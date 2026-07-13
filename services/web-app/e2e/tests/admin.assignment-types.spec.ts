@@ -85,65 +85,12 @@ test.describe.serial('Admin assignment types', () => {
       ).toBeVisible();
       await expect(page.getByText('Grading instructions')).not.toBeVisible();
 
-      await page.getByRole('button', { name: 'View compiled prompt' }).click();
-      const compiledPromptDialog = page.getByRole('dialog', {
-        name: 'Compiled prompt',
-      });
-      await expect(compiledPromptDialog).toBeVisible();
       await expect(
-        compiledPromptDialog.getByText('System message')
-      ).toBeVisible();
+        page.getByRole('button', { name: 'View compiled prompt' })
+      ).toHaveCount(0);
       await expect(
-        compiledPromptDialog.getByText('User message')
-      ).toBeVisible();
-      await expect(
-        compiledPromptDialog.getByText('You are a grading assistant.')
-      ).toBeVisible();
-      await expect(
-        compiledPromptDialog.getByText(
-          'Act as a careful evaluator for this assignment type.'
-        )
-      ).toBeVisible();
-      await expect(compiledPromptDialog.getByText(title)).toBeVisible();
-      await expect(
-        compiledPromptDialog.getByText(
-          'Grade against the rubric categories and give concise, actionable feedback.'
-        )
-      ).toBeVisible();
-      await expect(
-        compiledPromptDialog.getByText('[CASE DOCUMENT CONTENT]')
-      ).toBeVisible();
-      await expect(compiledPromptDialog.getByText('Version')).toBeVisible();
-      await expect(
-        compiledPromptDialog.getByText('Intermediate', { exact: true })
-      ).toBeVisible();
-      await compiledPromptDialog.getByRole('button', { name: 'Close' }).click();
-
-      await page.getByRole('button', { name: 'Test prompt' }).click();
-      const testPromptDialog = page.getByRole('dialog', {
-        name: 'Test prompt',
-      });
-      await testPromptDialog
-        .getByLabel('Case document')
-        .fill('School uniforms should remain optional.');
-      await testPromptDialog
-        .getByLabel('Evaluation criterion')
-        .fill(
-          'The feedback should identify the thesis and give one grounded next step.'
-        );
-      await testPromptDialog.getByRole('button', { name: 'Run test' }).click();
-      await expect(
-        testPromptDialog.getByText('Pass', { exact: true })
-      ).toBeVisible();
-      await expect(
-        testPromptDialog.getByText('Jordan, make the stakes more explicit.')
-      ).toBeVisible();
-      await expect(
-        testPromptDialog.getByText(
-          'The response identifies the thesis and gives a grounded next step.'
-        )
-      ).toBeVisible();
-      await testPromptDialog.getByRole('button', { name: 'Close' }).click();
+        page.getByRole('button', { name: 'Test prompt' })
+      ).toHaveCount(0);
 
       await page.getByRole('button', { name: 'Edit instructions' }).click();
       await page
@@ -155,10 +102,7 @@ test.describe.serial('Admin assignment types', () => {
         .getByRole('button', { name: 'Done' })
         .click();
       await expect(
-        page.getByRole('button', { name: 'View compiled prompt' })
-      ).toBeDisabled();
-      await expect(
-        page.getByText('Save changes to preview the updated prompt.')
+        page.getByText('Save prompt changes before running the full suite.')
       ).toBeVisible();
       await page.getByRole('button', { name: 'Cancel' }).click();
 
@@ -167,53 +111,53 @@ test.describe.serial('Admin assignment types', () => {
       ).toBeVisible();
       await expect(
         page.getByText(
-          'No evaluation cases yet. Add one to start tracking prompt-version runs.'
+          'No evaluations yet. Add one to start tracking prompt-version runs.'
         )
       ).toBeVisible();
 
-      await page.getByRole('button', { name: 'Add case' }).click();
-      let addCaseDialog = page.getByRole('dialog', {
-        name: 'Add evaluation case',
+      await page.getByRole('button', { name: 'Add evaluation' }).click();
+      const addEvaluationDialog = page.getByRole('dialog', {
+        name: 'Add evaluation',
       });
-      await addCaseDialog.getByLabel('Category').selectOption('thesis_e2e');
-      await addCaseDialog.getByLabel('Case name').fill('Clear thesis');
-      await addCaseDialog
-        .getByLabel('Case document')
-        .fill('School uniforms should remain optional because choice matters.');
-      await addCaseDialog
-        .getByLabel('What should this case verify?')
-        .fill('The feedback identifies the clear thesis.');
-      await addCaseDialog.getByRole('button', { name: 'Save case' }).click();
-      await expect(addCaseDialog).not.toBeVisible();
-
-      await page.getByRole('button', { name: 'Add case' }).click();
-      addCaseDialog = page.getByRole('dialog', {
-        name: 'Add evaluation case',
-      });
-      await addCaseDialog.getByLabel('Category').selectOption('thesis_e2e');
-      await addCaseDialog.getByLabel('Case name').fill('Missing thesis');
-      await addCaseDialog
-        .getByLabel('Case document')
-        .fill('There are many different opinions about school uniforms.');
-      await addCaseDialog
-        .getByLabel('What should this case verify?')
+      await addEvaluationDialog
+        .getByLabel('Describe what good looks like')
         .fill(
-          'The feedback identifies the missing thesis. [fixture:improves-after-v1]'
+          'Always begin the final feedback with a brief, positive greeting to the student.'
         );
-      await addCaseDialog.getByRole('button', { name: 'Save case' }).click();
-      await expect(addCaseDialog).not.toBeVisible();
+      await addEvaluationDialog
+        .getByRole('button', { name: 'Generate evaluations' })
+        .click();
+      await expect(
+        addEvaluationDialog.getByLabel('Evaluation title')
+      ).toHaveValue('Positive greeting');
+      await expect(
+        addEvaluationDialog.getByRole('checkbox', {
+          name: 'Use Strong opening',
+        })
+      ).toBeChecked();
+      await expect(
+        addEvaluationDialog.getByRole('checkbox', {
+          name: 'Use Missing opening',
+        })
+      ).toBeChecked();
+      await addEvaluationDialog
+        .getByRole('button', { name: 'Save 2 cases' })
+        .click();
+      await expect(addEvaluationDialog).not.toBeVisible();
 
-      await expect(page.getByText('2 cases')).toBeVisible();
-      await page.getByRole('button', { name: 'Run all cases' }).click();
+      await expect(page.getByText('1 evaluation · 2 cases')).toBeVisible();
       const historyTable = page.getByRole('table', {
         name: 'Evaluation history',
       });
+      await expect(
+        historyTable.getByRole('columnheader', { name: 'Positive greeting' })
+      ).toBeVisible();
+      await page.getByRole('button', { name: 'Run all cases' }).click();
       await expect(historyTable.getByRole('row', { name: /v1/ })).toContainText(
         '1/2'
       );
-      await expect(historyTable.getByLabel('Clear thesis: Pass')).toBeVisible();
       await expect(
-        historyTable.getByLabel('Missing thesis: Fail')
+        historyTable.getByLabel('Positive greeting: 1/2 passed')
       ).toBeVisible();
 
       await page.getByRole('button', { name: 'Edit instructions' }).click();
@@ -236,7 +180,9 @@ test.describe.serial('Admin assignment types', () => {
         '2/2'
       );
       await expect(
-        historyTable.getByRole('row', { name: /v2/ }).getByText('2/2')
+        historyTable
+          .getByLabel('Positive greeting: 2/2 passed')
+          .getByText('2/2')
       ).toHaveAttribute('data-status', 'pass');
       await historyTable
         .getByRole('button', { name: 'View prompt v1' })

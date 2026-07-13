@@ -71,6 +71,10 @@ const SCORING_SCALE_TYPES = [
   { value: 'rubric_points', label: 'Rubric points' },
 ];
 
+// Keep the underlying sheets wired for an easy rollback while the main admin
+// flow stays focused on instructions and saved evaluation runs.
+const SHOW_PROMPT_INSPECTION_CONTROLS = false;
+
 type RubricCategoryRow = RubricCategory & { id: string };
 
 const labelToKey = rubricCategoryLabelToKey;
@@ -1257,65 +1261,91 @@ function runSummaryTextClass(status: AssignmentTypeEvaluationStatus) {
 }
 
 function buildEvaluationColumns(
-  cases: AssignmentTypeEvaluationHistory['cases'],
-  categories: RubricCategory[]
+  evaluationHistory: AssignmentTypeEvaluationHistory
 ) {
-  const grouped = new Map<string, AssignmentTypeEvaluationHistory['cases']>();
-  for (const evaluationCase of cases) {
-    const bucket = grouped.get(evaluationCase.rubricCategoryKey) ?? [];
+  const groupedCases = new Map<
+    string,
+    AssignmentTypeEvaluationHistory['cases']
+  >();
+  for (const evaluationCase of evaluationHistory.cases) {
+    if (!evaluationCase.evaluationId) continue;
+    const bucket = groupedCases.get(evaluationCase.evaluationId) ?? [];
     bucket.push(evaluationCase);
-    grouped.set(evaluationCase.rubricCategoryKey, bucket);
+    groupedCases.set(evaluationCase.evaluationId, bucket);
   }
 
-  const orderedKeys = categories.map((category) => category.key);
-  const remainingKeys = [...grouped.keys()].filter(
-    (key) => !orderedKeys.includes(key)
-  );
-  const labelByKey = new Map(
-    categories.map((category) => [category.key, category.label])
-  );
-
-  return [...orderedKeys, ...remainingKeys]
-    .filter((key) => grouped.has(key))
-    .map((key) => ({
-      key,
-      label: labelByKey.get(key) ?? key,
-      cases: grouped.get(key)!,
+  const namedColumns = evaluationHistory.evaluations
+    .filter((evaluation) => groupedCases.has(evaluation.id))
+    .map((evaluation) => ({
+      key: evaluation.id,
+      label: evaluation.title,
+      description: evaluation.description,
+      archived: evaluation.archived,
+      cases: groupedCases.get(evaluation.id)!,
     }));
+  const legacyColumns = evaluationHistory.cases
+    .filter((evaluationCase) => !evaluationCase.evaluationId)
+    .map((evaluationCase) => ({
+      key: `legacy:${evaluationCase.id}`,
+      label: evaluationCase.title,
+      description: evaluationCase.criterion,
+      archived: evaluationCase.archived,
+      cases: [evaluationCase],
+    }));
+
+  return [...namedColumns, ...legacyColumns];
 }
 
-function AddEvaluationCaseSheet({
+type GeneratedEvaluationCaseDraft = {
+  title: string;
+  documentText: string;
+  expectedOutputText: string;
+  selected: boolean;
+};
+
+type EvaluationFetcherData = {
+  success?: boolean;
+  message?: string;
+  evaluationId?: string;
+  evaluation?: {
+    title: string;
+    description: string;
+    cases: Array<{
+      title: string;
+      documentText: string;
+      expectedOutput: unknown;
+    }>;
+  };
+};
+
+function AddEvaluationSheet({
   open,
   onOpenChange,
   assignmentTypeId,
-  categories,
   fetcher,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   assignmentTypeId: string;
-  categories: RubricCategory[];
-  fetcher: ReturnType<
-    typeof useFetcher<{ success?: boolean; message?: string }>
-  >;
+  fetcher: ReturnType<typeof useFetcher<EvaluationFetcherData>>;
 }) {
-  const [categoryKey, setCategoryKey] = useState('');
-  const [caseTitle, setCaseTitle] = useState('');
-  const [documentText, setDocumentText] = useState('');
-  const [criterion, setCriterion] = useState('');
-  const isSaving = fetcher.state !== 'idle';
+  const [description, setDescription] = useState('');
+  const [evaluationTitle, setEvaluationTitle] = useState('');
+  const [cases, setCases] = useState<GeneratedEvaluationCaseDraft[]>([]);
+  const [localError, setLocalError] = useState<string | null>(null);
+  const isWorking = fetcher.state !== 'idle';
   const errorMessage =
     fetcher.data && fetcher.data.success === false
       ? (fetcher.data.message ?? 'Could not save the case.')
-      : null;
+      : localError;
   const handledResponseRef = useRef<unknown>(null);
 
   useEffect(() => {
     if (!open) {
-      setCategoryKey('');
-      setCaseTitle('');
-      setDocumentText('');
-      setCriterion('');
+      setDescription('');
+      setEvaluationTitle('');
+      setCases([]);
+      setLocalError(null);
     }
   }, [open]);
 
@@ -1323,25 +1353,91 @@ function AddEvaluationCaseSheet({
     if (!fetcher.data?.success) return;
     if (handledResponseRef.current === fetcher.data) return;
     handledResponseRef.current = fetcher.data;
-    onOpenChange(false);
+    if (fetcher.data.evaluation) {
+      setEvaluationTitle(fetcher.data.evaluation.title);
+      setCases(
+        fetcher.data.evaluation.cases.map((evaluationCase) => ({
+          title: evaluationCase.title,
+          documentText: evaluationCase.documentText,
+          expectedOutputText: JSON.stringify(
+            evaluationCase.expectedOutput,
+            null,
+            2
+          ),
+          selected: true,
+        }))
+      );
+      return;
+    }
+    if (fetcher.data.evaluationId) onOpenChange(false);
   }, [fetcher.data, onOpenChange]);
 
+  const selectedCount = cases.filter(
+    (evaluationCase) => evaluationCase.selected
+  ).length;
+  const canGenerate = description.trim().length > 0 && !isWorking;
   const canSave =
-    categoryKey.trim().length > 0 &&
-    caseTitle.trim().length > 0 &&
-    documentText.trim().length > 0 &&
-    criterion.trim().length > 0 &&
-    !isSaving;
+    evaluationTitle.trim().length > 0 && selectedCount > 0 && !isWorking;
+
+  function handleGenerate() {
+    if (!canGenerate) return;
+    setLocalError(null);
+    const formData = new FormData();
+    formData.set('intent', 'generateEvaluation');
+    formData.set('assignmentTypeId', assignmentTypeId);
+    formData.set('description', description.trim());
+    fetcher.submit(formData, {
+      method: 'POST',
+      action: '/api/domain/assignment-type-evaluations',
+    });
+  }
+
+  function updateCase(
+    index: number,
+    update: Partial<GeneratedEvaluationCaseDraft>
+  ) {
+    setCases((current) =>
+      current.map((evaluationCase, caseIndex) =>
+        caseIndex === index ? { ...evaluationCase, ...update } : evaluationCase
+      )
+    );
+  }
 
   function handleSave() {
     if (!canSave) return;
+    setLocalError(null);
+    let selectedCases: Array<{
+      title: string;
+      documentText: string;
+      expectedOutput: unknown;
+    }>;
+    try {
+      selectedCases = cases
+        .filter((evaluationCase) => evaluationCase.selected)
+        .map((evaluationCase) => ({
+          title: evaluationCase.title.trim(),
+          documentText: evaluationCase.documentText.trim(),
+          expectedOutput: JSON.parse(evaluationCase.expectedOutputText),
+        }));
+    } catch {
+      setLocalError('Fix the expected output JSON before saving.');
+      return;
+    }
+    if (
+      selectedCases.some(
+        (evaluationCase) =>
+          !evaluationCase.title || !evaluationCase.documentText
+      )
+    ) {
+      setLocalError('Every selected case needs an input and a short title.');
+      return;
+    }
     const formData = new FormData();
-    formData.set('intent', 'createCase');
+    formData.set('intent', 'createEvaluation');
     formData.set('assignmentTypeId', assignmentTypeId);
-    formData.set('rubricCategoryKey', categoryKey);
-    formData.set('title', caseTitle.trim());
-    formData.set('documentText', documentText.trim());
-    formData.set('criterion', criterion.trim());
+    formData.set('title', evaluationTitle.trim());
+    formData.set('description', description.trim());
+    formData.set('casesJson', JSON.stringify(selectedCases));
     fetcher.submit(formData, {
       method: 'POST',
       action: '/api/domain/assignment-type-evaluations',
@@ -1350,134 +1446,233 @@ function AddEvaluationCaseSheet({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent aria-describedby={undefined}>
+      <SheetContent
+        aria-describedby={undefined}
+        className="flex max-h-screen flex-col overflow-y-auto sm:max-w-xl"
+      >
         <SheetHeader>
-          <SheetTitle>Add evaluation case</SheetTitle>
+          <SheetTitle>Add evaluation</SheetTitle>
         </SheetHeader>
         <div className="mt-4 space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="evaluation-case-category">Category</Label>
-            <select
-              id="evaluation-case-category"
-              className="h-10 w-full rounded-md border bg-background px-3 text-sm"
-              value={categoryKey}
-              onChange={(event) => setCategoryKey(event.target.value)}
-              disabled={isSaving}
-            >
-              <option value="">Select a category</option>
-              {categories.map((category) => (
-                <option key={category.key} value={category.key}>
-                  {category.label}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="evaluation-case-title">Case name</Label>
-            <Input
-              id="evaluation-case-title"
-              value={caseTitle}
-              onChange={(event) => setCaseTitle(event.target.value)}
-              disabled={isSaving}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="evaluation-case-document">Case document</Label>
-            <Textarea
-              id="evaluation-case-document"
-              rows={8}
-              value={documentText}
-              onChange={(event) => setDocumentText(event.target.value)}
-              placeholder="Paste or write a sample student submission..."
-              disabled={isSaving}
-            />
-            <p className="text-sm text-muted-foreground text-pretty">
-              Use synthetic or deidentified student work only.
-            </p>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="evaluation-case-criterion">
-              What should this case verify?
+            <Label htmlFor="evaluation-description">
+              Describe what good looks like
             </Label>
             <Textarea
-              id="evaluation-case-criterion"
-              rows={3}
-              value={criterion}
-              onChange={(event) => setCriterion(event.target.value)}
-              placeholder="e.g. The feedback identifies the missing thesis."
-              disabled={isSaving}
+              id="evaluation-description"
+              rows={5}
+              value={description}
+              onChange={(event) => setDescription(event.target.value)}
+              placeholder="e.g. Always begin the final feedback with a brief, positive greeting."
+              disabled={isWorking || cases.length > 0}
             />
+            <p className="text-sm text-muted-foreground text-pretty">
+              AI will suggest varied inputs and a complete ideal output for each
+              one. Nothing is saved until you choose the cases you want.
+            </p>
           </div>
+          {cases.length === 0 ? (
+            <Button
+              type="button"
+              className="w-full"
+              onClick={handleGenerate}
+              disabled={!canGenerate}
+            >
+              {isWorking ? (
+                <>
+                  <Loader2 className="mr-2 size-4 shrink-0 animate-spin" />
+                  Generating...
+                </>
+              ) : (
+                'Generate evaluations'
+              )}
+            </Button>
+          ) : (
+            <>
+              <div className="space-y-2">
+                <Label htmlFor="evaluation-title">Evaluation title</Label>
+                <Input
+                  id="evaluation-title"
+                  value={evaluationTitle}
+                  onChange={(event) => setEvaluationTitle(event.target.value)}
+                  disabled={isWorking}
+                />
+                <p className="text-sm text-muted-foreground">
+                  This becomes one column in the history table.
+                </p>
+              </div>
+              <div className="space-y-2">
+                <p className="text-sm font-medium">Choose cases</p>
+                {cases.map((evaluationCase, index) => (
+                  <div
+                    key={`${evaluationCase.title}-${index}`}
+                    className="rounded-md border p-3"
+                  >
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        aria-label={`Use ${evaluationCase.title}`}
+                        checked={evaluationCase.selected}
+                        onChange={(event) =>
+                          updateCase(index, { selected: event.target.checked })
+                        }
+                        disabled={isWorking}
+                        className="size-4"
+                      />
+                      <Input
+                        aria-label={`${evaluationCase.title} title`}
+                        value={evaluationCase.title}
+                        onChange={(event) =>
+                          updateCase(index, { title: event.target.value })
+                        }
+                        disabled={isWorking}
+                        className="h-8"
+                      />
+                    </div>
+                    <details className="mt-2 text-sm">
+                      <summary className="cursor-pointer text-muted-foreground">
+                        Review input and expected output
+                      </summary>
+                      <div className="mt-3 space-y-3">
+                        <div className="space-y-1.5">
+                          <Label htmlFor={`generated-case-input-${index}`}>
+                            Input document
+                          </Label>
+                          <Textarea
+                            id={`generated-case-input-${index}`}
+                            rows={6}
+                            value={evaluationCase.documentText}
+                            onChange={(event) =>
+                              updateCase(index, {
+                                documentText: event.target.value,
+                              })
+                            }
+                            disabled={isWorking}
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label htmlFor={`generated-case-output-${index}`}>
+                            Full expected output
+                          </Label>
+                          <Textarea
+                            id={`generated-case-output-${index}`}
+                            rows={10}
+                            value={evaluationCase.expectedOutputText}
+                            onChange={(event) =>
+                              updateCase(index, {
+                                expectedOutputText: event.target.value,
+                              })
+                            }
+                            disabled={isWorking}
+                            className="font-mono text-xs"
+                          />
+                        </div>
+                      </div>
+                    </details>
+                  </div>
+                ))}
+              </div>
+              <Button
+                type="button"
+                className="w-full"
+                onClick={handleSave}
+                disabled={!canSave}
+              >
+                {isWorking ? (
+                  <>
+                    <Loader2 className="mr-2 size-4 shrink-0 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  `Save ${selectedCount} ${selectedCount === 1 ? 'case' : 'cases'}`
+                )}
+              </Button>
+            </>
+          )}
           {errorMessage ? (
             <p className="text-sm text-destructive">{errorMessage}</p>
           ) : null}
-          <Button
-            type="button"
-            className="w-full"
-            onClick={handleSave}
-            disabled={!canSave}
-          >
-            {isSaving ? (
-              <>
-                <Loader2 className="mr-2 size-4 shrink-0 animate-spin" />
-                Saving...
-              </>
-            ) : (
-              'Save case'
-            )}
-          </Button>
         </div>
       </SheetContent>
     </Sheet>
   );
 }
 
-function EvaluationCaseDetailSheet({
-  evaluationCase,
+type EvaluationColumn = ReturnType<typeof buildEvaluationColumns>[number];
+
+function EvaluationDetailSheet({
+  evaluation,
   open,
   onOpenChange,
-  onRemove,
+  onRemoveCase,
   isRemoving,
 }: {
-  evaluationCase: AssignmentTypeEvaluationHistory['cases'][number] | null;
+  evaluation: EvaluationColumn | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onRemove: () => void;
+  onRemoveCase: (caseId: string) => void;
   isRemoving: boolean;
 }) {
-  if (!evaluationCase) return null;
+  if (!evaluation) return null;
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent aria-describedby={undefined}>
+      <SheetContent
+        aria-describedby={undefined}
+        className="flex max-h-screen flex-col overflow-y-auto sm:max-w-xl"
+      >
         <SheetHeader>
-          <SheetTitle>{evaluationCase.title}</SheetTitle>
+          <SheetTitle>{evaluation.label}</SheetTitle>
         </SheetHeader>
         <div className="mt-4 space-y-4">
-          {evaluationCase.archived ? (
+          {evaluation.archived ? (
             <Badge variant="warning-soft">Archived</Badge>
           ) : null}
-          <div className="space-y-2">
-            <p className="text-sm font-medium">Case document</p>
-            <pre className="max-w-full overflow-x-hidden whitespace-pre-wrap break-words rounded-md border bg-muted/40 p-3 text-sm">
-              {evaluationCase.documentText}
-            </pre>
-          </div>
-          <div className="space-y-2">
-            <p className="text-sm font-medium">What this case verifies</p>
-            <p className="text-sm text-pretty">{evaluationCase.criterion}</p>
-          </div>
-          {!evaluationCase.archived ? (
-            <Button
-              type="button"
-              variant="destructive-outline"
-              onClick={onRemove}
-              disabled={isRemoving}
+          <p className="text-sm text-pretty">{evaluation.description}</p>
+          <p className="text-sm font-medium">
+            {pluralizeCases(evaluation.cases.length)}
+          </p>
+          {evaluation.cases.map((evaluationCase) => (
+            <details
+              key={evaluationCase.id}
+              className="rounded-md border p-3 text-sm"
             >
-              <Trash2 className="mr-2 size-4 shrink-0" />
-              {isRemoving ? 'Removing...' : 'Remove case'}
-            </Button>
-          ) : null}
+              <summary className="cursor-pointer font-medium">
+                {evaluationCase.title}
+                {evaluationCase.archived ? (
+                  <span className="ml-2 text-xs font-normal text-muted-foreground">
+                    Archived
+                  </span>
+                ) : null}
+              </summary>
+              <div className="mt-3 space-y-3">
+                <div className="space-y-1.5">
+                  <p className="font-medium">Input document</p>
+                  <pre className="max-w-full overflow-x-hidden whitespace-pre-wrap break-words rounded-md bg-muted/40 p-3 text-sm">
+                    {evaluationCase.documentText}
+                  </pre>
+                </div>
+                <div className="space-y-1.5">
+                  <p className="font-medium">Full expected output</p>
+                  <pre className="max-w-full overflow-x-hidden whitespace-pre-wrap break-words rounded-md bg-muted/40 p-3 text-xs">
+                    {JSON.stringify(evaluationCase.expectedOutput, null, 2)}
+                  </pre>
+                </div>
+                {!evaluationCase.archived ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="destructive-outline"
+                    onClick={() => onRemoveCase(evaluationCase.id)}
+                    disabled={isRemoving}
+                  >
+                    <Trash2 className="mr-2 size-4 shrink-0" />
+                    {isRemoving ? 'Removing...' : 'Remove case'}
+                  </Button>
+                ) : null}
+              </div>
+            </details>
+          ))}
         </div>
       </SheetContent>
     </Sheet>
@@ -1488,24 +1683,46 @@ function EvaluationResultDetailSheet({
   open,
   onOpenChange,
   runVersion,
-  result,
+  evaluation,
+  results,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   runVersion: number | null;
-  result:
-    AssignmentTypeEvaluationHistory['runs'][number]['results'][number] | null;
+  evaluation: EvaluationColumn | null;
+  results: AssignmentTypeEvaluationHistory['runs'][number]['results'];
 }) {
-  if (!result) return null;
+  if (!evaluation) return null;
+  const resultsByCaseId = new Map(
+    results.map((result) => [result.caseId, result])
+  );
+  const passed = evaluation.cases.filter(
+    (evaluationCase) =>
+      resultsByCaseId.get(evaluationCase.id)?.status === 'pass'
+  ).length;
+  const resultCount = evaluation.cases.filter((evaluationCase) =>
+    resultsByCaseId.has(evaluationCase.id)
+  ).length;
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent aria-describedby={undefined}>
+      <SheetContent
+        aria-describedby={undefined}
+        className="flex max-h-screen flex-col overflow-y-auto sm:max-w-xl"
+      >
         <SheetHeader>
           <SheetTitle className="flex flex-wrap items-center gap-2">
-            {result.caseTitle}
-            <Badge variant={evaluationStatusBadgeVariant(result.status)}>
-              {evaluationStatusLabel(result.status)}
+            {evaluation.label}
+            <Badge
+              variant={
+                resultCount > 0 && passed === resultCount
+                  ? 'success'
+                  : passed === 0
+                    ? 'destructive'
+                    : 'warning-soft'
+              }
+            >
+              {passed}/{resultCount}
             </Badge>
           </SheetTitle>
         </SheetHeader>
@@ -1515,20 +1732,51 @@ function EvaluationResultDetailSheet({
               Prompt version v{runVersion}
             </p>
           ) : null}
-          <div className="space-y-2">
-            <p className="text-sm font-medium">Evaluation criterion</p>
-            <p className="text-sm text-pretty">{result.criterion}</p>
-          </div>
-          <div className="space-y-2">
-            <p className="text-sm font-medium">Evidence</p>
-            <p className="text-sm text-pretty">{result.evidence}</p>
-          </div>
-          <div className="space-y-2">
-            <p className="text-sm font-medium">Grading output</p>
-            <pre className="max-w-full overflow-x-hidden whitespace-pre-wrap break-words rounded-md border bg-muted/40 p-3 text-sm">
-              {JSON.stringify(result.gradingOutput, null, 2)}
-            </pre>
-          </div>
+          {evaluation.cases.map((evaluationCase) => {
+            const result = resultsByCaseId.get(evaluationCase.id);
+            return (
+              <details
+                key={evaluationCase.id}
+                className="rounded-md border p-3 text-sm"
+              >
+                <summary className="cursor-pointer font-medium">
+                  {evaluationCase.title}
+                  {result ? (
+                    <Badge
+                      variant={evaluationStatusBadgeVariant(result.status)}
+                      className="ml-2"
+                    >
+                      {evaluationStatusLabel(result.status)}
+                    </Badge>
+                  ) : null}
+                </summary>
+                {result ? (
+                  <div className="mt-3 space-y-3">
+                    <div className="space-y-1.5">
+                      <p className="font-medium">Judge evidence</p>
+                      <p className="text-pretty">{result.evidence}</p>
+                    </div>
+                    <div className="space-y-1.5">
+                      <p className="font-medium">Expected output</p>
+                      <pre className="max-w-full overflow-x-hidden whitespace-pre-wrap break-words rounded-md bg-muted/40 p-3 text-xs">
+                        {JSON.stringify(result.expectedOutput, null, 2)}
+                      </pre>
+                    </div>
+                    <div className="space-y-1.5">
+                      <p className="font-medium">Actual output</p>
+                      <pre className="max-w-full overflow-x-hidden whitespace-pre-wrap break-words rounded-md bg-muted/40 p-3 text-xs">
+                        {JSON.stringify(result.gradingOutput, null, 2)}
+                      </pre>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="mt-3 text-muted-foreground">
+                    This case was not part of the run.
+                  </p>
+                )}
+              </details>
+            );
+          })}
         </div>
       </SheetContent>
     </Sheet>
@@ -1604,25 +1852,24 @@ function EvaluationRunDetailSheet({
 
 function EvaluationHistorySection({
   assignmentTypeId,
-  rubric,
   evaluationHistory,
   isPromptPreviewStale,
 }: {
   assignmentTypeId: string;
-  rubric: RubricData;
   evaluationHistory: AssignmentTypeEvaluationHistory;
   isPromptPreviewStale: boolean;
 }) {
-  const addCaseFetcher = useFetcher<{ success?: boolean; message?: string }>();
+  const addCaseFetcher = useFetcher<EvaluationFetcherData>();
   const archiveFetcher = useFetcher<{ success?: boolean; message?: string }>();
   const runFetcher = useFetcher<{ success?: boolean; message?: string }>();
 
   const [addOpen, setAddOpen] = useState(false);
-  const [detailCaseId, setDetailCaseId] = useState<string | null>(null);
+  const [detailColumnKey, setDetailColumnKey] = useState<string | null>(null);
   const [detailRunId, setDetailRunId] = useState<string | null>(null);
   const [detailResult, setDetailResult] = useState<{
     runVersion: number;
-    result: AssignmentTypeEvaluationHistory['runs'][number]['results'][number];
+    columnKey: string;
+    results: AssignmentTypeEvaluationHistory['runs'][number]['results'];
   } | null>(null);
 
   const isRunning = runFetcher.state !== 'idle';
@@ -1635,19 +1882,22 @@ function EvaluationHistorySection({
   const activeCaseCount = evaluationHistory.cases.filter(
     (evaluationCase) => !evaluationCase.archived
   ).length;
-  const columns = buildEvaluationColumns(
-    evaluationHistory.cases,
-    rubric.categories
-  );
-  const totalColumnCount = columns.reduce(
-    (sum, column) => sum + column.cases.length,
-    0
-  );
-  const detailCase = detailCaseId
-    ? (evaluationHistory.cases.find(
-        (evaluationCase) => evaluationCase.id === detailCaseId
-      ) ?? null)
+  const columns = buildEvaluationColumns(evaluationHistory);
+  const activeEvaluationCount = columns.filter(
+    (column) =>
+      !column.archived &&
+      column.cases.some((evaluationCase) => !evaluationCase.archived)
+  ).length;
+  const totalColumnCount = columns.length;
+  const detailEvaluation = detailColumnKey
+    ? (columns.find((column) => column.key === detailColumnKey) ?? null)
     : null;
+  const detailResultEvaluation = detailResult
+    ? (columns.find((column) => column.key === detailResult.columnKey) ?? null)
+    : null;
+  const evaluationSummary = `${activeEvaluationCount} ${
+    activeEvaluationCount === 1 ? 'evaluation' : 'evaluations'
+  } · ${pluralizeCases(activeCaseCount)}`;
   const detailRun = detailRunId
     ? (evaluationHistory.runs.find((run) => run.id === detailRunId) ?? null)
     : null;
@@ -1662,17 +1912,15 @@ function EvaluationHistorySection({
     });
   }
 
-  function handleRemoveCase() {
-    if (!detailCase) return;
+  function handleRemoveCase(caseId: string) {
     const formData = new FormData();
     formData.set('intent', 'archiveCase');
     formData.set('assignmentTypeId', assignmentTypeId);
-    formData.set('caseId', detailCase.id);
+    formData.set('caseId', caseId);
     archiveFetcher.submit(formData, {
       method: 'POST',
       action: '/api/domain/assignment-type-evaluations',
     });
-    setDetailCaseId(null);
   }
 
   const canRunAll = activeCaseCount > 0 && !isPromptPreviewStale && !isRunning;
@@ -1682,7 +1930,7 @@ function EvaluationHistorySection({
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 className="text-sm font-semibold">Evaluation history</h3>
         <span className="text-sm text-muted-foreground">
-          {pluralizeCases(activeCaseCount)}
+          {evaluationSummary}
         </span>
       </div>
 
@@ -1694,7 +1942,7 @@ function EvaluationHistorySection({
           onClick={() => setAddOpen(true)}
         >
           <Plus className="mr-1.5 size-4 shrink-0" />
-          Add case
+          Add evaluation
         </Button>
         <Button
           type="button"
@@ -1723,10 +1971,9 @@ function EvaluationHistorySection({
         <p className="text-sm text-destructive">{runErrorMessage}</p>
       ) : null}
 
-      {evaluationHistory.cases.length === 0 ? (
+      {columns.length === 0 ? (
         <p className="text-sm text-muted-foreground">
-          No evaluation cases yet. Add one to start tracking prompt-version
-          runs.
+          No evaluations yet. Add one to start tracking prompt-version runs.
         </p>
       ) : (
         <div className="overflow-x-auto rounded-md border">
@@ -1735,14 +1982,13 @@ function EvaluationHistorySection({
             aria-label="Evaluation history"
           >
             <caption className="sr-only">
-              Rows are saved prompt-version runs. Columns are evaluation cases
-              grouped by rubric category.
+              Rows are saved prompt-version runs. Columns are named evaluations
+              containing one or more input and expected-output cases.
             </caption>
             <thead>
               <tr>
                 <th
                   scope="col"
-                  rowSpan={2}
                   className="sticky left-0 z-10 min-w-[6rem] border-b bg-muted/60 p-2 text-left align-bottom font-medium"
                 >
                   Version
@@ -1750,40 +1996,22 @@ function EvaluationHistorySection({
                 {columns.map((column) => (
                   <th
                     key={column.key}
-                    scope="colgroup"
-                    colSpan={column.cases.length}
-                    className="border-b border-l bg-muted/40 p-2 text-left font-medium text-muted-foreground"
+                    scope="col"
+                    className="min-w-[9rem] border-b border-l bg-muted/40 p-2 text-left font-medium"
                   >
-                    {column.label}
+                    <button
+                      type="button"
+                      onClick={() => setDetailColumnKey(column.key)}
+                      aria-label={`View evaluation ${column.label}`}
+                      className="flex max-w-[12rem] flex-col items-start text-left hover:underline"
+                    >
+                      <span>{column.label}</span>
+                      <span className="text-[10px] font-normal text-muted-foreground">
+                        {pluralizeCases(column.cases.length)}
+                      </span>
+                    </button>
                   </th>
                 ))}
-              </tr>
-              <tr>
-                {columns.flatMap((column) =>
-                  column.cases.map((evaluationCase) => (
-                    <th
-                      key={evaluationCase.id}
-                      scope="col"
-                      className="border-b border-l p-1 text-left align-bottom font-normal"
-                    >
-                      <button
-                        type="button"
-                        onClick={() => setDetailCaseId(evaluationCase.id)}
-                        aria-label={`View case ${evaluationCase.title}`}
-                        className="flex max-w-[9rem] flex-col items-start gap-0.5 text-left hover:underline"
-                      >
-                        <span className="truncate text-xs font-medium">
-                          {evaluationCase.title}
-                        </span>
-                        {evaluationCase.archived ? (
-                          <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                            Archived
-                          </span>
-                        ) : null}
-                      </button>
-                    </th>
-                  ))
-                )}
               </tr>
             </thead>
             <tbody>
@@ -1828,43 +2056,58 @@ function EvaluationHistorySection({
                           {run.passedCases}/{run.totalCases}
                         </div>
                       </th>
-                      {columns.flatMap((column) =>
-                        column.cases.map((evaluationCase) => {
-                          const result = resultsByCaseId.get(evaluationCase.id);
-                          return (
-                            <td
-                              key={evaluationCase.id}
-                              className="border-t border-l p-1 align-top"
-                            >
-                              {result ? (
-                                <button
-                                  type="button"
-                                  className="inline-flex min-h-7 min-w-7 items-center justify-center"
-                                  onClick={() =>
-                                    setDetailResult({
-                                      runVersion: run.promptVersion,
-                                      result,
-                                    })
-                                  }
-                                  aria-label={`${evaluationCase.title}: ${evaluationStatusLabel(result.status)}`}
+                      {columns.map((column) => {
+                        const columnResults = column.cases.flatMap(
+                          (evaluationCase) => {
+                            const result = resultsByCaseId.get(
+                              evaluationCase.id
+                            );
+                            return result ? [result] : [];
+                          }
+                        );
+                        const passed = columnResults.filter(
+                          (result) => result.status === 'pass'
+                        ).length;
+                        const status: AssignmentTypeEvaluationStatus =
+                          columnResults.length > 0 &&
+                          passed === columnResults.length
+                            ? 'pass'
+                            : columnResults.length > 0 && passed === 0
+                              ? 'fail'
+                              : 'needs_review';
+                        return (
+                          <td
+                            key={column.key}
+                            className="border-t border-l p-2 align-top"
+                          >
+                            {columnResults.length > 0 ? (
+                              <button
+                                type="button"
+                                className="inline-flex min-h-7 items-center justify-center"
+                                onClick={() =>
+                                  setDetailResult({
+                                    runVersion: run.promptVersion,
+                                    columnKey: column.key,
+                                    results: run.results,
+                                  })
+                                }
+                                aria-label={`${column.label}: ${passed}/${columnResults.length} passed`}
+                              >
+                                <Badge
+                                  variant={evaluationStatusBadgeVariant(status)}
+                                  data-status={status}
                                 >
-                                  <Badge
-                                    variant={evaluationStatusBadgeVariant(
-                                      result.status
-                                    )}
-                                  >
-                                    {evaluationStatusLabel(result.status)}
-                                  </Badge>
-                                </button>
-                              ) : (
-                                <span className="px-1 text-xs text-muted-foreground">
-                                  —
-                                </span>
-                              )}
-                            </td>
-                          );
-                        })
-                      )}
+                                  {passed}/{columnResults.length}
+                                </Badge>
+                              </button>
+                            ) : (
+                              <span className="px-1 text-xs text-muted-foreground">
+                                —
+                              </span>
+                            )}
+                          </td>
+                        );
+                      })}
                     </tr>
                   );
                 })
@@ -1874,21 +2117,20 @@ function EvaluationHistorySection({
         </div>
       )}
 
-      <AddEvaluationCaseSheet
+      <AddEvaluationSheet
         open={addOpen}
         onOpenChange={setAddOpen}
         assignmentTypeId={assignmentTypeId}
-        categories={rubric.categories}
         fetcher={addCaseFetcher}
       />
 
-      <EvaluationCaseDetailSheet
-        evaluationCase={detailCase}
-        open={Boolean(detailCase)}
+      <EvaluationDetailSheet
+        evaluation={detailEvaluation}
+        open={Boolean(detailEvaluation)}
         onOpenChange={(open) => {
-          if (!open) setDetailCaseId(null);
+          if (!open) setDetailColumnKey(null);
         }}
-        onRemove={handleRemoveCase}
+        onRemoveCase={handleRemoveCase}
         isRemoving={isRemoving}
       />
 
@@ -1898,7 +2140,8 @@ function EvaluationHistorySection({
           if (!open) setDetailResult(null);
         }}
         runVersion={detailResult?.runVersion ?? null}
-        result={detailResult?.result ?? null}
+        evaluation={detailResultEvaluation}
+        results={detailResult?.results ?? []}
       />
 
       <EvaluationRunDetailSheet
@@ -1977,7 +2220,7 @@ export function PromptConfigEditor({
         >
           Edit instructions
         </Button>
-        {gradingAssistantPromptPreview ? (
+        {SHOW_PROMPT_INSPECTION_CONTROLS && gradingAssistantPromptPreview ? (
           <>
             <Button
               type="button"
@@ -1996,13 +2239,13 @@ export function PromptConfigEditor({
               </p>
             ) : null}
           </>
-        ) : (
+        ) : SHOW_PROMPT_INSPECTION_CONTROLS ? (
           <p className="text-sm text-muted-foreground">
             {gradingAssistantPromptPreviewUnavailableReason ??
               'Save this assignment type to preview the compiled prompt.'}
           </p>
-        )}
-        {canTestPrompt ? (
+        ) : null}
+        {SHOW_PROMPT_INSPECTION_CONTROLS && canTestPrompt ? (
           <Button
             type="button"
             variant="outline"
@@ -2017,7 +2260,6 @@ export function PromptConfigEditor({
       {assignmentTypeId && evaluationHistory ? (
         <EvaluationHistorySection
           assignmentTypeId={assignmentTypeId}
-          rubric={rubric ?? { categories: [] }}
           evaluationHistory={evaluationHistory}
           isPromptPreviewStale={isPromptPreviewStale}
         />
