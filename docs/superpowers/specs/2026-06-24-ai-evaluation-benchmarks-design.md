@@ -27,8 +27,32 @@ type's suite and must be approved in that context.
 
 The admin experience should remain intentionally controlled and minimal. The
 first slice exposes the saved grading-assistant instructions and the compiled
-primary model request from the assignment type editor. Case libraries, run-one,
-run-all, automated evaluation, and tutor evaluation remain follow-on slices.
+primary model request from the assignment type editor. Durable case libraries,
+approved run-one/run-all workflows, and tutor evaluation remain follow-on
+slices.
+
+### July 13 Controlled Prompt-Testing Slice
+
+The assignment type editor now owns two admin-editable prompt sections:
+
+- **Custom system instructions** set assignment-specific persona and behavior.
+  The production response contract, dynamic score bounds, rubric keys, student
+  name, and document placement remain code-compiled guardrails.
+- **Grading instructions** tell the assistant how to apply the assignment
+  type's rubric. They are compiled into the primary user message.
+
+Both sections are visible in the exact compiled invocation and use the same
+compiler as live grading. Admins can also open **Test prompt** and run the
+current draft prompt configuration and rubric against one scratch case document
+and one narrow evaluation criterion. The run first checks the grading response
+contract, then asks a constrained evaluator for a pass/fail verdict with
+evidence. A malformed grading response blocks the criterion evaluator.
+
+This scratch run is intentionally not a benchmark or release result. It is not
+saved, approved, repeated, or included in run history. It exists so an admin can
+iterate on a prompt before the next slice adds assignment-type-owned case
+libraries, durable runs, approved criteria, and run-all behavior. AP History is
+excluded because its production prompt requires an assignment snapshot.
 
 ## Ubiquitous Language
 
