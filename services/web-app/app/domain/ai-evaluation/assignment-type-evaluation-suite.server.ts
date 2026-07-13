@@ -7,6 +7,7 @@ export type AssignmentTypeEvaluationCaseInput = {
   rubricCategoryKey: string;
   documentText: string;
   criterion: string;
+  expectedOutputJson?: unknown;
 };
 
 export type AssignmentTypeEvaluationExecution = {
@@ -30,6 +31,7 @@ export type AssignmentTypeEvaluationSuiteResult = {
     caseTitle: string;
     rubricCategoryKey: string;
     criterion: string;
+    expectedOutput: unknown;
     status: 'pass' | 'fail' | 'needs_review';
     evidence: string;
     gradingOutput: {
@@ -60,6 +62,7 @@ export async function runAssignmentTypeEvaluationSuite({
         gradingConfig,
         documentText: evaluationCase.documentText,
         criterion: evaluationCase.criterion,
+        expectedOutput: evaluationCase.expectedOutputJson,
         studentFirstName: 'Jordan',
         strictnessLevel: 'intermediate',
         execute: (input) => execute({ ...input, evaluationCase }),
@@ -75,6 +78,7 @@ export async function runAssignmentTypeEvaluationSuite({
         caseTitle: evaluationCase.title,
         rubricCategoryKey: evaluationCase.rubricCategoryKey,
         criterion: evaluationCase.criterion,
+        expectedOutput: evaluationCase.expectedOutputJson ?? null,
         status,
         evidence,
         gradingOutput: result.gradingOutput,
@@ -86,6 +90,7 @@ export async function runAssignmentTypeEvaluationSuite({
         caseTitle: evaluationCase.title,
         rubricCategoryKey: evaluationCase.rubricCategoryKey,
         criterion: evaluationCase.criterion,
+        expectedOutput: evaluationCase.expectedOutputJson ?? null,
         status: 'fail',
         evidence:
           error instanceof Error

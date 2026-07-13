@@ -65,6 +65,9 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         orderBy: { position: 'asc' },
       },
       image: { select: { id: true } },
+      evaluations: {
+        orderBy: [{ position: 'asc' }, { createdAt: 'asc' }],
+      },
       evaluationCases: {
         orderBy: [{ position: 'asc' }, { createdAt: 'asc' }],
       },
@@ -83,12 +86,22 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   }
 
   const evaluationHistory = {
+    evaluations: (course.evaluations ?? []).map((evaluation) => ({
+      id: evaluation.id,
+      title: evaluation.title,
+      description: evaluation.description,
+      position: evaluation.position,
+      archived: Boolean(evaluation.archivedAt),
+      createdAt: evaluation.createdAt.toISOString(),
+    })),
     cases: (course.evaluationCases ?? []).map((evaluationCase) => ({
       id: evaluationCase.id,
+      evaluationId: evaluationCase.evaluationId,
       title: evaluationCase.title,
       rubricCategoryKey: evaluationCase.rubricCategoryKey,
       documentText: evaluationCase.documentText,
       criterion: evaluationCase.criterion,
+      expectedOutput: evaluationCase.expectedOutputJson,
       position: evaluationCase.position,
       archived: Boolean(evaluationCase.archivedAt),
       createdAt: evaluationCase.createdAt.toISOString(),
@@ -114,10 +127,12 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         status: normalizeEvaluationStatus(result.status),
         evidence: result.evidence,
         gradingOutput: result.gradingOutputJson,
+        expectedOutput: result.expectedOutputJson,
       })),
     })),
   };
   const {
+    evaluations: _evaluations,
     evaluationCases: _evaluationCases,
     evaluationRuns: _evaluationRuns,
     ...courseForEditor

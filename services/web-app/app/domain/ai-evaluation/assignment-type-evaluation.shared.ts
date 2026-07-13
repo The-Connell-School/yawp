@@ -2,12 +2,22 @@ export type AssignmentTypeEvaluationStatus =
   'pass' | 'fail' | 'needs_review' | 'blocked';
 
 export type AssignmentTypeEvaluationHistory = {
+  evaluations: Array<{
+    id: string;
+    title: string;
+    description: string;
+    position: number;
+    archived: boolean;
+    createdAt: string;
+  }>;
   cases: Array<{
     id: string;
+    evaluationId: string | null;
     title: string;
     rubricCategoryKey: string;
     documentText: string;
     criterion: string;
+    expectedOutput: unknown;
     position: number;
     archived: boolean;
     createdAt: string;
@@ -33,6 +43,7 @@ export type AssignmentTypeEvaluationHistory = {
       status: AssignmentTypeEvaluationStatus;
       evidence: string;
       gradingOutput: unknown;
+      expectedOutput: unknown;
     }>;
   }>;
 };

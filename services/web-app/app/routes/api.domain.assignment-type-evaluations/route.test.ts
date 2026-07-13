@@ -3,6 +3,11 @@ import { beforeEach, describe, expect, mock, test } from 'bun:test';
 const prisma = {
   $transaction: mock(),
   assignmentType: { findUnique: mock() },
+  assignmentTypeEvaluation: {
+    count: mock(),
+    create: mock(),
+    updateMany: mock(),
+  },
   assignmentTypeEvaluationCase: {
     count: mock(),
     create: mock(),
@@ -57,10 +62,15 @@ const assignmentType = {
   evaluationCases: [
     {
       id: 'case-1',
+      evaluationId: 'evaluation-1',
       title: 'Clear claim',
       rubricCategoryKey: 'claim',
       documentText: 'Uniforms should remain optional.',
       criterion: 'The feedback identifies the claim.',
+      expectedOutputJson: {
+        categories: [{ key: 'claim', score: 4, comment: 'Clear claim.' }],
+        overallComment: 'Jordan, explain the stakes next.',
+      },
     },
   ],
 };
@@ -92,6 +102,10 @@ describe('assignment-type evaluations action', () => {
     );
     prisma.assignmentType.findUnique.mockResolvedValue(assignmentType);
     prisma.assignmentTypeEvaluationRun.findFirst.mockResolvedValue(null);
+    prisma.assignmentTypeEvaluation.count.mockResolvedValue(1);
+    prisma.assignmentTypeEvaluation.create.mockResolvedValue({
+      id: 'evaluation-new',
+    });
     prisma.assignmentTypeEvaluationCase.count.mockResolvedValue(2);
     prisma.assignmentTypeEvaluationCase.create.mockResolvedValue({
       id: 'case-new',
@@ -128,6 +142,130 @@ describe('assignment-type evaluations action', () => {
           },
         },
       ],
+    });
+  });
+
+  test('generates editable input and full-output cases for one named evaluation', async () => {
+    getLLMCompletion.mockResolvedValue(
+      JSON.stringify({
+        evaluationTitle: 'Positive greeting',
+        cases: [
+          {
+            title: 'Strong opening',
+            documentText:
+              'School uniforms can reduce distractions while still allowing students to express themselves through clubs and activities.',
+            expectedOutput: {
+              categories: [
+                { key: 'claim', score: 4, comment: 'The claim is clear.' },
+              ],
+              overallComment:
+                'Jordan, you have a clear position. Explain why the tradeoff matters.',
+            },
+          },
+        ],
+      })
+    );
+
+    const response = await action({
+      request: requestWith({
+        intent: 'generateEvaluation',
+        assignmentTypeId: 'at-1',
+        description:
+          'Always begin the final feedback with a brief, positive greeting.',
+      }),
+      params: {},
+      context: {} as never,
+    } as any);
+
+    expect(getLLMCompletion).toHaveBeenCalledWith(
+      expect.objectContaining({
+        metadata: expect.objectContaining({
+          feature: 'grading-evaluation-case-generation',
+          assignmentTypeId: 'at-1',
+        }),
+      })
+    );
+    expect((response as { data: any }).data).toMatchObject({
+      success: true,
+      evaluation: {
+        title: 'Positive greeting',
+        cases: [
+          expect.objectContaining({
+            title: 'Strong opening',
+            expectedOutput: expect.objectContaining({
+              overallComment: expect.stringContaining('Jordan'),
+            }),
+          }),
+        ],
+      },
+    });
+  });
+
+  test('saves selected generated cases under one evaluation column', async () => {
+    const cases = [
+      {
+        title: 'Strong opening',
+        documentText:
+          'School uniforms can reduce distractions while still allowing students to express themselves through clubs and activities.',
+        expectedOutput: {
+          categories: [
+            { key: 'claim', score: 4, comment: 'The claim is clear.' },
+          ],
+          overallComment:
+            'Jordan, you have a clear position. Explain why the tradeoff matters.',
+        },
+      },
+      {
+        title: 'Missing opening',
+        documentText:
+          'There are many different opinions about school uniforms, and each school approaches the issue in a different way.',
+        expectedOutput: {
+          categories: [
+            { key: 'claim', score: 2, comment: 'No clear claim is present.' },
+          ],
+          overallComment:
+            'Jordan, you introduce the topic clearly. Add a specific position to guide the essay.',
+        },
+      },
+    ];
+
+    const response = await action({
+      request: requestWith({
+        intent: 'createEvaluation',
+        assignmentTypeId: 'at-1',
+        title: 'Positive greeting',
+        description:
+          'Always begin the final feedback with a brief, positive greeting.',
+        casesJson: JSON.stringify(cases),
+      }),
+      params: {},
+      context: {} as never,
+    } as any);
+
+    expect(prisma.assignmentTypeEvaluation.create).toHaveBeenCalledWith({
+      data: {
+        assignmentTypeId: 'at-1',
+        title: 'Positive greeting',
+        description:
+          'Always begin the final feedback with a brief, positive greeting.',
+        position: 1,
+        cases: {
+          create: cases.map((evaluationCase, position) => ({
+            assignmentTypeId: 'at-1',
+            title: evaluationCase.title,
+            documentText: evaluationCase.documentText,
+            expectedOutputJson: evaluationCase.expectedOutput,
+            criterion:
+              'Always begin the final feedback with a brief, positive greeting.',
+            rubricCategoryKey: 'claim',
+            position,
+          })),
+        },
+      },
+    });
+    expect((response as { data: any }).data).toEqual({
+      success: true,
+      evaluationId: 'evaluation-new',
     });
   });
 

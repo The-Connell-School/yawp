@@ -68,6 +68,17 @@ describe('runGradingAssistantScratchEvaluation', () => {
       documentText: 'School uniforms should remain optional.',
       criterion:
         'The feedback should identify the claim and give one grounded next step.',
+      expectedOutput: {
+        categories: [
+          {
+            key: 'claim',
+            score: 4,
+            comment: 'The position is clear and defensible.',
+          },
+        ],
+        overallComment:
+          'Jordan, you make a clear claim. Explain why the choice matters.',
+      },
       studentFirstName: 'Jordan',
       strictnessLevel: 'intermediate',
       execute,
@@ -86,6 +97,9 @@ describe('runGradingAssistantScratchEvaluation', () => {
     );
     expect(execute.mock.calls[1]?.[0].messages[0].content).toContain(
       'The feedback should identify the claim and give one grounded next step.'
+    );
+    expect(execute.mock.calls[1]?.[0].messages[0].content).toContain(
+      'Jordan, you make a clear claim. Explain why the choice matters.'
     );
   });
 

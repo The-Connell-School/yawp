@@ -210,13 +210,27 @@ describe('admin assignment type detail action', () => {
       gradingAssistantVersion: 4,
       gradingAssistantSourceTemplateId: null,
       gradingAssistantSourceTemplateSlug: null,
+      evaluations: [
+        {
+          id: 'evaluation-1',
+          title: 'Positive greeting',
+          description: 'Begin with a brief, encouraging acknowledgment.',
+          position: 0,
+          archivedAt: null,
+          createdAt: new Date('2026-07-13T16:00:00.000Z'),
+        },
+      ],
       evaluationCases: [
         {
           id: 'case-1',
+          evaluationId: 'evaluation-1',
           title: 'Clear claim',
           rubricCategoryKey: 'ideas_and_analysis',
           documentText: 'School uniforms should remain optional.',
           criterion: 'The feedback identifies the claim.',
+          expectedOutputJson: {
+            overallComment: 'Jordan, you have a clear claim. Revise next.',
+          },
           position: 0,
           createdAt: new Date('2026-07-13T17:00:00.000Z'),
         },
@@ -248,6 +262,9 @@ describe('admin assignment type detail action', () => {
               status: 'pass',
               evidence: 'The response identifies the claim.',
               gradingOutputJson: { overallComment: 'Jordan, revise next.' },
+              expectedOutputJson: {
+                overallComment: 'Jordan, you have a clear claim. Revise next.',
+              },
             },
           ],
         },
@@ -290,7 +307,17 @@ describe('admin assignment type detail action', () => {
     expect(data.evaluationHistory.cases).toEqual([
       expect.objectContaining({
         id: 'case-1',
+        evaluationId: 'evaluation-1',
         rubricCategoryKey: 'ideas_and_analysis',
+        expectedOutput: {
+          overallComment: 'Jordan, you have a clear claim. Revise next.',
+        },
+      }),
+    ]);
+    expect(data.evaluationHistory.evaluations).toEqual([
+      expect.objectContaining({
+        id: 'evaluation-1',
+        title: 'Positive greeting',
       }),
     ]);
     expect(data.evaluationHistory.runs).toEqual([

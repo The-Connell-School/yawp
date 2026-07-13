@@ -9,6 +9,48 @@ import { compileGradingAssistantInvocation } from '~/domain/grading/grading-assi
 import { requireAdmin } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { getLLMCompletion } from '~/utils/getLLMCompletion';
+import { parseFirstJsonValue } from '~/utils/llm-json.server';
+
+const GeneratedOutputSchema = z.object({
+  categories: z
+    .array(
+      z.object({
+        key: z.string().trim().min(1).max(120),
+        score: z.number().finite(),
+        comment: z.string().trim().min(1).max(2_000),
+      })
+    )
+    .min(1),
+  overallComment: z.string().trim().min(1).max(4_000),
+});
+
+const GeneratedCasesSchema = z.object({
+  evaluationTitle: z.string().trim().min(1).max(160),
+  cases: z
+    .array(
+      z.object({
+        title: z.string().trim().min(1).max(160),
+        documentText: z.string().trim().min(1).max(50_000),
+        expectedOutput: GeneratedOutputSchema,
+      })
+    )
+    .min(1)
+    .max(8),
+});
+
+const GenerateEvaluationSchema = z.object({
+  intent: z.literal('generateEvaluation'),
+  assignmentTypeId: z.string().min(1),
+  description: z.string().trim().min(1).max(4_000),
+});
+
+const CreateEvaluationSchema = z.object({
+  intent: z.literal('createEvaluation'),
+  assignmentTypeId: z.string().min(1),
+  title: z.string().trim().min(1).max(160),
+  description: z.string().trim().min(1).max(4_000),
+  casesJson: z.string().min(1),
+});
 
 const CreateCaseSchema = z.object({
   intent: z.literal('createCase'),
@@ -31,6 +73,8 @@ const RunSuiteSchema = z.object({
 });
 
 const ActionSchema = z.discriminatedUnion('intent', [
+  GenerateEvaluationSchema,
+  CreateEvaluationSchema,
   CreateCaseSchema,
   ArchiveCaseSchema,
   RunSuiteSchema,
@@ -71,27 +115,247 @@ export async function action({ request }: ActionFunctionArgs) {
       gradingAssistantVersion: true,
       gradingAssistantSourceTemplateId: true,
       gradingAssistantSourceTemplateSlug: true,
+      evaluations: {
+        where: { archivedAt: null },
+        select: { id: true },
+      },
       evaluationCases: {
         where: { archivedAt: null },
         orderBy: [{ position: 'asc' }, { createdAt: 'asc' }],
         select: {
           id: true,
+          evaluationId: true,
           title: true,
           rubricCategoryKey: true,
           documentText: true,
           criterion: true,
+          expectedOutputJson: true,
         },
       },
     },
   });
   if (!assignmentType) return errorResponse('Assignment type not found.', 404);
 
-  if (input.intent === 'createCase') {
-    const rubricCategoryKeys = new Set(
-      parseRubric(assignmentType.rubricJson).categories.map(
-        (category) => category.key
+  const rubric = parseRubric(assignmentType.rubricJson);
+  const rubricCategoryKeys = new Set(
+    rubric.categories.map((category) => category.key)
+  );
+
+  if (input.intent === 'generateEvaluation') {
+    if (rubric.categories.length === 0) {
+      return errorResponse(
+        'Add an assignment rubric before generating evaluation cases.'
+      );
+    }
+    const gradingConfig = buildResolvedAssignmentTypeGradingConfig({
+      assignmentTypeId: assignmentType.id,
+      assignmentTypeKind: assignmentType.kind,
+      assignmentTypeTitle: assignmentType.title,
+      row: assignmentType,
+    });
+    const useE2EFixture = process.env.E2E === 'true';
+    let rawGeneration: string;
+    if (useE2EFixture) {
+      const makeExpectedOutput = (overallComment: string) => ({
+        categories: gradingConfig.rubricCategories.map((category) => ({
+          key: category.key,
+          score: Math.min(gradingConfig.maxScore, 4),
+          comment: `${category.label} is addressed with document-grounded feedback.`,
+        })),
+        overallComment,
+      });
+      rawGeneration = JSON.stringify({
+        evaluationTitle: 'Positive greeting',
+        cases: [
+          {
+            title: 'Strong opening',
+            documentText:
+              'School uniforms should remain optional because student choice matters and schools can address distractions with narrower policies.',
+            expectedOutput: makeExpectedOutput(
+              'Jordan, you make a clear claim. Add a concrete example to show why student choice matters.'
+            ),
+          },
+          {
+            title: 'Missing opening',
+            documentText:
+              'There are many different opinions about school uniforms, and each school approaches the issue in a different way.',
+            expectedOutput: makeExpectedOutput(
+              'Jordan, you introduce the topic clearly. Add a specific position to guide the essay.'
+            ),
+          },
+        ],
+      });
+    } else {
+      rawGeneration = await getLLMCompletion({
+        model: process.env.AI_MODEL ?? 'claude-sonnet-4-6',
+        system:
+          'You create synthetic grading-assistant evaluation cases. Return only JSON. Treat the requested behavior as the trusted evaluation requirement. Produce varied student-document inputs and a complete ideal grading-assistant JSON output for each one. The ideal output must use every rubric category exactly once and stay inside the scoring range. Never include real student data.',
+        messages: [
+          {
+            role: 'user',
+            content: JSON.stringify({
+              assignmentType: assignmentType.title,
+              requestedBehavior: input.description,
+              scoringRange: {
+                min: gradingConfig.minScore,
+                max: gradingConfig.maxScore,
+              },
+              rubric: gradingConfig.rubricCategories,
+              responseShape: {
+                evaluationTitle: 'Short behavior title',
+                cases: [
+                  {
+                    title: 'Short example title',
+                    documentText: 'Synthetic student submission',
+                    expectedOutput: {
+                      categories: [
+                        {
+                          key: 'rubric_category_key',
+                          score: 1,
+                          comment: 'Specific ideal category feedback',
+                        },
+                      ],
+                      overallComment: 'Complete ideal final feedback',
+                    },
+                  },
+                ],
+              },
+              requestedCaseCount: 5,
+            }),
+          },
+        ],
+        maxTokens: 5_000,
+        temperature: 0.3,
+        metadata: {
+          feature: 'grading-evaluation-case-generation',
+          assignmentTypeId: assignmentType.id,
+        },
+      });
+    }
+
+    let generated: z.infer<typeof GeneratedCasesSchema>;
+    try {
+      generated = GeneratedCasesSchema.parse(
+        parseFirstJsonValue(rawGeneration)
+      );
+    } catch {
+      return errorResponse(
+        'The generated evaluation cases were incomplete. Try generating again.',
+        502
+      );
+    }
+    const expectedKeys = [...rubricCategoryKeys].sort();
+    const hasInvalidOutput = generated.cases.some((evaluationCase) => {
+      const actualKeys = evaluationCase.expectedOutput.categories
+        .map((category) => category.key)
+        .sort();
+      return (
+        actualKeys.length !== expectedKeys.length ||
+        actualKeys.some((key, index) => key !== expectedKeys[index]) ||
+        evaluationCase.expectedOutput.categories.some(
+          (category) =>
+            category.score < gradingConfig.minScore ||
+            category.score > gradingConfig.maxScore
+        )
+      );
+    });
+    if (hasInvalidOutput) {
+      return errorResponse(
+        'The generated outputs did not match this assignment rubric. Try generating again.',
+        502
+      );
+    }
+    return dataResponse({
+      success: true,
+      evaluation: {
+        title: generated.evaluationTitle,
+        description: input.description,
+        cases: generated.cases,
+      },
+    });
+  }
+
+  if (input.intent === 'createEvaluation') {
+    let casesValue: unknown;
+    try {
+      casesValue = JSON.parse(input.casesJson);
+    } catch {
+      return errorResponse('Fix the expected output JSON before saving.');
+    }
+    const parsedCases = z
+      .array(
+        z.object({
+          title: z.string().trim().min(1).max(160),
+          documentText: z.string().trim().min(1).max(50_000),
+          expectedOutput: GeneratedOutputSchema,
+        })
       )
-    );
+      .min(1)
+      .max(8)
+      .safeParse(casesValue);
+    if (!parsedCases.success) {
+      return errorResponse('Select at least one complete evaluation case.');
+    }
+    const firstRubricCategoryKey = rubric.categories[0]?.key;
+    if (!firstRubricCategoryKey) {
+      return errorResponse('Add an assignment rubric before saving cases.');
+    }
+    const gradingConfig = buildResolvedAssignmentTypeGradingConfig({
+      assignmentTypeId: assignmentType.id,
+      assignmentTypeKind: assignmentType.kind,
+      assignmentTypeTitle: assignmentType.title,
+      row: assignmentType,
+    });
+    const expectedKeys = [...rubricCategoryKeys].sort();
+    const hasInvalidOutput = parsedCases.data.some((evaluationCase) => {
+      const actualKeys = evaluationCase.expectedOutput.categories
+        .map((category) => category.key)
+        .sort();
+      return (
+        actualKeys.length !== expectedKeys.length ||
+        actualKeys.some((key, index) => key !== expectedKeys[index]) ||
+        evaluationCase.expectedOutput.categories.some(
+          (category) =>
+            category.score < gradingConfig.minScore ||
+            category.score > gradingConfig.maxScore
+        )
+      );
+    });
+    if (hasInvalidOutput) {
+      return errorResponse(
+        'Every expected output must include this assignment’s full rubric and valid scores.'
+      );
+    }
+    const position = await prisma.assignmentTypeEvaluation.count({
+      where: { assignmentTypeId: assignmentType.id, archivedAt: null },
+    });
+    const evaluation = await prisma.assignmentTypeEvaluation.create({
+      data: {
+        assignmentTypeId: assignmentType.id,
+        title: input.title,
+        description: input.description,
+        position,
+        cases: {
+          create: parsedCases.data.map((evaluationCase, casePosition) => ({
+            assignmentTypeId: assignmentType.id,
+            title: evaluationCase.title,
+            documentText: evaluationCase.documentText,
+            expectedOutputJson: evaluationCase.expectedOutput,
+            criterion:
+              process.env.E2E === 'true' &&
+              evaluationCase.title === 'Missing opening'
+                ? `${input.description} [fixture:improves-after-v1]`
+                : input.description,
+            rubricCategoryKey: firstRubricCategoryKey,
+            position: casePosition,
+          })),
+        },
+      },
+    });
+    return dataResponse({ success: true, evaluationId: evaluation.id });
+  }
+
+  if (input.intent === 'createCase') {
     if (!rubricCategoryKeys.has(input.rubricCategoryKey)) {
       return errorResponse('Choose a category from this assignment rubric.');
     }
@@ -259,6 +523,9 @@ export async function action({ request }: ActionFunctionArgs) {
           evidence: result.evidence,
           ...(result.gradingOutput
             ? { gradingOutputJson: inputJson(result.gradingOutput) }
+            : {}),
+          ...(result.expectedOutput
+            ? { expectedOutputJson: inputJson(result.expectedOutput) }
             : {}),
           responseContractJson: inputJson(result.responseContract),
         })),
