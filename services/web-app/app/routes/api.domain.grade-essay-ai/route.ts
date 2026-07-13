@@ -17,10 +17,9 @@ import { resolveAssignmentTypeGradingConfig } from '~/domain/assignment-types/as
 import type { RubricCategory as GradingRubricCategory } from '~/domain/assignment-types/assignment-type-rubric.shared';
 import {
   DEFAULT_GRADING_ASSISTANT_STRICTNESS_LEVEL,
-  getGradingAssistantStrictnessInstructions,
-  getGradingAssistantStrictnessLabel,
   parseGradingAssistantStrictnessLevel,
 } from '~/domain/grading/grading-assistant-strictness';
+import { compileGradingAssistantInvocation } from '~/domain/grading/grading-assistant-invocation';
 import { redirectWithToast } from '~/utils/toast.server';
 import {
   extractJsonObjectCandidates,
@@ -189,7 +188,9 @@ function buildApHistoryPrompt({
     snapshot.essayType === 'dbq'
       ? snapshot.sources
           .map((source) => {
-            const caption = source.caption ? `\nCaption: ${source.caption}` : '';
+            const caption = source.caption
+              ? `\nCaption: ${source.caption}`
+              : '';
             return `Document ${source.position}: ${source.title}\nAttribution: ${source.attribution}${caption}\nBody: ${source.body}`;
           })
           .join('\n\n')
@@ -497,10 +498,7 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 
   if (
-    isGradingOwnDocument(
-      actor.membershipId,
-      submission.document.membershipId
-    )
+    isGradingOwnDocument(actor.membershipId, submission.document.membershipId)
   ) {
     return dataResponse(
       {
@@ -523,10 +521,10 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 
   const resolvedGradingConfig = await resolveAssignmentTypeGradingConfig({
-      assignmentTypeId: submission.document.assignmentTypeId,
-      assignmentTypeKind: submission.document.assignmentType?.kind ?? null,
-      assignmentTypeTitle: submission.document.assignmentType?.title ?? null,
-    });
+    assignmentTypeId: submission.document.assignmentTypeId,
+    assignmentTypeKind: submission.document.assignmentType?.kind ?? null,
+    assignmentTypeTitle: submission.document.assignmentType?.title ?? null,
+  });
   const requestedStrictnessLevel = data.gradingAssistantStrictnessLevel
     ? parseGradingAssistantStrictnessLevel(data.gradingAssistantStrictnessLevel)
     : null;
@@ -546,11 +544,6 @@ export async function action({ request }: ActionFunctionArgs) {
     requestedStrictnessLevel ??
     assignmentStrictnessLevel ??
     DEFAULT_GRADING_ASSISTANT_STRICTNESS_LEVEL;
-  const gradingAssistantStrictnessLabel = getGradingAssistantStrictnessLabel(
-    gradingAssistantStrictnessLevel
-  );
-  const gradingAssistantStrictnessInstructions =
-    getGradingAssistantStrictnessInstructions(gradingAssistantStrictnessLevel);
   const rubricCategories = resolvedGradingConfig.rubricCategories;
   const rubricKeys = rubricCategories.map((category) => category.key);
   const { minScore, maxScore, scoringType } = resolvedGradingConfig;
@@ -560,19 +553,11 @@ export async function action({ request }: ActionFunctionArgs) {
     maxScore,
     scoringType,
   };
-  const templateInstructions = resolvedGradingConfig.instructions;
   const { AiCategoriesSchema, AiResponseSchema } = buildAiSchemas({
     rubricKeys,
     minScore,
     maxScore,
   });
-
-  const rubricText = rubricCategories
-    .map(
-      (item) =>
-        `${item.key}: ${item.label} (${Math.round(item.weight * 100)}%) - ${item.description}`
-    )
-    .join('\n');
 
   const studentFirstName = firstNameFromFullName(
     submission.document.membership?.user?.name
@@ -583,8 +568,7 @@ export async function action({ request }: ActionFunctionArgs) {
     forceFallback,
     signalFallbackRetry: !forceFallback,
   };
-  const retryResponse = () =>
-    dataResponse({ retrying: true }, { status: 202 });
+  const retryResponse = () => dataResponse({ retrying: true }, { status: 202 });
   const getGradingLlmCompletion = (
     params: Parameters<typeof getLLMCompletion>[0]
   ) =>
@@ -745,36 +729,13 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
     });
   }
 
-  const gradingSystemBase = `You are a grading assistant. Return ONLY valid JSON with the schema:\n{\n  \"categories\": [{\"key\": string, \"score\": ${minScore}-${maxScore}, \"comment\": string}],\n  \"overallComment\": string\n}\nScores must be integers ${minScore}-${maxScore}.\nReturn exactly one category for each rubric key provided.\nProvide concise, actionable comments.\nIn overallComment, start with \"${studentFirstName},\" and continue with cohesive feedback in a warm but professional tone.\nAfter the name, continue naturally (for example: \"${studentFirstName}, you ...\").\nDo not use fixed lead-ins like \"Overall grade,\" or \"${studentFirstName}, this is your overall feedback.\"`;
-  const strictnessBlock = `Grading assistant strictness: ${gradingAssistantStrictnessLabel}\n${gradingAssistantStrictnessInstructions}\n\n`;
-
-  let system = gradingSystemBase;
-  let userPrompt = '';
-
-  if (templateInstructions.mode === 'unified') {
-    system = `${gradingSystemBase}\nFollow the grading instructions in the user prompt exactly.`;
-    userPrompt = `Student first name: ${studentFirstName}\n\nAssignment type grading config: ${resolvedGradingConfig.label}\n\n${strictnessBlock}Rubric category keys (use these exact keys in categories[].key):\n${rubricText}\n\nGrading instructions:\n${templateInstructions.gradingInstructions}\n\nEssay:\n${submission.text}`;
-  } else {
-    const rubricInstructions =
-      templateInstructions.mode === 'legacy-split' ||
-      templateInstructions.mode === 'preset'
-        ? templateInstructions.rubricInstructions
-        : '';
-    const scoreInstructions =
-      templateInstructions.mode === 'legacy-split' ||
-      templateInstructions.mode === 'preset'
-        ? templateInstructions.scoreInstructions
-        : '';
-    const systemInstructions =
-      templateInstructions.mode === 'legacy-split'
-        ? templateInstructions.systemInstructions
-        : undefined;
-    const templateSystemInstructions = systemInstructions
-      ? `${systemInstructions}\n\n`
-      : '';
-    system = `${templateSystemInstructions}${gradingSystemBase}\nUse the rubric language, proficiency bands, and category weights from the user prompt exactly.\n${scoreInstructions}`;
-    userPrompt = `Student first name: ${studentFirstName}\n\nAssignment type grading config: ${resolvedGradingConfig.label}\n\n${strictnessBlock}Rubric category keys (use these exact keys in categories[].key):\n${rubricText}\n\nRubric Instructions:\n${rubricInstructions}\n\nEssay:\n${submission.text}`;
-  }
+  const compiledInvocation = compileGradingAssistantInvocation({
+    gradingConfig: resolvedGradingConfig,
+    studentFirstName,
+    strictnessLevel: gradingAssistantStrictnessLevel,
+    documentText: submission.text,
+  });
+  const { system, maxTokens } = compiledInvocation;
 
   let responseText = '';
 
@@ -790,15 +751,16 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
       responseText = await getGradingLlmCompletion({
         model,
         system,
-        messages: [{ role: 'user', content: userPrompt }],
-        maxTokens: 900,
+        messages: compiledInvocation.messages,
+        maxTokens,
         metadata: {
           feature: 'grading',
           kind: 'rubric-evaluation',
           gradingConfigSource: resolvedGradingConfig.source,
           ...gradingAiContextMetadata,
           assignmentTypeGradingLabel: resolvedGradingConfig.label,
-          assignmentTypeSourceTemplateId: resolvedGradingConfig.sourceTemplateId,
+          assignmentTypeSourceTemplateId:
+            resolvedGradingConfig.sourceTemplateId,
           assignmentTypeSourceTemplateSlug:
             resolvedGradingConfig.sourceTemplateSlug,
           gradingAssistantStrictnessLevel,
@@ -1079,7 +1041,8 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
         assignmentTypeGradingVersion: resolvedGradingConfig.version,
         assignmentTypeGradingLabel: resolvedGradingConfig.label,
         assignmentTypeSourceTemplateId: resolvedGradingConfig.sourceTemplateId,
-        assignmentTypeSourceTemplateSlug: resolvedGradingConfig.sourceTemplateSlug,
+        assignmentTypeSourceTemplateSlug:
+          resolvedGradingConfig.sourceTemplateSlug,
         gradingAssistantStrictnessLevel,
         assignmentTypeId: submission.document.assignmentTypeId,
         assignmentId: submission.document.assignment?.id ?? null,
