@@ -119,6 +119,18 @@ test.describe.serial('Admin assignment types', () => {
       const addEvaluationDialog = page.getByRole('dialog', {
         name: 'Add evaluation',
       });
+      await expect(
+        addEvaluationDialog.getByLabel('Evaluation name')
+      ).toBeVisible();
+      await expect(
+        addEvaluationDialog.getByLabel('Evaluation description')
+      ).toBeVisible();
+      await expect(
+        addEvaluationDialog.getByLabel('Describe what good looks like')
+      ).not.toBeVisible();
+      await addEvaluationDialog
+        .getByRole('button', { name: 'Generate with AI' })
+        .click();
       await addEvaluationDialog
         .getByLabel('Describe what good looks like')
         .fill(
@@ -130,6 +142,11 @@ test.describe.serial('Admin assignment types', () => {
       await expect(
         addEvaluationDialog.getByLabel('Evaluation name')
       ).toHaveValue('Positive greeting');
+      await expect(
+        addEvaluationDialog.getByLabel('Evaluation description')
+      ).toHaveValue(
+        'Always begin the final feedback with a brief, positive greeting to the student.'
+      );
       await expect(
         addEvaluationDialog.getByRole('checkbox', {
           name: 'Use Strong opening',
@@ -159,15 +176,21 @@ test.describe.serial('Admin assignment types', () => {
       const evaluationDialog = page.getByRole('dialog', {
         name: 'Positive greeting',
       });
-      await evaluationDialog
-        .getByRole('button', { name: 'Edit evaluation' })
-        .click();
+      await expect(
+        evaluationDialog.getByRole('button', { name: 'Edit evaluation' })
+      ).toHaveCount(0);
+      await expect(evaluationDialog.getByLabel('Evaluation name')).toHaveValue(
+        'Positive greeting'
+      );
       await evaluationDialog
         .getByLabel('Evaluation name')
         .fill('Encouraging opening');
       await evaluationDialog
         .getByText('Strong opening', { exact: true })
         .click();
+      await expect(
+        evaluationDialog.getByRole('button', { name: 'Remove case' })
+      ).toBeVisible();
       await evaluationDialog
         .getByLabel('Strong opening case name')
         .fill('Clear position');

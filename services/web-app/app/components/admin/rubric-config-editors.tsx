@@ -8,6 +8,7 @@ import {
   GripVertical,
   Loader2,
   Plus,
+  Sparkles,
   Trash2,
 } from 'lucide-react';
 import {
@@ -48,6 +49,11 @@ import {
   SheetHeader,
   SheetTitle,
 } from '~/components/ui/sheet';
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '~/components/ui/collapsible';
 import {
   DEFAULT_SCORING_SCALE,
   prepareRubricForSave,
@@ -1320,6 +1326,71 @@ type EvaluationFetcherData = {
   };
 };
 
+function CaseFieldsBody({
+  idPrefix,
+  labelTitle,
+  title,
+  documentText,
+  expectedOutputText,
+  disabled,
+  onTitleChange,
+  onDocumentChange,
+  onOutputChange,
+}: {
+  idPrefix: string;
+  labelTitle: string;
+  title: string;
+  documentText: string;
+  expectedOutputText: string;
+  disabled: boolean;
+  onTitleChange: (value: string) => void;
+  onDocumentChange: (value: string) => void;
+  onOutputChange: (value: string) => void;
+}) {
+  return (
+    <div className="mt-3 space-y-3">
+      <div className="space-y-1.5">
+        <Label htmlFor={`${idPrefix}-name`}>Case name</Label>
+        <Input
+          id={`${idPrefix}-name`}
+          aria-label={`${labelTitle} case name`}
+          value={title}
+          onChange={(event) => onTitleChange(event.target.value)}
+          disabled={disabled}
+        />
+      </div>
+      <div className="space-y-1.5">
+        <Label htmlFor={`${idPrefix}-document`}>Input document</Label>
+        <Textarea
+          id={`${idPrefix}-document`}
+          aria-label={`${labelTitle} input document`}
+          rows={6}
+          value={documentText}
+          onChange={(event) => onDocumentChange(event.target.value)}
+          disabled={disabled}
+        />
+      </div>
+      <details className="text-sm">
+        <summary className="cursor-pointer text-muted-foreground">
+          Edit full expected output
+        </summary>
+        <div className="mt-2 space-y-1.5">
+          <Label htmlFor={`${idPrefix}-output`}>Full expected output</Label>
+          <Textarea
+            id={`${idPrefix}-output`}
+            aria-label={`${labelTitle} full expected output`}
+            rows={10}
+            value={expectedOutputText}
+            onChange={(event) => onOutputChange(event.target.value)}
+            disabled={disabled}
+            className="font-mono text-xs"
+          />
+        </div>
+      </details>
+    </div>
+  );
+}
+
 function AddEvaluationSheet({
   open,
   onOpenChange,
@@ -1331,6 +1402,8 @@ function AddEvaluationSheet({
   assignmentTypeId: string;
   fetcher: ReturnType<typeof useFetcher<EvaluationFetcherData>>;
 }) {
+  const [generatorOpen, setGeneratorOpen] = useState(false);
+  const [genPrompt, setGenPrompt] = useState('');
   const [description, setDescription] = useState('');
   const [evaluationTitle, setEvaluationTitle] = useState('');
   const [cases, setCases] = useState<GeneratedEvaluationCaseDraft[]>([]);
@@ -1344,6 +1417,8 @@ function AddEvaluationSheet({
 
   useEffect(() => {
     if (!open) {
+      setGeneratorOpen(false);
+      setGenPrompt('');
       setDescription('');
       setEvaluationTitle('');
       setCases([]);
@@ -1357,6 +1432,7 @@ function AddEvaluationSheet({
     handledResponseRef.current = fetcher.data;
     if (fetcher.data.evaluation) {
       setEvaluationTitle(fetcher.data.evaluation.title);
+      setDescription(fetcher.data.evaluation.description);
       setCases(
         fetcher.data.evaluation.cases.map((evaluationCase) => ({
           title: evaluationCase.title,
@@ -1369,6 +1445,7 @@ function AddEvaluationSheet({
           selected: true,
         }))
       );
+      setGeneratorOpen(false);
       return;
     }
     if (fetcher.data.evaluationId) onOpenChange(false);
@@ -1377,9 +1454,12 @@ function AddEvaluationSheet({
   const selectedCount = cases.filter(
     (evaluationCase) => evaluationCase.selected
   ).length;
-  const canGenerate = description.trim().length > 0 && !isWorking;
+  const canGenerate = genPrompt.trim().length > 0 && !isWorking;
   const canSave =
-    evaluationTitle.trim().length > 0 && selectedCount > 0 && !isWorking;
+    evaluationTitle.trim().length > 0 &&
+    description.trim().length > 0 &&
+    selectedCount > 0 &&
+    !isWorking;
 
   function handleGenerate() {
     if (!canGenerate) return;
@@ -1387,7 +1467,7 @@ function AddEvaluationSheet({
     const formData = new FormData();
     formData.set('intent', 'generateEvaluation');
     formData.set('assignmentTypeId', assignmentTypeId);
-    formData.set('description', description.trim());
+    formData.set('description', genPrompt.trim());
     fetcher.submit(formData, {
       method: 'POST',
       action: '/api/domain/assignment-type-evaluations',
@@ -1456,144 +1536,149 @@ function AddEvaluationSheet({
           <SheetTitle>Add evaluation</SheetTitle>
         </SheetHeader>
         <div className="mt-4 space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="evaluation-description">
-              Describe what good looks like
-            </Label>
-            <Textarea
-              id="evaluation-description"
-              rows={5}
-              value={description}
-              onChange={(event) => setDescription(event.target.value)}
-              placeholder="e.g. Always begin the final feedback with a brief, positive greeting."
-              disabled={isWorking || cases.length > 0}
-            />
-            <p className="text-sm text-muted-foreground text-pretty">
-              AI will suggest varied inputs and a complete ideal output for each
-              one. Nothing is saved until you choose the cases you want.
-            </p>
-          </div>
-          {cases.length === 0 ? (
-            <Button
-              type="button"
-              className="w-full"
-              onClick={handleGenerate}
-              disabled={!canGenerate}
-            >
-              {isWorking ? (
-                <>
-                  <Loader2 className="mr-2 size-4 shrink-0 animate-spin" />
-                  Generating...
-                </>
-              ) : (
-                'Generate evaluations'
-              )}
-            </Button>
-          ) : (
-            <>
+          <Collapsible open={generatorOpen} onOpenChange={setGeneratorOpen}>
+            <CollapsibleTrigger asChild>
+              <Button type="button" variant="outline" size="sm">
+                <Sparkles className="mr-1.5 size-4 shrink-0" />
+                Generate with AI
+              </Button>
+            </CollapsibleTrigger>
+            <CollapsibleContent className="mt-3 space-y-3">
               <div className="space-y-2">
-                <Label htmlFor="evaluation-title">Evaluation name</Label>
-                <Input
-                  id="evaluation-title"
-                  value={evaluationTitle}
-                  onChange={(event) => setEvaluationTitle(event.target.value)}
+                <Label htmlFor="evaluation-generate-prompt">
+                  Describe what good looks like
+                </Label>
+                <Textarea
+                  id="evaluation-generate-prompt"
+                  rows={5}
+                  value={genPrompt}
+                  onChange={(event) => setGenPrompt(event.target.value)}
+                  placeholder="e.g. Always begin the final feedback with a brief, positive greeting."
                   disabled={isWorking}
                 />
-                <p className="text-sm text-muted-foreground">
-                  This becomes one column in the history table.
+                <p className="text-sm text-muted-foreground text-pretty">
+                  AI will suggest varied inputs and a complete ideal output for
+                  each one, and fill in the name and description below.
                 </p>
-              </div>
-              <div className="space-y-2">
-                <p className="text-sm font-medium">Choose cases</p>
-                {cases.map((evaluationCase, index) => (
-                  <div
-                    key={`${evaluationCase.title}-${index}`}
-                    className="rounded-md border p-3"
-                  >
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        aria-label={`Use ${evaluationCase.title}`}
-                        checked={evaluationCase.selected}
-                        onChange={(event) =>
-                          updateCase(index, { selected: event.target.checked })
-                        }
-                        disabled={isWorking}
-                        className="size-4"
-                      />
-                      <Input
-                        aria-label={`${evaluationCase.title} title`}
-                        value={evaluationCase.title}
-                        onChange={(event) =>
-                          updateCase(index, { title: event.target.value })
-                        }
-                        disabled={isWorking}
-                        className="h-8"
-                      />
-                    </div>
-                    <details className="mt-2 text-sm">
-                      <summary className="cursor-pointer text-muted-foreground">
-                        Review input and expected output
-                      </summary>
-                      <div className="mt-3 space-y-3">
-                        <div className="space-y-1.5">
-                          <Label htmlFor={`generated-case-input-${index}`}>
-                            Input document
-                          </Label>
-                          <Textarea
-                            id={`generated-case-input-${index}`}
-                            rows={6}
-                            value={evaluationCase.documentText}
-                            onChange={(event) =>
-                              updateCase(index, {
-                                documentText: event.target.value,
-                              })
-                            }
-                            disabled={isWorking}
-                          />
-                        </div>
-                        <div className="space-y-1.5">
-                          <Label htmlFor={`generated-case-output-${index}`}>
-                            Full expected output
-                          </Label>
-                          <Textarea
-                            id={`generated-case-output-${index}`}
-                            rows={10}
-                            value={evaluationCase.expectedOutputText}
-                            onChange={(event) =>
-                              updateCase(index, {
-                                expectedOutputText: event.target.value,
-                              })
-                            }
-                            disabled={isWorking}
-                            className="font-mono text-xs"
-                          />
-                        </div>
-                      </div>
-                    </details>
-                  </div>
-                ))}
               </div>
               <Button
                 type="button"
                 className="w-full"
-                onClick={handleSave}
-                disabled={!canSave}
+                onClick={handleGenerate}
+                disabled={!canGenerate}
               >
                 {isWorking ? (
                   <>
                     <Loader2 className="mr-2 size-4 shrink-0 animate-spin" />
-                    Saving...
+                    Generating...
                   </>
                 ) : (
-                  `Save ${selectedCount} ${selectedCount === 1 ? 'case' : 'cases'}`
+                  'Generate evaluations'
                 )}
               </Button>
-            </>
-          )}
+            </CollapsibleContent>
+          </Collapsible>
+
+          <div className="space-y-2">
+            <Label htmlFor="evaluation-title">Evaluation name</Label>
+            <Input
+              id="evaluation-title"
+              value={evaluationTitle}
+              onChange={(event) => setEvaluationTitle(event.target.value)}
+              disabled={isWorking}
+            />
+            <p className="text-sm text-muted-foreground">
+              This becomes one column in the history table.
+            </p>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="evaluation-description">
+              Evaluation description
+            </Label>
+            <Textarea
+              id="evaluation-description"
+              rows={3}
+              value={description}
+              onChange={(event) => setDescription(event.target.value)}
+              disabled={isWorking}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <p className="text-sm font-medium">
+              {pluralizeCases(cases.length)}
+            </p>
+            {cases.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                No cases yet. Use Generate with AI above, and they&apos;ll
+                appear here for review.
+              </p>
+            ) : (
+              cases.map((evaluationCase, index) => (
+                <div
+                  key={`${evaluationCase.title}-${index}`}
+                  className="flex items-start gap-2 rounded-md border p-3"
+                >
+                  <input
+                    type="checkbox"
+                    aria-label={`Use ${evaluationCase.title}`}
+                    checked={evaluationCase.selected}
+                    onChange={(event) =>
+                      updateCase(index, { selected: event.target.checked })
+                    }
+                    disabled={isWorking}
+                    className="mt-1 size-4 shrink-0"
+                  />
+                  <details className="min-w-0 flex-1 text-sm">
+                    <summary className="cursor-pointer font-medium">
+                      {evaluationCase.title || `Case ${index + 1}`}
+                    </summary>
+                    <CaseFieldsBody
+                      idPrefix={`generated-case-${index}`}
+                      labelTitle={evaluationCase.title}
+                      title={evaluationCase.title}
+                      documentText={evaluationCase.documentText}
+                      expectedOutputText={evaluationCase.expectedOutputText}
+                      disabled={isWorking}
+                      onTitleChange={(value) =>
+                        updateCase(index, { title: value })
+                      }
+                      onDocumentChange={(value) =>
+                        updateCase(index, { documentText: value })
+                      }
+                      onOutputChange={(value) =>
+                        updateCase(index, { expectedOutputText: value })
+                      }
+                    />
+                  </details>
+                </div>
+              ))
+            )}
+          </div>
+
           {errorMessage ? (
             <p className="text-sm text-destructive">{errorMessage}</p>
           ) : null}
+          <div className="flex items-center justify-end gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+              disabled={isWorking}
+            >
+              Cancel
+            </Button>
+            <Button type="button" onClick={handleSave} disabled={!canSave}>
+              {isWorking ? (
+                <>
+                  <Loader2 className="mr-2 size-4 shrink-0 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                `Save ${selectedCount} ${selectedCount === 1 ? 'case' : 'cases'}`
+              )}
+            </Button>
+          </div>
         </div>
       </SheetContent>
     </Sheet>
@@ -1627,17 +1712,39 @@ function EvaluationDetailSheet({
   isRemoving: boolean;
 }) {
   const updateFetcher = useFetcher<UpdateEvaluationFetcherData>();
-  const [isEditing, setIsEditing] = useState(false);
   const [editTitle, setEditTitle] = useState('');
   const [editDescription, setEditDescription] = useState('');
   const [editCases, setEditCases] = useState<EvaluationCaseDraft[]>([]);
   const [localError, setLocalError] = useState<string | null>(null);
   const handledResponseRef = useRef<unknown>(null);
   const isSaving = updateFetcher.state !== 'idle';
+  const isBusy = isSaving || isRemoving;
 
   useEffect(() => {
-    setIsEditing(false);
     setLocalError(null);
+    if (!evaluation) return;
+    const editable =
+      Boolean(evaluation.evaluationId) &&
+      !evaluation.key.startsWith('legacy:') &&
+      !evaluation.archived;
+    if (!editable) return;
+    const active = evaluation.cases.filter(
+      (evaluationCase) => !evaluationCase.archived
+    );
+    setEditTitle(evaluation.label);
+    setEditDescription(evaluation.description);
+    setEditCases(
+      active.map((evaluationCase) => ({
+        id: evaluationCase.id,
+        title: evaluationCase.title,
+        documentText: evaluationCase.documentText,
+        expectedOutputText: JSON.stringify(
+          evaluationCase.expectedOutput,
+          null,
+          2
+        ),
+      }))
+    );
   }, [evaluation?.key]);
 
   useEffect(() => {
@@ -1645,7 +1752,6 @@ function EvaluationDetailSheet({
     if (handledResponseRef.current === updateFetcher.data) return;
     handledResponseRef.current = updateFetcher.data;
     if (updateFetcher.data.success) {
-      setIsEditing(false);
       onOpenChange(false);
     } else {
       setLocalError(updateFetcher.data.message ?? 'Could not save changes.');
@@ -1658,34 +1764,14 @@ function EvaluationDetailSheet({
   const activeCases = evaluation.cases.filter(
     (evaluationCase) => !evaluationCase.archived
   );
+  const canEdit =
+    Boolean(evaluation.evaluationId) &&
+    !isLegacy &&
+    !evaluation.archived &&
+    activeCases.length > 0;
   const archivedCases = evaluation.cases.filter(
     (evaluationCase) => evaluationCase.archived
   );
-
-  function startEditing() {
-    if (!evaluation) return;
-    setEditTitle(evaluation.label);
-    setEditDescription(evaluation.description);
-    setEditCases(
-      activeCases.map((evaluationCase) => ({
-        id: evaluationCase.id,
-        title: evaluationCase.title,
-        documentText: evaluationCase.documentText,
-        expectedOutputText: JSON.stringify(
-          evaluationCase.expectedOutput,
-          null,
-          2
-        ),
-      }))
-    );
-    setLocalError(null);
-    setIsEditing(true);
-  }
-
-  function cancelEditing() {
-    setIsEditing(false);
-    setLocalError(null);
-  }
 
   function updateEditCase(id: string, patch: Partial<EvaluationCaseDraft>) {
     setEditCases((current) =>
@@ -1697,6 +1783,13 @@ function EvaluationDetailSheet({
     );
   }
 
+  function removeEditCase(id: string) {
+    setEditCases((current) =>
+      current.filter((evaluationCase) => evaluationCase.id !== id)
+    );
+    onRemoveCase(id);
+  }
+
   function handleSaveChanges() {
     if (!evaluation) return;
     setLocalError(null);
@@ -1706,6 +1799,10 @@ function EvaluationDetailSheet({
     }
     if (!editTitle.trim() || !editDescription.trim()) {
       setLocalError('Evaluation name and description are required.');
+      return;
+    }
+    if (editCases.length === 0) {
+      setLocalError('Keep at least one case in this evaluation.');
       return;
     }
     let parsedCases: Array<{
@@ -1748,13 +1845,7 @@ function EvaluationDetailSheet({
   }
 
   return (
-    <Sheet
-      open={open}
-      onOpenChange={(next) => {
-        if (!next) setIsEditing(false);
-        onOpenChange(next);
-      }}
-    >
+    <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
         aria-describedby={undefined}
         className="flex max-h-screen flex-col overflow-y-auto sm:max-w-xl"
@@ -1762,7 +1853,7 @@ function EvaluationDetailSheet({
         <SheetHeader>
           <SheetTitle>{evaluation.label}</SheetTitle>
         </SheetHeader>
-        {isEditing ? (
+        {canEdit ? (
           <div className="mt-4 space-y-4">
             <div className="space-y-2">
               <Label htmlFor="evaluation-edit-title">Evaluation name</Label>
@@ -1770,7 +1861,7 @@ function EvaluationDetailSheet({
                 id="evaluation-edit-title"
                 value={editTitle}
                 onChange={(event) => setEditTitle(event.target.value)}
-                disabled={isSaving}
+                disabled={isBusy}
               />
             </div>
             <div className="space-y-2">
@@ -1782,7 +1873,7 @@ function EvaluationDetailSheet({
                 rows={4}
                 value={editDescription}
                 onChange={(event) => setEditDescription(event.target.value)}
-                disabled={isSaving}
+                disabled={isBusy}
               />
             </div>
             <div className="space-y-2">
@@ -1797,70 +1888,40 @@ function EvaluationDetailSheet({
                   <summary className="cursor-pointer font-medium">
                     {evaluationCase.title || `Case ${index + 1}`}
                   </summary>
-                  <div className="mt-3 space-y-3">
-                    <div className="space-y-1.5">
-                      <Label
-                        htmlFor={`evaluation-case-name-${evaluationCase.id}`}
-                      >
-                        Case name
-                      </Label>
-                      <Input
-                        id={`evaluation-case-name-${evaluationCase.id}`}
-                        aria-label={`${activeCases[index]?.title} case name`}
-                        value={evaluationCase.title}
-                        onChange={(event) =>
-                          updateEditCase(evaluationCase.id, {
-                            title: event.target.value,
-                          })
-                        }
-                        disabled={isSaving}
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label
-                        htmlFor={`evaluation-case-document-${evaluationCase.id}`}
-                      >
-                        Input document
-                      </Label>
-                      <Textarea
-                        id={`evaluation-case-document-${evaluationCase.id}`}
-                        aria-label={`${activeCases[index]?.title} input document`}
-                        rows={6}
-                        value={evaluationCase.documentText}
-                        onChange={(event) =>
-                          updateEditCase(evaluationCase.id, {
-                            documentText: event.target.value,
-                          })
-                        }
-                        disabled={isSaving}
-                      />
-                    </div>
-                    <details className="text-sm">
-                      <summary className="cursor-pointer text-muted-foreground">
-                        Edit full expected output
-                      </summary>
-                      <div className="mt-2 space-y-1.5">
-                        <Label
-                          htmlFor={`evaluation-case-output-${evaluationCase.id}`}
-                        >
-                          Full expected output
-                        </Label>
-                        <Textarea
-                          id={`evaluation-case-output-${evaluationCase.id}`}
-                          aria-label={`${activeCases[index]?.title} full expected output`}
-                          rows={10}
-                          value={evaluationCase.expectedOutputText}
-                          onChange={(event) =>
-                            updateEditCase(evaluationCase.id, {
-                              expectedOutputText: event.target.value,
-                            })
-                          }
-                          disabled={isSaving}
-                          className="font-mono text-xs"
-                        />
-                      </div>
-                    </details>
-                  </div>
+                  <CaseFieldsBody
+                    idPrefix={`evaluation-case-${evaluationCase.id}`}
+                    labelTitle={
+                      activeCases[index]?.title ?? evaluationCase.title
+                    }
+                    title={evaluationCase.title}
+                    documentText={evaluationCase.documentText}
+                    expectedOutputText={evaluationCase.expectedOutputText}
+                    disabled={isBusy}
+                    onTitleChange={(value) =>
+                      updateEditCase(evaluationCase.id, { title: value })
+                    }
+                    onDocumentChange={(value) =>
+                      updateEditCase(evaluationCase.id, {
+                        documentText: value,
+                      })
+                    }
+                    onOutputChange={(value) =>
+                      updateEditCase(evaluationCase.id, {
+                        expectedOutputText: value,
+                      })
+                    }
+                  />
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="destructive-outline"
+                    onClick={() => removeEditCase(evaluationCase.id)}
+                    disabled={isBusy}
+                    className="mt-3"
+                  >
+                    <Trash2 className="mr-2 size-4 shrink-0" />
+                    {isRemoving ? 'Removing...' : 'Remove case'}
+                  </Button>
                 </details>
               ))}
             </div>
@@ -1871,15 +1932,15 @@ function EvaluationDetailSheet({
               <Button
                 type="button"
                 variant="outline"
-                onClick={cancelEditing}
-                disabled={isSaving}
+                onClick={() => onOpenChange(false)}
+                disabled={isBusy}
               >
                 Cancel
               </Button>
               <Button
                 type="button"
                 onClick={handleSaveChanges}
-                disabled={isSaving}
+                disabled={isBusy || editCases.length === 0}
               >
                 {isSaving ? (
                   <>
@@ -1898,21 +1959,9 @@ function EvaluationDetailSheet({
               <Badge variant="warning-soft">Archived</Badge>
             ) : null}
             <p className="text-sm text-pretty">{evaluation.description}</p>
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <p className="text-sm font-medium">
-                {pluralizeCases(evaluation.cases.length)}
-              </p>
-              {!isLegacy && !evaluation.archived && activeCases.length > 0 ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={startEditing}
-                >
-                  Edit evaluation
-                </Button>
-              ) : null}
-            </div>
+            <p className="text-sm font-medium">
+              {pluralizeCases(evaluation.cases.length)}
+            </p>
             {activeCases.map((evaluationCase) => (
               <details
                 key={evaluationCase.id}
