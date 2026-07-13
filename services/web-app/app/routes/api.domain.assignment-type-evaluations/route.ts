@@ -52,6 +52,15 @@ const CreateEvaluationSchema = z.object({
   casesJson: z.string().min(1),
 });
 
+const UpdateEvaluationSchema = z.object({
+  intent: z.literal('updateEvaluation'),
+  assignmentTypeId: z.string().min(1),
+  evaluationId: z.string().min(1),
+  title: z.string().trim().min(1).max(160),
+  description: z.string().trim().min(1).max(4_000),
+  casesJson: z.string().min(1),
+});
+
 const CreateCaseSchema = z.object({
   intent: z.literal('createCase'),
   assignmentTypeId: z.string().min(1),
@@ -75,6 +84,7 @@ const RunSuiteSchema = z.object({
 const ActionSchema = z.discriminatedUnion('intent', [
   GenerateEvaluationSchema,
   CreateEvaluationSchema,
+  UpdateEvaluationSchema,
   CreateCaseSchema,
   ArchiveCaseSchema,
   RunSuiteSchema,
@@ -353,6 +363,125 @@ export async function action({ request }: ActionFunctionArgs) {
       },
     });
     return dataResponse({ success: true, evaluationId: evaluation.id });
+  }
+
+  if (input.intent === 'updateEvaluation') {
+    if (
+      !assignmentType.evaluations.some(
+        (evaluation) => evaluation.id === input.evaluationId
+      )
+    ) {
+      return errorResponse('Evaluation not found.', 404);
+    }
+    let casesValue: unknown;
+    try {
+      casesValue = JSON.parse(input.casesJson);
+    } catch {
+      return errorResponse('Fix the expected output JSON before saving.');
+    }
+    const parsedCases = z
+      .array(
+        z.object({
+          id: z.string().min(1),
+          title: z.string().trim().min(1).max(160),
+          documentText: z.string().trim().min(1).max(50_000),
+          expectedOutput: GeneratedOutputSchema,
+        })
+      )
+      .min(1)
+      .max(20)
+      .safeParse(casesValue);
+    if (!parsedCases.success) {
+      return errorResponse('Every case needs a name, input, and full output.');
+    }
+    const activeEvaluationCases = assignmentType.evaluationCases.filter(
+      (evaluationCase) => evaluationCase.evaluationId === input.evaluationId
+    );
+    const activeCaseIds = new Set(
+      activeEvaluationCases.map((evaluationCase) => evaluationCase.id)
+    );
+    if (
+      parsedCases.data.length !== activeEvaluationCases.length ||
+      parsedCases.data.some(
+        (evaluationCase) => !activeCaseIds.has(evaluationCase.id)
+      )
+    ) {
+      return errorResponse(
+        'The saved cases changed while you were editing. Reopen the evaluation and try again.',
+        409
+      );
+    }
+    const gradingConfig = buildResolvedAssignmentTypeGradingConfig({
+      assignmentTypeId: assignmentType.id,
+      assignmentTypeKind: assignmentType.kind,
+      assignmentTypeTitle: assignmentType.title,
+      row: assignmentType,
+    });
+    const expectedKeys = [...rubricCategoryKeys].sort();
+    const hasInvalidOutput = parsedCases.data.some((evaluationCase) => {
+      const actualKeys = evaluationCase.expectedOutput.categories
+        .map((category) => category.key)
+        .sort();
+      return (
+        actualKeys.length !== expectedKeys.length ||
+        actualKeys.some((key, index) => key !== expectedKeys[index]) ||
+        evaluationCase.expectedOutput.categories.some(
+          (category) =>
+            category.score < gradingConfig.minScore ||
+            category.score > gradingConfig.maxScore
+        )
+      );
+    });
+    if (hasInvalidOutput) {
+      return errorResponse(
+        'Every expected output must include this assignment’s full rubric and valid scores.'
+      );
+    }
+
+    await prisma.$transaction(async (tx) => {
+      const updatedEvaluation = await tx.assignmentTypeEvaluation.updateMany({
+        where: {
+          id: input.evaluationId,
+          assignmentTypeId: assignmentType.id,
+          archivedAt: null,
+        },
+        data: {
+          title: input.title,
+          description: input.description,
+        },
+      });
+      if (updatedEvaluation.count === 0) {
+        throw new Error('Evaluation not found.');
+      }
+      for (const evaluationCase of parsedCases.data) {
+        const existingCase = activeEvaluationCases.find(
+          (activeCase) => activeCase.id === evaluationCase.id
+        );
+        const fixtureSuffix =
+          process.env.E2E === 'true' &&
+          existingCase?.criterion.includes('[fixture:improves-after-v1]')
+            ? ' [fixture:improves-after-v1]'
+            : '';
+        const updatedCase = await tx.assignmentTypeEvaluationCase.updateMany({
+          where: {
+            id: evaluationCase.id,
+            evaluationId: input.evaluationId,
+            assignmentTypeId: assignmentType.id,
+            archivedAt: null,
+          },
+          data: {
+            title: evaluationCase.title,
+            documentText: evaluationCase.documentText,
+            expectedOutputJson: inputJson(evaluationCase.expectedOutput),
+            criterion: `${input.description}${fixtureSuffix}`,
+          },
+        });
+        if (updatedCase.count === 0) {
+          throw new Error('Evaluation case not found.');
+        }
+      }
+    });
+    return dataResponse({ success: true });
   }
 
   if (input.intent === 'createCase') {

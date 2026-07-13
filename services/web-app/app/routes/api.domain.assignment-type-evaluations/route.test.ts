@@ -59,6 +59,7 @@ const assignmentType = {
   gradingAssistantVersion: 7,
   gradingAssistantSourceTemplateId: null,
   gradingAssistantSourceTemplateSlug: null,
+  evaluations: [{ id: 'evaluation-1' }],
   evaluationCases: [
     {
       id: 'case-1',
@@ -106,6 +107,7 @@ describe('assignment-type evaluations action', () => {
     prisma.assignmentTypeEvaluation.create.mockResolvedValue({
       id: 'evaluation-new',
     });
+    prisma.assignmentTypeEvaluation.updateMany.mockResolvedValue({ count: 1 });
     prisma.assignmentTypeEvaluationCase.count.mockResolvedValue(2);
     prisma.assignmentTypeEvaluationCase.create.mockResolvedValue({
       id: 'case-new',
@@ -267,6 +269,70 @@ describe('assignment-type evaluations action', () => {
       success: true,
       evaluationId: 'evaluation-new',
     });
+  });
+
+  test('renames a saved evaluation and updates all of its editable cases', async () => {
+    const expectedOutput = {
+      categories: [
+        { key: 'claim', score: 5, comment: 'The claim is precise.' },
+      ],
+      overallComment:
+        'Jordan, you establish a strong position. Add one specific example.',
+    };
+
+    const response = await action({
+      request: requestWith({
+        intent: 'updateEvaluation',
+        assignmentTypeId: 'at-1',
+        evaluationId: 'evaluation-1',
+        title: 'Encouraging opening',
+        description:
+          'Begin with specific encouragement before giving revision advice.',
+        casesJson: JSON.stringify([
+          {
+            id: 'case-1',
+            title: 'Clear position',
+            documentText:
+              'Uniforms should remain optional because narrower policies can address distractions without removing individuality.',
+            expectedOutput,
+          },
+        ]),
+      }),
+      params: {},
+      context: {} as never,
+    } as any);
+
+    expect(prisma.assignmentTypeEvaluation.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: 'evaluation-1',
+        assignmentTypeId: 'at-1',
+        archivedAt: null,
+      },
+      data: {
+        title: 'Encouraging opening',
+        description:
+          'Begin with specific encouragement before giving revision advice.',
+      },
+    });
+    expect(prisma.assignmentTypeEvaluationCase.updateMany).toHaveBeenCalledWith(
+      {
+        where: {
+          id: 'case-1',
+          evaluationId: 'evaluation-1',
+          assignmentTypeId: 'at-1',
+          archivedAt: null,
+        },
+        data: {
+          title: 'Clear position',
+          documentText:
+            'Uniforms should remain optional because narrower policies can address distractions without removing individuality.',
+          expectedOutputJson: expectedOutput,
+          criterion:
+            'Begin with specific encouragement before giving revision advice.',
+        },
+      }
+    );
+    expect((response as { data: any }).data).toEqual({ success: true });
   });
 
   test('adds a case under one assignment-type rubric category', async () => {
