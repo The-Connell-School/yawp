@@ -8,6 +8,7 @@ import {
   loadProdFidelityBundle,
 } from './local-dev/import-prod-fidelity-fixtures';
 import { seedSyntheticLocalDevData } from './local-dev/seed-synthetic-data';
+import { seedStarterGradingEvaluations } from './local-dev/starter-grading-evaluations';
 import { truncateAllPublicTables } from './local-dev/truncate-all';
 import {
   LOCAL_DEV_ORG_ID,
@@ -46,6 +47,10 @@ try {
   const context = await seedSyntheticLocalDevData(prisma);
   console.timeEnd('synthetic');
 
+  console.time('grading-evaluations');
+  const evaluationSummary = await seedStarterGradingEvaluations(prisma);
+  console.timeEnd('grading-evaluations');
+
   console.log('🌱 Local dev seed complete.');
   console.log(
     JSON.stringify(
@@ -53,6 +58,7 @@ try {
         organizationId: context.organizationId,
         primaryClassId: context.primaryClassId,
         thesisAssignmentTypeId: context.thesisAssignmentTypeId,
+        evaluationSummary,
         personas: LOCAL_DEV_PERSONAS.map((persona) => ({
           label: persona.label,
           email: persona.email,

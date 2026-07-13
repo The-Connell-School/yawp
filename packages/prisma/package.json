@@ -19,6 +19,7 @@
     "compare-grade-submission-parity": "bun ./scripts/compare-grade-submission-parity.ts",
     "seed-ap-history-library": "bun run scripts/seed-ap-history-library.ts",
     "seed-local-dev": "bun run scripts/seed-local-dev.ts",
+    "seed-grading-evaluations": "bun run scripts/seed-grading-evaluations.ts",
     "fixtures:export-prod-fidelity": "bun run scripts/export-prod-fidelity-fixtures.ts",
     "assignment-type-release-gate": "bun run scripts/assignment-type-release-gate.ts",
     "backfill-class-art-key": "bun run scripts/backfill-class-art-key.ts",

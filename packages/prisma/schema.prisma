@@ -65,6 +65,7 @@ model AssignmentType {
   assignments                        Assignment[]
   documents                          Document[]
   apHistoryLibraryEntries            ApHistoryPromptLibraryEntry[]
+  evaluations                        AssignmentTypeEvaluation[]
   evaluationCases                    AssignmentTypeEvaluationCase[]
   evaluationRuns                     AssignmentTypeEvaluationRun[]
 
@@ -75,21 +76,40 @@ model AssignmentType {
   @@index([kind])
 }
 
+model AssignmentTypeEvaluation {
+  id               String                         @id @default(cuid())
+  createdAt        DateTime                       @default(now()) @db.Timestamptz(6)
+  updatedAt        DateTime                       @default(now()) @updatedAt @db.Timestamptz(6)
+  assignmentTypeId String
+  assignmentType   AssignmentType                 @relation(fields: [assignmentTypeId], references: [id], onDelete: Cascade)
+  title            String
+  description      String
+  position         Int                            @default(0)
+  archivedAt       DateTime?                      @db.Timestamptz(6)
+  cases            AssignmentTypeEvaluationCase[]
+
+  @@index([assignmentTypeId, archivedAt, position])
+}
+
 model AssignmentTypeEvaluationCase {
-  id                String                           @id @default(cuid())
-  createdAt         DateTime                         @default(now()) @db.Timestamptz(6)
-  updatedAt         DateTime                         @default(now()) @updatedAt @db.Timestamptz(6)
-  assignmentTypeId  String
-  assignmentType    AssignmentType                   @relation(fields: [assignmentTypeId], references: [id], onDelete: Cascade)
-  rubricCategoryKey String
-  title             String
-  documentText      String
-  criterion         String
-  position          Int                              @default(0)
-  archivedAt        DateTime?                        @db.Timestamptz(6)
-  results           AssignmentTypeEvaluationResult[]
+  id                 String                           @id @default(cuid())
+  createdAt          DateTime                         @default(now()) @db.Timestamptz(6)
+  updatedAt          DateTime                         @default(now()) @updatedAt @db.Timestamptz(6)
+  assignmentTypeId   String
+  assignmentType     AssignmentType                   @relation(fields: [assignmentTypeId], references: [id], onDelete: Cascade)
+  evaluationId       String?
+  evaluation         AssignmentTypeEvaluation?        @relation(fields: [evaluationId], references: [id], onDelete: SetNull)
+  rubricCategoryKey  String
+  title              String
+  documentText       String
+  criterion          String
+  expectedOutputJson Json?
+  position           Int                              @default(0)
+  archivedAt         DateTime?                        @db.Timestamptz(6)
+  results            AssignmentTypeEvaluationResult[]
 
   @@index([assignmentTypeId, archivedAt, rubricCategoryKey, position])
+  @@index([evaluationId, archivedAt, position])
 }
 
 model AssignmentTypeEvaluationRun {
@@ -124,6 +144,7 @@ model AssignmentTypeEvaluationResult {
   status               String
   evidence             String
   gradingOutputJson    Json?
+  expectedOutputJson   Json?
   responseContractJson Json?
 
   @@unique([runId, caseId])
