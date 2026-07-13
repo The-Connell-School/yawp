@@ -34,6 +34,7 @@ import {
   type AssignmentTypeModuleRow,
 } from './assignment-type-modules-section';
 import { RubricSourceBanner } from './rubric-source-indicator';
+import type { AssignmentTypeEvaluationHistory } from '~/domain/ai-evaluation/assignment-type-evaluation.shared';
 
 type AssignmentTypeEditorFormProps = {
   mode: 'create' | 'edit';
@@ -45,6 +46,7 @@ type AssignmentTypeEditorFormProps = {
   promptConfig?: PromptConfigData;
   gradingAssistantPromptPreview?: GradingAssistantPromptPreview;
   gradingAssistantPromptPreviewUnavailableReason?: string;
+  evaluationHistory?: AssignmentTypeEvaluationHistory;
   archivedAt?: Date | string | null;
   imageId?: string | null;
   modules?: AssignmentTypeModuleRow[];
@@ -136,6 +138,7 @@ export function AssignmentTypeEditorForm({
   promptConfig = DEFAULT_PROMPT_CONFIG,
   gradingAssistantPromptPreview,
   gradingAssistantPromptPreviewUnavailableReason,
+  evaluationHistory,
   archivedAt = null,
   imageId = null,
   modules = [],
@@ -410,6 +413,7 @@ export function AssignmentTypeEditorForm({
             title={title}
             scoringScale={scoringScaleState}
             rubric={rubricState}
+            evaluationHistory={evaluationHistory}
           />
         </Section>
 

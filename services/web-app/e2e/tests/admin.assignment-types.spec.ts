@@ -162,6 +162,98 @@ test.describe.serial('Admin assignment types', () => {
       ).toBeVisible();
       await page.getByRole('button', { name: 'Cancel' }).click();
 
+      await expect(
+        page.getByRole('heading', { name: 'Evaluation history' })
+      ).toBeVisible();
+      await expect(
+        page.getByText(
+          'No evaluation cases yet. Add one to start tracking prompt-version runs.'
+        )
+      ).toBeVisible();
+
+      await page.getByRole('button', { name: 'Add case' }).click();
+      let addCaseDialog = page.getByRole('dialog', {
+        name: 'Add evaluation case',
+      });
+      await addCaseDialog.getByLabel('Category').selectOption('thesis_e2e');
+      await addCaseDialog.getByLabel('Case name').fill('Clear thesis');
+      await addCaseDialog
+        .getByLabel('Case document')
+        .fill('School uniforms should remain optional because choice matters.');
+      await addCaseDialog
+        .getByLabel('What should this case verify?')
+        .fill('The feedback identifies the clear thesis.');
+      await addCaseDialog.getByRole('button', { name: 'Save case' }).click();
+      await expect(addCaseDialog).not.toBeVisible();
+
+      await page.getByRole('button', { name: 'Add case' }).click();
+      addCaseDialog = page.getByRole('dialog', {
+        name: 'Add evaluation case',
+      });
+      await addCaseDialog.getByLabel('Category').selectOption('thesis_e2e');
+      await addCaseDialog.getByLabel('Case name').fill('Missing thesis');
+      await addCaseDialog
+        .getByLabel('Case document')
+        .fill('There are many different opinions about school uniforms.');
+      await addCaseDialog
+        .getByLabel('What should this case verify?')
+        .fill(
+          'The feedback identifies the missing thesis. [fixture:improves-after-v1]'
+        );
+      await addCaseDialog.getByRole('button', { name: 'Save case' }).click();
+      await expect(addCaseDialog).not.toBeVisible();
+
+      await expect(page.getByText('2 cases')).toBeVisible();
+      await page.getByRole('button', { name: 'Run all cases' }).click();
+      const historyTable = page.getByRole('table', {
+        name: 'Evaluation history',
+      });
+      await expect(historyTable.getByRole('row', { name: /v1/ })).toContainText(
+        '1/2'
+      );
+      await expect(historyTable.getByLabel('Clear thesis: Pass')).toBeVisible();
+      await expect(
+        historyTable.getByLabel('Missing thesis: Fail')
+      ).toBeVisible();
+
+      await page.getByRole('button', { name: 'Edit instructions' }).click();
+      const versionTwoInstructions = page.getByRole('dialog', {
+        name: 'Edit instructions',
+      });
+      await versionTwoInstructions
+        .getByLabel('Grading instructions')
+        .fill(
+          'Grade against the rubric categories, explicitly identify missing thesis statements, and give concise feedback.'
+        );
+      await versionTwoInstructions
+        .getByRole('button', { name: 'Done' })
+        .click();
+      await page.getByRole('button', { name: 'Update' }).click();
+      await expect(page.getByRole('button', { name: 'Update' })).toBeDisabled();
+
+      await page.getByRole('button', { name: 'Run all cases' }).click();
+      await expect(historyTable.getByRole('row', { name: /v2/ })).toContainText(
+        '2/2'
+      );
+      await expect(
+        historyTable.getByRole('row', { name: /v2/ }).getByText('2/2')
+      ).toHaveAttribute('data-status', 'pass');
+      await historyTable
+        .getByRole('button', { name: 'View prompt v1' })
+        .click();
+      const historicalPromptDialog = page.getByRole('dialog', {
+        name: 'Prompt v1',
+      });
+      await expect(
+        historicalPromptDialog.getByText(
+          'Act as a careful evaluator for this assignment type.'
+        )
+      ).toBeVisible();
+      await historicalPromptDialog
+        .getByRole('button', { name: 'Close' })
+        .first()
+        .click();
+
       const created = await prisma.assignmentType.findUniqueOrThrow({
         where: { id: assignmentTypeId! },
         select: {
@@ -200,7 +292,7 @@ test.describe.serial('Admin assignment types', () => {
         systemInstructions:
           'Act as a careful evaluator for this assignment type.',
         gradingInstructions:
-          'Grade against the rubric categories and give concise, actionable feedback.',
+          'Grade against the rubric categories, explicitly identify missing thesis statements, and give concise feedback.',
       });
 
       await page.getByRole('button', { name: 'Add module' }).click();

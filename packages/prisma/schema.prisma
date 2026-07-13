@@ -36,25 +36,25 @@ model Class {
 }
 
 model AssignmentType {
-  id                                 String                        @id @default(cuid())
-  createdAt                          DateTime                      @default(now()) @db.Timestamptz(6)
-  updatedAt                          DateTime                      @default(now()) @db.Timestamptz(6)
+  id                                 String                         @id @default(cuid())
+  createdAt                          DateTime                       @default(now()) @db.Timestamptz(6)
+  updatedAt                          DateTime                       @default(now()) @db.Timestamptz(6)
   title                              String
-  kind                               String?                       @unique
+  kind                               String?                        @unique
   description                        String?
   position                           Int
-  systemKey                          String?                       @unique
-  archivedAt                         DateTime?                     @db.Timestamptz(6)
+  systemKey                          String?                        @unique
+  archivedAt                         DateTime?                      @db.Timestamptz(6)
   ownerOrgId                         String?
-  ownerOrg                           Organization?                 @relation(fields: [ownerOrgId], references: [id], onDelete: Cascade)
+  ownerOrg                           Organization?                  @relation(fields: [ownerOrgId], references: [id], onDelete: Cascade)
   ownerMembershipId                  String?
-  ownerMembership                    OrgMembership?                @relation("AssignmentTypeOwner", fields: [ownerMembershipId], references: [id], onDelete: Cascade)
+  ownerMembership                    OrgMembership?                 @relation("AssignmentTypeOwner", fields: [ownerMembershipId], references: [id], onDelete: Cascade)
   scoringScaleJson                   Json?
   rubricJson                         Json?
   gradingPromptConfigJson            Json?
   gradingOutputSchemaJson            Json?
   gradingCalibrationNotes            String?
-  gradingAssistantVersion            Int                           @default(1)
+  gradingAssistantVersion            Int                            @default(1)
   gradingAssistantSourceTemplateId   String?
   gradingAssistantSourceTemplateSlug String?
   image                              AssignmentTypeImage?
@@ -65,12 +65,71 @@ model AssignmentType {
   assignments                        Assignment[]
   documents                          Document[]
   apHistoryLibraryEntries            ApHistoryPromptLibraryEntry[]
+  evaluationCases                    AssignmentTypeEvaluationCase[]
+  evaluationRuns                     AssignmentTypeEvaluationRun[]
 
   @@index([ownerOrgId])
   @@index([ownerMembershipId])
   @@index([archivedAt])
   @@index([systemKey])
   @@index([kind])
+}
+
+model AssignmentTypeEvaluationCase {
+  id                String                           @id @default(cuid())
+  createdAt         DateTime                         @default(now()) @db.Timestamptz(6)
+  updatedAt         DateTime                         @default(now()) @updatedAt @db.Timestamptz(6)
+  assignmentTypeId  String
+  assignmentType    AssignmentType                   @relation(fields: [assignmentTypeId], references: [id], onDelete: Cascade)
+  rubricCategoryKey String
+  title             String
+  documentText      String
+  criterion         String
+  position          Int                              @default(0)
+  archivedAt        DateTime?                        @db.Timestamptz(6)
+  results           AssignmentTypeEvaluationResult[]
+
+  @@index([assignmentTypeId, archivedAt, rubricCategoryKey, position])
+}
+
+model AssignmentTypeEvaluationRun {
+  id                 String                           @id @default(cuid())
+  createdAt          DateTime                         @default(now()) @db.Timestamptz(6)
+  completedAt        DateTime?                        @db.Timestamptz(6)
+  assignmentTypeId   String
+  assignmentType     AssignmentType                   @relation(fields: [assignmentTypeId], references: [id], onDelete: Cascade)
+  promptVersion      Int
+  promptSnapshotJson Json
+  status             String                           @default("running")
+  totalCases         Int                              @default(0)
+  passedCases        Int                              @default(0)
+  failedCases        Int                              @default(0)
+  needsReviewCases   Int                              @default(0)
+  results            AssignmentTypeEvaluationResult[]
+
+  @@index([assignmentTypeId, createdAt(sort: Desc)])
+  @@index([status])
+}
+
+model AssignmentTypeEvaluationResult {
+  id                   String                        @id @default(cuid())
+  createdAt            DateTime                      @default(now()) @db.Timestamptz(6)
+  runId                String
+  run                  AssignmentTypeEvaluationRun   @relation(fields: [runId], references: [id], onDelete: Cascade)
+  caseId               String?
+  evaluationCase       AssignmentTypeEvaluationCase? @relation(fields: [caseId], references: [id], onDelete: SetNull)
+  caseTitle            String
+  rubricCategoryKey    String
+  criterion            String
+  status               String
+  evidence             String
+  gradingOutputJson    Json?
+  responseContractJson Json?
+
+  @@unique([runId, caseId])
+  @@index([runId])
+  @@index([caseId])
+  @@index([status])
 }
 
 model Assignment {

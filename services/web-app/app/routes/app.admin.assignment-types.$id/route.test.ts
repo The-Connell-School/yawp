@@ -210,6 +210,48 @@ describe('admin assignment type detail action', () => {
       gradingAssistantVersion: 4,
       gradingAssistantSourceTemplateId: null,
       gradingAssistantSourceTemplateSlug: null,
+      evaluationCases: [
+        {
+          id: 'case-1',
+          title: 'Clear claim',
+          rubricCategoryKey: 'ideas_and_analysis',
+          documentText: 'School uniforms should remain optional.',
+          criterion: 'The feedback identifies the claim.',
+          position: 0,
+          createdAt: new Date('2026-07-13T17:00:00.000Z'),
+        },
+      ],
+      evaluationRuns: [
+        {
+          id: 'run-1',
+          promptVersion: 4,
+          status: 'completed',
+          totalCases: 1,
+          passedCases: 1,
+          failedCases: 0,
+          needsReviewCases: 0,
+          promptSnapshotJson: {
+            compiledPrompt: {
+              system: 'You are a grading assistant. Prompt v4.',
+              userMessage: 'Grade the case document.',
+            },
+          },
+          createdAt: new Date('2026-07-13T18:00:00.000Z'),
+          completedAt: new Date('2026-07-13T18:00:05.000Z'),
+          results: [
+            {
+              id: 'result-1',
+              caseId: 'case-1',
+              caseTitle: 'Clear claim',
+              rubricCategoryKey: 'ideas_and_analysis',
+              criterion: 'The feedback identifies the claim.',
+              status: 'pass',
+              evidence: 'The response identifies the claim.',
+              gradingOutputJson: { overallComment: 'Jordan, revise next.' },
+            },
+          ],
+        },
+      ],
       assignmentModules: [],
       image: null,
     });
@@ -245,6 +287,32 @@ describe('admin assignment type detail action', () => {
       strictnessLevel: 'intermediate',
       documentText: '[CASE DOCUMENT CONTENT]',
     });
+    expect(data.evaluationHistory.cases).toEqual([
+      expect.objectContaining({
+        id: 'case-1',
+        rubricCategoryKey: 'ideas_and_analysis',
+      }),
+    ]);
+    expect(data.evaluationHistory.runs).toEqual([
+      expect.objectContaining({
+        id: 'run-1',
+        promptVersion: 4,
+        passedCases: 1,
+        promptSnapshot: {
+          compiledPrompt: {
+            system: 'You are a grading assistant. Prompt v4.',
+            userMessage: 'Grade the case document.',
+          },
+        },
+        results: [
+          expect.objectContaining({
+            caseId: 'case-1',
+            criterion: 'The feedback identifies the claim.',
+            status: 'pass',
+          }),
+        ],
+      }),
+    ]);
   });
 
   test('does not present the standard prompt as the exact AP History invocation', async () => {

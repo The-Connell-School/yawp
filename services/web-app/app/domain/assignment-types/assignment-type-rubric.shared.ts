@@ -41,6 +41,26 @@ export const DEFAULT_PROMPT_CONFIG: PromptConfigData = {
   gradingInstructions: '',
 };
 
+export function rubricCategoryLabelToKey(label: string) {
+  return label
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_|_$/g, '');
+}
+
+export function prepareRubricForSave(rubric: RubricData): RubricData {
+  return {
+    categories: rubric.categories.map(
+      ({ key, label, weight, description }) => ({
+        key: key.trim() || rubricCategoryLabelToKey(label),
+        label,
+        weight,
+        description,
+      })
+    ),
+  };
+}
+
 export function parseScoringScale(raw: unknown): ScoringScaleData {
   const d = raw as Partial<ScoringScaleData> | null;
   return {
