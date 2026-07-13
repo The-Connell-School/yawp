@@ -239,6 +239,28 @@ test.describe.serial('Admin assignment types', () => {
       await expect(
         historyTable.getByLabel('Encouraging opening: 1/2 passed')
       ).toBeVisible();
+      await historyTable.getByLabel('Encouraging opening: 1/2 passed').click();
+      const resultDialog = page.getByRole('dialog', {
+        name: 'Encouraging opening',
+      });
+      await expect(resultDialog.getByText('1/2')).toBeVisible();
+      await expect(resultDialog.getByText('Pass')).toBeVisible();
+      await expect(resultDialog.getByText('Fail')).toBeVisible();
+      await resultDialog
+        .locator('summary')
+        .filter({ hasText: 'Missing opening' })
+        .click();
+      const failedCaseResult = resultDialog.locator('details[open]');
+      await expect(failedCaseResult.getByText('Judge evidence')).toBeVisible();
+      await expect(failedCaseResult.getByText('Expected output')).toBeVisible();
+      await expect(failedCaseResult.getByText('Actual output')).toBeVisible();
+      await expect(failedCaseResult).toContainText(
+        'The first prompt version misses the saved evaluation criterion.'
+      );
+      await expect(failedCaseResult).toContainText(
+        'Jordan, make the stakes more explicit.'
+      );
+      await resultDialog.getByRole('button', { name: 'Close' }).click();
 
       await page.getByRole('link', { name: 'Back to assignment type' }).click();
       await expect(

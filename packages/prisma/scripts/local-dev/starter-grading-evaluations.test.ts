@@ -1,5 +1,8 @@
-import { describe, expect, test } from 'bun:test';
-import { buildStarterGradingEvaluations } from './starter-grading-evaluations';
+import { describe, expect, mock, test } from 'bun:test';
+import {
+  buildStarterGradingEvaluations,
+  seedStarterGradingEvaluations,
+} from './starter-grading-evaluations';
 
 describe('buildStarterGradingEvaluations', () => {
   test('builds named evaluations containing multiple input/output cases', () => {
@@ -81,5 +84,125 @@ describe('buildStarterGradingEvaluations', () => {
         rubricCategories: [],
       })
     ).toEqual([]);
+  });
+});
+
+describe('seedStarterGradingEvaluations', () => {
+  test('seeds one immutable mixed-result demo run with saved outputs and judgments', async () => {
+    const evaluationCases = [
+      ['Positive greeting', 'Strong opening'],
+      ['Positive greeting', 'Developing draft'],
+      ['Rubric fidelity', 'Clear thesis, thin evidence'],
+      ['Rubric fidelity', 'Evidence without a thesis'],
+      ['Prompt safety', 'System override attempt'],
+      ['Prompt safety', 'Hidden grading demand'],
+    ].map(([evaluationTitle, title], position) => ({
+      id: `case-${position + 1}`,
+      evaluationId: `evaluation-${evaluationTitle}`,
+      evaluation: { title: evaluationTitle },
+      title,
+      documentText: `Document for ${title}`,
+      rubricCategoryKey: 'thesis_and_content',
+      criterion: `Criterion for ${evaluationTitle}`,
+      expectedOutputJson: {
+        categories: [
+          {
+            key: 'thesis_and_content',
+            score: 3,
+            comment: 'Expected category feedback.',
+          },
+        ],
+        overallComment: `Expected feedback for ${title}.`,
+      },
+      position: position % 2,
+      archivedAt: null,
+    }));
+    const createRun = mock(() => Promise.resolve({ id: 'run-1' }));
+    const prisma = {
+      assignmentType: {
+        findMany: mock(() =>
+          Promise.resolve([
+            {
+              id: 'assignment-type-1',
+              title: 'The Thesis-Driven Essay',
+              rubricJson: {
+                categories: [
+                  { key: 'thesis_and_content', label: 'Thesis/Content' },
+                  {
+                    key: 'organization_and_structure',
+                    label: 'Organization/Structure',
+                  },
+                  { key: 'evidence_and_support', label: 'Evidence/Support' },
+                  { key: 'voice_and_style', label: 'Voice/Style' },
+                  {
+                    key: 'grammar_and_mechanics',
+                    label: 'Grammar/Syntax/Formatting',
+                  },
+                ],
+              },
+              gradingAssistantVersion: 3,
+              evaluations: [
+                {
+                  id: 'evaluation-Positive greeting',
+                  title: 'Positive greeting',
+                  cases: evaluationCases.slice(0, 2),
+                },
+                {
+                  id: 'evaluation-Rubric fidelity',
+                  title: 'Rubric fidelity',
+                  cases: evaluationCases.slice(2, 4),
+                },
+                {
+                  id: 'evaluation-Prompt safety',
+                  title: 'Prompt safety',
+                  cases: evaluationCases.slice(4, 6),
+                },
+              ],
+              evaluationRuns: [],
+            },
+          ])
+        ),
+      },
+      assignmentTypeEvaluation: { create: mock() },
+      assignmentTypeEvaluationCase: {
+        create: mock(),
+        findMany: mock(() => Promise.resolve(evaluationCases)),
+      },
+      assignmentTypeEvaluationRun: { create: createRun },
+    };
+
+    const summary = await seedStarterGradingEvaluations(prisma as never);
+
+    expect(summary).toMatchObject({ createdRuns: 1, existingRuns: 0 });
+    expect(createRun).toHaveBeenCalledTimes(1);
+    const run = createRun.mock.calls[0]?.[0]?.data;
+    expect(run).toMatchObject({
+      assignmentTypeId: 'assignment-type-1',
+      promptVersion: 3,
+      status: 'completed',
+      totalCases: 6,
+      passedCases: 3,
+      failedCases: 3,
+      needsReviewCases: 0,
+    });
+    expect(run.results.create).toHaveLength(6);
+    expect(
+      run.results.create.filter(
+        (result: { status: string }) => result.status === 'pass'
+      )
+    ).toHaveLength(3);
+    expect(
+      run.results.create.filter(
+        (result: { status: string }) => result.status === 'fail'
+      )
+    ).toHaveLength(3);
+    expect(run.results.create[1]).toMatchObject({
+      caseId: 'case-2',
+      status: 'fail',
+      gradingOutputJson: expect.any(Object),
+      expectedOutputJson: expect.any(Object),
+      evidence: expect.stringContaining('positive greeting'),
+      responseContractJson: expect.any(Object),
+    });
   });
 });
