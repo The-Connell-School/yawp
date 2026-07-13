@@ -128,7 +128,7 @@ test.describe.serial('Admin assignment types', () => {
         .getByRole('button', { name: 'Generate evaluations' })
         .click();
       await expect(
-        addEvaluationDialog.getByLabel('Evaluation title')
+        addEvaluationDialog.getByLabel('Evaluation name')
       ).toHaveValue('Positive greeting');
       await expect(
         addEvaluationDialog.getByRole('checkbox', {
@@ -152,12 +152,51 @@ test.describe.serial('Admin assignment types', () => {
       await expect(
         historyTable.getByRole('columnheader', { name: 'Positive greeting' })
       ).toBeVisible();
+
+      await historyTable
+        .getByRole('button', { name: 'View evaluation Positive greeting' })
+        .click();
+      const evaluationDialog = page.getByRole('dialog', {
+        name: 'Positive greeting',
+      });
+      await evaluationDialog
+        .getByRole('button', { name: 'Edit evaluation' })
+        .click();
+      await evaluationDialog
+        .getByLabel('Evaluation name')
+        .fill('Encouraging opening');
+      await evaluationDialog
+        .getByText('Strong opening', { exact: true })
+        .click();
+      await evaluationDialog
+        .getByLabel('Strong opening case name')
+        .fill('Clear position');
+      await evaluationDialog
+        .getByLabel('Strong opening input document')
+        .fill(
+          'School uniforms should remain optional because student choice matters and narrower policies can address distractions without removing individuality.'
+        );
+      await evaluationDialog
+        .locator('details[open]')
+        .getByText('Edit full expected output', { exact: true })
+        .click();
+      await expect(
+        evaluationDialog.getByLabel('Strong opening full expected output')
+      ).toBeVisible();
+      await evaluationDialog
+        .getByRole('button', { name: 'Save changes' })
+        .click();
+      await expect(evaluationDialog).not.toBeVisible();
+      await expect(
+        historyTable.getByRole('columnheader', { name: 'Encouraging opening' })
+      ).toBeVisible();
+
       await page.getByRole('button', { name: 'Run all cases' }).click();
       await expect(historyTable.getByRole('row', { name: /v1/ })).toContainText(
         '1/2'
       );
       await expect(
-        historyTable.getByLabel('Positive greeting: 1/2 passed')
+        historyTable.getByLabel('Encouraging opening: 1/2 passed')
       ).toBeVisible();
 
       await page.getByRole('button', { name: 'Edit instructions' }).click();
@@ -181,7 +220,7 @@ test.describe.serial('Admin assignment types', () => {
       );
       await expect(
         historyTable
-          .getByLabel('Positive greeting: 2/2 passed')
+          .getByLabel('Encouraging opening: 2/2 passed')
           .getByText('2/2')
       ).toHaveAttribute('data-status', 'pass');
       await historyTable
@@ -208,6 +247,15 @@ test.describe.serial('Admin assignment types', () => {
           rubricJson: true,
           scoringScaleJson: true,
           gradingPromptConfigJson: true,
+          evaluations: {
+            select: {
+              title: true,
+              cases: {
+                orderBy: { position: 'asc' },
+                select: { title: true, documentText: true },
+              },
+            },
+          },
         },
       });
 
@@ -240,6 +288,20 @@ test.describe.serial('Admin assignment types', () => {
         gradingInstructions:
           'Grade against the rubric categories, explicitly identify missing thesis statements, and give concise feedback.',
       });
+      expect(created.evaluations).toEqual([
+        expect.objectContaining({
+          title: 'Encouraging opening',
+          cases: [
+            expect.objectContaining({
+              title: 'Clear position',
+              documentText: expect.stringContaining(
+                'without removing individuality'
+              ),
+            }),
+            expect.objectContaining({ title: 'Missing opening' }),
+          ],
+        }),
+      ]);
 
       await page.getByRole('button', { name: 'Add module' }).click();
       await page.locator('#moduleTitle').fill('Thesis planning');

@@ -1278,6 +1278,7 @@ function buildEvaluationColumns(
     .filter((evaluation) => groupedCases.has(evaluation.id))
     .map((evaluation) => ({
       key: evaluation.id,
+      evaluationId: evaluation.id,
       label: evaluation.title,
       description: evaluation.description,
       archived: evaluation.archived,
@@ -1287,6 +1288,7 @@ function buildEvaluationColumns(
     .filter((evaluationCase) => !evaluationCase.evaluationId)
     .map((evaluationCase) => ({
       key: `legacy:${evaluationCase.id}`,
+      evaluationId: null,
       label: evaluationCase.title,
       description: evaluationCase.criterion,
       archived: evaluationCase.archived,
@@ -1490,7 +1492,7 @@ function AddEvaluationSheet({
           ) : (
             <>
               <div className="space-y-2">
-                <Label htmlFor="evaluation-title">Evaluation title</Label>
+                <Label htmlFor="evaluation-title">Evaluation name</Label>
                 <Input
                   id="evaluation-title"
                   value={evaluationTitle}
@@ -1600,23 +1602,159 @@ function AddEvaluationSheet({
 
 type EvaluationColumn = ReturnType<typeof buildEvaluationColumns>[number];
 
+type EvaluationCaseDraft = {
+  id: string;
+  title: string;
+  documentText: string;
+  expectedOutputText: string;
+};
+
+type UpdateEvaluationFetcherData = { success?: boolean; message?: string };
+
 function EvaluationDetailSheet({
   evaluation,
+  assignmentTypeId,
   open,
   onOpenChange,
   onRemoveCase,
   isRemoving,
 }: {
   evaluation: EvaluationColumn | null;
+  assignmentTypeId: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onRemoveCase: (caseId: string) => void;
   isRemoving: boolean;
 }) {
+  const updateFetcher = useFetcher<UpdateEvaluationFetcherData>();
+  const [isEditing, setIsEditing] = useState(false);
+  const [editTitle, setEditTitle] = useState('');
+  const [editDescription, setEditDescription] = useState('');
+  const [editCases, setEditCases] = useState<EvaluationCaseDraft[]>([]);
+  const [localError, setLocalError] = useState<string | null>(null);
+  const handledResponseRef = useRef<unknown>(null);
+  const isSaving = updateFetcher.state !== 'idle';
+
+  useEffect(() => {
+    setIsEditing(false);
+    setLocalError(null);
+  }, [evaluation?.key]);
+
+  useEffect(() => {
+    if (isSaving || !updateFetcher.data) return;
+    if (handledResponseRef.current === updateFetcher.data) return;
+    handledResponseRef.current = updateFetcher.data;
+    if (updateFetcher.data.success) {
+      setIsEditing(false);
+      onOpenChange(false);
+    } else {
+      setLocalError(updateFetcher.data.message ?? 'Could not save changes.');
+    }
+  }, [isSaving, onOpenChange, updateFetcher.data]);
+
   if (!evaluation) return null;
 
+  const isLegacy = evaluation.key.startsWith('legacy:');
+  const activeCases = evaluation.cases.filter(
+    (evaluationCase) => !evaluationCase.archived
+  );
+  const archivedCases = evaluation.cases.filter(
+    (evaluationCase) => evaluationCase.archived
+  );
+
+  function startEditing() {
+    if (!evaluation) return;
+    setEditTitle(evaluation.label);
+    setEditDescription(evaluation.description);
+    setEditCases(
+      activeCases.map((evaluationCase) => ({
+        id: evaluationCase.id,
+        title: evaluationCase.title,
+        documentText: evaluationCase.documentText,
+        expectedOutputText: JSON.stringify(
+          evaluationCase.expectedOutput,
+          null,
+          2
+        ),
+      }))
+    );
+    setLocalError(null);
+    setIsEditing(true);
+  }
+
+  function cancelEditing() {
+    setIsEditing(false);
+    setLocalError(null);
+  }
+
+  function updateEditCase(id: string, patch: Partial<EvaluationCaseDraft>) {
+    setEditCases((current) =>
+      current.map((evaluationCase) =>
+        evaluationCase.id === id
+          ? { ...evaluationCase, ...patch }
+          : evaluationCase
+      )
+    );
+  }
+
+  function handleSaveChanges() {
+    if (!evaluation) return;
+    setLocalError(null);
+    if (!evaluation.evaluationId) {
+      setLocalError('This older evaluation cannot be edited here yet.');
+      return;
+    }
+    if (!editTitle.trim() || !editDescription.trim()) {
+      setLocalError('Evaluation name and description are required.');
+      return;
+    }
+    let parsedCases: Array<{
+      id: string;
+      title: string;
+      documentText: string;
+      expectedOutput: unknown;
+    }>;
+    try {
+      parsedCases = editCases.map((evaluationCase) => ({
+        id: evaluationCase.id,
+        title: evaluationCase.title.trim(),
+        documentText: evaluationCase.documentText.trim(),
+        expectedOutput: JSON.parse(evaluationCase.expectedOutputText),
+      }));
+    } catch {
+      setLocalError('Fix the expected output JSON before saving.');
+      return;
+    }
+    if (
+      parsedCases.some(
+        (evaluationCase) =>
+          !evaluationCase.title || !evaluationCase.documentText
+      )
+    ) {
+      setLocalError('Every case needs a name and an input document.');
+      return;
+    }
+    const formData = new FormData();
+    formData.set('intent', 'updateEvaluation');
+    formData.set('assignmentTypeId', assignmentTypeId);
+    formData.set('evaluationId', evaluation.evaluationId);
+    formData.set('title', editTitle.trim());
+    formData.set('description', editDescription.trim());
+    formData.set('casesJson', JSON.stringify(parsedCases));
+    updateFetcher.submit(formData, {
+      method: 'POST',
+      action: '/api/domain/assignment-type-evaluations',
+    });
+  }
+
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
+    <Sheet
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) setIsEditing(false);
+        onOpenChange(next);
+      }}
+    >
       <SheetContent
         aria-describedby={undefined}
         className="flex max-h-screen flex-col overflow-y-auto sm:max-w-xl"
@@ -1624,41 +1762,178 @@ function EvaluationDetailSheet({
         <SheetHeader>
           <SheetTitle>{evaluation.label}</SheetTitle>
         </SheetHeader>
-        <div className="mt-4 space-y-4">
-          {evaluation.archived ? (
-            <Badge variant="warning-soft">Archived</Badge>
-          ) : null}
-          <p className="text-sm text-pretty">{evaluation.description}</p>
-          <p className="text-sm font-medium">
-            {pluralizeCases(evaluation.cases.length)}
-          </p>
-          {evaluation.cases.map((evaluationCase) => (
-            <details
-              key={evaluationCase.id}
-              className="rounded-md border p-3 text-sm"
-            >
-              <summary className="cursor-pointer font-medium">
-                {evaluationCase.title}
-                {evaluationCase.archived ? (
-                  <span className="ml-2 text-xs font-normal text-muted-foreground">
-                    Archived
-                  </span>
-                ) : null}
-              </summary>
-              <div className="mt-3 space-y-3">
-                <div className="space-y-1.5">
-                  <p className="font-medium">Input document</p>
-                  <pre className="max-w-full overflow-x-hidden whitespace-pre-wrap break-words rounded-md bg-muted/40 p-3 text-sm">
-                    {evaluationCase.documentText}
-                  </pre>
-                </div>
-                <div className="space-y-1.5">
-                  <p className="font-medium">Full expected output</p>
-                  <pre className="max-w-full overflow-x-hidden whitespace-pre-wrap break-words rounded-md bg-muted/40 p-3 text-xs">
-                    {JSON.stringify(evaluationCase.expectedOutput, null, 2)}
-                  </pre>
-                </div>
-                {!evaluationCase.archived ? (
+        {isEditing ? (
+          <div className="mt-4 space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="evaluation-edit-title">Evaluation name</Label>
+              <Input
+                id="evaluation-edit-title"
+                value={editTitle}
+                onChange={(event) => setEditTitle(event.target.value)}
+                disabled={isSaving}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="evaluation-edit-description">
+                Evaluation description
+              </Label>
+              <Textarea
+                id="evaluation-edit-description"
+                rows={4}
+                value={editDescription}
+                onChange={(event) => setEditDescription(event.target.value)}
+                disabled={isSaving}
+              />
+            </div>
+            <div className="space-y-2">
+              <p className="text-sm font-medium">
+                {pluralizeCases(editCases.length)}
+              </p>
+              {editCases.map((evaluationCase, index) => (
+                <details
+                  key={evaluationCase.id}
+                  className="rounded-md border p-3 text-sm"
+                >
+                  <summary className="cursor-pointer font-medium">
+                    {evaluationCase.title || `Case ${index + 1}`}
+                  </summary>
+                  <div className="mt-3 space-y-3">
+                    <div className="space-y-1.5">
+                      <Label
+                        htmlFor={`evaluation-case-name-${evaluationCase.id}`}
+                      >
+                        Case name
+                      </Label>
+                      <Input
+                        id={`evaluation-case-name-${evaluationCase.id}`}
+                        aria-label={`${activeCases[index]?.title} case name`}
+                        value={evaluationCase.title}
+                        onChange={(event) =>
+                          updateEditCase(evaluationCase.id, {
+                            title: event.target.value,
+                          })
+                        }
+                        disabled={isSaving}
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label
+                        htmlFor={`evaluation-case-document-${evaluationCase.id}`}
+                      >
+                        Input document
+                      </Label>
+                      <Textarea
+                        id={`evaluation-case-document-${evaluationCase.id}`}
+                        aria-label={`${activeCases[index]?.title} input document`}
+                        rows={6}
+                        value={evaluationCase.documentText}
+                        onChange={(event) =>
+                          updateEditCase(evaluationCase.id, {
+                            documentText: event.target.value,
+                          })
+                        }
+                        disabled={isSaving}
+                      />
+                    </div>
+                    <details className="text-sm">
+                      <summary className="cursor-pointer text-muted-foreground">
+                        Edit full expected output
+                      </summary>
+                      <div className="mt-2 space-y-1.5">
+                        <Label
+                          htmlFor={`evaluation-case-output-${evaluationCase.id}`}
+                        >
+                          Full expected output
+                        </Label>
+                        <Textarea
+                          id={`evaluation-case-output-${evaluationCase.id}`}
+                          aria-label={`${activeCases[index]?.title} full expected output`}
+                          rows={10}
+                          value={evaluationCase.expectedOutputText}
+                          onChange={(event) =>
+                            updateEditCase(evaluationCase.id, {
+                              expectedOutputText: event.target.value,
+                            })
+                          }
+                          disabled={isSaving}
+                          className="font-mono text-xs"
+                        />
+                      </div>
+                    </details>
+                  </div>
+                </details>
+              ))}
+            </div>
+            {localError ? (
+              <p className="text-sm text-destructive">{localError}</p>
+            ) : null}
+            <div className="flex items-center justify-end gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={cancelEditing}
+                disabled={isSaving}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                onClick={handleSaveChanges}
+                disabled={isSaving}
+              >
+                {isSaving ? (
+                  <>
+                    <Loader2 className="mr-2 size-4 shrink-0 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  'Save changes'
+                )}
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <div className="mt-4 space-y-4">
+            {evaluation.archived ? (
+              <Badge variant="warning-soft">Archived</Badge>
+            ) : null}
+            <p className="text-sm text-pretty">{evaluation.description}</p>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-sm font-medium">
+                {pluralizeCases(evaluation.cases.length)}
+              </p>
+              {!isLegacy && !evaluation.archived && activeCases.length > 0 ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={startEditing}
+                >
+                  Edit evaluation
+                </Button>
+              ) : null}
+            </div>
+            {activeCases.map((evaluationCase) => (
+              <details
+                key={evaluationCase.id}
+                className="rounded-md border p-3 text-sm"
+              >
+                <summary className="cursor-pointer font-medium">
+                  {evaluationCase.title}
+                </summary>
+                <div className="mt-3 space-y-3">
+                  <div className="space-y-1.5">
+                    <p className="font-medium">Input document</p>
+                    <pre className="max-w-full overflow-x-hidden whitespace-pre-wrap break-words rounded-md bg-muted/40 p-3 text-sm">
+                      {evaluationCase.documentText}
+                    </pre>
+                  </div>
+                  <div className="space-y-1.5">
+                    <p className="font-medium">Full expected output</p>
+                    <pre className="max-w-full overflow-x-hidden whitespace-pre-wrap break-words rounded-md bg-muted/40 p-3 text-xs">
+                      {JSON.stringify(evaluationCase.expectedOutput, null, 2)}
+                    </pre>
+                  </div>
                   <Button
                     type="button"
                     size="sm"
@@ -1669,11 +1944,38 @@ function EvaluationDetailSheet({
                     <Trash2 className="mr-2 size-4 shrink-0" />
                     {isRemoving ? 'Removing...' : 'Remove case'}
                   </Button>
-                ) : null}
-              </div>
-            </details>
-          ))}
-        </div>
+                </div>
+              </details>
+            ))}
+            {archivedCases.map((evaluationCase) => (
+              <details
+                key={evaluationCase.id}
+                className="rounded-md border p-3 text-sm"
+              >
+                <summary className="cursor-pointer font-medium">
+                  {evaluationCase.title}
+                  <span className="ml-2 text-xs font-normal text-muted-foreground">
+                    Archived
+                  </span>
+                </summary>
+                <div className="mt-3 space-y-3">
+                  <div className="space-y-1.5">
+                    <p className="font-medium">Input document</p>
+                    <pre className="max-w-full overflow-x-hidden whitespace-pre-wrap break-words rounded-md bg-muted/40 p-3 text-sm">
+                      {evaluationCase.documentText}
+                    </pre>
+                  </div>
+                  <div className="space-y-1.5">
+                    <p className="font-medium">Full expected output</p>
+                    <pre className="max-w-full overflow-x-hidden whitespace-pre-wrap break-words rounded-md bg-muted/40 p-3 text-xs">
+                      {JSON.stringify(evaluationCase.expectedOutput, null, 2)}
+                    </pre>
+                  </div>
+                </div>
+              </details>
+            ))}
+          </div>
+        )}
       </SheetContent>
     </Sheet>
   );
@@ -2126,6 +2428,7 @@ function EvaluationHistorySection({
 
       <EvaluationDetailSheet
         evaluation={detailEvaluation}
+        assignmentTypeId={assignmentTypeId}
         open={Boolean(detailEvaluation)}
         onOpenChange={(open) => {
           if (!open) setDetailColumnKey(null);
