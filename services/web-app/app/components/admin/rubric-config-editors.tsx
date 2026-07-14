@@ -2981,6 +2981,11 @@ function PromptVersionsOverview({
   onOpenPrompt: (promptVersionId: string) => void;
 }) {
   const latestSuite = evaluationHistory.suiteVersions[0];
+  const initialSuiteVersion = Math.min(
+    ...evaluationHistory.suiteVersions.map(
+      (suiteVersion) => suiteVersion.version
+    )
+  );
 
   return (
     <div className="flex h-full min-h-0 w-full flex-col">
@@ -3016,9 +3021,13 @@ function PromptVersionsOverview({
             {evaluationHistory.promptVersions.map((promptVersion) => {
               const latestRun = evaluationHistory.runs.find(
                 (run) =>
-                  run.promptVersionId === promptVersion.id &&
-                  run.promptRevision === promptVersion.revision &&
-                  run.evaluationSuiteVersionId === latestSuite?.id
+                  (run.promptVersionId === promptVersion.id &&
+                    run.promptRevision === promptVersion.revision &&
+                    run.evaluationSuiteVersionId === latestSuite?.id) ||
+                  (run.promptVersionId === null &&
+                    run.evaluationSuiteVersionId === null &&
+                    run.promptVersion === promptVersion.version &&
+                    latestSuite?.version === initialSuiteVersion)
               );
               return (
                 <div
@@ -3167,9 +3176,18 @@ export function EvaluationHistorySection({
 
   const selectedRuns = evaluationHistory.runs.filter(
     (run) =>
-      run.promptVersionId === selectedPrompt.id &&
-      run.promptRevision === selectedPrompt.revision &&
-      run.evaluationSuiteVersionId === selectedSuite.id
+      (run.promptVersionId === selectedPrompt.id &&
+        run.promptRevision === selectedPrompt.revision &&
+        run.evaluationSuiteVersionId === selectedSuite.id) ||
+      (run.promptVersionId === null &&
+        run.evaluationSuiteVersionId === null &&
+        run.promptVersion === selectedPrompt.version &&
+        selectedSuite.version ===
+          Math.min(
+            ...evaluationHistory.suiteVersions.map(
+              (suiteVersion) => suiteVersion.version
+            )
+          ))
   );
   const selectedHistory: AssignmentTypeEvaluationHistory = {
     ...evaluationHistory,

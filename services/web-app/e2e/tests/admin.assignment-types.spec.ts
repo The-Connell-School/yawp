@@ -422,7 +422,7 @@ test.describe.serial('Admin assignment types', () => {
         },
       },
     });
-    await prisma.assignmentTypeEvaluation.create({
+    const seededEvaluation = await prisma.assignmentTypeEvaluation.create({
       data: {
         assignmentTypeId: assignmentType.id,
         title: 'Encouraging opening',
@@ -470,6 +470,29 @@ test.describe.serial('Admin assignment types', () => {
           ],
         },
       },
+      include: { cases: { orderBy: { position: 'asc' } } },
+    });
+    await prisma.assignmentTypeEvaluationRun.create({
+      data: {
+        assignmentTypeId: assignmentType.id,
+        promptVersion: 1,
+        promptSnapshotJson: { legacy: true },
+        status: 'completed',
+        totalCases: 2,
+        passedCases: 1,
+        failedCases: 1,
+        completedAt: new Date(),
+        results: {
+          create: seededEvaluation.cases.map((evaluationCase, index) => ({
+            caseId: evaluationCase.id,
+            caseTitle: evaluationCase.title,
+            rubricCategoryKey: evaluationCase.rubricCategoryKey,
+            criterion: evaluationCase.criterion,
+            status: index === 0 ? 'pass' : 'fail',
+            evidence: 'Legacy result preserved for migration coverage.',
+          })),
+        },
+      },
     });
 
     try {
@@ -487,6 +510,11 @@ test.describe.serial('Admin assignment types', () => {
         page.getByRole('heading', { name: 'Prompt v1', exact: true })
       ).toBeVisible();
       await expect(page.getByText('Suite v1', { exact: true })).toBeVisible();
+      await expect(
+        page
+          .getByRole('table', { name: 'Evaluation history' })
+          .getByRole('row', { name: /v1/ })
+      ).toContainText('1/2');
 
       await page.getByRole('button', { name: 'Create draft' }).click();
       await expect(
