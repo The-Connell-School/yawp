@@ -20,7 +20,7 @@ import {
   Loader2,
   Pencil,
   Plus,
-  Sparkles,
+  Sprout,
   Trash2,
   X,
 } from 'lucide-react';
@@ -77,6 +77,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from '~/components/ui/collapsible';
+import { Tooltip } from '~/components/ui/tooltip';
 import {
   DEFAULT_SCORING_SCALE,
   prepareRubricForSave,
@@ -1397,6 +1398,7 @@ type GeneratedEvaluationCaseDraft = {
   documentText: string;
   expectedOutputText: string;
   selected: boolean;
+  expanded?: boolean;
 };
 
 type EvaluationFetcherData = {
@@ -1491,7 +1493,6 @@ function AddEvaluationSheet({
   fetcher: ReturnType<typeof useFetcher<EvaluationFetcherData>>;
 }) {
   const [generatorOpen, setGeneratorOpen] = useState(false);
-  const [genPrompt, setGenPrompt] = useState('');
   const [description, setDescription] = useState('');
   const [evaluationTitle, setEvaluationTitle] = useState('');
   const [cases, setCases] = useState<GeneratedEvaluationCaseDraft[]>([]);
@@ -1506,7 +1507,6 @@ function AddEvaluationSheet({
   useEffect(() => {
     if (!open) {
       setGeneratorOpen(false);
-      setGenPrompt('');
       setDescription('');
       setEvaluationTitle('');
       setCases([]);
@@ -1519,10 +1519,9 @@ function AddEvaluationSheet({
     if (handledResponseRef.current === fetcher.data) return;
     handledResponseRef.current = fetcher.data;
     if (fetcher.data.evaluation) {
-      setEvaluationTitle(fetcher.data.evaluation.title);
-      setDescription(fetcher.data.evaluation.description);
-      setCases(
-        fetcher.data.evaluation.cases.map((evaluationCase) => ({
+      setCases((current) => [
+        ...current,
+        ...fetcher.data!.evaluation!.cases.map((evaluationCase) => ({
           title: evaluationCase.title,
           documentText: evaluationCase.documentText,
           expectedOutputText: JSON.stringify(
@@ -1531,8 +1530,8 @@ function AddEvaluationSheet({
             2
           ),
           selected: true,
-        }))
-      );
+        })),
+      ]);
       setGeneratorOpen(false);
       return;
     }
@@ -1542,7 +1541,9 @@ function AddEvaluationSheet({
   const selectedCount = cases.filter(
     (evaluationCase) => evaluationCase.selected
   ).length;
-  const canGenerate = genPrompt.trim().length > 0 && !isWorking;
+  const hasEvaluationBasics =
+    evaluationTitle.trim().length > 0 && description.trim().length > 0;
+  const canGenerate = hasEvaluationBasics && !isWorking;
   const canSave =
     evaluationTitle.trim().length > 0 &&
     description.trim().length > 0 &&
@@ -1555,7 +1556,7 @@ function AddEvaluationSheet({
     const formData = new FormData();
     formData.set('intent', 'generateEvaluation');
     formData.set('assignmentTypeId', assignmentTypeId);
-    formData.set('description', genPrompt.trim());
+    formData.set('description', description.trim());
     fetcher.submit(formData, {
       method: 'POST',
       action: '/api/domain/assignment-type-evaluations',
@@ -1570,6 +1571,25 @@ function AddEvaluationSheet({
       current.map((evaluationCase, caseIndex) =>
         caseIndex === index ? { ...evaluationCase, ...update } : evaluationCase
       )
+    );
+  }
+
+  function handleAddManualCase() {
+    setCases((current) => [
+      ...current,
+      {
+        title: '',
+        documentText: '',
+        expectedOutputText: '{}',
+        selected: true,
+        expanded: true,
+      },
+    ]);
+  }
+
+  function removeCase(index: number) {
+    setCases((current) =>
+      current.filter((_, caseIndex) => caseIndex !== index)
     );
   }
 
@@ -1624,49 +1644,6 @@ function AddEvaluationSheet({
           <SheetTitle>Add evaluation</SheetTitle>
         </SheetHeader>
         <div className="mt-4 space-y-4">
-          <Collapsible open={generatorOpen} onOpenChange={setGeneratorOpen}>
-            <CollapsibleTrigger asChild>
-              <Button type="button" variant="outline" size="sm">
-                <Sparkles className="mr-1.5 size-4 shrink-0" />
-                Generate with AI
-              </Button>
-            </CollapsibleTrigger>
-            <CollapsibleContent className="mt-3 space-y-3">
-              <div className="space-y-2">
-                <Label htmlFor="evaluation-generate-prompt">
-                  Describe what good looks like
-                </Label>
-                <Textarea
-                  id="evaluation-generate-prompt"
-                  rows={5}
-                  value={genPrompt}
-                  onChange={(event) => setGenPrompt(event.target.value)}
-                  placeholder="e.g. Always begin the final feedback with a brief, positive greeting."
-                  disabled={isWorking}
-                />
-                <p className="text-sm text-muted-foreground text-pretty">
-                  AI will suggest varied inputs and a complete ideal output for
-                  each one, and fill in the name and description below.
-                </p>
-              </div>
-              <Button
-                type="button"
-                className="w-full"
-                onClick={handleGenerate}
-                disabled={!canGenerate}
-              >
-                {isWorking ? (
-                  <>
-                    <Loader2 className="mr-2 size-4 shrink-0 animate-spin" />
-                    Generating...
-                  </>
-                ) : (
-                  'Generate evaluations'
-                )}
-              </Button>
-            </CollapsibleContent>
-          </Collapsible>
-
           <div className="space-y-2">
             <Label htmlFor="evaluation-title">Evaluation name</Label>
             <Input
@@ -1692,57 +1669,148 @@ function AddEvaluationSheet({
             />
           </div>
 
-          <div className="space-y-2">
-            <p className="text-sm font-medium">
-              {pluralizeCases(cases.length)}
-            </p>
-            {cases.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                No cases yet. Use Generate with AI above, and they&apos;ll
-                appear here for review.
-              </p>
-            ) : (
-              cases.map((evaluationCase, index) => (
-                <div
-                  key={`${evaluationCase.title}-${index}`}
-                  className="flex items-start gap-2 rounded-md border p-3"
+          <Collapsible
+            open={generatorOpen}
+            onOpenChange={setGeneratorOpen}
+            className="space-y-3 rounded-md border p-3"
+          >
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p className="text-sm font-medium">Create cases here</p>
+                <p className="text-xs text-muted-foreground text-pretty">
+                  Add a case by hand, or generate a starting set with AI.
+                </p>
+              </div>
+              <div className="flex shrink-0 items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleAddManualCase}
+                  disabled={isWorking}
                 >
-                  <input
-                    type="checkbox"
-                    aria-label={`Use ${evaluationCase.title}`}
-                    checked={evaluationCase.selected}
-                    onChange={(event) =>
-                      updateCase(index, { selected: event.target.checked })
-                    }
-                    disabled={isWorking}
-                    className="mt-1 size-4 shrink-0"
-                  />
-                  <details className="min-w-0 flex-1 text-sm">
-                    <summary className="cursor-pointer font-medium">
-                      {evaluationCase.title || `Case ${index + 1}`}
-                    </summary>
-                    <CaseFieldsBody
-                      idPrefix={`generated-case-${index}`}
-                      labelTitle={evaluationCase.title}
-                      title={evaluationCase.title}
-                      documentText={evaluationCase.documentText}
-                      expectedOutputText={evaluationCase.expectedOutputText}
+                  <Plus className="mr-1.5 size-4 shrink-0" />
+                  Add case
+                </Button>
+                <Tooltip
+                  text={
+                    hasEvaluationBasics
+                      ? 'Suggest a starting set of cases from the description above'
+                      : 'Add an evaluation name and description first'
+                  }
+                >
+                  <span className="inline-flex">
+                    <CollapsibleTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={!hasEvaluationBasics || isWorking}
+                        aria-expanded={generatorOpen}
+                      >
+                        <Sprout className="mr-1.5 size-4 shrink-0" />
+                        Generate with AI
+                      </Button>
+                    </CollapsibleTrigger>
+                  </span>
+                </Tooltip>
+              </div>
+            </div>
+
+            <CollapsibleContent className="space-y-3">
+              <p className="text-sm text-muted-foreground text-pretty">
+                AI will read the evaluation name and description above and
+                suggest a few varied inputs, each with a complete ideal
+                output, added to the cases below for review.
+              </p>
+              <Button
+                type="button"
+                className="w-full"
+                onClick={handleGenerate}
+                disabled={!canGenerate}
+              >
+                {isWorking ? (
+                  <>
+                    <Loader2 className="mr-2 size-4 shrink-0 animate-spin" />
+                    Generating...
+                  </>
+                ) : (
+                  'Generate cases'
+                )}
+              </Button>
+            </CollapsibleContent>
+
+            <div className="space-y-2">
+              <p className="text-sm font-medium">
+                {pluralizeCases(cases.length)}
+              </p>
+              {cases.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  No cases yet. Add one manually or generate a starting set
+                  with AI.
+                </p>
+              ) : (
+                cases.map((evaluationCase, index) => (
+                  <div
+                    key={`case-${index}`}
+                    className="flex items-start gap-2 rounded-md border p-3"
+                  >
+                    <input
+                      type="checkbox"
+                      aria-label={`Use ${evaluationCase.title || `case ${index + 1}`}`}
+                      checked={evaluationCase.selected}
+                      onChange={(event) =>
+                        updateCase(index, { selected: event.target.checked })
+                      }
                       disabled={isWorking}
-                      onTitleChange={(value) =>
-                        updateCase(index, { title: value })
-                      }
-                      onDocumentChange={(value) =>
-                        updateCase(index, { documentText: value })
-                      }
-                      onOutputChange={(value) =>
-                        updateCase(index, { expectedOutputText: value })
-                      }
+                      className="mt-1 size-4 shrink-0"
                     />
-                  </details>
-                </div>
-              ))
-            )}
-          </div>
+                    <details
+                      className="min-w-0 flex-1 text-sm"
+                      open={evaluationCase.expanded ?? false}
+                      onToggle={(event) =>
+                        updateCase(index, {
+                          expanded: (event.target as HTMLDetailsElement).open,
+                        })
+                      }
+                    >
+                      <summary className="cursor-pointer font-medium">
+                        {evaluationCase.title || `Case ${index + 1}`}
+                      </summary>
+                      <CaseFieldsBody
+                        idPrefix={`generated-case-${index}`}
+                        labelTitle={evaluationCase.title}
+                        title={evaluationCase.title}
+                        documentText={evaluationCase.documentText}
+                        expectedOutputText={evaluationCase.expectedOutputText}
+                        disabled={isWorking}
+                        onTitleChange={(value) =>
+                          updateCase(index, { title: value })
+                        }
+                        onDocumentChange={(value) =>
+                          updateCase(index, { documentText: value })
+                        }
+                        onOutputChange={(value) =>
+                          updateCase(index, { expectedOutputText: value })
+                        }
+                      />
+                    </details>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      className="shrink-0"
+                      onClick={() => removeCase(index)}
+                      disabled={isWorking}
+                      aria-label={`Remove ${evaluationCase.title || `case ${index + 1}`}`}
+                    >
+                      <Trash2 className="size-4" />
+                    </Button>
+                  </div>
+                ))
+              )}
+            </div>
+          </Collapsible>
 
           {errorMessage ? (
             <p className="text-sm text-destructive">{errorMessage}</p>

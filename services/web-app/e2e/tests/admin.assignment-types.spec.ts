@@ -122,18 +122,26 @@ test.describe.serial('Admin assignment types', () => {
         addEvaluationDialog.getByLabel('Evaluation description')
       ).toBeVisible();
       await expect(
-        addEvaluationDialog.getByLabel('Describe what good looks like')
-      ).not.toBeVisible();
+        addEvaluationDialog.getByRole('button', { name: 'Generate with AI' })
+      ).toBeDisabled();
+
+      await addEvaluationDialog
+        .getByLabel('Evaluation name')
+        .fill('Positive greeting');
+      await addEvaluationDialog
+        .getByLabel('Evaluation description')
+        .fill(
+          'Always begin the final feedback with a brief, positive greeting to the student.'
+        );
+      await expect(
+        addEvaluationDialog.getByRole('button', { name: 'Generate with AI' })
+      ).toBeEnabled();
+
       await addEvaluationDialog
         .getByRole('button', { name: 'Generate with AI' })
         .click();
       await addEvaluationDialog
-        .getByLabel('Describe what good looks like')
-        .fill(
-          'Always begin the final feedback with a brief, positive greeting to the student.'
-        );
-      await addEvaluationDialog
-        .getByRole('button', { name: 'Generate evaluations' })
+        .getByRole('button', { name: 'Generate cases' })
         .click();
       await expect(
         addEvaluationDialog.getByLabel('Evaluation name')
