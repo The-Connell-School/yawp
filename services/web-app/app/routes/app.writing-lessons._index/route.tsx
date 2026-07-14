@@ -494,15 +494,16 @@ export default function WritingLessonsIndexRoute() {
                   to={`/app/writing-lessons/${lesson.slug}`}
                   className="block h-full"
                 >
-                  <Card className="flex h-full flex-col shadow-none hover:shadow-sm">
-                    <CardHeader className="p-4">
-                      <CardTitle className="text-sm leading-snug">
+                  <Card className="flex h-full items-center justify-between gap-3 p-3 shadow-none hover:shadow-sm">
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold leading-snug">
                         {lesson.title}
-                      </CardTitle>
-                      <CardDescription className="text-xs">
+                      </p>
+                      <p className="mt-0.5 truncate text-xs text-muted-foreground">
                         {lesson.description}
-                      </CardDescription>
-                    </CardHeader>
+                      </p>
+                    </div>
+                    <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
                   </Card>
                 </Link>
               ))}
