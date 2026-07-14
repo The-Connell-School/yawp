@@ -2545,7 +2545,7 @@ export function EvaluationHistorySection({
                           className={cn(
                             'flex max-w-[12rem] flex-col items-start p-2 text-left hover:bg-muted/50',
                             isColumnSelected &&
-                              'bg-muted/70 ring-2 ring-inset ring-primary/40'
+                              'bg-muted/70 ring-2 ring-inset ring-yellow-500 dark:ring-yellow-400'
                           )}
                         >
                           <span>{column.label}</span>
@@ -2597,7 +2597,7 @@ export function EvaluationHistorySection({
                             className={cn(
                               'group flex h-full w-full items-center justify-between gap-2 px-2 py-3 text-left hover:bg-muted/60',
                               isRunSelected &&
-                                'bg-muted/70 ring-2 ring-inset ring-primary/40'
+                                'bg-muted/70 ring-2 ring-inset ring-yellow-500 dark:ring-yellow-400'
                             )}
                           >
                             <span className="inline-flex min-w-0 flex-wrap items-baseline gap-x-1 text-sm">
@@ -2657,7 +2657,7 @@ export function EvaluationHistorySection({
                                   className={cn(
                                     'flex h-full w-full items-center justify-center px-2 py-3 text-inherit text-xs font-semibold tabular-nums',
                                     isResultSelected &&
-                                      'ring-2 ring-inset ring-primary/50'
+                                      'ring-2 ring-inset ring-yellow-500 dark:ring-yellow-400'
                                   )}
                                   onClick={() =>
                                     setDetailSelection((current) =>
