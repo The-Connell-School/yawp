@@ -26,6 +26,8 @@ export type PromptConfigData = {
   systemInstructions?: string;
   gradingInstructions?: string;
   instructionsPreset?: string;
+  systemMessageTemplate?: string;
+  userMessageTemplate?: string;
 };
 
 export const DEFAULT_SCORING_SCALE: ScoringScaleData = {
@@ -96,6 +98,16 @@ export function parsePromptConfig(raw: unknown): PromptConfigData {
 
   const systemInstructions =
     typeof d?.systemInstructions === 'string' ? d.systemInstructions : '';
+  const managedTemplates = {
+    systemMessageTemplate:
+      typeof d?.systemMessageTemplate === 'string'
+        ? d.systemMessageTemplate
+        : undefined,
+    userMessageTemplate:
+      typeof d?.userMessageTemplate === 'string'
+        ? d.userMessageTemplate
+        : undefined,
+  };
 
   if (
     typeof d?.gradingInstructions === 'string' &&
@@ -105,6 +117,7 @@ export function parsePromptConfig(raw: unknown): PromptConfigData {
       systemInstructions,
       gradingInstructions: d.gradingInstructions,
       instructionsPreset: d?.instructionsPreset ?? '',
+      ...managedTemplates,
     };
   }
 
@@ -116,5 +129,6 @@ export function parsePromptConfig(raw: unknown): PromptConfigData {
     systemInstructions,
     gradingInstructions: legacyParts.join('\n\n'),
     instructionsPreset: d?.instructionsPreset ?? '',
+    ...managedTemplates,
   };
 }

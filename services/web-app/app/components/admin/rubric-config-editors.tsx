@@ -2978,6 +2978,12 @@ function serializePromptConfig(cfg: PromptConfigData): Record<string, unknown> {
   if (cfg.instructionsPreset?.trim()) {
     result.instructionsPreset = cfg.instructionsPreset.trim();
   }
+  if (cfg.systemMessageTemplate?.trim()) {
+    result.systemMessageTemplate = cfg.systemMessageTemplate;
+  }
+  if (cfg.userMessageTemplate?.trim()) {
+    result.userMessageTemplate = cfg.userMessageTemplate;
+  }
   return result;
 }
 

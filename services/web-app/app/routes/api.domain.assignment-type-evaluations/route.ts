@@ -4,8 +4,21 @@ import { z } from 'zod';
 import { buildResolvedAssignmentTypeGradingConfig } from '~/domain/assignment-types/assignment-type-grading-config.server';
 import { parseRubric } from '~/domain/assignment-types/assignment-type-rubric.shared';
 import { runAssignmentTypeEvaluationSuite } from '~/domain/ai-evaluation/assignment-type-evaluation-suite.server';
+import {
+  createEvaluationSuiteVersion,
+  ensureEvaluationSuiteVersion,
+  ensureProductionPromptVersion,
+  flattenEvaluationSuiteCases,
+  gradingConfigWithPromptVersion,
+  parseEvaluationSuiteSnapshot,
+  PROMPT_VERSION_VARIABLE_SCHEMA,
+  promptTemplateContentHash,
+} from '~/domain/ai-evaluation/prompt-version-control.server';
 import { AP_HISTORY_ASSIGNMENT_TYPE_KEY } from '~/domain/ap-history/schema';
-import { compileGradingAssistantInvocation } from '~/domain/grading/grading-assistant-invocation';
+import {
+  compileGradingAssistantInvocation,
+  validateGradingAssistantPromptTemplate,
+} from '~/domain/grading/grading-assistant-invocation';
 import { requireAdmin } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { getLLMCompletion } from '~/utils/getLLMCompletion';
@@ -79,6 +92,28 @@ const ArchiveCaseSchema = z.object({
 const RunSuiteSchema = z.object({
   intent: z.literal('runSuite'),
   assignmentTypeId: z.string().min(1),
+  promptVersionId: z.string().min(1).optional(),
+  evaluationSuiteVersionId: z.string().min(1).optional(),
+});
+
+const CreatePromptDraftSchema = z.object({
+  intent: z.literal('createPromptDraft'),
+  assignmentTypeId: z.string().min(1),
+  sourcePromptVersionId: z.string().min(1).optional(),
+});
+
+const UpdatePromptDraftSchema = z.object({
+  intent: z.literal('updatePromptDraft'),
+  assignmentTypeId: z.string().min(1),
+  promptVersionId: z.string().min(1),
+  systemMessageTemplate: z.string().trim().min(1).max(30_000),
+  userMessageTemplate: z.string().trim().min(1).max(50_000),
+});
+
+const PromotePromptDraftSchema = z.object({
+  intent: z.literal('promotePromptDraft'),
+  assignmentTypeId: z.string().min(1),
+  promptVersionId: z.string().min(1),
 });
 
 const ActionSchema = z.discriminatedUnion('intent', [
@@ -87,6 +122,9 @@ const ActionSchema = z.discriminatedUnion('intent', [
   UpdateEvaluationSchema,
   CreateCaseSchema,
   ArchiveCaseSchema,
+  CreatePromptDraftSchema,
+  UpdatePromptDraftSchema,
+  PromotePromptDraftSchema,
   RunSuiteSchema,
 ]);
 
@@ -150,6 +188,160 @@ export async function action({ request }: ActionFunctionArgs) {
   const rubricCategoryKeys = new Set(
     rubric.categories.map((category) => category.key)
   );
+
+  if (input.intent === 'createPromptDraft') {
+    const gradingConfig = buildResolvedAssignmentTypeGradingConfig({
+      assignmentTypeId: assignmentType.id,
+      assignmentTypeKind: assignmentType.kind,
+      assignmentTypeTitle: assignmentType.title,
+      row: assignmentType,
+    });
+    const production = await ensureProductionPromptVersion({
+      db: prisma,
+      assignmentTypeId: assignmentType.id,
+      gradingConfig,
+    });
+    const source = input.sourcePromptVersionId
+      ? await prisma.assignmentTypePromptVersion.findFirst({
+          where: {
+            id: input.sourcePromptVersionId,
+            assignmentTypeId: assignmentType.id,
+          },
+        })
+      : production;
+    if (!source) return errorResponse('Prompt version not found.', 404);
+    const latest = await prisma.assignmentTypePromptVersion.findFirst({
+      where: { assignmentTypeId: assignmentType.id },
+      orderBy: { version: 'desc' },
+    });
+    const draft = await prisma.assignmentTypePromptVersion.create({
+      data: {
+        assignmentTypeId: assignmentType.id,
+        version: (latest?.version ?? 0) + 1,
+        revision: 1,
+        status: 'draft',
+        systemMessageTemplate: source.systemMessageTemplate,
+        userMessageTemplate: source.userMessageTemplate,
+        variableSchemaJson: inputJson(PROMPT_VERSION_VARIABLE_SCHEMA),
+        contentHash: promptTemplateContentHash({
+          systemMessage: source.systemMessageTemplate,
+          userMessage: source.userMessageTemplate,
+        }),
+      },
+    });
+    return dataResponse({
+      success: true,
+      promptVersionId: draft.id,
+      version: draft.version,
+    });
+  }
+
+  if (input.intent === 'updatePromptDraft') {
+    const draft = await prisma.assignmentTypePromptVersion.findUnique({
+      where: { id: input.promptVersionId },
+    });
+    if (
+      !draft ||
+      draft.assignmentTypeId !== assignmentType.id ||
+      draft.status !== 'draft'
+    ) {
+      return errorResponse('Editable prompt draft not found.', 404);
+    }
+    const validationError = validateGradingAssistantPromptTemplate({
+      systemMessage: input.systemMessageTemplate,
+      userMessage: input.userMessageTemplate,
+    });
+    if (validationError) return errorResponse(validationError);
+    const updated = await prisma.assignmentTypePromptVersion.update({
+      where: { id: draft.id },
+      data: {
+        revision: { increment: 1 },
+        systemMessageTemplate: input.systemMessageTemplate,
+        userMessageTemplate: input.userMessageTemplate,
+        variableSchemaJson: inputJson(PROMPT_VERSION_VARIABLE_SCHEMA),
+        contentHash: promptTemplateContentHash({
+          systemMessage: input.systemMessageTemplate,
+          userMessage: input.userMessageTemplate,
+        }),
+      },
+    });
+    return dataResponse({
+      success: true,
+      promptVersionId: updated.id,
+      revision: updated.revision,
+    });
+  }
+
+  if (input.intent === 'promotePromptDraft') {
+    const [draft, latestSuite] = await Promise.all([
+      prisma.assignmentTypePromptVersion.findUnique({
+        where: { id: input.promptVersionId },
+      }),
+      ensureEvaluationSuiteVersion(prisma, assignmentType.id),
+    ]);
+    if (
+      !draft ||
+      draft.assignmentTypeId !== assignmentType.id ||
+      draft.status !== 'draft'
+    ) {
+      return errorResponse('Editable prompt draft not found.', 404);
+    }
+    const matchingRun = await prisma.assignmentTypeEvaluationRun.findFirst({
+      where: {
+        assignmentTypeId: assignmentType.id,
+        promptVersionId: draft.id,
+        promptRevision: draft.revision,
+        evaluationSuiteVersionId: latestSuite.id,
+        evaluationSuiteContentHash: latestSuite.contentHash,
+        status: 'completed',
+      },
+      orderBy: { createdAt: 'desc' },
+      select: { id: true, passedCases: true, totalCases: true },
+    });
+    if (!matchingRun) {
+      return errorResponse(
+        'Run the current draft against the latest evaluation suite before promoting.',
+        409
+      );
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await tx.assignmentTypePromptVersion.updateMany({
+        where: {
+          assignmentTypeId: assignmentType.id,
+          status: 'production',
+        },
+        data: { status: 'previous' },
+      });
+      await tx.assignmentTypePromptVersion.update({
+        where: { id: draft.id },
+        data: { status: 'production', promotedAt: new Date() },
+      });
+      const previousConfig =
+        assignmentType.gradingPromptConfigJson &&
+        typeof assignmentType.gradingPromptConfigJson === 'object' &&
+        !Array.isArray(assignmentType.gradingPromptConfigJson)
+          ? assignmentType.gradingPromptConfigJson
+          : {};
+      await tx.assignmentType.update({
+        where: { id: assignmentType.id },
+        data: {
+          gradingAssistantVersion: draft.version,
+          gradingPromptConfigJson: inputJson({
+            ...previousConfig,
+            systemMessageTemplate: draft.systemMessageTemplate,
+            userMessageTemplate: draft.userMessageTemplate,
+          }),
+        },
+      });
+    });
+    return dataResponse({
+      success: true,
+      promptVersionId: draft.id,
+      status: 'production',
+      runId: matchingRun.id,
+    });
+  }
 
   if (input.intent === 'generateEvaluation') {
     if (rubric.categories.length === 0) {
@@ -339,28 +531,32 @@ export async function action({ request }: ActionFunctionArgs) {
     const position = await prisma.assignmentTypeEvaluation.count({
       where: { assignmentTypeId: assignmentType.id, archivedAt: null },
     });
-    const evaluation = await prisma.assignmentTypeEvaluation.create({
-      data: {
-        assignmentTypeId: assignmentType.id,
-        title: input.title,
-        description: input.description,
-        position,
-        cases: {
-          create: parsedCases.data.map((evaluationCase, casePosition) => ({
-            assignmentTypeId: assignmentType.id,
-            title: evaluationCase.title,
-            documentText: evaluationCase.documentText,
-            expectedOutputJson: evaluationCase.expectedOutput,
-            criterion:
-              process.env.E2E === 'true' &&
-              evaluationCase.title === 'Missing opening'
-                ? `${input.description} [fixture:improves-after-v1]`
-                : input.description,
-            rubricCategoryKey: firstRubricCategoryKey,
-            position: casePosition,
-          })),
+    const evaluation = await prisma.$transaction(async (tx) => {
+      const created = await tx.assignmentTypeEvaluation.create({
+        data: {
+          assignmentTypeId: assignmentType.id,
+          title: input.title,
+          description: input.description,
+          position,
+          cases: {
+            create: parsedCases.data.map((evaluationCase, casePosition) => ({
+              assignmentTypeId: assignmentType.id,
+              title: evaluationCase.title,
+              documentText: evaluationCase.documentText,
+              expectedOutputJson: evaluationCase.expectedOutput,
+              criterion:
+                process.env.E2E === 'true' &&
+                evaluationCase.title === 'Missing opening'
+                  ? `${input.description} [fixture:improves-after-v1]`
+                  : input.description,
+              rubricCategoryKey: firstRubricCategoryKey,
+              position: casePosition,
+            })),
+          },
         },
-      },
+      });
+      await createEvaluationSuiteVersion(tx, assignmentType.id);
+      return created;
     });
     return dataResponse({ success: true, evaluationId: evaluation.id });
   }
@@ -480,6 +676,7 @@ export async function action({ request }: ActionFunctionArgs) {
           throw new Error('Evaluation case not found.');
         }
       }
+      await createEvaluationSuiteVersion(tx, assignmentType.id);
     });
     return dataResponse({ success: true });
   }
@@ -494,27 +691,37 @@ export async function action({ request }: ActionFunctionArgs) {
         archivedAt: null,
       },
     });
-    const evaluationCase = await prisma.assignmentTypeEvaluationCase.create({
-      data: {
-        assignmentTypeId: assignmentType.id,
-        rubricCategoryKey: input.rubricCategoryKey,
-        title: input.title,
-        documentText: input.documentText,
-        criterion: input.criterion,
-        position,
-      },
+    const evaluationCase = await prisma.$transaction(async (tx) => {
+      const created = await tx.assignmentTypeEvaluationCase.create({
+        data: {
+          assignmentTypeId: assignmentType.id,
+          rubricCategoryKey: input.rubricCategoryKey,
+          title: input.title,
+          documentText: input.documentText,
+          criterion: input.criterion,
+          position,
+        },
+      });
+      await createEvaluationSuiteVersion(tx, assignmentType.id);
+      return created;
     });
     return dataResponse({ success: true, caseId: evaluationCase.id });
   }
 
   if (input.intent === 'archiveCase') {
-    const result = await prisma.assignmentTypeEvaluationCase.updateMany({
-      where: {
-        id: input.caseId,
-        assignmentTypeId: assignmentType.id,
-        archivedAt: null,
-      },
-      data: { archivedAt: new Date() },
+    const result = await prisma.$transaction(async (tx) => {
+      const archived = await tx.assignmentTypeEvaluationCase.updateMany({
+        where: {
+          id: input.caseId,
+          assignmentTypeId: assignmentType.id,
+          archivedAt: null,
+        },
+        data: { archivedAt: new Date() },
+      });
+      if (archived.count > 0) {
+        await createEvaluationSuiteVersion(tx, assignmentType.id);
+      }
+      return archived;
     });
     if (result.count === 0)
       return errorResponse('Evaluation case not found.', 404);
@@ -526,10 +733,6 @@ export async function action({ request }: ActionFunctionArgs) {
       'AP History suite runs require an assignment snapshot.'
     );
   }
-  if (assignmentType.evaluationCases.length === 0) {
-    return errorResponse('Add at least one evaluation case before running.');
-  }
-
   const runningRun = await prisma.assignmentTypeEvaluationRun.findFirst({
     where: {
       assignmentTypeId: assignmentType.id,
@@ -539,12 +742,54 @@ export async function action({ request }: ActionFunctionArgs) {
   });
   if (runningRun) return errorResponse(RUN_IN_PROGRESS_MESSAGE, 409);
 
-  const gradingConfig = buildResolvedAssignmentTypeGradingConfig({
+  const baseGradingConfig = buildResolvedAssignmentTypeGradingConfig({
     assignmentTypeId: assignmentType.id,
     assignmentTypeKind: assignmentType.kind,
     assignmentTypeTitle: assignmentType.title,
     row: assignmentType,
   });
+  const [promptVersion, evaluationSuiteVersion] = await Promise.all([
+    input.promptVersionId
+      ? prisma.assignmentTypePromptVersion.findUnique({
+          where: { id: input.promptVersionId },
+        })
+      : ensureProductionPromptVersion({
+          db: prisma,
+          assignmentTypeId: assignmentType.id,
+          gradingConfig: baseGradingConfig,
+        }),
+    input.evaluationSuiteVersionId
+      ? prisma.assignmentTypeEvaluationSuiteVersion.findUnique({
+          where: { id: input.evaluationSuiteVersionId },
+        })
+      : ensureEvaluationSuiteVersion(prisma, assignmentType.id),
+  ]);
+  if (
+    !promptVersion ||
+    promptVersion.assignmentTypeId !== assignmentType.id
+  ) {
+    return errorResponse('Prompt version not found.', 404);
+  }
+  if (
+    !evaluationSuiteVersion ||
+    evaluationSuiteVersion.assignmentTypeId !== assignmentType.id
+  ) {
+    return errorResponse('Evaluation suite version not found.', 404);
+  }
+  const evaluationSnapshot = parseEvaluationSuiteSnapshot(
+    evaluationSuiteVersion.snapshotJson
+  );
+  if (!evaluationSnapshot) {
+    return errorResponse('The evaluation suite snapshot is invalid.', 409);
+  }
+  const evaluationCases = flattenEvaluationSuiteCases(evaluationSnapshot);
+  if (evaluationCases.length === 0) {
+    return errorResponse('Add at least one evaluation case before running.');
+  }
+  const gradingConfig = gradingConfigWithPromptVersion(
+    baseGradingConfig,
+    promptVersion
+  );
   const compiledPrompt = compileGradingAssistantInvocation({
     gradingConfig,
     studentFirstName: 'Jordan',
@@ -556,12 +801,24 @@ export async function action({ request }: ActionFunctionArgs) {
     run = await prisma.assignmentTypeEvaluationRun.create({
       data: {
         assignmentTypeId: assignmentType.id,
-        promptVersion: gradingConfig.version,
+        promptVersion: promptVersion.version,
+        promptVersionId: promptVersion.id,
+        promptRevision: promptVersion.revision,
+        evaluationSuiteVersionId: evaluationSuiteVersion.id,
+        evaluationSuiteContentHash: evaluationSuiteVersion.contentHash,
+        evaluationSnapshotJson: inputJson(evaluationSnapshot),
         status: 'running',
-        totalCases: assignmentType.evaluationCases.length,
+        totalCases: evaluationCases.length,
         promptSnapshotJson: inputJson({
           assignmentTypeTitle: assignmentType.title,
-          version: gradingConfig.version,
+          version: promptVersion.version,
+          revision: promptVersion.revision,
+          status: promptVersion.status,
+          contentHash: promptVersion.contentHash,
+          template: {
+            systemMessage: promptVersion.systemMessageTemplate,
+            userMessage: promptVersion.userMessageTemplate,
+          },
           scoringScale: {
             type: gradingConfig.scoringType,
             minScore: gradingConfig.minScore,
@@ -593,7 +850,7 @@ export async function action({ request }: ActionFunctionArgs) {
   try {
     const suiteResult = await runAssignmentTypeEvaluationSuite({
       gradingConfig,
-      evaluationCases: assignmentType.evaluationCases,
+      evaluationCases,
       execute: async ({ evaluationCase, purpose, ...completion }) => {
         if (useE2EFixture) {
           if (purpose === 'criterion') {
@@ -657,6 +914,9 @@ export async function action({ request }: ActionFunctionArgs) {
             ? { expectedOutputJson: inputJson(result.expectedOutput) }
             : {}),
           responseContractJson: inputJson(result.responseContract),
+          ...(result.requestSnapshot
+            ? { requestSnapshotJson: inputJson(result.requestSnapshot) }
+            : {}),
         })),
       });
       await tx.assignmentTypeEvaluationRun.update({
@@ -681,7 +941,7 @@ export async function action({ request }: ActionFunctionArgs) {
       where: { id: run.id },
       data: {
         status: 'failed',
-        failedCases: assignmentType.evaluationCases.length,
+        failedCases: evaluationCases.length,
         completedAt: new Date(),
       },
     });

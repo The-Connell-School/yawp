@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, mock, test } from 'bun:test';
 
 const prisma = {
   $transaction: mock(),
-  assignmentType: { findUnique: mock() },
+  assignmentType: { findUnique: mock(), update: mock() },
   assignmentTypeEvaluation: {
     count: mock(),
     create: mock(),
@@ -19,6 +19,20 @@ const prisma = {
     update: mock(),
   },
   assignmentTypeEvaluationResult: { createMany: mock() },
+  assignmentTypePromptVersion: {
+    count: mock(),
+    findFirst: mock(),
+    findUnique: mock(),
+    create: mock(),
+    update: mock(),
+    updateMany: mock(),
+  },
+  assignmentTypeEvaluationSuiteVersion: {
+    count: mock(),
+    findFirst: mock(),
+    findUnique: mock(),
+    create: mock(),
+  },
 };
 const requireAdmin = mock();
 const getLLMCompletion = mock();
@@ -102,6 +116,7 @@ describe('assignment-type evaluations action', () => {
       callback(prisma)
     );
     prisma.assignmentType.findUnique.mockResolvedValue(assignmentType);
+    prisma.assignmentType.update.mockResolvedValue({ id: 'at-1' });
     prisma.assignmentTypeEvaluationRun.findFirst.mockResolvedValue(null);
     prisma.assignmentTypeEvaluation.count.mockResolvedValue(1);
     prisma.assignmentTypeEvaluation.create.mockResolvedValue({
@@ -123,6 +138,81 @@ describe('assignment-type evaluations action', () => {
     });
     prisma.assignmentTypeEvaluationResult.createMany.mockResolvedValue({
       count: 1,
+    });
+    prisma.assignmentTypePromptVersion.count.mockResolvedValue(1);
+    prisma.assignmentTypePromptVersion.findFirst.mockResolvedValue({
+      id: 'prompt-production-7',
+      assignmentTypeId: 'at-1',
+      version: 7,
+      revision: 1,
+      status: 'production',
+      systemMessageTemplate: 'Production system {{student_first_name}}',
+      userMessageTemplate: 'Production user {{document}}',
+      contentHash: 'production-hash',
+    });
+    prisma.assignmentTypePromptVersion.findUnique.mockResolvedValue({
+      id: 'prompt-draft-8',
+      assignmentTypeId: 'at-1',
+      version: 8,
+      revision: 2,
+      status: 'draft',
+      systemMessageTemplate: 'Draft system {{student_first_name}}',
+      userMessageTemplate: 'Draft user {{rubric}} {{document}}',
+      contentHash: 'draft-hash',
+    });
+    prisma.assignmentTypePromptVersion.create.mockResolvedValue({
+      id: 'prompt-draft-8',
+      version: 8,
+      status: 'draft',
+    });
+    prisma.assignmentTypePromptVersion.update.mockResolvedValue({
+      id: 'prompt-draft-8',
+      version: 8,
+      revision: 3,
+      status: 'draft',
+    });
+    prisma.assignmentTypePromptVersion.updateMany.mockResolvedValue({
+      count: 1,
+    });
+    prisma.assignmentTypeEvaluationSuiteVersion.count.mockResolvedValue(1);
+    prisma.assignmentTypeEvaluationSuiteVersion.findFirst.mockResolvedValue({
+      id: 'suite-1',
+      assignmentTypeId: 'at-1',
+      version: 1,
+      contentHash: 'suite-hash',
+      snapshotJson: {
+        evaluations: [
+          {
+            id: 'evaluation-1',
+            title: 'Claim feedback',
+            description: 'The feedback identifies the claim.',
+            position: 0,
+            cases: assignmentType.evaluationCases,
+          },
+        ],
+      },
+    });
+    prisma.assignmentTypeEvaluationSuiteVersion.findUnique.mockResolvedValue({
+      id: 'suite-1',
+      assignmentTypeId: 'at-1',
+      version: 1,
+      contentHash: 'suite-hash',
+      snapshotJson: {
+        evaluations: [
+          {
+            id: 'evaluation-1',
+            title: 'Claim feedback',
+            description: 'The feedback identifies the claim.',
+            position: 0,
+            cases: assignmentType.evaluationCases,
+          },
+        ],
+      },
+    });
+    prisma.assignmentTypeEvaluationSuiteVersion.create.mockResolvedValue({
+      id: 'suite-2',
+      version: 2,
+      contentHash: 'suite-2-hash',
     });
     runAssignmentTypeEvaluationSuite.mockResolvedValue({
       summary: { total: 1, passed: 1, failed: 0, needsReview: 0 },
@@ -333,6 +423,135 @@ describe('assignment-type evaluations action', () => {
       }
     );
     expect((response as { data: any }).data).toEqual({ success: true });
+    expect(
+      prisma.assignmentTypeEvaluationSuiteVersion.create
+    ).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        assignmentTypeId: 'at-1',
+        version: 2,
+        snapshotJson: expect.any(Object),
+        contentHash: expect.any(String),
+      }),
+    });
+  });
+
+  test('creates an editable prompt draft from the current production prompt', async () => {
+    const response = await action({
+      request: requestWith({
+        intent: 'createPromptDraft',
+        assignmentTypeId: 'at-1',
+        sourcePromptVersionId: 'prompt-production-7',
+      }),
+      params: {},
+      context: {} as never,
+    } as any);
+
+    expect(prisma.assignmentTypePromptVersion.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        assignmentTypeId: 'at-1',
+        version: 8,
+        revision: 1,
+        status: 'draft',
+        systemMessageTemplate: expect.stringContaining('Production system'),
+        userMessageTemplate: expect.stringContaining('Production user'),
+      }),
+    });
+    expect((response as { data: any }).data).toMatchObject({
+      success: true,
+      promptVersionId: 'prompt-draft-8',
+    });
+  });
+
+  test('updates a draft prompt revision without mutating production', async () => {
+    const response = await action({
+      request: requestWith({
+        intent: 'updatePromptDraft',
+        assignmentTypeId: 'at-1',
+        promptVersionId: 'prompt-draft-8',
+        systemMessageTemplate:
+          'Be concise with {{student_first_name}} and use {{min_score}}-{{max_score}}.',
+        userMessageTemplate:
+          '{{assignment_type}}\n{{rubric}}\n{{grading_instructions}}\n{{document}}',
+      }),
+      params: {},
+      context: {} as never,
+    } as any);
+
+    expect(prisma.assignmentTypePromptVersion.update).toHaveBeenCalledWith({
+      where: { id: 'prompt-draft-8' },
+      data: expect.objectContaining({
+        revision: { increment: 1 },
+        systemMessageTemplate: expect.stringContaining('Be concise'),
+        userMessageTemplate: expect.stringContaining('{{document}}'),
+        contentHash: expect.any(String),
+      }),
+    });
+    expect((response as { data: any }).data).toMatchObject({
+      success: true,
+      promptVersionId: 'prompt-draft-8',
+    });
+  });
+
+  test('blocks promotion until the current draft runs against the latest suite', async () => {
+    const response = await action({
+      request: requestWith({
+        intent: 'promotePromptDraft',
+        assignmentTypeId: 'at-1',
+        promptVersionId: 'prompt-draft-8',
+      }),
+      params: {},
+      context: {} as never,
+    } as any);
+
+    expect((response as { init: { status: number } }).init.status).toBe(409);
+    expect((response as { data: any }).data.message).toContain(
+      'latest evaluation suite'
+    );
+    expect(prisma.assignmentTypePromptVersion.updateMany).not.toHaveBeenCalled();
+  });
+
+  test('promotes an evaluated draft and dual-writes the live prompt config', async () => {
+    prisma.assignmentTypeEvaluationRun.findFirst.mockImplementation((args) =>
+      Promise.resolve(
+        args?.where?.status === 'completed'
+          ? { id: 'run-current', passedCases: 5, totalCases: 6 }
+          : null
+      )
+    );
+
+    const response = await action({
+      request: requestWith({
+        intent: 'promotePromptDraft',
+        assignmentTypeId: 'at-1',
+        promptVersionId: 'prompt-draft-8',
+      }),
+      params: {},
+      context: {} as never,
+    } as any);
+
+    expect(prisma.assignmentTypePromptVersion.updateMany).toHaveBeenCalledWith({
+      where: { assignmentTypeId: 'at-1', status: 'production' },
+      data: { status: 'previous' },
+    });
+    expect(prisma.assignmentTypePromptVersion.update).toHaveBeenCalledWith({
+      where: { id: 'prompt-draft-8' },
+      data: { status: 'production', promotedAt: expect.any(Date) },
+    });
+    expect(prisma.assignmentType.update).toHaveBeenCalledWith({
+      where: { id: 'at-1' },
+      data: expect.objectContaining({
+        gradingAssistantVersion: 8,
+        gradingPromptConfigJson: expect.objectContaining({
+          systemMessageTemplate: expect.stringContaining('Draft system'),
+          userMessageTemplate: expect.stringContaining('Draft user'),
+        }),
+      }),
+    });
+    expect((response as { data: any }).data).toMatchObject({
+      success: true,
+      status: 'production',
+      runId: 'run-current',
+    });
   });
 
   test('adds a case under one assignment-type rubric category', async () => {
@@ -410,6 +629,13 @@ describe('assignment-type evaluations action', () => {
       ...assignmentType,
       evaluationCases: [],
     });
+    prisma.assignmentTypeEvaluationSuiteVersion.findFirst.mockResolvedValue({
+      id: 'suite-empty',
+      assignmentTypeId: 'at-1',
+      version: 2,
+      contentHash: 'empty-suite-hash',
+      snapshotJson: { evaluations: [], legacyCases: [] },
+    });
 
     const response = await action({
       request: requestWith({ intent: 'runSuite', assignmentTypeId: 'at-1' }),
@@ -441,7 +667,12 @@ describe('assignment-type evaluations action', () => {
 
   test('runs all active cases and persists one immutable prompt-version row', async () => {
     const response = await action({
-      request: requestWith({ intent: 'runSuite', assignmentTypeId: 'at-1' }),
+      request: requestWith({
+        intent: 'runSuite',
+        assignmentTypeId: 'at-1',
+        promptVersionId: 'prompt-draft-8',
+        evaluationSuiteVersionId: 'suite-1',
+      }),
       params: {},
       context: {} as never,
     } as any);
@@ -449,12 +680,16 @@ describe('assignment-type evaluations action', () => {
     expect(prisma.assignmentTypeEvaluationRun.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
         assignmentTypeId: 'at-1',
-        promptVersion: 7,
+        promptVersion: 8,
+        promptVersionId: 'prompt-draft-8',
+        promptRevision: 2,
+        evaluationSuiteVersionId: 'suite-1',
+        evaluationSuiteContentHash: 'suite-hash',
         status: 'running',
         totalCases: 1,
         promptSnapshotJson: expect.objectContaining({
           compiledPrompt: expect.objectContaining({
-            system: expect.stringContaining('You are a grading assistant.'),
+            system: expect.stringContaining('Draft system'),
           }),
         }),
       }),

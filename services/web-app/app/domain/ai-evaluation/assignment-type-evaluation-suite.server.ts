@@ -42,6 +42,10 @@ export type AssignmentTypeEvaluationSuiteResult = {
       status: 'pass' | 'fail' | 'blocked';
       evidence: string;
     };
+    requestSnapshot: {
+      system: string;
+      userMessage: string;
+    } | null;
   }>;
 };
 
@@ -83,6 +87,7 @@ export async function runAssignmentTypeEvaluationSuite({
         evidence,
         gradingOutput: result.gradingOutput,
         responseContract: result.responseContract,
+        requestSnapshot: result.requestSnapshot,
       });
     } catch (error) {
       results.push({
@@ -101,6 +106,7 @@ export async function runAssignmentTypeEvaluationSuite({
           status: 'blocked',
           evidence: 'The grading attempt did not complete.',
         },
+        requestSnapshot: null,
       });
     }
   }

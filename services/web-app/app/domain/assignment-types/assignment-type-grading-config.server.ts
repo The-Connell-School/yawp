@@ -46,6 +46,10 @@ export type ResolvedAssignmentTypeGradingConfig = {
   calibrationNotes: string | null;
   sourceTemplateId: string | null;
   sourceTemplateSlug: string | null;
+  promptTemplate?: {
+    systemMessage: string;
+    userMessage: string;
+  } | null;
 };
 
 export type AssignmentTypeGradingRow = {
@@ -86,6 +90,16 @@ function getPromptConfigSnapshot(
   fallbackPromptConfig: Record<string, unknown>
 ) {
   return isRecord(rawPromptConfig) ? rawPromptConfig : fallbackPromptConfig;
+}
+
+function getManagedPromptTemplate(promptConfig: Record<string, unknown>) {
+  const systemMessage = promptConfig.systemMessageTemplate;
+  const userMessage = promptConfig.userMessageTemplate;
+  if (typeof systemMessage !== 'string' || typeof userMessage !== 'string') {
+    return null;
+  }
+  if (!systemMessage.trim() || !userMessage.trim()) return null;
+  return { systemMessage, userMessage };
 }
 
 export function getAssignmentTypeGradingInstructions(
@@ -197,6 +211,7 @@ export function buildResolvedAssignmentTypeGradingConfig({
       parsedConfig.source === 'assignment-type'
         ? (row?.gradingAssistantSourceTemplateSlug ?? null)
         : null,
+    promptTemplate: getManagedPromptTemplate(promptConfigSnapshot),
   };
 }
 

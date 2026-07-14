@@ -32,6 +32,10 @@ export type GradingAssistantScratchEvaluationResult = {
   rawGradingOutput: string;
   responseContract: EvaluationCheck;
   criterion: EvaluationCheck;
+  requestSnapshot: {
+    system: string;
+    userMessage: string;
+  };
 };
 
 export async function runGradingAssistantScratchEvaluation({
@@ -104,6 +108,10 @@ export async function runGradingAssistantScratchEvaluation({
         evidence:
           'The criterion was not evaluated because the response contract failed.',
       },
+      requestSnapshot: {
+        system: compiledInvocation.system,
+        userMessage: compiledInvocation.userMessage,
+      },
     };
   }
 
@@ -144,6 +152,10 @@ export async function runGradingAssistantScratchEvaluation({
         status: 'blocked',
         evidence: 'The evaluator did not return a valid pass/fail result.',
       },
+      requestSnapshot: {
+        system: compiledInvocation.system,
+        userMessage: compiledInvocation.userMessage,
+      },
     };
   }
 
@@ -155,6 +167,10 @@ export async function runGradingAssistantScratchEvaluation({
     criterion: {
       status: criterionResult.passed ? 'pass' : 'fail',
       evidence: criterionResult.evidence,
+    },
+    requestSnapshot: {
+      system: compiledInvocation.system,
+      userMessage: compiledInvocation.userMessage,
     },
   };
 }

@@ -137,4 +137,34 @@ describe('compileGradingAssistantInvocation', () => {
       'Rubric Instructions:\nApply the approved thesis rubric.'
     );
   });
+
+  test('renders a saved prompt-version template with controlled variables', () => {
+    const invocation = compileGradingAssistantInvocation({
+      gradingConfig: gradingConfig({
+        promptTemplate: {
+          systemMessage:
+            'Coach {{student_first_name}} with scores {{min_score}}-{{max_score}}.',
+          userMessage:
+            '{{assignment_type}}\n{{strictness}}\n{{rubric}}\n{{grading_instructions}}\nDOCUMENT={{document}}',
+        },
+      } as Partial<ResolvedAssignmentTypeGradingConfig>),
+      studentFirstName: 'Jordan',
+      strictnessLevel: 'advanced',
+      documentText: 'School uniforms should be optional.',
+    });
+
+    expect(invocation.system).toBe('Coach Jordan with scores 1-5.');
+    expect(invocation.userMessage).toContain('Argument Essay');
+    expect(invocation.userMessage).toContain('Advanced');
+    expect(invocation.userMessage).toContain(
+      'claim: Claim (60%) - States a defensible position.'
+    );
+    expect(invocation.userMessage).toContain(
+      'Prioritize the strongest next revision and do not rewrite the essay.'
+    );
+    expect(invocation.userMessage).toContain(
+      'DOCUMENT=School uniforms should be optional.'
+    );
+    expect(invocation.userMessage).not.toContain('{{');
+  });
 });

@@ -121,4 +121,42 @@ describe('resolveAssignmentTypeGradingConfig', () => {
     ).toBe(0.1);
     expect(config.instructions.mode).toBe('preset');
   });
+
+  test('uses the promoted prompt templates stored on the assignment type', async () => {
+    prisma.assignmentType.findUnique.mockResolvedValue({
+      id: 'assignment-type-prompt',
+      title: 'Prompt-managed essay',
+      kind: 'essay',
+      scoringScaleJson: { type: 'weighted_1_5', minScore: 1, maxScore: 5 },
+      rubricJson: {
+        categories: [
+          {
+            key: 'thesis',
+            label: 'Thesis',
+            description: 'Makes a clear claim.',
+            weight: 1,
+          },
+        ],
+      },
+      gradingPromptConfigJson: {
+        gradingInstructions: 'Grade the essay.',
+        systemMessageTemplate: 'Production system for {{assignment_type}}',
+        userMessageTemplate: 'Rubric:\n{{rubric}}\nEssay:\n{{document}}',
+      },
+      gradingOutputSchemaJson: { schemaVersion: 1 },
+      gradingCalibrationNotes: null,
+      gradingAssistantVersion: 7,
+      gradingAssistantSourceTemplateId: null,
+      gradingAssistantSourceTemplateSlug: null,
+    });
+
+    const config = await resolveAssignmentTypeGradingConfig({
+      assignmentTypeId: 'assignment-type-prompt',
+    });
+
+    expect(config.promptTemplate).toEqual({
+      systemMessage: 'Production system for {{assignment_type}}',
+      userMessage: 'Rubric:\n{{rubric}}\nEssay:\n{{document}}',
+    });
+  });
 });
