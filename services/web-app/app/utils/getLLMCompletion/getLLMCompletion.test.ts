@@ -63,6 +63,7 @@ describe('getLLMCompletion Anthropic outage fallback', () => {
   });
 
   test('falls back to gpt-4o-mini and opens the circuit after Anthropic 529', async () => {
+    const controller = new AbortController();
     const anthropicError = Object.assign(new Error('Overloaded'), {
       status: 529,
     });
@@ -75,6 +76,7 @@ describe('getLLMCompletion Anthropic outage fallback', () => {
       system: 'Be a writing tutor.',
       maxTokens: 100,
       metadata: { feature: 'tutor' },
+      signal: controller.signal,
     });
 
     expect(result).toBe('Fallback reply.');
@@ -83,6 +85,12 @@ describe('getLLMCompletion Anthropic outage fallback', () => {
     expect(openAiCreate.mock.calls[0]?.[0]).toMatchObject({
       model: 'gpt-4o-mini',
       max_tokens: 100,
+    });
+    expect(anthropicCreate.mock.calls[0]?.[1]).toEqual({
+      signal: controller.signal,
+    });
+    expect(openAiCreate.mock.calls[0]?.[1]).toEqual({
+      signal: controller.signal,
     });
     expect(isAnthropicOutageCircuitOpen()).toBe(true);
     expect(llmLogCreate).toHaveBeenCalledTimes(2);

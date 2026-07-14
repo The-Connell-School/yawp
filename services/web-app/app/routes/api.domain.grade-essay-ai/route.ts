@@ -39,6 +39,11 @@ import {
   parseApHistorySnapshot,
   type ApHistorySnapshot,
 } from '~/domain/ap-history/schema';
+import {
+  createGradingRequestDeadlineSignal,
+  isGradingRequestDeadlineError,
+  runWithGradingRequestDeadline,
+} from './grading-request-deadline.server';
 
 const POST = z.object({
   documentId: z.string().optional(),
@@ -363,6 +368,17 @@ function buildDynamicGradeFields({
 }
 
 export async function action({ request }: ActionFunctionArgs) {
+  const gradingDeadlineSignal = createGradingRequestDeadlineSignal();
+  const gradingDeadlineResponse = () =>
+    dataResponse(
+      {
+        success: false,
+        code: 'GRADING_REQUEST_TIMEOUT',
+        message: 'Grading took too long. Please try again.',
+      },
+      { status: 504 }
+    );
+
   const { error, data } = await parseFormData(request, POST);
   if (error) return validationError(error);
   if (!data.documentId && !data.submissionId) {
@@ -561,7 +577,10 @@ export async function action({ request }: ActionFunctionArgs) {
     dataResponse({ retrying: true }, { status: 202 });
   const getGradingLlmCompletion = (
     params: Parameters<typeof getLLMCompletion>[0]
-  ) => getLLMCompletion({ ...params, ...llmRetryOptions });
+  ) =>
+    runWithGradingRequestDeadline(gradingDeadlineSignal, (signal) =>
+      getLLMCompletion({ ...params, ...llmRetryOptions, signal })
+    );
   const useE2EFixture = shouldUseE2EGradingFixture();
 
   const apHistorySnapshotCandidate =
@@ -620,6 +639,9 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
         parsedJsonCandidate.points
       );
     } catch (error) {
+      if (isGradingRequestDeadlineError(error)) {
+        return gradingDeadlineResponse();
+      }
       if (isLlmFallbackRetrySignal(error)) return retryResponse();
       return dataResponse(
         {
@@ -651,6 +673,10 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
         : `${studentFirstName}, your AP History response has been scored with the ${apHistorySnapshot.rubric.rubricId} rubric.`;
     const grammarIssues = null;
     const now = new Date();
+
+    if (gradingDeadlineSignal.aborted) {
+      return gradingDeadlineResponse();
+    }
 
     await prisma.submission.update({
       where: { id: submission.id },
@@ -711,6 +737,9 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
         maxTokens: 900,
       });
     } catch (error) {
+      if (isGradingRequestDeadlineError(error)) {
+        return gradingDeadlineResponse();
+      }
       if (isLlmFallbackRetrySignal(error)) return retryResponse();
       throw error;
     }
@@ -806,6 +835,9 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
   try {
     parsed = await parseAiResponse(responseText);
   } catch (error) {
+    if (isGradingRequestDeadlineError(error)) {
+      return gradingDeadlineResponse();
+    }
     if (isLlmFallbackRetrySignal(error)) return retryResponse();
     return dataResponse(
       {
@@ -939,12 +971,19 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
 
       grammarIssues = buildGrammarIssuesPayload(parsedGrammarIssues);
     } catch (error) {
+      if (isGradingRequestDeadlineError(error)) {
+        return gradingDeadlineResponse();
+      }
       if (isLlmFallbackRetrySignal(error)) return retryResponse();
       grammarIssues = null;
     }
   }
 
   // Write AI grading results directly to the Submission
+  if (gradingDeadlineSignal.aborted) {
+    return gradingDeadlineResponse();
+  }
+
   const now = new Date();
   await prisma.submission.update({
     where: { id: submission.id },

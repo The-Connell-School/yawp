@@ -273,6 +273,49 @@ describe('api.domain.grade-essay-ai', () => {
     });
   });
 
+  test('starts the grading deadline before request preflight work', async () => {
+    const originalTimeout = AbortSignal.timeout;
+    const timeout = mock((milliseconds: number) =>
+      originalTimeout.call(AbortSignal, milliseconds)
+    );
+    Object.defineProperty(AbortSignal, 'timeout', {
+      configurable: true,
+      value: timeout,
+    });
+    getGradingActor.mockImplementationOnce(async () => {
+      expect(timeout).toHaveBeenCalledWith(100_000);
+      return {
+        membershipId: 'teacher-1',
+        teacherProfileId: 'teacher-1',
+        isTeacher: true,
+        isAdmin: false,
+      };
+    });
+    prisma.submission.findFirst.mockResolvedValue(
+      mockSubmission({ id: 'sub-action-deadline' })
+    );
+
+    const form = new FormData();
+    form.append('submissionId', 'sub-action-deadline');
+
+    try {
+      const response = await action({
+        request: new Request('https://example.com/api/domain/grade-essay-ai', {
+          method: 'POST',
+          body: form,
+        }),
+      } as any);
+      expect((response as { data: { success: boolean } }).data.success).toBe(
+        true
+      );
+    } finally {
+      Object.defineProperty(AbortSignal, 'timeout', {
+        configurable: true,
+        value: originalTimeout,
+      });
+    }
+  });
+
   test('returns a retry signal without persisting when fallback retry is requested', async () => {
     getLLMCompletion.mockReset();
     getLLMCompletion.mockImplementationOnce(() => {
@@ -328,6 +371,59 @@ describe('api.domain.grade-essay-ai', () => {
         signalFallbackRetry: false,
       });
     }
+  });
+
+  test('uses one abort signal for every grading model call', async () => {
+    prisma.submission.findFirst.mockResolvedValue(
+      mockSubmission({ id: 'sub-deadline-signal' })
+    );
+
+    const form = new FormData();
+    form.append('submissionId', 'sub-deadline-signal');
+
+    await action({
+      request: new Request('https://example.com/api/domain/grade-essay-ai', {
+        method: 'POST',
+        body: form,
+      }),
+    } as any);
+
+    const signals = getLLMCompletion.mock.calls.map((call) => call[0]?.signal);
+    expect(signals.length).toBeGreaterThan(1);
+    expect(signals.every((signal) => signal instanceof AbortSignal)).toBe(true);
+    expect(new Set(signals).size).toBe(1);
+  });
+
+  test('returns structured JSON without persisting when grading times out', async () => {
+    getLLMCompletion.mockReset();
+    const expiredSignal = AbortSignal.timeout(0);
+    await new Promise((resolve) => setTimeout(resolve, 1));
+    getLLMCompletion.mockRejectedValueOnce(expiredSignal.reason);
+    prisma.submission.findFirst.mockResolvedValue(
+      mockSubmission({ id: 'sub-deadline-exceeded' })
+    );
+
+    const form = new FormData();
+    form.append('submissionId', 'sub-deadline-exceeded');
+
+    const response = (await action({
+      request: new Request('https://example.com/api/domain/grade-essay-ai', {
+        method: 'POST',
+        body: form,
+      }),
+    } as any)) as {
+      init?: { status?: number };
+      data: Record<string, unknown>;
+    };
+
+    expect(response.init?.status).toBe(504);
+    expect(response.data).toEqual({
+      success: false,
+      code: 'GRADING_REQUEST_TIMEOUT',
+      message: 'Grading took too long. Please try again.',
+    });
+    expect(prisma.submission.update).not.toHaveBeenCalled();
+    expect(prisma.submissionGradingAssistantRun.create).not.toHaveBeenCalled();
   });
 
   test('filters submission access through assignment class relation', async () => {
