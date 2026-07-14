@@ -47,7 +47,12 @@ export async function action({ request }: ActionFunctionArgs) {
           membershipId: ctx.membershipId,
           deletedAt: null,
         },
-        include: { messages: { orderBy: { createdAt: 'asc' } } },
+        // id tiebreak: rows written before we stamped explicit timestamps share
+        // one createdAt per turn, and cuids from a single nested create are
+        // sequential — this keeps question-before-answer order for them too.
+        include: {
+          messages: { orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] },
+        },
       })
     : null;
 
@@ -118,14 +123,23 @@ export async function action({ request }: ActionFunctionArgs) {
     });
   }
 
+  // Stamp explicit, strictly-increasing timestamps: both rows land in one
+  // nested create, so the DB default would give them the same createdAt and
+  // leave the question/answer order ambiguous on replay.
+  const askedAt = new Date();
+  const answeredAt = new Date(askedAt.getTime() + 1);
   await prisma.reporterConversation.update({
     where: { id: conversation.id },
     data: {
       updatedAt: new Date(),
       messages: {
         create: [
-          { role: AgentType.User, content: data.message },
-          { role: AgentType.Assistant, content: reply },
+          { role: AgentType.User, content: data.message, createdAt: askedAt },
+          {
+            role: AgentType.Assistant,
+            content: reply,
+            createdAt: answeredAt,
+          },
         ],
       },
     },

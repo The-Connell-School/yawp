@@ -34,6 +34,9 @@ mock.module('~/utils/getLLMCompletion', () => ({
   getLLMCompletion,
 }));
 
+const { LlmFallbackRetrySignal } = await import(
+  '~/utils/getLLMCompletion/llm-provider-errors.server'
+);
 const { action } = await import('./route');
 
 afterAll(() => {
@@ -108,6 +111,14 @@ describe('api.domain.reporter action', () => {
       role: 'assistant',
       content: 'Here is your report.',
     });
+    // Explicit, strictly-increasing timestamps: both rows are written in one
+    // nested create, so leaving createdAt to the DB default would tie them and
+    // make replay order ambiguous.
+    expect(created[0].createdAt).toBeInstanceOf(Date);
+    expect(created[1].createdAt).toBeInstanceOf(Date);
+    expect(created[1].createdAt.getTime()).toBeGreaterThan(
+      created[0].createdAt.getTime()
+    );
   });
 
   test('passes reporter tools and a teacher-scoped context to the LLM', async () => {
@@ -157,6 +168,49 @@ describe('api.domain.reporter action', () => {
     const llmMessages = getLLMCompletion.mock.calls[0][0].messages;
     expect(llmMessages).toHaveLength(3); // 2 prior + new user
     expect(llmMessages[2]).toMatchObject({ role: 'user', content: 'and now?' });
+
+    // Prior messages are replayed in insertion order, with the message id as a
+    // deterministic tiebreak for legacy rows whose timestamps tie.
+    const findArg = prisma.reporterConversation.findFirst.mock.calls[0][0];
+    expect(findArg.include.messages.orderBy).toEqual([
+      { createdAt: 'asc' },
+      { id: 'asc' },
+    ]);
+  });
+
+  test('returns a 202 retry signal when the primary provider is down', async () => {
+    getLLMCompletion.mockRejectedValue(
+      new LlmFallbackRetrySignal({
+        fallbackModel: 'fallback-model',
+        reason: 'anthropic outage',
+      })
+    );
+
+    const response = await action({
+      request: formRequest({ message: 'hi' }),
+    } as any);
+
+    expect(response.init?.status).toBe(202);
+    expect((response.data as any).retrying).toBe(true);
+    // No half-written history: the conversation is only created on success.
+    expect(prisma.reporterConversation.create).not.toHaveBeenCalled();
+  });
+
+  test('forces the fallback provider and disables re-signaling on llmRetry', async () => {
+    getLLMCompletion.mockResolvedValue('fallback answer');
+    prisma.reporterConversation.create.mockResolvedValue({
+      id: 'conv-2',
+      messages: [],
+    });
+    prisma.reporterConversation.update.mockResolvedValue({});
+
+    await action({
+      request: formRequest({ message: 'hi', llmRetry: 'fallback' }),
+    } as any);
+
+    const llmArgs = getLLMCompletion.mock.calls[0][0];
+    expect(llmArgs.forceFallback).toBe(true);
+    expect(llmArgs.signalFallbackRetry).toBe(false);
   });
 
   test('returns 404 when a conversationId does not belong to the teacher', async () => {
