@@ -138,8 +138,15 @@ function formatDueDate(iso: string): string {
 }
 
 export default function AssignedPracticeRoute() {
-  const { title, instructions, dueAt, problemCount, sequence, completedCount } =
-    useLoaderData<typeof loader>();
+  const {
+    classAssignmentId,
+    title,
+    instructions,
+    dueAt,
+    problemCount,
+    sequence,
+    completedCount,
+  } = useLoaderData<typeof loader>();
 
   const fetcher = useFetcher<AssignedActionData>();
   const [pointer, setPointer] = useState(
@@ -225,7 +232,9 @@ export default function AssignedPracticeRoute() {
                   Problem {currentItem.position} of {problemCount}
                 </CardTitle>
                 <Link
-                  to={`/app/writing-lessons/${currentItem.lessonSlug}`}
+                  to={`/app/writing-lessons/${currentItem.lessonSlug}?from=${encodeURIComponent(
+                    `/app/writing-lessons/assigned/${classAssignmentId}`
+                  )}`}
                   className="inline-flex items-center gap-1 text-base text-primary hover:underline sm:text-sm"
                 >
                   <BookOpen className="h-4 w-4" />

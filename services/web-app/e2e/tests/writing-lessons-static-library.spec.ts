@@ -206,6 +206,18 @@ test.describe.serial('Writing Fundamentals Practice', () => {
       page.getByRole('heading', { name: /problem 1 of/i })
     ).toBeVisible();
 
+    // Reviewing the skill mid-exercise must not interrupt the student: clicking
+    // "Review lesson" and then "Back to practice" returns them to this same
+    // assigned practice, not the library index.
+    await page.getByRole('link', { name: /review lesson/i }).click();
+    await expect(
+      page.getByRole('heading', { name: /fixing comma splices/i })
+    ).toBeVisible();
+    await page.getByRole('link', { name: /back to practice/i }).click();
+    await expect(
+      page.getByRole('heading', { name: /problem 1 of/i })
+    ).toBeVisible();
+
     // The first offline question drills the comma splice; pick the semicolon fix.
     await expect(page.getByText(/choose the best answer/i)).toBeVisible();
     await page.getByRole('radio', { name: /week; students/i }).check();

@@ -72,6 +72,45 @@ describe('writing lesson detail route', () => {
     expect(response.data.actQuestions.length).toBeGreaterThan(0);
     expect(response.data.actQuestions[0].choices).toHaveLength(4);
   });
+
+  test('defaults "Back to practice" to the library index', async () => {
+    const response = await loader({
+      request: new Request(
+        'https://example.test/app/writing-lessons/revising-for-wordiness'
+      ),
+      params: { lessonSlug: 'revising-for-wordiness' },
+      context: {} as never,
+    } as never);
+
+    expect(response.data.backToPracticeHref).toBe('/app/writing-lessons');
+  });
+
+  test('sends the student back to the exercise they reviewed from', async () => {
+    const from = '/app/writing-lessons/assigned/assignment-123';
+    const response = await loader({
+      request: new Request(
+        `https://example.test/app/writing-lessons/revising-for-wordiness?from=${encodeURIComponent(
+          from
+        )}`
+      ),
+      params: { lessonSlug: 'revising-for-wordiness' },
+      context: {} as never,
+    } as never);
+
+    expect(response.data.backToPracticeHref).toBe(from);
+  });
+
+  test('ignores an off-site "from" target', async () => {
+    const response = await loader({
+      request: new Request(
+        'https://example.test/app/writing-lessons/revising-for-wordiness?from=https%3A%2F%2Fevil.example.com'
+      ),
+      params: { lessonSlug: 'revising-for-wordiness' },
+      context: {} as never,
+    } as never);
+
+    expect(response.data.backToPracticeHref).toBe('/app/writing-lessons');
+  });
 });
 
 describe('writing lesson practice action - generate-act intent', () => {

@@ -26,6 +26,7 @@ import { Textarea } from '~/components/ui/textarea';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { getActPracticeQuestions } from '~/utils/writing-lessons/act-practice-bank';
+import { resolveBackToPracticeHref } from '~/utils/writing-lessons/lesson-back-link';
 import { generateActPracticeQuestions } from '~/utils/writing-lessons/act-practice-generation.server';
 import {
   NO_CHANGE_LABEL,
@@ -57,6 +58,13 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     throw new Response('Lesson not found', { status: 404 });
   }
 
+  // If the student reached this lesson by clicking "Review lesson" mid-practice,
+  // the exercise passes its own path in `from` so we can send them back exactly
+  // where they were instead of dumping them at the library index.
+  const backToPracticeHref = resolveBackToPracticeHref(
+    new URL(request.url).searchParams.get('from')
+  );
+
   const isTeacher = profile.role === 'TEACHER';
   const teacherClasses: TeacherClass[] = isTeacher
     ? await prisma.class.findMany({
@@ -68,6 +76,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
   return dataResponse({
     lesson,
+    backToPracticeHref,
     lessonBody: getQuickWritingLessonBody(lesson.content),
     // Kept for the teacher assign panel's default problem count.
     practicePrompts: getQuickWritingPracticePrompts(params.lessonSlug),
@@ -129,6 +138,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
 export default function WritingLessonDetailRoute() {
   const {
     lesson,
+    backToPracticeHref,
     lessonBody,
     practicePrompts,
     actQuestions,
@@ -141,7 +151,7 @@ export default function WritingLessonDetailRoute() {
       <div className="w-full border-b bg-secondary">
         <div className="mx-auto w-full max-w-screen-lg p-3 sm:p-5">
           <Button asChild variant="ghost" size="sm" className="mb-4 -ml-2">
-            <Link to="/app/writing-lessons">
+            <Link to={backToPracticeHref}>
               <ArrowLeft className="mr-2 h-4 w-4" />
               Back to practice
             </Link>
