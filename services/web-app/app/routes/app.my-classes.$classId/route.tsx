@@ -54,7 +54,6 @@ import {
   UserMinus,
   Search,
   ChevronRight,
-  Sparkles,
 } from 'lucide-react';
 import { Pagination } from '~/components/table/pagination';
 import { timeAgo } from '~/utils/timeAgo';
@@ -1870,7 +1869,6 @@ function ClassDetailPage() {
                 <Link
                   to={`/app/my-classes/${data.klass.id}/assignments/${selectedClassAssignment.id}`}
                 >
-                  <Sparkles className="mr-2 h-4 w-4" aria-hidden />
                   Class performance summary
                 </Link>
               </Button>
