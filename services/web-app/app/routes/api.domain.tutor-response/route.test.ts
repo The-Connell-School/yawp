@@ -24,6 +24,7 @@ mock.module('~/utils/getLLMCompletion', () => ({
 const { LlmFallbackRetrySignal } = await import(
   '~/utils/getLLMCompletion/llm-provider-errors.server'
 );
+const { buildApHistorySnapshot } = await import('~/domain/ap-history/schema');
 const { action } = await import('./route');
 
 describe('api.domain.tutor-response read-only impersonation', () => {
@@ -188,6 +189,87 @@ describe('api.domain.tutor-response read-only impersonation', () => {
           messages: expect.any(Object),
         }),
       })
+    );
+  });
+
+  test('AP History sessions coach against the current section (module)', async () => {
+    getLLMCompletion.mockResolvedValue('Which documents group together?');
+    const apHistorySnapshot = buildApHistorySnapshot({
+      externalKey: 'apush-dbq-new-deal-federal-power',
+      course: 'apush',
+      essayType: 'dbq',
+      prompt:
+        'Evaluate the extent to which the New Deal changed federal power.',
+      period: '1932-1980',
+      periodNumber: 7,
+      reasoningSkill: 'causation',
+      defaultTimeMode: 'untimed',
+      defaultDurationMinutes: 60,
+      sources: [
+        {
+          externalKey: 'apush-dbq-new-deal-federal-power-doc-1',
+          position: 1,
+          title: 'Document 1',
+          attribution: 'Franklin D. Roosevelt, first inaugural address, 1933',
+          body: 'This Nation asks for action, and action now.',
+          caption: null,
+          mediaType: 'text',
+          imageUrl: null,
+          imageAlt: null,
+          provenanceUrl: null,
+        },
+      ],
+    });
+    prisma.assignmentModuleSession.findUnique.mockResolvedValueOnce({
+      id: 'cms-1',
+      instructionsCompleted: 0,
+      assignmentModule: {
+        title: 'Read the Documents',
+        tutorInstructions:
+          'Coach source analysis and document groupings; hold off on drafting.',
+        rubricAlignmentJson: null,
+        assignmentType: {
+          id: 'assignment-type-1',
+          gradingAssistantVersion: 1,
+          rubricJson: null,
+        },
+        instructions: [{ id: 'instruction-1', tutorInstructions: null }],
+      },
+      messages: [],
+      document: {
+        id: 'doc-1',
+        text: 'Original draft',
+        apHistorySnapshot,
+      },
+    });
+    prisma.assignmentModuleSession.findUnique.mockResolvedValueOnce({
+      id: 'cms-1',
+      messages: [],
+      assignmentModule: {
+        instructions: [],
+        assignmentType: { assignmentModules: [] },
+      },
+    });
+
+    const body = new FormData();
+    body.set('response', 'Where do I start?');
+    body.set('cmsId', 'cms-1');
+    body.set('content', 'Current draft');
+
+    await action({
+      request: new Request('https://example.com/api/domain/tutor-response', {
+        method: 'POST',
+        body,
+      }),
+    } as any);
+
+    const completionArgs = getLLMCompletion.mock.calls[0]?.[0] as any;
+    expect(completionArgs.system).toContain('DBQ Rubric (7 points');
+    expect(completionArgs.system).toContain(
+      'Current section: "Read the Documents"'
+    );
+    expect(completionArgs.system).toContain(
+      'Coach source analysis and document groupings; hold off on drafting.'
     );
   });
 

@@ -117,7 +117,10 @@ export async function action({ request }: ActionFunctionArgs) {
       cms.document.apHistorySnapshot ??
       cms.document.assignment?.apHistorySnapshot;
     const system = isApHistorySnapshot(apHistorySnapshot)
-      ? buildApHistoryTutorSystemPrompt(apHistorySnapshot)
+      ? buildApHistoryTutorSystemPrompt(apHistorySnapshot, {
+          title: cms.assignmentModule.title,
+          tutorInstructions: cms.assignmentModule.tutorInstructions,
+        })
       : buildTutorSystemPrompt({
           tutorInstructions: cms.assignmentModule.tutorInstructions,
           instructionTutorInstructions: instruction.tutorInstructions,

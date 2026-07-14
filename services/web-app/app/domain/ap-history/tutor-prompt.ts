@@ -77,6 +77,27 @@ const FAILURE_DETECTORS = `Named failure-mode detectors — if you detect any of
 12. reasoning-mentioned-not-used (LEQ): Student names a reasoning type but doesn't structure the argument around it. → "You mentioned 'many causes' but your paragraphs don't trace cause → effect. Restructure around *because* and *led to*."
 13. narrative-drift (LEQ): Student narrating events chronologically without claims. → "This reads as a history report, not an argument. What's the claim this paragraph is making?"`;
 
+// The current assignment module (section) the student is working in, e.g.
+// "Read the Documents" or "Pre-Writing". Legacy documents created when the
+// AP History type had a single catch-all module carry no tutorInstructions,
+// which leaves the prompt exactly as it was before sections existed.
+export type ApHistoryTutorModuleContext = {
+  title: string;
+  tutorInstructions?: string | null;
+};
+
+function formatModuleSection(
+  module: ApHistoryTutorModuleContext | undefined,
+): string | null {
+  const guidance = module?.tutorInstructions?.trim();
+  if (!guidance) return null;
+  return [
+    `The student works through this assignment in sections. Current section: "${module!.title}".`,
+    guidance,
+    'Keep your coaching centered on this section. If the student asks about work from another section, help briefly, then steer back.',
+  ].join('\n');
+}
+
 function formatSources(snapshot: ApHistorySnapshot): string | null {
   if (snapshot.sources.length === 0) return null;
   const body = [...snapshot.sources]
@@ -92,6 +113,7 @@ function formatSources(snapshot: ApHistorySnapshot): string | null {
 
 export function buildApHistoryTutorSystemPrompt(
   snapshot: ApHistorySnapshot,
+  module?: ApHistoryTutorModuleContext,
 ): string {
   const isDbq = snapshot.essayType === 'dbq';
   const rubric = isDbq ? DBQ_RUBRIC : LEQ_RUBRIC;
@@ -108,6 +130,7 @@ export function buildApHistoryTutorSystemPrompt(
     VOICE_RULES,
     rubric,
     arc,
+    formatModuleSection(module),
     FAILURE_DETECTORS,
     assignmentContext,
     formatSources(snapshot),

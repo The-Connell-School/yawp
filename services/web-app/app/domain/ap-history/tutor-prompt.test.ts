@@ -77,4 +77,30 @@ describe('buildApHistoryTutorSystemPrompt', () => {
     // never writes the essay for the student
     expect(prompt).toContain('Never write for the student');
   });
+
+  test('focuses coaching on the current section when the module provides guidance', () => {
+    const prompt = buildApHistoryTutorSystemPrompt(dbqSnapshot, {
+      title: 'Read the Documents',
+      tutorInstructions:
+        'Coach source analysis and document groupings; hold off on drafting.',
+    });
+
+    expect(prompt).toContain('Current section: "Read the Documents"');
+    expect(prompt).toContain(
+      'Coach source analysis and document groupings; hold off on drafting.'
+    );
+    // the full arc still travels with the prompt so the tutor knows what
+    // comes before and after the current section
+    expect(prompt).toContain('Coaching arc (DBQ)');
+  });
+
+  test('legacy single-module sessions without guidance produce the unchanged prompt', () => {
+    const withLegacyModule = buildApHistoryTutorSystemPrompt(dbqSnapshot, {
+      title: 'AP History Essay',
+      tutorInstructions: null,
+    });
+
+    expect(withLegacyModule).not.toContain('Current section:');
+    expect(withLegacyModule).toBe(buildApHistoryTutorSystemPrompt(dbqSnapshot));
+  });
 });
