@@ -381,7 +381,7 @@ export default function WritingLessonsIndexRoute() {
         </div>
       </div>
 
-      <div className="mx-auto flex w-full max-w-screen-lg flex-col gap-8 px-3 py-6 pb-24 sm:px-5">
+      <div className="mx-auto flex w-full max-w-screen-lg flex-col gap-6 px-3 py-6 pb-24 sm:px-5">
         {isTeacher ? <TeacherDirections /> : null}
 
         {assignedByTeacher.length > 0 ? (
@@ -487,28 +487,23 @@ export default function WritingLessonsIndexRoute() {
                 {group.lessons.length}
               </Badge>
             </div>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
               {group.lessons.map((lesson) => (
                 <Link
                   key={lesson.slug}
                   to={`/app/writing-lessons/${lesson.slug}`}
                   className="block h-full"
                 >
-                  <Card className="flex h-full flex-col shadow-none hover:shadow-sm">
-                    <CardHeader className="pb-3">
-                      <CardTitle className="text-base leading-snug">
+                  <Card className="flex h-full items-center justify-between gap-3 p-3 shadow-none hover:shadow-sm">
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold leading-snug">
                         {lesson.title}
-                      </CardTitle>
-                      <CardDescription className="text-base sm:text-sm">
+                      </p>
+                      <p className="mt-0.5 truncate text-xs text-muted-foreground">
                         {lesson.description}
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent className="mt-auto flex items-center justify-end gap-3 text-base text-muted-foreground sm:text-sm">
-                      <span className="inline-flex items-center gap-1">
-                        Start practice
-                        <ChevronRight className="h-4 w-4 shrink-0" />
-                      </span>
-                    </CardContent>
+                      </p>
+                    </div>
+                    <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
                   </Card>
                 </Link>
               ))}
