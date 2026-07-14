@@ -228,7 +228,6 @@ test.describe.serial('Admin assignment types', () => {
       const failedCaseResult = resultPanel
         .getByTestId('evaluation-case-result')
         .filter({ hasText: 'Missing opening' });
-      await expect(failedCaseResult.getByText('Judge evidence')).toBeVisible();
       await expect(
         failedCaseResult.getByRole('tab', { name: 'Expected output' })
       ).toBeVisible();

@@ -1329,6 +1329,56 @@ function JsonPreview({ value, label }: { value: unknown; label?: string }) {
   );
 }
 
+// Two-tab underline switcher for expected vs. actual output. The tabs are
+// always equal width, so the active indicator can just slide between the
+// left and right half instead of measuring anything.
+function OutputTabs({
+  expectedOutput,
+  actualOutput,
+}: {
+  expectedOutput: unknown;
+  actualOutput: unknown;
+}) {
+  const [activeTab, setActiveTab] = useState<'expected' | 'actual'>(
+    'expected'
+  );
+
+  return (
+    <Tabs
+      value={activeTab}
+      onValueChange={(value) => setActiveTab(value as 'expected' | 'actual')}
+    >
+      <TabsList className="relative grid h-auto w-full grid-cols-2 rounded-none border-b bg-transparent p-0">
+        <TabsTrigger
+          value="expected"
+          className="rounded-none border-0 bg-transparent px-1 pb-2 text-xs font-medium text-muted-foreground shadow-none data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"
+        >
+          Expected output
+        </TabsTrigger>
+        <TabsTrigger
+          value="actual"
+          className="rounded-none border-0 bg-transparent px-1 pb-2 text-xs font-medium text-muted-foreground shadow-none data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"
+        >
+          Actual output
+        </TabsTrigger>
+        <span
+          aria-hidden="true"
+          className={cn(
+            'pointer-events-none absolute bottom-0 left-0 h-0.5 w-1/2 bg-primary transition-transform duration-200 ease-out',
+            activeTab === 'actual' && 'translate-x-full'
+          )}
+        />
+      </TabsList>
+      <TabsContent value="expected" className="mt-3">
+        <JsonPreview value={expectedOutput} />
+      </TabsContent>
+      <TabsContent value="actual" className="mt-3">
+        <JsonPreview value={actualOutput} />
+      </TabsContent>
+    </Tabs>
+  );
+}
+
 function evaluationStatusLabel(status: AssignmentTypeEvaluationStatus) {
   if (status === 'pass') return 'Pass';
   if (status === 'fail') return 'Fail';
@@ -2299,14 +2349,14 @@ function EvaluationResultDetailPanel({
               data-testid="evaluation-case-result"
               className="space-y-2 py-3 first:pt-0"
             >
-              <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-                <p className="text-sm font-medium text-muted-foreground">
+              <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                <p className="text-sm font-semibold">
                   {evaluationCase.title}
                 </p>
                 {result ? (
                   <p
                     className={cn(
-                      'text-sm font-semibold',
+                      'text-sm font-bold uppercase tracking-wide',
                       evaluationStatusTextClass(result.status)
                     )}
                   >
@@ -2316,34 +2366,11 @@ function EvaluationResultDetailPanel({
               </div>
               {result ? (
                 <div className="space-y-3">
-                  <div className="space-y-1">
-                    <p className="text-xs font-medium text-muted-foreground">
-                      Judge evidence
-                    </p>
-                    <p className="text-sm text-pretty">{result.evidence}</p>
-                  </div>
-                  <Tabs defaultValue="expected">
-                    <TabsList className="h-8 p-0.5">
-                      <TabsTrigger
-                        value="expected"
-                        className="h-7 px-2.5 text-xs"
-                      >
-                        Expected output
-                      </TabsTrigger>
-                      <TabsTrigger
-                        value="actual"
-                        className="h-7 px-2.5 text-xs"
-                      >
-                        Actual output
-                      </TabsTrigger>
-                    </TabsList>
-                    <TabsContent value="expected">
-                      <JsonPreview value={result.expectedOutput} />
-                    </TabsContent>
-                    <TabsContent value="actual">
-                      <JsonPreview value={result.gradingOutput} />
-                    </TabsContent>
-                  </Tabs>
+                  <p className="text-sm text-pretty">{result.evidence}</p>
+                  <OutputTabs
+                    expectedOutput={result.expectedOutput}
+                    actualOutput={result.gradingOutput}
+                  />
                 </div>
               ) : (
                 <p className="text-sm text-muted-foreground">
