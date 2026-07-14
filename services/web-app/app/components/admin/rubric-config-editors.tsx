@@ -1898,23 +1898,27 @@ function evaluationDetailPanelHeader({
   subtitle?: ReactNode;
 }) {
   return (
-    <div className="flex items-start justify-between gap-3 border-b pb-4">
-      <div className="min-w-0 space-y-1">
-        <h2 className="text-lg font-semibold leading-tight">{title}</h2>
-        {subtitle ? (
-          <div className="text-sm text-muted-foreground">{subtitle}</div>
-        ) : null}
+    // Negative margins cancel the detail pane's own padding so this
+    // border-b spans the full width of the pane, touching its edges.
+    <div className="-mx-4 border-b px-4 pb-4 md:-mx-6 md:px-6">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 space-y-1">
+          <h2 className="text-lg font-semibold leading-tight">{title}</h2>
+          {subtitle ? (
+            <div className="text-sm text-muted-foreground">{subtitle}</div>
+          ) : null}
+        </div>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="shrink-0"
+          onClick={onClose}
+          aria-label="Close details"
+        >
+          <X className="size-4" />
+        </Button>
       </div>
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon"
-        className="shrink-0"
-        onClick={onClose}
-        aria-label="Close details"
-      >
-        <X className="size-4" />
-      </Button>
     </div>
   );
 }
