@@ -122,7 +122,7 @@ test.describe.serial('Admin assignment types', () => {
         addEvaluationDialog.getByLabel('Evaluation description')
       ).toBeVisible();
       await expect(
-        addEvaluationDialog.getByRole('button', { name: 'Generate with AI' })
+        addEvaluationDialog.getByRole('button', { name: 'Generate' })
       ).toBeDisabled();
 
       await addEvaluationDialog
@@ -134,14 +134,11 @@ test.describe.serial('Admin assignment types', () => {
           'Always begin the final feedback with a brief, positive greeting to the student.'
         );
       await expect(
-        addEvaluationDialog.getByRole('button', { name: 'Generate with AI' })
+        addEvaluationDialog.getByRole('button', { name: 'Generate' })
       ).toBeEnabled();
 
       await addEvaluationDialog
-        .getByRole('button', { name: 'Generate with AI' })
-        .click();
-      await addEvaluationDialog
-        .getByRole('button', { name: 'Generate cases' })
+        .getByRole('button', { name: 'Generate' })
         .click();
       await expect(
         addEvaluationDialog.getByLabel('Evaluation name')
@@ -204,7 +201,6 @@ test.describe.serial('Admin assignment types', () => {
           'School uniforms should remain optional because student choice matters and narrower policies can address distractions without removing individuality.'
         );
       await evaluationPanel
-        .locator('details[open]')
         .getByText('Edit full expected output', { exact: true })
         .click();
       await expect(

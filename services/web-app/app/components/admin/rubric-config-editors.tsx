@@ -73,10 +73,11 @@ import {
   SheetTitle,
 } from '~/components/ui/sheet';
 import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from '~/components/ui/collapsible';
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from '~/components/ui/accordion';
 import { Tooltip } from '~/components/ui/tooltip';
 import {
   DEFAULT_SCORING_SCALE,
@@ -1492,7 +1493,6 @@ function AddEvaluationSheet({
   assignmentTypeId: string;
   fetcher: ReturnType<typeof useFetcher<EvaluationFetcherData>>;
 }) {
-  const [generatorOpen, setGeneratorOpen] = useState(false);
   const [description, setDescription] = useState('');
   const [evaluationTitle, setEvaluationTitle] = useState('');
   const [cases, setCases] = useState<GeneratedEvaluationCaseDraft[]>([]);
@@ -1506,7 +1506,6 @@ function AddEvaluationSheet({
 
   useEffect(() => {
     if (!open) {
-      setGeneratorOpen(false);
       setDescription('');
       setEvaluationTitle('');
       setCases([]);
@@ -1532,7 +1531,6 @@ function AddEvaluationSheet({
           selected: true,
         })),
       ]);
-      setGeneratorOpen(false);
       return;
     }
     if (fetcher.data.evaluationId) onOpenChange(false);
@@ -1669,18 +1667,11 @@ function AddEvaluationSheet({
             />
           </div>
 
-          <Collapsible
-            open={generatorOpen}
-            onOpenChange={setGeneratorOpen}
-            className="space-y-3 rounded-md border p-3"
-          >
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <p className="text-sm font-medium">Create cases here</p>
-                <p className="text-xs text-muted-foreground text-pretty">
-                  Add a case by hand, or generate a starting set with AI.
-                </p>
-              </div>
+          <div className="space-y-3 border-t pt-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <p className="text-sm font-medium">
+                {pluralizeCases(cases.length)}
+              </p>
               <div className="flex shrink-0 items-center gap-2">
                 <Button
                   type="button"
@@ -1695,88 +1686,87 @@ function AddEvaluationSheet({
                 <Tooltip
                   text={
                     hasEvaluationBasics
-                      ? 'Suggest a starting set of cases from the description above'
+                      ? 'Suggest a few cases from the description above'
                       : 'Add an evaluation name and description first'
                   }
                 >
                   <span className="inline-flex">
-                    <CollapsibleTrigger asChild>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        disabled={!hasEvaluationBasics || isWorking}
-                        aria-expanded={generatorOpen}
-                      >
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={handleGenerate}
+                      disabled={!canGenerate}
+                    >
+                      {isWorking ? (
+                        <Loader2 className="mr-1.5 size-4 shrink-0 animate-spin" />
+                      ) : (
                         <Sprout className="mr-1.5 size-4 shrink-0" />
-                        Generate with AI
-                      </Button>
-                    </CollapsibleTrigger>
+                      )}
+                      Generate
+                    </Button>
                   </span>
                 </Tooltip>
               </div>
             </div>
 
-            <CollapsibleContent className="space-y-3">
-              <p className="text-sm text-muted-foreground text-pretty">
-                AI will read the evaluation name and description above and
-                suggest a few varied inputs, each with a complete ideal
-                output, added to the cases below for review.
+            {cases.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                No cases yet. Add one by hand, or generate a few from the
+                description above.
               </p>
-              <Button
-                type="button"
-                className="w-full"
-                onClick={handleGenerate}
-                disabled={!canGenerate}
-              >
-                {isWorking ? (
-                  <>
-                    <Loader2 className="mr-2 size-4 shrink-0 animate-spin" />
-                    Generating...
-                  </>
-                ) : (
-                  'Generate cases'
+            ) : (
+              <Accordion
+                type="multiple"
+                value={cases.flatMap((evaluationCase, index) =>
+                  evaluationCase.expanded ? [String(index)] : []
                 )}
-              </Button>
-            </CollapsibleContent>
-
-            <div className="space-y-2">
-              <p className="text-sm font-medium">
-                {pluralizeCases(cases.length)}
-              </p>
-              {cases.length === 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  No cases yet. Add one manually or generate a starting set
-                  with AI.
-                </p>
-              ) : (
-                cases.map((evaluationCase, index) => (
-                  <div
+                onValueChange={(openValues) =>
+                  setCases((current) =>
+                    current.map((evaluationCase, index) => ({
+                      ...evaluationCase,
+                      expanded: openValues.includes(String(index)),
+                    }))
+                  )
+                }
+              >
+                {cases.map((evaluationCase, index) => (
+                  <AccordionItem
                     key={`case-${index}`}
-                    className="flex items-start gap-2 rounded-md border p-3"
+                    value={String(index)}
+                    className="last:border-b-0"
                   >
-                    <input
-                      type="checkbox"
-                      aria-label={`Use ${evaluationCase.title || `case ${index + 1}`}`}
-                      checked={evaluationCase.selected}
-                      onChange={(event) =>
-                        updateCase(index, { selected: event.target.checked })
-                      }
-                      disabled={isWorking}
-                      className="mt-1 size-4 shrink-0"
-                    />
-                    <details
-                      className="min-w-0 flex-1 text-sm"
-                      open={evaluationCase.expanded ?? false}
-                      onToggle={(event) =>
-                        updateCase(index, {
-                          expanded: (event.target as HTMLDetailsElement).open,
-                        })
-                      }
-                    >
-                      <summary className="cursor-pointer font-medium">
-                        {evaluationCase.title || `Case ${index + 1}`}
-                      </summary>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        aria-label={`Use ${evaluationCase.title || `case ${index + 1}`}`}
+                        checked={evaluationCase.selected}
+                        onChange={(event) =>
+                          updateCase(index, {
+                            selected: event.target.checked,
+                          })
+                        }
+                        disabled={isWorking}
+                        className="size-4 shrink-0"
+                      />
+                      <AccordionTrigger className="min-w-0 flex-1 py-3 text-sm hover:no-underline">
+                        <span className="truncate">
+                          {evaluationCase.title || `Case ${index + 1}`}
+                        </span>
+                      </AccordionTrigger>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-sm"
+                        className="shrink-0"
+                        onClick={() => removeCase(index)}
+                        disabled={isWorking}
+                        aria-label={`Remove ${evaluationCase.title || `case ${index + 1}`}`}
+                      >
+                        <Trash2 className="size-4" />
+                      </Button>
+                    </div>
+                    <AccordionContent>
                       <CaseFieldsBody
                         idPrefix={`generated-case-${index}`}
                         labelTitle={evaluationCase.title}
@@ -1794,23 +1784,12 @@ function AddEvaluationSheet({
                           updateCase(index, { expectedOutputText: value })
                         }
                       />
-                    </details>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon-sm"
-                      className="shrink-0"
-                      onClick={() => removeCase(index)}
-                      disabled={isWorking}
-                      aria-label={`Remove ${evaluationCase.title || `case ${index + 1}`}`}
-                    >
-                      <Trash2 className="size-4" />
-                    </Button>
-                  </div>
-                ))
-              )}
-            </div>
-          </Collapsible>
+                    </AccordionContent>
+                  </AccordionItem>
+                ))}
+              </Accordion>
+            )}
+          </div>
 
           {errorMessage ? (
             <p className="text-sm text-destructive">{errorMessage}</p>
@@ -2100,48 +2079,54 @@ function EvaluationDetailPanel({
             <p className="text-sm font-medium">
               {pluralizeCases(editCases.length)}
             </p>
-            {editCases.map((evaluationCase, index) => (
-              <details
-                key={evaluationCase.id}
-                className="rounded-md border p-3 text-sm"
-              >
-                <summary className="cursor-pointer font-medium">
-                  {evaluationCase.title || `Case ${index + 1}`}
-                </summary>
-                <CaseFieldsBody
-                  idPrefix={`evaluation-case-${evaluationCase.id}`}
-                  labelTitle={activeCases[index]?.title ?? evaluationCase.title}
-                  title={evaluationCase.title}
-                  documentText={evaluationCase.documentText}
-                  expectedOutputText={evaluationCase.expectedOutputText}
-                  disabled={isBusy}
-                  onTitleChange={(value) =>
-                    updateEditCase(evaluationCase.id, { title: value })
-                  }
-                  onDocumentChange={(value) =>
-                    updateEditCase(evaluationCase.id, {
-                      documentText: value,
-                    })
-                  }
-                  onOutputChange={(value) =>
-                    updateEditCase(evaluationCase.id, {
-                      expectedOutputText: value,
-                    })
-                  }
-                />
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="destructive-outline"
-                  onClick={() => removeEditCase(evaluationCase.id)}
-                  disabled={isBusy}
-                  className="mt-3"
+            <Accordion type="multiple">
+              {editCases.map((evaluationCase, index) => (
+                <AccordionItem
+                  key={evaluationCase.id}
+                  value={evaluationCase.id}
+                  className="last:border-b-0"
                 >
-                  <Trash2 className="mr-2 size-4 shrink-0" />
-                  {isRemoving ? 'Removing...' : 'Remove case'}
-                </Button>
-              </details>
-            ))}
+                  <AccordionTrigger className="py-3 text-sm hover:no-underline">
+                    {evaluationCase.title || `Case ${index + 1}`}
+                  </AccordionTrigger>
+                  <AccordionContent className="space-y-3">
+                    <CaseFieldsBody
+                      idPrefix={`evaluation-case-${evaluationCase.id}`}
+                      labelTitle={
+                        activeCases[index]?.title ?? evaluationCase.title
+                      }
+                      title={evaluationCase.title}
+                      documentText={evaluationCase.documentText}
+                      expectedOutputText={evaluationCase.expectedOutputText}
+                      disabled={isBusy}
+                      onTitleChange={(value) =>
+                        updateEditCase(evaluationCase.id, { title: value })
+                      }
+                      onDocumentChange={(value) =>
+                        updateEditCase(evaluationCase.id, {
+                          documentText: value,
+                        })
+                      }
+                      onOutputChange={(value) =>
+                        updateEditCase(evaluationCase.id, {
+                          expectedOutputText: value,
+                        })
+                      }
+                    />
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="destructive-outline"
+                      onClick={() => removeEditCase(evaluationCase.id)}
+                      disabled={isBusy}
+                    >
+                      <Trash2 className="mr-2 size-4 shrink-0" />
+                      {isRemoving ? 'Removing...' : 'Remove case'}
+                    </Button>
+                  </AccordionContent>
+                </AccordionItem>
+              ))}
+            </Accordion>
           </div>
           {localError ? (
             <p className="text-sm text-destructive">{localError}</p>
@@ -2180,65 +2165,69 @@ function EvaluationDetailPanel({
           <p className="text-sm font-medium">
             {pluralizeCases(evaluation.cases.length)}
           </p>
-          {activeCases.map((evaluationCase) => (
-            <details
-              key={evaluationCase.id}
-              className="rounded-md border p-3 text-sm"
-            >
-              <summary className="cursor-pointer font-medium">
-                {evaluationCase.title}
-              </summary>
-              <div className="mt-3 space-y-3">
-                <div className="space-y-1.5">
-                  <p className="font-medium">Input document</p>
-                  <pre className="max-w-full overflow-x-hidden whitespace-pre-wrap break-words rounded-md bg-muted/40 p-3 text-sm">
-                    {evaluationCase.documentText}
-                  </pre>
-                </div>
-                <JsonPreview
-                  label="Full expected output"
-                  value={evaluationCase.expectedOutput}
-                />
-                {allowChanges ? (
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="destructive-outline"
-                    onClick={() => onRemoveCase(evaluationCase.id)}
-                    disabled={isRemoving}
-                  >
-                    <Trash2 className="mr-2 size-4 shrink-0" />
-                    {isRemoving ? 'Removing...' : 'Remove case'}
-                  </Button>
-                ) : null}
-              </div>
-            </details>
-          ))}
-          {archivedCases.map((evaluationCase) => (
-            <details
-              key={evaluationCase.id}
-              className="rounded-md border p-3 text-sm"
-            >
-              <summary className="cursor-pointer font-medium">
-                {evaluationCase.title}
-                <span className="ml-2 text-xs font-normal text-muted-foreground">
-                  Archived
-                </span>
-              </summary>
-              <div className="mt-3 space-y-3">
-                <div className="space-y-1.5">
-                  <p className="font-medium">Input document</p>
-                  <pre className="max-w-full overflow-x-hidden whitespace-pre-wrap break-words rounded-md bg-muted/40 p-3 text-sm">
-                    {evaluationCase.documentText}
-                  </pre>
-                </div>
-                <JsonPreview
-                  label="Full expected output"
-                  value={evaluationCase.expectedOutput}
-                />
-              </div>
-            </details>
-          ))}
+          <Accordion type="multiple">
+            {activeCases.map((evaluationCase) => (
+              <AccordionItem
+                key={evaluationCase.id}
+                value={evaluationCase.id}
+                className="last:border-b-0"
+              >
+                <AccordionTrigger className="py-3 text-sm hover:no-underline">
+                  {evaluationCase.title}
+                </AccordionTrigger>
+                <AccordionContent className="space-y-3">
+                  <div className="space-y-1.5">
+                    <p className="font-medium">Input document</p>
+                    <pre className="max-w-full overflow-x-hidden whitespace-pre-wrap break-words rounded-md bg-muted/40 p-3 text-sm">
+                      {evaluationCase.documentText}
+                    </pre>
+                  </div>
+                  <JsonPreview
+                    label="Full expected output"
+                    value={evaluationCase.expectedOutput}
+                  />
+                  {allowChanges ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="destructive-outline"
+                      onClick={() => onRemoveCase(evaluationCase.id)}
+                      disabled={isRemoving}
+                    >
+                      <Trash2 className="mr-2 size-4 shrink-0" />
+                      {isRemoving ? 'Removing...' : 'Remove case'}
+                    </Button>
+                  ) : null}
+                </AccordionContent>
+              </AccordionItem>
+            ))}
+            {archivedCases.map((evaluationCase) => (
+              <AccordionItem
+                key={evaluationCase.id}
+                value={evaluationCase.id}
+                className="last:border-b-0"
+              >
+                <AccordionTrigger className="py-3 text-sm hover:no-underline">
+                  {evaluationCase.title}
+                  <span className="ml-2 text-xs font-normal text-muted-foreground">
+                    Archived
+                  </span>
+                </AccordionTrigger>
+                <AccordionContent className="space-y-3">
+                  <div className="space-y-1.5">
+                    <p className="font-medium">Input document</p>
+                    <pre className="max-w-full overflow-x-hidden whitespace-pre-wrap break-words rounded-md bg-muted/40 p-3 text-sm">
+                      {evaluationCase.documentText}
+                    </pre>
+                  </div>
+                  <JsonPreview
+                    label="Full expected output"
+                    value={evaluationCase.expectedOutput}
+                  />
+                </AccordionContent>
+              </AccordionItem>
+            ))}
+          </Accordion>
         </div>
       )}
     </div>
