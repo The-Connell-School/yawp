@@ -19,6 +19,7 @@ import DOMPurify from 'dompurify';
 import { Button } from '~/components/ui/button';
 import { Textarea } from '~/components/ui/textarea';
 import { cn } from '~/utils/misc';
+import { isLlmRetryResponse } from '~/utils/llm-retry-ui';
 import { prisma } from '~/utils/db.server';
 import { getReporterAccess } from '~/utils/reporter/reporter-access.server';
 import { RECOMMENDED_REPORTER_PROMPTS } from '~/routes/api.domain.reporter/build-system-prompt';
@@ -54,8 +55,11 @@ export async function loader({ request }: LoaderFunctionArgs) {
           select: {
             id: true,
             title: true,
+            // id tiebreak: legacy rows share one createdAt per turn (they were
+            // written in a single nested create), and their cuids are
+            // sequential — this keeps question-before-answer order for them.
             messages: {
-              orderBy: { createdAt: 'asc' },
+              orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
               select: { role: true, content: true },
             },
           },
@@ -82,6 +86,7 @@ type ReporterActionData = {
   conversationId?: string;
   reply?: string;
   isNewConversation?: boolean;
+  retrying?: boolean;
   error?: string;
 };
 
@@ -95,7 +100,19 @@ export default function ReporterRoute() {
     selectedConversation?.messages ?? []
   );
   const [input, setInput] = useState('');
-  const conversationId = selectedConversation?.id;
+  // The conversation created by the last send, until the URL/loader catch up.
+  // Without it, a quick follow-up message would start a second conversation.
+  const [pendingConversationId, setPendingConversationId] = useState<
+    string | null
+  >(null);
+  // The turn currently in flight and which conversation it belongs to, so a
+  // reply can never be appended to a different transcript.
+  const [pendingSubmission, setPendingSubmission] = useState<{
+    message: string;
+    conversationKey: string;
+  } | null>(null);
+  const conversationId = selectedConversation?.id ?? pendingConversationId;
+  const conversationKey = conversationId ?? 'new';
   const transcriptRef = useRef<HTMLDivElement>(null);
   // Track the last fetcher result we merged so switching conversations (which
   // re-runs this effect with the same stale data) can't re-append a reply.
@@ -105,7 +122,17 @@ export default function ReporterRoute() {
 
   // Reset the local transcript when switching between saved conversations.
   useEffect(() => {
-    setMessages(selectedConversation?.messages ?? []);
+    setPendingConversationId(null);
+    const persisted = selectedConversation?.messages ?? [];
+    // Keep an in-flight question visible if it belongs to this conversation
+    // (e.g. the loader refresh after the first turn created the conversation).
+    setMessages(
+      pendingSubmission &&
+        pendingSubmission.conversationKey === (selectedConversation?.id ?? 'new')
+        ? [...persisted, { role: 'user', content: pendingSubmission.message }]
+        : persisted
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedConversation?.id]);
 
   // Merge the assistant reply back in once the action resolves.
@@ -113,19 +140,49 @@ export default function ReporterRoute() {
     if (fetcher.state !== 'idle' || !fetcher.data) return;
     if (processedData.current === fetcher.data) return;
     processedData.current = fetcher.data;
+    const submission = pendingSubmission;
+
+    // The primary LLM provider is down; retry the same turn once on the
+    // fallback provider (shared 202 contract — see llm-retry-ui.ts).
+    if (isLlmRetryResponse(fetcher.data)) {
+      if (submission) {
+        fetcher.submit(
+          {
+            message: submission.message,
+            llmRetry: 'fallback',
+            ...(submission.conversationKey !== 'new'
+              ? { conversationId: submission.conversationKey }
+              : {}),
+          },
+          { method: 'post', action: '/api/domain/reporter' }
+        );
+      }
+      return;
+    }
+
+    const submittedHere = submission?.conversationKey === conversationKey;
+    setPendingSubmission(null);
+
     if (fetcher.data.error) {
-      setMessages((prev) => [
-        ...prev,
-        { role: 'assistant', content: fetcher.data!.error! },
-      ]);
+      if (submittedHere) {
+        setMessages((prev) => [
+          ...prev,
+          { role: 'assistant', content: fetcher.data!.error! },
+        ]);
+      }
       return;
     }
     if (fetcher.data.reply) {
+      // If the teacher switched conversations while this turn was in flight,
+      // don't append the reply here — the turn is persisted and will be there
+      // when they reopen that report.
+      if (!submittedHere) return;
       setMessages((prev) => [
         ...prev,
         { role: 'assistant', content: fetcher.data!.reply! },
       ]);
       if (fetcher.data.conversationId && !conversationId) {
+        setPendingConversationId(fetcher.data.conversationId);
         const next = new URLSearchParams(searchParams);
         next.set('c', fetcher.data.conversationId);
         // Replace so the browser back button doesn't bounce between states.
@@ -146,6 +203,7 @@ export default function ReporterRoute() {
     const trimmed = message.trim();
     if (!trimmed || isSending) return;
     setMessages((prev) => [...prev, { role: 'user', content: trimmed }]);
+    setPendingSubmission({ message: trimmed, conversationKey });
     setInput('');
     fetcher.submit(
       {
@@ -167,6 +225,10 @@ export default function ReporterRoute() {
             variant="outline"
             className="w-full justify-start gap-2"
             onClick={() => {
+              // Clear immediately: the loader refresh only resets the
+              // transcript when the selected conversation actually changes.
+              setPendingConversationId(null);
+              setMessages([]);
               const next = new URLSearchParams(searchParams);
               next.delete('c');
               setSearchParams(next);
@@ -246,7 +308,8 @@ export default function ReporterRoute() {
                 />
               ))
             )}
-            {isSending ? (
+            {isSending &&
+            pendingSubmission?.conversationKey === conversationKey ? (
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Loader2 size={16} className="animate-spin" />
                 Pulling the numbers…
@@ -344,7 +407,7 @@ function MessageBubble({
 }) {
   if (message.role === 'user') {
     return (
-      <div className="flex justify-end">
+      <div className="flex justify-end" data-role="user">
         <div className="max-w-[85%] whitespace-pre-wrap rounded-2xl rounded-br-sm bg-primary px-4 py-2.5 text-sm text-primary-foreground shadow-sm">
           {message.content}
         </div>
@@ -357,7 +420,7 @@ function MessageBubble({
   const isReport = /(^|\n)#{1,3}\s/.test(body) || /\n\|.*\|/.test(body);
 
   return (
-    <div className="flex gap-3">
+    <div className="flex gap-3" data-role="assistant">
       <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary ring-1 ring-primary/15">
         <Search size={16} />
       </div>
