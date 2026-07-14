@@ -9,9 +9,9 @@ import {
 import {
   CornerDownRight,
   Loader2,
-  Microscope,
   Plus,
   Printer,
+  Search,
   Send,
 } from 'lucide-react';
 import { marked } from 'marked';
@@ -212,7 +212,7 @@ export default function ReporterRoute() {
       <div className="flex h-full min-w-0 flex-1 flex-col">
         <div className="border-b bg-secondary px-4 py-3">
           <div className="mx-auto flex w-full max-w-3xl items-center gap-2">
-            <Microscope size={20} className="text-primary" />
+            <Search size={20} className="text-primary" />
             <div>
               <h2 className="text-lg font-semibold leading-none">
                 Yawp Reporter
@@ -306,7 +306,7 @@ function ReporterEmptyState({
     <div className="flex flex-col items-center gap-6 py-10 text-center">
       <div className="flex flex-col items-center gap-2">
         <div className="rounded-2xl bg-primary/10 p-3 text-primary">
-          <Microscope size={28} />
+          <Search size={28} />
         </div>
         <h3 className="text-xl font-semibold">What would you like to know?</h3>
         <p className="max-w-md text-sm text-muted-foreground">
@@ -359,7 +359,7 @@ function MessageBubble({
   return (
     <div className="flex gap-3">
       <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary ring-1 ring-primary/15">
-        <Microscope size={16} />
+        <Search size={16} />
       </div>
       <div className="min-w-0 flex-1">
         <div className="rounded-2xl rounded-tl-sm border border-border/60 bg-card px-4 py-3 text-foreground shadow-sm">
