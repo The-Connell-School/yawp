@@ -1,5 +1,3 @@
-import { Sparkles } from 'lucide-react';
-
 import { Badge } from '~/components/ui/badge';
 
 /**
@@ -60,7 +58,6 @@ export function PracticePrompt({
       </div>
 
       <p className="flex items-start justify-center gap-1.5 text-sm text-muted-foreground">
-        <Sparkles className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
         {instruction}
       </p>
     </div>

@@ -1,4 +1,4 @@
-import { ChevronRight, ClipboardPlus, Sparkles } from 'lucide-react';
+import { ChevronRight, ClipboardPlus } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import {
   Link,
@@ -368,7 +368,6 @@ export default function WritingLessonsIndexRoute() {
                   className="shrink-0 rounded-full"
                   onClick={() => setIsBuilderOpen(true)}
                 >
-                  <Sparkles className="mr-2 h-4 w-4" />
                   Create practice
                 </Button>
                 <StudentPracticeBuilder
@@ -504,11 +503,7 @@ export default function WritingLessonsIndexRoute() {
                         {lesson.description}
                       </CardDescription>
                     </CardHeader>
-                    <CardContent className="mt-auto flex items-center justify-between gap-3 text-base text-muted-foreground sm:text-sm">
-                      <span className="inline-flex items-center gap-1.5">
-                        <Sparkles className="h-3.5 w-3.5 shrink-0 text-primary" />
-                        Endless drills
-                      </span>
+                    <CardContent className="mt-auto flex items-center justify-end gap-3 text-base text-muted-foreground sm:text-sm">
                       <span className="inline-flex items-center gap-1">
                         Start practice
                         <ChevronRight className="h-4 w-4 shrink-0" />
