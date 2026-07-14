@@ -233,7 +233,14 @@ describe('api.domain.tutor-response read-only impersonation', () => {
           gradingAssistantVersion: 1,
           rubricJson: null,
         },
-        instructions: [{ id: 'instruction-1', tutorInstructions: null }],
+        instructions: [
+          {
+            id: 'instruction-1',
+            title: 'Analyze the sources',
+            tutorInstructions:
+              'Build a working sense of each document before drafting.',
+          },
+        ],
       },
       messages: [],
       document: {
@@ -270,6 +277,12 @@ describe('api.domain.tutor-response read-only impersonation', () => {
     );
     expect(completionArgs.system).toContain(
       'Coach source analysis and document groupings; hold off on drafting.'
+    );
+    expect(completionArgs.system).toContain(
+      'Current step: "Analyze the sources"'
+    );
+    expect(completionArgs.system).toContain(
+      'Build a working sense of each document before drafting.'
     );
   });
 

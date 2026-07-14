@@ -17,17 +17,48 @@ describe('AP History module (section) seed data', () => {
     ]);
   });
 
-  test('every section carries tutor guidance and one student-facing kickoff instruction', () => {
+  test('every section carries tutor guidance and student-facing instructions', () => {
     for (const module of AP_HISTORY_MODULES) {
       expect(module.description.trim().length).toBeGreaterThan(0);
       expect(module.tutorInstructions.trim().length).toBeGreaterThan(0);
-      expect(module.instructions).toHaveLength(1);
+      expect(module.instructions.length).toBeGreaterThanOrEqual(1);
 
-      const instruction = module.instructions[0];
-      expect(instruction.position).toBe(1);
-      expect(instruction.title.trim().length).toBeGreaterThan(0);
-      expect(instruction.prompt.trim().length).toBeGreaterThan(0);
-      expect(instruction.showChatButton).toBe(true);
+      for (const [index, instruction] of module.instructions.entries()) {
+        expect(instruction.position).toBe(index + 1);
+        expect(instruction.title.trim().length).toBeGreaterThan(0);
+        expect(instruction.prompt.trim().length).toBeGreaterThan(0);
+        expect(instruction.showChatButton).toBe(true);
+      }
+    }
+  });
+
+  test('Drafting is broken into steps that walk the essay from intro to conclusion', () => {
+    const drafting = AP_HISTORY_MODULES.find(
+      (module) => module.title === 'Drafting'
+    );
+
+    expect(drafting).toBeDefined();
+    expect(drafting!.instructions.map((instruction) => instruction.title)).toEqual([
+      'Introduction',
+      'Body Paragraphs',
+      'Strengthen the Evidence',
+      'Conclusion',
+    ]);
+
+    // Each drafting step carries its own tutor guidance, so the coach narrows
+    // from the section to the step at hand.
+    for (const instruction of drafting!.instructions) {
+      expect(instruction.tutorInstructions?.trim().length).toBeGreaterThan(0);
+    }
+
+    // The evidence-heavy steps differ by essay type, so their guidance must
+    // cover both flows (modules and steps are shared across DBQ and LEQ).
+    for (const stepTitle of ['Body Paragraphs', 'Strengthen the Evidence']) {
+      const step = drafting!.instructions.find(
+        (instruction) => instruction.title === stepTitle
+      );
+      expect(step?.tutorInstructions).toContain('DBQ');
+      expect(step?.tutorInstructions).toContain('LEQ');
     }
   });
 

@@ -94,6 +94,35 @@ describe('buildApHistoryTutorSystemPrompt', () => {
     expect(prompt).toContain('Coaching arc (DBQ)');
   });
 
+  test('narrows to the current step when the instruction provides guidance', () => {
+    const prompt = buildApHistoryTutorSystemPrompt(dbqSnapshot, {
+      title: 'Drafting',
+      tutorInstructions: 'Coach argument-first body paragraphs.',
+      instruction: {
+        title: 'Strengthen the Evidence',
+        tutorInstructions:
+          'HIPP-source at least 2 documents and add specific outside evidence.',
+      },
+    });
+
+    expect(prompt).toContain('Current section: "Drafting"');
+    expect(prompt).toContain('Current step: "Strengthen the Evidence"');
+    expect(prompt).toContain(
+      'HIPP-source at least 2 documents and add specific outside evidence.'
+    );
+  });
+
+  test('steps without their own guidance fall back to section-level coaching only', () => {
+    const prompt = buildApHistoryTutorSystemPrompt(dbqSnapshot, {
+      title: 'Pre-Writing',
+      tutorInstructions: 'Coach thesis and contextualization.',
+      instruction: { title: 'Plan your essay', tutorInstructions: null },
+    });
+
+    expect(prompt).toContain('Current section: "Pre-Writing"');
+    expect(prompt).not.toContain('Current step:');
+  });
+
   test('legacy single-module sessions without guidance produce the unchanged prompt', () => {
     const withLegacyModule = buildApHistoryTutorSystemPrompt(dbqSnapshot, {
       title: 'AP History Essay',

@@ -39,7 +39,9 @@ describe('buildApHistoryAssignmentTypeCreateInput', () => {
       expect(module.tutorInstructions).toBe(
         AP_HISTORY_MODULES[index].tutorInstructions
       );
-      expect(module.instructions?.create).toHaveLength(1);
+      expect(module.instructions?.create).toHaveLength(
+        AP_HISTORY_MODULES[index].instructions.length
+      );
     }
   });
 

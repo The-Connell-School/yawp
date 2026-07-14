@@ -21,6 +21,9 @@ export type ApHistoryModuleDefinition = {
     prompt: string;
     position: number;
     showChatButton: boolean;
+    // Step-level guidance appended to the tutor system prompt after the
+    // section-level guidance, narrowing the coach to the step at hand.
+    tutorInstructions?: string;
   }>;
 };
 
@@ -75,11 +78,41 @@ LEQ: use specific named evidence as argument rather than a list of facts, and ma
 Watch for the failure modes — describing instead of arguing, HIPP without relevance, generic evidence — and surface them as they appear.`,
     instructions: [
       {
-        title: 'Draft your essay',
+        title: 'Introduction',
         prompt:
-          "Now write your draft in the editor. Lead each body paragraph with an argument, then bring in your documents and evidence to back it up. Check in with me anytime — I can help you weave in evidence, source documents, or get unstuck on a paragraph.",
+          "Let's draft — starting with your introduction. Open with the contextualization you planned, then land your thesis at the end of the paragraph; that's where AP readers look for it first. Write it in the editor and check in when it's down.",
         position: 1,
         showChatButton: true,
+        tutorInstructions: `Step focus: the introduction. Coach the student to open with their 2–3 specific contextualization sentences and land the thesis at the end of paragraph 1 — the safest position for fast-moving AP readers. Confirm the thesis kept its line of reasoning through the move; watch for buried-thesis and generic-context.`,
+      },
+      {
+        title: 'Body Paragraphs',
+        prompt:
+          'Now the body paragraphs. Lead each one with a claim that supports your thesis — then bring in the evidence to back it up. DBQ: weave 2–3 documents into each paragraph. LEQ: use specific named evidence, not a list of facts. Draft a paragraph and check in with me.',
+        position: 2,
+        showChatButton: true,
+        tutorInstructions: `Step focus: body paragraphs. Every paragraph leads with an argument tied to the thesis, never with a document or a fact.
+DBQ: 2–3 documents woven into each paragraph as evidence for the claim — never a walk-through of documents in order. Watch walking-through-documents and description-not-argument.
+LEQ: specific named evidence used as argument. Watch evidence-as-list and narrative-drift.
+Sourcing and outside evidence get their own step next — don't block a paragraph on them here.`,
+      },
+      {
+        title: 'Strengthen the Evidence',
+        prompt:
+          "Your paragraphs are down — now let's pick up the analysis points. DBQ: source at least two documents (why does the author's point of view, purpose, situation, or audience matter for your argument?) and work in one specific piece of outside evidence from the period. LEQ: make sure your reasoning skill shows in the structure and every piece of evidence earns its place. Ask me to look at a paragraph.",
+        position: 3,
+        showChatButton: true,
+        tutorInstructions: `Step focus: analysis and evidence upgrades to the existing draft.
+DBQ: HIPP-source at least 2 documents with explicit "which matters because" relevance to the argument, and add at least one specific piece of outside evidence inside the prompt's date window. Watch HIPP-without-relevance, generic-outside-evidence, and period-bleed.
+LEQ: make the reasoning skill visible in the paragraph structure and push evidence specificity — named laws, people, events, court cases. Watch reasoning-mentioned-not-used and generic-evidence.`,
+      },
+      {
+        title: 'Conclusion',
+        prompt:
+          "Last piece of the draft: the conclusion. Reinforce your argument without just repeating your thesis — and if you're chasing the complexity point, a \"while X, also Y\" move lands well here. Share it when it's drafted.",
+        position: 4,
+        showChatButton: true,
+        tutorInstructions: `Step focus: the conclusion. Reinforce the thesis without merely restating it. This is a natural home for a complexity move — qualification ("while X dominated, Y persisted"), multiple causes or perspectives, or a connection across periods. Keep it tight; length is not sophistication.`,
       },
     ],
   },

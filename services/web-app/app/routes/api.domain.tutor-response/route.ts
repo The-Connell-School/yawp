@@ -120,6 +120,10 @@ export async function action({ request }: ActionFunctionArgs) {
       ? buildApHistoryTutorSystemPrompt(apHistorySnapshot, {
           title: cms.assignmentModule.title,
           tutorInstructions: cms.assignmentModule.tutorInstructions,
+          instruction: {
+            title: instruction.title,
+            tutorInstructions: instruction.tutorInstructions,
+          },
         })
       : buildTutorSystemPrompt({
           tutorInstructions: cms.assignmentModule.tutorInstructions,
