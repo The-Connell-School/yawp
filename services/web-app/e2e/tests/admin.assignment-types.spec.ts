@@ -228,14 +228,21 @@ test.describe.serial('Admin assignment types', () => {
       await expect(resultPanel.getByText('Pass')).toBeVisible();
       await expect(resultPanel.getByText('Fail')).toBeVisible();
       const failedCaseResult = resultPanel
-        .locator('div.rounded-md.border')
+        .getByTestId('evaluation-case-result')
         .filter({ hasText: 'Missing opening' });
       await expect(failedCaseResult.getByText('Judge evidence')).toBeVisible();
-      await expect(failedCaseResult.getByText('Expected output')).toBeVisible();
-      await expect(failedCaseResult.getByText('Actual output')).toBeVisible();
+      await expect(
+        failedCaseResult.getByRole('tab', { name: 'Expected output' })
+      ).toBeVisible();
+      await expect(
+        failedCaseResult.getByRole('tab', { name: 'Actual output' })
+      ).toBeVisible();
       await expect(failedCaseResult).toContainText(
         'The first prompt version misses the saved evaluation criterion.'
       );
+      await failedCaseResult
+        .getByRole('tab', { name: 'Actual output' })
+        .click();
       await expect(failedCaseResult).toContainText(
         'Jordan, make the stakes more explicit.'
       );

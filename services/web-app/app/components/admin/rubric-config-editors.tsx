@@ -78,6 +78,7 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from '~/components/ui/accordion';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '~/components/ui/tabs';
 import { Tooltip } from '~/components/ui/tooltip';
 import {
   DEFAULT_SCORING_SCALE,
@@ -1282,35 +1283,47 @@ function JsonPreview({ value, label }: { value: unknown; label?: string }) {
   return (
     <div className="space-y-1.5">
       {label ? <p className="font-medium">{label}</p> : null}
-      <pre
-        ref={preRef}
-        className={cn(
-          'max-w-full overflow-x-hidden whitespace-pre-wrap break-words rounded-md bg-muted/40 p-3 text-xs',
-          expanded ? 'max-h-96 overflow-y-auto' : 'max-h-28 overflow-hidden'
-        )}
-      >
-        {text}
-      </pre>
-      {canExpand ? (
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="h-auto px-0 py-1 text-xs font-medium text-muted-foreground hover:bg-transparent hover:text-foreground"
-          onClick={() => setExpanded((current) => !current)}
-        >
-          {expanded ? (
-            <>
-              <ChevronUp className="mr-1 size-3.5 shrink-0" />
-              Show less
-            </>
-          ) : (
-            <>
-              <ChevronDown className="mr-1 size-3.5 shrink-0" />
-              Show more
-            </>
+      <div className="relative">
+        <pre
+          ref={preRef}
+          className={cn(
+            'max-w-full overflow-x-hidden whitespace-pre-wrap break-words rounded-md bg-muted/40 p-3 text-xs',
+            expanded
+              ? 'max-h-96 overflow-y-auto'
+              : 'max-h-28 overflow-hidden',
+            canExpand && !expanded && 'pb-8'
           )}
-        </Button>
+        >
+          {text}
+        </pre>
+        {canExpand && !expanded ? (
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-center rounded-b-md bg-gradient-to-t from-muted via-muted/90 to-transparent pb-1.5 pt-6">
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="pointer-events-auto h-6 gap-1 rounded-full bg-background px-2.5 text-xs font-semibold shadow-sm"
+              onClick={() => setExpanded(true)}
+            >
+              <ChevronDown className="size-3.5 shrink-0" />
+              Show more
+            </Button>
+          </div>
+        ) : null}
+      </div>
+      {expanded ? (
+        <div className="flex justify-center">
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="h-6 gap-1 rounded-full px-2.5 text-xs font-semibold shadow-sm"
+            onClick={() => setExpanded(false)}
+          >
+            <ChevronUp className="size-3.5 shrink-0" />
+            Show less
+          </Button>
+        </div>
       ) : null}
     </div>
   );
@@ -1329,12 +1342,10 @@ function evaluationStatusSynopsis(status: AssignmentTypeEvaluationStatus) {
   return 'Partial';
 }
 
-function evaluationStatusBadgeVariant(
-  status: AssignmentTypeEvaluationStatus
-): 'success' | 'destructive' | 'warning-soft' {
-  if (status === 'pass') return 'success';
-  if (status === 'fail') return 'destructive';
-  return 'warning-soft';
+function evaluationStatusTextClass(status: AssignmentTypeEvaluationStatus) {
+  if (status === 'pass') return 'text-green-700 dark:text-green-400';
+  if (status === 'fail') return 'text-destructive';
+  return 'text-orange-700 dark:text-orange-400';
 }
 
 function evaluationStatusCellClass(status: AssignmentTypeEvaluationStatus) {
@@ -2279,42 +2290,63 @@ function EvaluationResultDetailPanel({
         subtitle:
           runVersion !== null ? <p>Prompt version v{runVersion}</p> : undefined,
       })}
-      <div className="space-y-4">
+      <div className="divide-y">
         {evaluation.cases.map((evaluationCase) => {
           const result = resultsByCaseId.get(evaluationCase.id);
           return (
             <div
               key={evaluationCase.id}
-              className="rounded-md border p-3 text-sm"
+              data-testid="evaluation-case-result"
+              className="space-y-2 py-3 first:pt-0"
             >
-              <p className="font-medium">
-                {evaluationCase.title}
+              <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+                <p className="text-sm font-medium text-muted-foreground">
+                  {evaluationCase.title}
+                </p>
                 {result ? (
-                  <Badge
-                    variant={evaluationStatusBadgeVariant(result.status)}
-                    className="ml-2"
+                  <p
+                    className={cn(
+                      'text-sm font-semibold',
+                      evaluationStatusTextClass(result.status)
+                    )}
                   >
                     {evaluationStatusLabel(result.status)}
-                  </Badge>
+                  </p>
                 ) : null}
-              </p>
+              </div>
               {result ? (
-                <div className="mt-3 space-y-3">
-                  <div className="space-y-1.5">
-                    <p className="font-medium">Judge evidence</p>
-                    <p className="text-pretty">{result.evidence}</p>
+                <div className="space-y-3">
+                  <div className="space-y-1">
+                    <p className="text-xs font-medium text-muted-foreground">
+                      Judge evidence
+                    </p>
+                    <p className="text-sm text-pretty">{result.evidence}</p>
                   </div>
-                  <JsonPreview
-                    label="Expected output"
-                    value={result.expectedOutput}
-                  />
-                  <JsonPreview
-                    label="Actual output"
-                    value={result.gradingOutput}
-                  />
+                  <Tabs defaultValue="expected">
+                    <TabsList className="h-8 p-0.5">
+                      <TabsTrigger
+                        value="expected"
+                        className="h-7 px-2.5 text-xs"
+                      >
+                        Expected output
+                      </TabsTrigger>
+                      <TabsTrigger
+                        value="actual"
+                        className="h-7 px-2.5 text-xs"
+                      >
+                        Actual output
+                      </TabsTrigger>
+                    </TabsList>
+                    <TabsContent value="expected">
+                      <JsonPreview value={result.expectedOutput} />
+                    </TabsContent>
+                    <TabsContent value="actual">
+                      <JsonPreview value={result.gradingOutput} />
+                    </TabsContent>
+                  </Tabs>
                 </div>
               ) : (
-                <p className="mt-3 text-muted-foreground">
+                <p className="text-sm text-muted-foreground">
                   This case was not part of the run.
                 </p>
               )}
@@ -2611,7 +2643,7 @@ function EvaluationMatrixSection({
               scope="col"
               className="sticky left-0 z-10 min-w-[6rem] border-b bg-muted/60 p-2 text-left align-bottom font-medium"
             >
-              Version
+              Run
             </th>
             {columns.map((column) => {
               const isColumnSelected =
@@ -2693,20 +2725,9 @@ function EvaluationMatrixSection({
                           'bg-muted/70 ring-2 ring-inset ring-yellow-500 dark:ring-yellow-400'
                       )}
                     >
-                      <span className="inline-flex min-w-0 flex-wrap items-baseline gap-x-1 text-sm">
-                        <span className="font-medium tabular-nums whitespace-nowrap">
-                          v{run.promptVersion}
-                        </span>
-                        <span
-                          className="text-muted-foreground"
-                          aria-hidden="true"
-                        >
-                          ·
-                        </span>
-                        <time className="whitespace-nowrap text-muted-foreground">
-                          {run.createdAtLabel}
-                        </time>
-                      </span>
+                      <time className="whitespace-nowrap text-sm">
+                        {run.createdAtLabel}
+                      </time>
                       <ChevronRight
                         className="size-4 shrink-0 text-muted-foreground group-hover:text-foreground"
                         aria-hidden="true"
