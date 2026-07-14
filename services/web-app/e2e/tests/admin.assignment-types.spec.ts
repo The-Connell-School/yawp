@@ -191,43 +191,42 @@ test.describe.serial('Admin assignment types', () => {
       await historyTable
         .getByRole('button', { name: 'View evaluation Positive greeting' })
         .click();
-      const evaluationDialog = page.getByRole('dialog', {
-        name: 'Positive greeting',
+      const evaluationPanel = page.getByRole('complementary', {
+        name: 'Evaluation details',
       });
       await expect(
-        evaluationDialog.getByRole('button', { name: 'Edit evaluation' })
+        evaluationPanel.getByRole('button', { name: 'Edit evaluation' })
       ).toHaveCount(0);
-      await expect(evaluationDialog.getByLabel('Evaluation name')).toHaveValue(
+      await expect(evaluationPanel.getByLabel('Evaluation name')).toHaveValue(
         'Positive greeting'
       );
-      await evaluationDialog
+      await evaluationPanel
         .getByLabel('Evaluation name')
         .fill('Encouraging opening');
-      await evaluationDialog
+      await evaluationPanel
         .getByText('Strong opening', { exact: true })
         .click();
       await expect(
-        evaluationDialog.getByRole('button', { name: 'Remove case' })
+        evaluationPanel.getByRole('button', { name: 'Remove case' })
       ).toBeVisible();
-      await evaluationDialog
+      await evaluationPanel
         .getByLabel('Strong opening case name')
         .fill('Clear position');
-      await evaluationDialog
+      await evaluationPanel
         .getByLabel('Strong opening input document')
         .fill(
           'School uniforms should remain optional because student choice matters and narrower policies can address distractions without removing individuality.'
         );
-      await evaluationDialog
+      await evaluationPanel
         .locator('details[open]')
         .getByText('Edit full expected output', { exact: true })
         .click();
       await expect(
-        evaluationDialog.getByLabel('Strong opening full expected output')
+        evaluationPanel.getByLabel('Strong opening full expected output')
       ).toBeVisible();
-      await evaluationDialog
+      await evaluationPanel
         .getByRole('button', { name: 'Save changes' })
         .click();
-      await expect(evaluationDialog).not.toBeVisible();
       await expect(
         historyTable.getByRole('columnheader', { name: 'Encouraging opening' })
       ).toBeVisible();
@@ -237,20 +236,20 @@ test.describe.serial('Admin assignment types', () => {
         '1/2'
       );
       await expect(
-        historyTable.getByLabel('Encouraging opening: 1/2 passed')
+        historyTable.getByLabel('Encouraging opening: 1/2 Partial')
       ).toBeVisible();
-      await historyTable.getByLabel('Encouraging opening: 1/2 passed').click();
-      const resultDialog = page.getByRole('dialog', {
-        name: 'Encouraging opening',
+      await historyTable.getByLabel('Encouraging opening: 1/2 Partial').click();
+      const resultPanel = page.getByRole('complementary', {
+        name: 'Evaluation details',
       });
-      await expect(resultDialog.getByText('1/2')).toBeVisible();
-      await expect(resultDialog.getByText('Pass')).toBeVisible();
-      await expect(resultDialog.getByText('Fail')).toBeVisible();
-      await resultDialog
+      await expect(resultPanel.getByText('1/2')).toBeVisible();
+      await expect(resultPanel.getByText('Pass')).toBeVisible();
+      await expect(resultPanel.getByText('Fail')).toBeVisible();
+      await resultPanel
         .locator('summary')
         .filter({ hasText: 'Missing opening' })
         .click();
-      const failedCaseResult = resultDialog.locator('details[open]');
+      const failedCaseResult = resultPanel.locator('details[open]');
       await expect(failedCaseResult.getByText('Judge evidence')).toBeVisible();
       await expect(failedCaseResult.getByText('Expected output')).toBeVisible();
       await expect(failedCaseResult.getByText('Actual output')).toBeVisible();
@@ -260,7 +259,7 @@ test.describe.serial('Admin assignment types', () => {
       await expect(failedCaseResult).toContainText(
         'Jordan, make the stakes more explicit.'
       );
-      await resultDialog.getByRole('button', { name: 'Close' }).click();
+      await resultPanel.getByRole('button', { name: 'Close details' }).click();
 
       await page.getByRole('link', { name: 'Back to assignment type' }).click();
       await expect(
@@ -293,23 +292,22 @@ test.describe.serial('Admin assignment types', () => {
       );
       await expect(
         historyTable
-          .getByLabel('Encouraging opening: 2/2 passed')
+          .getByLabel('Encouraging opening: 2/2 Pass')
           .getByText('2/2')
       ).toHaveAttribute('data-status', 'pass');
       await historyTable
         .getByRole('button', { name: 'View prompt v1' })
         .click();
-      const historicalPromptDialog = page.getByRole('dialog', {
-        name: 'Prompt v1',
+      const historicalPromptPanel = page.getByRole('complementary', {
+        name: 'Evaluation details',
       });
       await expect(
-        historicalPromptDialog.getByText(
+        historicalPromptPanel.getByText(
           'Act as a careful evaluator for this assignment type.'
         )
       ).toBeVisible();
-      await historicalPromptDialog
-        .getByRole('button', { name: 'Close' })
-        .first()
+      await historicalPromptPanel
+        .getByRole('button', { name: 'Close details' })
         .click();
       await page.getByRole('link', { name: 'Back to assignment type' }).click();
       await expect(

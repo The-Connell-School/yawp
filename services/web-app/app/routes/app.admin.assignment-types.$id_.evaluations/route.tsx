@@ -1,9 +1,7 @@
-import { ArrowLeft, FlaskConical } from 'lucide-react';
-import { data as dataResponse, Link, useLoaderData } from 'react-router';
+import { data as dataResponse, useLoaderData } from 'react-router';
 import type { LoaderFunctionArgs } from 'react-router';
 import { EvaluationHistorySection } from '~/components/admin/rubric-config-editors';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
-import { Button } from '~/components/ui/button';
 import type { AssignmentTypeEvaluationStatus } from '~/domain/ai-evaluation/assignment-type-evaluation.shared';
 import { requireAdmin } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
@@ -113,36 +111,19 @@ export default function AssignmentTypeEvaluationsRoute() {
   const { assignmentType, evaluationHistory } = useLoaderData<typeof loader>();
 
   return (
-    <main className="mx-auto w-full max-w-6xl px-3 py-5 md:px-6 md:py-8">
-      <header className="mb-8 space-y-5">
-        <Button variant="outline" size="sm" asChild>
-          <Link
-            to={`/app/admin/assignment-types/${assignmentType.id}`}
-            className="w-fit"
-          >
-            <ArrowLeft className="mr-1.5 size-4 shrink-0" />
-            Back to assignment type
-          </Link>
-        </Button>
-
-        <div className="space-y-1">
-          <p className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground">
-            <FlaskConical className="size-4" aria-hidden="true" />
-            AI evaluations
-          </p>
-          <h1 className="text-3xl font-semibold tracking-tight">Evaluations</h1>
-          <p className="text-sm text-muted-foreground">
-            {assignmentType.title}
-          </p>
-        </div>
-      </header>
-
+    // The admin layout wraps routes in a scroll container with pb-24 to leave
+    // breathing room for normal scrolling pages. This route fills the full
+    // remaining height instead, so we compensate for that bottom padding to
+    // let the panel border reach the true bottom edge of the page.
+    <div className="flex h-[calc(100%+6rem)] min-h-0 w-full flex-col">
       <EvaluationHistorySection
         assignmentTypeId={assignmentType.id}
+        assignmentTypeTitle={assignmentType.title}
         evaluationHistory={evaluationHistory}
         isPromptPreviewStale={false}
+        layout="page"
       />
-    </main>
+    </div>
   );
 }
 

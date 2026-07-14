@@ -1,15 +1,20 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { useFetcher } from 'react-router';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { Link, useFetcher } from 'react-router';
 import {
+  ArrowLeft,
+  ChevronDown,
   ChevronRight,
+  ChevronUp,
   ClipboardPaste,
   Copy,
   FileUp,
+  FlaskConical,
   GripVertical,
   Loader2,
   Plus,
   Sparkles,
   Trash2,
+  X,
 } from 'lucide-react';
 import {
   DndContext,
@@ -70,6 +75,7 @@ import type {
   AssignmentTypeEvaluationHistory,
   AssignmentTypeEvaluationStatus,
 } from '~/domain/ai-evaluation/assignment-type-evaluation.shared';
+import { cn } from '~/utils/misc';
 
 const SCORING_SCALE_TYPES = [
   { value: 'weighted_1_5', label: 'Weighted 1–5' },
@@ -1199,12 +1205,10 @@ function ScratchTestSheet({
           {result ? (
             <div className="space-y-4 border-t pt-4">
               <div className="space-y-2">
-                <p className="text-sm font-medium">Grading output</p>
-                <pre className="max-w-full overflow-x-hidden whitespace-pre-wrap break-words rounded-md border bg-muted/40 p-3 text-sm">
-                  {result.gradingOutput
-                    ? JSON.stringify(result.gradingOutput, null, 2)
-                    : result.rawGradingOutput}
-                </pre>
+                <JsonPreview
+                  label="Grading output"
+                  value={result.gradingOutput ?? result.rawGradingOutput}
+                />
                 {result.responseContract.status !== 'pass' ? (
                   <p className="text-sm text-destructive">
                     {result.responseContract.evidence}
@@ -1237,11 +1241,78 @@ function pluralizeCases(count: number) {
   return `${count} case${count === 1 ? '' : 's'}`;
 }
 
+const JSON_PREVIEW_COLLAPSED_HEIGHT_PX = 112;
+
+// Truncates long JSON (or other pre-formatted text) to a few rows, with a
+// toggle to expand up to a taller height before it starts scrolling. Never
+// scrolls while collapsed.
+function JsonPreview({
+  value,
+  label,
+}: {
+  value: unknown;
+  label?: string;
+}) {
+  const text =
+    typeof value === 'string' ? value : JSON.stringify(value, null, 2);
+  const [expanded, setExpanded] = useState(false);
+  const [canExpand, setCanExpand] = useState(false);
+  const preRef = useRef<HTMLPreElement>(null);
+
+  useEffect(() => {
+    const node = preRef.current;
+    if (!node) return;
+    setCanExpand(node.scrollHeight > JSON_PREVIEW_COLLAPSED_HEIGHT_PX + 1);
+  }, [text]);
+
+  return (
+    <div className="space-y-1.5">
+      {label ? <p className="font-medium">{label}</p> : null}
+      <pre
+        ref={preRef}
+        className={cn(
+          'max-w-full overflow-x-hidden whitespace-pre-wrap break-words rounded-md bg-muted/40 p-3 text-xs',
+          expanded ? 'max-h-96 overflow-y-auto' : 'max-h-28 overflow-hidden'
+        )}
+      >
+        {text}
+      </pre>
+      {canExpand ? (
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="h-auto px-0 py-1 text-xs font-medium text-muted-foreground hover:bg-transparent hover:text-foreground"
+          onClick={() => setExpanded((current) => !current)}
+        >
+          {expanded ? (
+            <>
+              <ChevronUp className="mr-1 size-3.5 shrink-0" />
+              Show less
+            </>
+          ) : (
+            <>
+              <ChevronDown className="mr-1 size-3.5 shrink-0" />
+              Show more
+            </>
+          )}
+        </Button>
+      ) : null}
+    </div>
+  );
+}
+
 function evaluationStatusLabel(status: AssignmentTypeEvaluationStatus) {
   if (status === 'pass') return 'Pass';
   if (status === 'fail') return 'Fail';
   if (status === 'blocked') return 'Blocked';
   return 'Needs review';
+}
+
+function evaluationStatusSynopsis(status: AssignmentTypeEvaluationStatus) {
+  if (status === 'pass') return 'Pass';
+  if (status === 'fail') return 'Fail';
+  return 'Partial';
 }
 
 function evaluationStatusBadgeVariant(
@@ -1252,18 +1323,23 @@ function evaluationStatusBadgeVariant(
   return 'warning-soft';
 }
 
-function runSummaryStatus(
-  run: AssignmentTypeEvaluationHistory['runs'][number]
-): AssignmentTypeEvaluationStatus {
-  if (run.totalCases > 0 && run.passedCases === run.totalCases) return 'pass';
-  if (run.passedCases === 0 && run.failedCases > 0) return 'fail';
-  return 'needs_review';
+function evaluationStatusCellClass(status: AssignmentTypeEvaluationStatus) {
+  if (status === 'pass') {
+    return 'bg-green-100 text-green-900 hover:bg-green-200 dark:bg-green-950 dark:text-green-100 dark:hover:bg-green-900';
+  }
+  if (status === 'fail') {
+    return 'bg-destructive text-destructive-foreground hover:bg-destructive/90';
+  }
+  return 'bg-orange-100 text-orange-700 hover:bg-orange-200 hover:text-orange-800 dark:bg-orange-950 dark:text-orange-100 dark:hover:bg-orange-900';
 }
 
-function runSummaryTextClass(status: AssignmentTypeEvaluationStatus) {
-  if (status === 'pass') return 'text-green-700 dark:text-green-400';
-  if (status === 'fail') return 'text-destructive';
-  return 'text-amber-700 dark:text-amber-400';
+function columnSummaryStatus(
+  passed: number,
+  total: number
+): AssignmentTypeEvaluationStatus {
+  if (total > 0 && passed === total) return 'pass';
+  if (total > 0 && passed === 0) return 'fail';
+  return 'needs_review';
 }
 
 function buildEvaluationColumns(
@@ -1687,6 +1763,74 @@ function AddEvaluationSheet({
 
 type EvaluationColumn = ReturnType<typeof buildEvaluationColumns>[number];
 
+type EvaluationDetailSelection =
+  | { kind: 'evaluation'; columnKey: string }
+  | { kind: 'run'; runId: string }
+  | { kind: 'result'; runId: string; columnKey: string };
+
+function evaluationDetailPanelHeader({
+  title,
+  onClose,
+  subtitle,
+}: {
+  title: ReactNode;
+  onClose: () => void;
+  subtitle?: ReactNode;
+}) {
+  return (
+    <div className="flex items-start justify-between gap-3 border-b pb-4">
+      <div className="min-w-0 space-y-1">
+        <h2 className="text-lg font-semibold leading-tight">{title}</h2>
+        {subtitle ? (
+          <div className="text-sm text-muted-foreground">{subtitle}</div>
+        ) : null}
+      </div>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        className="shrink-0"
+        onClick={onClose}
+        aria-label="Close details"
+      >
+        <X className="size-4" />
+      </Button>
+    </div>
+  );
+}
+
+function toggleEvaluationSelection(
+  current: EvaluationDetailSelection | null,
+  next: EvaluationDetailSelection
+): EvaluationDetailSelection | null {
+  if (
+    current?.kind === next.kind &&
+    current.kind === 'evaluation' &&
+    next.kind === 'evaluation' &&
+    current.columnKey === next.columnKey
+  ) {
+    return null;
+  }
+  if (
+    current?.kind === next.kind &&
+    current.kind === 'run' &&
+    next.kind === 'run' &&
+    current.runId === next.runId
+  ) {
+    return null;
+  }
+  if (
+    current?.kind === next.kind &&
+    current.kind === 'result' &&
+    next.kind === 'result' &&
+    current.runId === next.runId &&
+    current.columnKey === next.columnKey
+  ) {
+    return null;
+  }
+  return next;
+}
+
 type EvaluationCaseDraft = {
   id: string;
   title: string;
@@ -1696,18 +1840,16 @@ type EvaluationCaseDraft = {
 
 type UpdateEvaluationFetcherData = { success?: boolean; message?: string };
 
-function EvaluationDetailSheet({
+function EvaluationDetailPanel({
   evaluation,
   assignmentTypeId,
-  open,
-  onOpenChange,
+  onClose,
   onRemoveCase,
   isRemoving,
 }: {
-  evaluation: EvaluationColumn | null;
+  evaluation: EvaluationColumn;
   assignmentTypeId: string;
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
+  onClose: () => void;
   onRemoveCase: (caseId: string) => void;
   isRemoving: boolean;
 }) {
@@ -1752,13 +1894,11 @@ function EvaluationDetailSheet({
     if (handledResponseRef.current === updateFetcher.data) return;
     handledResponseRef.current = updateFetcher.data;
     if (updateFetcher.data.success) {
-      onOpenChange(false);
+      setLocalError(null);
     } else {
       setLocalError(updateFetcher.data.message ?? 'Could not save changes.');
     }
-  }, [isSaving, onOpenChange, updateFetcher.data]);
-
-  if (!evaluation) return null;
+  }, [isSaving, updateFetcher.data]);
 
   const isLegacy = evaluation.key.startsWith('legacy:');
   const activeCases = evaluation.cases.filter(
@@ -1845,16 +1985,13 @@ function EvaluationDetailSheet({
   }
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent
-        aria-describedby={undefined}
-        className="flex max-h-screen flex-col overflow-y-auto sm:max-w-xl"
-      >
-        <SheetHeader>
-          <SheetTitle>{evaluation.label}</SheetTitle>
-        </SheetHeader>
+    <div className="space-y-4">
+      {evaluationDetailPanelHeader({
+        title: evaluation.label,
+        onClose,
+      })}
         {canEdit ? (
-          <div className="mt-4 space-y-4">
+          <div className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="evaluation-edit-title">Evaluation name</Label>
               <Input
@@ -1932,7 +2069,7 @@ function EvaluationDetailSheet({
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => onOpenChange(false)}
+                onClick={onClose}
                 disabled={isBusy}
               >
                 Cancel
@@ -1954,7 +2091,7 @@ function EvaluationDetailSheet({
             </div>
           </div>
         ) : (
-          <div className="mt-4 space-y-4">
+          <div className="space-y-4">
             {evaluation.archived ? (
               <Badge variant="warning-soft">Archived</Badge>
             ) : null}
@@ -1977,12 +2114,10 @@ function EvaluationDetailSheet({
                       {evaluationCase.documentText}
                     </pre>
                   </div>
-                  <div className="space-y-1.5">
-                    <p className="font-medium">Full expected output</p>
-                    <pre className="max-w-full overflow-x-hidden whitespace-pre-wrap break-words rounded-md bg-muted/40 p-3 text-xs">
-                      {JSON.stringify(evaluationCase.expectedOutput, null, 2)}
-                    </pre>
-                  </div>
+                  <JsonPreview
+                    label="Full expected output"
+                    value={evaluationCase.expectedOutput}
+                  />
                   <Button
                     type="button"
                     size="sm"
@@ -2014,36 +2149,30 @@ function EvaluationDetailSheet({
                       {evaluationCase.documentText}
                     </pre>
                   </div>
-                  <div className="space-y-1.5">
-                    <p className="font-medium">Full expected output</p>
-                    <pre className="max-w-full overflow-x-hidden whitespace-pre-wrap break-words rounded-md bg-muted/40 p-3 text-xs">
-                      {JSON.stringify(evaluationCase.expectedOutput, null, 2)}
-                    </pre>
-                  </div>
+                  <JsonPreview
+                    label="Full expected output"
+                    value={evaluationCase.expectedOutput}
+                  />
                 </div>
               </details>
             ))}
           </div>
         )}
-      </SheetContent>
-    </Sheet>
+    </div>
   );
 }
 
-function EvaluationResultDetailSheet({
-  open,
-  onOpenChange,
+function EvaluationResultDetailPanel({
   runVersion,
   evaluation,
   results,
+  onClose,
 }: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
   runVersion: number | null;
-  evaluation: EvaluationColumn | null;
+  evaluation: EvaluationColumn;
   results: AssignmentTypeEvaluationHistory['runs'][number]['results'];
+  onClose: () => void;
 }) {
-  if (!evaluation) return null;
   const resultsByCaseId = new Map(
     results.map((result) => [result.caseId, result])
   );
@@ -2056,13 +2185,10 @@ function EvaluationResultDetailSheet({
   ).length;
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent
-        aria-describedby={undefined}
-        className="flex max-h-screen flex-col overflow-y-auto sm:max-w-xl"
-      >
-        <SheetHeader>
-          <SheetTitle className="flex flex-wrap items-center gap-2">
+    <div className="space-y-4">
+      {evaluationDetailPanelHeader({
+        title: (
+          <span className="flex flex-wrap items-center gap-2">
             {evaluation.label}
             <Badge
               variant={
@@ -2075,22 +2201,23 @@ function EvaluationResultDetailSheet({
             >
               {passed}/{resultCount}
             </Badge>
-          </SheetTitle>
-        </SheetHeader>
-        <div className="mt-4 space-y-4">
-          {runVersion !== null ? (
-            <p className="text-sm text-muted-foreground">
-              Prompt version v{runVersion}
-            </p>
-          ) : null}
+          </span>
+        ),
+        onClose,
+        subtitle:
+          runVersion !== null ? (
+            <p>Prompt version v{runVersion}</p>
+          ) : undefined,
+      })}
+        <div className="space-y-4">
           {evaluation.cases.map((evaluationCase) => {
             const result = resultsByCaseId.get(evaluationCase.id);
             return (
-              <details
+              <div
                 key={evaluationCase.id}
                 className="rounded-md border p-3 text-sm"
               >
-                <summary className="cursor-pointer font-medium">
+                <p className="font-medium">
                   {evaluationCase.title}
                   {result ? (
                     <Badge
@@ -2100,37 +2227,32 @@ function EvaluationResultDetailSheet({
                       {evaluationStatusLabel(result.status)}
                     </Badge>
                   ) : null}
-                </summary>
+                </p>
                 {result ? (
                   <div className="mt-3 space-y-3">
                     <div className="space-y-1.5">
                       <p className="font-medium">Judge evidence</p>
                       <p className="text-pretty">{result.evidence}</p>
                     </div>
-                    <div className="space-y-1.5">
-                      <p className="font-medium">Expected output</p>
-                      <pre className="max-w-full overflow-x-hidden whitespace-pre-wrap break-words rounded-md bg-muted/40 p-3 text-xs">
-                        {JSON.stringify(result.expectedOutput, null, 2)}
-                      </pre>
-                    </div>
-                    <div className="space-y-1.5">
-                      <p className="font-medium">Actual output</p>
-                      <pre className="max-w-full overflow-x-hidden whitespace-pre-wrap break-words rounded-md bg-muted/40 p-3 text-xs">
-                        {JSON.stringify(result.gradingOutput, null, 2)}
-                      </pre>
-                    </div>
+                    <JsonPreview
+                      label="Expected output"
+                      value={result.expectedOutput}
+                    />
+                    <JsonPreview
+                      label="Actual output"
+                      value={result.gradingOutput}
+                    />
                   </div>
                 ) : (
                   <p className="mt-3 text-muted-foreground">
                     This case was not part of the run.
                   </p>
                 )}
-              </details>
+              </div>
             );
           })}
         </div>
-      </SheetContent>
-    </Sheet>
+    </div>
   );
 }
 
@@ -2145,59 +2267,49 @@ function historicalCompiledPrompt(snapshot: unknown) {
   return { system, userMessage };
 }
 
-function EvaluationRunDetailSheet({
+function EvaluationRunDetailPanel({
   run,
-  open,
-  onOpenChange,
+  onClose,
 }: {
-  run: AssignmentTypeEvaluationHistory['runs'][number] | null;
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
+  run: AssignmentTypeEvaluationHistory['runs'][number];
+  onClose: () => void;
 }) {
-  if (!run) return null;
   const compiledPrompt = historicalCompiledPrompt(run.promptSnapshot);
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent
-        aria-describedby={undefined}
-        className="flex w-full max-w-full flex-col overflow-y-auto sm:max-w-xl md:max-w-2xl"
-      >
-        <SheetHeader>
-          <SheetTitle>Prompt v{run.promptVersion}</SheetTitle>
-        </SheetHeader>
-        <div className="mt-4 space-y-4">
-          <p className="text-sm text-muted-foreground">
+    <div className="space-y-4">
+      {evaluationDetailPanelHeader({
+        title: `Prompt v${run.promptVersion}`,
+        onClose,
+        subtitle: (
+          <p>
             {run.createdAtLabel} · {run.passedCases}/{run.totalCases} passed
           </p>
-          {compiledPrompt ? (
-            <>
-              <div className="space-y-2">
-                <p className="text-sm font-medium">System message</p>
-                <pre className="max-w-full overflow-x-hidden whitespace-pre-wrap break-words rounded-md border bg-muted/40 p-3 text-sm">
-                  {compiledPrompt.system}
-                </pre>
-              </div>
-              <div className="space-y-2">
-                <p className="text-sm font-medium">User message template</p>
-                <pre className="max-w-full overflow-x-hidden whitespace-pre-wrap break-words rounded-md border bg-muted/40 p-3 text-sm">
-                  {compiledPrompt.userMessage}
-                </pre>
-              </div>
-            </>
-          ) : (
-            <p className="text-sm text-muted-foreground">
-              This run does not include a readable compiled prompt snapshot.
-            </p>
-          )}
-        </div>
-        <SheetFooter className="mt-4">
-          <SheetClose asChild>
-            <Button type="button">Close</Button>
-          </SheetClose>
-        </SheetFooter>
-      </SheetContent>
-    </Sheet>
+        ),
+      })}
+      <div className="space-y-4">
+        {compiledPrompt ? (
+          <>
+            <div className="space-y-2">
+              <p className="text-sm font-medium">System message</p>
+              <pre className="max-w-full overflow-x-hidden whitespace-pre-wrap break-words rounded-md border bg-muted/40 p-3 text-sm">
+                {compiledPrompt.system}
+              </pre>
+            </div>
+            <div className="space-y-2">
+              <p className="text-sm font-medium">User message template</p>
+              <pre className="max-w-full overflow-x-hidden whitespace-pre-wrap break-words rounded-md border bg-muted/40 p-3 text-sm">
+                {compiledPrompt.userMessage}
+              </pre>
+            </div>
+          </>
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            This run does not include a readable compiled prompt snapshot.
+          </p>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -2205,23 +2317,22 @@ export function EvaluationHistorySection({
   assignmentTypeId,
   evaluationHistory,
   isPromptPreviewStale,
+  layout = 'embedded',
+  assignmentTypeTitle,
 }: {
   assignmentTypeId: string;
   evaluationHistory: AssignmentTypeEvaluationHistory;
   isPromptPreviewStale: boolean;
+  layout?: 'embedded' | 'page';
+  assignmentTypeTitle?: string;
 }) {
   const addCaseFetcher = useFetcher<EvaluationFetcherData>();
   const archiveFetcher = useFetcher<{ success?: boolean; message?: string }>();
   const runFetcher = useFetcher<{ success?: boolean; message?: string }>();
 
   const [addOpen, setAddOpen] = useState(false);
-  const [detailColumnKey, setDetailColumnKey] = useState<string | null>(null);
-  const [detailRunId, setDetailRunId] = useState<string | null>(null);
-  const [detailResult, setDetailResult] = useState<{
-    runVersion: number;
-    columnKey: string;
-    results: AssignmentTypeEvaluationHistory['runs'][number]['results'];
-  } | null>(null);
+  const [detailSelection, setDetailSelection] =
+    useState<EvaluationDetailSelection | null>(null);
 
   const isRunning = runFetcher.state !== 'idle';
   const isRemoving = archiveFetcher.state !== 'idle';
@@ -2240,18 +2351,33 @@ export function EvaluationHistorySection({
       column.cases.some((evaluationCase) => !evaluationCase.archived)
   ).length;
   const totalColumnCount = columns.length;
-  const detailEvaluation = detailColumnKey
-    ? (columns.find((column) => column.key === detailColumnKey) ?? null)
-    : null;
-  const detailResultEvaluation = detailResult
-    ? (columns.find((column) => column.key === detailResult.columnKey) ?? null)
-    : null;
+  const isDetailOpen = detailSelection !== null;
+  const detailEvaluation =
+    detailSelection?.kind === 'evaluation'
+      ? (columns.find((column) => column.key === detailSelection.columnKey) ??
+        null)
+      : null;
+  const detailRun =
+    detailSelection?.kind === 'run' ||
+    detailSelection?.kind === 'result'
+      ? (evaluationHistory.runs.find((run) =>
+          detailSelection.kind === 'run'
+            ? run.id === detailSelection.runId
+            : run.id === detailSelection.runId
+        ) ?? null)
+      : null;
+  const detailResultEvaluation =
+    detailSelection?.kind === 'result'
+      ? (columns.find((column) => column.key === detailSelection.columnKey) ??
+        null)
+      : null;
   const evaluationSummary = `${activeEvaluationCount} ${
     activeEvaluationCount === 1 ? 'evaluation' : 'evaluations'
   } · ${pluralizeCases(activeCaseCount)}`;
-  const detailRun = detailRunId
-    ? (evaluationHistory.runs.find((run) => run.id === detailRunId) ?? null)
-    : null;
+
+  function closeDetailPanel() {
+    setDetailSelection(null);
+  }
 
   function handleRunAll() {
     const formData = new FormData();
@@ -2275,9 +2401,34 @@ export function EvaluationHistorySection({
   }
 
   const canRunAll = activeCaseCount > 0 && !isPromptPreviewStale && !isRunning;
+  const isPageLayout = layout === 'page';
+  const splitClassName = cn(
+    'grid min-h-0',
+    isPageLayout ? 'h-full flex-1' : 'overflow-hidden rounded-md border',
+    isDetailOpen
+      ? 'grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)]'
+      : 'grid-cols-[minmax(0,1fr)]'
+  );
+  const leftPaneClassName = cn(
+    'min-h-0 min-w-0',
+    isPageLayout ? 'flex flex-col overflow-hidden' : 'overflow-auto'
+  );
+  const tableScrollClassName = cn(
+    'min-h-0 min-w-0 overflow-auto',
+    isPageLayout ? 'flex-1 px-3 py-4 md:px-6' : ''
+  );
+  const detailPaneClassName = cn(
+    'min-h-0 min-w-0 overflow-y-auto border-l p-4 md:p-6',
+    isPageLayout ? 'h-full bg-muted/15' : ''
+  );
+  // Keep the left pane from stretching edge-to-edge when the detail panel
+  // is closed, so it doesn't feel like an overly wide, empty page.
+  const leftContentWidthClassName = cn(
+    !isDetailOpen && 'mx-auto w-full max-w-5xl'
+  );
 
-  return (
-    <div className="space-y-3 border-t pt-4">
+  const toolbarContent = (
+    <>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 className="text-sm font-semibold">Evaluation history</h3>
         <span className="text-sm text-muted-foreground">
@@ -2321,151 +2472,298 @@ export function EvaluationHistorySection({
       {runErrorMessage ? (
         <p className="text-sm text-destructive">{runErrorMessage}</p>
       ) : null}
+    </>
+  );
 
-      {columns.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
-          No evaluations yet. Add one to start tracking prompt-version runs.
-        </p>
-      ) : (
-        <div className="overflow-x-auto rounded-md border">
-          <table
-            className="w-full min-w-max border-collapse text-sm"
-            aria-label="Evaluation history"
-          >
-            <caption className="sr-only">
-              Rows are saved prompt-version runs. Columns are named evaluations
-              containing one or more input and expected-output cases.
-            </caption>
-            <thead>
-              <tr>
-                <th
-                  scope="col"
-                  className="sticky left-0 z-10 min-w-[6rem] border-b bg-muted/60 p-2 text-left align-bottom font-medium"
-                >
-                  Version
-                </th>
-                {columns.map((column) => (
-                  <th
-                    key={column.key}
-                    scope="col"
-                    className="min-w-[9rem] border-b border-l bg-muted/40 p-2 text-left font-medium"
-                  >
-                    <button
-                      type="button"
-                      onClick={() => setDetailColumnKey(column.key)}
-                      aria-label={`View evaluation ${column.label}`}
-                      className="flex max-w-[12rem] flex-col items-start text-left hover:underline"
-                    >
-                      <span>{column.label}</span>
-                      <span className="text-[10px] font-normal text-muted-foreground">
-                        {pluralizeCases(column.cases.length)}
-                      </span>
-                    </button>
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {evaluationHistory.runs.length === 0 ? (
+  const detailAside = isDetailOpen ? (
+    <aside aria-label="Evaluation details" className={detailPaneClassName}>
+      {detailSelection?.kind === 'evaluation' && detailEvaluation ? (
+        <EvaluationDetailPanel
+          evaluation={detailEvaluation}
+          assignmentTypeId={assignmentTypeId}
+          onClose={closeDetailPanel}
+          onRemoveCase={handleRemoveCase}
+          isRemoving={isRemoving}
+        />
+      ) : null}
+      {detailSelection?.kind === 'result' &&
+      detailRun &&
+      detailResultEvaluation ? (
+        <EvaluationResultDetailPanel
+          runVersion={detailRun.promptVersion}
+          evaluation={detailResultEvaluation}
+          results={detailRun.results}
+          onClose={closeDetailPanel}
+        />
+      ) : null}
+      {detailSelection?.kind === 'run' && detailRun ? (
+        <EvaluationRunDetailPanel run={detailRun} onClose={closeDetailPanel} />
+      ) : null}
+    </aside>
+  ) : null;
+
+  const evaluationHistoryTable =
+    columns.length > 0 ? (
+      <table
+        className="w-full min-w-max border-collapse text-sm"
+        aria-label="Evaluation history"
+      >
+              <caption className="sr-only">
+                Rows are saved prompt-version runs. Columns are named evaluations
+                containing one or more input and expected-output cases.
+              </caption>
+              <thead>
                 <tr>
-                  <td
-                    className="sticky left-0 bg-background p-2 text-sm text-muted-foreground"
-                    colSpan={1 + totalColumnCount}
+                  <th
+                    scope="col"
+                    className="sticky left-0 z-10 min-w-[6rem] border-b bg-muted/60 p-2 text-left align-bottom font-medium"
                   >
-                    No runs yet. Run all cases to add the first row.
-                  </td>
-                </tr>
-              ) : (
-                evaluationHistory.runs.map((run) => {
-                  const summaryStatus = runSummaryStatus(run);
-                  const resultsByCaseId = new Map(
-                    run.results.map((result) => [result.caseId, result])
-                  );
-                  return (
-                    <tr key={run.id}>
+                    Version
+                  </th>
+                  {columns.map((column) => {
+                    const isColumnSelected =
+                      detailSelection?.kind === 'evaluation' &&
+                      detailSelection.columnKey === column.key;
+                    return (
                       <th
-                        scope="row"
-                        className="sticky left-0 z-10 border-t bg-background p-2 text-left align-top"
+                        key={column.key}
+                        scope="col"
+                        className="min-w-[9rem] border-b border-l bg-muted/40 p-0 text-left font-medium"
                       >
                         <button
                           type="button"
-                          aria-label={`View prompt v${run.promptVersion}`}
-                          onClick={() => setDetailRunId(run.id)}
-                          className="text-left hover:underline"
-                        >
-                          <span className="block font-medium tabular-nums">
-                            v{run.promptVersion}
-                          </span>
-                          <time className="block text-[10px] font-normal text-muted-foreground">
-                            {run.createdAtLabel}
-                          </time>
-                        </button>
-                        <div
-                          className={`text-xs font-medium tabular-nums ${runSummaryTextClass(summaryStatus)}`}
-                          data-status={summaryStatus}
-                        >
-                          {run.passedCases}/{run.totalCases}
-                        </div>
-                      </th>
-                      {columns.map((column) => {
-                        const columnResults = column.cases.flatMap(
-                          (evaluationCase) => {
-                            const result = resultsByCaseId.get(
-                              evaluationCase.id
-                            );
-                            return result ? [result] : [];
+                          onClick={() =>
+                            setDetailSelection((current) =>
+                              toggleEvaluationSelection(current, {
+                                kind: 'evaluation',
+                                columnKey: column.key,
+                              })
+                            )
                           }
-                        );
-                        const passed = columnResults.filter(
-                          (result) => result.status === 'pass'
-                        ).length;
-                        const status: AssignmentTypeEvaluationStatus =
-                          columnResults.length > 0 &&
-                          passed === columnResults.length
-                            ? 'pass'
-                            : columnResults.length > 0 && passed === 0
-                              ? 'fail'
-                              : 'needs_review';
-                        return (
-                          <td
-                            key={column.key}
-                            className="border-t border-l p-2 align-top"
+                          aria-label={`View evaluation ${column.label}`}
+                          aria-pressed={isColumnSelected}
+                          className={cn(
+                            'flex max-w-[12rem] flex-col items-start p-2 text-left hover:bg-muted/50',
+                            isColumnSelected &&
+                              'bg-muted/70 ring-2 ring-inset ring-primary/40'
+                          )}
+                        >
+                          <span>{column.label}</span>
+                          <span className="text-[10px] font-normal text-muted-foreground">
+                            {pluralizeCases(column.cases.length)}
+                          </span>
+                        </button>
+                      </th>
+                    );
+                  })}
+                </tr>
+              </thead>
+              <tbody>
+                {evaluationHistory.runs.length === 0 ? (
+                  <tr>
+                    <td
+                      className="sticky left-0 bg-background p-2 text-sm text-muted-foreground"
+                      colSpan={1 + totalColumnCount}
+                    >
+                      No runs yet. Run all cases to add the first row.
+                    </td>
+                  </tr>
+                ) : (
+                  evaluationHistory.runs.map((run) => {
+                    const isRunSelected =
+                      detailSelection?.kind === 'run' &&
+                      detailSelection.runId === run.id;
+                    const resultsByCaseId = new Map(
+                      run.results.map((result) => [result.caseId, result])
+                    );
+                    return (
+                      <tr key={run.id}>
+                        <th
+                          scope="row"
+                          className="sticky left-0 z-10 h-px border-t bg-background p-0 text-left align-stretch"
+                        >
+                          <button
+                            type="button"
+                            aria-label={`View prompt v${run.promptVersion} from ${run.createdAtLabel}`}
+                            aria-pressed={isRunSelected}
+                            onClick={() =>
+                              setDetailSelection((current) =>
+                                toggleEvaluationSelection(current, {
+                                  kind: 'run',
+                                  runId: run.id,
+                                })
+                              )
+                            }
+                            className={cn(
+                              'group flex h-full w-full items-center justify-between gap-2 px-2 py-3 text-left hover:bg-muted/60',
+                              isRunSelected &&
+                                'bg-muted/70 ring-2 ring-inset ring-primary/40'
+                            )}
                           >
-                            {columnResults.length > 0 ? (
-                              <button
-                                type="button"
-                                className="inline-flex min-h-7 items-center justify-center"
-                                onClick={() =>
-                                  setDetailResult({
-                                    runVersion: run.promptVersion,
-                                    columnKey: column.key,
-                                    results: run.results,
-                                  })
-                                }
-                                aria-label={`${column.label}: ${passed}/${columnResults.length} passed`}
+                            <span className="inline-flex min-w-0 flex-wrap items-baseline gap-x-1 text-sm">
+                              <span className="font-medium tabular-nums whitespace-nowrap">
+                                v{run.promptVersion}
+                              </span>
+                              <span
+                                className="text-muted-foreground"
+                                aria-hidden="true"
                               >
-                                <Badge
-                                  variant={evaluationStatusBadgeVariant(status)}
+                                ·
+                              </span>
+                              <time className="whitespace-nowrap text-muted-foreground">
+                                {run.createdAtLabel}
+                              </time>
+                            </span>
+                            <ChevronRight
+                              className="size-4 shrink-0 text-muted-foreground group-hover:text-foreground"
+                              aria-hidden="true"
+                            />
+                          </button>
+                        </th>
+                        {columns.map((column) => {
+                          const columnResults = column.cases.flatMap(
+                            (evaluationCase) => {
+                              const result = resultsByCaseId.get(
+                                evaluationCase.id
+                              );
+                              return result ? [result] : [];
+                            }
+                          );
+                          const passed = columnResults.filter(
+                            (result) => result.status === 'pass'
+                          ).length;
+                          const status = columnSummaryStatus(
+                            passed,
+                            columnResults.length
+                          );
+                          const synopsis = evaluationStatusSynopsis(status);
+                          const isResultSelected =
+                            detailSelection?.kind === 'result' &&
+                            detailSelection.runId === run.id &&
+                            detailSelection.columnKey === column.key;
+                          return (
+                            <td
+                              key={column.key}
+                              className={cn(
+                                'h-px border-t border-l p-0 align-stretch',
+                                columnResults.length > 0
+                                  ? evaluationStatusCellClass(status)
+                                  : ''
+                              )}
+                            >
+                              {columnResults.length > 0 ? (
+                                <button
+                                  type="button"
+                                  className={cn(
+                                    'flex h-full w-full items-center justify-center px-2 py-3 text-inherit text-xs font-semibold tabular-nums',
+                                    isResultSelected &&
+                                      'ring-2 ring-inset ring-primary/50'
+                                  )}
+                                  onClick={() =>
+                                    setDetailSelection((current) =>
+                                      toggleEvaluationSelection(current, {
+                                        kind: 'result',
+                                        runId: run.id,
+                                        columnKey: column.key,
+                                      })
+                                    )
+                                  }
+                                  aria-label={`${column.label}: ${passed}/${columnResults.length} ${synopsis}`}
+                                  aria-pressed={isResultSelected}
                                   data-status={status}
                                 >
-                                  {passed}/{columnResults.length}
-                                </Badge>
-                              </button>
-                            ) : (
-                              <span className="px-1 text-xs text-muted-foreground">
-                                —
-                              </span>
-                            )}
-                          </td>
-                        );
-                      })}
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
+                                  {passed}/{columnResults.length} {synopsis}
+                                </button>
+                              ) : (
+                                <span className="flex h-full w-full items-center justify-center px-2 py-3 text-xs text-muted-foreground">
+                                  —
+                                </span>
+                              )}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+    ) : null;
+
+  return (
+    <div
+      className={cn(isPageLayout && 'flex h-full min-h-0 w-full flex-col')}
+    >
+      {isPageLayout ? (
+        <div className={splitClassName}>
+          <div className={leftPaneClassName}>
+            <header className="shrink-0 border-b px-3 py-5 md:px-6 md:py-6">
+              <div className={cn('space-y-5', leftContentWidthClassName)}>
+                <Button variant="outline" size="sm" asChild>
+                  <Link
+                    to={`/app/admin/assignment-types/${assignmentTypeId}`}
+                    className="w-fit"
+                  >
+                    <ArrowLeft className="mr-1.5 size-4 shrink-0" />
+                    Back to assignment type
+                  </Link>
+                </Button>
+
+                <div className="space-y-1">
+                  <h1 className="text-3xl font-semibold tracking-tight">
+                    Evaluations
+                  </h1>
+                  {assignmentTypeTitle ? (
+                    <p className="text-sm text-muted-foreground">
+                      {assignmentTypeTitle}
+                    </p>
+                  ) : null}
+                </div>
+              </div>
+            </header>
+
+            <div className="shrink-0 px-3 py-4 md:px-6">
+              <div className={cn('space-y-3', leftContentWidthClassName)}>
+                {toolbarContent}
+                {columns.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    No evaluations yet. Add one to start tracking
+                    prompt-version runs.
+                  </p>
+                ) : null}
+              </div>
+            </div>
+
+            <div className={tableScrollClassName}>
+              <div className={leftContentWidthClassName}>
+                <div className="overflow-x-auto rounded-md border">
+                  {evaluationHistoryTable}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {detailAside}
         </div>
+      ) : (
+        <>
+          <div className="space-y-3 border-t pt-4">
+            {toolbarContent}
+            {columns.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                No evaluations yet. Add one to start tracking prompt-version
+                runs.
+              </p>
+            ) : null}
+          </div>
+
+          {columns.length > 0 ? (
+            <div className={splitClassName}>
+              <div className={leftPaneClassName}>{evaluationHistoryTable}</div>
+              {detailAside}
+            </div>
+          ) : null}
+        </>
       )}
 
       <AddEvaluationSheet
@@ -2473,35 +2771,6 @@ export function EvaluationHistorySection({
         onOpenChange={setAddOpen}
         assignmentTypeId={assignmentTypeId}
         fetcher={addCaseFetcher}
-      />
-
-      <EvaluationDetailSheet
-        evaluation={detailEvaluation}
-        assignmentTypeId={assignmentTypeId}
-        open={Boolean(detailEvaluation)}
-        onOpenChange={(open) => {
-          if (!open) setDetailColumnKey(null);
-        }}
-        onRemoveCase={handleRemoveCase}
-        isRemoving={isRemoving}
-      />
-
-      <EvaluationResultDetailSheet
-        open={Boolean(detailResult)}
-        onOpenChange={(open) => {
-          if (!open) setDetailResult(null);
-        }}
-        runVersion={detailResult?.runVersion ?? null}
-        evaluation={detailResultEvaluation}
-        results={detailResult?.results ?? []}
-      />
-
-      <EvaluationRunDetailSheet
-        run={detailRun}
-        open={Boolean(detailRun)}
-        onOpenChange={(open) => {
-          if (!open) setDetailRunId(null);
-        }}
       />
     </div>
   );
@@ -2570,6 +2839,17 @@ export function PromptConfigEditor({
         >
           Edit instructions
         </Button>
+        {assignmentTypeId ? (
+          <Button type="button" variant="outline" size="sm" asChild>
+            <Link
+              to={`/app/admin/assignment-types/${assignmentTypeId}/evaluations`}
+              className="w-fit"
+            >
+              <FlaskConical className="mr-1.5 size-4 shrink-0" />
+              Evaluations
+            </Link>
+          </Button>
+        ) : null}
         {SHOW_PROMPT_INSPECTION_CONTROLS && gradingAssistantPromptPreview ? (
           <>
             <Button

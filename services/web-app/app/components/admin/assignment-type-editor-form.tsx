@@ -7,12 +7,7 @@ import {
   type ReactNode,
 } from 'react';
 import { Form, Link, useFetcher } from 'react-router';
-import {
-  ArchiveIcon,
-  ArrowLeft,
-  FlaskConical,
-  RotateCcwIcon,
-} from 'lucide-react';
+import { ArchiveIcon, ArrowLeft, RotateCcwIcon } from 'lucide-react';
 import { Button } from '~/components/ui/button';
 import { Input } from '~/components/ui/input';
 import { Textarea } from '~/components/ui/textarea';
@@ -416,17 +411,6 @@ export function AssignmentTypeEditorForm({
             scoringScale={scoringScaleState}
             rubric={rubricState}
           />
-          {assignmentTypeId ? (
-            <Button type="button" variant="outline" size="sm" asChild>
-              <Link
-                to={`/app/admin/assignment-types/${assignmentTypeId}/evaluations`}
-                className="w-fit"
-              >
-                <FlaskConical className="mr-1.5 size-4 shrink-0" />
-                Evaluations
-              </Link>
-            </Button>
-          ) : null}
         </Section>
 
         {!isEdit ? (
