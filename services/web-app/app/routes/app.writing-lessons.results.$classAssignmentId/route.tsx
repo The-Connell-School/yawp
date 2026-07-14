@@ -20,8 +20,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import {
   NO_CHANGE_LABEL,
+  isActAttemptRecord,
   splitAroundUnderline,
-  type ActAttemptRecord,
 } from '~/utils/writing-lessons/act-practice.shared';
 import { getWritingPracticeResultsForTeacher } from '~/utils/writing-lessons/practice-assignments.server';
 import {
@@ -168,11 +168,10 @@ export default function WritingPracticeResultsRoute() {
                   <AccordionItem
                     key={row.membershipId}
                     value={row.membershipId}
-                    disabled={row.attempts.length === 0}
                   >
                     <AccordionTrigger
                       data-testid="student-progress-row"
-                      className="gap-3 px-4 py-3 hover:no-underline data-[disabled]:opacity-70 [&[data-disabled]>svg]:hidden"
+                      className="gap-3 px-4 py-3 hover:no-underline"
                     >
                       <div className="flex min-w-0 flex-1 items-center gap-3 text-left">
                         {row.completed ? (
@@ -215,13 +214,20 @@ export default function WritingPracticeResultsRoute() {
                         className="space-y-3 pt-1"
                         data-testid="student-attempts"
                       >
-                        {row.attempts.map((attempt, index) => (
-                          <AttemptCard
-                            key={attempt.id}
-                            position={index + 1}
-                            attempt={attempt}
-                          />
-                        ))}
+                        {row.attempts.length === 0 ? (
+                          <p className="py-2 text-sm text-muted-foreground">
+                            {(row.name ?? 'This student').split(' ')[0]} hasn
+                            &rsquo;t started this practice yet.
+                          </p>
+                        ) : (
+                          row.attempts.map((attempt, index) => (
+                            <AttemptCard
+                              key={attempt.id}
+                              position={index + 1}
+                              attempt={attempt}
+                            />
+                          ))
+                        )}
                       </div>
                     </AccordionContent>
                   </AccordionItem>
@@ -239,7 +245,7 @@ type AttemptView = {
   id: string;
   lessonTitle: string;
   status: string;
-  record: ActAttemptRecord;
+  record: unknown;
   createdAt: string;
 };
 
@@ -251,6 +257,11 @@ function AttemptCard({
   attempt: AttemptView;
 }) {
   const { record } = attempt;
+  // Older attempts stored free-text feedback rather than an ACT record; render a
+  // graceful summary for those instead of crashing on the missing ACT fields.
+  if (!isActAttemptRecord(record)) {
+    return <LegacyAttemptCard position={position} attempt={attempt} />;
+  }
   const parts = splitAroundUnderline(record.sentence, record.underline);
   return (
     <div className="rounded-lg border border-border/70 bg-background p-3.5">
@@ -320,6 +331,43 @@ function AttemptCard({
           {record.explanation}
         </p>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Fallback for attempts persisted before the ACT multiple-choice format (their
+ * `feedbackJson` holds a free-text feedback blob). Shows whatever summary text
+ * is available plus the status badge so the row is still informative.
+ */
+function LegacyAttemptCard({
+  position,
+  attempt,
+}: {
+  position: number;
+  attempt: AttemptView;
+}) {
+  const record = (attempt.record ?? {}) as { summary?: unknown };
+  const summary =
+    typeof record.summary === 'string' && record.summary.trim().length > 0
+      ? record.summary
+      : 'This attempt was recorded before multiple-choice practice, so the answer detail isn’t available.';
+  const status = attempt.status as PracticeFeedbackStatus;
+  return (
+    <div className="rounded-lg border border-border/70 bg-background p-3.5">
+      <div className="mb-2 flex items-center justify-between gap-3">
+        <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          Problem {position} · {attempt.lessonTitle}
+        </span>
+        {STATUS_STYLES[status] ? (
+          <span
+            className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${STATUS_STYLES[status]}`}
+          >
+            {practiceFeedbackStatusLabel(status)}
+          </span>
+        ) : null}
+      </div>
+      <p className="text-sm leading-relaxed text-muted-foreground">{summary}</p>
     </div>
   );
 }

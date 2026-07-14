@@ -109,6 +109,24 @@ export type ActAttemptRecord = {
   explanation: string;
 };
 
+/**
+ * Narrows an attempt's `feedbackJson` (typed `unknown` at the DB boundary, and
+ * historically a free-text feedback blob) to a renderable ACT record. Guards
+ * the teacher results view so a legacy or malformed record shows a graceful
+ * fallback instead of crashing the expanded panel.
+ */
+export function isActAttemptRecord(value: unknown): value is ActAttemptRecord {
+  if (!value || typeof value !== 'object') return false;
+  const record = value as Partial<ActAttemptRecord>;
+  return (
+    record.kind === 'act' &&
+    typeof record.sentence === 'string' &&
+    Array.isArray(record.choices) &&
+    typeof record.selectedChoiceIndex === 'number' &&
+    typeof record.correctChoiceIndex === 'number'
+  );
+}
+
 export type UnderlineSplit = {
   before: string;
   underlined: string;

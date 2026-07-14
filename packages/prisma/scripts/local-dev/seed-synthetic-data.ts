@@ -462,28 +462,64 @@ export async function seedSyntheticLocalDevData(
   const writingPracticeClassAssignment =
     writingPracticeAssignment.classAssignments[0];
   if (writingPracticeClassAssignment) {
-    await prisma.writingPracticeAttempt.create({
-      data: {
-        classAssignmentId: writingPracticeClassAssignment.id,
-        membershipId: personaRecords['student-graded'].membershipId,
-        lessonSlug: 'fixing-comma-splices',
+    // Two ACT multiple-choice attempts (one correct, one not) so the teacher
+    // results view shows real per-student progress out of the box. The full ACT
+    // record lives in `feedbackJson` — see `ActAttemptRecord`.
+    const practiceAttempts = [
+      {
         promptId: 'fixing-comma-splices-1',
-        exercise:
-          'The new phone costs over a thousand dollars, most students can’t afford it.',
-        instruction: 'Fix this comma splice using any method you prefer.',
-        response:
-          'The new phone costs over a thousand dollars; most students can’t afford it.',
         status: 'strong',
-        feedbackJson: {
-          status: 'strong',
-          summary: 'You fixed the splice cleanly with a semicolon.',
-          strengths: ['The semicolon joins two independent clauses correctly.'],
-          focus: ['Try a period or a conjunction next time for variety.'],
-          encouragement: 'Nice control — keep it up.',
-          degraded: false,
+        record: {
+          kind: 'act',
+          sentence:
+            'The new phone costs over a thousand dollars, most students can’t afford it.',
+          underline: 'dollars, most',
+          choices: [
+            'dollars, most',
+            'dollars; most',
+            'dollars. Most',
+            'dollars, so most',
+          ],
+          selectedChoiceIndex: 1,
+          correctChoiceIndex: 1,
+          correct: true,
+          explanation:
+            'Two independent clauses joined by only a comma form a comma splice; a semicolon correctly links them.',
         },
       },
-    });
+      {
+        promptId: 'fixing-comma-splices-2',
+        status: 'needs_revision',
+        record: {
+          kind: 'act',
+          sentence: 'She studied all night, she still felt unprepared.',
+          underline: 'night, she',
+          choices: ['night, she', 'night; she', 'night. She', 'night she'],
+          selectedChoiceIndex: 0,
+          correctChoiceIndex: 1,
+          correct: false,
+          explanation:
+            'A comma alone cannot join two independent clauses. A semicolon fixes the splice while keeping the clauses linked.',
+        },
+      },
+    ] as const;
+
+    for (const attempt of practiceAttempts) {
+      await prisma.writingPracticeAttempt.create({
+        data: {
+          classAssignmentId: writingPracticeClassAssignment.id,
+          membershipId: personaRecords['student-graded'].membershipId,
+          lessonSlug: 'fixing-comma-splices',
+          promptId: attempt.promptId,
+          exercise: attempt.record.sentence,
+          instruction: attempt.record.underline,
+          response:
+            attempt.record.choices[attempt.record.selectedChoiceIndex] ?? '',
+          status: attempt.status,
+          feedbackJson: attempt.record,
+        },
+      });
+    }
   }
 
   return {

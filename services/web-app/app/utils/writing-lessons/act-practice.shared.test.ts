@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 import {
   gradeActAnswer,
+  isActAttemptRecord,
   isRenderableActQuestion,
   splitAroundUnderline,
   generatedActQuestionSchema,
@@ -81,6 +82,46 @@ describe('isRenderableActQuestion', () => {
         choices: ['a', 'b', '   ', 'd'] as [string, string, string, string],
       })
     ).toBe(false);
+  });
+});
+
+describe('isActAttemptRecord', () => {
+  const record = {
+    kind: 'act',
+    sentence: 'She studied all night, she still felt unprepared.',
+    underline: 'night, she',
+    choices: ['night, she', 'night; she', 'night. She', 'night she'],
+    selectedChoiceIndex: 0,
+    correctChoiceIndex: 1,
+    correct: false,
+    explanation: 'A comma alone cannot join two independent clauses.',
+  };
+
+  test('accepts a well-formed ACT attempt record', () => {
+    expect(isActAttemptRecord(record)).toBe(true);
+  });
+
+  test('rejects a legacy free-text feedback blob', () => {
+    // Attempts persisted before the ACT format stored this shape.
+    expect(
+      isActAttemptRecord({
+        status: 'strong',
+        summary: 'You fixed the splice cleanly with a semicolon.',
+        strengths: [],
+        focus: [],
+      })
+    ).toBe(false);
+  });
+
+  test('rejects null, undefined, and non-objects', () => {
+    expect(isActAttemptRecord(null)).toBe(false);
+    expect(isActAttemptRecord(undefined)).toBe(false);
+    expect(isActAttemptRecord('act')).toBe(false);
+  });
+
+  test('rejects an ACT record missing required fields', () => {
+    const { choices: _choices, ...withoutChoices } = record;
+    expect(isActAttemptRecord(withoutChoices)).toBe(false);
   });
 });
 
