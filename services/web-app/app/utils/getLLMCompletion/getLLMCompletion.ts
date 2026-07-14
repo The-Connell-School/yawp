@@ -158,17 +158,17 @@ async function runAnthropicCompletion(params: Params, startTime: number) {
 
   try {
     for (let round = 0; round <= maxRounds; round++) {
-      const message = await anthropic.messages.create(
-        {
-          max_tokens: params.maxTokens ?? 1024,
-          model: params.model,
-          system,
-          messages: messages as any,
-          temperature: params.temperature ?? 0.6,
-          ...(params.tools?.length ? { tools: params.tools as any } : {}),
-        },
-        { signal: params.signal }
-      );
+      const request = {
+        max_tokens: params.maxTokens ?? 1024,
+        model: params.model,
+        system,
+        messages: messages as any,
+        temperature: params.temperature ?? 0.6,
+        ...(params.tools?.length ? { tools: params.tools as any } : {}),
+      };
+      const message = params.signal
+        ? await anthropic.messages.create(request, { signal: params.signal })
+        : await anthropic.messages.create(request);
 
       totalInputTokens += message.usage?.input_tokens ?? 0;
       totalOutputTokens += message.usage?.output_tokens ?? 0;
@@ -308,16 +308,18 @@ async function runOpenAiCompletion({
 
   try {
     for (let round = 0; round <= maxRounds; round++) {
-      const message = await openai.chat.completions.create(
-        {
-          model,
-          max_tokens: params.maxTokens,
-          temperature: params.temperature ?? 0.6,
-          messages: formattedMessages as any,
-          ...(tools?.length ? { tools } : {}),
-        },
-        { signal: params.signal }
-      );
+      const request = {
+        model,
+        max_tokens: params.maxTokens,
+        temperature: params.temperature ?? 0.6,
+        messages: formattedMessages as any,
+        ...(tools?.length ? { tools } : {}),
+      };
+      const message = params.signal
+        ? await openai.chat.completions.create(request, {
+            signal: params.signal,
+          })
+        : await openai.chat.completions.create(request);
 
       totalInputTokens += message.usage?.prompt_tokens ?? 0;
       totalOutputTokens += message.usage?.completion_tokens ?? 0;
