@@ -1,7 +1,14 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
 import { Link, useFetcher } from 'react-router';
 import {
   ArrowLeft,
+  Check,
   ChevronDown,
   ChevronRight,
   ChevronUp,
@@ -11,11 +18,22 @@ import {
   FlaskConical,
   GripVertical,
   Loader2,
+  Pencil,
   Plus,
   Sparkles,
   Trash2,
   X,
 } from 'lucide-react';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '~/components/ui/alert-dialog';
 import {
   DndContext,
   closestCenter,
@@ -1246,13 +1264,7 @@ const JSON_PREVIEW_COLLAPSED_HEIGHT_PX = 112;
 // Truncates long JSON (or other pre-formatted text) to a few rows, with a
 // toggle to expand up to a taller height before it starts scrolling. Never
 // scrolls while collapsed.
-function JsonPreview({
-  value,
-  label,
-}: {
-  value: unknown;
-  label?: string;
-}) {
+function JsonPreview({ value, label }: { value: unknown; label?: string }) {
   const text =
     typeof value === 'string' ? value : JSON.stringify(value, null, 2);
   const [expanded, setExpanded] = useState(false);
@@ -1846,12 +1858,14 @@ function EvaluationDetailPanel({
   onClose,
   onRemoveCase,
   isRemoving,
+  allowChanges = true,
 }: {
   evaluation: EvaluationColumn;
   assignmentTypeId: string;
   onClose: () => void;
   onRemoveCase: (caseId: string) => void;
   isRemoving: boolean;
+  allowChanges?: boolean;
 }) {
   const updateFetcher = useFetcher<UpdateEvaluationFetcherData>();
   const [editTitle, setEditTitle] = useState('');
@@ -1905,6 +1919,7 @@ function EvaluationDetailPanel({
     (evaluationCase) => !evaluationCase.archived
   );
   const canEdit =
+    allowChanges &&
     Boolean(evaluation.evaluationId) &&
     !isLegacy &&
     !evaluation.archived &&
@@ -1990,134 +2005,133 @@ function EvaluationDetailPanel({
         title: evaluation.label,
         onClose,
       })}
-        {canEdit ? (
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="evaluation-edit-title">Evaluation name</Label>
-              <Input
-                id="evaluation-edit-title"
-                value={editTitle}
-                onChange={(event) => setEditTitle(event.target.value)}
-                disabled={isBusy}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="evaluation-edit-description">
-                Evaluation description
-              </Label>
-              <Textarea
-                id="evaluation-edit-description"
-                rows={4}
-                value={editDescription}
-                onChange={(event) => setEditDescription(event.target.value)}
-                disabled={isBusy}
-              />
-            </div>
-            <div className="space-y-2">
-              <p className="text-sm font-medium">
-                {pluralizeCases(editCases.length)}
-              </p>
-              {editCases.map((evaluationCase, index) => (
-                <details
-                  key={evaluationCase.id}
-                  className="rounded-md border p-3 text-sm"
-                >
-                  <summary className="cursor-pointer font-medium">
-                    {evaluationCase.title || `Case ${index + 1}`}
-                  </summary>
-                  <CaseFieldsBody
-                    idPrefix={`evaluation-case-${evaluationCase.id}`}
-                    labelTitle={
-                      activeCases[index]?.title ?? evaluationCase.title
-                    }
-                    title={evaluationCase.title}
-                    documentText={evaluationCase.documentText}
-                    expectedOutputText={evaluationCase.expectedOutputText}
-                    disabled={isBusy}
-                    onTitleChange={(value) =>
-                      updateEditCase(evaluationCase.id, { title: value })
-                    }
-                    onDocumentChange={(value) =>
-                      updateEditCase(evaluationCase.id, {
-                        documentText: value,
-                      })
-                    }
-                    onOutputChange={(value) =>
-                      updateEditCase(evaluationCase.id, {
-                        expectedOutputText: value,
-                      })
-                    }
-                  />
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="destructive-outline"
-                    onClick={() => removeEditCase(evaluationCase.id)}
-                    disabled={isBusy}
-                    className="mt-3"
-                  >
-                    <Trash2 className="mr-2 size-4 shrink-0" />
-                    {isRemoving ? 'Removing...' : 'Remove case'}
-                  </Button>
-                </details>
-              ))}
-            </div>
-            {localError ? (
-              <p className="text-sm text-destructive">{localError}</p>
-            ) : null}
-            <div className="flex items-center justify-end gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={onClose}
-                disabled={isBusy}
-              >
-                Cancel
-              </Button>
-              <Button
-                type="button"
-                onClick={handleSaveChanges}
-                disabled={isBusy || editCases.length === 0}
-              >
-                {isSaving ? (
-                  <>
-                    <Loader2 className="mr-2 size-4 shrink-0 animate-spin" />
-                    Saving...
-                  </>
-                ) : (
-                  'Save changes'
-                )}
-              </Button>
-            </div>
+      {canEdit ? (
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="evaluation-edit-title">Evaluation name</Label>
+            <Input
+              id="evaluation-edit-title"
+              value={editTitle}
+              onChange={(event) => setEditTitle(event.target.value)}
+              disabled={isBusy}
+            />
           </div>
-        ) : (
-          <div className="space-y-4">
-            {evaluation.archived ? (
-              <Badge variant="warning-soft">Archived</Badge>
-            ) : null}
-            <p className="text-sm text-pretty">{evaluation.description}</p>
+          <div className="space-y-2">
+            <Label htmlFor="evaluation-edit-description">
+              Evaluation description
+            </Label>
+            <Textarea
+              id="evaluation-edit-description"
+              rows={4}
+              value={editDescription}
+              onChange={(event) => setEditDescription(event.target.value)}
+              disabled={isBusy}
+            />
+          </div>
+          <div className="space-y-2">
             <p className="text-sm font-medium">
-              {pluralizeCases(evaluation.cases.length)}
+              {pluralizeCases(editCases.length)}
             </p>
-            {activeCases.map((evaluationCase) => (
+            {editCases.map((evaluationCase, index) => (
               <details
                 key={evaluationCase.id}
                 className="rounded-md border p-3 text-sm"
               >
                 <summary className="cursor-pointer font-medium">
-                  {evaluationCase.title}
+                  {evaluationCase.title || `Case ${index + 1}`}
                 </summary>
-                <div className="mt-3 space-y-3">
-                  <div className="space-y-1.5">
-                    <p className="font-medium">Input document</p>
-                    <pre className="max-w-full overflow-x-hidden whitespace-pre-wrap break-words rounded-md bg-muted/40 p-3 text-sm">
-                      {evaluationCase.documentText}
-                    </pre>
-                  </div>
-                  <JsonPreview
-                    label="Full expected output"
-                    value={evaluationCase.expectedOutput}
-                  />
+                <CaseFieldsBody
+                  idPrefix={`evaluation-case-${evaluationCase.id}`}
+                  labelTitle={activeCases[index]?.title ?? evaluationCase.title}
+                  title={evaluationCase.title}
+                  documentText={evaluationCase.documentText}
+                  expectedOutputText={evaluationCase.expectedOutputText}
+                  disabled={isBusy}
+                  onTitleChange={(value) =>
+                    updateEditCase(evaluationCase.id, { title: value })
+                  }
+                  onDocumentChange={(value) =>
+                    updateEditCase(evaluationCase.id, {
+                      documentText: value,
+                    })
+                  }
+                  onOutputChange={(value) =>
+                    updateEditCase(evaluationCase.id, {
+                      expectedOutputText: value,
+                    })
+                  }
+                />
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="destructive-outline"
+                  onClick={() => removeEditCase(evaluationCase.id)}
+                  disabled={isBusy}
+                  className="mt-3"
+                >
+                  <Trash2 className="mr-2 size-4 shrink-0" />
+                  {isRemoving ? 'Removing...' : 'Remove case'}
+                </Button>
+              </details>
+            ))}
+          </div>
+          {localError ? (
+            <p className="text-sm text-destructive">{localError}</p>
+          ) : null}
+          <div className="flex items-center justify-end gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={onClose}
+              disabled={isBusy}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={handleSaveChanges}
+              disabled={isBusy || editCases.length === 0}
+            >
+              {isSaving ? (
+                <>
+                  <Loader2 className="mr-2 size-4 shrink-0 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                'Save changes'
+              )}
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {evaluation.archived ? (
+            <Badge variant="warning-soft">Archived</Badge>
+          ) : null}
+          <p className="text-sm text-pretty">{evaluation.description}</p>
+          <p className="text-sm font-medium">
+            {pluralizeCases(evaluation.cases.length)}
+          </p>
+          {activeCases.map((evaluationCase) => (
+            <details
+              key={evaluationCase.id}
+              className="rounded-md border p-3 text-sm"
+            >
+              <summary className="cursor-pointer font-medium">
+                {evaluationCase.title}
+              </summary>
+              <div className="mt-3 space-y-3">
+                <div className="space-y-1.5">
+                  <p className="font-medium">Input document</p>
+                  <pre className="max-w-full overflow-x-hidden whitespace-pre-wrap break-words rounded-md bg-muted/40 p-3 text-sm">
+                    {evaluationCase.documentText}
+                  </pre>
+                </div>
+                <JsonPreview
+                  label="Full expected output"
+                  value={evaluationCase.expectedOutput}
+                />
+                {allowChanges ? (
                   <Button
                     type="button"
                     size="sm"
@@ -2128,36 +2142,37 @@ function EvaluationDetailPanel({
                     <Trash2 className="mr-2 size-4 shrink-0" />
                     {isRemoving ? 'Removing...' : 'Remove case'}
                   </Button>
+                ) : null}
+              </div>
+            </details>
+          ))}
+          {archivedCases.map((evaluationCase) => (
+            <details
+              key={evaluationCase.id}
+              className="rounded-md border p-3 text-sm"
+            >
+              <summary className="cursor-pointer font-medium">
+                {evaluationCase.title}
+                <span className="ml-2 text-xs font-normal text-muted-foreground">
+                  Archived
+                </span>
+              </summary>
+              <div className="mt-3 space-y-3">
+                <div className="space-y-1.5">
+                  <p className="font-medium">Input document</p>
+                  <pre className="max-w-full overflow-x-hidden whitespace-pre-wrap break-words rounded-md bg-muted/40 p-3 text-sm">
+                    {evaluationCase.documentText}
+                  </pre>
                 </div>
-              </details>
-            ))}
-            {archivedCases.map((evaluationCase) => (
-              <details
-                key={evaluationCase.id}
-                className="rounded-md border p-3 text-sm"
-              >
-                <summary className="cursor-pointer font-medium">
-                  {evaluationCase.title}
-                  <span className="ml-2 text-xs font-normal text-muted-foreground">
-                    Archived
-                  </span>
-                </summary>
-                <div className="mt-3 space-y-3">
-                  <div className="space-y-1.5">
-                    <p className="font-medium">Input document</p>
-                    <pre className="max-w-full overflow-x-hidden whitespace-pre-wrap break-words rounded-md bg-muted/40 p-3 text-sm">
-                      {evaluationCase.documentText}
-                    </pre>
-                  </div>
-                  <JsonPreview
-                    label="Full expected output"
-                    value={evaluationCase.expectedOutput}
-                  />
-                </div>
-              </details>
-            ))}
-          </div>
-        )}
+                <JsonPreview
+                  label="Full expected output"
+                  value={evaluationCase.expectedOutput}
+                />
+              </div>
+            </details>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -2205,53 +2220,51 @@ function EvaluationResultDetailPanel({
         ),
         onClose,
         subtitle:
-          runVersion !== null ? (
-            <p>Prompt version v{runVersion}</p>
-          ) : undefined,
+          runVersion !== null ? <p>Prompt version v{runVersion}</p> : undefined,
       })}
-        <div className="space-y-4">
-          {evaluation.cases.map((evaluationCase) => {
-            const result = resultsByCaseId.get(evaluationCase.id);
-            return (
-              <div
-                key={evaluationCase.id}
-                className="rounded-md border p-3 text-sm"
-              >
-                <p className="font-medium">
-                  {evaluationCase.title}
-                  {result ? (
-                    <Badge
-                      variant={evaluationStatusBadgeVariant(result.status)}
-                      className="ml-2"
-                    >
-                      {evaluationStatusLabel(result.status)}
-                    </Badge>
-                  ) : null}
-                </p>
+      <div className="space-y-4">
+        {evaluation.cases.map((evaluationCase) => {
+          const result = resultsByCaseId.get(evaluationCase.id);
+          return (
+            <div
+              key={evaluationCase.id}
+              className="rounded-md border p-3 text-sm"
+            >
+              <p className="font-medium">
+                {evaluationCase.title}
                 {result ? (
-                  <div className="mt-3 space-y-3">
-                    <div className="space-y-1.5">
-                      <p className="font-medium">Judge evidence</p>
-                      <p className="text-pretty">{result.evidence}</p>
-                    </div>
-                    <JsonPreview
-                      label="Expected output"
-                      value={result.expectedOutput}
-                    />
-                    <JsonPreview
-                      label="Actual output"
-                      value={result.gradingOutput}
-                    />
+                  <Badge
+                    variant={evaluationStatusBadgeVariant(result.status)}
+                    className="ml-2"
+                  >
+                    {evaluationStatusLabel(result.status)}
+                  </Badge>
+                ) : null}
+              </p>
+              {result ? (
+                <div className="mt-3 space-y-3">
+                  <div className="space-y-1.5">
+                    <p className="font-medium">Judge evidence</p>
+                    <p className="text-pretty">{result.evidence}</p>
                   </div>
-                ) : (
-                  <p className="mt-3 text-muted-foreground">
-                    This case was not part of the run.
-                  </p>
-                )}
-              </div>
-            );
-          })}
-        </div>
+                  <JsonPreview
+                    label="Expected output"
+                    value={result.expectedOutput}
+                  />
+                  <JsonPreview
+                    label="Actual output"
+                    value={result.gradingOutput}
+                  />
+                </div>
+              ) : (
+                <p className="mt-3 text-muted-foreground">
+                  This case was not part of the run.
+                </p>
+              )}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -2313,18 +2326,34 @@ function EvaluationRunDetailPanel({
   );
 }
 
-export function EvaluationHistorySection({
+function EvaluationMatrixSection({
   assignmentTypeId,
   evaluationHistory,
   isPromptPreviewStale,
   layout = 'embedded',
   assignmentTypeTitle,
+  promptVersionId,
+  evaluationSuiteVersionId,
+  allowEvaluationChanges = true,
+  pageTitle = 'Evaluations',
+  pageMeta,
+  pageBackControl,
+  toolbarLeading,
+  emptyRunMessage = 'No runs yet. Run all cases to add the first row.',
 }: {
   assignmentTypeId: string;
   evaluationHistory: AssignmentTypeEvaluationHistory;
   isPromptPreviewStale: boolean;
   layout?: 'embedded' | 'page';
   assignmentTypeTitle?: string;
+  promptVersionId?: string;
+  evaluationSuiteVersionId?: string;
+  allowEvaluationChanges?: boolean;
+  pageTitle?: string;
+  pageMeta?: ReactNode;
+  pageBackControl?: ReactNode;
+  toolbarLeading?: ReactNode;
+  emptyRunMessage?: string;
 }) {
   const addCaseFetcher = useFetcher<EvaluationFetcherData>();
   const archiveFetcher = useFetcher<{ success?: boolean; message?: string }>();
@@ -2358,8 +2387,7 @@ export function EvaluationHistorySection({
         null)
       : null;
   const detailRun =
-    detailSelection?.kind === 'run' ||
-    detailSelection?.kind === 'result'
+    detailSelection?.kind === 'run' || detailSelection?.kind === 'result'
       ? (evaluationHistory.runs.find((run) =>
           detailSelection.kind === 'run'
             ? run.id === detailSelection.runId
@@ -2383,6 +2411,10 @@ export function EvaluationHistorySection({
     const formData = new FormData();
     formData.set('intent', 'runSuite');
     formData.set('assignmentTypeId', assignmentTypeId);
+    if (promptVersionId) formData.set('promptVersionId', promptVersionId);
+    if (evaluationSuiteVersionId) {
+      formData.set('evaluationSuiteVersionId', evaluationSuiteVersionId);
+    }
     runFetcher.submit(formData, {
       method: 'POST',
       action: '/api/domain/assignment-type-evaluations',
@@ -2437,15 +2469,18 @@ export function EvaluationHistorySection({
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() => setAddOpen(true)}
-        >
-          <Plus className="mr-1.5 size-4 shrink-0" />
-          Add evaluation
-        </Button>
+        {toolbarLeading}
+        {allowEvaluationChanges ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setAddOpen(true)}
+          >
+            <Plus className="mr-1.5 size-4 shrink-0" />
+            Add evaluation
+          </Button>
+        ) : null}
         <Button
           type="button"
           size="sm"
@@ -2484,6 +2519,7 @@ export function EvaluationHistorySection({
           onClose={closeDetailPanel}
           onRemoveCase={handleRemoveCase}
           isRemoving={isRemoving}
+          allowChanges={allowEvaluationChanges}
         />
       ) : null}
       {detailSelection?.kind === 'result' &&
@@ -2508,216 +2544,215 @@ export function EvaluationHistorySection({
         className="w-full min-w-max border-collapse text-sm"
         aria-label="Evaluation history"
       >
-              <caption className="sr-only">
-                Rows are saved prompt-version runs. Columns are named evaluations
-                containing one or more input and expected-output cases.
-              </caption>
-              <thead>
-                <tr>
-                  <th
-                    scope="col"
-                    className="sticky left-0 z-10 min-w-[6rem] border-b bg-muted/60 p-2 text-left align-bottom font-medium"
+        <caption className="sr-only">
+          Rows are saved prompt-version runs. Columns are named evaluations
+          containing one or more input and expected-output cases.
+        </caption>
+        <thead>
+          <tr>
+            <th
+              scope="col"
+              className="sticky left-0 z-10 min-w-[6rem] border-b bg-muted/60 p-2 text-left align-bottom font-medium"
+            >
+              Version
+            </th>
+            {columns.map((column) => {
+              const isColumnSelected =
+                detailSelection?.kind === 'evaluation' &&
+                detailSelection.columnKey === column.key;
+              return (
+                <th
+                  key={column.key}
+                  scope="col"
+                  className="min-w-[9rem] border-b border-l bg-muted/40 p-0 text-left font-medium"
+                >
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setDetailSelection((current) =>
+                        toggleEvaluationSelection(current, {
+                          kind: 'evaluation',
+                          columnKey: column.key,
+                        })
+                      )
+                    }
+                    aria-label={`View evaluation ${column.label}`}
+                    aria-pressed={isColumnSelected}
+                    className={cn(
+                      'flex max-w-[12rem] flex-col items-start p-2 text-left hover:bg-muted/50',
+                      isColumnSelected &&
+                        'bg-muted/70 ring-2 ring-inset ring-yellow-500 dark:ring-yellow-400'
+                    )}
                   >
-                    Version
+                    <span>{column.label}</span>
+                    <span className="text-[10px] font-normal text-muted-foreground">
+                      {pluralizeCases(column.cases.length)}
+                    </span>
+                  </button>
+                </th>
+              );
+            })}
+          </tr>
+        </thead>
+        <tbody>
+          {evaluationHistory.runs.length === 0 ? (
+            <tr>
+              <td
+                className="sticky left-0 bg-background p-2 text-sm text-muted-foreground"
+                colSpan={1 + totalColumnCount}
+              >
+                {emptyRunMessage}
+              </td>
+            </tr>
+          ) : (
+            evaluationHistory.runs.map((run) => {
+              const isRunSelected =
+                detailSelection?.kind === 'run' &&
+                detailSelection.runId === run.id;
+              const resultsByCaseId = new Map(
+                run.results.map((result) => [result.caseId, result])
+              );
+              return (
+                <tr key={run.id}>
+                  <th
+                    scope="row"
+                    className="sticky left-0 z-10 h-px border-t bg-background p-0 text-left align-stretch"
+                  >
+                    <button
+                      type="button"
+                      aria-label={`View prompt v${run.promptVersion} from ${run.createdAtLabel}`}
+                      aria-pressed={isRunSelected}
+                      onClick={() =>
+                        setDetailSelection((current) =>
+                          toggleEvaluationSelection(current, {
+                            kind: 'run',
+                            runId: run.id,
+                          })
+                        )
+                      }
+                      className={cn(
+                        'group flex h-full w-full items-center justify-between gap-2 px-2 py-3 text-left hover:bg-muted/60',
+                        isRunSelected &&
+                          'bg-muted/70 ring-2 ring-inset ring-yellow-500 dark:ring-yellow-400'
+                      )}
+                    >
+                      <span className="inline-flex min-w-0 flex-wrap items-baseline gap-x-1 text-sm">
+                        <span className="font-medium tabular-nums whitespace-nowrap">
+                          v{run.promptVersion}
+                        </span>
+                        <span
+                          className="text-muted-foreground"
+                          aria-hidden="true"
+                        >
+                          ·
+                        </span>
+                        <time className="whitespace-nowrap text-muted-foreground">
+                          {run.createdAtLabel}
+                        </time>
+                      </span>
+                      <ChevronRight
+                        className="size-4 shrink-0 text-muted-foreground group-hover:text-foreground"
+                        aria-hidden="true"
+                      />
+                    </button>
                   </th>
                   {columns.map((column) => {
-                    const isColumnSelected =
-                      detailSelection?.kind === 'evaluation' &&
+                    const columnResults = column.cases.flatMap(
+                      (evaluationCase) => {
+                        const result = resultsByCaseId.get(evaluationCase.id);
+                        return result ? [result] : [];
+                      }
+                    );
+                    const passed = columnResults.filter(
+                      (result) => result.status === 'pass'
+                    ).length;
+                    const status = columnSummaryStatus(
+                      passed,
+                      columnResults.length
+                    );
+                    const synopsis = evaluationStatusSynopsis(status);
+                    const isResultSelected =
+                      detailSelection?.kind === 'result' &&
+                      detailSelection.runId === run.id &&
                       detailSelection.columnKey === column.key;
                     return (
-                      <th
+                      <td
                         key={column.key}
-                        scope="col"
-                        className="min-w-[9rem] border-b border-l bg-muted/40 p-0 text-left font-medium"
+                        className={cn(
+                          'h-px border-t border-l p-0 align-stretch',
+                          columnResults.length > 0
+                            ? evaluationStatusCellClass(status)
+                            : ''
+                        )}
                       >
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setDetailSelection((current) =>
-                              toggleEvaluationSelection(current, {
-                                kind: 'evaluation',
-                                columnKey: column.key,
-                              })
-                            )
-                          }
-                          aria-label={`View evaluation ${column.label}`}
-                          aria-pressed={isColumnSelected}
-                          className={cn(
-                            'flex max-w-[12rem] flex-col items-start p-2 text-left hover:bg-muted/50',
-                            isColumnSelected &&
-                              'bg-muted/70 ring-2 ring-inset ring-yellow-500 dark:ring-yellow-400'
-                          )}
-                        >
-                          <span>{column.label}</span>
-                          <span className="text-[10px] font-normal text-muted-foreground">
-                            {pluralizeCases(column.cases.length)}
-                          </span>
-                        </button>
-                      </th>
-                    );
-                  })}
-                </tr>
-              </thead>
-              <tbody>
-                {evaluationHistory.runs.length === 0 ? (
-                  <tr>
-                    <td
-                      className="sticky left-0 bg-background p-2 text-sm text-muted-foreground"
-                      colSpan={1 + totalColumnCount}
-                    >
-                      No runs yet. Run all cases to add the first row.
-                    </td>
-                  </tr>
-                ) : (
-                  evaluationHistory.runs.map((run) => {
-                    const isRunSelected =
-                      detailSelection?.kind === 'run' &&
-                      detailSelection.runId === run.id;
-                    const resultsByCaseId = new Map(
-                      run.results.map((result) => [result.caseId, result])
-                    );
-                    return (
-                      <tr key={run.id}>
-                        <th
-                          scope="row"
-                          className="sticky left-0 z-10 h-px border-t bg-background p-0 text-left align-stretch"
-                        >
+                        {columnResults.length > 0 ? (
                           <button
                             type="button"
-                            aria-label={`View prompt v${run.promptVersion} from ${run.createdAtLabel}`}
-                            aria-pressed={isRunSelected}
+                            className={cn(
+                              'flex h-full w-full items-center justify-center px-2 py-3 text-inherit text-xs font-semibold tabular-nums',
+                              isResultSelected &&
+                                'ring-2 ring-inset ring-yellow-500 dark:ring-yellow-400'
+                            )}
                             onClick={() =>
                               setDetailSelection((current) =>
                                 toggleEvaluationSelection(current, {
-                                  kind: 'run',
+                                  kind: 'result',
                                   runId: run.id,
+                                  columnKey: column.key,
                                 })
                               )
                             }
-                            className={cn(
-                              'group flex h-full w-full items-center justify-between gap-2 px-2 py-3 text-left hover:bg-muted/60',
-                              isRunSelected &&
-                                'bg-muted/70 ring-2 ring-inset ring-yellow-500 dark:ring-yellow-400'
-                            )}
+                            aria-label={`${column.label}: ${passed}/${columnResults.length} ${synopsis}`}
+                            aria-pressed={isResultSelected}
+                            data-status={status}
                           >
-                            <span className="inline-flex min-w-0 flex-wrap items-baseline gap-x-1 text-sm">
-                              <span className="font-medium tabular-nums whitespace-nowrap">
-                                v{run.promptVersion}
-                              </span>
-                              <span
-                                className="text-muted-foreground"
-                                aria-hidden="true"
-                              >
-                                ·
-                              </span>
-                              <time className="whitespace-nowrap text-muted-foreground">
-                                {run.createdAtLabel}
-                              </time>
-                            </span>
-                            <ChevronRight
-                              className="size-4 shrink-0 text-muted-foreground group-hover:text-foreground"
-                              aria-hidden="true"
-                            />
+                            {passed}/{columnResults.length} {synopsis}
                           </button>
-                        </th>
-                        {columns.map((column) => {
-                          const columnResults = column.cases.flatMap(
-                            (evaluationCase) => {
-                              const result = resultsByCaseId.get(
-                                evaluationCase.id
-                              );
-                              return result ? [result] : [];
-                            }
-                          );
-                          const passed = columnResults.filter(
-                            (result) => result.status === 'pass'
-                          ).length;
-                          const status = columnSummaryStatus(
-                            passed,
-                            columnResults.length
-                          );
-                          const synopsis = evaluationStatusSynopsis(status);
-                          const isResultSelected =
-                            detailSelection?.kind === 'result' &&
-                            detailSelection.runId === run.id &&
-                            detailSelection.columnKey === column.key;
-                          return (
-                            <td
-                              key={column.key}
-                              className={cn(
-                                'h-px border-t border-l p-0 align-stretch',
-                                columnResults.length > 0
-                                  ? evaluationStatusCellClass(status)
-                                  : ''
-                              )}
-                            >
-                              {columnResults.length > 0 ? (
-                                <button
-                                  type="button"
-                                  className={cn(
-                                    'flex h-full w-full items-center justify-center px-2 py-3 text-inherit text-xs font-semibold tabular-nums',
-                                    isResultSelected &&
-                                      'ring-2 ring-inset ring-yellow-500 dark:ring-yellow-400'
-                                  )}
-                                  onClick={() =>
-                                    setDetailSelection((current) =>
-                                      toggleEvaluationSelection(current, {
-                                        kind: 'result',
-                                        runId: run.id,
-                                        columnKey: column.key,
-                                      })
-                                    )
-                                  }
-                                  aria-label={`${column.label}: ${passed}/${columnResults.length} ${synopsis}`}
-                                  aria-pressed={isResultSelected}
-                                  data-status={status}
-                                >
-                                  {passed}/{columnResults.length} {synopsis}
-                                </button>
-                              ) : (
-                                <span className="flex h-full w-full items-center justify-center px-2 py-3 text-xs text-muted-foreground">
-                                  —
-                                </span>
-                              )}
-                            </td>
-                          );
-                        })}
-                      </tr>
+                        ) : (
+                          <span className="flex h-full w-full items-center justify-center px-2 py-3 text-xs text-muted-foreground">
+                            —
+                          </span>
+                        )}
+                      </td>
                     );
-                  })
-                )}
-              </tbody>
-            </table>
+                  })}
+                </tr>
+              );
+            })
+          )}
+        </tbody>
+      </table>
     ) : null;
 
   return (
-    <div
-      className={cn(isPageLayout && 'flex h-full min-h-0 w-full flex-col')}
-    >
+    <div className={cn(isPageLayout && 'flex h-full min-h-0 w-full flex-col')}>
       {isPageLayout ? (
         <div className={splitClassName}>
           <div className={leftPaneClassName}>
             <header className="shrink-0 border-b px-3 py-5 md:px-6 md:py-6">
               <div className={cn('space-y-5', leftContentWidthClassName)}>
-                <Button variant="outline" size="sm" asChild>
-                  <Link
-                    to={`/app/admin/assignment-types/${assignmentTypeId}`}
-                    className="w-fit"
-                  >
-                    <ArrowLeft className="mr-1.5 size-4 shrink-0" />
-                    Back to assignment type
-                  </Link>
-                </Button>
+                {pageBackControl ?? (
+                  <Button variant="outline" size="sm" asChild>
+                    <Link
+                      to={`/app/admin/assignment-types/${assignmentTypeId}`}
+                      className="w-fit"
+                    >
+                      <ArrowLeft className="mr-1.5 size-4 shrink-0" />
+                      Back to assignment type
+                    </Link>
+                  </Button>
+                )}
 
                 <div className="space-y-1">
                   <h1 className="text-3xl font-semibold tracking-tight">
-                    Evaluations
+                    {pageTitle}
                   </h1>
-                  {assignmentTypeTitle ? (
-                    <p className="text-sm text-muted-foreground">
-                      {assignmentTypeTitle}
-                    </p>
-                  ) : null}
+                  {pageMeta ??
+                    (assignmentTypeTitle ? (
+                      <p className="text-sm text-muted-foreground">
+                        {assignmentTypeTitle}
+                      </p>
+                    ) : null)}
                 </div>
               </div>
             </header>
@@ -2727,8 +2762,8 @@ export function EvaluationHistorySection({
                 {toolbarContent}
                 {columns.length === 0 ? (
                   <p className="text-sm text-muted-foreground">
-                    No evaluations yet. Add one to start tracking
-                    prompt-version runs.
+                    No evaluations yet. Add one to start tracking prompt-version
+                    runs.
                   </p>
                 ) : null}
               </div>
@@ -2776,17 +2811,552 @@ export function EvaluationHistorySection({
   );
 }
 
+type ManagedPromptVersion =
+  AssignmentTypeEvaluationHistory['promptVersions'][number];
+
+type PromptVersionFetcherData = {
+  success?: boolean;
+  message?: string;
+  promptVersionId?: string;
+  revision?: number;
+  status?: string;
+};
+
+function promptStatusBadgeVariant(status: ManagedPromptVersion['status']) {
+  if (status === 'production') return 'success' as const;
+  if (status === 'draft') return 'warning-soft' as const;
+  return 'outline' as const;
+}
+
+function promptStatusLabel(status: ManagedPromptVersion['status']) {
+  if (status === 'production') return 'Production';
+  if (status === 'draft') return 'Draft';
+  return 'Previous';
+}
+
+function PromptVersionEditorSheet({
+  assignmentTypeId,
+  promptVersion,
+  open,
+  onOpenChange,
+}: {
+  assignmentTypeId: string;
+  promptVersion: ManagedPromptVersion;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const fetcher = useFetcher<PromptVersionFetcherData>();
+  const [systemMessage, setSystemMessage] = useState(
+    promptVersion.systemMessageTemplate
+  );
+  const [userMessage, setUserMessage] = useState(
+    promptVersion.userMessageTemplate
+  );
+  const handledResponseRef = useRef<unknown>(null);
+  const isSaving = fetcher.state !== 'idle';
+  const errorMessage =
+    fetcher.data?.success === false
+      ? (fetcher.data.message ?? 'The prompt could not be saved.')
+      : null;
+
+  useEffect(() => {
+    setSystemMessage(promptVersion.systemMessageTemplate);
+    setUserMessage(promptVersion.userMessageTemplate);
+  }, [
+    promptVersion.id,
+    promptVersion.revision,
+    promptVersion.systemMessageTemplate,
+    promptVersion.userMessageTemplate,
+  ]);
+
+  useEffect(() => {
+    if (isSaving || !fetcher.data || fetcher.data.success !== true) return;
+    if (handledResponseRef.current === fetcher.data) return;
+    handledResponseRef.current = fetcher.data;
+    onOpenChange(false);
+  }, [fetcher.data, isSaving, onOpenChange]);
+
+  function handleSave() {
+    const formData = new FormData();
+    formData.set('intent', 'updatePromptDraft');
+    formData.set('assignmentTypeId', assignmentTypeId);
+    formData.set('promptVersionId', promptVersion.id);
+    formData.set('systemMessageTemplate', systemMessage);
+    formData.set('userMessageTemplate', userMessage);
+    fetcher.submit(formData, {
+      method: 'POST',
+      action: '/api/domain/assignment-type-evaluations',
+    });
+  }
+
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent
+        aria-describedby={undefined}
+        className="flex max-h-screen w-full max-w-full flex-col overflow-y-auto sm:max-w-2xl"
+      >
+        <SheetHeader>
+          <SheetTitle>Edit prompt v{promptVersion.version}</SheetTitle>
+        </SheetHeader>
+        <div className="mt-4 space-y-5">
+          <div className="space-y-2">
+            <Label htmlFor="managed-system-message">
+              System message template
+            </Label>
+            <Textarea
+              id="managed-system-message"
+              rows={10}
+              value={systemMessage}
+              onChange={(event) => setSystemMessage(event.target.value)}
+              disabled={isSaving}
+              className="font-mono text-sm"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="managed-user-message">User message template</Label>
+            <Textarea
+              id="managed-user-message"
+              rows={16}
+              value={userMessage}
+              onChange={(event) => setUserMessage(event.target.value)}
+              disabled={isSaving}
+              className="font-mono text-sm"
+            />
+          </div>
+          <div className="rounded-md border bg-muted/30 p-3 text-xs text-muted-foreground">
+            <p className="font-medium text-foreground">Available variables</p>
+            <p className="mt-1 break-words font-mono">
+              {
+                '{{assignment_type}} · {{rubric}} · {{document}} · {{student_first_name}} · {{grading_instructions}} · {{score_instructions}} · {{strictness}}'
+              }
+            </p>
+            <p className="mt-2">
+              The user message must keep {'{{rubric}}'} and {'{{document}}'}.
+            </p>
+          </div>
+          {errorMessage ? (
+            <p className="text-sm text-destructive">{errorMessage}</p>
+          ) : null}
+          <div className="flex items-center justify-end gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+              disabled={isSaving}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={handleSave}
+              disabled={
+                isSaving || !systemMessage.trim() || !userMessage.trim()
+              }
+            >
+              {isSaving ? (
+                <>
+                  <Loader2 className="mr-2 size-4 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                'Save prompt'
+              )}
+            </Button>
+          </div>
+        </div>
+      </SheetContent>
+    </Sheet>
+  );
+}
+
+function PromptVersionsOverview({
+  assignmentTypeId,
+  assignmentTypeTitle,
+  evaluationHistory,
+  onOpenPrompt,
+}: {
+  assignmentTypeId: string;
+  assignmentTypeTitle?: string;
+  evaluationHistory: AssignmentTypeEvaluationHistory;
+  onOpenPrompt: (promptVersionId: string) => void;
+}) {
+  const latestSuite = evaluationHistory.suiteVersions[0];
+
+  return (
+    <div className="flex h-full min-h-0 w-full flex-col">
+      <header className="shrink-0 border-b px-3 py-5 md:px-6 md:py-6">
+        <div className="mx-auto w-full max-w-3xl space-y-5">
+          <Button variant="outline" size="sm" asChild>
+            <Link to={`/app/admin/assignment-types/${assignmentTypeId}`}>
+              <ArrowLeft className="mr-1.5 size-4" />
+              Back to assignment type
+            </Link>
+          </Button>
+          <div className="space-y-1">
+            <h1 className="text-3xl font-semibold tracking-tight">
+              Evaluations
+            </h1>
+            {assignmentTypeTitle ? (
+              <p className="text-sm text-muted-foreground">
+                {assignmentTypeTitle}
+              </p>
+            ) : null}
+          </div>
+        </div>
+      </header>
+      <main className="min-h-0 flex-1 overflow-y-auto px-3 py-6 md:px-6">
+        <div className="mx-auto w-full max-w-3xl space-y-4">
+          <div className="space-y-1">
+            <h2 className="text-lg font-semibold">Prompt versions</h2>
+            <p className="text-sm text-muted-foreground">
+              Open a version to edit its draft or review its evaluation runs.
+            </p>
+          </div>
+          <div className="divide-y rounded-md border">
+            {evaluationHistory.promptVersions.map((promptVersion) => {
+              const latestRun = evaluationHistory.runs.find(
+                (run) =>
+                  run.promptVersionId === promptVersion.id &&
+                  run.promptRevision === promptVersion.revision &&
+                  run.evaluationSuiteVersionId === latestSuite?.id
+              );
+              return (
+                <div
+                  key={promptVersion.id}
+                  className="flex flex-wrap items-center justify-between gap-3 p-4"
+                >
+                  <div className="flex min-w-0 items-center gap-3">
+                    <div className="flex size-9 shrink-0 items-center justify-center rounded-md border bg-muted/30 text-sm font-semibold tabular-nums">
+                      v{promptVersion.version}
+                    </div>
+                    <div className="min-w-0 space-y-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-medium">
+                          Prompt v{promptVersion.version}
+                        </span>
+                        <Badge
+                          size="sm"
+                          variant={promptStatusBadgeVariant(
+                            promptVersion.status
+                          )}
+                        >
+                          {promptStatusLabel(promptVersion.status)}
+                        </Badge>
+                      </div>
+                      <p className="text-sm text-muted-foreground">
+                        Revision {promptVersion.revision}
+                        {latestRun
+                          ? ` · ${latestRun.passedCases}/${latestRun.totalCases} passed on Suite v${latestSuite?.version}`
+                          : latestSuite
+                            ? ` · Not run on Suite v${latestSuite.version}`
+                            : ''}
+                      </p>
+                    </div>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    aria-label={`Open prompt v${promptVersion.version}`}
+                    onClick={() => onOpenPrompt(promptVersion.id)}
+                  >
+                    Open
+                    <ChevronRight className="ml-1.5 size-4" />
+                  </Button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </main>
+    </div>
+  );
+}
+
+export function EvaluationHistorySection({
+  assignmentTypeId,
+  evaluationHistory,
+  isPromptPreviewStale,
+  layout = 'embedded',
+  assignmentTypeTitle,
+  promptVersionControlEnabled = false,
+}: {
+  assignmentTypeId: string;
+  evaluationHistory: AssignmentTypeEvaluationHistory;
+  isPromptPreviewStale: boolean;
+  layout?: 'embedded' | 'page';
+  assignmentTypeTitle?: string;
+  promptVersionControlEnabled?: boolean;
+}) {
+  const createDraftFetcher = useFetcher<PromptVersionFetcherData>();
+  const promoteFetcher = useFetcher<PromptVersionFetcherData>();
+  const [selectedPromptId, setSelectedPromptId] = useState<string | null>(null);
+  const [selectedSuiteId, setSelectedSuiteId] = useState<string | null>(null);
+  const [editPromptOpen, setEditPromptOpen] = useState(false);
+  const [promoteOpen, setPromoteOpen] = useState(false);
+  const latestSuite = evaluationHistory.suiteVersions[0] ?? null;
+  const previousLatestSuiteIdRef = useRef<string | null>(
+    latestSuite?.id ?? null
+  );
+  const managed =
+    promptVersionControlEnabled &&
+    layout === 'page' &&
+    evaluationHistory.promptVersions.length > 0;
+
+  useEffect(() => {
+    const createdPromptId = createDraftFetcher.data?.promptVersionId;
+    if (createDraftFetcher.data?.success && createdPromptId) {
+      setSelectedPromptId(createdPromptId);
+      setSelectedSuiteId(latestSuite?.id ?? null);
+    }
+  }, [
+    createDraftFetcher.data,
+    evaluationHistory.promptVersions,
+    latestSuite?.id,
+  ]);
+
+  useEffect(() => {
+    const latestSuiteId = latestSuite?.id ?? null;
+    if (
+      !selectedSuiteId ||
+      previousLatestSuiteIdRef.current !== latestSuiteId
+    ) {
+      setSelectedSuiteId(latestSuiteId);
+    }
+    previousLatestSuiteIdRef.current = latestSuiteId;
+  }, [latestSuite?.id, selectedSuiteId]);
+
+  useEffect(() => {
+    if (promoteFetcher.data?.success === false) setPromoteOpen(true);
+  }, [promoteFetcher.data]);
+
+  if (!managed) {
+    return (
+      <EvaluationMatrixSection
+        assignmentTypeId={assignmentTypeId}
+        assignmentTypeTitle={assignmentTypeTitle}
+        evaluationHistory={evaluationHistory}
+        isPromptPreviewStale={isPromptPreviewStale}
+        layout={layout}
+      />
+    );
+  }
+
+  const selectedPrompt =
+    evaluationHistory.promptVersions.find(
+      (promptVersion) => promptVersion.id === selectedPromptId
+    ) ?? null;
+  const selectedSuite =
+    evaluationHistory.suiteVersions.find(
+      (suiteVersion) => suiteVersion.id === selectedSuiteId
+    ) ?? latestSuite;
+
+  if (!selectedPrompt || !selectedSuite) {
+    return (
+      <PromptVersionsOverview
+        assignmentTypeId={assignmentTypeId}
+        assignmentTypeTitle={assignmentTypeTitle}
+        evaluationHistory={evaluationHistory}
+        onOpenPrompt={(promptVersionId) => {
+          setSelectedPromptId(promptVersionId);
+          setSelectedSuiteId(latestSuite?.id ?? null);
+        }}
+      />
+    );
+  }
+
+  const selectedRuns = evaluationHistory.runs.filter(
+    (run) =>
+      run.promptVersionId === selectedPrompt.id &&
+      run.promptRevision === selectedPrompt.revision &&
+      run.evaluationSuiteVersionId === selectedSuite.id
+  );
+  const selectedHistory: AssignmentTypeEvaluationHistory = {
+    ...evaluationHistory,
+    evaluations: selectedSuite.evaluations,
+    cases: selectedSuite.cases,
+    runs: selectedRuns,
+  };
+  const selectedPromptVersionId = selectedPrompt.id;
+  const isLatestSuite = selectedSuite.id === latestSuite?.id;
+  const hasPromotionRun =
+    selectedPrompt.status === 'draft' &&
+    isLatestSuite &&
+    selectedRuns.some((run) => run.status === 'completed');
+  const createError =
+    createDraftFetcher.data?.success === false
+      ? createDraftFetcher.data.message
+      : null;
+  const promoteError =
+    promoteFetcher.data?.success === false ? promoteFetcher.data.message : null;
+
+  function createDraft() {
+    const formData = new FormData();
+    formData.set('intent', 'createPromptDraft');
+    formData.set('assignmentTypeId', assignmentTypeId);
+    formData.set('sourcePromptVersionId', selectedPromptVersionId);
+    createDraftFetcher.submit(formData, {
+      method: 'POST',
+      action: '/api/domain/assignment-type-evaluations',
+    });
+  }
+
+  function promoteDraft() {
+    const formData = new FormData();
+    formData.set('intent', 'promotePromptDraft');
+    formData.set('assignmentTypeId', assignmentTypeId);
+    formData.set('promptVersionId', selectedPromptVersionId);
+    promoteFetcher.submit(formData, {
+      method: 'POST',
+      action: '/api/domain/assignment-type-evaluations',
+    });
+  }
+
+  const suiteSelector = (
+    <Select
+      value={selectedSuite.id}
+      onValueChange={(value) => setSelectedSuiteId(value)}
+    >
+      <SelectTrigger className="h-9 w-[8.5rem]" aria-label="Evaluation suite">
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        {evaluationHistory.suiteVersions.map((suiteVersion) => (
+          <SelectItem key={suiteVersion.id} value={suiteVersion.id}>
+            Suite v{suiteVersion.version}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+
+  const promptActions = (
+    <>
+      {suiteSelector}
+      {selectedPrompt.status === 'draft' ? (
+        <>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setEditPromptOpen(true)}
+          >
+            <Pencil className="mr-1.5 size-4" />
+            Edit prompt
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setPromoteOpen(true)}
+            disabled={!hasPromotionRun || promoteFetcher.state !== 'idle'}
+          >
+            <Check className="mr-1.5 size-4" />
+            Promote to production
+          </Button>
+        </>
+      ) : (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={createDraft}
+          disabled={createDraftFetcher.state !== 'idle'}
+        >
+          {createDraftFetcher.state !== 'idle' ? (
+            <Loader2 className="mr-1.5 size-4 animate-spin" />
+          ) : (
+            <Copy className="mr-1.5 size-4" />
+          )}
+          Create draft
+        </Button>
+      )}
+      {createError || promoteError ? (
+        <p className="text-sm text-destructive">
+          {createError ?? promoteError}
+        </p>
+      ) : null}
+    </>
+  );
+
+  return (
+    <>
+      <EvaluationMatrixSection
+        key={`${selectedPrompt.id}:${selectedPrompt.revision}:${selectedSuite.id}`}
+        assignmentTypeId={assignmentTypeId}
+        assignmentTypeTitle={assignmentTypeTitle}
+        evaluationHistory={selectedHistory}
+        isPromptPreviewStale={false}
+        layout={layout}
+        promptVersionId={selectedPrompt.id}
+        evaluationSuiteVersionId={selectedSuite.id}
+        allowEvaluationChanges={isLatestSuite}
+        pageTitle={`Prompt v${selectedPrompt.version}`}
+        pageBackControl={
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setSelectedPromptId(null)}
+          >
+            <ArrowLeft className="mr-1.5 size-4" />
+            Back to prompt versions
+          </Button>
+        }
+        pageMeta={
+          <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+            <span>{assignmentTypeTitle}</span>
+            <Badge
+              size="sm"
+              variant={promptStatusBadgeVariant(selectedPrompt.status)}
+            >
+              {promptStatusLabel(selectedPrompt.status)}
+            </Badge>
+            <span>Revision {selectedPrompt.revision}</span>
+          </div>
+        }
+        toolbarLeading={promptActions}
+        emptyRunMessage="No runs for this prompt and evaluation suite yet."
+      />
+
+      {selectedPrompt.status === 'draft' ? (
+        <PromptVersionEditorSheet
+          assignmentTypeId={assignmentTypeId}
+          promptVersion={selectedPrompt}
+          open={editPromptOpen}
+          onOpenChange={setEditPromptOpen}
+        />
+      ) : null}
+
+      <AlertDialog open={promoteOpen} onOpenChange={setPromoteOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              Promote prompt v{selectedPrompt.version}?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              This prompt will replace the current production prompt used by the
+              grading assistant. Its saved run history will remain.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          {promoteError ? (
+            <p className="text-sm text-destructive">{promoteError}</p>
+          ) : null}
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={promoteDraft}>
+              Promote
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
+  );
+}
+
 export function PromptConfigEditor({
   initial,
-  namePrefix = '',
-  onChange,
-  gradingAssistantPromptPreview,
-  gradingAssistantPromptPreviewUnavailableReason,
-  isPromptPreviewStale = false,
   assignmentTypeId,
-  title,
-  scoringScale,
-  rubric,
 }: {
   initial: PromptConfigData;
   namePrefix?: string;
@@ -2799,47 +3369,14 @@ export function PromptConfigEditor({
   scoringScale?: ScoringScaleData;
   rubric?: RubricData;
 }) {
-  const [cfg, setCfg] = useState<PromptConfigData>(initial);
-  const [editOpen, setEditOpen] = useState(false);
-  const [compiledOpen, setCompiledOpen] = useState(false);
-  const [testOpen, setTestOpen] = useState(false);
-  const usesBuiltInPreset = Boolean(cfg.instructionsPreset?.trim());
-  const instructions = cfg.gradingInstructions?.trim() ?? '';
-  const textareaId = `${namePrefix}gradingInstr`;
-  const systemInstructionsId = `${namePrefix}systemInstr`;
-  const canTestPrompt = Boolean(
-    assignmentTypeId && gradingAssistantPromptPreview
-  );
-
-  function updateCfg(next: PromptConfigData) {
-    setCfg(next);
-    onChange?.(next);
-  }
-
   return (
     <div className="space-y-3">
-      {usesBuiltInPreset && (
-        <p className="text-sm text-muted-foreground text-pretty">
-          This grading assistant uses built-in instructions. Use{' '}
-          <span className="font-medium text-foreground">Edit instructions</span>{' '}
-          to add custom instructions that override them.
-        </p>
-      )}
-
-      <p className="line-clamp-2 text-sm text-muted-foreground text-pretty">
-        {instructions || 'No custom grading instructions yet.'}
-      </p>
-
-      <div className="flex flex-wrap items-center gap-2">
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() => setEditOpen(true)}
-        >
-          Edit instructions
-        </Button>
-        {assignmentTypeId ? (
+      {assignmentTypeId ? (
+        <>
+          <p className="text-sm text-muted-foreground text-pretty">
+            Prompt configuration and tests are managed with this assignment
+            type&apos;s evaluations.
+          </p>
           <Button type="button" variant="outline" size="sm" asChild>
             <Link
               to={`/app/admin/assignment-types/${assignmentTypeId}/evaluations`}
@@ -2849,119 +3386,18 @@ export function PromptConfigEditor({
               Evaluations
             </Link>
           </Button>
-        ) : null}
-        {SHOW_PROMPT_INSPECTION_CONTROLS && gradingAssistantPromptPreview ? (
-          <>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={
-                isPromptPreviewStale ? undefined : () => setCompiledOpen(true)
-              }
-              disabled={isPromptPreviewStale}
-            >
-              View compiled prompt
-            </Button>
-            {isPromptPreviewStale ? (
-              <p className="text-sm text-muted-foreground">
-                Save changes to preview the updated prompt.
-              </p>
-            ) : null}
-          </>
-        ) : SHOW_PROMPT_INSPECTION_CONTROLS ? (
-          <p className="text-sm text-muted-foreground">
-            {gradingAssistantPromptPreviewUnavailableReason ??
-              'Save this assignment type to preview the compiled prompt.'}
-          </p>
-        ) : null}
-        {SHOW_PROMPT_INSPECTION_CONTROLS && canTestPrompt ? (
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => setTestOpen(true)}
-          >
-            Test prompt
-          </Button>
-        ) : null}
-      </div>
-
-      <Sheet open={editOpen} onOpenChange={setEditOpen}>
-        <SheetContent
-          aria-describedby={undefined}
-          className="flex max-h-screen flex-col overflow-y-auto"
-        >
-          <SheetHeader>
-            <SheetTitle>Edit instructions</SheetTitle>
-          </SheetHeader>
-          <div className="mt-4 space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor={systemInstructionsId}>
-                Custom system instructions
-              </Label>
-              <Textarea
-                id={systemInstructionsId}
-                rows={4}
-                value={cfg.systemInstructions ?? ''}
-                onChange={(e) =>
-                  updateCfg({ ...cfg, systemInstructions: e.target.value })
-                }
-              />
-              <p className="text-sm text-muted-foreground text-pretty">
-                Sets tone or persona for the AI. Core grading rules — JSON
-                output format, score range, feedback structure — always apply
-                and aren&apos;t editable here.
-              </p>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor={textareaId}>Grading instructions</Label>
-              <Textarea
-                id={textareaId}
-                rows={12}
-                value={cfg.gradingInstructions ?? ''}
-                onChange={(e) =>
-                  updateCfg({ ...cfg, gradingInstructions: e.target.value })
-                }
-              />
-              <p className="text-sm text-muted-foreground text-pretty">
-                Tell the AI how to grade this assignment. Include scoring rules,
-                tone, and how to interpret each rubric category.
-              </p>
-            </div>
-          </div>
-          <SheetFooter className="mt-4">
-            <SheetClose asChild>
-              <Button type="button">Done</Button>
-            </SheetClose>
-          </SheetFooter>
-        </SheetContent>
-      </Sheet>
-
-      {gradingAssistantPromptPreview ? (
-        <CompiledPromptSheet
-          open={compiledOpen}
-          onOpenChange={setCompiledOpen}
-          preview={gradingAssistantPromptPreview}
-        />
-      ) : null}
-
-      {canTestPrompt && assignmentTypeId ? (
-        <ScratchTestSheet
-          open={testOpen}
-          onOpenChange={setTestOpen}
-          assignmentTypeId={assignmentTypeId}
-          title={title ?? ''}
-          scoringScale={scoringScale ?? DEFAULT_SCORING_SCALE}
-          rubric={rubric ?? { categories: [] }}
-          promptConfig={cfg}
-        />
-      ) : null}
+        </>
+      ) : (
+        <p className="text-sm text-muted-foreground text-pretty">
+          Prompt setup and evaluation testing are available after this
+          assignment type is created.
+        </p>
+      )}
 
       <input
         type="hidden"
         name="promptConfigJson"
-        value={JSON.stringify(serializePromptConfig(cfg))}
+        value={JSON.stringify(serializePromptConfig(initial))}
       />
     </div>
   );

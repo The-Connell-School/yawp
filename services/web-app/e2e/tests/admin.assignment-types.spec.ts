@@ -50,23 +50,6 @@ test.describe.serial('Admin assignment types', () => {
         .fill('Grammar and syntax support clarity.');
       await page.getByRole('button', { name: 'Done' }).click();
 
-      await page.getByRole('button', { name: 'Edit instructions' }).click();
-      const editInstructionsDialog = page.getByRole('dialog', {
-        name: 'Edit instructions',
-      });
-      await expect(editInstructionsDialog).toBeVisible();
-      await editInstructionsDialog
-        .getByLabel('Custom system instructions')
-        .fill('Act as a careful evaluator for this assignment type.');
-      await editInstructionsDialog
-        .getByLabel('Grading instructions')
-        .fill(
-          'Grade against the rubric categories and give concise, actionable feedback.'
-        );
-      await editInstructionsDialog
-        .getByRole('button', { name: 'Done' })
-        .click();
-
       await Promise.all([
         page.waitForURL(
           (url) =>
@@ -91,18 +74,9 @@ test.describe.serial('Admin assignment types', () => {
       await expect(
         page.getByRole('button', { name: 'Test prompt' })
       ).toHaveCount(0);
-
-      await page.getByRole('button', { name: 'Edit instructions' }).click();
-      await page
-        .getByRole('dialog', { name: 'Edit instructions' })
-        .getByLabel('Grading instructions')
-        .fill('This unsaved instruction must not appear as production-ready.');
-      await page
-        .getByRole('dialog', { name: 'Edit instructions' })
-        .getByRole('button', { name: 'Done' })
-        .click();
-      await expect(page.getByRole('button', { name: 'Update' })).toBeEnabled();
-      await page.getByRole('button', { name: 'Cancel' }).click();
+      await expect(
+        page.getByRole('button', { name: 'Edit instructions' })
+      ).toHaveCount(0);
 
       await expect(
         page.getByRole('heading', { name: 'Evaluation history' })
@@ -127,6 +101,10 @@ test.describe.serial('Admin assignment types', () => {
       await expect(
         page.getByRole('link', { name: 'Back to assignment type' })
       ).toBeVisible();
+      await expect(
+        page.getByRole('heading', { name: 'Prompt versions' })
+      ).toBeVisible();
+      await page.getByRole('button', { name: 'Open prompt v1' }).click();
       await expect(
         page.getByText(
           'No evaluations yet. Add one to start tracking prompt-version runs.'
@@ -245,11 +223,9 @@ test.describe.serial('Admin assignment types', () => {
       await expect(resultPanel.getByText('1/2')).toBeVisible();
       await expect(resultPanel.getByText('Pass')).toBeVisible();
       await expect(resultPanel.getByText('Fail')).toBeVisible();
-      await resultPanel
-        .locator('summary')
-        .filter({ hasText: 'Missing opening' })
-        .click();
-      const failedCaseResult = resultPanel.locator('details[open]');
+      const failedCaseResult = resultPanel
+        .locator('div.rounded-md.border')
+        .filter({ hasText: 'Missing opening' });
       await expect(failedCaseResult.getByText('Judge evidence')).toBeVisible();
       await expect(failedCaseResult.getByText('Expected output')).toBeVisible();
       await expect(failedCaseResult.getByText('Actual output')).toBeVisible();
@@ -261,31 +237,23 @@ test.describe.serial('Admin assignment types', () => {
       );
       await resultPanel.getByRole('button', { name: 'Close details' }).click();
 
-      await page.getByRole('link', { name: 'Back to assignment type' }).click();
+      await page.getByRole('button', { name: 'Create draft' }).click();
       await expect(
-        page.getByRole('heading', { name: 'Edit assignment type' })
+        page.getByRole('heading', { name: 'Prompt v2', exact: true })
       ).toBeVisible();
-      await page.getByRole('button', { name: 'Edit instructions' }).click();
-      const versionTwoInstructions = page.getByRole('dialog', {
-        name: 'Edit instructions',
+      await page.getByRole('button', { name: 'Edit prompt' }).click();
+      const versionTwoPrompt = page.getByRole('dialog', {
+        name: 'Edit prompt v2',
       });
-      await versionTwoInstructions
-        .getByLabel('Grading instructions')
-        .fill(
-          'Grade against the rubric categories, explicitly identify missing thesis statements, and give concise feedback.'
-        );
-      await versionTwoInstructions
-        .getByRole('button', { name: 'Done' })
+      await versionTwoPrompt
+        .getByLabel('System message template')
+        .fill('Grade {{assignment_type}} work carefully.');
+      await versionTwoPrompt
+        .getByLabel('User message template')
+        .fill('Rubric:\n{{rubric}}\n\nStudent work:\n{{document}}');
+      await versionTwoPrompt
+        .getByRole('button', { name: 'Save prompt' })
         .click();
-      await page.getByRole('button', { name: 'Update' }).click();
-      await expect(page.getByRole('button', { name: 'Update' })).toBeDisabled();
-
-      await page
-        .getByRole('link', { name: 'Evaluations', exact: true })
-        .click();
-      await expect(page).toHaveURL(
-        `/app/admin/assignment-types/${assignmentTypeId}/evaluations`
-      );
       await page.getByRole('button', { name: 'Run all cases' }).click();
       await expect(historyTable.getByRole('row', { name: /v2/ })).toContainText(
         '2/2'
@@ -295,19 +263,8 @@ test.describe.serial('Admin assignment types', () => {
           .getByLabel('Encouraging opening: 2/2 Pass')
           .getByText('2/2')
       ).toHaveAttribute('data-status', 'pass');
-      await historyTable
-        .getByRole('button', { name: 'View prompt v1' })
-        .click();
-      const historicalPromptPanel = page.getByRole('complementary', {
-        name: 'Evaluation details',
-      });
-      await expect(
-        historicalPromptPanel.getByText(
-          'Act as a careful evaluator for this assignment type.'
-        )
-      ).toBeVisible();
-      await historicalPromptPanel
-        .getByRole('button', { name: 'Close details' })
+      await page
+        .getByRole('button', { name: 'Back to prompt versions' })
         .click();
       await page.getByRole('link', { name: 'Back to assignment type' }).click();
       await expect(
@@ -321,7 +278,6 @@ test.describe.serial('Admin assignment types', () => {
           kind: true,
           rubricJson: true,
           scoringScaleJson: true,
-          gradingPromptConfigJson: true,
           evaluations: {
             select: {
               title: true,
@@ -356,12 +312,6 @@ test.describe.serial('Admin assignment types', () => {
             description: 'Grammar and syntax support clarity.',
           },
         ],
-      });
-      expect(created.gradingPromptConfigJson).toMatchObject({
-        systemInstructions:
-          'Act as a careful evaluator for this assignment type.',
-        gradingInstructions:
-          'Grade against the rubric categories, explicitly identify missing thesis statements, and give concise feedback.',
       });
       expect(created.evaluations).toEqual([
         expect.objectContaining({
@@ -434,6 +384,193 @@ test.describe.serial('Admin assignment types', () => {
           where: { id: assignmentTypeId },
         });
       }
+      await prisma.$disconnect();
+    }
+  });
+
+  test('versions prompts and evaluation suites before promoting a draft', async ({
+    page,
+    signIn,
+  }) => {
+    const prisma = createE2EPrismaClient();
+    const assignmentType = await prisma.assignmentType.create({
+      data: {
+        title: `Prompt versions E2E ${Date.now()}`,
+        description: 'Exercises prompt and evaluation-suite version control.',
+        position: 9_999,
+        scoringScaleJson: {
+          type: 'weighted_1_5',
+          minScore: 1,
+          maxScore: 5,
+        },
+        rubricJson: {
+          categories: [
+            {
+              key: 'thesis',
+              label: 'Thesis',
+              description: 'Makes a clear, defensible claim.',
+              weight: 1,
+            },
+          ],
+        },
+        gradingPromptConfigJson: {
+          gradingInstructions: 'Give concise, rubric-grounded feedback.',
+        },
+        gradingOutputSchemaJson: {
+          responseShape: 'categories_overall_comment',
+          schemaVersion: 1,
+        },
+      },
+    });
+    await prisma.assignmentTypeEvaluation.create({
+      data: {
+        assignmentTypeId: assignmentType.id,
+        title: 'Encouraging opening',
+        description: 'Begin with specific encouragement.',
+        position: 0,
+        cases: {
+          create: [
+            {
+              assignmentTypeId: assignmentType.id,
+              title: 'Positive opening',
+              documentText: 'School uniforms should remain optional.',
+              criterion: 'Begin with specific encouragement.',
+              rubricCategoryKey: 'thesis',
+              expectedOutputJson: {
+                categories: [
+                  {
+                    key: 'thesis',
+                    score: 4,
+                    comment: 'The position is clear.',
+                  },
+                ],
+                overallComment: 'Jordan, your position is clear.',
+              },
+              position: 0,
+            },
+            {
+              assignmentTypeId: assignmentType.id,
+              title: 'Missing opening',
+              documentText: 'Uniforms can reduce distractions.',
+              criterion:
+                'Begin with specific encouragement. [fixture:improves-after-v1]',
+              rubricCategoryKey: 'thesis',
+              expectedOutputJson: {
+                categories: [
+                  {
+                    key: 'thesis',
+                    score: 4,
+                    comment: 'The position is present.',
+                  },
+                ],
+                overallComment: 'Jordan, make the stakes more explicit.',
+              },
+              position: 1,
+            },
+          ],
+        },
+      },
+    });
+
+    try {
+      await signIn('admin.e2e@yawp.test', 'admin-e2e-password');
+      await page.goto(
+        `/app/admin/assignment-types/${assignmentType.id}/evaluations`
+      );
+
+      await expect(
+        page.getByRole('heading', { name: 'Prompt versions' })
+      ).toBeVisible();
+      await expect(page.getByText('Production', { exact: true })).toBeVisible();
+      await page.getByRole('button', { name: 'Open prompt v1' }).click();
+      await expect(
+        page.getByRole('heading', { name: 'Prompt v1', exact: true })
+      ).toBeVisible();
+      await expect(page.getByText('Suite v1', { exact: true })).toBeVisible();
+
+      await page.getByRole('button', { name: 'Create draft' }).click();
+      await expect(
+        page.getByRole('heading', { name: 'Prompt v2', exact: true })
+      ).toBeVisible();
+      await expect(page.getByText('Draft', { exact: true })).toBeVisible();
+
+      await page.getByRole('button', { name: 'Edit prompt' }).click();
+      const promptDialog = page.getByRole('dialog', { name: 'Edit prompt v2' });
+      await promptDialog
+        .getByLabel('System message template')
+        .fill(
+          'You are the production grading assistant for {{assignment_type}}.'
+        );
+      await promptDialog
+        .getByLabel('User message template')
+        .fill('Use this rubric:\n{{rubric}}\n\nStudent work:\n{{document}}');
+      await promptDialog.getByRole('button', { name: 'Save prompt' }).click();
+      await expect(page.getByText('Revision 2', { exact: true })).toBeVisible();
+
+      const historyTable = page.getByRole('table', {
+        name: 'Evaluation history',
+      });
+      await historyTable
+        .getByRole('button', { name: 'View evaluation Encouraging opening' })
+        .click();
+      const evaluationPanel = page.getByRole('complementary', {
+        name: 'Evaluation details',
+      });
+      await evaluationPanel
+        .getByLabel('Evaluation name')
+        .fill('Encouraging feedback');
+      await evaluationPanel
+        .getByRole('button', { name: 'Save changes' })
+        .click();
+
+      await expect(page.getByText('Suite v2', { exact: true })).toBeVisible();
+      await expect(
+        historyTable.getByText(
+          'No runs for this prompt and evaluation suite yet.'
+        )
+      ).toBeVisible();
+
+      await page.getByRole('button', { name: 'Run all cases' }).click();
+      await expect(historyTable.getByRole('row', { name: /v2/ })).toContainText(
+        '2/2'
+      );
+      await page.getByRole('button', { name: 'Promote to production' }).click();
+      await page
+        .getByRole('alertdialog', { name: 'Promote prompt v2?' })
+        .getByRole('button', { name: 'Promote' })
+        .click();
+      await expect(page.getByText('Production', { exact: true })).toBeVisible();
+
+      const promoted = await prisma.assignmentType.findUniqueOrThrow({
+        where: { id: assignmentType.id },
+        select: {
+          gradingAssistantVersion: true,
+          gradingPromptConfigJson: true,
+          promptVersions: {
+            orderBy: { version: 'asc' },
+            select: { version: true, revision: true, status: true },
+          },
+          evaluationSuiteVersions: {
+            orderBy: { version: 'asc' },
+            select: { version: true },
+          },
+        },
+      });
+      expect(promoted.gradingAssistantVersion).toBe(2);
+      expect(promoted.gradingPromptConfigJson).toMatchObject({
+        systemMessageTemplate:
+          'You are the production grading assistant for {{assignment_type}}.',
+      });
+      expect(promoted.promptVersions).toEqual([
+        { version: 1, revision: 1, status: 'previous' },
+        { version: 2, revision: 2, status: 'production' },
+      ]);
+      expect(promoted.evaluationSuiteVersions).toEqual([
+        { version: 1 },
+        { version: 2 },
+      ]);
+    } finally {
+      await prisma.assignmentType.delete({ where: { id: assignmentType.id } });
       await prisma.$disconnect();
     }
   });

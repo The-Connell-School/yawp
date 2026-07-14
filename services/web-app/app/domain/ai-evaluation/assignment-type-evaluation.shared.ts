@@ -1,7 +1,31 @@
 export type AssignmentTypeEvaluationStatus =
-  'pass' | 'fail' | 'needs_review' | 'blocked';
+  | 'pass'
+  | 'fail'
+  | 'needs_review'
+  | 'blocked';
 
 export type AssignmentTypeEvaluationHistory = {
+  promptVersions: Array<{
+    id: string;
+    version: number;
+    revision: number;
+    status: 'draft' | 'production' | 'previous';
+    systemMessageTemplate: string;
+    userMessageTemplate: string;
+    variableSchema: unknown;
+    contentHash: string;
+    createdAt: string;
+    updatedAt: string;
+    promotedAt: string | null;
+  }>;
+  suiteVersions: Array<{
+    id: string;
+    version: number;
+    contentHash: string;
+    createdAt: string;
+    evaluations: AssignmentTypeEvaluationHistory['evaluations'];
+    cases: AssignmentTypeEvaluationHistory['cases'];
+  }>;
   evaluations: Array<{
     id: string;
     title: string;
@@ -25,6 +49,10 @@ export type AssignmentTypeEvaluationHistory = {
   runs: Array<{
     id: string;
     promptVersion: number;
+    promptVersionId: string | null;
+    promptRevision: number | null;
+    evaluationSuiteVersionId: string | null;
+    evaluationSuiteContentHash: string | null;
     status: string;
     totalCases: number;
     passedCases: number;
@@ -44,6 +72,7 @@ export type AssignmentTypeEvaluationHistory = {
       evidence: string;
       gradingOutput: unknown;
       expectedOutput: unknown;
+      requestSnapshot: unknown;
     }>;
   }>;
 };
