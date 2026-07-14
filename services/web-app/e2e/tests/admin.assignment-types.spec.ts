@@ -95,16 +95,14 @@ test.describe.serial('Admin assignment types', () => {
         `/app/admin/assignment-types/${assignmentTypeId}/evaluations`
       );
       await expect(
-        page.getByRole('heading', { name: 'Evaluations', exact: true })
+        page.getByRole('heading', { name: 'Prompts', exact: true })
       ).toBeVisible();
       await expect(page.getByText(title, { exact: true })).toBeVisible();
       await expect(
         page.getByRole('link', { name: 'Back to assignment type' })
       ).toBeVisible();
-      await expect(
-        page.getByRole('heading', { name: 'Prompt versions' })
-      ).toBeVisible();
-      await page.getByRole('button', { name: 'Open prompt v1' }).click();
+      await expect(page.getByText('Production', { exact: true })).toBeVisible();
+      await page.getByRole('button').filter({ hasText: 'Production' }).click();
       await expect(
         page.getByText(
           'No evaluations yet. Add one to start tracking prompt-version runs.'
@@ -513,10 +511,10 @@ test.describe.serial('Admin assignment types', () => {
       );
 
       await expect(
-        page.getByRole('heading', { name: 'Prompt versions' })
+        page.getByRole('heading', { name: 'Prompts', exact: true })
       ).toBeVisible();
       await expect(page.getByText('Production', { exact: true })).toBeVisible();
-      await page.getByRole('button', { name: 'Open prompt v1' }).click();
+      await page.getByRole('button').filter({ hasText: 'Production' }).click();
       await expect(
         page.getByRole('heading', { name: 'Prompt v1', exact: true })
       ).toBeVisible();

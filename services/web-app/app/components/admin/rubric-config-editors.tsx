@@ -2912,6 +2912,22 @@ function promptStatusLabel(status: ManagedPromptVersion['status']) {
   return 'Previous';
 }
 
+const PROMPT_DATE_FORMATTER = new Intl.DateTimeFormat('en-US', {
+  timeZone: 'America/Chicago',
+  month: 'numeric',
+  day: 'numeric',
+  year: 'numeric',
+});
+
+// Renders as "7.14.2026" — periods between month, day, and year.
+function formatPromptDate(createdAt: string) {
+  const parts = PROMPT_DATE_FORMATTER.formatToParts(new Date(createdAt));
+  const month = parts.find((part) => part.type === 'month')?.value ?? '';
+  const day = parts.find((part) => part.type === 'day')?.value ?? '';
+  const year = parts.find((part) => part.type === 'year')?.value ?? '';
+  return `${month}.${day}.${year}`;
+}
+
 function PromptVersionEditorSheet({
   assignmentTypeId,
   promptVersion,
@@ -3058,16 +3074,9 @@ function PromptVersionsOverview({
   evaluationHistory: AssignmentTypeEvaluationHistory;
   onOpenPrompt: (promptVersionId: string) => void;
 }) {
-  const latestSuite = evaluationHistory.suiteVersions[0];
-  const initialSuiteVersion = Math.min(
-    ...evaluationHistory.suiteVersions.map(
-      (suiteVersion) => suiteVersion.version
-    )
-  );
-
   return (
     <div className="flex h-full min-h-0 w-full flex-col">
-      <header className="shrink-0 border-b px-3 py-5 md:px-6 md:py-6">
+      <header className="shrink-0 px-3 py-5 md:px-6 md:py-6">
         <div className="mx-auto w-full max-w-3xl space-y-5">
           <Button variant="outline" size="sm" asChild>
             <Link to={`/app/admin/assignment-types/${assignmentTypeId}`}>
@@ -3077,7 +3086,7 @@ function PromptVersionsOverview({
           </Button>
           <div className="space-y-1">
             <h1 className="text-3xl font-semibold tracking-tight">
-              Evaluations
+              Prompts
             </h1>
             {assignmentTypeTitle ? (
               <p className="text-sm text-muted-foreground">
@@ -3088,71 +3097,32 @@ function PromptVersionsOverview({
         </div>
       </header>
       <main className="min-h-0 flex-1 overflow-y-auto px-3 py-6 md:px-6">
-        <div className="mx-auto w-full max-w-3xl space-y-4">
-          <div className="space-y-1">
-            <h2 className="text-lg font-semibold">Prompt versions</h2>
-            <p className="text-sm text-muted-foreground">
-              Open a version to edit its draft or review its evaluation runs.
-            </p>
-          </div>
+        <div className="mx-auto w-full max-w-3xl">
           <div className="divide-y rounded-md border">
-            {evaluationHistory.promptVersions.map((promptVersion) => {
-              const latestRun = evaluationHistory.runs.find(
-                (run) =>
-                  (run.promptVersionId === promptVersion.id &&
-                    run.promptRevision === promptVersion.revision &&
-                    run.evaluationSuiteVersionId === latestSuite?.id) ||
-                  (run.promptVersionId === null &&
-                    run.evaluationSuiteVersionId === null &&
-                    run.promptVersion === promptVersion.version &&
-                    latestSuite?.version === initialSuiteVersion)
-              );
-              return (
-                <div
-                  key={promptVersion.id}
-                  className="flex flex-wrap items-center justify-between gap-3 p-4"
-                >
-                  <div className="flex min-w-0 items-center gap-3">
-                    <div className="flex size-9 shrink-0 items-center justify-center rounded-md border bg-muted/30 text-sm font-semibold tabular-nums">
-                      v{promptVersion.version}
-                    </div>
-                    <div className="min-w-0 space-y-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="font-medium">
-                          Prompt v{promptVersion.version}
-                        </span>
-                        <Badge
-                          size="sm"
-                          variant={promptStatusBadgeVariant(
-                            promptVersion.status
-                          )}
-                        >
-                          {promptStatusLabel(promptVersion.status)}
-                        </Badge>
-                      </div>
-                      <p className="text-sm text-muted-foreground">
-                        Revision {promptVersion.revision}
-                        {latestRun
-                          ? ` · ${latestRun.passedCases}/${latestRun.totalCases} passed on Suite v${latestSuite?.version}`
-                          : latestSuite
-                            ? ` · Not run on Suite v${latestSuite.version}`
-                            : ''}
-                      </p>
-                    </div>
-                  </div>
-                  <Button
-                    type="button"
-                    variant="outline"
+            {evaluationHistory.promptVersions.map((promptVersion) => (
+              <button
+                key={promptVersion.id}
+                type="button"
+                onClick={() => onOpenPrompt(promptVersion.id)}
+                className="flex w-full items-center justify-between gap-3 p-4 text-left hover:bg-muted/50"
+              >
+                <span className="flex min-w-0 items-center gap-2">
+                  <span className="font-medium tabular-nums">
+                    {formatPromptDate(promptVersion.createdAt)}
+                  </span>
+                  <Badge
                     size="sm"
-                    aria-label={`Open prompt v${promptVersion.version}`}
-                    onClick={() => onOpenPrompt(promptVersion.id)}
+                    variant={promptStatusBadgeVariant(promptVersion.status)}
                   >
-                    Open
-                    <ChevronRight className="ml-1.5 size-4" />
-                  </Button>
-                </div>
-              );
-            })}
+                    {promptStatusLabel(promptVersion.status)}
+                  </Badge>
+                </span>
+                <ChevronRight
+                  className="size-4 shrink-0 text-muted-foreground"
+                  aria-hidden="true"
+                />
+              </button>
+            ))}
           </div>
         </div>
       </main>
