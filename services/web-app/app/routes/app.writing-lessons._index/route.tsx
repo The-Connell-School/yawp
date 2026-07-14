@@ -494,8 +494,8 @@ export default function WritingLessonsIndexRoute() {
                   to={`/app/writing-lessons/${lesson.slug}`}
                   className="block h-full"
                 >
-                  <Card className="flex h-full flex-col shadow-none hover:shadow-sm">
-                    <CardHeader className="pb-3">
+                  <Card className="h-full shadow-none hover:shadow-sm">
+                    <CardHeader className="p-4">
                       <CardTitle className="text-base leading-snug">
                         {lesson.title}
                       </CardTitle>
@@ -503,12 +503,6 @@ export default function WritingLessonsIndexRoute() {
                         {lesson.description}
                       </CardDescription>
                     </CardHeader>
-                    <CardContent className="mt-auto flex items-center justify-end gap-3 text-base text-muted-foreground sm:text-sm">
-                      <span className="inline-flex items-center gap-1">
-                        Start practice
-                        <ChevronRight className="h-4 w-4 shrink-0" />
-                      </span>
-                    </CardContent>
                   </Card>
                 </Link>
               ))}
