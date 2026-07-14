@@ -66,15 +66,49 @@ const READY_INSIGHT: ClassInsight = {
   },
 };
 
+const INSIGHT_WITH_DIFFERENTIATION: ClassInsight = {
+  ...READY_INSIGHT,
+  summary: {
+    ...READY_INSIGHT.summary!,
+    differentiation: {
+      focusGroups: [
+        {
+          category: 'evidence_and_support',
+          label: 'Evidence/Support',
+          students: [
+            { name: 'Ben Ortiz', href: '/app/submissions/sub-ben' },
+            { name: 'Ana Reyes', href: '/app/submissions/sub-ana' },
+          ],
+        },
+      ],
+      individuals: [
+        {
+          kind: 'support' as const,
+          student: { name: 'Ben Ortiz', href: '/app/submissions/sub-ben' },
+          categoryLabels: ['Thesis/Content', 'Evidence/Support'],
+        },
+        {
+          kind: 'extension' as const,
+          student: { name: 'Dara Lin', href: null },
+          categoryLabels: ['Thesis/Content', 'Evidence/Support'],
+        },
+      ],
+    },
+  },
+};
+
 let root: Root | null = null;
 let container: HTMLDivElement | null = null;
+
+// Links inside the panel need a router context.
+const { MemoryRouter } = actualReactRouter;
 
 function render(element: ReactElement) {
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
   act(() => {
-    root!.render(element);
+    root!.render(<MemoryRouter>{element}</MemoryRouter>);
   });
   return container;
 }
@@ -132,6 +166,36 @@ describe('ClassInsightsPanel', () => {
     expect(el.textContent).toMatch(/24 submissions/i);
     // regenerate affordance is available once an insight exists
     expect(el.textContent).toMatch(/regenerate|update/i);
+  });
+
+  it('renders differentiation groups and individual flags when present', () => {
+    const el = render(
+      <ClassInsightsPanel
+        classAssignmentId="ca-1"
+        initialInsight={INSIGHT_WITH_DIFFERENTIATION}
+      />
+    );
+    expect(el.textContent).toMatch(/differentiation starting points/i);
+    expect(el.textContent).toMatch(/small group · evidence\/support/i);
+    expect(el.textContent).toMatch(/2 students scored 2 or below/i);
+    expect(el.textContent).toContain('Ana Reyes');
+    expect(el.textContent).toMatch(/check in/i);
+    expect(el.textContent).toMatch(/ready for more/i);
+    // Students with a submission link out to the full paper.
+    const link = Array.from(el.querySelectorAll('a')).find((a) =>
+      a.textContent?.includes('Ben Ortiz')
+    );
+    expect(link?.getAttribute('href')).toBe('/app/submissions/sub-ben');
+  });
+
+  it('omits the differentiation section when the summary has none', () => {
+    const el = render(
+      <ClassInsightsPanel
+        classAssignmentId="ca-1"
+        initialInsight={READY_INSIGHT}
+      />
+    );
+    expect(el.textContent).not.toMatch(/differentiation starting points/i);
   });
 
   it('renders a fresh insight returned by the fetcher', () => {

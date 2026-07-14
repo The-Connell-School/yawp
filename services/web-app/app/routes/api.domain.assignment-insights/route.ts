@@ -5,6 +5,10 @@ import {
   type GradedSubmissionInput,
 } from '~/domain/assignment-insights/aggregate-rubric-performance';
 import { generateClassInsight } from '~/domain/assignment-insights/class-insight-synthesis.server';
+import {
+  buildDifferentiation,
+  type DifferentiationInput,
+} from '~/domain/assignment-insights/differentiate-students';
 import { prisma } from '~/utils/db.server';
 import { canManageGrades, getGradingActor } from '~/utils/grading-auth.server';
 
@@ -59,10 +63,15 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 
   // Latest graded submission per student document in this class-assignment.
+  // Student identity is carried for the deterministic differentiation pass
+  // only — the LLM still sees aggregate data with no names.
   const documents = await prisma.document.findMany({
     where: { classAssignmentId: classAssignment.id, deletedAt: null },
     select: {
       id: true,
+      membership: {
+        select: { user: { select: { name: true, email: true } } },
+      },
       submissions: {
         where: { gradedAt: { not: null } },
         orderBy: { submittedAt: 'desc' },
@@ -72,17 +81,23 @@ export async function action({ request }: ActionFunctionArgs) {
     },
   });
 
-  const inputs: GradedSubmissionInput[] = documents
-    .map((doc) => doc.submissions[0])
-    .filter((submission): submission is NonNullable<typeof submission> =>
-      Boolean(submission)
-    )
-    .map((submission) => ({
-      submissionId: submission.id,
-      rubricScores:
-        submission.rubricScores as GradedSubmissionInput['rubricScores'],
-      overallComment: submission.overallComment,
-    }));
+  const inputs: DifferentiationInput[] = documents.flatMap((doc) => {
+    const submission = doc.submissions[0];
+    if (!submission) return [];
+    return [
+      {
+        submissionId: submission.id,
+        studentName:
+          doc.membership?.user?.name?.trim() ||
+          doc.membership?.user?.email?.trim() ||
+          null,
+        href: `/app/submissions/${submission.id}`,
+        rubricScores:
+          submission.rubricScores as GradedSubmissionInput['rubricScores'],
+        overallComment: submission.overallComment,
+      },
+    ];
+  });
 
   if (inputs.length === 0) {
     return dataResponse(
@@ -134,7 +149,15 @@ export async function action({ request }: ActionFunctionArgs) {
     );
   }
 
-  const summaryJson = summary as unknown as Prisma.InputJsonValue;
+  // Differentiation starting points are computed deterministically from the
+  // rubric scores and stored alongside the LLM summary so they hydrate from
+  // the cache with it.
+  const differentiation = buildDifferentiation(inputs);
+  const enrichedSummary = differentiation
+    ? { ...summary, differentiation }
+    : summary;
+
+  const summaryJson = enrichedSummary as unknown as Prisma.InputJsonValue;
   await prisma.classAssignmentInsight.upsert({
     where: { classAssignmentId: classAssignment.id },
     create: {
@@ -154,7 +177,7 @@ export async function action({ request }: ActionFunctionArgs) {
       model,
       submissionCount: aggregate.submissionCount,
       generatedAt: generatedAt.toISOString(),
-      summary,
+      summary: enrichedSummary,
     },
   });
 }

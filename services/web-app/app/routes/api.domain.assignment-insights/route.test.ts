@@ -139,6 +139,97 @@ describe('api.domain.assignment-insights', () => {
     expect(summary.nextSteps[0].rubricCategory).toBe('evidence_and_support');
   });
 
+  test('stores differentiation starting points with the summary, without sending names to the LLM', async () => {
+    // Ana struggles across the board; Ben and Cara share an evidence gap
+    // (with Ana, still a minority of the class); Dev is strong everywhere.
+    const lowScores = {
+      thesis_and_content: { score: 2, comment: '' },
+      evidence_and_support: { score: 1, comment: '' },
+    };
+    const strongScores = {
+      thesis_and_content: { score: 5, comment: '' },
+      evidence_and_support: { score: 4, comment: '' },
+    };
+    const midScores = {
+      thesis_and_content: { score: 3, comment: '' },
+      evidence_and_support: { score: 3, comment: '' },
+    };
+    prisma.document.findMany.mockResolvedValue([
+      {
+        id: 'doc-1',
+        membership: { user: { name: 'Ana Reyes', email: 'ana@school.test' } },
+        submissions: [{ id: 'sub-1', rubricScores: lowScores, overallComment: null }],
+      },
+      {
+        id: 'doc-2',
+        membership: { user: { name: null, email: 'ben@school.test' } },
+        submissions: [
+          {
+            id: 'sub-2',
+            rubricScores: {
+              thesis_and_content: { score: 4, comment: '' },
+              evidence_and_support: { score: 2, comment: '' },
+            },
+            overallComment: null,
+          },
+        ],
+      },
+      {
+        id: 'doc-3',
+        membership: { user: { name: 'Dev Patel', email: 'dev@school.test' } },
+        submissions: [{ id: 'sub-3', rubricScores: strongScores, overallComment: null }],
+      },
+      ...['doc-4', 'doc-5', 'doc-6'].map((id, index) => ({
+        id,
+        membership: { user: { name: `Mid ${index}`, email: null } },
+        submissions: [
+          {
+            id: `sub-mid-${index}`,
+            rubricScores: midScores,
+            overallComment: null,
+          },
+        ],
+      })),
+    ]);
+
+    const response = await action({ request: postRequest('ca-1') } as any);
+    const payload = payloadOf(response);
+    expect(payload.data.success).toBe(true);
+
+    const summary = (payload.data.insight as any).summary;
+    const differentiation = summary.differentiation;
+    expect(differentiation).toBeTruthy();
+
+    const evidenceGroup = differentiation.focusGroups.find(
+      (group: any) => group.category === 'evidence_and_support'
+    );
+    expect(evidenceGroup.students.map((s: any) => s.name)).toEqual([
+      'Ana Reyes',
+      'ben@school.test',
+    ]);
+    expect(evidenceGroup.students[0].href).toBe('/app/submissions/sub-1');
+
+    const kinds = differentiation.individuals.map((flag: any) => [
+      flag.kind,
+      flag.student.name,
+    ]);
+    expect(kinds).toContainEqual(['support', 'Ana Reyes']);
+    expect(kinds).toContainEqual(['extension', 'Dev Patel']);
+
+    // The cached row carries the same enriched summary.
+    const upsertArgs = prisma.classAssignmentInsight.upsert.mock.calls[0][0];
+    expect(upsertArgs.create.summaryJson.differentiation).toEqual(
+      differentiation
+    );
+
+    // Student identities stay out of the LLM prompt.
+    const llmArgs = getLLMCompletion.mock.calls[0][0];
+    const promptText = JSON.stringify(llmArgs);
+    expect(promptText).not.toContain('Ana Reyes');
+    expect(promptText).not.toContain('ben@school.test');
+    expect(promptText).not.toContain('Dev Patel');
+  });
+
   test('rejects non-graders with 403', async () => {
     canManageGrades.mockReturnValue(false);
     const response = await action({ request: postRequest('ca-1') } as any);

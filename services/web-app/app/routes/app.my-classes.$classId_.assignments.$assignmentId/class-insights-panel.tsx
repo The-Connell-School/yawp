@@ -7,6 +7,7 @@ import {
   Sparkles,
   TrendingUp,
   TriangleAlert,
+  Users,
   type LucideIcon,
 } from 'lucide-react';
 import { Badge } from '~/components/ui/badge';
@@ -28,10 +29,34 @@ type TeachingNextStep = {
   rubricCategory: string;
 };
 
+type DifferentiationStudent = {
+  name: string;
+  href: string | null;
+};
+
+type DifferentiationGroup = {
+  category: string;
+  label: string;
+  students: DifferentiationStudent[];
+};
+
+type DifferentiationFlag = {
+  kind: 'support' | 'extension';
+  student: DifferentiationStudent;
+  categoryLabels: string[];
+};
+
+type DifferentiationSummary = {
+  focusGroups: DifferentiationGroup[];
+  individuals: DifferentiationFlag[];
+};
+
 export type ClassInsightSummary = {
   overview: string;
   categories: CategoryInsight[];
   nextSteps: TeachingNextStep[];
+  /** Deterministic starting points for grouping/supporting students; absent when the data suggests nothing. */
+  differentiation?: DifferentiationSummary | null;
 };
 
 export type ClassInsight = {
@@ -203,6 +228,93 @@ function CategoryCard({
   );
 }
 
+function StudentLink({ student }: { student: DifferentiationStudent }) {
+  if (!student.href) {
+    return <span className="text-sm font-medium">{student.name}</span>;
+  }
+  return (
+    <Link
+      to={student.href}
+      className="inline-flex items-center gap-0.5 text-sm font-medium text-primary hover:underline"
+    >
+      {student.name}
+      <ArrowUpRight className="h-3 w-3" aria-hidden />
+    </Link>
+  );
+}
+
+function DifferentiationSection({
+  differentiation,
+}: {
+  differentiation: DifferentiationSummary;
+}) {
+  const { focusGroups, individuals } = differentiation;
+  if (focusGroups.length === 0 && individuals.length === 0) return null;
+
+  return (
+    <div>
+      <h4 className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        Differentiation starting points
+      </h4>
+      <p className="mb-2.5 text-xs text-muted-foreground">
+        Patterns in the rubric scores worth a second look — you know your
+        students best.
+      </p>
+      <div className="flex flex-col gap-2.5">
+        {focusGroups.map((group) => (
+          <div
+            key={group.category}
+            className="rounded-lg border bg-card p-3.5"
+          >
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+                <Users className="h-4 w-4" aria-hidden />
+              </span>
+              <p className="text-sm font-semibold">
+                Small group · {group.label}
+              </p>
+              <span className="text-xs text-muted-foreground">
+                {group.students.length} students scored 2 or below
+              </span>
+            </div>
+            <ul className="mt-2 flex flex-wrap gap-x-3 gap-y-1 pl-9">
+              {group.students.map((student) => (
+                <li key={student.name}>
+                  <StudentLink student={student} />
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
+
+        {individuals.length > 0 && (
+          <ul className="flex flex-col gap-2">
+            {individuals.map((flag) => (
+              <li
+                key={`${flag.kind}-${flag.student.name}`}
+                className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border bg-card px-3.5 py-2.5"
+              >
+                <StudentLink student={flag.student} />
+                <Badge
+                  variant={flag.kind === 'support' ? 'warning-soft' : 'success'}
+                  size="sm"
+                >
+                  {flag.kind === 'support' ? 'Check in' : 'Ready for more'}
+                </Badge>
+                <span className="text-xs text-muted-foreground">
+                  {flag.kind === 'support'
+                    ? `Scored 2 or below in ${flag.categoryLabels.join(', ')}`
+                    : 'Strong across the rubric — consider an extension'}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function StatChip({
   value,
   label,
@@ -321,6 +433,10 @@ function InsightBody({
             })}
           </ol>
         </div>
+      )}
+
+      {summary.differentiation && (
+        <DifferentiationSection differentiation={summary.differentiation} />
       )}
     </div>
   );
