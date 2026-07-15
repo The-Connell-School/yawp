@@ -153,6 +153,65 @@ describe('api.model.assignment-module-session', () => {
     expect(prisma.assignmentModuleSession.create).toHaveBeenCalledTimes(1);
   });
 
+  test('opens an AP History session with the essay-type-specific bubble', async () => {
+    const { buildApHistorySnapshot } = await import(
+      '~/domain/ap-history/schema'
+    );
+    const apHistorySnapshot = buildApHistorySnapshot({
+      externalKey: 'apush-leq-market-revolution',
+      course: 'apush',
+      essayType: 'leq',
+      prompt:
+        'Evaluate the extent to which the Market Revolution transformed society.',
+      period: '1815-1848',
+      periodNumber: 4,
+      reasoningSkill: 'causation',
+      defaultTimeMode: 'untimed',
+      defaultDurationMinutes: 40,
+      sources: [],
+    });
+    prisma.document.findUnique.mockResolvedValue({
+      membershipId: 'student-profile-1',
+      apHistorySnapshot,
+      assignment: null,
+    });
+    // The shared DB module stores the default (DBQ) prompt; the route must open
+    // this LEQ document with the LEQ bubble instead.
+    prisma.assignmentModule.findUnique.mockResolvedValue({
+      id: 'module-1',
+      title: 'Read the Documents',
+      instructions: [
+        {
+          id: 'instruction-1',
+          title: 'Analyze the sources',
+          prompt: 'DBQ opener stored in the shared module.',
+        },
+      ],
+    });
+    prisma.assignmentModuleSession.findFirst.mockResolvedValue(null);
+    prisma.assignmentModuleSession.create.mockResolvedValue({
+      id: 'cms-created',
+    });
+    prisma.assignmentModuleSession.findUnique.mockResolvedValue({
+      ...existingCms,
+      id: 'cms-created',
+    });
+
+    await action({
+      request: requestFor({
+        documentId: 'document-1',
+        assignmentModuleId: 'module-1',
+      }),
+      params: {},
+    } as any);
+
+    const createArgs = prisma.assignmentModuleSession.create.mock
+      .calls[0]?.[0] as any;
+    const openingMessage = createArgs.data.messages.create[0].content as string;
+    expect(openingMessage).toContain('no documents on an LEQ');
+    expect(openingMessage).not.toBe('DBQ opener stored in the shared module.');
+  });
+
   test('touches a newly created document module session when it becomes active', async () => {
     prisma.assignmentModuleSession.findFirst.mockResolvedValue(null);
     prisma.assignmentModuleSession.create.mockResolvedValue({
