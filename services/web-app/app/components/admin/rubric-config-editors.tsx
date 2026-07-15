@@ -1,6 +1,7 @@
 import {
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type ReactNode,
@@ -92,6 +93,10 @@ import {
 import { getGradingAssistantStrictnessLabel } from '~/domain/grading/grading-assistant-strictness';
 import type { CompiledGradingAssistantInvocation } from '~/domain/grading/grading-assistant-invocation';
 import type { GradingAssistantStrictnessLevel } from '~/domain/grading/grading-assistant-strictness';
+import {
+  computePromptVersionLabels,
+  formatPromptDate,
+} from '~/domain/ai-evaluation/assignment-type-evaluation.shared';
 import type {
   AssignmentTypeEvaluationHistory,
   AssignmentTypeEvaluationStatus,
@@ -2300,12 +2305,12 @@ function EvaluationDetailPanel({
 }
 
 function EvaluationResultDetailPanel({
-  runVersion,
+  promptLabel,
   evaluation,
   results,
   onClose,
 }: {
-  runVersion: number | null;
+  promptLabel: string | null;
   evaluation: EvaluationColumn;
   results: AssignmentTypeEvaluationHistory['runs'][number]['results'];
   onClose: () => void;
@@ -2341,8 +2346,7 @@ function EvaluationResultDetailPanel({
           </span>
         ),
         onClose,
-        subtitle:
-          runVersion !== null ? <p>Prompt version v{runVersion}</p> : undefined,
+        subtitle: promptLabel ? <p>Prompt version {promptLabel}</p> : undefined,
       })}
       <div className="divide-y">
         {evaluation.cases.map((evaluationCase) => {
@@ -2402,9 +2406,11 @@ function historicalCompiledPrompt(snapshot: unknown) {
 
 function EvaluationRunDetailPanel({
   run,
+  promptLabel,
   onClose,
 }: {
   run: AssignmentTypeEvaluationHistory['runs'][number];
+  promptLabel: string;
   onClose: () => void;
 }) {
   const compiledPrompt = historicalCompiledPrompt(run.promptSnapshot);
@@ -2412,7 +2418,7 @@ function EvaluationRunDetailPanel({
   return (
     <div className="space-y-4">
       {evaluationDetailPanelHeader({
-        title: `Prompt v${run.promptVersion}`,
+        title: `Prompt ${promptLabel}`,
         onClose,
         subtitle: (
           <p>
@@ -2444,6 +2450,14 @@ function EvaluationRunDetailPanel({
       </div>
     </div>
   );
+}
+
+function resolveRunPromptLabel(
+  run: { promptVersionId: string | null; promptVersion: number },
+  promptLabels: Map<string, string>
+): string {
+  const label = run.promptVersionId ? promptLabels.get(run.promptVersionId) : undefined;
+  return label ?? `v${run.promptVersion}`;
 }
 
 function EvaluationMatrixSection({
@@ -2490,6 +2504,10 @@ function EvaluationMatrixSection({
       ? (runFetcher.data.message ?? 'The evaluation suite could not run.')
       : null;
 
+  const promptLabels = useMemo(
+    () => computePromptVersionLabels(evaluationHistory.promptVersions),
+    [evaluationHistory.promptVersions]
+  );
   const activeCaseCount = evaluationHistory.cases.filter(
     (evaluationCase) => !evaluationCase.archived
   ).length;
@@ -2646,14 +2664,18 @@ function EvaluationMatrixSection({
       detailRun &&
       detailResultEvaluation ? (
         <EvaluationResultDetailPanel
-          runVersion={detailRun.promptVersion}
+          promptLabel={resolveRunPromptLabel(detailRun, promptLabels)}
           evaluation={detailResultEvaluation}
           results={detailRun.results}
           onClose={closeDetailPanel}
         />
       ) : null}
       {detailSelection?.kind === 'run' && detailRun ? (
-        <EvaluationRunDetailPanel run={detailRun} onClose={closeDetailPanel} />
+        <EvaluationRunDetailPanel
+          run={detailRun}
+          promptLabel={resolveRunPromptLabel(detailRun, promptLabels)}
+          onClose={closeDetailPanel}
+        />
       ) : null}
     </aside>
   ) : null;
@@ -2943,30 +2965,16 @@ function promptStatusLabel(status: ManagedPromptVersion['status']) {
   return 'Previous';
 }
 
-const PROMPT_DATE_FORMATTER = new Intl.DateTimeFormat('en-US', {
-  timeZone: 'America/Chicago',
-  month: 'numeric',
-  day: 'numeric',
-  year: 'numeric',
-});
-
-// Renders as "7.14.2026" — periods between month, day, and year.
-function formatPromptDate(createdAt: string) {
-  const parts = PROMPT_DATE_FORMATTER.formatToParts(new Date(createdAt));
-  const month = parts.find((part) => part.type === 'month')?.value ?? '';
-  const day = parts.find((part) => part.type === 'day')?.value ?? '';
-  const year = parts.find((part) => part.type === 'year')?.value ?? '';
-  return `${month}.${day}.${year}`;
-}
-
 function PromptVersionEditorSheet({
   assignmentTypeId,
   promptVersion,
+  promptLabel,
   open,
   onOpenChange,
 }: {
   assignmentTypeId: string;
   promptVersion: ManagedPromptVersion;
+  promptLabel: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
@@ -3021,7 +3029,7 @@ function PromptVersionEditorSheet({
         className="flex max-h-screen w-full max-w-full flex-col overflow-y-auto sm:max-w-2xl"
       >
         <SheetHeader>
-          <SheetTitle>Edit prompt v{promptVersion.version}</SheetTitle>
+          <SheetTitle>Edit prompt {promptLabel}</SheetTitle>
         </SheetHeader>
         <div className="mt-4 space-y-5">
           <div className="space-y-2">
@@ -3098,11 +3106,13 @@ function PromptVersionsOverview({
   assignmentTypeId,
   assignmentTypeTitle,
   evaluationHistory,
+  promptLabels,
   onOpenPrompt,
 }: {
   assignmentTypeId: string;
   assignmentTypeTitle?: string;
   evaluationHistory: AssignmentTypeEvaluationHistory;
+  promptLabels: Map<string, string>;
   onOpenPrompt: (promptVersionId: string) => void;
 }) {
   return (
@@ -3139,7 +3149,8 @@ function PromptVersionsOverview({
               >
                 <span className="flex min-w-0 items-center gap-2">
                   <span className="font-medium tabular-nums">
-                    {formatPromptDate(promptVersion.createdAt)}
+                    {promptLabels.get(promptVersion.id) ??
+                      formatPromptDate(promptVersion.createdAt)}
                   </span>
                   <Badge
                     size="sm"
@@ -3190,6 +3201,10 @@ export function EvaluationHistorySection({
     promptVersionControlEnabled &&
     layout === 'page' &&
     evaluationHistory.promptVersions.length > 0;
+  const promptLabels = useMemo(
+    () => computePromptVersionLabels(evaluationHistory.promptVersions),
+    [evaluationHistory.promptVersions]
+  );
 
   useEffect(() => {
     const createdPromptId = createDraftFetcher.data?.promptVersionId;
@@ -3245,6 +3260,7 @@ export function EvaluationHistorySection({
         assignmentTypeId={assignmentTypeId}
         assignmentTypeTitle={assignmentTypeTitle}
         evaluationHistory={evaluationHistory}
+        promptLabels={promptLabels}
         onOpenPrompt={(promptVersionId) => {
           setSelectedPromptId(promptVersionId);
           setSelectedSuiteId(latestSuite?.id ?? null);
@@ -3275,6 +3291,8 @@ export function EvaluationHistorySection({
     runs: selectedRuns,
   };
   const selectedPromptVersionId = selectedPrompt.id;
+  const selectedPromptLabel =
+    promptLabels.get(selectedPrompt.id) ?? `v${selectedPrompt.version}`;
   const isLatestSuite = selectedSuite.id === latestSuite?.id;
   const hasPromotionRun =
     selectedPrompt.status === 'draft' &&
@@ -3388,7 +3406,7 @@ export function EvaluationHistorySection({
         promptVersionId={selectedPrompt.id}
         evaluationSuiteVersionId={selectedSuite.id}
         allowEvaluationChanges={isLatestSuite}
-        pageTitle={`Prompt v${selectedPrompt.version}`}
+        pageTitle={`Prompt ${selectedPromptLabel}`}
         pageBackControl={
           <Button
             type="button"
@@ -3409,7 +3427,6 @@ export function EvaluationHistorySection({
             >
               {promptStatusLabel(selectedPrompt.status)}
             </Badge>
-            <span>Revision {selectedPrompt.revision}</span>
           </div>
         }
         toolbarLeading={promptActions}
@@ -3420,6 +3437,7 @@ export function EvaluationHistorySection({
         <PromptVersionEditorSheet
           assignmentTypeId={assignmentTypeId}
           promptVersion={selectedPrompt}
+          promptLabel={selectedPromptLabel}
           open={editPromptOpen}
           onOpenChange={setEditPromptOpen}
         />
@@ -3429,7 +3447,7 @@ export function EvaluationHistorySection({
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
-              Promote prompt v{selectedPrompt.version}?
+              Promote prompt {selectedPromptLabel}?
             </AlertDialogTitle>
             <AlertDialogDescription>
               This prompt will replace the current production prompt used by the
@@ -3454,6 +3472,7 @@ export function EvaluationHistorySection({
 export function PromptConfigEditor({
   initial,
   assignmentTypeId,
+  currentPromptLabel,
 }: {
   initial: PromptConfigData;
   namePrefix?: string;
@@ -3462,6 +3481,7 @@ export function PromptConfigEditor({
   gradingAssistantPromptPreviewUnavailableReason?: string;
   isPromptPreviewStale?: boolean;
   assignmentTypeId?: string | null;
+  currentPromptLabel?: string | null;
   title?: string;
   scoringScale?: ScoringScaleData;
   rubric?: RubricData;
@@ -3472,17 +3492,24 @@ export function PromptConfigEditor({
         <>
           <p className="text-sm text-muted-foreground text-pretty">
             Prompt configuration and tests are managed with this assignment
-            type&apos;s evaluations.
+            type&apos;s prompt.
           </p>
-          <Button type="button" variant="outline" size="sm" asChild>
-            <Link
-              to={`/app/admin/assignment-types/${assignmentTypeId}/evaluations`}
-              className="w-fit"
-            >
-              <FlaskConical className="mr-1.5 size-4 shrink-0" />
-              Evaluations
-            </Link>
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button type="button" variant="outline" size="sm" asChild>
+              <Link
+                to={`/app/admin/assignment-types/${assignmentTypeId}/prompt`}
+                className="w-fit"
+              >
+                <FlaskConical className="mr-1.5 size-4 shrink-0" />
+                Prompt
+              </Link>
+            </Button>
+            {currentPromptLabel ? (
+              <span className="text-sm text-muted-foreground">
+                Production prompt: {currentPromptLabel}
+              </span>
+            ) : null}
+          </div>
         </>
       ) : (
         <p className="text-sm text-muted-foreground text-pretty">
