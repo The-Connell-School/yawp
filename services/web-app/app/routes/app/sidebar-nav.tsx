@@ -5,8 +5,8 @@ import {
   FileText,
   GaugeIcon,
   LockIcon,
+  Microscope,
   MonitorPlay,
-  Search,
   Users,
 } from 'lucide-react';
 import { Tooltip } from '~/components/ui/tooltip';
@@ -47,7 +47,7 @@ const icons = {
   studentWork: <FileText size={20} className="shrink-0" />,
   assignments: <ClipboardList size={20} className="shrink-0" />,
   lounge: <MonitorPlay size={20} className="shrink-0" />,
-  reporter: <Search size={20} className="shrink-0" />,
+  reporter: <Microscope size={20} className="shrink-0" />,
   organization: <CogIcon size={20} className="shrink-0" />,
   admin: <LockIcon size={20} className="shrink-0" />,
 };
