@@ -11,6 +11,10 @@ import {
 } from './build-system-prompt';
 import { isApHistorySnapshot } from '~/domain/ap-history/schema';
 import { buildApHistoryTutorSystemPrompt } from '~/domain/ap-history/tutor-prompt';
+import {
+  resolveApHistorySectionTutorInstructions,
+  resolveApHistoryStepTutorInstructions,
+} from '../../../../../packages/prisma/scripts/ap-history-module-data';
 import { parseRubric } from '~/domain/assignment-types/assignment-type-rubric.shared';
 import { normalizeModuleRubricAlignment } from '~/domain/assignment-types/assignment-type-rubric-config';
 import {
@@ -116,13 +120,26 @@ export async function action({ request }: ActionFunctionArgs) {
     const apHistorySnapshot =
       cms.document.apHistorySnapshot ??
       cms.document.assignment?.apHistorySnapshot;
+    // DBQ and LEQ get separately authored coaching. The shared DB module stores
+    // one representative variant; select the variant matching this document's
+    // essay type, falling back to the stored value for legacy/uncanonical
+    // modules that have no essay-type-specific guidance.
     const system = isApHistorySnapshot(apHistorySnapshot)
       ? buildApHistoryTutorSystemPrompt(apHistorySnapshot, {
           title: cms.assignmentModule.title,
-          tutorInstructions: cms.assignmentModule.tutorInstructions,
+          tutorInstructions:
+            resolveApHistorySectionTutorInstructions(
+              apHistorySnapshot.essayType,
+              cms.assignmentModule.title
+            ) ?? cms.assignmentModule.tutorInstructions,
           instruction: {
             title: instruction.title,
-            tutorInstructions: instruction.tutorInstructions,
+            tutorInstructions:
+              resolveApHistoryStepTutorInstructions(
+                apHistorySnapshot.essayType,
+                cms.assignmentModule.title,
+                instruction.title
+              ) ?? instruction.tutorInstructions,
           },
         })
       : buildTutorSystemPrompt({
