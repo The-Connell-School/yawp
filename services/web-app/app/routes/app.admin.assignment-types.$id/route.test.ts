@@ -6,6 +6,9 @@ const prisma = {
     findUnique: mock(),
     update: mock(),
   },
+  assignmentTypePromptVersion: {
+    findMany: mock(),
+  },
   orgMembership: {
     findMany: mock(),
     findUnique: mock(),
@@ -38,6 +41,7 @@ describe('admin assignment type detail action', () => {
     prisma.$transaction.mockReset();
     prisma.assignmentType.findUnique.mockReset();
     prisma.assignmentType.update.mockReset();
+    prisma.assignmentTypePromptVersion.findMany.mockReset();
     prisma.orgMembership.findMany.mockReset();
     prisma.orgMembership.findUnique.mockReset();
     requireAdmin.mockReset();
@@ -49,6 +53,7 @@ describe('admin assignment type detail action', () => {
       callback(prisma)
     );
     prisma.assignmentType.findUnique.mockResolvedValue({ id: 'at-1' });
+    prisma.assignmentTypePromptVersion.findMany.mockResolvedValue([]);
     prisma.orgMembership.findMany.mockResolvedValue([]);
     prisma.orgMembership.findUnique.mockResolvedValue({ id: 'teacher-1' });
   });
@@ -310,6 +315,52 @@ describe('admin assignment type detail action', () => {
     expect(assignmentTypeQuery.include.evaluations).toBeUndefined();
     expect(assignmentTypeQuery.include.evaluationCases).toBeUndefined();
     expect(assignmentTypeQuery.include.evaluationRuns).toBeUndefined();
+  });
+
+  test('resolves the production prompt version label for the current prompt', async () => {
+    prisma.assignmentType.findUnique.mockResolvedValue({
+      id: 'at-1',
+      title: 'ACT Writing',
+      kind: 'act_writing',
+      createdAt: new Date('2026-06-04T00:00:00.000Z'),
+      description: null,
+      archivedAt: null,
+      scoringScaleJson: null,
+      rubricJson: null,
+      gradingPromptConfigJson: null,
+      gradingOutputSchemaJson: null,
+      gradingCalibrationNotes: null,
+      gradingAssistantVersion: 1,
+      gradingAssistantSourceTemplateId: null,
+      gradingAssistantSourceTemplateSlug: null,
+      evaluations: [],
+      evaluationCases: [],
+      assignmentModules: [],
+      image: null,
+    });
+    prisma.assignmentTypePromptVersion.findMany.mockResolvedValue([
+      {
+        id: 'prompt-a',
+        createdAt: new Date('2026-07-14T14:00:00.000Z'),
+        status: 'previous',
+      },
+      {
+        id: 'prompt-b',
+        createdAt: new Date('2026-07-14T16:00:00.000Z'),
+        status: 'production',
+      },
+    ]);
+
+    const result = await loader({
+      request: new Request(
+        'https://example.test/app/admin/assignment-types/at-1'
+      ),
+      params: { id: 'at-1' },
+      context: {} as never,
+    });
+
+    const data = (result as { data: any }).data;
+    expect(data.currentPromptLabel).toBe('7.14.2026 B');
   });
 
   test('does not present the standard prompt as the exact AP History invocation', async () => {

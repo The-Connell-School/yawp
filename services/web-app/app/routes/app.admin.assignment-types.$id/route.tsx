@@ -13,6 +13,8 @@ import {
 import { resolveAssignmentTypeGradingConfig } from '~/domain/assignment-types/assignment-type-grading-config.server';
 import { compileGradingAssistantInvocation } from '~/domain/grading/grading-assistant-invocation';
 import { AP_HISTORY_ASSIGNMENT_TYPE_KEY } from '~/domain/ap-history/schema';
+import { computePromptVersionLabels } from '~/domain/ai-evaluation/assignment-type-evaluation.shared';
+import { isPromptVersionControlEnabled } from '~/domain/ai-evaluation/prompt-version-control.server';
 
 const PROMPT_PREVIEW_INPUTS = {
   studentFirstName: 'Jordan',
@@ -54,12 +56,15 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     throw new Response('Not Found', { status: 404 });
   }
 
+  const currentPromptLabel = await resolveCurrentPromptLabel(course.id);
+
   if (course.systemKey === AP_HISTORY_ASSIGNMENT_TYPE_KEY) {
     return dataResponse({
       course,
       gradingAssistantPromptPreview: null,
       gradingAssistantPromptPreviewUnavailableReason:
         'The AP History prompt is built from the assignment snapshot. Open a graded submission to inspect the full prompt.',
+      currentPromptLabel,
     });
   }
 
@@ -82,7 +87,29 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       previewInputs: PROMPT_PREVIEW_INPUTS,
     },
     gradingAssistantPromptPreviewUnavailableReason: null,
+    currentPromptLabel,
   });
+}
+
+async function resolveCurrentPromptLabel(assignmentTypeId: string) {
+  if (!isPromptVersionControlEnabled()) return null;
+
+  const promptVersions = await prisma.assignmentTypePromptVersion.findMany({
+    where: { assignmentTypeId },
+    select: { id: true, createdAt: true, status: true },
+  });
+  const production = promptVersions.find(
+    (promptVersion) => promptVersion.status === 'production'
+  );
+  if (!production) return null;
+
+  const labels = computePromptVersionLabels(
+    promptVersions.map((promptVersion) => ({
+      id: promptVersion.id,
+      createdAt: promptVersion.createdAt.toISOString(),
+    }))
+  );
+  return labels.get(production.id) ?? null;
 }
 
 export async function action({ request, params }: ActionFunctionArgs) {
@@ -236,6 +263,7 @@ export default function AssignmentTypeRoute() {
     course,
     gradingAssistantPromptPreview,
     gradingAssistantPromptPreviewUnavailableReason,
+    currentPromptLabel,
   } = useLoaderData<typeof loader>();
 
   return (
@@ -254,6 +282,7 @@ export default function AssignmentTypeRoute() {
       archivedAt={course.archivedAt}
       imageId={course.image?.id ?? null}
       modules={course.assignmentModules}
+      currentPromptLabel={currentPromptLabel}
     />
   );
 }

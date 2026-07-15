@@ -48,6 +48,7 @@ type AssignmentTypeEditorFormProps = {
   archivedAt?: Date | string | null;
   imageId?: string | null;
   modules?: AssignmentTypeModuleRow[];
+  currentPromptLabel?: string | null;
 };
 
 function formSnapshot(values: {
@@ -139,6 +140,7 @@ export function AssignmentTypeEditorForm({
   archivedAt = null,
   imageId = null,
   modules = [],
+  currentPromptLabel = null,
 }: AssignmentTypeEditorFormProps) {
   const fetcher = useFetcher();
   const imageFileInputRef = useRef<HTMLInputElement>(null);
@@ -407,6 +409,7 @@ export function AssignmentTypeEditorForm({
             }
             isPromptPreviewStale={isPromptPreviewStale}
             assignmentTypeId={assignmentTypeId ?? null}
+            currentPromptLabel={currentPromptLabel}
             title={title}
             scoringScale={scoringScaleState}
             rubric={rubricState}
