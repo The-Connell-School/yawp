@@ -1,3 +1,50 @@
+const PROMPT_DATE_FORMATTER = new Intl.DateTimeFormat('en-US', {
+  timeZone: 'America/Chicago',
+  month: 'numeric',
+  day: 'numeric',
+  year: 'numeric',
+});
+
+// Renders as "7.14.2026" — periods between month, day, and year.
+export function formatPromptDate(createdAt: string) {
+  const parts = PROMPT_DATE_FORMATTER.formatToParts(new Date(createdAt));
+  const month = parts.find((part) => part.type === 'month')?.value ?? '';
+  const day = parts.find((part) => part.type === 'day')?.value ?? '';
+  const year = parts.find((part) => part.type === 'year')?.value ?? '';
+  return `${month}.${day}.${year}`;
+}
+
+// A prompt's display ID is just its creation date. If another prompt was
+// created the same calendar day, same-day prompts get A/B/C suffixes in
+// creation order instead — so a lone same-day prompt has no letter until a
+// sibling shows up. Computed fresh from createdAt every time; nothing is
+// stored.
+export function computePromptVersionLabels(
+  promptVersions: Array<{ id: string; createdAt: string }>
+): Map<string, string> {
+  const sorted = [...promptVersions].sort(
+    (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+  );
+  const idsByDay = new Map<string, string[]>();
+  for (const promptVersion of sorted) {
+    const day = formatPromptDate(promptVersion.createdAt);
+    const ids = idsByDay.get(day) ?? [];
+    ids.push(promptVersion.id);
+    idsByDay.set(day, ids);
+  }
+  const labels = new Map<string, string>();
+  for (const [day, ids] of idsByDay) {
+    if (ids.length === 1) {
+      labels.set(ids[0], day);
+      continue;
+    }
+    ids.forEach((id, index) => {
+      labels.set(id, `${day} ${String.fromCharCode(65 + index)}`);
+    });
+  }
+  return labels;
+}
+
 export type AssignmentTypeEvaluationStatus =
   | 'pass'
   | 'fail'
