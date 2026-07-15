@@ -2,7 +2,7 @@
 import { PrismaClient } from '../generated/prisma';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { AP_HISTORY_LIBRARY_ENTRIES } from './ap-history-library-data';
-import { AP_HISTORY_MODULES } from './ap-history-module-data';
+import { AP_HISTORY_SEED_MODULES } from './ap-history-module-data';
 import { isLocalDatabaseUrl } from './seed-overlay-connection';
 
 const AP_HISTORY_ASSIGNMENT_TYPE_KEY = 'ap_history_essay';
@@ -71,7 +71,7 @@ async function seedApHistoryLibrary() {
         create: { organizationId: org.id },
       },
       assignmentModules: {
-        create: AP_HISTORY_MODULES.map((moduleData) => ({
+        create: AP_HISTORY_SEED_MODULES.map((moduleData) => ({
           title: moduleData.title,
           position: moduleData.position,
           description: moduleData.description,
@@ -103,7 +103,7 @@ async function seedApHistoryLibrary() {
   // single "AP History Essay" module in place so existing documents keep
   // their sessions; positions 2-4 are additive and their sessions are
   // created on demand when a student advances into them.
-  for (const moduleData of AP_HISTORY_MODULES) {
+  for (const moduleData of AP_HISTORY_SEED_MODULES) {
     const moduleFields = {
       title: moduleData.title,
       position: moduleData.position,

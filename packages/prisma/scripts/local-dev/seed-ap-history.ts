@@ -1,7 +1,7 @@
 /* eslint-disable no-console */
 import type { Prisma, PrismaClient } from '../../generated/prisma';
 import { AP_HISTORY_LIBRARY_ENTRIES } from '../ap-history-library-data';
-import { AP_HISTORY_MODULES } from '../ap-history-module-data';
+import { AP_HISTORY_SEED_MODULES } from '../ap-history-module-data';
 import {
   AP_HISTORY_HERO_IMAGE,
   apHistoryHeroImageBytes,
@@ -37,7 +37,7 @@ export function buildApHistoryAssignmentTypeCreateInput(
       },
     },
     assignmentModules: {
-      create: AP_HISTORY_MODULES.map((moduleData) => ({
+      create: AP_HISTORY_SEED_MODULES.map((moduleData) => ({
         title: moduleData.title,
         position: moduleData.position,
         description: moduleData.description,

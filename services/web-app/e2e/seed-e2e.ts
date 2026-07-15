@@ -2,7 +2,7 @@
 import { createE2EPrismaClient, type E2EPrismaClient } from './prisma-client';
 import { createDeployedAssignment } from './db-helpers';
 import { AP_HISTORY_LIBRARY_ENTRIES } from '../../../packages/prisma/scripts/ap-history-library-data';
-import { AP_HISTORY_MODULES } from '../../../packages/prisma/scripts/ap-history-module-data';
+import { AP_HISTORY_SEED_MODULES } from '../../../packages/prisma/scripts/ap-history-module-data';
 import bcrypt from 'bcryptjs';
 
 let prisma: E2EPrismaClient | null = null;
@@ -303,7 +303,7 @@ export async function seedE2E(): Promise<E2EContext> {
         create: { organizationId: org.id },
       },
       assignmentModules: {
-        create: AP_HISTORY_MODULES.map((moduleData) => ({
+        create: AP_HISTORY_SEED_MODULES.map((moduleData) => ({
           title: moduleData.title,
           position: moduleData.position,
           description: moduleData.description,
