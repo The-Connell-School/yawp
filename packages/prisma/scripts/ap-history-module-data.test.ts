@@ -1,5 +1,13 @@
 import { describe, expect, test } from 'bun:test';
-import { AP_HISTORY_MODULES } from './ap-history-module-data';
+import {
+  AP_HISTORY_MODULES,
+  AP_HISTORY_SEED_DEFAULT_ESSAY_TYPE,
+  AP_HISTORY_SEED_MODULES,
+  pickApHistoryEssayVariant,
+  resolveApHistoryInstructionPrompt,
+  resolveApHistorySectionTutorInstructions,
+  resolveApHistoryStepTutorInstructions,
+} from './ap-history-module-data';
 
 describe('AP History module (section) seed data', () => {
   test('breaks the tutor into the writing-process sections', () => {
@@ -17,16 +25,18 @@ describe('AP History module (section) seed data', () => {
     ]);
   });
 
-  test('every section carries tutor guidance and student-facing instructions', () => {
+  test('every section carries essay-type-specific tutor guidance and student-facing instructions', () => {
     for (const module of AP_HISTORY_MODULES) {
       expect(module.description.trim().length).toBeGreaterThan(0);
-      expect(module.tutorInstructions.trim().length).toBeGreaterThan(0);
+      expect(module.tutorInstructions.dbq.trim().length).toBeGreaterThan(0);
+      expect(module.tutorInstructions.leq.trim().length).toBeGreaterThan(0);
       expect(module.instructions.length).toBeGreaterThanOrEqual(1);
 
       for (const [index, instruction] of module.instructions.entries()) {
         expect(instruction.position).toBe(index + 1);
         expect(instruction.title.trim().length).toBeGreaterThan(0);
-        expect(instruction.prompt.trim().length).toBeGreaterThan(0);
+        expect(instruction.prompt.dbq.trim().length).toBeGreaterThan(0);
+        expect(instruction.prompt.leq.trim().length).toBeGreaterThan(0);
         expect(instruction.showChatButton).toBe(true);
       }
     }
@@ -38,43 +48,136 @@ describe('AP History module (section) seed data', () => {
     );
 
     expect(drafting).toBeDefined();
-    expect(drafting!.instructions.map((instruction) => instruction.title)).toEqual([
+    expect(
+      drafting!.instructions.map((instruction) => instruction.title)
+    ).toEqual([
       'Introduction',
       'Body Paragraphs',
       'Strengthen the Evidence',
       'Conclusion',
     ]);
 
-    // Each drafting step carries its own tutor guidance, so the coach narrows
-    // from the section to the step at hand.
+    // Each drafting step carries its own tutor guidance for both essay types,
+    // so the coach narrows from the section to the step at hand.
     for (const instruction of drafting!.instructions) {
-      expect(instruction.tutorInstructions?.trim().length).toBeGreaterThan(0);
-    }
-
-    // The evidence-heavy steps differ by essay type, so their guidance must
-    // cover both flows (modules and steps are shared across DBQ and LEQ).
-    for (const stepTitle of ['Body Paragraphs', 'Strengthen the Evidence']) {
-      const step = drafting!.instructions.find(
-        (instruction) => instruction.title === stepTitle
+      expect(instruction.tutorInstructions?.dbq.trim().length).toBeGreaterThan(
+        0
       );
-      expect(step?.tutorInstructions).toContain('DBQ');
-      expect(step?.tutorInstructions).toContain('LEQ');
+      expect(instruction.tutorInstructions?.leq.trim().length).toBeGreaterThan(
+        0
+      );
     }
   });
 
-  test('section guidance covers both DBQ and LEQ flows (modules are shared across essay types)', () => {
-    for (const module of AP_HISTORY_MODULES) {
-      expect(module.tutorInstructions).toContain('DBQ');
-      expect(module.tutorInstructions).toContain('LEQ');
-    }
+  test('DBQ and LEQ guidance is tailored, not hedged: the evidence work differs by essay type', () => {
+    // The DBQ tutor talks documents/HIPP; the LEQ tutor talks named evidence
+    // and reasoning. Neither hedges with the other essay type's playbook.
+    const dbqDrafting = resolveApHistorySectionTutorInstructions(
+      'dbq',
+      'Drafting'
+    )!;
+    const leqDrafting = resolveApHistorySectionTutorInstructions(
+      'leq',
+      'Drafting'
+    )!;
+
+    expect(dbqDrafting).toContain('documents');
+    expect(dbqDrafting).toContain('HIPP');
+    expect(dbqDrafting).not.toContain('LEQ');
+
+    expect(leqDrafting).toContain('reasoning skill');
+    expect(leqDrafting).not.toContain('HIPP');
+    expect(leqDrafting).not.toContain('DBQ');
+
+    // The two essay types get different guidance strings.
+    expect(dbqDrafting).not.toBe(leqDrafting);
+  });
+
+  test('the LEQ opening bubble does not describe a DBQ, and vice versa', () => {
+    const dbqOpener = resolveApHistoryInstructionPrompt(
+      'dbq',
+      'Read the Documents',
+      'Analyze the sources'
+    )!;
+    const leqOpener = resolveApHistoryInstructionPrompt(
+      'leq',
+      'Read the Documents',
+      'Analyze the sources'
+    )!;
+
+    expect(dbqOpener).toContain('documents');
+    expect(leqOpener).toContain('no documents on an LEQ');
+    expect(dbqOpener).not.toBe(leqOpener);
   });
 
   test('section guidance meets students where they are instead of hard-blocking work in progress', () => {
     // Existing documents keep their position-1 session, so a student mid-draft
     // may land in an early section. Guidance must never insist on restarting.
-    const readSection = AP_HISTORY_MODULES[0];
-    expect(readSection.tutorInstructions.toLowerCase()).toContain(
-      'meet them where they are'
-    );
+    for (const essayType of ['dbq', 'leq'] as const) {
+      const readSection = resolveApHistorySectionTutorInstructions(
+        essayType,
+        'Read the Documents'
+      )!;
+      expect(readSection.toLowerCase()).toContain('meet them where they are');
+    }
+  });
+
+  describe('resolvers', () => {
+    test('return null for a module/step outside the canonical sections (legacy)', () => {
+      expect(
+        resolveApHistorySectionTutorInstructions('dbq', 'AP History Essay')
+      ).toBeNull();
+      expect(
+        resolveApHistoryInstructionPrompt('dbq', 'AP History Essay', 'Write')
+      ).toBeNull();
+    });
+
+    test('return null for a step without its own step-level guidance', () => {
+      expect(
+        resolveApHistoryStepTutorInstructions(
+          'dbq',
+          'Read the Documents',
+          'Analyze the sources'
+        )
+      ).toBeNull();
+    });
+
+    test('pickApHistoryEssayVariant selects by essay type', () => {
+      const variants = { dbq: 'D', leq: 'L' };
+      expect(pickApHistoryEssayVariant(variants, 'dbq')).toBe('D');
+      expect(pickApHistoryEssayVariant(variants, 'leq')).toBe('L');
+    });
+  });
+
+  describe('seed (string-valued) modules', () => {
+    test('mirror the canonical sections with the default essay-type variant', () => {
+      expect(AP_HISTORY_SEED_MODULES.map((module) => module.title)).toEqual(
+        AP_HISTORY_MODULES.map((module) => module.title)
+      );
+
+      for (const [index, seedModule] of AP_HISTORY_SEED_MODULES.entries()) {
+        const canonical = AP_HISTORY_MODULES[index];
+        expect(seedModule.position).toBe(canonical.position);
+        expect(typeof seedModule.tutorInstructions).toBe('string');
+        expect(seedModule.tutorInstructions).toBe(
+          canonical.tutorInstructions[AP_HISTORY_SEED_DEFAULT_ESSAY_TYPE]
+        );
+        expect(seedModule.instructions).toHaveLength(
+          canonical.instructions.length
+        );
+        for (const [stepIndex, seedStep] of seedModule.instructions.entries()) {
+          const canonicalStep = canonical.instructions[stepIndex];
+          expect(typeof seedStep.prompt).toBe('string');
+          expect(seedStep.prompt).toBe(
+            canonicalStep.prompt[AP_HISTORY_SEED_DEFAULT_ESSAY_TYPE]
+          );
+          if (canonicalStep.tutorInstructions) {
+            expect(seedStep.tutorInstructions).toBe(
+              canonicalStep.tutorInstructions[AP_HISTORY_SEED_DEFAULT_ESSAY_TYPE]
+            );
+          }
+        }
+      }
+    });
   });
 });
