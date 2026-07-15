@@ -1,5 +1,8 @@
 import { test, expect } from '../test-setup';
 import { createE2EPrismaClient } from '../prisma-client';
+import { formatPromptDate } from '~/domain/ai-evaluation/assignment-type-evaluation.shared';
+
+const todayPromptDate = formatPromptDate(new Date().toISOString());
 
 test.describe.serial('Admin assignment types', () => {
   test.setTimeout(90_000);
@@ -81,18 +84,18 @@ test.describe.serial('Admin assignment types', () => {
       await expect(
         page.getByRole('heading', { name: 'Evaluation history' })
       ).toHaveCount(0);
-      const evaluationsLink = page.getByRole('link', {
-        name: 'Evaluations',
+      const promptLink = page.getByRole('link', {
+        name: 'Prompt',
         exact: true,
       });
-      await expect(evaluationsLink).toBeVisible();
-      await expect(evaluationsLink).toHaveAttribute(
+      await expect(promptLink).toBeVisible();
+      await expect(promptLink).toHaveAttribute(
         'href',
-        `/app/admin/assignment-types/${assignmentTypeId}/evaluations`
+        `/app/admin/assignment-types/${assignmentTypeId}/prompt`
       );
-      await evaluationsLink.click();
+      await promptLink.click();
       await expect(page).toHaveURL(
-        `/app/admin/assignment-types/${assignmentTypeId}/evaluations`
+        `/app/admin/assignment-types/${assignmentTypeId}/prompt`
       );
       await expect(
         page.getByRole('heading', { name: 'Prompts', exact: true })
@@ -247,11 +250,14 @@ test.describe.serial('Admin assignment types', () => {
 
       await page.getByRole('button', { name: 'Create draft' }).click();
       await expect(
-        page.getByRole('heading', { name: 'Prompt v2', exact: true })
+        page.getByRole('heading', {
+          name: `Prompt ${todayPromptDate} B`,
+          exact: true,
+        })
       ).toBeVisible();
       await page.getByRole('button', { name: 'Edit prompt' }).click();
       const versionTwoPrompt = page.getByRole('dialog', {
-        name: 'Edit prompt v2',
+        name: `Edit prompt ${todayPromptDate} B`,
       });
       await versionTwoPrompt
         .getByLabel('System message template')
@@ -506,7 +512,7 @@ test.describe.serial('Admin assignment types', () => {
     try {
       await signIn('admin.e2e@yawp.test', 'admin-e2e-password');
       await page.goto(
-        `/app/admin/assignment-types/${assignmentType.id}/evaluations`
+        `/app/admin/assignment-types/${assignmentType.id}/prompt`
       );
 
       await expect(
@@ -515,7 +521,10 @@ test.describe.serial('Admin assignment types', () => {
       await expect(page.getByText('Production', { exact: true })).toBeVisible();
       await page.getByRole('button').filter({ hasText: 'Production' }).click();
       await expect(
-        page.getByRole('heading', { name: 'Prompt v1', exact: true })
+        page.getByRole('heading', {
+          name: `Prompt ${todayPromptDate}`,
+          exact: true,
+        })
       ).toBeVisible();
       await expect(page.getByText('Suite v1', { exact: true })).toBeVisible();
       await expect(
@@ -526,12 +535,17 @@ test.describe.serial('Admin assignment types', () => {
 
       await page.getByRole('button', { name: 'Create draft' }).click();
       await expect(
-        page.getByRole('heading', { name: 'Prompt v2', exact: true })
+        page.getByRole('heading', {
+          name: `Prompt ${todayPromptDate} B`,
+          exact: true,
+        })
       ).toBeVisible();
       await expect(page.getByText('Draft', { exact: true })).toBeVisible();
 
       await page.getByRole('button', { name: 'Edit prompt' }).click();
-      const promptDialog = page.getByRole('dialog', { name: 'Edit prompt v2' });
+      const promptDialog = page.getByRole('dialog', {
+        name: `Edit prompt ${todayPromptDate} B`,
+      });
       await promptDialog
         .getByLabel('System message template')
         .fill(
@@ -541,7 +555,6 @@ test.describe.serial('Admin assignment types', () => {
         .getByLabel('User message template')
         .fill('Use this rubric:\n{{rubric}}\n\nStudent work:\n{{document}}');
       await promptDialog.getByRole('button', { name: 'Save prompt' }).click();
-      await expect(page.getByText('Revision 2', { exact: true })).toBeVisible();
 
       const historyTable = page.getByRole('table', {
         name: 'Evaluation history',
@@ -572,7 +585,9 @@ test.describe.serial('Admin assignment types', () => {
       );
       await page.getByRole('button', { name: 'Promote to production' }).click();
       await page
-        .getByRole('alertdialog', { name: 'Promote prompt v2?' })
+        .getByRole('alertdialog', {
+          name: `Promote prompt ${todayPromptDate} B?`,
+        })
         .getByRole('button', { name: 'Promote' })
         .click();
       await expect(page.getByText('Production', { exact: true })).toBeVisible();
