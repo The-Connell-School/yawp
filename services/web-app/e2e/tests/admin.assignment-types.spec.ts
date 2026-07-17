@@ -213,6 +213,7 @@ test.describe.serial('Admin assignment types', () => {
       await expect(
         historyTable.getByRole('columnheader', { name: 'Encouraging opening' })
       ).toBeVisible();
+      await expect(page.getByText('Suite v1', { exact: true })).toBeVisible();
 
       await page.getByRole('button', { name: 'Run all cases' }).click();
       await expect(historyTable.getByRole('row', { name: /v1/ })).toContainText(
@@ -622,6 +623,207 @@ test.describe.serial('Admin assignment types', () => {
       ]);
     } finally {
       await prisma.assignmentType.delete({ where: { id: assignmentType.id } });
+      await prisma.$disconnect();
+    }
+  });
+
+  test('copies evaluations and full suites from another assignment type', async ({
+    page,
+    signIn,
+  }) => {
+    const prisma = createE2EPrismaClient();
+    const suffix = Date.now();
+    const rubricJson = {
+      categories: [
+        {
+          key: 'thesis',
+          label: 'Thesis',
+          description: 'Makes a clear, defensible claim.',
+          weight: 1,
+        },
+      ],
+    };
+    const scoringScaleJson = {
+      type: 'weighted_1_5',
+      minScore: 1,
+      maxScore: 5,
+    };
+    const sourceAssignmentType = await prisma.assignmentType.create({
+      data: {
+        title: `Copy source E2E ${suffix}`,
+        description: 'Provides reusable evaluation fixtures.',
+        position: 9_997,
+        rubricJson,
+        scoringScaleJson,
+      },
+    });
+    const targetAssignmentType = await prisma.assignmentType.create({
+      data: {
+        title: `Copy target E2E ${suffix}`,
+        description: 'Receives copied evaluation fixtures.',
+        position: 9_998,
+        rubricJson,
+        scoringScaleJson,
+      },
+    });
+    const sourceEvaluations = await Promise.all(
+      [
+        {
+          title: 'Specific encouragement',
+          description: 'Begin with document-specific encouragement.',
+          caseTitle: 'Clear position',
+          documentText: 'School uniforms should remain optional.',
+          overallComment: 'Jordan, your position is clear.',
+        },
+        {
+          title: 'Actionable next step',
+          description: 'End with one concrete next step.',
+          caseTitle: 'Missing evidence',
+          documentText: 'Uniforms can help schools.',
+          overallComment: 'Add one example that supports your claim.',
+        },
+      ].map((fixture, position) =>
+        prisma.assignmentTypeEvaluation.create({
+          data: {
+            assignmentTypeId: sourceAssignmentType.id,
+            title: fixture.title,
+            description: fixture.description,
+            position,
+            cases: {
+              create: {
+                assignmentTypeId: sourceAssignmentType.id,
+                title: fixture.caseTitle,
+                documentText: fixture.documentText,
+                criterion: fixture.description,
+                rubricCategoryKey: 'thesis',
+                expectedOutputJson: {
+                  categories: [
+                    {
+                      key: 'thesis',
+                      score: 4,
+                      comment: 'The position is clear.',
+                    },
+                  ],
+                  overallComment: fixture.overallComment,
+                },
+                position: 0,
+              },
+            },
+          },
+          include: { cases: true },
+        })
+      )
+    );
+    await prisma.assignmentTypeEvaluationSuiteVersion.create({
+      data: {
+        assignmentTypeId: sourceAssignmentType.id,
+        version: 1,
+        contentHash: `copy-source-${suffix}`,
+        snapshotJson: {
+          evaluations: sourceEvaluations.map((evaluation) => ({
+            id: evaluation.id,
+            title: evaluation.title,
+            description: evaluation.description,
+            position: evaluation.position,
+            cases: evaluation.cases.map((evaluationCase) => ({
+              id: evaluationCase.id,
+              evaluationId: evaluation.id,
+              title: evaluationCase.title,
+              rubricCategoryKey: evaluationCase.rubricCategoryKey,
+              documentText: evaluationCase.documentText,
+              criterion: evaluationCase.criterion,
+              expectedOutputJson: evaluationCase.expectedOutputJson,
+              position: evaluationCase.position,
+            })),
+          })),
+          legacyCases: [],
+        },
+      },
+    });
+
+    try {
+      await signIn('admin.e2e@yawp.test', 'admin-e2e-password');
+      await page.goto(
+        `/app/admin/assignment-types/${targetAssignmentType.id}/prompt`
+      );
+      await page.getByRole('button').filter({ hasText: 'Production' }).click();
+      await expect(page.getByText('Suite v1', { exact: true })).toBeVisible();
+
+      await page.getByRole('button', { name: 'Add evaluation' }).click();
+      let addEvaluationDialog = page.getByRole('dialog', {
+        name: 'Add evaluation',
+      });
+      await addEvaluationDialog
+        .getByRole('button', { name: 'Copy from another suite' })
+        .click();
+      await addEvaluationDialog.getByLabel('Source assignment type').click();
+      await page
+        .getByRole('option', { name: sourceAssignmentType.title })
+        .click();
+      await addEvaluationDialog.getByLabel('Source evaluation suite').click();
+      await page.getByRole('option', { name: 'Suite v1' }).click();
+      await addEvaluationDialog
+        .getByRole('button', {
+          name: 'Copy evaluation Specific encouragement',
+        })
+        .click();
+      await expect(addEvaluationDialog).not.toBeVisible();
+      await expect(
+        page
+          .getByRole('table', { name: 'Evaluation history' })
+          .getByRole('columnheader', { name: 'Specific encouragement' })
+      ).toBeVisible();
+      await expect(page.getByText('Suite v1', { exact: true })).toBeVisible();
+
+      await page.getByRole('button', { name: 'Add evaluation' }).click();
+      addEvaluationDialog = page.getByRole('dialog', {
+        name: 'Add evaluation',
+      });
+      await addEvaluationDialog
+        .getByRole('button', { name: 'Copy from another suite' })
+        .click();
+      await addEvaluationDialog.getByLabel('Source assignment type').click();
+      await page
+        .getByRole('option', { name: sourceAssignmentType.title })
+        .click();
+      await addEvaluationDialog.getByLabel('Source evaluation suite').click();
+      await page.getByRole('option', { name: 'Suite v1' }).click();
+      await addEvaluationDialog
+        .getByRole('button', { name: 'Copy entire suite' })
+        .click();
+      await expect(addEvaluationDialog).not.toBeVisible();
+      await expect(
+        page
+          .getByRole('table', { name: 'Evaluation history' })
+          .getByRole('columnheader', { name: 'Actionable next step' })
+      ).toBeVisible();
+      await expect(page.getByText('Suite v1', { exact: true })).toBeVisible();
+
+      const saved = await prisma.assignmentType.findUniqueOrThrow({
+        where: { id: targetAssignmentType.id },
+        select: {
+          evaluations: { select: { title: true } },
+          evaluationSuiteVersions: {
+            orderBy: { version: 'asc' },
+            select: { version: true },
+          },
+        },
+      });
+      expect(saved.evaluations.map((evaluation) => evaluation.title)).toEqual(
+        expect.arrayContaining([
+          'Specific encouragement',
+          'Actionable next step',
+        ])
+      );
+      expect(saved.evaluationSuiteVersions).toEqual([{ version: 1 }]);
+    } finally {
+      await prisma.assignmentType.deleteMany({
+        where: {
+          id: {
+            in: [sourceAssignmentType.id, targetAssignmentType.id],
+          },
+        },
+      });
       await prisma.$disconnect();
     }
   });
