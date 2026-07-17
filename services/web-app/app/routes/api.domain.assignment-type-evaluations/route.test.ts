@@ -32,6 +32,7 @@ const prisma = {
     findFirst: mock(),
     findUnique: mock(),
     create: mock(),
+    update: mock(),
   },
 };
 const requireAdmin = mock();
@@ -213,6 +214,11 @@ describe('assignment-type evaluations action', () => {
       id: 'suite-2',
       version: 2,
       contentHash: 'suite-2-hash',
+    });
+    prisma.assignmentTypeEvaluationSuiteVersion.update.mockResolvedValue({
+      id: 'suite-1',
+      version: 1,
+      contentHash: 'updated-suite-hash',
     });
     runAssignmentTypeEvaluationSuite.mockResolvedValue({
       summary: { total: 1, passed: 1, failed: 0, needsReview: 0 },
@@ -424,15 +430,17 @@ describe('assignment-type evaluations action', () => {
     );
     expect((response as { data: any }).data).toEqual({ success: true });
     expect(
-      prisma.assignmentTypeEvaluationSuiteVersion.create
+      prisma.assignmentTypeEvaluationSuiteVersion.update
     ).toHaveBeenCalledWith({
+      where: { id: 'suite-1' },
       data: expect.objectContaining({
-        assignmentTypeId: 'at-1',
-        version: 2,
         snapshotJson: expect.any(Object),
         contentHash: expect.any(String),
       }),
     });
+    expect(
+      prisma.assignmentTypeEvaluationSuiteVersion.create
+    ).not.toHaveBeenCalled();
   });
 
   test('creates an editable prompt draft from the current production prompt', async () => {

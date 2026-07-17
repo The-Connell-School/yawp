@@ -164,10 +164,43 @@ export async function createEvaluationSuiteVersion(
   ]);
   const contentHash = suiteContentHash(snapshot);
   if (latest?.contentHash === contentHash) return latest;
+  if (!latest) {
+    return db.assignmentTypeEvaluationSuiteVersion.create({
+      data: {
+        assignmentTypeId,
+        version: 1,
+        contentHash,
+        snapshotJson: inputJson(snapshot),
+      },
+    });
+  }
+  const existingRun =
+    await db.assignmentTypeEvaluationRun.findFirst({
+      where:
+        latest.version === 1
+          ? {
+              assignmentTypeId,
+              OR: [
+                { evaluationSuiteVersionId: latest.id },
+                { evaluationSuiteVersionId: null },
+              ],
+            }
+          : { evaluationSuiteVersionId: latest.id },
+      select: { id: true },
+    });
+  if (!existingRun) {
+    return db.assignmentTypeEvaluationSuiteVersion.update({
+      where: { id: latest.id },
+      data: {
+        contentHash,
+        snapshotJson: inputJson(snapshot),
+      },
+    });
+  }
   return db.assignmentTypeEvaluationSuiteVersion.create({
     data: {
       assignmentTypeId,
-      version: (latest?.version ?? 0) + 1,
+      version: latest.version + 1,
       contentHash,
       snapshotJson: inputJson(snapshot),
     },
