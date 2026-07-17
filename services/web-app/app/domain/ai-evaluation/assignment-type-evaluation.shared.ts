@@ -123,3 +123,17 @@ export type AssignmentTypeEvaluationHistory = {
     }>;
   }>;
 };
+
+// Other assignment types' evaluation suites available to copy from, keyed
+// off the current assignment type so its own suites never appear as a
+// source. Only named evaluations are listed — legacy (unnamed) cases can't
+// be copied individually and are excluded to keep the payload bounded.
+export type EvaluationCopySourceCatalog = Array<{
+  assignmentTypeId: string;
+  assignmentTypeTitle: string;
+  suites: Array<{
+    id: string;
+    version: number;
+    evaluations: Array<{ id: string; title: string }>;
+  }>;
+}>;

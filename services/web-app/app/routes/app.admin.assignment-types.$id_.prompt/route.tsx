@@ -3,7 +3,10 @@ import type { LoaderFunctionArgs } from 'react-router';
 import { EvaluationHistorySection } from '~/components/admin/rubric-config-editors';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { buildResolvedAssignmentTypeGradingConfig } from '~/domain/assignment-types/assignment-type-grading-config.server';
-import type { AssignmentTypeEvaluationStatus } from '~/domain/ai-evaluation/assignment-type-evaluation.shared';
+import type {
+  AssignmentTypeEvaluationStatus,
+  EvaluationCopySourceCatalog,
+} from '~/domain/ai-evaluation/assignment-type-evaluation.shared';
 import {
   ensureEvaluationSuiteVersion,
   ensureProductionPromptVersion,
@@ -85,26 +88,68 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     ]);
   }
 
-  const [promptVersions, suiteVersions, evaluationRuns] = await Promise.all([
-    promptVersionControlEnabled
-      ? prisma.assignmentTypePromptVersion.findMany({
-          where: { assignmentTypeId: assignmentType.id },
-          orderBy: { version: 'desc' },
+  const [promptVersions, suiteVersions, evaluationRuns, copySourceTypes] =
+    await Promise.all([
+      promptVersionControlEnabled
+        ? prisma.assignmentTypePromptVersion.findMany({
+            where: { assignmentTypeId: assignmentType.id },
+            orderBy: { version: 'desc' },
+          })
+        : Promise.resolve([]),
+      promptVersionControlEnabled
+        ? prisma.assignmentTypeEvaluationSuiteVersion.findMany({
+            where: { assignmentTypeId: assignmentType.id },
+            orderBy: { version: 'desc' },
+          })
+        : Promise.resolve([]),
+      prisma.assignmentTypeEvaluationRun.findMany({
+        where: { assignmentTypeId: assignmentType.id },
+        orderBy: { createdAt: 'desc' },
+        take: 100,
+        include: { results: { orderBy: { createdAt: 'asc' } } },
+      }),
+      promptVersionControlEnabled
+        ? prisma.assignmentType.findMany({
+            where: {
+              id: { not: assignmentType.id },
+              archivedAt: null,
+            },
+            orderBy: { title: 'asc' },
+            take: 50,
+            select: {
+              id: true,
+              title: true,
+              evaluationSuiteVersions: {
+                orderBy: { version: 'desc' },
+                take: 5,
+                select: { id: true, version: true, snapshotJson: true },
+              },
+            },
+          })
+        : Promise.resolve([]),
+    ]);
+
+  const copySourceCatalog: EvaluationCopySourceCatalog = copySourceTypes
+    .map((sourceType) => ({
+      assignmentTypeId: sourceType.id,
+      assignmentTypeTitle: sourceType.title,
+      suites: sourceType.evaluationSuiteVersions
+        .map((suiteVersion) => {
+          const snapshot = parseEvaluationSuiteSnapshot(
+            suiteVersion.snapshotJson
+          );
+          return {
+            id: suiteVersion.id,
+            version: suiteVersion.version,
+            evaluations: (snapshot?.evaluations ?? []).map((evaluation) => ({
+              id: evaluation.id,
+              title: evaluation.title,
+            })),
+          };
         })
-      : Promise.resolve([]),
-    promptVersionControlEnabled
-      ? prisma.assignmentTypeEvaluationSuiteVersion.findMany({
-          where: { assignmentTypeId: assignmentType.id },
-          orderBy: { version: 'desc' },
-        })
-      : Promise.resolve([]),
-    prisma.assignmentTypeEvaluationRun.findMany({
-      where: { assignmentTypeId: assignmentType.id },
-      orderBy: { createdAt: 'desc' },
-      take: 100,
-      include: { results: { orderBy: { createdAt: 'asc' } } },
-    }),
-  ]);
+        .filter((suite) => suite.evaluations.length > 0),
+    }))
+    .filter((sourceType) => sourceType.suites.length > 0);
 
   const currentEvaluations = assignmentType.evaluations.map((evaluation) => ({
     id: evaluation.id,
@@ -218,12 +263,17 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     },
     evaluationHistory,
     promptVersionControlEnabled,
+    copySourceCatalog,
   });
 }
 
 export default function AssignmentTypePromptRoute() {
-  const { assignmentType, evaluationHistory, promptVersionControlEnabled } =
-    useLoaderData<typeof loader>();
+  const {
+    assignmentType,
+    evaluationHistory,
+    promptVersionControlEnabled,
+    copySourceCatalog,
+  } = useLoaderData<typeof loader>();
 
   return (
     // The admin layout wraps routes in a scroll container with pb-24 to leave
@@ -237,6 +287,7 @@ export default function AssignmentTypePromptRoute() {
         evaluationHistory={evaluationHistory}
         isPromptPreviewStale={false}
         promptVersionControlEnabled={promptVersionControlEnabled}
+        copySourceCatalog={copySourceCatalog}
         layout="page"
       />
     </div>

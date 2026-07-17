@@ -100,6 +100,7 @@ import {
 import type {
   AssignmentTypeEvaluationHistory,
   AssignmentTypeEvaluationStatus,
+  EvaluationCopySourceCatalog,
 } from '~/domain/ai-evaluation/assignment-type-evaluation.shared';
 import { cn } from '~/utils/misc';
 
@@ -1472,6 +1473,7 @@ type EvaluationFetcherData = {
   success?: boolean;
   message?: string;
   evaluationId?: string;
+  copiedEvaluations?: number;
   evaluation?: {
     title: string;
     description: string;
@@ -1553,22 +1555,36 @@ function AddEvaluationSheet({
   onOpenChange,
   assignmentTypeId,
   fetcher,
+  copySourceCatalog = [],
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   assignmentTypeId: string;
   fetcher: ReturnType<typeof useFetcher<EvaluationFetcherData>>;
+  copySourceCatalog?: EvaluationCopySourceCatalog;
 }) {
   const [description, setDescription] = useState('');
   const [evaluationTitle, setEvaluationTitle] = useState('');
   const [cases, setCases] = useState<GeneratedEvaluationCaseDraft[]>([]);
   const [localError, setLocalError] = useState<string | null>(null);
+  const [copyOpen, setCopyOpen] = useState(false);
+  const [copySourceAssignmentTypeId, setCopySourceAssignmentTypeId] =
+    useState('');
+  const [copySourceSuiteId, setCopySourceSuiteId] = useState('');
   const isWorking = fetcher.state !== 'idle';
   const errorMessage =
     fetcher.data && fetcher.data.success === false
       ? (fetcher.data.message ?? 'Could not save the case.')
       : localError;
   const handledResponseRef = useRef<unknown>(null);
+  const copySourceAssignmentType =
+    copySourceCatalog.find(
+      (source) => source.assignmentTypeId === copySourceAssignmentTypeId
+    ) ?? null;
+  const copySourceSuite =
+    copySourceAssignmentType?.suites.find(
+      (suite) => suite.id === copySourceSuiteId
+    ) ?? null;
 
   useEffect(() => {
     if (!open) {
@@ -1576,6 +1592,9 @@ function AddEvaluationSheet({
       setEvaluationTitle('');
       setCases([]);
       setLocalError(null);
+      setCopyOpen(false);
+      setCopySourceAssignmentTypeId('');
+      setCopySourceSuiteId('');
     }
   }, [open]);
 
@@ -1599,7 +1618,12 @@ function AddEvaluationSheet({
       ]);
       return;
     }
-    if (fetcher.data.evaluationId) onOpenChange(false);
+    if (
+      fetcher.data.evaluationId ||
+      fetcher.data.copiedEvaluations !== undefined
+    ) {
+      onOpenChange(false);
+    }
   }, [fetcher.data, onOpenChange]);
 
   const selectedCount = cases.filter(
@@ -1621,6 +1645,33 @@ function AddEvaluationSheet({
     formData.set('intent', 'generateEvaluation');
     formData.set('assignmentTypeId', assignmentTypeId);
     formData.set('description', description.trim());
+    fetcher.submit(formData, {
+      method: 'POST',
+      action: '/api/domain/assignment-type-evaluations',
+    });
+  }
+
+  function handleCopyEvaluation(sourceEvaluationId: string) {
+    if (!copySourceSuiteId || isWorking) return;
+    setLocalError(null);
+    const formData = new FormData();
+    formData.set('intent', 'copyEvaluation');
+    formData.set('assignmentTypeId', assignmentTypeId);
+    formData.set('sourceSuiteVersionId', copySourceSuiteId);
+    formData.set('sourceEvaluationId', sourceEvaluationId);
+    fetcher.submit(formData, {
+      method: 'POST',
+      action: '/api/domain/assignment-type-evaluations',
+    });
+  }
+
+  function handleCopySuite() {
+    if (!copySourceSuiteId || isWorking) return;
+    setLocalError(null);
+    const formData = new FormData();
+    formData.set('intent', 'copyEvaluationSuite');
+    formData.set('assignmentTypeId', assignmentTypeId);
+    formData.set('sourceSuiteVersionId', copySourceSuiteId);
     fetcher.submit(formData, {
       method: 'POST',
       action: '/api/domain/assignment-type-evaluations',
@@ -1708,6 +1759,133 @@ function AddEvaluationSheet({
           <SheetTitle>Add evaluation</SheetTitle>
         </SheetHeader>
         <div className="mt-4 space-y-4">
+          {copySourceCatalog.length > 0 ? (
+            <div className="rounded-md border p-3">
+              {!copyOpen ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCopyOpen(true)}
+                  disabled={isWorking}
+                >
+                  <Copy className="mr-1.5 size-4 shrink-0" />
+                  Copy from another suite
+                </Button>
+              ) : (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-sm font-medium">
+                      Copy from another suite
+                    </p>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      onClick={() => setCopyOpen(false)}
+                      aria-label="Close copy from another suite"
+                    >
+                      <X className="size-4" />
+                    </Button>
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    Adds evaluations to this suite — nothing here is removed
+                    or changed.
+                  </p>
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="copy-source-assignment-type">
+                        Source assignment type
+                      </Label>
+                      <Select
+                        value={copySourceAssignmentTypeId}
+                        onValueChange={(value) => {
+                          setCopySourceAssignmentTypeId(value);
+                          setCopySourceSuiteId('');
+                        }}
+                      >
+                        <SelectTrigger id="copy-source-assignment-type">
+                          <SelectValue placeholder="Select assignment type" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {copySourceCatalog.map((source) => (
+                            <SelectItem
+                              key={source.assignmentTypeId}
+                              value={source.assignmentTypeId}
+                            >
+                              {source.assignmentTypeTitle}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="copy-source-suite">
+                        Source evaluation suite
+                      </Label>
+                      <Select
+                        value={copySourceSuiteId}
+                        onValueChange={setCopySourceSuiteId}
+                        disabled={!copySourceAssignmentType}
+                      >
+                        <SelectTrigger id="copy-source-suite">
+                          <SelectValue placeholder="Select suite" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {(copySourceAssignmentType?.suites ?? []).map(
+                            (suite) => (
+                              <SelectItem key={suite.id} value={suite.id}>
+                                {`Suite v${suite.version}`}
+                              </SelectItem>
+                            )
+                          )}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  {copySourceSuite ? (
+                    <div className="space-y-2">
+                      <ul role="list" className="divide-y rounded-md border">
+                        {copySourceSuite.evaluations.map((evaluation) => (
+                          <li
+                            key={evaluation.id}
+                            className="flex items-center justify-between gap-2 p-2"
+                          >
+                            <span className="min-w-0 flex-1 truncate text-sm">
+                              {evaluation.title}
+                            </span>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="shrink-0"
+                              onClick={() =>
+                                handleCopyEvaluation(evaluation.id)
+                              }
+                              disabled={isWorking}
+                              aria-label={`Copy evaluation ${evaluation.title}`}
+                            >
+                              Copy
+                            </Button>
+                          </li>
+                        ))}
+                      </ul>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="w-full"
+                        onClick={handleCopySuite}
+                        disabled={isWorking}
+                      >
+                        Copy entire suite
+                      </Button>
+                    </div>
+                  ) : null}
+                </div>
+              )}
+            </div>
+          ) : null}
           <div className="space-y-2">
             <Label htmlFor="evaluation-title">Evaluation name</Label>
             <Input
@@ -2474,6 +2652,7 @@ function EvaluationMatrixSection({
   pageBackControl,
   toolbarLeading,
   emptyRunMessage = 'No runs yet. Run all cases to add the first row.',
+  copySourceCatalog = [],
 }: {
   assignmentTypeId: string;
   evaluationHistory: AssignmentTypeEvaluationHistory;
@@ -2488,6 +2667,7 @@ function EvaluationMatrixSection({
   pageBackControl?: ReactNode;
   toolbarLeading?: ReactNode;
   emptyRunMessage?: string;
+  copySourceCatalog?: EvaluationCopySourceCatalog;
 }) {
   const addCaseFetcher = useFetcher<EvaluationFetcherData>();
   const archiveFetcher = useFetcher<{ success?: boolean; message?: string }>();
@@ -2937,6 +3117,7 @@ function EvaluationMatrixSection({
         onOpenChange={setAddOpen}
         assignmentTypeId={assignmentTypeId}
         fetcher={addCaseFetcher}
+        copySourceCatalog={copySourceCatalog}
       />
     </div>
   );
@@ -3179,6 +3360,7 @@ export function EvaluationHistorySection({
   layout = 'embedded',
   assignmentTypeTitle,
   promptVersionControlEnabled = false,
+  copySourceCatalog = [],
 }: {
   assignmentTypeId: string;
   evaluationHistory: AssignmentTypeEvaluationHistory;
@@ -3186,6 +3368,7 @@ export function EvaluationHistorySection({
   layout?: 'embedded' | 'page';
   assignmentTypeTitle?: string;
   promptVersionControlEnabled?: boolean;
+  copySourceCatalog?: EvaluationCopySourceCatalog;
 }) {
   const createDraftFetcher = useFetcher<PromptVersionFetcherData>();
   const promoteFetcher = useFetcher<PromptVersionFetcherData>();
@@ -3241,6 +3424,7 @@ export function EvaluationHistorySection({
         evaluationHistory={evaluationHistory}
         isPromptPreviewStale={isPromptPreviewStale}
         layout={layout}
+        copySourceCatalog={copySourceCatalog}
       />
     );
   }
@@ -3406,6 +3590,7 @@ export function EvaluationHistorySection({
         promptVersionId={selectedPrompt.id}
         evaluationSuiteVersionId={selectedSuite.id}
         allowEvaluationChanges={isLatestSuite}
+        copySourceCatalog={copySourceCatalog}
         pageTitle={`Prompt ${selectedPromptLabel}`}
         pageBackControl={
           <Button
