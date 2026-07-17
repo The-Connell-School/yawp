@@ -89,6 +89,19 @@ const ArchiveCaseSchema = z.object({
   caseId: z.string().min(1),
 });
 
+const CopyEvaluationSchema = z.object({
+  intent: z.literal('copyEvaluation'),
+  assignmentTypeId: z.string().min(1),
+  sourceSuiteVersionId: z.string().min(1),
+  sourceEvaluationId: z.string().min(1),
+});
+
+const CopyEvaluationSuiteSchema = z.object({
+  intent: z.literal('copyEvaluationSuite'),
+  assignmentTypeId: z.string().min(1),
+  sourceSuiteVersionId: z.string().min(1),
+});
+
 const RunSuiteSchema = z.object({
   intent: z.literal('runSuite'),
   assignmentTypeId: z.string().min(1),
@@ -122,6 +135,8 @@ const ActionSchema = z.discriminatedUnion('intent', [
   UpdateEvaluationSchema,
   CreateCaseSchema,
   ArchiveCaseSchema,
+  CopyEvaluationSchema,
+  CopyEvaluationSuiteSchema,
   CreatePromptDraftSchema,
   UpdatePromptDraftSchema,
   PromotePromptDraftSchema,
@@ -134,6 +149,35 @@ function errorResponse(message: string, status = 400) {
 
 function inputJson(value: unknown): Prisma.InputJsonValue {
   return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
+}
+
+function parseCopyableExpectedOutput({
+  value,
+  rubricCategoryKeys,
+  minScore,
+  maxScore,
+}: {
+  value: unknown;
+  rubricCategoryKeys: Set<string>;
+  minScore: number;
+  maxScore: number;
+}) {
+  const parsed = GeneratedOutputSchema.safeParse(value);
+  if (!parsed.success) return null;
+  const expectedKeys = [...rubricCategoryKeys].sort();
+  const actualKeys = parsed.data.categories
+    .map((category) => category.key)
+    .sort();
+  if (
+    actualKeys.length !== expectedKeys.length ||
+    actualKeys.some((key, index) => key !== expectedKeys[index]) ||
+    parsed.data.categories.some(
+      (category) => category.score < minScore || category.score > maxScore
+    )
+  ) {
+    return null;
+  }
+  return parsed.data;
 }
 
 const RUN_IN_PROGRESS_MESSAGE =
@@ -679,6 +723,115 @@ export async function action({ request }: ActionFunctionArgs) {
       await createEvaluationSuiteVersion(tx, assignmentType.id);
     });
     return dataResponse({ success: true });
+  }
+
+  if (
+    input.intent === 'copyEvaluation' ||
+    input.intent === 'copyEvaluationSuite'
+  ) {
+    const sourceSuite =
+      await prisma.assignmentTypeEvaluationSuiteVersion.findUnique({
+        where: { id: input.sourceSuiteVersionId },
+        select: {
+          id: true,
+          assignmentTypeId: true,
+          snapshotJson: true,
+        },
+      });
+    const sourceSnapshot = sourceSuite
+      ? parseEvaluationSuiteSnapshot(sourceSuite.snapshotJson)
+      : null;
+    if (!sourceSuite || !sourceSnapshot) {
+      return errorResponse('Source evaluation suite not found.', 404);
+    }
+    const sourceEvaluations =
+      input.intent === 'copyEvaluation'
+        ? sourceSnapshot.evaluations.filter(
+            (evaluation) => evaluation.id === input.sourceEvaluationId
+          )
+        : sourceSnapshot.evaluations;
+    if (sourceEvaluations.length === 0) {
+      return errorResponse('Source evaluation not found.', 404);
+    }
+    const gradingConfig = buildResolvedAssignmentTypeGradingConfig({
+      assignmentTypeId: assignmentType.id,
+      assignmentTypeKind: assignmentType.kind,
+      assignmentTypeTitle: assignmentType.title,
+      row: assignmentType,
+    });
+    const copiedEvaluations = sourceEvaluations.map((evaluation) => ({
+      ...evaluation,
+      cases: evaluation.cases.map((evaluationCase) => ({
+        ...evaluationCase,
+        expectedOutput: parseCopyableExpectedOutput({
+          value: evaluationCase.expectedOutputJson,
+          rubricCategoryKeys,
+          minScore: gradingConfig.minScore,
+          maxScore: gradingConfig.maxScore,
+        }),
+      })),
+    }));
+    if (
+      copiedEvaluations.some(
+        (evaluation) =>
+          evaluation.cases.length === 0 ||
+          evaluation.cases.some(
+            (evaluationCase) => !evaluationCase.expectedOutput
+          )
+      )
+    ) {
+      return errorResponse(
+        'That evaluation suite uses a different rubric or scoring range.'
+      );
+    }
+    const firstRubricCategoryKey = rubric.categories[0]?.key;
+    if (!firstRubricCategoryKey) {
+      return errorResponse('Add an assignment rubric before copying cases.');
+    }
+    const startingPosition = await prisma.assignmentTypeEvaluation.count({
+      where: { assignmentTypeId: assignmentType.id, archivedAt: null },
+    });
+    const createdEvaluationIds: string[] = [];
+    await prisma.$transaction(async (tx) => {
+      for (const [index, evaluation] of copiedEvaluations.entries()) {
+        const created = await tx.assignmentTypeEvaluation.create({
+          data: {
+            assignmentTypeId: assignmentType.id,
+            title: evaluation.title,
+            description: evaluation.description,
+            position: startingPosition + index,
+            cases: {
+              create: evaluation.cases.map(
+                (evaluationCase, casePosition) => ({
+                  assignmentTypeId: assignmentType.id,
+                  title: evaluationCase.title,
+                  documentText: evaluationCase.documentText,
+                  expectedOutputJson: inputJson(
+                    evaluationCase.expectedOutput
+                  ),
+                  criterion: evaluationCase.criterion,
+                  rubricCategoryKey: rubricCategoryKeys.has(
+                    evaluationCase.rubricCategoryKey
+                  )
+                    ? evaluationCase.rubricCategoryKey
+                    : firstRubricCategoryKey,
+                  position: casePosition,
+                })
+              ),
+            },
+          },
+        });
+        createdEvaluationIds.push(created.id);
+      }
+      await createEvaluationSuiteVersion(tx, assignmentType.id);
+    });
+    return dataResponse({
+      success: true,
+      ...(input.intent === 'copyEvaluation'
+        ? { evaluationId: createdEvaluationIds[0] }
+        : {}),
+      copiedEvaluations: createdEvaluationIds.length,
+    });
   }
 
   if (input.intent === 'createCase') {

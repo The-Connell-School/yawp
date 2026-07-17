@@ -443,6 +443,186 @@ describe('assignment-type evaluations action', () => {
     ).not.toHaveBeenCalled();
   });
 
+  test('copies one evaluation from another assignment-type suite', async () => {
+    prisma.assignmentTypeEvaluationSuiteVersion.findUnique.mockResolvedValue({
+      id: 'source-suite-3',
+      assignmentTypeId: 'source-at',
+      version: 3,
+      snapshotJson: {
+        evaluations: [
+          {
+            id: 'source-evaluation',
+            title: 'Specific encouragement',
+            description: 'Begin with document-specific encouragement.',
+            position: 0,
+            cases: [
+              {
+                id: 'source-case',
+                evaluationId: 'source-evaluation',
+                title: 'Clear position',
+                rubricCategoryKey: 'claim',
+                documentText: 'Uniforms should remain optional.',
+                criterion: 'Begin with document-specific encouragement.',
+                expectedOutputJson: {
+                  categories: [
+                    {
+                      key: 'claim',
+                      score: 4,
+                      comment: 'The position is clear.',
+                    },
+                  ],
+                  overallComment: 'Jordan, your position is clear.',
+                },
+                position: 0,
+              },
+            ],
+          },
+        ],
+        legacyCases: [],
+      },
+    });
+
+    const response = await action({
+      request: requestWith({
+        intent: 'copyEvaluation',
+        assignmentTypeId: 'at-1',
+        sourceSuiteVersionId: 'source-suite-3',
+        sourceEvaluationId: 'source-evaluation',
+      }),
+      params: {},
+      context: {} as never,
+    } as any);
+
+    expect(prisma.assignmentTypeEvaluation.create).toHaveBeenCalledWith({
+      data: {
+        assignmentTypeId: 'at-1',
+        title: 'Specific encouragement',
+        description: 'Begin with document-specific encouragement.',
+        position: 1,
+        cases: {
+          create: [
+            {
+              assignmentTypeId: 'at-1',
+              title: 'Clear position',
+              documentText: 'Uniforms should remain optional.',
+              expectedOutputJson: {
+                categories: [
+                  {
+                    key: 'claim',
+                    score: 4,
+                    comment: 'The position is clear.',
+                  },
+                ],
+                overallComment: 'Jordan, your position is clear.',
+              },
+              criterion: 'Begin with document-specific encouragement.',
+              rubricCategoryKey: 'claim',
+              position: 0,
+            },
+          ],
+        },
+      },
+    });
+    expect((response as { data: any }).data).toEqual({
+      success: true,
+      evaluationId: 'evaluation-new',
+      copiedEvaluations: 1,
+    });
+  });
+
+  test('copies every evaluation in another assignment-type suite', async () => {
+    prisma.assignmentTypeEvaluationSuiteVersion.findUnique.mockResolvedValue({
+      id: 'source-suite-4',
+      assignmentTypeId: 'source-at',
+      version: 4,
+      snapshotJson: {
+        evaluations: [
+          {
+            id: 'source-evaluation-1',
+            title: 'Specific encouragement',
+            description: 'Begin with document-specific encouragement.',
+            position: 0,
+            cases: [
+              {
+                id: 'source-case-1',
+                evaluationId: 'source-evaluation-1',
+                title: 'Clear position',
+                rubricCategoryKey: 'claim',
+                documentText: 'Uniforms should remain optional.',
+                criterion: 'Begin with document-specific encouragement.',
+                expectedOutputJson: {
+                  categories: [
+                    {
+                      key: 'claim',
+                      score: 4,
+                      comment: 'The position is clear.',
+                    },
+                  ],
+                  overallComment: 'Jordan, your position is clear.',
+                },
+                position: 0,
+              },
+            ],
+          },
+          {
+            id: 'source-evaluation-2',
+            title: 'Actionable next step',
+            description: 'End with one concrete next step.',
+            position: 1,
+            cases: [
+              {
+                id: 'source-case-2',
+                evaluationId: 'source-evaluation-2',
+                title: 'Missing evidence',
+                rubricCategoryKey: 'claim',
+                documentText: 'Uniforms can help schools.',
+                criterion: 'End with one concrete next step.',
+                expectedOutputJson: {
+                  categories: [
+                    {
+                      key: 'claim',
+                      score: 2,
+                      comment: 'The position needs evidence.',
+                    },
+                  ],
+                  overallComment: 'Add one example that supports your claim.',
+                },
+                position: 0,
+              },
+            ],
+          },
+        ],
+        legacyCases: [],
+      },
+    });
+    prisma.assignmentTypeEvaluation.create
+      .mockResolvedValueOnce({ id: 'copied-evaluation-1' })
+      .mockResolvedValueOnce({ id: 'copied-evaluation-2' });
+
+    const response = await action({
+      request: requestWith({
+        intent: 'copyEvaluationSuite',
+        assignmentTypeId: 'at-1',
+        sourceSuiteVersionId: 'source-suite-4',
+      }),
+      params: {},
+      context: {} as never,
+    } as any);
+
+    expect(prisma.assignmentTypeEvaluation.create).toHaveBeenCalledTimes(2);
+    expect(prisma.assignmentTypeEvaluation.create).toHaveBeenLastCalledWith({
+      data: expect.objectContaining({
+        assignmentTypeId: 'at-1',
+        title: 'Actionable next step',
+        position: 2,
+      }),
+    });
+    expect((response as { data: any }).data).toEqual({
+      success: true,
+      copiedEvaluations: 2,
+    });
+  });
+
   test('creates an editable prompt draft from the current production prompt', async () => {
     const response = await action({
       request: requestWith({
