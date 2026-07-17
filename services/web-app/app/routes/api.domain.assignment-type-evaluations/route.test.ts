@@ -623,6 +623,63 @@ describe('assignment-type evaluations action', () => {
     });
   });
 
+  test('does not copy evaluations whose expected output uses another rubric', async () => {
+    prisma.assignmentTypeEvaluationSuiteVersion.findUnique.mockResolvedValue({
+      id: 'incompatible-suite',
+      assignmentTypeId: 'source-at',
+      version: 1,
+      snapshotJson: {
+        evaluations: [
+          {
+            id: 'incompatible-evaluation',
+            title: 'Evidence feedback',
+            description: 'Give feedback about evidence.',
+            position: 0,
+            cases: [
+              {
+                id: 'incompatible-case',
+                evaluationId: 'incompatible-evaluation',
+                title: 'Evidence only',
+                rubricCategoryKey: 'evidence',
+                documentText: 'One example appears here.',
+                criterion: 'Give feedback about evidence.',
+                expectedOutputJson: {
+                  categories: [
+                    {
+                      key: 'evidence',
+                      score: 4,
+                      comment: 'The evidence is relevant.',
+                    },
+                  ],
+                  overallComment: 'Explain how this example proves the claim.',
+                },
+                position: 0,
+              },
+            ],
+          },
+        ],
+        legacyCases: [],
+      },
+    });
+
+    const response = await action({
+      request: requestWith({
+        intent: 'copyEvaluation',
+        assignmentTypeId: 'at-1',
+        sourceSuiteVersionId: 'incompatible-suite',
+        sourceEvaluationId: 'incompatible-evaluation',
+      }),
+      params: {},
+      context: {} as never,
+    } as any);
+
+    expect((response as { init: { status: number } }).init.status).toBe(400);
+    expect((response as { data: any }).data.message).toContain(
+      'different rubric'
+    );
+    expect(prisma.assignmentTypeEvaluation.create).not.toHaveBeenCalled();
+  });
+
   test('creates an editable prompt draft from the current production prompt', async () => {
     const response = await action({
       request: requestWith({
