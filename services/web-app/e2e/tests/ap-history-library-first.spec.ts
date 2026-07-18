@@ -63,7 +63,9 @@ test.describe.serial('AP History library-first assignment flow', () => {
 
       const dialog = page.getByRole('dialog');
       await expect(dialog).toBeVisible();
-      await expect(dialog.getByText('Selected Prompt')).toBeVisible();
+      await expect(
+        dialog.getByText('Selected Prompt', { exact: true })
+      ).toBeVisible();
       await expect(dialog.getByText(dbqEntry.title)).toBeVisible();
       await expect(dialog.getByText(dbqEntry.prompt)).toBeVisible();
       await expect(
