@@ -217,6 +217,41 @@ test.describe.serial('AP History library-first assignment flow', () => {
       await expect(
         rightRail.getByRole('heading', { name: firstSource!.title })
       ).toBeVisible();
+
+      // Full screen read mode: documents temporarily take over the screen.
+      const docsFullscreenDialog = page.getByRole('dialog', {
+        name: 'Documents full screen',
+      });
+      await expect(docsFullscreenDialog).toHaveCount(0);
+      await rightRail
+        .getByRole('button', { name: 'Full screen (expand documents)' })
+        .click();
+      await expect(docsFullscreenDialog).toBeVisible();
+      await expect(
+        docsFullscreenDialog.getByRole('heading', { name: firstSource!.title })
+      ).toBeVisible();
+      const dialogBox = await docsFullscreenDialog.boundingBox();
+      const viewport = page.viewportSize();
+      expect(dialogBox?.width).toBe(viewport?.width);
+      expect(dialogBox?.height).toBe(viewport?.height);
+      await docsFullscreenDialog
+        .getByRole('button', { name: 'Exit full screen' })
+        .click();
+      await expect(docsFullscreenDialog).toHaveCount(0);
+      await expect(page.getByTestId('document-editor-surface')).toBeVisible();
+
+      // Escape also exits full screen.
+      await rightRail
+        .getByRole('button', { name: 'Full screen (expand documents)' })
+        .click();
+      await expect(docsFullscreenDialog).toBeVisible();
+      await page.keyboard.press('Escape');
+      await expect(docsFullscreenDialog).toHaveCount(0);
+      await expect(
+        rightRail.getByRole('button', {
+          name: 'Full screen (expand documents)',
+        })
+      ).toBeVisible();
     } finally {
       await prisma.apHistoryPromptLibraryEntry.updateMany({
         where: { externalKey: dbqEntry.externalKey },
