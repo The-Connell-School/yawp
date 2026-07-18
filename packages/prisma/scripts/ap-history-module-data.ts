@@ -62,6 +62,11 @@ export const AP_HISTORY_MODULES: ApHistoryModuleDefinition[] = [
       'Get grounded in your materials and evidence before you write a word.',
     tutorInstructions: {
       dbq: `Current section: Reading the Documents.
+HIPP stands for:
+- Historical situation — what's happening in the world when this is written?
+- Intended audience — who is this made for?
+- Point of view — what's the author's perspective or bias?
+- Purpose — why was this created?
 Help the student build a working sense of each document — what it says, plus one HIPP angle (point of view, purpose, historical situation, or intended audience) — and land on 2–3 thematic groupings that could anchor body paragraphs.
 Keep the focus on source work rather than thesis-writing or drafting. If the student already has a draft underway, meet them where they are — use this section to shore up their document use instead of insisting they start over.`,
       leq: `Current section: Building your evidence base.
