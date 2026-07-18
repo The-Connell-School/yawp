@@ -254,6 +254,42 @@ test.describe.serial('AP History library-first assignment flow', () => {
           name: 'Full screen (expand documents)',
         })
       ).toBeVisible();
+
+      // Annotation tools: selecting document text highlights it and records
+      // the mark in the Annotations list.
+      const sourceBody = rightRail.locator('[data-source-body]').first();
+      await expect(sourceBody).toBeVisible();
+      const selectedQuote = await sourceBody.evaluate((root) => {
+        const seg = root.querySelector('[data-seg-start]') as HTMLElement;
+        const textNode = seg.firstChild as Text;
+        const start = 4;
+        const end = Math.min(24, textNode.textContent!.length);
+        const range = document.createRange();
+        range.setStart(textNode, start);
+        range.setEnd(textNode, end);
+        const selection = window.getSelection()!;
+        selection.removeAllRanges();
+        selection.addRange(range);
+        root.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+        return textNode.textContent!.slice(start, end);
+      });
+
+      await rightRail
+        .getByRole('button', { name: 'Highlight selection' })
+        .click();
+      const highlighted = rightRail.locator('[data-mark-kind~="highlight"]');
+      await expect(highlighted).toHaveText(selectedQuote);
+      await expect(
+        rightRail.getByRole('heading', { name: 'Annotations' })
+      ).toBeVisible();
+
+      // The mark can be removed again.
+      await rightRail
+        .getByRole('button', { name: 'Remove annotation' })
+        .click();
+      await expect(
+        rightRail.locator('[data-mark-kind~="highlight"]')
+      ).toHaveCount(0);
     } finally {
       await prisma.apHistoryPromptLibraryEntry.updateMany({
         where: { externalKey: dbqEntry.externalKey },
