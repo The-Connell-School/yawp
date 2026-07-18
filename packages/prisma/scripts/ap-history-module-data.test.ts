@@ -110,6 +110,26 @@ describe('AP History module (section) seed data', () => {
     expect(dbqOpener).not.toBe(leqOpener);
   });
 
+  test('the DBQ Read the Documents section spells out what HIPP stands for up front', () => {
+    // Students first meet HIPP in the reading section, so the guidance must
+    // define the acronym rather than assume the student already knows it.
+    const readSection = resolveApHistorySectionTutorInstructions(
+      'dbq',
+      'Read the Documents'
+    )!;
+
+    expect(readSection).toContain('HIPP stands for');
+    expect(readSection).toContain('Historical situation');
+    expect(readSection).toContain('Intended audience');
+    expect(readSection).toContain('Point of view');
+    expect(readSection).toContain('Purpose');
+
+    // The definition comes before the acronym is put to work in the guidance.
+    expect(readSection.indexOf('HIPP stands for')).toBeLessThan(
+      readSection.indexOf('one HIPP angle')
+    );
+  });
+
   test('section guidance meets students where they are instead of hard-blocking work in progress', () => {
     // Existing documents keep their position-1 session, so a student mid-draft
     // may land in an early section. Guidance must never insist on restarting.
