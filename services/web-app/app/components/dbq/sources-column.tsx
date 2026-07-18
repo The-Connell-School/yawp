@@ -1,5 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
-import { BookOpen, MessageSquarePlus, Trash2 } from 'lucide-react';
+import {
+  BookOpen,
+  Maximize2,
+  MessageSquarePlus,
+  Minimize2,
+  Trash2,
+} from 'lucide-react';
 import { Button } from '~/components/ui/button';
 import type { DbqSource, SourceAnnotation } from './types';
 import type { DbqState } from './use-dbq-state';
@@ -26,6 +32,16 @@ export function SourcesColumn({
     insertCitation,
   } = state;
   const [selectedId, setSelectedId] = useState(prompt.sources[0]?.id ?? '');
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  useEffect(() => {
+    if (!isFullscreen) return;
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') setIsFullscreen(false);
+    }
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [isFullscreen]);
 
   const active =
     prompt.sources.find((s) => s.id === selectedId) ?? prompt.sources[0];
@@ -41,9 +57,13 @@ export function SourcesColumn({
 
   return (
     <section
+      role={isFullscreen ? 'dialog' : undefined}
+      aria-modal={isFullscreen ? 'true' : undefined}
+      aria-label={isFullscreen ? 'Documents full screen' : undefined}
       className={cn(
         'flex h-full min-h-0 flex-col overflow-hidden rounded-lg border bg-background',
-        className
+        className,
+        isFullscreen && 'fixed inset-0 z-50 h-auto rounded-none border-0'
       )}
     >
       <header className="shrink-0 border-b">
@@ -53,7 +73,7 @@ export function SourcesColumn({
             <span className="hidden text-[11px] text-muted-foreground sm:inline">
               {prompt.sources.length} sources · click a thumbnail
             </span>
-            {onToggleMaximize ? (
+            {onToggleMaximize && !isFullscreen ? (
               <button
                 type="button"
                 onClick={onToggleMaximize}
@@ -74,6 +94,25 @@ export function SourcesColumn({
                 <BookOpen size={12} />
               </button>
             ) : null}
+            <button
+              type="button"
+              onClick={() => setIsFullscreen((v) => !v)}
+              aria-label={
+                isFullscreen
+                  ? 'Exit full screen'
+                  : 'Full screen (expand documents)'
+              }
+              aria-pressed={isFullscreen}
+              title={isFullscreen ? 'Exit full screen' : 'Full screen'}
+              className={cn(
+                'inline-flex h-6 w-6 items-center justify-center rounded-md border transition',
+                isFullscreen
+                  ? 'border-primary bg-primary text-primary-foreground'
+                  : 'border-border bg-background text-muted-foreground hover:border-primary hover:text-primary'
+              )}
+            >
+              {isFullscreen ? <Minimize2 size={12} /> : <Maximize2 size={12} />}
+            </button>
           </div>
         </div>
         <div className="flex items-center gap-1 overflow-x-auto px-2 pb-2">
@@ -132,6 +171,7 @@ export function SourcesColumn({
         onRemoveAnnotation={removeAnnotation}
         onInsertCitation={insertCitation}
         allowSourceTools={allowSourceTools}
+        isFullscreen={isFullscreen}
       />
     </section>
   );
@@ -144,6 +184,7 @@ function ActiveSourceViewer({
   onRemoveAnnotation,
   onInsertCitation,
   allowSourceTools,
+  isFullscreen = false,
 }: {
   source: DbqSource;
   annotations: SourceAnnotation[];
@@ -151,6 +192,7 @@ function ActiveSourceViewer({
   onRemoveAnnotation: (id: string) => void;
   onInsertCitation: (label: string) => void;
   allowSourceTools: boolean;
+  isFullscreen?: boolean;
 }) {
   const [adding, setAdding] = useState(false);
   const [draft, setDraft] = useState('');
@@ -169,7 +211,12 @@ function ActiveSourceViewer({
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <div className="shrink-0 border-b px-4 py-3">
-        <div className="flex items-start justify-between gap-3">
+        <div
+          className={cn(
+            'flex items-start justify-between gap-3',
+            isFullscreen && 'mx-auto w-full max-w-3xl'
+          )}
+        >
           <div className="min-w-0">
             <div className="flex items-center gap-2">
               <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">
@@ -206,81 +253,83 @@ function ActiveSourceViewer({
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
-        {source.imageUrl ? (
-          <img
-            src={source.imageUrl}
-            alt={source.imageAlt ?? source.title}
-            loading="lazy"
-            className="mb-3 w-full rounded-md border bg-slate-50 object-contain"
-          />
-        ) : null}
-        <p className="whitespace-pre-line text-[13px] leading-relaxed text-foreground/90">
-          {source.body}
-        </p>
-        {source.caption ? (
-          <p className="mt-3 rounded-md bg-muted/30 px-2 py-1.5 text-[11px] italic text-muted-foreground">
-            {source.caption}
-          </p>
-        ) : null}
-
-        {allowSourceTools && adding ? (
-          <div className="mt-4 rounded-md border bg-muted/30 p-2">
-            <textarea
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              placeholder="Note point of view, audience, purpose, or context."
-              className="min-h-[64px] w-full resize-y rounded-md border bg-background px-2 py-1.5 text-[12px] focus:outline-none focus:ring-2 focus:ring-ring"
-              autoFocus
+        <div className={cn(isFullscreen && 'mx-auto max-w-3xl')}>
+          {source.imageUrl ? (
+            <img
+              src={source.imageUrl}
+              alt={source.imageAlt ?? source.title}
+              loading="lazy"
+              className="mb-3 w-full rounded-md border bg-slate-50 object-contain"
             />
-            <div className="mt-1.5 flex justify-end gap-1.5">
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-7 px-2 text-[11px]"
-                onClick={() => {
-                  setAdding(false);
-                  setDraft('');
-                }}
-              >
-                Cancel
-              </Button>
-              <Button
-                size="sm"
-                className="h-7 px-2 text-[11px]"
-                onClick={commit}
-                disabled={!draft.trim()}
-              >
-                Save
-              </Button>
-            </div>
-          </div>
-        ) : null}
+          ) : null}
+          <p className="whitespace-pre-line text-[13px] leading-relaxed text-foreground/90">
+            {source.body}
+          </p>
+          {source.caption ? (
+            <p className="mt-3 rounded-md bg-muted/30 px-2 py-1.5 text-[11px] italic text-muted-foreground">
+              {source.caption}
+            </p>
+          ) : null}
 
-        {allowSourceTools && annotations.length > 0 ? (
-          <div className="mt-4">
-            <h4 className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-              Your notes on this document
-            </h4>
-            <ul className="space-y-1">
-              {annotations.map((a) => (
-                <li
-                  key={a.id}
-                  className="flex items-start justify-between gap-2 rounded-md bg-yellow-50 px-2 py-1.5 text-[12px] text-yellow-900"
+          {allowSourceTools && adding ? (
+            <div className="mt-4 rounded-md border bg-muted/30 p-2">
+              <textarea
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                placeholder="Note point of view, audience, purpose, or context."
+                className="min-h-[64px] w-full resize-y rounded-md border bg-background px-2 py-1.5 text-[12px] focus:outline-none focus:ring-2 focus:ring-ring"
+                autoFocus
+              />
+              <div className="mt-1.5 flex justify-end gap-1.5">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 px-2 text-[11px]"
+                  onClick={() => {
+                    setAdding(false);
+                    setDraft('');
+                  }}
                 >
-                  <span>{a.text}</span>
-                  <button
-                    type="button"
-                    onClick={() => onRemoveAnnotation(a.id)}
-                    className="text-yellow-700 hover:text-yellow-900"
-                    aria-label="Remove note"
+                  Cancel
+                </Button>
+                <Button
+                  size="sm"
+                  className="h-7 px-2 text-[11px]"
+                  onClick={commit}
+                  disabled={!draft.trim()}
+                >
+                  Save
+                </Button>
+              </div>
+            </div>
+          ) : null}
+
+          {allowSourceTools && annotations.length > 0 ? (
+            <div className="mt-4">
+              <h4 className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                Your notes on this document
+              </h4>
+              <ul className="space-y-1">
+                {annotations.map((a) => (
+                  <li
+                    key={a.id}
+                    className="flex items-start justify-between gap-2 rounded-md bg-yellow-50 px-2 py-1.5 text-[12px] text-yellow-900"
                   >
-                    <Trash2 size={12} />
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </div>
-        ) : null}
+                    <span>{a.text}</span>
+                    <button
+                      type="button"
+                      onClick={() => onRemoveAnnotation(a.id)}
+                      className="text-yellow-700 hover:text-yellow-900"
+                      aria-label="Remove note"
+                    >
+                      <Trash2 size={12} />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+        </div>
       </div>
     </div>
   );
