@@ -67,6 +67,29 @@ export type SourceAnnotation = {
   createdAt: number;
 };
 
+export type MarkKind = 'highlight' | 'underline';
+
+export type TextMark = {
+  id: string;
+  sourceId: string;
+  kind: MarkKind;
+  // Character offsets into the source body, [start, end).
+  start: number;
+  end: number;
+  // The selected text, kept for display in the notes list and resilience.
+  quote: string;
+  // Optional comment attached to this mark.
+  note: string;
+  createdAt: number;
+};
+
+export type TextSegment = {
+  start: number;
+  end: number;
+  markIds: string[];
+  kinds: MarkKind[];
+};
+
 export type FailureFlag = {
   id: string;
   label: string;
