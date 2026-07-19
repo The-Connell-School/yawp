@@ -26,6 +26,8 @@ describe('Quick Writing Lessons static lesson archive', () => {
       'commas-introductory-phrases',
       'topic-sentences',
       'thesis-statements',
+      'evidence',
+      'analysis',
     ]);
   });
 
@@ -55,9 +57,11 @@ describe('Quick Writing Lessons static lesson archive', () => {
     expect(composition.map((lesson) => lesson.slug)).toEqual([
       'topic-sentences',
       'thesis-statements',
+      'evidence',
+      'analysis',
     ]);
     for (const lesson of composition) {
-      expect(lesson.category).toBe('Making Claims');
+      expect(['Making Claims', 'Supporting Claims']).toContain(lesson.category);
     }
   });
 
@@ -72,15 +76,19 @@ describe('Quick Writing Lessons static lesson archive', () => {
     const composition = sections.find(
       (section) => section.section === 'Composition'
     );
-    expect(composition?.groups).toEqual([
-      {
-        category: 'Making Claims',
-        lessons: expect.arrayContaining([
-          expect.objectContaining({ slug: 'topic-sentences' }),
-          expect.objectContaining({ slug: 'thesis-statements' }),
-        ]),
-      },
+    // Making Claims (topic sentences, thesis) then Supporting Claims
+    // (evidence, analysis), in first-appearance order.
+    expect(composition?.groups.map((group) => group.category)).toEqual([
+      'Making Claims',
+      'Supporting Claims',
     ]);
+    expect(composition?.groups[1]).toEqual({
+      category: 'Supporting Claims',
+      lessons: expect.arrayContaining([
+        expect.objectContaining({ slug: 'evidence' }),
+        expect.objectContaining({ slug: 'analysis' }),
+      ]),
+    });
   });
 
   test('exposes grounding context (skill + rule) for a composition lesson', () => {

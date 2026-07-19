@@ -26,10 +26,14 @@ test.describe.serial('Writing Fundamentals Practice — Composition', () => {
       page.getByRole('heading', { name: 'Composition' })
     ).toBeVisible();
 
-    // Composition links through to the constructed-response lessons.
+    // Composition links through to the constructed-response lessons, grouped
+    // into Making Claims (topic sentences, thesis) and Supporting Claims
+    // (evidence, analysis).
     await expect(
       page.getByRole('link', { name: /topic sentences/i })
     ).toBeVisible();
+    await expect(page.getByRole('link', { name: /evidence/i })).toBeVisible();
+    await expect(page.getByRole('link', { name: /analysis/i })).toBeVisible();
     await page.getByRole('link', { name: /thesis statements/i }).click();
     await expect(
       page.getByRole('heading', { name: 'Thesis Statements' })

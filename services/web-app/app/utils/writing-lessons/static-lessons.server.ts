@@ -13,7 +13,8 @@ export type LessonCategory =
   | 'Sentence Structure'
   | 'Agreement'
   | 'Flow'
-  | 'Making Claims';
+  | 'Making Claims'
+  | 'Supporting Claims';
 
 type LessonMetadata = {
   slug: string;
@@ -127,6 +128,20 @@ const LESSON_METADATA: Record<string, LessonMetadata> = {
     category: 'Making Claims',
     description: 'Stating the one arguable claim an essay defends',
     skill: 'thesis statements',
+  },
+  Evidence: {
+    section: 'Composition',
+    slug: 'evidence',
+    category: 'Supporting Claims',
+    description: 'Backing a claim with specific, relevant support',
+    skill: 'evidence',
+  },
+  Analysis: {
+    section: 'Composition',
+    slug: 'analysis',
+    category: 'Supporting Claims',
+    description: 'Explaining how evidence proves the claim',
+    skill: 'analysis',
   },
 };
 
