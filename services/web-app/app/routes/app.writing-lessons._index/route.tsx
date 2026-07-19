@@ -34,26 +34,37 @@ import {
 } from '~/components/ui/sheet';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
+import { isCompositionPracticeEnabled } from '~/utils/writing-lessons/composition-flag.server';
 import {
   getAssignedPracticeForStudent,
   getWritingPracticeAssignmentsForTeacher,
 } from '~/utils/writing-lessons/practice-assignments.server';
-import { getQuickWritingLessonGroups } from '~/utils/writing-lessons/static-lessons.server';
+import { getQuickWritingLessonSections } from '~/utils/writing-lessons/static-lessons.server';
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
   const profile = await requireMembership(request, userId);
 
-  const groups = getQuickWritingLessonGroups();
+  // Composition is behind its rollout flag; hide the whole section until on.
+  const compositionEnabled = isCompositionPracticeEnabled();
+  const sections = getQuickWritingLessonSections().filter(
+    (section) => compositionEnabled || section.section !== 'Composition'
+  );
+
+  // The self-directed session and the teacher assign builder are ACT
+  // multiple-choice only, so they list grammar skills exclusively — composition
+  // lessons are constructed response and are practiced from the lesson page.
+  const grammarLessons = getQuickWritingLessonSections()
+    .filter((section) => section.section === 'Grammar & Mechanics')
+    .flatMap((section) => section.groups)
+    .flatMap((group) => group.lessons);
 
   // Flat skill list for the student "Create practice" builder.
-  const practiceSkillOptions = groups.flatMap((group) =>
-    group.lessons.map((lesson) => ({
-      slug: lesson.slug,
-      title: lesson.title,
-      category: lesson.category,
-    }))
-  );
+  const practiceSkillOptions = grammarLessons.map((lesson) => ({
+    slug: lesson.slug,
+    title: lesson.title,
+    category: lesson.category,
+  }));
 
   const isTeacher = profile.role === 'TEACHER';
 
@@ -72,13 +83,11 @@ export async function loader({ request }: LoaderFunctionArgs) {
       }))
     : [];
   const writingPracticeLessons = isTeacher
-    ? groups.flatMap((group) =>
-        group.lessons.map((lesson) => ({
-          slug: lesson.slug,
-          title: lesson.title,
-          category: lesson.category,
-        }))
-      )
+    ? grammarLessons.map((lesson) => ({
+        slug: lesson.slug,
+        title: lesson.title,
+        category: lesson.category,
+      }))
     : [];
 
   const assignedPractice =
@@ -118,7 +127,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       : [];
 
   return dataResponse({
-    groups,
+    sections,
     isTeacher,
     teacherClasses,
     writingPracticeLessons,
@@ -183,8 +192,9 @@ function StudentPracticeBuilder({
         <SheetHeader>
           <SheetTitle>Create practice</SheetTitle>
           <SheetDescription>
-            Pick the skills you want to work on and how many problems. We&rsquo;ll
-            build a mixed set and give you feedback on every rewrite.
+            Pick the skills you want to work on and how many problems.
+            We&rsquo;ll build a mixed set and give you feedback on every
+            rewrite.
           </SheetDescription>
         </SheetHeader>
 
@@ -310,7 +320,7 @@ function TeacherDirections() {
 
 export default function WritingLessonsIndexRoute() {
   const {
-    groups,
+    sections,
     isTeacher,
     teacherClasses,
     writingPracticeLessons,
@@ -479,36 +489,56 @@ export default function WritingLessonsIndexRoute() {
           </section>
         ) : null}
 
-        {groups.map((group) => (
-          <section key={group.category} className="flex flex-col gap-3">
-            <div className="flex items-center gap-2">
-              <h3 className="text-lg font-semibold">{group.category}</h3>
-              <Badge variant="secondary" size="sm">
-                {group.lessons.length}
-              </Badge>
-            </div>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {group.lessons.map((lesson) => (
-                <Link
-                  key={lesson.slug}
-                  to={`/app/writing-lessons/${lesson.slug}`}
-                  className="block h-full"
-                >
-                  <Card className="h-full shadow-none hover:shadow-sm">
-                    <CardHeader className="p-4">
-                      <CardTitle className="text-base leading-snug">
-                        {lesson.title}
-                      </CardTitle>
-                      <CardDescription className="text-base sm:text-sm">
-                        {lesson.description}
-                      </CardDescription>
-                    </CardHeader>
-                  </Card>
-                </Link>
+        {sections.map((section) => {
+          const sectionCount = section.groups.reduce(
+            (total, group) => total + group.lessons.length,
+            0
+          );
+          return (
+            <div key={section.section} className="flex flex-col gap-5">
+              <div className="flex items-center gap-2 border-b pb-2">
+                <h3 className="text-xl font-bold tracking-tight">
+                  {section.section}
+                </h3>
+                <Badge variant="secondary" size="sm">
+                  {sectionCount}
+                </Badge>
+              </div>
+              {section.groups.map((group) => (
+                <section key={group.category} className="flex flex-col gap-3">
+                  <div className="flex items-center gap-2">
+                    <h4 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                      {group.category}
+                    </h4>
+                    <Badge variant="secondary" size="sm">
+                      {group.lessons.length}
+                    </Badge>
+                  </div>
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                    {group.lessons.map((lesson) => (
+                      <Link
+                        key={lesson.slug}
+                        to={`/app/writing-lessons/${lesson.slug}`}
+                        className="block h-full"
+                      >
+                        <Card className="h-full shadow-none hover:shadow-sm">
+                          <CardHeader className="p-4">
+                            <CardTitle className="text-base leading-snug">
+                              {lesson.title}
+                            </CardTitle>
+                            <CardDescription className="text-base sm:text-sm">
+                              {lesson.description}
+                            </CardDescription>
+                          </CardHeader>
+                        </Card>
+                      </Link>
+                    ))}
+                  </div>
+                </section>
               ))}
             </div>
-          </section>
-        ))}
+          );
+        })}
       </div>
     </section>
   );

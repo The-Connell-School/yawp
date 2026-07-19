@@ -50,9 +50,17 @@ describe('writing lessons index route', () => {
       context: {} as never,
     } as any);
 
-    expect(response.data.groups.length).toBeGreaterThan(0);
+    expect(response.data.sections.length).toBeGreaterThan(0);
     expect(
-      response.data.groups.some((group) => group.lessons.length > 0)
+      response.data.sections.some((section) =>
+        section.groups.some((group) => group.lessons.length > 0)
+      )
+    ).toBe(true);
+    // Grammar & Mechanics is always present; Composition appears when enabled.
+    expect(
+      response.data.sections.some(
+        (section) => section.section === 'Grammar & Mechanics'
+      )
     ).toBe(true);
   });
 });
