@@ -31,17 +31,23 @@ const prisma = {
     delete: mock(),
     deleteMany: mock(),
   },
+  writingPracticeAssignment: {
+    findMany: mock(),
+    deleteMany: mock(),
+  },
 };
 
 const requireUserId = mock();
 const requireMembership = mock();
 
 mock.module('~/utils/db.server', () => ({ prisma }));
-mock.module('~/utils/auth.server', () => ({ requireUserId, requireMembership }));
+mock.module('~/utils/auth.server', () => ({
+  requireUserId,
+  requireMembership,
+}));
 
-const { action, loader, sanitizeAssignmentCreateReturnTo } = await import(
-  './route'
-);
+const { action, loader, sanitizeAssignmentCreateReturnTo } =
+  await import('./route');
 
 function requestFor(body: Record<string, string>) {
   const form = new FormData();
@@ -195,6 +201,104 @@ describe('app.assignments action', () => {
     });
   });
 
+  test('deletes writing practice assignments alongside standard ones', async () => {
+    prisma.assignment.findMany.mockResolvedValue([
+      {
+        id: 'assignment-1',
+        classAssignments: [
+          {
+            class: {
+              id: 'class-1',
+              school: { id: 'school-1', organizationId: 'org-1' },
+            },
+          },
+        ],
+      },
+    ]);
+    prisma.writingPracticeAssignment.findMany.mockResolvedValue([
+      { id: 'practice-1' },
+    ]);
+
+    const form = new FormData();
+    form.append('intent', 'delete-assignments');
+    form.append('assignmentIds', 'assignment-1');
+    form.append('practiceAssignmentIds', 'practice-1');
+
+    const response = await action({
+      request: new Request('https://example.com/app/assignments', {
+        method: 'POST',
+        body: form,
+      }),
+      params: {},
+    } as any);
+
+    const body = await readBody(response);
+    expect(body.success).toBe(true);
+    expect(body.message).toBe('Deleted 2 assignment(s).');
+    expect(prisma.assignment.deleteMany).toHaveBeenCalledWith({
+      where: { id: { in: ['assignment-1'] } },
+    });
+    expect(prisma.writingPracticeAssignment.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          id: { in: ['practice-1'] },
+          classAssignments: {
+            some: {
+              class: { teachers: { some: { id: 'teacher-1' } } },
+            },
+          },
+        }),
+      })
+    );
+    expect(prisma.writingPracticeAssignment.deleteMany).toHaveBeenCalledWith({
+      where: { id: { in: ['practice-1'] } },
+    });
+  });
+
+  test('deletes writing practice assignments on their own', async () => {
+    prisma.writingPracticeAssignment.findMany.mockResolvedValue([
+      { id: 'practice-1' },
+    ]);
+
+    const form = new FormData();
+    form.append('intent', 'delete-assignments');
+    form.append('practiceAssignmentIds', 'practice-1');
+
+    const response = await action({
+      request: new Request('https://example.com/app/assignments', {
+        method: 'POST',
+        body: form,
+      }),
+      params: {},
+    } as any);
+
+    const body = await readBody(response);
+    expect(body.success).toBe(true);
+    expect(prisma.assignment.deleteMany).not.toHaveBeenCalled();
+    expect(prisma.writingPracticeAssignment.deleteMany).toHaveBeenCalledWith({
+      where: { id: { in: ['practice-1'] } },
+    });
+  });
+
+  test('rejects deleting writing practice assignments the teacher does not own', async () => {
+    prisma.writingPracticeAssignment.findMany.mockResolvedValue([]);
+
+    const form = new FormData();
+    form.append('intent', 'delete-assignments');
+    form.append('practiceAssignmentIds', 'practice-x');
+
+    const response = await action({
+      request: new Request('https://example.com/app/assignments', {
+        method: 'POST',
+        body: form,
+      }),
+      params: {},
+    } as any);
+
+    expect(responseStatus(response)).toBe(400);
+    expect(prisma.writingPracticeAssignment.deleteMany).not.toHaveBeenCalled();
+  });
+
   test('deletes the assignment without touching documents', async () => {
     const response = await action({
       request: requestFor({
@@ -336,10 +440,77 @@ describe('app.assignments loader', () => {
     expect(prisma.assignment.findMany).not.toHaveBeenCalled();
     expect(prisma.assignmentType.findMany).not.toHaveBeenCalled();
     expect(prisma.organizationAssignmentType.findMany).not.toHaveBeenCalled();
+    expect(prisma.writingPracticeAssignment.findMany).not.toHaveBeenCalled();
+  });
+
+  test('returns writing practice assignments with lesson titles resolved', async () => {
+    const { getQuickWritingLessonGroups } =
+      await import('~/utils/writing-lessons/static-lessons.server');
+    const firstLesson = getQuickWritingLessonGroups()[0]!.lessons[0]!;
+
+    prisma.class.findMany.mockResolvedValue([
+      {
+        id: 'class-1',
+        grade: '9',
+        period: '1',
+        title: null,
+        school: { id: 'school-1', name: 'School', organizationId: 'org-1' },
+      },
+    ]);
+    prisma.assignment.findMany.mockResolvedValue([]);
+    prisma.organizationAssignmentType.findMany.mockResolvedValue([]);
+    prisma.school.findMany.mockResolvedValue([]);
+    prisma.orgMembership.findMany.mockResolvedValue([]);
+    prisma.assignmentType.findMany.mockResolvedValue([]);
+    prisma.writingPracticeAssignment.findMany.mockResolvedValue([
+      {
+        id: 'practice-1',
+        title: null,
+        lessonSlugs: [firstLesson.slug, 'unknown-slug'],
+        problemCount: 5,
+        dueAt: new Date('2026-07-20T00:00:00Z'),
+        createdAt: new Date('2026-07-01T00:00:00Z'),
+        classAssignments: [
+          {
+            id: 'practice-ca-1',
+            class: { id: 'class-1', grade: '9', period: '1', title: null },
+            _count: { attempts: 3 },
+          },
+        ],
+      },
+    ]);
+
+    const response = await loader({
+      request: new Request('https://example.com/app/assignments'),
+      params: {},
+    } as any);
+
+    const body = await readBody(response);
+
+    expect(prisma.writingPracticeAssignment.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          classAssignments: { some: { classId: { in: ['class-1'] } } },
+        },
+      })
+    );
+    expect(body.writingPracticeAssignments).toHaveLength(1);
+    expect(body.writingPracticeAssignments[0]).toMatchObject({
+      id: 'practice-1',
+      problemCount: 5,
+      lessonTitles: [firstLesson.title, 'unknown-slug'],
+      dueAt: '2026-07-20T00:00:00.000Z',
+    });
+    expect(
+      body.writingPracticeAssignments[0].classAssignments[0]._count.attempts
+    ).toBe(3);
   });
 
   test('does not describe teachers without classes as missing organization enablement', () => {
-    const source = readFileSync(new URL('./route.tsx', import.meta.url), 'utf8');
+    const source = readFileSync(
+      new URL('./route.tsx', import.meta.url),
+      'utf8'
+    );
 
     expect(source).not.toContain(
       'Assignments are not enabled for your organization yet.'

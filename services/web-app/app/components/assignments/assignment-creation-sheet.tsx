@@ -43,6 +43,22 @@ export type AssignmentCreationAssignmentType = {
   title: string;
 };
 
+/**
+ * Synthetic assignment-type value for writing practice. Selecting it in the
+ * type dropdown swaps the sheet body to the writing-practice builder (pick
+ * skills to interleave + how many problems) and posts to the practice-assign
+ * endpoint instead of the essay-assignment API.
+ */
+export const WRITING_PRACTICE_TYPE_ID = '__writing_practice__';
+
+export const WRITING_PRACTICE_PROBLEM_PRESETS = [3, 5, 10, 15] as const;
+
+export type WritingPracticeLessonOption = {
+  slug: string;
+  title: string;
+  category: string;
+};
+
 export type AssignmentCreationClassOption = {
   id: string;
   name?: string;
@@ -80,6 +96,8 @@ export type AssignmentCreationSheetProps = {
   initialTitle?: string;
   initialPrompt?: string;
   emptyClassesMessage?: string;
+  writingPracticeEnabled?: boolean;
+  writingPracticeLessons?: WritingPracticeLessonOption[];
 };
 
 type AssignmentCreationSheetContentProps = AssignmentCreationSheetProps & {
@@ -109,6 +127,149 @@ function initialAssignmentTypeSelection(
     initialAssignmentTypeId ??
     assignmentTypes[0]?.id ??
     ''
+  );
+}
+
+function WritingPracticeFields({
+  lessons,
+  selectedLessonSlugs,
+  onToggleLesson,
+  problemCount,
+  onProblemCountChange,
+  dueAt,
+  onDueAtChange,
+  instructions,
+  onInstructionsChange,
+  disabled,
+}: {
+  lessons: WritingPracticeLessonOption[];
+  selectedLessonSlugs: string[];
+  onToggleLesson: (slug: string) => void;
+  problemCount: string;
+  onProblemCountChange: (value: string) => void;
+  dueAt: string;
+  onDueAtChange: (value: string) => void;
+  instructions: string;
+  onInstructionsChange: (value: string) => void;
+  disabled: boolean;
+}) {
+  const grouped = useMemo(() => {
+    const map = new Map<string, WritingPracticeLessonOption[]>();
+    for (const lesson of lessons) {
+      const list = map.get(lesson.category) ?? [];
+      list.push(lesson);
+      map.set(lesson.category, list);
+    }
+    return Array.from(map, ([category, items]) => ({ category, items }));
+  }, [lessons]);
+
+  return (
+    <>
+      {selectedLessonSlugs.map((slug) => (
+        <input key={slug} type="hidden" name="lessonSlugs" value={slug} />
+      ))}
+      <input type="hidden" name="problemCount" value={problemCount} />
+
+      <div className="space-y-2">
+        <Label>Skills to practice</Label>
+        <p className="text-sm text-muted-foreground">
+          Pick one skill, or several to interleave them into one mixed set.
+        </p>
+        <div className="max-h-64 space-y-3 overflow-y-auto rounded-md border p-3">
+          {grouped.map((group) => (
+            <div key={group.category} className="space-y-1.5">
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                {group.category}
+              </p>
+              {group.items.map((lesson) => (
+                <div key={lesson.slug} className="flex items-center gap-2.5">
+                  <Checkbox
+                    id={`wp-lesson-${lesson.slug}`}
+                    checked={selectedLessonSlugs.includes(lesson.slug)}
+                    onCheckedChange={() => onToggleLesson(lesson.slug)}
+                    disabled={disabled}
+                  />
+                  <Label
+                    htmlFor={`wp-lesson-${lesson.slug}`}
+                    className="cursor-pointer font-normal"
+                  >
+                    {lesson.title}
+                  </Label>
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        <Label>How many problems?</Label>
+        <div className="flex flex-wrap items-center gap-2">
+          {WRITING_PRACTICE_PROBLEM_PRESETS.map((preset) => {
+            const selected = problemCount === String(preset);
+            return (
+              <button
+                key={preset}
+                type="button"
+                onClick={() => onProblemCountChange(String(preset))}
+                aria-pressed={selected}
+                disabled={disabled}
+                className={`h-9 w-12 rounded-md border text-sm transition ${
+                  selected
+                    ? 'border-primary bg-primary text-primary-foreground'
+                    : 'border-border bg-background hover:bg-muted'
+                }`}
+              >
+                {preset}
+              </button>
+            );
+          })}
+          <Input
+            type="number"
+            min={1}
+            max={20}
+            inputMode="numeric"
+            aria-label="Custom number of problems"
+            value={problemCount}
+            onChange={(event) => onProblemCountChange(event.target.value)}
+            disabled={disabled}
+            className="h-9 w-20"
+          />
+        </div>
+        <p className="text-sm text-muted-foreground">
+          Students answer this many prompts, drawn from the selected skills.
+        </p>
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="wp-due-at">
+          Due date <span className="text-muted-foreground">(optional)</span>
+        </Label>
+        <Input
+          id="wp-due-at"
+          name="dueAt"
+          type="date"
+          value={dueAt}
+          onChange={(event) => onDueAtChange(event.target.value)}
+          disabled={disabled}
+        />
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="wp-instructions">
+          Instructions <span className="text-muted-foreground">(optional)</span>
+        </Label>
+        <Textarea
+          id="wp-instructions"
+          name="instructions"
+          value={instructions}
+          onChange={(event) => onInstructionsChange(event.target.value)}
+          placeholder="A note your students will see with this practice."
+          rows={3}
+          disabled={disabled}
+        />
+      </div>
+    </>
   );
 }
 
@@ -143,6 +304,8 @@ export function AssignmentCreationSheetContent({
   initialTitle = '',
   initialPrompt = '',
   emptyClassesMessage = "You don't have any assignment-enabled classes yet.",
+  writingPracticeEnabled = false,
+  writingPracticeLessons = [],
   createFetcher,
   extractFetcher,
   renderSheet = true,
@@ -170,6 +333,10 @@ export function AssignmentCreationSheetContent({
     );
   const [promptMode, setPromptMode] = useState<'manual' | 'pdf'>('manual');
   const [pdfFile, setPdfFile] = useState<File | null>(null);
+  const [selectedLessonSlugs, setSelectedLessonSlugs] = useState<string[]>([]);
+  const [problemCount, setProblemCount] = useState('5');
+  const [dueAt, setDueAt] = useState('');
+  const [instructions, setInstructions] = useState('');
   const wasOpenRef = useRef(false);
 
   const CreateForm = createFetcher.Form;
@@ -177,10 +344,20 @@ export function AssignmentCreationSheetContent({
   const isExtracting = extractFetcher.state !== 'idle';
   const assignmentTypeId =
     fixedAssignmentTypeId ?? selectedAssignmentTypeId ?? '';
+  const isWritingPractice = assignmentTypeId === WRITING_PRACTICE_TYPE_ID;
   const hasFixedClass = Boolean(fixedClassId);
   const usesBulkCreateApi =
     entryPoint === 'dashboard' || entryPoint === 'assignment-type';
-  const formAction = usesBulkCreateApi ? '/api/assignments/create' : undefined;
+  const formAction = isWritingPractice
+    ? '/app/writing-lessons/assign'
+    : usesBulkCreateApi
+      ? '/api/assignments/create'
+      : undefined;
+  const parsedProblemCount = Number(problemCount);
+  const isProblemCountValid =
+    Number.isInteger(parsedProblemCount) &&
+    parsedProblemCount >= 1 &&
+    parsedProblemCount <= 20;
   const selectedClassCount = hasFixedClass
     ? 1
     : usesBulkCreateApi
@@ -232,6 +409,10 @@ export function AssignmentCreationSheetContent({
     );
     setPromptMode('manual');
     setPdfFile(null);
+    setSelectedLessonSlugs([]);
+    setProblemCount('5');
+    setDueAt('');
+    setInstructions('');
   }, [
     assignmentTypes,
     fixedAssignmentTypeId,
@@ -269,6 +450,14 @@ export function AssignmentCreationSheetContent({
     );
   }
 
+  function toggleLesson(slug: string) {
+    setSelectedLessonSlugs((prev) =>
+      prev.includes(slug)
+        ? prev.filter((existing) => existing !== slug)
+        : [...prev, slug]
+    );
+  }
+
   function handleExtractPdf() {
     if (!pdfFile || !pdfExtractionClassId) return;
     const formData = new FormData();
@@ -281,13 +470,17 @@ export function AssignmentCreationSheetContent({
     });
   }
 
-  const isSubmitDisabled =
-    isSaving ||
-    isExtracting ||
-    !assignmentTypeId ||
-    selectedClassCount === 0 ||
-    !prompt.trim() ||
-    (submitForGrade && !pointValue.trim());
+  const isSubmitDisabled = isWritingPractice
+    ? isSaving ||
+      selectedClassCount === 0 ||
+      selectedLessonSlugs.length === 0 ||
+      !isProblemCountValid
+    : isSaving ||
+      isExtracting ||
+      !assignmentTypeId ||
+      selectedClassCount === 0 ||
+      !prompt.trim() ||
+      (submitForGrade && !pointValue.trim());
 
   const header = renderSheet ? (
     <SheetHeader>
@@ -308,8 +501,16 @@ export function AssignmentCreationSheetContent({
       {header}
 
       <CreateForm method="post" action={formAction} className="mt-6 space-y-4">
-        <input type="hidden" name="intent" value="create-assignment" />
-        <input type="hidden" name="assignmentTypeId" value={assignmentTypeId} />
+        {!isWritingPractice ? (
+          <>
+            <input type="hidden" name="intent" value="create-assignment" />
+            <input
+              type="hidden"
+              name="assignmentTypeId"
+              value={assignmentTypeId}
+            />
+          </>
+        ) : null}
 
         {hasFixedClass ? (
           <input type="hidden" name="classId" value={fixedClassId} />
@@ -335,6 +536,11 @@ export function AssignmentCreationSheetContent({
                   {assignmentType.title}
                 </SelectItem>
               ))}
+              {writingPracticeEnabled ? (
+                <SelectItem value={WRITING_PRACTICE_TYPE_ID}>
+                  Writing Fundamentals Practice
+                </SelectItem>
+              ) : null}
             </SelectContent>
           </Select>
         </div>
@@ -342,35 +548,35 @@ export function AssignmentCreationSheetContent({
         <div className="space-y-2">
           <Label>Assign to</Label>
           <div className="space-y-2.5 rounded-md border p-3">
-              {teacherClasses.length === 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  {emptyClassesMessage}
-                </p>
-              ) : (
-                teacherClasses.map((klass) => {
-                  const checked = hasFixedClass
-                    ? klass.id === fixedClassId
-                    : selectedClassIds.includes(klass.id);
+            {teacherClasses.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                {emptyClassesMessage}
+              </p>
+            ) : (
+              teacherClasses.map((klass) => {
+                const checked = hasFixedClass
+                  ? klass.id === fixedClassId
+                  : selectedClassIds.includes(klass.id);
 
-                  return (
-                    <div key={klass.id} className="flex items-center gap-2.5">
-                      <Checkbox
-                        id={`assignment-create-class-${klass.id}`}
-                        checked={checked}
-                        onCheckedChange={() => toggleClass(klass.id)}
-                        disabled={isSaving || hasFixedClass}
-                      />
-                      <Label
-                        htmlFor={`assignment-create-class-${klass.id}`}
-                        className="cursor-pointer font-normal"
-                      >
-                        {assignmentCreationClassLabel(klass)}
-                      </Label>
-                    </div>
-                  );
-                })
-              )}
-            </div>
+                return (
+                  <div key={klass.id} className="flex items-center gap-2.5">
+                    <Checkbox
+                      id={`assignment-create-class-${klass.id}`}
+                      checked={checked}
+                      onCheckedChange={() => toggleClass(klass.id)}
+                      disabled={isSaving || hasFixedClass}
+                    />
+                    <Label
+                      htmlFor={`assignment-create-class-${klass.id}`}
+                      className="cursor-pointer font-normal"
+                    >
+                      {assignmentCreationClassLabel(klass)}
+                    </Label>
+                  </div>
+                );
+              })
+            )}
+          </div>
         </div>
 
         <div className="space-y-2">
@@ -380,196 +586,222 @@ export function AssignmentCreationSheetContent({
             name="title"
             value={title}
             onChange={(event) => setTitle(event.target.value)}
-            placeholder="e.g., Rhetorical Analysis Essay"
+            placeholder={
+              isWritingPractice
+                ? 'e.g., Comma splices warm-up'
+                : 'e.g., Rhetorical Analysis Essay'
+            }
             disabled={isSaving}
           />
         </div>
 
-        <div className="space-y-2">
-          <Label>Prompt Source</Label>
-          <div className="flex items-center gap-4 text-sm">
-            <label className="flex items-center gap-2">
-              <input
-                type="radio"
-                checked={promptMode === 'manual'}
-                onChange={() => setPromptMode('manual')}
-              />
-              Type manually
-            </label>
-            <label className="flex items-center gap-2">
-              <input
-                type="radio"
-                checked={promptMode === 'pdf'}
-                onChange={() => setPromptMode('pdf')}
-              />
-              Upload PDF
-            </label>
-          </div>
-        </div>
-
-        {promptMode === 'pdf' ? (
-          <div className="space-y-2 rounded-md border p-3">
-            <Label htmlFor="assignment-create-pdf">Assignment PDF</Label>
-            <Input
-              id="assignment-create-pdf"
-              type="file"
-              accept="application/pdf,.pdf"
-              onChange={(event) => {
-                setPdfFile(event.target.files?.[0] ?? null);
-              }}
-              disabled={isExtracting || isSaving}
-            />
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={handleExtractPdf}
-              disabled={
-                !pdfFile || !pdfExtractionClassId || isExtracting || isSaving
-              }
-            >
-              {isExtracting ? 'Extracting...' : 'Extract Prompt from PDF'}
-            </Button>
-            {extractError ? (
-              <p className="text-sm text-destructive">{extractError}</p>
-            ) : null}
-          </div>
-        ) : null}
-
-        <div className="space-y-2">
-          <Label htmlFor="assignment-create-prompt">Prompt</Label>
-          <Textarea
-            id="assignment-create-prompt"
-            name="prompt"
-            value={prompt}
-            onChange={(event) => setPrompt(event.target.value)}
-            rows={8}
-            placeholder="Paste or type the full assignment prompt for students..."
+        {isWritingPractice ? (
+          <WritingPracticeFields
+            lessons={writingPracticeLessons}
+            selectedLessonSlugs={selectedLessonSlugs}
+            onToggleLesson={toggleLesson}
+            problemCount={problemCount}
+            onProblemCountChange={setProblemCount}
+            dueAt={dueAt}
+            onDueAtChange={setDueAt}
+            instructions={instructions}
+            onInstructionsChange={setInstructions}
             disabled={isSaving}
-            required
           />
-        </div>
-
-        <div className="pt-6">
-          <input type="hidden" name="submitForGrade" value="false" />
-          <div className="flex items-center gap-2.5">
-            <Checkbox
-              id="assignment-create-submit-for-grade"
-              name="submitForGrade"
-              value="true"
-              checked={submitForGrade}
-              onCheckedChange={(checked) =>
-                setSubmitForGrade(checked === true)
-              }
-              disabled={isSaving}
-              className="size-4 shrink-0"
-            />
-            <Label
-              htmlFor="assignment-create-submit-for-grade"
-              className="cursor-pointer font-normal leading-none"
-            >
-              Submit for grade
-            </Label>
-          </div>
-          <p className="mt-1 pl-[calc(1rem+0.625rem)] text-sm text-muted-foreground">
-            Students can submit this assignment for a recorded grade.
-          </p>
-
-          {submitForGrade ? (
-            <div className="mt-3 flex gap-2.5">
-              <div className="flex w-4 shrink-0 justify-center">
-                <div aria-hidden className="w-px bg-border" />
-              </div>
-              <div className="min-w-0 flex-1 space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="assignment-create-point-value">
-                    Point value
-                  </Label>
-                  <Input
-                    id="assignment-create-point-value"
-                    name="pointValue"
-                    type="number"
-                    min={1}
-                    max={1000}
-                    step={1}
-                    inputMode="numeric"
-                    value={pointValue}
-                    onChange={(event) => setPointValue(event.target.value)}
-                    disabled={isSaving}
-                    required
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <Label>Grading assistant strictness</Label>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="h-6 w-6 rounded-full"
-                          aria-label="Grading assistant strictness help"
-                          title={gradingAssistantStrictnessHelpText}
-                        >
-                          <CircleHelp className="h-4 w-4" />
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent
-                        align="start"
-                        className="w-80 rounded-md border-slate-200 bg-slate-100 p-3 text-sm text-slate-800 shadow-md"
-                      >
-                        {gradingAssistantStrictnessHelpText}
-                      </PopoverContent>
-                    </Popover>
-                  </div>
+        ) : (
+          <>
+            <div className="space-y-2">
+              <Label>Prompt Source</Label>
+              <div className="flex items-center gap-4 text-sm">
+                <label className="flex items-center gap-2">
                   <input
-                    type="hidden"
-                    name="gradingAssistantStrictnessLevel"
-                    value={gradingAssistantStrictnessLevel}
+                    type="radio"
+                    checked={promptMode === 'manual'}
+                    onChange={() => setPromptMode('manual')}
                   />
-                  <div className="grid gap-2 sm:grid-cols-3">
-                    {gradingAssistantStrictnessOptions.map((option) => {
-                      const selected =
-                        gradingAssistantStrictnessLevel === option.value;
-                      return (
-                        <button
-                          key={option.value}
-                          type="button"
-                          className={`rounded-md border px-3 py-2 text-left text-sm transition ${
-                            selected
-                              ? 'border-primary bg-primary text-primary-foreground'
-                              : 'border-border bg-background hover:bg-muted'
-                          }`}
-                          aria-pressed={selected}
-                          onClick={() =>
-                            setGradingAssistantStrictnessLevel(option.value)
-                          }
-                          disabled={isSaving}
-                        >
-                          <span className="block font-medium">
-                            {option.label}
-                          </span>
-                          <span
-                            className={`mt-1 block text-xs ${
-                              selected
-                                ? 'text-primary-foreground/80'
-                                : 'text-muted-foreground'
-                            }`}
-                          >
-                            {option.description}
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
+                  Type manually
+                </label>
+                <label className="flex items-center gap-2">
+                  <input
+                    type="radio"
+                    checked={promptMode === 'pdf'}
+                    onChange={() => setPromptMode('pdf')}
+                  />
+                  Upload PDF
+                </label>
               </div>
             </div>
-          ) : null}
-        </div>
 
-        {!submitForGrade ? <input type="hidden" name="pointValue" value="" /> : null}
+            {promptMode === 'pdf' ? (
+              <div className="space-y-2 rounded-md border p-3">
+                <Label htmlFor="assignment-create-pdf">Assignment PDF</Label>
+                <Input
+                  id="assignment-create-pdf"
+                  type="file"
+                  accept="application/pdf,.pdf"
+                  onChange={(event) => {
+                    setPdfFile(event.target.files?.[0] ?? null);
+                  }}
+                  disabled={isExtracting || isSaving}
+                />
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={handleExtractPdf}
+                  disabled={
+                    !pdfFile ||
+                    !pdfExtractionClassId ||
+                    isExtracting ||
+                    isSaving
+                  }
+                >
+                  {isExtracting ? 'Extracting...' : 'Extract Prompt from PDF'}
+                </Button>
+                {extractError ? (
+                  <p className="text-sm text-destructive">{extractError}</p>
+                ) : null}
+              </div>
+            ) : null}
+
+            <div className="space-y-2">
+              <Label htmlFor="assignment-create-prompt">Prompt</Label>
+              <Textarea
+                id="assignment-create-prompt"
+                name="prompt"
+                value={prompt}
+                onChange={(event) => setPrompt(event.target.value)}
+                rows={8}
+                placeholder="Paste or type the full assignment prompt for students..."
+                disabled={isSaving}
+                required
+              />
+            </div>
+
+            <div className="pt-6">
+              <input type="hidden" name="submitForGrade" value="false" />
+              <div className="flex items-center gap-2.5">
+                <Checkbox
+                  id="assignment-create-submit-for-grade"
+                  name="submitForGrade"
+                  value="true"
+                  checked={submitForGrade}
+                  onCheckedChange={(checked) =>
+                    setSubmitForGrade(checked === true)
+                  }
+                  disabled={isSaving}
+                  className="size-4 shrink-0"
+                />
+                <Label
+                  htmlFor="assignment-create-submit-for-grade"
+                  className="cursor-pointer font-normal leading-none"
+                >
+                  Submit for grade
+                </Label>
+              </div>
+              <p className="mt-1 pl-[calc(1rem+0.625rem)] text-sm text-muted-foreground">
+                Students can submit this assignment for a recorded grade.
+              </p>
+
+              {submitForGrade ? (
+                <div className="mt-3 flex gap-2.5">
+                  <div className="flex w-4 shrink-0 justify-center">
+                    <div aria-hidden className="w-px bg-border" />
+                  </div>
+                  <div className="min-w-0 flex-1 space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="assignment-create-point-value">
+                        Point value
+                      </Label>
+                      <Input
+                        id="assignment-create-point-value"
+                        name="pointValue"
+                        type="number"
+                        min={1}
+                        max={1000}
+                        step={1}
+                        inputMode="numeric"
+                        value={pointValue}
+                        onChange={(event) => setPointValue(event.target.value)}
+                        disabled={isSaving}
+                        required
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2">
+                        <Label>Grading assistant strictness</Label>
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6 rounded-full"
+                              aria-label="Grading assistant strictness help"
+                              title={gradingAssistantStrictnessHelpText}
+                            >
+                              <CircleHelp className="h-4 w-4" />
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent
+                            align="start"
+                            className="w-80 rounded-md border-slate-200 bg-slate-100 p-3 text-sm text-slate-800 shadow-md"
+                          >
+                            {gradingAssistantStrictnessHelpText}
+                          </PopoverContent>
+                        </Popover>
+                      </div>
+                      <input
+                        type="hidden"
+                        name="gradingAssistantStrictnessLevel"
+                        value={gradingAssistantStrictnessLevel}
+                      />
+                      <div className="grid gap-2 sm:grid-cols-3">
+                        {gradingAssistantStrictnessOptions.map((option) => {
+                          const selected =
+                            gradingAssistantStrictnessLevel === option.value;
+                          return (
+                            <button
+                              key={option.value}
+                              type="button"
+                              className={`rounded-md border px-3 py-2 text-left text-sm transition ${
+                                selected
+                                  ? 'border-primary bg-primary text-primary-foreground'
+                                  : 'border-border bg-background hover:bg-muted'
+                              }`}
+                              aria-pressed={selected}
+                              onClick={() =>
+                                setGradingAssistantStrictnessLevel(option.value)
+                              }
+                              disabled={isSaving}
+                            >
+                              <span className="block font-medium">
+                                {option.label}
+                              </span>
+                              <span
+                                className={`mt-1 block text-xs ${
+                                  selected
+                                    ? 'text-primary-foreground/80'
+                                    : 'text-muted-foreground'
+                                }`}
+                              >
+                                {option.description}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+
+            {!submitForGrade ? (
+              <input type="hidden" name="pointValue" value="" />
+            ) : null}
+          </>
+        )}
 
         {formError ? (
           <p className="text-sm text-destructive">{formError}</p>
@@ -585,7 +817,13 @@ export function AssignmentCreationSheetContent({
             Cancel
           </Button>
           <Button type="submit" disabled={isSubmitDisabled}>
-            {isSaving ? 'Creating...' : 'Create Assignment'}
+            {isWritingPractice
+              ? isSaving
+                ? 'Assigning…'
+                : 'Assign practice'
+              : isSaving
+                ? 'Creating...'
+                : 'Create Assignment'}
           </Button>
         </div>
       </CreateForm>

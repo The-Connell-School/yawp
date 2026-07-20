@@ -61,7 +61,12 @@ async function upsertPersona(
 }
 
 function pickAssignmentTypeId(
-  rows: Array<{ id: string; title: string; kind: string | null; systemKey: string | null }>,
+  rows: Array<{
+    id: string;
+    title: string;
+    kind: string | null;
+    systemKey: string | null;
+  }>,
   matcher: (row: (typeof rows)[number]) => boolean
 ) {
   return rows.find(matcher)?.id ?? null;
@@ -93,14 +98,15 @@ export async function seedSyntheticLocalDevData(
   ];
 
   const schools = await Promise.all(
-    ['North Ridge High', 'Riverview Academy', 'Summit Prep'].map(async (name, index) =>
-      prisma.school.create({
-        data: {
-          name,
-          code: `DEV-SCH-${index + 1}`,
-          organizationId: LOCAL_DEV_ORG_ID,
-        },
-      })
+    ['North Ridge High', 'Riverview Academy', 'Summit Prep'].map(
+      async (name, index) =>
+        prisma.school.create({
+          data: {
+            name,
+            code: `DEV-SCH-${index + 1}`,
+            organizationId: LOCAL_DEV_ORG_ID,
+          },
+        })
     )
   );
 
@@ -238,7 +244,8 @@ export async function seedSyntheticLocalDevData(
       data: {
         assignmentTypeId: dailyPagesAssignmentTypeId,
         title: 'Daily Pages - week 2',
-        prompt: 'Write freely for ten minutes about something that surprised you this week.',
+        prompt:
+          'Write freely for ten minutes about something that surprised you this week.',
       },
     });
     await prisma.classAssignment.create({
@@ -433,6 +440,87 @@ export async function seedSyntheticLocalDevData(
       occurrence: 1,
     },
   });
+
+  // Writing practice: add a sample teacher-assigned practice (with one student
+  // attempt) so every surface — student "Assigned to you", teacher "Assigned
+  // by you", and the results view — is populated out of the box in
+  // seeded/preview environments.
+  const writingPracticeAssignment =
+    await prisma.writingPracticeAssignment.create({
+      data: {
+        title: 'Comma splices warm-up',
+        lessonSlugs: ['fixing-comma-splices'],
+        problemCount: 4,
+        instructions:
+          'Fix each comma splice, then check your work with the tutor.',
+        createdByMembershipId: primaryTeacher.membershipId,
+        classAssignments: { create: [{ classId: primaryClass.id }] },
+      },
+      include: { classAssignments: true },
+    });
+
+  const writingPracticeClassAssignment =
+    writingPracticeAssignment.classAssignments[0];
+  if (writingPracticeClassAssignment) {
+    // Two ACT multiple-choice attempts (one correct, one not) so the teacher
+    // results view shows real per-student progress out of the box. The full ACT
+    // record lives in `feedbackJson` — see `ActAttemptRecord`.
+    const practiceAttempts = [
+      {
+        promptId: 'fixing-comma-splices-1',
+        status: 'strong',
+        record: {
+          kind: 'act',
+          sentence:
+            'The new phone costs over a thousand dollars, most students can’t afford it.',
+          underline: 'dollars, most',
+          choices: [
+            'dollars, most',
+            'dollars; most',
+            'dollars. Most',
+            'dollars, so most',
+          ],
+          selectedChoiceIndex: 1,
+          correctChoiceIndex: 1,
+          correct: true,
+          explanation:
+            'Two independent clauses joined by only a comma form a comma splice; a semicolon correctly links them.',
+        },
+      },
+      {
+        promptId: 'fixing-comma-splices-2',
+        status: 'needs_revision',
+        record: {
+          kind: 'act',
+          sentence: 'She studied all night, she still felt unprepared.',
+          underline: 'night, she',
+          choices: ['night, she', 'night; she', 'night. She', 'night she'],
+          selectedChoiceIndex: 0,
+          correctChoiceIndex: 1,
+          correct: false,
+          explanation:
+            'A comma alone cannot join two independent clauses. A semicolon fixes the splice while keeping the clauses linked.',
+        },
+      },
+    ] as const;
+
+    for (const attempt of practiceAttempts) {
+      await prisma.writingPracticeAttempt.create({
+        data: {
+          classAssignmentId: writingPracticeClassAssignment.id,
+          membershipId: personaRecords['student-graded'].membershipId,
+          lessonSlug: 'fixing-comma-splices',
+          promptId: attempt.promptId,
+          exercise: attempt.record.sentence,
+          instruction: attempt.record.underline,
+          response:
+            attempt.record.choices[attempt.record.selectedChoiceIndex] ?? '',
+          status: attempt.status,
+          feedbackJson: attempt.record,
+        },
+      });
+    }
+  }
 
   return {
     organizationId: LOCAL_DEV_ORG_ID,
