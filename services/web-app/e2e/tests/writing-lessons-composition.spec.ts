@@ -26,6 +26,9 @@ test.describe.serial('Writing Fundamentals Practice — Composition', () => {
       page.getByRole('heading', { name: 'Composition' })
     ).toBeVisible();
 
+    // Sections are collapsed by default; open Composition to reveal its lessons.
+    await page.getByRole('button', { name: 'Composition' }).click();
+
     // Composition links through to the constructed-response lessons, grouped
     // into Making Claims (topic sentences, thesis) and Supporting Claims
     // (evidence, analysis).

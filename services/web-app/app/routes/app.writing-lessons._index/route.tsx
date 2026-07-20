@@ -500,11 +500,7 @@ export default function WritingLessonsIndexRoute() {
             0
           );
           return (
-            <Collapsible
-              key={section.section}
-              defaultOpen
-              className="flex flex-col gap-5"
-            >
+            <Collapsible key={section.section} className="flex flex-col gap-5">
               <div className="flex items-center gap-2 border-b pb-2">
                 <h3 className="flex-1 text-xl font-bold tracking-tight">
                   <CollapsibleTrigger className="group flex w-full items-center gap-2 text-left">
