@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, mock, test } from 'bun:test';
 
 const prisma = {
   classAssignment: { findFirst: mock() },
+  classAssignmentInsight: { findUnique: mock() },
   class: { findFirst: mock() },
   document: { findMany: mock() },
   submission: { findMany: mock() },
@@ -54,6 +55,7 @@ describe('assignment submissions loader', () => {
     prisma.document.findMany.mockResolvedValue([
       { id: 'draft-1', title: 'Draft essay' },
     ]);
+    prisma.classAssignmentInsight.findUnique.mockResolvedValue(null);
   });
 
   test('keeps submitted assignment work visible', async () => {

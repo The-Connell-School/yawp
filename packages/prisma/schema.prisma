@@ -102,9 +102,27 @@ model ClassAssignment {
   classId      String
   class        Class      @relation(fields: [classId], references: [id], onDelete: Cascade)
   documents    Document[]
+  insight      ClassAssignmentInsight?
 
   @@unique([assignmentId, classId])
   @@index([classId, createdAt(sort: Desc)])
+}
+
+/// Class-wide, assignment-level feedback for the teacher: an AI summary of how
+/// the whole class did on one assignment (strengths, gaps, teaching next steps).
+/// One cached row per ClassAssignment; regenerated on demand.
+model ClassAssignmentInsight {
+  id                      String          @id @default(cuid())
+  createdAt               DateTime        @default(now()) @db.Timestamptz(6)
+  updatedAt               DateTime        @default(now()) @updatedAt @db.Timestamptz(6)
+  classAssignmentId       String          @unique
+  classAssignment         ClassAssignment @relation(fields: [classAssignmentId], references: [id], onDelete: Cascade)
+  status                  String          @default("ready") // ready | failed
+  model                   String?
+  submissionCount         Int             @default(0)
+  summaryJson             Json?
+  generatedByMembershipId String?
+  generatedAt             DateTime?       @db.Timestamptz(6)
 }
 
 model ApHistoryPromptLibraryEntry {

@@ -54,6 +54,7 @@ import {
   UserMinus,
   Search,
   ChevronRight,
+  Sparkles,
 } from 'lucide-react';
 import { Pagination } from '~/components/table/pagination';
 import { timeAgo } from '~/utils/timeAgo';
@@ -869,6 +870,15 @@ function ClassDetailPage() {
       : 'students';
   const classAssignmentFilterParam =
     searchParams.get('classAssignmentId') ?? 'all';
+  // When the Documents view is scoped to a single assignment, we can offer the
+  // class-wide performance summary for that assignment.
+  const selectedClassAssignment =
+    classAssignmentFilterParam !== 'all'
+      ? (data.assignments.find(
+          (assignment) =>
+            assignment.classAssignmentId === classAssignmentFilterParam
+        ) ?? null)
+      : null;
   const assignmentIdParam = searchParams.get('assignmentId');
   const studentIdParam = searchParams.get('studentId');
   const students = data.klass.students;
@@ -1847,6 +1857,25 @@ function ClassDetailPage() {
           key={activeHeaderTab}
           className="animate-in fade-in-0 slide-in-from-right-2 duration-300"
         >
+          {activeTab === 'documents' && selectedClassAssignment ? (
+            <div className="mb-4 flex items-center justify-between gap-3 rounded-lg border bg-muted/30 p-3">
+              <p className="text-sm text-muted-foreground">
+                See how the whole class did on{' '}
+                <span className="font-medium text-foreground">
+                  {selectedClassAssignment.title ?? 'this assignment'}
+                </span>
+                .
+              </p>
+              <Button asChild variant="outline" size="sm">
+                <Link
+                  to={`/app/my-classes/${data.klass.id}/assignments/${selectedClassAssignment.id}`}
+                >
+                  <Sparkles className="mr-2 h-4 w-4" aria-hidden />
+                  Class performance summary
+                </Link>
+              </Button>
+            </div>
+          ) : null}
           <div>{renderTable()}</div>
           {activeTab === 'students' && currentTabData.length > 0 ? (
             <div className="mt-4">

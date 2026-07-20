@@ -12,7 +12,15 @@ import {
   useSearchParams,
 } from 'react-router';
 import { useEffect, useMemo, useState } from 'react';
-import { ClipboardList, Copy, Pencil, Plus, Trash2, X } from 'lucide-react';
+import {
+  ClipboardList,
+  Copy,
+  Pencil,
+  Plus,
+  Sparkles,
+  Trash2,
+  X,
+} from 'lucide-react';
 import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
 import { Checkbox } from '~/components/ui/checkbox';
@@ -884,6 +892,7 @@ export default function AssignmentsRoute() {
                       <TableHead>Assignment</TableHead>
                       <TableHead>Assignment Type</TableHead>
                       <TableHead>Applied to</TableHead>
+                      <TableHead>Class summary</TableHead>
                       <TableHead className="pr-4">Documents</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -1029,6 +1038,34 @@ export default function AssignmentsRoute() {
                                 </Link>
                               ))}
                             </div>
+                          </TableCell>
+                          <TableCell>
+                            {assignment.classAssignments.length > 0 ? (
+                              <div className="flex flex-col gap-1">
+                                {assignment.classAssignments.map((deployment) => (
+                                  <Link
+                                    key={deployment.id}
+                                    to={`/app/my-classes/${deployment.class.id}/assignments/${assignment.id}`}
+                                    title={`Class performance summary — ${formatClassLabel(
+                                      deployment.class
+                                    )}`}
+                                    className="inline-flex w-fit items-center gap-1 text-sm text-primary hover:underline"
+                                  >
+                                    <Sparkles
+                                      className="h-3.5 w-3.5 shrink-0"
+                                      aria-hidden
+                                    />
+                                    {assignment.classAssignments.length > 1
+                                      ? formatClassLabel(deployment.class)
+                                      : 'Summary'}
+                                  </Link>
+                                ))}
+                              </div>
+                            ) : (
+                              <span className="text-sm text-muted-foreground">
+                                —
+                              </span>
+                            )}
                           </TableCell>
                           <TableCell className="pr-4">
                             <Badge variant="secondary" size="sm">
