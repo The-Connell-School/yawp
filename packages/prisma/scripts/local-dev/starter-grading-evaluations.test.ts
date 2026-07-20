@@ -1,5 +1,6 @@
 import { describe, expect, mock, test } from 'bun:test';
 import {
+  buildDemoGradingEvaluations,
   buildStarterGradingEvaluations,
   seedStarterGradingEvaluations,
 } from './starter-grading-evaluations';
@@ -74,6 +75,25 @@ describe('buildStarterGradingEvaluations', () => {
         expect.objectContaining({ key: 'ideas_and_analysis' }),
         expect.objectContaining({ key: 'organization' }),
       ])
+    );
+  });
+
+  test('builds a compact demo set with one case per evaluation', () => {
+    const thesisCategories = [
+      { key: 'thesis_and_content', label: 'Thesis/Content' },
+      { key: 'organization_and_structure', label: 'Organization/Structure' },
+      { key: 'evidence_and_support', label: 'Evidence/Support' },
+      { key: 'voice_and_style', label: 'Voice/Style' },
+      { key: 'grammar_and_mechanics', label: 'Grammar/Syntax/Formatting' },
+    ];
+    const evaluations = buildDemoGradingEvaluations({
+      title: 'The Thesis-Driven Essay',
+      rubricCategories: thesisCategories,
+    });
+
+    expect(evaluations).toHaveLength(3);
+    expect(evaluations.every((evaluation) => evaluation.cases.length === 1)).toBe(
+      true
     );
   });
 

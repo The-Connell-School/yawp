@@ -260,6 +260,22 @@ export function buildStarterGradingEvaluations({
   return [];
 }
 
+/** One representative case per evaluation — fast local demo runs. */
+export function buildDemoGradingEvaluations({
+  title,
+  rubricCategories,
+}: {
+  title: string;
+  rubricCategories: RubricCategory[];
+}): StarterGradingEvaluation[] {
+  return buildStarterGradingEvaluations({ title, rubricCategories })
+    .map((evaluation) => ({
+      ...evaluation,
+      cases: evaluation.cases.slice(0, 1),
+    }))
+    .filter((evaluation) => evaluation.cases.length > 0);
+}
+
 function parseRubricCategories(value: unknown): RubricCategory[] {
   if (!value || typeof value !== 'object') return [];
   const categories = (value as { categories?: unknown }).categories;
@@ -345,7 +361,10 @@ function demoResultForCase({
   } as const;
 }
 
-export async function seedStarterGradingEvaluations(prisma: PrismaClient) {
+export async function seedStarterGradingEvaluations(
+  prisma: PrismaClient,
+  options?: { demo?: boolean }
+) {
   const assignmentTypes = await prisma.assignmentType.findMany({
     where: { archivedAt: null },
     select: {
@@ -370,7 +389,10 @@ export async function seedStarterGradingEvaluations(prisma: PrismaClient) {
 
   for (const assignmentType of assignmentTypes) {
     const categories = parseRubricCategories(assignmentType.rubricJson);
-    const starters = buildStarterGradingEvaluations({
+    const buildEvaluations = options?.demo
+      ? buildDemoGradingEvaluations
+      : buildStarterGradingEvaluations;
+    const starters = buildEvaluations({
       title: assignmentType.title,
       rubricCategories: categories,
     });

@@ -107,6 +107,28 @@ test.describe.serial('Admin assignment types', () => {
       await expect(page.getByText('Production', { exact: true })).toBeVisible();
       await page.getByRole('button').filter({ hasText: 'Production' }).click();
       await expect(
+        page.getByRole('button', { name: 'View compiled prompt' })
+      ).toBeVisible();
+      await expect(
+        page.getByRole('button', { name: 'Test prompt' })
+      ).toBeVisible();
+      await page.getByRole('button', { name: 'Test prompt' }).click();
+      const scratchTestSheet = page.getByRole('dialog', { name: 'Test prompt' });
+      await expect(scratchTestSheet).toBeVisible();
+      await scratchTestSheet
+        .getByLabel('Case document')
+        .fill(
+          'Public libraries should eliminate late fees because fees keep families from returning books.'
+        );
+      await scratchTestSheet
+        .getByLabel('Evaluation criterion')
+        .fill('The feedback identifies the main claim.');
+      await scratchTestSheet.getByRole('button', { name: 'Run test' }).click();
+      await expect(scratchTestSheet.getByText('Evaluator result')).toBeVisible({
+        timeout: 30_000,
+      });
+      await scratchTestSheet.getByRole('button', { name: 'Close' }).click();
+      await expect(
         page.getByText(
           'No evaluations yet. Add one to start tracking prompt-version runs.'
         )

@@ -1,8 +1,17 @@
 import { data as dataResponse, useLoaderData } from 'react-router';
 import type { LoaderFunctionArgs } from 'react-router';
-import { EvaluationHistorySection } from '~/components/admin/rubric-config-editors';
+import {
+  EvaluationHistorySection,
+  type GradingAssistantPromptPreview,
+  type PromptWorkspaceContext,
+} from '~/components/admin/rubric-config-editors';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { buildResolvedAssignmentTypeGradingConfig } from '~/domain/assignment-types/assignment-type-grading-config.server';
+import {
+  parsePromptConfig,
+  parseRubric,
+  parseScoringScale,
+} from '~/domain/assignment-types/assignment-type-rubric.shared';
 import type {
   AssignmentTypeEvaluationStatus,
   EvaluationCopySourceCatalog,
@@ -10,11 +19,19 @@ import type {
 import {
   ensureEvaluationSuiteVersion,
   ensureProductionPromptVersion,
+  gradingConfigWithPromptVersion,
   isPromptVersionControlEnabled,
   parseEvaluationSuiteSnapshot,
 } from '~/domain/ai-evaluation/prompt-version-control.server';
+import { compileGradingAssistantInvocation } from '~/domain/grading/grading-assistant-invocation';
 import { requireAdmin } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
+
+const PROMPT_PREVIEW_INPUTS = {
+  studentFirstName: 'Jordan',
+  strictnessLevel: 'intermediate' as const,
+  documentText: '[CASE DOCUMENT CONTENT]',
+};
 
 const EVALUATION_RUN_DATE_FORMATTER = new Intl.DateTimeFormat('en-US', {
   timeZone: 'America/Chicago',
@@ -38,6 +55,69 @@ function normalizePromptStatus(
 ): 'draft' | 'production' | 'previous' {
   if (status === 'draft' || status === 'previous') return status;
   return 'production';
+}
+
+function buildPromptWorkspaceContext({
+  assignmentType,
+  promptVersions,
+}: {
+  assignmentType: {
+    id: string;
+    title: string;
+    kind: string | null;
+    scoringScaleJson: unknown;
+    rubricJson: unknown;
+    gradingPromptConfigJson: unknown;
+    gradingOutputSchemaJson: unknown;
+    gradingCalibrationNotes: string | null;
+    gradingAssistantVersion: number;
+    gradingAssistantSourceTemplateId: string | null;
+    gradingAssistantSourceTemplateSlug: string | null;
+  };
+  promptVersions: Array<{
+    id: string;
+    version: number;
+    systemMessageTemplate: string;
+    userMessageTemplate: string;
+  }>;
+}): PromptWorkspaceContext | null {
+  const rubric = parseRubric(assignmentType.rubricJson);
+  if (rubric.categories.length === 0) return null;
+
+  const scoringScale = parseScoringScale(assignmentType.scoringScaleJson);
+  const promptConfig = parsePromptConfig(assignmentType.gradingPromptConfigJson);
+  const baseGradingConfig = buildResolvedAssignmentTypeGradingConfig({
+    assignmentTypeId: assignmentType.id,
+    assignmentTypeKind: assignmentType.kind,
+    assignmentTypeTitle: assignmentType.title,
+    row: assignmentType,
+  });
+  const compiledPreviewsByPromptId: Record<string, GradingAssistantPromptPreview> =
+    {};
+
+  for (const promptVersion of promptVersions) {
+    const gradingConfig = gradingConfigWithPromptVersion(
+      baseGradingConfig,
+      promptVersion
+    );
+    const compiledInvocation = compileGradingAssistantInvocation({
+      gradingConfig,
+      ...PROMPT_PREVIEW_INPUTS,
+    });
+    compiledPreviewsByPromptId[promptVersion.id] = {
+      ...compiledInvocation,
+      version: gradingConfig.version,
+      source: gradingConfig.source,
+      previewInputs: PROMPT_PREVIEW_INPUTS,
+    };
+  }
+
+  return {
+    scoringScale,
+    rubric,
+    promptConfig,
+    compiledPreviewsByPromptId,
+  };
 }
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
@@ -264,6 +344,10 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     evaluationHistory,
     promptVersionControlEnabled,
     copySourceCatalog,
+    promptWorkspace: buildPromptWorkspaceContext({
+      assignmentType,
+      promptVersions,
+    }),
   });
 }
 
@@ -273,6 +357,7 @@ export default function AssignmentTypePromptRoute() {
     evaluationHistory,
     promptVersionControlEnabled,
     copySourceCatalog,
+    promptWorkspace,
   } = useLoaderData<typeof loader>();
 
   return (
@@ -288,6 +373,7 @@ export default function AssignmentTypePromptRoute() {
         isPromptPreviewStale={false}
         promptVersionControlEnabled={promptVersionControlEnabled}
         copySourceCatalog={copySourceCatalog}
+        promptWorkspace={promptWorkspace ?? undefined}
         layout="page"
       />
     </div>

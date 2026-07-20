@@ -1022,6 +1022,13 @@ export type GradingAssistantPromptPreview =
     };
   };
 
+export type PromptWorkspaceContext = {
+  scoringScale: ScoringScaleData;
+  rubric: RubricData;
+  promptConfig: PromptConfigData;
+  compiledPreviewsByPromptId: Record<string, GradingAssistantPromptPreview>;
+};
+
 function CompiledPromptSheet({
   open,
   onOpenChange,
@@ -1130,6 +1137,7 @@ function ScratchTestSheet({
   scoringScale,
   rubric,
   promptConfig,
+  managedPromptTemplates,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -1138,6 +1146,10 @@ function ScratchTestSheet({
   scoringScale: ScoringScaleData;
   rubric: RubricData;
   promptConfig: PromptConfigData;
+  managedPromptTemplates?: {
+    systemMessageTemplate: string;
+    userMessageTemplate: string;
+  };
 }) {
   const fetcher = useFetcher<{
     success?: boolean;
@@ -1158,12 +1170,19 @@ function ScratchTestSheet({
 
   function handleRun() {
     if (!canRun) return;
+    const effectivePromptConfig: PromptConfigData = managedPromptTemplates
+      ? {
+          ...promptConfig,
+          systemMessageTemplate: managedPromptTemplates.systemMessageTemplate,
+          userMessageTemplate: managedPromptTemplates.userMessageTemplate,
+        }
+      : promptConfig;
     const formData = new FormData();
     formData.set('assignmentTypeId', assignmentTypeId);
     formData.set('title', title);
     formData.set('scoringScaleJson', scoringScaleSnapshot(scoringScale));
     formData.set('rubricJson', rubricSnapshot(rubric));
-    formData.set('promptConfigJson', promptConfigSnapshot(promptConfig));
+    formData.set('promptConfigJson', promptConfigSnapshot(effectivePromptConfig));
     formData.set('documentText', documentText);
     formData.set('criterion', criterion);
     formData.set('strictnessLevel', 'intermediate');
@@ -1184,8 +1203,8 @@ function ScratchTestSheet({
         </SheetHeader>
         <div className="mt-4 space-y-4">
           <p className="text-sm text-muted-foreground text-pretty">
-            Scratch test — not saved. Uses your current draft instructions and
-            rubric.
+            Scratch test — not saved. Uses the selected prompt templates with
+            this assignment type&apos;s rubric.
           </p>
           <div className="space-y-2">
             <Label htmlFor="scratch-test-document">Case document</Label>
@@ -2653,6 +2672,9 @@ function EvaluationMatrixSection({
   toolbarLeading,
   emptyRunMessage = 'No runs yet. Run all cases to add the first row.',
   copySourceCatalog = [],
+  promptWorkspace,
+  managedPromptTemplates,
+  compiledPromptPreview,
 }: {
   assignmentTypeId: string;
   evaluationHistory: AssignmentTypeEvaluationHistory;
@@ -2668,12 +2690,20 @@ function EvaluationMatrixSection({
   toolbarLeading?: ReactNode;
   emptyRunMessage?: string;
   copySourceCatalog?: EvaluationCopySourceCatalog;
+  promptWorkspace?: PromptWorkspaceContext;
+  managedPromptTemplates?: {
+    systemMessageTemplate: string;
+    userMessageTemplate: string;
+  };
+  compiledPromptPreview?: GradingAssistantPromptPreview;
 }) {
   const addCaseFetcher = useFetcher<EvaluationFetcherData>();
   const archiveFetcher = useFetcher<{ success?: boolean; message?: string }>();
   const runFetcher = useFetcher<{ success?: boolean; message?: string }>();
 
   const [addOpen, setAddOpen] = useState(false);
+  const [scratchTestOpen, setScratchTestOpen] = useState(false);
+  const [compiledPromptOpen, setCompiledPromptOpen] = useState(false);
   const [detailSelection, setDetailSelection] =
     useState<EvaluationDetailSelection | null>(null);
 
@@ -2788,6 +2818,26 @@ function EvaluationMatrixSection({
 
       <div className="flex flex-wrap items-center gap-2">
         {toolbarLeading}
+        {promptWorkspace && compiledPromptPreview ? (
+          <>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setCompiledPromptOpen(true)}
+            >
+              View compiled prompt
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setScratchTestOpen(true)}
+            >
+              Test prompt
+            </Button>
+          </>
+        ) : null}
         {allowEvaluationChanges ? (
           <Button
             type="button"
@@ -3119,6 +3169,26 @@ function EvaluationMatrixSection({
         fetcher={addCaseFetcher}
         copySourceCatalog={copySourceCatalog}
       />
+
+      {promptWorkspace && compiledPromptPreview ? (
+        <>
+          <CompiledPromptSheet
+            open={compiledPromptOpen}
+            onOpenChange={setCompiledPromptOpen}
+            preview={compiledPromptPreview}
+          />
+          <ScratchTestSheet
+            open={scratchTestOpen}
+            onOpenChange={setScratchTestOpen}
+            assignmentTypeId={assignmentTypeId}
+            title={assignmentTypeTitle ?? 'Assignment type'}
+            scoringScale={promptWorkspace.scoringScale}
+            rubric={promptWorkspace.rubric}
+            promptConfig={promptWorkspace.promptConfig}
+            managedPromptTemplates={managedPromptTemplates}
+          />
+        </>
+      ) : null}
     </div>
   );
 }
@@ -3361,6 +3431,7 @@ export function EvaluationHistorySection({
   assignmentTypeTitle,
   promptVersionControlEnabled = false,
   copySourceCatalog = [],
+  promptWorkspace,
 }: {
   assignmentTypeId: string;
   evaluationHistory: AssignmentTypeEvaluationHistory;
@@ -3369,6 +3440,7 @@ export function EvaluationHistorySection({
   assignmentTypeTitle?: string;
   promptVersionControlEnabled?: boolean;
   copySourceCatalog?: EvaluationCopySourceCatalog;
+  promptWorkspace?: PromptWorkspaceContext;
 }) {
   const createDraftFetcher = useFetcher<PromptVersionFetcherData>();
   const promoteFetcher = useFetcher<PromptVersionFetcherData>();
@@ -3478,6 +3550,12 @@ export function EvaluationHistorySection({
   const selectedPromptLabel =
     promptLabels.get(selectedPrompt.id) ?? `v${selectedPrompt.version}`;
   const isLatestSuite = selectedSuite.id === latestSuite?.id;
+  const compiledPromptPreview =
+    promptWorkspace?.compiledPreviewsByPromptId[selectedPrompt.id] ?? undefined;
+  const managedPromptTemplates = {
+    systemMessageTemplate: selectedPrompt.systemMessageTemplate,
+    userMessageTemplate: selectedPrompt.userMessageTemplate,
+  };
   const hasPromotionRun =
     selectedPrompt.status === 'draft' &&
     isLatestSuite &&
@@ -3616,6 +3694,9 @@ export function EvaluationHistorySection({
         }
         toolbarLeading={promptActions}
         emptyRunMessage="No runs for this prompt and evaluation suite yet."
+        promptWorkspace={promptWorkspace}
+        managedPromptTemplates={managedPromptTemplates}
+        compiledPromptPreview={compiledPromptPreview}
       />
 
       {selectedPrompt.status === 'draft' ? (

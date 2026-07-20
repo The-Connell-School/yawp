@@ -48,7 +48,9 @@ try {
   console.timeEnd('synthetic');
 
   console.time('grading-evaluations');
-  const evaluationSummary = await seedStarterGradingEvaluations(prisma);
+  const evaluationSummary = await seedStarterGradingEvaluations(prisma, {
+    demo: true,
+  });
   console.timeEnd('grading-evaluations');
 
   console.log('🌱 Local dev seed complete.');
