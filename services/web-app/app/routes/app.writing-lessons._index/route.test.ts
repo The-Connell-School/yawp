@@ -29,7 +29,7 @@ mock.module('~/utils/student-preview.server', () => ({
   }) => membershipRole === 'STUDENT' || previewActive,
 }));
 
-const { loader } = await import('./route');
+const { assignedPracticeProgressLabels, loader } = await import('./route');
 
 afterAll(() => {
   mock.restore();
@@ -66,6 +66,21 @@ describe('writing lessons index route', () => {
     expect(response.data.groups.some((group) => group.lessons.length > 0)).toBe(
       true
     );
+  });
+
+  test('uses consistent status and action labels for assigned practice progress', () => {
+    expect(assignedPracticeProgressLabels(0, 4)).toEqual({
+      status: 'Not started',
+      action: 'Start',
+    });
+    expect(assignedPracticeProgressLabels(2, 4)).toEqual({
+      status: 'In progress',
+      action: 'Continue',
+    });
+    expect(assignedPracticeProgressLabels(4, 4)).toEqual({
+      status: 'Complete',
+      action: 'Review',
+    });
   });
 
   test('keeps generated and assigned practice off when the organization gate is disabled', async () => {

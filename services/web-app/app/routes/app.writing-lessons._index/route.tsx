@@ -44,6 +44,19 @@ import {
 } from '~/utils/writing-lessons/practice-assignments.server';
 import { getQuickWritingLessonGroups } from '~/utils/writing-lessons/static-lessons.server';
 
+export function assignedPracticeProgressLabels(
+  completedCount: number,
+  problemCount: number
+) {
+  if (completedCount >= problemCount) {
+    return { status: 'Complete', action: 'Review' };
+  }
+  if (completedCount > 0) {
+    return { status: 'In progress', action: 'Continue' };
+  }
+  return { status: 'Not started', action: 'Start' };
+}
+
 export async function loader({ request }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
   const profile = await requireMembership(request, userId);
@@ -464,6 +477,10 @@ export default function WritingLessonsIndexRoute() {
               {assignedPractice.map((assignment) => {
                 const complete =
                   assignment.completedCount >= assignment.problemCount;
+                const progress = assignedPracticeProgressLabels(
+                  assignment.completedCount,
+                  assignment.problemCount
+                );
                 return (
                   <Link
                     key={assignment.id}
@@ -489,10 +506,10 @@ export default function WritingLessonsIndexRoute() {
                           variant={complete ? 'secondary' : 'default'}
                           size="sm"
                         >
-                          {complete ? 'Complete' : 'Continue'}
+                          {progress.status}
                         </Badge>
                         <span className="inline-flex items-center gap-1">
-                          {complete ? 'Review' : 'Start'}
+                          {progress.action}
                           <ChevronRight className="h-4 w-4 shrink-0" />
                         </span>
                       </CardContent>
