@@ -122,7 +122,10 @@ model ClassAssignmentInsight {
   submissionCount         Int             @default(0)
   summaryJson             Json?
   generatedByMembershipId String?
+  generatedByMembership   OrgMembership?  @relation(fields: [generatedByMembershipId], references: [id], onDelete: SetNull)
   generatedAt             DateTime?       @db.Timestamptz(6)
+
+  @@index([generatedByMembershipId])
 }
 
 model ApHistoryPromptLibraryEntry {
@@ -443,6 +446,7 @@ model OrgMembership {
   writingPracticeAssignmentsCreated WritingPracticeAssignment[] @relation("WritingPracticeAssignmentCreator")
   writingPracticeAttempts           WritingPracticeAttempt[]    @relation("WritingPracticeAttemptStudent")
   writingPracticePromptSets         WritingPracticePromptSet[]  @relation("WritingPracticePromptSetStudent")
+  classAssignmentInsightsGenerated  ClassAssignmentInsight[]
 
   @@unique([userId, organizationId])
   @@unique([id, organizationId])

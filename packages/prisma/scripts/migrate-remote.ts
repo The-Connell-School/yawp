@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 
 import { spawn } from 'child_process';
-import { existsSync } from 'fs';
+import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
 import pg from 'pg';
 
@@ -114,6 +114,35 @@ async function resolveRecoverableFailedMigrations(env: NodeJS.ProcessEnv) {
   return 0;
 }
 
+async function runCombinedFeatureGate(
+  scriptName: 'combined-feature-preflight.sql' | 'combined-feature-postcheck.sql',
+  env: NodeJS.ProcessEnv
+) {
+  if (!env.DATABASE_URL) {
+    throw new Error(`Cannot run ${scriptName} without DATABASE_URL`);
+  }
+  const sql = readFileSync(join(prismaRoot, 'scripts', scriptName), 'utf8').replace(
+    /^\\set ON_ERROR_STOP on\\s*/u,
+    ''
+  );
+  const client = new pg.Client({
+    connectionString: env.DATABASE_URL,
+    ssl:
+      env.REMOTE_MIGRATE_TUNNEL === '1'
+        ? { rejectUnauthorized: false }
+        : undefined,
+  });
+  client.on('notice', (notice) => console.log(`${scriptName}: ${notice.message}`));
+  await client.connect();
+  try {
+    console.log(`Running fail-closed migration gate: ${scriptName}`);
+    await client.query(sql);
+    console.log(`Migration gate passed: ${scriptName}`);
+  } finally {
+    await client.end();
+  }
+}
+
 async function runProductionMigrations(env: NodeJS.ProcessEnv) {
   const generateCode = await runCommand('bun', ['prisma', 'generate'], env);
   if (generateCode !== 0) {
@@ -125,10 +154,14 @@ async function runProductionMigrations(env: NodeJS.ProcessEnv) {
     return resolveCode;
   }
 
+  await runCombinedFeatureGate('combined-feature-preflight.sql', env);
+
   const migrateCode = await runCommand('bun', ['prisma', 'migrate', 'deploy'], env);
   if (migrateCode !== 0) {
     return migrateCode;
   }
+
+  await runCombinedFeatureGate('combined-feature-postcheck.sql', env);
 
   const backfillCode = await runCommand(
     'bun',

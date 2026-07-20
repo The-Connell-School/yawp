@@ -218,6 +218,12 @@ test.describe.serial('Writing Fundamentals Practice', () => {
     await expect(assignedCard).toBeVisible();
     await assignedCard.click();
 
+    const startAssigned = page.getByRole('button', {
+      name: /start assigned practice/i,
+    });
+    if (await startAssigned.isVisible()) {
+      await startAssigned.click();
+    }
     await expect(
       page.getByRole('heading', { name: /problem 1 of/i })
     ).toBeVisible();

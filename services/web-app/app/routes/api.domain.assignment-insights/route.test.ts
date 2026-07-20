@@ -1,9 +1,14 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
+import { Prisma } from '@app/prisma';
 
 const prisma = {
   classAssignment: { findFirst: mock() },
   document: { findMany: mock() },
-  classAssignmentInsight: { upsert: mock() },
+  classAssignmentInsight: {
+    upsert: mock(),
+    updateMany: mock(),
+    create: mock(),
+  },
 };
 
 const getGradingActor = mock();
@@ -77,6 +82,12 @@ describe('api.domain.assignment-insights', () => {
     prisma.classAssignment.findFirst.mockReset();
     prisma.document.findMany.mockReset();
     prisma.classAssignmentInsight.upsert.mockReset();
+    prisma.classAssignmentInsight.updateMany.mockReset().mockResolvedValue({
+      count: 0,
+    });
+    prisma.classAssignmentInsight.create.mockReset().mockResolvedValue({
+      id: 'insight-failed',
+    });
     getGradingActor.mockReset();
     canManageGrades.mockReset();
     getLLMCompletion.mockReset();
@@ -313,8 +324,8 @@ describe('api.domain.assignment-insights', () => {
     const response = await action({ request: postRequest('ca-1') } as any);
     const payload = payloadOf(response);
     expect(payload.init?.status).toBe(502);
-    const upsertArgs = prisma.classAssignmentInsight.upsert.mock.calls[0][0];
-    expect(upsertArgs.create.status).toBe('failed');
+    const createArgs = prisma.classAssignmentInsight.create.mock.calls[0][0];
+    expect(createArgs.data.status).toBe('failed');
   });
 
   test('contains provider failures, persists failed status, and returns a generic error', async () => {
@@ -331,9 +342,29 @@ describe('api.domain.assignment-insights', () => {
       message: 'Class insights are temporarily unavailable. Please try again.',
     });
     expect(JSON.stringify(payload.data)).not.toContain('provider-secret');
-    const upsertArgs = prisma.classAssignmentInsight.upsert.mock.calls[0][0];
-    expect(upsertArgs.create.status).toBe('failed');
-    expect(upsertArgs.create.submissionCount).toBe(2);
+    const createArgs = prisma.classAssignmentInsight.create.mock.calls[0][0];
+    expect(createArgs.data.status).toBe('failed');
+    expect(createArgs.data.submissionCount).toBe(2);
+  });
+
+  test('a failed regeneration cannot overwrite the last ready summary', async () => {
+    getLLMCompletion.mockRejectedValue(new Error('provider unavailable'));
+    prisma.classAssignmentInsight.create.mockRejectedValue(
+      new Prisma.PrismaClientKnownRequestError('existing ready row', {
+        code: 'P2002',
+        clientVersion: '7.8.0',
+      })
+    );
+
+    const response = await action({ request: postRequest('ca-1') } as any);
+
+    expect(payloadOf(response).init?.status).toBe(502);
+    expect(prisma.classAssignmentInsight.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { classAssignmentId: 'ca-1', status: 'failed' },
+      })
+    );
+    expect(prisma.classAssignmentInsight.upsert).not.toHaveBeenCalled();
   });
 
   test('passes a bounded request deadline to the insight model', async () => {

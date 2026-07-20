@@ -7,8 +7,10 @@ import {
 } from 'lucide-react';
 import { useState } from 'react';
 import {
+  Form,
   Link,
   data as dataResponse,
+  redirect,
   useFetcher,
   useLoaderData,
   type ActionFunctionArgs,
@@ -20,16 +22,24 @@ import { ActPracticeQuestionView } from '~/components/writing-lessons/act-practi
 import { Button } from '~/components/ui/button';
 import { Badge } from '~/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
-import { requireMembership, requireUserId } from '~/utils/auth.server';
+import {
+  getImpersonationState,
+  requireMembership,
+  requireUserId,
+} from '~/utils/auth.server';
 import {
   gradeActAnswer,
+  isActAttemptRecord,
   type ActGradeResult,
 } from '~/utils/writing-lessons/act-practice.shared';
 import {
+  buildActPracticeSequence,
   getAssignedPracticeForStudentById,
   getOrCreateStudentPracticeSet,
+  getStudentPracticeSet,
   recordWritingPracticeAttempt,
 } from '~/utils/writing-lessons/practice-assignments.server';
+import { getStudentPreviewState } from '~/utils/student-preview.server';
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
@@ -50,13 +60,23 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   }
 
   const { assignment } = classAssignment;
-  const sequence = await getOrCreateStudentPracticeSet({
+  const storedSequence = await getStudentPracticeSet({
     classAssignmentId: classAssignment.id,
     membershipId: profile.id,
-    organizationId: profile.organization.id,
-    lessonSlugs: assignment.lessonSlugs,
-    problemCount: assignment.problemCount,
   });
+  const [impersonation, preview] = await Promise.all([
+    getImpersonationState(request),
+    getStudentPreviewState(request),
+  ]);
+  const readOnly = impersonation.isReadOnly || preview.active;
+  const sequence =
+    storedSequence ??
+    (readOnly
+      ? buildActPracticeSequence(
+          assignment.lessonSlugs,
+          assignment.problemCount
+        )
+      : []);
   const completedCount = Math.min(
     classAssignment.attempts.length,
     assignment.problemCount
@@ -68,12 +88,23 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     instructions: assignment.instructions,
     dueAt: assignment.dueAt ? assignment.dueAt.toISOString() : null,
     problemCount: assignment.problemCount,
-    sequence,
+    sequence: sequence.map((item) => ({
+      ...item,
+      question: {
+        id: item.question.id,
+        sentence: item.question.sentence,
+        underline: item.question.underline,
+        choices: item.question.choices,
+      },
+    })),
     completedCount,
+    needsInitialization: storedSequence === null && !readOnly,
+    readOnly,
   });
 }
 
 type AssignedActionData = {
+  intent: 'answer';
   position: number;
   grade: ActGradeResult;
   recorded: boolean;
@@ -98,19 +129,34 @@ export async function action({ request, params }: ActionFunctionArgs) {
   }
 
   const formData = await request.formData();
+  const intent = String(formData.get('intent') ?? 'answer');
+  if (intent === 'initialize') {
+    await getOrCreateStudentPracticeSet({
+      classAssignmentId: classAssignment.id,
+      membershipId: profile.id,
+      organizationId: profile.organization.id,
+      lessonSlugs: classAssignment.assignment.lessonSlugs,
+      problemCount: classAssignment.assignment.problemCount,
+    });
+    return redirect(new URL(request.url).pathname);
+  }
+  if (intent !== 'answer') {
+    throw new Response('Unknown practice action', { status: 400 });
+  }
+
   const position = Number(formData.get('position'));
   const lessonSlug = String(formData.get('lessonSlug') ?? '');
   const promptId = String(formData.get('promptId') ?? '');
   const selectedChoiceIndex = Number(formData.get('selectedChoiceIndex'));
 
   // The question must belong to this student's stored set for the assignment.
-  const sequence = await getOrCreateStudentPracticeSet({
+  const sequence = await getStudentPracticeSet({
     classAssignmentId: classAssignment.id,
     membershipId: profile.id,
-    organizationId: profile.organization.id,
-    lessonSlugs: classAssignment.assignment.lessonSlugs,
-    problemCount: classAssignment.assignment.problemCount,
   });
+  if (!sequence) {
+    throw new Response('Practice set not initialized', { status: 409 });
+  }
   const item = sequence.find((candidate) => candidate.position === position);
   if (
     !item ||
@@ -128,7 +174,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
   const grade = gradeActAnswer(item.question, selectedChoiceIndex);
 
-  await recordWritingPracticeAttempt({
+  const persisted = await recordWritingPracticeAttempt({
     classAssignmentId: classAssignment.id,
     membershipId: profile.id,
     position: item.position,
@@ -137,10 +183,22 @@ export async function action({ request, params }: ActionFunctionArgs) {
     selectedChoiceIndex,
     grade,
   });
+  if (!isActAttemptRecord(persisted.feedbackJson)) {
+    throw new Response('Stored practice answer is invalid', { status: 500 });
+  }
+  if (persisted.feedbackJson.selectedChoiceIndex !== selectedChoiceIndex) {
+    throw new Response('This problem was already answered.', { status: 409 });
+  }
+  const persistedGrade: ActGradeResult = {
+    correct: persisted.feedbackJson.correct,
+    correctChoiceIndex: persisted.feedbackJson.correctChoiceIndex,
+    explanation: persisted.feedbackJson.explanation,
+  };
 
   return dataResponse<AssignedActionData>({
+    intent: 'answer',
     position: Number.isFinite(position) ? position : 0,
-    grade,
+    grade: persistedGrade,
     recorded: true,
   });
 }
@@ -155,8 +213,16 @@ function formatDueDate(iso: string): string {
 }
 
 export default function AssignedPracticeRoute() {
-  const { title, instructions, dueAt, problemCount, sequence, completedCount } =
-    useLoaderData<typeof loader>();
+  const {
+    title,
+    instructions,
+    dueAt,
+    problemCount,
+    sequence,
+    completedCount,
+    needsInitialization,
+    readOnly,
+  } = useLoaderData<typeof loader>();
 
   const fetcher = useFetcher<AssignedActionData>();
   const [pointer, setPointer] = useState(
@@ -230,9 +296,28 @@ export default function AssignedPracticeRoute() {
       </div>
 
       <div className="mx-auto flex w-full max-w-screen-lg flex-col gap-6 px-3 py-6 pb-24 sm:px-5">
-        {sequence.length === 0 ? (
+        {needsInitialization ? (
+          <Card className="shadow-none">
+            <CardContent className="flex flex-col items-center gap-3 py-10 text-center">
+              <BookOpen className="h-8 w-8 text-primary" />
+              <p className="text-lg font-semibold">Ready to begin?</p>
+              <p className="max-w-[420px] text-base text-muted-foreground sm:text-sm">
+                Start once to prepare and save your question set. It will stay
+                the same when you return.
+              </p>
+              <Form method="post">
+                <input type="hidden" name="intent" value="initialize" />
+                <Button type="submit" size="sm">
+                  Start assigned practice
+                </Button>
+              </Form>
+            </CardContent>
+          </Card>
+        ) : sequence.length === 0 ? (
           <p className="text-base text-muted-foreground sm:text-sm">
-            This assignment has no practice questions yet.
+            {readOnly
+              ? 'This assignment has no practice questions available in read-only mode.'
+              : 'This assignment has no practice questions yet.'}
           </p>
         ) : currentItem ? (
           <Card className="shadow-none">
@@ -252,6 +337,7 @@ export default function AssignedPracticeRoute() {
             </CardHeader>
             <CardContent className="space-y-4">
               <fetcher.Form method="post" className="space-y-4">
+                <input type="hidden" name="intent" value="answer" />
                 <input
                   type="hidden"
                   name="position"

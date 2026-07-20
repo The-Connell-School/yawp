@@ -1,10 +1,11 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
-import { Prisma } from '@app/prisma';
 
 const writingPracticeAssignment = { create: mock() };
 const writingPracticeAttempt = { upsert: mock() };
 const writingPracticeClassAssignment = { findMany: mock(), findFirst: mock() };
 const writingPracticePromptSet = { findUnique: mock(), create: mock() };
+const queryRaw = mock();
+const transaction = mock();
 const getLLMCompletion = mock();
 const reserveAiRequest = mock();
 class AiRateLimitError extends Error {
@@ -13,14 +14,16 @@ class AiRateLimitError extends Error {
   }
 }
 
-mock.module('~/utils/db.server', () => ({
-  prisma: {
-    writingPracticeAssignment,
-    writingPracticeAttempt,
-    writingPracticeClassAssignment,
-    writingPracticePromptSet,
-  },
-}));
+const prismaMock = {
+  writingPracticeAssignment,
+  writingPracticeAttempt,
+  writingPracticeClassAssignment,
+  writingPracticePromptSet,
+  $queryRaw: queryRaw,
+  $transaction: transaction,
+};
+
+mock.module('~/utils/db.server', () => ({ prisma: prismaMock }));
 mock.module('~/utils/getLLMCompletion', () => ({
   AgentType: { Assistant: 'assistant', User: 'user' },
   getLLMCompletion,
@@ -54,6 +57,10 @@ beforeEach(() => {
   writingPracticeClassAssignment.findFirst.mockReset();
   writingPracticePromptSet.findUnique.mockReset();
   writingPracticePromptSet.create.mockReset();
+  queryRaw.mockReset().mockResolvedValue([{ locked: 1 }]);
+  transaction
+    .mockReset()
+    .mockImplementation((callback) => callback(prismaMock));
   getLLMCompletion.mockReset();
   reserveAiRequest.mockReset().mockResolvedValue(undefined);
 });
@@ -361,30 +368,23 @@ describe('getOrCreateStudentPracticeSet', () => {
     expect(items[0].question.choices).toHaveLength(4);
   });
 
-  test('re-reads only a unique-conflict race when two requests create the set', async () => {
-    const raced = [
-      {
-        position: 1,
-        lessonSlug: 'fixing-comma-splices',
-        lessonTitle: 'Fixing Comma Splices',
-        question: {
-          id: 'race-question',
-          sentence: 'The comet appeared, astronomers cheered.',
-          underline: 'appeared, astronomers',
-          choices: [
-            'appeared, astronomers',
-            'appeared; astronomers',
-            'appeared astronomers',
-            'appeared, and, astronomers',
-          ],
-          correctChoiceIndex: 1,
-          explanation: 'A semicolon joins independent clauses.',
-        },
-      },
-    ];
-    writingPracticePromptSet.findUnique
-      .mockResolvedValueOnce(null)
-      .mockResolvedValueOnce({ promptsJson: raced });
+  test('serializes concurrent first access before reservation and generation', async () => {
+    let stored: { promptsJson: unknown } | null = null;
+    let transactionTail = Promise.resolve();
+    transaction.mockImplementation(async (callback) => {
+      const previous = transactionTail;
+      let release!: () => void;
+      transactionTail = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      await previous;
+      try {
+        return await callback(prismaMock);
+      } finally {
+        release();
+      }
+    });
+    writingPracticePromptSet.findUnique.mockImplementation(async () => stored);
     mockGeneratedActQuestions([
       {
         sentence: 'The comet appeared, they cheered.',
@@ -398,23 +398,29 @@ describe('getOrCreateStudentPracticeSet', () => {
         correctChoiceIndex: 1,
       },
     ]);
-    writingPracticePromptSet.create.mockRejectedValueOnce(
-      new Prisma.PrismaClientKnownRequestError('unique conflict', {
-        code: 'P2002',
-        clientVersion: '7.8.0',
-      })
-    );
-
-    const items = await getOrCreateStudentPracticeSet({
+    writingPracticePromptSet.create.mockImplementation(async ({ data }) => {
+      stored = { promptsJson: data.promptsJson };
+      return stored;
+    });
+    const input = {
       classAssignmentId: 'ca-1',
       membershipId: 'student-1',
       organizationId: 'org-1',
       lessonSlugs: ['fixing-comma-splices'],
       problemCount: 1,
-    });
+    };
 
-    expect(items).toEqual(raced);
+    const [first, second] = await Promise.all([
+      getOrCreateStudentPracticeSet(input),
+      getOrCreateStudentPracticeSet(input),
+    ]);
+
+    expect(second).toEqual(first);
     expect(writingPracticePromptSet.findUnique).toHaveBeenCalledTimes(2);
+    expect(writingPracticePromptSet.create).toHaveBeenCalledTimes(1);
+    expect(reserveAiRequest).toHaveBeenCalledTimes(1);
+    expect(getLLMCompletion).toHaveBeenCalledTimes(1);
+    expect(queryRaw).toHaveBeenCalledTimes(2);
   });
 
   test('does not hide unexpected prompt-set persistence failures', async () => {

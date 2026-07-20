@@ -134,6 +134,12 @@ describe('production deployment contract', () => {
     const migrateIndex = deployWorkflow.indexOf('bun prisma:migrate-remote production');
     const pushIndex = deployWorkflow.indexOf('bun web-app:docker:production:push');
     const remoteMigrateIndex = migrateRemoteScript.indexOf("['prisma', 'migrate', 'deploy']");
+    const remotePreflightIndex = migrateRemoteScript.indexOf(
+      "runCombinedFeatureGate('combined-feature-preflight.sql'"
+    );
+    const remotePostcheckIndex = migrateRemoteScript.indexOf(
+      "runCombinedFeatureGate('combined-feature-postcheck.sql'"
+    );
     const remoteBackfillIndex = migrateRemoteScript.indexOf('backfill-class-art-key.ts');
     const remoteReleaseGateIndex = migrateRemoteScript.indexOf('assignment-type-release-gate.ts');
 
@@ -162,6 +168,12 @@ describe('production deployment contract', () => {
     expect(migrateRemoteScript).toContain('rejectUnauthorized: false');
     expect(migrateRemoteScript).toContain("REMOTE_MIGRATE_TUNNEL: '1'");
     expect(remoteMigrateIndex).toBeGreaterThan(-1);
+    expect(remotePreflightIndex).toBeGreaterThan(-1);
+    expect(remotePreflightIndex).toBeLessThan(remoteMigrateIndex);
+    expect(remotePostcheckIndex).toBeGreaterThan(remoteMigrateIndex);
+    expect(migrateRemoteScript).toContain(
+      "console.log(`Migration gate passed: ${scriptName}`)"
+    );
     expect(remoteBackfillIndex).toBeGreaterThan(remoteMigrateIndex);
     expect(remoteReleaseGateIndex).toBeGreaterThan(remoteBackfillIndex);
   });

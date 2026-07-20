@@ -27,6 +27,12 @@ export type ActPracticeQuestion = {
   explanation: string;
 };
 
+/** Question fields safe to serialize to a student before they answer. */
+export type StudentActPracticeQuestion = Omit<
+  ActPracticeQuestion,
+  'correctChoiceIndex' | 'explanation'
+>;
+
 /** Choice A is always presented to students as this label, ACT-style. */
 export const NO_CHANGE_LABEL = 'NO CHANGE';
 

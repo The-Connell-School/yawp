@@ -101,10 +101,23 @@ BEGIN
         'WritingPracticeAssignment_creator_tenant_check',
         'WritingPracticeAttempt_tenant_check',
         'WritingPracticePromptSet_tenant_check',
-        'ClassAssignmentInsight_tenant_check'
+        'ClassAssignmentInsight_tenant_check',
+        'School_parent_tenant_check',
+        'Class_parent_tenant_check',
+        'OrgMembership_parent_tenant_check'
       )
-  ) <> 5 THEN
+  ) <> 8 THEN
     RAISE EXCEPTION 'postcheck: one or more tenant-integrity triggers are missing';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname =
+      'ClassAssignmentInsight_generatedByMembershipId_fkey'
+  ) THEN
+    RAISE EXCEPTION
+      'postcheck: class insight generator foreign key is missing';
   END IF;
 END $$;
 

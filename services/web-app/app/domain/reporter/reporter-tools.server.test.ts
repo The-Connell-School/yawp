@@ -155,6 +155,7 @@ describe('get_class_grade_report', () => {
     // Released-only filter is enforced in the query.
     const subWhere = prisma.submission.findMany.mock.calls[0][0].where;
     expect(subWhere.releasedAt).toEqual({ not: null });
+    expect(subWhere.gradedAt).toEqual({ not: null });
     expect(subWhere.document.classAssignment.class.teachers.some.id).toBe(
       'teacher-1'
     );
@@ -459,6 +460,7 @@ describe('get_submission_detail', () => {
     const where = prisma.submission.findFirst.mock.calls[0][0].where;
     expect(where.id).toBe('sub-x');
     expect(where.releasedAt).toEqual({ not: null });
+    expect(where.gradedAt).toEqual({ not: null });
     expect(where.archivedAt).toBeNull();
     expect(where.document.classAssignment.class.teachers.some.id).toBe(
       'teacher-1'

@@ -77,10 +77,20 @@ jobs:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
         run: bun prisma generate
 
+      - name: 🔎 Combined feature migration preflight
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
+        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f packages/prisma/scripts/combined-feature-preflight.sql
+
       - name: 🧱 Apply Prisma migrations
         env:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
         run: bun prisma migrate deploy
+
+      - name: ✅ Combined feature migration postcheck
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
+        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f packages/prisma/scripts/combined-feature-postcheck.sql
 
       - name: 🎨 Backfill class artwork keys
         env:

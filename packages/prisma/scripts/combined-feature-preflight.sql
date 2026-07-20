@@ -277,17 +277,22 @@ BEGIN
       SELECT EXISTS (
         SELECT 1
         FROM "ClassAssignmentInsight" insight
-        JOIN "OrgMembership" generator
+        LEFT JOIN "OrgMembership" generator
           ON generator."id" = insight."generatedByMembershipId"
         JOIN "ClassAssignment" deployment
           ON deployment."id" = insight."classAssignmentId"
         JOIN "Class" class_row ON class_row."id" = deployment."classId"
         JOIN "School" school ON school."id" = class_row."schoolId"
-        WHERE generator."organizationId" <> school."organizationId"
+        WHERE insight."generatedByMembershipId" IS NOT NULL
+          AND (
+            generator."id" IS NULL
+            OR generator."organizationId" <> school."organizationId"
+          )
       )
     $query$ INTO violation;
     IF violation THEN
-      RAISE EXCEPTION 'preflight: cross-organization class insight exists';
+      RAISE EXCEPTION
+        'preflight: orphaned or cross-organization class insight exists';
     END IF;
 
     EXECUTE 'SELECT COUNT(*) FROM "ClassAssignmentInsight"' INTO row_count;

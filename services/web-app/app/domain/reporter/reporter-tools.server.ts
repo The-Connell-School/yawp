@@ -183,7 +183,7 @@ export const REPORTER_TOOLS: ReporterTool[] = [
   {
     name: 'save_growth_plan',
     description:
-      "Persist a writing growth plan for a student so it survives the chat and future reports can measure progress against it. Call this AFTER you have presented a growth plan to the teacher (on their request). It snapshots the student's current standing as the baseline. Saving a new plan archives the student's previous active plan.",
+      'Propose a writing growth plan for explicit teacher confirmation. Call this AFTER presenting the exact plan. The application, not the model, decides whether to persist it after the teacher clicks Save.',
     input_schema: {
       type: 'object',
       properties: {
@@ -274,6 +274,7 @@ async function fetchScopedGradedRows(where: {
   const submissions = await prisma.submission.findMany({
     where: {
       releasedAt: { not: null },
+      gradedAt: { not: null },
       archivedAt: null,
       document: {
         ...(where.studentMembershipId
@@ -624,6 +625,7 @@ async function getSubmissionDetail(ctx: ReporterToolContext, input: unknown) {
     where: {
       id: submissionId,
       releasedAt: { not: null },
+      gradedAt: { not: null },
       archivedAt: null,
       document: {
         classAssignment: {
@@ -804,7 +806,8 @@ async function saveGrowthPlan(ctx: ReporterToolContext, input: unknown) {
       );
 
   return {
-    saved: true,
+    saved: !ctx.pendingGrowthPlanSaves,
+    requiresTeacherConfirmation: Boolean(ctx.pendingGrowthPlanSaves),
     pendingCommit: Boolean(ctx.pendingGrowthPlanSaves),
     planId,
     student: { studentMembershipId: student.id, studentName: student.name },

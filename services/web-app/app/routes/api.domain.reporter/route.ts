@@ -6,7 +6,6 @@ import { AgentType, getLLMCompletion } from '~/utils/getLLMCompletion';
 import { requireMutableRequest } from '~/utils/auth.server';
 import { requireReporterAccess } from '~/utils/reporter/reporter-access.server';
 import {
-  commitReporterGrowthPlans,
   handleReporterToolCall,
   REPORTER_TOOLS,
 } from '~/domain/reporter/reporter-tools.server';
@@ -33,8 +32,42 @@ const REPORTER_ADMISSION_POLICY = {
 
 const POST = z
   .object({
-    message: z.string().trim().min(1).max(MAX_REPORTER_MESSAGE_CHARS),
+    intent: z.enum(['chat', 'confirm-growth-plan']).default('chat'),
+    message: z
+      .string()
+      .trim()
+      .min(1)
+      .max(MAX_REPORTER_MESSAGE_CHARS)
+      .optional(),
     conversationId: z.string().optional(),
+    growthPlanProposal: z.string().max(20_000).optional(),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (value.intent === 'chat' && !value.message) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['message'],
+        message: 'Message is required.',
+      });
+    }
+    if (value.intent === 'confirm-growth-plan' && !value.growthPlanProposal) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['growthPlanProposal'],
+        message: 'Growth plan proposal is required.',
+      });
+    }
+  });
+
+const growthPlanConfirmationSchema = z
+  .object({
+    student: z.string().min(1),
+    studentName: z.string().min(1),
+    focus: z.string().min(1).max(500),
+    targetSkills: z.array(z.string().min(1)).min(1).max(5),
+    body: z.string().min(1).max(12_000),
+    checkInInDays: z.number().int().min(1).max(180).optional(),
   })
   .strict();
 
@@ -71,29 +104,6 @@ export async function action({ request }: ActionFunctionArgs) {
     pendingGrowthPlanSaves: new Map(),
   };
 
-  try {
-    await reserveAiRequest({
-      membershipId: ctx.membershipId,
-      organizationId: ctx.organizationId,
-      feature: 'reporter',
-      policy: REPORTER_ADMISSION_POLICY,
-    });
-  } catch (error) {
-    if (!(error instanceof AiRateLimitError)) {
-      return dataResponse({ error: REPORTER_FAILED }, { status: 503 });
-    }
-    return dataResponse(
-      {
-        error:
-          'Too many reporter requests. Please wait a moment and try again.',
-      },
-      {
-        status: 429,
-        headers: { 'Retry-After': String(error.retryAfterSeconds) },
-      }
-    );
-  }
-
   // Load an existing conversation (scoped to this teacher) or start a new one.
   let conversation = data.conversationId
     ? await prisma.reporterConversation.findFirst({
@@ -118,6 +128,59 @@ export async function action({ request }: ActionFunctionArgs) {
     return dataResponse({ error: 'Conversation not found.' }, { status: 404 });
   }
 
+  if (data.intent === 'confirm-growth-plan') {
+    let proposal: z.infer<typeof growthPlanConfirmationSchema>;
+    try {
+      proposal = growthPlanConfirmationSchema.parse(
+        JSON.parse(data.growthPlanProposal ?? '')
+      );
+    } catch {
+      return dataResponse(
+        { error: 'The growth plan confirmation is invalid.' },
+        { status: 400 }
+      );
+    }
+    const result = JSON.parse(
+      await handleReporterToolCall('save_growth_plan', proposal, {
+        membershipId: ctx.membershipId,
+        organizationId: ctx.organizationId,
+      })
+    ) as { error?: string; saved?: boolean };
+    if (result.error || !result.saved) {
+      return dataResponse(
+        { error: 'The growth plan could not be saved.' },
+        { status: 400 }
+      );
+    }
+    return dataResponse({
+      growthPlanSaved: true,
+      studentName: proposal.studentName,
+    });
+  }
+
+  try {
+    await reserveAiRequest({
+      membershipId: ctx.membershipId,
+      organizationId: ctx.organizationId,
+      feature: 'reporter',
+      policy: REPORTER_ADMISSION_POLICY,
+    });
+  } catch (error) {
+    if (!(error instanceof AiRateLimitError)) {
+      return dataResponse({ error: REPORTER_FAILED }, { status: 503 });
+    }
+    return dataResponse(
+      {
+        error:
+          'Too many reporter requests. Please wait a moment and try again.',
+      },
+      {
+        status: 429,
+        headers: { 'Retry-After': String(error.retryAfterSeconds) },
+      }
+    );
+  }
+
   const priorMessages = boundedHistory(
     [...(conversation?.messages ?? [])].reverse()
   );
@@ -133,7 +196,7 @@ export async function action({ request }: ActionFunctionArgs) {
       role: message.role as AgentType,
       content: message.content,
     })),
-    { role: AgentType.User, content: data.message },
+    { role: AgentType.User, content: data.message! },
   ];
 
   let reply: string;
@@ -170,17 +233,10 @@ export async function action({ request }: ActionFunctionArgs) {
           data: {
             membershipId: ctx.membershipId,
             organizationId: ctx.organizationId,
-            title: deriveTitle(data.message),
+            title: deriveTitle(data.message!),
           },
           include: { messages: true },
         }));
-
-      if (ctx.pendingGrowthPlanSaves.size > 0) {
-        await commitReporterGrowthPlans(
-          [...ctx.pendingGrowthPlanSaves.values()],
-          transaction
-        );
-      }
 
       await transaction.reporterConversation.update({
         where: { id: persistedConversation.id },
@@ -190,7 +246,7 @@ export async function action({ request }: ActionFunctionArgs) {
             create: [
               {
                 role: AgentType.User,
-                content: data.message,
+                content: data.message!,
                 createdAt: askedAt,
               },
               {
@@ -212,5 +268,28 @@ export async function action({ request }: ActionFunctionArgs) {
     conversationId: conversation.id,
     reply,
     isNewConversation,
+    growthPlanProposals: [...ctx.pendingGrowthPlanSaves.values()].map(
+      (plan) => ({
+        student: plan.studentMembershipId,
+        studentName: plan.studentName,
+        focus: plan.focus,
+        targetSkills: plan.targetSkills,
+        body: plan.body,
+        ...(plan.checkInAt
+          ? {
+              checkInInDays: Math.max(
+                1,
+                Math.min(
+                  180,
+                  Math.ceil(
+                    (plan.checkInAt.getTime() - Date.now()) /
+                      (24 * 60 * 60 * 1_000)
+                  )
+                )
+              ),
+            }
+          : {}),
+      })
+    ),
   });
 }

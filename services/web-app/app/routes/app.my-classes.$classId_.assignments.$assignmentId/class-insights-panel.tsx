@@ -500,7 +500,10 @@ export function ClassInsightsPanel({
 
       <div className="p-4">
         {errorMessage && (
-          <div className="flex items-start gap-2 rounded-md border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive">
+          <div
+            className="flex items-start gap-2 rounded-md border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive"
+            role="alert"
+          >
             <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
             <span>{errorMessage}</span>
           </div>

@@ -337,59 +337,79 @@ export async function getOrCreateStudentPracticeSet(params: {
     },
   };
 
-  const existing = await prisma.writingPracticePromptSet.findUnique({ where });
-  if (existing) {
-    return existing.promptsJson as unknown as ActAssignedPracticeItem[];
-  }
+  const lockKey = `writing-practice-prompt-set:${params.classAssignmentId}:${params.membershipId}`;
+  return prisma.$transaction(
+    async (transaction) => {
+      await transaction.$queryRaw`
+        SELECT 1::integer AS "locked"
+        FROM pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))
+      `;
 
-  let generated: {
-    items: ActAssignedPracticeItem[];
-    source: WritingPracticeSetSource;
-  };
-  try {
-    await reserveAiRequest({
-      membershipId: params.membershipId,
-      organizationId: params.organizationId,
-      feature: 'writing-fundamentals-generation',
-      policy: WRITING_AI_ADMISSION_POLICY,
-      units: Math.max(1, new Set(params.lessonSlugs).size),
-    });
-    generated = await buildGeneratedActPracticeSequence(
-      params.lessonSlugs,
-      params.problemCount
-    );
-  } catch (error) {
-    if (!(error instanceof AiRateLimitError)) throw error;
-    generated = {
-      items: buildActPracticeSequence(params.lessonSlugs, params.problemCount),
-      source: 'static',
-    };
-  }
-  const { items, source } = generated;
+      const existing = await transaction.writingPracticePromptSet.findUnique({
+        where,
+      });
+      if (existing) {
+        return existing.promptsJson as unknown as ActAssignedPracticeItem[];
+      }
 
-  try {
-    const created = await prisma.writingPracticePromptSet.create({
-      data: {
+      let generated: {
+        items: ActAssignedPracticeItem[];
+        source: WritingPracticeSetSource;
+      };
+      try {
+        await reserveAiRequest({
+          membershipId: params.membershipId,
+          organizationId: params.organizationId,
+          feature: 'writing-fundamentals-generation',
+          policy: WRITING_AI_ADMISSION_POLICY,
+          units: Math.max(1, new Set(params.lessonSlugs).size),
+        });
+        generated = await buildGeneratedActPracticeSequence(
+          params.lessonSlugs,
+          params.problemCount
+        );
+      } catch (error) {
+        if (!(error instanceof AiRateLimitError)) throw error;
+        generated = {
+          items: buildActPracticeSequence(
+            params.lessonSlugs,
+            params.problemCount
+          ),
+          source: 'static',
+        };
+      }
+      const { items, source } = generated;
+
+      const created = await transaction.writingPracticePromptSet.create({
+        data: {
+          classAssignmentId: params.classAssignmentId,
+          membershipId: params.membershipId,
+          source,
+          promptsJson: items as unknown as object,
+        },
+      });
+      return created.promptsJson as unknown as ActAssignedPracticeItem[];
+    },
+    { maxWait: 5_000, timeout: 60_000 }
+  );
+}
+
+/** Reads a stored practice set without reserving capacity or writing. */
+export async function getStudentPracticeSet(params: {
+  classAssignmentId: string;
+  membershipId: string;
+}): Promise<ActAssignedPracticeItem[] | null> {
+  const existing = await prisma.writingPracticePromptSet.findUnique({
+    where: {
+      classAssignmentId_membershipId: {
         classAssignmentId: params.classAssignmentId,
         membershipId: params.membershipId,
-        source,
-        promptsJson: items as unknown as object,
       },
-    });
-    return created.promptsJson as unknown as ActAssignedPracticeItem[];
-  } catch (error) {
-    if (!(
-      error instanceof Prisma.PrismaClientKnownRequestError &&
-      error.code === 'P2002'
-    )) {
-      throw error;
-    }
-    // A concurrent request may have created the set first; re-read it.
-    const raced = await prisma.writingPracticePromptSet.findUnique({ where });
-    return (
-      (raced?.promptsJson as unknown as ActAssignedPracticeItem[]) ?? items
-    );
-  }
+    },
+  });
+  return existing
+    ? (existing.promptsJson as unknown as ActAssignedPracticeItem[])
+    : null;
 }
 
 export type CreateWritingPracticeAssignmentInput = {

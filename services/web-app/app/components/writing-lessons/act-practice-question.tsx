@@ -4,7 +4,7 @@ import {
   NO_CHANGE_LABEL,
   splitAroundUnderline,
   type ActGradeResult,
-  type ActPracticeQuestion,
+  type StudentActPracticeQuestion,
 } from '~/utils/writing-lessons/act-practice.shared';
 
 /**
@@ -22,7 +22,7 @@ export function ActPracticeQuestionView({
   grade,
   onSelect,
 }: {
-  question: ActPracticeQuestion;
+  question: StudentActPracticeQuestion;
   selectedIndex: number | null;
   grade: ActGradeResult | null;
   onSelect: (index: number) => void;
@@ -52,7 +52,7 @@ export function ActPracticeQuestionView({
         {question.choices.map((choice, index) => {
           const label = index === 0 ? NO_CHANGE_LABEL : choice;
           const isSelected = selectedIndex === index;
-          const isCorrect = index === question.correctChoiceIndex;
+          const isCorrect = grade?.correctChoiceIndex === index;
           // After grading, tint the correct row green and a wrong pick red.
           const tone = isGraded
             ? isCorrect
@@ -96,7 +96,7 @@ export function ActResultPanel({
   question,
   grade,
 }: {
-  question: ActPracticeQuestion;
+  question: StudentActPracticeQuestion;
   grade: ActGradeResult;
 }) {
   const correctLabel =

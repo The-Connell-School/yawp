@@ -126,6 +126,39 @@ BEGIN
     RAISE NOTICE 'rejected cross-tenant AI reservation: %', SQLERRM;
   END;
 
+  BEGIN
+    UPDATE "Class"
+    SET "schoolId" = 'rehearsal-school-b'
+    WHERE "id" = 'rehearsal-class-a';
+    RAISE EXCEPTION '%: class parent reassignment', proof_failure;
+  EXCEPTION WHEN OTHERS THEN
+    IF SQLERRM LIKE proof_failure || '%' THEN RAISE; END IF;
+    rejected := rejected + 1;
+    RAISE NOTICE 'rejected class parent reassignment: %', SQLERRM;
+  END;
+
+  BEGIN
+    UPDATE "School"
+    SET "organizationId" = 'rehearsal-org-b'
+    WHERE "id" = 'rehearsal-school-a';
+    RAISE EXCEPTION '%: school parent reassignment', proof_failure;
+  EXCEPTION WHEN OTHERS THEN
+    IF SQLERRM LIKE proof_failure || '%' THEN RAISE; END IF;
+    rejected := rejected + 1;
+    RAISE NOTICE 'rejected school parent reassignment: %', SQLERRM;
+  END;
+
+  BEGIN
+    UPDATE "OrgMembership"
+    SET "organizationId" = 'rehearsal-org-b'
+    WHERE "id" = 'rehearsal-student-a';
+    RAISE EXCEPTION '%: membership parent reassignment', proof_failure;
+  EXCEPTION WHEN OTHERS THEN
+    IF SQLERRM LIKE proof_failure || '%' THEN RAISE; END IF;
+    rejected := rejected + 1;
+    RAISE NOTICE 'rejected membership parent reassignment: %', SQLERRM;
+  END;
+
   DELETE FROM "OrgMembership" WHERE "id" = 'rehearsal-teacher-a';
   SELECT "organizationId", "createdByMembershipId"
     INTO assignment_tenant, creator_id
@@ -150,8 +183,8 @@ BEGIN
     RAISE NOTICE 'rejected ownerless cross-tenant deployment: %', SQLERRM;
   END;
 
-  IF rejected <> 7 THEN
-    RAISE EXCEPTION 'expected 7 tenant rejections, observed %', rejected;
+  IF rejected <> 10 THEN
+    RAISE EXCEPTION 'expected 10 tenant rejections, observed %', rejected;
   END IF;
 
   RAISE NOTICE 'tenant negative proof passed with % rejected writes', rejected;

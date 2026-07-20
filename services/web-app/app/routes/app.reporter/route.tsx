@@ -86,6 +86,18 @@ type ReporterActionData = {
   reply?: string;
   isNewConversation?: boolean;
   error?: string;
+  growthPlanProposals?: GrowthPlanProposal[];
+  growthPlanSaved?: boolean;
+  studentName?: string;
+};
+
+type GrowthPlanProposal = {
+  student: string;
+  studentName: string;
+  focus: string;
+  targetSkills: string[];
+  body: string;
+  checkInInDays?: number;
 };
 
 export default function ReporterRoute() {
@@ -98,6 +110,9 @@ export default function ReporterRoute() {
     selectedConversation?.messages ?? []
   );
   const [input, setInput] = useState('');
+  const [growthPlanProposals, setGrowthPlanProposals] = useState<
+    GrowthPlanProposal[]
+  >([]);
   // The conversation created by the last send, until the URL/loader catch up.
   // Without it, a quick follow-up message would start a second conversation.
   const [pendingConversationId, setPendingConversationId] = useState<
@@ -141,6 +156,18 @@ export default function ReporterRoute() {
     processedData.current = fetcher.data;
     const submission = pendingSubmission;
 
+    if (fetcher.data.growthPlanSaved) {
+      setGrowthPlanProposals([]);
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: 'assistant',
+          content: `Growth plan saved for ${fetcher.data!.studentName ?? 'the student'}.`,
+        },
+      ]);
+      return;
+    }
+
     const submittedHere = submission?.conversationKey === conversationKey;
     setPendingSubmission(null);
 
@@ -162,6 +189,7 @@ export default function ReporterRoute() {
         ...prev,
         { role: 'assistant', content: fetcher.data!.reply! },
       ]);
+      setGrowthPlanProposals(fetcher.data.growthPlanProposals ?? []);
       if (fetcher.data.conversationId && !conversationId) {
         setPendingConversationId(fetcher.data.conversationId);
         const next = new URLSearchParams(searchParams);
@@ -188,7 +216,20 @@ export default function ReporterRoute() {
     setInput('');
     fetcher.submit(
       {
+        intent: 'chat',
         message: trimmed,
+        ...(conversationId ? { conversationId } : {}),
+      },
+      { method: 'post', action: '/api/domain/reporter' }
+    );
+  }
+
+  function confirmGrowthPlan(proposal: GrowthPlanProposal) {
+    if (isSending) return;
+    fetcher.submit(
+      {
+        intent: 'confirm-growth-plan',
+        growthPlanProposal: JSON.stringify(proposal),
         ...(conversationId ? { conversationId } : {}),
       },
       { method: 'post', action: '/api/domain/reporter' }
@@ -330,11 +371,38 @@ export default function ReporterRoute() {
             )}
             {isSending &&
             pendingSubmission?.conversationKey === conversationKey ? (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <div
+                className="flex items-center gap-2 text-sm text-muted-foreground"
+                role="status"
+                aria-live="polite"
+              >
                 <Loader2 size={16} className="animate-spin" />
                 Pulling the numbers…
               </div>
             ) : null}
+            {growthPlanProposals.map((proposal) => (
+              <div
+                key={proposal.student}
+                className="rounded-xl border border-primary/30 bg-primary/5 p-4"
+                role="status"
+              >
+                <p className="text-sm font-medium">
+                  Save this growth plan for {proposal.studentName}?
+                </p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Nothing is persisted until you confirm this exact proposal.
+                </p>
+                <Button
+                  type="button"
+                  size="sm"
+                  className="mt-3"
+                  disabled={isSending}
+                  onClick={() => confirmGrowthPlan(proposal)}
+                >
+                  Save growth plan
+                </Button>
+              </div>
+            ))}
           </div>
         </div>
 

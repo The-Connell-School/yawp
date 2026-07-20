@@ -34,6 +34,50 @@ function classLabel(klass: {
   return parts.length ? parts.join(' · ') : null;
 }
 
+async function recordClassInsightFailure(input: {
+  classAssignmentId: string;
+  submissionCount: number;
+  generatedByMembershipId: string;
+  generatedAt: Date;
+  model?: string;
+}) {
+  const data = {
+    status: 'failed',
+    submissionCount: input.submissionCount,
+    generatedByMembershipId: input.generatedByMembershipId,
+    generatedAt: input.generatedAt,
+    ...(input.model ? { model: input.model } : {}),
+  };
+  const updated = await prisma.classAssignmentInsight.updateMany({
+    where: {
+      classAssignmentId: input.classAssignmentId,
+      status: 'failed',
+    },
+    data,
+  });
+  if (updated.count > 0) return;
+
+  try {
+    await prisma.classAssignmentInsight.create({
+      data: {
+        classAssignmentId: input.classAssignmentId,
+        ...data,
+      },
+    });
+  } catch (error) {
+    // A ready row (including one completed by a concurrent regeneration) is
+    // authoritative. A late failure must never erase its last good summary.
+    if (
+      !(
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      )
+    ) {
+      throw error;
+    }
+  }
+}
+
 export async function action({ request }: ActionFunctionArgs) {
   const actor = await getGradingActor(request);
   if (!canManageGrades(actor)) {
@@ -186,22 +230,11 @@ export async function action({ request }: ActionFunctionArgs) {
       metadata: { classAssignmentId: classAssignment.id },
     });
   } catch {
-    await prisma.classAssignmentInsight.upsert({
-      where: { classAssignmentId: classAssignment.id },
-      create: {
-        classAssignmentId: classAssignment.id,
-        status: 'failed',
-        submissionCount: aggregate.submissionCount,
-        generatedByMembershipId: actor.membershipId,
-        generatedAt,
-      },
-      update: {
-        status: 'failed',
-        summaryJson: Prisma.JsonNull,
-        submissionCount: aggregate.submissionCount,
-        generatedByMembershipId: actor.membershipId,
-        generatedAt,
-      },
+    await recordClassInsightFailure({
+      classAssignmentId: classAssignment.id,
+      submissionCount: aggregate.submissionCount,
+      generatedByMembershipId: actor.membershipId,
+      generatedAt,
     });
     return dataResponse(
       {
@@ -222,14 +255,9 @@ export async function action({ request }: ActionFunctionArgs) {
   };
 
   if (!summary) {
-    await prisma.classAssignmentInsight.upsert({
-      where: { classAssignmentId: classAssignment.id },
-      create: {
-        classAssignmentId: classAssignment.id,
-        status: 'failed',
-        ...baseRow,
-      },
-      update: { status: 'failed', summaryJson: Prisma.JsonNull, ...baseRow },
+    await recordClassInsightFailure({
+      classAssignmentId: classAssignment.id,
+      ...baseRow,
     });
     return dataResponse(
       {
