@@ -156,7 +156,10 @@ export async function action({ request }: ActionFunctionArgs) {
           where: {
             id: { in: practiceAssignmentIds },
             classAssignments: {
-              some: {
+              // Deleting the parent cascades to every deployment and attempt,
+              // so partial/co-teacher ownership is not sufficient.
+              some: {},
+              every: {
                 class: { teachers: { some: { id: profile.id } } },
               },
             },

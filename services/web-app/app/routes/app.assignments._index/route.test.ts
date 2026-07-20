@@ -243,7 +243,8 @@ describe('app.assignments action', () => {
         where: expect.objectContaining({
           id: { in: ['practice-1'] },
           classAssignments: {
-            some: {
+            some: {},
+            every: {
               class: { teachers: { some: { id: 'teacher-1' } } },
             },
           },
@@ -296,6 +297,35 @@ describe('app.assignments action', () => {
     } as any);
 
     expect(responseStatus(response)).toBe(400);
+    expect(prisma.writingPracticeAssignment.deleteMany).not.toHaveBeenCalled();
+  });
+
+  test('rejects deleting a shared practice assignment unless every deployment belongs to the teacher', async () => {
+    // The ownership query excludes an assignment that also targets another
+    // teacher's class.
+    prisma.writingPracticeAssignment.findMany.mockResolvedValue([]);
+
+    const form = new FormData();
+    form.append('intent', 'delete-assignments');
+    form.append('practiceAssignmentIds', 'shared-practice');
+
+    const response = await action({
+      request: new Request('https://example.com/app/assignments', {
+        method: 'POST',
+        body: form,
+      }),
+      params: {},
+    } as any);
+
+    expect(responseStatus(response)).toBe(400);
+    const where =
+      prisma.writingPracticeAssignment.findMany.mock.calls[0][0].where;
+    expect(where.classAssignments).toEqual({
+      some: {},
+      every: {
+        class: { teachers: { some: { id: 'teacher-1' } } },
+      },
+    });
     expect(prisma.writingPracticeAssignment.deleteMany).not.toHaveBeenCalled();
   });
 
