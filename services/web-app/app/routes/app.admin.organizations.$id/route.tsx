@@ -45,43 +45,38 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const currentUser = await requireAdmin(request);
   const profile = await requireMembership(request, currentUser.id);
 
-  const [
-    organization,
-    invitations,
-    totalOrganizations,
-    assignmentTypes,
-  ] =
+  const [organization, invitations, totalOrganizations, assignmentTypes] =
     await Promise.all([
-    prisma.organization.findUnique({
-      where: { id: params.id },
-      include: {
-        memberships: {
-          where: { isOrgOwner: true },
-          include: { user: { select: { name: true, email: true } } },
-        },
-        assignmentTypeAssignments: {
-          include: {
-            assignmentType: {
-              select: { id: true, title: true, description: true },
-            },
+      prisma.organization.findUnique({
+        where: { id: params.id },
+        include: {
+          memberships: {
+            where: { isOrgOwner: true },
+            include: { user: { select: { name: true, email: true } } },
           },
-          orderBy: { assignmentType: { position: 'asc' } },
+          assignmentTypeAssignments: {
+            include: {
+              assignmentType: {
+                select: { id: true, title: true, description: true },
+              },
+            },
+            orderBy: { assignmentType: { position: 'asc' } },
+          },
         },
-      },
-    }),
-    prisma.invitation.findMany({
-      where: {
-        metadata: JSON.stringify({ organizationId: params.id }),
-        type: 'onboard-owner',
-      },
-    }),
-    prisma.organization.count(),
-    prisma.assignmentType.findMany({
-      where: { archivedAt: null },
-      select: { id: true, title: true, description: true },
-      orderBy: { position: 'asc' },
-    }),
-  ]);
+      }),
+      prisma.invitation.findMany({
+        where: {
+          metadata: JSON.stringify({ organizationId: params.id }),
+          type: 'onboard-owner',
+        },
+      }),
+      prisma.organization.count(),
+      prisma.assignmentType.findMany({
+        where: { archivedAt: null },
+        select: { id: true, title: true, description: true },
+        orderBy: { position: 'asc' },
+      }),
+    ]);
 
   if (!organization) {
     throw new Response('Not Found', { status: 404 });
@@ -159,6 +154,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
       formData.get('numOfTeacherSeats')?.toString() || '10'
     );
     const accessExpiresAt = formData.get('accessExpiresAt')?.toString();
+    const reporterEnabled = formData.get('reporterEnabled') === 'true';
     const assignmentTypeIds = Array.from(
       new Set(
         formData
@@ -189,6 +185,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
           numOfStudentSeats,
           numOfTeacherSeats,
           accessExpiresAt: accessExpiresAt ? new Date(accessExpiresAt) : null,
+          reporterEnabled,
         },
       }),
       prisma.organizationAssignmentType.deleteMany({
@@ -342,12 +339,7 @@ function OrganizationInviteEmail({
 }
 
 export default function OrganizationRoute() {
-  const {
-    organization,
-    invitations,
-    assignmentTypes,
-    canDelete,
-  } =
+  const { organization, invitations, assignmentTypes, canDelete } =
     useLoaderData<typeof loader>();
   const fetcher = useFetcher();
   const inviteFetcher = useFetcher();
@@ -449,12 +441,40 @@ export default function OrganizationRoute() {
 
                 <div
                   className="border-t pt-5"
+                  data-testid="organization-reporter-manager"
+                >
+                  <div className="space-y-1">
+                    <h3 className="text-sm font-semibold">Yawp Reporter</h3>
+                    <p className="text-sm text-muted-foreground">
+                      Give teachers in this organization the chat-based reporter
+                      for class and student insights.
+                    </p>
+                  </div>
+                  <label className="mt-3 flex min-h-12 items-start gap-3 rounded-md border bg-background px-3 py-2 text-sm">
+                    <input
+                      type="checkbox"
+                      name="reporterEnabled"
+                      value="true"
+                      defaultChecked={organization.reporterEnabled}
+                      className="mt-1 h-4 w-4"
+                    />
+                    <span className="min-w-0">
+                      <span className="block font-medium">
+                        Enable Yawp Reporter
+                      </span>
+                      <span className="block text-xs text-muted-foreground">
+                        Adds a Reporter entry to the teacher sidebar.
+                      </span>
+                    </span>
+                  </label>
+                </div>
+
+                <div
+                  className="border-t pt-5"
                   data-testid="organization-assignment-types-manager"
                 >
                   <div className="space-y-1">
-                    <h3 className="text-sm font-semibold">
-                      Assignment Types
-                    </h3>
+                    <h3 className="text-sm font-semibold">Assignment Types</h3>
                     <p className="text-sm text-muted-foreground">
                       Select the assignment types teachers in this organization
                       can see and use.
@@ -689,7 +709,6 @@ export default function OrganizationRoute() {
           </Table>
         </CardContent>
       </Card>
-
     </div>
   );
 }

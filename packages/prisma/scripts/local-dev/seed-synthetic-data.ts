@@ -8,6 +8,7 @@ import {
   LOCAL_DEV_PERSONAS,
   type LocalDevPersona,
 } from './dev-personas';
+import { seedReporterDemoData } from './seed-reporter-demo';
 
 type PersonaRecord = {
   persona: LocalDevPersona;
@@ -521,6 +522,18 @@ export async function seedSyntheticLocalDevData(
       });
     }
   }
+
+  // Rich, deterministic reporting dataset: many students × papers × released
+  // grades with per-student trajectories so the Yawp Reporter has real trends
+  // to surface across students and across papers.
+  await seedReporterDemoData(prisma, {
+    organizationId: LOCAL_DEV_ORG_ID,
+    assignmentTypeId: thesisAssignmentTypeId,
+    teacherMembershipId: primaryTeacher.membershipId,
+    primaryClassId: primaryClass.id,
+    secondaryClassId: secondaryClass.id,
+    now: Date.now(),
+  });
 
   return {
     organizationId: LOCAL_DEV_ORG_ID,
