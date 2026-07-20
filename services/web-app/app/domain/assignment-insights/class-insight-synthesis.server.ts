@@ -93,6 +93,8 @@ export async function generateClassInsight({
     messages: [{ role: 'user', content: user }],
     maxTokens: INSIGHT_MAX_TOKENS,
     temperature: INSIGHT_TEMPERATURE,
+    allowFallbackProvider: false,
+    logPayload: 'metadata-only',
     signal: AbortSignal.timeout(INSIGHT_REQUEST_DEADLINE_MS),
     metadata: {
       feature: 'assignment-level-feedback',

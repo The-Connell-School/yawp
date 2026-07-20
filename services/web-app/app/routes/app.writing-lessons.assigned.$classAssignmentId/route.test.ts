@@ -51,7 +51,7 @@ beforeEach(() => {
   requireMembership.mockResolvedValue({
     id: 'student-1',
     role: 'STUDENT',
-    organization: { writingFundamentalsEnabled: true },
+    organization: { id: 'org-1', writingFundamentalsEnabled: true },
   });
   getAssignedPracticeForStudentById.mockResolvedValue({
     id: 'class-assignment-1',
@@ -107,7 +107,7 @@ describe('assigned writing practice action', () => {
     requireMembership.mockResolvedValue({
       id: 'student-1',
       role: 'STUDENT',
-      organization: { writingFundamentalsEnabled: false },
+      organization: { id: 'org-1', writingFundamentalsEnabled: false },
     });
 
     await expect(

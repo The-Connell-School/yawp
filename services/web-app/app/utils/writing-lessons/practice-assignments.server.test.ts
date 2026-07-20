@@ -1,10 +1,17 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
+import { Prisma } from '@app/prisma';
 
 const writingPracticeAssignment = { create: mock() };
 const writingPracticeAttempt = { upsert: mock() };
 const writingPracticeClassAssignment = { findMany: mock(), findFirst: mock() };
 const writingPracticePromptSet = { findUnique: mock(), create: mock() };
 const getLLMCompletion = mock();
+const reserveAiRequest = mock();
+class AiRateLimitError extends Error {
+  constructor(readonly retryAfterSeconds: number) {
+    super('rate limited');
+  }
+}
 
 mock.module('~/utils/db.server', () => ({
   prisma: {
@@ -17,6 +24,16 @@ mock.module('~/utils/db.server', () => ({
 mock.module('~/utils/getLLMCompletion', () => ({
   AgentType: { Assistant: 'assistant', User: 'user' },
   getLLMCompletion,
+}));
+mock.module('~/utils/ai-admission.server', () => ({
+  AiRateLimitError,
+  reserveAiRequest,
+  WRITING_AI_ADMISSION_POLICY: {
+    membershipLimit: 10,
+    membershipWindowMs: 60_000,
+    organizationLimit: 100,
+    organizationWindowMs: 3_600_000,
+  },
 }));
 
 const {
@@ -38,6 +55,7 @@ beforeEach(() => {
   writingPracticePromptSet.findUnique.mockReset();
   writingPracticePromptSet.create.mockReset();
   getLLMCompletion.mockReset();
+  reserveAiRequest.mockReset().mockResolvedValue(undefined);
 });
 
 function mockGeneratedPrompts(prompts: Array<{ exercise: string }>) {
@@ -288,6 +306,7 @@ describe('getOrCreateStudentPracticeSet', () => {
     const items = await getOrCreateStudentPracticeSet({
       classAssignmentId: 'ca-1',
       membershipId: 'student-1',
+      organizationId: 'org-1',
       lessonSlugs: ['fixing-comma-splices'],
       problemCount: 5,
     });
@@ -327,6 +346,7 @@ describe('getOrCreateStudentPracticeSet', () => {
     const items = await getOrCreateStudentPracticeSet({
       classAssignmentId: 'ca-1',
       membershipId: 'student-1',
+      organizationId: 'org-1',
       lessonSlugs: ['fixing-comma-splices'],
       problemCount: 2,
     });
@@ -337,6 +357,92 @@ describe('getOrCreateStudentPracticeSet', () => {
     expect(items).toHaveLength(2);
     expect(items[0].question.sentence).toContain('comet');
     expect(items[0].question.choices).toHaveLength(4);
+  });
+
+  test('re-reads only a unique-conflict race when two requests create the set', async () => {
+    const raced = [
+      {
+        position: 1,
+        lessonSlug: 'fixing-comma-splices',
+        lessonTitle: 'Fixing Comma Splices',
+        question: {
+          id: 'race-question',
+          sentence: 'The comet appeared, astronomers cheered.',
+          underline: 'appeared, astronomers',
+          choices: [
+            'appeared, astronomers',
+            'appeared; astronomers',
+            'appeared astronomers',
+            'appeared, and, astronomers',
+          ],
+          correctChoiceIndex: 1,
+          explanation: 'A semicolon joins independent clauses.',
+        },
+      },
+    ];
+    writingPracticePromptSet.findUnique
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ promptsJson: raced });
+    mockGeneratedActQuestions([
+      {
+        sentence: 'The comet appeared, they cheered.',
+        underline: 'appeared, they',
+        choices: [
+          'appeared, they',
+          'appeared; they',
+          'appeared they',
+          'appeared, and, they',
+        ],
+        correctChoiceIndex: 1,
+      },
+    ]);
+    writingPracticePromptSet.create.mockRejectedValueOnce(
+      new Prisma.PrismaClientKnownRequestError('unique conflict', {
+        code: 'P2002',
+        clientVersion: '7.8.0',
+      })
+    );
+
+    const items = await getOrCreateStudentPracticeSet({
+      classAssignmentId: 'ca-1',
+      membershipId: 'student-1',
+      organizationId: 'org-1',
+      lessonSlugs: ['fixing-comma-splices'],
+      problemCount: 1,
+    });
+
+    expect(items).toEqual(raced);
+    expect(writingPracticePromptSet.findUnique).toHaveBeenCalledTimes(2);
+  });
+
+  test('does not hide unexpected prompt-set persistence failures', async () => {
+    writingPracticePromptSet.findUnique.mockResolvedValueOnce(null);
+    mockGeneratedActQuestions([
+      {
+        sentence: 'The comet appeared, they cheered.',
+        underline: 'appeared, they',
+        choices: [
+          'appeared, they',
+          'appeared; they',
+          'appeared they',
+          'appeared, and, they',
+        ],
+        correctChoiceIndex: 1,
+      },
+    ]);
+    writingPracticePromptSet.create.mockRejectedValueOnce(
+      new Error('database unavailable')
+    );
+
+    await expect(
+      getOrCreateStudentPracticeSet({
+        classAssignmentId: 'ca-1',
+        membershipId: 'student-1',
+        organizationId: 'org-1',
+        lessonSlugs: ['fixing-comma-splices'],
+        problemCount: 1,
+      })
+    ).rejects.toThrow('database unavailable');
   });
 });
 

@@ -5,6 +5,12 @@ const requireMutableRequest = mock();
 const requireReporterAccess = mock();
 const handleReporterToolCall = mock();
 const commitReporterGrowthPlans = mock();
+const reserveAiRequest = mock();
+class AiRateLimitError extends Error {
+  constructor(readonly retryAfterSeconds: number) {
+    super('rate limited');
+  }
+}
 
 const prisma = {
   reporterConversation: {
@@ -31,6 +37,10 @@ mock.module('~/domain/reporter/reporter-tools.server', () => ({
 mock.module('~/utils/getLLMCompletion', () => ({
   AgentType: { Assistant: 'assistant', User: 'user' },
   getLLMCompletion,
+}));
+mock.module('~/utils/ai-admission.server', () => ({
+  AiRateLimitError,
+  reserveAiRequest,
 }));
 
 const { action } = await import('./route');
@@ -67,6 +77,7 @@ beforeEach(() => {
   requireReporterAccess.mockReset().mockResolvedValue(access);
   handleReporterToolCall.mockReset();
   commitReporterGrowthPlans.mockReset();
+  reserveAiRequest.mockReset().mockResolvedValue(undefined);
   prisma.reporterConversation.findFirst.mockReset();
   prisma.reporterConversation.create.mockReset();
   prisma.reporterConversation.update.mockReset();
@@ -225,9 +236,7 @@ describe('api.domain.reporter action', () => {
   });
 
   test('rate-limits rapid reporter requests per teacher', async () => {
-    prisma.reporterMessage.count
-      .mockResolvedValueOnce(8)
-      .mockResolvedValueOnce(8);
+    reserveAiRequest.mockRejectedValueOnce(new AiRateLimitError(60));
 
     const response = await action({
       request: formRequest({ message: 'one more' }),

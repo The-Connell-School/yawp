@@ -183,7 +183,7 @@ export const REPORTER_TOOLS: ReporterTool[] = [
   {
     name: 'save_growth_plan',
     description:
-      'Persist a writing growth plan for a student so it survives the chat and future reports can measure progress against it. Call this AFTER you have presented a growth plan to the teacher (on their request). It snapshots the student\'s current standing as the baseline. Saving a new plan archives the student\'s previous active plan.',
+      "Persist a writing growth plan for a student so it survives the chat and future reports can measure progress against it. Call this AFTER you have presented a growth plan to the teacher (on their request). It snapshots the student's current standing as the baseline. Saving a new plan archives the student's previous active plan.",
     input_schema: {
       type: 'object',
       properties: {
@@ -243,7 +243,11 @@ function buildEssayExcerpt(
   const normalized = text?.trim();
   if (!normalized) return null;
   if (normalized.length <= MAX_ESSAY_EXCERPT_CHARS) {
-    return { excerpt: normalized, truncated: false, totalChars: normalized.length };
+    return {
+      excerpt: normalized,
+      truncated: false,
+      totalChars: normalized.length,
+    };
   }
   return {
     excerpt: `${normalized.slice(0, MAX_ESSAY_EXCERPT_CHARS).trimEnd()}…`,
@@ -262,7 +266,11 @@ async function fetchScopedGradedRows(where: {
   classId?: string;
   studentMembershipId?: string;
   studentMembershipIds?: string[];
-}): Promise<GradedSubmissionRow[]> {
+}): Promise<{
+  rows: GradedSubmissionRow[];
+  sourceTruncated: boolean;
+  sourceLimit: number;
+}> {
   const submissions = await prisma.submission.findMany({
     where: {
       releasedAt: { not: null },
@@ -300,22 +308,33 @@ async function fetchScopedGradedRows(where: {
       },
     },
     orderBy: { submittedAt: 'desc' },
-    take: MAX_SCOPED_SUBMISSIONS,
+    // Fetch one sentinel row so callers can distinguish an exact 500-row
+    // result from a larger source that was capped for model context safety.
+    take: MAX_SCOPED_SUBMISSIONS + 1,
   });
 
-  return submissions.map((submission) => ({
-    submissionId: submission.id,
-    studentMembershipId: submission.document.membershipId,
-    studentName: submission.document.membership.user.name ?? 'Unknown student',
-    assignmentTitle:
-      submission.document.classAssignment?.assignment.title ??
-      'Untitled assignment',
-    submittedAt: submission.submittedAt,
-    numericPercentage: submission.numericPercentage,
-    letterGrade: submission.letterGrade,
-    rubricScores: normalizeRubricScores(submission.rubricScores),
-    overallComment: submission.overallComment,
-  }));
+  const sourceTruncated = submissions.length > MAX_SCOPED_SUBMISSIONS;
+  const rows = submissions
+    .slice(0, MAX_SCOPED_SUBMISSIONS)
+    .map((submission) => ({
+      submissionId: submission.id,
+      studentMembershipId: submission.document.membershipId,
+      studentName:
+        submission.document.membership.user.name ?? 'Unknown student',
+      assignmentTitle:
+        submission.document.classAssignment?.assignment.title ??
+        'Untitled assignment',
+      submittedAt: submission.submittedAt,
+      numericPercentage: submission.numericPercentage,
+      letterGrade: submission.letterGrade,
+      rubricScores: normalizeRubricScores(submission.rubricScores),
+      overallComment: submission.overallComment,
+    }));
+  return {
+    rows,
+    sourceTruncated,
+    sourceLimit: MAX_SCOPED_SUBMISSIONS,
+  };
 }
 
 /** Coerce a stored rubricScores JSON blob into a { category: number } map. */
@@ -376,7 +395,7 @@ async function getClassGradeReport(ctx: ReporterToolContext, input: unknown) {
     return { error: 'Class not found or not taught by you.' };
   }
 
-  const rows = await fetchScopedGradedRows({
+  const { rows, sourceTruncated, sourceLimit } = await fetchScopedGradedRows({
     organizationId: ctx.organizationId,
     teacherMembershipId: ctx.membershipId,
     classId,
@@ -401,6 +420,11 @@ async function getClassGradeReport(ctx: ReporterToolContext, input: unknown) {
       period: klass.period,
     },
     gradedSubmissionCount: rows.length,
+    sourceTruncated,
+    sourceLimit,
+    sourceWarning: sourceTruncated
+      ? `This report uses the ${sourceLimit} most recent graded submissions and is not a complete class history.`
+      : null,
     classAveragePercentage,
     // Per-writing-skill class averages, so "what's my class weakest at?" is
     // answerable from this one report without walking student by student.
@@ -420,20 +444,24 @@ const MAX_ATTENTION_STUDENTS = 40;
 async function findAttention(ctx: ReporterToolContext, input: unknown) {
   const { classId, averageThreshold } = attentionSchema.parse(input);
 
-  const rows = await fetchScopedGradedRows({
+  const { rows, sourceTruncated, sourceLimit } = await fetchScopedGradedRows({
     organizationId: ctx.organizationId,
     teacherMembershipId: ctx.membershipId,
     ...(classId ? { classId } : {}),
   });
 
   const flagged = findStudentsNeedingAttention(rows, { averageThreshold });
-  const studentsConsidered = new Set(
-    rows.map((row) => row.studentMembershipId)
-  ).size;
+  const studentsConsidered = new Set(rows.map((row) => row.studentMembershipId))
+    .size;
 
   return {
     averageThreshold: averageThreshold ?? 70,
     scope: classId ? 'class' : 'all_classes',
+    sourceTruncated,
+    sourceLimit,
+    sourceWarning: sourceTruncated
+      ? `This scan uses the ${sourceLimit} most recent graded submissions and is not a complete all-time scan.`
+      : null,
     studentsConsidered,
     flaggedCount: flagged.length,
     truncated: flagged.length > MAX_ATTENTION_STUDENTS,
@@ -523,7 +551,7 @@ async function getStudentGradeReport(ctx: ReporterToolContext, input: unknown) {
   if ('error' in resolved) return resolved;
   const { student } = resolved;
 
-  const rows = await fetchScopedGradedRows({
+  const { rows, sourceTruncated, sourceLimit } = await fetchScopedGradedRows({
     organizationId: ctx.organizationId,
     teacherMembershipId: ctx.membershipId,
     studentMembershipId: student.id,
@@ -532,6 +560,11 @@ async function getStudentGradeReport(ctx: ReporterToolContext, input: unknown) {
 
   return {
     student: { studentMembershipId: student.id, studentName: student.name },
+    sourceTruncated,
+    sourceLimit,
+    sourceWarning: sourceTruncated
+      ? `This report uses the ${sourceLimit} most recent graded submissions and is not a complete history.`
+      : null,
     averagePercentage: summary?.averagePercentage ?? null,
     latestLetterGrade: summary?.latestLetterGrade ?? null,
     rubricTrends: buildRubricTrends(rows),
@@ -553,7 +586,7 @@ async function getStudentGrowth(ctx: ReporterToolContext, input: unknown) {
   if ('error' in resolved) return resolved;
   const { student } = resolved;
 
-  const rows = await fetchScopedGradedRows({
+  const { rows, sourceTruncated, sourceLimit } = await fetchScopedGradedRows({
     organizationId: ctx.organizationId,
     teacherMembershipId: ctx.membershipId,
     studentMembershipId: student.id,
@@ -563,6 +596,11 @@ async function getStudentGrowth(ctx: ReporterToolContext, input: unknown) {
 
   return {
     student: { studentMembershipId: student.id, studentName: student.name },
+    sourceTruncated,
+    sourceLimit,
+    sourceWarning: sourceTruncated
+      ? `This report uses the ${sourceLimit} most recent graded submissions and is not a complete history.`
+      : null,
     ...growth,
     rubricTrends: buildRubricTrends(rows),
     // Attach rubric detail and any written feedback to each point so the model
@@ -652,7 +690,8 @@ async function getSubmissionDetail(ctx: ReporterToolContext, input: unknown) {
   return {
     submissionId: submission.id,
     student: {
-      studentName: submission.document.membership.user.name ?? 'Unknown student',
+      studentName:
+        submission.document.membership.user.name ?? 'Unknown student',
     },
     assignmentTitle:
       submission.document.classAssignment?.assignment.title ??
@@ -699,8 +738,11 @@ function parsePlanBaseline(value: unknown): PlanBaseline | null {
   const rubricLevels: Record<string, number> = {};
   const rawLevels = obj.rubricLevels;
   if (rawLevels && typeof rawLevels === 'object' && !Array.isArray(rawLevels)) {
-    for (const [key, raw] of Object.entries(rawLevels as Record<string, unknown>)) {
-      if (typeof raw === 'number' && !Number.isNaN(raw)) rubricLevels[key] = raw;
+    for (const [key, raw] of Object.entries(
+      rawLevels as Record<string, unknown>
+    )) {
+      if (typeof raw === 'number' && !Number.isNaN(raw))
+        rubricLevels[key] = raw;
     }
   }
   return {
@@ -717,11 +759,17 @@ async function saveGrowthPlan(ctx: ReporterToolContext, input: unknown) {
   if ('error' in resolved) return resolved;
   const { student } = resolved;
 
-  const rows = await fetchScopedGradedRows({
+  const { rows, sourceTruncated } = await fetchScopedGradedRows({
     organizationId: ctx.organizationId,
     teacherMembershipId: ctx.membershipId,
     studentMembershipId: student.id,
   });
+  if (sourceTruncated) {
+    return {
+      error:
+        'The student has more than 500 graded submissions. Narrow the reporting scope before saving a baseline.',
+    };
+  }
   const baseline: PlanBaseline = {
     ...captureRubricLevels(rows),
     capturedAt: new Date().toISOString(),
@@ -846,15 +894,22 @@ async function listGrowthPlans(ctx: ReporterToolContext, input: unknown) {
   // to keep the cross-student list lean.
   const includeBody = parsed.student != null;
 
-  const studentIds = [...new Set(plans.map((plan) => plan.studentMembershipId))];
-  const currentRows =
+  const studentIds = [
+    ...new Set(plans.map((plan) => plan.studentMembershipId)),
+  ];
+  const currentResult =
     studentIds.length > 0
       ? await fetchScopedGradedRows({
           organizationId: ctx.organizationId,
           teacherMembershipId: ctx.membershipId,
           studentMembershipIds: studentIds,
         })
-      : [];
+      : {
+          rows: [] as GradedSubmissionRow[],
+          sourceTruncated: false,
+          sourceLimit: MAX_SCOPED_SUBMISSIONS,
+        };
+  const currentRows = currentResult.rows;
   const rowsByStudent = new Map<string, GradedSubmissionRow[]>();
   for (const row of currentRows) {
     const rows = rowsByStudent.get(row.studentMembershipId) ?? [];
@@ -885,7 +940,15 @@ async function listGrowthPlans(ctx: ReporterToolContext, input: unknown) {
     });
   }
 
-  return { planCount: detailed.length, plans: detailed };
+  return {
+    planCount: detailed.length,
+    sourceTruncated: currentResult.sourceTruncated,
+    sourceLimit: currentResult.sourceLimit,
+    sourceWarning: currentResult.sourceTruncated
+      ? `Progress uses the ${currentResult.sourceLimit} most recent graded submissions and is not a complete history.`
+      : null,
+    plans: detailed,
+  };
 }
 
 /**

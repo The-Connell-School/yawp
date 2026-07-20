@@ -164,6 +164,41 @@ describe('get_class_grade_report', () => {
     expect(ada.averagePercentage).toBe(80);
     // class average of Ada (80) and Grace (100) = 90
     expect(result.classAveragePercentage).toBe(90);
+    expect(prisma.submission.findMany.mock.calls[0][0].take).toBe(501);
+    expect(result.sourceTruncated).toBe(false);
+  });
+
+  test('marks reports partial when more than 500 source submissions exist', async () => {
+    prisma.class.findFirst.mockResolvedValue({
+      id: 'class-1',
+      title: 'Large English',
+      grade: '10',
+      period: '2',
+    });
+    prisma.submission.findMany.mockResolvedValue(
+      Array.from({ length: 501 }, (_, index) =>
+        submissionRow({
+          id: `submission-${index}`,
+          membershipId: `student-${index}`,
+          name: `Student ${index}`,
+          pct: 80,
+        })
+      )
+    );
+
+    const result = JSON.parse(
+      await handleReporterToolCall(
+        'get_class_grade_report',
+        { classId: 'class-1' },
+        ctx
+      )
+    );
+
+    // The outer tool budget may itself truncate the very large payload, but
+    // its preview must retain the source-level partial-data warning.
+    expect(result.truncated).toBe(true);
+    expect(result.preview).toContain('"sourceTruncated":true');
+    expect(result.preview).toContain('not a complete class history');
   });
 });
 
@@ -375,11 +410,7 @@ describe('find_students_needing_attention', () => {
     ]);
 
     const result = JSON.parse(
-      await handleReporterToolCall(
-        'find_students_needing_attention',
-        {},
-        ctx
-      )
+      await handleReporterToolCall('find_students_needing_attention', {}, ctx)
     );
 
     // No classId → scans all the teacher's classes (no class filter applied).
@@ -429,12 +460,12 @@ describe('get_submission_detail', () => {
     expect(where.id).toBe('sub-x');
     expect(where.releasedAt).toEqual({ not: null });
     expect(where.archivedAt).toBeNull();
-    expect(
-      where.document.classAssignment.class.teachers.some.id
-    ).toBe('teacher-1');
-    expect(
-      where.document.classAssignment.class.school.organizationId
-    ).toBe('org-1');
+    expect(where.document.classAssignment.class.teachers.some.id).toBe(
+      'teacher-1'
+    );
+    expect(where.document.classAssignment.class.school.organizationId).toBe(
+      'org-1'
+    );
   });
 
   test('surfaces essay text, inline comments, feedback, and grammar issues', async () => {
@@ -449,15 +480,25 @@ describe('get_submission_detail', () => {
       overallComment: 'Strong control, thin analysis.',
       feedback: 'Push past summary into interpretation.',
       grammarIssues: [
-        { excerpt: 'It sat in the tree.', message: 'Vague pronoun.', kind: 'style' },
+        {
+          excerpt: 'It sat in the tree.',
+          message: 'Vague pronoun.',
+          kind: 'style',
+        },
       ],
       document: {
         membership: { user: { name: 'Amelia Brooks' } },
         classAssignment: { assignment: { title: 'Scarlet Ibis Analysis' } },
       },
       comments: [
-        { excerpt: 'The ibis was red.', content: 'What does the color signal here?' },
-        { excerpt: 'Doodle looked up at it.', content: 'Good — connect this to the ending.' },
+        {
+          excerpt: 'The ibis was red.',
+          content: 'What does the color signal here?',
+        },
+        {
+          excerpt: 'Doodle looked up at it.',
+          content: 'Good — connect this to the ending.',
+        },
       ],
     });
 
@@ -574,7 +615,9 @@ describe('save_growth_plan', () => {
     expect(createData.membershipId).toBe('teacher-1');
     expect(createData.studentMembershipId).toBe('stu-1');
     expect(createData.targetSkills).toEqual(['evidence_and_support']);
-    expect(createData.baseline.rubricLevels).toEqual({ evidence_and_support: 2 });
+    expect(createData.baseline.rubricLevels).toEqual({
+      evidence_and_support: 2,
+    });
     expect(createData.baseline.averagePercentage).toBe(60);
     expect(createData.checkInAt).toBeInstanceOf(Date);
 

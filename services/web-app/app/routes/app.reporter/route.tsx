@@ -340,7 +340,7 @@ export default function ReporterRoute() {
 
         <div className="border-t bg-background px-4 py-3">
           <form
-            className="mx-auto flex w-full max-w-3xl items-end gap-2"
+            className="mx-auto flex w-full max-w-3xl items-end gap-2 pr-12 sm:pr-0"
             onSubmit={(event) => {
               event.preventDefault();
               send(input);

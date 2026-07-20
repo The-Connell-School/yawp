@@ -5,6 +5,7 @@ import { parseFirstJsonValue } from '~/utils/llm-json.server';
 import { filterAppropriatePrompts } from './practice-content-safety';
 
 const DEFAULT_MODEL = 'claude-sonnet-4-6';
+const GENERATION_REQUEST_DEADLINE_MS = 30_000;
 
 export type GeneratedPracticePrompt = {
   exercise: string;
@@ -92,6 +93,7 @@ export async function generatePracticePrompts(input: {
       model: process.env.AI_MODEL ?? DEFAULT_MODEL,
       temperature: 0.9,
       maxTokens: 2000,
+      signal: AbortSignal.timeout(GENERATION_REQUEST_DEADLINE_MS),
       metadata: {
         feature: 'writing-practice-prompt-generation',
         skill: input.skill,

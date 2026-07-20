@@ -11,6 +11,17 @@ import {
 } from '~/domain/assignment-insights/differentiate-students';
 import { prisma } from '~/utils/db.server';
 import { canManageGrades, getGradingActor } from '~/utils/grading-auth.server';
+import {
+  AiRateLimitError,
+  reserveAiRequest,
+} from '~/utils/ai-admission.server';
+
+const CLASS_INSIGHT_ADMISSION_POLICY = {
+  membershipLimit: 6,
+  membershipWindowMs: 60_000,
+  organizationLimit: 60,
+  organizationWindowMs: 60 * 60_000,
+};
 
 function classLabel(klass: {
   grade: string | null;
@@ -41,13 +52,17 @@ export async function action({ request }: ActionFunctionArgs) {
     );
   }
 
-  // Authorization: the actor must teach this class (admins bypass the scope).
+  // Authorization always stays inside the actor's organization. Teachers must
+  // additionally teach the class; admins only bypass that teacher link.
   const classAssignment = await prisma.classAssignment.findFirst({
     where: {
       id: classAssignmentId,
-      ...(actor.isAdmin
-        ? {}
-        : { class: { teachers: { some: { id: actor.membershipId } } } }),
+      class: {
+        school: { organizationId: actor.organizationId },
+        ...(actor.isAdmin
+          ? {}
+          : { teachers: { some: { id: actor.membershipId } } }),
+      },
     },
     select: {
       id: true,
@@ -129,6 +144,37 @@ export async function action({ request }: ActionFunctionArgs) {
   const aggregate = aggregateRubricPerformance(inputs);
 
   const generatedAt = new Date();
+  try {
+    await reserveAiRequest({
+      membershipId: actor.membershipId,
+      organizationId: actor.organizationId,
+      feature: 'class-insight',
+      policy: CLASS_INSIGHT_ADMISSION_POLICY,
+    });
+  } catch (error) {
+    if (error instanceof AiRateLimitError) {
+      return dataResponse(
+        {
+          success: false,
+          message:
+            'Too many class insight requests. Please wait and try again.',
+        },
+        {
+          status: 429,
+          headers: { 'Retry-After': String(error.retryAfterSeconds) },
+        }
+      );
+    }
+    return dataResponse(
+      {
+        success: false,
+        message:
+          'Class insights are temporarily unavailable. Please try again.',
+      },
+      { status: 503 }
+    );
+  }
+
   let generated: Awaited<ReturnType<typeof generateClassInsight>>;
   try {
     generated = await generateClassInsight({

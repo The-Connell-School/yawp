@@ -10,14 +10,20 @@ const sampleAggregate = aggregateRubricPerformance([
     submissionId: 'a',
     rubricScores: {
       thesis_and_content: { score: 5, comment: 'Sharp, arguable thesis.' },
-      evidence_and_support: { score: 2, comment: 'Quotes dropped in, not analyzed.' },
+      evidence_and_support: {
+        score: 2,
+        comment: 'Quotes dropped in, not analyzed.',
+      },
     },
   },
   {
     submissionId: 'b',
     rubricScores: {
       thesis_and_content: { score: 4, comment: 'Clear claim.' },
-      evidence_and_support: { score: 2, comment: 'Needs to explain the evidence.' },
+      evidence_and_support: {
+        score: 2,
+        comment: 'Needs to explain the evidence.',
+      },
     },
   },
 ]);
@@ -38,9 +44,12 @@ describe('buildInsightPrompt', () => {
     expect(user).toContain('Evidence/Support');
   });
 
-  test('surfaces sample per-category comments for grounding', () => {
+  test('never sends free-text grader comments to the model', () => {
     const { user } = buildInsightPrompt(sampleAggregate, {});
-    expect(user).toContain('Quotes dropped in, not analyzed.');
+    expect(user).not.toContain('Quotes dropped in, not analyzed.');
+    expect(user).not.toContain('Sharp, arguable thesis.');
+    expect(user).not.toContain('Clear claim.');
+    expect(user).toContain('avg 2.00 / 5');
   });
 
   test('enumerates the valid rubric category keys for tagging next steps', () => {
@@ -51,7 +60,8 @@ describe('buildInsightPrompt', () => {
 
 describe('parseInsightResponse', () => {
   const validPayload = {
-    overview: 'The class writes strong theses but struggles to analyze evidence.',
+    overview:
+      'The class writes strong theses but struggles to analyze evidence.',
     categories: [
       {
         key: 'thesis_and_content',

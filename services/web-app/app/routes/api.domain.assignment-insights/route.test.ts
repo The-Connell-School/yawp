@@ -9,6 +9,12 @@ const prisma = {
 const getGradingActor = mock();
 const canManageGrades = mock();
 const getLLMCompletion = mock();
+const reserveAiRequest = mock();
+class AiRateLimitError extends Error {
+  constructor(readonly retryAfterSeconds: number) {
+    super('rate limited');
+  }
+}
 
 mock.module('~/utils/db.server', () => ({ prisma }));
 mock.module('~/utils/grading-auth.server', () => ({
@@ -17,6 +23,10 @@ mock.module('~/utils/grading-auth.server', () => ({
 }));
 mock.module('~/utils/getLLMCompletion/getLLMCompletion', () => ({
   getLLMCompletion,
+}));
+mock.module('~/utils/ai-admission.server', () => ({
+  AiRateLimitError,
+  reserveAiRequest,
 }));
 
 const { action } = await import('./route');
@@ -70,9 +80,11 @@ describe('api.domain.assignment-insights', () => {
     getGradingActor.mockReset();
     canManageGrades.mockReset();
     getLLMCompletion.mockReset();
+    reserveAiRequest.mockReset().mockResolvedValue(undefined);
 
     getGradingActor.mockResolvedValue({
       membershipId: 'teacher-1',
+      organizationId: 'org-1',
       teacherProfileId: 'teacher-1',
       isTeacher: true,
       isAdmin: false,
@@ -236,6 +248,11 @@ describe('api.domain.assignment-insights', () => {
     expect(promptText).not.toContain('Ana Reyes');
     expect(promptText).not.toContain('ben@school.test');
     expect(promptText).not.toContain('Dev Patel');
+    expect(promptText).not.toContain('Sharp thesis.');
+    expect(promptText).not.toContain('Not analyzed.');
+    expect(promptText).not.toContain('Nice start, dig into evidence.');
+    expect(llmArgs.logPayload).toBe('metadata-only');
+    expect(llmArgs.allowFallbackProvider).toBe(false);
   });
 
   test('rejects non-graders with 403', async () => {

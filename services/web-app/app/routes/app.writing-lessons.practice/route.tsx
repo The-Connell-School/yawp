@@ -22,6 +22,11 @@ import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
+import {
+  AiRateLimitError,
+  reserveAiRequest,
+  WRITING_AI_ADMISSION_POLICY,
+} from '~/utils/ai-admission.server';
 import { getActPracticeQuestions } from '~/utils/writing-lessons/act-practice-bank';
 import { generateActPracticeQuestions } from '~/utils/writing-lessons/act-practice-generation.server';
 import {
@@ -112,14 +117,37 @@ export async function action({ request }: ActionFunctionArgs) {
   const exampleSentences = getActPracticeQuestions(lessonSlug)
     .slice(0, 3)
     .map((question) => question.sentence);
-  const questions = await generateActPracticeQuestions({
-    lessonSlug,
-    skill: context.skill,
-    lessonTitle: context.title,
-    rule: context.rule,
-    exampleSentences,
-    count,
-  });
+  let questions: ActPracticeQuestion[];
+  try {
+    await reserveAiRequest({
+      membershipId: profile.id,
+      organizationId: profile.organization.id,
+      feature: 'writing-fundamentals-generation',
+      policy: WRITING_AI_ADMISSION_POLICY,
+    });
+    questions = await generateActPracticeQuestions({
+      lessonSlug,
+      skill: context.skill,
+      lessonTitle: context.title,
+      rule: context.rule,
+      exampleSentences,
+      count,
+    });
+  } catch (error) {
+    if (error instanceof AiRateLimitError) {
+      return dataResponse(
+        { error: 'Too many practice requests. Please wait and try again.' },
+        {
+          status: 429,
+          headers: { 'Retry-After': String(error.retryAfterSeconds) },
+        }
+      );
+    }
+    return dataResponse(
+      { error: 'Practice generation is temporarily unavailable.' },
+      { status: 503 }
+    );
+  }
 
   return dataResponse<GenerateActionData>({
     intent: 'generate-act',

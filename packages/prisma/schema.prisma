@@ -392,6 +392,7 @@ model Organization {
   assignmentTypeAssignments  OrganizationAssignmentType[]
   reporterConversations      ReporterConversation[]
   reporterGrowthPlans        ReporterGrowthPlan[]
+  aiRequestReservations      AiRequestReservation[]
 }
 
 model OrganizationAssignmentType {
@@ -436,6 +437,7 @@ model OrgMembership {
   reporterConversations         ReporterConversation[]
   reporterGrowthPlansOwned      ReporterGrowthPlan[]           @relation("ReporterGrowthPlanOwner")
   reporterGrowthPlansAsStudent  ReporterGrowthPlan[]           @relation("ReporterGrowthPlanStudent")
+  aiRequestReservations         AiRequestReservation[]
 
   writingPracticeAssignmentsCreated WritingPracticeAssignment[] @relation("WritingPracticeAssignmentCreator")
   writingPracticeAttempts           WritingPracticeAttempt[]    @relation("WritingPracticeAttemptStudent")
@@ -444,6 +446,22 @@ model OrgMembership {
   @@unique([userId, organizationId])
   @@unique([id, organizationId])
   @@map("OrgMembership")
+}
+
+/// Durable admission record created before an AI provider call. Advisory locks
+/// serialize each membership and organization budget so concurrent requests
+/// cannot all pass a count-then-call race.
+model AiRequestReservation {
+  id             String        @id @default(cuid())
+  createdAt      DateTime      @default(now()) @db.Timestamptz(6)
+  feature        String
+  membershipId   String
+  membership     OrgMembership @relation(fields: [membershipId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  organizationId String
+  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([membershipId, feature, createdAt(sort: Desc)])
+  @@index([organizationId, feature, createdAt(sort: Desc)])
 }
 
 /// A Yawp Reporter chat session. Owned by a teacher (OrgMembership) and scoped

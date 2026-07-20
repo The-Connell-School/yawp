@@ -8,11 +8,7 @@ import type { ClassRubricAggregate } from './aggregate-rubric-performance';
 
 export type CategoryInsightStatus = 'strength' | 'mixed' | 'gap';
 
-const CATEGORY_STATUSES: CategoryInsightStatus[] = [
-  'strength',
-  'mixed',
-  'gap',
-];
+const CATEGORY_STATUSES: CategoryInsightStatus[] = ['strength', 'mixed', 'gap'];
 
 export type CategoryInsight = {
   key: RubricKey;
@@ -57,16 +53,12 @@ export function buildInsightPrompt(
   context: InsightPromptContext
 ): { system: string; user: string } {
   const categoryLines = aggregate.categories
-    .map((category) => {
-      const comments = category.sampleComments.length
-        ? `\n    Sample grader comments: ${category.sampleComments
-            .map((c) => `"${c}"`)
-            .join('; ')}`
-        : '';
-      return `- ${category.label} (${category.key}): avg ${formatAverage(
-        category.averageScore
-      )} across ${category.scoredCount} scored; ${category.highCount} strong (>=4), ${category.lowCount} struggling (<=2).${comments}`;
-    })
+    .map(
+      (category) =>
+        `- ${category.label} (${category.key}): avg ${formatAverage(
+          category.averageScore
+        )} across ${category.scoredCount} scored; ${category.highCount} strong (>=4), ${category.lowCount} struggling (<=2).`
+    )
     .join('\n');
 
   const contextLines = [
@@ -131,9 +123,7 @@ function asString(value: unknown): string | null {
     : null;
 }
 
-export function parseInsightResponse(
-  text: string
-): ClassInsightSummary | null {
+export function parseInsightResponse(text: string): ClassInsightSummary | null {
   let parsed: unknown;
   try {
     parsed = parseFirstJsonValue(text);

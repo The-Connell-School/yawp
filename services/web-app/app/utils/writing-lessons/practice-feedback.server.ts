@@ -10,6 +10,7 @@ import {
 } from './practice-feedback.shared';
 
 const DEFAULT_MODEL = 'claude-sonnet-4-6';
+const FEEDBACK_REQUEST_DEADLINE_MS = 30_000;
 
 const SYSTEM_PROMPT = [
   'You are a warm, sharp writing tutor for the Yawp! writing program.',
@@ -79,6 +80,9 @@ export async function generatePracticeFeedback(
       model: process.env.AI_MODEL ?? DEFAULT_MODEL,
       temperature: 0.2,
       maxTokens: 600,
+      allowFallbackProvider: false,
+      logPayload: 'metadata-only',
+      signal: AbortSignal.timeout(FEEDBACK_REQUEST_DEADLINE_MS),
       metadata: {
         feature: 'writing-practice-feedback',
         skill: input.skill,

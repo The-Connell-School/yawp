@@ -1,3 +1,4 @@
+import { Prisma } from '@app/prisma';
 import {
   type ActionFunctionArgs,
   type LoaderFunctionArgs,
@@ -119,75 +120,80 @@ export async function action({ request }: ActionFunctionArgs) {
       );
     }
 
-    if (assignmentIds.length) {
-      const assignments = await prisma.assignment.findMany({
-        where: {
-          id: { in: assignmentIds },
-          classAssignments: {
-            some: {
-              class: { teachers: { some: { id: profile.id } } },
-            },
-          },
-        },
-        select: {
-          id: true,
-          classAssignments: {
-            select: {
-              class: {
-                select: {
-                  id: true,
-                  school: { select: { id: true, organizationId: true } },
+    const deleted = await prisma.$transaction(
+      async (transaction) => {
+        const [assignments, practiceAssignments] = await Promise.all([
+          assignmentIds.length
+            ? transaction.assignment.findMany({
+                where: {
+                  id: { in: assignmentIds },
+                  classAssignments: {
+                    some: {},
+                    every: {
+                      class: {
+                        teachers: { some: { id: profile.id } },
+                        school: {
+                          organizationId: profile.organization.id,
+                        },
+                      },
+                    },
+                  },
                 },
-              },
-            },
-          },
-        },
-      });
+                select: { id: true },
+              })
+            : [],
+          practiceAssignmentIds.length
+            ? transaction.writingPracticeAssignment.findMany({
+                where: {
+                  id: { in: practiceAssignmentIds },
+                  classAssignments: {
+                    // Parent deletion cascades to every deployment and attempt,
+                    // so partial/co-teacher ownership is never sufficient.
+                    some: {},
+                    every: {
+                      class: {
+                        teachers: { some: { id: profile.id } },
+                        school: {
+                          organizationId: profile.organization.id,
+                        },
+                      },
+                    },
+                  },
+                },
+                select: { id: true },
+              })
+            : [],
+        ]);
 
-      if (assignments.length !== assignmentIds.length) {
-        return dataResponse(
-          { success: false, message: 'Some assignments were not found.' },
-          { status: 400 }
-        );
-      }
-    }
+        if (
+          assignments.length !== assignmentIds.length ||
+          practiceAssignments.length !== practiceAssignmentIds.length
+        ) {
+          return false;
+        }
 
-    if (practiceAssignmentIds.length) {
-      const practiceAssignments =
-        await prisma.writingPracticeAssignment.findMany({
-          where: {
-            id: { in: practiceAssignmentIds },
-            classAssignments: {
-              // Deleting the parent cascades to every deployment and attempt,
-              // so partial/co-teacher ownership is not sufficient.
-              some: {},
-              every: {
-                class: { teachers: { some: { id: profile.id } } },
-              },
-            },
-          },
-          select: { id: true },
-        });
+        await Promise.all([
+          assignmentIds.length
+            ? transaction.assignment.deleteMany({
+                where: { id: { in: assignmentIds } },
+              })
+            : null,
+          practiceAssignmentIds.length
+            ? transaction.writingPracticeAssignment.deleteMany({
+                where: { id: { in: practiceAssignmentIds } },
+              })
+            : null,
+        ]);
+        return true;
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }
+    );
 
-      if (practiceAssignments.length !== practiceAssignmentIds.length) {
-        return dataResponse(
-          { success: false, message: 'Some assignments were not found.' },
-          { status: 400 }
-        );
-      }
-    }
-
-    if (assignmentIds.length) {
-      await prisma.assignment.deleteMany({
-        where: { id: { in: assignmentIds } },
-      });
-    }
-
-    if (practiceAssignmentIds.length) {
-      // Cascades to the per-class deployments and their student attempts.
-      await prisma.writingPracticeAssignment.deleteMany({
-        where: { id: { in: practiceAssignmentIds } },
-      });
+    if (!deleted) {
+      return dataResponse(
+        { success: false, message: 'Some assignments were not found.' },
+        { status: 400 }
+      );
     }
 
     return dataResponse({
@@ -209,8 +215,12 @@ export async function action({ request }: ActionFunctionArgs) {
     where: {
       id: assignmentId,
       classAssignments: {
-        some: {
-          class: { teachers: { some: { id: profile.id } } },
+        some: {},
+        every: {
+          class: {
+            teachers: { some: { id: profile.id } },
+            school: { organizationId: profile.organization.id },
+          },
         },
       },
     },
@@ -244,7 +254,35 @@ export async function action({ request }: ActionFunctionArgs) {
 
   if (intent === 'delete-assignment') {
     // Documents keep their content; the assignment link is set to null by the schema.
-    await prisma.assignment.delete({ where: { id: assignment.id } });
+    const deleted = await prisma.$transaction(
+      async (transaction) => {
+        const owned = await transaction.assignment.findFirst({
+          where: {
+            id: assignment.id,
+            classAssignments: {
+              some: {},
+              every: {
+                class: {
+                  teachers: { some: { id: profile.id } },
+                  school: { organizationId: profile.organization.id },
+                },
+              },
+            },
+          },
+          select: { id: true },
+        });
+        if (!owned) return false;
+        await transaction.assignment.delete({ where: { id: owned.id } });
+        return true;
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }
+    );
+    if (!deleted) {
+      return dataResponse(
+        { success: false, message: 'Assignment not found.' },
+        { status: 404 }
+      );
+    }
     return dataResponse({
       success: true,
       message: 'Assignment deleted successfully.',
@@ -313,20 +351,48 @@ export async function action({ request }: ActionFunctionArgs) {
     );
   }
 
-  await prisma.assignment.update({
-    where: { id: assignment.id },
-    data: {
-      assignmentTypeId,
-      title,
-      prompt,
-      ...(gradingIntent?.success
-        ? {
-            submitForGrade: gradingIntent.data.submitForGrade,
-            pointValue: gradingIntent.data.pointValue,
-          }
-        : {}),
+  const updated = await prisma.$transaction(
+    async (transaction) => {
+      const owned = await transaction.assignment.findFirst({
+        where: {
+          id: assignment.id,
+          classAssignments: {
+            some: {},
+            every: {
+              class: {
+                teachers: { some: { id: profile.id } },
+                school: { organizationId: profile.organization.id },
+              },
+            },
+          },
+        },
+        select: { id: true },
+      });
+      if (!owned) return false;
+      await transaction.assignment.update({
+        where: { id: owned.id },
+        data: {
+          assignmentTypeId,
+          title,
+          prompt,
+          ...(gradingIntent?.success
+            ? {
+                submitForGrade: gradingIntent.data.submitForGrade,
+                pointValue: gradingIntent.data.pointValue,
+              }
+            : {}),
+        },
+      });
+      return true;
     },
-  });
+    { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }
+  );
+  if (!updated) {
+    return dataResponse(
+      { success: false, message: 'Assignment not found.' },
+      { status: 404 }
+    );
+  }
 
   return dataResponse({
     success: true,

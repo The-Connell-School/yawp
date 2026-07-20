@@ -10,6 +10,7 @@ import {
 import { filterAppropriateActQuestions } from './practice-content-safety';
 
 const DEFAULT_MODEL = 'claude-sonnet-4-6';
+const GENERATION_REQUEST_DEADLINE_MS = 30_000;
 
 const generationSchema = z.object({
   questions: z.array(generatedActQuestionSchema).min(1),
@@ -94,6 +95,7 @@ export async function generateActPracticeQuestions(input: {
       model: process.env.AI_MODEL ?? DEFAULT_MODEL,
       temperature: 0.8,
       maxTokens: 2500,
+      signal: AbortSignal.timeout(GENERATION_REQUEST_DEADLINE_MS),
       metadata: {
         feature: 'writing-practice-act-generation',
         skill: input.skill,

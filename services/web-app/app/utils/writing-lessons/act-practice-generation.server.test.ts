@@ -51,6 +51,9 @@ describe('generateActPracticeQuestions', () => {
     expect(result[0].id).toContain('fixing-comma-splices-act-gen-');
     expect(result[0].underline).toBe('comet, astronomers');
     expect(result[0].correctChoiceIndex).toBe(1);
+    expect(getLLMCompletion.mock.calls[0][0].signal).toBeInstanceOf(
+      AbortSignal
+    );
   });
 
   test('grounds the request with skill, rule, and examples', async () => {

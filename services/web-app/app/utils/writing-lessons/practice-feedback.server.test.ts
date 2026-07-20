@@ -52,6 +52,13 @@ describe('generatePracticeFeedback', () => {
     expect(result.degraded).toBe(false);
     expect(result.status).toBe('strong');
     expect(result.strengths[0]).toContain('semicolon');
+    expect(getLLMCompletion.mock.calls[0][0]).toMatchObject({
+      allowFallbackProvider: false,
+      logPayload: 'metadata-only',
+    });
+    expect(getLLMCompletion.mock.calls[0][0].signal).toBeInstanceOf(
+      AbortSignal
+    );
   });
 
   test('passes the skill and rule to the tutor as grounding', async () => {
@@ -85,14 +92,14 @@ describe('generatePracticeFeedback', () => {
     expect(result.status).toBe('needs_revision');
   });
 
-  test('still attempts the tutor even without an Anthropic key (provider fallback is getLLMCompletion’s job)', async () => {
+  test('still attempts the configured provider without an Anthropic key', async () => {
     delete process.env.ANTHROPIC_API_KEY;
     getLLMCompletion.mockRejectedValueOnce(new Error('no provider configured'));
 
     const result = await generatePracticeFeedback(baseInput);
 
-    // We no longer short-circuit on a missing Anthropic key; we call through and
-    // only fall back when the call actually fails.
+    // Provider selection happens below this helper; student text still may not
+    // transfer to a fallback provider.
     expect(getLLMCompletion).toHaveBeenCalledTimes(1);
     expect(result.degraded).toBe(true);
     expect(result.focus.join(' ')).toContain('comma splices');

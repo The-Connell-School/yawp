@@ -35,6 +35,7 @@ const prisma = {
     findMany: mock(),
     deleteMany: mock(),
   },
+  $transaction: mock(),
 };
 
 const requireUserId = mock();
@@ -85,6 +86,10 @@ const ownedAssignment = {
 describe('app.assignments action', () => {
   beforeEach(() => {
     for (const model of Object.values(prisma)) {
+      if (typeof model === 'function') {
+        model.mockReset();
+        continue;
+      }
       for (const fn of Object.values(model)) fn.mockReset();
     }
     requireUserId.mockReset();
@@ -100,6 +105,10 @@ describe('app.assignments action', () => {
         writingFundamentalsEnabled: true,
       },
     });
+    prisma.$transaction.mockImplementation(
+      async (callback: (transaction: typeof prisma) => unknown) =>
+        callback(prisma)
+    );
     prisma.assignment.findFirst.mockResolvedValue(ownedAssignment);
     prisma.assignment.findMany.mockResolvedValue([
       {
@@ -179,8 +188,12 @@ describe('app.assignments action', () => {
         where: expect.objectContaining({
           id: 'assignment-x',
           classAssignments: {
-            some: {
-              class: { teachers: { some: { id: 'teacher-1' } } },
+            some: {},
+            every: {
+              class: {
+                teachers: { some: { id: 'teacher-1' } },
+                school: { organizationId: 'org-1' },
+              },
             },
           },
         }),
@@ -207,6 +220,34 @@ describe('app.assignments action', () => {
     expect(prisma.assignment.deleteMany).toHaveBeenCalledWith({
       where: { id: { in: ['assignment-1', 'assignment-2'] } },
     });
+  });
+
+  test('rejects deleting a shared standard assignment unless every deployment belongs to the teacher', async () => {
+    prisma.assignment.findMany.mockResolvedValue([]);
+    const form = new FormData();
+    form.append('intent', 'delete-assignments');
+    form.append('assignmentIds', 'shared-assignment');
+
+    const response = await action({
+      request: new Request('https://example.com/app/assignments', {
+        method: 'POST',
+        body: form,
+      }),
+      params: {},
+    } as any);
+
+    expect(responseStatus(response)).toBe(400);
+    const where = prisma.assignment.findMany.mock.calls[0][0].where;
+    expect(where.classAssignments).toEqual({
+      some: {},
+      every: {
+        class: {
+          teachers: { some: { id: 'teacher-1' } },
+          school: { organizationId: 'org-1' },
+        },
+      },
+    });
+    expect(prisma.assignment.deleteMany).not.toHaveBeenCalled();
   });
 
   test('deletes writing practice assignments alongside standard ones', async () => {
@@ -253,7 +294,10 @@ describe('app.assignments action', () => {
           classAssignments: {
             some: {},
             every: {
-              class: { teachers: { some: { id: 'teacher-1' } } },
+              class: {
+                teachers: { some: { id: 'teacher-1' } },
+                school: { organizationId: 'org-1' },
+              },
             },
           },
         }),
@@ -331,7 +375,10 @@ describe('app.assignments action', () => {
     expect(where.classAssignments).toEqual({
       some: {},
       every: {
-        class: { teachers: { some: { id: 'teacher-1' } } },
+        class: {
+          teachers: { some: { id: 'teacher-1' } },
+          school: { organizationId: 'org-1' },
+        },
       },
     });
     expect(prisma.writingPracticeAssignment.deleteMany).not.toHaveBeenCalled();

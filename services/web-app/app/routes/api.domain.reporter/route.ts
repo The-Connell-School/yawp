@@ -11,6 +11,10 @@ import {
   REPORTER_TOOLS,
 } from '~/domain/reporter/reporter-tools.server';
 import { buildReporterSystemPrompt } from './build-system-prompt';
+import {
+  AiRateLimitError,
+  reserveAiRequest,
+} from '~/utils/ai-admission.server';
 
 const REPORTER_FAILED =
   'The reporter could not put that together. Please try again.';
@@ -20,11 +24,19 @@ const MAX_HISTORY_CHARS = 24_000;
 const REPORTER_REQUEST_DEADLINE_MS = 60_000;
 const REPORTER_REQUESTS_PER_MINUTE = 8;
 const REPORTER_REQUESTS_PER_HOUR_PER_ORG = 80;
+const REPORTER_ADMISSION_POLICY = {
+  membershipLimit: REPORTER_REQUESTS_PER_MINUTE,
+  membershipWindowMs: 60_000,
+  organizationLimit: REPORTER_REQUESTS_PER_HOUR_PER_ORG,
+  organizationWindowMs: 60 * 60_000,
+};
 
-const POST = z.object({
-  message: z.string().trim().min(1).max(MAX_REPORTER_MESSAGE_CHARS),
-  conversationId: z.string().optional(),
-}).strict();
+const POST = z
+  .object({
+    message: z.string().trim().min(1).max(MAX_REPORTER_MESSAGE_CHARS),
+    conversationId: z.string().optional(),
+  })
+  .strict();
 
 function deriveTitle(message: string): string {
   const trimmed = message.trim().replace(/\s+/g, ' ');
@@ -59,35 +71,26 @@ export async function action({ request }: ActionFunctionArgs) {
     pendingGrowthPlanSaves: new Map(),
   };
 
-  const now = Date.now();
-  const [recentTeacherRequests, recentOrganizationRequests] = await Promise.all(
-    [
-      prisma.reporterMessage.count({
-        where: {
-          role: AgentType.User,
-          createdAt: { gte: new Date(now - 60_000) },
-          conversation: { membershipId: ctx.membershipId },
-        },
-      }),
-      prisma.reporterMessage.count({
-        where: {
-          role: AgentType.User,
-          createdAt: { gte: new Date(now - 60 * 60_000) },
-          conversation: { organizationId: ctx.organizationId },
-        },
-      }),
-    ]
-  );
-  if (
-    recentTeacherRequests >= REPORTER_REQUESTS_PER_MINUTE ||
-    recentOrganizationRequests >= REPORTER_REQUESTS_PER_HOUR_PER_ORG
-  ) {
+  try {
+    await reserveAiRequest({
+      membershipId: ctx.membershipId,
+      organizationId: ctx.organizationId,
+      feature: 'reporter',
+      policy: REPORTER_ADMISSION_POLICY,
+    });
+  } catch (error) {
+    if (!(error instanceof AiRateLimitError)) {
+      return dataResponse({ error: REPORTER_FAILED }, { status: 503 });
+    }
     return dataResponse(
       {
         error:
           'Too many reporter requests. Please wait a moment and try again.',
       },
-      { status: 429 }
+      {
+        status: 429,
+        headers: { 'Retry-After': String(error.retryAfterSeconds) },
+      }
     );
   }
 

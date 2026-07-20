@@ -42,6 +42,9 @@ describe('generatePracticePrompts', () => {
     expect(getLLMCompletion).toHaveBeenCalledTimes(1);
     expect(prompts).toHaveLength(3);
     expect(prompts[0].exercise).toBe('The team lost, the fans left.');
+    expect(getLLMCompletion.mock.calls[0][0].signal).toBeInstanceOf(
+      AbortSignal
+    );
   });
 
   test('grounds the request with the skill, rule, and examples', async () => {

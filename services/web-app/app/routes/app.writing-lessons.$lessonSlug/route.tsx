@@ -26,6 +26,11 @@ import { Textarea } from '~/components/ui/textarea';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import {
+  AiRateLimitError,
+  reserveAiRequest,
+  WRITING_AI_ADMISSION_POLICY,
+} from '~/utils/ai-admission.server';
+import {
   getStudentPreviewState,
   shouldUseStudentExperience,
 } from '~/utils/student-preview.server';
@@ -130,14 +135,37 @@ export async function action({ request, params }: ActionFunctionArgs) {
   const exampleSentences = getActPracticeQuestions(context.slug)
     .slice(0, 3)
     .map((question) => question.sentence);
-  const questions = await generateActPracticeQuestions({
-    lessonSlug: context.slug,
-    skill: context.skill,
-    lessonTitle: context.title,
-    rule: context.rule,
-    exampleSentences,
-    count,
-  });
+  let questions: ActPracticeQuestion[];
+  try {
+    await reserveAiRequest({
+      membershipId: profile.id,
+      organizationId: profile.organization.id,
+      feature: 'writing-fundamentals-generation',
+      policy: WRITING_AI_ADMISSION_POLICY,
+    });
+    questions = await generateActPracticeQuestions({
+      lessonSlug: context.slug,
+      skill: context.skill,
+      lessonTitle: context.title,
+      rule: context.rule,
+      exampleSentences,
+      count,
+    });
+  } catch (error) {
+    if (error instanceof AiRateLimitError) {
+      return dataResponse(
+        { error: 'Too many practice requests. Please wait and try again.' },
+        {
+          status: 429,
+          headers: { 'Retry-After': String(error.retryAfterSeconds) },
+        }
+      );
+    }
+    return dataResponse(
+      { error: 'Practice generation is temporarily unavailable.' },
+      { status: 503 }
+    );
+  }
 
   return dataResponse<ActGenerateActionData>({
     intent: 'generate-act',

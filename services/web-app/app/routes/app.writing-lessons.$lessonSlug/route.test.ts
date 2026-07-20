@@ -4,6 +4,12 @@ const requireUserId = mock();
 const requireMembership = mock();
 const getLLMCompletion = mock();
 const getStudentPreviewState = mock();
+const reserveAiRequest = mock();
+class AiRateLimitError extends Error {
+  constructor(readonly retryAfterSeconds: number) {
+    super('rate limited');
+  }
+}
 
 mock.module('~/utils/auth.server', () => ({
   requireUserId,
@@ -17,6 +23,16 @@ mock.module('~/utils/db.server', () => ({
 mock.module('~/utils/getLLMCompletion', () => ({
   AgentType: { Assistant: 'assistant', User: 'user' },
   getLLMCompletion,
+}));
+mock.module('~/utils/ai-admission.server', () => ({
+  AiRateLimitError,
+  reserveAiRequest,
+  WRITING_AI_ADMISSION_POLICY: {
+    membershipLimit: 10,
+    membershipWindowMs: 60_000,
+    organizationLimit: 100,
+    organizationWindowMs: 3_600_000,
+  },
 }));
 mock.module('~/utils/student-preview.server', () => ({
   getStudentPreviewState,
@@ -62,6 +78,7 @@ describe('writing lesson detail route', () => {
     requireMembership.mockReset();
     getLLMCompletion.mockReset();
     getStudentPreviewState.mockReset().mockResolvedValue({ active: false });
+    reserveAiRequest.mockReset().mockResolvedValue(undefined);
 
     requireUserId.mockResolvedValue('user-1');
     requireMembership.mockResolvedValue({

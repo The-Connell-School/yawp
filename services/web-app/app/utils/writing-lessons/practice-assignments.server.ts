@@ -1,4 +1,10 @@
+import { Prisma } from '@app/prisma';
 import { prisma } from '~/utils/db.server';
+import {
+  AiRateLimitError,
+  reserveAiRequest,
+  WRITING_AI_ADMISSION_POLICY,
+} from '~/utils/ai-admission.server';
 
 import { getActPracticeQuestions } from './act-practice-bank';
 import { generateActPracticeQuestions } from './act-practice-generation.server';
@@ -320,6 +326,7 @@ export async function buildGeneratedPracticeSequence(
 export async function getOrCreateStudentPracticeSet(params: {
   classAssignmentId: string;
   membershipId: string;
+  organizationId: string;
   lessonSlugs: string[];
   problemCount: number;
 }): Promise<ActAssignedPracticeItem[]> {
@@ -335,10 +342,30 @@ export async function getOrCreateStudentPracticeSet(params: {
     return existing.promptsJson as unknown as ActAssignedPracticeItem[];
   }
 
-  const { items, source } = await buildGeneratedActPracticeSequence(
-    params.lessonSlugs,
-    params.problemCount
-  );
+  let generated: {
+    items: ActAssignedPracticeItem[];
+    source: WritingPracticeSetSource;
+  };
+  try {
+    await reserveAiRequest({
+      membershipId: params.membershipId,
+      organizationId: params.organizationId,
+      feature: 'writing-fundamentals-generation',
+      policy: WRITING_AI_ADMISSION_POLICY,
+      units: Math.max(1, new Set(params.lessonSlugs).size),
+    });
+    generated = await buildGeneratedActPracticeSequence(
+      params.lessonSlugs,
+      params.problemCount
+    );
+  } catch (error) {
+    if (!(error instanceof AiRateLimitError)) throw error;
+    generated = {
+      items: buildActPracticeSequence(params.lessonSlugs, params.problemCount),
+      source: 'static',
+    };
+  }
+  const { items, source } = generated;
 
   try {
     const created = await prisma.writingPracticePromptSet.create({
@@ -350,7 +377,13 @@ export async function getOrCreateStudentPracticeSet(params: {
       },
     });
     return created.promptsJson as unknown as ActAssignedPracticeItem[];
-  } catch {
+  } catch (error) {
+    if (!(
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === 'P2002'
+    )) {
+      throw error;
+    }
     // A concurrent request may have created the set first; re-read it.
     const raced = await prisma.writingPracticePromptSet.findUnique({ where });
     return (

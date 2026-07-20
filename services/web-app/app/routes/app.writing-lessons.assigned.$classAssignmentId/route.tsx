@@ -53,6 +53,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const sequence = await getOrCreateStudentPracticeSet({
     classAssignmentId: classAssignment.id,
     membershipId: profile.id,
+    organizationId: profile.organization.id,
     lessonSlugs: assignment.lessonSlugs,
     problemCount: assignment.problemCount,
   });
@@ -106,6 +107,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
   const sequence = await getOrCreateStudentPracticeSet({
     classAssignmentId: classAssignment.id,
     membershipId: profile.id,
+    organizationId: profile.organization.id,
     lessonSlugs: classAssignment.assignment.lessonSlugs,
     problemCount: classAssignment.assignment.problemCount,
   });

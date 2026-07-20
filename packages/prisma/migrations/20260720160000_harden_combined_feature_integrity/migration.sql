@@ -1,27 +1,26 @@
+SET lock_timeout = '5s';
+SET statement_timeout = '2min';
+
 -- Prisma supplies @updatedAt values, but the database default keeps raw
 -- operational inserts and migration checks safe as well.
 ALTER TABLE "ClassAssignmentInsight"
   ALTER COLUMN "updatedAt" SET DEFAULT CURRENT_TIMESTAMP;
 
--- Resolve any pre-constraint duplicates deterministically, retaining the most
--- recently updated plan as active.
-WITH ranked_active_plans AS (
-  SELECT
-    "id",
-    ROW_NUMBER() OVER (
-      PARTITION BY "membershipId", "studentMembershipId"
-      ORDER BY "updatedAt" DESC, "id" DESC
-    ) AS rank
-  FROM "ReporterGrowthPlan"
-  WHERE "status" = 'active'
-)
-UPDATE "ReporterGrowthPlan" AS plan
-SET
-  "status" = 'archived',
-  "updatedAt" = CURRENT_TIMESTAMP
-FROM ranked_active_plans
-WHERE plan."id" = ranked_active_plans."id"
-  AND ranked_active_plans.rank > 1;
+-- Duplicate active plans require an explicit product decision. Fail before
+-- mutating customer state instead of silently archiving records.
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM "ReporterGrowthPlan"
+    WHERE "status" = 'active'
+    GROUP BY "membershipId", "studentMembershipId"
+    HAVING COUNT(*) > 1
+  ) THEN
+    RAISE EXCEPTION
+      'duplicate active ReporterGrowthPlan rows; resolve explicitly before deploy';
+  END IF;
+END $$;
 
 CREATE UNIQUE INDEX "ReporterGrowthPlan_one_active_per_owner_student"
   ON "ReporterGrowthPlan"("membershipId", "studentMembershipId")
