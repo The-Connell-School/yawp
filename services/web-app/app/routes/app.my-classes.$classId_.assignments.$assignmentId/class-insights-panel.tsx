@@ -4,7 +4,6 @@ import {
   ArrowUpRight,
   ChevronDown,
   Minus,
-  Sparkles,
   TrendingUp,
   TriangleAlert,
   Users,
@@ -473,9 +472,6 @@ export function ClassInsightsPanel({
       {/* Header band */}
       <div className="flex flex-wrap items-start justify-between gap-3 border-b bg-gradient-to-r from-primary/[0.07] to-transparent p-4">
         <div className="flex min-w-0 gap-3">
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-            <Sparkles className="h-5 w-5" aria-hidden />
-          </span>
           <div className="min-w-0">
             <h3 className="text-base font-semibold leading-tight">
               Class performance summary

@@ -17,7 +17,6 @@ import {
   Copy,
   Pencil,
   Plus,
-  Sparkles,
   Trash2,
   X,
 } from 'lucide-react';
@@ -1051,10 +1050,6 @@ export default function AssignmentsRoute() {
                                     )}`}
                                     className="inline-flex w-fit items-center gap-1 text-sm text-primary hover:underline"
                                   >
-                                    <Sparkles
-                                      className="h-3.5 w-3.5 shrink-0"
-                                      aria-hidden
-                                    />
                                     {assignment.classAssignments.length > 1
                                       ? formatClassLabel(deployment.class)
                                       : 'Summary'}
