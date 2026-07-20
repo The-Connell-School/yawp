@@ -1,4 +1,4 @@
-import { ChevronRight, ClipboardPlus } from 'lucide-react';
+import { ChevronDown, ChevronRight, ClipboardPlus } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import {
   Link,
@@ -23,6 +23,11 @@ import {
   CardTitle,
 } from '~/components/ui/card';
 import { Checkbox } from '~/components/ui/checkbox';
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '~/components/ui/collapsible';
 import { Input } from '~/components/ui/input';
 import { Label } from '~/components/ui/label';
 import {
@@ -495,48 +500,57 @@ export default function WritingLessonsIndexRoute() {
             0
           );
           return (
-            <div key={section.section} className="flex flex-col gap-5">
+            <Collapsible
+              key={section.section}
+              defaultOpen
+              className="flex flex-col gap-5"
+            >
               <div className="flex items-center gap-2 border-b pb-2">
-                <h3 className="text-xl font-bold tracking-tight">
-                  {section.section}
+                <h3 className="flex-1 text-xl font-bold tracking-tight">
+                  <CollapsibleTrigger className="group flex w-full items-center gap-2 text-left">
+                    <ChevronDown className="h-5 w-5 shrink-0 text-muted-foreground transition-transform group-data-[state=closed]:-rotate-90" />
+                    {section.section}
+                  </CollapsibleTrigger>
                 </h3>
                 <Badge variant="secondary" size="sm">
                   {sectionCount}
                 </Badge>
               </div>
-              {section.groups.map((group) => (
-                <section key={group.category} className="flex flex-col gap-3">
-                  <div className="flex items-center gap-2">
-                    <h4 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-                      {group.category}
-                    </h4>
-                    <Badge variant="secondary" size="sm">
-                      {group.lessons.length}
-                    </Badge>
-                  </div>
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                    {group.lessons.map((lesson) => (
-                      <Link
-                        key={lesson.slug}
-                        to={`/app/writing-lessons/${lesson.slug}`}
-                        className="block h-full"
-                      >
-                        <Card className="h-full shadow-none hover:shadow-sm">
-                          <CardHeader className="p-4">
-                            <CardTitle className="text-base leading-snug">
-                              {lesson.title}
-                            </CardTitle>
-                            <CardDescription className="text-base sm:text-sm">
-                              {lesson.description}
-                            </CardDescription>
-                          </CardHeader>
-                        </Card>
-                      </Link>
-                    ))}
-                  </div>
-                </section>
-              ))}
-            </div>
+              <CollapsibleContent className="flex flex-col gap-5">
+                {section.groups.map((group) => (
+                  <section key={group.category} className="flex flex-col gap-3">
+                    <div className="flex items-center gap-2">
+                      <h4 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                        {group.category}
+                      </h4>
+                      <Badge variant="secondary" size="sm">
+                        {group.lessons.length}
+                      </Badge>
+                    </div>
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                      {group.lessons.map((lesson) => (
+                        <Link
+                          key={lesson.slug}
+                          to={`/app/writing-lessons/${lesson.slug}`}
+                          className="block h-full"
+                        >
+                          <Card className="h-full shadow-none hover:shadow-sm">
+                            <CardHeader className="p-4">
+                              <CardTitle className="text-base leading-snug">
+                                {lesson.title}
+                              </CardTitle>
+                              <CardDescription className="text-base sm:text-sm">
+                                {lesson.description}
+                              </CardDescription>
+                            </CardHeader>
+                          </Card>
+                        </Link>
+                      ))}
+                    </div>
+                  </section>
+                ))}
+              </CollapsibleContent>
+            </Collapsible>
           );
         })}
       </div>

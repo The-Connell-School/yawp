@@ -34,6 +34,35 @@ test.describe.serial('Writing Fundamentals Practice', () => {
     ).toBeVisible();
   });
 
+  test('lets a student collapse a practice section to save space', async ({
+    page,
+    e2eContext,
+    signIn,
+  }) => {
+    await signIn(e2eContext.userEmail, 'johndoe');
+    await page.goto('/app/writing-lessons');
+
+    // Sections start expanded, so lessons are visible on load.
+    const lessonLink = page.getByRole('link', {
+      name: /revising for wordiness/i,
+    });
+    await expect(lessonLink).toBeVisible();
+
+    // The section heading doubles as a toggle: collapsing it hides the lessons
+    // (reclaiming the space) without navigating away.
+    const toggle = page.getByRole('button', { name: 'Grammar & Mechanics' });
+    await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+
+    await toggle.click();
+    await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    await expect(lessonLink).toBeHidden();
+
+    // Expanding it again brings the lessons back.
+    await toggle.click();
+    await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    await expect(lessonLink).toBeVisible();
+  });
+
   test('lets a student create their own mixed practice set', async ({
     page,
     e2eContext,
@@ -77,9 +106,7 @@ test.describe.serial('Writing Fundamentals Practice', () => {
       page.getByRole('heading', { name: /writing fundamentals practice/i })
     ).toBeVisible();
     // The practice page leads with the café-cat banner artwork.
-    await expect(
-      page.getByTestId('writing-fundamentals-banner')
-    ).toBeVisible();
+    await expect(page.getByTestId('writing-fundamentals-banner')).toBeVisible();
     await expect(page.getByText(/quick rewrite drills/i)).toBeVisible();
     await expect(
       page.getByRole('link', { name: /revising for wordiness/i })
