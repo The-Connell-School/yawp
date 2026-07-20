@@ -948,15 +948,31 @@ export default function AssignmentsRoute() {
                                 ))}
                               </div>
                             </TableCell>
+                            <TableCell>
+                              <div className="flex flex-col gap-1">
+                                {row.classAssignments.map((deployment) => (
+                                  <Link
+                                    key={deployment.id}
+                                    to={`/app/writing-lessons/results/${deployment.id}`}
+                                    className="inline-flex w-fit items-center gap-1 text-sm text-primary hover:underline"
+                                  >
+                                    {row.classAssignments.length > 1
+                                      ? formatClassLabel(deployment.class)
+                                      : 'Summary'}
+                                    <span className="text-muted-foreground">
+                                      ({deployment._count.attempts} attempts)
+                                    </span>
+                                  </Link>
+                                ))}
+                              </div>
+                            </TableCell>
                             <TableCell className="pr-4">
-                              <Badge variant="secondary" size="sm">
-                                {row.classAssignments.reduce(
-                                  (total, deployment) =>
-                                    total + deployment._count.attempts,
-                                  0
-                                )}{' '}
-                                attempts
-                              </Badge>
+                              <span
+                                className="text-sm text-muted-foreground"
+                                aria-label="No documents for writing practice"
+                              >
+                                —
+                              </span>
                             </TableCell>
                           </TableRow>
                         );

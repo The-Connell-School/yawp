@@ -547,4 +547,17 @@ describe('app.assignments loader', () => {
     );
     expect(source).toContain('You are not assigned to any active classes yet.');
   });
+
+  test('keeps writing-practice summary and documents in their matching table columns', () => {
+    const source = readFileSync(
+      new URL('./route.tsx', import.meta.url),
+      'utf8'
+    );
+
+    expect(source).toContain(
+      'to={`/app/writing-lessons/results/${deployment.id}`}'
+    );
+    expect(source).toContain("'Summary'");
+    expect(source).toContain('aria-label="No documents for writing practice"');
+  });
 });
