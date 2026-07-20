@@ -178,7 +178,7 @@ export default function Route() {
             'p-3': navExpanded,
           })}
         >
-          <Link to=".">
+          <Link to="/app">
             <img
               src="/img/logo_for_light_mode.png"
               alt="Logo"

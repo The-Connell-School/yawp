@@ -48,60 +48,65 @@ export const DocumentLink = ({
   });
 
   return (
-    <Link
+    <div
       key={doc.id}
-      to={targetPath}
       className="relative flex h-48 flex-col overflow-hidden rounded-lg border bg-white shadow-sm transition-all hover:border-primary/50"
     >
-      {showGradedBadge ? (
-        <span className="absolute right-0 top-0 z-20 rounded-bl-lg rounded-tr-lg border border-green-600 bg-green-50 px-2 py-0.5 text-xs text-green-900 dark:bg-green-950/80 dark:text-green-100">
-          {gradedSubmissions.length} graded
-        </span>
-      ) : showSubmittedBadge ? (
-        <span className="absolute right-0 top-0 z-20 rounded-bl-lg rounded-tr-lg border border-muted-foreground/30 bg-muted px-2 py-0.5 text-xs text-muted-foreground">
-          Submitted
-        </span>
-      ) : (
-        <span className="absolute right-0 top-0 z-20 rounded-bl-lg rounded-tr-lg border border-primary px-2 py-0.5 text-xs text-primary">
-          {doc.assignmentModuleSessions[0]?.assignmentModule.title}
-        </span>
-      )}
-      {doc.html ? (
-        <div
-          dangerouslySetInnerHTML={{ __html: doc.html }}
-          className="z-10 flex-1 scale-90 overflow-hidden p-3 font-times text-sm"
-        />
-      ) : (
-        <p className="flex w-full flex-1 items-center justify-center bg-white p-3 text-lg text-muted-foreground/60">
-          No preview.
-        </p>
-      )}
-      <div className="flex items-center justify-between border-t bg-muted p-2 text-sm">
-        <div className="flex flex-col">
-          <h4>{doc.title || 'Untitled document'}</h4>
-          <Tooltip
-            delayDuration={200}
-            text={new Date(doc.updatedAt).toLocaleString('en-US', {
-              year: 'numeric',
-              month: '2-digit',
-              day: '2-digit',
-              hour: '2-digit',
-              minute: '2-digit',
-              second: '2-digit',
-            })}
-          >
-            <p className="mt-1 text-xs text-muted-foreground">
-              Updated{' '}
-              <span className="underline">{timeAgo(doc.updatedAt)}</span>
-            </p>
-          </Tooltip>
+      <Link to={targetPath} className="flex min-h-0 flex-1 flex-col">
+        {showGradedBadge ? (
+          <span className="absolute right-0 top-0 z-20 rounded-bl-lg rounded-tr-lg border border-green-600 bg-green-50 px-2 py-0.5 text-xs text-green-900 dark:bg-green-950/80 dark:text-green-100">
+            {gradedSubmissions.length} graded
+          </span>
+        ) : showSubmittedBadge ? (
+          <span className="absolute right-0 top-0 z-20 rounded-bl-lg rounded-tr-lg border border-muted-foreground/30 bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+            Submitted
+          </span>
+        ) : (
+          <span className="absolute right-0 top-0 z-20 rounded-bl-lg rounded-tr-lg border border-primary px-2 py-0.5 text-xs text-primary">
+            {doc.assignmentModuleSessions[0]?.assignmentModule.title}
+          </span>
+        )}
+        {doc.html ? (
+          <div
+            dangerouslySetInnerHTML={{ __html: doc.html }}
+            className="z-10 flex-1 scale-90 overflow-hidden p-3 font-times text-sm"
+          />
+        ) : (
+          <p className="flex w-full flex-1 items-center justify-center bg-white p-3 text-lg text-muted-foreground/60">
+            No preview.
+          </p>
+        )}
+        <div className="flex items-center justify-between border-t bg-muted p-2 text-sm">
+          <div className="flex min-w-0 flex-col">
+            <h4 className="truncate">{doc.title || 'Untitled document'}</h4>
+            <Tooltip
+              delayDuration={200}
+              text={new Date(doc.updatedAt).toLocaleString('en-US', {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+              })}
+            >
+              <p className="mt-1 text-xs text-muted-foreground">
+                Updated{' '}
+                <span className="underline">{timeAgo(doc.updatedAt)}</span>
+              </p>
+            </Tooltip>
+          </div>
+          <span className="h-8 w-8 shrink-0" aria-hidden="true" />
         </div>
+      </Link>
+      <div className="absolute bottom-2 right-2 z-20">
         <DropdownMenu>
-          <DropdownMenuTrigger>
+          <DropdownMenuTrigger asChild>
             <Button
+              type="button"
               size="icon-sm"
               variant="outline"
-              onClick={(e) => e.stopPropagation()}
+              aria-label={`Document actions for ${doc.title || 'Untitled document'}`}
             >
               <EllipsisVertical size={16} />
             </Button>
@@ -129,6 +134,6 @@ export const DocumentLink = ({
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
-    </Link>
+    </div>
   );
 };

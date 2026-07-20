@@ -6,9 +6,25 @@ test.describe.serial('Writing Fundamentals Practice', () => {
     e2eContext,
     signIn,
   }) => {
+    const consoleErrors: string[] = [];
+    const pageErrors: string[] = [];
+    page.on('console', (message) => {
+      if (message.type() === 'error') consoleErrors.push(message.text());
+    });
+    page.on('pageerror', (error) => pageErrors.push(error.message));
+
     await signIn(e2eContext.userEmail, 'johndoe');
-    await page.goto('/app');
+    await page.goto('/app/reporter');
+    await expect(page).toHaveURL(/\/app\/?$/);
     await expect(page.getByTestId('app._index')).toBeVisible();
+
+    // The app shell must hydrate deterministically after the authorization
+    // redirect, and document cards cannot nest buttons inside links/buttons.
+    await expect(
+      page.locator('a[href="/app"]').filter({ has: page.getByAltText('Logo') })
+    ).toHaveCount(1);
+    await expect(page.locator('button button')).toHaveCount(0);
+    await expect(page.locator('a button')).toHaveCount(0);
 
     // Students get a persistent "Practice" entry in the side menu.
     await expect(
@@ -32,6 +48,8 @@ test.describe.serial('Writing Fundamentals Practice', () => {
     await expect(
       page.getByRole('link', { name: /revising for wordiness/i })
     ).toBeVisible();
+    expect(consoleErrors).toEqual([]);
+    expect(pageErrors).toEqual([]);
   });
 
   test('lets a student create their own mixed practice set', async ({
@@ -77,9 +95,7 @@ test.describe.serial('Writing Fundamentals Practice', () => {
       page.getByRole('heading', { name: /writing fundamentals practice/i })
     ).toBeVisible();
     // The practice page leads with the café-cat banner artwork.
-    await expect(
-      page.getByTestId('writing-fundamentals-banner')
-    ).toBeVisible();
+    await expect(page.getByTestId('writing-fundamentals-banner')).toBeVisible();
     await expect(page.getByText(/quick rewrite drills/i)).toBeVisible();
     await expect(
       page.getByRole('link', { name: /revising for wordiness/i })
