@@ -10,6 +10,10 @@ import { z } from 'zod';
 import { prisma } from '~/utils/db.server';
 import { parseGrammarIssuesPayload } from '~/domain/grading/grammarIssues';
 import {
+  readRubricEntryScore,
+  type SubmissionRubricEntry,
+} from '~/domain/assignment-insights/aggregate-rubric-performance';
+import {
   buildGrowthSeries,
   buildPlanProgress,
   buildRubricTrends,
@@ -291,7 +295,8 @@ function normalizeRubricScores(value: unknown): Record<string, number> | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   const out: Record<string, number> = {};
   for (const [key, raw] of Object.entries(value as Record<string, unknown>)) {
-    if (typeof raw === 'number' && !Number.isNaN(raw)) out[key] = raw;
+    const score = readRubricEntryScore(raw as SubmissionRubricEntry);
+    if (score !== null) out[key] = score;
   }
   return Object.keys(out).length > 0 ? out : null;
 }

@@ -214,6 +214,49 @@ describe('get_student_growth', () => {
     expect(result.points[0].rubricScores.grammar_and_mechanics).toBe(3);
   });
 
+  test('normalizes current nested rubric scores in growth reports', async () => {
+    prisma.orgMembership.findFirst.mockResolvedValue({
+      id: 'stu-1',
+      user: { name: 'Ada Lovelace' },
+    });
+    prisma.submission.findMany.mockResolvedValue([
+      submissionRow({
+        id: 's1',
+        name: 'Ada Lovelace',
+        pct: 82,
+        rubricScores: {
+          evidence_and_support: {
+            score: 4,
+            comment: 'Specific and well connected.',
+            isAi: true,
+          },
+          grammar_and_mechanics: { score: 3 },
+        },
+      }),
+    ]);
+
+    const result = JSON.parse(
+      await handleReporterToolCall(
+        'get_student_growth',
+        { student: 'stu-1' },
+        ctx
+      )
+    );
+
+    expect(result.points[0].rubricScores).toEqual({
+      evidence_and_support: 4,
+      grammar_and_mechanics: 3,
+    });
+    expect(result.rubricTrends).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          category: 'evidence_and_support',
+          latest: 4,
+        }),
+      ])
+    );
+  });
+
   test('returns candidates when a name is ambiguous', async () => {
     prisma.orgMembership.findFirst.mockResolvedValue(null);
     prisma.orgMembership.findMany.mockResolvedValue([
@@ -627,7 +670,10 @@ function submissionRow({
   name: string;
   pct: number | null;
   submittedAt?: Date;
-  rubricScores?: Record<string, number> | null;
+  rubricScores?: Record<
+    string,
+    number | { score?: number; comment?: string; isAi?: boolean }
+  > | null;
 }) {
   return {
     id,
