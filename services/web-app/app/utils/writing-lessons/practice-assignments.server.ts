@@ -394,6 +394,7 @@ export async function getOrCreateStudentPracticeSet(params: {
 
 export type CreateWritingPracticeAssignmentInput = {
   createdByMembershipId: string;
+  organizationId: string;
   title?: string | null;
   /** One slug = massed practice on a single skill; several = interleaved. */
   lessonSlugs: string[];
@@ -416,6 +417,7 @@ export async function createWritingPracticeAssignmentForClasses(
   return prisma.writingPracticeAssignment.create({
     data: {
       createdByMembershipId: input.createdByMembershipId,
+      organizationId: input.organizationId,
       title: input.title ?? null,
       lessonSlugs: input.lessonSlugs,
       problemCount: input.problemCount,

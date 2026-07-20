@@ -59,12 +59,14 @@ export async function reserveAiRequest({
     // All callers acquire organization then membership locks, preventing
     // deadlocks when many users in the same tenant arrive simultaneously.
     await transaction.$queryRaw`
-      SELECT pg_advisory_xact_lock(
+      SELECT 1::integer AS "locked"
+      FROM pg_advisory_xact_lock(
         hashtextextended(${'ai-admission:org:' + organizationId + ':' + feature}, 0)
       )
     `;
     await transaction.$queryRaw`
-      SELECT pg_advisory_xact_lock(
+      SELECT 1::integer AS "locked"
+      FROM pg_advisory_xact_lock(
         hashtextextended(${'ai-admission:member:' + membershipId + ':' + feature}, 0)
       )
     `;

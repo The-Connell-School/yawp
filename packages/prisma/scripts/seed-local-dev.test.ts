@@ -143,6 +143,7 @@ describe('local dev seed fixtures', () => {
     );
 
     expect(source).toContain('prisma.writingPracticeAssignment.create');
+    expect(source).toContain('organizationId: LOCAL_DEV_ORG_ID');
     expect(source).toContain('prisma.writingPracticeAttempt.create');
     expect(source).toContain('position: index + 1');
   });

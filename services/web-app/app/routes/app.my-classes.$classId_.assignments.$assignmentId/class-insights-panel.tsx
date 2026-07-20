@@ -261,10 +261,7 @@ function DifferentiationSection({
       </p>
       <div className="flex flex-col gap-2.5">
         {focusGroups.map((group) => (
-          <div
-            key={group.category}
-            className="rounded-lg border bg-card p-3.5"
-          >
+          <div key={group.category} className="rounded-lg border bg-card p-3.5">
             <div className="flex flex-wrap items-center gap-2">
               <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
                 <Users className="h-4 w-4" aria-hidden />
@@ -488,7 +485,7 @@ export function ClassInsightsPanel({
         <Button
           type="button"
           size="sm"
-          variant={hasInsight ? 'outline' : 'default'}
+          variant="outline"
           onClick={generate}
           disabled={isWorking}
           isLoading={isWorking}

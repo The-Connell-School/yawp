@@ -88,6 +88,7 @@ export async function action({ request }: ActionFunctionArgs) {
   await createWritingPracticeAssignmentForClasses(
     {
       createdByMembershipId: profile.id,
+      organizationId: profile.organization.id,
       title: title || null,
       lessonSlugs,
       problemCount,

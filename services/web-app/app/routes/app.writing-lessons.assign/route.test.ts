@@ -73,6 +73,7 @@ describe('writing-lessons assign action', () => {
     const [input, classIds] =
       createWritingPracticeAssignmentForClasses.mock.calls[0];
     expect(input.createdByMembershipId).toBe('teacher-1');
+    expect(input.organizationId).toBe('org-1');
     expect(input.lessonSlugs).toEqual(['fixing-comma-splices']);
     expect(input.problemCount).toBe(5);
     expect(classIds).toEqual(['class-a']);

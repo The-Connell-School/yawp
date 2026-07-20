@@ -94,6 +94,7 @@ describe('createWritingPracticeAssignmentForClasses', () => {
     await createWritingPracticeAssignmentForClasses(
       {
         createdByMembershipId: 'teacher-1',
+        organizationId: 'org-1',
         title: 'Comma week',
         lessonSlugs: ['fixing-comma-splices'],
         problemCount: 3,
@@ -106,6 +107,7 @@ describe('createWritingPracticeAssignmentForClasses', () => {
     expect(writingPracticeAssignment.create).toHaveBeenCalledTimes(1);
     const arg = writingPracticeAssignment.create.mock.calls[0][0];
     expect(arg.data.createdByMembershipId).toBe('teacher-1');
+    expect(arg.data.organizationId).toBe('org-1');
     expect(arg.data.lessonSlugs).toEqual(['fixing-comma-splices']);
     expect(arg.data.problemCount).toBe(3);
     expect(arg.data.classAssignments.create).toEqual([

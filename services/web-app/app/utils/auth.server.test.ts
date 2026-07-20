@@ -83,7 +83,7 @@ describe('membership auth helpers', () => {
     );
 
     expect(prisma.orgMembership.findUnique).toHaveBeenCalledWith({
-      where: { id: 'membership-1', userId: 'user-1' },
+      where: { id: 'membership-1', userId: 'user-1', isActive: true },
       select: {
         id: true,
         role: true,
@@ -112,7 +112,7 @@ describe('membership auth helpers', () => {
     );
 
     expect(prisma.orgMembership.findFirst).toHaveBeenCalledWith({
-      where: { userId: 'user-1' },
+      where: { userId: 'user-1', isActive: true },
       orderBy: { createdAt: 'asc' },
       select: {
         id: true,
@@ -130,6 +130,26 @@ describe('membership auth helpers', () => {
       },
     });
     expect(membership).toEqual(membershipFixture);
+  });
+
+  test('requireMembership clears an inactive cookie-selected membership', async () => {
+    getMembershipId.mockResolvedValue('inactive-membership');
+    prisma.orgMembership.findUnique.mockResolvedValue(null);
+
+    await expect(
+      requireMembership(new Request('https://example.com/app'), 'user-1')
+    ).rejects.toMatchObject({ status: 302 });
+
+    expect(prisma.orgMembership.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          id: 'inactive-membership',
+          userId: 'user-1',
+          isActive: true,
+        },
+      })
+    );
+    expect(setMembershipId).toHaveBeenCalledWith('');
   });
 
   test('requireOwner checks memberships with isOrgOwner', async () => {

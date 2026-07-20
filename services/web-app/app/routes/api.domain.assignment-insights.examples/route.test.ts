@@ -41,7 +41,11 @@ function payloadOf(response: unknown) {
   };
 }
 
-const ACTOR = { membershipId: 'm-1', isAdmin: false };
+const ACTOR = {
+  membershipId: 'm-1',
+  organizationId: 'org-1',
+  isAdmin: false,
+};
 
 describe('api.domain.assignment-insights.examples', () => {
   beforeEach(() => {
@@ -99,6 +103,36 @@ describe('api.domain.assignment-insights.examples', () => {
       } as never)
     );
     expect(response.init?.status).toBe(404);
+  });
+
+  test('always scopes exemplar access to the actor organization', async () => {
+    getGradingActor.mockResolvedValue({
+      membershipId: 'admin-1',
+      organizationId: 'org-1',
+      isAdmin: true,
+    });
+    prisma.classAssignment.findFirst.mockResolvedValue(null);
+
+    const response = payloadOf(
+      await loader({
+        request: getRequest({
+          classAssignmentId: 'other-org-assignment',
+          category: 'evidence_and_support',
+          status: 'gap',
+        }),
+      } as never)
+    );
+
+    expect(response.init?.status).toBe(404);
+    expect(prisma.classAssignment.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          id: 'other-org-assignment',
+          class: { school: { organizationId: 'org-1' } },
+        },
+      })
+    );
+    expect(prisma.document.findMany).not.toHaveBeenCalled();
   });
 
   test('returns the lowest-scoring snippets for a gap category', async () => {

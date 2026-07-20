@@ -8,9 +8,35 @@ BEGIN
   IF EXISTS (
     SELECT 1
     FROM "WritingPracticeAssignment"
-    WHERE "lessonSlugs" IS NULL OR CARDINALITY("lessonSlugs") = 0
+    WHERE "organizationId" IS NULL
+      OR "problemCount" <= 0
+      OR "lessonSlugs" IS NULL
+      OR CARDINALITY("lessonSlugs") = 0
   ) THEN
-    RAISE EXCEPTION 'postcheck: invalid lessonSlugs remain';
+    RAISE EXCEPTION 'postcheck: invalid writing assignment data remain';
+  END IF;
+
+  IF EXISTS (
+    SELECT 1
+    FROM "WritingPracticeAssignment" assignment
+    LEFT JOIN "OrgMembership" creator
+      ON creator."id" = assignment."createdByMembershipId"
+    WHERE creator."id" IS NOT NULL
+      AND creator."organizationId" <> assignment."organizationId"
+  ) THEN
+    RAISE EXCEPTION 'postcheck: writing assignment creator tenant mismatch';
+  END IF;
+
+  IF EXISTS (
+    SELECT 1
+    FROM "WritingPracticeClassAssignment" deployment
+    JOIN "WritingPracticeAssignment" assignment
+      ON assignment."id" = deployment."assignmentId"
+    JOIN "Class" class_row ON class_row."id" = deployment."classId"
+    JOIN "School" school ON school."id" = class_row."schoolId"
+    WHERE assignment."organizationId" <> school."organizationId"
+  ) THEN
+    RAISE EXCEPTION 'postcheck: writing deployment tenant mismatch';
   END IF;
 
   IF EXISTS (
@@ -72,11 +98,12 @@ BEGIN
     WHERE NOT tgisinternal
       AND tgname IN (
         'WritingPracticeClassAssignment_tenant_check',
+        'WritingPracticeAssignment_creator_tenant_check',
         'WritingPracticeAttempt_tenant_check',
         'WritingPracticePromptSet_tenant_check',
         'ClassAssignmentInsight_tenant_check'
       )
-  ) <> 4 THEN
+  ) <> 5 THEN
     RAISE EXCEPTION 'postcheck: one or more tenant-integrity triggers are missing';
   END IF;
 END $$;

@@ -83,14 +83,17 @@ export async function loader({ request }: LoaderFunctionArgs) {
     );
   }
 
-  // Authorization mirrors the summary route: the actor must teach this class
-  // (admins bypass the scope).
+  // Authorization mirrors the summary route: every actor stays inside their
+  // organization, while admins bypass only the teacher-ownership predicate.
   const classAssignment = await prisma.classAssignment.findFirst({
     where: {
       id: classAssignmentId,
-      ...(actor.isAdmin
-        ? {}
-        : { class: { teachers: { some: { id: actor.membershipId } } } }),
+      class: {
+        school: { organizationId: actor.organizationId },
+        ...(actor.isAdmin
+          ? {}
+          : { teachers: { some: { id: actor.membershipId } } }),
+      },
     },
     select: {
       id: true,

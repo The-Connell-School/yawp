@@ -546,7 +546,7 @@ export default function OrganizationRoute() {
                       {assignmentTypes.map((assignmentType) => (
                         <label
                           key={assignmentType.id}
-                          className="flex min-h-12 items-start gap-3 rounded-md border bg-background px-3 py-2 text-sm"
+                          className="flex min-h-12 min-w-0 items-start gap-3 overflow-hidden rounded-md border bg-background px-3 py-2 text-sm"
                         >
                           <input
                             type="checkbox"
@@ -555,14 +555,14 @@ export default function OrganizationRoute() {
                             defaultChecked={assignedAssignmentTypeIds.has(
                               assignmentType.id
                             )}
-                            className="mt-1 h-4 w-4"
+                            className="mt-1 h-4 w-4 shrink-0"
                           />
-                          <span className="min-w-0">
-                            <span className="block truncate font-medium">
+                          <span className="min-w-0 flex-1 overflow-hidden">
+                            <span className="block max-w-full truncate font-medium">
                               {assignmentType.title}
                             </span>
                             {assignmentType.description ? (
-                              <span className="block truncate text-xs text-muted-foreground">
+                              <span className="block max-w-full truncate text-xs text-muted-foreground">
                                 {assignmentType.description}
                               </span>
                             ) : null}

@@ -30,9 +30,7 @@ test.describe('Yawp Reporter', () => {
     await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
 
     // No sidebar entry.
-    await expect(
-      page.getByRole('link', { name: 'Reporter' })
-    ).toHaveCount(0);
+    await expect(page.getByRole('link', { name: 'Reporter' })).toHaveCount(0);
 
     // Direct navigation redirects back into the app, away from the reporter.
     await page.goto('/app/reporter');
@@ -85,5 +83,59 @@ test.describe('Yawp Reporter', () => {
     ).toBeVisible();
     // Composer clears after sending.
     await expect(composer).toHaveValue('');
+  });
+
+  test('keeps Reporter controls in bounds at desktop and mobile breakpoints', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    const consoleErrors: string[] = [];
+    const pageErrors: string[] = [];
+    page.on('console', (message) => {
+      if (message.type() === 'error') consoleErrors.push(message.text());
+    });
+    page.on('pageerror', (error) => pageErrors.push(error.message));
+
+    await setReporterEnabled(e2eContext.organizationId, true);
+    await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+
+    for (const viewport of [
+      { width: 1440, height: 1000 },
+      { width: 390, height: 844 },
+    ]) {
+      await page.setViewportSize(viewport);
+      await page.goto('/app/reporter');
+
+      const composer = page.getByLabel('Message Yawp Reporter');
+      const send = page.getByRole('button', { name: 'Send message' });
+      await expect(composer).toBeVisible();
+      await expect(send).toBeVisible();
+      if (viewport.width === 390) {
+        await expect(page.getByLabel('Past reports')).toBeVisible();
+        await expect(
+          page.getByRole('button', { name: 'New report' })
+        ).toBeVisible();
+      }
+
+      for (const control of [composer, send]) {
+        const box = await control.boundingBox();
+        expect(box).not.toBeNull();
+        expect(box!.x).toBeGreaterThanOrEqual(0);
+        expect(box!.y).toBeGreaterThanOrEqual(0);
+        expect(box!.x + box!.width).toBeLessThanOrEqual(viewport.width);
+        expect(box!.y + box!.height).toBeLessThanOrEqual(viewport.height);
+      }
+
+      const overflow = await page.evaluate(() => ({
+        body: document.body.scrollWidth - window.innerWidth,
+        document: document.documentElement.scrollWidth - window.innerWidth,
+      }));
+      expect(overflow.body).toBeLessThanOrEqual(0);
+      expect(overflow.document).toBeLessThanOrEqual(0);
+    }
+
+    expect(consoleErrors).toEqual([]);
+    expect(pageErrors).toEqual([]);
   });
 });

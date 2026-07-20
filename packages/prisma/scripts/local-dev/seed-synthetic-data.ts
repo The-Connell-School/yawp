@@ -466,6 +466,7 @@ export async function seedSyntheticLocalDevData(
   const writingPracticeAssignment =
     await prisma.writingPracticeAssignment.create({
       data: {
+        organizationId: LOCAL_DEV_ORG_ID,
         title: 'Comma splices warm-up',
         lessonSlugs: ['fixing-comma-splices'],
         problemCount: 4,

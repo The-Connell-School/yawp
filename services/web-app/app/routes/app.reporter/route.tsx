@@ -338,7 +338,7 @@ export default function ReporterRoute() {
           </div>
         </div>
 
-        <div className="border-t bg-background px-4 py-3">
+        <div className="border-t bg-background px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3">
           <form
             className="mx-auto flex w-full max-w-3xl items-end gap-2 pr-12 sm:pr-0"
             onSubmit={(event) => {
@@ -356,9 +356,9 @@ export default function ReporterRoute() {
                 }
               }}
               rows={1}
-              placeholder="Ask for a grade report, a student's growth, who needs attention…"
+              placeholder="Ask Yawp Reporter…"
               aria-label="Message Yawp Reporter"
-              className="max-h-40 min-h-[44px] flex-1 resize-none"
+              className="max-h-40 min-h-[44px] flex-1 resize-none max-sm:text-base"
               disabled={isSending}
             />
             <Button

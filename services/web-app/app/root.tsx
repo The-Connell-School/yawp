@@ -346,7 +346,7 @@ export default function App({ loaderData: data }: Route.ComponentProps) {
         />
       ) : null}
       <GlobalLoading />
-      <div className="flex h-screen min-h-screen flex-col justify-between">
+      <div className="flex h-dvh min-h-dvh flex-col justify-between">
         <div className="flex-1 bg-background">
           <Outlet />
         </div>

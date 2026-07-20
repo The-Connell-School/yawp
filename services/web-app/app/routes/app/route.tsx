@@ -159,12 +159,9 @@ export default function Route() {
 
   return (
     <main
-      className={cn(
-        'flex h-screen min-h-screen overflow-hidden bg-background',
-        {
-          'overflow-hidden': isMobileNavOpen,
-        }
-      )}
+      className={cn('flex h-dvh min-h-dvh overflow-hidden bg-background', {
+        'overflow-hidden': isMobileNavOpen,
+      })}
     >
       {/* Left navigation panel */}
       <nav

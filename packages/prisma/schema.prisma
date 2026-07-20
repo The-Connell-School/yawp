@@ -393,6 +393,7 @@ model Organization {
   reporterConversations      ReporterConversation[]
   reporterGrowthPlans        ReporterGrowthPlan[]
   aiRequestReservations      AiRequestReservation[]
+  writingPracticeAssignments WritingPracticeAssignment[]
 }
 
 model OrganizationAssignmentType {
@@ -825,11 +826,14 @@ model WritingPracticeAssignment {
   problemCount          Int                              @default(5)
   dueAt                 DateTime?                        @db.Timestamptz(6)
   instructions          String?
+  organizationId        String
+  organization          Organization                     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   createdByMembershipId String?
   createdByMembership   OrgMembership?                   @relation("WritingPracticeAssignmentCreator", fields: [createdByMembershipId], references: [id], onDelete: SetNull)
   classAssignments      WritingPracticeClassAssignment[]
 
   @@index([createdByMembershipId])
+  @@index([organizationId])
 }
 
 /// Per-class deployment of a writing-practice assignment (the join row),

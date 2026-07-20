@@ -11,6 +11,7 @@
   "scripts": {
     "build": "react-router build",
     "dev": "react-router dev",
+    "proof:ai-admission": "bun scripts/prove-ai-admission-concurrency.ts",
     "start": "react-router-serve ./build/server/index.js",
     "typecheck": "react-router typegen && tsc",
     "test": "bun test app/",
