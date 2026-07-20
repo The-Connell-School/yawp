@@ -39,7 +39,10 @@ function choiceLabel(choices: string[], index: number): string {
 export async function loader({ request, params }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
   const profile = await requireMembership(request, userId);
-  if (profile.role !== 'TEACHER') {
+  if (
+    profile.role !== 'TEACHER' ||
+    !profile.organization.writingFundamentalsEnabled
+  ) {
     return redirect('/app/writing-lessons');
   }
 

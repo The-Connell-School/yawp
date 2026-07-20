@@ -429,16 +429,16 @@ export async function recordWritingPracticeAttempt(
   };
 
   const create = {
-      classAssignmentId: input.classAssignmentId,
-      membershipId: input.membershipId,
-      position: input.position,
-      lessonSlug: input.lessonSlug,
-      promptId: question.id,
-      exercise: question.sentence,
-      instruction: question.underline,
-      response: question.choices[selectedChoiceIndex] ?? '',
-      status: grade.correct ? 'strong' : 'needs_revision',
-      feedbackJson: record,
+    classAssignmentId: input.classAssignmentId,
+    membershipId: input.membershipId,
+    position: input.position,
+    lessonSlug: input.lessonSlug,
+    promptId: question.id,
+    exercise: question.sentence,
+    instruction: question.underline,
+    response: question.choices[selectedChoiceIndex] ?? '',
+    status: grade.correct ? 'strong' : 'needs_revision',
+    feedbackJson: record,
   };
 
   return prisma.writingPracticeAttempt.upsert({
@@ -465,7 +465,7 @@ export async function getAssignedPracticeForStudent(membershipId: string) {
     include: {
       assignment: true,
       attempts: {
-        where: { membershipId },
+        where: { membershipId, countsTowardProgress: true },
         orderBy: { createdAt: 'desc' },
         select: {
           id: true,
@@ -494,7 +494,7 @@ export async function getAssignedPracticeForStudentById(
     include: {
       assignment: true,
       attempts: {
-        where: { membershipId },
+        where: { membershipId, countsTowardProgress: true },
         orderBy: { createdAt: 'desc' },
       },
     },
@@ -515,7 +515,11 @@ export async function getWritingPracticeAssignmentsForTeacher(
       class: {
         select: { id: true, title: true, period: true, grade: true },
       },
-      _count: { select: { attempts: true } },
+      _count: {
+        select: {
+          attempts: { where: { countsTowardProgress: true } },
+        },
+      },
     },
     orderBy: { createdAt: 'desc' },
   });
@@ -629,6 +633,7 @@ export async function getWritingPracticeResultsForTeacher(
           },
         },
         attempts: {
+          where: { countsTowardProgress: true },
           select: {
             id: true,
             membershipId: true,

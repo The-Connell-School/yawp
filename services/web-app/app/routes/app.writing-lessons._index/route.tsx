@@ -35,6 +35,10 @@ import {
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import {
+  getStudentPreviewState,
+  shouldUseStudentExperience,
+} from '~/utils/student-preview.server';
+import {
   getAssignedPracticeForStudent,
   getWritingPracticeAssignmentsForTeacher,
 } from '~/utils/writing-lessons/practice-assignments.server';
@@ -43,6 +47,7 @@ import { getQuickWritingLessonGroups } from '~/utils/writing-lessons/static-less
 export async function loader({ request }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
   const profile = await requireMembership(request, userId);
+  const preview = await getStudentPreviewState(request);
 
   const groups = getQuickWritingLessonGroups();
 
@@ -55,34 +60,45 @@ export async function loader({ request }: LoaderFunctionArgs) {
     }))
   );
 
-  const isTeacher = profile.role === 'TEACHER';
+  const studentExperience = shouldUseStudentExperience({
+    membershipRole: profile.role,
+    previewActive: preview.active,
+  });
+  const isTeacher = profile.role === 'TEACHER' && !studentExperience;
+  const writingFundamentalsEnabled =
+    profile.organization.writingFundamentalsEnabled;
 
-  const teacherClasses = isTeacher
-    ? (
-        await prisma.class.findMany({
-          where: { teachers: { some: { id: profile.id } }, isArchived: false },
-          select: { id: true, title: true, grade: true, period: true },
-          orderBy: [{ grade: 'asc' }, { period: 'asc' }],
-        })
-      ).map((klass) => ({
-        id: klass.id,
-        title: klass.title,
-        grade: klass.grade,
-        period: klass.period,
-      }))
-    : [];
-  const writingPracticeLessons = isTeacher
-    ? groups.flatMap((group) =>
-        group.lessons.map((lesson) => ({
-          slug: lesson.slug,
-          title: lesson.title,
-          category: lesson.category,
+  const teacherClasses =
+    isTeacher && writingFundamentalsEnabled
+      ? (
+          await prisma.class.findMany({
+            where: {
+              teachers: { some: { id: profile.id } },
+              isArchived: false,
+            },
+            select: { id: true, title: true, grade: true, period: true },
+            orderBy: [{ grade: 'asc' }, { period: 'asc' }],
+          })
+        ).map((klass) => ({
+          id: klass.id,
+          title: klass.title,
+          grade: klass.grade,
+          period: klass.period,
         }))
-      )
-    : [];
+      : [];
+  const writingPracticeLessons =
+    isTeacher && writingFundamentalsEnabled
+      ? groups.flatMap((group) =>
+          group.lessons.map((lesson) => ({
+            slug: lesson.slug,
+            title: lesson.title,
+            category: lesson.category,
+          }))
+        )
+      : [];
 
   const assignedPractice =
-    profile.role === 'STUDENT'
+    writingFundamentalsEnabled && profile.role === 'STUDENT'
       ? (await getAssignedPracticeForStudent(profile.id)).map(
           (classAssignment) => ({
             id: classAssignment.id,
@@ -100,7 +116,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       : [];
 
   const assignedByTeacher =
-    profile.role === 'TEACHER'
+    writingFundamentalsEnabled && isTeacher
       ? (await getWritingPracticeAssignmentsForTeacher(profile.id)).map(
           (classAssignment) => ({
             id: classAssignment.id,
@@ -125,6 +141,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     practiceSkillOptions,
     assignedPractice,
     assignedByTeacher,
+    writingFundamentalsEnabled,
   });
 }
 
@@ -183,8 +200,9 @@ function StudentPracticeBuilder({
         <SheetHeader>
           <SheetTitle>Create practice</SheetTitle>
           <SheetDescription>
-            Pick the skills you want to work on and how many problems. We&rsquo;ll
-            build a mixed set and give you feedback on every rewrite.
+            Pick the skills you want to work on and how many problems.
+            We&rsquo;ll build a mixed set and give you feedback on every
+            rewrite.
           </SheetDescription>
         </SheetHeader>
 
@@ -317,6 +335,7 @@ export default function WritingLessonsIndexRoute() {
     practiceSkillOptions,
     assignedPractice,
     assignedByTeacher,
+    writingFundamentalsEnabled,
   } = useLoaderData<typeof loader>();
   const [isAssignOpen, setIsAssignOpen] = useState(false);
   const [isBuilderOpen, setIsBuilderOpen] = useState(false);
@@ -325,24 +344,30 @@ export default function WritingLessonsIndexRoute() {
     <section className="no-scrollbar flex h-full w-full flex-col overflow-y-scroll">
       <div className="flex w-full justify-between border-b bg-secondary">
         <div className="mx-auto w-full max-w-screen-lg p-3 sm:p-5">
-          <img
-            src="/img/writing-fundamentals-cafe-cat.png"
-            alt="A cat in a beret writing in a notebook at a Parisian café"
-            data-testid="writing-fundamentals-banner"
-            className="mb-4 h-32 w-full rounded-lg object-cover object-center sm:h-48"
-          />
+          {writingFundamentalsEnabled ? (
+            <img
+              src="/img/writing-fundamentals-cafe-cat.png"
+              alt="A cat in a beret writing in a notebook at a Parisian café"
+              data-testid="writing-fundamentals-banner"
+              className="mb-4 h-32 w-full rounded-lg object-cover object-center sm:h-48"
+            />
+          ) : null}
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div className="flex flex-col">
               <p className="text-base font-medium text-primary sm:text-sm">
                 Practice
               </p>
-              <h2 className="mt-1">Writing Fundamentals Practice</h2>
+              <h2 className="mt-1">
+                {writingFundamentalsEnabled
+                  ? 'Writing Fundamentals Practice'
+                  : 'Writing practice'}
+              </h2>
               <p className="mt-3 max-w-full text-base text-muted-foreground sm:max-w-[620px] sm:text-sm">
                 Focused lessons and quick rewrite drills for sentence control,
                 grammar, and revision habits.
               </p>
             </div>
-            {isTeacher ? (
+            {writingFundamentalsEnabled && isTeacher ? (
               <>
                 <Button
                   className="shrink-0 rounded-full"
@@ -362,7 +387,7 @@ export default function WritingLessonsIndexRoute() {
                   writingPracticeLessons={writingPracticeLessons}
                 />
               </>
-            ) : (
+            ) : writingFundamentalsEnabled ? (
               <>
                 <Button
                   className="shrink-0 rounded-full"
@@ -376,13 +401,13 @@ export default function WritingLessonsIndexRoute() {
                   skills={practiceSkillOptions}
                 />
               </>
-            )}
+            ) : null}
           </div>
         </div>
       </div>
 
       <div className="mx-auto flex w-full max-w-screen-lg flex-col gap-8 px-3 py-6 pb-24 sm:px-5">
-        {isTeacher ? <TeacherDirections /> : null}
+        {isTeacher && writingFundamentalsEnabled ? <TeacherDirections /> : null}
 
         {assignedByTeacher.length > 0 ? (
           <section className="flex flex-col gap-3">

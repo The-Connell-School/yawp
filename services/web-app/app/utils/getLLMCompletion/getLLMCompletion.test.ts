@@ -36,10 +36,8 @@ const {
   markAnthropicOutageOpen,
   resetAnthropicOutageForTest,
 } = await import('./anthropic-outage-cache.server');
-const {
-  LlmFallbackRetrySignal,
-  isLlmFallbackRetrySignal,
-} = await import('./llm-provider-errors.server');
+const { LlmFallbackRetrySignal, isLlmFallbackRetrySignal } =
+  await import('./llm-provider-errors.server');
 
 function anthropicTextResponse(content: string) {
   return {
@@ -212,6 +210,36 @@ describe('getLLMCompletion', () => {
       hasTools: false,
       toolRoundCount: 0,
     });
+  });
+
+  test('never transfers a sensitive workload to the fallback provider', async () => {
+    const anthropicError = Object.assign(new Error('Overloaded'), {
+      status: 529,
+    });
+    anthropicCreate.mockRejectedValueOnce(anthropicError);
+
+    await expect(
+      getLLMCompletion({
+        model: 'claude-sonnet-4-6',
+        messages: [{ role: 'user', content: 'Analyze this student record.' }],
+        allowFallbackProvider: false,
+      })
+    ).rejects.toBe(anthropicError);
+
+    expect(anthropicCreate).toHaveBeenCalledTimes(1);
+    expect(openAiCreate).not.toHaveBeenCalled();
+  });
+
+  test('ignores a forced fallback request when fallback is forbidden', async () => {
+    await getLLMCompletion({
+      model: 'claude-sonnet-4-6',
+      messages: [{ role: 'user', content: 'Analyze this student record.' }],
+      forceFallback: true,
+      allowFallbackProvider: false,
+    });
+
+    expect(anthropicCreate).toHaveBeenCalledTimes(1);
+    expect(openAiCreate).not.toHaveBeenCalled();
   });
 
   test('skips Anthropic when the circuit is already open', async () => {

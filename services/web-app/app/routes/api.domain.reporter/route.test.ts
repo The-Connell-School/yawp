@@ -1,11 +1,4 @@
-import {
-  afterAll,
-  beforeEach,
-  describe,
-  expect,
-  mock,
-  test,
-} from 'bun:test';
+import { afterAll, beforeEach, describe, expect, mock, test } from 'bun:test';
 
 const getLLMCompletion = mock();
 const requireMutableRequest = mock();
@@ -40,9 +33,6 @@ mock.module('~/utils/getLLMCompletion', () => ({
   getLLMCompletion,
 }));
 
-const { LlmFallbackRetrySignal } = await import(
-  '~/utils/getLLMCompletion/llm-provider-errors.server'
-);
 const { action } = await import('./route');
 
 afterAll(() => {
@@ -147,6 +137,7 @@ describe('api.domain.reporter action', () => {
     expect(llmArgs.tools).toEqual([{ name: 'list_classes' }]);
     expect(llmArgs.metadata.feature).toBe('reporter');
     expect(llmArgs.logPayload).toBe('metadata-only');
+    expect(llmArgs.allowFallbackProvider).toBe(false);
     expect(llmArgs.signal).toBeInstanceOf(AbortSignal);
 
     // The handleToolCall closure must bind the calling teacher's scope.
@@ -192,10 +183,7 @@ describe('api.domain.reporter action', () => {
     // deterministic tiebreak for legacy rows whose timestamps tie.
     const findArg = prisma.reporterConversation.findFirst.mock.calls[0][0];
     expect(findArg.include.messages).toMatchObject({
-      orderBy: [
-        { createdAt: 'desc' },
-        { id: 'desc' },
-      ],
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       take: 20,
     });
   });
@@ -268,39 +256,13 @@ describe('api.domain.reporter action', () => {
     expect(prisma.reporterConversation.create).not.toHaveBeenCalled();
   });
 
-  test('returns a 202 retry signal when the primary provider is down', async () => {
-    getLLMCompletion.mockRejectedValue(
-      new LlmFallbackRetrySignal({
-        fallbackModel: 'fallback-model',
-        reason: 'anthropic outage',
-      })
-    );
-
+  test('never accepts a client request to transfer Reporter data to fallback', async () => {
     const response = await action({
-      request: formRequest({ message: 'hi' }),
-    } as any);
-
-    expect(response.init?.status).toBe(202);
-    expect((response.data as any).retrying).toBe(true);
-    // No half-written history: the conversation is only created on success.
-    expect(prisma.reporterConversation.create).not.toHaveBeenCalled();
-  });
-
-  test('forces the fallback provider and disables re-signaling on llmRetry', async () => {
-    getLLMCompletion.mockResolvedValue('fallback answer');
-    prisma.reporterConversation.create.mockResolvedValue({
-      id: 'conv-2',
-      messages: [],
-    });
-    prisma.reporterConversation.update.mockResolvedValue({});
-
-    await action({
       request: formRequest({ message: 'hi', llmRetry: 'fallback' }),
     } as any);
 
-    const llmArgs = getLLMCompletion.mock.calls[0][0];
-    expect(llmArgs.forceFallback).toBe(true);
-    expect(llmArgs.signalFallbackRetry).toBe(false);
+    expect(response.init?.status).toBe(422);
+    expect(getLLMCompletion).not.toHaveBeenCalled();
   });
 
   test('returns 404 when a conversationId does not belong to the teacher', async () => {
@@ -367,10 +329,7 @@ describe('api.domain.reporter action', () => {
     } as any);
 
     expect(response.data).toMatchObject({ conversationId: 'conv-1' });
-    expect(commitReporterGrowthPlans).toHaveBeenCalledWith(
-      [pending],
-      prisma
-    );
+    expect(commitReporterGrowthPlans).toHaveBeenCalledWith([pending], prisma);
     expect(prisma.$transaction).toHaveBeenCalledTimes(1);
   });
 });

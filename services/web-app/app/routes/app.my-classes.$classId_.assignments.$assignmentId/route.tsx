@@ -50,7 +50,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
   const userId = await requireUserId(request);
   const profile = await requireMembership(request, userId);
-  if (profile.role !== "TEACHER") {
+  if (profile.role !== 'TEACHER') {
     throw new Response('Not Found', { status: 404 });
   }
 
@@ -90,15 +90,18 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   if (!classAssignment) throw new Response('Not Found', { status: 404 });
   const assignment = classAssignment.assignment;
 
-  const insightRow = await prisma.classAssignmentInsight.findUnique({
-    where: { classAssignmentId: classAssignment.id },
-    select: {
-      status: true,
-      submissionCount: true,
-      generatedAt: true,
-      summaryJson: true,
-    },
-  });
+  const classInsightsEnabled = profile.organization.classInsightsEnabled;
+  const insightRow = classInsightsEnabled
+    ? await prisma.classAssignmentInsight.findUnique({
+        where: { classAssignmentId: classAssignment.id },
+        select: {
+          status: true,
+          submissionCount: true,
+          generatedAt: true,
+          summaryJson: true,
+        },
+      })
+    : null;
   const insight: ClassInsight | null =
     insightRow && insightRow.status === 'ready' && insightRow.summaryJson
       ? {
@@ -188,6 +191,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     assignment,
     classAssignmentId: classAssignment.id,
     insight,
+    classInsightsEnabled,
     status,
     isDocumentSubmissionEnabled,
     submissions,
@@ -207,6 +211,7 @@ export default function AssignmentSubmissionsRoute() {
     assignment,
     classAssignmentId,
     insight,
+    classInsightsEnabled,
     status,
     isDocumentSubmissionEnabled,
     submissions,
@@ -370,12 +375,14 @@ export default function AssignmentSubmissionsRoute() {
         </div>
 
         {/* Class-wide, assignment-level feedback for the teacher */}
-        <div className="mb-6">
-          <ClassInsightsPanel
-            classAssignmentId={classAssignmentId}
-            initialInsight={insight}
-          />
-        </div>
+        {classInsightsEnabled ? (
+          <div className="mb-6">
+            <ClassInsightsPanel
+              classAssignmentId={classAssignmentId}
+              initialInsight={insight}
+            />
+          </div>
+        ) : null}
 
         {/* Status tabs */}
         <div className="mb-4 flex gap-1 border-b">
@@ -657,9 +664,7 @@ export default function AssignmentSubmissionsRoute() {
                           letterGrade: sub.letterGrade ?? null,
                           pointValue: assignment.pointValue,
                           score: sub.score,
-                        }) ?? (
-                          <span className="text-muted-foreground">—</span>
-                        )}
+                        }) ?? <span className="text-muted-foreground">—</span>}
                       </TableCell>
                       <TableCell className="text-muted-foreground text-sm">
                         {sub.gradedAt ? timeAgo(sub.gradedAt) : '—'}
@@ -713,9 +718,7 @@ export default function AssignmentSubmissionsRoute() {
                           letterGrade: sub.letterGrade ?? null,
                           pointValue: assignment.pointValue,
                           score: sub.score,
-                        }) ?? (
-                          <span className="text-muted-foreground">—</span>
-                        )}
+                        }) ?? <span className="text-muted-foreground">—</span>}
                       </TableCell>
                       <TableCell className="text-muted-foreground text-sm">
                         {sub.releasedAt ? timeAgo(sub.releasedAt) : '—'}

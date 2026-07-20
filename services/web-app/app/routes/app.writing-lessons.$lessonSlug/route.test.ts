@@ -3,6 +3,7 @@ import { afterAll, beforeEach, describe, expect, mock, test } from 'bun:test';
 const requireUserId = mock();
 const requireMembership = mock();
 const getLLMCompletion = mock();
+const getStudentPreviewState = mock();
 
 mock.module('~/utils/auth.server', () => ({
   requireUserId,
@@ -16,6 +17,16 @@ mock.module('~/utils/db.server', () => ({
 mock.module('~/utils/getLLMCompletion', () => ({
   AgentType: { Assistant: 'assistant', User: 'user' },
   getLLMCompletion,
+}));
+mock.module('~/utils/student-preview.server', () => ({
+  getStudentPreviewState,
+  shouldUseStudentExperience: ({
+    membershipRole,
+    previewActive,
+  }: {
+    membershipRole: string;
+    previewActive: boolean;
+  }) => membershipRole === 'STUDENT' || previewActive,
 }));
 
 const { action, loader } = await import('./route');
@@ -50,12 +61,17 @@ describe('writing lesson detail route', () => {
     requireUserId.mockReset();
     requireMembership.mockReset();
     getLLMCompletion.mockReset();
+    getStudentPreviewState.mockReset().mockResolvedValue({ active: false });
 
     requireUserId.mockResolvedValue('user-1');
     requireMembership.mockResolvedValue({
       id: 'student-1',
       role: 'STUDENT',
-      organization: { id: 'org-1', name: 'Org' },
+      organization: {
+        id: 'org-1',
+        name: 'Org',
+        writingFundamentalsEnabled: true,
+      },
     });
   });
 
@@ -75,6 +91,20 @@ describe('writing lesson detail route', () => {
 });
 
 describe('writing lesson practice action - generate-act intent', () => {
+  beforeEach(() => {
+    requireUserId.mockReset().mockResolvedValue('user-1');
+    requireMembership.mockReset().mockResolvedValue({
+      id: 'student-1',
+      role: 'STUDENT',
+      organization: {
+        id: 'org-1',
+        name: 'Org',
+        writingFundamentalsEnabled: true,
+      },
+    });
+    getLLMCompletion.mockReset();
+  });
+
   const validQuestion = {
     sentence: 'The comet appeared at dawn, observers gasped in wonder.',
     underline: 'dawn, observers',
@@ -120,5 +150,22 @@ describe('writing lesson practice action - generate-act intent', () => {
     await expect(run({ intent: 'check', promptId: 'x' })).rejects.toMatchObject(
       { status: 400 }
     );
+  });
+
+  test('rejects generated-practice actions while the rollout gate is off', async () => {
+    requireMembership.mockResolvedValue({
+      id: 'student-1',
+      role: 'STUDENT',
+      organization: {
+        id: 'org-1',
+        name: 'Org',
+        writingFundamentalsEnabled: false,
+      },
+    });
+
+    await expect(run({ intent: 'generate-act' })).rejects.toMatchObject({
+      status: 404,
+    });
+    expect(getLLMCompletion).not.toHaveBeenCalled();
   });
 });

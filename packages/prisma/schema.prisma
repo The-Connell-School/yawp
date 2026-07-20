@@ -375,21 +375,23 @@ model DocumentWriteJournal {
 }
 
 model Organization {
-  id                        String                       @id @default(cuid())
-  createdAt                 DateTime                     @default(now()) @db.Timestamptz(6)
-  updatedAt                 DateTime                     @default(now()) @db.Timestamptz(6)
-  name                      String
-  accessExpiresAt           DateTime?                    @db.Timestamptz(6)
-  numOfStudentSeats         Int                          @default(10)
-  numOfTeacherSeats         Int                          @default(10)
-  reporterEnabled           Boolean                      @default(false)
-  memberships               OrgMembership[]
-  invitations               Invitation[]
-  schools                   School[]
-  assignmentTypes           AssignmentType[]
-  assignmentTypeAssignments OrganizationAssignmentType[]
-  reporterConversations     ReporterConversation[]
-  reporterGrowthPlans       ReporterGrowthPlan[]
+  id                         String                       @id @default(cuid())
+  createdAt                  DateTime                     @default(now()) @db.Timestamptz(6)
+  updatedAt                  DateTime                     @default(now()) @db.Timestamptz(6)
+  name                       String
+  accessExpiresAt            DateTime?                    @db.Timestamptz(6)
+  numOfStudentSeats          Int                          @default(10)
+  numOfTeacherSeats          Int                          @default(10)
+  reporterEnabled            Boolean                      @default(false)
+  writingFundamentalsEnabled Boolean                      @default(false)
+  classInsightsEnabled       Boolean                      @default(false)
+  memberships                OrgMembership[]
+  invitations                Invitation[]
+  schools                    School[]
+  assignmentTypes            AssignmentType[]
+  assignmentTypeAssignments  OrganizationAssignmentType[]
+  reporterConversations      ReporterConversation[]
+  reporterGrowthPlans        ReporterGrowthPlan[]
 }
 
 model OrganizationAssignmentType {
@@ -833,23 +835,25 @@ model WritingPracticeClassAssignment {
 /// tutor feedback it produced. Snapshots the prompt text so history survives
 /// lesson-content changes.
 model WritingPracticeAttempt {
-  id                String                         @id @default(cuid())
-  createdAt         DateTime                       @default(now()) @db.Timestamptz(6)
-  updatedAt         DateTime                       @default(now()) @updatedAt @db.Timestamptz(6)
-  classAssignmentId String
-  classAssignment   WritingPracticeClassAssignment @relation(fields: [classAssignmentId], references: [id], onDelete: Cascade)
-  membershipId      String
-  membership        OrgMembership                  @relation("WritingPracticeAttemptStudent", fields: [membershipId], references: [id], onDelete: Cascade)
+  id                   String                         @id @default(cuid())
+  createdAt            DateTime                       @default(now()) @db.Timestamptz(6)
+  updatedAt            DateTime                       @default(now()) @updatedAt @db.Timestamptz(6)
+  classAssignmentId    String
+  classAssignment      WritingPracticeClassAssignment @relation(fields: [classAssignmentId], references: [id], onDelete: Cascade)
+  membershipId         String
+  membership           OrgMembership                  @relation("WritingPracticeAttemptStudent", fields: [membershipId], references: [id], onDelete: Cascade)
   /// Immutable 1-based position in this student's stored assignment sequence.
-  position          Int
-  lessonSlug        String
-  promptId          String
-  exercise          String
-  instruction       String
-  response          String
+  position             Int
+  /// False only for quarantined legacy replays that must not inflate progress.
+  countsTowardProgress Boolean                        @default(true)
+  lessonSlug           String
+  promptId             String
+  exercise             String
+  instruction          String
+  response             String
   /// Feedback status: 'strong' | 'developing' | 'needs_revision'.
-  status            String
-  feedbackJson      Json
+  status               String
+  feedbackJson         Json
 
   @@unique([classAssignmentId, membershipId, position])
   @@index([classAssignmentId, membershipId, createdAt(sort: Desc)])

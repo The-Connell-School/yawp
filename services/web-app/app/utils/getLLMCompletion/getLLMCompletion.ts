@@ -41,6 +41,8 @@ interface Params {
   forceFallback?: boolean;
   signalFallbackRetry?: boolean;
   fallbackModel?: string;
+  /** Disable automatic cross-provider transfer for sensitive workloads. */
+  allowFallbackProvider?: boolean;
   signal?: AbortSignal;
   /** Store only counts/timing metadata when prompts contain sensitive records. */
   logPayload?: 'full' | 'metadata-only';
@@ -77,8 +79,7 @@ async function logLlmCall(data: {
             }
           : (data.messages as object),
         response: metadataOnly ? undefined : data.response,
-        error:
-          metadataOnly && data.error ? 'LLM request failed' : data.error,
+        error: metadataOnly && data.error ? 'LLM request failed' : data.error,
         inputTokens: data.inputTokens,
         outputTokens: data.outputTokens,
         totalTokens: data.totalTokens,
@@ -422,7 +423,7 @@ export async function getLLMCompletion(params: Params) {
   const startTime = Date.now();
   const fallbackModel = getOpenAiFallbackModel(params);
 
-  if (params.forceFallback) {
+  if (params.forceFallback && params.allowFallbackProvider !== false) {
     return runOpenAiCompletion({
       params,
       model: fallbackModel,
@@ -437,7 +438,8 @@ export async function getLLMCompletion(params: Params) {
   }
 
   if (params.model.includes('claude')) {
-    const fallbackAvailable = isFallbackEnabled();
+    const fallbackAvailable =
+      params.allowFallbackProvider !== false && isFallbackEnabled();
     const circuitState = getAnthropicOutageState();
 
     if (fallbackAvailable && isAnthropicOutageCircuitOpen()) {

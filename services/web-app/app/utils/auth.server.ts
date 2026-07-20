@@ -20,7 +20,15 @@ const membershipSelect = {
   id: true,
   role: true,
   isOrgOwner: true,
-  organization: { select: { id: true, name: true } },
+  organization: {
+    select: {
+      id: true,
+      name: true,
+      reporterEnabled: true,
+      writingFundamentalsEnabled: true,
+      classInsightsEnabled: true,
+    },
+  },
 } as const;
 
 export type RequiredMembership = Prisma.OrgMembershipGetPayload<{
@@ -59,9 +67,7 @@ function isMutationRequest(request: Request) {
 }
 
 function isAllowedReadOnlySessionMutation(request: Request) {
-  return readOnlySessionAllowedMutationPaths.has(
-    new URL(request.url).pathname
-  );
+  return readOnlySessionAllowedMutationPaths.has(new URL(request.url).pathname);
 }
 
 export async function getImpersonationState(request: Request) {
@@ -93,14 +99,14 @@ export async function requireMutableRequest(request: Request) {
     );
   }
 
-  const { getStudentPreviewState } = await import('./student-preview.server.ts');
+  const { getStudentPreviewState } =
+    await import('./student-preview.server.ts');
   const preview = await getStudentPreviewState(request);
   if (preview.active) {
     throw Response.json(
       {
         error: 'Student preview active',
-        message:
-          'This session can view student pages but cannot make changes.',
+        message: 'This session can view student pages but cannot make changes.',
       },
       { status: 403 }
     );

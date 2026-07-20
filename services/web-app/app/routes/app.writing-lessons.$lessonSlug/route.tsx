@@ -8,7 +8,7 @@ import {
   RotateCcw,
   XCircle,
 } from 'lucide-react';
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
   Link,
   data as dataResponse,
@@ -25,6 +25,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
 import { Textarea } from '~/components/ui/textarea';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
+import {
+  getStudentPreviewState,
+  shouldUseStudentExperience,
+} from '~/utils/student-preview.server';
 import { getActPracticeQuestions } from '~/utils/writing-lessons/act-practice-bank';
 import { generateActPracticeQuestions } from '~/utils/writing-lessons/act-practice-generation.server';
 import {
@@ -39,6 +43,7 @@ import {
   getQuickWritingLessonBySlug,
   getQuickWritingLessonContext,
   getQuickWritingPracticePrompts,
+  type QuickWritingPracticePrompt,
 } from '~/utils/writing-lessons/static-lessons.server';
 
 type TeacherClass = {
@@ -51,13 +56,23 @@ type TeacherClass = {
 export async function loader({ request, params }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
   const profile = await requireMembership(request, userId);
+  const preview = await getStudentPreviewState(request);
 
   const lesson = getQuickWritingLessonBySlug(params.lessonSlug);
   if (!lesson) {
     throw new Response('Lesson not found', { status: 404 });
   }
 
-  const isTeacher = profile.role === 'TEACHER';
+  const studentExperience = shouldUseStudentExperience({
+    membershipRole: profile.role,
+    previewActive: preview.active,
+  });
+  const writingFundamentalsEnabled =
+    profile.organization.writingFundamentalsEnabled;
+  const isTeacher =
+    profile.role === 'TEACHER' &&
+    !studentExperience &&
+    writingFundamentalsEnabled;
   const teacherClasses: TeacherClass[] = isTeacher
     ? await prisma.class.findMany({
         where: { teachers: { some: { id: profile.id } }, isArchived: false },
@@ -76,6 +91,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     actQuestions: getActPracticeQuestions(params.lessonSlug),
     isTeacher,
     teacherClasses,
+    writingFundamentalsEnabled,
   });
 }
 
@@ -86,7 +102,10 @@ type ActGenerateActionData = {
 
 export async function action({ request, params }: ActionFunctionArgs) {
   const userId = await requireUserId(request);
-  await requireMembership(request, userId);
+  const profile = await requireMembership(request, userId);
+  if (!profile.organization.writingFundamentalsEnabled) {
+    throw new Response('Lesson action not found', { status: 404 });
+  }
 
   const context = getQuickWritingLessonContext(params.lessonSlug);
   if (!context) {
@@ -134,6 +153,7 @@ export default function WritingLessonDetailRoute() {
     actQuestions,
     isTeacher,
     teacherClasses,
+    writingFundamentalsEnabled,
   } = useLoaderData<typeof loader>();
 
   return (
@@ -170,7 +190,9 @@ export default function WritingLessonDetailRoute() {
         </div>
 
         <aside className="lg:sticky lg:top-6 lg:self-start">
-          {isTeacher ? (
+          {!writingFundamentalsEnabled ? (
+            <LegacyPracticePanel prompts={practicePrompts} />
+          ) : isTeacher ? (
             // Teachers get the assign panel plus the same "Try it yourself"
             // practice students see, so they can test-drive a lesson before
             // assigning it.
@@ -188,6 +210,107 @@ export default function WritingLessonDetailRoute() {
         </aside>
       </div>
     </section>
+  );
+}
+
+function LegacyPracticePanel({
+  prompts,
+}: {
+  prompts: QuickWritingPracticePrompt[];
+}) {
+  const [promptIndex, setPromptIndex] = useState(0);
+  const [response, setResponse] = useState('');
+  const [score, setScore] = useState<number | null>(null);
+  const activePrompt = prompts[promptIndex] ?? null;
+  const scoreLabel = useMemo(() => {
+    if (score === null) return null;
+    if (score >= 80) return 'Ready for tutor review';
+    if (score >= 55) return 'Good start';
+    return 'Add more revision';
+  }, [score]);
+
+  function checkResponse() {
+    const trimmed = response.trim();
+    const words = trimmed.split(/\s+/).filter(Boolean).length;
+    const punctuation = /[.!?]$/.test(trimmed);
+    setScore(
+      Math.min(100, 35 + Math.min(words, 10) * 4 + (punctuation ? 15 : 0))
+    );
+  }
+
+  function showNextPrompt() {
+    if (prompts.length === 0) return;
+    setPromptIndex((current) => (current + 1) % prompts.length);
+    setResponse('');
+    setScore(null);
+  }
+
+  return (
+    <Card className="shadow-none">
+      <CardHeader className="pb-3">
+        <div className="flex items-center justify-between gap-3">
+          <CardTitle className="text-xl">Practice prompt</CardTitle>
+          <Badge variant="secondary" size="sm">
+            {prompts.length} prompts
+          </Badge>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {activePrompt ? (
+          <>
+            <div className="rounded-lg border bg-muted/50 p-3">
+              <p className="text-base text-foreground sm:text-sm">
+                {activePrompt.exercise}
+              </p>
+              <p className="mt-3 text-base text-muted-foreground sm:text-sm">
+                {activePrompt.instruction}
+              </p>
+            </div>
+            <Textarea
+              aria-label="Your practice response"
+              value={response}
+              onChange={(event) => {
+                setResponse(event.currentTarget.value);
+                setScore(null);
+              }}
+              placeholder="Rewrite the sentence here."
+              className="min-h-28 text-base sm:text-sm"
+            />
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                size="sm"
+                onClick={checkResponse}
+                disabled={!response.trim()}
+              >
+                <CheckCircle2 className="mr-2 h-4 w-4" />
+                Check response
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={showNextPrompt}
+              >
+                <RotateCcw className="mr-2 h-4 w-4" />
+                Try another prompt
+              </Button>
+            </div>
+            {score !== null ? (
+              <div className="rounded-lg border bg-card p-3">
+                <p className="font-medium">
+                  {score} · {scoreLabel}
+                </p>
+              </div>
+            ) : null}
+          </>
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            This lesson does not have extracted practice prompts yet.
+          </p>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 

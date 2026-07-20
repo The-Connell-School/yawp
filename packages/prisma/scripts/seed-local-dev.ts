@@ -35,6 +35,8 @@ try {
       numOfTeacherSeats: 40,
       // Enable Yawp Reporter locally so teachers can exercise it in dev.
       reporterEnabled: true,
+      writingFundamentalsEnabled: true,
+      classInsightsEnabled: true,
     },
   });
   console.timeEnd('organization');

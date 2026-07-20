@@ -34,6 +34,12 @@ import {
 export async function loader({ request, params }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
   const profile = await requireMembership(request, userId);
+  if (
+    profile.role !== 'STUDENT' ||
+    !profile.organization.writingFundamentalsEnabled
+  ) {
+    throw new Response('Assigned practice not found', { status: 404 });
+  }
 
   const classAssignment = await getAssignedPracticeForStudentById(
     params.classAssignmentId ?? '',
@@ -75,6 +81,12 @@ type AssignedActionData = {
 export async function action({ request, params }: ActionFunctionArgs) {
   const userId = await requireUserId(request);
   const profile = await requireMembership(request, userId);
+  if (
+    profile.role !== 'STUDENT' ||
+    !profile.organization.writingFundamentalsEnabled
+  ) {
+    throw new Response('Assigned practice not found', { status: 404 });
+  }
 
   const classAssignment = await getAssignedPracticeForStudentById(
     params.classAssignmentId ?? '',

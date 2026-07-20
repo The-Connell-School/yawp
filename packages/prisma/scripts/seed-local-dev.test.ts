@@ -82,8 +82,7 @@ describe('local dev seed fixtures', () => {
     );
 
     const teacherMembershipIdsBlock =
-      source.match(/const teacherMembershipIds = \[([\s\S]*?)\];/)?.[1] ??
-      '';
+      source.match(/const teacherMembershipIds = \[([\s\S]*?)\];/)?.[1] ?? '';
     expect(teacherMembershipIdsBlock).toContain('primaryTeacher.membershipId');
     expect(teacherMembershipIdsBlock).toContain('ownerTeacher.membershipId');
     expect(teacherMembershipIdsBlock).toContain('adminTeacher.membershipId');
@@ -97,8 +96,7 @@ describe('local dev seed fixtures', () => {
     expect(adminClassConnects.length).toBeGreaterThanOrEqual(2);
 
     const studentMembershipIdsBlock =
-      source.match(/const studentMembershipIds = \[([\s\S]*?)\];/)?.[1] ??
-      '';
+      source.match(/const studentMembershipIds = \[([\s\S]*?)\];/)?.[1] ?? '';
     expect(studentMembershipIdsBlock).not.toContain('Teacher.membershipId');
   });
 
@@ -114,7 +112,7 @@ describe('local dev seed fixtures', () => {
     );
   });
 
-  test('does not create writing practice feature-flag configuration', () => {
+  test('uses organization columns for combined-feature rollout gates', () => {
     const seedSource = readFileSync(
       join(import.meta.dirname, 'seed-local-dev.ts'),
       'utf8'
@@ -128,12 +126,14 @@ describe('local dev seed fixtures', () => {
       'utf8'
     );
 
-    expect(seedSource).not.toContain(['organization', 'Flags'].join(''));
-    expect(seedSource).not.toContain('writing_practice');
+    expect(seedSource).toContain('writingFundamentalsEnabled: true');
+    expect(seedSource).toContain('classInsightsEnabled: true');
     expect(syntheticSeedSource).not.toContain('prisma.featureFlag');
     expect(syntheticSeedSource).not.toContain('writing_practice');
     expect(schemaSource).not.toContain(['Organization', 'Flag'].join(''));
     expect(schemaSource).not.toContain(['feature', 'Flag'].join(''));
+    expect(schemaSource).toContain('writingFundamentalsEnabled Boolean');
+    expect(schemaSource).toContain('classInsightsEnabled');
   });
 
   test('seeds a sample writing-practice assignment and attempt', () => {
@@ -144,6 +144,7 @@ describe('local dev seed fixtures', () => {
 
     expect(source).toContain('prisma.writingPracticeAssignment.create');
     expect(source).toContain('prisma.writingPracticeAttempt.create');
+    expect(source).toContain('position: index + 1');
   });
 
   test('treats localhost database urls as local seed targets', () => {

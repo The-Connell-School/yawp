@@ -17,7 +17,9 @@ mock.module('~/utils/grading-auth.server', () => ({
 const { loader } = await import('./route');
 
 function getRequest(params: Record<string, string>) {
-  const url = new URL('https://example.com/api/domain/assignment-insights/examples');
+  const url = new URL(
+    'https://example.com/api/domain/assignment-insights/examples'
+  );
   for (const [key, value] of Object.entries(params)) {
     url.searchParams.set(key, value);
   }
@@ -49,6 +51,12 @@ describe('api.domain.assignment-insights.examples', () => {
     canManageGrades.mockReset();
     getGradingActor.mockResolvedValue(ACTOR);
     canManageGrades.mockReturnValue(true);
+    prisma.classAssignment.findFirst.mockResolvedValue({
+      id: 'ca-1',
+      class: {
+        school: { organization: { classInsightsEnabled: true } },
+      },
+    });
   });
 
   test('rejects non-teachers', async () => {
@@ -94,7 +102,6 @@ describe('api.domain.assignment-insights.examples', () => {
   });
 
   test('returns the lowest-scoring snippets for a gap category', async () => {
-    prisma.classAssignment.findFirst.mockResolvedValue({ id: 'ca-1' });
     prisma.document.findMany.mockResolvedValue([
       {
         id: 'd-strong',
@@ -156,7 +163,6 @@ describe('api.domain.assignment-insights.examples', () => {
   });
 
   test('falls back to email, then a placeholder, when a name is missing', async () => {
-    prisma.classAssignment.findFirst.mockResolvedValue({ id: 'ca-1' });
     prisma.document.findMany.mockResolvedValue([
       {
         id: 'd-email',
@@ -200,7 +206,6 @@ describe('api.domain.assignment-insights.examples', () => {
   });
 
   test('reads the nested rubric-score shape and strips html', async () => {
-    prisma.classAssignment.findFirst.mockResolvedValue({ id: 'ca-1' });
     prisma.document.findMany.mockResolvedValue([
       {
         id: 'd-1',
@@ -209,7 +214,9 @@ describe('api.domain.assignment-insights.examples', () => {
             id: 's-1',
             text: '',
             html: '<p>Rich <em>markup</em> student text.</p>',
-            rubricScores: { thesis_and_content: { score: 5, comment: 'Great' } },
+            rubricScores: {
+              thesis_and_content: { score: 5, comment: 'Great' },
+            },
           },
         ],
       },
@@ -228,5 +235,27 @@ describe('api.domain.assignment-insights.examples', () => {
     expect(response.data.examples).toHaveLength(1);
     expect(response.data.examples[0].score).toBe(5);
     expect(response.data.examples[0].snippet).toBe('Rich markup student text.');
+  });
+
+  test('rejects direct example requests while the organization gate is off', async () => {
+    prisma.classAssignment.findFirst.mockResolvedValue({
+      id: 'ca-1',
+      class: {
+        school: { organization: { classInsightsEnabled: false } },
+      },
+    });
+
+    const response = payloadOf(
+      await loader({
+        request: getRequest({
+          classAssignmentId: 'ca-1',
+          category: 'evidence_and_support',
+          status: 'gap',
+        }),
+      } as never)
+    );
+
+    expect(response.init?.status).toBe(404);
+    expect(prisma.document.findMany).not.toHaveBeenCalled();
   });
 });

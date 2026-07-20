@@ -48,7 +48,11 @@ beforeEach(() => {
   recordWritingPracticeAttempt.mockReset();
 
   requireUserId.mockResolvedValue('user-1');
-  requireMembership.mockResolvedValue({ id: 'student-1', role: 'STUDENT' });
+  requireMembership.mockResolvedValue({
+    id: 'student-1',
+    role: 'STUDENT',
+    organization: { writingFundamentalsEnabled: true },
+  });
   getAssignedPracticeForStudentById.mockResolvedValue({
     id: 'class-assignment-1',
     assignment: {
@@ -97,5 +101,22 @@ describe('assigned writing practice action', () => {
       } as never)
     ).rejects.toMatchObject({ status: 400 });
     expect(recordWritingPracticeAttempt).not.toHaveBeenCalled();
+  });
+
+  test('rejects a direct assigned-practice URL while the rollout gate is off', async () => {
+    requireMembership.mockResolvedValue({
+      id: 'student-1',
+      role: 'STUDENT',
+      organization: { writingFundamentalsEnabled: false },
+    });
+
+    await expect(
+      action({
+        request: request(1),
+        params: { classAssignmentId: 'class-assignment-1' },
+        context: {},
+      } as never)
+    ).rejects.toMatchObject({ status: 404 });
+    expect(getAssignedPracticeForStudentById).not.toHaveBeenCalled();
   });
 });

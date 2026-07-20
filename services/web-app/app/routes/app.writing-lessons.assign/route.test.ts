@@ -49,7 +49,11 @@ beforeEach(() => {
   requireMembership.mockResolvedValue({
     id: 'teacher-1',
     role: 'TEACHER',
-    organization: { id: 'org-1', name: 'Org' },
+    organization: {
+      id: 'org-1',
+      name: 'Org',
+      writingFundamentalsEnabled: true,
+    },
   });
   classFindMany.mockResolvedValue([{ id: 'class-a' }]);
   createWritingPracticeAssignmentForClasses.mockResolvedValue({ id: 'wpa-1' });
@@ -78,7 +82,11 @@ describe('writing-lessons assign action', () => {
     requireMembership.mockResolvedValue({
       id: 'student-1',
       role: 'STUDENT',
-      organization: { id: 'org-1', name: 'Org' },
+      organization: {
+        id: 'org-1',
+        name: 'Org',
+        writingFundamentalsEnabled: true,
+      },
     });
 
     const result = (await run({
@@ -126,6 +134,28 @@ describe('writing-lessons assign action', () => {
 
     expect(result.success).toBe(false);
     expect(result.message).toContain('Number of problems');
+    expect(createWritingPracticeAssignmentForClasses).not.toHaveBeenCalled();
+  });
+
+  test('rejects direct assignment requests while the organization gate is off', async () => {
+    requireMembership.mockResolvedValue({
+      id: 'teacher-1',
+      role: 'TEACHER',
+      organization: {
+        id: 'org-1',
+        name: 'Org',
+        writingFundamentalsEnabled: false,
+      },
+    });
+
+    const result = (await run({
+      lessonSlugs: 'fixing-comma-splices',
+      classIds: 'class-a',
+      problemCount: '5',
+    })) as { success: boolean; message: string };
+
+    expect(result.success).toBe(false);
+    expect(result.message).toContain('not enabled');
     expect(createWritingPracticeAssignmentForClasses).not.toHaveBeenCalled();
   });
 });

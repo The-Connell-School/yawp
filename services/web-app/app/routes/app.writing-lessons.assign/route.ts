@@ -21,6 +21,9 @@ export async function action({ request }: ActionFunctionArgs) {
   if (profile.role !== 'TEACHER') {
     return fail('Only teachers can assign writing practice.', 403);
   }
+  if (!profile.organization.writingFundamentalsEnabled) {
+    return fail('Writing Fundamentals is not enabled.', 404);
+  }
 
   const formData = await request.formData();
   const lessonSlugs = formData

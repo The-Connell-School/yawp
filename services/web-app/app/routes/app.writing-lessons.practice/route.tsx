@@ -56,7 +56,10 @@ function clampCount(raw: string | null): number {
 // Nothing is persisted — this is on-the-fly practice, endless via AI top-ups.
 export async function loader({ request }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
-  await requireMembership(request, userId);
+  const profile = await requireMembership(request, userId);
+  if (!profile.organization.writingFundamentalsEnabled) {
+    throw new Response('Practice not found', { status: 404 });
+  }
 
   const url = new URL(request.url);
   const skills = parseSkills(url.searchParams.get('skills'));
@@ -83,7 +86,10 @@ type GenerateActionData = {
 
 export async function action({ request }: ActionFunctionArgs) {
   const userId = await requireUserId(request);
-  await requireMembership(request, userId);
+  const profile = await requireMembership(request, userId);
+  if (!profile.organization.writingFundamentalsEnabled) {
+    throw new Response('Practice not found', { status: 404 });
+  }
 
   const formData = await request.formData();
   const intent = String(formData.get('intent') ?? '');

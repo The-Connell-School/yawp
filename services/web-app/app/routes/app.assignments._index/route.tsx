@@ -12,14 +12,7 @@ import {
   useSearchParams,
 } from 'react-router';
 import { useEffect, useMemo, useState } from 'react';
-import {
-  ClipboardList,
-  Copy,
-  Pencil,
-  Plus,
-  Trash2,
-  X,
-} from 'lucide-react';
+import { ClipboardList, Copy, Pencil, Plus, Trash2, X } from 'lucide-react';
 import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
 import { Checkbox } from '~/components/ui/checkbox';
@@ -88,6 +81,8 @@ export async function action({ request }: ActionFunctionArgs) {
       { status: 403 }
     );
   }
+  const writingFundamentalsEnabled =
+    profile.organization.writingFundamentalsEnabled;
 
   const formData = await request.formData();
   const intent = formData.get('intent')?.toString();
@@ -109,6 +104,13 @@ export async function action({ request }: ActionFunctionArgs) {
     const practiceAssignmentIds = formData.getAll(
       'practiceAssignmentIds'
     ) as string[];
+
+    if (practiceAssignmentIds.length > 0 && !writingFundamentalsEnabled) {
+      return dataResponse(
+        { success: false, message: 'Writing Fundamentals is not enabled.' },
+        { status: 404 }
+      );
+    }
 
     if (!assignmentIds.length && !practiceAssignmentIds.length) {
       return dataResponse(
@@ -411,7 +413,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
             orderBy: { position: 'asc' },
           })
         : [],
-      hasActiveClasses
+      hasActiveClasses && profile.organization.writingFundamentalsEnabled
         ? prisma.writingPracticeAssignment.findMany({
             where: {
               classAssignments: {
@@ -450,15 +452,16 @@ export async function loader({ request }: LoaderFunctionArgs) {
     (type) => type.systemKey !== AP_HISTORY_ASSIGNMENT_TYPE_KEY
   );
 
-  const writingPracticeLessons = hasActiveClasses
-    ? getQuickWritingLessonGroups().flatMap((group) =>
-        group.lessons.map((lesson) => ({
-          slug: lesson.slug,
-          title: lesson.title,
-          category: lesson.category,
-        }))
-      )
-    : [];
+  const writingPracticeLessons =
+    hasActiveClasses && profile.organization.writingFundamentalsEnabled
+      ? getQuickWritingLessonGroups().flatMap((group) =>
+          group.lessons.map((lesson) => ({
+            slug: lesson.slug,
+            title: lesson.title,
+            category: lesson.category,
+          }))
+        )
+      : [];
 
   const lessonTitleBySlug = new Map(
     writingPracticeLessons.map((lesson) => [lesson.slug, lesson.title])
@@ -499,6 +502,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     assignmentsEnabled: hasActiveClasses,
     hasActiveClasses,
     writingPracticeLessons,
+    writingFundamentalsEnabled: profile.organization.writingFundamentalsEnabled,
   });
 }
 
@@ -1060,20 +1064,22 @@ export default function AssignmentsRoute() {
                           <TableCell>
                             {assignment.classAssignments.length > 0 ? (
                               <div className="flex flex-col gap-1">
-                                {assignment.classAssignments.map((deployment) => (
-                                  <Link
-                                    key={deployment.id}
-                                    to={`/app/my-classes/${deployment.class.id}/assignments/${assignment.id}`}
-                                    title={`Class performance summary — ${formatClassLabel(
-                                      deployment.class
-                                    )}`}
-                                    className="inline-flex w-fit items-center gap-1 text-sm text-primary hover:underline"
-                                  >
-                                    {assignment.classAssignments.length > 1
-                                      ? formatClassLabel(deployment.class)
-                                      : 'Summary'}
-                                  </Link>
-                                ))}
+                                {assignment.classAssignments.map(
+                                  (deployment) => (
+                                    <Link
+                                      key={deployment.id}
+                                      to={`/app/my-classes/${deployment.class.id}/assignments/${assignment.id}`}
+                                      title={`Class performance summary — ${formatClassLabel(
+                                        deployment.class
+                                      )}`}
+                                      className="inline-flex w-fit items-center gap-1 text-sm text-primary hover:underline"
+                                    >
+                                      {assignment.classAssignments.length > 1
+                                        ? formatClassLabel(deployment.class)
+                                        : 'Summary'}
+                                    </Link>
+                                  )
+                                )}
                               </div>
                             ) : (
                               <span className="text-sm text-muted-foreground">
@@ -1147,7 +1153,7 @@ export default function AssignmentsRoute() {
             : undefined
         }
         initialPrompt={duplicateAssignment?.prompt}
-        writingPracticeEnabled
+        writingPracticeEnabled={data.writingFundamentalsEnabled}
         writingPracticeLessons={data.writingPracticeLessons}
       />
 

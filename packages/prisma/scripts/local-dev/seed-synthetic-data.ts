@@ -522,11 +522,12 @@ export async function seedSyntheticLocalDevData(
       },
     ] as const;
 
-    for (const attempt of practiceAttempts) {
+    for (const [index, attempt] of practiceAttempts.entries()) {
       await prisma.writingPracticeAttempt.create({
         data: {
           classAssignmentId: writingPracticeClassAssignment.id,
           membershipId: personaRecords['student-graded'].membershipId,
+          position: index + 1,
           lessonSlug: 'fixing-comma-splices',
           promptId: attempt.promptId,
           exercise: attempt.record.sentence,

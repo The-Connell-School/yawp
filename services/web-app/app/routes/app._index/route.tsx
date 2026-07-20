@@ -135,15 +135,16 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const assignmentsEnabled = useStudentExperience
     ? studentAssignmentClassIds.length > 0
     : teacherAssignmentClassScopes.length > 0;
-  const writingPracticeLessons = !useStudentExperience
-    ? getQuickWritingLessonGroups().flatMap((group) =>
-        group.lessons.map((lesson) => ({
-          slug: lesson.slug,
-          title: lesson.title,
-          category: lesson.category,
-        }))
-      )
-    : [];
+  const writingPracticeLessons =
+    !useStudentExperience && profile.organization.writingFundamentalsEnabled
+      ? getQuickWritingLessonGroups().flatMap((group) =>
+          group.lessons.map((lesson) => ({
+            slug: lesson.slug,
+            title: lesson.title,
+            category: lesson.category,
+          }))
+        )
+      : [];
 
   const [courses, documents, archivedDocuments, teacherClasses, assignments] =
     await Promise.all([
@@ -412,6 +413,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     })),
     assignmentCreationTypes,
     writingPracticeLessons,
+    writingFundamentalsEnabled: profile.organization.writingFundamentalsEnabled,
   });
 }
 
@@ -429,6 +431,7 @@ export default function AppRoute() {
   const isTeacher =
     user.selectedMembership?.role === 'TEACHER' && !studentPreviewActive;
   const assignmentsEnabled = data.assignmentsEnabled ?? false;
+  const writingFundamentalsEnabled = data.writingFundamentalsEnabled ?? false;
   const currentStudentTab =
     assignmentsEnabled && searchParams.get('tab') === 'assignments'
       ? 'assignments'
@@ -468,7 +471,11 @@ export default function AppRoute() {
             <>
               <AssignmentsAtAGlance
                 assignmentTypes={data.teacherAssignmentTypes}
-                writingPracticeTo="/app/writing-lessons"
+                writingPracticeTo={
+                  writingFundamentalsEnabled
+                    ? '/app/writing-lessons'
+                    : undefined
+                }
                 onCreateAssignment={() => {
                   setCreateAssignmentTypeId(undefined);
                   setIsCreateSheetOpen(true);
@@ -490,7 +497,7 @@ export default function AppRoute() {
                 assignmentTypes={data.assignmentCreationTypes}
                 teacherClasses={data.assignmentCreationClasses}
                 initialAssignmentTypeId={createAssignmentTypeId}
-                writingPracticeEnabled
+                writingPracticeEnabled={writingFundamentalsEnabled}
                 writingPracticeLessons={data.writingPracticeLessons}
               />
             </>

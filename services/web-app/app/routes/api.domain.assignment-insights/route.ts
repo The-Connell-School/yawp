@@ -52,12 +52,28 @@ export async function action({ request }: ActionFunctionArgs) {
     select: {
       id: true,
       assignment: { select: { title: true } },
-      class: { select: { grade: true, period: true } },
+      class: {
+        select: {
+          grade: true,
+          period: true,
+          school: {
+            select: {
+              organization: { select: { classInsightsEnabled: true } },
+            },
+          },
+        },
+      },
     },
   });
   if (!classAssignment) {
     return dataResponse(
       { success: false, message: 'Assignment not found.' },
+      { status: 404 }
+    );
+  }
+  if (!classAssignment.class.school.organization.classInsightsEnabled) {
+    return dataResponse(
+      { success: false, message: 'Class insights are not enabled.' },
       { status: 404 }
     );
   }
@@ -144,7 +160,8 @@ export async function action({ request }: ActionFunctionArgs) {
     return dataResponse(
       {
         success: false,
-        message: 'Class insights are temporarily unavailable. Please try again.',
+        message:
+          'Class insights are temporarily unavailable. Please try again.',
       },
       { status: 502 }
     );

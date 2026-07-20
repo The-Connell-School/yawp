@@ -19,7 +19,6 @@ import DOMPurify from 'dompurify';
 import { Button } from '~/components/ui/button';
 import { Textarea } from '~/components/ui/textarea';
 import { cn } from '~/utils/misc';
-import { isLlmRetryResponse } from '~/utils/llm-retry-ui';
 import { prisma } from '~/utils/db.server';
 import { getReporterAccess } from '~/utils/reporter/reporter-access.server';
 import { RECOMMENDED_REPORTER_PROMPTS } from '~/routes/api.domain.reporter/build-system-prompt';
@@ -86,7 +85,6 @@ type ReporterActionData = {
   conversationId?: string;
   reply?: string;
   isNewConversation?: boolean;
-  retrying?: boolean;
   error?: string;
 };
 
@@ -128,7 +126,8 @@ export default function ReporterRoute() {
     // (e.g. the loader refresh after the first turn created the conversation).
     setMessages(
       pendingSubmission &&
-        pendingSubmission.conversationKey === (selectedConversation?.id ?? 'new')
+        pendingSubmission.conversationKey ===
+          (selectedConversation?.id ?? 'new')
         ? [...persisted, { role: 'user', content: pendingSubmission.message }]
         : persisted
     );
@@ -141,24 +140,6 @@ export default function ReporterRoute() {
     if (processedData.current === fetcher.data) return;
     processedData.current = fetcher.data;
     const submission = pendingSubmission;
-
-    // The primary LLM provider is down; retry the same turn once on the
-    // fallback provider (shared 202 contract — see llm-retry-ui.ts).
-    if (isLlmRetryResponse(fetcher.data)) {
-      if (submission) {
-        fetcher.submit(
-          {
-            message: submission.message,
-            llmRetry: 'fallback',
-            ...(submission.conversationKey !== 'new'
-              ? { conversationId: submission.conversationKey }
-              : {}),
-          },
-          { method: 'post', action: '/api/domain/reporter' }
-        );
-      }
-      return;
-    }
 
     const submittedHere = submission?.conversationKey === conversationKey;
     setPendingSubmission(null);
@@ -274,14 +255,53 @@ export default function ReporterRoute() {
       <div className="flex h-full min-w-0 flex-1 flex-col">
         <div className="border-b bg-secondary px-4 py-3">
           <div className="mx-auto flex w-full max-w-3xl items-center gap-2">
-            <Search size={20} className="text-primary" />
-            <div>
+            <Search size={20} className="shrink-0 text-primary" />
+            <div className="min-w-0 flex-1">
               <h2 className="text-lg font-semibold leading-none">
                 Yawp Reporter
               </h2>
-              <p className="text-sm text-muted-foreground">
+              <p className="hidden text-sm text-muted-foreground sm:block">
                 Ask about your classes and students in plain language.
               </p>
+            </div>
+            <div className="flex shrink-0 items-center gap-2 md:hidden">
+              <label className="sr-only" htmlFor="reporter-mobile-history">
+                Past reports
+              </label>
+              <select
+                id="reporter-mobile-history"
+                aria-label="Past reports"
+                value={selectedConversation?.id ?? ''}
+                onChange={(event) => {
+                  if (!event.target.value) return;
+                  const next = new URLSearchParams(searchParams);
+                  next.set('c', event.target.value);
+                  setSearchParams(next);
+                }}
+                className="h-9 max-w-32 rounded-md border bg-background px-2 text-sm"
+              >
+                <option value="">Past reports</option>
+                {conversations.map((conversation) => (
+                  <option key={conversation.id} value={conversation.id}>
+                    {conversation.title}
+                  </option>
+                ))}
+              </select>
+              <Button
+                type="button"
+                size="icon"
+                variant="outline"
+                aria-label="New report"
+                onClick={() => {
+                  setPendingConversationId(null);
+                  setMessages([]);
+                  const next = new URLSearchParams(searchParams);
+                  next.delete('c');
+                  setSearchParams(next);
+                }}
+              >
+                <Plus size={16} />
+              </Button>
             </div>
           </div>
         </div>

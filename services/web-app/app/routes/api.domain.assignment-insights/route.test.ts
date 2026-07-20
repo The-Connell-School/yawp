@@ -81,7 +81,11 @@ describe('api.domain.assignment-insights', () => {
     prisma.classAssignment.findFirst.mockResolvedValue({
       id: 'ca-1',
       assignment: { title: 'Macbeth Essay' },
-      class: { grade: '10', period: '3' },
+      class: {
+        grade: '10',
+        period: '3',
+        school: { organization: { classInsightsEnabled: true } },
+      },
     });
     prisma.document.findMany.mockResolvedValue([
       {
@@ -158,7 +162,9 @@ describe('api.domain.assignment-insights', () => {
       {
         id: 'doc-1',
         membership: { user: { name: 'Ana Reyes', email: 'ana@school.test' } },
-        submissions: [{ id: 'sub-1', rubricScores: lowScores, overallComment: null }],
+        submissions: [
+          { id: 'sub-1', rubricScores: lowScores, overallComment: null },
+        ],
       },
       {
         id: 'doc-2',
@@ -177,7 +183,9 @@ describe('api.domain.assignment-insights', () => {
       {
         id: 'doc-3',
         membership: { user: { name: 'Dev Patel', email: 'dev@school.test' } },
-        submissions: [{ id: 'sub-3', rubricScores: strongScores, overallComment: null }],
+        submissions: [
+          { id: 'sub-3', rubricScores: strongScores, overallComment: null },
+        ],
       },
       ...['doc-4', 'doc-5', 'doc-6'].map((id, index) => ({
         id,
@@ -243,6 +251,25 @@ describe('api.domain.assignment-insights', () => {
     const response = await action({ request: postRequest('ca-1') } as any);
     const payload = payloadOf(response);
     expect(payload.init?.status).toBe(404);
+    expect(getLLMCompletion).not.toHaveBeenCalled();
+  });
+
+  test('rejects direct generation requests while the organization gate is off', async () => {
+    prisma.classAssignment.findFirst.mockResolvedValue({
+      id: 'ca-1',
+      assignment: { title: 'Macbeth Essay' },
+      class: {
+        grade: '10',
+        period: '3',
+        school: { organization: { classInsightsEnabled: false } },
+      },
+    });
+
+    const response = await action({ request: postRequest('ca-1') } as any);
+    const payload = payloadOf(response);
+
+    expect(payload.init?.status).toBe(404);
+    expect(prisma.document.findMany).not.toHaveBeenCalled();
     expect(getLLMCompletion).not.toHaveBeenCalled();
   });
 

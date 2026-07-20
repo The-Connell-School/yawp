@@ -31,13 +31,21 @@ describe('assignment submissions loader', () => {
     requireMembership.mockResolvedValue({
       id: 'teacher-1',
       role: 'TEACHER',
-      organization: { id: 'org-1', name: 'Org' },
+      organization: {
+        id: 'org-1',
+        name: 'Org',
+        classInsightsEnabled: true,
+      },
     });
     prisma.class.findFirst.mockResolvedValue({
       id: 'class-1',
       grade: '9',
       period: '2',
-      school: { id: 'school-1', name: 'Tallassee High School', organizationId: 'org-1' },
+      school: {
+        id: 'school-1',
+        name: 'Tallassee High School',
+        organizationId: 'org-1',
+      },
     });
     prisma.classAssignment.findFirst.mockResolvedValue({
       id: 'class-assignment-1',
@@ -88,5 +96,30 @@ describe('assignment submissions loader', () => {
       { id: 'draft-1', title: 'Draft essay' },
     ]);
     expect(prisma.document.findMany).toHaveBeenCalledTimes(1);
+  });
+
+  test('does not query or expose class insights while the rollout gate is off', async () => {
+    requireMembership.mockResolvedValue({
+      id: 'teacher-1',
+      role: 'TEACHER',
+      organization: {
+        id: 'org-1',
+        name: 'Org',
+        classInsightsEnabled: false,
+      },
+    });
+
+    const response = await loader({
+      request: new Request(
+        'https://example.test/app/my-classes/class-1/assignments/assignment-1'
+      ),
+      params: { classId: 'class-1', assignmentId: 'assignment-1' },
+      context: {} as never,
+    } as any);
+    const data = (response as { data: any }).data;
+
+    expect(data.classInsightsEnabled).toBe(false);
+    expect(data.insight).toBeNull();
+    expect(prisma.classAssignmentInsight.findUnique).not.toHaveBeenCalled();
   });
 });

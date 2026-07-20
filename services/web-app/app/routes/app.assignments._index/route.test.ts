@@ -94,7 +94,11 @@ describe('app.assignments action', () => {
     requireMembership.mockResolvedValue({
       id: 'teacher-1',
       role: 'TEACHER',
-      organization: { id: 'org-1', name: 'Org' },
+      organization: {
+        id: 'org-1',
+        name: 'Org',
+        writingFundamentalsEnabled: true,
+      },
     });
     prisma.assignment.findFirst.mockResolvedValue(ownedAssignment);
     prisma.assignment.findMany.mockResolvedValue([
@@ -140,7 +144,11 @@ describe('app.assignments action', () => {
     requireMembership.mockResolvedValue({
       id: 'profile-1',
       role: 'STUDENT',
-      organization: { id: 'org-1', name: 'Org' },
+      organization: {
+        id: 'org-1',
+        name: 'Org',
+        writingFundamentalsEnabled: true,
+      },
     });
 
     const response = await action({
@@ -329,6 +337,32 @@ describe('app.assignments action', () => {
     expect(prisma.writingPracticeAssignment.deleteMany).not.toHaveBeenCalled();
   });
 
+  test('rejects direct writing-practice mutations while the rollout gate is off', async () => {
+    requireMembership.mockResolvedValue({
+      id: 'teacher-1',
+      role: 'TEACHER',
+      organization: {
+        id: 'org-1',
+        name: 'Org',
+        writingFundamentalsEnabled: false,
+      },
+    });
+    const form = new FormData();
+    form.append('intent', 'delete-assignments');
+    form.append('practiceAssignmentIds', 'practice-1');
+
+    const response = await action({
+      request: new Request('https://example.com/app/assignments', {
+        method: 'POST',
+        body: form,
+      }),
+      params: {},
+    } as any);
+
+    expect(responseStatus(response)).toBe(404);
+    expect(prisma.writingPracticeAssignment.findMany).not.toHaveBeenCalled();
+  });
+
   test('deletes the assignment without touching documents', async () => {
     const response = await action({
       request: requestFor({
@@ -451,7 +485,11 @@ describe('app.assignments loader', () => {
     requireMembership.mockResolvedValue({
       id: 'teacher-1',
       role: 'TEACHER',
-      organization: { id: 'org-1', name: 'Org' },
+      organization: {
+        id: 'org-1',
+        name: 'Org',
+        writingFundamentalsEnabled: true,
+      },
     });
   });
 

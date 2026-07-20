@@ -75,7 +75,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
     !rubricKeySet.has(category)
   ) {
     return dataResponse(
-      { examples: [], message: 'A class assignment and rubric category are required.' },
+      {
+        examples: [],
+        message: 'A class assignment and rubric category are required.',
+      },
       { status: 400 }
     );
   }
@@ -89,11 +92,28 @@ export async function loader({ request }: LoaderFunctionArgs) {
         ? {}
         : { class: { teachers: { some: { id: actor.membershipId } } } }),
     },
-    select: { id: true },
+    select: {
+      id: true,
+      class: {
+        select: {
+          school: {
+            select: {
+              organization: { select: { classInsightsEnabled: true } },
+            },
+          },
+        },
+      },
+    },
   });
   if (!classAssignment) {
     return dataResponse(
       { examples: [], message: 'Assignment not found.' },
+      { status: 404 }
+    );
+  }
+  if (!classAssignment.class.school.organization.classInsightsEnabled) {
+    return dataResponse(
+      { examples: [], message: 'Class insights are not enabled.' },
       { status: 404 }
     );
   }

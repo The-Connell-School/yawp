@@ -3,7 +3,6 @@ import { parseFormData, validationError } from '@rvf/react-router';
 import { z } from 'zod';
 import { prisma } from '~/utils/db.server';
 import { AgentType, getLLMCompletion } from '~/utils/getLLMCompletion';
-import { isLlmFallbackRetrySignal } from '~/utils/getLLMCompletion/llm-provider-errors.server';
 import { requireMutableRequest } from '~/utils/auth.server';
 import { requireReporterAccess } from '~/utils/reporter/reporter-access.server';
 import {
@@ -25,8 +24,7 @@ const REPORTER_REQUESTS_PER_HOUR_PER_ORG = 80;
 const POST = z.object({
   message: z.string().trim().min(1).max(MAX_REPORTER_MESSAGE_CHARS),
   conversationId: z.string().optional(),
-  llmRetry: z.enum(['fallback']).optional(),
-});
+}).strict();
 
 function deriveTitle(message: string): string {
   const trimmed = message.trim().replace(/\s+/g, ' ');
@@ -62,29 +60,32 @@ export async function action({ request }: ActionFunctionArgs) {
   };
 
   const now = Date.now();
-  const [recentTeacherRequests, recentOrganizationRequests] = await Promise.all([
-    prisma.reporterMessage.count({
-      where: {
-        role: AgentType.User,
-        createdAt: { gte: new Date(now - 60_000) },
-        conversation: { membershipId: ctx.membershipId },
-      },
-    }),
-    prisma.reporterMessage.count({
-      where: {
-        role: AgentType.User,
-        createdAt: { gte: new Date(now - 60 * 60_000) },
-        conversation: { organizationId: ctx.organizationId },
-      },
-    }),
-  ]);
+  const [recentTeacherRequests, recentOrganizationRequests] = await Promise.all(
+    [
+      prisma.reporterMessage.count({
+        where: {
+          role: AgentType.User,
+          createdAt: { gte: new Date(now - 60_000) },
+          conversation: { membershipId: ctx.membershipId },
+        },
+      }),
+      prisma.reporterMessage.count({
+        where: {
+          role: AgentType.User,
+          createdAt: { gte: new Date(now - 60 * 60_000) },
+          conversation: { organizationId: ctx.organizationId },
+        },
+      }),
+    ]
+  );
   if (
     recentTeacherRequests >= REPORTER_REQUESTS_PER_MINUTE ||
     recentOrganizationRequests >= REPORTER_REQUESTS_PER_HOUR_PER_ORG
   ) {
     return dataResponse(
       {
-        error: 'Too many reporter requests. Please wait a moment and try again.',
+        error:
+          'Too many reporter requests. Please wait a moment and try again.',
       },
       { status: 429 }
     );
@@ -133,7 +134,6 @@ export async function action({ request }: ActionFunctionArgs) {
   ];
 
   let reply: string;
-  const forceFallback = data.llmRetry === 'fallback';
   try {
     reply = await getLLMCompletion({
       model: (process.env.AI_MODEL as any) ?? 'claude-sonnet-4-6',
@@ -143,8 +143,7 @@ export async function action({ request }: ActionFunctionArgs) {
       maxToolRounds: 6,
       tools: REPORTER_TOOLS,
       handleToolCall: (name, input) => handleReporterToolCall(name, input, ctx),
-      forceFallback,
-      signalFallbackRetry: !forceFallback,
+      allowFallbackProvider: false,
       signal: AbortSignal.timeout(REPORTER_REQUEST_DEADLINE_MS),
       logPayload: 'metadata-only',
       metadata: {
@@ -152,13 +151,7 @@ export async function action({ request }: ActionFunctionArgs) {
       },
     });
   } catch (err) {
-    if (isLlmFallbackRetrySignal(err)) {
-      return dataResponse({ retrying: true }, { status: 202 });
-    }
-    return dataResponse(
-      { error: REPORTER_FAILED },
-      { status: 500 }
-    );
+    return dataResponse({ error: REPORTER_FAILED }, { status: 500 });
   }
 
   // Stamp explicit, strictly-increasing timestamps: both rows land in one
@@ -192,7 +185,11 @@ export async function action({ request }: ActionFunctionArgs) {
           updatedAt: new Date(),
           messages: {
             create: [
-              { role: AgentType.User, content: data.message, createdAt: askedAt },
+              {
+                role: AgentType.User,
+                content: data.message,
+                createdAt: askedAt,
+              },
               {
                 role: AgentType.Assistant,
                 content: reply,
