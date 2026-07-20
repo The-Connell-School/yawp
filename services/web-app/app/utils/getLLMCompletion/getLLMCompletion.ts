@@ -42,6 +42,8 @@ interface Params {
   signalFallbackRetry?: boolean;
   fallbackModel?: string;
   signal?: AbortSignal;
+  /** Store only counts/timing metadata when prompts contain sensitive records. */
+  logPayload?: 'full' | 'metadata-only';
 }
 
 async function logLlmCall(data: {
@@ -56,21 +58,35 @@ async function logLlmCall(data: {
   totalTokens?: number;
   durationMs?: number;
   metadata?: Record<string, unknown>;
+  logPayload?: 'full' | 'metadata-only';
 }) {
+  const metadataOnly = data.logPayload === 'metadata-only';
   try {
     await prisma.llmLog.create({
       data: {
         model: data.model,
         provider: data.provider,
-        systemPrompt: data.systemPrompt,
-        messages: data.messages as object,
-        response: data.response,
-        error: data.error,
+        systemPrompt: metadataOnly ? undefined : data.systemPrompt,
+        messages: metadataOnly
+          ? {
+              redacted: true,
+              messageCount:
+                data.metadata && typeof data.metadata.messageCount === 'number'
+                  ? data.metadata.messageCount
+                  : 0,
+            }
+          : (data.messages as object),
+        response: metadataOnly ? undefined : data.response,
+        error:
+          metadataOnly && data.error ? 'LLM request failed' : data.error,
         inputTokens: data.inputTokens,
         outputTokens: data.outputTokens,
         totalTokens: data.totalTokens,
         durationMs: data.durationMs,
-        metadata: data.metadata as object,
+        metadata: {
+          ...data.metadata,
+          ...(metadataOnly ? { payloadLogging: 'metadata-only' } : {}),
+        } as object,
       },
     });
   } catch (err) {
@@ -224,6 +240,7 @@ async function runAnthropicCompletion(params: Params, startTime: number) {
           hasTools,
           toolRoundCount,
         }),
+        logPayload: params.logPayload,
       });
 
       return responseText;
@@ -245,6 +262,7 @@ async function runAnthropicCompletion(params: Params, startTime: number) {
         hasTools,
         toolRoundCount,
       }),
+      logPayload: params.logPayload,
     });
     throw err;
   }
@@ -372,6 +390,7 @@ async function runOpenAiCompletion({
           hasTools,
           toolRoundCount,
         }),
+        logPayload: params.logPayload,
       });
 
       return responseText;
@@ -393,6 +412,7 @@ async function runOpenAiCompletion({
         hasTools,
         toolRoundCount,
       }),
+      logPayload: params.logPayload,
     });
     throw err;
   }

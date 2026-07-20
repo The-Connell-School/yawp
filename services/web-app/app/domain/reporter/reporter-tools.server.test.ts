@@ -82,6 +82,28 @@ describe('list_classes', () => {
       studentCount: 24,
       assignmentCount: 5,
     });
+    expect(prisma.class.findMany.mock.calls[0][0].take).toBe(100);
+  });
+
+  test('returns an explicit truncation envelope when a tool result exceeds its budget', async () => {
+    prisma.class.findMany.mockResolvedValue(
+      Array.from({ length: 100 }, (_, index) => ({
+        id: `class-${index}`,
+        title: `Class ${index} ${'x'.repeat(500)}`,
+        grade: '10',
+        period: String(index),
+        schoolYear: '2026',
+        _count: { students: 30, classAssignments: 10 },
+      }))
+    );
+
+    const result = JSON.parse(
+      await handleReporterToolCall('list_classes', {}, ctx)
+    );
+
+    expect(result.truncated).toBe(true);
+    expect(result.totalCharacters).toBeGreaterThan(32_000);
+    expect(result.preview.length).toBeLessThanOrEqual(28_000);
   });
 });
 
@@ -655,7 +677,58 @@ describe('list_growth_plans', () => {
     expect(where.studentMembershipId).toBeUndefined();
     expect(result.planCount).toBe(0);
   });
+
+  test('loads current submissions once when listing plans for several students', async () => {
+    prisma.reporterGrowthPlan.findMany.mockResolvedValue([
+      growthPlanRow('plan-1', 'stu-1', 'Ada'),
+      growthPlanRow('plan-2', 'stu-2', 'Grace'),
+    ]);
+    prisma.submission.findMany.mockResolvedValue([
+      submissionRow({
+        id: 's1',
+        membershipId: 'stu-1',
+        name: 'Ada',
+        pct: 75,
+      }),
+      submissionRow({
+        id: 's2',
+        membershipId: 'stu-2',
+        name: 'Grace',
+        pct: 85,
+      }),
+    ]);
+
+    const result = JSON.parse(
+      await handleReporterToolCall('list_growth_plans', {}, ctx)
+    );
+
+    expect(result.planCount).toBe(2);
+    expect(prisma.submission.findMany).toHaveBeenCalledTimes(1);
+    const where = prisma.submission.findMany.mock.calls[0][0].where;
+    expect(where.document.membershipId).toEqual({
+      in: ['stu-1', 'stu-2'],
+    });
+  });
 });
+
+function growthPlanRow(id: string, studentMembershipId: string, name: string) {
+  return {
+    id,
+    status: 'active',
+    focus: 'Improve evidence',
+    targetSkills: ['evidence_and_support'],
+    body: 'Practice evidence analysis.',
+    baseline: {
+      averagePercentage: 60,
+      rubricLevels: {},
+      capturedAt: '2026-03-01T00:00:00.000Z',
+    },
+    checkInAt: null,
+    createdAt: new Date('2026-03-01T00:00:00.000Z'),
+    studentMembershipId,
+    student: { user: { name } },
+  };
+}
 
 function submissionRow({
   id,

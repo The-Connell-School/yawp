@@ -18,6 +18,9 @@ const prisma = {
     create: mock(),
     update: mock(),
   },
+  reporterMessage: {
+    count: mock(),
+  },
 };
 
 mock.module('~/utils/auth.server', () => ({ requireMutableRequest }));
@@ -73,6 +76,7 @@ beforeEach(() => {
   prisma.reporterConversation.findFirst.mockReset();
   prisma.reporterConversation.create.mockReset();
   prisma.reporterConversation.update.mockReset();
+  prisma.reporterMessage.count.mockReset().mockResolvedValue(0);
 });
 
 describe('api.domain.reporter action', () => {
@@ -134,6 +138,8 @@ describe('api.domain.reporter action', () => {
     const llmArgs = getLLMCompletion.mock.calls[0][0];
     expect(llmArgs.tools).toEqual([{ name: 'list_classes' }]);
     expect(llmArgs.metadata.feature).toBe('reporter');
+    expect(llmArgs.logPayload).toBe('metadata-only');
+    expect(llmArgs.signal).toBeInstanceOf(AbortSignal);
 
     // The handleToolCall closure must bind the calling teacher's scope.
     llmArgs.handleToolCall('list_classes', { a: 1 });
@@ -151,8 +157,8 @@ describe('api.domain.reporter action', () => {
     prisma.reporterConversation.findFirst.mockResolvedValue({
       id: 'conv-9',
       messages: [
-        { role: 'user', content: 'earlier question' },
         { role: 'assistant', content: 'earlier answer' },
+        { role: 'user', content: 'earlier question' },
       ],
     });
     getLLMCompletion.mockResolvedValue('follow-up answer');
@@ -167,15 +173,90 @@ describe('api.domain.reporter action', () => {
     expect(prisma.reporterConversation.create).not.toHaveBeenCalled();
     const llmMessages = getLLMCompletion.mock.calls[0][0].messages;
     expect(llmMessages).toHaveLength(3); // 2 prior + new user
+    expect(llmMessages[0]).toMatchObject({
+      role: 'user',
+      content: 'earlier question',
+    });
     expect(llmMessages[2]).toMatchObject({ role: 'user', content: 'and now?' });
 
     // Prior messages are replayed in insertion order, with the message id as a
     // deterministic tiebreak for legacy rows whose timestamps tie.
     const findArg = prisma.reporterConversation.findFirst.mock.calls[0][0];
-    expect(findArg.include.messages.orderBy).toEqual([
-      { createdAt: 'asc' },
-      { id: 'asc' },
-    ]);
+    expect(findArg.include.messages).toMatchObject({
+      orderBy: [
+        { createdAt: 'desc' },
+        { id: 'desc' },
+      ],
+      take: 20,
+    });
+  });
+
+  test('bounds long histories by character count before calling the model', async () => {
+    prisma.reporterConversation.findFirst.mockResolvedValue({
+      id: 'conv-9',
+      messages: Array.from({ length: 20 }, (_, index) => ({
+        role: index % 2 ? 'user' : 'assistant',
+        content: `${index}-${'x'.repeat(2_000)}`,
+      })),
+    });
+    getLLMCompletion.mockResolvedValue('bounded');
+    prisma.reporterConversation.update.mockResolvedValue({});
+
+    await action({
+      request: formRequest({ message: 'new', conversationId: 'conv-9' }),
+    } as any);
+
+    const llmMessages = getLLMCompletion.mock.calls[0][0].messages;
+    expect(llmMessages.length).toBeLessThan(21);
+    expect(
+      llmMessages.reduce(
+        (total: number, message: { content: string }) =>
+          total + message.content.length,
+        0
+      )
+    ).toBeLessThanOrEqual(24_003);
+    expect(llmMessages.at(-1)).toMatchObject({ role: 'user', content: 'new' });
+  });
+
+  test('rejects oversized messages before calling the model', async () => {
+    const response = await action({
+      request: formRequest({ message: 'x'.repeat(4_001) }),
+    } as any);
+
+    expect(response.init?.status).toBe(422);
+    expect(getLLMCompletion).not.toHaveBeenCalled();
+  });
+
+  test('rate-limits rapid reporter requests per teacher', async () => {
+    prisma.reporterMessage.count
+      .mockResolvedValueOnce(8)
+      .mockResolvedValueOnce(8);
+
+    const response = await action({
+      request: formRequest({ message: 'one more' }),
+    } as any);
+
+    expect(response.init?.status).toBe(429);
+    expect(response.data).toMatchObject({
+      error: 'Too many reporter requests. Please wait a moment and try again.',
+    });
+    expect(getLLMCompletion).not.toHaveBeenCalled();
+  });
+
+  test('does not expose provider errors to the client', async () => {
+    getLLMCompletion.mockRejectedValue(
+      new Error('provider-secret request identifier')
+    );
+    const response = await action({
+      request: formRequest({ message: 'hi' }),
+    } as any);
+
+    expect(response.init?.status).toBe(500);
+    expect(response.data).toEqual({
+      error: 'The reporter could not put that together. Please try again.',
+    });
+    expect(JSON.stringify(response.data)).not.toContain('provider-secret');
+    expect(prisma.reporterConversation.create).not.toHaveBeenCalled();
   });
 
   test('returns a 202 retry signal when the primary provider is down', async () => {

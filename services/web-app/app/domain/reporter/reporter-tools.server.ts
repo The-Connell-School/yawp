@@ -208,6 +208,9 @@ const MAX_ESSAY_EXCERPT_CHARS = 1400;
 const MAX_INLINE_COMMENTS = 20;
 const MAX_COMMENT_CHARS = 400;
 const MAX_GRAMMAR_ISSUES = 15;
+const MAX_SCOPED_SUBMISSIONS = 500;
+const MAX_TOOL_RESULT_CHARS = 32_000;
+const MAX_TOOL_RESULT_PREVIEW_CHARS = 28_000;
 
 /**
  * Bound an essay body to a readable opening excerpt so the model has real text
@@ -237,6 +240,7 @@ async function fetchScopedGradedRows(where: {
   teacherMembershipId: string;
   classId?: string;
   studentMembershipId?: string;
+  studentMembershipIds?: string[];
 }): Promise<GradedSubmissionRow[]> {
   const submissions = await prisma.submission.findMany({
     where: {
@@ -245,7 +249,9 @@ async function fetchScopedGradedRows(where: {
       document: {
         ...(where.studentMembershipId
           ? { membershipId: where.studentMembershipId }
-          : {}),
+          : where.studentMembershipIds
+            ? { membershipId: { in: where.studentMembershipIds } }
+            : {}),
         classAssignment: {
           class: {
             ...(where.classId ? { id: where.classId } : {}),
@@ -272,7 +278,8 @@ async function fetchScopedGradedRows(where: {
         },
       },
     },
-    orderBy: { submittedAt: 'asc' },
+    orderBy: { submittedAt: 'desc' },
+    take: MAX_SCOPED_SUBMISSIONS,
   });
 
   return submissions.map((submission) => ({
@@ -317,6 +324,7 @@ async function listClasses(ctx: ReporterToolContext) {
       _count: { select: { students: true, classAssignments: true } },
     },
     orderBy: [{ schoolYear: 'desc' }, { period: 'asc' }],
+    take: 100,
   });
 
   return {
@@ -779,15 +787,27 @@ async function listGrowthPlans(ctx: ReporterToolContext, input: unknown) {
   // to keep the cross-student list lean.
   const includeBody = parsed.student != null;
 
+  const studentIds = [...new Set(plans.map((plan) => plan.studentMembershipId))];
+  const currentRows =
+    studentIds.length > 0
+      ? await fetchScopedGradedRows({
+          organizationId: ctx.organizationId,
+          teacherMembershipId: ctx.membershipId,
+          studentMembershipIds: studentIds,
+        })
+      : [];
+  const rowsByStudent = new Map<string, GradedSubmissionRow[]>();
+  for (const row of currentRows) {
+    const rows = rowsByStudent.get(row.studentMembershipId) ?? [];
+    rows.push(row);
+    rowsByStudent.set(row.studentMembershipId, rows);
+  }
+
   const detailed = [];
   for (const plan of plans) {
     const targetSkills = parseTargetSkills(plan.targetSkills);
     const baseline = parsePlanBaseline(plan.baseline);
-    const rows = await fetchScopedGradedRows({
-      organizationId: ctx.organizationId,
-      teacherMembershipId: ctx.membershipId,
-      studentMembershipId: plan.studentMembershipId,
-    });
+    const rows = rowsByStudent.get(plan.studentMembershipId) ?? [];
     detailed.push({
       planId: plan.id,
       status: plan.status,
@@ -821,26 +841,44 @@ export async function handleReporterToolCall(
   ctx: ReporterToolContext
 ): Promise<string> {
   try {
+    let result: unknown;
     switch (name) {
       case 'list_classes':
-        return JSON.stringify(await listClasses(ctx));
+        result = await listClasses(ctx);
+        break;
       case 'get_class_grade_report':
-        return JSON.stringify(await getClassGradeReport(ctx, input));
+        result = await getClassGradeReport(ctx, input);
+        break;
       case 'get_student_grade_report':
-        return JSON.stringify(await getStudentGradeReport(ctx, input));
+        result = await getStudentGradeReport(ctx, input);
+        break;
       case 'get_student_growth':
-        return JSON.stringify(await getStudentGrowth(ctx, input));
+        result = await getStudentGrowth(ctx, input);
+        break;
       case 'find_students_needing_attention':
-        return JSON.stringify(await findAttention(ctx, input));
+        result = await findAttention(ctx, input);
+        break;
       case 'get_submission_detail':
-        return JSON.stringify(await getSubmissionDetail(ctx, input));
+        result = await getSubmissionDetail(ctx, input);
+        break;
       case 'list_growth_plans':
-        return JSON.stringify(await listGrowthPlans(ctx, input));
+        result = await listGrowthPlans(ctx, input);
+        break;
       case 'save_growth_plan':
-        return JSON.stringify(await saveGrowthPlan(ctx, input));
+        result = await saveGrowthPlan(ctx, input);
+        break;
       default:
         return JSON.stringify({ error: `Unknown tool: ${name}` });
     }
+
+    const serialized = JSON.stringify(result);
+    if (serialized.length <= MAX_TOOL_RESULT_CHARS) return serialized;
+    return JSON.stringify({
+      truncated: true,
+      totalCharacters: serialized.length,
+      preview: serialized.slice(0, MAX_TOOL_RESULT_PREVIEW_CHARS),
+      note: 'The tool result exceeded the Reporter context budget. Narrow the request before continuing.',
+    });
   } catch (error) {
     return JSON.stringify({
       error:

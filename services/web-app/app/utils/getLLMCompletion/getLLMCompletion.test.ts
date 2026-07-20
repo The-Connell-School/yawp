@@ -119,6 +119,57 @@ describe('getLLMCompletion', () => {
     });
   });
 
+  test('supports metadata-only audit logs for sensitive prompts and tool results', async () => {
+    anthropicCreate
+      .mockResolvedValueOnce({
+        content: [
+          {
+            type: 'tool_use',
+            id: 'tool-1',
+            name: 'get_student',
+            input: { student: 'Ada Lovelace' },
+          },
+        ],
+        stop_reason: 'tool_use',
+        usage: { input_tokens: 10, output_tokens: 5 },
+      })
+      .mockResolvedValueOnce(anthropicTextResponse('Ada needs support.'));
+
+    await getLLMCompletion({
+      model: 'claude-sonnet-4-6',
+      system: 'Analyze confidential student data.',
+      messages: [{ role: 'user', content: 'Tell me about Ada Lovelace.' }],
+      tools: [
+        {
+          name: 'get_student',
+          description: 'Fetches a student.',
+          input_schema: { type: 'object', properties: {} },
+        },
+      ],
+      handleToolCall: mock(async () =>
+        JSON.stringify({ essay: 'Confidential essay text.' })
+      ),
+      logPayload: 'metadata-only',
+      metadata: { feature: 'reporter' },
+    });
+
+    const log = llmLogCreate.mock.calls[0][0].data;
+    expect(log.systemPrompt).toBeUndefined();
+    expect(log.response).toBeUndefined();
+    expect(log.messages).toEqual({
+      redacted: true,
+      messageCount: 3,
+    });
+    expect(JSON.stringify(log)).not.toContain('Ada Lovelace');
+    expect(JSON.stringify(log)).not.toContain('Confidential essay text');
+    expect(log.metadata).toMatchObject({
+      feature: 'reporter',
+      payloadLogging: 'metadata-only',
+      messageCount: 3,
+      toolRoundCount: 1,
+    });
+  });
+
   test('falls back to gpt-4o-mini and opens the circuit after Anthropic 529', async () => {
     const controller = new AbortController();
     const anthropicError = Object.assign(new Error('Overloaded'), {

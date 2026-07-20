@@ -14,9 +14,15 @@ import { buildReporterSystemPrompt } from './build-system-prompt';
 
 const REPORTER_FAILED =
   'The reporter could not put that together. Please try again.';
+const MAX_REPORTER_MESSAGE_CHARS = 4_000;
+const MAX_HISTORY_MESSAGES = 20;
+const MAX_HISTORY_CHARS = 24_000;
+const REPORTER_REQUEST_DEADLINE_MS = 60_000;
+const REPORTER_REQUESTS_PER_MINUTE = 8;
+const REPORTER_REQUESTS_PER_HOUR_PER_ORG = 80;
 
 const POST = z.object({
-  message: z.string().min(1),
+  message: z.string().trim().min(1).max(MAX_REPORTER_MESSAGE_CHARS),
   conversationId: z.string().optional(),
   llmRetry: z.enum(['fallback']).optional(),
 });
@@ -25,6 +31,20 @@ function deriveTitle(message: string): string {
   const trimmed = message.trim().replace(/\s+/g, ' ');
   if (trimmed.length <= 60) return trimmed || 'New report';
   return `${trimmed.slice(0, 57)}…`;
+}
+
+function boundedHistory(
+  messages: Array<{ role: string; content: string }>
+): Array<{ role: string; content: string }> {
+  const selected: Array<{ role: string; content: string }> = [];
+  let chars = 0;
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index]!;
+    if (chars + message.content.length > MAX_HISTORY_CHARS) break;
+    selected.unshift(message);
+    chars += message.content.length;
+  }
+  return selected;
 }
 
 export async function action({ request }: ActionFunctionArgs) {
@@ -39,6 +59,35 @@ export async function action({ request }: ActionFunctionArgs) {
     organizationId: access.membership.organization.id,
   };
 
+  const now = Date.now();
+  const [recentTeacherRequests, recentOrganizationRequests] = await Promise.all([
+    prisma.reporterMessage.count({
+      where: {
+        role: AgentType.User,
+        createdAt: { gte: new Date(now - 60_000) },
+        conversation: { membershipId: ctx.membershipId },
+      },
+    }),
+    prisma.reporterMessage.count({
+      where: {
+        role: AgentType.User,
+        createdAt: { gte: new Date(now - 60 * 60_000) },
+        conversation: { organizationId: ctx.organizationId },
+      },
+    }),
+  ]);
+  if (
+    recentTeacherRequests >= REPORTER_REQUESTS_PER_MINUTE ||
+    recentOrganizationRequests >= REPORTER_REQUESTS_PER_HOUR_PER_ORG
+  ) {
+    return dataResponse(
+      {
+        error: 'Too many reporter requests. Please wait a moment and try again.',
+      },
+      { status: 429 }
+    );
+  }
+
   // Load an existing conversation (scoped to this teacher) or start a new one.
   let conversation = data.conversationId
     ? await prisma.reporterConversation.findFirst({
@@ -51,7 +100,10 @@ export async function action({ request }: ActionFunctionArgs) {
         // one createdAt per turn, and cuids from a single nested create are
         // sequential — this keeps question-before-answer order for them too.
         include: {
-          messages: { orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] },
+          messages: {
+            orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+            take: MAX_HISTORY_MESSAGES,
+          },
         },
       })
     : null;
@@ -60,7 +112,9 @@ export async function action({ request }: ActionFunctionArgs) {
     return dataResponse({ error: 'Conversation not found.' }, { status: 404 });
   }
 
-  const priorMessages = conversation?.messages ?? [];
+  const priorMessages = boundedHistory(
+    [...(conversation?.messages ?? [])].reverse()
+  );
   const isNewConversation = !conversation;
 
   const system = buildReporterSystemPrompt({
@@ -89,11 +143,10 @@ export async function action({ request }: ActionFunctionArgs) {
       handleToolCall: (name, input) => handleReporterToolCall(name, input, ctx),
       forceFallback,
       signalFallbackRetry: !forceFallback,
+      signal: AbortSignal.timeout(REPORTER_REQUEST_DEADLINE_MS),
+      logPayload: 'metadata-only',
       metadata: {
         feature: 'reporter',
-        membershipId: ctx.membershipId,
-        organizationId: ctx.organizationId,
-        conversationId: conversation?.id,
       },
     });
   } catch (err) {
@@ -101,11 +154,7 @@ export async function action({ request }: ActionFunctionArgs) {
       return dataResponse({ retrying: true }, { status: 202 });
     }
     return dataResponse(
-      {
-        error: `${REPORTER_FAILED} Error: ${
-          err instanceof Error ? err.message : String(err)
-        }`,
-      },
+      { error: REPORTER_FAILED },
       { status: 500 }
     );
   }
