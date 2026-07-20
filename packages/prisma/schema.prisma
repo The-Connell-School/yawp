@@ -440,6 +440,7 @@ model OrgMembership {
   writingPracticePromptSets         WritingPracticePromptSet[]  @relation("WritingPracticePromptSetStudent")
 
   @@unique([userId, organizationId])
+  @@unique([id, organizationId])
   @@map("OrgMembership")
 }
 
@@ -452,7 +453,7 @@ model ReporterConversation {
   deletedAt      DateTime?         @db.Timestamptz(6)
   title          String            @default("New report")
   membershipId   String
-  membership     OrgMembership     @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  membership     OrgMembership     @relation(fields: [membershipId, organizationId], references: [id, organizationId], onDelete: Cascade)
   organizationId String
   organization   Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   messages       ReporterMessage[]
@@ -494,11 +495,11 @@ model ReporterGrowthPlan {
   baseline            Json
   checkInAt           DateTime?     @db.Timestamptz(6)
   membershipId        String
-  membership          OrgMembership @relation("ReporterGrowthPlanOwner", fields: [membershipId], references: [id], onDelete: Cascade)
+  membership          OrgMembership @relation("ReporterGrowthPlanOwner", fields: [membershipId, organizationId], references: [id, organizationId], onDelete: Cascade)
   organizationId      String
   organization        Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   studentMembershipId String
-  student             OrgMembership @relation("ReporterGrowthPlanStudent", fields: [studentMembershipId], references: [id], onDelete: Cascade)
+  student             OrgMembership @relation("ReporterGrowthPlanStudent", fields: [studentMembershipId, organizationId], references: [id, organizationId], onDelete: Cascade)
 
   @@index([membershipId, studentMembershipId, status])
   @@index([studentMembershipId])

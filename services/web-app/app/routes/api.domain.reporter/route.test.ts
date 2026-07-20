@@ -11,6 +11,7 @@ const getLLMCompletion = mock();
 const requireMutableRequest = mock();
 const requireReporterAccess = mock();
 const handleReporterToolCall = mock();
+const commitReporterGrowthPlans = mock();
 
 const prisma = {
   reporterConversation: {
@@ -21,6 +22,7 @@ const prisma = {
   reporterMessage: {
     count: mock(),
   },
+  $transaction: mock(),
 };
 
 mock.module('~/utils/auth.server', () => ({ requireMutableRequest }));
@@ -30,6 +32,7 @@ mock.module('~/utils/reporter/reporter-access.server', () => ({
 }));
 mock.module('~/domain/reporter/reporter-tools.server', () => ({
   handleReporterToolCall,
+  commitReporterGrowthPlans,
   REPORTER_TOOLS: [{ name: 'list_classes' }],
 }));
 mock.module('~/utils/getLLMCompletion', () => ({
@@ -73,10 +76,15 @@ beforeEach(() => {
   requireMutableRequest.mockReset().mockResolvedValue(undefined);
   requireReporterAccess.mockReset().mockResolvedValue(access);
   handleReporterToolCall.mockReset();
+  commitReporterGrowthPlans.mockReset();
   prisma.reporterConversation.findFirst.mockReset();
   prisma.reporterConversation.create.mockReset();
   prisma.reporterConversation.update.mockReset();
   prisma.reporterMessage.count.mockReset().mockResolvedValue(0);
+  prisma.$transaction.mockReset();
+  prisma.$transaction.mockImplementation(
+    async (callback: (client: typeof prisma) => unknown) => callback(prisma)
+  );
 });
 
 describe('api.domain.reporter action', () => {
@@ -146,10 +154,11 @@ describe('api.domain.reporter action', () => {
     expect(handleReporterToolCall).toHaveBeenCalledWith(
       'list_classes',
       { a: 1 },
-      {
+      expect.objectContaining({
         membershipId: 'teacher-1',
         organizationId: 'org-1',
-      }
+        pendingGrowthPlanSaves: expect.any(Map),
+      })
     );
   });
 
@@ -310,5 +319,58 @@ describe('api.domain.reporter action', () => {
     } as any);
     expect(response.init?.status).toBe(500);
     expect(prisma.reporterConversation.create).not.toHaveBeenCalled();
+  });
+
+  test('does not commit a model-requested growth plan when the provider later fails', async () => {
+    handleReporterToolCall.mockImplementation(
+      async (_name: string, _input: unknown, context: any) => {
+        context.pendingGrowthPlanSaves.set('student-1', {
+          studentMembershipId: 'student-1',
+        });
+        return '{"saved":true,"pendingCommit":true}';
+      }
+    );
+    getLLMCompletion.mockImplementation(async (args: any) => {
+      await args.handleToolCall('save_growth_plan', {});
+      throw new Error('provider failed after tool use');
+    });
+
+    const response = await action({
+      request: formRequest({ message: 'Save a plan for Ada' }),
+    } as any);
+
+    expect(response.init?.status).toBe(500);
+    expect(commitReporterGrowthPlans).not.toHaveBeenCalled();
+    expect(prisma.reporterConversation.create).not.toHaveBeenCalled();
+  });
+
+  test('commits deferred growth plans only inside successful turn persistence', async () => {
+    const pending = { studentMembershipId: 'student-1' };
+    handleReporterToolCall.mockImplementation(
+      async (_name: string, _input: unknown, context: any) => {
+        context.pendingGrowthPlanSaves.set('student-1', pending);
+        return '{"saved":true,"pendingCommit":true}';
+      }
+    );
+    getLLMCompletion.mockImplementation(async (args: any) => {
+      await args.handleToolCall('save_growth_plan', {});
+      return 'Saved after confirmation.';
+    });
+    prisma.reporterConversation.create.mockResolvedValue({
+      id: 'conv-1',
+      messages: [],
+    });
+    prisma.reporterConversation.update.mockResolvedValue({});
+
+    const response = await action({
+      request: formRequest({ message: 'Save a plan for Ada' }),
+    } as any);
+
+    expect(response.data).toMatchObject({ conversationId: 'conv-1' });
+    expect(commitReporterGrowthPlans).toHaveBeenCalledWith(
+      [pending],
+      prisma
+    );
+    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
   });
 });

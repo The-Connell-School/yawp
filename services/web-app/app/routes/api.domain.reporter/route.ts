@@ -7,6 +7,7 @@ import { isLlmFallbackRetrySignal } from '~/utils/getLLMCompletion/llm-provider-
 import { requireMutableRequest } from '~/utils/auth.server';
 import { requireReporterAccess } from '~/utils/reporter/reporter-access.server';
 import {
+  commitReporterGrowthPlans,
   handleReporterToolCall,
   REPORTER_TOOLS,
 } from '~/domain/reporter/reporter-tools.server';
@@ -57,6 +58,7 @@ export async function action({ request }: ActionFunctionArgs) {
   const ctx = {
     membershipId: access.membership.id,
     organizationId: access.membership.organization.id,
+    pendingGrowthPlanSaves: new Map(),
   };
 
   const now = Date.now();
@@ -159,40 +161,52 @@ export async function action({ request }: ActionFunctionArgs) {
     );
   }
 
-  // Persist the turn. Create the conversation lazily on first success so failed
-  // requests don't leave empty conversations behind.
-  if (!conversation) {
-    conversation = await prisma.reporterConversation.create({
-      data: {
-        membershipId: ctx.membershipId,
-        organizationId: ctx.organizationId,
-        title: deriveTitle(data.message),
-      },
-      include: { messages: true },
-    });
-  }
-
   // Stamp explicit, strictly-increasing timestamps: both rows land in one
   // nested create, so the DB default would give them the same createdAt and
   // leave the question/answer order ambiguous on replay.
   const askedAt = new Date();
   const answeredAt = new Date(askedAt.getTime() + 1);
-  await prisma.reporterConversation.update({
-    where: { id: conversation.id },
-    data: {
-      updatedAt: new Date(),
-      messages: {
-        create: [
-          { role: AgentType.User, content: data.message, createdAt: askedAt },
-          {
-            role: AgentType.Assistant,
-            content: reply,
-            createdAt: answeredAt,
+  try {
+    conversation = await prisma.$transaction(async (transaction) => {
+      const persistedConversation =
+        conversation ??
+        (await transaction.reporterConversation.create({
+          data: {
+            membershipId: ctx.membershipId,
+            organizationId: ctx.organizationId,
+            title: deriveTitle(data.message),
           },
-        ],
-      },
-    },
-  });
+          include: { messages: true },
+        }));
+
+      if (ctx.pendingGrowthPlanSaves.size > 0) {
+        await commitReporterGrowthPlans(
+          [...ctx.pendingGrowthPlanSaves.values()],
+          transaction
+        );
+      }
+
+      await transaction.reporterConversation.update({
+        where: { id: persistedConversation.id },
+        data: {
+          updatedAt: new Date(),
+          messages: {
+            create: [
+              { role: AgentType.User, content: data.message, createdAt: askedAt },
+              {
+                role: AgentType.Assistant,
+                content: reply,
+                createdAt: answeredAt,
+              },
+            ],
+          },
+        },
+      });
+      return persistedConversation;
+    });
+  } catch {
+    return dataResponse({ error: REPORTER_FAILED }, { status: 500 });
+  }
 
   return dataResponse({
     conversationId: conversation.id,

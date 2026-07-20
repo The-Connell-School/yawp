@@ -30,6 +30,27 @@ export type ReporterToolContext = {
   membershipId: string;
   /** The calling teacher's organization id. */
   organizationId: string;
+  /** Model-requested writes staged until the containing LLM turn succeeds. */
+  pendingGrowthPlanSaves?: Map<string, PendingReporterGrowthPlan>;
+};
+
+export type PendingReporterGrowthPlan = {
+  membershipId: string;
+  organizationId: string;
+  studentMembershipId: string;
+  studentName: string;
+  focus: string;
+  targetSkills: string[];
+  body: string;
+  baseline: PlanBaseline;
+  checkInAt: Date | null;
+};
+
+type ReporterGrowthPlanWriter = {
+  reporterGrowthPlan: {
+    updateMany: (args: any) => Promise<unknown>;
+    create: (args: any) => Promise<{ id: string }>;
+  };
 };
 
 export type ReporterTool = {
@@ -710,40 +731,78 @@ async function saveGrowthPlan(ctx: ReporterToolContext, input: unknown) {
       ? new Date(Date.now() + parsed.checkInInDays * DAY_MS)
       : null;
 
-  // Keep a single active plan per student: archive any prior active one first.
-  await prisma.reporterGrowthPlan.updateMany({
-    where: {
-      membershipId: ctx.membershipId,
-      studentMembershipId: student.id,
-      status: 'active',
-    },
-    data: { status: 'archived' },
-  });
+  const pending: PendingReporterGrowthPlan = {
+    membershipId: ctx.membershipId,
+    organizationId: ctx.organizationId,
+    studentMembershipId: student.id,
+    studentName: student.name,
+    focus: parsed.focus,
+    targetSkills: parsed.targetSkills,
+    body: parsed.body,
+    baseline,
+    checkInAt,
+  };
 
-  const plan = await prisma.reporterGrowthPlan.create({
-    data: {
-      membershipId: ctx.membershipId,
-      organizationId: ctx.organizationId,
-      studentMembershipId: student.id,
-      status: 'active',
-      focus: parsed.focus,
-      targetSkills: parsed.targetSkills,
-      body: parsed.body,
-      baseline,
-      checkInAt,
-    },
-    select: { id: true },
-  });
+  if (ctx.pendingGrowthPlanSaves) {
+    // Last request for the same student wins within one model turn. Persistence
+    // happens only after the provider returns a successful final response.
+    ctx.pendingGrowthPlanSaves.set(student.id, pending);
+  }
+
+  const [planId] = ctx.pendingGrowthPlanSaves
+    ? [null]
+    : await prisma.$transaction((transaction) =>
+        commitReporterGrowthPlans([pending], transaction)
+      );
 
   return {
     saved: true,
-    planId: plan.id,
+    pendingCommit: Boolean(ctx.pendingGrowthPlanSaves),
+    planId,
     student: { studentMembershipId: student.id, studentName: student.name },
     focus: parsed.focus,
     targetSkills: parsed.targetSkills,
     baseline,
     checkInAt: checkInAt?.toISOString() ?? null,
   };
+}
+
+/**
+ * Atomically replaces active growth plans. The route calls this inside the same
+ * transaction that persists the successful conversation turn, so provider
+ * errors and failed retries cannot leave model-controlled writes behind.
+ */
+export async function commitReporterGrowthPlans(
+  plans: PendingReporterGrowthPlan[],
+  db: ReporterGrowthPlanWriter = prisma
+): Promise<string[]> {
+  const ids: string[] = [];
+  for (const plan of plans) {
+    await db.reporterGrowthPlan.updateMany({
+      where: {
+        membershipId: plan.membershipId,
+        studentMembershipId: plan.studentMembershipId,
+        status: 'active',
+      },
+      data: { status: 'archived' },
+    });
+    const created = await db.reporterGrowthPlan.create({
+      data: {
+        membershipId: plan.membershipId,
+        organizationId: plan.organizationId,
+        studentMembershipId: plan.studentMembershipId,
+        status: 'active',
+        focus: plan.focus,
+        targetSkills: plan.targetSkills,
+        body: plan.body,
+        baseline: plan.baseline,
+        checkInAt: plan.checkInAt,
+      },
+      select: { id: true },
+    });
+    ids.push(created.id);
+  }
+  return ids;
 }
 
 async function listGrowthPlans(ctx: ReporterToolContext, input: unknown) {

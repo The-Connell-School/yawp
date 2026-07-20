@@ -5,6 +5,7 @@ const prisma = {
   submission: { findMany: mock(), findFirst: mock() },
   orgMembership: { findFirst: mock(), findMany: mock() },
   reporterGrowthPlan: { findMany: mock(), create: mock(), updateMany: mock() },
+  $transaction: mock(),
 };
 
 mock.module('~/utils/db.server', () => ({ prisma }));
@@ -24,6 +25,10 @@ beforeEach(() => {
   prisma.reporterGrowthPlan.findMany.mockReset();
   prisma.reporterGrowthPlan.create.mockReset();
   prisma.reporterGrowthPlan.updateMany.mockReset();
+  prisma.$transaction.mockReset();
+  prisma.$transaction.mockImplementation(
+    async (callback: (client: typeof prisma) => unknown) => callback(prisma)
+  );
 });
 
 describe('REPORTER_TOOLS', () => {
@@ -576,6 +581,7 @@ describe('save_growth_plan', () => {
     expect(result.saved).toBe(true);
     expect(result.planId).toBe('plan-1');
     expect(result.student.studentName).toBe('Amelia Brooks');
+    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
   });
 
   test('refuses to save for a student outside the teacher scope', async () => {
@@ -595,6 +601,34 @@ describe('save_growth_plan', () => {
     );
     expect(result.error).toContain('No student named');
     expect(prisma.reporterGrowthPlan.create).not.toHaveBeenCalled();
+  });
+
+  test('rolls back the active-plan replacement when create fails', async () => {
+    prisma.orgMembership.findFirst.mockResolvedValue({
+      id: 'stu-1',
+      user: { name: 'Amelia Brooks' },
+    });
+    prisma.submission.findMany.mockResolvedValue([]);
+    prisma.reporterGrowthPlan.updateMany.mockResolvedValue({ count: 1 });
+    prisma.reporterGrowthPlan.create.mockRejectedValue(
+      new Error('unique constraint')
+    );
+
+    const result = JSON.parse(
+      await handleReporterToolCall(
+        'save_growth_plan',
+        {
+          student: 'stu-1',
+          focus: 'Analyze evidence',
+          targetSkills: ['evidence_and_support'],
+          body: 'Plan body',
+        },
+        ctx
+      )
+    );
+
+    expect(result.error).toBe('Failed to run report.');
+    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
   });
 });
 
