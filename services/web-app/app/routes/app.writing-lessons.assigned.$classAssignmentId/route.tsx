@@ -97,12 +97,14 @@ export async function action({ request, params }: ActionFunctionArgs) {
     lessonSlugs: classAssignment.assignment.lessonSlugs,
     problemCount: classAssignment.assignment.problemCount,
   });
-  const item = sequence.find(
-    (candidate) =>
-      candidate.question.id === promptId && candidate.lessonSlug === lessonSlug
-  );
+  const item = sequence.find((candidate) => candidate.position === position);
   if (
     !item ||
+    item.question.id !== promptId ||
+    item.lessonSlug !== lessonSlug ||
+    !Number.isInteger(position) ||
+    position < 1 ||
+    position > classAssignment.assignment.problemCount ||
     !Number.isInteger(selectedChoiceIndex) ||
     selectedChoiceIndex < 0 ||
     selectedChoiceIndex >= item.question.choices.length
@@ -115,6 +117,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
   await recordWritingPracticeAttempt({
     classAssignmentId: classAssignment.id,
     membershipId: profile.id,
+    position: item.position,
     lessonSlug,
     question: item.question,
     selectedChoiceIndex,

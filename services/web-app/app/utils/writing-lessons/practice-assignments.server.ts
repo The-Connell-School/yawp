@@ -399,6 +399,7 @@ export async function createWritingPracticeAssignmentForClasses(
 export type RecordWritingPracticeAttemptInput = {
   classAssignmentId: string;
   membershipId: string;
+  position: number;
   lessonSlug: string;
   question: ActPracticeQuestion;
   selectedChoiceIndex: number;
@@ -427,10 +428,10 @@ export async function recordWritingPracticeAttempt(
     explanation: grade.explanation,
   };
 
-  return prisma.writingPracticeAttempt.create({
-    data: {
+  const create = {
       classAssignmentId: input.classAssignmentId,
       membershipId: input.membershipId,
+      position: input.position,
       lessonSlug: input.lessonSlug,
       promptId: question.id,
       exercise: question.sentence,
@@ -438,7 +439,19 @@ export async function recordWritingPracticeAttempt(
       response: question.choices[selectedChoiceIndex] ?? '',
       status: grade.correct ? 'strong' : 'needs_revision',
       feedbackJson: record,
+  };
+
+  return prisma.writingPracticeAttempt.upsert({
+    where: {
+      classAssignmentId_membershipId_position: {
+        classAssignmentId: input.classAssignmentId,
+        membershipId: input.membershipId,
+        position: input.position,
+      },
     },
+    // A retry must return the first immutable answer, not rewrite history.
+    update: {},
+    create,
   });
 }
 
@@ -456,6 +469,7 @@ export async function getAssignedPracticeForStudent(membershipId: string) {
         orderBy: { createdAt: 'desc' },
         select: {
           id: true,
+          position: true,
           lessonSlug: true,
           promptId: true,
           status: true,
@@ -534,24 +548,33 @@ export type WritingPracticeAttemptDetail = {
  */
 export function summarizeWritingPracticeResults(params: {
   students: Array<{ id: string; user: { name: string | null; email: string } }>;
-  attempts: Array<{ membershipId: string; status: string; createdAt: Date }>;
+  attempts: Array<{
+    membershipId: string;
+    position: number;
+    status: string;
+    createdAt: Date;
+  }>;
   problemCount: number;
 }): WritingPracticeStudentResult[] {
   const byStudent = new Map<
     string,
-    { count: number; latestStatus: string; latestAt: Date }
+    {
+      positions: Set<number>;
+      latestStatus: string;
+      latestAt: Date;
+    }
   >();
   for (const attempt of params.attempts) {
     const existing = byStudent.get(attempt.membershipId);
     if (!existing) {
       byStudent.set(attempt.membershipId, {
-        count: 1,
+        positions: new Set([attempt.position]),
         latestStatus: attempt.status,
         latestAt: attempt.createdAt,
       });
       continue;
     }
-    existing.count += 1;
+    existing.positions.add(attempt.position);
     if (attempt.createdAt >= existing.latestAt) {
       existing.latestStatus = attempt.status;
       existing.latestAt = attempt.createdAt;
@@ -561,7 +584,7 @@ export function summarizeWritingPracticeResults(params: {
   return params.students
     .map((student) => {
       const summary = byStudent.get(student.id);
-      const attemptCount = summary?.count ?? 0;
+      const attemptCount = summary?.positions.size ?? 0;
       return {
         membershipId: student.id,
         name: student.user.name,
@@ -609,6 +632,7 @@ export async function getWritingPracticeResultsForTeacher(
           select: {
             id: true,
             membershipId: true,
+            position: true,
             lessonSlug: true,
             promptId: true,
             exercise: true,

@@ -94,13 +94,13 @@ model Assignment {
 }
 
 model ClassAssignment {
-  id           String     @id @default(cuid())
-  createdAt    DateTime   @default(now()) @db.Timestamptz(6)
-  updatedAt    DateTime   @default(now()) @db.Timestamptz(6)
+  id           String                  @id @default(cuid())
+  createdAt    DateTime                @default(now()) @db.Timestamptz(6)
+  updatedAt    DateTime                @default(now()) @db.Timestamptz(6)
   assignmentId String
-  assignment   Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  assignment   Assignment              @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
   classId      String
-  class        Class      @relation(fields: [classId], references: [id], onDelete: Cascade)
+  class        Class                   @relation(fields: [classId], references: [id], onDelete: Cascade)
   documents    Document[]
   insight      ClassAssignmentInsight?
 
@@ -446,15 +446,15 @@ model OrgMembership {
 /// A Yawp Reporter chat session. Owned by a teacher (OrgMembership) and scoped
 /// to their organization. Holds an ordered transcript of reporter messages.
 model ReporterConversation {
-  id             String             @id @default(cuid())
-  createdAt      DateTime           @default(now()) @db.Timestamptz(6)
-  updatedAt      DateTime           @default(now()) @updatedAt @db.Timestamptz(6)
-  deletedAt      DateTime?          @db.Timestamptz(6)
-  title          String             @default("New report")
+  id             String            @id @default(cuid())
+  createdAt      DateTime          @default(now()) @db.Timestamptz(6)
+  updatedAt      DateTime          @default(now()) @updatedAt @db.Timestamptz(6)
+  deletedAt      DateTime?         @db.Timestamptz(6)
+  title          String            @default("New report")
   membershipId   String
-  membership     OrgMembership      @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  membership     OrgMembership     @relation(fields: [membershipId], references: [id], onDelete: Cascade)
   organizationId String
-  organization   Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization   Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   messages       ReporterMessage[]
 
   @@index([membershipId, updatedAt(sort: Desc)])
@@ -814,13 +814,13 @@ model WritingPracticeAssignment {
 /// Per-class deployment of a writing-practice assignment (the join row),
 /// mirroring the Assignment -> ClassAssignment split.
 model WritingPracticeClassAssignment {
-  id           String                    @id @default(cuid())
-  createdAt    DateTime                  @default(now()) @db.Timestamptz(6)
-  updatedAt    DateTime                  @default(now()) @updatedAt @db.Timestamptz(6)
+  id           String                     @id @default(cuid())
+  createdAt    DateTime                   @default(now()) @db.Timestamptz(6)
+  updatedAt    DateTime                   @default(now()) @updatedAt @db.Timestamptz(6)
   assignmentId String
-  assignment   WritingPracticeAssignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  assignment   WritingPracticeAssignment  @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
   classId      String
-  class        Class                     @relation(fields: [classId], references: [id], onDelete: Cascade)
+  class        Class                      @relation(fields: [classId], references: [id], onDelete: Cascade)
   attempts     WritingPracticeAttempt[]
   promptSets   WritingPracticePromptSet[]
 
@@ -839,6 +839,8 @@ model WritingPracticeAttempt {
   classAssignment   WritingPracticeClassAssignment @relation(fields: [classAssignmentId], references: [id], onDelete: Cascade)
   membershipId      String
   membership        OrgMembership                  @relation("WritingPracticeAttemptStudent", fields: [membershipId], references: [id], onDelete: Cascade)
+  /// Immutable 1-based position in this student's stored assignment sequence.
+  position          Int
   lessonSlug        String
   promptId          String
   exercise          String
@@ -848,6 +850,7 @@ model WritingPracticeAttempt {
   status            String
   feedbackJson      Json
 
+  @@unique([classAssignmentId, membershipId, position])
   @@index([classAssignmentId, membershipId, createdAt(sort: Desc)])
   @@index([membershipId, createdAt(sort: Desc)])
 }

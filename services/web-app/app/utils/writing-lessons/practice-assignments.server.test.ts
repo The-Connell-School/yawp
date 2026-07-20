@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
 
 const writingPracticeAssignment = { create: mock() };
-const writingPracticeAttempt = { create: mock() };
+const writingPracticeAttempt = { upsert: mock() };
 const writingPracticeClassAssignment = { findMany: mock(), findFirst: mock() };
 const writingPracticePromptSet = { findUnique: mock(), create: mock() };
 const getLLMCompletion = mock();
@@ -32,7 +32,7 @@ const {
 
 beforeEach(() => {
   writingPracticeAssignment.create.mockReset();
-  writingPracticeAttempt.create.mockReset();
+  writingPracticeAttempt.upsert.mockReset();
   writingPracticeClassAssignment.findMany.mockReset();
   writingPracticeClassAssignment.findFirst.mockReset();
   writingPracticePromptSet.findUnique.mockReset();
@@ -113,11 +113,12 @@ describe('recordWritingPracticeAttempt', () => {
   };
 
   test('persists a correct ACT attempt as strong with the snapshot record', async () => {
-    writingPracticeAttempt.create.mockResolvedValueOnce({ id: 'att-1' });
+    writingPracticeAttempt.upsert.mockResolvedValueOnce({ id: 'att-1' });
 
     await recordWritingPracticeAttempt({
       classAssignmentId: 'wpca-1',
       membershipId: 'student-1',
+      position: 2,
       lessonSlug: 'fixing-comma-splices',
       question,
       selectedChoiceIndex: 1,
@@ -128,12 +129,19 @@ describe('recordWritingPracticeAttempt', () => {
       },
     });
 
-    const arg = writingPracticeAttempt.create.mock.calls[0][0];
-    expect(arg.data.status).toBe('strong');
-    expect(arg.data.promptId).toBe('fixing-comma-splices-act-1');
-    expect(arg.data.response).toBe('dropped; fans');
-    expect(arg.data.membershipId).toBe('student-1');
-    expect(arg.data.feedbackJson).toMatchObject({
+    const arg = writingPracticeAttempt.upsert.mock.calls[0][0];
+    expect(arg.where.classAssignmentId_membershipId_position).toEqual({
+      classAssignmentId: 'wpca-1',
+      membershipId: 'student-1',
+      position: 2,
+    });
+    expect(arg.update).toEqual({});
+    expect(arg.create.status).toBe('strong');
+    expect(arg.create.position).toBe(2);
+    expect(arg.create.promptId).toBe('fixing-comma-splices-act-1');
+    expect(arg.create.response).toBe('dropped; fans');
+    expect(arg.create.membershipId).toBe('student-1');
+    expect(arg.create.feedbackJson).toMatchObject({
       kind: 'act',
       correct: true,
       selectedChoiceIndex: 1,
@@ -142,11 +150,12 @@ describe('recordWritingPracticeAttempt', () => {
   });
 
   test('records an incorrect pick as needs_revision', async () => {
-    writingPracticeAttempt.create.mockResolvedValueOnce({ id: 'att-2' });
+    writingPracticeAttempt.upsert.mockResolvedValueOnce({ id: 'att-2' });
 
     await recordWritingPracticeAttempt({
       classAssignmentId: 'wpca-1',
       membershipId: 'student-1',
+      position: 1,
       lessonSlug: 'fixing-comma-splices',
       question,
       selectedChoiceIndex: 0,
@@ -157,9 +166,9 @@ describe('recordWritingPracticeAttempt', () => {
       },
     });
 
-    const arg = writingPracticeAttempt.create.mock.calls[0][0];
-    expect(arg.data.status).toBe('needs_revision');
-    expect(arg.data.feedbackJson.correct).toBe(false);
+    const arg = writingPracticeAttempt.upsert.mock.calls[0][0];
+    expect(arg.create.status).toBe('needs_revision');
+    expect(arg.create.feedbackJson.correct).toBe(false);
   });
 });
 
@@ -417,16 +426,19 @@ describe('summarizeWritingPracticeResults', () => {
       attempts: [
         {
           membershipId: 's-1',
+          position: 1,
           status: 'developing',
           createdAt: new Date('2026-07-01T10:00:00Z'),
         },
         {
           membershipId: 's-1',
+          position: 2,
           status: 'strong',
           createdAt: new Date('2026-07-01T11:00:00Z'),
         },
         {
           membershipId: 's-2',
+          position: 1,
           status: 'needs_revision',
           createdAt: new Date('2026-07-01T09:00:00Z'),
         },
@@ -452,5 +464,33 @@ describe('summarizeWritingPracticeResults', () => {
     expect(cara.attemptCount).toBe(0);
     expect(cara.completed).toBe(false);
     expect(cara.latestStatus).toBeNull();
+  });
+
+  test('counts distinct sequence positions so legacy duplicate rows cannot inflate completion', () => {
+    const results = summarizeWritingPracticeResults({
+      students,
+      problemCount: 2,
+      attempts: [
+        {
+          membershipId: 's-1',
+          position: 1,
+          status: 'needs_revision',
+          createdAt: new Date('2026-07-01T10:00:00Z'),
+        },
+        {
+          membershipId: 's-1',
+          position: 1,
+          status: 'strong',
+          createdAt: new Date('2026-07-01T11:00:00Z'),
+        },
+      ],
+    });
+
+    expect(results[0]).toMatchObject({
+      membershipId: 's-1',
+      attemptCount: 1,
+      completed: false,
+      latestStatus: 'strong',
+    });
   });
 });
