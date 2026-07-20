@@ -112,16 +112,45 @@ export async function action({ request }: ActionFunctionArgs) {
 
   const aggregate = aggregateRubricPerformance(inputs);
 
-  const { summary, model } = await generateClassInsight({
-    aggregate,
-    context: {
-      assignmentTitle: classAssignment.assignment.title,
-      className: classLabel(classAssignment.class),
-    },
-    metadata: { classAssignmentId: classAssignment.id },
-  });
-
   const generatedAt = new Date();
+  let generated: Awaited<ReturnType<typeof generateClassInsight>>;
+  try {
+    generated = await generateClassInsight({
+      aggregate,
+      context: {
+        assignmentTitle: classAssignment.assignment.title,
+        className: classLabel(classAssignment.class),
+      },
+      metadata: { classAssignmentId: classAssignment.id },
+    });
+  } catch {
+    await prisma.classAssignmentInsight.upsert({
+      where: { classAssignmentId: classAssignment.id },
+      create: {
+        classAssignmentId: classAssignment.id,
+        status: 'failed',
+        submissionCount: aggregate.submissionCount,
+        generatedByMembershipId: actor.membershipId,
+        generatedAt,
+      },
+      update: {
+        status: 'failed',
+        summaryJson: Prisma.JsonNull,
+        submissionCount: aggregate.submissionCount,
+        generatedByMembershipId: actor.membershipId,
+        generatedAt,
+      },
+    });
+    return dataResponse(
+      {
+        success: false,
+        message: 'Class insights are temporarily unavailable. Please try again.',
+      },
+      { status: 502 }
+    );
+  }
+
+  const { summary, model } = generated;
   const baseRow = {
     model,
     submissionCount: aggregate.submissionCount,

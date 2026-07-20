@@ -13,6 +13,7 @@ import {
 
 const INSIGHT_MAX_TOKENS = 1200;
 const INSIGHT_TEMPERATURE = 0.4;
+const INSIGHT_REQUEST_DEADLINE_MS = 30_000;
 
 /** Deterministic, no-network path so e2e never calls a real model. */
 function shouldUseE2EInsightFixture() {
@@ -92,6 +93,7 @@ export async function generateClassInsight({
     messages: [{ role: 'user', content: user }],
     maxTokens: INSIGHT_MAX_TOKENS,
     temperature: INSIGHT_TEMPERATURE,
+    signal: AbortSignal.timeout(INSIGHT_REQUEST_DEADLINE_MS),
     metadata: {
       feature: 'assignment-level-feedback',
       submissionCount: aggregate.submissionCount,

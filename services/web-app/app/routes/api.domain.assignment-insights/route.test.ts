@@ -272,4 +272,30 @@ describe('api.domain.assignment-insights', () => {
     const upsertArgs = prisma.classAssignmentInsight.upsert.mock.calls[0][0];
     expect(upsertArgs.create.status).toBe('failed');
   });
+
+  test('contains provider failures, persists failed status, and returns a generic error', async () => {
+    getLLMCompletion.mockRejectedValue(
+      new Error('provider-secret: upstream request id abc123')
+    );
+
+    const response = await action({ request: postRequest('ca-1') } as any);
+    const payload = payloadOf(response);
+
+    expect(payload.init?.status).toBe(502);
+    expect(payload.data).toEqual({
+      success: false,
+      message: 'Class insights are temporarily unavailable. Please try again.',
+    });
+    expect(JSON.stringify(payload.data)).not.toContain('provider-secret');
+    const upsertArgs = prisma.classAssignmentInsight.upsert.mock.calls[0][0];
+    expect(upsertArgs.create.status).toBe('failed');
+    expect(upsertArgs.create.submissionCount).toBe(2);
+  });
+
+  test('passes a bounded request deadline to the insight model', async () => {
+    await action({ request: postRequest('ca-1') } as any);
+
+    const llmArgs = getLLMCompletion.mock.calls[0][0];
+    expect(llmArgs.signal).toBeInstanceOf(AbortSignal);
+  });
 });
