@@ -5,6 +5,7 @@ import {
   Lightbulb,
   Loader2,
   MessageSquareText,
+  MonitorPlay,
   PenLine,
   RotateCcw,
   Sparkles,
@@ -37,6 +38,10 @@ import {
   type ActPracticeQuestion,
 } from '~/utils/writing-lessons/act-practice.shared';
 import { isCompositionPracticeEnabled } from '~/utils/writing-lessons/composition-flag.server';
+import {
+  getLoungeModuleLinkForLesson,
+  type LoungeModuleLink,
+} from '~/utils/writing-lessons/lounge-links.server';
 import { generatePracticeFeedback } from '~/utils/writing-lessons/practice-feedback.server';
 import {
   practiceFeedbackStatusLabel,
@@ -82,6 +87,14 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       })
     : [];
 
+  // Composition skills are taught on video in the Teacher's Lounge; link
+  // teachers straight to Brian's matching module. Null (student, grammar
+  // lesson, or module absent in this environment) simply omits the link.
+  const loungeModule: LoungeModuleLink | null =
+    isComposition && isTeacher
+      ? await getLoungeModuleLinkForLesson(lesson.slug, profile.id)
+      : null;
+
   return dataResponse({
     lesson,
     isComposition,
@@ -96,6 +109,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     actQuestions: getActPracticeQuestions(params.lessonSlug),
     isTeacher,
     teacherClasses,
+    loungeModule,
   });
 }
 
@@ -187,6 +201,7 @@ export default function WritingLessonDetailRoute() {
     actQuestions,
     isTeacher,
     teacherClasses,
+    loungeModule,
   } = useLoaderData<typeof loader>();
 
   // Grammar lessons drill ACT multiple choice; composition lessons are
@@ -236,6 +251,9 @@ export default function WritingLessonDetailRoute() {
             // practice students see, so they can test-drive a lesson before
             // assigning it.
             <div className="space-y-6">
+              {loungeModule ? (
+                <LoungeModuleCard loungeModule={loungeModule} />
+              ) : null}
               <TeacherAssignPanel
                 lessonSlug={lesson.slug}
                 classes={teacherClasses}
@@ -249,6 +267,40 @@ export default function WritingLessonDetailRoute() {
         </aside>
       </div>
     </section>
+  );
+}
+
+function LoungeModuleCard({
+  loungeModule,
+}: {
+  loungeModule: LoungeModuleLink;
+}) {
+  return (
+    <Card className="shadow-none" data-testid="lounge-module-card">
+      <CardHeader className="pb-2">
+        <CardTitle className="flex items-center gap-2 text-base">
+          <MonitorPlay className="h-4 w-4 shrink-0 text-primary" />
+          Watch Brian teach this
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3 text-base sm:text-sm">
+        <p className="text-muted-foreground">
+          This skill is covered in{' '}
+          <span className="font-medium text-foreground">
+            {loungeModule.moduleTitle}
+          </span>{' '}
+          from {loungeModule.trainingTitle} — with the lesson plan and slide
+          deck ready to download.
+        </p>
+        <Button asChild variant="outline" size="sm" className="w-full">
+          <Link
+            to={`/app/teacher-trainings/${loungeModule.trainingId}/modules/${loungeModule.moduleId}`}
+          >
+            Open in the Teacher&rsquo;s Lounge
+          </Link>
+        </Button>
+      </CardContent>
+    </Card>
   );
 }
 

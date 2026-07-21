@@ -3,13 +3,17 @@ import { afterAll, beforeEach, describe, expect, mock, test } from 'bun:test';
 const requireUserId = mock();
 const requireMembership = mock();
 const getLLMCompletion = mock();
+const getLoungeModuleLinkForLesson = mock();
 
 mock.module('~/utils/auth.server', () => ({
   requireUserId,
   requireMembership,
 }));
 mock.module('~/utils/db.server', () => ({
-  prisma: { class: { findMany: mock() } },
+  prisma: { class: { findMany: mock().mockResolvedValue([]) } },
+}));
+mock.module('~/utils/writing-lessons/lounge-links.server', () => ({
+  getLoungeModuleLinkForLesson,
 }));
 // Mock the leaf LLM call (not the generation/feedback modules) so this test
 // never clobbers the module-as-subject in the generation/feedback unit tests.
@@ -50,6 +54,7 @@ describe('writing lesson detail route', () => {
     requireUserId.mockReset();
     requireMembership.mockReset();
     getLLMCompletion.mockReset();
+    getLoungeModuleLinkForLesson.mockReset();
 
     requireUserId.mockResolvedValue('user-1');
     requireMembership.mockResolvedValue({
@@ -71,6 +76,67 @@ describe('writing lesson detail route', () => {
     expect(response.data.lesson.slug).toBe('revising-for-wordiness');
     expect(response.data.actQuestions.length).toBeGreaterThan(0);
     expect(response.data.actQuestions[0].choices).toHaveLength(4);
+  });
+
+  test('links teachers on a composition lesson to the Lounge module', async () => {
+    requireMembership.mockResolvedValue({
+      id: 'teacher-1',
+      role: 'TEACHER',
+      organization: { id: 'org-1', name: 'Org' },
+    });
+    const link = {
+      trainingId: 'training-1',
+      trainingTitle: 'The Thesis-Driven Essay',
+      moduleId: 'module-1',
+      moduleTitle: 'Lesson 3: Developing a Thesis Statement',
+    };
+    getLoungeModuleLinkForLesson.mockResolvedValue(link);
+
+    const response = await loader({
+      request: new Request(
+        'https://example.test/app/writing-lessons/thesis-statements'
+      ),
+      params: { lessonSlug: 'thesis-statements' },
+      context: {} as never,
+    } as never);
+
+    expect(response.data.loungeModule).toEqual(link);
+    expect(getLoungeModuleLinkForLesson).toHaveBeenCalledWith(
+      'thesis-statements',
+      'teacher-1'
+    );
+  });
+
+  test('does not resolve a Lounge link for students', async () => {
+    const response = await loader({
+      request: new Request(
+        'https://example.test/app/writing-lessons/thesis-statements'
+      ),
+      params: { lessonSlug: 'thesis-statements' },
+      context: {} as never,
+    } as never);
+
+    expect(response.data.loungeModule).toBeNull();
+    expect(getLoungeModuleLinkForLesson).not.toHaveBeenCalled();
+  });
+
+  test('does not resolve a Lounge link on grammar lessons', async () => {
+    requireMembership.mockResolvedValue({
+      id: 'teacher-1',
+      role: 'TEACHER',
+      organization: { id: 'org-1', name: 'Org' },
+    });
+
+    const response = await loader({
+      request: new Request(
+        'https://example.test/app/writing-lessons/revising-for-wordiness'
+      ),
+      params: { lessonSlug: 'revising-for-wordiness' },
+      context: {} as never,
+    } as never);
+
+    expect(response.data.loungeModule).toBeNull();
+    expect(getLoungeModuleLinkForLesson).not.toHaveBeenCalled();
   });
 });
 
