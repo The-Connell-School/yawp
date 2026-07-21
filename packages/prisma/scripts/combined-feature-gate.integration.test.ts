@@ -7,6 +7,14 @@ import {
 
 const integrationEnabled = process.env.COMBINED_FEATURE_GATE_INTEGRATION === '1';
 const integrationTest = integrationEnabled ? test : test.skip;
+const postcheckIntegrationTest =
+  integrationEnabled && process.env.COMBINED_FEATURE_GATE_POSTCHECK === '1'
+    ? test
+    : test.skip;
+const negativeIntegrationTest =
+  integrationEnabled && process.env.COMBINED_FEATURE_GATE_NEGATIVES !== '0'
+    ? test
+    : test.skip;
 let client: pg.Client;
 
 describe('production node-postgres combined-feature gates', () => {
@@ -25,6 +33,10 @@ describe('production node-postgres combined-feature gates', () => {
 
   integrationTest('runs the production preflight through node-postgres on valid data', async () => {
     await runCombinedFeatureGate('combined-feature-preflight.sql', process.env);
+  });
+
+  postcheckIntegrationTest('runs the production postcheck through node-postgres on valid data', async () => {
+    await runCombinedFeatureGate('combined-feature-postcheck.sql', process.env);
   });
 
   const negativeCases = [
@@ -61,7 +73,7 @@ describe('production node-postgres combined-feature gates', () => {
   ] as const;
 
   for (const negativeCase of negativeCases) {
-    integrationTest(`rejects ${negativeCase.label} through node-postgres`, async () => {
+    negativeIntegrationTest(`rejects ${negativeCase.label} through node-postgres`, async () => {
       await client.query('BEGIN');
       try {
         await client.query(negativeCase.mutation);

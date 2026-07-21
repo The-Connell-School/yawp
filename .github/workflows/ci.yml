@@ -92,6 +92,14 @@ jobs:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
         run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f packages/prisma/scripts/combined-feature-postcheck.sql
 
+      - name: 🧪 Exercise production node-postgres migration gates
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
+          COMBINED_FEATURE_GATE_INTEGRATION: 1
+          COMBINED_FEATURE_GATE_POSTCHECK: 1
+          COMBINED_FEATURE_GATE_NEGATIVES: 0
+        run: bun test ./packages/prisma/scripts/combined-feature-gate.integration.test.ts
+
       - name: 🎨 Backfill class artwork keys
         env:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci

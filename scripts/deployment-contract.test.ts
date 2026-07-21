@@ -49,6 +49,10 @@ describe('production deployment contract', () => {
     const ciWorkflow = readRepoFile('.github/workflows/ci.yml');
     const generateIndex = ciWorkflow.indexOf('bun prisma generate');
     const migrateIndex = ciWorkflow.indexOf('bun prisma migrate deploy');
+    const postcheckIndex = ciWorkflow.indexOf('combined-feature-postcheck.sql');
+    const productionGateTestIndex = ciWorkflow.indexOf(
+      'combined-feature-gate.integration.test.ts'
+    );
     const backfillIndex = ciWorkflow.indexOf('backfill-class-art-key');
     const releaseGateIndex = ciWorkflow.indexOf('assignment-type-release-gate');
 
@@ -57,12 +61,18 @@ describe('production deployment contract', () => {
     expect(ciWorkflow).toContain('teacher-training-assignment-migration.test.ts');
     expect(ciWorkflow).toContain('bun prisma generate');
     expect(ciWorkflow).toContain('bun prisma migrate deploy');
+    expect(ciWorkflow).toContain('COMBINED_FEATURE_GATE_INTEGRATION: 1');
+    expect(ciWorkflow).toContain('COMBINED_FEATURE_GATE_POSTCHECK: 1');
+    expect(ciWorkflow).toContain('COMBINED_FEATURE_GATE_NEGATIVES: 0');
+    expect(ciWorkflow).toContain('combined-feature-gate.integration.test.ts');
     expect(ciWorkflow).toContain('backfill-class-art-key');
     expect(ciWorkflow).toContain('assignment-type-release-gate');
     expect(ciWorkflow).toContain('postgres:16');
     expect(generateIndex).toBeGreaterThan(-1);
     expect(migrateIndex).toBeGreaterThan(-1);
     expect(generateIndex).toBeLessThan(migrateIndex);
+    expect(productionGateTestIndex).toBeGreaterThan(postcheckIndex);
+    expect(productionGateTestIndex).toBeLessThan(backfillIndex);
     expect(backfillIndex).toBeGreaterThan(migrateIndex);
     expect(releaseGateIndex).toBeGreaterThan(backfillIndex);
   });
