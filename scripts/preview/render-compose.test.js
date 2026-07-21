@@ -37,6 +37,28 @@ describe('renderPreviewCompose', () => {
     expect(compose).not.toContain('docker push');
   });
 
+  test('keeps the web container alive across host and Docker restarts', () => {
+    const fast = renderPreviewCompose({
+      prNumber: '142',
+      domain: 'preview.yawp.school',
+      sourceDir: '/srv/yawp-preview/sources/pr-142',
+    });
+    const production = renderPreviewCompose({
+      prNumber: '142',
+      domain: 'preview.yawp.school',
+      sourceDir: '/srv/yawp-preview/sources/pr-142',
+      runtime: 'production',
+    });
+
+    // The shared Postgres and Traefik containers already restart automatically;
+    // the per-PR web container must do the same or a preview goes 502 (and never
+    // recovers) whenever the host reboots or the Docker daemon restarts.
+    for (const compose of [fast, production]) {
+      const webBlock = compose.slice(compose.indexOf('\n  web:'));
+      expect(webBlock).toContain('restart: unless-stopped');
+    }
+  });
+
   test('still supports production-image previews when explicitly requested', () => {
     const compose = renderPreviewCompose({
       prNumber: '142',
