@@ -52,6 +52,14 @@ function listTrackedRepoFiles(): string[] {
 }
 
 describe('production deployment contract', () => {
+  test('application viewport preserves user zoom', () => {
+    const root = readRepoFile('services/web-app/app/root.tsx');
+
+    expect(root).toContain('content="width=device-width, initial-scale=1.0"');
+    expect(root).not.toContain('maximum-scale');
+    expect(root).not.toContain('user-scalable=no');
+  });
+
   test('container startup does not run Prisma migrations', () => {
     const startScript = readRepoFile('services/web-app/start.sh');
 
@@ -61,8 +69,18 @@ describe('production deployment contract', () => {
 
   test('CI has a dedicated migration validation job against Postgres', () => {
     const ciWorkflow = readRepoFile('.github/workflows/ci.yml');
+    const rehearsalScript = readRepoFile(
+      'packages/prisma/scripts/rehearse-combined-feature-migrations.sh'
+    );
     const generateIndex = ciWorkflow.indexOf('bun prisma generate');
     const migrateIndex = ciWorkflow.indexOf('bun prisma migrate deploy');
+    const postcheckIndex = ciWorkflow.indexOf('combined-feature-postcheck.sql');
+    const productionGateTestIndex = ciWorkflow.indexOf(
+      'combined-feature-gate.integration.test.ts'
+    );
+    const hostedNegativeGateIndex = ciWorkflow.indexOf(
+      'COMBINED_REHEARSAL_NEGATIVES_ONLY: 1'
+    );
     const backfillIndex = ciWorkflow.indexOf('backfill-class-art-key');
     const releaseGateIndex = ciWorkflow.indexOf('assignment-type-release-gate');
 
@@ -75,12 +93,26 @@ describe('production deployment contract', () => {
     );
     expect(ciWorkflow).toContain('bun prisma generate');
     expect(ciWorkflow).toContain('bun prisma migrate deploy');
+    expect(ciWorkflow).toContain('COMBINED_FEATURE_GATE_INTEGRATION: 1');
+    expect(ciWorkflow).toContain('COMBINED_FEATURE_GATE_POSTCHECK: 1');
+    expect(ciWorkflow).toContain('COMBINED_FEATURE_GATE_NEGATIVES: 0');
+    expect(ciWorkflow).toContain('combined-feature-gate.integration.test.ts');
+    expect(ciWorkflow).toContain('COMBINED_REHEARSAL_NEGATIVES_ONLY: 1');
+    expect(ciWorkflow).toContain('rehearse-combined-feature-migrations.sh');
+    expect(rehearsalScript).toContain(
+      '${COMBINED_REHEARSAL_NEGATIVES_ONLY:-0}'
+    );
+    expect(rehearsalScript).toContain('hosted_negative_gate_result=pass');
     expect(ciWorkflow).toContain('backfill-class-art-key');
     expect(ciWorkflow).toContain('assignment-type-release-gate');
     expect(ciWorkflow).toContain('postgres:16');
     expect(generateIndex).toBeGreaterThan(-1);
     expect(migrateIndex).toBeGreaterThan(-1);
     expect(generateIndex).toBeLessThan(migrateIndex);
+    expect(productionGateTestIndex).toBeGreaterThan(postcheckIndex);
+    expect(productionGateTestIndex).toBeLessThan(backfillIndex);
+    expect(hostedNegativeGateIndex).toBeGreaterThan(productionGateTestIndex);
+    expect(hostedNegativeGateIndex).toBeLessThan(backfillIndex);
     expect(backfillIndex).toBeGreaterThan(migrateIndex);
     expect(releaseGateIndex).toBeGreaterThan(backfillIndex);
   });
@@ -159,6 +191,9 @@ describe('production deployment contract', () => {
     const migrateRemoteScript = readRepoFile(
       'packages/prisma/scripts/migrate-remote.ts'
     );
+    const combinedFeatureGateScript = readRepoFile(
+      'packages/prisma/scripts/combined-feature-gate.ts'
+    );
     const deployGenerateIndex = deployWorkflow.indexOf('bun prisma generate');
     const deployValidateMigrateIndex = deployWorkflow.indexOf(
       'bun prisma migrate deploy'
@@ -177,6 +212,12 @@ describe('production deployment contract', () => {
     );
     const remoteMigrateIndex = migrateRemoteScript.indexOf(
       "['prisma', 'migrate', 'deploy']"
+    );
+    const remotePreflightIndex = migrateRemoteScript.indexOf(
+      "runCombinedFeatureGate('combined-feature-preflight.sql'"
+    );
+    const remotePostcheckIndex = migrateRemoteScript.indexOf(
+      "runCombinedFeatureGate('combined-feature-postcheck.sql'"
     );
     const remoteBackfillIndex = migrateRemoteScript.indexOf(
       'backfill-class-art-key.ts'
@@ -219,7 +260,17 @@ describe('production deployment contract', () => {
     );
     expect(migrateRemoteScript).toContain('rejectUnauthorized: false');
     expect(migrateRemoteScript).toContain("REMOTE_MIGRATE_TUNNEL: '1'");
+    expect(migrateRemoteScript).toContain(
+      "import { runCombinedFeatureGate } from './combined-feature-gate'"
+    );
     expect(remoteMigrateIndex).toBeGreaterThan(-1);
+    expect(remotePreflightIndex).toBeGreaterThan(-1);
+    expect(remotePreflightIndex).toBeLessThan(remoteMigrateIndex);
+    expect(remotePostcheckIndex).toBeGreaterThan(remoteMigrateIndex);
+    expect(combinedFeatureGateScript).toContain(
+      "log(`Migration gate passed: ${scriptName}`)"
+    );
+    expect(combinedFeatureGateScript).toContain('await client.query(sql)');
     expect(remoteBackfillIndex).toBeGreaterThan(remoteMigrateIndex);
     expect(remoteReleaseGateIndex).toBeGreaterThan(remoteBackfillIndex);
   });
@@ -256,7 +307,7 @@ describe('worktree local setup contract', () => {
     );
     expect(playwrightConfig).toContain('baseURL: e2eBaseUrl');
     expect(playwrightConfig).toContain('url: e2eBaseUrl');
-    expect(playwrightConfig).toContain('--port ${e2ePort}');
+    expect(playwrightConfig).toContain('PORT=${e2ePort}');
     expect(playwrightConfig).toContain('reuseExistingServer: false');
     expect(playwrightConfig).not.toContain(
       'reuseExistingServer: !process.env.CI'

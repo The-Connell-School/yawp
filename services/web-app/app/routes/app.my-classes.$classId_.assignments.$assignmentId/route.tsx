@@ -24,6 +24,11 @@ import { timeAgo } from '~/utils/timeAgo';
 import { formatAssignmentGrade } from '~/domain/grading/gradeMath';
 import { Loader2 } from 'lucide-react';
 import { postFormWithFallbackRetry } from '~/utils/llm-retry-ui';
+import {
+  ClassInsightsPanel,
+  type ClassInsight,
+  type ClassInsightSummary,
+} from './class-insights-panel';
 
 type StatusFilter = 'submitted' | 'graded' | 'released' | 'in-progress';
 
@@ -45,7 +50,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
   const userId = await requireUserId(request);
   const profile = await requireMembership(request, userId);
-  if (profile.role !== "TEACHER") {
+  if (profile.role !== 'TEACHER') {
     throw new Response('Not Found', { status: 404 });
   }
 
@@ -84,6 +89,30 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   });
   if (!classAssignment) throw new Response('Not Found', { status: 404 });
   const assignment = classAssignment.assignment;
+
+  const classInsightsEnabled = profile.organization.classInsightsEnabled;
+  const insightRow = classInsightsEnabled
+    ? await prisma.classAssignmentInsight.findUnique({
+        where: { classAssignmentId: classAssignment.id },
+        select: {
+          status: true,
+          submissionCount: true,
+          generatedAt: true,
+          summaryJson: true,
+        },
+      })
+    : null;
+  const insight: ClassInsight | null =
+    insightRow && insightRow.status === 'ready' && insightRow.summaryJson
+      ? {
+          status: 'ready',
+          submissionCount: insightRow.submissionCount,
+          generatedAt: insightRow.generatedAt
+            ? insightRow.generatedAt.toISOString()
+            : null,
+          summary: insightRow.summaryJson as unknown as ClassInsightSummary,
+        }
+      : null;
 
   const url = new URL(request.url);
   const rawStatus = url.searchParams.get('status');
@@ -160,6 +189,9 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   return dataResponse({
     klass,
     assignment,
+    classAssignmentId: classAssignment.id,
+    insight,
+    classInsightsEnabled,
     status,
     isDocumentSubmissionEnabled,
     submissions,
@@ -177,6 +209,9 @@ export default function AssignmentSubmissionsRoute() {
   const {
     klass,
     assignment,
+    classAssignmentId,
+    insight,
+    classInsightsEnabled,
     status,
     isDocumentSubmissionEnabled,
     submissions,
@@ -338,6 +373,16 @@ export default function AssignmentSubmissionsRoute() {
             <span>{assignment.assignmentType.title}</span>
           </div>
         </div>
+
+        {/* Class-wide, assignment-level feedback for the teacher */}
+        {classInsightsEnabled ? (
+          <div className="mb-6">
+            <ClassInsightsPanel
+              classAssignmentId={classAssignmentId}
+              initialInsight={insight}
+            />
+          </div>
+        ) : null}
 
         {/* Status tabs */}
         <div className="mb-4 flex gap-1 border-b">
@@ -619,9 +664,7 @@ export default function AssignmentSubmissionsRoute() {
                           letterGrade: sub.letterGrade ?? null,
                           pointValue: assignment.pointValue,
                           score: sub.score,
-                        }) ?? (
-                          <span className="text-muted-foreground">—</span>
-                        )}
+                        }) ?? <span className="text-muted-foreground">—</span>}
                       </TableCell>
                       <TableCell className="text-muted-foreground text-sm">
                         {sub.gradedAt ? timeAgo(sub.gradedAt) : '—'}
@@ -675,9 +718,7 @@ export default function AssignmentSubmissionsRoute() {
                           letterGrade: sub.letterGrade ?? null,
                           pointValue: assignment.pointValue,
                           score: sub.score,
-                        }) ?? (
-                          <span className="text-muted-foreground">—</span>
-                        )}
+                        }) ?? <span className="text-muted-foreground">—</span>}
                       </TableCell>
                       <TableCell className="text-muted-foreground text-sm">
                         {sub.releasedAt ? timeAgo(sub.releasedAt) : '—'}

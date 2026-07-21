@@ -5,7 +5,9 @@ import {
   FileText,
   GaugeIcon,
   LockIcon,
+  Microscope,
   MonitorPlay,
+  PencilLine,
   Users,
 } from 'lucide-react';
 import { Tooltip } from '~/components/ui/tooltip';
@@ -24,10 +26,7 @@ export type SidebarNavLink = {
   label: string;
   end?: boolean;
   icon: React.ReactNode;
-  requires?:
-    | { OR: RequiresFn[] }
-    | { AND: RequiresFn[] }
-    | RequiresFn;
+  requires?: { OR: RequiresFn[] } | { AND: RequiresFn[] } | RequiresFn;
 };
 
 export type SidebarNavSection = {
@@ -37,15 +36,23 @@ export type SidebarNavSection = {
 
 const teacher = (user: User, studentPreviewActive = false) =>
   user.selectedMembership?.role === 'TEACHER' && !studentPreviewActive;
+// Students (and a teacher previewing the student view) get the practice entry.
+const student = (user: User, studentPreviewActive = false) =>
+  user.selectedMembership?.role === 'STUDENT' || studentPreviewActive;
 const owner = (user: User) => user.selectedMembership?.isOrgOwner;
 const admin = (user: User) => user.isAdmin;
+const reporterEnabled = (user: User, studentPreviewActive = false) =>
+  teacher(user, studentPreviewActive) &&
+  Boolean(user.selectedMembership?.organization?.reporterEnabled);
 
 const icons = {
   dashboard: <GaugeIcon size={20} className="shrink-0" />,
   classes: <Users size={20} className="shrink-0" />,
   studentWork: <FileText size={20} className="shrink-0" />,
   assignments: <ClipboardList size={20} className="shrink-0" />,
+  practice: <PencilLine size={20} className="shrink-0" />,
   lounge: <MonitorPlay size={20} className="shrink-0" />,
+  reporter: <Microscope size={20} className="shrink-0" />,
   organization: <CogIcon size={20} className="shrink-0" />,
   admin: <LockIcon size={20} className="shrink-0" />,
 };
@@ -58,6 +65,12 @@ export const FLAT_SIDEBAR_SECTIONS: SidebarNavSection[] = [
         label: 'Dashboard',
         end: true,
         icon: icons.dashboard,
+      },
+      {
+        to: '/app/writing-lessons',
+        label: 'Practice',
+        icon: icons.practice,
+        requires: student,
       },
       {
         to: '/app/my-classes',
@@ -82,6 +95,12 @@ export const FLAT_SIDEBAR_SECTIONS: SidebarNavSection[] = [
         label: "Teacher's Lounge",
         icon: icons.lounge,
         requires: teacher,
+      },
+      {
+        to: '/app/reporter',
+        label: 'Reporter',
+        icon: icons.reporter,
+        requires: reporterEnabled,
       },
       {
         to: '/app/organization',

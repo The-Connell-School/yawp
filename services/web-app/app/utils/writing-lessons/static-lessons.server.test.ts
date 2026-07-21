@@ -1,7 +1,9 @@
 import { describe, expect, test } from 'bun:test';
 
 import {
+  getQuickWritingLessonBody,
   getQuickWritingLessonBySlug,
+  getQuickWritingLessonContext,
   getQuickWritingLessons,
   getQuickWritingPracticePrompts,
 } from './static-lessons.server';
@@ -48,5 +50,35 @@ describe('Quick Writing Lessons static lesson archive', () => {
       instruction: 'Cut the wordiness. Say the same thing in fewer words.',
     });
     expect(prompts[1].instruction).toContain('weak');
+  });
+
+  test('exposes grounding context (skill + rule) for tutor feedback', () => {
+    const context = getQuickWritingLessonContext('fixing-comma-splices');
+
+    expect(context).not.toBeNull();
+    expect(context?.title).toBe('Fixing Comma Splices');
+    expect(context?.skill).toBe('comma splices');
+    // The rule section, not the hook or the practice exercises.
+    expect(context?.rule).toContain('two complete sentences');
+    expect(context?.rule).not.toContain('Why This Matters');
+    expect(context?.rule).not.toContain('Your turn');
+  });
+
+  test('returns null context for an unknown slug', () => {
+    expect(getQuickWritingLessonContext('not-a-lesson')).toBeNull();
+  });
+
+  test('lesson body drops the redundant Practice Time section', () => {
+    const lesson = getQuickWritingLessonBySlug('fixing-comma-splices');
+    const body = getQuickWritingLessonBody(lesson!.content);
+
+    // Keeps the teaching content...
+    expect(body).toContain('Why This Matters');
+    expect(body).toContain('The Rule');
+    expect(body).toContain('Quick Tip');
+    // ...but not the practice exercises (the side panel owns those).
+    expect(body).not.toContain('Practice Time');
+    expect(body).not.toContain('Your turn');
+    expect(body).not.toContain('[Your response here]');
   });
 });

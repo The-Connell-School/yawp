@@ -36,6 +36,7 @@ const {
   resetUserPassword,
   verifyUserPassword,
   requireMembership,
+  requireAdmin,
   requireOwner,
   isTeacherMembership,
   isStudentMembership,
@@ -45,7 +46,13 @@ const membershipFixture = {
   id: 'membership-1',
   role: 'TEACHER' as const,
   isOrgOwner: false,
-  organization: { id: 'org-1', name: 'Yawp Org' },
+  organization: {
+    id: 'org-1',
+    name: 'Yawp Org',
+    reporterEnabled: false,
+    writingFundamentalsEnabled: false,
+    classInsightsEnabled: false,
+  },
 };
 
 describe('membership auth helpers', () => {
@@ -77,12 +84,20 @@ describe('membership auth helpers', () => {
     );
 
     expect(prisma.orgMembership.findUnique).toHaveBeenCalledWith({
-      where: { id: 'membership-1', userId: 'user-1' },
+      where: { id: 'membership-1', userId: 'user-1', isActive: true },
       select: {
         id: true,
         role: true,
         isOrgOwner: true,
-        organization: { select: { id: true, name: true } },
+        organization: {
+          select: {
+            id: true,
+            name: true,
+            reporterEnabled: true,
+            writingFundamentalsEnabled: true,
+            classInsightsEnabled: true,
+          },
+        },
       },
     });
     expect(membership).toEqual(membershipFixture);
@@ -98,16 +113,44 @@ describe('membership auth helpers', () => {
     );
 
     expect(prisma.orgMembership.findFirst).toHaveBeenCalledWith({
-      where: { userId: 'user-1' },
+      where: { userId: 'user-1', isActive: true },
       orderBy: { createdAt: 'asc' },
       select: {
         id: true,
         role: true,
         isOrgOwner: true,
-        organization: { select: { id: true, name: true } },
+        organization: {
+          select: {
+            id: true,
+            name: true,
+            reporterEnabled: true,
+            writingFundamentalsEnabled: true,
+            classInsightsEnabled: true,
+          },
+        },
       },
     });
     expect(membership).toEqual(membershipFixture);
+  });
+
+  test('requireMembership clears an inactive cookie-selected membership', async () => {
+    getMembershipId.mockResolvedValue('inactive-membership');
+    prisma.orgMembership.findUnique.mockResolvedValue(null);
+
+    await expect(
+      requireMembership(new Request('https://example.com/app'), 'user-1')
+    ).rejects.toMatchObject({ status: 302 });
+
+    expect(prisma.orgMembership.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          id: 'inactive-membership',
+          userId: 'user-1',
+          isActive: true,
+        },
+      })
+    );
+    expect(setMembershipId).toHaveBeenCalledWith('');
   });
 
   test('requireOwner checks memberships with isOrgOwner', async () => {
@@ -142,6 +185,31 @@ describe('membership auth helpers', () => {
     expect(user).toEqual({
       id: 'user-1',
       memberships: [{ id: 'membership-1', isOrgOwner: true }],
+    });
+  });
+
+  test('requireAdmin returns a stable denial payload for non-admin users', async () => {
+    getSession.mockResolvedValue({
+      get: (key: string) => (key === 'sessionId' ? 'session-1' : undefined),
+    });
+    prisma.session.findUnique.mockResolvedValue({
+      user: { id: 'user-1' },
+    });
+    prisma.user.findFirst.mockResolvedValue(null);
+
+    await expect(
+      requireAdmin(
+        new Request('https://example.com/app/admin', {
+          headers: { cookie: 'en_session=signed-cookie' },
+        })
+      )
+    ).rejects.toMatchObject({
+      data: {
+        error: 'Unauthorized',
+        requiredRole: 'isAdmin',
+        message: 'Unauthorized: required role: isAdmin',
+      },
+      init: { status: 403 },
     });
   });
 });

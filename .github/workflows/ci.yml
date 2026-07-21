@@ -45,10 +45,10 @@ jobs:
           --health-retries=10
     steps:
       - name: ⬇️ Checkout repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: 📥 Setup Bun
-        uses: oven-sh/setup-bun@v1
+        uses: oven-sh/setup-bun@v2
 
       - name: 📦 Install dependencies
         run: bun install
@@ -77,10 +77,34 @@ jobs:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
         run: bun prisma generate
 
+      - name: 🔎 Combined feature migration preflight
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
+        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f packages/prisma/scripts/combined-feature-preflight.sql
+
       - name: 🧱 Apply Prisma migrations
         env:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
         run: bun prisma migrate deploy
+
+      - name: ✅ Combined feature migration postcheck
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
+        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f packages/prisma/scripts/combined-feature-postcheck.sql
+
+      - name: 🧪 Exercise production node-postgres migration gates
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
+          COMBINED_FEATURE_GATE_INTEGRATION: 1
+          COMBINED_FEATURE_GATE_POSTCHECK: 1
+          COMBINED_FEATURE_GATE_NEGATIVES: 0
+        run: bun test ./packages/prisma/scripts/combined-feature-gate.integration.test.ts
+
+      - name: 🛡️ Prove fail-closed node-postgres migration gates
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
+          COMBINED_REHEARSAL_NEGATIVES_ONLY: 1
+        run: bash ./packages/prisma/scripts/rehearse-combined-feature-migrations.sh
 
       - name: 🎨 Backfill class artwork keys
         env:
@@ -97,15 +121,15 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - name: ⬇️ Checkout repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: ⎔ Setup node
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
 
       - name: 📥 Download deps
-        uses: oven-sh/setup-bun@v1
+        uses: oven-sh/setup-bun@v2
 
       - name: 📦 Install dependencies
         run: bun install
@@ -137,15 +161,15 @@ jobs:
           --health-retries=10
     steps:
       - name: ⬇️ Checkout repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: ⎔ Setup node
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
 
       - name: 📥 Setup Bun
-        uses: oven-sh/setup-bun@v1
+        uses: oven-sh/setup-bun@v2
 
       - name: 📦 Install dependencies
         run: bun install

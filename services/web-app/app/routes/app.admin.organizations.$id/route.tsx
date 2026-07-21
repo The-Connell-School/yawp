@@ -40,48 +40,44 @@ import { generateTOTP } from '~/utils/totp.server';
 import { getDomainUrl } from '~/utils/misc';
 import { Prisma } from '@app/prisma';
 import { normalizeEmail } from '~/utils/normalize-email';
+import { formatDateOnly } from '~/utils/date-only';
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   const currentUser = await requireAdmin(request);
   const profile = await requireMembership(request, currentUser.id);
 
-  const [
-    organization,
-    invitations,
-    totalOrganizations,
-    assignmentTypes,
-  ] =
+  const [organization, invitations, totalOrganizations, assignmentTypes] =
     await Promise.all([
-    prisma.organization.findUnique({
-      where: { id: params.id },
-      include: {
-        memberships: {
-          where: { isOrgOwner: true },
-          include: { user: { select: { name: true, email: true } } },
-        },
-        assignmentTypeAssignments: {
-          include: {
-            assignmentType: {
-              select: { id: true, title: true, description: true },
-            },
+      prisma.organization.findUnique({
+        where: { id: params.id },
+        include: {
+          memberships: {
+            where: { isOrgOwner: true },
+            include: { user: { select: { name: true, email: true } } },
           },
-          orderBy: { assignmentType: { position: 'asc' } },
+          assignmentTypeAssignments: {
+            include: {
+              assignmentType: {
+                select: { id: true, title: true, description: true },
+              },
+            },
+            orderBy: { assignmentType: { position: 'asc' } },
+          },
         },
-      },
-    }),
-    prisma.invitation.findMany({
-      where: {
-        metadata: JSON.stringify({ organizationId: params.id }),
-        type: 'onboard-owner',
-      },
-    }),
-    prisma.organization.count(),
-    prisma.assignmentType.findMany({
-      where: { archivedAt: null },
-      select: { id: true, title: true, description: true },
-      orderBy: { position: 'asc' },
-    }),
-  ]);
+      }),
+      prisma.invitation.findMany({
+        where: {
+          metadata: JSON.stringify({ organizationId: params.id }),
+          type: 'onboard-owner',
+        },
+      }),
+      prisma.organization.count(),
+      prisma.assignmentType.findMany({
+        where: { archivedAt: null },
+        select: { id: true, title: true, description: true },
+        orderBy: { position: 'asc' },
+      }),
+    ]);
 
   if (!organization) {
     throw new Response('Not Found', { status: 404 });
@@ -159,6 +155,11 @@ export async function action({ request, params }: ActionFunctionArgs) {
       formData.get('numOfTeacherSeats')?.toString() || '10'
     );
     const accessExpiresAt = formData.get('accessExpiresAt')?.toString();
+    const reporterEnabled = formData.get('reporterEnabled') === 'true';
+    const writingFundamentalsEnabled =
+      formData.get('writingFundamentalsEnabled') === 'true';
+    const classInsightsEnabled =
+      formData.get('classInsightsEnabled') === 'true';
     const assignmentTypeIds = Array.from(
       new Set(
         formData
@@ -189,6 +190,9 @@ export async function action({ request, params }: ActionFunctionArgs) {
           numOfStudentSeats,
           numOfTeacherSeats,
           accessExpiresAt: accessExpiresAt ? new Date(accessExpiresAt) : null,
+          reporterEnabled,
+          writingFundamentalsEnabled,
+          classInsightsEnabled,
         },
       }),
       prisma.organizationAssignmentType.deleteMany({
@@ -342,12 +346,7 @@ function OrganizationInviteEmail({
 }
 
 export default function OrganizationRoute() {
-  const {
-    organization,
-    invitations,
-    assignmentTypes,
-    canDelete,
-  } =
+  const { organization, invitations, assignmentTypes, canDelete } =
     useLoaderData<typeof loader>();
   const fetcher = useFetcher();
   const inviteFetcher = useFetcher();
@@ -449,12 +448,91 @@ export default function OrganizationRoute() {
 
                 <div
                   className="border-t pt-5"
-                  data-testid="organization-assignment-types-manager"
+                  data-testid="organization-combined-features-manager"
                 >
                   <div className="space-y-1">
                     <h3 className="text-sm font-semibold">
-                      Assignment Types
+                      Production pilot features
                     </h3>
+                    <p className="text-sm text-muted-foreground">
+                      Roll out Writing Fundamentals assignments and class
+                      insights independently by organization.
+                    </p>
+                  </div>
+                  <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                    <label className="flex min-h-12 items-start gap-3 rounded-md border bg-background px-3 py-2 text-sm">
+                      <input
+                        type="checkbox"
+                        name="writingFundamentalsEnabled"
+                        value="true"
+                        defaultChecked={organization.writingFundamentalsEnabled}
+                        className="mt-1 h-4 w-4"
+                      />
+                      <span className="min-w-0">
+                        <span className="block font-medium">
+                          Writing Fundamentals
+                        </span>
+                        <span className="block text-xs text-muted-foreground">
+                          Enables generated and teacher-assigned practice.
+                        </span>
+                      </span>
+                    </label>
+                    <label className="flex min-h-12 items-start gap-3 rounded-md border bg-background px-3 py-2 text-sm">
+                      <input
+                        type="checkbox"
+                        name="classInsightsEnabled"
+                        value="true"
+                        defaultChecked={organization.classInsightsEnabled}
+                        className="mt-1 h-4 w-4"
+                      />
+                      <span className="min-w-0">
+                        <span className="block font-medium">
+                          Class insights
+                        </span>
+                        <span className="block text-xs text-muted-foreground">
+                          Enables assignment-level AI class summaries.
+                        </span>
+                      </span>
+                    </label>
+                  </div>
+                </div>
+
+                <div
+                  className="border-t pt-5"
+                  data-testid="organization-reporter-manager"
+                >
+                  <div className="space-y-1">
+                    <h3 className="text-sm font-semibold">Yawp Reporter</h3>
+                    <p className="text-sm text-muted-foreground">
+                      Give teachers in this organization the chat-based reporter
+                      for class and student insights.
+                    </p>
+                  </div>
+                  <label className="mt-3 flex min-h-12 items-start gap-3 rounded-md border bg-background px-3 py-2 text-sm">
+                    <input
+                      type="checkbox"
+                      name="reporterEnabled"
+                      value="true"
+                      defaultChecked={organization.reporterEnabled}
+                      className="mt-1 h-4 w-4"
+                    />
+                    <span className="min-w-0">
+                      <span className="block font-medium">
+                        Enable Yawp Reporter
+                      </span>
+                      <span className="block text-xs text-muted-foreground">
+                        Adds a Reporter entry to the teacher sidebar.
+                      </span>
+                    </span>
+                  </label>
+                </div>
+
+                <div
+                  className="border-t pt-5"
+                  data-testid="organization-assignment-types-manager"
+                >
+                  <div className="space-y-1">
+                    <h3 className="text-sm font-semibold">Assignment Types</h3>
                     <p className="text-sm text-muted-foreground">
                       Select the assignment types teachers in this organization
                       can see and use.
@@ -469,7 +547,7 @@ export default function OrganizationRoute() {
                       {assignmentTypes.map((assignmentType) => (
                         <label
                           key={assignmentType.id}
-                          className="flex min-h-12 items-start gap-3 rounded-md border bg-background px-3 py-2 text-sm"
+                          className="flex min-h-12 min-w-0 items-start gap-3 overflow-hidden rounded-md border bg-background px-3 py-2 text-sm"
                         >
                           <input
                             type="checkbox"
@@ -478,14 +556,14 @@ export default function OrganizationRoute() {
                             defaultChecked={assignedAssignmentTypeIds.has(
                               assignmentType.id
                             )}
-                            className="mt-1 h-4 w-4"
+                            className="mt-1 h-4 w-4 shrink-0"
                           />
-                          <span className="min-w-0">
-                            <span className="block truncate font-medium">
+                          <span className="min-w-0 flex-1 overflow-hidden">
+                            <span className="block max-w-full truncate font-medium">
                               {assignmentType.title}
                             </span>
                             {assignmentType.description ? (
-                              <span className="block truncate text-xs text-muted-foreground">
+                              <span className="block max-w-full truncate text-xs text-muted-foreground">
                                 {assignmentType.description}
                               </span>
                             ) : null}
@@ -605,7 +683,7 @@ export default function OrganizationRoute() {
                   Created At
                 </dt>
                 <dd className="text-base">
-                  {new Date(organization.createdAt).toLocaleDateString()}
+                  {formatDateOnly(organization.createdAt)}
                 </dd>
               </div>
               {organization.accessExpiresAt && (
@@ -614,9 +692,7 @@ export default function OrganizationRoute() {
                     Access Expires
                   </dt>
                   <dd className="text-base">
-                    {new Date(
-                      organization.accessExpiresAt
-                    ).toLocaleDateString()}
+                    {formatDateOnly(organization.accessExpiresAt)}
                   </dd>
                 </div>
               )}
@@ -670,7 +746,7 @@ export default function OrganizationRoute() {
                     </TableCell>
                     <TableCell>{profile.user.email}</TableCell>
                     <TableCell>
-                      {new Date(profile.createdAt).toLocaleDateString()}
+                      {formatDateOnly(profile.createdAt)}
                     </TableCell>
                   </TableRow>
                 ))
@@ -689,7 +765,6 @@ export default function OrganizationRoute() {
           </Table>
         </CardContent>
       </Card>
-
     </div>
   );
 }

@@ -33,6 +33,10 @@ try {
       name: LOCAL_DEV_ORG_NAME,
       numOfStudentSeats: 200,
       numOfTeacherSeats: 40,
+      // Enable Yawp Reporter locally so teachers can exercise it in dev.
+      reporterEnabled: true,
+      writingFundamentalsEnabled: true,
+      classInsightsEnabled: true,
     },
   });
   console.timeEnd('organization');

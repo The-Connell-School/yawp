@@ -59,10 +59,7 @@ import {
   writeLastNonDocumentRoute,
 } from '~/utils/document-exit';
 import type { Route as RootRoute } from '../../+types/root';
-import {
-  FLAT_SIDEBAR_SECTIONS,
-  SidebarNavLinks,
-} from './sidebar-nav';
+import { FLAT_SIDEBAR_SECTIONS, SidebarNavLinks } from './sidebar-nav';
 
 export const NavExpandedContext = createContext({
   isMobileNavOpen: false,
@@ -89,10 +86,7 @@ function isAppNavLinkActive(linkTo: string, pathname: string) {
     return normalized === '/app';
   }
 
-  return (
-    normalized === linkTo ||
-    normalized.startsWith(`${linkTo}/`)
-  );
+  return normalized === linkTo || normalized.startsWith(`${linkTo}/`);
 }
 
 export default function Route() {
@@ -100,8 +94,7 @@ export default function Route() {
   const user = useUser();
   const rootData =
     useRouteLoaderData<RootRoute.ComponentProps['loaderData']>('root');
-  const isReadOnlyImpersonation =
-    rootData?.impersonation?.isReadOnly ?? false;
+  const isReadOnlyImpersonation = rootData?.impersonation?.isReadOnly ?? false;
   const studentPreviewActive = rootData?.studentPreview?.active ?? false;
   const canToggleStudentPreview =
     user.selectedMembership?.role === 'TEACHER' || user.isAdmin;
@@ -166,12 +159,9 @@ export default function Route() {
 
   return (
     <main
-      className={cn(
-        'flex h-screen min-h-screen overflow-hidden bg-background',
-        {
-          'overflow-hidden': isMobileNavOpen,
-        }
-      )}
+      className={cn('flex h-dvh min-h-dvh overflow-hidden bg-background', {
+        'overflow-hidden': isMobileNavOpen,
+      })}
     >
       {/* Left navigation panel */}
       <nav
@@ -188,7 +178,7 @@ export default function Route() {
             'p-3': navExpanded,
           })}
         >
-          <Link to=".">
+          <Link to="/app">
             <img
               src="/img/logo_for_light_mode.png"
               alt="Logo"
@@ -277,7 +267,11 @@ export default function Route() {
                       ? user.selectedMembership?.id === m.id
                       : user.memberships?.[0]?.id === m.id;
                     return (
-                      <Form method="POST" action="/api/membership-id" key={m.id}>
+                      <Form
+                        method="POST"
+                        action="/api/membership-id"
+                        key={m.id}
+                      >
                         <input
                           type="hidden"
                           name="intent"
@@ -354,7 +348,7 @@ export default function Route() {
       </nav>
       <div
         className={cn(
-          'min-w-full flex-1 transition-all duration-300 ease-in-out sm:min-w-0 sm:translate-x-0',
+          'flex min-h-0 min-w-full flex-1 flex-col transition-all duration-300 ease-in-out sm:min-w-0 sm:translate-x-0',
           {
             'translate-x-0': isMobileNavOpen,
             '-translate-x-[212px]': isNavExpanded,
@@ -418,7 +412,9 @@ export default function Route() {
         <NavExpandedContext.Provider
           value={{ isMobileNavOpen, setIsMobileNavOpen }}
         >
-          <Outlet key={location.pathname} />
+          <div className="min-h-0 flex-1">
+            <Outlet key={location.pathname} />
+          </div>
         </NavExpandedContext.Provider>
       </div>
       <UserSettingsDialog
@@ -526,7 +522,11 @@ function UserSettingsDialog({
           </div>
         </div>
         <DialogFooter className="mt-2">
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+          >
             Close
           </Button>
         </DialogFooter>

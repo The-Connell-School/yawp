@@ -110,7 +110,9 @@ describe('admin organization detail route', () => {
 
   test('does not load writing practice state for the organization edit sheet', async () => {
     const response = await loader({
-      request: new Request('https://example.test/app/admin/organizations/org-1'),
+      request: new Request(
+        'https://example.test/app/admin/organizations/org-1'
+      ),
       params: { id: 'org-1' },
       context: {} as never,
     });
@@ -138,5 +140,62 @@ describe('admin organization detail route', () => {
       { operation: 'update-org' },
       { operation: 'delete-org-assignment-types' },
     ]);
+  });
+
+  test('enables Yawp Reporter when the toggle is checked', async () => {
+    const form = new URLSearchParams();
+    form.set('intent', 'update');
+    form.set('name', 'Test Org');
+    form.set('numOfStudentSeats', '30');
+    form.set('numOfTeacherSeats', '10');
+    form.set('reporterEnabled', 'true');
+
+    await action({
+      request: updateRequest(form),
+      params: { id: 'org-1' },
+      context: {} as never,
+    });
+
+    const updateArg = prisma.organization.update.mock.calls[0][0];
+    expect(updateArg.data.reporterEnabled).toBe(true);
+  });
+
+  test('disables Yawp Reporter when the toggle is absent', async () => {
+    const form = new URLSearchParams();
+    form.set('intent', 'update');
+    form.set('name', 'Test Org');
+    form.set('numOfStudentSeats', '30');
+    form.set('numOfTeacherSeats', '10');
+
+    await action({
+      request: updateRequest(form),
+      params: { id: 'org-1' },
+      context: {} as never,
+    });
+
+    const updateArg = prisma.organization.update.mock.calls[0][0];
+    expect(updateArg.data.reporterEnabled).toBe(false);
+  });
+
+  test('updates the independent Writing Fundamentals and class insight gates', async () => {
+    const form = new URLSearchParams();
+    form.set('intent', 'update');
+    form.set('name', 'Test Org');
+    form.set('numOfStudentSeats', '30');
+    form.set('numOfTeacherSeats', '10');
+    form.set('writingFundamentalsEnabled', 'true');
+    form.set('classInsightsEnabled', 'true');
+
+    await action({
+      request: updateRequest(form),
+      params: { id: 'org-1' },
+      context: {} as never,
+    });
+
+    const updateArg = prisma.organization.update.mock.calls[0][0];
+    expect(updateArg.data).toMatchObject({
+      writingFundamentalsEnabled: true,
+      classInsightsEnabled: true,
+    });
   });
 });

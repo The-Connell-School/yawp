@@ -15,21 +15,22 @@ Keep the existing hue and saturation while darkening the standard light-theme
 tokens enough to clear 4.5:1 against the surfaces used by the application:
 
 - `--primary`: lightness 57.0588% -> 40%.
-- `--muted-foreground`: lightness 49.0196% -> 38%.
-- High-contrast `--primary`: lightness 40% -> 34%, so the optional mode
-  remains materially stronger than the standard accessible palette.
+- `--muted-foreground`: lightness 49.0196% -> 36%.
+- High-contrast `--primary`: lightness 40% -> 30%, and high-contrast
+  `--muted-foreground`: lightness 36% -> 28%, so the optional mode remains
+  materially stronger than the standard accessible palette.
 
 Calculated contrast for the new values:
 
 - Primary foreground on primary: 5.96:1.
 - Primary on page background: 5.51:1.
 - Primary on a 10% primary overlay: 4.79:1.
-- Muted foreground on muted: 6.01:1.
-- Muted foreground on page background: 5.56:1.
-- Muted foreground on secondary: 4.69:1.
+- Muted foreground on muted: 6.51:1.
+- Muted foreground on page background: 6.02:1.
+- Muted foreground on secondary: 5.07:1.
 
-The high-contrast override remains at muted foreground lightness 36%. Dark-theme
-tokens are not changed because they were not implicated by the failing evidence.
+Dark-theme tokens are not changed because they were not implicated by the
+failing evidence.
 
 ## Verification
 

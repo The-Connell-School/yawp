@@ -1,3 +1,4 @@
+import { Prisma } from '@app/prisma';
 import {
   type ActionFunctionArgs,
   type LoaderFunctionArgs,
@@ -34,7 +35,10 @@ import {
   TableHeader,
   TableRow,
 } from '~/components/ui/table';
-import { AssignmentCreationSheet } from '~/components/assignments/assignment-creation-sheet';
+import {
+  AssignmentCreationSheet,
+  WRITING_PRACTICE_TYPE_ID,
+} from '~/components/assignments/assignment-creation-sheet';
 import {
   AssignmentEditSheet,
   type AssignmentEditRecord,
@@ -44,6 +48,7 @@ import { getAvailableAssignmentTypesForScopes } from '~/utils/assignment-type-ac
 import { parseAssignmentGradingIntent } from '~/utils/assignment-grading-intent.server';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
+import { getQuickWritingLessonGroups } from '~/utils/writing-lessons/static-lessons.server';
 
 export const handle = { breadcrumb: 'Assignments' };
 
@@ -71,12 +76,14 @@ export function sanitizeAssignmentCreateReturnTo(value: string | null) {
 export async function action({ request }: ActionFunctionArgs) {
   const userId = await requireUserId(request);
   const profile = await requireMembership(request, userId);
-  if (profile.role !== "TEACHER") {
+  if (profile.role !== 'TEACHER') {
     return dataResponse(
       { success: false, message: 'Only teachers can manage assignments.' },
       { status: 403 }
     );
   }
+  const writingFundamentalsEnabled =
+    profile.organization.writingFundamentalsEnabled;
 
   const formData = await request.formData();
   const intent = formData.get('intent')?.toString();
@@ -95,52 +102,105 @@ export async function action({ request }: ActionFunctionArgs) {
 
   if (intent === 'delete-assignments') {
     const assignmentIds = formData.getAll('assignmentIds') as string[];
+    const practiceAssignmentIds = formData.getAll(
+      'practiceAssignmentIds'
+    ) as string[];
 
-    if (!assignmentIds.length) {
+    if (practiceAssignmentIds.length > 0 && !writingFundamentalsEnabled) {
+      return dataResponse(
+        { success: false, message: 'Writing Fundamentals is not enabled.' },
+        { status: 404 }
+      );
+    }
+
+    if (!assignmentIds.length && !practiceAssignmentIds.length) {
       return dataResponse(
         { success: false, message: 'Select at least one assignment.' },
         { status: 400 }
       );
     }
 
-    const assignments = await prisma.assignment.findMany({
-      where: {
-        id: { in: assignmentIds },
-        classAssignments: {
-          some: {
-            class: { teachers: { some: { id: profile.id } } },
-          },
-        },
-      },
-      select: {
-        id: true,
-        classAssignments: {
-          select: {
-            class: {
-              select: {
-                id: true,
-                school: { select: { id: true, organizationId: true } },
-              },
-            },
-          },
-        },
-      },
-    });
+    const deleted = await prisma.$transaction(
+      async (transaction) => {
+        const [assignments, practiceAssignments] = await Promise.all([
+          assignmentIds.length
+            ? transaction.assignment.findMany({
+                where: {
+                  id: { in: assignmentIds },
+                  classAssignments: {
+                    some: {},
+                    every: {
+                      class: {
+                        teachers: { some: { id: profile.id } },
+                        school: {
+                          organizationId: profile.organization.id,
+                        },
+                      },
+                    },
+                  },
+                },
+                select: { id: true },
+              })
+            : [],
+          practiceAssignmentIds.length
+            ? transaction.writingPracticeAssignment.findMany({
+                where: {
+                  id: { in: practiceAssignmentIds },
+                  classAssignments: {
+                    // Parent deletion cascades to every deployment and attempt,
+                    // so partial/co-teacher ownership is never sufficient.
+                    some: {},
+                    every: {
+                      class: {
+                        teachers: { some: { id: profile.id } },
+                        school: {
+                          organizationId: profile.organization.id,
+                        },
+                      },
+                    },
+                  },
+                },
+                select: { id: true },
+              })
+            : [],
+        ]);
 
-    if (assignments.length !== assignmentIds.length) {
+        if (
+          assignments.length !== assignmentIds.length ||
+          practiceAssignments.length !== practiceAssignmentIds.length
+        ) {
+          return false;
+        }
+
+        await Promise.all([
+          assignmentIds.length
+            ? transaction.assignment.deleteMany({
+                where: { id: { in: assignmentIds } },
+              })
+            : null,
+          practiceAssignmentIds.length
+            ? transaction.writingPracticeAssignment.deleteMany({
+                where: { id: { in: practiceAssignmentIds } },
+              })
+            : null,
+        ]);
+        return true;
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }
+    );
+
+    if (!deleted) {
       return dataResponse(
         { success: false, message: 'Some assignments were not found.' },
         { status: 400 }
       );
     }
 
-    await prisma.assignment.deleteMany({
-      where: { id: { in: assignmentIds } },
-    });
-
     return dataResponse({
       success: true,
-      message: `Deleted ${assignmentIds.length} assignment(s).`,
+      message: `Deleted ${
+        assignmentIds.length + practiceAssignmentIds.length
+      } assignment(s).`,
     });
   }
 
@@ -155,8 +215,12 @@ export async function action({ request }: ActionFunctionArgs) {
     where: {
       id: assignmentId,
       classAssignments: {
-        some: {
-          class: { teachers: { some: { id: profile.id } } },
+        some: {},
+        every: {
+          class: {
+            teachers: { some: { id: profile.id } },
+            school: { organizationId: profile.organization.id },
+          },
         },
       },
     },
@@ -190,7 +254,35 @@ export async function action({ request }: ActionFunctionArgs) {
 
   if (intent === 'delete-assignment') {
     // Documents keep their content; the assignment link is set to null by the schema.
-    await prisma.assignment.delete({ where: { id: assignment.id } });
+    const deleted = await prisma.$transaction(
+      async (transaction) => {
+        const owned = await transaction.assignment.findFirst({
+          where: {
+            id: assignment.id,
+            classAssignments: {
+              some: {},
+              every: {
+                class: {
+                  teachers: { some: { id: profile.id } },
+                  school: { organizationId: profile.organization.id },
+                },
+              },
+            },
+          },
+          select: { id: true },
+        });
+        if (!owned) return false;
+        await transaction.assignment.delete({ where: { id: owned.id } });
+        return true;
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }
+    );
+    if (!deleted) {
+      return dataResponse(
+        { success: false, message: 'Assignment not found.' },
+        { status: 404 }
+      );
+    }
     return dataResponse({
       success: true,
       message: 'Assignment deleted successfully.',
@@ -259,20 +351,48 @@ export async function action({ request }: ActionFunctionArgs) {
     );
   }
 
-  await prisma.assignment.update({
-    where: { id: assignment.id },
-    data: {
-      assignmentTypeId,
-      title,
-      prompt,
-      ...(gradingIntent?.success
-        ? {
-            submitForGrade: gradingIntent.data.submitForGrade,
-            pointValue: gradingIntent.data.pointValue,
-          }
-        : {}),
+  const updated = await prisma.$transaction(
+    async (transaction) => {
+      const owned = await transaction.assignment.findFirst({
+        where: {
+          id: assignment.id,
+          classAssignments: {
+            some: {},
+            every: {
+              class: {
+                teachers: { some: { id: profile.id } },
+                school: { organizationId: profile.organization.id },
+              },
+            },
+          },
+        },
+        select: { id: true },
+      });
+      if (!owned) return false;
+      await transaction.assignment.update({
+        where: { id: owned.id },
+        data: {
+          assignmentTypeId,
+          title,
+          prompt,
+          ...(gradingIntent?.success
+            ? {
+                submitForGrade: gradingIntent.data.submitForGrade,
+                pointValue: gradingIntent.data.pointValue,
+              }
+            : {}),
+        },
+      });
+      return true;
     },
-  });
+    { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }
+  );
+  if (!updated) {
+    return dataResponse(
+      { success: false, message: 'Assignment not found.' },
+      { status: 404 }
+    );
+  }
 
   return dataResponse({
     success: true,
@@ -283,7 +403,7 @@ export async function action({ request }: ActionFunctionArgs) {
 export async function loader({ request }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
   const profile = await requireMembership(request, userId);
-  if (profile.role !== "TEACHER") {
+  if (profile.role !== 'TEACHER') {
     return redirect('/app');
   }
 
@@ -305,14 +425,15 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const classIds = classes.map((klass) => klass.id);
   const hasActiveClasses = classIds.length > 0;
 
-  const [assignments, allowedAssignmentTypes] = await Promise.all([
-    hasActiveClasses
-      ? prisma.assignment.findMany({
-          where: {
-            classAssignments: {
-              some: { classId: { in: classIds } },
+  const [assignments, allowedAssignmentTypes, practiceAssignments] =
+    await Promise.all([
+      hasActiveClasses
+        ? prisma.assignment.findMany({
+            where: {
+              classAssignments: {
+                some: { classId: { in: classIds } },
+              },
             },
-          },
             select: {
               id: true,
               title: true,
@@ -329,7 +450,12 @@ export async function loader({ request }: LoaderFunctionArgs) {
                 select: {
                   id: true,
                   class: {
-                    select: { id: true, grade: true, period: true, title: true },
+                    select: {
+                      id: true,
+                      grade: true,
+                      period: true,
+                      title: true,
+                    },
                   },
                   _count: { select: { documents: true } },
                 },
@@ -338,29 +464,88 @@ export async function loader({ request }: LoaderFunctionArgs) {
             orderBy: [{ createdAt: 'desc' }],
           })
         : [],
-    hasActiveClasses
-      ? getAvailableAssignmentTypesForScopes<{
-          id: string;
-          title: string;
-          systemKey: string | null;
-        }>({
-          scopes: classes.map((klass) => ({
-            organizationId: klass.school.organizationId,
-            schoolId: klass.school.id,
-            teacherProfileId: profile.id,
-          })),
-          select: { id: true, title: true, systemKey: true },
-          orderBy: { position: 'asc' },
-        })
-      : [],
-  ]);
+      hasActiveClasses
+        ? getAvailableAssignmentTypesForScopes<{
+            id: string;
+            title: string;
+            systemKey: string | null;
+          }>({
+            scopes: classes.map((klass) => ({
+              organizationId: klass.school.organizationId,
+              schoolId: klass.school.id,
+              teacherProfileId: profile.id,
+            })),
+            select: { id: true, title: true, systemKey: true },
+            orderBy: { position: 'asc' },
+          })
+        : [],
+      hasActiveClasses && profile.organization.writingFundamentalsEnabled
+        ? prisma.writingPracticeAssignment.findMany({
+            where: {
+              classAssignments: {
+                some: { classId: { in: classIds } },
+              },
+            },
+            select: {
+              id: true,
+              title: true,
+              lessonSlugs: true,
+              problemCount: true,
+              dueAt: true,
+              createdAt: true,
+              classAssignments: {
+                where: { classId: { in: classIds } },
+                select: {
+                  id: true,
+                  class: {
+                    select: {
+                      id: true,
+                      grade: true,
+                      period: true,
+                      title: true,
+                    },
+                  },
+                  _count: { select: { attempts: true } },
+                },
+              },
+            },
+            orderBy: [{ createdAt: 'desc' }],
+          })
+        : [],
+    ]);
 
   const genericAssignmentTypes = allowedAssignmentTypes.filter(
     (type) => type.systemKey !== AP_HISTORY_ASSIGNMENT_TYPE_KEY
   );
 
+  const writingPracticeLessons =
+    hasActiveClasses && profile.organization.writingFundamentalsEnabled
+      ? getQuickWritingLessonGroups().flatMap((group) =>
+          group.lessons.map((lesson) => ({
+            slug: lesson.slug,
+            title: lesson.title,
+            category: lesson.category,
+          }))
+        )
+      : [];
+
+  const lessonTitleBySlug = new Map(
+    writingPracticeLessons.map((lesson) => [lesson.slug, lesson.title])
+  );
+
   return dataResponse({
     assignments,
+    writingPracticeAssignments: practiceAssignments.map((assignment) => ({
+      id: assignment.id,
+      title: assignment.title,
+      problemCount: assignment.problemCount,
+      lessonTitles: assignment.lessonSlugs.map(
+        (slug) => lessonTitleBySlug.get(slug) ?? slug
+      ),
+      dueAt: assignment.dueAt ? assignment.dueAt.toISOString() : null,
+      createdAt: assignment.createdAt,
+      classAssignments: assignment.classAssignments,
+    })),
     classes: classes.map((klass) => ({
       id: klass.id,
       grade: klass.grade,
@@ -382,6 +567,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
     })),
     assignmentsEnabled: hasActiveClasses,
     hasActiveClasses,
+    writingPracticeLessons,
+    writingFundamentalsEnabled: profile.organization.writingFundamentalsEnabled,
   });
 }
 
@@ -400,6 +587,26 @@ type AssignmentRow = {
     _count: { documents: number };
   }>;
 };
+
+type PracticeAssignmentRow = {
+  id: string;
+  title: string | null;
+  problemCount: number;
+  lessonTitles: string[];
+  dueAt: string | null;
+  createdAt: Date | string;
+  classAssignments: Array<{
+    id: string;
+    class: { id: string; grade: string; period: string; title: string | null };
+    _count: { attempts: number };
+  }>;
+};
+
+type TableRowData =
+  | ({ kind: 'standard' } & AssignmentRow)
+  | ({ kind: 'practice' } & PracticeAssignmentRow);
+
+const WRITING_PRACTICE_TYPE_TITLE = 'Writing Fundamentals Practice';
 
 export default function AssignmentsRoute() {
   const data = useLoaderData<typeof loader>();
@@ -446,6 +653,26 @@ export default function AssignmentsRoute() {
   const typeFilter = searchParams.get('type') ?? 'all';
 
   const assignments = data.assignments as AssignmentRow[];
+  const practiceAssignments =
+    data.writingPracticeAssignments as PracticeAssignmentRow[];
+
+  const rows = useMemo<TableRowData[]>(
+    () =>
+      [
+        ...assignments.map((assignment) => ({
+          kind: 'standard' as const,
+          ...assignment,
+        })),
+        ...practiceAssignments.map((assignment) => ({
+          kind: 'practice' as const,
+          ...assignment,
+        })),
+      ].sort(
+        (a, b) =>
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      ),
+    [assignments, practiceAssignments]
+  );
 
   const typeOptions = useMemo(() => {
     const byId = new Map<string, { id: string; title: string }>();
@@ -455,22 +682,31 @@ export default function AssignmentsRoute() {
         title: assignment.assignmentType.title,
       });
     }
+    if (practiceAssignments.length > 0) {
+      byId.set(WRITING_PRACTICE_TYPE_ID, {
+        id: WRITING_PRACTICE_TYPE_ID,
+        title: WRITING_PRACTICE_TYPE_TITLE,
+      });
+    }
     return Array.from(byId.values()).sort((a, b) =>
       a.title.localeCompare(b.title)
     );
-  }, [assignments]);
+  }, [assignments, practiceAssignments]);
 
-  const filteredAssignments = useMemo(
+  const filteredRows = useMemo(
     () =>
-      assignments.filter(
-        (assignment) =>
+      rows.filter(
+        (row) =>
           (classFilter === 'all' ||
-            assignment.classAssignments.some(
+            row.classAssignments.some(
               (deployment) => deployment.class.id === classFilter
             )) &&
-          (typeFilter === 'all' || assignment.assignmentType.id === typeFilter)
+          (typeFilter === 'all' ||
+            (row.kind === 'practice'
+              ? typeFilter === WRITING_PRACTICE_TYPE_ID
+              : row.assignmentType.id === typeFilter))
       ),
-    [assignments, classFilter, typeFilter]
+    [rows, classFilter, typeFilter]
   );
 
   const hasFilters = classFilter !== 'all' || typeFilter !== 'all';
@@ -478,9 +714,8 @@ export default function AssignmentsRoute() {
   const editingAssignment: (AssignmentRow & AssignmentEditRecord) | null =
     useMemo(
       () =>
-        assignments.find(
-          (candidate) => candidate.id === editingAssignmentId
-        ) ?? null,
+        assignments.find((candidate) => candidate.id === editingAssignmentId) ??
+        null,
       [assignments, editingAssignmentId]
     );
 
@@ -489,19 +724,24 @@ export default function AssignmentsRoute() {
     setSelected: setSelectedAssignmentIds,
     handleSelectAll,
     handleSelect,
-  } = useTable({ rows: filteredAssignments });
+  } = useTable({ rows: filteredRows });
 
-  const selectedAssignments = useMemo(
-    () =>
-      filteredAssignments.filter((assignment) =>
-        selectedAssignmentIds.includes(assignment.id)
-      ),
-    [filteredAssignments, selectedAssignmentIds]
+  const selectedRows = useMemo(
+    () => filteredRows.filter((row) => selectedAssignmentIds.includes(row.id)),
+    [filteredRows, selectedAssignmentIds]
   );
 
+  const selectedStandardIds = selectedRows
+    .filter((row) => row.kind === 'standard')
+    .map((row) => row.id);
+  const selectedPracticeIds = selectedRows
+    .filter((row) => row.kind === 'practice')
+    .map((row) => row.id);
+
   const canEditSelectedAssignment =
-    selectedAssignments.length === 1 &&
-    selectedAssignments[0]!.assignmentType.systemKey !==
+    selectedRows.length === 1 &&
+    selectedRows[0]!.kind === 'standard' &&
+    selectedRows[0]!.assignmentType.systemKey !==
       AP_HISTORY_ASSIGNMENT_TYPE_KEY;
 
   const updateFilter = (key: 'class' | 'type', value: string) => {
@@ -522,8 +762,8 @@ export default function AssignmentsRoute() {
             <div>
               <h2>Assignments</h2>
               <p className="mt-3 max-w-full text-muted-foreground sm:max-w-[460px]">
-                Create assignments and apply them to your classes. Grading
-                lives in Documents.
+                Create assignments and apply them to your classes. Grading lives
+                in Documents.
               </p>
             </div>
           </div>
@@ -534,9 +774,7 @@ export default function AssignmentsRoute() {
         {!data.hasActiveClasses ? (
           <div className="flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed bg-muted p-12 text-center">
             <ClipboardList className="h-8 w-8 text-muted-foreground" />
-            <span className="text-lg font-bold">
-              No active classes
-            </span>
+            <span className="text-lg font-bold">No active classes</span>
             <span className="text-sm text-muted-foreground">
               You are not assigned to any active classes yet.
             </span>
@@ -602,8 +840,10 @@ export default function AssignmentsRoute() {
                     text={
                       canEditSelectedAssignment
                         ? 'Edit assignment'
-                        : selectedAssignments.length === 1
-                          ? 'Edit this assignment from the APUSH library'
+                        : selectedRows.length === 1
+                          ? selectedRows[0]!.kind === 'practice'
+                            ? 'Open the practice assignment to see results'
+                            : 'Edit this assignment from the APUSH library'
                           : 'Select one assignment to edit'
                     }
                   >
@@ -615,7 +855,7 @@ export default function AssignmentsRoute() {
                       aria-label="Edit selected assignment"
                       onClick={() => {
                         if (!canEditSelectedAssignment) return;
-                        setEditingAssignmentId(selectedAssignments[0]!.id);
+                        setEditingAssignmentId(selectedRows[0]!.id);
                         setSelectedAssignmentIds([]);
                       }}
                     >
@@ -627,13 +867,22 @@ export default function AssignmentsRoute() {
                     className="inline"
                     onSubmit={(event) => {
                       const count = selectedAssignmentIds.length;
-                      if (
-                        !window.confirm(
-                          count === 1
-                            ? 'Delete this assignment? Existing student documents will remain, but they will no longer be linked to this assignment.'
-                            : `Delete ${count} assignments? Existing student documents will remain, but they will no longer be linked to these assignments.`
-                        )
-                      ) {
+                      const parts = [
+                        count === 1
+                          ? 'Delete this assignment?'
+                          : `Delete ${count} assignments?`,
+                      ];
+                      if (selectedStandardIds.length > 0) {
+                        parts.push(
+                          'Existing student documents will remain, but they will no longer be linked.'
+                        );
+                      }
+                      if (selectedPracticeIds.length > 0) {
+                        parts.push(
+                          'Student progress on writing practice will be deleted.'
+                        );
+                      }
+                      if (!window.confirm(parts.join(' '))) {
                         event.preventDefault();
                         return;
                       }
@@ -645,11 +894,19 @@ export default function AssignmentsRoute() {
                       name="intent"
                       value="delete-assignments"
                     />
-                    {selectedAssignmentIds.map((id) => (
+                    {selectedStandardIds.map((id) => (
                       <input
                         key={id}
                         type="hidden"
                         name="assignmentIds"
+                        value={id}
+                      />
+                    ))}
+                    {selectedPracticeIds.map((id) => (
+                      <input
+                        key={id}
+                        type="hidden"
+                        name="practiceAssignmentIds"
                         value={id}
                       />
                     ))}
@@ -678,7 +935,7 @@ export default function AssignmentsRoute() {
               </Button>
             </div>
 
-            {filteredAssignments.length === 0 ? (
+            {filteredRows.length === 0 ? (
               <div className="flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed bg-muted p-12 text-center">
                 <span className="text-lg font-bold">
                   {hasFilters ? 'No assignments match' : 'No assignments yet'}
@@ -698,9 +955,8 @@ export default function AssignmentsRoute() {
                         <Checkbox
                           aria-label="Select all assignments"
                           checked={
-                            filteredAssignments.length > 0 &&
-                            selectedAssignmentIds.length ===
-                              filteredAssignments.length
+                            filteredRows.length > 0 &&
+                            selectedAssignmentIds.length === filteredRows.length
                           }
                           onCheckedChange={handleSelectAll}
                         />
@@ -708,11 +964,91 @@ export default function AssignmentsRoute() {
                       <TableHead>Assignment</TableHead>
                       <TableHead>Assignment Type</TableHead>
                       <TableHead>Applied to</TableHead>
+                      <TableHead>Class summary</TableHead>
                       <TableHead className="pr-4">Documents</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredAssignments.map((assignment) => {
+                    {filteredRows.map((row) => {
+                      if (row.kind === 'practice') {
+                        const resultsHref = row.classAssignments[0]
+                          ? `/app/writing-lessons/results/${row.classAssignments[0].id}`
+                          : '/app/writing-lessons';
+                        return (
+                          <TableRow key={row.id}>
+                            <TableCell className="max-h-[37px] pl-4">
+                              <Checkbox
+                                aria-label={`Select assignment ${
+                                  row.title?.trim() ||
+                                  WRITING_PRACTICE_TYPE_TITLE
+                                }`}
+                                checked={selectedAssignmentIds.includes(row.id)}
+                                onCheckedChange={() => handleSelect(row.id)}
+                              />
+                            </TableCell>
+                            <TableCell className="max-w-[320px] font-medium">
+                              <Link
+                                to={resultsHref}
+                                data-testid={`assignment-open-${row.id}`}
+                                className="flex min-w-0 flex-1 flex-col gap-1 text-left hover:text-primary"
+                              >
+                                <span>
+                                  {row.title?.trim() ||
+                                    WRITING_PRACTICE_TYPE_TITLE}
+                                </span>
+                                <span className="line-clamp-1 text-xs font-normal text-muted-foreground">
+                                  {row.problemCount} problems ·{' '}
+                                  {row.lessonTitles.join(', ')}
+                                </span>
+                              </Link>
+                            </TableCell>
+                            <TableCell className="text-muted-foreground">
+                              {WRITING_PRACTICE_TYPE_TITLE}
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex flex-col gap-1">
+                                {row.classAssignments.map((deployment) => (
+                                  <Link
+                                    key={deployment.id}
+                                    to={`/app/writing-lessons/results/${deployment.id}`}
+                                    className="text-sm hover:underline"
+                                  >
+                                    {formatClassLabel(deployment.class)}
+                                  </Link>
+                                ))}
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex flex-col gap-1">
+                                {row.classAssignments.map((deployment) => (
+                                  <Link
+                                    key={deployment.id}
+                                    to={`/app/writing-lessons/results/${deployment.id}`}
+                                    className="inline-flex w-fit items-center gap-1 text-sm text-primary hover:underline"
+                                  >
+                                    {row.classAssignments.length > 1
+                                      ? formatClassLabel(deployment.class)
+                                      : 'Summary'}
+                                    <span className="text-muted-foreground">
+                                      ({deployment._count.attempts} attempts)
+                                    </span>
+                                  </Link>
+                                ))}
+                              </div>
+                            </TableCell>
+                            <TableCell className="pr-4">
+                              <span
+                                className="text-sm text-muted-foreground"
+                                aria-label="No documents for writing practice"
+                              >
+                                —
+                              </span>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      }
+
+                      const assignment = row;
                       const canEdit =
                         assignment.assignmentType.systemKey !==
                         AP_HISTORY_ASSIGNMENT_TYPE_KEY;
@@ -735,44 +1071,44 @@ export default function AssignmentsRoute() {
                           </TableCell>
                           <TableCell className="max-w-[320px] font-medium">
                             <div className="flex items-start gap-2">
-                            <button
-                              type="button"
-                              data-testid={`assignment-open-${assignment.id}`}
-                              className={cn(
-                                'flex min-w-0 flex-1 flex-col gap-1 text-left',
-                                canEdit
-                                  ? 'cursor-pointer hover:text-primary'
-                                  : 'cursor-default text-foreground'
-                              )}
-                              disabled={!canEdit}
-                              onClick={() =>
-                                setEditingAssignmentId(assignment.id)
-                              }
-                            >
-                              <span>
-                                {assignment.title?.trim() ||
-                                  'Untitled Assignment'}
-                              </span>
-                              <span className="line-clamp-1 text-xs font-normal text-muted-foreground">
-                                {assignment.prompt}
-                              </span>
-                            </button>
-                            {canEdit ? (
-                              <Tooltip text="Duplicate">
-                                <Button
-                                  type="button"
-                                  size="icon-sm"
-                                  variant="ghost"
-                                  aria-label="Duplicate"
-                                  onClick={() => {
-                                    setDuplicateAssignment(assignment);
-                                    setIsCreateSheetOpen(true);
-                                  }}
-                                >
-                                  <Copy className="h-4 w-4" />
-                                </Button>
-                              </Tooltip>
-                            ) : null}
+                              <button
+                                type="button"
+                                data-testid={`assignment-open-${assignment.id}`}
+                                className={cn(
+                                  'flex min-w-0 flex-1 flex-col gap-1 text-left',
+                                  canEdit
+                                    ? 'cursor-pointer hover:text-primary'
+                                    : 'cursor-default text-foreground'
+                                )}
+                                disabled={!canEdit}
+                                onClick={() =>
+                                  setEditingAssignmentId(assignment.id)
+                                }
+                              >
+                                <span>
+                                  {assignment.title?.trim() ||
+                                    'Untitled Assignment'}
+                                </span>
+                                <span className="line-clamp-1 text-xs font-normal text-muted-foreground">
+                                  {assignment.prompt}
+                                </span>
+                              </button>
+                              {canEdit ? (
+                                <Tooltip text="Duplicate">
+                                  <Button
+                                    type="button"
+                                    size="icon-sm"
+                                    variant="ghost"
+                                    aria-label="Duplicate"
+                                    onClick={() => {
+                                      setDuplicateAssignment(assignment);
+                                      setIsCreateSheetOpen(true);
+                                    }}
+                                  >
+                                    <Copy className="h-4 w-4" />
+                                  </Button>
+                                </Tooltip>
+                              ) : null}
                             </div>
                           </TableCell>
                           <TableCell className="text-muted-foreground">
@@ -790,6 +1126,32 @@ export default function AssignmentsRoute() {
                                 </Link>
                               ))}
                             </div>
+                          </TableCell>
+                          <TableCell>
+                            {assignment.classAssignments.length > 0 ? (
+                              <div className="flex flex-col gap-1">
+                                {assignment.classAssignments.map(
+                                  (deployment) => (
+                                    <Link
+                                      key={deployment.id}
+                                      to={`/app/my-classes/${deployment.class.id}/assignments/${assignment.id}`}
+                                      title={`Class performance summary — ${formatClassLabel(
+                                        deployment.class
+                                      )}`}
+                                      className="inline-flex w-fit items-center gap-1 text-sm text-primary hover:underline"
+                                    >
+                                      {assignment.classAssignments.length > 1
+                                        ? formatClassLabel(deployment.class)
+                                        : 'Summary'}
+                                    </Link>
+                                  )
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-sm text-muted-foreground">
+                                —
+                              </span>
+                            )}
                           </TableCell>
                           <TableCell className="pr-4">
                             <Badge variant="secondary" size="sm">
@@ -857,6 +1219,8 @@ export default function AssignmentsRoute() {
             : undefined
         }
         initialPrompt={duplicateAssignment?.prompt}
+        writingPracticeEnabled={data.writingFundamentalsEnabled}
+        writingPracticeLessons={data.writingPracticeLessons}
       />
 
       {editingAssignment ? (
@@ -865,9 +1229,7 @@ export default function AssignmentsRoute() {
           onOpenChange={(open) => {
             if (!open) setEditingAssignmentId(null);
           }}
-          pdfClassId={
-            editingAssignment.classAssignments[0]?.class.id ?? ''
-          }
+          pdfClassId={editingAssignment.classAssignments[0]?.class.id ?? ''}
           allowedAssignmentTypes={data.assignmentTypes}
           editingAssignment={editingAssignment}
         />

@@ -136,7 +136,14 @@ export async function loader({ request }: LoaderFunctionArgs) {
                   id: true,
                   role: true,
                   isOrgOwner: true,
-                  organization: { select: { name: true } },
+                  organization: {
+                    select: {
+                      name: true,
+                      reporterEnabled: true,
+                      writingFundamentalsEnabled: true,
+                      classInsightsEnabled: true,
+                    },
+                  },
                 },
               },
             },
@@ -166,9 +173,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
     user?.memberships.find((m) => m.id === membershipId) ??
     user?.memberships[0];
   const impersonation = await getImpersonationState(request);
-  const { getStudentPreviewState } = await import(
-    './utils/student-preview.server.ts'
-  );
+  const { getStudentPreviewState } =
+    await import('./utils/student-preview.server.ts');
   const studentPreview = await getStudentPreviewState(request);
   const bannerWarning = getEnvironmentBannerWarning(request.url);
   const localDevQuickLoginEnabled = shouldEnableLocalDevQuickLogin({
@@ -238,7 +244,7 @@ function Document({
         <meta charSet="utf-8" />
         <meta
           name="viewport"
-          content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+          content="width=device-width, initial-scale=1.0"
         />
         <meta name="theme-color" content="#ffffff" />
         <Links />
@@ -340,7 +346,7 @@ export default function App({ loaderData: data }: Route.ComponentProps) {
         />
       ) : null}
       <GlobalLoading />
-      <div className="flex h-screen min-h-screen flex-col justify-between">
+      <div className="flex h-dvh min-h-dvh flex-col justify-between">
         <div className="flex-1 bg-background">
           <Outlet />
         </div>

@@ -1,0 +1,125 @@
+import { prisma } from '~/utils/db.server';
+
+export class AiRateLimitError extends Error {
+  readonly retryAfterSeconds: number;
+
+  constructor(retryAfterSeconds: number) {
+    super('AI request budget exhausted');
+    this.name = 'AiRateLimitError';
+    this.retryAfterSeconds = retryAfterSeconds;
+  }
+}
+
+export type AiAdmissionPolicy = {
+  membershipLimit: number;
+  membershipWindowMs: number;
+  organizationLimit: number;
+  organizationWindowMs: number;
+};
+
+export const WRITING_AI_ADMISSION_POLICY: AiAdmissionPolicy = {
+  membershipLimit: 10,
+  membershipWindowMs: 60_000,
+  organizationLimit: 100,
+  organizationWindowMs: 60 * 60_000,
+};
+
+/**
+ * Atomically reserves capacity before an AI call.
+ *
+ * PostgreSQL transaction-scoped advisory locks close the race between counting
+ * and inserting without holding application-process state. Reservations are
+ * intentionally retained when a provider call fails: failed and concurrent
+ * attempts still consume capacity and cannot be used to bypass spend limits.
+ */
+export async function reserveAiRequest({
+  membershipId,
+  organizationId,
+  feature,
+  policy,
+  units = 1,
+  now = new Date(),
+}: {
+  membershipId: string;
+  organizationId: string;
+  feature: string;
+  policy: AiAdmissionPolicy;
+  units?: number;
+  now?: Date;
+}): Promise<void> {
+  if (!Number.isInteger(units) || units < 1) {
+    throw new Error('AI reservation units must be a positive integer');
+  }
+  const membershipSince = new Date(now.getTime() - policy.membershipWindowMs);
+  const organizationSince = new Date(
+    now.getTime() - policy.organizationWindowMs
+  );
+
+  await prisma.$transaction(async (transaction) => {
+    // All callers acquire organization then membership locks, preventing
+    // deadlocks when many users in the same tenant arrive simultaneously.
+    await transaction.$queryRaw`
+      SELECT 1::integer AS "locked"
+      FROM pg_advisory_xact_lock(
+        hashtextextended(${'ai-admission:org:' + organizationId + ':' + feature}, 0)
+      )
+    `;
+    await transaction.$queryRaw`
+      SELECT 1::integer AS "locked"
+      FROM pg_advisory_xact_lock(
+        hashtextextended(${'ai-admission:member:' + membershipId + ':' + feature}, 0)
+      )
+    `;
+
+    await transaction.aiRequestReservation.deleteMany({
+      where: {
+        organizationId,
+        feature,
+        createdAt: {
+          lt:
+            organizationSince < membershipSince
+              ? organizationSince
+              : membershipSince,
+        },
+      },
+    });
+
+    const [membershipCount, organizationCount] = await Promise.all([
+      transaction.aiRequestReservation.count({
+        where: {
+          membershipId,
+          organizationId,
+          feature,
+          createdAt: { gte: membershipSince },
+        },
+      }),
+      transaction.aiRequestReservation.count({
+        where: {
+          organizationId,
+          feature,
+          createdAt: { gte: organizationSince },
+        },
+      }),
+    ]);
+
+    if (membershipCount + units > policy.membershipLimit) {
+      throw new AiRateLimitError(
+        Math.max(1, Math.ceil(policy.membershipWindowMs / 1000))
+      );
+    }
+    if (organizationCount + units > policy.organizationLimit) {
+      throw new AiRateLimitError(
+        Math.max(1, Math.ceil(policy.organizationWindowMs / 1000))
+      );
+    }
+
+    await transaction.aiRequestReservation.createMany({
+      data: Array.from({ length: units }, () => ({
+        membershipId,
+        organizationId,
+        feature,
+        createdAt: now,
+      })),
+    });
+  });
+}

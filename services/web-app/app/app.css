@@ -18,7 +18,7 @@
   --secondary: 45 24.2424% 87.0588%;
   --secondary-foreground: 50 8% 29.4118%;
   --muted: 48 100% 99.0196%;
-  --muted-foreground: 50 2.4% 38%;
+  --muted-foreground: 50 2.4% 36%;
   --accent: 45 24.2424% 87.0588%;
   --accent-foreground: 50.7692 20% 12.7451%;
   --destructive: 0 51.8367% 51.9608%;
@@ -64,8 +64,8 @@
 }
 
 :root[data-contrast='high'] {
-  --primary: 14.8837 58.9041% 34%;
-  --muted-foreground: 50 2.4% 36%;
+  --primary: 14.8837 58.9041% 30%;
+  --muted-foreground: 50 2.4% 28%;
 }
 
 .dark {

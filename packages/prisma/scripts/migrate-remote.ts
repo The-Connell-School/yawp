@@ -4,6 +4,7 @@ import { spawn } from 'child_process';
 import { existsSync } from 'fs';
 import { join } from 'path';
 import pg from 'pg';
+import { runCombinedFeatureGate } from './combined-feature-gate';
 
 const prismaRoot = join(import.meta.dir, '..');
 const RECOVERABLE_FAILED_MIGRATIONS = [
@@ -125,10 +126,14 @@ async function runProductionMigrations(env: NodeJS.ProcessEnv) {
     return resolveCode;
   }
 
+  await runCombinedFeatureGate('combined-feature-preflight.sql', env);
+
   const migrateCode = await runCommand('bun', ['prisma', 'migrate', 'deploy'], env);
   if (migrateCode !== 0) {
     return migrateCode;
   }
+
+  await runCombinedFeatureGate('combined-feature-postcheck.sql', env);
 
   const backfillCode = await runCommand(
     'bun',

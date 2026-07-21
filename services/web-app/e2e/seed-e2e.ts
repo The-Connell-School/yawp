@@ -123,7 +123,15 @@ export async function seedE2E(): Promise<E2EContext> {
 
   // Minimal org
   const org = await prisma.organization.create({
-    data: { id: 'the-connell-school', name: 'The Connell School' },
+    data: {
+      id: 'the-connell-school',
+      name: 'The Connell School',
+      // The feature E2E specs exercise the enabled product paths. Reporter
+      // remains disabled here because its spec explicitly verifies both flag
+      // states and restores the disabled state after every test.
+      writingFundamentalsEnabled: true,
+      classInsightsEnabled: true,
+    },
   });
 
   // Seed a school and class for student signup flow

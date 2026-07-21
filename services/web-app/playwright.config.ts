@@ -30,7 +30,7 @@ export default defineConfig({
     { name: 'firefox', use: { ...devices['Desktop Firefox'] } },
   ],
   webServer: {
-    command: `bash -c 'bun ./e2e/ensure-e2e-env.ts && set -a && source ./e2e/.env.e2e && set +a; E2E=true bun run dev -- --port ${e2ePort} --host 127.0.0.1 --strictPort'`,
+    command: `bash -c 'bun ./e2e/ensure-e2e-env.ts && set -a && source ./e2e/.env.e2e && set +a; E2E=true NODE_ENV=production bun run build && E2E=true NODE_ENV=production HOST=127.0.0.1 PORT=${e2ePort} bun run start'`,
     url: e2eBaseUrl,
     reuseExistingServer: false,
     timeout: 240 * 1000,
