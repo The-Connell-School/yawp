@@ -342,7 +342,7 @@ export default function TeacherTrainingModuleRoute() {
                     />
                   ) : (
                     <div className="flex items-center justify-center h-full">
-                      <div className="text-center text-muted-foreground">
+                      <div className="text-center text-white/70">
                         <Play className="mx-auto h-16 w-16 mb-4" />
                         <p>No video available for this module</p>
                       </div>
@@ -552,12 +552,18 @@ export default function TeacherTrainingModuleRoute() {
                         </Link>
 
                         <DropdownMenu>
-                          <DropdownMenuTrigger>
+                          <DropdownMenuTrigger asChild>
                             <Button
+                              type="button"
                               variant="ghost"
                               size="sm"
-                              className="h-6 w-6 p-0"
+                              className="relative h-6 w-6 p-0"
+                              aria-label={`Module actions for ${module.title}`}
                             >
+                              <span
+                                className="absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2 pointer-fine:hidden"
+                                aria-hidden="true"
+                              />
                               <MoreVertical className="h-4 w-4" />
                             </Button>
                           </DropdownMenuTrigger>

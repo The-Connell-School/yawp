@@ -15,7 +15,9 @@ Lounge module page:
   player surface and rendered at 3.18:1.
 
 The ui.sh review also identified the existing 24x24 module-action control as too
-small for coarse pointers.
+small for coarse pointers. A focused rerun then deterministically caught the
+global navigation progress bar while active; it exposed a value but had no
+accessible name.
 
 ## Decision
 
@@ -27,6 +29,9 @@ small for coarse pointers.
 - Scope `text-white/70` to the black empty-video state. This keeps it visually
   muted while producing approximately 9.9:1 contrast without changing shared
   theme tokens.
+- Give the shared navigation progress bar the stable accessible name
+  `Page loading progress`; retain its existing active value text and hidden
+  behavior.
 
 No axe exclusions, test bypasses, data changes, or route-behavior changes are
 permitted.
@@ -37,4 +42,3 @@ The existing production-build axe test is the RED/GREEN contract. The focused
 Teacher Lounge case and complete UA suite must pass on a Playwright-owned port.
 Desktop and mobile screenshots must show an intentional empty state with no
 layout regression.
-
