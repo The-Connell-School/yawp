@@ -183,6 +183,20 @@ describe('worktree local setup contract', () => {
     expect(viteConfig).toContain('strictPort: true');
   });
 
+  test('Playwright starts this checkout on one isolated fail-closed port', () => {
+    const playwrightConfig = readRepoFile('services/web-app/playwright.config.ts');
+
+    expect(playwrightConfig).toContain("process.env.E2E_PORT ?? '5173'");
+    expect(playwrightConfig).toContain(
+      'const e2eBaseUrl = `http://127.0.0.1:${e2ePort}`'
+    );
+    expect(playwrightConfig).toContain('baseURL: e2eBaseUrl');
+    expect(playwrightConfig).toContain('url: e2eBaseUrl');
+    expect(playwrightConfig).toContain('--port ${e2ePort}');
+    expect(playwrightConfig).toContain('reuseExistingServer: false');
+    expect(playwrightConfig).not.toContain('reuseExistingServer: !process.env.CI');
+  });
+
   test('worktree setup backfills class art keys before local seed verification', () => {
     const setupScript = readRepoFile('scripts/worktree-local-setup.sh');
     const migrateIndex = setupScript.indexOf('prisma migrate deploy');
