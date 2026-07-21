@@ -7,7 +7,7 @@ import {
   RotateCcw,
   Sparkles,
 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Link,
   data as dataResponse,
@@ -298,6 +298,17 @@ export default function AssignedPracticeRoute() {
   );
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const [writtenResponse, setWrittenResponse] = useState('');
+  // The revision trail for the current composition problem: every recorded
+  // draft plus the feedback it earned, kept in order so the student can see
+  // their progression from the earliest attempt down to the latest.
+  const [draftHistory, setDraftHistory] = useState<
+    Array<{ response: string; feedback: PracticeFeedbackResult }>
+  >([]);
+  // The response text submitted with the in-flight attempt (captured at submit
+  // so the effect can pair it with the feedback that comes back).
+  const pendingResponseRef = useRef('');
+  // Guards the result effect against processing the same fetcher payload twice.
+  const lastProcessedRef = useRef<AssignedActionData | null>(null);
 
   const currentItem = items[pointer] ?? null;
   const isChecking = fetcher.state !== 'idle';
@@ -307,13 +318,19 @@ export default function AssignedPracticeRoute() {
       ? fetcher.data
       : null;
   const grade = currentResult?.kind === 'act' ? currentResult.grade : null;
-  const compositionFeedback =
-    currentResult?.kind === 'composition' ? currentResult.feedback : null;
+  // Guardrail feedback (blank / unchanged) isn't recorded and doesn't join the
+  // draft trail — show it inline by the textarea instead.
+  const guardrailFeedback =
+    currentResult?.kind === 'composition' && !currentResult.recorded
+      ? currentResult.feedback
+      : null;
 
-  // Fold each recorded result into the progress sets.
+  // Fold each recorded result into the progress sets and the draft trail.
   useEffect(() => {
     const result = fetcher.data;
     if (!result || !result.recorded) return;
+    if (lastProcessedRef.current === result) return;
+    lastProcessedRef.current = result;
     const position = result.position;
     setAttemptedPositions((prev) => new Set(prev).add(position));
     if (result.kind === 'act') {
@@ -322,10 +339,17 @@ export default function AssignedPracticeRoute() {
       if (result.grade.correct) {
         setMasteredPositions((prev) => new Set(prev).add(position));
       }
-    } else if (result.feedback.status === 'strong') {
-      // Composition problems are done only once mastered.
-      setDonePositions((prev) => new Set(prev).add(position));
-      setMasteredPositions((prev) => new Set(prev).add(position));
+    } else {
+      // Record this composition draft in the trail...
+      setDraftHistory((prev) => [
+        ...prev,
+        { response: pendingResponseRef.current, feedback: result.feedback },
+      ]);
+      if (result.feedback.status === 'strong') {
+        // ...and mark it done only once mastered.
+        setDonePositions((prev) => new Set(prev).add(position));
+        setMasteredPositions((prev) => new Set(prev).add(position));
+      }
     }
   }, [fetcher.data]);
 
@@ -337,7 +361,8 @@ export default function AssignedPracticeRoute() {
   const isComposition = currentItem?.kind === 'composition';
   const currentMastered = currentItem
     ? masteredPositions.has(currentItem.position) ||
-      compositionFeedback?.status === 'strong'
+      (currentResult?.kind === 'composition' &&
+        currentResult.feedback.status === 'strong')
     : false;
   const currentAttempted = currentItem
     ? attemptedPositions.has(currentItem.position) ||
@@ -353,6 +378,7 @@ export default function AssignedPracticeRoute() {
     setPointer((prev) => prev + 1);
     setSelectedIndex(null);
     setWrittenResponse('');
+    setDraftHistory([]);
   }
 
   function revisitUnfinished() {
@@ -361,6 +387,7 @@ export default function AssignedPracticeRoute() {
     setPointer(next);
     setSelectedIndex(null);
     setWrittenResponse('');
+    setDraftHistory([]);
   }
 
   const isLastProblem = pointer + 1 >= items.length;
@@ -435,7 +462,13 @@ export default function AssignedPracticeRoute() {
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
-              <fetcher.Form method="post" className="space-y-4">
+              <fetcher.Form
+                method="post"
+                className="space-y-4"
+                onSubmit={() => {
+                  pendingResponseRef.current = writtenResponse;
+                }}
+              >
                 <input
                   type="hidden"
                   name="position"
@@ -459,18 +492,26 @@ export default function AssignedPracticeRoute() {
                       exercise={currentItem.prompt.exercise}
                       instruction={currentItem.prompt.instruction}
                     />
-                    <Textarea
-                      name="response"
-                      data-testid="assigned-composition-response"
-                      aria-label="Your response"
-                      value={writtenResponse}
-                      onChange={(event) =>
-                        setWrittenResponse(event.target.value)
-                      }
-                      readOnly={currentMastered}
-                      placeholder="Write your response here…"
-                      className="min-h-28 text-base sm:text-sm"
-                    />
+
+                    {draftHistory.length > 0 ? (
+                      <div
+                        className="space-y-2"
+                        data-testid="composition-draft-history"
+                      >
+                        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                          Your drafts so far
+                        </p>
+                        {draftHistory.map((draft, index) => (
+                          <DraftHistoryEntry
+                            key={index}
+                            index={index + 1}
+                            response={draft.response}
+                            feedback={draft.feedback}
+                          />
+                        ))}
+                      </div>
+                    ) : null}
+
                     {currentMastered ? (
                       <div
                         data-testid="composition-mastered"
@@ -479,12 +520,38 @@ export default function AssignedPracticeRoute() {
                         <Sparkles className="h-4 w-4 shrink-0" />
                         Mastered — nice work.
                       </div>
-                    ) : null}
-                    {compositionFeedback ? (
-                      <AssignedCompositionFeedback
-                        feedback={compositionFeedback}
-                      />
-                    ) : null}
+                    ) : (
+                      <>
+                        <label className="text-sm font-medium text-foreground">
+                          {draftHistory.length > 0
+                            ? `Your next draft (attempt ${draftHistory.length + 1})`
+                            : 'Your response'}
+                        </label>
+                        <Textarea
+                          name="response"
+                          data-testid="assigned-composition-response"
+                          aria-label="Your response"
+                          value={writtenResponse}
+                          onChange={(event) =>
+                            setWrittenResponse(event.target.value)
+                          }
+                          placeholder={
+                            draftHistory.length > 0
+                              ? 'Revise your draft and resubmit…'
+                              : 'Write your response here…'
+                          }
+                          className="min-h-28 text-base sm:text-sm"
+                        />
+                        {guardrailFeedback ? (
+                          <div
+                            data-testid="assigned-composition-feedback"
+                            className="rounded-xl border border-border/70 bg-muted/30 p-3 text-sm text-foreground"
+                          >
+                            {guardrailFeedback.summary}
+                          </div>
+                        ) : null}
+                      </>
+                    )}
                   </>
                 ) : (
                   <>
@@ -593,6 +660,35 @@ export default function AssignedPracticeRoute() {
         )}
       </div>
     </section>
+  );
+}
+
+function DraftHistoryEntry({
+  index,
+  response,
+  feedback,
+}: {
+  index: number;
+  response: string;
+  feedback: PracticeFeedbackResult;
+}) {
+  return (
+    <div className="rounded-xl border border-border/60 bg-background p-3">
+      <div className="mb-2 flex items-center gap-2">
+        <span className="flex h-6 w-6 items-center justify-center rounded-md bg-muted text-xs font-semibold text-muted-foreground">
+          {index}
+        </span>
+        <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          Draft {index}
+        </span>
+      </div>
+      <p className="whitespace-pre-wrap rounded-md bg-muted/40 px-2.5 py-1.5 text-sm text-foreground">
+        {response}
+      </p>
+      <div className="mt-2">
+        <AssignedCompositionFeedback feedback={feedback} />
+      </div>
+    </div>
   );
 }
 

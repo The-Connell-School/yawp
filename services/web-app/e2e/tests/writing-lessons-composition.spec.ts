@@ -82,11 +82,22 @@ test.describe.serial('Writing Fundamentals Practice — Composition', () => {
     await expect(
       page.getByTestId('assigned-composition-feedback')
     ).toBeVisible();
+    const draftHistory = page.getByTestId('composition-draft-history');
+    await expect(draftHistory).toBeVisible();
+    await expect(draftHistory.getByText('Draft 1')).toBeVisible();
     await expect(
       page.getByRole('button', { name: /revise & resubmit/i })
     ).toBeVisible();
     // Nothing mastered yet, but the attempt is on record.
     await expect(page.getByText(/0 of 3 mastered/i)).toBeVisible();
+
+    // Revising keeps the earlier draft visible, so the progression builds up.
+    await response.fill(
+      'The cafeteria menu quietly punishes the students who most need a real lunch, and the school should fix it.'
+    );
+    await page.getByRole('button', { name: /revise & resubmit/i }).click();
+    await expect(draftHistory.getByText('Draft 1')).toBeVisible();
+    await expect(draftHistory.getByText('Draft 2')).toBeVisible();
 
     // The student can move on without being hard-blocked.
     await page.getByRole('button', { name: /skip for now/i }).click();
