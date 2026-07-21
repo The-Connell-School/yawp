@@ -10,6 +10,7 @@ import {
   useRouteLoaderData,
   useSearchParams,
 } from 'react-router';
+import { PenLine } from 'lucide-react';
 import { useState } from 'react';
 import type { Route as RootRoute } from '../../+types/root';
 import { AssignmentCreationSheet } from '~/components/assignments/assignment-creation-sheet';
@@ -21,7 +22,15 @@ import {
   getStudentPreviewState,
   shouldUseStudentExperience,
 } from '~/utils/student-preview.server';
-import { getQuickWritingLessonGroups } from '~/utils/writing-lessons/static-lessons.server';
+import {
+  getQuickWritingLessonBySlug,
+  getQuickWritingLessonGroups,
+} from '~/utils/writing-lessons/static-lessons.server';
+import { writingPracticeAssignmentTitle } from '~/utils/writing-lessons/assignment-title';
+import {
+  computeAssignedProgress,
+  getAssignedPracticeForStudent,
+} from '~/utils/writing-lessons/practice-assignments.server';
 import { prisma } from '~/utils/db.server.js';
 import { getAvailableAssignmentTypesForScopes } from '~/utils/assignment-type-access.server';
 import { AP_HISTORY_ASSIGNMENT_TYPE_KEY } from '~/domain/ap-history/schema';
@@ -59,6 +68,14 @@ function formatClassLabel(klass: {
 }) {
   const base = `Grade ${klass.grade} • Period ${klass.period}`;
   return klass.title ? `${base} — ${klass.title}` : base;
+}
+
+function formatAssignmentDueDate(iso: string): string {
+  return new Date(iso).toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
 }
 
 function orderDocumentTileModuleSessions<
@@ -281,6 +298,47 @@ export async function loader({ request }: LoaderFunctionArgs) {
         : [],
     ]);
 
+  // A student's assigned Writing Fundamentals practice, surfaced on the
+  // dashboard alongside their other assignments (each links into the practice
+  // runner). Grammar sets report answered progress; composition sets report
+  // mastery.
+  const writingPracticeAssignments =
+    useStudentExperience && assignmentsEnabled
+      ? (await getAssignedPracticeForStudent(profile.id)).map(
+          (classAssignment) => {
+            const { assignment } = classAssignment;
+            const progress = computeAssignedProgress(
+              classAssignment.attempts.map((attempt) => ({
+                promptId: attempt.promptId,
+                lessonSlug: attempt.lessonSlug,
+                status: attempt.status,
+              }))
+            );
+            const hasComposition = assignment.lessonSlugs.some(
+              (slug) =>
+                getQuickWritingLessonBySlug(slug)?.section === 'Composition'
+            );
+            return {
+              id: classAssignment.id,
+              title: writingPracticeAssignmentTitle(assignment),
+              problemCount: assignment.problemCount,
+              dueAt: assignment.dueAt ? assignment.dueAt.toISOString() : null,
+              hasComposition,
+              doneCount: Math.min(progress.doneCount, assignment.problemCount),
+              masteredCount: Math.min(
+                progress.masteredCount,
+                assignment.problemCount
+              ),
+              classLabel: {
+                grade: classAssignment.class.grade,
+                period: classAssignment.class.period,
+                title: classAssignment.class.title,
+              },
+            };
+          }
+        )
+      : [];
+
   // Sort teacher classes with recent activity first.
   let teacherClassesOrdered: typeof teacherClasses = teacherClasses;
   let recentActiveClassIds: string[] = [];
@@ -401,6 +459,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     archivedDocuments: orderDocumentTileModuleSessions(archivedDocuments),
     teacherClasses: teacherClassesOrdered,
     assignments,
+    writingPracticeAssignments,
     assignmentsEnabled,
     teacherClassCards,
     totalTeacherClassCount: teacherClasses.length,
@@ -541,7 +600,10 @@ export default function AppRoute() {
                     Courses ({data.courses.length})
                   </TabsTrigger>
                   <TabsTrigger value="assignments">
-                    Assignments ({data.assignments.length})
+                    Assignments (
+                    {data.assignments.length +
+                      data.writingPracticeAssignments.length}
+                    )
                   </TabsTrigger>
                 </TabsList>
               </Tabs>
@@ -576,7 +638,8 @@ export default function AppRoute() {
           ) : (
             <>
               <p className="my-2 text-foreground/60">Assignments</p>
-              {data.assignments.length > 0 ? (
+              {data.assignments.length > 0 ||
+              data.writingPracticeAssignments.length > 0 ? (
                 <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
                   {data.assignments.map((classAssignment) => (
                     <Form
@@ -612,6 +675,52 @@ export default function AppRoute() {
                       </button>
                     </Form>
                   ))}
+                  {data.writingPracticeAssignments.map((practice) => {
+                    const remaining = practice.hasComposition
+                      ? practice.problemCount - practice.masteredCount
+                      : practice.problemCount - practice.doneCount;
+                    const progressLabel = practice.hasComposition
+                      ? `${practice.masteredCount} of ${practice.problemCount} mastered`
+                      : `${practice.doneCount} of ${practice.problemCount} done`;
+                    return (
+                      <Link
+                        to={`/app/writing-lessons/assigned/${practice.id}`}
+                        key={practice.id}
+                        data-testid="writing-practice-assignment-card"
+                        className="flex h-full w-full flex-col rounded-lg border bg-muted text-left transition-shadow hover:shadow"
+                      >
+                        <div className="flex h-24 w-full flex-col justify-between rounded-t-lg bg-gradient-to-br from-primary/10 to-primary/25 px-3 py-2">
+                          <span className="inline-flex w-fit items-center gap-1 rounded-full bg-background/70 px-2 py-0.5 text-[11px] font-medium text-primary">
+                            <PenLine className="h-3 w-3" />
+                            Writing practice
+                          </span>
+                          <p className="text-xs font-medium text-foreground/80">
+                            {remaining > 0
+                              ? `${remaining} problem${remaining === 1 ? '' : 's'} left`
+                              : 'All done — nice work!'}
+                          </p>
+                        </div>
+                        <div className="flex flex-1 flex-col gap-1 p-3">
+                          <h4 className="text-foreground/90 font-medium">
+                            {practice.title}
+                          </h4>
+                          <p className="text-xs text-muted-foreground">
+                            {progressLabel}
+                            {practice.dueAt
+                              ? ` • Due ${formatAssignmentDueDate(practice.dueAt)}`
+                              : ''}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            Grade {practice.classLabel.grade} • Period{' '}
+                            {practice.classLabel.period}
+                            {practice.classLabel.title
+                              ? ` • ${practice.classLabel.title}`
+                              : ''}
+                          </p>
+                        </div>
+                      </Link>
+                    );
+                  })}
                 </div>
               ) : (
                 <NoDataPlaceholder
@@ -621,29 +730,6 @@ export default function AppRoute() {
               )}
             </>
           )}
-        </div>
-        <div className="mt-8 flex flex-col">
-          <p className="my-2 text-foreground/60">Practice</p>
-          <Link
-            to="/app/writing-lessons"
-            className="group flex flex-col overflow-hidden rounded-lg border bg-muted text-left hover:shadow sm:flex-row"
-          >
-            <img
-              src="/img/writing-fundamentals-cafe-cat.png"
-              alt=""
-              data-testid="writing-fundamentals-card-image"
-              className="h-40 w-full shrink-0 object-cover object-center sm:h-auto sm:w-56"
-            />
-            <div className="min-w-0 p-4">
-              <h3 className="text-lg font-semibold text-foreground">
-                Writing Fundamentals Practice
-              </h3>
-              <p className="mt-1 max-w-[62ch] text-base text-muted-foreground sm:text-sm">
-                Browse focused grammar and revision lessons and practice on your
-                own — you&rsquo;ll get instant feedback on every rewrite.
-              </p>
-            </div>
-          </Link>
         </div>
         <div className="mt-8 flex flex-col">
           <p className="my-2 text-foreground/60">Documents</p>

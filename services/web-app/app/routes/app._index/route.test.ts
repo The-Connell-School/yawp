@@ -17,7 +17,18 @@ const getTeacherClassCardStats = mock();
 const getTeacherRecentActiveClassIds = mock();
 const getAvailableAssignmentTypesForScopes = mock();
 const getStudentPreviewState = mock();
+const getAssignedPracticeForStudent = mock();
 
+mock.module('~/utils/writing-lessons/practice-assignments.server', () => ({
+  getAssignedPracticeForStudent,
+  computeAssignedProgress: (
+    attempts: Array<{ status: string; lessonSlug: string }>
+  ) => ({
+    attemptedCount: attempts.length,
+    masteredCount: attempts.filter((a) => a.status === 'strong').length,
+    doneCount: attempts.length,
+  }),
+}));
 mock.module('~/utils/db.server.js', () => ({ prisma }));
 mock.module('~/utils/auth.server.js', () => ({
   requireUserId,
@@ -39,9 +50,10 @@ mock.module('~/utils/student-preview.server', () => ({
   getStudentPreviewState,
   studentPreviewModeKey: 'studentPreviewMode',
   studentPreviewOrgIdKey: 'studentPreviewOrgId',
-  shouldUseStudentExperience: (
-    args: { membershipRole: string; previewActive: boolean }
-  ) => args.membershipRole === 'STUDENT' || args.previewActive,
+  shouldUseStudentExperience: (args: {
+    membershipRole: string;
+    previewActive: boolean;
+  }) => args.membershipRole === 'STUDENT' || args.previewActive,
 }));
 const { loader } = await import('./route');
 
@@ -62,7 +74,12 @@ describe('app index loader assignments', () => {
     getTeacherRecentActiveClassIds.mockReset();
     getAvailableAssignmentTypesForScopes.mockReset();
     getStudentPreviewState.mockReset();
-    getStudentPreviewState.mockResolvedValue({ active: false, organizationId: null });
+    getStudentPreviewState.mockResolvedValue({
+      active: false,
+      organizationId: null,
+    });
+    getAssignedPracticeForStudent.mockReset();
+    getAssignedPracticeForStudent.mockResolvedValue([]);
     getAvailableAssignmentTypesForScopes.mockResolvedValue([]);
     getTeacherClassCardStats.mockResolvedValue({
       ungradedCount: 0,
@@ -183,6 +200,44 @@ describe('app index loader assignments', () => {
     const data = (response as { data: any }).data;
 
     expect(data).not.toHaveProperty(['writingPractice', 'Enabled'].join(''));
+  });
+
+  test('surfaces assigned writing practice on the student dashboard', async () => {
+    getAssignedPracticeForStudent.mockResolvedValue([
+      {
+        id: 'wpca-1',
+        assignment: {
+          title: null,
+          lessonSlugs: ['topic-sentences'],
+          problemCount: 3,
+          dueAt: new Date('2026-12-01T00:00:00Z'),
+        },
+        class: { id: 'class-1', grade: '10', period: '3', title: 'English 10' },
+        attempts: [
+          {
+            promptId: 'topic-sentences-1',
+            lessonSlug: 'topic-sentences',
+            status: 'strong',
+          },
+        ],
+      },
+    ]);
+
+    const response = await loader({
+      request: new Request('https://example.test/app?tab=assignments'),
+      params: {},
+      context: {} as never,
+    } as any);
+    const data = (response as { data: any }).data;
+
+    expect(data.writingPracticeAssignments).toHaveLength(1);
+    const practice = data.writingPracticeAssignments[0];
+    expect(practice.id).toBe('wpca-1');
+    // Untitled assignment shows the assigned lesson's name.
+    expect(practice.title).toBe('Topic Sentences');
+    expect(practice.hasComposition).toBe(true);
+    expect(practice.masteredCount).toBe(1);
+    expect(practice.classLabel.title).toBe('English 10');
   });
 
   test('keeps all teacher classes navigable while scoping assignment data to available classes', async () => {
@@ -332,7 +387,10 @@ describe('app index loader assignments', () => {
           id: 'class-active-2',
           school: { id: 'school-1', organizationId: 'org-1' },
         },
-        { id: 'class-quiet', school: { id: 'school-1', organizationId: 'org-1' } },
+        {
+          id: 'class-quiet',
+          school: { id: 'school-1', organizationId: 'org-1' },
+        },
       ];
     });
 
@@ -344,9 +402,9 @@ describe('app index loader assignments', () => {
     const data = (response as { data: any }).data;
 
     expect(data.totalTeacherClassCount).toBe(3);
-    expect(data.teacherClassCards.map((klass: { id: string }) => klass.id)).toEqual(
-      ['class-active-1', 'class-active-2', 'class-quiet']
-    );
+    expect(
+      data.teacherClassCards.map((klass: { id: string }) => klass.id)
+    ).toEqual(['class-active-1', 'class-active-2', 'class-quiet']);
     expect(data.teacherWorkspaceClassStats).toHaveLength(3);
   });
 
@@ -377,7 +435,10 @@ describe('app index loader assignments', () => {
 
       return classRows.map((klass) => ({
         id: klass.id,
-        school: { id: klass.school.id, organizationId: klass.school.organizationId },
+        school: {
+          id: klass.school.id,
+          organizationId: klass.school.organizationId,
+        },
       }));
     });
 
@@ -420,7 +481,10 @@ describe('app index loader assignments', () => {
       }
 
       return [
-        { id: 'class-quiet', school: { id: 'school-1', organizationId: 'org-1' } },
+        {
+          id: 'class-quiet',
+          school: { id: 'school-1', organizationId: 'org-1' },
+        },
       ];
     });
 
@@ -567,5 +631,4 @@ describe('app index loader assignments', () => {
       { id: 'type-1', title: 'Daily Pages' },
     ]);
   });
-
 });

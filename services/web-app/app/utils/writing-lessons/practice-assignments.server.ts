@@ -608,6 +608,9 @@ export async function getAssignedPracticeForStudent(membershipId: string) {
     where: { class: { students: { some: { id: membershipId } } } },
     include: {
       assignment: true,
+      class: {
+        select: { id: true, grade: true, period: true, title: true },
+      },
       attempts: {
         where: { membershipId },
         orderBy: { createdAt: 'desc' },

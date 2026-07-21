@@ -10,22 +10,14 @@ test.describe.serial('Writing Fundamentals Practice', () => {
     await page.goto('/app');
     await expect(page.getByTestId('app._index')).toBeVisible();
 
-    // Students get a persistent "Practice" entry in the side menu.
-    await expect(
-      page.locator('nav a[href="/app/writing-lessons"]').first()
-    ).toBeVisible();
+    // Students reach the practice library from the persistent "Practice" entry
+    // in the side menu.
+    const practiceNav = page
+      .locator('nav a[href="/app/writing-lessons"]')
+      .first();
+    await expect(practiceNav).toBeVisible();
 
-    // ...plus a discovery card on the dashboard, illustrated with the
-    // café-cat artwork.
-    const practiceLink = page.getByRole('link', {
-      name: /writing fundamentals practice/i,
-    });
-    await expect(practiceLink).toBeVisible();
-    await expect(
-      page.getByTestId('writing-fundamentals-card-image')
-    ).toBeVisible();
-
-    await practiceLink.click();
+    await practiceNav.click();
     await expect(
       page.getByRole('heading', { name: /writing fundamentals practice/i })
     ).toBeVisible();
@@ -223,12 +215,20 @@ test.describe.serial('Writing Fundamentals Practice', () => {
       /assigned to/i
     );
 
-    // Student sees it under "Assigned to you" and works a problem.
+    // The assignment also surfaces on the student dashboard's Assignments tab,
+    // listed alongside their other assignments (not as a generic practice
+    // banner).
     await page.request.post('/auth/logout');
     await page.context().clearCookies();
     await signIn(e2eContext.userEmail, 'johndoe');
-    await page.goto('/app/writing-lessons');
+    await page.goto('/app?tab=assignments');
+    const dashboardCard = page
+      .getByTestId('writing-practice-assignment-card')
+      .first();
+    await expect(dashboardCard).toBeVisible();
 
+    // And under "Assigned to you" on the practice page, where they work a problem.
+    await page.goto('/app/writing-lessons');
     const assignedCard = page.getByTestId('assigned-practice-card').first();
     await expect(assignedCard).toBeVisible();
     await assignedCard.click();
