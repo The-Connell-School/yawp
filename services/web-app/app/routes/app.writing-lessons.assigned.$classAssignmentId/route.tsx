@@ -17,6 +17,7 @@ import {
 
 import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { ActPracticeQuestionView } from '~/components/writing-lessons/act-practice-question';
+import { CompositionPrompt } from '~/components/writing-lessons/composition-prompt';
 import { Button } from '~/components/ui/button';
 import { Badge } from '~/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
@@ -26,6 +27,7 @@ import {
   gradeActAnswer,
   type ActGradeResult,
 } from '~/utils/writing-lessons/act-practice.shared';
+import { writingPracticeAssignmentTitle } from '~/utils/writing-lessons/assignment-title';
 import {
   getAssignedPracticeForStudentById,
   getOrCreateStudentPracticeSet,
@@ -66,7 +68,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
   return dataResponse({
     classAssignmentId: classAssignment.id,
-    title: assignment.title,
+    title: writingPracticeAssignmentTitle(assignment),
     instructions: assignment.instructions,
     dueAt: assignment.dueAt ? assignment.dueAt.toISOString() : null,
     problemCount: assignment.problemCount,
@@ -218,8 +220,15 @@ function formatDueDate(iso: string): string {
 }
 
 export default function AssignedPracticeRoute() {
-  const { title, instructions, dueAt, problemCount, sequence, completedCount } =
-    useLoaderData<typeof loader>();
+  const {
+    classAssignmentId,
+    title,
+    instructions,
+    dueAt,
+    problemCount,
+    sequence,
+    completedCount,
+  } = useLoaderData<typeof loader>();
 
   const fetcher = useFetcher<AssignedActionData>();
   const [pointer, setPointer] = useState(
@@ -271,7 +280,7 @@ export default function AssignedPracticeRoute() {
             <p className="text-base font-medium text-primary sm:text-sm">
               Assigned practice
             </p>
-            <h2 className="mt-1">{title ?? 'Writing Fundamentals Practice'}</h2>
+            <h2 className="mt-1">{title}</h2>
             {instructions ? (
               <p className="mt-3 max-w-full text-base text-muted-foreground sm:max-w-[620px] sm:text-sm">
                 {instructions}
@@ -310,7 +319,9 @@ export default function AssignedPracticeRoute() {
                   Problem {currentItem.position} of {problemCount}
                 </CardTitle>
                 <Link
-                  to={`/app/writing-lessons/${currentItem.lessonSlug}`}
+                  to={`/app/writing-lessons/${currentItem.lessonSlug}?from=${encodeURIComponent(
+                    `/app/writing-lessons/assigned/${classAssignmentId}`
+                  )}`}
                   className="inline-flex items-center gap-1 text-base text-primary hover:underline sm:text-sm"
                 >
                   <BookOpen className="h-4 w-4" />
@@ -339,17 +350,10 @@ export default function AssignedPracticeRoute() {
                       name="promptId"
                       value={currentItem.prompt.id}
                     />
-                    <div className="rounded-xl border border-border/70 bg-muted/30 p-4">
-                      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                        Your prompt
-                      </p>
-                      <p className="mt-2 text-base leading-relaxed text-foreground">
-                        {currentItem.prompt.exercise}
-                      </p>
-                      <p className="mt-3 text-sm font-medium text-foreground">
-                        {currentItem.prompt.instruction}
-                      </p>
-                    </div>
+                    <CompositionPrompt
+                      exercise={currentItem.prompt.exercise}
+                      instruction={currentItem.prompt.instruction}
+                    />
                     <Textarea
                       name="response"
                       data-testid="assigned-composition-response"

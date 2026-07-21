@@ -17,11 +17,13 @@ import {
   data as dataResponse,
   useFetcher,
   useLoaderData,
+  useSearchParams,
   type ActionFunctionArgs,
   type LoaderFunctionArgs,
 } from 'react-router';
 
 import { GeneralErrorBoundary } from '~/components/error-boundary';
+import { CompositionPrompt } from '~/components/writing-lessons/composition-prompt';
 import { Button } from '~/components/ui/button';
 import { Badge } from '~/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
@@ -61,6 +63,7 @@ import {
   getQuickWritingPracticePrompts,
   type QuickWritingPracticePrompt,
 } from '~/utils/writing-lessons/static-lessons.server';
+import { safeAssignedReturnPath } from '~/utils/writing-lessons/return-path';
 
 type TeacherClass = {
   id: string;
@@ -285,14 +288,23 @@ export default function WritingLessonDetailRoute() {
     <StudentPracticePanel actQuestions={actQuestions} />
   );
 
+  // If the student opened this lesson to review it mid-assignment, "Back to
+  // practice" returns them to that exact exercise instead of the index.
+  const [searchParams] = useSearchParams();
+  const returnToAssignment = safeAssignedReturnPath(searchParams.get('from'));
+  const backTo = returnToAssignment ?? '/app/writing-lessons';
+  const backLabel = returnToAssignment
+    ? 'Back to assignment'
+    : 'Back to practice';
+
   return (
     <section className="no-scrollbar flex h-full w-full flex-col overflow-y-scroll">
       <div className="w-full border-b bg-secondary">
         <div className="mx-auto w-full max-w-screen-lg p-3 sm:p-5">
           <Button asChild variant="ghost" size="sm" className="mb-4 -ml-2">
-            <Link to="/app/writing-lessons">
+            <Link to={backTo}>
               <ArrowLeft className="mr-2 h-4 w-4" />
-              Back to practice
+              {backLabel}
             </Link>
           </Button>
           <div className="flex flex-col">
@@ -772,18 +784,10 @@ function CompositionPracticePanel({
 
         {activePrompt ? (
           <div className="space-y-4">
-            <div className="rounded-xl border border-border/70 bg-muted/30 p-4">
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Your prompt
-              </p>
-              <p className="mt-2 text-base leading-relaxed text-foreground">
-                {activePrompt.exercise}
-              </p>
-              <p className="mt-3 flex gap-2 text-sm font-medium text-foreground">
-                <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-                <span>{activePrompt.instruction}</span>
-              </p>
-            </div>
+            <CompositionPrompt
+              exercise={activePrompt.exercise}
+              instruction={activePrompt.instruction}
+            />
 
             <Textarea
               data-testid="composition-response"

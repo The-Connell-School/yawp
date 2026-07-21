@@ -23,6 +23,7 @@ import {
   isActAttemptRecord,
   splitAroundUnderline,
 } from '~/utils/writing-lessons/act-practice.shared';
+import { writingPracticeAssignmentTitle } from '~/utils/writing-lessons/assignment-title';
 import { getWritingPracticeResultsForTeacher } from '~/utils/writing-lessons/practice-assignments.server';
 import {
   isCompositionAttemptRecord,
@@ -78,7 +79,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     classLabel:
       classAssignment.class.title ??
       `Grade ${classAssignment.class.grade} · Period ${classAssignment.class.period}`,
-    title: classAssignment.assignment.title,
+    title: writingPracticeAssignmentTitle(classAssignment.assignment),
     lessonTitles,
     problemCount: classAssignment.assignment.problemCount,
     dueAt: classAssignment.assignment.dueAt
@@ -130,7 +131,7 @@ export default function WritingPracticeResultsRoute() {
             <p className="text-base font-medium text-primary sm:text-sm">
               Assigned practice · {classLabel}
             </p>
-            <h2 className="mt-1">{title ?? 'Writing Fundamentals Practice'}</h2>
+            <h2 className="mt-1">{title}</h2>
             <p className="mt-2 text-base text-muted-foreground sm:text-sm">
               {lessonTitles.join(' · ') || 'Practice'}
             </p>

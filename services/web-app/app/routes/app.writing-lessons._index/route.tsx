@@ -39,6 +39,7 @@ import {
 } from '~/components/ui/sheet';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
+import { writingPracticeAssignmentTitle } from '~/utils/writing-lessons/assignment-title';
 import { isCompositionPracticeEnabled } from '~/utils/writing-lessons/composition-flag.server';
 import {
   getAssignedPracticeForStudent,
@@ -104,7 +105,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       ? (await getAssignedPracticeForStudent(profile.id)).map(
           (classAssignment) => ({
             id: classAssignment.id,
-            title: classAssignment.assignment.title,
+            title: writingPracticeAssignmentTitle(classAssignment.assignment),
             problemCount: classAssignment.assignment.problemCount,
             dueAt: classAssignment.assignment.dueAt
               ? classAssignment.assignment.dueAt.toISOString()
@@ -122,7 +123,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       ? (await getWritingPracticeAssignmentsForTeacher(profile.id)).map(
           (classAssignment) => ({
             id: classAssignment.id,
-            title: classAssignment.assignment.title,
+            title: writingPracticeAssignmentTitle(classAssignment.assignment),
             problemCount: classAssignment.assignment.problemCount,
             dueAt: classAssignment.assignment.dueAt
               ? classAssignment.assignment.dueAt.toISOString()
@@ -422,7 +423,7 @@ export default function WritingLessonsIndexRoute() {
                   <Card className="flex h-full flex-col shadow-none hover:shadow-sm">
                     <CardHeader className="pb-3">
                       <CardTitle className="text-base leading-snug">
-                        {assignment.title ?? 'Writing Fundamentals Practice'}
+                        {assignment.title}
                       </CardTitle>
                       <CardDescription className="text-base sm:text-sm">
                         {assignment.classLabel} · {assignment.problemCount}{' '}
@@ -468,7 +469,7 @@ export default function WritingLessonsIndexRoute() {
                     <Card className="flex h-full flex-col border-primary/40 shadow-none hover:shadow-sm">
                       <CardHeader className="pb-3">
                         <CardTitle className="text-base leading-snug">
-                          {assignment.title ?? 'Writing Fundamentals Practice'}
+                          {assignment.title}
                         </CardTitle>
                         <CardDescription className="text-base sm:text-sm">
                           {assignment.completedCount} of{' '}
