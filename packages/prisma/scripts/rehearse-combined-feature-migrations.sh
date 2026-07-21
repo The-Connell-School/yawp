@@ -115,6 +115,11 @@ DATABASE_URL="$SCRATCH_URL" \
   bun test "$PRISMA_DIR/scripts/combined-feature-gate.integration.test.ts"
 echo "preflight_feature_result=pass"
 
+if [[ "${COMBINED_REHEARSAL_NEGATIVES_ONLY:-0}" == "1" ]]; then
+  echo "hosted_negative_gate_result=pass"
+  exit 0
+fi
+
 create_snapshot
 echo "snapshot=created"
 

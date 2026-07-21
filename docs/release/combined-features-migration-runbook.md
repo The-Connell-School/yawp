@@ -34,6 +34,10 @@ psql-only `\set ON_ERROR_STOP on` directive before submitting the script through
 node-postgres. The migration rehearsal runs the same executor on the origin,
 feature, hardened, and recovered schemas and proves five invalid feature states
 raise through node-postgres before any production migration is attempted.
+The hosted Prisma job repeats those five fail-closed cases in an isolated,
+disposable PostgreSQL database by setting
+`COMBINED_REHEARSAL_NEGATIVES_ONLY=1`; the database is dropped before the job
+continues to the normal backfill and assignment-type release gate.
 
 ## Deploy and verify
 

@@ -47,11 +47,17 @@ describe('production deployment contract', () => {
 
   test('CI has a dedicated migration validation job against Postgres', () => {
     const ciWorkflow = readRepoFile('.github/workflows/ci.yml');
+    const rehearsalScript = readRepoFile(
+      'packages/prisma/scripts/rehearse-combined-feature-migrations.sh'
+    );
     const generateIndex = ciWorkflow.indexOf('bun prisma generate');
     const migrateIndex = ciWorkflow.indexOf('bun prisma migrate deploy');
     const postcheckIndex = ciWorkflow.indexOf('combined-feature-postcheck.sql');
     const productionGateTestIndex = ciWorkflow.indexOf(
       'combined-feature-gate.integration.test.ts'
+    );
+    const hostedNegativeGateIndex = ciWorkflow.indexOf(
+      'COMBINED_REHEARSAL_NEGATIVES_ONLY: 1'
     );
     const backfillIndex = ciWorkflow.indexOf('backfill-class-art-key');
     const releaseGateIndex = ciWorkflow.indexOf('assignment-type-release-gate');
@@ -65,6 +71,12 @@ describe('production deployment contract', () => {
     expect(ciWorkflow).toContain('COMBINED_FEATURE_GATE_POSTCHECK: 1');
     expect(ciWorkflow).toContain('COMBINED_FEATURE_GATE_NEGATIVES: 0');
     expect(ciWorkflow).toContain('combined-feature-gate.integration.test.ts');
+    expect(ciWorkflow).toContain('COMBINED_REHEARSAL_NEGATIVES_ONLY: 1');
+    expect(ciWorkflow).toContain('rehearse-combined-feature-migrations.sh');
+    expect(rehearsalScript).toContain(
+      '${COMBINED_REHEARSAL_NEGATIVES_ONLY:-0}'
+    );
+    expect(rehearsalScript).toContain('hosted_negative_gate_result=pass');
     expect(ciWorkflow).toContain('backfill-class-art-key');
     expect(ciWorkflow).toContain('assignment-type-release-gate');
     expect(ciWorkflow).toContain('postgres:16');
@@ -73,6 +85,8 @@ describe('production deployment contract', () => {
     expect(generateIndex).toBeLessThan(migrateIndex);
     expect(productionGateTestIndex).toBeGreaterThan(postcheckIndex);
     expect(productionGateTestIndex).toBeLessThan(backfillIndex);
+    expect(hostedNegativeGateIndex).toBeGreaterThan(productionGateTestIndex);
+    expect(hostedNegativeGateIndex).toBeLessThan(backfillIndex);
     expect(backfillIndex).toBeGreaterThan(migrateIndex);
     expect(releaseGateIndex).toBeGreaterThan(backfillIndex);
   });
