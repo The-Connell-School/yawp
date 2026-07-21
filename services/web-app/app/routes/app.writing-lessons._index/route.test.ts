@@ -64,6 +64,33 @@ describe('writing lessons index route', () => {
     ).toBe(true);
   });
 
+  test('surfaces a student’s assigned practice with a lesson-derived title', async () => {
+    getAssignedPracticeForStudent.mockResolvedValue([
+      {
+        id: 'wpca-1',
+        assignment: {
+          title: null,
+          lessonSlugs: ['topic-sentences'],
+          problemCount: 3,
+          dueAt: new Date('2026-12-01T00:00:00Z'),
+        },
+        attempts: [],
+      },
+    ]);
+
+    const response = await loader({
+      request: new Request('https://example.test/app/writing-lessons'),
+      params: {},
+      context: {} as never,
+    } as any);
+
+    expect(response.data.assignedPractice).toHaveLength(1);
+    expect(response.data.assignedPractice[0].id).toBe('wpca-1');
+    // Untitled assignment falls back to the assigned lesson's name.
+    expect(response.data.assignedPractice[0].title).toBe('Topic Sentences');
+    expect(response.data.assignedPractice[0].problemCount).toBe(3);
+  });
+
   test('teachers can assign composition skills; the student session builder stays ACT-only', async () => {
     process.env.COMPOSITION_PRACTICE_ENABLED = 'true';
     requireMembership.mockResolvedValue({
