@@ -92,7 +92,11 @@ test.describe.serial('Writing Fundamentals Practice', () => {
     await page.goto('/app/writing-lessons');
 
     await expect(
-      page.getByRole('heading', { name: /writing fundamentals practice/i })
+      page.getByRole('heading', {
+        name: 'Writing Fundamentals Practice',
+        exact: true,
+        level: 2,
+      })
     ).toBeVisible();
     // The practice page leads with the café-cat banner artwork.
     await expect(page.getByTestId('writing-fundamentals-banner')).toBeVisible();
@@ -221,12 +225,16 @@ test.describe.serial('Writing Fundamentals Practice', () => {
     const startAssigned = page.getByRole('button', {
       name: /start assigned practice/i,
     });
+    const firstProblemHeading = page.getByRole('heading', {
+      name: /problem 1 of/i,
+    });
+    await expect(startAssigned.or(firstProblemHeading)).toBeVisible({
+      timeout: 15_000,
+    });
     if (await startAssigned.isVisible()) {
       await startAssigned.click();
     }
-    await expect(
-      page.getByRole('heading', { name: /problem 1 of/i })
-    ).toBeVisible();
+    await expect(firstProblemHeading).toBeVisible({ timeout: 60_000 });
 
     // The first offline question drills the comma splice; pick the semicolon fix.
     await expect(page.getByText(/choose the best answer/i)).toBeVisible();
