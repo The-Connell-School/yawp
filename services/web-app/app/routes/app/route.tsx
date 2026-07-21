@@ -383,6 +383,7 @@ export default function Route() {
           <Button
             variant="outline"
             size="icon"
+            aria-label="Open app navigation"
             onClick={() => setIsMobileNavOpen(true)}
           >
             <HamburgerIcon />
@@ -404,6 +405,7 @@ export default function Route() {
           <Button
             variant="outline"
             size="icon"
+            aria-label="Reload page"
             onClick={() => window.location.reload()}
           >
             <ReloadIcon />

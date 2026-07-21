@@ -103,6 +103,7 @@ test.describe.serial('UA accessibility axe audit', () => {
     signIn,
     e2eContext,
   }, testInfo) => {
+    test.slow();
     await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
     await page.goto('/app/teacher-trainings');
     await expect(
@@ -146,8 +147,12 @@ test.describe.serial('UA accessibility axe audit', () => {
       );
     });
     await scanPage(page, testInfo, 'teacher-lounge-module-actions-open');
+    const desktopScreenshotPath = testInfo.outputPath(
+      'teacher-lounge-module-actions-desktop.png'
+    );
+    await page.screenshot({ path: desktopScreenshotPath });
     await testInfo.attach('teacher-lounge-module-actions-desktop', {
-      body: await page.screenshot(),
+      path: desktopScreenshotPath,
       contentType: 'image/png',
     });
     await restartModuleItem.focus();
@@ -184,8 +189,12 @@ test.describe.serial('UA accessibility axe audit', () => {
       );
     });
     await scanPage(page, testInfo, 'teacher-lounge-module-actions-open-mobile');
+    const mobileScreenshotPath = testInfo.outputPath(
+      'teacher-lounge-module-actions-mobile.png'
+    );
+    await page.screenshot({ path: mobileScreenshotPath });
     await testInfo.attach('teacher-lounge-module-actions-mobile', {
-      body: await page.screenshot(),
+      path: mobileScreenshotPath,
       contentType: 'image/png',
     });
     await page.keyboard.press('Escape');
