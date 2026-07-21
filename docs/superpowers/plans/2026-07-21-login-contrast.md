@@ -7,4 +7,3 @@ Issue: #219
 3. Run the focused login axe test on an isolated Playwright port.
 4. Run formatting and the complete UA accessibility suite.
 5. Record screenshots, logs, and review markers in the issue ledger.
-
