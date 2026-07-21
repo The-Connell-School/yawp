@@ -133,6 +133,9 @@ describe('production deployment contract', () => {
   test('main deploy runs production Prisma migrations before publishing the image', () => {
     const deployWorkflow = readRepoFile('.github/workflows/deploy.yml');
     const migrateRemoteScript = readRepoFile('packages/prisma/scripts/migrate-remote.ts');
+    const combinedFeatureGateScript = readRepoFile(
+      'packages/prisma/scripts/combined-feature-gate.ts'
+    );
     const deployGenerateIndex = deployWorkflow.indexOf('bun prisma generate');
     const deployValidateMigrateIndex = deployWorkflow.indexOf('bun prisma migrate deploy');
     const deployTrainingMigrationTestIndex = deployWorkflow.indexOf(
@@ -175,13 +178,17 @@ describe('production deployment contract', () => {
     expect(migrateRemoteScript).toContain("['prisma', 'migrate', 'resolve', '--rolled-back'");
     expect(migrateRemoteScript).toContain('rejectUnauthorized: false');
     expect(migrateRemoteScript).toContain("REMOTE_MIGRATE_TUNNEL: '1'");
+    expect(migrateRemoteScript).toContain(
+      "import { runCombinedFeatureGate } from './combined-feature-gate'"
+    );
     expect(remoteMigrateIndex).toBeGreaterThan(-1);
     expect(remotePreflightIndex).toBeGreaterThan(-1);
     expect(remotePreflightIndex).toBeLessThan(remoteMigrateIndex);
     expect(remotePostcheckIndex).toBeGreaterThan(remoteMigrateIndex);
-    expect(migrateRemoteScript).toContain(
-      "console.log(`Migration gate passed: ${scriptName}`)"
+    expect(combinedFeatureGateScript).toContain(
+      "log(`Migration gate passed: ${scriptName}`)"
     );
+    expect(combinedFeatureGateScript).toContain('await client.query(sql)');
     expect(remoteBackfillIndex).toBeGreaterThan(remoteMigrateIndex);
     expect(remoteReleaseGateIndex).toBeGreaterThan(remoteBackfillIndex);
   });

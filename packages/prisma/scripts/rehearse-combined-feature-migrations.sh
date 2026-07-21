@@ -62,20 +62,12 @@ deploy_migrations() {
     bunx prisma migrate deploy --config "$PRISMA_DIR/prisma.rehearsal.config.ts"
 }
 
-expect_preflight_failure() {
-  local label="$1"
-  local mutation="$2"
+run_node_gate() {
+  local url="$1"
+  local script_name="$2"
 
-  if psql "$SCRATCH_URL" \
-    -v ON_ERROR_STOP=1 \
-    -c "BEGIN; $mutation" \
-    -f "$PRISMA_DIR/scripts/combined-feature-preflight.sql" \
-    >/dev/null 2>&1; then
-    echo "preflight_negative=$label result=unexpected-pass" >&2
-    exit 1
-  fi
-
-  echo "preflight_negative=$label result=rejected"
+  DATABASE_URL="$url" \
+    bun "$PRISMA_DIR/scripts/combined-feature-gate-cli.ts" "$script_name"
 }
 
 create_snapshot() {
@@ -111,41 +103,24 @@ createdb --maintenance-db="$ADMIN_URL" "$SCRATCH_DATABASE"
 echo "rehearsal_database=$SCRATCH_DATABASE"
 echo "phase=origin-equivalent"
 deploy_migrations "$SCRATCH_URL" "$BASE_COPY"
-psql "$SCRATCH_URL" -v ON_ERROR_STOP=1 \
-  -f "$PRISMA_DIR/scripts/combined-feature-preflight.sql"
+run_node_gate "$SCRATCH_URL" "combined-feature-preflight.sql"
 echo "preflight_origin_result=pass"
 
 echo "phase=feature-branches-before-hardening"
 deploy_migrations "$SCRATCH_URL" "$FEATURE_COPY"
 psql "$SCRATCH_URL" -v ON_ERROR_STOP=1 \
   -f "$PRISMA_DIR/scripts/combined-feature-rehearsal-fixture.sql"
-psql "$SCRATCH_URL" -v ON_ERROR_STOP=1 \
-  -f "$PRISMA_DIR/scripts/combined-feature-preflight.sql"
+COMBINED_FEATURE_GATE_INTEGRATION=1 \
+DATABASE_URL="$SCRATCH_URL" \
+  bun test "$PRISMA_DIR/scripts/combined-feature-gate.integration.test.ts"
 echo "preflight_feature_result=pass"
-
-expect_preflight_failure \
-  "writing-problem-count" \
-  "UPDATE \"WritingPracticeAssignment\" SET \"problemCount\" = 0 WHERE \"id\" = 'rehearsal-writing-assignment';"
-expect_preflight_failure \
-  "writing-attempt-status" \
-  "UPDATE \"WritingPracticeAttempt\" SET \"status\" = 'invalid-status' WHERE \"id\" = 'rehearsal-attempt-1';"
-expect_preflight_failure \
-  "class-insight-status" \
-  "UPDATE \"ClassAssignmentInsight\" SET \"status\" = 'invalid-status' WHERE \"id\" = 'rehearsal-class-insight';"
-expect_preflight_failure \
-  "reporter-conversation-tenant" \
-  "UPDATE \"ReporterConversation\" SET \"organizationId\" = 'rehearsal-org-b' WHERE \"id\" = 'rehearsal-conversation';"
-expect_preflight_failure \
-  "reporter-growth-status" \
-  "UPDATE \"ReporterGrowthPlan\" SET \"status\" = 'invalid-status' WHERE \"id\" = 'rehearsal-growth-plan';"
 
 create_snapshot
 echo "snapshot=created"
 
 echo "phase=all-hardening-migrations"
 deploy_migrations "$SCRATCH_URL" "$PRISMA_DIR"
-psql "$SCRATCH_URL" -v ON_ERROR_STOP=1 \
-  -f "$PRISMA_DIR/scripts/combined-feature-postcheck.sql"
+run_node_gate "$SCRATCH_URL" "combined-feature-postcheck.sql"
 echo "postcheck_result=pass"
 psql "$SCRATCH_URL" -v ON_ERROR_STOP=1 \
   -f "$PRISMA_DIR/scripts/combined-feature-rehearsal-assertions.sql"
@@ -158,8 +133,7 @@ deploy_migrations "$SCRATCH_URL" "$PRISMA_DIR"
 echo "phase=snapshot-recovery"
 createdb --maintenance-db="$ADMIN_URL" "$RECOVERY_DATABASE"
 restore_snapshot
-psql "$RECOVERY_URL" -v ON_ERROR_STOP=1 \
-  -f "$PRISMA_DIR/scripts/combined-feature-preflight.sql"
+run_node_gate "$RECOVERY_URL" "combined-feature-preflight.sql"
 echo "preflight_recovery_result=pass"
 psql "$RECOVERY_URL" -v ON_ERROR_STOP=1 -Atc \
   "SELECT 'recovered_attempts=' || COUNT(*) FROM \"WritingPracticeAttempt\"

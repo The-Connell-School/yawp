@@ -28,6 +28,13 @@ gate and aborts the process before the next step. The explicit commands here
 remain useful for operator inspection and for recording the cutover transcript;
 they are not the only enforcement mechanism.
 
+The production runner and rehearsal share
+`packages/prisma/scripts/combined-feature-gate.ts`. That executor removes the
+psql-only `\set ON_ERROR_STOP on` directive before submitting the script through
+node-postgres. The migration rehearsal runs the same executor on the origin,
+feature, hardened, and recovered schemas and proves five invalid feature states
+raise through node-postgres before any production migration is attempted.
+
 ## Deploy and verify
 
 ```sh
