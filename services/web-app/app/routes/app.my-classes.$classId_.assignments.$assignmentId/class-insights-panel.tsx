@@ -176,7 +176,7 @@ function CategoryCard({
           <p className="text-sm leading-relaxed text-muted-foreground">
             {category.summary}
           </p>
-          <span className="text-xs font-medium text-primary/80">
+          <span className="text-xs font-medium text-primary">
             {expanded ? 'Hide student examples' : 'Show student examples'}
           </span>
         </div>

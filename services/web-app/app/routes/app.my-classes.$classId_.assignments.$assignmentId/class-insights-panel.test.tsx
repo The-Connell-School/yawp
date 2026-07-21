@@ -166,6 +166,12 @@ describe('ClassInsightsPanel', () => {
     expect(el.textContent).toMatch(/24 submissions/i);
     // regenerate affordance is available once an insight exists
     expect(el.textContent).toMatch(/regenerate|update/i);
+
+    const examplesLabel = Array.from(el.querySelectorAll('span')).find((span) =>
+      span.textContent?.includes('Show student examples')
+    );
+    expect(examplesLabel?.className).toContain('text-primary');
+    expect(examplesLabel?.className).not.toContain('text-primary/80');
   });
 
   it('renders differentiation groups and individual flags when present', () => {
