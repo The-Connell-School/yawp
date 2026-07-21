@@ -2,7 +2,9 @@ import { defineConfig, devices } from '@playwright/test';
 
 const e2ePort = Number(process.env.E2E_PORT ?? '5173');
 if (!Number.isInteger(e2ePort) || e2ePort < 1 || e2ePort > 65_535) {
-  throw new Error(`E2E_PORT must be an integer between 1 and 65535, got ${process.env.E2E_PORT}`);
+  throw new Error(
+    `E2E_PORT must be an integer between 1 and 65535, got ${process.env.E2E_PORT}`
+  );
 }
 const e2eBaseUrl = `http://127.0.0.1:${e2ePort}`;
 
