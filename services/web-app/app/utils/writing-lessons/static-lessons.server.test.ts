@@ -28,6 +28,8 @@ describe('Quick Writing Lessons static lesson archive', () => {
       'thesis-statements',
       'evidence',
       'analysis',
+      'hooks-and-openings',
+      'conclusions',
     ]);
   });
 
@@ -59,9 +61,15 @@ describe('Quick Writing Lessons static lesson archive', () => {
       'thesis-statements',
       'evidence',
       'analysis',
+      'hooks-and-openings',
+      'conclusions',
     ]);
     for (const lesson of composition) {
-      expect(['Making Claims', 'Supporting Claims']).toContain(lesson.category);
+      expect([
+        'Making Claims',
+        'Supporting Claims',
+        'Framing the Essay',
+      ]).toContain(lesson.category);
     }
   });
 
@@ -81,6 +89,7 @@ describe('Quick Writing Lessons static lesson archive', () => {
     expect(composition?.groups.map((group) => group.category)).toEqual([
       'Making Claims',
       'Supporting Claims',
+      'Framing the Essay',
     ]);
     expect(composition?.groups[1]).toEqual({
       category: 'Supporting Claims',
@@ -100,6 +109,24 @@ describe('Quick Writing Lessons static lesson archive', () => {
     expect(context?.rule).toContain('claim');
     expect(context?.rule).not.toContain('Why This Matters');
     expect(context?.rule).not.toContain('Your turn');
+  });
+
+  test('the framing lessons carry grounding context and practice prompts', () => {
+    const hooks = getQuickWritingLessonContext('hooks-and-openings');
+    expect(hooks?.title).toBe('Hooks & Openings');
+    expect(hooks?.skill).toBe('essay hooks and openings');
+    expect(hooks?.rule.length).toBeGreaterThan(0);
+    expect(
+      getQuickWritingPracticePrompts('hooks-and-openings').length
+    ).toBeGreaterThan(2);
+
+    const conclusions = getQuickWritingLessonContext('conclusions');
+    expect(conclusions?.title).toBe('Conclusions');
+    expect(conclusions?.skill).toBe('essay conclusions');
+    expect(conclusions?.rule.length).toBeGreaterThan(0);
+    expect(
+      getQuickWritingPracticePrompts('conclusions').length
+    ).toBeGreaterThan(2);
   });
 
   test('preserves lesson content without the generator instructions', () => {
