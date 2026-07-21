@@ -68,6 +68,38 @@ test.describe.serial('Writing Fundamentals Practice — Composition', () => {
     ).toHaveCount(0);
   });
 
+  test('lets a student make the practice about their own interest', async ({
+    page,
+    e2eContext,
+    signIn,
+  }) => {
+    await signIn(e2eContext.userEmail, 'johndoe');
+    await page.goto('/app/writing-lessons/topic-sentences');
+
+    const panel = page.getByRole('complementary');
+    await expect(panel.getByTestId('composition-topic-picker')).toBeVisible();
+
+    // Name a topic. E2E runs offline (no ANTHROPIC_API_KEY), so AI generation
+    // degrades to the deterministic topic templates — choice still works.
+    await panel.getByTestId('composition-topic-input').fill('skateboarding');
+    await panel.getByRole('button', { name: /make it mine/i }).click();
+
+    const activeTopic = panel.getByTestId('composition-topic-active');
+    await expect(activeTopic).toBeVisible();
+    await expect(activeTopic).toContainText('skateboarding');
+    // The prompt itself is now built around the student's interest.
+    await expect(
+      panel.getByText(/one opinion you hold about skateboarding/i)
+    ).toBeVisible();
+
+    // And they can drop back to the standard prompts at any time.
+    await panel.getByRole('button', { name: /use standard prompts/i }).click();
+    await expect(panel.getByTestId('composition-topic-picker')).toBeVisible();
+    await expect(
+      panel.getByText(/one opinion you hold about skateboarding/i)
+    ).toHaveCount(0);
+  });
+
   test('lets a student write a topic sentence and get tutor feedback', async ({
     page,
     e2eContext,

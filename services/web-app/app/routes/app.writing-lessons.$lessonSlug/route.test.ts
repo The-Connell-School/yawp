@@ -293,3 +293,114 @@ describe('writing lesson practice action - check-composition intent', () => {
     ).rejects.toMatchObject({ status: 400 });
   });
 });
+
+describe('writing lesson practice action - personalize-composition intent', () => {
+  async function runPersonalize(
+    fields: Record<string, string | string[]>,
+    lessonSlug = 'topic-sentences'
+  ) {
+    const response = await action({
+      request: buildRequest(fields),
+      params: { lessonSlug },
+      context: {},
+    } as never);
+    return (response as unknown as { data?: any }).data ?? response;
+  }
+
+  beforeEach(() => {
+    requireUserId.mockReset();
+    requireMembership.mockReset();
+    getLLMCompletion.mockReset();
+
+    requireUserId.mockResolvedValue('user-1');
+    requireMembership.mockResolvedValue({
+      id: 'student-1',
+      role: 'STUDENT',
+      organization: { id: 'org-1', name: 'Org' },
+    });
+    process.env.COMPOSITION_PRACTICE_ENABLED = 'true';
+  });
+
+  afterAll(() => {
+    delete process.env.COMPOSITION_PRACTICE_ENABLED;
+  });
+
+  test('returns AI prompts grounded in the student topic', async () => {
+    getLLMCompletion.mockResolvedValueOnce(
+      JSON.stringify({
+        prompts: [
+          {
+            exercise: 'Your team just lost a final. Make a claim about it.',
+            instruction: 'Write a topic sentence about your team.',
+          },
+          {
+            exercise: 'A fan says the team is cursed.',
+            instruction: 'Turn that into an arguable claim.',
+          },
+        ],
+      })
+    );
+
+    const result = await runPersonalize({
+      intent: 'personalize-composition',
+      topic: 'my basketball team',
+    });
+
+    expect(result.intent).toBe('personalize-composition');
+    expect(result.ok).toBe(true);
+    expect(result.topic).toBe('my basketball team');
+    expect(result.source).toBe('ai');
+    expect(result.prompts.length).toBeGreaterThan(1);
+    expect(new Set(result.prompts.map((p: { id: string }) => p.id)).size).toBe(
+      result.prompts.length
+    );
+    // The model call was grounded in the student's topic.
+    const userMessage = getLLMCompletion.mock.calls[0][0].messages[0].content;
+    expect(userMessage).toContain('my basketball team');
+  });
+
+  test('falls back to topic templates when generation is unavailable', async () => {
+    getLLMCompletion.mockRejectedValueOnce(new Error('no provider'));
+
+    const result = await runPersonalize({
+      intent: 'personalize-composition',
+      topic: 'skateboarding',
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.source).toBe('template');
+    expect(result.prompts.length).toBeGreaterThanOrEqual(3);
+    for (const prompt of result.prompts) {
+      expect(`${prompt.exercise} ${prompt.instruction}`).toContain(
+        'skateboarding'
+      );
+    }
+  });
+
+  test('asks for a different topic when the topic trips the safety screen', async () => {
+    const result = await runPersonalize({
+      intent: 'personalize-composition',
+      topic: 'how to buy meth',
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.message).toMatch(/topic/i);
+    expect(getLLMCompletion).not.toHaveBeenCalled();
+  });
+
+  test('rejects the intent on grammar lessons', async () => {
+    await expect(
+      runPersonalize(
+        { intent: 'personalize-composition', topic: 'music' },
+        'fixing-comma-splices'
+      )
+    ).rejects.toMatchObject({ status: 400 });
+  });
+
+  test('is rejected when the composition flag is off', async () => {
+    process.env.COMPOSITION_PRACTICE_ENABLED = 'false';
+    await expect(
+      runPersonalize({ intent: 'personalize-composition', topic: 'music' })
+    ).rejects.toMatchObject({ status: 400 });
+  });
+});

@@ -25,6 +25,7 @@ import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { Button } from '~/components/ui/button';
 import { Badge } from '~/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
+import { Input } from '~/components/ui/input';
 import { Textarea } from '~/components/ui/textarea';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
@@ -39,10 +40,16 @@ import {
 } from '~/utils/writing-lessons/act-practice.shared';
 import { isCompositionPracticeEnabled } from '~/utils/writing-lessons/composition-flag.server';
 import {
+  COMPOSITION_TOPIC_SUGGESTIONS,
+  buildTopicFallbackPrompts,
+  sanitizeCompositionTopic,
+} from '~/utils/writing-lessons/composition-topic-prompts';
+import {
   getLoungeModuleLinkForLesson,
   type LoungeModuleLink,
 } from '~/utils/writing-lessons/lounge-links.server';
 import { generatePracticeFeedback } from '~/utils/writing-lessons/practice-feedback.server';
+import { generatePracticePrompts } from '~/utils/writing-lessons/practice-prompt-generation.server';
 import {
   practiceFeedbackStatusLabel,
   type PracticeFeedbackResult,
@@ -124,6 +131,17 @@ type CompositionCheckActionData = {
   feedback: PracticeFeedbackResult;
 };
 
+type CompositionPersonalizeActionData = {
+  intent: 'personalize-composition';
+  ok: boolean;
+  /** Set when ok is false: why the topic was declined. */
+  message?: string;
+  topic?: string;
+  /** 'ai' when the model generated the set, 'template' for the offline fallback. */
+  source?: 'ai' | 'template';
+  prompts?: QuickWritingPracticePrompt[];
+};
+
 export async function action({ request, params }: ActionFunctionArgs) {
   const userId = await requireUserId(request);
   await requireMembership(request, userId);
@@ -158,6 +176,61 @@ export async function action({ request, params }: ActionFunctionArgs) {
       intent: 'check-composition',
       promptId: String(formData.get('promptId') ?? ''),
       feedback,
+    });
+  }
+
+  // Interest-driven practice: the student names what the practice should be
+  // about and gets a fresh prompt set grounded in it. AI generation is
+  // preferred; the deterministic topic templates keep choice working with no
+  // ANTHROPIC_API_KEY, so personalizing never dead-ends.
+  if (intent === 'personalize-composition') {
+    if (!isCompositionPracticeEnabled()) {
+      throw new Response('Composition practice is not enabled', {
+        status: 400,
+      });
+    }
+    const lesson = getQuickWritingLessonBySlug(params.lessonSlug);
+    if (lesson?.section !== 'Composition') {
+      throw new Response('Only composition practice can be personalized', {
+        status: 400,
+      });
+    }
+
+    const topic = sanitizeCompositionTopic(String(formData.get('topic') ?? ''));
+    if (!topic) {
+      return dataResponse<CompositionPersonalizeActionData>({
+        intent: 'personalize-composition',
+        ok: false,
+        message:
+          'Let’s keep practice topics classroom-friendly — try a different one.',
+      });
+    }
+
+    const staticPrompts = getQuickWritingPracticePrompts(lesson.slug);
+    const generated = await generatePracticePrompts({
+      skill: context.skill,
+      lessonTitle: context.title,
+      rule: context.rule,
+      exampleExercises: staticPrompts
+        .slice(0, 4)
+        .map((prompt) => prompt.exercise),
+      count: 5,
+      topic,
+    });
+    const prompts: QuickWritingPracticePrompt[] =
+      generated.length > 0
+        ? generated.map((prompt, index) => ({
+            id: `${lesson.slug}-personal-${index + 1}`,
+            ...prompt,
+          }))
+        : buildTopicFallbackPrompts(lesson.slug, topic);
+
+    return dataResponse<CompositionPersonalizeActionData>({
+      intent: 'personalize-composition',
+      ok: true,
+      topic,
+      source: generated.length > 0 ? 'ai' : 'template',
+      prompts,
     });
   }
 
@@ -502,17 +575,28 @@ function StudentPracticePanel({
 }
 
 function CompositionPracticePanel({
-  prompts,
+  prompts: defaultPrompts,
 }: {
   prompts: QuickWritingPracticePrompt[];
 }) {
   const feedbackFetcher = useFetcher<CompositionCheckActionData>();
+  const personalizeFetcher = useFetcher<CompositionPersonalizeActionData>();
   const [promptIndex, setPromptIndex] = useState(0);
   const [response, setResponse] = useState('');
   const [feedback, setFeedback] = useState<PracticeFeedbackResult | null>(null);
+  // Interest-driven practice: once the student names a topic, their prompt set
+  // is rebuilt around it and replaces the archived defaults until cleared.
+  const [personalPrompts, setPersonalPrompts] = useState<
+    QuickWritingPracticePrompt[] | null
+  >(null);
+  const [activeTopic, setActiveTopic] = useState<string | null>(null);
+  const [topicInput, setTopicInput] = useState('');
+  const [topicMessage, setTopicMessage] = useState<string | null>(null);
 
+  const prompts = personalPrompts ?? defaultPrompts;
   const activePrompt = prompts[promptIndex] ?? null;
   const isChecking = feedbackFetcher.state !== 'idle';
+  const isPersonalizing = personalizeFetcher.state !== 'idle';
 
   // Adopt feedback once it comes back for the prompt currently on screen — a
   // late response for a prompt the student already moved past is ignored.
@@ -525,6 +609,42 @@ function CompositionPracticePanel({
       setFeedback(data.feedback);
     }
   }, [feedbackFetcher.data, activePrompt?.id]);
+
+  // Adopt a personalized prompt set (or the reason the topic was declined).
+  useEffect(() => {
+    const data = personalizeFetcher.data;
+    if (data?.intent !== 'personalize-composition') return;
+    if (data.ok && data.prompts && data.prompts.length > 0 && data.topic) {
+      setPersonalPrompts(data.prompts);
+      setActiveTopic(data.topic);
+      setTopicMessage(null);
+      setTopicInput('');
+      setPromptIndex(0);
+      setResponse('');
+      setFeedback(null);
+    } else if (!data.ok) {
+      setTopicMessage(data.message ?? 'Try a different topic.');
+    }
+  }, [personalizeFetcher.data]);
+
+  function personalize(topic: string) {
+    if (isPersonalizing) return;
+    const trimmed = topic.trim();
+    if (!trimmed) return;
+    personalizeFetcher.submit(
+      { intent: 'personalize-composition', topic: trimmed },
+      { method: 'post' }
+    );
+  }
+
+  function clearTopic() {
+    setPersonalPrompts(null);
+    setActiveTopic(null);
+    setTopicMessage(null);
+    setPromptIndex(0);
+    setResponse('');
+    setFeedback(null);
+  }
 
   function checkResponse() {
     if (activePrompt === null || isChecking) return;
@@ -565,6 +685,91 @@ function CompositionPracticePanel({
         </div>
       </CardHeader>
       <CardContent className="space-y-4 p-5">
+        {activeTopic ? (
+          <div
+            data-testid="composition-topic-active"
+            className="flex flex-wrap items-center gap-2 rounded-xl border border-primary/30 bg-primary/5 px-3 py-2"
+          >
+            <Sparkles className="h-4 w-4 shrink-0 text-primary" />
+            <span className="text-sm text-foreground">
+              Practicing with <span className="font-medium">{activeTopic}</span>
+            </span>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="ml-auto h-7 rounded-full px-2 text-xs text-muted-foreground"
+              onClick={clearTopic}
+            >
+              Use standard prompts
+            </Button>
+          </div>
+        ) : (
+          <div
+            data-testid="composition-topic-picker"
+            className="space-y-2 rounded-xl border border-dashed border-border/70 p-3"
+          >
+            <p className="text-sm font-medium text-foreground">
+              Make it about you
+            </p>
+            <p className="text-sm text-muted-foreground">
+              Pick something you care about and the prompts will be built around
+              it.
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {COMPOSITION_TOPIC_SUGGESTIONS.map((suggestion) => (
+                <button
+                  key={suggestion}
+                  type="button"
+                  disabled={isPersonalizing}
+                  onClick={() => personalize(suggestion)}
+                  className="rounded-full border border-border bg-background px-2.5 py-1 text-xs text-foreground transition hover:bg-muted disabled:opacity-50"
+                >
+                  {suggestion}
+                </button>
+              ))}
+            </div>
+            <div className="flex items-center gap-2">
+              <Input
+                data-testid="composition-topic-input"
+                aria-label="Your own topic"
+                value={topicInput}
+                onChange={(event) => setTopicInput(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    event.preventDefault();
+                    personalize(topicInput);
+                  }
+                }}
+                placeholder="…or your own topic"
+                className="h-8 text-base sm:text-sm"
+              />
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="h-8 shrink-0 rounded-full"
+                disabled={isPersonalizing || topicInput.trim().length === 0}
+                onClick={() => personalize(topicInput)}
+              >
+                {isPersonalizing ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  'Make it mine'
+                )}
+              </Button>
+            </div>
+            {topicMessage ? (
+              <p
+                data-testid="composition-topic-message"
+                className="text-sm text-destructive"
+              >
+                {topicMessage}
+              </p>
+            ) : null}
+          </div>
+        )}
+
         {activePrompt ? (
           <div className="space-y-4">
             <div className="rounded-xl border border-border/70 bg-muted/30 p-4">
