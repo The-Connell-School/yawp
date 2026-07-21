@@ -22,7 +22,7 @@ export default defineConfig({
   use: {
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
-    video: 'retain-on-failure',
+    video: process.env.E2E_VIDEO === 'on' ? 'on' : 'retain-on-failure',
     baseURL: e2eBaseUrl,
   },
   projects: [

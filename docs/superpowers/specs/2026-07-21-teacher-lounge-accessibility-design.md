@@ -34,8 +34,11 @@ focusable application chrome from assistive technology while the menu was open.
 - Scope `text-white/70` to the black empty-video state. This keeps it visually
   muted while producing approximately 9.9:1 contrast without changing shared
   theme tokens.
-- Render the restart control through `DropdownMenuItem asChild`, producing one
-  semantic menu item rather than nested interactive controls.
+- Render the restart control directly as one `DropdownMenuItem`, producing one
+  semantic menu item rather than nested interactive controls. Independent
+  keyboard verification showed that Radix selection did not submit the prior
+  nested form, so the final design renders the Radix item directly and uses the
+  route's existing fetcher to send one explicit `restartModule` POST on select.
 - Use a non-modal dropdown. This one-action menu does not need modal
   outside-content suppression, and the modal implementation caused a real
   `aria-hidden-focus` violation in the integrated application shell.
@@ -52,7 +55,8 @@ permitted.
 
 The production-build axe test is the RED/GREEN contract. It must keyboard-open
 the module menu, wait on the menu's actual CSS animation promises, scan the
-stable open state, and keyboard-activate Restart Module. No arbitrary delay or
-axe exclusion is allowed. The focused Teacher Lounge case and complete UA suite
-must pass on a Playwright-owned port. Desktop and mobile screenshots must show
-an intentional empty state with no layout regression.
+stable open state, and keyboard-activate Restart Module. The test must observe
+the `restartModule` POST and its successful response. No arbitrary delay or axe
+exclusion is allowed. The focused Teacher Lounge case and complete UA suite
+must pass on a Playwright-owned port. Stable desktop and mobile captures plus an
+actual browser-flow video must show the open menu and responsive layout.

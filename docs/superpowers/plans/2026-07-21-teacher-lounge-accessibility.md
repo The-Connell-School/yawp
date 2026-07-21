@@ -9,6 +9,8 @@ Issue: #220
    target and global progress-name work under milestone issue #221.
 4. Extend the production-build browser contract to keyboard-open the menu, wait
    for its real CSS animations, axe-scan the stable open state, and activate the
-   restart action without sleeps or exclusions.
+   restart action without sleeps or exclusions. Observe the resulting POST and
+   successful response so menu closure alone cannot produce a false pass.
 5. Run typecheck/build plus focused and complete axe suites on an isolated port.
-6. Capture desktop/mobile visual proof and run an independent review swarm.
+6. Capture stable desktop/mobile proof plus an actual browser-flow video, add
+   narration, and run an independent review swarm.

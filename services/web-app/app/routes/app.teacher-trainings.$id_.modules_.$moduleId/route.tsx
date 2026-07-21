@@ -4,7 +4,6 @@ import {
   data as dataResponse,
   useLoaderData,
   useFetcher,
-  Form,
   redirect,
 } from 'react-router';
 import { Link } from 'react-router';
@@ -568,24 +567,21 @@ export default function TeacherTrainingModuleRoute() {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            <Form method="post">
-                              <input
-                                type="hidden"
-                                name="moduleId"
-                                value={module.id}
-                              />
-                              <DropdownMenuItem asChild>
-                                <button
-                                  type="submit"
-                                  name="intent"
-                                  value="restartModule"
-                                  className="flex w-full items-center text-popover-foreground"
-                                >
-                                  <RotateCcw className="mr-2 h-4 w-4" />
-                                  Restart Module
-                                </button>
-                              </DropdownMenuItem>
-                            </Form>
+                            <DropdownMenuItem
+                              className="text-popover-foreground"
+                              onSelect={() => {
+                                fetcher.submit(
+                                  {
+                                    intent: 'restartModule',
+                                    moduleId: module.id,
+                                  },
+                                  { method: 'post' }
+                                );
+                              }}
+                            >
+                              <RotateCcw className="mr-2 h-4 w-4" />
+                              Restart Module
+                            </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </div>

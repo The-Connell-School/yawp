@@ -135,9 +135,10 @@ test.describe.serial('UA accessibility axe audit', () => {
     const restartModuleItem = page.getByRole('menuitem', {
       name: 'Restart Module',
     });
+    const moduleActionsMenu = page.getByRole('menu');
     await expect(restartModuleItem).toBeVisible();
     await expect(restartModuleItem).toBeFocused();
-    await restartModuleItem.evaluate(async (node) => {
+    await moduleActionsMenu.evaluate(async (node) => {
       await Promise.all(
         node
           .getAnimations({ subtree: true })
@@ -145,11 +146,50 @@ test.describe.serial('UA accessibility axe audit', () => {
       );
     });
     await scanPage(page, testInfo, 'teacher-lounge-module-actions-open');
+    await testInfo.attach('teacher-lounge-module-actions-desktop', {
+      body: await page.screenshot(),
+      contentType: 'image/png',
+    });
+    await restartModuleItem.focus();
+    await expect(restartModuleItem).toBeFocused();
 
-    await page.keyboard.press('Enter');
+    const [restartRequest] = await Promise.all([
+      page.waitForRequest(
+        (request) =>
+          request.method() === 'POST' &&
+          request.postData()?.includes('restartModule') === true
+      ),
+      restartModuleItem.press('Enter'),
+    ]);
+    const restartResponse = await restartRequest.response();
+    if (!restartResponse) {
+      throw new Error('Restart Module POST completed without a response');
+    }
+    expect(restartResponse.status()).toBeLessThan(400);
+    await expect(restartModuleItem).toBeHidden();
     await expect(
       page.getByRole('heading', { name: 'E2E Lounge Module' }).first()
     ).toBeVisible();
+
+    await page.setViewportSize({ width: 390, height: 844 });
+    await moduleActions.focus();
+    await expect(moduleActions).toBeFocused();
+    await moduleActions.press('Enter');
+    await expect(restartModuleItem).toBeVisible();
+    await moduleActionsMenu.evaluate(async (node) => {
+      await Promise.all(
+        node
+          .getAnimations({ subtree: true })
+          .map((animation) => animation.finished)
+      );
+    });
+    await scanPage(page, testInfo, 'teacher-lounge-module-actions-open-mobile');
+    await testInfo.attach('teacher-lounge-module-actions-mobile', {
+      body: await page.screenshot(),
+      contentType: 'image/png',
+    });
+    await page.keyboard.press('Escape');
+    await expect(restartModuleItem).toBeHidden();
   });
 
   test('teacher grading view has no serious or critical WCAG 2.1 A/AA violations', async ({
