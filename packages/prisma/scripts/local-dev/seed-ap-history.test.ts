@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { AP_HISTORY_LIBRARY_ENTRIES } from '../ap-history-library-data';
+import { AP_HISTORY_SEED_MODULES } from '../ap-history-module-data';
 import {
   AP_HISTORY_ASSIGNMENT_TYPE_SYSTEM_KEY,
   buildApHistoryAssignmentTypeCreateInput,
@@ -20,6 +21,31 @@ describe('buildApHistoryAssignmentTypeCreateInput', () => {
     expect(input.organizationAssignments?.create).toEqual({
       organizationId: orgId,
     });
+  });
+
+  test('seeds every writing-process section (module) from the shared data source', () => {
+    const modules = (input.assignmentModules?.create ?? []) as Array<{
+      title: string;
+      position: number;
+      tutorInstructions?: string | null;
+      instructions?: { create: Array<{ title: string }> };
+    }>;
+
+    expect(modules.map((module) => module.title)).toEqual(
+      AP_HISTORY_SEED_MODULES.map((module) => module.title)
+    );
+    for (const [index, module] of modules.entries()) {
+      expect(module.position).toBe(AP_HISTORY_SEED_MODULES[index].position);
+      // The DB stores one representative (default essay-type) string per
+      // shared module; the runtime selects the correct variant per essay type.
+      expect(module.tutorInstructions).toBe(
+        AP_HISTORY_SEED_MODULES[index].tutorInstructions
+      );
+      expect(typeof module.tutorInstructions).toBe('string');
+      expect(module.instructions?.create).toHaveLength(
+        AP_HISTORY_SEED_MODULES[index].instructions.length
+      );
+    }
   });
 
   test('seeds every curated library entry from the shared data source', () => {

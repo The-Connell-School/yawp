@@ -19,6 +19,11 @@ type Props = {
   advanceInstruction?: (label?: string) => void;
   respond: (response: string) => void | Promise<void>;
   disabled?: boolean;
+  // Open straight into the chat input instead of the choices row — used once a
+  // back-and-forth conversation is already underway.
+  defaultOpen?: boolean;
+  // The session is read-only (e.g. submitted). Collapses the chat input.
+  locked?: boolean;
 };
 
 export const ResponseBar = ({
@@ -29,19 +34,28 @@ export const ResponseBar = ({
   respond,
   className,
   disabled = false,
+  defaultOpen = false,
+  locked = false,
 }: Props) => {
   const navigation = useNavigation();
-  const [isAskingQuestion, setIsAskingQuestion] = useState(false);
+  const hasButtons = !!buttons && buttons.length > 0;
+  const [isAskingQuestion, setIsAskingQuestion] = useState(
+    () => defaultOpen && !!showChatButton && !hasButtons
+  );
   const [check, setCheck] = useState(false);
   const isPending = navigation.state !== 'idle';
   const isDisabled = disabled || isPending;
 
+  // Collapse back to the choices only when the session is locked — NOT while a
+  // tutor response is in flight. Collapsing on every pending state is what made
+  // the chat box snap shut after each message.
   useEffect(() => {
-    if (disabled) {
-      setIsAskingQuestion(false);
-      setCheck(false);
-    }
-  }, [disabled]);
+    if (locked) setIsAskingQuestion(false);
+  }, [locked]);
+
+  useEffect(() => {
+    if (isDisabled) setCheck(false);
+  }, [isDisabled]);
 
   return isAskingQuestion ? (
     <div
@@ -64,6 +78,7 @@ export const ResponseBar = ({
             if (isDisabled) return;
             void respond(message);
           }}
+          submitOnEnter
           textareaTestId="tutor-chat-input"
           sendButtonTestId="tutor-chat-send"
           aria-label="Ask tutor a question"

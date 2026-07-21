@@ -5,6 +5,8 @@ import { z } from 'zod';
 import { zfd } from 'zod-form-data';
 import { requireUserId } from '~/utils/auth.server.js';
 import { prisma } from '~/utils/db.server.js';
+import { isApHistorySnapshot } from '~/domain/ap-history/schema';
+import { resolveApHistoryInstructionPrompt } from '../../../../../packages/prisma/scripts/ap-history-module-data';
 import omit from 'lodash/omit';
 
 const validator = z.object({
@@ -53,6 +55,12 @@ export async function action({ request, params }: ActionFunctionArgs) {
           },
         },
       },
+      document: {
+        select: {
+          apHistorySnapshot: true,
+          assignment: { select: { apHistorySnapshot: true } },
+        },
+      },
     },
   });
 
@@ -69,6 +77,21 @@ export async function action({ request, params }: ActionFunctionArgs) {
   const instructionsLength = instructions.length;
   const currentInstruction = instructions[cms.instructionsCompleted];
   const nextInstructionRecord = instructions[cms.instructionsCompleted + 1];
+
+  // DBQ and LEQ advance into separately authored step messages. When the
+  // document carries an AP History snapshot, pick the bubble matching its essay
+  // type; otherwise fall back to the shared stored prompt.
+  const apHistorySnapshot =
+    cms.document?.apHistorySnapshot ??
+    cms.document?.assignment?.apHistorySnapshot;
+  const nextInstructionContent =
+    nextInstructionRecord && isApHistorySnapshot(apHistorySnapshot)
+      ? (resolveApHistoryInstructionPrompt(
+          apHistorySnapshot.essayType,
+          cms.assignmentModule.title,
+          nextInstructionRecord.title
+        ) ?? nextInstructionRecord.prompt)
+      : nextInstructionRecord?.prompt;
 
   const isIncrementing =
     typeof data.instructionsCompleted === 'object' &&
@@ -104,7 +127,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
                   instructionId: currentInstruction.id,
                 },
                 {
-                  content: nextInstructionRecord.prompt,
+                  content: nextInstructionContent ?? nextInstructionRecord.prompt,
                   agent: 'assistant',
                   instructionId: nextInstructionRecord.id,
                 },

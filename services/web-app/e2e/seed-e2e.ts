@@ -2,6 +2,7 @@
 import { createE2EPrismaClient, type E2EPrismaClient } from './prisma-client';
 import { createDeployedAssignment } from './db-helpers';
 import { AP_HISTORY_LIBRARY_ENTRIES } from '../../../packages/prisma/scripts/ap-history-library-data';
+import { AP_HISTORY_SEED_MODULES } from '../../../packages/prisma/scripts/ap-history-module-data';
 import bcrypt from 'bcryptjs';
 
 let prisma: E2EPrismaClient | null = null;
@@ -302,24 +303,15 @@ export async function seedE2E(): Promise<E2EContext> {
         create: { organizationId: org.id },
       },
       assignmentModules: {
-        create: [
-          {
-            title: 'AP History Essay',
-            position: 1,
-            description: 'Write an APUSH DBQ or LEQ with AP-specific coaching.',
-            instructions: {
-              create: [
-                {
-                  title: 'Write',
-                  prompt:
-                    'Use the selected APUSH prompt and source panel to draft your response.',
-                  position: 1,
-                  showChatButton: true,
-                },
-              ],
-            },
+        create: AP_HISTORY_SEED_MODULES.map((moduleData) => ({
+          title: moduleData.title,
+          position: moduleData.position,
+          description: moduleData.description,
+          tutorInstructions: moduleData.tutorInstructions,
+          instructions: {
+            create: moduleData.instructions,
           },
-        ],
+        })),
       },
       apHistoryLibraryEntries: {
         create: AP_HISTORY_LIBRARY_ENTRIES.map((entry) => ({

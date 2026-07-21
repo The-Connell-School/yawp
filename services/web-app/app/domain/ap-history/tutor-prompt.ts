@@ -77,6 +77,46 @@ const FAILURE_DETECTORS = `Named failure-mode detectors — if you detect any of
 12. reasoning-mentioned-not-used (LEQ): Student names a reasoning type but doesn't structure the argument around it. → "You mentioned 'many causes' but your paragraphs don't trace cause → effect. Restructure around *because* and *led to*."
 13. narrative-drift (LEQ): Student narrating events chronologically without claims. → "This reads as a history report, not an argument. What's the claim this paragraph is making?"`;
 
+// The current assignment module (section) the student is working in, e.g.
+// "Read the Documents" or "Pre-Writing", plus the current step (instruction)
+// within it when the section is broken into steps. Legacy documents created
+// when the AP History type had a single catch-all module carry no
+// tutorInstructions, which leaves the prompt exactly as it was before
+// sections existed.
+export type ApHistoryTutorModuleContext = {
+  title: string;
+  tutorInstructions?: string | null;
+  instruction?: {
+    title: string;
+    tutorInstructions?: string | null;
+  } | null;
+};
+
+function formatModuleSection(
+  module: ApHistoryTutorModuleContext | undefined,
+): string | null {
+  const sectionGuidance = module?.tutorInstructions?.trim();
+  if (!sectionGuidance) return null;
+
+  const parts = [
+    `The student works through this assignment in sections. Current section: "${module!.title}".`,
+    sectionGuidance,
+  ];
+
+  const stepGuidance = module!.instruction?.tutorInstructions?.trim();
+  if (stepGuidance) {
+    parts.push(
+      `Within this section, the student is on the step: Current step: "${module!.instruction!.title}".`,
+      stepGuidance,
+    );
+  }
+
+  parts.push(
+    'Keep your coaching centered on this section. If the student asks about work from another section, help briefly, then steer back.',
+  );
+  return parts.join('\n');
+}
+
 function formatSources(snapshot: ApHistorySnapshot): string | null {
   if (snapshot.sources.length === 0) return null;
   const body = [...snapshot.sources]
@@ -92,6 +132,7 @@ function formatSources(snapshot: ApHistorySnapshot): string | null {
 
 export function buildApHistoryTutorSystemPrompt(
   snapshot: ApHistorySnapshot,
+  module?: ApHistoryTutorModuleContext,
 ): string {
   const isDbq = snapshot.essayType === 'dbq';
   const rubric = isDbq ? DBQ_RUBRIC : LEQ_RUBRIC;
@@ -108,6 +149,7 @@ export function buildApHistoryTutorSystemPrompt(
     VOICE_RULES,
     rubric,
     arc,
+    formatModuleSection(module),
     FAILURE_DETECTORS,
     assignmentContext,
     formatSources(snapshot),

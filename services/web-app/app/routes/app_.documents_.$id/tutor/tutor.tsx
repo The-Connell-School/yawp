@@ -467,6 +467,8 @@ export const Tutor = ({
           showChatButton={!!instruction.showChatButton}
           showNextButton={!!instruction.showNextButton}
           disabled={isSessionLocked || isTutorResponding}
+          locked={isSessionLocked}
+          defaultOpen={cms.messages.some((message) => message.agent === 'user')}
           advanceInstruction={
             isLastCmInstruction && liveNextModuleId
               ? () => advanceToNextCourseModule()
