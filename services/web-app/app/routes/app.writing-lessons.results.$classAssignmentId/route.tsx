@@ -25,7 +25,9 @@ import {
 } from '~/utils/writing-lessons/act-practice.shared';
 import { getWritingPracticeResultsForTeacher } from '~/utils/writing-lessons/practice-assignments.server';
 import {
+  isCompositionAttemptRecord,
   practiceFeedbackStatusLabel,
+  type CompositionAttemptRecord,
   type PracticeFeedbackStatus,
 } from '~/utils/writing-lessons/practice-feedback.shared';
 import { getQuickWritingLessonBySlug } from '~/utils/writing-lessons/static-lessons.server';
@@ -257,6 +259,17 @@ function AttemptCard({
   attempt: AttemptView;
 }) {
   const { record } = attempt;
+  // Constructed-response attempts show the prompt, the student's writing, and
+  // the tutor feedback it earned.
+  if (isCompositionAttemptRecord(record)) {
+    return (
+      <CompositionAttemptCard
+        position={position}
+        attempt={attempt}
+        record={record}
+      />
+    );
+  }
   // Older attempts stored free-text feedback rather than an ACT record; render a
   // graceful summary for those instead of crashing on the missing ACT fields.
   if (!isActAttemptRecord(record)) {
@@ -329,6 +342,66 @@ function AttemptCard({
       <div className="mt-3 border-t border-border/60 pt-2.5">
         <p className="text-sm leading-relaxed text-muted-foreground">
           {record.explanation}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * A constructed-response (composition) attempt: the prompt, the student's
+ * exact writing, and the tutor feedback it earned — the teacher-facing
+ * counterpart of the student's in-flow feedback panel.
+ */
+function CompositionAttemptCard({
+  position,
+  attempt,
+  record,
+}: {
+  position: number;
+  attempt: AttemptView;
+  record: CompositionAttemptRecord;
+}) {
+  const status = record.status as PracticeFeedbackStatus;
+  return (
+    <div className="rounded-lg border border-border/70 bg-background p-3.5">
+      <div className="mb-2 flex items-center justify-between gap-3">
+        <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          Problem {position} · {attempt.lessonTitle}
+        </span>
+        {STATUS_STYLES[status] ? (
+          <span
+            className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${STATUS_STYLES[status]}`}
+          >
+            {practiceFeedbackStatusLabel(status)}
+          </span>
+        ) : null}
+      </div>
+
+      <div className="space-y-2 text-sm">
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            Prompt
+          </p>
+          <p className="text-foreground">{record.exercise}</p>
+          <p className="mt-0.5 text-muted-foreground">{record.instruction}</p>
+        </div>
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            Their response
+          </p>
+          <p className="whitespace-pre-wrap rounded-md bg-muted/50 px-2.5 py-1.5 text-foreground">
+            {record.response}
+          </p>
+        </div>
+      </div>
+
+      <div className="mt-3 border-t border-border/60 pt-2.5">
+        <p className="text-sm leading-relaxed text-muted-foreground">
+          {record.summary}
+          {record.degraded
+            ? ' (Quick self-check — the tutor was offline for this attempt.)'
+            : ''}
         </p>
       </div>
     </div>

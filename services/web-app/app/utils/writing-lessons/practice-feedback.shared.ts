@@ -38,6 +38,35 @@ export type PracticeFeedbackResult = PracticeFeedback & {
   degraded: boolean;
 };
 
+/**
+ * The `feedbackJson` payload persisted for a constructed-response (composition)
+ * assigned-practice attempt: the prompt snapshot, the student's writing, and
+ * the tutor feedback it earned. The `kind` discriminator keeps it distinct from
+ * ACT attempt records sharing the same column.
+ */
+export type CompositionAttemptRecord = PracticeFeedbackResult & {
+  kind: 'composition';
+  exercise: string;
+  instruction: string;
+  response: string;
+};
+
+/**
+ * Narrows an attempt's `feedbackJson` (typed `unknown` at the DB boundary) to
+ * a composition attempt record.
+ */
+export function isCompositionAttemptRecord(
+  value: unknown
+): value is CompositionAttemptRecord {
+  if (!value || typeof value !== 'object') return false;
+  const record = value as Partial<CompositionAttemptRecord>;
+  return (
+    record.kind === 'composition' &&
+    typeof record.response === 'string' &&
+    typeof record.summary === 'string'
+  );
+}
+
 export type PracticeFeedbackInput = {
   lessonTitle: string;
   /** Short concept label, e.g. "comma splices". */

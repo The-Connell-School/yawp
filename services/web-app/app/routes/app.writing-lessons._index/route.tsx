@@ -56,11 +56,15 @@ export async function loader({ request }: LoaderFunctionArgs) {
     (section) => compositionEnabled || section.section !== 'Composition'
   );
 
-  // The self-directed session and the teacher assign builder are ACT
-  // multiple-choice only, so they list grammar skills exclusively — composition
-  // lessons are constructed response and are practiced from the lesson page.
+  // The student's self-directed session is ACT multiple-choice only, so its
+  // builder lists grammar skills exclusively. Teacher-assigned practice
+  // supports both kinds: grammar skills drill ACT items and composition
+  // skills are constructed response, mixed freely in one assignment.
   const grammarLessons = getQuickWritingLessonSections()
     .filter((section) => section.section === 'Grammar & Mechanics')
+    .flatMap((section) => section.groups)
+    .flatMap((group) => group.lessons);
+  const assignableLessons = sections
     .flatMap((section) => section.groups)
     .flatMap((group) => group.lessons);
 
@@ -88,7 +92,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       }))
     : [];
   const writingPracticeLessons = isTeacher
-    ? grammarLessons.map((lesson) => ({
+    ? assignableLessons.map((lesson) => ({
         slug: lesson.slug,
         title: lesson.title,
         category: lesson.category,

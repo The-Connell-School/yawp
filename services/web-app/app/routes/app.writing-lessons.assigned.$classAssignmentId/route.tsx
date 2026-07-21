@@ -20,6 +20,7 @@ import { ActPracticeQuestionView } from '~/components/writing-lessons/act-practi
 import { Button } from '~/components/ui/button';
 import { Badge } from '~/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
+import { Textarea } from '~/components/ui/textarea';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import {
   gradeActAnswer,
@@ -28,8 +29,16 @@ import {
 import {
   getAssignedPracticeForStudentById,
   getOrCreateStudentPracticeSet,
+  recordCompositionPracticeAttempt,
   recordWritingPracticeAttempt,
 } from '~/utils/writing-lessons/practice-assignments.server';
+import { generatePracticeFeedback } from '~/utils/writing-lessons/practice-feedback.server';
+import {
+  detectPracticeGuardrail,
+  practiceFeedbackStatusLabel,
+  type PracticeFeedbackResult,
+} from '~/utils/writing-lessons/practice-feedback.shared';
+import { getQuickWritingLessonContext } from '~/utils/writing-lessons/static-lessons.server';
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
@@ -66,11 +75,19 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   });
 }
 
-type AssignedActionData = {
-  position: number;
-  grade: ActGradeResult;
-  recorded: boolean;
-};
+type AssignedActionData =
+  | {
+      kind: 'act';
+      position: number;
+      grade: ActGradeResult;
+      recorded: boolean;
+    }
+  | {
+      kind: 'composition';
+      position: number;
+      feedback: PracticeFeedbackResult;
+      recorded: boolean;
+    };
 
 export async function action({ request, params }: ActionFunctionArgs) {
   const userId = await requireUserId(request);
@@ -85,24 +102,86 @@ export async function action({ request, params }: ActionFunctionArgs) {
   }
 
   const formData = await request.formData();
+  const kind = String(formData.get('kind') ?? 'act');
   const position = Number(formData.get('position'));
   const lessonSlug = String(formData.get('lessonSlug') ?? '');
   const promptId = String(formData.get('promptId') ?? '');
-  const selectedChoiceIndex = Number(formData.get('selectedChoiceIndex'));
+  const safePosition = Number.isFinite(position) ? position : 0;
 
-  // The question must belong to this student's stored set for the assignment.
+  // The item must belong to this student's stored set for the assignment.
   const sequence = await getOrCreateStudentPracticeSet({
     classAssignmentId: classAssignment.id,
     membershipId: profile.id,
     lessonSlugs: classAssignment.assignment.lessonSlugs,
     problemCount: classAssignment.assignment.problemCount,
   });
+
+  // Constructed-response (composition) problems: the tutor feedback service
+  // grades the writing and the attempt is persisted with it. Guardrailed
+  // submissions (blank / unchanged) get feedback but are NOT recorded, so
+  // they never consume assignment progress.
+  if (kind === 'composition') {
+    const item = sequence.find(
+      (candidate) =>
+        candidate.kind === 'composition' &&
+        candidate.prompt.id === promptId &&
+        candidate.lessonSlug === lessonSlug
+    );
+    const context = getQuickWritingLessonContext(lessonSlug);
+    if (!item || item.kind !== 'composition' || !context) {
+      throw new Response('Unknown or invalid practice answer', { status: 400 });
+    }
+    const responseText = String(formData.get('response') ?? '');
+
+    const guardrail = detectPracticeGuardrail({
+      exercise: item.prompt.exercise,
+      response: responseText,
+    });
+    if (guardrail) {
+      return dataResponse<AssignedActionData>({
+        kind: 'composition',
+        position: safePosition,
+        feedback: { ...guardrail, degraded: false },
+        recorded: false,
+      });
+    }
+
+    const feedback = await generatePracticeFeedback({
+      lessonTitle: context.title,
+      skill: context.skill,
+      rule: context.rule,
+      exercise: item.prompt.exercise,
+      instruction: item.prompt.instruction,
+      response: responseText,
+    });
+
+    await recordCompositionPracticeAttempt({
+      classAssignmentId: classAssignment.id,
+      membershipId: profile.id,
+      lessonSlug,
+      prompt: item.prompt,
+      response: responseText,
+      feedback,
+    });
+
+    return dataResponse<AssignedActionData>({
+      kind: 'composition',
+      position: safePosition,
+      feedback,
+      recorded: true,
+    });
+  }
+
+  const selectedChoiceIndex = Number(formData.get('selectedChoiceIndex'));
   const item = sequence.find(
     (candidate) =>
-      candidate.question.id === promptId && candidate.lessonSlug === lessonSlug
+      candidate.kind !== 'composition' &&
+      candidate.question.id === promptId &&
+      candidate.lessonSlug === lessonSlug
   );
   if (
     !item ||
+    item.kind === 'composition' ||
     !Number.isInteger(selectedChoiceIndex) ||
     selectedChoiceIndex < 0 ||
     selectedChoiceIndex >= item.question.choices.length
@@ -122,7 +201,8 @@ export async function action({ request, params }: ActionFunctionArgs) {
   });
 
   return dataResponse<AssignedActionData>({
-    position: Number.isFinite(position) ? position : 0,
+    kind: 'act',
+    position: safePosition,
     grade,
     recorded: true,
   });
@@ -146,16 +226,20 @@ export default function AssignedPracticeRoute() {
     Math.min(completedCount, sequence.length)
   );
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
+  const [writtenResponse, setWrittenResponse] = useState('');
   const [sessionAnswered, setSessionAnswered] = useState<number[]>([]);
 
   const currentItem = sequence[pointer] ?? null;
   const isChecking = fetcher.state !== 'idle';
 
-  const grade =
+  const currentResult =
     fetcher.data && fetcher.data.position === currentItem?.position
-      ? fetcher.data.grade
+      ? fetcher.data
       : null;
-  const currentAnswered = grade !== null && fetcher.data?.recorded === true;
+  const grade = currentResult?.kind === 'act' ? currentResult.grade : null;
+  const compositionFeedback =
+    currentResult?.kind === 'composition' ? currentResult.feedback : null;
+  const currentAnswered = currentResult?.recorded === true;
 
   const doneCount = Math.min(
     problemCount,
@@ -170,6 +254,7 @@ export default function AssignedPracticeRoute() {
     }
     setPointer((prev) => prev + 1);
     setSelectedIndex(null);
+    setWrittenResponse('');
   }
 
   return (
@@ -245,30 +330,76 @@ export default function AssignedPracticeRoute() {
                   name="lessonSlug"
                   value={currentItem.lessonSlug}
                 />
-                <input
-                  type="hidden"
-                  name="promptId"
-                  value={currentItem.question.id}
-                />
-                <input
-                  type="hidden"
-                  name="selectedChoiceIndex"
-                  value={selectedIndex ?? ''}
-                />
 
-                <ActPracticeQuestionView
-                  question={currentItem.question}
-                  selectedIndex={selectedIndex}
-                  grade={grade}
-                  onSelect={setSelectedIndex}
-                />
+                {currentItem.kind === 'composition' ? (
+                  <>
+                    <input type="hidden" name="kind" value="composition" />
+                    <input
+                      type="hidden"
+                      name="promptId"
+                      value={currentItem.prompt.id}
+                    />
+                    <div className="rounded-xl border border-border/70 bg-muted/30 p-4">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                        Your prompt
+                      </p>
+                      <p className="mt-2 text-base leading-relaxed text-foreground">
+                        {currentItem.prompt.exercise}
+                      </p>
+                      <p className="mt-3 text-sm font-medium text-foreground">
+                        {currentItem.prompt.instruction}
+                      </p>
+                    </div>
+                    <Textarea
+                      name="response"
+                      data-testid="assigned-composition-response"
+                      aria-label="Your response"
+                      value={writtenResponse}
+                      onChange={(event) =>
+                        setWrittenResponse(event.target.value)
+                      }
+                      readOnly={currentAnswered}
+                      placeholder="Write your response here…"
+                      className="min-h-28 text-base sm:text-sm"
+                    />
+                    {compositionFeedback ? (
+                      <AssignedCompositionFeedback
+                        feedback={compositionFeedback}
+                      />
+                    ) : null}
+                  </>
+                ) : (
+                  <>
+                    <input
+                      type="hidden"
+                      name="promptId"
+                      value={currentItem.question.id}
+                    />
+                    <input
+                      type="hidden"
+                      name="selectedChoiceIndex"
+                      value={selectedIndex ?? ''}
+                    />
+                    <ActPracticeQuestionView
+                      question={currentItem.question}
+                      selectedIndex={selectedIndex}
+                      grade={grade}
+                      onSelect={setSelectedIndex}
+                    />
+                  </>
+                )}
 
                 <div className="flex flex-wrap gap-2">
                   {!currentAnswered ? (
                     <Button
                       type="submit"
                       size="sm"
-                      disabled={selectedIndex === null || isChecking}
+                      disabled={
+                        isChecking ||
+                        (currentItem.kind === 'composition'
+                          ? writtenResponse.trim().length === 0
+                          : selectedIndex === null)
+                      }
                     >
                       {isChecking ? (
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -305,6 +436,43 @@ export default function AssignedPracticeRoute() {
         )}
       </div>
     </section>
+  );
+}
+
+function AssignedCompositionFeedback({
+  feedback,
+}: {
+  feedback: PracticeFeedbackResult;
+}) {
+  return (
+    <div
+      data-testid="assigned-composition-feedback"
+      className="space-y-2 rounded-xl border border-border/70 bg-muted/30 p-4"
+    >
+      <p className="text-sm font-semibold text-foreground">
+        {practiceFeedbackStatusLabel(feedback.status)}
+      </p>
+      <p className="text-sm leading-relaxed text-foreground">
+        {feedback.summary}
+      </p>
+      {feedback.strengths.length > 0 ? (
+        <ul className="list-disc space-y-1 pl-5 text-sm text-muted-foreground">
+          {feedback.strengths.map((strength) => (
+            <li key={strength}>{strength}</li>
+          ))}
+        </ul>
+      ) : null}
+      {feedback.focus.length > 0 ? (
+        <ul className="list-disc space-y-1 pl-5 text-sm text-muted-foreground">
+          {feedback.focus.map((item) => (
+            <li key={item}>{item}</li>
+          ))}
+        </ul>
+      ) : null}
+      <p className="text-sm italic text-muted-foreground">
+        {feedback.encouragement}
+      </p>
+    </div>
   );
 }
 

@@ -63,4 +63,34 @@ describe('writing lessons index route', () => {
       )
     ).toBe(true);
   });
+
+  test('teachers can assign composition skills; the student session builder stays ACT-only', async () => {
+    process.env.COMPOSITION_PRACTICE_ENABLED = 'true';
+    requireMembership.mockResolvedValue({
+      id: 'teacher-1',
+      role: 'TEACHER',
+      organization: { id: 'org-1' },
+    });
+    classFindMany.mockResolvedValue([]);
+
+    const response = await loader({
+      request: new Request('https://example.test/app/writing-lessons'),
+      params: {},
+      context: {} as never,
+    } as any);
+
+    const assignableSlugs = response.data.writingPracticeLessons.map(
+      (lesson) => lesson.slug
+    );
+    expect(assignableSlugs).toContain('fixing-comma-splices');
+    expect(assignableSlugs).toContain('topic-sentences');
+    expect(assignableSlugs).toContain('conclusions');
+
+    // The self-directed ACT session builder still lists grammar skills only.
+    const sessionSlugs = response.data.practiceSkillOptions.map(
+      (lesson) => lesson.slug
+    );
+    expect(sessionSlugs).toContain('fixing-comma-splices');
+    expect(sessionSlugs).not.toContain('topic-sentences');
+  });
 });

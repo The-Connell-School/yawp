@@ -22,10 +22,12 @@ mock.module('~/utils/getLLMCompletion', () => ({
 const {
   createWritingPracticeAssignmentForClasses,
   recordWritingPracticeAttempt,
+  recordCompositionPracticeAttempt,
   getAssignedPracticeForStudent,
   buildAssignedPracticeSequence,
   summarizeWritingPracticeResults,
   buildGeneratedPracticeSequence,
+  buildMixedGeneratedPracticeSequence,
   getOrCreateStudentPracticeSet,
   getWritingPracticeResultsForTeacher,
 } = await import('./practice-assignments.server');
@@ -326,8 +328,12 @@ describe('getOrCreateStudentPracticeSet', () => {
     const createArg = writingPracticePromptSet.create.mock.calls[0][0];
     expect(createArg.data.source).toBe('ai');
     expect(items).toHaveLength(2);
-    expect(items[0].question.sentence).toContain('comet');
-    expect(items[0].question.choices).toHaveLength(4);
+    const first = items[0];
+    expect(first.kind).toBe('act');
+    if (first.kind !== 'composition') {
+      expect(first.question.sentence).toContain('comet');
+      expect(first.question.choices).toHaveLength(4);
+    }
   });
 });
 
@@ -452,5 +458,114 @@ describe('summarizeWritingPracticeResults', () => {
     expect(cara.attemptCount).toBe(0);
     expect(cara.completed).toBe(false);
     expect(cara.latestStatus).toBeNull();
+  });
+});
+
+describe('buildMixedGeneratedPracticeSequence', () => {
+  test('composition-only slugs produce constructed-response items', async () => {
+    getLLMCompletion.mockRejectedValue(new Error('offline'));
+
+    const { items, source } = await buildMixedGeneratedPracticeSequence(
+      ['topic-sentences', 'thesis-statements'],
+      4
+    );
+
+    expect(source).toBe('static');
+    expect(items).toHaveLength(4);
+    expect(items.map((item) => item.position)).toEqual([1, 2, 3, 4]);
+    for (const item of items) {
+      expect(item.kind).toBe('composition');
+      if (item.kind === 'composition') {
+        expect(item.prompt.exercise.length).toBeGreaterThan(0);
+        expect(item.prompt.instruction.length).toBeGreaterThan(0);
+      }
+    }
+    // Skills interleave round-robin.
+    expect(items[0].lessonSlug).toBe('topic-sentences');
+    expect(items[1].lessonSlug).toBe('thesis-statements');
+  });
+
+  test('grammar-only slugs keep producing ACT items', async () => {
+    getLLMCompletion.mockRejectedValue(new Error('offline'));
+
+    const { items } = await buildMixedGeneratedPracticeSequence(
+      ['fixing-comma-splices'],
+      3
+    );
+
+    expect(items).toHaveLength(3);
+    for (const item of items) {
+      expect(item.kind).toBe('act');
+      if (item.kind === 'act') {
+        expect(item.question.choices).toHaveLength(4);
+      }
+    }
+  });
+
+  test('mixed slugs interleave ACT and constructed-response items', async () => {
+    getLLMCompletion.mockRejectedValue(new Error('offline'));
+
+    const { items } = await buildMixedGeneratedPracticeSequence(
+      ['fixing-comma-splices', 'topic-sentences'],
+      6
+    );
+
+    expect(items).toHaveLength(6);
+    expect(items.map((item) => item.position)).toEqual([1, 2, 3, 4, 5, 6]);
+    const kinds = new Set(items.map((item) => item.kind));
+    expect(kinds.has('act')).toBe(true);
+    expect(kinds.has('composition')).toBe(true);
+    // Kinds alternate rather than clustering all of one skill first.
+    expect(items[0].kind).not.toBe(items[1].kind);
+  });
+
+  test('a single problem with mixed slugs still yields exactly one item', async () => {
+    getLLMCompletion.mockRejectedValue(new Error('offline'));
+
+    const { items } = await buildMixedGeneratedPracticeSequence(
+      ['fixing-comma-splices', 'topic-sentences'],
+      1
+    );
+
+    expect(items).toHaveLength(1);
+    expect(items[0].position).toBe(1);
+  });
+});
+
+describe('recordCompositionPracticeAttempt', () => {
+  test('persists the prompt snapshot, response, and feedback', async () => {
+    writingPracticeAttempt.create.mockResolvedValue({ id: 'attempt-1' });
+
+    await recordCompositionPracticeAttempt({
+      classAssignmentId: 'ca-1',
+      membershipId: 'student-1',
+      lessonSlug: 'topic-sentences',
+      prompt: {
+        id: 'topic-sentences-1',
+        exercise: 'Rewrite this announcement as a claim.',
+        instruction: 'Write a topic sentence.',
+      },
+      response: 'The cafeteria menu punishes the students who need lunch most.',
+      feedback: {
+        status: 'strong',
+        summary: 'A clear, arguable claim.',
+        strengths: ['Specific and arguable.'],
+        focus: ['Now prove it in a paragraph.'],
+        encouragement: 'Nice work.',
+        degraded: false,
+      },
+    });
+
+    const data = writingPracticeAttempt.create.mock.calls[0][0].data;
+    expect(data.classAssignmentId).toBe('ca-1');
+    expect(data.lessonSlug).toBe('topic-sentences');
+    expect(data.promptId).toBe('topic-sentences-1');
+    expect(data.exercise).toBe('Rewrite this announcement as a claim.');
+    expect(data.response).toBe(
+      'The cafeteria menu punishes the students who need lunch most.'
+    );
+    expect(data.status).toBe('strong');
+    expect(data.feedbackJson.kind).toBe('composition');
+    expect(data.feedbackJson.summary).toBe('A clear, arguable claim.');
   });
 });

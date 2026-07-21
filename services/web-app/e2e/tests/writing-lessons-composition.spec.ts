@@ -43,6 +43,72 @@ test.describe.serial('Writing Fundamentals Practice — Composition', () => {
     ).toBeVisible();
   });
 
+  test('a composition assignment reaches the student and records written attempts', async ({
+    page,
+    e2eContext,
+    signIn,
+  }) => {
+    // Teacher assigns Topic Sentences (constructed response) to their class.
+    await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
+    await page.goto('/app/writing-lessons/topic-sentences');
+    await page.locator('input[name="classIds"]').first().check();
+    await page.locator('input[name="problemCount"]').fill('3');
+    await page.getByRole('button', { name: /assign practice/i }).click();
+    await expect(page.getByTestId('assign-result')).toContainText(
+      /assigned to/i
+    );
+
+    // Student opens it and gets a writing box, not ACT answer choices.
+    await page.request.post('/auth/logout');
+    await page.context().clearCookies();
+    await signIn(e2eContext.userEmail, 'johndoe');
+    await page.goto('/app/writing-lessons');
+    await page.getByTestId('assigned-practice-card').first().click();
+    await expect(
+      page.getByRole('heading', { name: /problem 1 of/i })
+    ).toBeVisible();
+    await expect(page.getByText(/choose the best answer/i)).toHaveCount(0);
+
+    const response = page.getByTestId('assigned-composition-response');
+    await expect(response).toBeVisible();
+    await response.fill(
+      'The cafeteria menu punishes the students who most need a real lunch.'
+    );
+    await page.getByRole('button', { name: /check & save/i }).click();
+
+    // Feedback appears (offline-degraded in e2e) and the attempt is recorded.
+    await expect(
+      page.getByTestId('assigned-composition-feedback')
+    ).toBeVisible();
+    await expect(page.getByText(/1 of 3 done/i)).toBeVisible();
+    await page.getByRole('button', { name: /next problem/i }).click();
+    await expect(
+      page.getByRole('heading', { name: /problem 2 of/i })
+    ).toBeVisible();
+
+    // Teacher reads the student's exact writing in results.
+    await page.request.post('/auth/logout');
+    await page.context().clearCookies();
+    await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
+    await page.goto('/app/writing-lessons');
+    await page.getByTestId('assigned-by-teacher-card').first().click();
+    await expect(
+      page.getByRole('heading', { name: /student progress/i })
+    ).toBeVisible();
+    const studentRow = page
+      .getByTestId('student-progress-row')
+      .filter({ hasText: '1/3' });
+    await expect(studentRow).toBeVisible();
+    await studentRow.click();
+
+    const attempts = page.getByTestId('student-attempts');
+    await expect(attempts).toBeVisible();
+    await expect(attempts.getByText(/their response/i)).toBeVisible();
+    await expect(
+      attempts.getByText(/punishes the students who most need a real lunch/i)
+    ).toBeVisible();
+  });
+
   test('keeps Composition lessons out of the ACT session builder', async ({
     page,
     e2eContext,
