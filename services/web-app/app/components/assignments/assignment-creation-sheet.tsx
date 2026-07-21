@@ -243,7 +243,7 @@ function WritingPracticeFields({
 
       <div className="space-y-2">
         <Label htmlFor="wp-due-at">
-          Due date <span className="text-muted-foreground">(optional)</span>
+          Due date <span className="text-destructive">*</span>
         </Label>
         <Input
           id="wp-due-at"
@@ -474,7 +474,9 @@ export function AssignmentCreationSheetContent({
     ? isSaving ||
       selectedClassCount === 0 ||
       selectedLessonSlugs.length === 0 ||
-      !isProblemCountValid
+      !isProblemCountValid ||
+      title.trim().length === 0 ||
+      dueAt.trim().length === 0
     : isSaving ||
       isExtracting ||
       !assignmentTypeId ||
@@ -580,7 +582,14 @@ export function AssignmentCreationSheetContent({
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="assignment-create-title">Title (optional)</Label>
+          <Label htmlFor="assignment-create-title">
+            Title
+            {isWritingPractice ? (
+              <span className="text-destructive"> *</span>
+            ) : (
+              <span className="text-muted-foreground"> (optional)</span>
+            )}
+          </Label>
           <Input
             id="assignment-create-title"
             name="title"

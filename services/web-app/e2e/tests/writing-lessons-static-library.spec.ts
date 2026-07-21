@@ -307,6 +307,9 @@ test.describe.serial('Writing Fundamentals Practice', () => {
       .click();
 
     const dialog = page.getByRole('dialog');
+    // Title and due date are required for a practice assignment.
+    await dialog.getByLabel(/^title/i).fill('Interleaved grammar set');
+    await dialog.getByLabel(/due date/i).fill('2026-12-01');
     // First checkbox is the class; then pick two skills to interleave.
     await dialog.getByRole('checkbox').first().click();
     await dialog.getByText('Fixing Comma Splices', { exact: true }).click();
