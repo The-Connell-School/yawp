@@ -76,12 +76,20 @@ test.describe.serial('Writing Fundamentals Practice — Composition', () => {
     );
     await page.getByRole('button', { name: /check & save/i }).click();
 
-    // Feedback appears (offline-degraded in e2e) and the attempt is recorded.
+    // Feedback appears and the attempt is recorded. Offline (e2e) the tutor
+    // degrades to "developing", so the problem isn't mastered yet — the student
+    // is offered a revision loop rather than being pushed straight on.
     await expect(
       page.getByTestId('assigned-composition-feedback')
     ).toBeVisible();
-    await expect(page.getByText(/1 of 3 done/i)).toBeVisible();
-    await page.getByRole('button', { name: /next problem/i }).click();
+    await expect(
+      page.getByRole('button', { name: /revise & resubmit/i })
+    ).toBeVisible();
+    // Nothing mastered yet, but the attempt is on record.
+    await expect(page.getByText(/0 of 3 mastered/i)).toBeVisible();
+
+    // The student can move on without being hard-blocked.
+    await page.getByRole('button', { name: /skip for now/i }).click();
     await expect(
       page.getByRole('heading', { name: /problem 2 of/i })
     ).toBeVisible();

@@ -26,6 +26,7 @@ const {
   getAssignedPracticeForStudent,
   buildAssignedPracticeSequence,
   summarizeWritingPracticeResults,
+  computeAssignedProgress,
   buildGeneratedPracticeSequence,
   buildMixedGeneratedPracticeSequence,
   getOrCreateStudentPracticeSet,
@@ -421,18 +422,25 @@ describe('summarizeWritingPracticeResults', () => {
       students,
       problemCount: 2,
       attempts: [
+        // Aaron answered two distinct grammar problems.
         {
           membershipId: 's-1',
+          promptId: 'fixing-comma-splices-1',
+          lessonSlug: 'fixing-comma-splices',
           status: 'developing',
           createdAt: new Date('2026-07-01T10:00:00Z'),
         },
         {
           membershipId: 's-1',
+          promptId: 'fixing-comma-splices-2',
+          lessonSlug: 'fixing-comma-splices',
           status: 'strong',
           createdAt: new Date('2026-07-01T11:00:00Z'),
         },
         {
           membershipId: 's-2',
+          promptId: 'fixing-comma-splices-1',
+          lessonSlug: 'fixing-comma-splices',
           status: 'needs_revision',
           createdAt: new Date('2026-07-01T09:00:00Z'),
         },
@@ -447,6 +455,7 @@ describe('summarizeWritingPracticeResults', () => {
 
     const aaron = results[0];
     expect(aaron.attemptCount).toBe(2);
+    // Grammar problems are done as soon as they're answered.
     expect(aaron.completed).toBe(true);
     expect(aaron.latestStatus).toBe('strong'); // most recent wins
 
@@ -458,6 +467,83 @@ describe('summarizeWritingPracticeResults', () => {
     expect(cara.attemptCount).toBe(0);
     expect(cara.completed).toBe(false);
     expect(cara.latestStatus).toBeNull();
+  });
+
+  test('collapses composition revisions and gates completion on mastery', () => {
+    const results = summarizeWritingPracticeResults({
+      students: [students[1]], // just Aaron (s-1)
+      problemCount: 2,
+      attempts: [
+        // Problem 1: revised twice, then mastered — one problem, mastered.
+        {
+          membershipId: 's-1',
+          promptId: 'topic-sentences-1',
+          lessonSlug: 'topic-sentences',
+          status: 'needs_revision',
+          createdAt: new Date('2026-07-01T10:00:00Z'),
+        },
+        {
+          membershipId: 's-1',
+          promptId: 'topic-sentences-1',
+          lessonSlug: 'topic-sentences',
+          status: 'developing',
+          createdAt: new Date('2026-07-01T10:05:00Z'),
+        },
+        {
+          membershipId: 's-1',
+          promptId: 'topic-sentences-1',
+          lessonSlug: 'topic-sentences',
+          status: 'strong',
+          createdAt: new Date('2026-07-01T10:10:00Z'),
+        },
+        // Problem 2: attempted but never mastered.
+        {
+          membershipId: 's-1',
+          promptId: 'topic-sentences-2',
+          lessonSlug: 'topic-sentences',
+          status: 'developing',
+          createdAt: new Date('2026-07-01T10:20:00Z'),
+        },
+      ],
+    });
+
+    const aaron = results[0];
+    // Two distinct problems attempted (three revisions of #1 collapse to one).
+    expect(aaron.attemptCount).toBe(2);
+    expect(aaron.masteredCount).toBe(1);
+    // Not complete: composition problem #2 was never mastered.
+    expect(aaron.completed).toBe(false);
+    expect(aaron.latestStatus).toBe('developing');
+  });
+});
+
+describe('computeAssignedProgress', () => {
+  test('composition done requires mastery; ACT done on any attempt', () => {
+    const progress = computeAssignedProgress([
+      // Composition mastered
+      {
+        promptId: 'topic-sentences-1',
+        lessonSlug: 'topic-sentences',
+        status: 'strong',
+      },
+      // Composition attempted, not mastered
+      {
+        promptId: 'topic-sentences-2',
+        lessonSlug: 'topic-sentences',
+        status: 'needs_revision',
+      },
+      // Grammar answered (done regardless of correctness)
+      {
+        promptId: 'fixing-comma-splices-1',
+        lessonSlug: 'fixing-comma-splices',
+        status: 'needs_revision',
+      },
+    ]);
+
+    expect(progress.attemptedCount).toBe(3);
+    expect(progress.masteredCount).toBe(1);
+    // topic-sentences-1 (mastered) + fixing-comma-splices-1 (answered) = 2 done.
+    expect(progress.doneCount).toBe(2);
   });
 });
 

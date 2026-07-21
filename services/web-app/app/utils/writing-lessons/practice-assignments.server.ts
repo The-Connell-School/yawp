@@ -668,10 +668,63 @@ export type WritingPracticeStudentResult = {
   membershipId: string;
   name: string | null;
   email: string;
+  /** Distinct problems the student has submitted at least once (revisions of
+   *  the same prompt count once). */
   attemptCount: number;
+  /** Distinct problems the student has demonstrated mastery on (a `strong`
+   *  attempt). Composition problems are "done" only once mastered; ACT
+   *  problems are done as soon as they're answered. */
+  masteredCount: number;
   completed: boolean;
   latestStatus: string | null;
 };
+
+type ProgressAttempt = {
+  promptId: string;
+  lessonSlug: string;
+  status: string;
+};
+
+export type AssignedProgress = {
+  /** Distinct prompts attempted (revisions collapsed). */
+  attemptedCount: number;
+  /** Distinct prompts with a `strong` attempt. */
+  masteredCount: number;
+  /** Distinct prompts "done": mastered for composition, attempted for ACT. */
+  doneCount: number;
+};
+
+/**
+ * Collapses a student's raw attempt rows (which include every revision) into
+ * per-problem progress. A composition problem counts as done only once it has
+ * a `strong` attempt — so a wrong-then-abandoned answer never reads as
+ * complete — while an ACT problem is done as soon as it is answered, preserving
+ * the multiple-choice flow. Mastery is tracked for both.
+ */
+export function computeAssignedProgress(
+  attempts: ProgressAttempt[]
+): AssignedProgress {
+  const byPrompt = new Map<string, { lessonSlug: string; mastered: boolean }>();
+  for (const attempt of attempts) {
+    const existing = byPrompt.get(attempt.promptId);
+    byPrompt.set(attempt.promptId, {
+      lessonSlug: attempt.lessonSlug,
+      mastered: (existing?.mastered ?? false) || attempt.status === 'strong',
+    });
+  }
+
+  let attemptedCount = 0;
+  let masteredCount = 0;
+  let doneCount = 0;
+  for (const { lessonSlug, mastered } of byPrompt.values()) {
+    attemptedCount += 1;
+    if (mastered) masteredCount += 1;
+    const isComposition =
+      getQuickWritingLessonBySlug(lessonSlug)?.section === 'Composition';
+    if (isComposition ? mastered : true) doneCount += 1;
+  }
+  return { attemptedCount, masteredCount, doneCount };
+}
 
 /**
  * One recorded student attempt: an ACT question + their pick + the grade, or a
@@ -694,24 +747,39 @@ export type WritingPracticeAttemptDetail = {
  */
 export function summarizeWritingPracticeResults(params: {
   students: Array<{ id: string; user: { name: string | null; email: string } }>;
-  attempts: Array<{ membershipId: string; status: string; createdAt: Date }>;
+  attempts: Array<{
+    membershipId: string;
+    promptId: string;
+    lessonSlug: string;
+    status: string;
+    createdAt: Date;
+  }>;
   problemCount: number;
 }): WritingPracticeStudentResult[] {
   const byStudent = new Map<
     string,
-    { count: number; latestStatus: string; latestAt: Date }
+    {
+      attempts: ProgressAttempt[];
+      latestStatus: string;
+      latestAt: Date;
+    }
   >();
   for (const attempt of params.attempts) {
     const existing = byStudent.get(attempt.membershipId);
+    const progressAttempt: ProgressAttempt = {
+      promptId: attempt.promptId,
+      lessonSlug: attempt.lessonSlug,
+      status: attempt.status,
+    };
     if (!existing) {
       byStudent.set(attempt.membershipId, {
-        count: 1,
+        attempts: [progressAttempt],
         latestStatus: attempt.status,
         latestAt: attempt.createdAt,
       });
       continue;
     }
-    existing.count += 1;
+    existing.attempts.push(progressAttempt);
     if (attempt.createdAt >= existing.latestAt) {
       existing.latestStatus = attempt.status;
       existing.latestAt = attempt.createdAt;
@@ -721,13 +789,14 @@ export function summarizeWritingPracticeResults(params: {
   return params.students
     .map((student) => {
       const summary = byStudent.get(student.id);
-      const attemptCount = summary?.count ?? 0;
+      const progress = computeAssignedProgress(summary?.attempts ?? []);
       return {
         membershipId: student.id,
         name: student.user.name,
         email: student.user.email,
-        attemptCount,
-        completed: attemptCount >= params.problemCount,
+        attemptCount: progress.attemptedCount,
+        masteredCount: progress.masteredCount,
+        completed: progress.doneCount >= params.problemCount,
         latestStatus: summary?.latestStatus ?? null,
       };
     })

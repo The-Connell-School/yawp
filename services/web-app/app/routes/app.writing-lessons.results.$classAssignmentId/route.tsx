@@ -58,22 +58,45 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const lessonTitles = classAssignment.assignment.lessonSlugs
     .map((slug) => getQuickWritingLessonBySlug(slug)?.title)
     .filter((title): title is string => Boolean(title));
+  const hasComposition = classAssignment.assignment.lessonSlugs.some(
+    (slug) => getQuickWritingLessonBySlug(slug)?.section === 'Composition'
+  );
 
   const completedCount = results.filter((row) => row.completed).length;
   const startedCount = results.filter((row) => row.attemptCount > 0).length;
 
-  // Attach each student's ACT attempts (question + their pick + grade) to their row.
-  const resultsWithAttempts = results.map((row) => ({
-    ...row,
-    attempts: (attemptsByStudent[row.membershipId] ?? []).map((attempt) => ({
-      id: attempt.id,
-      lessonTitle:
-        getQuickWritingLessonBySlug(attempt.lessonSlug)?.title ?? 'Practice',
-      status: attempt.status,
-      record: attempt.attempt,
-      createdAt: attempt.createdAt.toISOString(),
-    })),
-  }));
+  // Attach each student's attempts, collapsing composition revisions to the
+  // latest attempt per prompt (with a revision count) so the teacher sees one
+  // card per problem rather than one per resubmission.
+  const resultsWithAttempts = results.map((row) => {
+    const byPrompt = new Map<
+      string,
+      { latest: (typeof attemptsByStudent)[string][number]; revisions: number }
+    >();
+    for (const attempt of attemptsByStudent[row.membershipId] ?? []) {
+      const existing = byPrompt.get(attempt.promptId);
+      if (!existing) {
+        byPrompt.set(attempt.promptId, { latest: attempt, revisions: 1 });
+      } else {
+        existing.revisions += 1;
+        if (attempt.createdAt >= existing.latest.createdAt) {
+          existing.latest = attempt;
+        }
+      }
+    }
+    return {
+      ...row,
+      attempts: Array.from(byPrompt.values()).map(({ latest, revisions }) => ({
+        id: latest.id,
+        lessonTitle:
+          getQuickWritingLessonBySlug(latest.lessonSlug)?.title ?? 'Practice',
+        status: latest.status,
+        record: latest.attempt,
+        revisions,
+        createdAt: latest.createdAt.toISOString(),
+      })),
+    };
+  });
 
   return dataResponse({
     classLabel:
@@ -81,6 +104,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       `Grade ${classAssignment.class.grade} · Period ${classAssignment.class.period}`,
     title: writingPracticeAssignmentTitle(classAssignment.assignment),
     lessonTitles,
+    hasComposition,
     problemCount: classAssignment.assignment.problemCount,
     dueAt: classAssignment.assignment.dueAt
       ? classAssignment.assignment.dueAt.toISOString()
@@ -110,6 +134,7 @@ export default function WritingPracticeResultsRoute() {
     classLabel,
     title,
     lessonTitles,
+    hasComposition,
     problemCount,
     dueAt,
     results,
@@ -194,6 +219,11 @@ export default function WritingPracticeResultsRoute() {
                         </div>
                       </div>
                       <div className="flex shrink-0 items-center gap-3">
+                        {hasComposition && row.masteredCount > 0 ? (
+                          <span className="hidden items-center rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-900 sm:inline-flex">
+                            {row.masteredCount} mastered
+                          </span>
+                        ) : null}
                         {row.latestStatus ? (
                           <span
                             className={`hidden items-center rounded-full px-2.5 py-0.5 text-xs font-medium sm:inline-flex ${
@@ -249,6 +279,7 @@ type AttemptView = {
   lessonTitle: string;
   status: string;
   record: unknown;
+  revisions: number;
   createdAt: string;
 };
 
@@ -369,6 +400,11 @@ function CompositionAttemptCard({
       <div className="mb-2 flex items-center justify-between gap-3">
         <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           Problem {position} · {attempt.lessonTitle}
+          {attempt.revisions > 1 ? (
+            <span className="ml-2 font-normal normal-case text-muted-foreground/80">
+              · revised {attempt.revisions}×
+            </span>
+          ) : null}
         </span>
         {STATUS_STYLES[status] ? (
           <span

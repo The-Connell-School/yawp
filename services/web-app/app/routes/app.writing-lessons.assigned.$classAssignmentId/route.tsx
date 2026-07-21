@@ -4,8 +4,10 @@ import {
   CheckCircle2,
   Loader2,
   PartyPopper,
+  RotateCcw,
+  Sparkles,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Link,
   data as dataResponse,
@@ -61,10 +63,36 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     lessonSlugs: assignment.lessonSlugs,
     problemCount: assignment.problemCount,
   });
-  const completedCount = Math.min(
-    classAssignment.attempts.length,
-    assignment.problemCount
+
+  // Collapse the student's attempts (which now include composition revisions)
+  // into per-problem state so each item knows whether it is already mastered.
+  const attemptedPromptIds = new Set(
+    classAssignment.attempts.map((attempt) => attempt.promptId)
   );
+  const masteredPromptIds = new Set(
+    classAssignment.attempts
+      .filter((attempt) => attempt.status === 'strong')
+      .map((attempt) => attempt.promptId)
+  );
+  const items = sequence.map((item) => {
+    const promptId =
+      item.kind === 'composition' ? item.prompt.id : item.question.id;
+    // ACT problems are done once answered; composition problems are done only
+    // once mastered (a `strong` tutor verdict) — a wrong-then-abandoned answer
+    // stays "attempted".
+    const done =
+      item.kind === 'composition'
+        ? masteredPromptIds.has(promptId)
+        : attemptedPromptIds.has(promptId);
+    const initialStatus: 'done' | 'attempted' | 'todo' = done
+      ? 'done'
+      : attemptedPromptIds.has(promptId)
+        ? 'attempted'
+        : 'todo';
+    return { ...item, initialStatus };
+  });
+
+  const hasComposition = sequence.some((item) => item.kind === 'composition');
 
   return dataResponse({
     classAssignmentId: classAssignment.id,
@@ -72,8 +100,8 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     instructions: assignment.instructions,
     dueAt: assignment.dueAt ? assignment.dueAt.toISOString() : null,
     problemCount: assignment.problemCount,
-    sequence,
-    completedCount,
+    items,
+    hasComposition,
   });
 }
 
@@ -226,19 +254,52 @@ export default function AssignedPracticeRoute() {
     instructions,
     dueAt,
     problemCount,
-    sequence,
-    completedCount,
+    items,
+    hasComposition,
   } = useLoaderData<typeof loader>();
 
   const fetcher = useFetcher<AssignedActionData>();
+  // Positions the student has finished: composition problems require mastery
+  // (a `strong` verdict), ACT problems just need an answer.
+  const [donePositions, setDonePositions] = useState<Set<number>>(
+    () =>
+      new Set(
+        items
+          .filter((item) => item.initialStatus === 'done')
+          .map((item) => item.position)
+      )
+  );
+  // Composition problems the student has mastered (for the "mastered" tally).
+  const [masteredPositions, setMasteredPositions] = useState<Set<number>>(
+    () =>
+      new Set(
+        items
+          .filter(
+            (item) =>
+              item.kind === 'composition' && item.initialStatus === 'done'
+          )
+          .map((item) => item.position)
+      )
+  );
+  const [attemptedPositions, setAttemptedPositions] = useState<Set<number>>(
+    () =>
+      new Set(
+        items
+          .filter((item) => item.initialStatus !== 'todo')
+          .map((item) => item.position)
+      )
+  );
+
+  const firstUnfinished = items.findIndex(
+    (item) => !donePositions.has(item.position)
+  );
   const [pointer, setPointer] = useState(
-    Math.min(completedCount, sequence.length)
+    firstUnfinished === -1 ? items.length : firstUnfinished
   );
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const [writtenResponse, setWrittenResponse] = useState('');
-  const [sessionAnswered, setSessionAnswered] = useState<number[]>([]);
 
-  const currentItem = sequence[pointer] ?? null;
+  const currentItem = items[pointer] ?? null;
   const isChecking = fetcher.state !== 'idle';
 
   const currentResult =
@@ -248,23 +309,61 @@ export default function AssignedPracticeRoute() {
   const grade = currentResult?.kind === 'act' ? currentResult.grade : null;
   const compositionFeedback =
     currentResult?.kind === 'composition' ? currentResult.feedback : null;
-  const currentAnswered = currentResult?.recorded === true;
 
-  const doneCount = Math.min(
-    problemCount,
-    completedCount + sessionAnswered.length
-  );
+  // Fold each recorded result into the progress sets.
+  useEffect(() => {
+    const result = fetcher.data;
+    if (!result || !result.recorded) return;
+    const position = result.position;
+    setAttemptedPositions((prev) => new Set(prev).add(position));
+    if (result.kind === 'act') {
+      // ACT problems are done as soon as they're answered.
+      setDonePositions((prev) => new Set(prev).add(position));
+      if (result.grade.correct) {
+        setMasteredPositions((prev) => new Set(prev).add(position));
+      }
+    } else if (result.feedback.status === 'strong') {
+      // Composition problems are done only once mastered.
+      setDonePositions((prev) => new Set(prev).add(position));
+      setMasteredPositions((prev) => new Set(prev).add(position));
+    }
+  }, [fetcher.data]);
+
+  const doneCount = Math.min(problemCount, donePositions.size);
+  const masteredCount = Math.min(problemCount, masteredPositions.size);
   const progressPct =
     problemCount > 0 ? Math.round((doneCount / problemCount) * 100) : 0;
 
+  const isComposition = currentItem?.kind === 'composition';
+  const currentMastered = currentItem
+    ? masteredPositions.has(currentItem.position) ||
+      compositionFeedback?.status === 'strong'
+    : false;
+  const currentAttempted = currentItem
+    ? attemptedPositions.has(currentItem.position) ||
+      currentResult?.recorded === true
+    : false;
+  // ACT locks after its single answer; composition locks only after mastery.
+  const currentDone = isComposition
+    ? currentMastered
+    : donePositions.has(currentItem?.position ?? -1) ||
+      currentResult?.recorded === true;
+
   function goNext() {
-    if (currentItem && !sessionAnswered.includes(currentItem.position)) {
-      setSessionAnswered((prev) => [...prev, currentItem.position]);
-    }
     setPointer((prev) => prev + 1);
     setSelectedIndex(null);
     setWrittenResponse('');
   }
+
+  function revisitUnfinished() {
+    const next = items.findIndex((item) => !donePositions.has(item.position));
+    if (next === -1) return;
+    setPointer(next);
+    setSelectedIndex(null);
+    setWrittenResponse('');
+  }
+
+  const isLastProblem = pointer + 1 >= items.length;
 
   return (
     <section className="no-scrollbar flex h-full w-full flex-col overflow-y-scroll">
@@ -287,9 +386,15 @@ export default function AssignedPracticeRoute() {
               </p>
             ) : null}
             <div className="mt-3 flex flex-wrap items-center gap-2">
-              <Badge variant="secondary" size="sm">
-                {doneCount} of {problemCount} done
-              </Badge>
+              {hasComposition ? (
+                <Badge variant="secondary" size="sm">
+                  {masteredCount} of {problemCount} mastered
+                </Badge>
+              ) : (
+                <Badge variant="secondary" size="sm">
+                  {doneCount} of {problemCount} done
+                </Badge>
+              )}
               {dueAt ? (
                 <Badge variant="outline" size="sm">
                   Due {formatDueDate(dueAt)}
@@ -307,7 +412,7 @@ export default function AssignedPracticeRoute() {
       </div>
 
       <div className="mx-auto flex w-full max-w-screen-lg flex-col gap-6 px-3 py-6 pb-24 sm:px-5">
-        {sequence.length === 0 ? (
+        {items.length === 0 ? (
           <p className="text-base text-muted-foreground sm:text-sm">
             This assignment has no practice questions yet.
           </p>
@@ -362,10 +467,19 @@ export default function AssignedPracticeRoute() {
                       onChange={(event) =>
                         setWrittenResponse(event.target.value)
                       }
-                      readOnly={currentAnswered}
+                      readOnly={currentMastered}
                       placeholder="Write your response here…"
                       className="min-h-28 text-base sm:text-sm"
                     />
+                    {currentMastered ? (
+                      <div
+                        data-testid="composition-mastered"
+                        className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-900"
+                      >
+                        <Sparkles className="h-4 w-4 shrink-0" />
+                        Mastered — nice work.
+                      </div>
+                    ) : null}
                     {compositionFeedback ? (
                       <AssignedCompositionFeedback
                         feedback={compositionFeedback}
@@ -393,29 +507,48 @@ export default function AssignedPracticeRoute() {
                   </>
                 )}
 
-                <div className="flex flex-wrap gap-2">
-                  {!currentAnswered ? (
-                    <Button
-                      type="submit"
-                      size="sm"
-                      disabled={
-                        isChecking ||
-                        (currentItem.kind === 'composition'
-                          ? writtenResponse.trim().length === 0
-                          : selectedIndex === null)
-                      }
-                    >
-                      {isChecking ? (
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      ) : (
-                        <CheckCircle2 className="mr-2 h-4 w-4" />
-                      )}
-                      {isChecking ? 'Saving…' : 'Check & save'}
+                <div className="flex flex-wrap items-center gap-2">
+                  {currentDone ? (
+                    <Button type="button" size="sm" onClick={goNext}>
+                      {isLastProblem ? 'Finish' : 'Next problem'}
                     </Button>
                   ) : (
-                    <Button type="button" size="sm" onClick={goNext}>
-                      {pointer + 1 >= problemCount ? 'Finish' : 'Next problem'}
-                    </Button>
+                    <>
+                      <Button
+                        type="submit"
+                        size="sm"
+                        disabled={
+                          isChecking ||
+                          (isComposition
+                            ? writtenResponse.trim().length === 0
+                            : selectedIndex === null)
+                        }
+                      >
+                        {isChecking ? (
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        ) : isComposition && currentAttempted ? (
+                          <RotateCcw className="mr-2 h-4 w-4" />
+                        ) : (
+                          <CheckCircle2 className="mr-2 h-4 w-4" />
+                        )}
+                        {isChecking
+                          ? 'Saving…'
+                          : isComposition && currentAttempted
+                            ? 'Revise & resubmit'
+                            : 'Check & save'}
+                      </Button>
+                      {isComposition && currentAttempted ? (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          className="text-muted-foreground"
+                          onClick={goNext}
+                        >
+                          {isLastProblem ? 'Skip for now' : 'Skip for now →'}
+                        </Button>
+                      ) : null}
+                    </>
                   )}
                 </div>
               </fetcher.Form>
@@ -425,16 +558,36 @@ export default function AssignedPracticeRoute() {
           <Card className="shadow-none">
             <CardContent className="flex flex-col items-center gap-3 py-10 text-center">
               <PartyPopper className="h-8 w-8 text-primary" />
-              <p className="text-lg font-semibold">
-                You’ve completed this assigned practice.
-              </p>
-              <p className="max-w-[420px] text-base text-muted-foreground sm:text-sm">
-                All {problemCount} problems are done. You can revisit the
-                lessons any time from the practice library.
-              </p>
-              <Button asChild size="sm" variant="outline">
-                <Link to="/app/writing-lessons">Back to practice</Link>
-              </Button>
+              {doneCount >= problemCount ? (
+                <>
+                  <p className="text-lg font-semibold">
+                    You’ve completed this assigned practice.
+                  </p>
+                  <p className="max-w-[420px] text-base text-muted-foreground sm:text-sm">
+                    {hasComposition
+                      ? `All ${problemCount} problems mastered. Revisit any lesson from the practice library anytime.`
+                      : `All ${problemCount} problems are done. You can revisit the lessons any time from the practice library.`}
+                  </p>
+                  <Button asChild size="sm" variant="outline">
+                    <Link to="/app/writing-lessons">Back to practice</Link>
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <p className="text-lg font-semibold">
+                    Nice work — you’ve been through every problem.
+                  </p>
+                  <p className="max-w-[440px] text-base text-muted-foreground sm:text-sm">
+                    You’ve mastered {masteredCount} of {problemCount}. Head back
+                    to sharpen the ones you skipped — revising until it clicks
+                    is where the real practice happens.
+                  </p>
+                  <Button size="sm" onClick={revisitUnfinished}>
+                    <RotateCcw className="mr-2 h-4 w-4" />
+                    Keep going: {problemCount - masteredCount} to master
+                  </Button>
+                </>
+              )}
             </CardContent>
           </Card>
         )}
