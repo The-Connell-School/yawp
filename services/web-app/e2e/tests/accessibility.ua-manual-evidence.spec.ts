@@ -278,7 +278,7 @@ test.describe.serial('UA manual accessibility evidence automation', () => {
 
     await page.goto(`/app/admin/assignment-types/${e2eContext.assignmentTypeId}`);
     await expect(
-      page.getByRole('heading', { name: 'Assignment Type Details' })
+      page.getByRole('heading', { name: 'Edit assignment type' })
     ).toBeVisible();
     await collectTabStops(page, testInfo, 'admin-assignment-type', 6);
   });
