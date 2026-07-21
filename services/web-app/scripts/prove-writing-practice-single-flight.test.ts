@@ -69,7 +69,7 @@ afterAll(async () => {
   mock.restore();
 });
 
-test('PostgreSQL advisory lock admits one reservation, provider call, and prompt set', async () => {
+test('PostgreSQL advisory lock and retry admit one reservation, provider call, and prompt set', async () => {
   const suffix = `${Date.now()}-${crypto.randomUUID()}`;
   let userId: string | null = null;
   let membershipId: string | null = null;
@@ -148,6 +148,7 @@ test('PostgreSQL advisory lock admits one reservation, provider call, and prompt
     });
     release();
     const results = await Promise.all(contenders);
+    const retry = await getOrCreateStudentPracticeSet(input);
 
     expect(results.every((result) => result.length === 4)).toBe(true);
     expect(
@@ -155,6 +156,7 @@ test('PostgreSQL advisory lock admits one reservation, provider call, and prompt
         (result) => result[0]!.question.id === results[0]![0]!.question.id
       )
     ).toBe(true);
+    expect(retry[0]!.question.id).toBe(results[0]![0]!.question.id);
     expect(getLLMCompletion).toHaveBeenCalledTimes(1);
     expect(
       await prisma.writingPracticePromptSet.count({

@@ -7,7 +7,7 @@ product enablement are separate operations.
 ## Before deployment
 
 1. Take a restorable database snapshot.
-2. Run:
+2. Run this operator preflight:
 
    ```sh
    psql "$DATABASE_URL" \
@@ -20,6 +20,13 @@ product enablement are separate operations.
    migration intentionally does not pick a winner. The script is
    base-schema-aware, so this command must also succeed before any of the new
    feature tables exist.
+
+The production deployment path enforces the same ordering in
+`packages/prisma/scripts/migrate-remote.ts`: it awaits the preflight, then
+`prisma migrate deploy`, then the postcheck. Any SQL error rejects the awaited
+gate and aborts the process before the next step. The explicit commands here
+remain useful for operator inspection and for recording the cutover transcript;
+they are not the only enforcement mechanism.
 
 ## Deploy and verify
 

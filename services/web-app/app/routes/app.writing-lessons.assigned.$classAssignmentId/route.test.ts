@@ -153,6 +153,29 @@ describe('assigned writing practice action', () => {
     expect(getOrCreateStudentPracticeSet).toHaveBeenCalledTimes(1);
   });
 
+  test('rejects non-students before assignment lookup or AI admission', async () => {
+    requireMembership.mockResolvedValue({
+      id: 'teacher-1',
+      role: 'TEACHER',
+      organization: { id: 'org-1', writingFundamentalsEnabled: true },
+    });
+    const body = new URLSearchParams({ intent: 'initialize' });
+
+    await expect(
+      action({
+        request: new Request(
+          'http://localhost/app/writing-lessons/assigned/class-assignment-1',
+          { method: 'POST', body }
+        ),
+        params: { classAssignmentId: 'class-assignment-1' },
+        context: {},
+      } as never)
+    ).rejects.toMatchObject({ status: 404 });
+
+    expect(getAssignedPracticeForStudentById).not.toHaveBeenCalled();
+    expect(getOrCreateStudentPracticeSet).not.toHaveBeenCalled();
+  });
+
   test('loader is read-only and strips grading secrets from student data', async () => {
     const response = await loader({
       request: new Request(

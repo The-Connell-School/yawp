@@ -30,6 +30,14 @@ function listTrackedRepoFiles(): string[] {
 }
 
 describe('production deployment contract', () => {
+  test('application viewport preserves user zoom', () => {
+    const root = readRepoFile('services/web-app/app/root.tsx');
+
+    expect(root).toContain('content="width=device-width, initial-scale=1.0"');
+    expect(root).not.toContain('maximum-scale');
+    expect(root).not.toContain('user-scalable=no');
+  });
+
   test('container startup does not run Prisma migrations', () => {
     const startScript = readRepoFile('services/web-app/start.sh');
 

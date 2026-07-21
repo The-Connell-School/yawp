@@ -113,6 +113,7 @@ echo "phase=origin-equivalent"
 deploy_migrations "$SCRATCH_URL" "$BASE_COPY"
 psql "$SCRATCH_URL" -v ON_ERROR_STOP=1 \
   -f "$PRISMA_DIR/scripts/combined-feature-preflight.sql"
+echo "preflight_origin_result=pass"
 
 echo "phase=feature-branches-before-hardening"
 deploy_migrations "$SCRATCH_URL" "$FEATURE_COPY"
@@ -120,6 +121,7 @@ psql "$SCRATCH_URL" -v ON_ERROR_STOP=1 \
   -f "$PRISMA_DIR/scripts/combined-feature-rehearsal-fixture.sql"
 psql "$SCRATCH_URL" -v ON_ERROR_STOP=1 \
   -f "$PRISMA_DIR/scripts/combined-feature-preflight.sql"
+echo "preflight_feature_result=pass"
 
 expect_preflight_failure \
   "writing-problem-count" \
@@ -144,6 +146,7 @@ echo "phase=all-hardening-migrations"
 deploy_migrations "$SCRATCH_URL" "$PRISMA_DIR"
 psql "$SCRATCH_URL" -v ON_ERROR_STOP=1 \
   -f "$PRISMA_DIR/scripts/combined-feature-postcheck.sql"
+echo "postcheck_result=pass"
 psql "$SCRATCH_URL" -v ON_ERROR_STOP=1 \
   -f "$PRISMA_DIR/scripts/combined-feature-rehearsal-assertions.sql"
 psql "$SCRATCH_URL" -v ON_ERROR_STOP=1 \
@@ -157,6 +160,7 @@ createdb --maintenance-db="$ADMIN_URL" "$RECOVERY_DATABASE"
 restore_snapshot
 psql "$RECOVERY_URL" -v ON_ERROR_STOP=1 \
   -f "$PRISMA_DIR/scripts/combined-feature-preflight.sql"
+echo "preflight_recovery_result=pass"
 psql "$RECOVERY_URL" -v ON_ERROR_STOP=1 -Atc \
   "SELECT 'recovered_attempts=' || COUNT(*) FROM \"WritingPracticeAttempt\"
    UNION ALL

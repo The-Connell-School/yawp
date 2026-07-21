@@ -36,6 +36,7 @@ const {
   resetUserPassword,
   verifyUserPassword,
   requireMembership,
+  requireAdmin,
   requireOwner,
   isTeacherMembership,
   isStudentMembership,
@@ -184,6 +185,31 @@ describe('membership auth helpers', () => {
     expect(user).toEqual({
       id: 'user-1',
       memberships: [{ id: 'membership-1', isOrgOwner: true }],
+    });
+  });
+
+  test('requireAdmin returns a stable denial payload for non-admin users', async () => {
+    getSession.mockResolvedValue({
+      get: (key: string) => (key === 'sessionId' ? 'session-1' : undefined),
+    });
+    prisma.session.findUnique.mockResolvedValue({
+      user: { id: 'user-1' },
+    });
+    prisma.user.findFirst.mockResolvedValue(null);
+
+    await expect(
+      requireAdmin(
+        new Request('https://example.com/app/admin', {
+          headers: { cookie: 'en_session=signed-cookie' },
+        })
+      )
+    ).rejects.toMatchObject({
+      data: {
+        error: 'Unauthorized',
+        requiredRole: 'isAdmin',
+        message: 'Unauthorized: required role: isAdmin',
+      },
+      init: { status: 403 },
     });
   });
 });

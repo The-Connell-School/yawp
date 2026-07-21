@@ -159,6 +159,23 @@ async function main() {
         where: { feature: providerFailureFeature },
       });
     assert.equal(retainedAfterProviderFailure, 3);
+    await reserveAiRequest({
+      membershipId: organization.memberships[0].id,
+      organizationId: organization.id,
+      feature: providerFailureFeature,
+      policy: {
+        membershipLimit: 10,
+        membershipWindowMs: 60_000,
+        organizationLimit: 10,
+        organizationWindowMs: 60_000,
+      },
+      now: new Date(Date.now() + 60_001),
+    });
+    const rowsAfterWindowExpiry =
+      await prisma.aiRequestReservation.count({
+        where: { feature: providerFailureFeature },
+      });
+    assert.equal(rowsAfterWindowExpiry, 1);
 
     process.stdout.write(
       `${JSON.stringify(
@@ -175,6 +192,9 @@ async function main() {
           providerFailure: {
             simulatedFailures: simulatedProviderFailures.length,
             retainedReservations: retainedAfterProviderFailure,
+            retentionPolicy:
+              'failed attempts remain bounded until the admission window expires',
+            rowsAfterWindowExpiry,
           },
         },
         null,
