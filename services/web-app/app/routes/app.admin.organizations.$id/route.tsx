@@ -40,6 +40,7 @@ import { generateTOTP } from '~/utils/totp.server';
 import { getDomainUrl } from '~/utils/misc';
 import { Prisma } from '@app/prisma';
 import { normalizeEmail } from '~/utils/normalize-email';
+import { formatDateOnly } from '~/utils/date-only';
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   const currentUser = await requireAdmin(request);
@@ -682,7 +683,7 @@ export default function OrganizationRoute() {
                   Created At
                 </dt>
                 <dd className="text-base">
-                  {new Date(organization.createdAt).toLocaleDateString()}
+                  {formatDateOnly(organization.createdAt)}
                 </dd>
               </div>
               {organization.accessExpiresAt && (
@@ -691,9 +692,7 @@ export default function OrganizationRoute() {
                     Access Expires
                   </dt>
                   <dd className="text-base">
-                    {new Date(
-                      organization.accessExpiresAt
-                    ).toLocaleDateString()}
+                    {formatDateOnly(organization.accessExpiresAt)}
                   </dd>
                 </div>
               )}
@@ -747,7 +746,7 @@ export default function OrganizationRoute() {
                     </TableCell>
                     <TableCell>{profile.user.email}</TableCell>
                     <TableCell>
-                      {new Date(profile.createdAt).toLocaleDateString()}
+                      {formatDateOnly(profile.createdAt)}
                     </TableCell>
                   </TableRow>
                 ))
