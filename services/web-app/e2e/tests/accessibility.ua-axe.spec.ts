@@ -98,6 +98,76 @@ test.describe.serial('UA accessibility axe audit', () => {
     await scanPage(page, testInfo, 'teacher-dashboard');
   });
 
+  test('mobile app shell controls have stable names and preserve behavior', async ({
+    page,
+    signIn,
+    e2eContext,
+  }, testInfo) => {
+    const holdForReview = async () => {
+      if (process.env.E2E_VIDEO === 'on') {
+        await page.waitForTimeout(4_000);
+      }
+    };
+    await page.setViewportSize({ width: 390, height: 844 });
+    await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
+    await page.goto('/app/teacher-trainings');
+    await expect(
+      page.getByRole('heading', { name: "Teacher's Lounge" })
+    ).toBeVisible();
+
+    const openNavigation = page.getByRole('button', {
+      name: 'Open app navigation',
+      exact: true,
+    });
+    const reloadPage = page.getByRole('button', {
+      name: 'Reload page',
+      exact: true,
+    });
+    await expect(openNavigation).toBeVisible();
+    await expect(reloadPage).toBeVisible();
+    await holdForReview();
+
+    await openNavigation.click();
+    const closeNavigation = page.getByRole('button', {
+      name: 'Close app navigation',
+      exact: true,
+    });
+    await expect(closeNavigation).toBeVisible();
+    const navigation = page.getByRole('navigation');
+    await expect(navigation).toBeVisible();
+    await expect
+      .poll(async () => (await navigation.boundingBox())?.x ?? -1)
+      .toBeGreaterThanOrEqual(0);
+    await holdForReview();
+    await closeNavigation.click();
+    await expect
+      .poll(async () => (await navigation.boundingBox())?.x ?? 0)
+      .toBeLessThan(0);
+    await expect(openNavigation).toBeVisible();
+    await holdForReview();
+
+    const routeBeforeReload = new URL(page.url()).pathname;
+    await Promise.all([
+      page.waitForNavigation({ waitUntil: 'domcontentloaded' }),
+      reloadPage.click(),
+    ]);
+    expect(new URL(page.url()).pathname).toBe(routeBeforeReload);
+    await expect(
+      page.getByRole('heading', { name: "Teacher's Lounge" })
+    ).toBeVisible();
+    await expect(openNavigation).toBeVisible();
+    await expect(reloadPage).toBeVisible();
+    await holdForReview();
+
+    await scanPage(page, testInfo, 'mobile-app-shell-controls');
+    const screenshotPath = testInfo.outputPath('mobile-app-shell-controls.png');
+    await page.screenshot({ path: screenshotPath });
+    await testInfo.attach('mobile-app-shell-controls', {
+      path: screenshotPath,
+      contentType: 'image/png',
+    });
+  });
+
   test('Teacher Lounge pages have no serious or critical WCAG 2.1 A/AA violations', async ({
     page,
     signIn,
