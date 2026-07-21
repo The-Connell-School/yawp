@@ -124,6 +124,32 @@ test.describe.serial('UA accessibility axe audit', () => {
       page.getByRole('heading', { name: 'E2E Lounge Module' })
     ).toBeVisible();
     await scanPage(page, testInfo, 'teacher-lounge-module');
+
+    const moduleActions = page.getByRole('button', {
+      name: 'Module actions for E2E Lounge Module',
+    });
+    await moduleActions.focus();
+    await expect(moduleActions).toBeFocused();
+    await page.keyboard.press('Enter');
+
+    const restartModuleItem = page.getByRole('menuitem', {
+      name: 'Restart Module',
+    });
+    await expect(restartModuleItem).toBeVisible();
+    await expect(restartModuleItem).toBeFocused();
+    await restartModuleItem.evaluate(async (node) => {
+      await Promise.all(
+        node
+          .getAnimations({ subtree: true })
+          .map((animation) => animation.finished)
+      );
+    });
+    await scanPage(page, testInfo, 'teacher-lounge-module-actions-open');
+
+    await page.keyboard.press('Enter');
+    await expect(
+      page.getByRole('heading', { name: 'E2E Lounge Module' }).first()
+    ).toBeVisible();
   });
 
   test('teacher grading view has no serious or critical WCAG 2.1 A/AA violations', async ({

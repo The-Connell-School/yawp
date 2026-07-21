@@ -17,28 +17,42 @@ Lounge module page:
 The ui.sh review also identified the existing 24x24 module-action control as too
 small for coarse pointers. A focused rerun then deterministically caught the
 global navigation progress bar while active; it exposed a value but had no
-accessible name.
+accessible name. Those independently valuable cross-cutting repairs are owned
+by milestone issue #221 so their provenance is explicit rather than silently
+expanding #220.
+
+The first independent review round then opened the repaired action menu and
+found a state that the original page-load axe contract never exercised. A
+`DropdownMenuItem` wrapped a native button, and Radix's modal behavior hid
+focusable application chrome from assistive technology while the menu was open.
 
 ## Decision
 
 - Compose `DropdownMenuTrigger` with `asChild` so exactly one button is rendered.
 - Give that button the contextual accessible name
   `Module actions for {module title}` and an explicit non-submit type.
-- Preserve the visible 24x24 row layout while adding the established Yawp/ui.sh
-  invisible 48x48 coarse-pointer target.
 - Scope `text-white/70` to the black empty-video state. This keeps it visually
   muted while producing approximately 9.9:1 contrast without changing shared
   theme tokens.
-- Give the shared navigation progress bar the stable accessible name
-  `Page loading progress`; retain its existing active value text and hidden
-  behavior.
+- Render the restart control through `DropdownMenuItem asChild`, producing one
+  semantic menu item rather than nested interactive controls.
+- Use a non-modal dropdown. This one-action menu does not need modal
+  outside-content suppression, and the modal implementation caused a real
+  `aria-hidden-focus` violation in the integrated application shell.
+
+Issue #221 separately owns and verifies the established Yawp/ui.sh 48px
+coarse-pointer target and the shared navigation progress bar's stable accessible
+name. Both remain in the integrated summer branch, with their own milestone
+acceptance criteria and human markers.
 
 No axe exclusions, test bypasses, data changes, or route-behavior changes are
 permitted.
 
 ## Verification
 
-The existing production-build axe test is the RED/GREEN contract. The focused
-Teacher Lounge case and complete UA suite must pass on a Playwright-owned port.
-Desktop and mobile screenshots must show an intentional empty state with no
-layout regression.
+The production-build axe test is the RED/GREEN contract. It must keyboard-open
+the module menu, wait on the menu's actual CSS animation promises, scan the
+stable open state, and keyboard-activate Restart Module. No arbitrary delay or
+axe exclusion is allowed. The focused Teacher Lounge case and complete UA suite
+must pass on a Playwright-owned port. Desktop and mobile screenshots must show
+an intentional empty state with no layout regression.

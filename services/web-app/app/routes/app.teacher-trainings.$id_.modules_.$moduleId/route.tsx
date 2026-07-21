@@ -551,7 +551,7 @@ export default function TeacherTrainingModuleRoute() {
                           </div>
                         </Link>
 
-                        <DropdownMenu>
+                        <DropdownMenu modal={false}>
                           <DropdownMenuTrigger asChild>
                             <Button
                               type="button"
@@ -574,12 +574,12 @@ export default function TeacherTrainingModuleRoute() {
                                 name="moduleId"
                                 value={module.id}
                               />
-                              <DropdownMenuItem>
+                              <DropdownMenuItem asChild>
                                 <button
                                   type="submit"
                                   name="intent"
                                   value="restartModule"
-                                  className="w-full flex items-center"
+                                  className="flex w-full items-center text-popover-foreground"
                                 >
                                   <RotateCcw className="mr-2 h-4 w-4" />
                                   Restart Module
