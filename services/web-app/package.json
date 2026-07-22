@@ -14,6 +14,7 @@
     "proof:ai-admission": "bun scripts/prove-ai-admission-concurrency.ts",
     "proof:lti-contract": "bun scripts/prove-lti-contract.ts",
     "proof:composition-anthropic": "bun scripts/prove-composition-anthropic-network.ts",
+    "proof:ap-history-anthropic": "bun scripts/prove-ap-history-anthropic-network.ts",
     "lti:prune-operational": "bun scripts/prune-lti-operational-data.ts",
     "start": "react-router-serve ./build/server/index.js",
     "typecheck": "react-router typegen && tsc",

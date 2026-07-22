@@ -4,6 +4,8 @@ import type { AddressInfo } from 'node:net';
 export type AnthropicMockScenario =
   | 'strong'
   | 'developing'
+  | 'ap-history-dbq'
+  | 'ap-history-leq'
   | 'malformed-json'
   | 'rate-limited'
   | 'internal-error'
@@ -34,6 +36,32 @@ const feedbackByScenario = {
     strengths: ['You state a position in your own voice.'],
     focus: ['Name who is affected and what changes for them.'],
     encouragement: 'You have the core idea; sharpen one detail.',
+  },
+  'ap-history-dbq': {
+    title: 'New Deal and Federal Power DBQ',
+    essayType: 'dbq',
+    prompt:
+      'Evaluate the extent to which the New Deal expanded federal power.',
+    periodNumber: 7,
+    reasoningSkill: 'causation',
+    sources: [
+      {
+        title: 'Document 1',
+        attribution:
+          'Franklin D. Roosevelt, First Inaugural Address, March 4, 1933',
+        body: 'This Nation asks for action, and action now.',
+        isVisual: false,
+      },
+    ],
+  },
+  'ap-history-leq': {
+    title: 'Market Revolution LEQ',
+    essayType: 'leq',
+    prompt:
+      'Evaluate the extent to which the Market Revolution transformed United States society.',
+    periodNumber: 4,
+    reasoningSkill: 'causation',
+    sources: [],
   },
 } as const;
 

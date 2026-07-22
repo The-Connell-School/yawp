@@ -168,6 +168,10 @@ describe('AP History snapshot schema', () => {
 
   test('continues to read version 1 snapshots for active assignments', () => {
     const v2 = buildApHistorySnapshot(dbqEntry);
+    expect(v2.schemaVersion).toBe(2);
+    if (v2.schemaVersion !== 2) {
+      throw new Error('fixture must build a version 2 snapshot');
+    }
     const { origin: _origin, importDigest: _digest, ...legacy } = v2;
     const legacySources = legacy.sources.map(
       ({ licenseName: _name, licenseUrl: _url, ...source }) => source,
