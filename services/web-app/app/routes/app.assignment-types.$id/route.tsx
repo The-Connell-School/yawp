@@ -610,22 +610,31 @@ export default function AppAssignmentTypesIdRoute() {
         {showPromptsLibrary ? <TeacherDirections /> : null}
         {showThesisLibrary ? <ThesisTeacherDirections /> : null}
         {hasModules ? (
-          <>
-            <h3 className="mb-2 text-foreground/75">Modules</h3>
-            <div className="border-b" />
-            <Accordion type="multiple" className="pb-6">
-              {data.assignmentType.assignmentModules.map((cm) => (
-                <AccordionItem key={cm.id} value={cm.id}>
-                  <AccordionTrigger className="py-2 text-base">
-                    {cm.title}
-                  </AccordionTrigger>
-                  <AccordionContent className="text-muted-foreground">
-                    {cm.description || 'No description.'}
-                  </AccordionContent>
-                </AccordionItem>
-              ))}
-            </Accordion>
-          </>
+          <Accordion type="single" collapsible defaultValue="modules">
+            <AccordionItem value="modules">
+              <AccordionTrigger className="py-2 text-base">
+                Modules
+              </AccordionTrigger>
+              <AccordionContent>
+                <Accordion type="multiple">
+                  {data.assignmentType.assignmentModules.map((cm) => (
+                    <AccordionItem
+                      key={cm.id}
+                      value={cm.id}
+                      className="border-b border-border/40"
+                    >
+                      <AccordionTrigger className="py-2 text-sm">
+                        {cm.title}
+                      </AccordionTrigger>
+                      <AccordionContent className="text-muted-foreground">
+                        {cm.description || 'No description.'}
+                      </AccordionContent>
+                    </AccordionItem>
+                  ))}
+                </Accordion>
+              </AccordionContent>
+            </AccordionItem>
+          </Accordion>
         ) : null}
         {data.promptLibrary ? (
           <div className="pb-6">
