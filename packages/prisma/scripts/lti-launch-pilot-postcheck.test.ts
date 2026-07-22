@@ -8,7 +8,9 @@ const cleanInput = {
   registrationTenantMismatches: [],
   courseTenantMismatches: [],
   identityTenantMismatches: [],
+  advantageTenantMismatches: [],
   invalidDigestRows: [],
+  invalidWorkflowRows: [],
   outstandingDisabledArtifacts: [],
   counts: { registrations: 1 },
 };

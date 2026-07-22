@@ -95,15 +95,16 @@ model Assignment {
 }
 
 model ClassAssignment {
-  id           String                  @id @default(cuid())
-  createdAt    DateTime                @default(now()) @db.Timestamptz(6)
-  updatedAt    DateTime                @default(now()) @db.Timestamptz(6)
-  assignmentId String
-  assignment   Assignment              @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
-  classId      String
-  class        Class                   @relation(fields: [classId], references: [id], onDelete: Cascade)
-  documents    Document[]
-  insight      ClassAssignmentInsight?
+  id            String                  @id @default(cuid())
+  createdAt     DateTime                @default(now()) @db.Timestamptz(6)
+  updatedAt     DateTime                @default(now()) @db.Timestamptz(6)
+  assignmentId  String
+  assignment    Assignment              @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  classId       String
+  class         Class                   @relation(fields: [classId], references: [id], onDelete: Cascade)
+  documents     Document[]
+  insight       ClassAssignmentInsight?
+  ltiPlacements LtiPlacement[]
 
   @@unique([assignmentId, classId])
   @@index([classId, createdAt(sort: Desc)])
@@ -405,6 +406,11 @@ model Organization {
   ltiExternalIdentities      LtiExternalIdentity[]
   ltiCourseMappings          LtiCourseMapping[]
   ltiAuditEvents             LtiAuditEvent[]
+  ltiDeepLinkRequests        LtiDeepLinkRequest[]
+  ltiPlacements              LtiPlacement[]
+  ltiRosterEnrollments       LtiRosterEnrollment[]
+  ltiWorkflowRuns            LtiWorkflowRun[]
+  ltiGradePassbacks          LtiGradePassback[]
 }
 
 model LtiRegistration {
@@ -439,6 +445,11 @@ model LtiRegistration {
   courseMappings        LtiCourseMapping[]
   auditEvents           LtiAuditEvent[]
   sessions              Session[]              @relation("LtiRegistrationSessions")
+  deepLinkRequests      LtiDeepLinkRequest[]
+  placements            LtiPlacement[]
+  rosterEnrollments     LtiRosterEnrollment[]
+  workflowRuns          LtiWorkflowRun[]
+  gradePassbacks        LtiGradePassback[]
 
   @@unique([issuer, clientId, deploymentId])
   @@unique([id, organizationId])
@@ -446,24 +457,25 @@ model LtiRegistration {
 }
 
 model LtiLaunchTransaction {
-  id                   String          @id @default(cuid())
-  createdAt            DateTime        @default(now()) @db.Timestamptz(6)
-  expiresAt            DateTime        @db.Timestamptz(6)
-  consumedAt           DateTime?       @db.Timestamptz(6)
-  stateHash            String          @unique
-  nonceHash            String          @unique
-  browserBindingHash   String          @unique
+  id                   String              @id @default(cuid())
+  createdAt            DateTime            @default(now()) @db.Timestamptz(6)
+  expiresAt            DateTime            @db.Timestamptz(6)
+  consumedAt           DateTime?           @db.Timestamptz(6)
+  stateHash            String              @unique
+  nonceHash            String              @unique
+  browserBindingHash   String              @unique
   requesterHash        String
-  verificationAttempts Int             @default(0)
+  verificationAttempts Int                 @default(0)
   loginHintHash        String
   messageHintHash      String?
   targetLinkUri        String
   expectedMessageType  String
   registrationId       String
   organizationId       String
-  registration         LtiRegistration @relation(fields: [registrationId, organizationId], references: [id, organizationId], onDelete: Cascade)
-  organization         Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  registration         LtiRegistration     @relation(fields: [registrationId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  organization         Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   pendingLink          LtiPendingLink?
+  deepLinkRequest      LtiDeepLinkRequest?
 
   @@index([registrationId, expiresAt])
   @@index([organizationId, consumedAt])
@@ -493,19 +505,21 @@ model LtiPendingLink {
 }
 
 model LtiExternalIdentity {
-  id               String          @id @default(cuid())
-  createdAt        DateTime        @default(now()) @db.Timestamptz(6)
-  updatedAt        DateTime        @updatedAt @db.Timestamptz(6)
-  lastLaunchedAt   DateTime?       @db.Timestamptz(6)
-  subjectHash      String
-  subjectHashKeyId String
-  registrationId   String
-  organizationId   String
-  membershipId     String
-  registration     LtiRegistration @relation(fields: [registrationId, organizationId], references: [id, organizationId], onDelete: Cascade)
-  organization     Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  membership       OrgMembership   @relation(fields: [membershipId, organizationId], references: [id, organizationId], onDelete: Cascade)
-  sessions         Session[]       @relation("LtiIdentitySessions")
+  id                String                @id @default(cuid())
+  createdAt         DateTime              @default(now()) @db.Timestamptz(6)
+  updatedAt         DateTime              @updatedAt @db.Timestamptz(6)
+  lastLaunchedAt    DateTime?             @db.Timestamptz(6)
+  subjectHash       String
+  subjectHashKeyId  String
+  registrationId    String
+  organizationId    String
+  membershipId      String
+  registration      LtiRegistration       @relation(fields: [registrationId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  organization      Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  membership        OrgMembership         @relation(fields: [membershipId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  sessions          Session[]             @relation("LtiIdentitySessions")
+  rosterEnrollments LtiRosterEnrollment[]
+  gradePassbacks    LtiGradePassback[]
 
   @@unique([registrationId, subjectHash])
   @@unique([registrationId, membershipId])
@@ -514,24 +528,172 @@ model LtiExternalIdentity {
 }
 
 model LtiCourseMapping {
-  id             String           @id @default(cuid())
-  createdAt      DateTime         @default(now()) @db.Timestamptz(6)
-  updatedAt      DateTime         @updatedAt @db.Timestamptz(6)
-  contextId      String
-  enabled        Boolean          @default(true)
-  registrationId String
-  organizationId String
-  classId        String
-  registration   LtiRegistration  @relation(fields: [registrationId, organizationId], references: [id, organizationId], onDelete: Cascade)
-  organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  class          Class            @relation(fields: [classId], references: [id], onDelete: Cascade)
-  pendingLinks   LtiPendingLink[]
+  id                  String                @id @default(cuid())
+  createdAt           DateTime              @default(now()) @db.Timestamptz(6)
+  updatedAt           DateTime              @updatedAt @db.Timestamptz(6)
+  contextId           String
+  enabled             Boolean               @default(true)
+  registrationId      String
+  organizationId      String
+  classId             String
+  nrpsMembershipsUrl  String?
+  nrpsVersions        String[]              @default([])
+  agsLineItemsUrl     String?
+  agsScopes           String[]              @default([])
+  lastServiceLaunchAt DateTime?             @db.Timestamptz(6)
+  registration        LtiRegistration       @relation(fields: [registrationId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  organization        Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  class               Class                 @relation(fields: [classId], references: [id], onDelete: Cascade)
+  pendingLinks        LtiPendingLink[]
+  deepLinkRequests    LtiDeepLinkRequest[]
+  placements          LtiPlacement[]
+  rosterEnrollments   LtiRosterEnrollment[]
+  workflowRuns        LtiWorkflowRun[]
+  gradePassbacks      LtiGradePassback[]
 
   @@unique([registrationId, contextId])
   @@unique([registrationId, classId])
   @@unique([id, organizationId])
   @@index([organizationId, enabled])
   @@index([classId])
+}
+
+model LtiDeepLinkRequest {
+  id                  String               @id @default(cuid())
+  createdAt           DateTime             @default(now()) @db.Timestamptz(6)
+  expiresAt           DateTime             @db.Timestamptz(6)
+  consumedAt          DateTime?            @db.Timestamptz(6)
+  browserSecretHash   String               @unique
+  responseNonce       String
+  returnUrl           String
+  data                String?
+  acceptTypes         String[]
+  documentTargets     String[]
+  acceptsMultiple     Boolean
+  acceptLineItem      Boolean?
+  transactionId       String               @unique
+  registrationId      String
+  organizationId      String
+  courseMappingId     String
+  teacherMembershipId String
+  transaction         LtiLaunchTransaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  registration        LtiRegistration      @relation(fields: [registrationId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  organization        Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  courseMapping       LtiCourseMapping     @relation(fields: [courseMappingId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  teacherMembership   OrgMembership        @relation(fields: [teacherMembershipId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  @@index([organizationId, expiresAt])
+  @@index([courseMappingId, consumedAt])
+}
+
+model LtiPlacement {
+  id                String             @id @default(cuid())
+  createdAt         DateTime           @default(now()) @db.Timestamptz(6)
+  updatedAt         DateTime           @updatedAt @db.Timestamptz(6)
+  resourceId        String
+  resourceLinkId    String?
+  lineItemUrl       String?
+  scoreMaximum      Float
+  enabled           Boolean            @default(true)
+  registrationId    String
+  organizationId    String
+  courseMappingId   String
+  classAssignmentId String
+  registration      LtiRegistration    @relation(fields: [registrationId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  organization      Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  courseMapping     LtiCourseMapping   @relation(fields: [courseMappingId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  classAssignment   ClassAssignment    @relation(fields: [classAssignmentId], references: [id], onDelete: Cascade)
+  gradePassbacks    LtiGradePassback[]
+
+  @@unique([registrationId, resourceId])
+  @@unique([registrationId, resourceLinkId])
+  @@unique([courseMappingId, classAssignmentId])
+  @@unique([id, organizationId])
+  @@index([organizationId, enabled])
+}
+
+model LtiRosterEnrollment {
+  id                  String               @id @default(cuid())
+  createdAt           DateTime             @default(now()) @db.Timestamptz(6)
+  updatedAt           DateTime             @updatedAt @db.Timestamptz(6)
+  subjectHash         String
+  subjectHashKeyId    String
+  role                MembershipRole
+  lmsStatus           String
+  reconciliationState String
+  managedByLti        Boolean              @default(false)
+  lastSeenAt          DateTime             @db.Timestamptz(6)
+  registrationId      String
+  organizationId      String
+  courseMappingId     String
+  externalIdentityId  String?
+  membershipId        String?
+  registration        LtiRegistration      @relation(fields: [registrationId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  organization        Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  courseMapping       LtiCourseMapping     @relation(fields: [courseMappingId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  externalIdentity    LtiExternalIdentity? @relation(fields: [externalIdentityId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  membership          OrgMembership?       @relation(fields: [membershipId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  @@unique([courseMappingId, subjectHash])
+  @@index([organizationId, reconciliationState])
+  @@index([membershipId, courseMappingId])
+}
+
+model LtiWorkflowRun {
+  id              String           @id @default(cuid())
+  createdAt       DateTime         @default(now()) @db.Timestamptz(6)
+  updatedAt       DateTime         @updatedAt @db.Timestamptz(6)
+  completedAt     DateTime?        @db.Timestamptz(6)
+  nextAttemptAt   DateTime?        @db.Timestamptz(6)
+  deadLetteredAt  DateTime?        @db.Timestamptz(6)
+  kind            String
+  status          String
+  idempotencyKey  String
+  attemptCount    Int              @default(0)
+  errorCode       String?
+  summary         Json?
+  registrationId  String
+  organizationId  String
+  courseMappingId String
+  registration    LtiRegistration  @relation(fields: [registrationId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  organization    Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  courseMapping   LtiCourseMapping @relation(fields: [courseMappingId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  @@unique([registrationId, idempotencyKey])
+  @@index([organizationId, kind, createdAt(sort: Desc)])
+  @@index([status, nextAttemptAt])
+}
+
+model LtiGradePassback {
+  id                 String              @id @default(cuid())
+  createdAt          DateTime            @default(now()) @db.Timestamptz(6)
+  updatedAt          DateTime            @updatedAt @db.Timestamptz(6)
+  releasedAt         DateTime            @db.Timestamptz(6)
+  scoreTimestamp     DateTime            @db.Timestamptz(6)
+  scoreGiven         Float
+  scoreMaximum       Float
+  status             String              @default("pending")
+  attemptCount       Int                 @default(0)
+  nextAttemptAt      DateTime?           @db.Timestamptz(6)
+  deliveredAt        DateTime?           @db.Timestamptz(6)
+  deadLetteredAt     DateTime?           @db.Timestamptz(6)
+  lastErrorCode      String?
+  registrationId     String
+  organizationId     String
+  courseMappingId    String
+  placementId        String
+  submissionId       String
+  externalIdentityId String
+  registration       LtiRegistration     @relation(fields: [registrationId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  organization       Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  courseMapping      LtiCourseMapping    @relation(fields: [courseMappingId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  placement          LtiPlacement        @relation(fields: [placementId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  submission         Submission          @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  externalIdentity   LtiExternalIdentity @relation(fields: [externalIdentityId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  @@unique([placementId, submissionId])
+  @@index([organizationId, status, nextAttemptAt])
+  @@index([submissionId])
 }
 
 model LtiAuditEvent {
@@ -604,6 +766,8 @@ model OrgMembership {
   writingPracticePromptSets         WritingPracticePromptSet[]  @relation("WritingPracticePromptSetStudent")
   classAssignmentInsightsGenerated  ClassAssignmentInsight[]
   ltiExternalIdentities             LtiExternalIdentity[]
+  ltiDeepLinkRequests               LtiDeepLinkRequest[]
+  ltiRosterEnrollments              LtiRosterEnrollment[]
 
   @@unique([userId, organizationId])
   @@unique([id, organizationId])
@@ -913,6 +1077,7 @@ model Submission {
   document             Document                        @relation(fields: [documentId], references: [id], onDelete: Restrict)
   comments             SubmissionComment[]
   gradingAssistantRuns SubmissionGradingAssistantRun[]
+  ltiGradePassbacks    LtiGradePassback[]
 
   @@index([documentId, submittedAt(sort: Desc)])
   @@index([documentId, archivedAt])

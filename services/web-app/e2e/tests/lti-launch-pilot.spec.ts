@@ -55,7 +55,11 @@ function loadE2eEnvironment() {
     if (!line) continue;
     const separator = line.indexOf('=');
     if (separator > 0) {
-      process.env[line.slice(0, separator)] = line.slice(separator + 1);
+      const serialized = line.slice(separator + 1);
+      process.env[line.slice(0, separator)] =
+        serialized.startsWith("'") && serialized.endsWith("'")
+          ? serialized.slice(1, -1).replaceAll(`'"'"'`, "'")
+          : serialized;
     }
   }
 }
@@ -333,6 +337,276 @@ test.describe.serial('secure LTI launch pilot', () => {
     }
   });
 
+  test('teacher places an assignment, learner launches it, and released grade reaches the LMS', async ({
+    page,
+    browser,
+    signIn,
+    e2eContext,
+  }, testInfo) => {
+    await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
+    await page.goto(
+      `${platform.baseUrl}/browser/launch?scenario=deep-link-standard`
+    );
+    const placementPopupPromise = page.waitForEvent('popup');
+    await page.getByRole('link', { name: 'Open Yawp in a new window' }).click();
+    const placementPage = await placementPopupPromise;
+    await expect(placementPage.locator('form')).toHaveAttribute(
+      'action',
+      `${APP_BASE_URL}/lti/deep-link`
+    );
+    const deepLinkCallbackRequest = placementPage.waitForRequest(
+      (request) =>
+        request.method() === 'POST' &&
+        new URL(request.url()).pathname === '/lti/deep-link'
+    );
+    const deepLinkCallbackResponse = placementPage.waitForResponse(
+      (response) =>
+        response.request().method() === 'POST' &&
+        new URL(response.url()).pathname === '/lti/deep-link'
+    );
+    const deepLinkSelectionResponse = placementPage.waitForResponse(
+      (response) =>
+        response.request().method() === 'GET' &&
+        new URL(response.url()).pathname === '/lti/deep-link/select'
+    );
+    await placementPage
+      .locator('form')
+      .evaluate((element) => (element as HTMLFormElement).submit());
+    const callbackRequest = await deepLinkCallbackRequest;
+    const callbackResponse = await deepLinkCallbackResponse;
+    const callbackBody = callbackRequest.postData() ?? '';
+    expect(
+      callbackResponse.status(),
+      JSON.stringify({
+        contentType: callbackRequest.headers()['content-type'],
+        contentLength: callbackBody.length,
+        fieldNames: [...new URLSearchParams(callbackBody).keys()],
+        location: callbackResponse.headers().location,
+      })
+    ).toBe(303);
+    expect(
+      callbackResponse.headers().location,
+      'signed callback must continue to the same-origin picker'
+    ).toBe('/lti/deep-link/select');
+    const selectionResponse = await deepLinkSelectionResponse;
+    expect(selectionResponse.status()).toBe(200);
+    await placementPage.waitForURL('**/lti/deep-link/select');
+    await expect(
+      placementPage.getByRole('heading', { name: 'Place a Yawp assignment' })
+    ).toBeVisible();
+    await expectNoBlockingAccessibilityViolations(
+      placementPage,
+      testInfo,
+      'lti-deep-link-selection'
+    );
+    await expect(placementPage.locator('form')).toHaveAttribute(
+      'action',
+      '/lti/deep-link/select/complete'
+    );
+    const selectionActionResponse = placementPage.waitForResponse(
+      (response) =>
+        response.request().method() === 'POST' &&
+        new URL(response.url()).pathname === '/lti/deep-link/select/complete'
+    );
+    await placementPage.getByRole('button', { name: 'Add to LMS' }).click();
+    const selectedResponse = await selectionActionResponse;
+    expect(
+      selectedResponse.status(),
+      JSON.stringify({
+        location: selectedResponse.headers().location,
+        requestUrl: selectedResponse.request().url(),
+        contentType: selectedResponse.request().headers()['content-type'],
+        fieldNames: [
+          ...new URLSearchParams(
+            selectedResponse.request().postData() ?? ''
+          ).keys(),
+        ],
+      })
+    ).toBe(200);
+    await expect(
+      placementPage.getByRole('heading', { name: 'Assignment ready' })
+    ).toBeVisible();
+    const returnResponse = placementPage.waitForResponse(
+      (response) => new URL(response.url()).pathname === '/deep-link/return'
+    );
+    await placementPage.getByRole('button', { name: 'Return to LMS' }).click();
+    expect((await returnResponse).status()).toBe(204);
+    expect(platform.state.deepLinkContentItems).toHaveLength(1);
+
+    const prisma = createE2EPrismaClient();
+    const placement = await prisma.ltiPlacement.findFirstOrThrow({
+      where: { registrationId: REGISTRATION_ID },
+      include: {
+        classAssignment: { include: { assignment: true } },
+      },
+    });
+    const learnerIdentity = await prisma.ltiExternalIdentity.findFirstOrThrow({
+      where: {
+        registrationId: REGISTRATION_ID,
+        membership: { role: 'STUDENT' },
+      },
+      select: { membershipId: true },
+    });
+    const teacherMembership = await prisma.orgMembership.findFirstOrThrow({
+      where: {
+        organizationId,
+        user: { email: e2eContext.teacherEmail },
+      },
+      select: { id: true },
+    });
+    await prisma.$disconnect();
+
+    const learnerContext = await browser.newContext();
+    try {
+      const lmsPage = await learnerContext.newPage();
+      const learnerLaunch = await beginLaunch(
+        lmsPage,
+        'learner-resource-link-placed'
+      );
+      await learnerLaunch.toolPage.waitForURL(
+        (url) =>
+          url.pathname === '/app' &&
+          url.searchParams.get('ltiClassId') === classId
+      );
+      await learnerLaunch.toolPage.close();
+    } finally {
+      await learnerContext.close();
+    }
+
+    const proofDocumentId = 'e2e-lti-advantage-document';
+    const proofSubmissionId = 'e2e-lti-advantage-submission';
+    const proofDb = createE2EPrismaClient();
+    try {
+      await proofDb.submission.deleteMany({ where: { id: proofSubmissionId } });
+      await proofDb.document.deleteMany({ where: { id: proofDocumentId } });
+      await proofDb.document.create({
+        data: {
+          id: proofDocumentId,
+          title: 'LTI Advantage browser proof',
+          text: 'A clear claim with evidence.',
+          html: '<p>A clear claim with evidence.</p>',
+          membershipId: learnerIdentity.membershipId,
+          assignmentTypeId:
+            placement.classAssignment.assignment.assignmentTypeId,
+          assignmentId: placement.classAssignment.assignmentId,
+          classAssignmentId: placement.classAssignmentId,
+        },
+      });
+      await proofDb.submission.create({
+        data: {
+          id: proofSubmissionId,
+          title: 'LTI Advantage browser proof',
+          text: 'A clear claim with evidence.',
+          html: '<p>A clear claim with evidence.</p>',
+          submittedAt: new Date(Date.now() - 60_000),
+          numericPercentage: 88,
+          gradedAt: new Date(),
+          gradedByMembershipId: teacherMembership.id,
+          documentId: proofDocumentId,
+        },
+      });
+    } finally {
+      await proofDb.$disconnect();
+    }
+
+    await page.goto(`${APP_BASE_URL}/app`);
+    const release = await page.evaluate(async (submissionId) => {
+      const response = await fetch('/api/domain/release-grades', {
+        method: 'POST',
+        headers: { 'content-type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ submissionIds: submissionId }),
+      });
+      return {
+        status: response.status,
+        contentType: response.headers.get('content-type'),
+        body: await response.json(),
+      };
+    }, proofSubmissionId);
+    expect(release).toMatchObject({
+      status: 200,
+      contentType: expect.stringContaining('application/json'),
+      body: {
+        success: true,
+        releasedCount: 1,
+      },
+    });
+    const gradeProofDb = createE2EPrismaClient();
+    try {
+      const releasedSubmission = await gradeProofDb.submission.findUnique({
+        where: { id: proofSubmissionId },
+        select: {
+          releasedAt: true,
+          numericPercentage: true,
+          document: {
+            select: {
+              membership: {
+                select: {
+                  ltiExternalIdentities: {
+                    select: { registrationId: true },
+                  },
+                },
+              },
+              classAssignment: {
+                select: {
+                  ltiPlacements: {
+                    select: { id: true, registrationId: true, enabled: true },
+                  },
+                },
+              },
+            },
+          },
+        },
+      });
+      expect(releasedSubmission).toMatchObject({
+        releasedAt: expect.any(Date),
+        numericPercentage: 88,
+        document: {
+          membership: {
+            ltiExternalIdentities: [{ registrationId: REGISTRATION_ID }],
+          },
+          classAssignment: {
+            ltiPlacements: [
+              {
+                id: placement.id,
+                registrationId: REGISTRATION_ID,
+                enabled: true,
+              },
+            ],
+          },
+        },
+      });
+      const passback = await gradeProofDb.ltiGradePassback.findUnique({
+        where: {
+          placementId_submissionId: {
+            placementId: placement.id,
+            submissionId: proofSubmissionId,
+          },
+        },
+        select: {
+          status: true,
+          attemptCount: true,
+          lastErrorCode: true,
+          deliveredAt: true,
+        },
+      });
+      expect(passback).toMatchObject({
+        status: 'delivered',
+        lastErrorCode: null,
+      });
+    } finally {
+      await gradeProofDb.$disconnect();
+    }
+    await expect.poll(() => platform.state.scores.length).toBe(1);
+    expect(platform.state.scores[0]).toMatchObject({
+      userId: 'lti-learner-ada',
+      activityProgress: 'Completed',
+      gradingProgress: 'FullyGraded',
+    });
+    expect(platform.state.scores[0]?.scoreGiven).toBe(
+      Math.round(placement.scoreMaximum * 0.88 * 100) / 100
+    );
+  });
+
   test('admin diagnostics remain usable at a narrow mobile viewport', async ({
     page,
     signIn,
@@ -359,6 +633,9 @@ test.describe.serial('secure LTI launch pilot', () => {
     await expect(
       page.getByRole('tab', { name: 'Course mappings' })
     ).toBeVisible();
+    await page.getByRole('tab', { name: 'Advantage workflows' }).click();
+    await expect(page.getByText('Service readiness')).toBeVisible();
+    await expect(page.getByText('Grade passback')).toBeVisible();
     await expect(page.locator('body')).not.toContainText(
       'kevin.instructor@example.test'
     );

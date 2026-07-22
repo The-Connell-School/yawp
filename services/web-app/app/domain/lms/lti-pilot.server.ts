@@ -4,6 +4,7 @@ import {
 } from '@app/prisma';
 import { prisma } from '~/utils/db.server';
 import {
+  createDeepLinkingResponseJwt,
   LTI_MESSAGE_TYPES,
   verifyLtiLaunchForm,
   type LtiSigningKeyResolver,
@@ -29,9 +30,11 @@ import {
   parseLtiRegistration,
   type LtiRegistration,
 } from './lti-registration';
+import { getActiveLtiToolSigningKey } from './lti-tool-keyset.server';
 
 const LAUNCH_TTL_MS = 5 * 60 * 1000;
 const LINK_TTL_MS = 15 * 60 * 1000;
+const DEEP_LINK_TTL_MS = 10 * 60 * 1000;
 const LOGIN_WINDOW_MS = 60 * 1000;
 const OPERATIONAL_RETENTION_MS = 24 * 60 * 60 * 1000;
 const MAX_REQUESTER_LOGINS_PER_WINDOW = 30;
@@ -193,10 +196,20 @@ export async function initiateLtiLogin(
   } catch (error) {
     throw publicFailure(error, 'invalid_request');
   }
-  if (targetLinkUri !== new URL(registration.launchUrl).toString()) {
+  const resourceLaunchUrl = new URL(registration.launchUrl).toString();
+  const deepLinkingLaunchUrl = new URL(
+    registration.deepLinkingLaunchUrl
+  ).toString();
+  const expectedMessageType =
+    targetLinkUri === resourceLaunchUrl
+      ? LTI_MESSAGE_TYPES.resourceLinkRequest
+      : targetLinkUri === deepLinkingLaunchUrl
+        ? LTI_MESSAGE_TYPES.deepLinkingRequest
+        : null;
+  if (!expectedMessageType) {
     throw new LtiPilotError(
       'invalid_request',
-      'This LTI login endpoint accepts resource launches only.'
+      'This LTI login target is not registered.'
     );
   }
 
@@ -268,7 +281,7 @@ export async function initiateLtiLogin(
             )
           : null,
         targetLinkUri,
-        expectedMessageType: LTI_MESSAGE_TYPES.resourceLinkRequest,
+        expectedMessageType,
         expiresAt,
         registrationId: registration.id,
         organizationId: registration.organizationId,
@@ -293,7 +306,7 @@ export async function initiateLtiLogin(
     authorizationUrl: buildLtiOidcAuthorizationUrl({
       authorizationEndpoint: registration.authorizationEndpoint,
       clientId: registration.clientId,
-      launchUrl: registration.launchUrl,
+      launchUrl: targetLinkUri,
       loginHint: initiation.loginHint,
       messageHint: initiation.messageHint,
       state,
@@ -595,6 +608,61 @@ export async function completeLtiLaunch(
       return { outcome: 'course_unmapped' as const };
     }
 
+    await database.ltiCourseMapping.update({
+      where: { id: courseMapping.id },
+      data: {
+        nrpsMembershipsUrl: launch.services.membershipsUrl,
+        nrpsVersions: launch.services.nrpsVersions,
+        agsLineItemsUrl: launch.services.lineItemsUrl,
+        agsScopes: launch.services.agsScopes,
+        lastServiceLaunchAt: now,
+      },
+    });
+
+    const placementId = launch.custom.yawp_placement_id;
+    if (placementId) {
+      const placement = await database.ltiPlacement.findFirst({
+        where: {
+          id: placementId,
+          registrationId: registration.id,
+          organizationId: registration.organizationId,
+          courseMappingId: courseMapping.id,
+          enabled: true,
+        },
+        select: { id: true },
+      });
+      const resourceLinkConflict = launch.resourceLink
+        ? await database.ltiPlacement.findFirst({
+            where: {
+              registrationId: registration.id,
+              resourceLinkId: launch.resourceLink.id,
+              NOT: { id: placementId },
+            },
+            select: { id: true },
+          })
+        : null;
+      if (!placement || resourceLinkConflict || !launch.resourceLink) {
+        await database.ltiAuditEvent.create({
+          data: {
+            eventType: 'launch_completed',
+            outcome: 'placement_unmapped',
+            registrationId: registration.id,
+            organizationId: registration.organizationId,
+            subjectHash,
+            contextId: launch.context!.id,
+          },
+        });
+        return { outcome: 'placement_unmapped' as const };
+      }
+      await database.ltiPlacement.update({
+        where: { id: placement.id },
+        data: {
+          resourceLinkId: launch.resourceLink.id,
+          lineItemUrl: launch.services.lineItemUrl,
+        },
+      });
+    }
+
     const destination = resolveLtiLaunchDestination({
       classId: courseMapping.class.id,
       role,
@@ -723,6 +791,13 @@ export async function completeLtiLaunch(
       409
     );
   }
+  if (result.outcome === 'placement_unmapped') {
+    throw new LtiPilotError(
+      'course_unmapped',
+      'This LMS placement is not mapped to Yawp.',
+      409
+    );
+  }
   if (result.outcome === 'account_conflict') {
     throw new LtiPilotError(
       'account_conflict',
@@ -750,6 +825,423 @@ export async function completeLtiLaunch(
     organizationId: registration.organizationId,
     role,
     destination: result.destination,
+  };
+}
+
+export async function completeLtiDeepLinkLaunch(
+  form: { idToken: string; state: string },
+  options: {
+    now?: Date;
+    currentUserId: string | null;
+    resolveSigningKey?: LtiSigningKeyResolver;
+    browserBinding?: { transactionId: string; secret: string } | null;
+  }
+) {
+  if (!form.state || !form.idToken || !options.currentUserId) {
+    throw new LtiPilotError(
+      'membership_not_allowed',
+      'A signed-in teacher account is required for Deep Linking.',
+      403
+    );
+  }
+  const now = options.now ?? new Date();
+  const transaction = await prisma.ltiLaunchTransaction.findUnique({
+    where: { stateHash: hashLtiOneTimeValue(form.state) },
+    include: {
+      registration: true,
+      organization: { select: { ltiEnabled: true } },
+    },
+  });
+  if (
+    !transaction ||
+    transaction.expectedMessageType !== LTI_MESSAGE_TYPES.deepLinkingRequest ||
+    !transaction.registration.enabled ||
+    transaction.registration.uninstalledAt !== null ||
+    !transaction.organization.ltiEnabled
+  ) {
+    throw new LtiPilotError(
+      'not_available',
+      'The LTI Deep Linking request is unavailable.',
+      404
+    );
+  }
+  if (transaction.consumedAt) {
+    throw new LtiPilotError('replay', 'This LTI launch was already used.', 409);
+  }
+  if (transaction.expiresAt <= now) {
+    throw new LtiPilotError('expired', 'This LTI launch has expired.', 410);
+  }
+  if (
+    !options.browserBinding ||
+    options.browserBinding.transactionId !== transaction.id ||
+    !ltiOneTimeValueMatches(
+      options.browserBinding.secret,
+      transaction.browserBindingHash
+    )
+  ) {
+    throw new LtiPilotError(
+      'invalid_launch',
+      'The LTI browser binding did not match this launch.',
+      403
+    );
+  }
+
+  const registration = toLtiContractRegistration(transaction.registration);
+  let launch;
+  try {
+    launch = await verifyLtiLaunchForm(form, {
+      registration,
+      expectedState: null,
+      expectedStateHash: transaction.stateHash,
+      expectedNonce: null,
+      expectedNonceHash: transaction.nonceHash,
+      expectedTargetLinkUri: transaction.targetLinkUri,
+      expectedMessageType: LTI_MESSAGE_TYPES.deepLinkingRequest,
+      nowSeconds: Math.floor(now.getTime() / 1000),
+      resolveSigningKey:
+        options.resolveSigningKey ?? signingKeyCache.resolveSigningKey,
+    });
+  } catch (error) {
+    throw publicFailure(error, 'invalid_launch');
+  }
+  if (!launch.subject || !launch.context?.id || !launch.deepLinking) {
+    throw new LtiPilotError(
+      'invalid_launch',
+      'An identified course Deep Linking launch is required.'
+    );
+  }
+  let role: LtiMembershipRole;
+  try {
+    role = mapLtiRolesToMembershipRole(launch.roles);
+  } catch (error) {
+    throw new LtiPilotError(
+      'role_not_allowed',
+      'The LMS role cannot place Yawp assignments.',
+      403,
+      { cause: error }
+    );
+  }
+  if (role !== 'TEACHER') {
+    throw new LtiPilotError(
+      'role_not_allowed',
+      'Only LMS instructors can place Yawp assignments.',
+      403
+    );
+  }
+  if (
+    !launch.deepLinking.acceptTypes.includes('ltiResourceLink') ||
+    !launch.deepLinking.documentTargets.includes('window')
+  ) {
+    throw new LtiPilotError(
+      'invalid_launch',
+      'The LMS placement must accept a top-level LTI resource link.'
+    );
+  }
+  const subjectCandidates = deriveLtiIdentityHashCandidates({
+    registrationId: registration.id,
+    subject: launch.subject,
+  });
+  const browserSecret = generateLtiOneTimeValue();
+  const responseNonce = generateLtiOneTimeValue();
+
+  const result = await prisma.$transaction(async (database) => {
+    const consumed = await database.ltiLaunchTransaction.updateMany({
+      where: {
+        id: transaction.id,
+        consumedAt: null,
+        expiresAt: { gt: now },
+      },
+      data: { consumedAt: now },
+    });
+    if (consumed.count !== 1) return { outcome: 'replay' as const };
+    const courseMapping = await database.ltiCourseMapping.findUnique({
+      where: {
+        registrationId_contextId: {
+          registrationId: registration.id,
+          contextId: launch.context!.id,
+        },
+      },
+    });
+    if (
+      !courseMapping?.enabled ||
+      courseMapping.organizationId !== registration.organizationId
+    ) {
+      return { outcome: 'course_unmapped' as const };
+    }
+    const identity = await database.ltiExternalIdentity.findFirst({
+      where: {
+        registrationId: registration.id,
+        subjectHash: {
+          in: subjectCandidates.map((candidate) => candidate.subjectHash),
+        },
+        membership: {
+          userId: options.currentUserId!,
+          role: 'TEACHER',
+          isActive: true,
+          classesAsTeacher: { some: { id: courseMapping.classId } },
+        },
+      },
+      include: { membership: { select: { id: true } } },
+    });
+    if (!identity) return { outcome: 'account_conflict' as const };
+
+    await database.ltiCourseMapping.update({
+      where: { id: courseMapping.id },
+      data: {
+        nrpsMembershipsUrl: launch.services.membershipsUrl,
+        nrpsVersions: launch.services.nrpsVersions,
+        agsLineItemsUrl: launch.services.lineItemsUrl,
+        agsScopes: launch.services.agsScopes,
+        lastServiceLaunchAt: now,
+      },
+    });
+    const request = await database.ltiDeepLinkRequest.create({
+      data: {
+        createdAt: now,
+        expiresAt: new Date(now.getTime() + DEEP_LINK_TTL_MS),
+        browserSecretHash: hashLtiOneTimeValue(browserSecret),
+        responseNonce,
+        returnUrl: launch.deepLinking!.returnUrl,
+        data: launch.deepLinking!.data,
+        acceptTypes: launch.deepLinking!.acceptTypes,
+        documentTargets: launch.deepLinking!.documentTargets,
+        acceptsMultiple: launch.deepLinking!.acceptsMultiple,
+        acceptLineItem: launch.deepLinking!.acceptLineItem,
+        transactionId: transaction.id,
+        registrationId: registration.id,
+        organizationId: registration.organizationId,
+        courseMappingId: courseMapping.id,
+        teacherMembershipId: identity.membership.id,
+      },
+      select: { id: true },
+    });
+    await database.ltiAuditEvent.create({
+      data: {
+        eventType: 'deep_link_started',
+        outcome: 'accepted',
+        registrationId: registration.id,
+        organizationId: registration.organizationId,
+        subjectHash: subjectCandidates[0]!.subjectHash,
+        contextId: launch.context!.id,
+        details: { requestId: request.id },
+      },
+    });
+    return { outcome: 'accepted' as const, requestId: request.id };
+  });
+
+  if (result.outcome === 'replay') {
+    throw new LtiPilotError('replay', 'This LTI launch was already used.', 409);
+  }
+  if (result.outcome === 'course_unmapped') {
+    throw new LtiPilotError(
+      'course_unmapped',
+      'This LMS course is not mapped to Yawp.',
+      409
+    );
+  }
+  if (result.outcome === 'account_conflict') {
+    throw new LtiPilotError(
+      'account_conflict',
+      'The linked teacher account does not match this course.',
+      409
+    );
+  }
+  return { requestId: result.requestId, browserSecret };
+}
+
+export async function selectLtiDeepLinkPlacement(input: {
+  requestId: string;
+  browserSecret: string;
+  teacherUserId: string;
+  classAssignmentId: string;
+  now?: Date;
+  toolKey?: { keyId: string; privateKeyPem: string };
+}) {
+  const now = input.now ?? new Date();
+  const toolKey = input.toolKey ?? getActiveLtiToolSigningKey();
+  const result = await prisma.$transaction(async (database) => {
+    await database.$executeRaw(
+      Prisma.sql`SELECT pg_advisory_xact_lock(hashtextextended(${`lti-deep-link:${input.requestId}`}, 0))`
+    );
+    const request = await database.ltiDeepLinkRequest.findUnique({
+      where: { id: input.requestId },
+      include: {
+        registration: true,
+        courseMapping: true,
+        teacherMembership: { select: { userId: true } },
+      },
+    });
+    if (
+      !request ||
+      request.consumedAt ||
+      request.expiresAt <= now ||
+      request.teacherMembership.userId !== input.teacherUserId ||
+      !ltiOneTimeValueMatches(input.browserSecret, request.browserSecretHash)
+    ) {
+      throw new LtiPilotError(
+        'link_expired',
+        'This Deep Linking selection is unavailable.',
+        410
+      );
+    }
+    const classAssignment = await database.classAssignment.findFirst({
+      where: {
+        id: input.classAssignmentId,
+        classId: request.courseMapping.classId,
+      },
+      include: { assignment: true },
+    });
+    if (!classAssignment) {
+      throw new LtiPilotError(
+        'course_unmapped',
+        'The selected assignment is outside the mapped course.',
+        409
+      );
+    }
+    const scoreMaximum = classAssignment.assignment.pointValue ?? 100;
+    if (scoreMaximum <= 0) {
+      throw new LtiPilotError(
+        'invalid_request',
+        'The selected assignment must have a positive point value.'
+      );
+    }
+    const resourceId = `yawp:${request.courseMappingId}:${classAssignment.id}`;
+    const placement = await database.ltiPlacement.upsert({
+      where: {
+        courseMappingId_classAssignmentId: {
+          courseMappingId: request.courseMappingId,
+          classAssignmentId: classAssignment.id,
+        },
+      },
+      create: {
+        resourceId,
+        scoreMaximum,
+        registrationId: request.registrationId,
+        organizationId: request.organizationId,
+        courseMappingId: request.courseMappingId,
+        classAssignmentId: classAssignment.id,
+      },
+      update: { scoreMaximum, enabled: true },
+    });
+    const title = classAssignment.assignment.title?.trim() || 'Yawp assignment';
+    const contentItem = {
+      type: 'ltiResourceLink' as const,
+      title,
+      window: { targetName: '_blank' },
+      custom: { yawp_placement_id: placement.id },
+      ...(request.acceptLineItem === true
+        ? {
+            lineItem: {
+              scoreMaximum,
+              label: title,
+              resourceId,
+              tag: 'yawp-assignment',
+              gradesReleased: false,
+            },
+          }
+        : {}),
+    };
+    const responseJwt = createDeepLinkingResponseJwt({
+      clientId: request.registration.clientId,
+      platformIssuer: request.registration.issuer,
+      deploymentId: request.registration.deploymentId,
+      privateKeyPem: toolKey.privateKeyPem,
+      keyId: toolKey.keyId,
+      nonce: request.responseNonce,
+      data: request.data,
+      contentItems: [contentItem],
+      acceptTypes: request.acceptTypes,
+      documentTargets: request.documentTargets,
+      acceptsMultiple: request.acceptsMultiple,
+      acceptLineItem: request.acceptLineItem,
+      nowSeconds: Math.floor(now.getTime() / 1000),
+    });
+    const consumed = await database.ltiDeepLinkRequest.updateMany({
+      where: { id: request.id, consumedAt: null, expiresAt: { gt: now } },
+      data: { consumedAt: now },
+    });
+    if (consumed.count !== 1) {
+      throw new LtiPilotError(
+        'replay',
+        'This Deep Linking selection was already used.',
+        409
+      );
+    }
+    await database.ltiAuditEvent.create({
+      data: {
+        eventType: 'deep_link_completed',
+        outcome: 'placed',
+        registrationId: request.registrationId,
+        organizationId: request.organizationId,
+        contextId: request.courseMapping.contextId,
+        actorUserId: null,
+        details: { placementId: placement.id },
+      },
+    });
+    return {
+      placementId: placement.id,
+      returnUrl: request.returnUrl,
+      responseJwt,
+    };
+  });
+  return result;
+}
+
+export async function inspectLtiDeepLinkRequest(input: {
+  requestId: string;
+  browserSecret: string;
+  teacherUserId: string;
+  now?: Date;
+}) {
+  const now = input.now ?? new Date();
+  const request = await prisma.ltiDeepLinkRequest.findUnique({
+    where: { id: input.requestId },
+    include: {
+      courseMapping: {
+        include: {
+          class: {
+            select: {
+              id: true,
+              title: true,
+              code: true,
+              classAssignments: {
+                orderBy: { createdAt: 'desc' },
+                select: {
+                  id: true,
+                  assignment: {
+                    select: { title: true, prompt: true, pointValue: true },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+      teacherMembership: { select: { userId: true } },
+    },
+  });
+  if (
+    !request ||
+    request.consumedAt ||
+    request.expiresAt <= now ||
+    request.teacherMembership.userId !== input.teacherUserId ||
+    !ltiOneTimeValueMatches(input.browserSecret, request.browserSecretHash)
+  ) {
+    throw new LtiPilotError(
+      'link_expired',
+      'This Deep Linking selection is unavailable.',
+      410
+    );
+  }
+  return {
+    className:
+      request.courseMapping.class.title || request.courseMapping.class.code,
+    assignments: request.courseMapping.class.classAssignments.map((item) => ({
+      id: item.id,
+      title: item.assignment.title || 'Untitled assignment',
+      prompt: item.assignment.prompt.slice(0, 180),
+      pointValue: item.assignment.pointValue ?? 100,
+    })),
   };
 }
 

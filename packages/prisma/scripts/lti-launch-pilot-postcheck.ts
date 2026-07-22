@@ -8,6 +8,11 @@ const REQUIRED_TABLES = [
   'LtiExternalIdentity',
   'LtiCourseMapping',
   'LtiAuditEvent',
+  'LtiDeepLinkRequest',
+  'LtiPlacement',
+  'LtiRosterEnrollment',
+  'LtiWorkflowRun',
+  'LtiGradePassback',
 ] as const;
 
 const REQUIRED_TRIGGERS = [
@@ -18,6 +23,11 @@ const REQUIRED_TRIGGERS = [
   'LtiAuditEvent_tenant_check',
   'LtiAuditEvent_append_only_update',
   'LtiAuditEvent_append_only_delete',
+  'LtiDeepLinkRequest_tenant_guard',
+  'LtiPlacement_tenant_guard',
+  'LtiRosterEnrollment_tenant_guard',
+  'LtiWorkflowRun_tenant_guard',
+  'LtiGradePassback_tenant_guard',
 ] as const;
 
 export type LtiPostcheckInput = {
@@ -27,7 +37,9 @@ export type LtiPostcheckInput = {
   registrationTenantMismatches: string[];
   courseTenantMismatches: string[];
   identityTenantMismatches: string[];
+  advantageTenantMismatches: string[];
   invalidDigestRows: string[];
+  invalidWorkflowRows: string[];
   outstandingDisabledArtifacts: string[];
   counts: Record<string, number>;
 };
@@ -51,8 +63,16 @@ export function buildLtiPostcheckReport(input: LtiPostcheckInput) {
       kind: 'identity_tenant_mismatch',
       id,
     })),
+    ...input.advantageTenantMismatches.map((id) => ({
+      kind: 'advantage_tenant_mismatch',
+      id,
+    })),
     ...input.invalidDigestRows.map((id) => ({
       kind: 'invalid_digest_length',
+      id,
+    })),
+    ...input.invalidWorkflowRows.map((id) => ({
+      kind: 'invalid_workflow_state',
       id,
     })),
     ...input.outstandingDisabledArtifacts.map((id) => ({
@@ -96,7 +116,9 @@ async function main() {
       registrationTenantMismatches,
       courseTenantMismatches,
       identityTenantMismatches,
+      advantageTenantMismatches,
       invalidDigestRows,
+      invalidWorkflowRows,
       outstandingDisabledArtifacts,
       counts,
     ] = await Promise.all([
@@ -122,6 +144,36 @@ async function main() {
         WHERE identity."organizationId" <> membership."organizationId"
       `,
       prisma.$queryRaw<Array<{ id: string }>>`
+        SELECT 'placement:' || placement.id AS id
+        FROM "LtiPlacement" placement
+        JOIN "LtiCourseMapping" mapping ON mapping.id = placement."courseMappingId"
+        JOIN "ClassAssignment" class_assignment ON class_assignment.id = placement."classAssignmentId"
+        WHERE placement."registrationId" <> mapping."registrationId"
+          OR placement."organizationId" <> mapping."organizationId"
+          OR class_assignment."classId" <> mapping."classId"
+        UNION ALL
+        SELECT 'roster:' || roster.id AS id
+        FROM "LtiRosterEnrollment" roster
+        JOIN "LtiCourseMapping" mapping ON mapping.id = roster."courseMappingId"
+        LEFT JOIN "LtiExternalIdentity" identity ON identity.id = roster."externalIdentityId"
+        WHERE roster."registrationId" <> mapping."registrationId"
+          OR roster."organizationId" <> mapping."organizationId"
+          OR (identity.id IS NOT NULL AND identity."registrationId" <> roster."registrationId")
+        UNION ALL
+        SELECT 'grade:' || grade.id AS id
+        FROM "LtiGradePassback" grade
+        JOIN "LtiPlacement" placement ON placement.id = grade."placementId"
+        JOIN "Submission" submission ON submission.id = grade."submissionId"
+        JOIN "Document" document ON document.id = submission."documentId"
+        JOIN "LtiExternalIdentity" identity ON identity.id = grade."externalIdentityId"
+        WHERE grade."registrationId" <> placement."registrationId"
+          OR grade."organizationId" <> placement."organizationId"
+          OR grade."courseMappingId" <> placement."courseMappingId"
+          OR document."classAssignmentId" <> placement."classAssignmentId"
+          OR document."membershipId" <> identity."membershipId"
+          OR submission."releasedAt" IS NULL
+      `,
+      prisma.$queryRaw<Array<{ id: string }>>`
         SELECT 'transaction:' || id AS id
         FROM "LtiLaunchTransaction"
         WHERE LENGTH("stateHash") <> 64
@@ -142,6 +194,32 @@ async function main() {
         FROM "LtiExternalIdentity"
         WHERE LENGTH("subjectHash") <> 64
           OR LENGTH("subjectHashKeyId") NOT BETWEEN 1 AND 40
+      `,
+      prisma.$queryRaw<Array<{ id: string }>>`
+        SELECT 'deep-link:' || id AS id
+        FROM "LtiDeepLinkRequest"
+        WHERE LENGTH("browserSecretHash") <> 64 OR "expiresAt" <= "createdAt"
+        UNION ALL
+        SELECT 'placement:' || id AS id
+        FROM "LtiPlacement"
+        WHERE "scoreMaximum" <= 0 OR "scoreMaximum" > 10000
+        UNION ALL
+        SELECT 'roster:' || id AS id
+        FROM "LtiRosterEnrollment"
+        WHERE LENGTH("subjectHash") <> 64
+          OR "lmsStatus" NOT IN ('Active', 'Inactive', 'Deleted')
+          OR "reconciliationState" NOT IN ('linked', 'unmatched', 'conflict', 'dropped')
+        UNION ALL
+        SELECT 'run:' || id AS id
+        FROM "LtiWorkflowRun"
+        WHERE "status" NOT IN ('running', 'succeeded', 'retry', 'dead_letter')
+          OR "attemptCount" NOT BETWEEN 0 AND 10
+        UNION ALL
+        SELECT 'grade:' || id AS id
+        FROM "LtiGradePassback"
+        WHERE "status" NOT IN ('pending', 'delivering', 'retry', 'delivered', 'dead_letter')
+          OR "attemptCount" NOT BETWEEN 0 AND 10
+          OR "scoreGiven" < 0 OR "scoreGiven" > "scoreMaximum"
       `,
       prisma.$queryRaw<Array<{ id: string }>>`
         SELECT 'transaction:' || tx.id AS id
@@ -186,6 +264,10 @@ async function main() {
         prisma.ltiCourseMapping.count(),
         prisma.ltiExternalIdentity.count(),
         prisma.ltiAuditEvent.count(),
+        prisma.ltiPlacement.count(),
+        prisma.ltiRosterEnrollment.count(),
+        prisma.ltiWorkflowRun.count(),
+        prisma.ltiGradePassback.count(),
       ]),
     ]);
 
@@ -200,7 +282,9 @@ async function main() {
       ),
       courseTenantMismatches: courseTenantMismatches.map(({ id }) => id),
       identityTenantMismatches: identityTenantMismatches.map(({ id }) => id),
+      advantageTenantMismatches: advantageTenantMismatches.map(({ id }) => id),
       invalidDigestRows: invalidDigestRows.map(({ id }) => id),
+      invalidWorkflowRows: invalidWorkflowRows.map(({ id }) => id),
       outstandingDisabledArtifacts: outstandingDisabledArtifacts.map(
         ({ id }) => id
       ),
@@ -209,6 +293,10 @@ async function main() {
         mappings: counts[1],
         identities: counts[2],
         auditEvents: counts[3],
+        placements: counts[4],
+        rosterEnrollments: counts[5],
+        workflowRuns: counts[6],
+        gradePassbacks: counts[7],
       },
     });
 

@@ -11,6 +11,13 @@ type TestFixtures = {
   helpers: TestHelpers;
 };
 
+function parseShellEnvValue(value: string) {
+  if (value.startsWith("'") && value.endsWith("'")) {
+    return value.slice(1, -1).replaceAll(`'"'"'`, "'");
+  }
+  return value;
+}
+
 export const test = base.extend<TestFixtures>({
   e2eContext: async ({}, use) => {
     const __filename = fileURLToPath(import.meta.url);
@@ -26,7 +33,10 @@ export const test = base.extend<TestFixtures>({
         .map((line) => {
           const idx = line.indexOf('=');
           if (idx === -1) return null;
-          return [line.slice(0, idx), line.slice(idx + 1)] as const;
+          return [
+            line.slice(0, idx),
+            parseShellEnvValue(line.slice(idx + 1)),
+          ] as const;
         })
         .filter((entry): entry is readonly [string, string] => !!entry);
       for (const [key, value] of envEntries) {
@@ -47,7 +57,8 @@ export const test = base.extend<TestFixtures>({
       await passwordInput.fill(password);
       await submitButton.click();
       await page.waitForURL(
-        (url) => url.pathname.startsWith('/app') || url.pathname === '/enter-code',
+        (url) =>
+          url.pathname.startsWith('/app') || url.pathname === '/enter-code',
         { timeout: 15000 }
       );
       if (new URL(page.url()).pathname === '/enter-code') {

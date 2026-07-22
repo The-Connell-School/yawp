@@ -39,6 +39,11 @@ import {
   upsertLtiCourseMapping,
 } from '~/domain/lms/lti-pilot.server';
 import { parseLtiRegistration } from '~/domain/lms/lti-registration';
+import {
+  deliverLtiGradePassback,
+  retryLtiWorkflow,
+  syncLtiRoster,
+} from '~/domain/lms/lti-advantage.server';
 import { requireAdmin, verifyUserPassword } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 
@@ -116,6 +121,12 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
               id: true,
               contextId: true,
               enabled: true,
+              nrpsMembershipsUrl: true,
+              agsLineItemsUrl: true,
+              lastServiceLaunchAt: true,
+              _count: {
+                select: { placements: true, rosterEnrollments: true },
+              },
               class: { select: { id: true, title: true, code: true } },
             },
           },
@@ -161,6 +172,39 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           subjectHash: true,
           contextId: true,
           registrationId: true,
+        },
+      },
+      ltiWorkflowRuns: {
+        take: 50,
+        orderBy: { createdAt: 'desc' },
+        select: {
+          id: true,
+          createdAt: true,
+          kind: true,
+          status: true,
+          attemptCount: true,
+          errorCode: true,
+          summary: true,
+          courseMappingId: true,
+        },
+      },
+      ltiGradePassbacks: {
+        take: 50,
+        orderBy: { createdAt: 'desc' },
+        select: {
+          id: true,
+          createdAt: true,
+          status: true,
+          attemptCount: true,
+          lastErrorCode: true,
+          deliveredAt: true,
+          placement: {
+            select: {
+              classAssignment: {
+                select: { assignment: { select: { title: true } } },
+              },
+            },
+          },
         },
       },
     },
@@ -252,6 +296,32 @@ export async function action({ request, params }: ActionFunctionArgs) {
         organizationId,
         actorUserId: admin.id,
       });
+    } else if (intent === 'sync-roster') {
+      const mappingId = requiredString(formData, 'mappingId');
+      const mapping = await prisma.ltiCourseMapping.findFirstOrThrow({
+        where: { id: mappingId, organizationId },
+        select: { id: true },
+      });
+      await syncLtiRoster({
+        courseMappingId: mapping.id,
+        idempotencyKey: `admin-${randomUUID()}`,
+      });
+    } else if (intent === 'retry-workflow') {
+      const runId = requiredString(formData, 'runId');
+      const run = await prisma.ltiWorkflowRun.findFirstOrThrow({
+        where: { id: runId, organizationId },
+      });
+      await retryLtiWorkflow({ organizationId, runId: run.id });
+      if (run.kind === 'roster_sync') {
+        await syncLtiRoster({
+          courseMappingId: run.courseMappingId,
+          idempotencyKey: run.idempotencyKey,
+        });
+      }
+    } else if (intent === 'retry-grade') {
+      const gradePassbackId = requiredString(formData, 'gradePassbackId');
+      await retryLtiWorkflow({ organizationId, gradePassbackId });
+      await deliverLtiGradePassback({ gradePassbackId });
     } else {
       throw new LtiPilotError('invalid_request', 'Unknown LTI action.');
     }
@@ -391,6 +461,51 @@ function MappingAction({
   );
 }
 
+function RosterSyncAction({ mappingId }: { mappingId: string }) {
+  const fetcher = useFetcher<typeof action>();
+  return (
+    <Button
+      type="button"
+      size="sm"
+      variant="outline"
+      disabled={fetcher.state !== 'idle'}
+      onClick={() =>
+        fetcher.submit({ intent: 'sync-roster', mappingId }, { method: 'post' })
+      }
+    >
+      Sync roster
+    </Button>
+  );
+}
+
+function RecoveryAction({
+  kind,
+  id,
+}: {
+  kind: 'workflow' | 'grade';
+  id: string;
+}) {
+  const fetcher = useFetcher<typeof action>();
+  return (
+    <Button
+      type="button"
+      size="sm"
+      variant="outline"
+      disabled={fetcher.state !== 'idle'}
+      onClick={() =>
+        fetcher.submit(
+          kind === 'workflow'
+            ? { intent: 'retry-workflow', runId: id }
+            : { intent: 'retry-grade', gradePassbackId: id },
+          { method: 'post' }
+        )
+      }
+    >
+      Retry
+    </Button>
+  );
+}
+
 function IdentityUnlinkAction({ identityId }: { identityId: string }) {
   const fetcher = useFetcher<typeof action>();
   return (
@@ -484,6 +599,7 @@ export default function OrganizationLtiRoute() {
           <TabsTrigger value="registrations">Registrations</TabsTrigger>
           <TabsTrigger value="mappings">Course mappings</TabsTrigger>
           <TabsTrigger value="identities">Linked accounts</TabsTrigger>
+          <TabsTrigger value="workflows">Advantage workflows</TabsTrigger>
           <TabsTrigger value="audit">Recent activity</TabsTrigger>
         </TabsList>
 
@@ -515,7 +631,7 @@ export default function OrganizationLtiRoute() {
                       rows={20}
                       className="font-mono text-xs"
                       placeholder={
-                        '{\n  "provider": "blackboard",\n  "displayName": "Campus LMS",\n  "issuer": "https://…",\n  "clientId": "…",\n  "allowedAudiences": ["…"],\n  "deploymentId": "…",\n  "authorizationEndpoint": "https://…",\n  "tokenEndpoint": "https://…",\n  "jwksUrl": "https://…",\n  "allowedServiceOrigins": ["https://…"],\n  "loginInitiationUrl": "https://app.yawp.school/lti/login",\n  "launchUrl": "https://app.yawp.school/lti/launch",\n  "deepLinkingLaunchUrl": "https://app.yawp.school/lti/deep-link",\n  "toolJwksUrl": "https://app.yawp.school/.well-known/jwks.json",\n  "allowedTargetLinkUris": ["https://app.yawp.school/lti/launch", "https://app.yawp.school/lti/deep-link"],\n  "enabledScopes": ["https://purl.imsglobal.org/spec/lti-nrps/scope/contextmembership.readonly"]\n}'
+                        '{\n  "provider": "blackboard",\n  "displayName": "Campus LMS",\n  "issuer": "https://…",\n  "clientId": "…",\n  "allowedAudiences": ["…"],\n  "deploymentId": "…",\n  "authorizationEndpoint": "https://…",\n  "tokenEndpoint": "https://…",\n  "jwksUrl": "https://…",\n  "allowedServiceOrigins": ["https://…"],\n  "loginInitiationUrl": "https://app.yawp.school/lti/login",\n  "launchUrl": "https://app.yawp.school/lti/launch",\n  "deepLinkingLaunchUrl": "https://app.yawp.school/lti/deep-link",\n  "toolJwksUrl": "https://app.yawp.school/lti/jwks",\n  "allowedTargetLinkUris": ["https://app.yawp.school/lti/launch", "https://app.yawp.school/lti/deep-link"],\n  "enabledScopes": ["https://purl.imsglobal.org/spec/lti-nrps/scope/contextmembership.readonly", "https://purl.imsglobal.org/spec/lti-ags/scope/lineitem", "https://purl.imsglobal.org/spec/lti-ags/scope/score"]\n}'
                       }
                     />
                   </div>
@@ -824,7 +940,12 @@ export default function OrganizationLtiRoute() {
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right">
-                      <MappingAction mapping={mapping} />
+                      <div className="flex justify-end gap-2">
+                        {mapping.nrpsMembershipsUrl ? (
+                          <RosterSyncAction mappingId={mapping.id} />
+                        ) : null}
+                        <MappingAction mapping={mapping} />
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))
@@ -840,6 +961,169 @@ export default function OrganizationLtiRoute() {
               )}
             </TableBody>
           </Table>
+        </TabsContent>
+
+        <TabsContent value="workflows" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Service readiness</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {mappings.length ? (
+                mappings.map((mapping) => (
+                  <div
+                    key={mapping.id}
+                    className="rounded-md border p-3 text-sm"
+                  >
+                    <div className="font-medium">
+                      {mapping.class.title ?? mapping.class.code} —{' '}
+                      {mapping.registrationName}
+                    </div>
+                    <div className="mt-1 text-muted-foreground">
+                      NRPS{' '}
+                      {mapping.nrpsMembershipsUrl ? 'bound' : 'not discovered'}{' '}
+                      · AGS{' '}
+                      {mapping.agsLineItemsUrl ? 'bound' : 'not discovered'} ·{' '}
+                      {mapping._count.placements} placements ·{' '}
+                      {mapping._count.rosterEnrollments} roster records
+                    </div>
+                    <div className="mt-1 text-xs text-muted-foreground">
+                      Last signed service launch:{' '}
+                      {mapping.lastServiceLaunchAt
+                        ? new Date(mapping.lastServiceLaunchAt).toISOString()
+                        : 'never'}
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  No mapped courses.
+                </p>
+              )}
+            </CardContent>
+          </Card>
+
+          <div>
+            <h2 className="mb-2 text-base font-semibold">
+              Roster and service runs
+            </h2>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Workflow</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Attempts</TableHead>
+                  <TableHead>Diagnostic</TableHead>
+                  <TableHead className="text-right">Recovery</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {organization.ltiWorkflowRuns.length ? (
+                  organization.ltiWorkflowRuns.map((run) => (
+                    <TableRow key={run.id}>
+                      <TableCell>{run.kind.replaceAll('_', ' ')}</TableCell>
+                      <TableCell>
+                        <Badge
+                          variant={
+                            run.status === 'succeeded'
+                              ? 'success'
+                              : run.status === 'dead_letter'
+                                ? 'destructive'
+                                : 'secondary'
+                          }
+                        >
+                          {run.status.replaceAll('_', ' ')}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>{run.attemptCount}</TableCell>
+                      <TableCell className="font-mono text-xs">
+                        {run.errorCode ?? '—'}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {run.status === 'retry' ||
+                        run.status === 'dead_letter' ? (
+                          <RecoveryAction kind="workflow" id={run.id} />
+                        ) : null}
+                      </TableCell>
+                    </TableRow>
+                  ))
+                ) : (
+                  <TableRow>
+                    <TableCell
+                      colSpan={5}
+                      className="py-6 text-center text-muted-foreground"
+                    >
+                      No service runs yet.
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </div>
+
+          <div>
+            <h2 className="mb-2 text-base font-semibold">Grade passback</h2>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Assignment</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Attempts</TableHead>
+                  <TableHead>Diagnostic</TableHead>
+                  <TableHead className="text-right">Recovery</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {organization.ltiGradePassbacks.length ? (
+                  organization.ltiGradePassbacks.map((grade) => (
+                    <TableRow key={grade.id}>
+                      <TableCell>
+                        {grade.placement.classAssignment.assignment.title ??
+                          'Untitled assignment'}
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          variant={
+                            grade.status === 'delivered'
+                              ? 'success'
+                              : grade.status === 'dead_letter'
+                                ? 'destructive'
+                                : 'secondary'
+                          }
+                        >
+                          {grade.status.replaceAll('_', ' ')}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>{grade.attemptCount}</TableCell>
+                      <TableCell className="font-mono text-xs">
+                        {grade.lastErrorCode ?? '—'}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {grade.status === 'retry' ||
+                        grade.status === 'dead_letter' ? (
+                          <RecoveryAction kind="grade" id={grade.id} />
+                        ) : null}
+                      </TableCell>
+                    </TableRow>
+                  ))
+                ) : (
+                  <TableRow>
+                    <TableCell
+                      colSpan={5}
+                      className="py-6 text-center text-muted-foreground"
+                    >
+                      No released LMS grades yet.
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Diagnostics contain stable workflow ids and redacted error
+            categories only; LMS user ids and access tokens are never stored
+            here.
+          </p>
         </TabsContent>
 
         <TabsContent value="audit">

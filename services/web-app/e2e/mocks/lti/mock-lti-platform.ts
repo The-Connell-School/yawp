@@ -130,15 +130,14 @@ const ALLOWED_SCOPES = new Set<string>([
 const PLATFORM_KEY_ID = 'mock-platform-rs256-2026';
 const ROTATED_PLATFORM_KEY_ID = 'mock-platform-rs256-2026-rotated';
 const TOOL_KEY_ID = 'mock-yawp-tool-rs256-2026';
+export const MOCK_LTI_TOOL_SIGNING_KEYSET_JSON = JSON.stringify({
+  activeKeyId: TOOL_KEY_ID,
+  keys: [{ keyId: TOOL_KEY_ID, privateKeyPem: TOOL_PRIVATE_KEY }],
+});
 const NOW_SECONDS = 1_784_678_400;
 
 type FailureKind =
-  | 'jwks'
-  | 'tool-jwks'
-  | 'token'
-  | 'nrps'
-  | 'deep-link'
-  | 'ags';
+  'jwks' | 'tool-jwks' | 'token' | 'nrps' | 'deep-link' | 'ags';
 type Failure = {
   status: number;
   body?: string;
@@ -170,6 +169,12 @@ type MockState = {
   deepLinkContentItems: unknown[];
   lineItems: Map<string, Record<string, unknown>>;
   scores: Array<Record<string, unknown>>;
+  members: Array<{
+    status: 'Active' | 'Inactive' | 'Deleted';
+    user_id: string;
+    roles: string[];
+    [key: string]: unknown;
+  }>;
 };
 
 export type MockLtiPlatform = {
@@ -929,6 +934,10 @@ export async function startMockLtiPlatform(
     deepLinkContentItems: [],
     lineItems: new Map(),
     scores: [],
+    members: MOCK_LTI_SEED.members.map((member) => ({
+      ...member,
+      roles: [...member.roles],
+    })),
   };
   let baseUrl = '';
   let nowSeconds = options.nowSeconds ?? NOW_SECONDS;
@@ -984,6 +993,9 @@ export async function startMockLtiPlatform(
   const toolAddress = toolServer.address() as AddressInfo;
   const internalToolBaseUrl = `http://127.0.0.1:${toolAddress.port}`;
   const toolBaseUrl = options.toolBaseUrl ?? internalToolBaseUrl;
+  const registeredToolJwksUrl = options.toolBaseUrl
+    ? `${toolBaseUrl}/lti/jwks`
+    : `${internalToolBaseUrl}/.well-known/jwks.json`;
 
   const server = createServer((request, response) => {
     void (async () => {
@@ -1015,6 +1027,9 @@ export async function startMockLtiPlatform(
       ) {
         const scenario =
           url.searchParams.get('scenario') ?? 'instructor-resource-link';
+        const targetPath = scenario.startsWith('deep-link')
+          ? '/lti/deep-link'
+          : '/lti/launch';
         const loginUrl = new URL('/lti/login', toolBaseUrl);
         loginUrl.search = new URLSearchParams({
           iss: baseUrl,
@@ -1022,7 +1037,7 @@ export async function startMockLtiPlatform(
           lti_deployment_id: MOCK_LTI_SEED.deploymentId,
           login_hint: `opaque-browser-${scenario}`,
           lti_message_hint: scenario,
-          target_link_uri: `${toolBaseUrl}/lti/launch`,
+          target_link_uri: `${toolBaseUrl}${targetPath}`,
         }).toString();
         response.writeHead(200, {
           'content-type': 'text/html; charset=utf-8',
@@ -1086,8 +1101,12 @@ export async function startMockLtiPlatform(
           url.searchParams.get('lti_message_hint') ??
           'instructor-resource-link';
         const targetLinkUri = url.searchParams.get('redirect_uri') ?? '';
-        const learner = scenario === 'learner-resource-link-no-pii';
+        const learner = scenario.startsWith('learner-resource-link');
         const deepLink = scenario.startsWith('deep-link');
+        const placedContentItem = scenario.endsWith('-placed')
+          ? (state.deepLinkContentItems.at(-1) as
+              { custom?: Record<string, string> } | undefined)
+          : undefined;
         const expectedTarget = deepLink
           ? `${toolBaseUrl}/lti/deep-link`
           : `${toolBaseUrl}/lti/launch`;
@@ -1117,7 +1136,9 @@ export async function startMockLtiPlatform(
               : 'http://purl.imsglobal.org/vocab/lis/v2/membership#Instructor',
           ],
           [CLAIMS.context]: MOCK_LTI_SEED.context,
-          [CLAIMS.custom]: { yawp_assignment_kind: 'argument-essay' },
+          [CLAIMS.custom]: placedContentItem?.custom ?? {
+            yawp_assignment_kind: 'argument-essay',
+          },
           [CLAIMS.namesRoleService]: {
             context_memberships_url: `${baseUrl}/contexts/course-eng-101/memberships`,
             service_versions: ['2.0'],
@@ -1128,7 +1149,12 @@ export async function startMockLtiPlatform(
           },
         };
         if (!deepLink)
-          payload[CLAIMS.resourceLink] = MOCK_LTI_SEED.resourceLink;
+          payload[CLAIMS.resourceLink] = placedContentItem
+            ? {
+                id: 'resource-link-from-deep-link-001',
+                title: 'Placed Yawp Assignment',
+              }
+            : MOCK_LTI_SEED.resourceLink;
         if (deepLink) {
           const settings: Record<string, unknown> = {
             deep_link_return_url: `${baseUrl}/deep-link/return`,
@@ -1453,7 +1479,7 @@ export async function startMockLtiPlatform(
           const claims = await decodeAndVerifyToolJwt(
             assertion,
             `${baseUrl}${url.pathname}`,
-            `${toolBaseUrl}/.well-known/jwks.json`,
+            registeredToolJwksUrl,
             {
               requireSubject: true,
               requireJti: true,
@@ -1515,13 +1541,13 @@ export async function startMockLtiPlatform(
           return;
         const requestedRole = url.searchParams.get('role');
         const matchingMembers = requestedRole
-          ? MOCK_LTI_SEED.members.filter((member) =>
+          ? state.members.filter((member) =>
               member.roles.some(
                 (role) =>
                   role === requestedRole || role.endsWith(`#${requestedRole}`)
               )
             )
-          : [...MOCK_LTI_SEED.members];
+          : [...state.members];
         const limit = Math.max(
           1,
           Math.min(Number(url.searchParams.get('limit') ?? 100), 100)
@@ -1561,7 +1587,7 @@ export async function startMockLtiPlatform(
           const claims = await decodeAndVerifyToolJwt(
             parsed.get('JWT') ?? parsed.get('id_token') ?? '',
             baseUrl,
-            `${toolBaseUrl}/.well-known/jwks.json`,
+            registeredToolJwksUrl,
             {
               requireSubject: false,
               requireJti: false,
@@ -1860,7 +1886,9 @@ export async function startMockLtiPlatform(
     loginInitiationUrl: `${toolBaseUrl}/lti/login`,
     launchUrl: `${toolBaseUrl}/lti/launch`,
     deepLinkingLaunchUrl: `${toolBaseUrl}/lti/deep-link`,
-    toolJwksUrl: `${toolBaseUrl}/.well-known/jwks.json`,
+    // Browser flows consume the tool's public route. Pure contract tests keep
+    // an independent network JWKS server so no application server is required.
+    toolJwksUrl: registeredToolJwksUrl,
     allowedTargetLinkUris: [
       `${toolBaseUrl}/lti/launch`,
       `${toolBaseUrl}/lti/deep-link`,

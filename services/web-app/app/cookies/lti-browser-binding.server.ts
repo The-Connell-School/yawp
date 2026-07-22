@@ -13,7 +13,7 @@ const BrowserBindingSchema = z
 const ltiBrowserBindingCookie = createCookie(
   secure ? '__Secure-yawp-lti-bind' : 'yawp-lti-bind',
   {
-    path: '/lti/launch',
+    path: '/lti',
     httpOnly: true,
     secure,
     sameSite: secure ? 'none' : 'lax',

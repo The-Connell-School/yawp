@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Client } from 'pg';
+import { MOCK_LTI_TOOL_SIGNING_KEYSET_JSON } from './mocks/lti/mock-lti-platform';
 
 const CONTAINER_NAME = 'yawp-e2e-postgres';
 const E2E_DB_NAME = 'yop_e2e';
@@ -181,10 +182,15 @@ function writeE2EEnv(e2eDir: string, databaseUrl: string) {
     LTI_IDENTITY_HMAC_KEYS:
       process.env.LTI_IDENTITY_HMAC_KEYS ||
       'v1=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY',
+    LTI_TOOL_SIGNING_KEYSET_JSON:
+      process.env.LTI_TOOL_SIGNING_KEYSET_JSON ||
+      MOCK_LTI_TOOL_SIGNING_KEYSET_JSON,
     ANTHROPIC_API_KEY: '',
   };
 
-  const lines = Object.entries(envVars).map(([k, v]) => `${k}=${v}`);
+  const lines = Object.entries(envVars).map(
+    ([k, v]) => `${k}=${shellEscape(v)}`
+  );
   fs.writeFileSync(e2eEnvPath, `${lines.join('\n')}\n`);
   fs.writeFileSync(path.join(e2eDir, '.e2e-owned'), '1');
   for (const [key, value] of Object.entries(envVars)) {

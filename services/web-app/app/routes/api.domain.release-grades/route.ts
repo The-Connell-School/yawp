@@ -4,6 +4,10 @@ import { z } from 'zod';
 import { prisma } from '~/utils/db.server';
 import { redirectWithToast } from '~/utils/toast.server';
 import { canManageGrades, getGradingActor } from '~/utils/grading-auth.server';
+import {
+  deliverDueLtiGrades,
+  enqueueReleasedLtiGrades,
+} from '~/domain/lms/lti-advantage.server';
 
 const POST = z.object({
   submissionIds: z.preprocess(
@@ -38,6 +42,7 @@ export async function action({ request }: ActionFunctionArgs) {
     | {
         kind: 'success';
         releasedCount: number;
+        submissionIds: string[];
       };
 
   try {
@@ -47,7 +52,9 @@ export async function action({ request }: ActionFunctionArgs) {
         where: {
           id: { in: requestedSubmissionIds },
           document: { is: { membershipId: { not: actor.membershipId } } },
-          ...(actor.isAdmin ? {} : { gradedByMembershipId: actor.membershipId }),
+          ...(actor.isAdmin
+            ? {}
+            : { gradedByMembershipId: actor.membershipId }),
           releasedAt: null,
         },
         select: {
@@ -117,7 +124,11 @@ export async function action({ request }: ActionFunctionArgs) {
         throw new ReleaseGradesConflictError();
       }
 
-      return { kind: 'success' as const, releasedCount: submissions.length };
+      return {
+        kind: 'success' as const,
+        releasedCount: submissions.length,
+        submissionIds: submissions.map((submission) => submission.id),
+      };
     });
   } catch (error) {
     if (error instanceof ReleaseGradesConflictError) {
@@ -138,6 +149,16 @@ export async function action({ request }: ActionFunctionArgs) {
       { success: false, message: result.message },
       { status: 404 }
     );
+  }
+
+  // The Yawp release is already committed. LMS availability must never roll
+  // back or hide a released grade; failures remain in the durable outbox for
+  // diagnostics and bounded retry.
+  try {
+    await enqueueReleasedLtiGrades({ submissionIds: result.submissionIds });
+    await deliverDueLtiGrades({ submissionIds: result.submissionIds });
+  } catch {
+    // Redacted provider failure state is persisted by the LTI workflow layer.
   }
 
   const message =
