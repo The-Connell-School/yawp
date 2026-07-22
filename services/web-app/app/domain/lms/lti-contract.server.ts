@@ -8,10 +8,17 @@ import {
 } from 'node:crypto';
 import { z } from 'zod';
 import {
+  assertAllowedLtiTargetLink,
   assertAllowedLtiServiceUrl,
+  assertRegistrationTransportUrl,
   LtiNetworkUrlSchema,
   type LtiRegistration,
 } from './lti-registration';
+import {
+  fetchLtiNetwork,
+  readLtiJson,
+  throwLtiHttpStatus,
+} from './lti-http.server';
 
 export const LTI_CLAIMS = {
   messageType: 'https://purl.imsglobal.org/spec/lti/claim/message_type',
@@ -120,10 +127,14 @@ function getRequiredObject(
   return value as JsonObject;
 }
 
-function getStringArray(value: unknown, label: string): string[] {
+function getStringArray(
+  value: unknown,
+  label: string,
+  options: { allowEmpty?: boolean } = {}
+): string[] {
   if (
     !Array.isArray(value) ||
-    value.length === 0 ||
+    (!options.allowEmpty && value.length === 0) ||
     value.some((item) => typeof item !== 'string' || item.length === 0)
   ) {
     throw new Error(`LTI ${label} must be a non-empty string array.`);
@@ -134,23 +145,31 @@ function getStringArray(value: unknown, label: string): string[] {
 async function fetchPlatformSigningKey(
   registration: LtiRegistration,
   keyId: string,
-  fetchImpl: typeof fetch
+  fetchImpl: typeof fetch,
+  timeoutMs?: number
 ) {
-  let response: Response;
-  try {
-    response = await fetchImpl(registration.jwksUrl, {
+  assertRegistrationTransportUrl(registration.jwksUrl, registration);
+  const response = await fetchLtiNetwork({
+    operation: 'LTI platform JWKS',
+    url: registration.jwksUrl,
+    fetchImpl,
+    timeoutMs,
+    init: {
       headers: { accept: 'application/json' },
-    });
-  } catch (error) {
-    throw new Error('LTI platform JWKS request failed.', { cause: error });
-  }
+    },
+  });
   if (!response.ok) {
-    throw new Error(`LTI platform JWKS returned HTTP ${response.status}.`);
+    throwLtiHttpStatus(response, 'LTI platform JWKS');
+  }
+  if (!response.headers.get('content-type')?.includes('application/json')) {
+    throw new Error(
+      'LTI platform JWKS response used an unexpected media type.'
+    );
   }
 
   let jwks: z.infer<typeof JwksSchema>;
   try {
-    jwks = JwksSchema.parse(await response.json());
+    jwks = JwksSchema.parse(await readLtiJson(response, 'LTI platform JWKS'));
   } catch (error) {
     throw new Error('LTI platform JWKS response is malformed.', {
       cause: error,
@@ -209,7 +228,7 @@ export type VerifiedLtiLaunch = {
     documentTargets: string[];
     acceptsMultiple: boolean;
     autoCreate: boolean;
-    data: string;
+    data: string | null;
   } | null;
 };
 
@@ -219,11 +238,18 @@ export async function verifyLtiLaunchForm(
     registration: LtiRegistration;
     expectedState: string;
     expectedNonce: string;
-    expectedMessageType: string;
+    expectedTargetLinkUri: string;
+    expectedMessageType:
+      | typeof LTI_MESSAGE_TYPES.resourceLinkRequest
+      | typeof LTI_MESSAGE_TYPES.deepLinkingRequest;
     nowSeconds?: number;
     fetchImpl?: typeof fetch;
+    timeoutMs?: number;
   }
 ): Promise<VerifiedLtiLaunch> {
+  if (!options.registration.enabled) {
+    throw new Error('LTI registration is disabled.');
+  }
   if (!form.state || form.state !== options.expectedState) {
     throw new Error('LTI OIDC state did not match the initiated launch.');
   }
@@ -242,7 +268,8 @@ export async function verifyLtiLaunchForm(
   const publicKey = await fetchPlatformSigningKey(
     options.registration,
     header.kid,
-    options.fetchImpl ?? fetch
+    options.fetchImpl ?? fetch,
+    options.timeoutMs
   );
   const verifier = createVerify('RSA-SHA256');
   verifier.update(decoded.signingInput);
@@ -258,13 +285,18 @@ export async function verifyLtiLaunchForm(
   }
 
   const audience = normalizeAudiences(payload);
-  if (!audience.includes(options.registration.clientId)) {
-    throw new Error('LTI audience does not contain the registered client.');
-  }
   if (
-    audience.length > 1 &&
-    getRequiredString(payload, 'azp', 'authorized-party') !==
-      options.registration.clientId
+    !audience.includes(options.registration.clientId) ||
+    audience.some(
+      (candidate) => !options.registration.allowedAudiences.includes(candidate)
+    )
+  ) {
+    throw new Error('LTI audience is not allowed by the registration.');
+  }
+  const authorizedParty = getOptionalString(payload, 'azp');
+  if (
+    (audience.length > 1 && !authorizedParty) ||
+    (authorizedParty && authorizedParty !== options.registration.clientId)
   ) {
     throw new Error(
       'LTI authorized-party does not match the registered client.'
@@ -277,6 +309,12 @@ export async function verifyLtiLaunchForm(
   }
   if (typeof payload.iat !== 'number' || payload.iat > now + 60) {
     throw new Error('LTI token issued-at time is invalid.');
+  }
+  if (payload.iat < now - 300) {
+    throw new Error('LTI token issued-at time is too old.');
+  }
+  if (payload.exp - payload.iat > 600) {
+    throw new Error('LTI token lifetime exceeds 10 minutes.');
   }
   if (payload.nonce !== options.expectedNonce) {
     throw new Error('LTI nonce did not match the initiated launch.');
@@ -307,7 +345,11 @@ export async function verifyLtiLaunchForm(
     LTI_CLAIMS.targetLinkUri,
     'target link'
   );
-  if (targetLinkUri !== options.registration.targetLinkUri) {
+  assertAllowedLtiTargetLink(
+    options.expectedTargetLinkUri,
+    options.registration
+  );
+  if (targetLinkUri !== options.expectedTargetLinkUri) {
     throw new Error('LTI target link does not match the initiated target.');
   }
 
@@ -320,7 +362,9 @@ export async function verifyLtiLaunchForm(
     messageType === LTI_MESSAGE_TYPES.resourceLinkRequest
       ? getRequiredObject(payload, LTI_CLAIMS.resourceLink, 'resource link')
       : null;
-  const roles = getStringArray(payload[LTI_CLAIMS.roles], 'roles');
+  const roles = getStringArray(payload[LTI_CLAIMS.roles], 'roles', {
+    allowEmpty: true,
+  });
   const nrps = payload[LTI_CLAIMS.namesRoleService];
   const ags = payload[LTI_CLAIMS.endpoint];
   const nrpsClaim =
@@ -432,11 +476,7 @@ export async function verifyLtiLaunchForm(
             ),
             acceptsMultiple: deepLinkingClaim.accept_multiple === true,
             autoCreate: deepLinkingClaim.auto_create === true,
-            data: getRequiredString(
-              deepLinkingClaim,
-              'data',
-              'Deep Linking data'
-            ),
+            data: getOptionalString(deepLinkingClaim, 'data'),
           }
         : null,
   };
@@ -462,6 +502,7 @@ export function signLtiJwt(input: {
 export function createLtiClientAssertion(input: {
   clientId: string;
   tokenEndpoint: string;
+  deploymentId: string;
   privateKeyPem: string;
   keyId: string;
   jti?: string;
@@ -478,6 +519,7 @@ export function createLtiClientAssertion(input: {
       iat: now,
       exp: now + 300,
       jti: input.jti ?? randomUUID(),
+      [LTI_CLAIMS.deploymentId]: input.deploymentId,
     },
     privateKeyPem: input.privateKeyPem,
   });
@@ -489,7 +531,7 @@ export function createDeepLinkingResponseJwt(input: {
   deploymentId: string;
   privateKeyPem: string;
   keyId: string;
-  data: string;
+  data?: string | null;
   contentItems: unknown[];
   nowSeconds?: number;
 }): string {
@@ -504,7 +546,7 @@ export function createDeepLinkingResponseJwt(input: {
       [LTI_CLAIMS.deploymentId]: input.deploymentId,
       [LTI_CLAIMS.messageType]: LTI_MESSAGE_TYPES.deepLinkingResponse,
       [LTI_CLAIMS.version]: '1.3.0',
-      [LTI_CLAIMS.data]: input.data,
+      ...(input.data ? { [LTI_CLAIMS.data]: input.data } : {}),
       [LTI_CLAIMS.contentItems]: input.contentItems,
     },
     privateKeyPem: input.privateKeyPem,
@@ -512,45 +554,70 @@ export function createDeepLinkingResponseJwt(input: {
 }
 
 export async function requestLtiAccessToken(input: {
-  tokenEndpoint: string;
+  registration: LtiRegistration;
   clientAssertion: string;
   scopes: string[];
+  advertisedScopes: string[];
   fetchImpl?: typeof fetch;
+  timeoutMs?: number;
 }): Promise<{
   accessToken: string;
   tokenType: 'Bearer';
   expiresIn: number;
   scope: string;
 }> {
-  const tokenEndpoint = LtiNetworkUrlSchema.parse(input.tokenEndpoint);
+  if (!input.registration.enabled) {
+    throw new Error('LTI registration is disabled.');
+  }
+  const tokenEndpoint = assertRegistrationTransportUrl(
+    input.registration.tokenEndpoint,
+    input.registration
+  );
   if (input.scopes.length === 0 || input.scopes.some((scope) => !scope)) {
     throw new Error('LTI service token requires at least one scope.');
   }
-  const response = await (input.fetchImpl ?? fetch)(tokenEndpoint, {
-    method: 'POST',
-    headers: { 'content-type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      grant_type: 'client_credentials',
-      client_assertion_type:
-        'urn:ietf:params:oauth:client-assertion-type:jwt-bearer',
-      client_assertion: input.clientAssertion,
-      scope: input.scopes.join(' '),
-    }),
+  if (
+    input.scopes.some(
+      (scope) => !input.registration.enabledScopes.includes(scope)
+    )
+  ) {
+    throw new Error('LTI service scope is not approved by the registration.');
+  }
+  if (input.scopes.some((scope) => !input.advertisedScopes.includes(scope))) {
+    throw new Error('LTI service scope was not advertised by the launch.');
+  }
+  const response = await fetchLtiNetwork({
+    operation: 'LTI token endpoint',
+    url: tokenEndpoint,
+    fetchImpl: input.fetchImpl,
+    timeoutMs: input.timeoutMs,
+    init: {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        grant_type: 'client_credentials',
+        client_assertion_type:
+          'urn:ietf:params:oauth:client-assertion-type:jwt-bearer',
+        client_assertion: input.clientAssertion,
+        scope: input.scopes.join(' '),
+      }),
+    },
   });
+  if (!response.ok) {
+    throwLtiHttpStatus(response, 'LTI token endpoint');
+  }
+  if (!response.headers.get('content-type')?.includes('application/json')) {
+    throw new Error(
+      'LTI token endpoint response used an unexpected media type.'
+    );
+  }
   let body: unknown;
   try {
-    body = await response.json();
+    body = await readLtiJson(response, 'LTI token endpoint');
   } catch (error) {
     throw new Error('LTI token endpoint returned malformed JSON.', {
       cause: error,
     });
-  }
-  if (!response.ok) {
-    const detail =
-      body && typeof body === 'object' && 'error' in body
-        ? String((body as { error: unknown }).error)
-        : `HTTP ${response.status}`;
-    throw new Error(`LTI token request failed: ${detail}.`);
   }
   const parsed = z
     .object({
@@ -560,6 +627,10 @@ export async function requestLtiAccessToken(input: {
       scope: z.string().min(1),
     })
     .parse(body);
+  const returnedScopes = parsed.scope.split(' ').filter(Boolean);
+  if (returnedScopes.some((scope) => !input.scopes.includes(scope))) {
+    throw new Error('LTI token endpoint returned scope beyond the request.');
+  }
   return {
     accessToken: parsed.access_token,
     tokenType: parsed.token_type,

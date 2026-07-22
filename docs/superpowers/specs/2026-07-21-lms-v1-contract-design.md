@@ -51,8 +51,11 @@ An enabled registration must identify one Yawp organization and contain:
 - provider key and display name;
 - issuer, client id, deployment id, and allowed audience values;
 - OIDC authorization URL, OAuth token URL, and platform JWKS URL;
-- Yawp login-initiation URL, launch URL, deep-link return URL, and tool JWKS URL;
-- enabled service scopes;
+- Yawp login-initiation URL, resource-launch URL, Deep Linking launch URL, and
+  tool JWKS URL;
+- exact allowed target-link URLs and service origins;
+- enabled service scopes, separately bounded by the scopes advertised in each
+  signed launch;
 - explicit enabled/disabled state.
 
 All non-loopback endpoints must use HTTPS. Plain HTTP is accepted only when the
@@ -97,8 +100,11 @@ The mock freezes the later #213 network boundary now:
   accepts a signed `LtiDeepLinkingResponse` at its return endpoint and preserves
   opaque `data`.
 - AGS exposes line-item create/read/update and score submission. Score state is
-  stored by the mock service, idempotency keys deduplicate writes, and seeded
-  controls can force 401, 403, 429, 500, timeout, and malformed responses.
+  stored by the mock service. Repeated writes remain repeated provider requests;
+  Yawp-owned grade-job idempotency is deliberately implemented in #213 rather
+  than attributed to a provider extension not required by the standard.
+- Seeded controls can force 401, 403, 429, 500, redirect, timeout, malformed
+  JSON, invalid media type, invalid context, and cross-origin resource responses.
 
 The mock records a redacted request journal for assertions. It never stores
 raw private keys, client assertions, bearer tokens, or launch JWTs in the
@@ -134,6 +140,52 @@ validation.
 The Blackboard reference profile captures its fixed issuer, documented OAuth
 token endpoint, and registration guidance. No Blackboard-only branching is
 permitted in core verification.
+
+## Workflow and data mapping
+
+Opaque platform identifiers are namespaced by the registration. No email,
+display name, course label, or mutable title is used as an identity key.
+
+| LTI boundary | Yawp-owned mapping | Tenant and lifecycle rule |
+| --- | --- | --- |
+| `iss` + client/deployment registration | LMS registration row | Exactly one organization; disabled by default; disabled/uninstalled registrations reject before network access |
+| `sub` | External LMS identity bound to a Yawp account | Unique within registration; email is optional profile data only; explicit first-launch account-binding policy belongs to #212 |
+| Context `id` | LMS course context mapped to a Yawp class | Unique within registration; every NRPS page must repeat the signed context id |
+| Resource-link `id` | LMS placement mapped to a Yawp assignment | Unique within registration and context; target link must match the initiated transaction |
+| NRPS member `user_id` | External identity and class-enrollment membership | Reconcile active/inactive/deleted status without assuming PII is present; minimize stored person fields per institutional approval |
+| Deep Linking content-item URL + custom data | Yawp assignment selected for placement | Signed response returns only accepted item types and the platform's opaque `data` when present |
+| AGS line-item `id` | External grade-column binding | Validate returned URL against the registration origin; preserve resource-link identity on update |
+| AGS score `userId` | External learner identity on a released Yawp submission | #213 gates on tenant, enrollment, release state, and a durable Yawp grade job before any provider write |
+
+## Audit and data handling contract
+
+The persistence issues (#212 and #213) must emit structured events for
+`lti.launch.accepted`, `lti.launch.rejected`, `lti.identity.bound`,
+`lti.roster.sync.started`, `lti.roster.sync.completed`,
+`lti.roster.sync.failed`, `lti.deep_link.completed`,
+`lti.grade_passback.queued`, `lti.grade_passback.sent`, and
+`lti.grade_passback.failed`. Events identify the Yawp organization,
+registration, context/resource mapping, actor or job, outcome, and safe provider
+status/retry metadata.
+
+Audit and diagnostic records never contain bearer tokens, private keys, client
+assertions, full launch JWTs, raw authorization headers, or full request/response
+bodies. Person attributes are omitted unless needed for the approved workflow;
+opaque subject/user ids are preferred. Institutional retention and deletion
+periods are a human approval marker before a live pilot, while uninstall must
+immediately disable network access and credential use.
+
+## Rollout transitions
+
+The integration remains default-off. The only permitted progression is:
+
+1. deterministic local network proof against the provider-shaped mock;
+2. institution-owned sandbox interoperability after security/data approval;
+3. named pilot organization enabled behind an organization-scoped feature flag;
+4. monitored pilot with explicit rollback/uninstall proof;
+5. broader availability only after pilot evidence and a separate approval.
+
+No stage changes automatically because local tests pass.
 
 ## Issue boundaries
 

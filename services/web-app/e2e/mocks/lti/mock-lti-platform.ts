@@ -127,7 +127,13 @@ const TOOL_KEY_ID = 'mock-yawp-tool-rs256-2026';
 const NOW_SECONDS = 1_784_678_400;
 
 type FailureKind = 'jwks' | 'token' | 'nrps' | 'deep-link' | 'ags';
-type Failure = { status: number; body: string; contentType?: string };
+type Failure = {
+  status: number;
+  body: string;
+  contentType?: string;
+  headers?: Record<string, string>;
+  delayMs?: number;
+};
 
 export type MockLtiJournalEntry = {
   method: string;
@@ -140,7 +146,7 @@ export type MockLtiJournalEntry = {
 type MockState = {
   deepLinkContentItems: unknown[];
   lineItems: Map<string, Record<string, unknown>>;
-  scores: Map<string, Record<string, unknown>>;
+  scores: Array<Record<string, unknown>>;
 };
 
 export type MockLtiPlatform = {
@@ -151,10 +157,27 @@ export type MockLtiPlatform = {
     keyId: string;
     privateKeyPem: string;
     publicKeyPem: string;
+    launchRequests: Array<{
+      path: string;
+      contentType: string;
+      idToken: string;
+      state: string;
+    }>;
   };
   journal: MockLtiJournalEntry[];
   state: MockState;
   failNext: (kind: FailureKind, failure: Failure) => void;
+  close: () => Promise<void>;
+};
+
+export type MockHttpCaptureServer = {
+  baseUrl: string;
+  requests: Array<{
+    method: string;
+    path: string;
+    headers: Record<string, string | string[] | undefined>;
+    body: string;
+  }>;
   close: () => Promise<void>;
 };
 
@@ -302,6 +325,8 @@ function decodeAndVerifyToolJwt(
     payload.iss !== MOCK_LTI_SEED.clientId ||
     (options.requireSubject && payload.sub !== MOCK_LTI_SEED.clientId) ||
     payload.aud !== expectedAudience ||
+    (options.requireSubject &&
+      payload[CLAIMS.deploymentId] !== MOCK_LTI_SEED.deploymentId) ||
     payload.exp <= NOW_SECONDS ||
     payload.iat > NOW_SECONDS + 60 ||
     (options.requireJti && typeof payload.jti !== 'string')
@@ -339,7 +364,7 @@ function journalEntry(
   };
 }
 
-function consumeFailure(
+async function consumeFailure(
   failures: Map<FailureKind, Failure>,
   kind: FailureKind,
   response: ServerResponse
@@ -347,12 +372,14 @@ function consumeFailure(
   const failure = failures.get(kind);
   if (!failure) return false;
   failures.delete(kind);
-  text(
-    response,
-    failure.status,
-    failure.body,
-    failure.contentType ?? 'text/plain'
-  );
+  if (failure.delayMs) {
+    await new Promise((resolve) => setTimeout(resolve, failure.delayMs));
+  }
+  response.writeHead(failure.status, {
+    'content-type': failure.contentType ?? 'text/plain',
+    ...failure.headers,
+  });
+  response.end(failure.body);
   return true;
 }
 
@@ -388,23 +415,47 @@ export async function startMockLtiPlatform(): Promise<MockLtiPlatform> {
   const failures = new Map<FailureKind, Failure>();
   const tokens = new Map<string, Set<string>>();
   const usedAssertions = new Set<string>();
+  const launchRequests: MockLtiPlatform['tool']['launchRequests'] = [];
   const state: MockState = {
     deepLinkContentItems: [],
-    lineItems: new Map([
-      [
-        'lineitem-argument-essay-001',
-        {
-          id: 'lineitem-argument-essay-001',
-          scoreMaximum: 100,
-          label: 'Yawp Argument Essay',
-          resourceId: 'resource-argument-essay-001',
-          tag: 'yawp-argument-essay',
-        },
-      ],
-    ]),
-    scores: new Map(),
+    lineItems: new Map(),
+    scores: [],
   };
   let baseUrl = '';
+
+  const toolServer = createServer((request, response) => {
+    void (async () => {
+      const url = new URL(request.url ?? '/', 'http://127.0.0.1');
+      if (
+        request.method !== 'POST' ||
+        !['/lti/launch', '/lti/deep-link'].includes(url.pathname) ||
+        !request.headers['content-type']?.includes(
+          'application/x-www-form-urlencoded'
+        )
+      ) {
+        json(response, 400, { error: 'invalid_tool_callback' });
+        return;
+      }
+      const form = new URLSearchParams(await readBody(request));
+      const idToken = form.get('id_token') ?? '';
+      const stateValue = form.get('state') ?? '';
+      if (!idToken || !stateValue) {
+        json(response, 400, { error: 'missing_form_fields' });
+        return;
+      }
+      launchRequests.push({
+        path: url.pathname,
+        contentType: String(request.headers['content-type']),
+        idToken,
+        state: stateValue,
+      });
+      json(response, 200, { idToken, state: stateValue });
+    })();
+  });
+  toolServer.listen(0, '127.0.0.1');
+  await once(toolServer, 'listening');
+  const toolAddress = toolServer.address() as AddressInfo;
+  const toolBaseUrl = `http://127.0.0.1:${toolAddress.port}`;
 
   const server = createServer((request, response) => {
     void (async () => {
@@ -434,7 +485,7 @@ export async function startMockLtiPlatform(): Promise<MockLtiPlatform> {
         request.method === 'GET' &&
         url.pathname === '/.well-known/jwks.json'
       ) {
-        if (consumeFailure(failures, 'jwks', response)) return;
+        if (await consumeFailure(failures, 'jwks', response)) return;
         const jwk = createPublicKey(PLATFORM_PUBLIC_KEY).export({
           format: 'jwk',
         });
@@ -462,7 +513,14 @@ export async function startMockLtiPlatform(): Promise<MockLtiPlatform> {
           'instructor-resource-link';
         const targetLinkUri = url.searchParams.get('redirect_uri') ?? '';
         const learner = scenario === 'learner-resource-link-no-pii';
-        const deepLink = scenario === 'deep-link';
+        const deepLink = scenario.startsWith('deep-link');
+        const expectedTarget = deepLink
+          ? `${toolBaseUrl}/lti/deep-link`
+          : `${toolBaseUrl}/lti/launch`;
+        if (targetLinkUri !== expectedTarget) {
+          json(response, 400, { error: 'invalid_redirect_uri' });
+          return;
+        }
         const payload: Record<string, unknown> = {
           iss: baseUrl,
           aud: MOCK_LTI_SEED.clientId,
@@ -495,14 +553,17 @@ export async function startMockLtiPlatform(): Promise<MockLtiPlatform> {
         if (!deepLink)
           payload[CLAIMS.resourceLink] = MOCK_LTI_SEED.resourceLink;
         if (deepLink) {
-          payload[CLAIMS.deepLinkingSettings] = {
+          const settings: Record<string, unknown> = {
             deep_link_return_url: `${baseUrl}/deep-link/return`,
             accept_types: ['ltiResourceLink'],
             accept_presentation_document_targets: ['iframe', 'window'],
             accept_multiple: true,
             auto_create: false,
-            data: 'opaque-deep-link-data-001',
           };
+          if (scenario !== 'deep-link-no-data') {
+            settings.data = 'opaque-deep-link-data-001';
+          }
+          payload[CLAIMS.deepLinkingSettings] = settings;
         }
         if (!learner) {
           Object.assign(payload, {
@@ -523,6 +584,17 @@ export async function startMockLtiPlatform(): Promise<MockLtiPlatform> {
           payload.exp = NOW_SECONDS - 1;
         } else if (scenario === 'future-issued-at') {
           payload.iat = NOW_SECONDS + 600;
+        } else if (scenario === 'stale-issued-at') {
+          payload.iat = NOW_SECONDS - 301;
+        } else if (scenario === 'excessive-lifetime') {
+          payload.exp = NOW_SECONDS + 601;
+        } else if (scenario === 'untrusted-additional-audience') {
+          payload.aud = [MOCK_LTI_SEED.clientId, 'attacker-client'];
+          payload.azp = MOCK_LTI_SEED.clientId;
+        } else if (scenario === 'wrong-authorized-party') {
+          payload.azp = 'attacker-client';
+        } else if (scenario === 'empty-roles') {
+          payload[CLAIMS.roles] = [];
         } else if (scenario === 'wrong-target') {
           payload[CLAIMS.targetLinkUri] = 'https://attacker.example/launch';
         } else if (scenario === 'untrusted-service-origin') {
@@ -559,7 +631,7 @@ export async function startMockLtiPlatform(): Promise<MockLtiPlatform> {
       }
 
       if (request.method === 'POST' && url.pathname === '/oauth2/token') {
-        if (consumeFailure(failures, 'token', response)) return;
+        if (await consumeFailure(failures, 'token', response)) return;
         if (
           !form ||
           form.get('grant_type') !== 'client_credentials' ||
@@ -607,7 +679,14 @@ export async function startMockLtiPlatform(): Promise<MockLtiPlatform> {
         request.method === 'GET' &&
         url.pathname === '/contexts/course-eng-101/memberships'
       ) {
-        if (consumeFailure(failures, 'nrps', response)) return;
+        if (await consumeFailure(failures, 'nrps', response)) return;
+        if (
+          request.headers.accept !==
+          'application/vnd.ims.lti-nrps.v2.membershipcontainer+json'
+        ) {
+          json(response, 406, { error: 'not_acceptable' });
+          return;
+        }
         if (
           !requireScope(
             request,
@@ -640,7 +719,10 @@ export async function startMockLtiPlatform(): Promise<MockLtiPlatform> {
         if (start + limit < matchingMembers.length) {
           const next = new URL(url);
           next.searchParams.set('page', String(page + 1));
-          headers.link = `<${next.toString()}>; rel="next"`;
+          headers.link =
+            url.searchParams.get('linkStyle') === 'complex'
+              ? `<${next.pathname}${next.search}>; type="application/json"; rel="next alternate"`
+              : `<${next.toString()}>; rel="next"`;
         }
         json(
           response,
@@ -656,7 +738,7 @@ export async function startMockLtiPlatform(): Promise<MockLtiPlatform> {
       }
 
       if (request.method === 'POST' && url.pathname === '/deep-link/return') {
-        if (consumeFailure(failures, 'deep-link', response)) return;
+        if (await consumeFailure(failures, 'deep-link', response)) return;
         const parsed = new URLSearchParams(body);
         try {
           const claims = decodeAndVerifyToolJwt(
@@ -668,12 +750,25 @@ export async function startMockLtiPlatform(): Promise<MockLtiPlatform> {
             claims[CLAIMS.messageType] !== 'LtiDeepLinkingResponse' ||
             claims[CLAIMS.version] !== '1.3.0' ||
             claims[CLAIMS.deploymentId] !== MOCK_LTI_SEED.deploymentId ||
-            claims[CLAIMS.data] !== 'opaque-deep-link-data-001'
+            (claims[CLAIMS.data] !== undefined &&
+              claims[CLAIMS.data] !== 'opaque-deep-link-data-001')
           ) {
             throw new Error('wrong message type');
           }
           const items = claims[CLAIMS.contentItems];
-          if (!Array.isArray(items)) throw new Error('missing content items');
+          if (
+            !Array.isArray(items) ||
+            items.some(
+              (item) =>
+                !item ||
+                typeof item !== 'object' ||
+                (item as Record<string, unknown>).type !== 'ltiResourceLink' ||
+                typeof (item as Record<string, unknown>).title !== 'string' ||
+                typeof (item as Record<string, unknown>).url !== 'string'
+            )
+          ) {
+            throw new Error('invalid content items');
+          }
           state.deepLinkContentItems.push(...items);
           response.writeHead(204);
           response.end();
@@ -687,15 +782,96 @@ export async function startMockLtiPlatform(): Promise<MockLtiPlatform> {
         request.method === 'POST' &&
         url.pathname === '/contexts/course-eng-101/lineitems'
       ) {
-        if (consumeFailure(failures, 'ags', response)) return;
+        if (await consumeFailure(failures, 'ags', response)) return;
         if (!requireScope(request, response, tokens, SCOPES.lineItem)) return;
+        if (
+          request.headers['content-type'] !==
+            'application/vnd.ims.lis.v2.lineitem+json' ||
+          request.headers.accept !== 'application/vnd.ims.lis.v2.lineitem+json'
+        ) {
+          json(response, 415, { error: 'unsupported_media_type' });
+          return;
+        }
         try {
           const lineItem = JSON.parse(body) as Record<string, unknown>;
+          if (
+            typeof lineItem.label !== 'string' ||
+            !lineItem.label ||
+            typeof lineItem.scoreMaximum !== 'number' ||
+            lineItem.scoreMaximum <= 0 ||
+            'id' in lineItem
+          ) {
+            throw new Error('invalid line item');
+          }
           const id = `lineitem-${String(lineItem.resourceId ?? state.lineItems.size + 1)}`;
-          const stored = { ...lineItem, id: `${baseUrl}/lineitems/${id}` };
+          const stored = {
+            ...lineItem,
+            id: `${baseUrl}/lineitems/${id}`,
+            resourceLinkId:
+              lineItem.resourceLinkId ?? MOCK_LTI_SEED.resourceLink.id,
+          };
           state.lineItems.set(id, stored);
           json(response, 201, stored, {
+            'content-type': 'application/vnd.ims.lis.v2.lineitem+json',
             location: `${baseUrl}/lineitems/${id}`,
+          });
+        } catch {
+          json(response, 400, { error: 'invalid_lineitem' });
+        }
+        return;
+      }
+
+      const lineItemMatch = url.pathname.match(/^\/lineitems\/([^/]+)$/);
+      if (lineItemMatch && ['GET', 'PUT'].includes(request.method ?? '')) {
+        if (await consumeFailure(failures, 'ags', response)) return;
+        if (!requireScope(request, response, tokens, SCOPES.lineItem)) return;
+        const existing = state.lineItems.get(lineItemMatch[1]);
+        if (!existing) {
+          json(response, 404, { error: 'lineitem_not_found' });
+          return;
+        }
+        if (request.method === 'GET') {
+          if (
+            request.headers.accept !==
+            'application/vnd.ims.lis.v2.lineitem+json'
+          ) {
+            json(response, 406, { error: 'not_acceptable' });
+            return;
+          }
+          json(response, 200, existing, {
+            'content-type': 'application/vnd.ims.lis.v2.lineitem+json',
+          });
+          return;
+        }
+        if (
+          request.headers['content-type'] !==
+            'application/vnd.ims.lis.v2.lineitem+json' ||
+          request.headers.accept !== 'application/vnd.ims.lis.v2.lineitem+json'
+        ) {
+          json(response, 415, { error: 'unsupported_media_type' });
+          return;
+        }
+        try {
+          const update = JSON.parse(body) as Record<string, unknown>;
+          if (
+            'id' in update ||
+            typeof update.label !== 'string' ||
+            !update.label ||
+            typeof update.scoreMaximum !== 'number' ||
+            update.scoreMaximum <= 0 ||
+            (update.resourceLinkId !== undefined &&
+              update.resourceLinkId !== existing.resourceLinkId)
+          ) {
+            throw new Error('invalid update');
+          }
+          const stored = {
+            ...update,
+            id: existing.id,
+            resourceLinkId: existing.resourceLinkId,
+          };
+          state.lineItems.set(lineItemMatch[1], stored);
+          json(response, 200, stored, {
+            'content-type': 'application/vnd.ims.lis.v2.lineitem+json',
           });
         } catch {
           json(response, 400, { error: 'invalid_lineitem' });
@@ -705,23 +881,39 @@ export async function startMockLtiPlatform(): Promise<MockLtiPlatform> {
 
       const scoreMatch = url.pathname.match(/^\/lineitems\/([^/]+)\/scores$/);
       if (request.method === 'POST' && scoreMatch) {
-        if (consumeFailure(failures, 'ags', response)) return;
+        if (await consumeFailure(failures, 'ags', response)) return;
         if (!requireScope(request, response, tokens, SCOPES.score)) return;
-        const idempotencyKey = request.headers['idempotency-key'];
-        if (typeof idempotencyKey !== 'string' || !idempotencyKey) {
-          json(response, 400, { error: 'missing_idempotency_key' });
+        if (!state.lineItems.has(scoreMatch[1])) {
+          json(response, 404, { error: 'lineitem_not_found' });
           return;
         }
-        if (!state.scores.has(idempotencyKey)) {
-          try {
-            state.scores.set(idempotencyKey, {
-              ...(JSON.parse(body) as Record<string, unknown>),
-              lineItemId: scoreMatch[1],
-            });
-          } catch {
-            json(response, 400, { error: 'invalid_score' });
-            return;
+        if (
+          request.headers['content-type'] !==
+          'application/vnd.ims.lis.v1.score+json'
+        ) {
+          json(response, 415, { error: 'unsupported_media_type' });
+          return;
+        }
+        try {
+          const score = JSON.parse(body) as Record<string, unknown>;
+          if (
+            typeof score.userId !== 'string' ||
+            !score.userId ||
+            typeof score.activityProgress !== 'string' ||
+            typeof score.gradingProgress !== 'string' ||
+            typeof score.timestamp !== 'string' ||
+            (score.scoreGiven !== undefined &&
+              (typeof score.scoreGiven !== 'number' ||
+                score.scoreGiven < 0 ||
+                typeof score.scoreMaximum !== 'number' ||
+                score.scoreMaximum <= 0))
+          ) {
+            throw new Error('invalid score');
           }
+          state.scores.push({ ...score, lineItemId: scoreMatch[1] });
+        } catch {
+          json(response, 400, { error: 'invalid_score' });
+          return;
         }
         response.writeHead(204);
         response.end();
@@ -745,20 +937,38 @@ export async function startMockLtiPlatform(): Promise<MockLtiPlatform> {
   await once(server, 'listening');
   const address = server.address() as AddressInfo;
   baseUrl = `http://127.0.0.1:${address.port}`;
+  state.lineItems.set('lineitem-argument-essay-001', {
+    id: `${baseUrl}/lineitems/lineitem-argument-essay-001`,
+    scoreMaximum: 100,
+    label: 'Yawp Argument Essay',
+    resourceId: 'resource-argument-essay-001',
+    resourceLinkId: MOCK_LTI_SEED.resourceLink.id,
+    tag: 'yawp-argument-essay',
+  });
 
   const registration: LtiRegistration = {
     id: 'registration-blackboard-001',
     organizationId: 'organization-ua-001',
     provider: 'blackboard',
     displayName: 'Blackboard Reference Mock',
+    transportMode: 'loopback-http',
     issuer: baseUrl,
     clientId: MOCK_LTI_SEED.clientId,
+    allowedAudiences: [MOCK_LTI_SEED.clientId],
     deploymentId: MOCK_LTI_SEED.deploymentId,
     authorizationEndpoint: `${baseUrl}/oidc/auth`,
     tokenEndpoint: `${baseUrl}/oauth2/token`,
     jwksUrl: `${baseUrl}/.well-known/jwks.json`,
     allowedServiceOrigins: [baseUrl],
-    targetLinkUri: 'http://localhost:5174/lti/launch',
+    loginInitiationUrl: `${toolBaseUrl}/lti/login`,
+    launchUrl: `${toolBaseUrl}/lti/launch`,
+    deepLinkingLaunchUrl: `${toolBaseUrl}/lti/deep-link`,
+    toolJwksUrl: `${toolBaseUrl}/.well-known/jwks.json`,
+    allowedTargetLinkUris: [
+      `${toolBaseUrl}/lti/launch`,
+      `${toolBaseUrl}/lti/deep-link`,
+    ],
+    enabledScopes: [...ALLOWED_SCOPES],
     enabled: true,
   };
 
@@ -770,12 +980,41 @@ export async function startMockLtiPlatform(): Promise<MockLtiPlatform> {
       keyId: TOOL_KEY_ID,
       privateKeyPem: TOOL_PRIVATE_KEY,
       publicKeyPem: TOOL_PUBLIC_KEY,
+      launchRequests,
     },
     journal,
     state,
     failNext(kind, failure) {
       failures.set(kind, failure);
     },
+    async close() {
+      server.close();
+      toolServer.close();
+      await Promise.all([once(server, 'close'), once(toolServer, 'close')]);
+    },
+  };
+}
+
+export async function startMockHttpCaptureServer(): Promise<MockHttpCaptureServer> {
+  const requests: MockHttpCaptureServer['requests'] = [];
+  const server = createServer((request, response) => {
+    void (async () => {
+      requests.push({
+        method: request.method ?? 'GET',
+        path: request.url ?? '/',
+        headers: { ...request.headers },
+        body: await readBody(request),
+      });
+      response.writeHead(204);
+      response.end();
+    })();
+  });
+  server.listen(0, '127.0.0.1');
+  await once(server, 'listening');
+  const address = server.address() as AddressInfo;
+  return {
+    baseUrl: `http://127.0.0.1:${address.port}`,
+    requests,
     async close() {
       server.close();
       await once(server, 'close');

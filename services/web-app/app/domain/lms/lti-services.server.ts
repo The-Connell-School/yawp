@@ -1,8 +1,19 @@
 import { z } from 'zod';
-import { LtiNetworkUrlSchema } from './lti-registration';
+import {
+  fetchLtiNetwork,
+  readLtiJson,
+  throwLtiHttpStatus,
+} from './lti-http.server';
+import {
+  assertAllowedLtiServiceUrl,
+  type LtiRegistration,
+} from './lti-registration';
 
 export const LTI_NRPS_MEDIA_TYPE =
   'application/vnd.ims.lti-nrps.v2.membershipcontainer+json';
+export const LTI_AGS_LINE_ITEM_MEDIA_TYPE =
+  'application/vnd.ims.lis.v2.lineitem+json';
+export const LTI_AGS_SCORE_MEDIA_TYPE = 'application/vnd.ims.lis.v1.score+json';
 
 export const LTI_SCOPES = {
   contextMembershipReadonly:
@@ -23,7 +34,7 @@ const ContextSchema = z.object({
 
 const MemberSchema = z.object({
   user_id: z.string().min(1),
-  roles: z.array(z.string().min(1)).min(1),
+  roles: z.array(z.string().min(1)),
   status: z.enum(['Active', 'Inactive', 'Deleted']).default('Active'),
   name: z.string().nullable().optional(),
   given_name: z.string().nullable().optional(),
@@ -38,11 +49,22 @@ const MembershipContainerSchema = z.object({
   members: z.array(MemberSchema),
 });
 
-function parseNextLink(header: string | null): string | null {
+function parseNextLink(header: string | null, currentUrl: URL): string | null {
   if (!header) return null;
-  for (const part of header.split(',')) {
-    const match = part.match(/^\s*<([^>]+)>\s*;\s*rel="?next"?\s*$/i);
-    if (match) return match[1];
+  const linkPattern = /<([^>]+)>\s*((?:;\s*[^,]+)*)/g;
+  for (const match of header.matchAll(linkPattern)) {
+    const parameters = match[2]
+      .split(';')
+      .map((part) => part.trim())
+      .filter(Boolean);
+    const rel = parameters
+      .find((parameter) => /^rel\s*=/i.test(parameter))
+      ?.replace(/^rel\s*=\s*/i, '')
+      .replace(/^"|"$/g, '')
+      .split(/\s+/);
+    if (rel?.some((value) => value.toLowerCase() === 'next')) {
+      return new URL(match[1], currentUrl).toString();
+    }
   }
   return null;
 }
@@ -50,9 +72,15 @@ function parseNextLink(header: string | null): string | null {
 export async function fetchAllNrpsMemberships(input: {
   membershipsUrl: string;
   accessToken: string;
+  registration: LtiRegistration;
+  expectedContextId: string;
   fetchImpl?: typeof fetch;
+  timeoutMs?: number;
 }) {
-  const initialUrl = new URL(LtiNetworkUrlSchema.parse(input.membershipsUrl));
+  const initialUrl = assertAllowedLtiServiceUrl(
+    input.membershipsUrl,
+    input.registration
+  );
   let nextUrl: string | null = initialUrl.toString();
   let context: z.infer<typeof ContextSchema> | null = null;
   const members: z.infer<typeof MemberSchema>[] = [];
@@ -63,34 +91,45 @@ export async function fetchAllNrpsMemberships(input: {
       throw new Error('NRPS pagination loop or page limit detected.');
     }
     visited.add(nextUrl);
-    const current = new URL(LtiNetworkUrlSchema.parse(nextUrl));
+    const current = assertAllowedLtiServiceUrl(nextUrl, input.registration);
     if (current.origin !== initialUrl.origin) {
       throw new Error('NRPS next-page URL changed service origin.');
     }
-
-    const response = await (input.fetchImpl ?? fetch)(current, {
-      headers: {
-        accept: LTI_NRPS_MEDIA_TYPE,
-        authorization: `Bearer ${input.accessToken}`,
+    const response = await fetchLtiNetwork({
+      operation: 'NRPS request',
+      url: current,
+      fetchImpl: input.fetchImpl,
+      timeoutMs: input.timeoutMs,
+      init: {
+        headers: {
+          accept: LTI_NRPS_MEDIA_TYPE,
+          authorization: `Bearer ${input.accessToken}`,
+        },
       },
     });
-    if (!response.ok) {
-      throw new Error(`NRPS request returned HTTP ${response.status}.`);
+    if (!response.ok) throwLtiHttpStatus(response, 'NRPS request');
+    if (!response.headers.get('content-type')?.includes(LTI_NRPS_MEDIA_TYPE)) {
+      throw new Error('NRPS response used an unexpected media type.');
     }
     let page: z.infer<typeof MembershipContainerSchema>;
     try {
-      page = MembershipContainerSchema.parse(await response.json());
+      page = MembershipContainerSchema.parse(
+        await readLtiJson(response, 'NRPS response')
+      );
     } catch (error) {
       throw new Error('NRPS response did not match the membership contract.', {
         cause: error,
       });
+    }
+    if (page.context.id !== input.expectedContextId) {
+      throw new Error('NRPS response context did not match the signed launch.');
     }
     if (context && page.context.id !== context.id) {
       throw new Error('NRPS pagination changed context id.');
     }
     context = page.context;
     members.push(...page.members);
-    nextUrl = parseNextLink(response.headers.get('link'));
+    nextUrl = parseNextLink(response.headers.get('link'), current);
   }
 
   if (!context) throw new Error('NRPS returned no membership pages.');
@@ -114,92 +153,198 @@ export async function fetchAllNrpsMemberships(input: {
 }
 
 const AgsLineItemSchema = z.object({
-  id: LtiNetworkUrlSchema,
+  id: z.string().url(),
   scoreMaximum: z.number().positive(),
   label: z.string().min(1),
   resourceId: z.string().min(1).optional(),
+  resourceLinkId: z.string().min(1).optional(),
   tag: z.string().min(1).optional(),
   startDateTime: z.string().datetime().optional(),
   endDateTime: z.string().datetime().optional(),
 });
 
-export type AgsLineItemInput = Omit<z.input<typeof AgsLineItemSchema>, 'id'>;
+const AgsLineItemInputSchema = AgsLineItemSchema.omit({ id: true });
+export type AgsLineItemInput = z.input<typeof AgsLineItemInputSchema>;
 
-export async function createAgsLineItem(input: {
-  lineItemsUrl: string;
-  accessToken: string;
-  lineItem: AgsLineItemInput;
-  fetchImpl?: typeof fetch;
-}) {
-  const lineItemsUrl = LtiNetworkUrlSchema.parse(input.lineItemsUrl);
-  const body = AgsLineItemSchema.omit({ id: true }).parse(input.lineItem);
-  const response = await (input.fetchImpl ?? fetch)(lineItemsUrl, {
-    method: 'POST',
-    headers: {
-      accept: 'application/vnd.ims.lis.v2.lineitem+json',
-      authorization: `Bearer ${input.accessToken}`,
-      'content-type': 'application/vnd.ims.lis.v2.lineitem+json',
-    },
-    body: JSON.stringify(body),
-  });
-  if (!response.ok) {
-    throw new Error(`AGS line-item request returned HTTP ${response.status}.`);
+async function parseAgsLineItemResponse(
+  response: Response,
+  registration: LtiRegistration
+) {
+  if (!response.ok) throwLtiHttpStatus(response, 'AGS line-item request');
+  if (
+    !response.headers
+      .get('content-type')
+      ?.includes(LTI_AGS_LINE_ITEM_MEDIA_TYPE)
+  ) {
+    throw new Error('AGS line-item response used an unexpected media type.');
   }
+  let lineItem: z.infer<typeof AgsLineItemSchema>;
   try {
-    return AgsLineItemSchema.parse(await response.json());
+    lineItem = AgsLineItemSchema.parse(
+      await readLtiJson(response, 'AGS line-item response')
+    );
   } catch (error) {
     throw new Error('AGS line-item response did not match the contract.', {
       cause: error,
     });
   }
+  assertAllowedLtiServiceUrl(lineItem.id, registration);
+  return lineItem;
 }
 
-const AgsScoreSchema = z.object({
-  userId: z.string().min(1),
-  scoreGiven: z.number().finite(),
-  scoreMaximum: z.number().positive(),
-  activityProgress: z.enum([
-    'Initialized',
-    'Started',
-    'InProgress',
-    'Submitted',
-    'Completed',
-  ]),
-  gradingProgress: z.enum([
-    'NotReady',
-    'Failed',
-    'Pending',
-    'PendingManual',
-    'FullyGraded',
-  ]),
-  timestamp: z.string().datetime(),
-  comment: z.string().optional(),
-});
+export async function createAgsLineItem(input: {
+  lineItemsUrl: string;
+  accessToken: string;
+  registration: LtiRegistration;
+  lineItem: AgsLineItemInput;
+  fetchImpl?: typeof fetch;
+  timeoutMs?: number;
+}) {
+  const lineItemsUrl = assertAllowedLtiServiceUrl(
+    input.lineItemsUrl,
+    input.registration
+  );
+  const body = AgsLineItemInputSchema.parse(input.lineItem);
+  const response = await fetchLtiNetwork({
+    operation: 'AGS line-item create',
+    url: lineItemsUrl,
+    fetchImpl: input.fetchImpl,
+    timeoutMs: input.timeoutMs,
+    init: {
+      method: 'POST',
+      headers: {
+        accept: LTI_AGS_LINE_ITEM_MEDIA_TYPE,
+        authorization: `Bearer ${input.accessToken}`,
+        'content-type': LTI_AGS_LINE_ITEM_MEDIA_TYPE,
+      },
+      body: JSON.stringify(body),
+    },
+  });
+  return parseAgsLineItemResponse(response, input.registration);
+}
+
+export async function getAgsLineItem(input: {
+  lineItemUrl: string;
+  accessToken: string;
+  registration: LtiRegistration;
+  fetchImpl?: typeof fetch;
+  timeoutMs?: number;
+}) {
+  const url = assertAllowedLtiServiceUrl(input.lineItemUrl, input.registration);
+  const response = await fetchLtiNetwork({
+    operation: 'AGS line-item read',
+    url,
+    fetchImpl: input.fetchImpl,
+    timeoutMs: input.timeoutMs,
+    init: {
+      headers: {
+        accept: LTI_AGS_LINE_ITEM_MEDIA_TYPE,
+        authorization: `Bearer ${input.accessToken}`,
+      },
+    },
+  });
+  return parseAgsLineItemResponse(response, input.registration);
+}
+
+export async function updateAgsLineItem(input: {
+  lineItemUrl: string;
+  accessToken: string;
+  registration: LtiRegistration;
+  lineItem: z.input<typeof AgsLineItemSchema>;
+  fetchImpl?: typeof fetch;
+  timeoutMs?: number;
+}) {
+  const url = assertAllowedLtiServiceUrl(input.lineItemUrl, input.registration);
+  const parsed = AgsLineItemSchema.parse(input.lineItem);
+  if (parsed.id !== url.toString()) {
+    throw new Error('AGS line-item update cannot change the immutable id.');
+  }
+  const { id: _id, ...body } = parsed;
+  const response = await fetchLtiNetwork({
+    operation: 'AGS line-item update',
+    url,
+    fetchImpl: input.fetchImpl,
+    timeoutMs: input.timeoutMs,
+    init: {
+      method: 'PUT',
+      headers: {
+        accept: LTI_AGS_LINE_ITEM_MEDIA_TYPE,
+        authorization: `Bearer ${input.accessToken}`,
+        'content-type': LTI_AGS_LINE_ITEM_MEDIA_TYPE,
+      },
+      body: JSON.stringify(body),
+    },
+  });
+  const updated = await parseAgsLineItemResponse(response, input.registration);
+  if (
+    updated.id !== parsed.id ||
+    updated.resourceLinkId !== parsed.resourceLinkId
+  ) {
+    throw new Error('AGS line-item update changed immutable identifiers.');
+  }
+  return updated;
+}
+
+const AgsScoreSchema = z
+  .object({
+    userId: z.string().min(1),
+    scoreGiven: z.number().nonnegative().optional(),
+    scoreMaximum: z.number().positive().optional(),
+    activityProgress: z.enum([
+      'Initialized',
+      'Started',
+      'InProgress',
+      'Submitted',
+      'Completed',
+    ]),
+    gradingProgress: z.enum([
+      'NotReady',
+      'Failed',
+      'Pending',
+      'PendingManual',
+      'FullyGraded',
+    ]),
+    timestamp: z.string().datetime(),
+    comment: z.string().optional(),
+  })
+  .superRefine((score, context) => {
+    if (score.scoreGiven !== undefined && score.scoreMaximum === undefined) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'AGS scoreMaximum is required when scoreGiven is present.',
+        path: ['scoreMaximum'],
+      });
+    }
+  });
 
 export async function submitAgsScore(input: {
   lineItemUrl: string;
   accessToken: string;
-  idempotencyKey: string;
+  registration: LtiRegistration;
   score: z.input<typeof AgsScoreSchema>;
   fetchImpl?: typeof fetch;
+  timeoutMs?: number;
 }) {
-  const lineItemUrl = LtiNetworkUrlSchema.parse(input.lineItemUrl).replace(
-    /\/$/,
-    ''
-  );
-  if (!input.idempotencyKey) {
-    throw new Error('AGS score submission requires an idempotency key.');
-  }
-  const response = await (input.fetchImpl ?? fetch)(`${lineItemUrl}/scores`, {
-    method: 'POST',
-    headers: {
-      authorization: `Bearer ${input.accessToken}`,
-      'content-type': 'application/vnd.ims.lis.v1.score+json',
-      'idempotency-key': input.idempotencyKey,
+  const lineItemUrl = assertAllowedLtiServiceUrl(
+    input.lineItemUrl,
+    input.registration
+  )
+    .toString()
+    .replace(/\/$/, '');
+  const score = AgsScoreSchema.parse(input.score);
+  const response = await fetchLtiNetwork({
+    operation: 'AGS score submission',
+    url: `${lineItemUrl}/scores`,
+    fetchImpl: input.fetchImpl,
+    timeoutMs: input.timeoutMs,
+    init: {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${input.accessToken}`,
+        'content-type': LTI_AGS_SCORE_MEDIA_TYPE,
+      },
+      body: JSON.stringify(score),
     },
-    body: JSON.stringify(AgsScoreSchema.parse(input.score)),
   });
-  if (!response.ok) {
-    throw new Error(`AGS score request returned HTTP ${response.status}.`);
-  }
+  if (!response.ok) throwLtiHttpStatus(response, 'AGS score submission');
 }
