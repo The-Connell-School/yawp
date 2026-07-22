@@ -37,6 +37,12 @@ async function expectNoBlockingAccessibilityViolations(
   );
 }
 
+async function holdForVideoReview(page: Page) {
+  if (process.env.E2E_VIDEO === 'on') {
+    await page.waitForTimeout(5_000);
+  }
+}
+
 function loadE2eEnvironment() {
   const e2eDirectory = path.resolve(
     path.dirname(fileURLToPath(import.meta.url)),
@@ -177,8 +183,10 @@ test.describe.serial('secure LTI launch pilot', () => {
       testInfo,
       'lti-link-confirmation'
     );
+    await holdForVideoReview(page);
     await page.getByRole('button', { name: 'Connect and open course' }).click();
     await page.waitForURL(`**/app/my-classes/${classId}`);
+    await holdForVideoReview(page);
 
     const replay = await page.request.post(`${APP_BASE_URL}/lti/launch`, {
       form: { id_token: firstForm.idToken, state: firstForm.state },
@@ -198,6 +206,7 @@ test.describe.serial('secure LTI launch pilot', () => {
       testInfo,
       'lti-generic-error'
     );
+    await holdForVideoReview(page);
 
     const second = await beginLaunch(page, 'instructor-resource-link');
     expect(second.state).not.toBe(firstForm.state);
@@ -212,9 +221,11 @@ test.describe.serial('secure LTI launch pilot', () => {
     await signInFromLaunch(page, e2eContext.userEmail, 'johndoe');
     await expect(page.getByText('Student', { exact: true })).toBeVisible();
     await expect(page.locator('body')).not.toContainText('@');
+    await holdForVideoReview(page);
     await page.getByRole('button', { name: 'Connect and open course' }).click();
     await page.waitForURL((url) => url.pathname === '/app');
     await expect(page.getByText('E2E Course')).toBeVisible();
+    await holdForVideoReview(page);
 
     const prisma = createE2EPrismaClient();
     try {
@@ -254,5 +265,6 @@ test.describe.serial('secure LTI launch pilot', () => {
       testInfo,
       'lti-mobile-admin-diagnostics'
     );
+    await holdForVideoReview(page);
   });
 });
