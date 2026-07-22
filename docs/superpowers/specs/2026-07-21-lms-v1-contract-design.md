@@ -247,7 +247,9 @@ credential leakage in logs.
 The contract therefore fail-closes unknown issuers/deployments and disabled
 registrations before network I/O, binds every launch and client assertion to
 registration metadata before disclosing credentials, ignores untrusted key
-URLs in JOSE headers, pins vetted DNS answers into sockets, blocks redirects and
+URLs in JOSE headers, retrieves provider key sets with the registered
+`application/jwk-set+json` media type (while accepting legacy JSON), pins vetted
+DNS answers into sockets, blocks redirects and
 non-public network targets (including mapped/translated IPv6), validates
 returned resources against the exact source-service origin, carries bearer
 tokens only in tenant/deployment/scope/expiry-bound grants fingerprinted to the

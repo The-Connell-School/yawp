@@ -952,9 +952,14 @@ export async function startMockLtiPlatform(): Promise<MockLtiPlatform> {
         const jwk = createPublicKey(PLATFORM_PUBLIC_KEY).export({
           format: 'jwk',
         });
-        json(response, 200, {
-          keys: [{ ...jwk, kid: PLATFORM_KEY_ID, use: 'sig', alg: 'RS256' }],
-        });
+        json(
+          response,
+          200,
+          {
+            keys: [{ ...jwk, kid: PLATFORM_KEY_ID, use: 'sig', alg: 'RS256' }],
+          },
+          { 'content-type': 'application/jwk-set+json' }
+        );
         return;
       }
 

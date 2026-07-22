@@ -354,13 +354,20 @@ async function fetchPlatformSigningKey(
     registration,
     timeoutMs,
     init: {
-      headers: { accept: 'application/json' },
+      headers: { accept: 'application/jwk-set+json, application/json' },
     },
   });
   if (!response.ok) {
     throwLtiHttpStatus(response, 'LTI platform JWKS');
   }
-  if (!response.headers.get('content-type')?.includes('application/json')) {
+  const mediaType = response.headers
+    .get('content-type')
+    ?.split(';', 1)[0]
+    .trim()
+    .toLowerCase();
+  if (
+    !['application/jwk-set+json', 'application/json'].includes(mediaType ?? '')
+  ) {
     finishLtiNetwork(response);
     throw new Error(
       'LTI platform JWKS response used an unexpected media type.'
