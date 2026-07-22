@@ -92,6 +92,9 @@ The signed launch must:
 - treat a missing subject as anonymous and discard person claims, reject every
   malformed present optional claim, and enforce the 255-ASCII-character Core
   bounds on deployment, subject, context, and resource-link identifiers;
+- preserve standards-valid empty descriptive strings while keeping identifiers,
+  authorized-party, and service URLs non-empty; require every Core custom value
+  to be a string and every present Deep Linking capability flag to be boolean;
 - expose only validated claim data to account and tenant mapping;
 - consume state and nonce exactly once in the persisted launch flow in #212.
 

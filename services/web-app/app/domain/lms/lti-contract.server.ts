@@ -339,10 +339,19 @@ function getRequiredString(
 function getOptionalString(object: JsonObject, key: string): string | null {
   const value = object[key];
   if (value === undefined) return null;
-  if (typeof value !== 'string' || value.length === 0) {
-    throw new Error(
-      `LTI ${key} claim must be a non-empty string when present.`
-    );
+  if (typeof value !== 'string') {
+    throw new Error(`LTI ${key} claim must be a string when present.`);
+  }
+  return value;
+}
+
+function getOptionalNonEmptyString(
+  object: JsonObject,
+  key: string
+): string | null {
+  const value = getOptionalString(object, key);
+  if (value === '') {
+    throw new Error(`LTI ${key} claim must be non-empty when present.`);
   }
   return value;
 }
@@ -371,6 +380,15 @@ function getOptionalOpaqueString(
   if (value === undefined) return null;
   if (typeof value !== 'string') {
     throw new Error(`LTI ${key} claim must be a string when present.`);
+  }
+  return value;
+}
+
+function getOptionalBoolean(object: JsonObject, key: string): boolean | null {
+  const value = object[key];
+  if (value === undefined) return null;
+  if (typeof value !== 'boolean') {
+    throw new Error(`LTI ${key} claim must be a boolean when present.`);
   }
   return value;
 }
@@ -577,7 +595,7 @@ export async function verifyLtiLaunchForm(
   ) {
     throw new Error('LTI audience is not allowed by the registration.');
   }
-  const authorizedParty = getOptionalString(payload, 'azp');
+  const authorizedParty = getOptionalNonEmptyString(payload, 'azp');
   if (
     (audience.length > 1 && !authorizedParty) ||
     (authorizedParty && authorizedParty !== options.registration.clientId)
@@ -679,21 +697,21 @@ export async function verifyLtiLaunchForm(
       )
     : null;
   const lineItemsUrl = agsClaim
-    ? getOptionalString(agsClaim, 'lineitems')
+    ? getOptionalNonEmptyString(agsClaim, 'lineitems')
     : null;
-  const lineItemUrl = agsClaim ? getOptionalString(agsClaim, 'lineitem') : null;
+  const lineItemUrl = agsClaim
+    ? getOptionalNonEmptyString(agsClaim, 'lineitem')
+    : null;
   for (const url of [membershipsUrl, lineItemsUrl, lineItemUrl]) {
     if (url) assertAllowedLtiServiceUrl(url, options.registration);
   }
 
   const customClaim = getOptionalObject(payload, LTI_CLAIMS.custom, 'custom');
-  const custom = customClaim
-    ? Object.fromEntries(
-        Object.entries(customClaim).filter(
-          (entry): entry is [string, string] => typeof entry[1] === 'string'
-        )
-      )
-    : {};
+  const customEntries = Object.entries(customClaim ?? {});
+  if (customEntries.some(([, value]) => typeof value !== 'string')) {
+    throw new Error('LTI custom claim values must be strings.');
+  }
+  const custom = Object.fromEntries(customEntries) as Record<string, string>;
   const deepLinkingClaim = getOptionalObject(
     payload,
     LTI_CLAIMS.deepLinkingSettings,
@@ -777,12 +795,14 @@ export async function verifyLtiLaunchForm(
               'Deep Linking document targets',
               { allowEmpty: true }
             ),
-            acceptsMultiple: deepLinkingClaim.accept_multiple === true,
-            autoCreate: deepLinkingClaim.auto_create === true,
-            acceptLineItem:
-              typeof deepLinkingClaim.accept_lineitem === 'boolean'
-                ? deepLinkingClaim.accept_lineitem
-                : null,
+            acceptsMultiple:
+              getOptionalBoolean(deepLinkingClaim, 'accept_multiple') ?? false,
+            autoCreate:
+              getOptionalBoolean(deepLinkingClaim, 'auto_create') ?? false,
+            acceptLineItem: getOptionalBoolean(
+              deepLinkingClaim,
+              'accept_lineitem'
+            ),
             data: getOptionalOpaqueString(deepLinkingClaim, 'data'),
           }
         : null,

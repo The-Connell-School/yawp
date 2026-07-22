@@ -352,6 +352,7 @@ describe('LTI 1.3 launch over the network boundary', () => {
     ['malformed-context-scalar', 'context'],
     ['malformed-nrps-array', 'NRPS'],
     ['malformed-ags-null', 'AGS'],
+    ['malformed-custom-null', 'custom'],
   ])(
     'rejects malformed present optional claim scenario %s',
     async (scenario, message) => {
@@ -393,6 +394,24 @@ describe('LTI 1.3 launch over the network boundary', () => {
       ).rejects.toThrow(message);
     }
   );
+
+  test('preserves standards-valid empty display strings', async () => {
+    const platform = await startPlatform();
+    const form = await authorize(platform, 'empty-display-strings');
+    const launch = await verifyLtiLaunchForm(form, {
+      registration: platform.registration,
+      expectedState: 'state-contract-001',
+      expectedNonce: 'nonce-contract-001',
+      expectedTargetLinkUri: platform.registration.launchUrl,
+      expectedMessageType: LTI_MESSAGE_TYPES.resourceLinkRequest,
+      nowSeconds: platform.seed.nowSeconds,
+    });
+
+    expect(launch.context).toMatchObject({ label: '', title: '' });
+    expect(launch.resourceLink?.title).toBe('');
+    expect(launch.person.givenName).toBe('');
+    expect(launch.person.name).toBe('');
+  });
 
   test('normalizes a signed Deep Linking request and returns signed content', async () => {
     const platform = await startPlatform();
@@ -559,6 +578,28 @@ describe('LTI 1.3 launch over the network boundary', () => {
     });
     expect(response.status).toBe(204);
   });
+
+  test.each([
+    ['deep-link-malformed-accept-multiple', 'accept_multiple'],
+    ['deep-link-malformed-auto-create', 'auto_create'],
+    ['deep-link-malformed-accept-lineitem', 'accept_lineitem'],
+  ])(
+    'rejects malformed Deep Linking boolean scenario %s',
+    async (scenario, message) => {
+      const platform = await startPlatform();
+      const form = await authorize(platform, scenario);
+      await expect(
+        verifyLtiLaunchForm(form, {
+          registration: platform.registration,
+          expectedState: 'state-contract-001',
+          expectedNonce: 'nonce-contract-001',
+          expectedTargetLinkUri: platform.registration.deepLinkingLaunchUrl,
+          expectedMessageType: LTI_MESSAGE_TYPES.deepLinkingRequest,
+          nowSeconds: platform.seed.nowSeconds,
+        })
+      ).rejects.toThrow(message);
+    }
+  );
 
   test('accepts a Deep Linking no-selection response without content_items', async () => {
     const platform = await startPlatform();

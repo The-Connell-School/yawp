@@ -1079,6 +1079,13 @@ export async function startMockLtiPlatform(): Promise<MockLtiPlatform> {
           if (scenario === 'deep-link-no-target') {
             settings.accept_presentation_document_targets = [];
           }
+          if (scenario === 'deep-link-malformed-accept-multiple') {
+            settings.accept_multiple = 'true';
+          } else if (scenario === 'deep-link-malformed-auto-create') {
+            settings.auto_create = 1;
+          } else if (scenario === 'deep-link-malformed-accept-lineitem') {
+            settings.accept_lineitem = 'false';
+          }
           if (scenario === 'deep-link-empty-data') {
             settings.data = '';
           } else if (scenario !== 'deep-link-no-data') {
@@ -1174,6 +1181,20 @@ export async function startMockLtiPlatform(): Promise<MockLtiPlatform> {
             ...MOCK_LTI_SEED.resourceLink,
             id: 'r'.repeat(256),
           };
+        } else if (scenario === 'empty-display-strings') {
+          payload[CLAIMS.context] = {
+            ...MOCK_LTI_SEED.context,
+            label: '',
+            title: '',
+          };
+          payload[CLAIMS.resourceLink] = {
+            ...MOCK_LTI_SEED.resourceLink,
+            title: '',
+          };
+          payload.given_name = '';
+          payload.name = '';
+        } else if (scenario === 'malformed-custom-null') {
+          payload[CLAIMS.custom] = { yawp_assignment_kind: null };
         }
 
         let idToken: string;
