@@ -37,14 +37,15 @@ describe('api.domain.thesis-prompt-generator', () => {
     requireMembership.mockResolvedValue({ id: 'teacher-1', role: 'TEACHER' });
   });
 
-  test('returns the reply and drafted prompt from the model', async () => {
+  test('returns the reply and drafted options from the model', async () => {
     getLLMCompletion.mockResolvedValue(
       JSON.stringify({
-        reply: 'Here is a draft about ambition.',
-        prompt: {
-          title: 'Ambition and Its Costs',
-          body: 'Write a thesis-driven critical essay on ambition…',
-        },
+        reply: 'Here are three drafts about ambition.',
+        options: [
+          { title: 'Ambition and Its Costs', body: 'Write a…' },
+          { title: 'The Price of Power', body: 'Write a…' },
+          { title: 'Who Pays for Ambition', body: 'Write a…' },
+        ],
       })
     );
 
@@ -53,14 +54,10 @@ describe('api.domain.thesis-prompt-generator', () => {
     } as never);
     const body = await readBody(response);
 
-    expect(body).toMatchObject({
-      success: true,
-      reply: 'Here is a draft about ambition.',
-      prompt: {
-        title: 'Ambition and Its Costs',
-        body: 'Write a thesis-driven critical essay on ambition…',
-      },
-    });
+    expect(body.success).toBe(true);
+    expect(body.reply).toBe('Here are three drafts about ambition.');
+    expect(body.options).toHaveLength(3);
+    expect(body.options[0].title).toBe('Ambition and Its Costs');
     expect(getLLMCompletion).toHaveBeenCalledTimes(1);
     const call = getLLMCompletion.mock.calls[0][0];
     expect(call.system).toContain('thesis-driven critical essay');
@@ -69,7 +66,7 @@ describe('api.domain.thesis-prompt-generator', () => {
 
   test('parses JSON that the model wraps in prose or code fences', async () => {
     getLLMCompletion.mockResolvedValue(
-      'Sure!\n```json\n{"reply":"What grade level?","prompt":null}\n```'
+      'Sure!\n```json\n{"reply":"What grade level?","options":[]}\n```'
     );
 
     const response = await action({
@@ -77,10 +74,24 @@ describe('api.domain.thesis-prompt-generator', () => {
     } as never);
     const body = await readBody(response);
 
-    expect(body).toMatchObject({
-      success: true,
-      reply: 'What grade level?',
-      prompt: null,
+    expect(body).toMatchObject({ success: true, reply: 'What grade level?' });
+    expect(body.options).toEqual([]);
+  });
+
+  test('coerces a legacy singular prompt into options', () => {
+    getLLMCompletion.mockResolvedValue(
+      JSON.stringify({
+        reply: 'Here is a draft.',
+        prompt: { title: 'Fate and Free Will', body: 'Write a…' },
+      })
+    );
+
+    return action({
+      request: request([{ role: 'user', content: 'A prompt about fate.' }]),
+    } as never).then(async (response: any) => {
+      const body = await readBody(response);
+      expect(body.options).toHaveLength(1);
+      expect(body.options[0].title).toBe('Fate and Free Will');
     });
   });
 
@@ -94,7 +105,7 @@ describe('api.domain.thesis-prompt-generator', () => {
 
     expect(body.success).toBe(true);
     expect(body.reply).toBe('Let me ask: which text are we using?');
-    expect(body.prompt).toBeNull();
+    expect(body.options).toEqual([]);
   });
 
   test('rejects students', async () => {

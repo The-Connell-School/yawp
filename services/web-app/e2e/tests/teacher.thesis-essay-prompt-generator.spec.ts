@@ -1,12 +1,23 @@
 import { test, expect } from '../test-setup';
 
-const GENERATED_PROMPT_BODY = [
-  'Write a thesis-driven critical essay on ambition and the price people pay to chase it.',
-  '',
-  'Find the angle that actually grabs you — a character who wanted too much, a moment ambition curdled into something darker, or a time you watched drive cost someone more than they expected. Go where the emotional charge is and take an original position you can defend.',
-  '',
-  'Your essay should be organized formally, with an introduction, thesis statement, body paragraphs, and a conclusion.',
-].join('\n');
+function optionBody(topic: string) {
+  return [
+    `Write a thesis-driven critical essay on ${topic}.`,
+    '',
+    'Find the angle that actually grabs you and take an original position. Go where the emotional charge is.',
+    '',
+    'Your essay should be organized formally, with an introduction, thesis statement, body paragraphs, and a conclusion.',
+  ].join('\n');
+}
+
+const GENERATED_OPTIONS = [
+  { title: 'Ambition and Its Costs', body: optionBody('ambition and its costs') },
+  { title: 'The Price of Power', body: optionBody('the price of unchecked power') },
+  {
+    title: 'Who Pays for Ambition',
+    body: optionBody('who pays the price for another person’s ambition'),
+  },
+];
 
 // Deterministic stand-in for the LLM so the flow is testable without a live
 // model. Mirrors the structured contract the real route returns.
@@ -23,11 +34,8 @@ async function stubGenerator(page: import('@playwright/test').Page) {
         contentType: 'application/json',
         body: JSON.stringify({
           success: true,
-          reply: 'Here is a draft about ambition — tweak anything you like.',
-          prompt: {
-            title: 'Ambition and Its Costs',
-            body: GENERATED_PROMPT_BODY,
-          },
+          reply: 'Here are three drafts about ambition — tweak anything you like.',
+          options: GENERATED_OPTIONS,
         }),
       });
     }
@@ -35,7 +43,7 @@ async function stubGenerator(page: import('@playwright/test').Page) {
 }
 
 test.describe.serial('Thesis-Driven Essay prompt generator', () => {
-  test('teacher can generate a prompt and turn it into an assignment', async ({
+  test('teacher can page through generated options and turn one into an assignment', async ({
     page,
     e2eContext,
     signIn,
@@ -63,17 +71,31 @@ test.describe.serial('Thesis-Driven Essay prompt generator', () => {
     await page.getByRole('button', { name: 'Send' }).click();
 
     await expect(
-      page.getByText('Here is a draft about ambition')
+      page.getByText('Here are three drafts about ambition')
     ).toBeVisible();
+
+    // Starts on the first of three options.
     await expect(
       page.getByRole('heading', { name: 'Ambition and Its Costs' })
     ).toBeVisible();
+    await expect(page.getByText('Option 1 of 3')).toBeVisible();
+
+    // Page forward to the third option, then use it.
+    await page.getByRole('button', { name: 'Next option' }).click();
+    await expect(
+      page.getByRole('heading', { name: 'The Price of Power' })
+    ).toBeVisible();
+    await page.getByRole('button', { name: 'Next option' }).click();
+    await expect(
+      page.getByRole('heading', { name: 'Who Pays for Ambition' })
+    ).toBeVisible();
+    await expect(page.getByText('Option 3 of 3')).toBeVisible();
 
     await page.getByRole('button', { name: 'Use this prompt' }).click();
 
     await expect(page.getByRole('dialog')).toBeVisible();
     await expect(page.getByRole('textbox', { name: 'Prompt' })).toHaveValue(
-      /thesis-driven critical essay on ambition/
+      /who pays the price for another person’s ambition/
     );
   });
 

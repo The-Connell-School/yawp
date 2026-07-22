@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useFetcher } from 'react-router';
-import { SparklesIcon } from 'lucide-react';
+import { ChevronLeftIcon, ChevronRightIcon, SparklesIcon } from 'lucide-react';
 import { Button } from '~/components/ui/button';
 import {
   Sheet,
@@ -27,14 +27,14 @@ type GeneratorTurn = {
   role: 'user' | 'assistant';
   /** The chat text shown in the bubble. */
   content: string;
-  /** A finished, assignable prompt drafted on this turn (assistant only). */
-  prompt?: GeneratedPrompt | null;
+  /** Distinct prompt drafts offered on this turn (assistant only). */
+  options?: GeneratedPrompt[];
 };
 
 type GeneratorFetcherData = {
   success: boolean;
   reply?: string;
-  prompt?: GeneratedPrompt | null;
+  options?: GeneratedPrompt[];
   message?: string;
 };
 
@@ -48,10 +48,13 @@ type Props = {
 /** Flatten display turns into the {role, content} history the API expects. */
 function toApiMessages(turns: GeneratorTurn[]): GeneratorMessage[] {
   return turns.map((turn) => {
-    if (turn.role === 'assistant' && turn.prompt) {
+    if (turn.role === 'assistant' && turn.options && turn.options.length > 0) {
+      const rendered = turn.options
+        .map((option, index) => `Option ${index + 1}: ${option.title}\n${option.body}`)
+        .join('\n\n');
       return {
         role: 'assistant',
-        content: `${turn.content}\n\n${turn.prompt.title}\n${turn.prompt.body}`,
+        content: `${turn.content}\n\n${rendered}`,
       };
     }
     return { role: turn.role, content: turn.content };
@@ -94,7 +97,7 @@ export function ThesisPromptGenerator({
         {
           role: 'assistant',
           content: fetcher.data!.reply as string,
-          prompt: fetcher.data!.prompt ?? null,
+          options: fetcher.data!.options ?? [],
         },
       ]);
     } else {
@@ -180,24 +183,13 @@ export function ThesisPromptGenerator({
                 }
               >
                 <p className="whitespace-pre-wrap leading-6">{turn.content}</p>
-                {turn.role === 'assistant' && turn.prompt ? (
-                  <div className="space-y-3 rounded-lg border bg-muted/40 p-4">
-                    <h3 className="text-base font-semibold">
-                      {turn.prompt.title}
-                    </h3>
-                    <p className="whitespace-pre-wrap text-sm leading-6 text-muted-foreground">
-                      {turn.prompt.body}
-                    </p>
-                    <div className="flex justify-end">
-                      <Button
-                        type="button"
-                        size="sm"
-                        onClick={() => onUsePrompt(turn.prompt!.body)}
-                      >
-                        Use this prompt
-                      </Button>
-                    </div>
-                  </div>
+                {turn.role === 'assistant' &&
+                turn.options &&
+                turn.options.length > 0 ? (
+                  <PromptOptionsCarousel
+                    options={turn.options}
+                    onUse={onUsePrompt}
+                  />
                 ) : null}
               </div>
             </div>
@@ -239,5 +231,63 @@ export function ThesisPromptGenerator({
         </form>
       </SheetContent>
     </Sheet>
+  );
+}
+
+/** A pageable set of drafted prompts: arrows to move between options, with a
+ * "Use this prompt" action on whichever option is showing. */
+function PromptOptionsCarousel({
+  options,
+  onUse,
+}: {
+  options: GeneratedPrompt[];
+  onUse: (promptBody: string) => void;
+}) {
+  const [index, setIndex] = useState(0);
+  const count = options.length;
+  const active = options[Math.min(index, count - 1)];
+  if (!active) return null;
+
+  return (
+    <div className="space-y-3 rounded-lg border bg-muted/40 p-4">
+      <div className="flex items-center gap-2">
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-sm"
+          disabled={count <= 1}
+          onClick={() => setIndex((i) => (i - 1 + count) % count)}
+          aria-label="Previous option"
+        >
+          <ChevronLeftIcon className="h-4 w-4" />
+        </Button>
+        <div className="min-w-0 flex-1 text-center">
+          <h3 className="truncate text-base font-semibold">{active.title}</h3>
+          {count > 1 ? (
+            <p className="text-xs text-muted-foreground">
+              Option {Math.min(index, count - 1) + 1} of {count}
+            </p>
+          ) : null}
+        </div>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-sm"
+          disabled={count <= 1}
+          onClick={() => setIndex((i) => (i + 1) % count)}
+          aria-label="Next option"
+        >
+          <ChevronRightIcon className="h-4 w-4" />
+        </Button>
+      </div>
+      <p className="whitespace-pre-wrap text-sm leading-6 text-muted-foreground">
+        {active.body}
+      </p>
+      <div className="flex justify-end">
+        <Button type="button" size="sm" onClick={() => onUse(active.body)}>
+          Use this prompt
+        </Button>
+      </div>
+    </div>
   );
 }

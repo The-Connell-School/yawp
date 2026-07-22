@@ -42,18 +42,20 @@ Prompts are grouped by `category`, the primary facet:
 
 ## Prompt generator (LLM)
 
-Alongside browsing the fixed corpus, teachers can **generate** a new prompt.
+Alongside browsing the fixed corpus, teachers can **generate** new prompts.
 The **"Generate a prompt"** option in the New menu (third item, next to
 Document and Assignment) opens a chat sheet where the teacher describes the
-essay they want and iterates with an LLM until they have a draft they like;
-"Use this prompt" drops it straight into the Create Assignment sheet.
+essay they want and iterates with an LLM. Each time the model drafts, it
+returns **three distinct options** the teacher pages through with left/right
+arrows; "Use this prompt" on whichever option is showing drops it straight into
+the Create Assignment sheet.
 
 - `prompt-generator.ts` — framework-free shared module: the `GeneratorMessage`
   / `GeneratedPrompt` types, the zod `GeneratorResponseSchema` output contract
-  (`{ reply, prompt }`), `selectFewShotExamples`, and
-  `buildGeneratorSystemPrompt`, which teaches the model the three-part house
-  style and seeds it with real corpus prompts as few-shot examples. Unit-tested
-  in `prompt-generator.test.ts`.
+  (`{ reply, options[] }`, with a legacy singular `prompt` coerced into
+  `options`), `selectFewShotExamples`, and `buildGeneratorSystemPrompt`, which
+  teaches the model the three-part house style and seeds it with real corpus
+  prompts as few-shot examples. Unit-tested in `prompt-generator.test.ts`.
 - `thesis-prompt-generator.tsx` — the chat sheet UI (`useFetcher`).
 - `../../api.domain.thesis-prompt-generator/route.ts` — the teacher-gated POST
   action that calls `getLLMCompletion` and parses the structured reply

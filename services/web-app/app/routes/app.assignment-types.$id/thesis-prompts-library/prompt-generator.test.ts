@@ -50,10 +50,12 @@ describe('buildGeneratorSystemPrompt', () => {
     );
   });
 
-  test('pins the JSON output contract', () => {
+  test('pins the JSON output contract with multiple options', () => {
     expect(system).toContain('STRICT JSON ONLY');
     expect(system).toContain('"reply"');
-    expect(system).toContain('"prompt"');
+    expect(system).toContain('"options"');
+    // The teacher wants a real choice, so it must ask for several distinct drafts.
+    expect(system).toContain('distinct');
   });
 
   test('includes at least one real corpus prompt as a few-shot example', () => {
@@ -63,27 +65,43 @@ describe('buildGeneratorSystemPrompt', () => {
 });
 
 describe('GeneratorResponseSchema', () => {
-  test('accepts a reply with a drafted prompt', () => {
+  test('accepts a reply with several drafted options', () => {
     const parsed = GeneratorResponseSchema.parse({
-      reply: 'Here is a draft you can tweak.',
-      prompt: { title: 'Ambition and Its Costs', body: 'Write a…' },
+      reply: 'Here are three drafts you can tweak.',
+      options: [
+        { title: 'Ambition and Its Costs', body: 'Write a…' },
+        { title: 'The Price of Power', body: 'Write a…' },
+        { title: 'Who Pays for Ambition', body: 'Write a…' },
+      ],
     });
-    expect(parsed.prompt?.title).toBe('Ambition and Its Costs');
+    expect(parsed.options).toHaveLength(3);
+    expect(parsed.options[0].title).toBe('Ambition and Its Costs');
   });
 
-  test('normalizes a missing or null prompt to null', () => {
-    expect(GeneratorResponseSchema.parse({ reply: 'What grade level?' }).prompt).toBeNull();
+  test('normalizes missing options to an empty array', () => {
     expect(
-      GeneratorResponseSchema.parse({ reply: 'What text?', prompt: null }).prompt
-    ).toBeNull();
+      GeneratorResponseSchema.parse({ reply: 'What grade level?' }).options
+    ).toEqual([]);
+    expect(
+      GeneratorResponseSchema.parse({ reply: 'What text?', options: [] }).options
+    ).toEqual([]);
   });
 
-  test('rejects an empty reply or an incomplete prompt object', () => {
+  test('coerces a legacy singular prompt into options', () => {
+    const parsed = GeneratorResponseSchema.parse({
+      reply: 'Here is a draft.',
+      prompt: { title: 'Fate and Free Will', body: 'Write a…' },
+    });
+    expect(parsed.options).toHaveLength(1);
+    expect(parsed.options[0].title).toBe('Fate and Free Will');
+  });
+
+  test('rejects an empty reply or an incomplete option object', () => {
     expect(GeneratorResponseSchema.safeParse({ reply: '' }).success).toBe(false);
     expect(
       GeneratorResponseSchema.safeParse({
         reply: 'ok',
-        prompt: { title: 'x' },
+        options: [{ title: 'x' }],
       }).success
     ).toBe(false);
   });

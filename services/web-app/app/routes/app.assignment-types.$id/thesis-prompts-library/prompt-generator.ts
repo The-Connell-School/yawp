@@ -27,27 +27,34 @@ export type GeneratorMessage = {
  * A finished, ready-to-use prompt the LLM has drafted. Present only once the
  * conversation has produced something the teacher could assign as-is.
  */
-export type GeneratedPrompt = {
-  title: string;
-  body: string;
-};
+export const GeneratedPromptSchema = z.object({
+  title: z.string().min(1),
+  body: z.string().min(1),
+});
+
+export type GeneratedPrompt = z.infer<typeof GeneratedPromptSchema>;
+
+/** How many distinct options we ask the model to draft each time. */
+export const GENERATOR_OPTION_COUNT = 3;
 
 /**
  * The model answers with this shape on every turn: a conversational `reply`
- * plus, when a complete prompt is ready, the drafted `prompt`. Keeping the two
- * separate lets the UI show the chat message and a distinct, assignable card.
+ * plus, when it has enough to draft, a set of distinct `options`. Keeping the
+ * two separate lets the UI show the chat message and a pageable set of
+ * assignable prompt cards. A legacy singular `prompt` is coerced into
+ * `options` so a stray older-style response still works.
  */
-export const GeneratorResponseSchema = z.object({
-  reply: z.string().min(1),
-  prompt: z
-    .object({
-      title: z.string().min(1),
-      body: z.string().min(1),
-    })
-    .nullable()
-    .optional()
-    .transform((value) => value ?? null),
-});
+export const GeneratorResponseSchema = z
+  .object({
+    reply: z.string().min(1),
+    options: z.array(GeneratedPromptSchema).optional(),
+    prompt: GeneratedPromptSchema.nullable().optional(),
+  })
+  .transform(({ reply, options, prompt }) => ({
+    reply,
+    options:
+      options && options.length > 0 ? options : prompt ? [prompt] : [],
+  }));
 
 export type GeneratorResponse = z.infer<typeof GeneratorResponseSchema>;
 
@@ -141,12 +148,16 @@ export function buildGeneratorSystemPrompt(prompts: ThesisPrompt[]): string {
     'Respond with STRICT JSON ONLY — no markdown, no code fences — matching:',
     '{',
     '  "reply": string,   // what you say to the teacher (a question or a note)',
-    '  "prompt": { "title": string, "body": string } | null',
+    '  "options": [ { "title": string, "body": string }, … ]',
     '}',
-    'Set "prompt" to a fully-drafted prompt whenever you have enough to draft one',
-    '(the "body" is the complete multi-paragraph prompt a student would receive,',
-    'and "title" is a short label like the example titles). Set "prompt" to null',
-    'only when you are still asking a clarifying question and have not drafted',
-    'anything yet. Always include a friendly "reply".',
+    `Whenever you have enough to draft, provide exactly ${GENERATOR_OPTION_COUNT} distinct`,
+    'options that each take a genuinely different angle on the request — vary the',
+    'focus, the cognitive move, or the entry point so the teacher has a real',
+    'choice, not three rewordings of the same idea. Every option is a complete',
+    'multi-paragraph prompt in the house style (all three parts) with its own',
+    'short "title" like the example titles, and its "body" is the full prompt a',
+    'student would receive. Return "options": [] only while you are still asking a',
+    'clarifying question and have not drafted anything yet. Always include a',
+    'friendly "reply".',
   ].join('\n');
 }

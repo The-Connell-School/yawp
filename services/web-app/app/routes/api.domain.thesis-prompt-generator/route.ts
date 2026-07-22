@@ -105,7 +105,7 @@ export async function action({ request }: ActionFunctionArgs) {
     return dataResponse({
       success: true,
       reply: parsed.reply,
-      prompt: parsed.prompt,
+      options: parsed.options,
     });
   }
 
@@ -115,7 +115,7 @@ export async function action({ request }: ActionFunctionArgs) {
     typeof completion === 'string' && completion.trim().length > 0
       ? completion.trim()
       : GENERIC_ERROR;
-  return dataResponse({ success: true, reply: fallbackReply, prompt: null });
+  return dataResponse({ success: true, reply: fallbackReply, options: [] });
 }
 
 function safeParseGeneratorResponse(completion: string) {
