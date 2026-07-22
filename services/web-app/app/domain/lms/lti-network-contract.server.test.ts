@@ -720,6 +720,33 @@ describe('LTI Advantage service authentication and roster shape', () => {
     ).rejects.toThrow('NRPS');
   });
 
+  test('rejects an invalid upstream status without escaping the network promise', async () => {
+    const platform = await startPlatform();
+    const assertion = createLtiClientAssertion({
+      clientId: platform.registration.clientId,
+      tokenEndpoint: platform.registration.tokenEndpoint,
+      deploymentId: platform.registration.deploymentId,
+      privateKeyPem: platform.tool.privateKeyPem,
+      keyId: platform.tool.keyId,
+      jti: 'client-assertion-invalid-upstream-status',
+      nowSeconds: platform.seed.nowSeconds,
+    });
+    platform.failNext('token', { status: 700 });
+
+    await expect(
+      requestLtiAccessToken({
+        registration: platform.registration,
+        clientAssertion: assertion,
+        scopes: [LTI_SCOPES.lineItem],
+        advertisedScopes: [LTI_SCOPES.lineItem],
+      })
+    ).rejects.toMatchObject({
+      name: 'LtiHttpError',
+      operation: 'LTI token endpoint',
+      status: null,
+    });
+  });
+
   test('aborts a provider request at the configured deadline', async () => {
     const platform = await startPlatform();
     const assertion = createLtiClientAssertion({

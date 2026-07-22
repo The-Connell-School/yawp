@@ -179,30 +179,40 @@ function requestPinnedLtiNetwork(input: {
           : {}),
       },
       (incoming) => {
-        const responseHeaders = new Headers();
-        for (let index = 0; index < incoming.rawHeaders.length; index += 2) {
-          responseHeaders.append(
-            incoming.rawHeaders[index],
-            incoming.rawHeaders[index + 1]
-          );
-        }
         const status = incoming.statusCode ?? 500;
-        const bodyless = [204, 205, 304].includes(status);
-        if (bodyless) incoming.resume();
-        resolve(
-          new Response(
-            bodyless
-              ? null
-              : (Readable.toWeb(
-                  incoming
-                ) as unknown as ReadableStream<Uint8Array>),
-            {
-              status,
-              statusText: incoming.statusMessage,
-              headers: responseHeaders,
-            }
-          )
-        );
+        if (status < 200 || status > 599) {
+          incoming.resume();
+          reject(new Error(`LTI upstream returned invalid status ${status}.`));
+          return;
+        }
+        try {
+          const responseHeaders = new Headers();
+          for (let index = 0; index < incoming.rawHeaders.length; index += 2) {
+            responseHeaders.append(
+              incoming.rawHeaders[index],
+              incoming.rawHeaders[index + 1]
+            );
+          }
+          const bodyless = [204, 205, 304].includes(status);
+          if (bodyless) incoming.resume();
+          resolve(
+            new Response(
+              bodyless
+                ? null
+                : (Readable.toWeb(
+                    incoming
+                  ) as unknown as ReadableStream<Uint8Array>),
+              {
+                status,
+                statusText: incoming.statusMessage,
+                headers: responseHeaders,
+              }
+            )
+          );
+        } catch (error) {
+          incoming.destroy();
+          reject(error);
+        }
       }
     );
     request.on('error', reject);
