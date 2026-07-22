@@ -62,6 +62,28 @@ describe('api.domain.thesis-prompt-generator', () => {
     const call = getLLMCompletion.mock.calls[0][0];
     expect(call.system).toContain('thesis-driven critical essay');
     expect(call.model).toContain('claude');
+    // Three full prompts must fit without truncating the JSON.
+    expect(call.maxTokens).toBeGreaterThanOrEqual(4000);
+  });
+
+  test('asks the teacher to retry instead of dumping truncated JSON', async () => {
+    // A response cut off mid-object (what caused the glitchy raw-JSON bubble).
+    getLLMCompletion.mockResolvedValue(
+      '{"reply":"Here are three angles","options":[{"title":"The American Dream","body":"Write a thesis-driven critical essay on Death of a Salesman and the'
+    );
+
+    const response = await action({
+      request: request([{ role: 'user', content: 'Death of a Salesman.' }]),
+    } as never);
+    const body = await readBody(response);
+
+    expect(body.success).toBe(true);
+    expect(body.options).toEqual([]);
+    // The teacher must never see the raw JSON.
+    expect(body.reply).not.toContain('"reply"');
+    expect(body.reply).not.toContain('"options"');
+    expect(body.reply).not.toContain('{');
+    expect(body.reply.toLowerCase()).toContain('again');
   });
 
   test('parses JSON that the model wraps in prose or code fences', async () => {

@@ -61,6 +61,13 @@ export type GeneratorResponse = z.infer<typeof GeneratorResponseSchema>;
 /** How many turns of history we keep/forward to keep the request bounded. */
 export const MAX_GENERATOR_MESSAGES = 24;
 
+/**
+ * Output token budget. Must comfortably fit `GENERATOR_OPTION_COUNT` full
+ * multi-paragraph prompts plus the reply — if the model runs out of tokens
+ * mid-object the JSON is truncated and can't be parsed, so keep this generous.
+ */
+export const MAX_GENERATOR_OUTPUT_TOKENS = 4000;
+
 /** Longest single teacher message we accept, in characters. */
 export const MAX_GENERATOR_MESSAGE_LENGTH = 4000;
 

@@ -8,6 +8,7 @@ import {
   GeneratorResponseSchema,
   MAX_GENERATOR_MESSAGE_LENGTH,
   MAX_GENERATOR_MESSAGES,
+  MAX_GENERATOR_OUTPUT_TOKENS,
   resolveGeneratorModel,
 } from '../app.assignment-types.$id/thesis-prompts-library/prompt-generator';
 import type { ThesisPrompt } from '../app.assignment-types.$id/thesis-prompts-library/data';
@@ -18,6 +19,9 @@ const SYSTEM_PROMPT = buildGeneratorSystemPrompt(ALL_THESIS_PROMPTS);
 
 const GENERIC_ERROR =
   'The prompt generator is unavailable right now. Please try again.';
+
+const RETRY_MESSAGE =
+  "Sorry — that one got tangled on my end and didn't come through cleanly. Mind sending it again? If it keeps happening, narrowing the ask (a single focus, character, or angle) usually does the trick.";
 
 function parseMessages(raw: FormDataEntryValue | null): GeneratorMessage[] | null {
   if (typeof raw !== 'string' || raw.trim().length === 0) return null;
@@ -86,7 +90,7 @@ export async function action({ request }: ActionFunctionArgs) {
       system: SYSTEM_PROMPT,
       messages: messages.slice(-MAX_GENERATOR_MESSAGES),
       temperature: 0.7,
-      maxTokens: 1500,
+      maxTokens: MAX_GENERATOR_OUTPUT_TOKENS,
       metadata: {
         route: '/api/domain/thesis-prompt-generator',
         membershipId: profile.id,
@@ -109,13 +113,21 @@ export async function action({ request }: ActionFunctionArgs) {
     });
   }
 
-  // The model returned something we can't structure. Surface its text as the
-  // reply so the teacher can keep the conversation going.
-  const fallbackReply =
-    typeof completion === 'string' && completion.trim().length > 0
-      ? completion.trim()
-      : GENERIC_ERROR;
-  return dataResponse({ success: true, reply: fallbackReply, options: [] });
+  // We couldn't structure the response. If it looks like a (likely truncated)
+  // JSON attempt, never surface the raw JSON to the teacher — ask them to try
+  // again. Only genuinely plain prose is passed through as a chat reply.
+  const trimmed = completion.trim();
+  if (trimmed.length === 0 || looksLikeJsonAttempt(trimmed)) {
+    return dataResponse({ success: true, reply: RETRY_MESSAGE, options: [] });
+  }
+  return dataResponse({ success: true, reply: trimmed, options: [] });
+}
+
+function looksLikeJsonAttempt(text: string): boolean {
+  return (
+    /^[[{]/.test(text) ||
+    /"(reply|options|prompt|title|body)"\s*:/.test(text)
+  );
 }
 
 function safeParseGeneratorResponse(completion: string) {
