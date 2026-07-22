@@ -14,6 +14,7 @@ import {
 import {
   assertLtiAccessGrant,
   hasValidIsoDateTimeFields,
+  LtiRolesSchema,
   type LtiAccessGrant,
 } from './lti-contract.server';
 
@@ -46,7 +47,9 @@ const ContextSchema = z.object({
 
 const MemberSchema = z.object({
   user_id: z.string().min(1),
-  roles: z.array(z.string().min(1)),
+  roles: LtiRolesSchema.refine((roles) => roles.length > 0, {
+    message: 'NRPS members must include at least one role.',
+  }),
   status: z.enum(['Active', 'Inactive', 'Deleted']).default('Active'),
   name: z.string().nullable().optional(),
   given_name: z.string().nullable().optional(),

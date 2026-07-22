@@ -48,6 +48,31 @@ export const LTI_MESSAGE_TYPES = {
   deepLinkingResponse: 'LtiDeepLinkingResponse',
 } as const;
 
+const STANDARD_LTI_ROLE_PREFIX = 'http://purl.imsglobal.org/vocab/lis/v2/';
+
+const LtiRoleUriSchema = z
+  .string()
+  .min(1)
+  .refine(
+    (value) => URL.canParse(value),
+    'LTI roles must be absolute URI values.'
+  );
+
+export const LtiRolesSchema = z
+  .array(LtiRoleUriSchema)
+  .superRefine((roles, context) => {
+    if (
+      roles.length > 0 &&
+      !roles.some((role) => role.startsWith(STANDARD_LTI_ROLE_PREFIX))
+    ) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message:
+          'A non-empty LTI role list must include a standard LIS vocabulary role.',
+      });
+    }
+  });
+
 export function hasValidIsoDateTimeFields(value: string) {
   const match =
     /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?(?:Z|[+-](\d{2})(?::(\d{2}))?)$/.exec(
@@ -679,9 +704,7 @@ export async function verifyLtiLaunchForm(
   const roles =
     payload[LTI_CLAIMS.roles] === undefined && !isResourceLaunch
       ? []
-      : getStringArray(payload[LTI_CLAIMS.roles], 'roles', {
-          allowEmpty: true,
-        });
+      : LtiRolesSchema.parse(payload[LTI_CLAIMS.roles]);
   const nrpsClaim = getOptionalObject(
     payload,
     LTI_CLAIMS.namesRoleService,

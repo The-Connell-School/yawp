@@ -1148,6 +1148,15 @@ export async function startMockLtiPlatform(): Promise<MockLtiPlatform> {
           payload.azp = 'attacker-client';
         } else if (scenario === 'empty-roles') {
           payload[CLAIMS.roles] = [];
+        } else if (scenario === 'malformed-relative-role') {
+          payload[CLAIMS.roles] = ['Instructor'];
+        } else if (scenario === 'nonstandard-only-role') {
+          payload[CLAIMS.roles] = ['https://roles.example.test/Instructor'];
+        } else if (scenario === 'mixed-standard-custom-roles') {
+          payload[CLAIMS.roles] = [
+            'https://roles.example.test/DepartmentChair',
+            'http://purl.imsglobal.org/vocab/lis/v2/membership#Instructor',
+          ];
         } else if (scenario === 'wrong-target') {
           payload[CLAIMS.targetLinkUri] = 'https://attacker.example/launch';
         } else if (scenario === 'untrusted-service-origin') {

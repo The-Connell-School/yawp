@@ -304,6 +304,44 @@ describe('LTI 1.3 launch over the network boundary', () => {
     expect(launch.roles).toEqual([]);
   });
 
+  test.each([
+    ['malformed-relative-role', 'absolute URI'],
+    ['nonstandard-only-role', 'standard LIS'],
+  ])(
+    'rejects authorization-unsafe role scenario %s',
+    async (scenario, message) => {
+      const platform = await startPlatform();
+      const form = await authorize(platform, scenario);
+      await expect(
+        verifyLtiLaunchForm(form, {
+          registration: platform.registration,
+          expectedState: 'state-contract-001',
+          expectedNonce: 'nonce-contract-001',
+          expectedTargetLinkUri: platform.registration.launchUrl,
+          expectedMessageType: LTI_MESSAGE_TYPES.resourceLinkRequest,
+          nowSeconds: platform.seed.nowSeconds,
+        })
+      ).rejects.toThrow(message);
+    }
+  );
+
+  test('preserves extension roles alongside a standard authorization role', async () => {
+    const platform = await startPlatform();
+    const form = await authorize(platform, 'mixed-standard-custom-roles');
+    const launch = await verifyLtiLaunchForm(form, {
+      registration: platform.registration,
+      expectedState: 'state-contract-001',
+      expectedNonce: 'nonce-contract-001',
+      expectedTargetLinkUri: platform.registration.launchUrl,
+      expectedMessageType: LTI_MESSAGE_TYPES.resourceLinkRequest,
+      nowSeconds: platform.seed.nowSeconds,
+    });
+    expect(launch.roles).toEqual([
+      'https://roles.example.test/DepartmentChair',
+      'http://purl.imsglobal.org/vocab/lis/v2/membership#Instructor',
+    ]);
+  });
+
   test('accepts an anonymous, context-free resource-link launch', async () => {
     const platform = await startPlatform();
     const form = await authorize(
@@ -924,6 +962,63 @@ describe('LTI Advantage service authentication and roster shape', () => {
       platform.journal.filter((entry) => entry.path.includes('memberships'))
     ).toHaveLength(2);
     expect(platform.journal.some((entry) => entry.secretsRedacted)).toBe(true);
+  });
+
+  test('rejects malformed and nonstandard-only NRPS member roles', async () => {
+    const platform = await startPlatform();
+    const assertion = createLtiClientAssertion({
+      clientId: platform.registration.clientId,
+      tokenEndpoint: platform.registration.tokenEndpoint,
+      deploymentId: platform.registration.deploymentId,
+      privateKeyPem: platform.tool.privateKeyPem,
+      keyId: platform.tool.keyId,
+      jti: 'client-assertion-nrps-role-contract',
+      nowSeconds: platform.seed.nowSeconds,
+    });
+    const grant = await requestLtiAccessToken({
+      registration: platform.registration,
+      clientAssertion: assertion,
+      scopes: [LTI_SCOPES.contextMembershipReadonly],
+      advertisedScopes: [LTI_SCOPES.contextMembershipReadonly],
+    });
+
+    for (const [roles, message] of [
+      [['Instructor'], 'absolute URI'],
+      [['https://roles.example.test/Instructor'], 'standard LIS'],
+    ] as const) {
+      platform.failNext('nrps', {
+        status: 200,
+        contentType: LTI_NRPS_MEDIA_TYPE,
+        body: JSON.stringify({
+          id: `${platform.baseUrl}/contexts/course-eng-101/memberships`,
+          context: { id: 'course-eng-101' },
+          members: [
+            {
+              status: 'Active',
+              user_id: 'lti-adversarial-role',
+              roles,
+            },
+          ],
+        }),
+      });
+      let caught: unknown;
+      try {
+        await fetchAllNrpsMemberships({
+          membershipsUrl: `${platform.baseUrl}/contexts/course-eng-101/memberships`,
+          grant,
+          registration: platform.registration,
+          expectedContextId: 'course-eng-101',
+        });
+      } catch (error) {
+        caught = error;
+      }
+      expect(caught).toMatchObject({
+        message: 'NRPS response did not match the membership contract.',
+      });
+      expect(JSON.stringify((caught as { cause: unknown }).cause)).toContain(
+        message
+      );
+    }
   });
 
   test('rejects unauthorized scopes and missing bearer tokens', async () => {
