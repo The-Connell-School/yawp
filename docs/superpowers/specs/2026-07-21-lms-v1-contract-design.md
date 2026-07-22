@@ -106,7 +106,9 @@ The signed launch must:
   are reserved, including terminal-DNS-dot and ASCII-percent-encoded variants;
   role URI strings with raw whitespace or control characters and malformed
   percent escapes are invalid, while valid opaque non-UTF-8 percent octets in
-  genuinely external URI paths remain supported;
+  genuinely external URI paths remain supported; reserved ownership checks use
+  the parser-canonicalized URI after ASCII percent normalization so encoded
+  URL-strippable controls cannot split a legacy namespace prefix;
 - consume state and nonce exactly once in the persisted launch flow in #212.
 
 A Deep Linking launch may omit subject, roles, and context under Deep Linking

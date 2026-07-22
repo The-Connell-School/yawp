@@ -181,9 +181,9 @@ function normalizeAsciiPercentOctets(value: string) {
 function isReservedImsVocabularyUri(value: string) {
   const percentNormalizedValue = normalizeAsciiPercentOctets(value);
   if (percentNormalizedValue === null) return false;
-  if (/^urn:lti:/i.test(percentNormalizedValue)) return true;
   if (!URL.canParse(percentNormalizedValue)) return false;
   const url = new URL(percentNormalizedValue);
+  if (/^urn:lti:/i.test(url.href)) return true;
   const canonicalHostname = url.hostname.toLowerCase().replace(/\.+$/, '');
   return canonicalHostname === 'purl.imsglobal.org';
 }

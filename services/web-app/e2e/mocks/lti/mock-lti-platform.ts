@@ -1244,6 +1244,21 @@ export async function startMockLtiPlatform(): Promise<MockLtiPlatform> {
             'http://purl.imsglobal.org/vocab/lti/system/person#TestUser',
             'urn:\rlti:role:ims/lis/SuperAdmin',
           ];
+        } else if (scenario === 'test-user-with-encoded-tab-legacy-urn') {
+          payload[CLAIMS.roles] = [
+            'http://purl.imsglobal.org/vocab/lti/system/person#TestUser',
+            'urn:l%09ti:role:ims/lis/SuperAdmin',
+          ];
+        } else if (scenario === 'test-user-with-encoded-newline-legacy-urn') {
+          payload[CLAIMS.roles] = [
+            'http://purl.imsglobal.org/vocab/lti/system/person#TestUser',
+            'urn:l%0Ati:sysrole:ims/lis/SuperAdmin',
+          ];
+        } else if (scenario === 'test-user-with-encoded-cr-legacy-urn') {
+          payload[CLAIMS.roles] = [
+            'http://purl.imsglobal.org/vocab/lti/system/person#TestUser',
+            'urn:%0Dlti:instrole:ims/lis/SuperAdmin',
+          ];
         } else if (scenario === 'test-user-with-opaque-custom-role') {
           payload[CLAIMS.roles] = [
             'http://purl.imsglobal.org/vocab/lti/system/person#TestUser',

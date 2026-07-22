@@ -324,6 +324,9 @@ describe('LTI 1.3 launch over the network boundary', () => {
     ['test-user-with-tabbed-legacy-urn', 'raw whitespace'],
     ['test-user-with-newline-legacy-urn', 'raw whitespace'],
     ['test-user-with-carriage-return-legacy-urn', 'raw whitespace'],
+    ['test-user-with-encoded-tab-legacy-urn', 'defined roles'],
+    ['test-user-with-encoded-newline-legacy-urn', 'defined roles'],
+    ['test-user-with-encoded-cr-legacy-urn', 'defined roles'],
   ])(
     'rejects authorization-unsafe role scenario %s',
     async (scenario, message) => {
@@ -1141,6 +1144,27 @@ describe('LTI Advantage service authentication and roster shape', () => {
           'urn:\rlti:role:ims/lis/SuperAdmin',
         ],
         'raw whitespace',
+      ],
+      [
+        [
+          'http://purl.imsglobal.org/vocab/lti/system/person#TestUser',
+          'urn:l%09ti:role:ims/lis/SuperAdmin',
+        ],
+        'defined roles',
+      ],
+      [
+        [
+          'http://purl.imsglobal.org/vocab/lti/system/person#TestUser',
+          'urn:l%0Ati:sysrole:ims/lis/SuperAdmin',
+        ],
+        'defined roles',
+      ],
+      [
+        [
+          'http://purl.imsglobal.org/vocab/lti/system/person#TestUser',
+          'urn:%0Dlti:instrole:ims/lis/SuperAdmin',
+        ],
+        'defined roles',
       ],
     ] as const) {
       platform.failNext('nrps', {
