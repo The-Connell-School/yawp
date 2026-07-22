@@ -55,6 +55,7 @@ import {
 } from './prompts-library/data';
 import promptsRaw from './prompts-library/prompts.json';
 import { ThesisPromptsLibrary } from './thesis-prompts-library/thesis-prompts-library';
+import { ThesisPromptGenerator } from './thesis-prompts-library/thesis-prompt-generator';
 import { ThesisTeacherDirections } from './thesis-prompts-library/thesis-teacher-directions';
 import {
   applyFilters as applyThesisFilters,
@@ -511,6 +512,7 @@ export default function AppAssignmentTypesIdRoute() {
   const isLoading = navigation.state !== 'idle';
   const docFormRef = useRef<HTMLFormElement>(null);
   const [isAssignmentSheetOpen, setIsAssignmentSheetOpen] = useState(false);
+  const [isPromptGeneratorOpen, setIsPromptGeneratorOpen] = useState(false);
   const [libraryPrompt, setLibraryPrompt] = useState('');
   const [apHistoryEntry, setApHistoryEntry] = useState<{
     externalKey: string;
@@ -565,6 +567,14 @@ export default function AppAssignmentTypesIdRoute() {
                       >
                         Assignment
                       </DropdownMenuItem>
+                      {showThesisLibrary ? (
+                        <DropdownMenuItem
+                          disabled={data.teacherClasses.length === 0}
+                          onSelect={() => setIsPromptGeneratorOpen(true)}
+                        >
+                          Generate a prompt
+                        </DropdownMenuItem>
+                      ) : null}
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </>
@@ -578,6 +588,18 @@ export default function AppAssignmentTypesIdRoute() {
                 initialPrompt={libraryPrompt}
                 apHistoryEntry={apHistoryEntry}
               />
+              {showThesisLibrary ? (
+                <ThesisPromptGenerator
+                  open={isPromptGeneratorOpen}
+                  onOpenChange={setIsPromptGeneratorOpen}
+                  onUsePrompt={(promptBody) => {
+                    setApHistoryEntry(null);
+                    setLibraryPrompt(promptBody);
+                    setIsPromptGeneratorOpen(false);
+                    setIsAssignmentSheetOpen(true);
+                  }}
+                />
+              ) : null}
             </>
           ) : canCreateDirectDocument ? (
             <Form method="post">
