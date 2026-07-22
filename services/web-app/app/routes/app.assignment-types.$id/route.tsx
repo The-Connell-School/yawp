@@ -610,7 +610,7 @@ export default function AppAssignmentTypesIdRoute() {
         {showPromptsLibrary ? <TeacherDirections /> : null}
         {showThesisLibrary ? <ThesisTeacherDirections /> : null}
         {hasModules ? (
-          <Accordion type="single" collapsible defaultValue="modules">
+          <Accordion type="single" collapsible>
             <AccordionItem value="modules">
               <AccordionTrigger className="py-2 text-base">
                 Modules
