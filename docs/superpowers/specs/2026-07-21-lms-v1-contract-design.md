@@ -120,8 +120,8 @@ The mock freezes the later #213 network boundary now:
 - Deep Linking authorization returns a signed `LtiDeepLinkingRequest`; the mock
   independently validates a signed `LtiDeepLinkingResponse`, its fresh nonce,
   item schema, advertised capabilities, and opaque `data` (including a present
-  empty string), accepts omitted `content_items` as no selection, and rejects
-  replay.
+  empty string), preserves an empty presentation-target array as `none`, accepts
+  omitted `content_items` as no selection, and rejects replay.
 - AGS exposes paginated/filterable line-item collection reads, single-item
   reads, create/update, and score submission with normative media types. A
   read-only token can list/read but cannot write. Line items preserve offset or
@@ -135,8 +135,9 @@ The mock freezes the later #213 network boundary now:
   extension not required by the standard.
 - The mock runs two registrations on one origin, binds OAuth assertions to the
   expected client and deployment, requires finite and fresh NumericDate claims
-  plus bounded validity windows and non-empty OAuth assertion ids, fetches the
-  tool signing key from Yawp's real loopback JWKS endpoint, expires bearer
+  (including `nbf`) plus bounded validity windows, a provider-required audience
+  array, and non-empty OAuth assertion ids, fetches the tool signing key from
+  Yawp's real loopback JWKS endpoint, expires bearer
   grants on a controllable clock, rejects cross-registration use, and validates
   provider requests independently from Yawp schemas.
 - Seeded controls can force 401, 403, 429, 500, redirect, timeout, malformed

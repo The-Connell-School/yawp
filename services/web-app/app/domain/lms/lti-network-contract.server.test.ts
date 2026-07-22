@@ -420,6 +420,21 @@ describe('LTI 1.3 launch over the network boundary', () => {
     expect(response.status).toBe(204);
   });
 
+  test('accepts a signed Deep Linking request with no presentation target', async () => {
+    const platform = await startPlatform();
+    const form = await authorize(platform, 'deep-link-no-target');
+    const launch = await verifyLtiLaunchForm(form, {
+      registration: platform.registration,
+      expectedState: 'state-contract-001',
+      expectedNonce: 'nonce-contract-001',
+      expectedTargetLinkUri: platform.registration.deepLinkingLaunchUrl,
+      expectedMessageType: LTI_MESSAGE_TYPES.deepLinkingRequest,
+      nowSeconds: platform.seed.nowSeconds,
+    });
+
+    expect(launch.deepLinking?.documentTargets).toEqual([]);
+  });
+
   test('preserves a present empty Deep Linking data value exactly', async () => {
     const platform = await startPlatform();
     const form = await authorize(platform, 'deep-link-empty-data');
@@ -737,6 +752,12 @@ describe('LTI Advantage service authentication and roster shape', () => {
       },
       { ...basePayload, exp: platform.seed.nowSeconds + 301 },
       { ...basePayload, jti: '' },
+      { ...basePayload, aud: platform.registration.tokenEndpoint },
+      {
+        ...basePayload,
+        exp: platform.seed.nowSeconds + 30,
+        nbf: platform.seed.nowSeconds + 40,
+      },
     ];
 
     for (const payload of invalidPayloads) {

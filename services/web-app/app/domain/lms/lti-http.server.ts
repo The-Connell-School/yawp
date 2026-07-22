@@ -188,7 +188,7 @@ function requestPinnedLtiNetwork(input: {
       (incoming) => {
         const status = incoming.statusCode ?? 500;
         if (status < 200 || status > 599) {
-          incoming.resume();
+          incoming.destroy();
           reject(new Error(`LTI upstream returned invalid status ${status}.`));
           return;
         }

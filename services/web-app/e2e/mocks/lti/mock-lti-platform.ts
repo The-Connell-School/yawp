@@ -371,6 +371,7 @@ async function decodeAndVerifyToolJwt(
   options: {
     requireSubject: boolean;
     requireJti: boolean;
+    requireAudienceArray: boolean;
     expectedClientId: string;
     expectedDeploymentId: string;
     nowSeconds: number;
@@ -410,11 +411,18 @@ async function decodeAndVerifyToolJwt(
           payload.aud.every((audience: unknown) => typeof audience === 'string')
         ? payload.aud
         : [];
+  const invalidNotBefore =
+    payload.nbf !== undefined &&
+    (typeof payload.nbf !== 'number' ||
+      !Number.isFinite(payload.nbf) ||
+      payload.nbf > options.nowSeconds + 60 ||
+      (typeof payload.exp === 'number' && payload.nbf >= payload.exp));
   if (
     payload.iss !== options.expectedClientId ||
     (options.requireSubject && payload.sub !== options.expectedClientId) ||
     audiences.length !== 1 ||
     audiences[0] !== expectedAudience ||
+    (options.requireAudienceArray && !Array.isArray(payload.aud)) ||
     (options.requireSubject &&
       payload[CLAIMS.deploymentId] !== options.expectedDeploymentId) ||
     typeof payload.iat !== 'number' ||
@@ -426,6 +434,7 @@ async function decodeAndVerifyToolJwt(
     payload.exp <= options.nowSeconds ||
     payload.exp <= payload.iat ||
     payload.exp - payload.iat > 300 ||
+    invalidNotBefore ||
     (options.requireJti &&
       (typeof payload.jti !== 'string' || payload.jti.length === 0))
   ) {
@@ -1017,6 +1026,9 @@ export async function startMockLtiPlatform(): Promise<MockLtiPlatform> {
             auto_create: false,
             accept_lineitem: deepLinkCapabilities.acceptLineItem,
           };
+          if (scenario === 'deep-link-no-target') {
+            settings.accept_presentation_document_targets = [];
+          }
           if (scenario === 'deep-link-empty-data') {
             settings.data = '';
           } else if (scenario !== 'deep-link-no-data') {
@@ -1144,6 +1156,7 @@ export async function startMockLtiPlatform(): Promise<MockLtiPlatform> {
             {
               requireSubject: true,
               requireJti: true,
+              requireAudienceArray: true,
               expectedClientId,
               expectedDeploymentId,
               nowSeconds,
@@ -1251,6 +1264,7 @@ export async function startMockLtiPlatform(): Promise<MockLtiPlatform> {
             {
               requireSubject: false,
               requireJti: false,
+              requireAudienceArray: false,
               expectedClientId: MOCK_LTI_SEED.clientId,
               expectedDeploymentId: MOCK_LTI_SEED.deploymentId,
               nowSeconds,

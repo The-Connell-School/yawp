@@ -696,7 +696,8 @@ export async function verifyLtiLaunchForm(
             ),
             documentTargets: getStringArray(
               deepLinkingClaim.accept_presentation_document_targets,
-              'Deep Linking document targets'
+              'Deep Linking document targets',
+              { allowEmpty: true }
             ),
             acceptsMultiple: deepLinkingClaim.accept_multiple === true,
             autoCreate: deepLinkingClaim.auto_create === true,
