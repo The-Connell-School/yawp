@@ -134,12 +134,14 @@ The mock freezes the later #213 network boundary now:
   deliberately implemented in #213 rather than attributed to a provider
   extension not required by the standard.
 - The mock runs two registrations on one origin, binds OAuth assertions to the
-  expected client and deployment, fetches the tool signing key from Yawp's real
-  loopback JWKS endpoint, expires bearer grants on a controllable clock, rejects
-  cross-registration use, and validates provider requests independently from
-  Yawp schemas.
+  expected client and deployment, requires finite and fresh NumericDate claims
+  plus bounded validity windows and non-empty OAuth assertion ids, fetches the
+  tool signing key from Yawp's real loopback JWKS endpoint, expires bearer
+  grants on a controllable clock, rejects cross-registration use, and validates
+  provider requests independently from Yawp schemas.
 - Seeded controls can force 401, 403, 429, 500, redirect, timeout, malformed
-  JSON, invalid media type, invalid context, and cross-origin resource responses.
+  JSON, invalid HTTP status, invalid media type, invalid context, and
+  cross-origin resource responses.
 
 The mock records a redacted request journal for assertions. It never stores
 raw private keys, client assertions, bearer tokens, or launch JWTs in the
@@ -247,7 +249,8 @@ registration metadata before disclosing credentials, ignores untrusted key
 URLs in JOSE headers, pins vetted DNS answers into sockets, blocks redirects and
 non-public network targets (including mapped/translated IPv6), validates
 returned resources against the exact source-service origin, carries bearer
-tokens only in tenant/deployment/scope/expiry-bound grants, preserves opaque
+tokens only in tenant/deployment/scope/expiry-bound grants fingerprinted to the
+immutable registration endpoints and allowlists, preserves opaque
 platform ids, requests least-privilege scopes, and redacts security material
 from diagnostic output. Persistence-level launch replay, tenant, release, and
 audit guarantees are completed in #212 and #213.

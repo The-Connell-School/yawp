@@ -51,7 +51,14 @@ function cleanupDeadline(response: Response) {
 
 export function finishLtiNetwork(response: Response) {
   cleanupDeadline(response);
-  if (response.body && !response.bodyUsed) void response.body.cancel();
+  if (response.body && !response.bodyUsed) {
+    try {
+      void response.body.cancel().catch(() => undefined);
+    } catch {
+      // A locked or already-failed stream is already unusable; cleanup above is
+      // the important part of this best-effort discard path.
+    }
+  }
 }
 
 async function assertPublicDestination(

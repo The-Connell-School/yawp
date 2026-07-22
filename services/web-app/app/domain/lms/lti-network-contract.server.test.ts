@@ -484,6 +484,58 @@ describe('LTI 1.3 launch over the network boundary', () => {
     expect(platform.state.deepLinkContentItems).toEqual([]);
   });
 
+  test('rejects malformed Deep Linking JWT times at the platform endpoint', async () => {
+    const platform = await startPlatform();
+    await authorize(platform, 'deep-link-no-data');
+    const invalidJwt = signLtiJwt({
+      header: { kid: platform.tool.keyId },
+      payload: {
+        iss: platform.registration.clientId,
+        aud: platform.registration.issuer,
+        iat: 'not-a-numeric-date',
+        exp: platform.seed.nowSeconds + 300,
+        nonce: 'deep-link-response-invalid-time',
+        [LTI_CLAIMS.deploymentId]: platform.registration.deploymentId,
+        [LTI_CLAIMS.messageType]: LTI_MESSAGE_TYPES.deepLinkingResponse,
+        [LTI_CLAIMS.version]: '1.3.0',
+      },
+      privateKeyPem: platform.tool.privateKeyPem,
+    });
+    const invalidResponse = await networkFetch(
+      `${platform.baseUrl}/deep-link/return`,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ JWT: invalidJwt }),
+      }
+    );
+    expect(invalidResponse.status).toBe(400);
+
+    const validJwt = createDeepLinkingResponseJwt({
+      clientId: platform.registration.clientId,
+      platformIssuer: platform.registration.issuer,
+      deploymentId: platform.registration.deploymentId,
+      privateKeyPem: platform.tool.privateKeyPem,
+      keyId: platform.tool.keyId,
+      nonce: 'deep-link-response-after-invalid-time',
+      contentItems: [],
+      acceptTypes: ['ltiResourceLink'],
+      documentTargets: ['iframe', 'window'],
+      acceptsMultiple: true,
+      acceptLineItem: true,
+      nowSeconds: platform.seed.nowSeconds,
+    });
+    const validResponse = await networkFetch(
+      `${platform.baseUrl}/deep-link/return`,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ JWT: validJwt }),
+      }
+    );
+    expect(validResponse.status).toBe(204);
+  });
+
   test('accepts a minimal Deep Linking request without subject, roles, or context', async () => {
     const platform = await startPlatform();
     const form = await authorize(platform, 'deep-link-minimal');
@@ -661,6 +713,47 @@ describe('LTI Advantage service authentication and roster shape', () => {
       { headers: { accept: LTI_NRPS_MEDIA_TYPE } }
     );
     expect(response.status).toBe(401);
+  });
+
+  test('rejects malformed OAuth assertion times and empty assertion IDs over HTTP', async () => {
+    const platform = await startPlatform();
+    const basePayload = {
+      iss: platform.registration.clientId,
+      sub: platform.registration.clientId,
+      aud: [platform.registration.tokenEndpoint],
+      iat: platform.seed.nowSeconds,
+      exp: platform.seed.nowSeconds + 300,
+      jti: 'valid-assertion-id',
+      [LTI_CLAIMS.deploymentId]: platform.registration.deploymentId,
+    };
+    const invalidPayloads: Array<Record<string, unknown>> = [
+      { ...basePayload, exp: undefined },
+      { ...basePayload, iat: String(platform.seed.nowSeconds) },
+      { ...basePayload, exp: platform.seed.nowSeconds },
+      {
+        ...basePayload,
+        iat: platform.seed.nowSeconds - 301,
+        exp: platform.seed.nowSeconds + 1,
+      },
+      { ...basePayload, exp: platform.seed.nowSeconds + 301 },
+      { ...basePayload, jti: '' },
+    ];
+
+    for (const payload of invalidPayloads) {
+      const assertion = signLtiJwt({
+        header: { kid: platform.tool.keyId },
+        payload,
+        privateKeyPem: platform.tool.privateKeyPem,
+      });
+      await expect(
+        requestLtiAccessToken({
+          registration: platform.registration,
+          clientAssertion: assertion,
+          scopes: [LTI_SCOPES.lineItem],
+          advertisedScopes: [LTI_SCOPES.lineItem],
+        })
+      ).rejects.toMatchObject({ status: 401 });
+    }
   });
 
   test('fails token exchange when the platform cannot retrieve tool JWKS', async () => {
@@ -1390,6 +1483,10 @@ describe('LTI Advantage service authentication and roster shape', () => {
     const platform = await startPlatform();
     const capture = await startMockHttpCaptureServer();
     captureServers.push(capture);
+    const registration = {
+      ...platform.registration,
+      allowedServiceOrigins: [platform.baseUrl, capture.baseUrl],
+    };
     const assertion = createLtiClientAssertion({
       clientId: platform.registration.clientId,
       tokenEndpoint: platform.registration.tokenEndpoint,
@@ -1400,7 +1497,7 @@ describe('LTI Advantage service authentication and roster shape', () => {
       nowSeconds: platform.seed.nowSeconds,
     });
     const token = await requestLtiAccessToken({
-      registration: platform.registration,
+      registration,
       clientAssertion: assertion,
       scopes: [LTI_SCOPES.lineItem, LTI_SCOPES.score],
       advertisedScopes: [LTI_SCOPES.lineItem, LTI_SCOPES.score],
@@ -1419,10 +1516,7 @@ describe('LTI Advantage service authentication and roster shape', () => {
       createAgsLineItem({
         lineItemsUrl: `${platform.baseUrl}/contexts/course-eng-101/lineitems`,
         grant: token,
-        registration: {
-          ...platform.registration,
-          allowedServiceOrigins: [platform.baseUrl, capture.baseUrl],
-        },
+        registration,
         lineItem: { scoreMaximum: 100, label: 'Expected item' },
       })
     ).rejects.toThrow('origin');
@@ -1498,6 +1592,41 @@ describe('LTI Advantage service authentication and roster shape', () => {
       }
     );
     expect(direct.status).toBe(401);
+  });
+
+  test('binds service grants to immutable registration transport metadata', async () => {
+    const platform = await startPlatform();
+    const capture = await startMockHttpCaptureServer();
+    captureServers.push(capture);
+    const assertion = createLtiClientAssertion({
+      clientId: platform.registration.clientId,
+      tokenEndpoint: platform.registration.tokenEndpoint,
+      deploymentId: platform.registration.deploymentId,
+      privateKeyPem: platform.tool.privateKeyPem,
+      keyId: platform.tool.keyId,
+      jti: 'client-assertion-registration-fingerprint',
+      nowSeconds: platform.seed.nowSeconds,
+    });
+    const grant = await requestLtiAccessToken({
+      registration: platform.registration,
+      clientAssertion: assertion,
+      scopes: [LTI_SCOPES.contextMembershipReadonly],
+      advertisedScopes: [LTI_SCOPES.contextMembershipReadonly],
+    });
+    const substitutedRegistration = {
+      ...platform.registration,
+      allowedServiceOrigins: [capture.baseUrl],
+    };
+
+    await expect(
+      fetchAllNrpsMemberships({
+        membershipsUrl: `${capture.baseUrl}/stolen-roster`,
+        grant,
+        registration: substitutedRegistration,
+        expectedContextId: 'course-eng-101',
+      })
+    ).rejects.toThrow('bound');
+    expect(capture.requests).toHaveLength(0);
   });
 
   test('expires provider grants and stops all service traffic after disablement', async () => {

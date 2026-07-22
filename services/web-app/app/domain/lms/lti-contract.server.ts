@@ -1,4 +1,5 @@
 import {
+  createHash,
   createPrivateKey,
   createPublicKey,
   createSign,
@@ -151,6 +152,33 @@ type JsonObject = Record<string, unknown>;
 
 const LTI_ACCESS_GRANT_BRAND = Symbol('yawp.lti-access-grant');
 
+function fingerprintLtiRegistration(registration: LtiRegistration) {
+  return createHash('sha256')
+    .update(
+      JSON.stringify({
+        id: registration.id,
+        organizationId: registration.organizationId,
+        provider: registration.provider,
+        transportMode: registration.transportMode,
+        issuer: registration.issuer,
+        clientId: registration.clientId,
+        allowedAudiences: registration.allowedAudiences,
+        deploymentId: registration.deploymentId,
+        authorizationEndpoint: registration.authorizationEndpoint,
+        tokenEndpoint: registration.tokenEndpoint,
+        jwksUrl: registration.jwksUrl,
+        allowedServiceOrigins: registration.allowedServiceOrigins,
+        loginInitiationUrl: registration.loginInitiationUrl,
+        launchUrl: registration.launchUrl,
+        deepLinkingLaunchUrl: registration.deepLinkingLaunchUrl,
+        toolJwksUrl: registration.toolJwksUrl,
+        allowedTargetLinkUris: registration.allowedTargetLinkUris,
+        enabledScopes: registration.enabledScopes,
+      })
+    )
+    .digest('base64url');
+}
+
 export type LtiAccessGrant = Readonly<{
   [LTI_ACCESS_GRANT_BRAND]: true;
   accessToken: string;
@@ -161,6 +189,7 @@ export type LtiAccessGrant = Readonly<{
   registrationId: string;
   organizationId: string;
   deploymentId: string;
+  registrationFingerprint: string;
   expiresAtEpochSeconds: number;
 }>;
 
@@ -176,7 +205,8 @@ export function assertLtiAccessGrant(
     grant[LTI_ACCESS_GRANT_BRAND] !== true ||
     grant.registrationId !== registration.id ||
     grant.organizationId !== registration.organizationId ||
-    grant.deploymentId !== registration.deploymentId
+    grant.deploymentId !== registration.deploymentId ||
+    grant.registrationFingerprint !== fingerprintLtiRegistration(registration)
   ) {
     throw new Error('LTI access grant is not bound to this registration.');
   }
@@ -879,6 +909,7 @@ export async function requestLtiAccessToken(input: {
     registrationId: input.registration.id,
     organizationId: input.registration.organizationId,
     deploymentId: input.registration.deploymentId,
+    registrationFingerprint: fingerprintLtiRegistration(input.registration),
     expiresAtEpochSeconds: Math.floor(Date.now() / 1000) + parsed.expires_in,
   });
 }

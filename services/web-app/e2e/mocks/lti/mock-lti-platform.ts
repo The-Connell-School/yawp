@@ -417,9 +417,17 @@ async function decodeAndVerifyToolJwt(
     audiences[0] !== expectedAudience ||
     (options.requireSubject &&
       payload[CLAIMS.deploymentId] !== options.expectedDeploymentId) ||
-    payload.exp <= options.nowSeconds ||
+    typeof payload.iat !== 'number' ||
+    !Number.isFinite(payload.iat) ||
+    typeof payload.exp !== 'number' ||
+    !Number.isFinite(payload.exp) ||
+    payload.iat < options.nowSeconds - 300 ||
     payload.iat > options.nowSeconds + 60 ||
-    (options.requireJti && typeof payload.jti !== 'string')
+    payload.exp <= options.nowSeconds ||
+    payload.exp <= payload.iat ||
+    payload.exp - payload.iat > 300 ||
+    (options.requireJti &&
+      (typeof payload.jti !== 'string' || payload.jti.length === 0))
   ) {
     throw new Error('invalid assertion claims');
   }
