@@ -63,7 +63,10 @@ resolved hostname is an IP loopback or `localhost`, allowing the same
 production contract code to exercise an actual local network service. No
 environment-name or test-mode bypass is allowed. Public HTTPS requests resolve
 the target before every request and reject private, loopback, link-local, and
-metadata-class addresses. Redirects are handled manually and revalidated.
+metadata-class addresses. The selected vetted address is pinned into the actual
+socket while the original host remains authoritative for HTTP Host, TLS SNI,
+and certificate identity, eliminating a second DNS resolution/rebinding gap.
+Redirects are handled manually and rejected.
 Provider response bodies share the request deadline and are streamed through a
 one-megabyte cap, including responses whose headers arrive before the body.
 
@@ -105,27 +108,36 @@ email as the external identity key.
 The mock freezes the later #213 network boundary now:
 
 - `POST /oauth2/token` accepts `client_credentials`, a JWT bearer client
-  assertion, and a space-delimited scope set; tokens are short lived and scoped.
+  assertion with a standards-valid audience array, and a space-delimited scope
+  set; token type is parsed case-insensitively and normalized. The returned
+  bearer is wrapped in a frozen grant bound to registration, organization,
+  deployment, returned scopes, and local expiry; service APIs do not accept raw
+  token strings.
 - `GET /contexts/:contextId/memberships` requires an NRPS bearer token and the
   LTI membership media type. The seed contains active instructors, active
   learners, one inactive learner, missing optional PII, role filtering, and
   paginated results with a `rel="next"` link.
 - Deep Linking authorization returns a signed `LtiDeepLinkingRequest`; the mock
   independently validates a signed `LtiDeepLinkingResponse`, its fresh nonce,
-  item schema, advertised capabilities, and opaque `data`, and rejects replay.
+  item schema, advertised capabilities, and opaque `data` (including a present
+  empty string), accepts omitted `content_items` as no selection, and rejects
+  replay.
 - AGS exposes paginated/filterable line-item collection reads, single-item
   reads, create/update, and score submission with normative media types. A
   read-only token can list/read but cannot write. Line items preserve offset or
-  null dates, `gradesReleased`, and qualified extensions; scores preserve clear
-  (`null`) updates, scoring-user and submission metadata, progress enums, and
-  qualified extensions. Query parameters on line-item IDs survive `/scores`
-  URL derivation. Score state is stored by the mock service. Repeated writes
+  blank/null optionals, `gradesReleased`, and qualified extensions; scores
+  preserve clear (`null`) updates, scoring-user and submission metadata,
+  sub-second timestamps (including the standard `+00` offset), progress enums,
+  and qualified extensions. Query parameters on line-item IDs survive
+  `/scores` URL derivation. Score state is stored by the mock service. Repeated writes
   remain repeated provider requests; Yawp-owned grade-job idempotency is
   deliberately implemented in #213 rather than attributed to a provider
   extension not required by the standard.
 - The mock runs two registrations on one origin, binds OAuth assertions to the
-  expected client and deployment, expires bearer grants on a controllable
-  clock, and validates provider requests independently from Yawp schemas.
+  expected client and deployment, fetches the tool signing key from Yawp's real
+  loopback JWKS endpoint, expires bearer grants on a controllable clock, rejects
+  cross-registration use, and validates provider requests independently from
+  Yawp schemas.
 - Seeded controls can force 401, 403, 429, 500, redirect, timeout, malformed
   JSON, invalid media type, invalid context, and cross-origin resource responses.
 
@@ -232,8 +244,10 @@ credential leakage in logs.
 The contract therefore fail-closes unknown issuers/deployments and disabled
 registrations before network I/O, binds every launch and client assertion to
 registration metadata before disclosing credentials, ignores untrusted key
-URLs in JOSE headers, blocks redirects and non-public network targets, validates
-returned resources against the exact source-service origin, preserves opaque
+URLs in JOSE headers, pins vetted DNS answers into sockets, blocks redirects and
+non-public network targets (including mapped/translated IPv6), validates
+returned resources against the exact source-service origin, carries bearer
+tokens only in tenant/deployment/scope/expiry-bound grants, preserves opaque
 platform ids, requests least-privilege scopes, and redacts security material
 from diagnostic output. Persistence-level launch replay, tenant, release, and
 audit guarantees are completed in #212 and #213.

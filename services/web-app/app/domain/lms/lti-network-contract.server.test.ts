@@ -2,21 +2,23 @@ import { afterEach, describe, expect, test } from 'bun:test';
 import {
   LTI_CLAIMS,
   LTI_MESSAGE_TYPES,
+  assertLtiAccessGrant,
   createDeepLinkingResponseJwt,
   createLtiClientAssertion,
-  requestLtiAccessToken as requestLtiAccessTokenWithTransport,
-  verifyLtiLaunchForm as verifyLtiLaunchFormWithTransport,
+  requestLtiAccessToken,
+  signLtiJwt,
+  verifyLtiLaunchForm,
 } from './lti-contract.server';
 import {
   LTI_AGS_LINE_ITEM_MEDIA_TYPE,
   LTI_NRPS_MEDIA_TYPE,
   LTI_SCOPES,
-  createAgsLineItem as createAgsLineItemWithTransport,
-  fetchAllAgsLineItems as fetchAllAgsLineItemsWithTransport,
-  fetchAllNrpsMemberships as fetchAllNrpsMembershipsWithTransport,
-  getAgsLineItem as getAgsLineItemWithTransport,
-  submitAgsScore as submitAgsScoreWithTransport,
-  updateAgsLineItem as updateAgsLineItemWithTransport,
+  createAgsLineItem,
+  fetchAllAgsLineItems,
+  fetchAllNrpsMemberships,
+  getAgsLineItem,
+  submitAgsScore,
+  updateAgsLineItem,
 } from './lti-services.server';
 import { LtiHttpError } from './lti-http.server';
 import {
@@ -29,85 +31,6 @@ import {
 const platforms: MockLtiPlatform[] = [];
 const captureServers: MockHttpCaptureServer[] = [];
 const networkFetch = Bun.fetch as unknown as typeof globalThis.fetch;
-
-function verifyLtiLaunchForm(
-  form: Parameters<typeof verifyLtiLaunchFormWithTransport>[0],
-  options: Omit<
-    Parameters<typeof verifyLtiLaunchFormWithTransport>[1],
-    'fetchImpl'
-  >
-) {
-  return verifyLtiLaunchFormWithTransport(form, {
-    ...options,
-    fetchImpl: networkFetch,
-  });
-}
-
-function requestLtiAccessToken(
-  input: Omit<
-    Parameters<typeof requestLtiAccessTokenWithTransport>[0],
-    'fetchImpl'
-  >
-) {
-  return requestLtiAccessTokenWithTransport({
-    ...input,
-    fetchImpl: networkFetch,
-  });
-}
-
-function fetchAllNrpsMemberships(
-  input: Omit<
-    Parameters<typeof fetchAllNrpsMembershipsWithTransport>[0],
-    'fetchImpl'
-  >
-) {
-  return fetchAllNrpsMembershipsWithTransport({
-    ...input,
-    fetchImpl: networkFetch,
-  });
-}
-
-function createAgsLineItem(
-  input: Omit<Parameters<typeof createAgsLineItemWithTransport>[0], 'fetchImpl'>
-) {
-  return createAgsLineItemWithTransport({
-    ...input,
-    fetchImpl: networkFetch,
-  });
-}
-
-function fetchAllAgsLineItems(
-  input: Omit<
-    Parameters<typeof fetchAllAgsLineItemsWithTransport>[0],
-    'fetchImpl'
-  >
-) {
-  return fetchAllAgsLineItemsWithTransport({
-    ...input,
-    fetchImpl: networkFetch,
-  });
-}
-
-function submitAgsScore(
-  input: Omit<Parameters<typeof submitAgsScoreWithTransport>[0], 'fetchImpl'>
-) {
-  return submitAgsScoreWithTransport({
-    ...input,
-    fetchImpl: networkFetch,
-  });
-}
-
-function getAgsLineItem(
-  input: Omit<Parameters<typeof getAgsLineItemWithTransport>[0], 'fetchImpl'>
-) {
-  return getAgsLineItemWithTransport({ ...input, fetchImpl: networkFetch });
-}
-
-function updateAgsLineItem(
-  input: Omit<Parameters<typeof updateAgsLineItemWithTransport>[0], 'fetchImpl'>
-) {
-  return updateAgsLineItemWithTransport({ ...input, fetchImpl: networkFetch });
-}
 
 afterEach(async () => {
   await Promise.all([
@@ -213,11 +136,7 @@ describe('LTI 1.3 launch over the network boundary', () => {
         nrpsVersions: ['2.0'],
         lineItemsUrl: `${platform.baseUrl}/contexts/course-eng-101/lineitems`,
         lineItemUrl: null,
-        agsScopes: [
-          LTI_SCOPES.lineItem,
-          LTI_SCOPES.resultReadonly,
-          LTI_SCOPES.score,
-        ],
+        agsScopes: [LTI_SCOPES.lineItem, LTI_SCOPES.score],
       },
       custom: { yawp_assignment_kind: 'argument-essay' },
       deepLinking: null,
@@ -353,6 +272,7 @@ describe('LTI 1.3 launch over the network boundary', () => {
     ['excessive-lifetime', 'lifetime'],
     ['future-not-before', 'not yet valid'],
     ['expiry-before-issued-at', 'after its issued-at'],
+    ['not-before-after-expiry', 'precede expiry'],
     ['untrusted-additional-audience', 'audience'],
     ['wrong-authorized-party', 'authorized-party'],
   ])('rejects bounded-token scenario %s', async (scenario, message) => {
@@ -422,6 +342,29 @@ describe('LTI 1.3 launch over the network boundary', () => {
       acceptLineItem: launch.deepLinking!.acceptLineItem,
       nowSeconds: platform.seed.nowSeconds,
     });
+    const missingDataJwt = createDeepLinkingResponseJwt({
+      clientId: platform.registration.clientId,
+      platformIssuer: platform.registration.issuer,
+      deploymentId: platform.registration.deploymentId,
+      privateKeyPem: platform.tool.privateKeyPem,
+      keyId: platform.tool.keyId,
+      nonce: 'deep-link-response-missing-data',
+      contentItems: [platform.seed.contentItem],
+      acceptTypes: launch.deepLinking!.acceptTypes,
+      documentTargets: launch.deepLinking!.documentTargets,
+      acceptsMultiple: launch.deepLinking!.acceptsMultiple,
+      acceptLineItem: launch.deepLinking!.acceptLineItem,
+      nowSeconds: platform.seed.nowSeconds,
+    });
+    const missingDataResponse = await networkFetch(
+      launch.deepLinking!.returnUrl,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ JWT: missingDataJwt }),
+      }
+    );
+    expect(missingDataResponse.status).toBe(400);
     const response = await networkFetch(launch.deepLinking!.returnUrl, {
       method: 'POST',
       headers: { 'content-type': 'application/x-www-form-urlencoded' },
@@ -477,6 +420,70 @@ describe('LTI 1.3 launch over the network boundary', () => {
     expect(response.status).toBe(204);
   });
 
+  test('preserves a present empty Deep Linking data value exactly', async () => {
+    const platform = await startPlatform();
+    const form = await authorize(platform, 'deep-link-empty-data');
+    const launch = await verifyLtiLaunchForm(form, {
+      registration: platform.registration,
+      expectedState: 'state-contract-001',
+      expectedNonce: 'nonce-contract-001',
+      expectedTargetLinkUri: platform.registration.deepLinkingLaunchUrl,
+      expectedMessageType: LTI_MESSAGE_TYPES.deepLinkingRequest,
+      nowSeconds: platform.seed.nowSeconds,
+    });
+    expect(launch.deepLinking?.data).toBe('');
+    const jwt = createDeepLinkingResponseJwt({
+      clientId: platform.registration.clientId,
+      platformIssuer: platform.registration.issuer,
+      deploymentId: platform.registration.deploymentId,
+      privateKeyPem: platform.tool.privateKeyPem,
+      keyId: platform.tool.keyId,
+      nonce: 'deep-link-response-empty-data',
+      data: launch.deepLinking!.data,
+      contentItems: [],
+      acceptTypes: launch.deepLinking!.acceptTypes,
+      documentTargets: launch.deepLinking!.documentTargets,
+      acceptsMultiple: launch.deepLinking!.acceptsMultiple,
+      acceptLineItem: launch.deepLinking!.acceptLineItem,
+      nowSeconds: platform.seed.nowSeconds,
+    });
+    const response = await networkFetch(launch.deepLinking!.returnUrl, {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ JWT: jwt }),
+    });
+    expect(response.status).toBe(204);
+  });
+
+  test('accepts a Deep Linking no-selection response without content_items', async () => {
+    const platform = await startPlatform();
+    await authorize(platform, 'deep-link-no-data');
+    const jwt = signLtiJwt({
+      header: { kid: platform.tool.keyId },
+      payload: {
+        iss: platform.registration.clientId,
+        aud: platform.registration.issuer,
+        iat: platform.seed.nowSeconds,
+        exp: platform.seed.nowSeconds + 300,
+        nonce: 'deep-link-response-no-selection',
+        [LTI_CLAIMS.deploymentId]: platform.registration.deploymentId,
+        [LTI_CLAIMS.messageType]: LTI_MESSAGE_TYPES.deepLinkingResponse,
+        [LTI_CLAIMS.version]: '1.3.0',
+      },
+      privateKeyPem: platform.tool.privateKeyPem,
+    });
+    const response = await networkFetch(
+      `${platform.baseUrl}/deep-link/return`,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ JWT: jwt }),
+      }
+    );
+    expect(response.status).toBe(204);
+    expect(platform.state.deepLinkContentItems).toEqual([]);
+  });
+
   test('accepts a minimal Deep Linking request without subject, roles, or context', async () => {
     const platform = await startPlatform();
     const form = await authorize(platform, 'deep-link-minimal');
@@ -496,6 +503,7 @@ describe('LTI 1.3 launch over the network boundary', () => {
 
   test('accepts the minimal standards-valid LTI resource link shape', async () => {
     const platform = await startPlatform();
+    await authorize(platform, 'deep-link');
     const jwt = createDeepLinkingResponseJwt({
       clientId: platform.registration.clientId,
       platformIssuer: platform.registration.issuer,
@@ -503,6 +511,7 @@ describe('LTI 1.3 launch over the network boundary', () => {
       privateKeyPem: platform.tool.privateKeyPem,
       keyId: platform.tool.keyId,
       nonce: 'deep-link-response-minimal-item',
+      data: 'opaque-deep-link-data-001',
       contentItems: [
         {
           type: 'ltiResourceLink',
@@ -587,7 +596,7 @@ describe('LTI Advantage service authentication and roster shape', () => {
 
     const memberships = await fetchAllNrpsMemberships({
       membershipsUrl: `${platform.baseUrl}/contexts/course-eng-101/memberships?limit=2`,
-      accessToken: token.accessToken,
+      grant: token,
       registration: platform.registration,
       expectedContextId: 'course-eng-101',
     });
@@ -597,6 +606,18 @@ describe('LTI Advantage service authentication and roster shape', () => {
       expiresIn: 300,
       scope: LTI_SCOPES.contextMembershipReadonly,
     });
+    expect(platform.tool.jwksRequests).toContainEqual({
+      method: 'GET',
+      path: '/.well-known/jwks.json',
+    });
+    expect(() =>
+      assertLtiAccessGrant(
+        token,
+        platform.registration,
+        LTI_SCOPES.contextMembershipReadonly,
+        token.expiresAtEpochSeconds
+      )
+    ).toThrow('expired');
     expect(memberships.context).toEqual({
       id: 'course-eng-101',
       label: 'ENG-101',
@@ -642,6 +663,30 @@ describe('LTI Advantage service authentication and roster shape', () => {
     expect(response.status).toBe(401);
   });
 
+  test('fails token exchange when the platform cannot retrieve tool JWKS', async () => {
+    const platform = await startPlatform();
+    const assertion = createLtiClientAssertion({
+      clientId: platform.registration.clientId,
+      tokenEndpoint: platform.registration.tokenEndpoint,
+      deploymentId: platform.registration.deploymentId,
+      privateKeyPem: platform.tool.privateKeyPem,
+      keyId: platform.tool.keyId,
+      jti: 'client-assertion-tool-jwks-outage',
+      nowSeconds: platform.seed.nowSeconds,
+    });
+    platform.failNext('tool-jwks', { status: 503 });
+
+    await expect(
+      requestLtiAccessToken({
+        registration: platform.registration,
+        clientAssertion: assertion,
+        scopes: [LTI_SCOPES.lineItem],
+        advertisedScopes: [LTI_SCOPES.lineItem],
+      })
+    ).rejects.toMatchObject({ status: 401 });
+    expect(platform.tool.jwksRequests).toHaveLength(1);
+  });
+
   test('surfaces malformed provider JSON as a contract error', async () => {
     const platform = await startPlatform();
     const assertion = createLtiClientAssertion({
@@ -668,7 +713,7 @@ describe('LTI Advantage service authentication and roster shape', () => {
     await expect(
       fetchAllNrpsMemberships({
         membershipsUrl: `${platform.baseUrl}/contexts/course-eng-101/memberships`,
-        accessToken: token.accessToken,
+        grant: token,
         registration: platform.registration,
         expectedContextId: 'course-eng-101',
       })
@@ -776,7 +821,7 @@ describe('LTI Advantage service authentication and roster shape', () => {
     await expect(
       fetchAllNrpsMemberships({
         membershipsUrl: `${platform.baseUrl}/contexts/course-eng-101/memberships`,
-        accessToken: token.accessToken,
+        grant: token,
         registration: platform.registration,
         expectedContextId: 'course-eng-101',
       })
@@ -802,7 +847,7 @@ describe('LTI Advantage service authentication and roster shape', () => {
     });
     const roster = await fetchAllNrpsMemberships({
       membershipsUrl: `${platform.baseUrl}/contexts/course-eng-101/memberships?limit=2&linkStyle=complex`,
-      accessToken: token.accessToken,
+      grant: token,
       registration: platform.registration,
       expectedContextId: 'course-eng-101',
     });
@@ -893,7 +938,7 @@ describe('LTI Advantage service authentication and roster shape', () => {
     });
     await fetchAllNrpsMemberships({
       membershipsUrl: `${platform.baseUrl}/contexts/course-eng-101/memberships`,
-      accessToken: token.accessToken,
+      grant: token,
       registration: platform.registration,
       expectedContextId: 'course-eng-101',
     });
@@ -925,7 +970,7 @@ describe('LTI Advantage service authentication and roster shape', () => {
 
     const lineItem = await createAgsLineItem({
       lineItemsUrl: `${platform.baseUrl}/contexts/course-eng-101/lineitems`,
-      accessToken: token.accessToken,
+      grant: token,
       registration: platform.registration,
       lineItem: {
         scoreMaximum: 100,
@@ -950,14 +995,14 @@ describe('LTI Advantage service authentication and roster shape', () => {
       await getAgsLineItem({
         lineItemsUrl: `${platform.baseUrl}/contexts/course-eng-101/lineitems`,
         lineItemUrl: lineItem.id,
-        accessToken: token.accessToken,
+        grant: token,
         registration: platform.registration,
       })
     ).toEqual(lineItem);
     const updated = await updateAgsLineItem({
       lineItemsUrl: `${platform.baseUrl}/contexts/course-eng-101/lineitems`,
       lineItemUrl: lineItem.id,
-      accessToken: token.accessToken,
+      grant: token,
       registration: platform.registration,
       lineItem: { ...lineItem, label: 'Yawp Network Contract Updated' },
     });
@@ -972,16 +1017,16 @@ describe('LTI Advantage service authentication and roster shape', () => {
     await submitAgsScore({
       lineItemsUrl: `${platform.baseUrl}/contexts/course-eng-101/lineitems`,
       lineItemUrl: lineItem.id,
-      accessToken: token.accessToken,
+      grant: token,
       registration: platform.registration,
       score,
     });
     await submitAgsScore({
       lineItemsUrl: `${platform.baseUrl}/contexts/course-eng-101/lineitems`,
       lineItemUrl: lineItem.id,
-      accessToken: token.accessToken,
+      grant: token,
       registration: platform.registration,
-      score,
+      score: { ...score, timestamp: '2026-07-21T12:00:00.001Z' },
     });
 
     expect(lineItem).toMatchObject({
@@ -1015,7 +1060,7 @@ describe('LTI Advantage service authentication and roster shape', () => {
     });
     await createAgsLineItem({
       lineItemsUrl: `${platform.baseUrl}/contexts/course-eng-101/lineitems`,
-      accessToken: writeToken.accessToken,
+      grant: writeToken,
       registration: platform.registration,
       lineItem: {
         scoreMaximum: 20,
@@ -1043,14 +1088,14 @@ describe('LTI Advantage service authentication and roster shape', () => {
     });
     const all = await fetchAllAgsLineItems({
       lineItemsUrl: `${platform.baseUrl}/contexts/course-eng-101/lineitems`,
-      accessToken: readToken.accessToken,
+      grant: readToken,
       registration: platform.registration,
       filters: { limit: 1 },
     });
     expect(all).toHaveLength(2);
     const filtered = await fetchAllAgsLineItems({
       lineItemsUrl: `${platform.baseUrl}/contexts/course-eng-101/lineitems`,
-      accessToken: readToken.accessToken,
+      grant: readToken,
       registration: platform.registration,
       filters: {
         resourceLinkId: 'resource-link-second',
@@ -1064,7 +1109,7 @@ describe('LTI Advantage service authentication and roster shape', () => {
       await getAgsLineItem({
         lineItemsUrl: `${platform.baseUrl}/contexts/course-eng-101/lineitems`,
         lineItemUrl: filtered[0]!.id,
-        accessToken: readToken.accessToken,
+        grant: readToken,
         registration: platform.registration,
       })
     ).toEqual(filtered[0]);
@@ -1072,11 +1117,11 @@ describe('LTI Advantage service authentication and roster shape', () => {
       updateAgsLineItem({
         lineItemsUrl: `${platform.baseUrl}/contexts/course-eng-101/lineitems`,
         lineItemUrl: filtered[0]!.id,
-        accessToken: readToken.accessToken,
+        grant: readToken,
         registration: platform.registration,
         lineItem: { ...filtered[0]!, label: 'Forbidden update' },
       })
-    ).rejects.toMatchObject({ status: 403 });
+    ).rejects.toThrow('required scope');
   });
 
   test('enforces provider media types at the real HTTP boundary', async () => {
@@ -1156,34 +1201,65 @@ describe('LTI Advantage service authentication and roster shape', () => {
     await expect(
       createAgsLineItem({
         lineItemsUrl: `${platform.baseUrl}/contexts/course-eng-101/lineitems`,
-        accessToken: token.accessToken,
+        grant: token,
         registration: platform.registration,
         lineItem: { scoreMaximum: 100, label: 'Expected media type' },
       })
     ).rejects.toThrow('media type');
   });
 
+  test('round-trips provider line-item responses with blank and null optionals', async () => {
+    const platform = await startPlatform();
+    const assertion = createLtiClientAssertion({
+      clientId: platform.registration.clientId,
+      tokenEndpoint: platform.registration.tokenEndpoint,
+      deploymentId: platform.registration.deploymentId,
+      privateKeyPem: platform.tool.privateKeyPem,
+      keyId: platform.tool.keyId,
+      jti: 'client-assertion-provider-empty-lineitem-fields',
+      nowSeconds: platform.seed.nowSeconds,
+    });
+    const grant = await requestLtiAccessToken({
+      registration: platform.registration,
+      clientAssertion: assertion,
+      scopes: [LTI_SCOPES.lineItemReadonly],
+      advertisedScopes: [LTI_SCOPES.lineItemReadonly],
+    });
+    const lineItemUrl = `${platform.baseUrl}/lineitems/lineitem-argument-essay-001`;
+    platform.failNext('ags', {
+      status: 200,
+      contentType: LTI_AGS_LINE_ITEM_MEDIA_TYPE,
+      body: JSON.stringify({
+        id: lineItemUrl,
+        scoreMaximum: 100,
+        label: 'Provider empty fields',
+        resourceId: '',
+        resourceLinkId: null,
+        tag: null,
+        startDateTime: '',
+        endDateTime: null,
+        gradesReleased: null,
+      }),
+    });
+
+    await expect(
+      getAgsLineItem({
+        lineItemsUrl: `${platform.baseUrl}/contexts/course-eng-101/lineitems`,
+        lineItemUrl,
+        grant,
+        registration: platform.registration,
+      })
+    ).resolves.toMatchObject({
+      resourceId: '',
+      resourceLinkId: null,
+      tag: null,
+      startDateTime: '',
+      endDateTime: null,
+    });
+  });
+
   test('supports progress-only and clear scores, query-bearing IDs, and rejects negatives', async () => {
     const platform = await startPlatform();
-    const before = platform.journal.length;
-    await expect(
-      submitAgsScore({
-        lineItemsUrl: `${platform.baseUrl}/contexts/course-eng-101/lineitems`,
-        lineItemUrl: `${platform.baseUrl}/lineitems/lineitem-argument-essay-001`,
-        accessToken: 'unused',
-        registration: platform.registration,
-        score: {
-          userId: 'lti-learner-ada',
-          scoreGiven: -1,
-          scoreMaximum: 100,
-          activityProgress: 'Completed',
-          gradingProgress: 'FullyGraded',
-          timestamp: '2026-07-21T12:00:00.000Z',
-        },
-      })
-    ).rejects.toThrow();
-    expect(platform.journal).toHaveLength(before);
-
     const assertion = createLtiClientAssertion({
       clientId: platform.registration.clientId,
       tokenEndpoint: platform.registration.tokenEndpoint,
@@ -1199,16 +1275,51 @@ describe('LTI Advantage service authentication and roster shape', () => {
       scopes: [LTI_SCOPES.score],
       advertisedScopes: [LTI_SCOPES.score],
     });
+    const beforeNegativeScore = platform.journal.length;
+    await expect(
+      submitAgsScore({
+        lineItemsUrl: `${platform.baseUrl}/contexts/course-eng-101/lineitems`,
+        lineItemUrl: `${platform.baseUrl}/lineitems/lineitem-argument-essay-001`,
+        grant: token,
+        registration: platform.registration,
+        score: {
+          userId: 'lti-learner-ada',
+          scoreGiven: -1,
+          scoreMaximum: 100,
+          activityProgress: 'Completed',
+          gradingProgress: 'FullyGraded',
+          timestamp: '2026-07-21T12:00:00.000Z',
+        },
+      })
+    ).rejects.toThrow();
+    expect(platform.journal).toHaveLength(beforeNegativeScore);
+
+    const beforeInvalidTimestamp = platform.journal.length;
+    await expect(
+      submitAgsScore({
+        lineItemsUrl: `${platform.baseUrl}/contexts/course-eng-101/lineitems`,
+        lineItemUrl: `${platform.baseUrl}/lineitems/lineitem-argument-essay-001`,
+        grant: token,
+        registration: platform.registration,
+        score: {
+          userId: 'lti-learner-ada',
+          activityProgress: 'InProgress',
+          gradingProgress: 'Pending',
+          timestamp: '2026-07-21T12:00:00Z',
+        },
+      })
+    ).rejects.toThrow('sub-second');
+    expect(platform.journal).toHaveLength(beforeInvalidTimestamp);
     await submitAgsScore({
       lineItemsUrl: `${platform.baseUrl}/contexts/course-eng-101/lineitems`,
       lineItemUrl: `${platform.baseUrl}/lineitems/lineitem-argument-essay-001`,
-      accessToken: token.accessToken,
+      grant: token,
       registration: platform.registration,
       score: {
         userId: 'lti-learner-ada',
         activityProgress: 'InProgress',
         gradingProgress: 'Pending',
-        timestamp: '2026-07-21T12:00:00.000Z',
+        timestamp: '2026-07-21T12:00:00.000+00',
       },
     });
     expect(platform.state.scores.at(-1)).toMatchObject({
@@ -1225,16 +1336,17 @@ describe('LTI Advantage service authentication and roster shape', () => {
     await submitAgsScore({
       lineItemsUrl: `${platform.baseUrl}/contexts/course-eng-101/lineitems`,
       lineItemUrl: `${platform.baseUrl}/lineitems/lineitem-query-001?tenant=ua`,
-      accessToken: token.accessToken,
+      grant: token,
       registration: platform.registration,
       score: {
         userId: 'lti-learner-ada',
         scoreGiven: null,
         activityProgress: 'Completed',
         gradingProgress: 'FullyGraded',
-        timestamp: '2026-07-21T07:00:00-05:00',
+        timestamp: '2026-07-21T07:00:00.000-05:00',
         scoringUserId: 'lti-instructor-kevin',
-        submission: { submittedAt: '2026-07-21T06:30:00-05:00' },
+        comment: null,
+        submission: { submittedAt: '2026-07-21T06:30:00.000-05:00' },
       },
     });
     expect(platform.state.scores.at(-1)).toMatchObject({
@@ -1279,7 +1391,7 @@ describe('LTI Advantage service authentication and roster shape', () => {
     await expect(
       createAgsLineItem({
         lineItemsUrl: `${platform.baseUrl}/contexts/course-eng-101/lineitems`,
-        accessToken: token.accessToken,
+        grant: token,
         registration: {
           ...platform.registration,
           allowedServiceOrigins: [platform.baseUrl, capture.baseUrl],
@@ -1318,6 +1430,47 @@ describe('LTI Advantage service authentication and roster shape', () => {
       })
     ).rejects.toThrow('bound');
     expect(capture.requests).toHaveLength(0);
+  });
+
+  test('binds service grants to one registration, organization, and deployment', async () => {
+    const platform = await startPlatform();
+    const assertion = createLtiClientAssertion({
+      clientId: platform.alternateRegistration.clientId,
+      tokenEndpoint: platform.alternateRegistration.tokenEndpoint,
+      deploymentId: platform.alternateRegistration.deploymentId,
+      privateKeyPem: platform.tool.privateKeyPem,
+      keyId: platform.tool.keyId,
+      jti: 'client-assertion-alternate-registration-service',
+      nowSeconds: platform.seed.nowSeconds,
+    });
+    const alternateGrant = await requestLtiAccessToken({
+      registration: platform.alternateRegistration,
+      clientAssertion: assertion,
+      scopes: [LTI_SCOPES.contextMembershipReadonly],
+      advertisedScopes: [LTI_SCOPES.contextMembershipReadonly],
+    });
+
+    const before = platform.journal.length;
+    await expect(
+      fetchAllNrpsMemberships({
+        membershipsUrl: `${platform.baseUrl}/contexts/course-eng-101/memberships`,
+        grant: alternateGrant,
+        registration: platform.registration,
+        expectedContextId: 'course-eng-101',
+      })
+    ).rejects.toThrow('bound');
+    expect(platform.journal).toHaveLength(before);
+
+    const direct = await networkFetch(
+      `${platform.baseUrl}/contexts/course-eng-101/memberships`,
+      {
+        headers: {
+          accept: LTI_NRPS_MEDIA_TYPE,
+          authorization: `Bearer ${alternateGrant.accessToken}`,
+        },
+      }
+    );
+    expect(direct.status).toBe(401);
   });
 
   test('expires provider grants and stops all service traffic after disablement', async () => {
@@ -1364,31 +1517,31 @@ describe('LTI Advantage service authentication and roster shape', () => {
     const attempts = await Promise.allSettled([
       fetchAllNrpsMemberships({
         membershipsUrl: `${platform.baseUrl}/contexts/course-eng-101/memberships`,
-        accessToken: token.accessToken,
+        grant: token,
         registration,
         expectedContextId: 'course-eng-101',
       }),
       fetchAllAgsLineItems({
         lineItemsUrl,
-        accessToken: token.accessToken,
+        grant: token,
         registration,
       }),
       createAgsLineItem({
         lineItemsUrl,
-        accessToken: token.accessToken,
+        grant: token,
         registration,
         lineItem: { scoreMaximum: 100, label: 'Disabled create' },
       }),
       getAgsLineItem({
         lineItemsUrl,
         lineItemUrl,
-        accessToken: token.accessToken,
+        grant: token,
         registration,
       }),
       updateAgsLineItem({
         lineItemsUrl,
         lineItemUrl,
-        accessToken: token.accessToken,
+        grant: token,
         registration,
         lineItem: {
           id: lineItemUrl,
@@ -1399,7 +1552,7 @@ describe('LTI Advantage service authentication and roster shape', () => {
       submitAgsScore({
         lineItemsUrl,
         lineItemUrl,
-        accessToken: token.accessToken,
+        grant: token,
         registration,
         score: {
           userId: 'lti-learner-ada',
@@ -1473,7 +1626,7 @@ describe('LTI Advantage service authentication and roster shape', () => {
     try {
       await createAgsLineItem({
         lineItemsUrl: `${platform.baseUrl}/contexts/course-eng-101/lineitems`,
-        accessToken: token.accessToken,
+        grant: token,
         registration: platform.registration,
         lineItem: {
           scoreMaximum: 100,

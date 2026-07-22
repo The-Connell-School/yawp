@@ -10,6 +10,10 @@ import {
   assertAllowedLtiServiceUrl,
   type LtiRegistration,
 } from './lti-registration';
+import {
+  assertLtiAccessGrant,
+  type LtiAccessGrant,
+} from './lti-contract.server';
 
 export const LTI_NRPS_MEDIA_TYPE =
   'application/vnd.ims.lti-nrps.v2.membershipcontainer+json';
@@ -79,13 +83,17 @@ function parseNextLink(header: string | null, currentUrl: URL): string | null {
 
 export async function fetchAllNrpsMemberships(input: {
   membershipsUrl: string;
-  accessToken: string;
+  grant: LtiAccessGrant;
   registration: LtiRegistration;
   expectedContextId: string;
-  fetchImpl?: typeof fetch;
   timeoutMs?: number;
 }) {
   assertEnabledRegistration(input.registration);
+  const accessToken = assertLtiAccessGrant(
+    input.grant,
+    input.registration,
+    LTI_SCOPES.contextMembershipReadonly
+  );
   const initialUrl = assertAllowedLtiServiceUrl(
     input.membershipsUrl,
     input.registration
@@ -108,12 +116,11 @@ export async function fetchAllNrpsMemberships(input: {
       operation: 'NRPS request',
       url: current,
       registration: input.registration,
-      fetchImpl: input.fetchImpl,
       timeoutMs: input.timeoutMs,
       init: {
         headers: {
           accept: LTI_NRPS_MEDIA_TYPE,
-          authorization: `Bearer ${input.accessToken}`,
+          authorization: `Bearer ${accessToken}`,
         },
       },
     });
@@ -164,7 +171,25 @@ export async function fetchAllNrpsMemberships(input: {
   };
 }
 
-const IsoDateSchema = z.string().datetime({ offset: true });
+function isValidIsoDate(value: string, requireSubseconds = false) {
+  const pattern = requireSubseconds
+    ? /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+(?:Z|[+-]\d{2}(?::\d{2})?)$/
+    : /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}(?::\d{2})?)$/;
+  return (
+    pattern.test(value) &&
+    !Number.isNaN(Date.parse(value.replace(/([+-]\d{2})$/, '$1:00')))
+  );
+}
+
+const IsoDateSchema = z
+  .string()
+  .refine((value) => isValidIsoDate(value), 'Invalid ISO 8601 date-time.');
+const AgsTimestampSchema = z
+  .string()
+  .refine(
+    (value) => isValidIsoDate(value, true),
+    'AGS timestamps require ISO 8601 sub-second precision and a time zone.'
+  );
 const LINE_ITEM_STANDARD_KEYS = new Set([
   'id',
   'scoreMaximum',
@@ -196,7 +221,7 @@ function validateQualifiedExtensions(
   }
 }
 
-const AgsLineItemFields = {
+const AgsLineItemInputFields = {
   scoreMaximum: z.number().positive(),
   label: z.string().min(1),
   resourceId: z.string().min(1).optional(),
@@ -207,15 +232,32 @@ const AgsLineItemFields = {
   gradesReleased: z.boolean().nullable().optional(),
 };
 
+const AgsLineItemResponseFields = {
+  scoreMaximum: z.number().positive(),
+  label: z.string().min(1),
+  resourceId: z.string().nullable().optional(),
+  resourceLinkId: z.string().nullable().optional(),
+  tag: z.string().nullable().optional(),
+  startDateTime: z
+    .union([IsoDateSchema, z.literal('')])
+    .nullable()
+    .optional(),
+  endDateTime: z
+    .union([IsoDateSchema, z.literal('')])
+    .nullable()
+    .optional(),
+  gradesReleased: z.boolean().nullable().optional(),
+};
+
 const AgsLineItemSchema = z
-  .object({ id: z.string().url(), ...AgsLineItemFields })
+  .object({ id: z.string().url(), ...AgsLineItemResponseFields })
   .catchall(z.unknown())
   .superRefine((value, context) =>
     validateQualifiedExtensions(value, context, LINE_ITEM_STANDARD_KEYS)
   );
 
 const AgsLineItemInputSchema = z
-  .object(AgsLineItemFields)
+  .object(AgsLineItemInputFields)
   .catchall(z.unknown())
   .superRefine((value, context) =>
     validateQualifiedExtensions(value, context, LINE_ITEM_STANDARD_KEYS)
@@ -271,13 +313,17 @@ async function parseAgsLineItemResponse(
 
 export async function createAgsLineItem(input: {
   lineItemsUrl: string;
-  accessToken: string;
+  grant: LtiAccessGrant;
   registration: LtiRegistration;
   lineItem: AgsLineItemInput;
-  fetchImpl?: typeof fetch;
   timeoutMs?: number;
 }) {
   assertEnabledRegistration(input.registration);
+  const accessToken = assertLtiAccessGrant(
+    input.grant,
+    input.registration,
+    LTI_SCOPES.lineItem
+  );
   const lineItemsUrl = assertAllowedLtiServiceUrl(
     input.lineItemsUrl,
     input.registration
@@ -287,13 +333,12 @@ export async function createAgsLineItem(input: {
     operation: 'AGS line-item create',
     url: lineItemsUrl,
     registration: input.registration,
-    fetchImpl: input.fetchImpl,
     timeoutMs: input.timeoutMs,
     init: {
       method: 'POST',
       headers: {
         accept: LTI_AGS_LINE_ITEM_MEDIA_TYPE,
-        authorization: `Bearer ${input.accessToken}`,
+        authorization: `Bearer ${accessToken}`,
         'content-type': LTI_AGS_LINE_ITEM_MEDIA_TYPE,
       },
       body: JSON.stringify(body),
@@ -308,7 +353,7 @@ export async function createAgsLineItem(input: {
 
 export async function fetchAllAgsLineItems(input: {
   lineItemsUrl: string;
-  accessToken: string;
+  grant: LtiAccessGrant;
   registration: LtiRegistration;
   filters?: {
     resourceLinkId?: string;
@@ -316,10 +361,13 @@ export async function fetchAllAgsLineItems(input: {
     tag?: string;
     limit?: number;
   };
-  fetchImpl?: typeof fetch;
   timeoutMs?: number;
 }) {
   assertEnabledRegistration(input.registration);
+  const accessToken = assertLtiAccessGrant(input.grant, input.registration, [
+    LTI_SCOPES.lineItem,
+    LTI_SCOPES.lineItemReadonly,
+  ]);
   const initialUrl = assertAllowedLtiServiceUrl(
     input.lineItemsUrl,
     input.registration
@@ -359,12 +407,11 @@ export async function fetchAllAgsLineItems(input: {
       operation: 'AGS line-item list',
       url: current,
       registration: input.registration,
-      fetchImpl: input.fetchImpl,
       timeoutMs: input.timeoutMs,
       init: {
         headers: {
           accept: LTI_AGS_LINE_ITEM_CONTAINER_MEDIA_TYPE,
-          authorization: `Bearer ${input.accessToken}`,
+          authorization: `Bearer ${accessToken}`,
         },
       },
     });
@@ -403,12 +450,15 @@ export async function fetchAllAgsLineItems(input: {
 export async function getAgsLineItem(input: {
   lineItemsUrl: string;
   lineItemUrl: string;
-  accessToken: string;
+  grant: LtiAccessGrant;
   registration: LtiRegistration;
-  fetchImpl?: typeof fetch;
   timeoutMs?: number;
 }) {
   assertEnabledRegistration(input.registration);
+  const accessToken = assertLtiAccessGrant(input.grant, input.registration, [
+    LTI_SCOPES.lineItem,
+    LTI_SCOPES.lineItemReadonly,
+  ]);
   const { container, resource } = assertAgsServiceBinding(
     input.lineItemsUrl,
     input.lineItemUrl,
@@ -418,12 +468,11 @@ export async function getAgsLineItem(input: {
     operation: 'AGS line-item read',
     url: resource,
     registration: input.registration,
-    fetchImpl: input.fetchImpl,
     timeoutMs: input.timeoutMs,
     init: {
       headers: {
         accept: LTI_AGS_LINE_ITEM_MEDIA_TYPE,
-        authorization: `Bearer ${input.accessToken}`,
+        authorization: `Bearer ${accessToken}`,
       },
     },
   });
@@ -437,13 +486,17 @@ export async function getAgsLineItem(input: {
 export async function updateAgsLineItem(input: {
   lineItemsUrl: string;
   lineItemUrl: string;
-  accessToken: string;
+  grant: LtiAccessGrant;
   registration: LtiRegistration;
   lineItem: z.input<typeof AgsLineItemSchema>;
-  fetchImpl?: typeof fetch;
   timeoutMs?: number;
 }) {
   assertEnabledRegistration(input.registration);
+  const accessToken = assertLtiAccessGrant(
+    input.grant,
+    input.registration,
+    LTI_SCOPES.lineItem
+  );
   const { container, resource } = assertAgsServiceBinding(
     input.lineItemsUrl,
     input.lineItemUrl,
@@ -458,13 +511,12 @@ export async function updateAgsLineItem(input: {
     operation: 'AGS line-item update',
     url: resource,
     registration: input.registration,
-    fetchImpl: input.fetchImpl,
     timeoutMs: input.timeoutMs,
     init: {
       method: 'PUT',
       headers: {
         accept: LTI_AGS_LINE_ITEM_MEDIA_TYPE,
-        authorization: `Bearer ${input.accessToken}`,
+        authorization: `Bearer ${accessToken}`,
         'content-type': LTI_AGS_LINE_ITEM_MEDIA_TYPE,
       },
       body: JSON.stringify(body),
@@ -486,10 +538,24 @@ export async function updateAgsLineItem(input: {
 
 const ScoreSubmissionSchema = z
   .object({
-    startedAt: IsoDateSchema.nullable().optional(),
-    submittedAt: IsoDateSchema.nullable().optional(),
+    startedAt: AgsTimestampSchema.optional(),
+    submittedAt: AgsTimestampSchema.optional(),
   })
-  .catchall(z.unknown());
+  .strict()
+  .superRefine((submission, context) => {
+    if (
+      submission.startedAt &&
+      submission.submittedAt &&
+      Date.parse(submission.submittedAt.replace(/([+-]\d{2})$/, '$1:00')) <
+        Date.parse(submission.startedAt.replace(/([+-]\d{2})$/, '$1:00'))
+    ) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'AGS submittedAt must not precede startedAt.',
+        path: ['submittedAt'],
+      });
+    }
+  });
 
 const SCORE_STANDARD_KEYS = new Set([
   'userId',
@@ -522,8 +588,8 @@ export const AgsScoreSchema = z
       'PendingManual',
       'FullyGraded',
     ]),
-    timestamp: IsoDateSchema,
-    comment: z.string().optional(),
+    timestamp: AgsTimestampSchema,
+    comment: z.string().nullable().optional(),
     scoringUserId: z.string().min(1).optional(),
     submission: ScoreSubmissionSchema.optional(),
   })
@@ -545,13 +611,17 @@ export const AgsScoreSchema = z
 export async function submitAgsScore(input: {
   lineItemsUrl: string;
   lineItemUrl: string;
-  accessToken: string;
+  grant: LtiAccessGrant;
   registration: LtiRegistration;
   score: z.input<typeof AgsScoreSchema>;
-  fetchImpl?: typeof fetch;
   timeoutMs?: number;
 }) {
   assertEnabledRegistration(input.registration);
+  const accessToken = assertLtiAccessGrant(
+    input.grant,
+    input.registration,
+    LTI_SCOPES.score
+  );
   const { resource } = assertAgsServiceBinding(
     input.lineItemsUrl,
     input.lineItemUrl,
@@ -565,12 +635,11 @@ export async function submitAgsScore(input: {
     operation: 'AGS score submission',
     url: scoreUrl,
     registration: input.registration,
-    fetchImpl: input.fetchImpl,
     timeoutMs: input.timeoutMs,
     init: {
       method: 'POST',
       headers: {
-        authorization: `Bearer ${input.accessToken}`,
+        authorization: `Bearer ${accessToken}`,
         'content-type': LTI_AGS_SCORE_MEDIA_TYPE,
       },
       body: JSON.stringify(score),

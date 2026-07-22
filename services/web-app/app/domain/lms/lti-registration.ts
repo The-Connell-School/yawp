@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { isIP } from 'node:net';
+import { BlockList, isIP } from 'node:net';
 
 const LOOPBACK_HOSTS = new Set(['127.0.0.1', '::1', '[::1]', 'localhost']);
 
@@ -11,42 +11,53 @@ function parseUrl(value: string) {
   }
 }
 
-function isBlockedIpv4(hostname: string) {
-  const parts = hostname.split('.').map(Number);
-  if (parts.length !== 4 || parts.some((part) => !Number.isInteger(part))) {
-    return false;
-  }
-  const [a, b] = parts;
-  return (
-    a === 0 ||
-    a === 10 ||
-    a === 127 ||
-    (a === 100 && b >= 64 && b <= 127) ||
-    (a === 169 && b === 254) ||
-    (a === 172 && b >= 16 && b <= 31) ||
-    (a === 192 && b === 168) ||
-    (a === 198 && (b === 18 || b === 19)) ||
-    a >= 224
-  );
+const blockedLtiAddresses = new BlockList();
+for (const [network, prefix] of [
+  ['0.0.0.0', 8],
+  ['10.0.0.0', 8],
+  ['100.64.0.0', 10],
+  ['127.0.0.0', 8],
+  ['169.254.0.0', 16],
+  ['172.16.0.0', 12],
+  ['192.0.0.0', 24],
+  ['192.0.2.0', 24],
+  ['192.88.99.0', 24],
+  ['192.168.0.0', 16],
+  ['198.18.0.0', 15],
+  ['198.51.100.0', 24],
+  ['203.0.113.0', 24],
+  ['224.0.0.0', 4],
+  ['240.0.0.0', 4],
+] as const) {
+  blockedLtiAddresses.addSubnet(network, prefix, 'ipv4');
+}
+for (const [network, prefix] of [
+  ['::', 128],
+  ['::1', 128],
+  ['::ffff:0:0', 96],
+  ['64:ff9b::', 96],
+  ['64:ff9b:1::', 48],
+  ['100::', 64],
+  ['2001::', 32],
+  ['2001:2::', 48],
+  ['2001:10::', 28],
+  ['2001:20::', 28],
+  ['2001:db8::', 32],
+  ['2002::', 16],
+  ['fc00::', 7],
+  ['fe80::', 10],
+  ['fec0::', 10],
+  ['ff00::', 8],
+] as const) {
+  blockedLtiAddresses.addSubnet(network, prefix, 'ipv6');
 }
 
 export function isBlockedLtiAddress(address: string) {
   const hostname = address.replace(/^\[|\]$/g, '').toLowerCase();
   if (hostname === 'localhost' || hostname.endsWith('.localhost')) return true;
   const ipVersion = isIP(hostname);
-  if (ipVersion === 4) return isBlockedIpv4(hostname);
-  if (ipVersion === 6) {
-    if (hostname.startsWith('::ffff:')) {
-      return isBlockedIpv4(hostname.slice('::ffff:'.length));
-    }
-    return (
-      hostname === '::' ||
-      hostname === '::1' ||
-      hostname.startsWith('fc') ||
-      hostname.startsWith('fd') ||
-      /^fe[89ab]/.test(hostname)
-    );
-  }
+  if (ipVersion === 4) return blockedLtiAddresses.check(hostname, 'ipv4');
+  if (ipVersion === 6) return blockedLtiAddresses.check(hostname, 'ipv6');
   return false;
 }
 
@@ -105,28 +116,30 @@ const LtiServiceOriginSchema = LtiNetworkUrlSchema.superRefine(
   }
 );
 
-const RegistrationShape = z.object({
-  id: z.string().min(1),
-  organizationId: z.string().min(1),
-  provider: z.enum(['blackboard', 'canvas', 'generic-lti-1p3']),
-  displayName: z.string().min(1),
-  transportMode: z.enum(['https', 'loopback-http']).default('https'),
-  issuer: LtiNetworkUrlSchema,
-  clientId: z.string().min(1),
-  allowedAudiences: z.array(z.string().min(1)).min(1),
-  deploymentId: z.string().min(1),
-  authorizationEndpoint: LtiNetworkUrlSchema,
-  tokenEndpoint: LtiNetworkUrlSchema,
-  jwksUrl: LtiNetworkUrlSchema,
-  allowedServiceOrigins: z.array(LtiServiceOriginSchema).min(1),
-  loginInitiationUrl: LtiNetworkUrlSchema,
-  launchUrl: LtiNetworkUrlSchema,
-  deepLinkingLaunchUrl: LtiNetworkUrlSchema,
-  toolJwksUrl: LtiNetworkUrlSchema,
-  allowedTargetLinkUris: z.array(LtiNetworkUrlSchema).min(1),
-  enabledScopes: z.array(z.string().url()).min(1),
-  enabled: z.boolean().default(false),
-});
+const RegistrationShape = z
+  .object({
+    id: z.string().min(1),
+    organizationId: z.string().min(1),
+    provider: z.enum(['blackboard', 'canvas', 'generic-lti-1p3']),
+    displayName: z.string().min(1),
+    transportMode: z.enum(['https', 'loopback-http']).default('https'),
+    issuer: LtiNetworkUrlSchema,
+    clientId: z.string().min(1),
+    allowedAudiences: z.array(z.string().min(1)).min(1),
+    deploymentId: z.string().min(1),
+    authorizationEndpoint: LtiNetworkUrlSchema,
+    tokenEndpoint: LtiNetworkUrlSchema,
+    jwksUrl: LtiNetworkUrlSchema,
+    allowedServiceOrigins: z.array(LtiServiceOriginSchema).min(1),
+    loginInitiationUrl: LtiNetworkUrlSchema,
+    launchUrl: LtiNetworkUrlSchema,
+    deepLinkingLaunchUrl: LtiNetworkUrlSchema,
+    toolJwksUrl: LtiNetworkUrlSchema,
+    allowedTargetLinkUris: z.array(LtiNetworkUrlSchema).min(1),
+    enabledScopes: z.array(z.string().url()).min(1),
+    enabled: z.boolean().default(false),
+  })
+  .strict();
 
 const NETWORK_FIELDS = [
   'issuer',

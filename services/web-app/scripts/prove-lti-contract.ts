@@ -92,7 +92,6 @@ async function run() {
       expectedTargetLinkUri: platform.registration.launchUrl,
       expectedMessageType: LTI_MESSAGE_TYPES.resourceLinkRequest,
       nowSeconds: platform.seed.nowSeconds,
-      fetchImpl: Bun.fetch as unknown as typeof fetch,
     });
     invariant(
       resourceLaunch.context,
@@ -121,7 +120,6 @@ async function run() {
         LTI_SCOPES.contextMembershipReadonly,
         ...resourceLaunch.services.agsScopes,
       ],
-      fetchImpl: Bun.fetch as unknown as typeof fetch,
     });
     invariant(
       resourceLaunch.services.membershipsUrl,
@@ -129,10 +127,9 @@ async function run() {
     );
     const roster = await fetchAllNrpsMemberships({
       membershipsUrl: `${resourceLaunch.services.membershipsUrl}?limit=2`,
-      accessToken: token.accessToken,
+      grant: token,
       registration: platform.registration,
       expectedContextId: resourceLaunch.context.id,
-      fetchImpl: Bun.fetch as unknown as typeof fetch,
     });
     invariant(roster.members.length === 4, 'NRPS roster size drifted.');
     invariant(
@@ -141,9 +138,8 @@ async function run() {
     );
     const lineItem = await createAgsLineItem({
       lineItemsUrl: resourceLaunch.services.lineItemsUrl,
-      accessToken: token.accessToken,
+      grant: token,
       registration: platform.registration,
-      fetchImpl: Bun.fetch as unknown as typeof fetch,
       lineItem: {
         scoreMaximum: 100,
         label: 'Yawp LMS Contract Proof',
@@ -155,16 +151,14 @@ async function run() {
     const readLineItem = await getAgsLineItem({
       lineItemsUrl: resourceLaunch.services.lineItemsUrl,
       lineItemUrl: lineItem.id,
-      accessToken: token.accessToken,
+      grant: token,
       registration: platform.registration,
-      fetchImpl: Bun.fetch as unknown as typeof fetch,
     });
     const updatedLineItem = await updateAgsLineItem({
       lineItemsUrl: resourceLaunch.services.lineItemsUrl,
       lineItemUrl: lineItem.id,
-      accessToken: token.accessToken,
+      grant: token,
       registration: platform.registration,
-      fetchImpl: Bun.fetch as unknown as typeof fetch,
       lineItem: { ...readLineItem, label: 'Yawp LMS Contract Proof Updated' },
     });
     invariant(
@@ -173,10 +167,9 @@ async function run() {
     );
     const listedLineItems = await fetchAllAgsLineItems({
       lineItemsUrl: resourceLaunch.services.lineItemsUrl,
-      accessToken: token.accessToken,
+      grant: token,
       registration: platform.registration,
       filters: { resourceId: 'resource-proof-001', limit: 1 },
-      fetchImpl: Bun.fetch as unknown as typeof fetch,
     });
     invariant(
       listedLineItems.length === 1 && listedLineItems[0].id === lineItem.id,
@@ -194,10 +187,15 @@ async function run() {
       await submitAgsScore({
         lineItemsUrl: resourceLaunch.services.lineItemsUrl,
         lineItemUrl: lineItem.id,
-        accessToken: token.accessToken,
+        grant: token,
         registration: platform.registration,
-        score,
-        fetchImpl: Bun.fetch as unknown as typeof fetch,
+        score: {
+          ...score,
+          timestamp:
+            attempt === 0
+              ? '2026-07-21T12:00:00.000Z'
+              : '2026-07-21T12:00:00.001Z',
+        },
       });
     }
     invariant(
@@ -219,7 +217,6 @@ async function run() {
       expectedTargetLinkUri: platform.registration.deepLinkingLaunchUrl,
       expectedMessageType: LTI_MESSAGE_TYPES.deepLinkingRequest,
       nowSeconds: platform.seed.nowSeconds,
-      fetchImpl: Bun.fetch as unknown as typeof fetch,
     });
     invariant(
       deepLinkLaunch.deepLinking,
@@ -266,6 +263,16 @@ async function run() {
       !journalJson.includes(platform.tool.privateKeyPem),
       'Journal leaked private key.'
     );
+    invariant(
+      platform.tool.jwksRequests.length >= 2,
+      'Platform did not fetch the tool JWKS over the network.'
+    );
+    invariant(
+      token.registrationId === platform.registration.id &&
+        token.organizationId === platform.registration.organizationId &&
+        token.deploymentId === platform.registration.deploymentId,
+      'OAuth grant was not bound to the selected registration tenant.'
+    );
 
     process.stdout.write(
       `${JSON.stringify(
@@ -305,6 +312,12 @@ async function run() {
             jwksFetchedOverNetwork: platform.journal.some(
               (entry) => entry.path === '/.well-known/jwks.json'
             ),
+            toolJwksFetchedByPlatformOverNetwork:
+              platform.tool.jwksRequests.length >= 2,
+            registrationBoundGrant:
+              token.registrationId === platform.registration.id &&
+              token.organizationId === platform.registration.organizationId &&
+              token.deploymentId === platform.registration.deploymentId,
             secretsRedacted: true,
           },
           requestPaths: platform.journal.map(

@@ -106,11 +106,21 @@ describe('LTI registration contract', () => {
       'https://169.254.169.254/latest/meta-data',
       'https://[::1]/jwks',
       'https://[fd00::1]/jwks',
+      'https://[::ffff:127.0.0.1]/jwks',
+      'https://[::ffff:a9fe:a9fe]/latest/meta-data',
+      'https://192.0.2.10/jwks',
+      'https://[2001:db8::1]/jwks',
     ]) {
       expect(() =>
         parseLtiRegistration({ ...validRegistration, jwksUrl: endpoint })
       ).toThrow('private');
     }
+  });
+
+  test('rejects unknown registration properties', () => {
+    expect(() =>
+      parseLtiRegistration({ ...validRegistration, testOnlyBypass: true })
+    ).toThrow('Unrecognized key');
   });
 
   test('reports malformed URLs as structured registration validation errors', () => {

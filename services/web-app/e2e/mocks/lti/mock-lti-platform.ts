@@ -4,9 +4,11 @@ import {
   createPublicKey,
   createSign,
   createVerify,
+  type JsonWebKey,
 } from 'node:crypto';
 import {
   createServer,
+  request as requestHttp,
   type IncomingMessage,
   type ServerResponse,
 } from 'node:http';
@@ -121,12 +123,18 @@ const SCOPES = {
   score: 'https://purl.imsglobal.org/spec/lti-ags/scope/score',
 } as const;
 
-const ALLOWED_SCOPES = new Set<string>(Object.values(SCOPES));
+const ALLOWED_SCOPES = new Set<string>([
+  SCOPES.contextMembershipReadonly,
+  SCOPES.lineItem,
+  SCOPES.lineItemReadonly,
+  SCOPES.score,
+]);
 const PLATFORM_KEY_ID = 'mock-platform-rs256-2026';
 const TOOL_KEY_ID = 'mock-yawp-tool-rs256-2026';
 const NOW_SECONDS = 1_784_678_400;
 
-type FailureKind = 'jwks' | 'token' | 'nrps' | 'deep-link' | 'ags';
+type FailureKind =
+  'jwks' | 'tool-jwks' | 'token' | 'nrps' | 'deep-link' | 'ags';
 type Failure = {
   status: number;
   body?: string;
@@ -174,6 +182,7 @@ export type MockLtiPlatform = {
       idToken: string;
       state: string;
     }>;
+    jwksRequests: Array<{ method: string; path: string }>;
   };
   journal: MockLtiJournalEntry[];
   state: MockState;
@@ -308,9 +317,57 @@ function signJwt(
   return `${input}.${b64(signer.sign(createPrivateKey(PLATFORM_PRIVATE_KEY)))}`;
 }
 
-function decodeAndVerifyToolJwt(
+function fetchToolJwks(toolJwksUrl: string) {
+  return new Promise<{ keys?: Array<Record<string, unknown>> }>(
+    (resolve, reject) => {
+      const request = requestHttp(
+        toolJwksUrl,
+        {
+          method: 'GET',
+          headers: { accept: 'application/json' },
+        },
+        (response) => {
+          const chunks: Buffer[] = [];
+          let size = 0;
+          response.on('data', (chunk: Buffer) => {
+            size += chunk.length;
+            if (size > 1024 * 1024) {
+              response.destroy(new Error('tool jwks response too large'));
+              return;
+            }
+            chunks.push(chunk);
+          });
+          response.on('error', reject);
+          response.on('end', () => {
+            if (
+              response.statusCode === undefined ||
+              response.statusCode < 200 ||
+              response.statusCode >= 300
+            ) {
+              reject(new Error('tool jwks unavailable'));
+              return;
+            }
+            try {
+              resolve(JSON.parse(Buffer.concat(chunks).toString('utf8')));
+            } catch {
+              reject(new Error('invalid tool jwks response'));
+            }
+          });
+        }
+      );
+      request.setTimeout(2_000, () => {
+        request.destroy(new Error('tool jwks request timed out'));
+      });
+      request.on('error', reject);
+      request.end();
+    }
+  );
+}
+
+async function decodeAndVerifyToolJwt(
   jwt: string,
   expectedAudience: string,
+  toolJwksUrl: string,
   options: {
     requireSubject: boolean;
     requireJti: boolean;
@@ -327,7 +384,12 @@ function decodeAndVerifyToolJwt(
   const payload = JSON.parse(
     Buffer.from(parts[1], 'base64url').toString('utf8')
   );
-  if (header.alg !== 'RS256' || header.kid !== TOOL_KEY_ID) {
+  if (header.alg !== 'RS256' || typeof header.kid !== 'string') {
+    throw new Error('invalid assertion key');
+  }
+  const jwks = await fetchToolJwks(toolJwksUrl);
+  const signingJwk = jwks.keys?.find((key) => key.kid === header.kid);
+  if (!signingJwk || signingJwk.kty !== 'RSA' || signingJwk.alg !== 'RS256') {
     throw new Error('invalid assertion key');
   }
   const verifier = createVerify('RSA-SHA256');
@@ -335,16 +397,24 @@ function decodeAndVerifyToolJwt(
   verifier.end();
   if (
     !verifier.verify(
-      createPublicKey(TOOL_PUBLIC_KEY),
+      createPublicKey({ key: signingJwk as JsonWebKey, format: 'jwk' }),
       Buffer.from(parts[2], 'base64url')
     )
   ) {
     throw new Error('invalid assertion signature');
   }
+  const audiences =
+    typeof payload.aud === 'string'
+      ? [payload.aud]
+      : Array.isArray(payload.aud) &&
+          payload.aud.every((audience: unknown) => typeof audience === 'string')
+        ? payload.aud
+        : [];
   if (
     payload.iss !== options.expectedClientId ||
     (options.requireSubject && payload.sub !== options.expectedClientId) ||
-    payload.aud !== expectedAudience ||
+    audiences.length !== 1 ||
+    audiences[0] !== expectedAudience ||
     (options.requireSubject &&
       payload[CLAIMS.deploymentId] !== options.expectedDeploymentId) ||
     payload.exp <= options.nowSeconds ||
@@ -421,7 +491,7 @@ async function consumeFailure(
   return true;
 }
 
-function bearerScopes(
+function bearerGrant(
   request: IncomingMessage,
   tokens: Map<string, TokenGrant>,
   nowSeconds: number
@@ -429,7 +499,7 @@ function bearerScopes(
   const authorization = request.headers.authorization;
   if (!authorization?.startsWith('Bearer ')) return null;
   const grant = tokens.get(authorization.slice('Bearer '.length));
-  return grant && grant.expiresAt > nowSeconds ? grant.scopes : null;
+  return grant && grant.expiresAt > nowSeconds ? grant : null;
 }
 
 function requireScope(
@@ -437,17 +507,25 @@ function requireScope(
   response: ServerResponse,
   tokens: Map<string, TokenGrant>,
   nowSeconds: number,
-  requiredScopes: string | string[]
+  requiredScopes: string | string[],
+  expectedRegistration: { clientId: string; deploymentId: string } = {
+    clientId: MOCK_LTI_SEED.clientId,
+    deploymentId: MOCK_LTI_SEED.deploymentId,
+  }
 ) {
-  const scopes = bearerScopes(request, tokens, nowSeconds);
-  if (!scopes) {
+  const grant = bearerGrant(request, tokens, nowSeconds);
+  if (
+    !grant ||
+    grant.clientId !== expectedRegistration.clientId ||
+    grant.deploymentId !== expectedRegistration.deploymentId
+  ) {
     json(response, 401, { error: 'invalid_token' });
     return false;
   }
   const candidates = Array.isArray(requiredScopes)
     ? requiredScopes
     : [requiredScopes];
-  if (!candidates.some((scope) => scopes.has(scope))) {
+  if (!candidates.some((scope) => grant.scopes.has(scope))) {
     json(response, 403, { error: 'insufficient_scope' });
     return false;
   }
@@ -530,11 +608,25 @@ function hasOnlyQualifiedExtensions(
 function isIsoDate(value: unknown) {
   return (
     typeof value === 'string' &&
-    /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(
+    /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}(?::\d{2})?)$/.test(
       value
     ) &&
-    !Number.isNaN(Date.parse(value))
+    !Number.isNaN(Date.parse(value.replace(/([+-]\d{2})$/, '$1:00')))
   );
+}
+
+function isAgsTimestamp(value: unknown) {
+  return (
+    typeof value === 'string' &&
+    /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+(?:Z|[+-]\d{2}(?::\d{2})?)$/.test(
+      value
+    ) &&
+    !Number.isNaN(Date.parse(value.replace(/([+-]\d{2})$/, '$1:00')))
+  );
+}
+
+function parseIsoDate(value: unknown) {
+  return Date.parse(String(value).replace(/([+-]\d{2})$/, '$1:00'));
 }
 
 function isLineItem(value: unknown, options: { allowId: boolean }) {
@@ -549,15 +641,21 @@ function isLineItem(value: unknown, options: { allowId: boolean }) {
     (options.allowId &&
       (typeof item.id !== 'string' || !URL.canParse(item.id))) ||
     (item.resourceId !== undefined &&
-      (typeof item.resourceId !== 'string' || !item.resourceId)) ||
+      item.resourceId !== null &&
+      typeof item.resourceId !== 'string') ||
     (item.resourceLinkId !== undefined &&
-      (typeof item.resourceLinkId !== 'string' || !item.resourceLinkId)) ||
-    (item.tag !== undefined && (typeof item.tag !== 'string' || !item.tag)) ||
+      item.resourceLinkId !== null &&
+      typeof item.resourceLinkId !== 'string') ||
+    (item.tag !== undefined &&
+      item.tag !== null &&
+      typeof item.tag !== 'string') ||
     (item.startDateTime !== undefined &&
       item.startDateTime !== null &&
+      item.startDateTime !== '' &&
       !isIsoDate(item.startDateTime)) ||
     (item.endDateTime !== undefined &&
       item.endDateTime !== null &&
+      item.endDateTime !== '' &&
       !isIsoDate(item.endDateTime)) ||
     (item.gradesReleased !== undefined &&
       item.gradesReleased !== null &&
@@ -689,7 +787,7 @@ function isScore(value: unknown) {
     !score.userId ||
     !ACTIVITY_PROGRESS.has(String(score.activityProgress)) ||
     !GRADING_PROGRESS.has(String(score.gradingProgress)) ||
-    !isIsoDate(score.timestamp) ||
+    !isAgsTimestamp(score.timestamp) ||
     (score.scoreGiven !== undefined &&
       score.scoreGiven !== null &&
       (typeof score.scoreGiven !== 'number' || score.scoreGiven < 0)) ||
@@ -711,25 +809,23 @@ function isScore(value: unknown) {
         ) ||
         ((score.submission as Record<string, unknown>).startedAt !==
           undefined &&
-          (score.submission as Record<string, unknown>).startedAt !== null &&
-          !isIsoDate(
+          !isAgsTimestamp(
             (score.submission as Record<string, unknown>).startedAt
           )) ||
         ((score.submission as Record<string, unknown>).submittedAt !==
           undefined &&
-          (score.submission as Record<string, unknown>).submittedAt !== null &&
-          !isIsoDate(
+          !isAgsTimestamp(
             (score.submission as Record<string, unknown>).submittedAt
           )) ||
         (typeof (score.submission as Record<string, unknown>).startedAt ===
           'string' &&
           typeof (score.submission as Record<string, unknown>).submittedAt ===
             'string' &&
-          Date.parse(
-            String((score.submission as Record<string, unknown>).submittedAt)
+          parseIsoDate(
+            (score.submission as Record<string, unknown>).submittedAt
           ) <
-            Date.parse(
-              String((score.submission as Record<string, unknown>).startedAt)
+            parseIsoDate(
+              (score.submission as Record<string, unknown>).startedAt
             )))) ||
     !hasOnlyQualifiedExtensions(score, SCORE_KEYS)
   ) {
@@ -744,6 +840,7 @@ export async function startMockLtiPlatform(): Promise<MockLtiPlatform> {
   const tokens = new Map<string, TokenGrant>();
   const usedAssertions = new Set<string>();
   const usedDeepLinkNonces = new Set<string>();
+  const pendingDeepLinkData: Array<string | null> = [];
   const deepLinkCapabilities = {
     acceptTypes: ['ltiResourceLink'],
     documentTargets: ['iframe', 'window'],
@@ -751,6 +848,7 @@ export async function startMockLtiPlatform(): Promise<MockLtiPlatform> {
     acceptLineItem: true,
   } as const;
   const launchRequests: MockLtiPlatform['tool']['launchRequests'] = [];
+  const toolJwksRequests: MockLtiPlatform['tool']['jwksRequests'] = [];
   const state: MockState = {
     deepLinkContentItems: [],
     lineItems: new Map(),
@@ -762,6 +860,18 @@ export async function startMockLtiPlatform(): Promise<MockLtiPlatform> {
   const toolServer = createServer((request, response) => {
     void (async () => {
       const url = new URL(request.url ?? '/', 'http://127.0.0.1');
+      if (
+        request.method === 'GET' &&
+        url.pathname === '/.well-known/jwks.json'
+      ) {
+        toolJwksRequests.push({ method: 'GET', path: url.pathname });
+        if (await consumeFailure(failures, 'tool-jwks', response)) return;
+        const jwk = createPublicKey(TOOL_PUBLIC_KEY).export({ format: 'jwk' });
+        json(response, 200, {
+          keys: [{ ...jwk, kid: TOOL_KEY_ID, use: 'sig', alg: 'RS256' }],
+        });
+        return;
+      }
       if (
         request.method !== 'POST' ||
         !['/lti/launch', '/lti/deep-link'].includes(url.pathname) ||
@@ -882,7 +992,7 @@ export async function startMockLtiPlatform(): Promise<MockLtiPlatform> {
             service_versions: ['2.0'],
           },
           [CLAIMS.endpoint]: {
-            scope: [SCOPES.lineItem, SCOPES.resultReadonly, SCOPES.score],
+            scope: [SCOPES.lineItem, SCOPES.score],
             lineitems: `${baseUrl}/contexts/course-eng-101/lineitems`,
           },
         };
@@ -899,10 +1009,15 @@ export async function startMockLtiPlatform(): Promise<MockLtiPlatform> {
             auto_create: false,
             accept_lineitem: deepLinkCapabilities.acceptLineItem,
           };
-          if (scenario !== 'deep-link-no-data') {
+          if (scenario === 'deep-link-empty-data') {
+            settings.data = '';
+          } else if (scenario !== 'deep-link-no-data') {
             settings.data = 'opaque-deep-link-data-001';
           }
           payload[CLAIMS.deepLinkingSettings] = settings;
+          pendingDeepLinkData.push(
+            typeof settings.data === 'string' ? settings.data : null
+          );
         }
         if (scenario === 'deep-link-minimal') {
           delete payload.sub;
@@ -937,6 +1052,9 @@ export async function startMockLtiPlatform(): Promise<MockLtiPlatform> {
         } else if (scenario === 'expiry-before-issued-at') {
           payload.iat = nowSeconds + 30;
           payload.exp = nowSeconds + 20;
+        } else if (scenario === 'not-before-after-expiry') {
+          payload.nbf = nowSeconds + 50;
+          payload.exp = nowSeconds + 40;
         } else if (scenario === 'untrusted-additional-audience') {
           payload.aud = [MOCK_LTI_SEED.clientId, 'attacker-client'];
           payload.azp = MOCK_LTI_SEED.clientId;
@@ -1011,9 +1129,10 @@ export async function startMockLtiPlatform(): Promise<MockLtiPlatform> {
           return;
         }
         try {
-          const claims = decodeAndVerifyToolJwt(
+          const claims = await decodeAndVerifyToolJwt(
             assertion,
             `${baseUrl}${url.pathname}`,
+            `${toolBaseUrl}/.well-known/jwks.json`,
             {
               requireSubject: true,
               requireJti: true,
@@ -1043,7 +1162,7 @@ export async function startMockLtiPlatform(): Promise<MockLtiPlatform> {
         });
         json(response, 200, {
           access_token: token,
-          token_type: 'Bearer',
+          token_type: 'bearer',
           expires_in: 300,
           scope,
         });
@@ -1117,9 +1236,10 @@ export async function startMockLtiPlatform(): Promise<MockLtiPlatform> {
         if (await consumeFailure(failures, 'deep-link', response)) return;
         const parsed = new URLSearchParams(body);
         try {
-          const claims = decodeAndVerifyToolJwt(
+          const claims = await decodeAndVerifyToolJwt(
             parsed.get('JWT') ?? parsed.get('id_token') ?? '',
             baseUrl,
+            `${toolBaseUrl}/.well-known/jwks.json`,
             {
               requireSubject: false,
               requireJti: false,
@@ -1129,19 +1249,22 @@ export async function startMockLtiPlatform(): Promise<MockLtiPlatform> {
             }
           );
           const nonce = claims.nonce;
+          const expectedData = pendingDeepLinkData[0];
           if (
+            expectedData === undefined ||
             claims[CLAIMS.messageType] !== 'LtiDeepLinkingResponse' ||
             claims[CLAIMS.version] !== '1.3.0' ||
             claims[CLAIMS.deploymentId] !== MOCK_LTI_SEED.deploymentId ||
             typeof nonce !== 'string' ||
             !nonce ||
             usedDeepLinkNonces.has(nonce) ||
-            (claims[CLAIMS.data] !== undefined &&
-              claims[CLAIMS.data] !== 'opaque-deep-link-data-001')
+            (expectedData === null
+              ? claims[CLAIMS.data] !== undefined
+              : claims[CLAIMS.data] !== expectedData)
           ) {
             throw new Error('wrong message type');
           }
-          const items = claims[CLAIMS.contentItems];
+          const items = claims[CLAIMS.contentItems] ?? [];
           if (
             !Array.isArray(items) ||
             (items.length > 1 && !deepLinkCapabilities.acceptsMultiple) ||
@@ -1163,6 +1286,7 @@ export async function startMockLtiPlatform(): Promise<MockLtiPlatform> {
           ) {
             throw new Error('invalid content items');
           }
+          pendingDeepLinkData.shift();
           usedDeepLinkNonces.add(nonce);
           state.deepLinkContentItems.push(...items);
           response.writeHead(204);
@@ -1347,6 +1471,19 @@ export async function startMockLtiPlatform(): Promise<MockLtiPlatform> {
           if (!isScore(score)) {
             throw new Error('invalid score');
           }
+          const latest = [...state.scores]
+            .reverse()
+            .find(
+              (stored) =>
+                stored.lineItemId === scoreMatch[1] &&
+                stored.userId === score.userId
+            );
+          if (
+            latest &&
+            parseIsoDate(score.timestamp) <= parseIsoDate(latest.timestamp)
+          ) {
+            throw new Error('stale score timestamp');
+          }
           state.scores.push({ ...score, lineItemId: scoreMatch[1] });
         } catch {
           json(response, 400, { error: 'invalid_score' });
@@ -1429,6 +1566,7 @@ export async function startMockLtiPlatform(): Promise<MockLtiPlatform> {
       privateKeyPem: TOOL_PRIVATE_KEY,
       publicKeyPem: TOOL_PUBLIC_KEY,
       launchRequests,
+      jwksRequests: toolJwksRequests,
     },
     journal,
     state,

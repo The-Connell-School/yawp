@@ -149,6 +149,54 @@ export type LtiDeepLinkContentItem = z.infer<
 
 type JsonObject = Record<string, unknown>;
 
+const LTI_ACCESS_GRANT_BRAND = Symbol('yawp.lti-access-grant');
+
+export type LtiAccessGrant = Readonly<{
+  [LTI_ACCESS_GRANT_BRAND]: true;
+  accessToken: string;
+  tokenType: 'Bearer';
+  expiresIn: number;
+  scope: string;
+  scopes: readonly string[];
+  registrationId: string;
+  organizationId: string;
+  deploymentId: string;
+  expiresAtEpochSeconds: number;
+}>;
+
+export function assertLtiAccessGrant(
+  grant: LtiAccessGrant,
+  registration: LtiRegistration,
+  acceptedScopes: string | readonly string[],
+  nowSeconds = Math.floor(Date.now() / 1000)
+) {
+  if (!registration.enabled) throw new Error('LTI registration is disabled.');
+  if (
+    !grant ||
+    grant[LTI_ACCESS_GRANT_BRAND] !== true ||
+    grant.registrationId !== registration.id ||
+    grant.organizationId !== registration.organizationId ||
+    grant.deploymentId !== registration.deploymentId
+  ) {
+    throw new Error('LTI access grant is not bound to this registration.');
+  }
+  if (grant.expiresAtEpochSeconds <= nowSeconds) {
+    throw new Error('LTI access grant has expired.');
+  }
+  if (
+    grant.scopes.some((scope) => !registration.enabledScopes.includes(scope))
+  ) {
+    throw new Error('LTI access grant contains a disabled scope.');
+  }
+  const candidates = Array.isArray(acceptedScopes)
+    ? acceptedScopes
+    : [acceptedScopes];
+  if (!candidates.some((scope) => grant.scopes.includes(scope))) {
+    throw new Error('LTI access grant lacks the required scope.');
+  }
+  return grant.accessToken;
+}
+
 const JwtHeaderSchema = z
   .object({
     alg: z.string(),
@@ -218,6 +266,18 @@ function getOptionalString(object: JsonObject, key: string): string | null {
   return typeof value === 'string' && value.length > 0 ? value : null;
 }
 
+function getOptionalOpaqueString(
+  object: JsonObject,
+  key: string
+): string | null {
+  const value = object[key];
+  if (value === undefined) return null;
+  if (typeof value !== 'string') {
+    throw new Error(`LTI ${key} claim must be a string when present.`);
+  }
+  return value;
+}
+
 function getRequiredObject(
   object: JsonObject,
   key: string,
@@ -255,7 +315,6 @@ function getStringArray(
 async function fetchPlatformSigningKey(
   registration: LtiRegistration,
   keyId: string,
-  fetchImpl: typeof fetch,
   timeoutMs?: number
 ) {
   assertRegistrationTransportUrl(registration.jwksUrl, registration);
@@ -263,7 +322,6 @@ async function fetchPlatformSigningKey(
     operation: 'LTI platform JWKS',
     url: registration.jwksUrl,
     registration,
-    fetchImpl,
     timeoutMs,
     init: {
       headers: { accept: 'application/json' },
@@ -357,7 +415,6 @@ export async function verifyLtiLaunchForm(
       | typeof LTI_MESSAGE_TYPES.resourceLinkRequest
       | typeof LTI_MESSAGE_TYPES.deepLinkingRequest;
     nowSeconds?: number;
-    fetchImpl?: typeof fetch;
     timeoutMs?: number;
   }
 ): Promise<VerifiedLtiLaunch> {
@@ -389,7 +446,6 @@ export async function verifyLtiLaunchForm(
   const publicKey = await fetchPlatformSigningKey(
     options.registration,
     header.kid,
-    options.fetchImpl ?? fetch,
     options.timeoutMs
   );
   const verifier = createVerify('RSA-SHA256');
@@ -437,6 +493,9 @@ export async function verifyLtiLaunchForm(
   if (payload.nbf !== undefined) {
     if (typeof payload.nbf !== 'number' || payload.nbf > now + 60) {
       throw new Error('LTI token is not yet valid.');
+    }
+    if (payload.nbf >= payload.exp) {
+      throw new Error('LTI token not-before time must precede expiry.');
     }
   }
   if (payload.iat < now - 300) {
@@ -615,7 +674,7 @@ export async function verifyLtiLaunchForm(
               typeof deepLinkingClaim.accept_lineitem === 'boolean'
                 ? deepLinkingClaim.accept_lineitem
                 : null,
-            data: getOptionalString(deepLinkingClaim, 'data'),
+            data: getOptionalOpaqueString(deepLinkingClaim, 'data'),
           }
         : null,
   };
@@ -654,7 +713,7 @@ export function createLtiClientAssertion(input: {
     payload: {
       iss: input.clientId,
       sub: input.clientId,
-      aud: tokenEndpoint,
+      aud: [tokenEndpoint],
       iat: now,
       exp: now + 300,
       jti: input.jti ?? randomUUID(),
@@ -712,7 +771,9 @@ export function createDeepLinkingResponseJwt(input: {
       [LTI_CLAIMS.deploymentId]: input.deploymentId,
       [LTI_CLAIMS.messageType]: LTI_MESSAGE_TYPES.deepLinkingResponse,
       [LTI_CLAIMS.version]: '1.3.0',
-      ...(input.data ? { [LTI_CLAIMS.data]: input.data } : {}),
+      ...(input.data !== undefined && input.data !== null
+        ? { [LTI_CLAIMS.data]: input.data }
+        : {}),
       [LTI_CLAIMS.contentItems]: contentItems,
     },
     privateKeyPem: input.privateKeyPem,
@@ -724,14 +785,8 @@ export async function requestLtiAccessToken(input: {
   clientAssertion: string;
   scopes: string[];
   advertisedScopes: string[];
-  fetchImpl?: typeof fetch;
   timeoutMs?: number;
-}): Promise<{
-  accessToken: string;
-  tokenType: 'Bearer';
-  expiresIn: number;
-  scope: string;
-}> {
+}): Promise<LtiAccessGrant> {
   if (!input.registration.enabled) {
     throw new Error('LTI registration is disabled.');
   }
@@ -740,10 +795,12 @@ export async function requestLtiAccessToken(input: {
     input.registration
   );
   const assertionPayload = decodeJwt(input.clientAssertion).payload;
+  const assertionAudiences = normalizeAudiences(assertionPayload);
   if (
     assertionPayload.iss !== input.registration.clientId ||
     assertionPayload.sub !== input.registration.clientId ||
-    assertionPayload.aud !== tokenEndpoint.toString() ||
+    assertionAudiences.length !== 1 ||
+    assertionAudiences[0] !== tokenEndpoint.toString() ||
     assertionPayload[LTI_CLAIMS.deploymentId] !==
       input.registration.deploymentId
   ) {
@@ -766,7 +823,6 @@ export async function requestLtiAccessToken(input: {
     operation: 'LTI token endpoint',
     url: tokenEndpoint,
     registration: input.registration,
-    fetchImpl: input.fetchImpl,
     timeoutMs: input.timeoutMs,
     init: {
       method: 'POST',
@@ -801,7 +857,10 @@ export async function requestLtiAccessToken(input: {
   const parsed = z
     .object({
       access_token: z.string().min(1),
-      token_type: z.literal('Bearer'),
+      token_type: z
+        .string()
+        .refine((value) => value.toLowerCase() === 'bearer')
+        .transform(() => 'Bearer' as const),
       expires_in: z.number().int().positive(),
       scope: z.string().min(1),
     })
@@ -810,10 +869,16 @@ export async function requestLtiAccessToken(input: {
   if (returnedScopes.some((scope) => !input.scopes.includes(scope))) {
     throw new Error('LTI token endpoint returned scope beyond the request.');
   }
-  return {
+  return Object.freeze({
+    [LTI_ACCESS_GRANT_BRAND]: true as const,
     accessToken: parsed.access_token,
     tokenType: parsed.token_type,
     expiresIn: parsed.expires_in,
     scope: parsed.scope,
-  };
+    scopes: Object.freeze([...returnedScopes]),
+    registrationId: input.registration.id,
+    organizationId: input.registration.organizationId,
+    deploymentId: input.registration.deploymentId,
+    expiresAtEpochSeconds: Math.floor(Date.now() / 1000) + parsed.expires_in,
+  });
 }
