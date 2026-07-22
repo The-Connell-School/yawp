@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import {
   AP_HISTORY_ASSIGNMENT_TYPE_KEY,
   buildApHistorySnapshot,
+  buildImportedApHistorySnapshot,
   parseApHistorySnapshot,
 } from './schema';
 
@@ -30,6 +31,8 @@ type LibraryEntryFixture = {
     imageUrl: string | null;
     imageAlt: string | null;
     provenanceUrl: string | null;
+    licenseName: string | null;
+    licenseUrl: string | null;
   }>;
 };
 
@@ -60,6 +63,8 @@ const dbqEntry: LibraryEntryFixture = {
       imageUrl: null,
       imageAlt: null,
       provenanceUrl: 'https://example.test/doc-1',
+      licenseName: 'Public Domain (U.S. federal government work)',
+      licenseUrl: 'https://www.usa.gov/government-copyright',
     },
   ],
 };
@@ -72,7 +77,8 @@ describe('AP History snapshot schema', () => {
   test('builds a versioned immutable DBQ snapshot from a library row', () => {
     const snapshot = buildApHistorySnapshot(dbqEntry);
     expect(snapshot).toMatchObject({
-      schemaVersion: 1,
+      schemaVersion: 2,
+      origin: 'library',
       libraryEntryId: 'apush-dbq-new-deal-federal-power',
       course: 'apush',
       essayType: 'dbq',
@@ -81,6 +87,11 @@ describe('AP History snapshot schema', () => {
       timing: { mode: 'untimed', durationMinutes: 60 },
     });
     expect(snapshot.sources).toHaveLength(1);
+    expect(snapshot.sources[0]).toMatchObject({
+      licenseName: 'Public Domain (U.S. federal government work)',
+      licenseUrl: 'https://www.usa.gov/government-copyright',
+      provenanceUrl: 'https://example.test/doc-1',
+    });
 
     dbqEntry.sources[0].body = 'Library row changed after assignment creation.';
     expect(snapshot.sources[0].body).toBe(
@@ -149,6 +160,89 @@ describe('AP History snapshot schema', () => {
           {
             ...dbqEntry.sources[0],
             mediaType: 'video',
+          },
+        ],
+      }),
+    ).toThrow();
+  });
+
+  test('continues to read version 1 snapshots for active assignments', () => {
+    const v2 = buildApHistorySnapshot(dbqEntry);
+    const { origin: _origin, importDigest: _digest, ...legacy } = v2;
+    const legacySources = legacy.sources.map(
+      ({ licenseName: _name, licenseUrl: _url, ...source }) => source,
+    );
+
+    expect(
+      parseApHistorySnapshot({
+        ...legacy,
+        schemaVersion: 1,
+        sources: legacySources,
+      }),
+    ).toMatchObject({
+      schemaVersion: 1,
+      essayType: 'dbq',
+      sources: [{ externalKey: dbqEntry.sources[0].externalKey }],
+    });
+  });
+
+  test('builds a bounded public-domain PDF import snapshot', () => {
+    const snapshot = buildImportedApHistorySnapshot({
+      importDigest: 'a'.repeat(64),
+      essayType: 'dbq',
+      prompt: 'Evaluate the extent to which the New Deal expanded federal power.',
+      period: 'Period 7: 1890-1945',
+      periodNumber: 7,
+      reasoningSkill: 'causation',
+      timeMode: 'timed',
+      durationMinutes: 60,
+      provenanceUrl: 'https://www.archives.gov/education/lessons/fdr-inaugural',
+      sources: [
+        {
+          position: 1,
+          title: 'Document 1',
+          attribution: 'Franklin D. Roosevelt, First Inaugural Address, 1933',
+          body: 'This Nation asks for action, and action now.',
+        },
+      ],
+    });
+
+    expect(snapshot).toMatchObject({
+      schemaVersion: 2,
+      origin: 'pdf-import',
+      importDigest: 'a'.repeat(64),
+      essayType: 'dbq',
+      timing: { mode: 'timed', durationMinutes: 60 },
+      sources: [
+        {
+          externalKey: `pdf-${'a'.repeat(16)}-doc-1`,
+          licenseName: 'Public Domain',
+          licenseUrl: 'https://creativecommons.org/public-domain/mark/1.0/',
+          provenanceUrl:
+            'https://www.archives.gov/education/lessons/fdr-inaugural',
+        },
+      ],
+    });
+  });
+
+  test('rejects PDF import snapshots without HTTPS provenance', () => {
+    expect(() =>
+      buildImportedApHistorySnapshot({
+        importDigest: 'b'.repeat(64),
+        essayType: 'dbq',
+        prompt: 'Evaluate the prompt.',
+        period: 'Period 7',
+        periodNumber: 7,
+        reasoningSkill: 'causation',
+        timeMode: 'timed',
+        durationMinutes: 60,
+        provenanceUrl: 'file:///teacher/downloads/dbq.pdf',
+        sources: [
+          {
+            position: 1,
+            title: 'Document 1',
+            attribution: 'Federal source, 1933',
+            body: 'Source body.',
           },
         ],
       }),

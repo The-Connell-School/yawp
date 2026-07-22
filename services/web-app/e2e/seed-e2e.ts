@@ -369,6 +369,8 @@ export async function seedE2E(): Promise<E2EContext> {
               imageUrl: source.imageUrl,
               imageAlt: source.imageAlt,
               provenanceUrl: source.provenanceUrl,
+              licenseName: source.licenseName,
+              licenseUrl: source.licenseUrl,
             })),
           },
         })),

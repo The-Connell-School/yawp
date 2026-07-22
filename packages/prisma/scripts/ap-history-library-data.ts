@@ -11,35 +11,43 @@ export const AP_HISTORY_LIBRARY_ENTRIES = [
     reasoningSkill: 'causation',
     difficulty: 'exam-ready',
     skillEmphasis: 'evidence',
-    defaultTimeMode: 'untimed',
+    defaultTimeMode: 'timed',
     defaultDurationMinutes: 60,
-    provenanceUrl: 'https://apcentral.collegeboard.org/',
+    provenanceUrl:
+      'https://www.archives.gov/education/lessons/fdr-inaugural',
     sources: [
       {
         externalKey: 'apush-dbq-new-deal-federal-power-doc-1',
         position: 1,
         title: 'Document 1',
-        attribution: 'Franklin D. Roosevelt, first inaugural address, 1933',
+        attribution:
+          'Franklin D. Roosevelt, First Inaugural Address, March 4, 1933',
         body:
           'This Nation asks for action, and action now. Our greatest primary task is to put people to work.',
         caption: 'Roosevelt outlines federal response to economic crisis.',
         mediaType: 'text',
         imageUrl: null,
         imageAlt: null,
-        provenanceUrl: 'https://apcentral.collegeboard.org/',
+        provenanceUrl:
+          'https://www.archives.gov/education/lessons/fdr-inaugural',
+        licenseName: 'Public Domain (U.S. federal government work)',
+        licenseUrl: 'https://www.usa.gov/government-copyright',
       },
       {
         externalKey: 'apush-dbq-new-deal-federal-power-doc-2',
         position: 2,
         title: 'Document 2',
-        attribution: 'Social Security Act summary, 1935',
+        attribution:
+          'Social Security Act of 1935, Act of August 14, 1935 (H.R. 7260)',
         body:
-          'The Act created old-age benefits and unemployment insurance funded through payroll taxes.',
+          'An act to provide for the general welfare by establishing a system of Federal old-age benefits and enabling the states to make more adequate provision for unemployment compensation and public welfare.',
         caption: 'Federal welfare-state expansion during the New Deal.',
         mediaType: 'text',
         imageUrl: null,
         imageAlt: null,
-        provenanceUrl: 'https://apcentral.collegeboard.org/',
+        provenanceUrl: 'https://www.ssa.gov/history/35act.html',
+        licenseName: 'Public Domain (U.S. federal government work)',
+        licenseUrl: 'https://www.usa.gov/government-copyright',
       },
     ],
   },
@@ -57,7 +65,8 @@ export const AP_HISTORY_LIBRARY_ENTRIES = [
     skillEmphasis: 'outside-evidence',
     defaultTimeMode: 'untimed',
     defaultDurationMinutes: 40,
-    provenanceUrl: 'https://apcentral.collegeboard.org/',
+    provenanceUrl:
+      'https://www.archives.gov/education/lessons/fdr-inaugural',
     sources: [],
   },
 ] as const;

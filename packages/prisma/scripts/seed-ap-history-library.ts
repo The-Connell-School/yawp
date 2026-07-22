@@ -203,6 +203,8 @@ async function seedApHistoryLibrary() {
           imageUrl: source.imageUrl,
           imageAlt: source.imageAlt,
           provenanceUrl: source.provenanceUrl,
+          licenseName: source.licenseName,
+          licenseUrl: source.licenseUrl,
         },
         create: {
           externalKey: source.externalKey,
@@ -216,6 +218,8 @@ async function seedApHistoryLibrary() {
           imageUrl: source.imageUrl,
           imageAlt: source.imageAlt,
           provenanceUrl: source.provenanceUrl,
+          licenseName: source.licenseName,
+          licenseUrl: source.licenseUrl,
         },
       });
     }

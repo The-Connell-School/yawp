@@ -27,6 +27,7 @@ const membershipSelect = {
       reporterEnabled: true,
       writingFundamentalsEnabled: true,
       compositionDrillsEnabled: true,
+      apHistoryPdfImportEnabled: true,
       classInsightsEnabled: true,
     },
   },

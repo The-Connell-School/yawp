@@ -50,6 +50,17 @@ describe('AP History library seed data', () => {
       }
     }
   });
+
+  test('every curated DBQ source carries HTTPS provenance and public-domain rights', () => {
+    for (const entry of AP_HISTORY_LIBRARY_ENTRIES) {
+      expect(entry.provenanceUrl).toMatch(/^https:\/\//);
+      for (const source of entry.sources) {
+        expect(source.provenanceUrl).toMatch(/^https:\/\//);
+        expect(source.licenseName).toContain('Public Domain');
+        expect(source.licenseUrl).toMatch(/^https:\/\//);
+      }
+    }
+  });
 });
 
 describe('AP History assignment type seed behavior', () => {

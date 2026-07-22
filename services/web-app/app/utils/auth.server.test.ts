@@ -53,6 +53,7 @@ const membershipFixture = {
     reporterEnabled: false,
     writingFundamentalsEnabled: false,
     compositionDrillsEnabled: false,
+    apHistoryPdfImportEnabled: false,
     classInsightsEnabled: false,
   },
 };
@@ -99,6 +100,7 @@ describe('membership auth helpers', () => {
             reporterEnabled: true,
             writingFundamentalsEnabled: true,
             compositionDrillsEnabled: true,
+            apHistoryPdfImportEnabled: true,
             classInsightsEnabled: true,
           },
         },
@@ -130,6 +132,7 @@ describe('membership auth helpers', () => {
             reporterEnabled: true,
             writingFundamentalsEnabled: true,
             compositionDrillsEnabled: true,
+            apHistoryPdfImportEnabled: true,
             classInsightsEnabled: true,
           },
         },

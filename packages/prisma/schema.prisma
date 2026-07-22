@@ -87,6 +87,7 @@ model Assignment {
   submitForGrade                  Boolean           @default(true)
   pointValue                      Int?              @default(100)
   gradingAssistantStrictnessLevel String            @default("intermediate")
+  tutorEnabled                    Boolean           @default(true)
   apHistorySnapshot               Json?
   classAssignments                ClassAssignment[]
   documents                       Document[]
@@ -173,6 +174,8 @@ model ApHistoryPromptLibrarySource {
   imageUrl             String?
   imageAlt             String?
   provenanceUrl        String?
+  licenseName          String?
+  licenseUrl           String?
 
   @@index([promptLibraryEntryId, position])
 }
@@ -267,6 +270,7 @@ model Document {
   title                    String                    @default("Untitled")
   text                     String?
   html                     String?
+  apHistoryTimerStartedAt  DateTime?                 @db.Timestamptz(6)
   membership               OrgMembership             @relation(fields: [membershipId], references: [id], onDelete: Cascade)
   membershipId             String
   assignmentTypeId         String
@@ -390,6 +394,7 @@ model Organization {
   reporterEnabled            Boolean                      @default(false)
   writingFundamentalsEnabled Boolean                      @default(false)
   compositionDrillsEnabled   Boolean                      @default(false)
+  apHistoryPdfImportEnabled  Boolean                      @default(false)
   classInsightsEnabled       Boolean                      @default(false)
   ltiEnabled                 Boolean                      @default(false)
   memberships                OrgMembership[]
