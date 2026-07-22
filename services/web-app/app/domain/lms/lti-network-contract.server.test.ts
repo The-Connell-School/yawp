@@ -317,10 +317,13 @@ describe('LTI 1.3 launch over the network boundary', () => {
     ['test-user-with-encoded-ims-role', 'defined roles'],
     ['test-user-with-ims-vocab-root-role', 'defined roles'],
     ['test-user-with-legacy-ims-urn-role', 'defined roles'],
-    ['test-user-with-whitespace-ims-urn-role', 'surrounding whitespace'],
+    ['test-user-with-whitespace-ims-urn-role', 'raw whitespace'],
     ['test-user-with-encoded-ims-urn-role', 'defined roles'],
     ['test-user-with-legacy-sysrole', 'defined roles'],
     ['test-user-with-legacy-instrole', 'defined roles'],
+    ['test-user-with-tabbed-legacy-urn', 'raw whitespace'],
+    ['test-user-with-newline-legacy-urn', 'raw whitespace'],
+    ['test-user-with-carriage-return-legacy-urn', 'raw whitespace'],
   ])(
     'rejects authorization-unsafe role scenario %s',
     async (scenario, message) => {
@@ -362,6 +365,10 @@ describe('LTI 1.3 launch over the network boundary', () => {
       'http://purl.imsglobal.org/vocab/lis/v2/membership#Learner',
     ],
     ['test-user-with-custom-role', 'https://roles.example.test/PreviewLearner'],
+    [
+      'test-user-with-opaque-custom-role',
+      'https://roles.example.test/%FFPreviewLearner',
+    ],
   ])(
     'recognizes TestUser with its companion role in scenario %s',
     async (scenario, companion) => {
@@ -1091,7 +1098,7 @@ describe('LTI Advantage service authentication and roster shape', () => {
           'http://purl.imsglobal.org/vocab/lti/system/person#TestUser',
           ' urn:lti:role:ims/lis/SuperAdmin',
         ],
-        'surrounding whitespace',
+        'raw whitespace',
       ],
       [
         [
@@ -1113,6 +1120,27 @@ describe('LTI Advantage service authentication and roster shape', () => {
           'urn:lti:instrole:ims/lis/SuperAdmin',
         ],
         'defined roles',
+      ],
+      [
+        [
+          'http://purl.imsglobal.org/vocab/lti/system/person#TestUser',
+          'urn:l\tti:role:ims/lis/SuperAdmin',
+        ],
+        'raw whitespace',
+      ],
+      [
+        [
+          'http://purl.imsglobal.org/vocab/lti/system/person#TestUser',
+          'ur\nn:lti:role:ims/lis/SuperAdmin',
+        ],
+        'raw whitespace',
+      ],
+      [
+        [
+          'http://purl.imsglobal.org/vocab/lti/system/person#TestUser',
+          'urn:\rlti:role:ims/lis/SuperAdmin',
+        ],
+        'raw whitespace',
       ],
     ] as const) {
       platform.failNext('nrps', {
@@ -1157,6 +1185,10 @@ describe('LTI Advantage service authentication and roster shape', () => {
       [
         'http://purl.imsglobal.org/vocab/lti/system/person#TestUser',
         'https://roles.example.test/PreviewLearner',
+      ],
+      [
+        'http://purl.imsglobal.org/vocab/lti/system/person#TestUser',
+        'https://roles.example.test/%FFPreviewLearner',
       ],
     ]) {
       platform.failNext('nrps', {

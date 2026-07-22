@@ -170,16 +170,20 @@ const STANDARD_LTI_ROLE_URIS = new Set([
   LTI_TEST_USER_ROLE,
 ]);
 
+function normalizeAsciiPercentOctets(value: string) {
+  if (/%(?![0-9a-f]{2})/i.test(value)) return null;
+  return value.replace(/%([0-9a-f]{2})/gi, (encoded, hex: string) => {
+    const octet = Number.parseInt(hex, 16);
+    return octet <= 0x7f ? String.fromCharCode(octet) : encoded.toUpperCase();
+  });
+}
+
 function isReservedImsVocabularyUri(value: string) {
-  let percentNormalizedValue: string;
-  try {
-    percentNormalizedValue = decodeURIComponent(value);
-  } catch {
-    return true;
-  }
+  const percentNormalizedValue = normalizeAsciiPercentOctets(value);
+  if (percentNormalizedValue === null) return false;
   if (/^urn:lti:/i.test(percentNormalizedValue)) return true;
-  if (!URL.canParse(value)) return false;
-  const url = new URL(value);
+  if (!URL.canParse(percentNormalizedValue)) return false;
+  const url = new URL(percentNormalizedValue);
   const canonicalHostname = url.hostname.toLowerCase().replace(/\.+$/, '');
   return canonicalHostname === 'purl.imsglobal.org';
 }
@@ -188,8 +192,12 @@ const LtiRoleUriSchema = z
   .string()
   .min(1)
   .refine(
-    (value) => value === value.trim(),
-    'LTI roles must not contain surrounding whitespace.'
+    (value) => !/[\u0000-\u0020\u007f-\u009f\s]/u.test(value),
+    'LTI roles must not contain raw whitespace or control characters.'
+  )
+  .refine(
+    (value) => normalizeAsciiPercentOctets(value) !== null,
+    'LTI roles must use valid percent encoding.'
   )
   .refine(
     (value) => URL.canParse(value),
