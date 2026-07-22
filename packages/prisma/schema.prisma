@@ -32,6 +32,7 @@ model Class {
   classAssignments ClassAssignment[]
 
   writingPracticeClassAssignments WritingPracticeClassAssignment[]
+  ltiCourseMappings               LtiCourseMapping[]
 
   @@unique([schoolId, code])
   @@index([schoolId, schoolYear, period, grade])
@@ -388,6 +389,7 @@ model Organization {
   reporterEnabled            Boolean                      @default(false)
   writingFundamentalsEnabled Boolean                      @default(false)
   classInsightsEnabled       Boolean                      @default(false)
+  ltiEnabled                 Boolean                      @default(false)
   memberships                OrgMembership[]
   invitations                Invitation[]
   schools                    School[]
@@ -397,6 +399,151 @@ model Organization {
   reporterGrowthPlans        ReporterGrowthPlan[]
   aiRequestReservations      AiRequestReservation[]
   writingPracticeAssignments WritingPracticeAssignment[]
+  ltiRegistrations           LtiRegistration[]
+  ltiLaunchTransactions      LtiLaunchTransaction[]
+  ltiPendingLinks            LtiPendingLink[]
+  ltiExternalIdentities      LtiExternalIdentity[]
+  ltiCourseMappings          LtiCourseMapping[]
+  ltiAuditEvents             LtiAuditEvent[]
+}
+
+model LtiRegistration {
+  id                    String                 @id @default(cuid())
+  createdAt             DateTime               @default(now()) @db.Timestamptz(6)
+  updatedAt             DateTime               @updatedAt @db.Timestamptz(6)
+  organizationId        String
+  organization          Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  provider              String
+  displayName           String
+  issuer                String
+  clientId              String
+  deploymentId          String
+  authorizationEndpoint String
+  tokenEndpoint         String
+  jwksUrl               String
+  loginInitiationUrl    String
+  launchUrl             String
+  deepLinkingLaunchUrl  String
+  toolJwksUrl           String
+  allowedAudiences      String[]
+  allowedServiceOrigins String[]
+  allowedTargetLinkUris String[]
+  enabledScopes         String[]
+  jwksCacheTtlSeconds   Int                    @default(300)
+  enabled               Boolean                @default(false)
+  disabledAt            DateTime?              @db.Timestamptz(6)
+  uninstalledAt         DateTime?              @db.Timestamptz(6)
+  launchTransactions    LtiLaunchTransaction[]
+  pendingLinks          LtiPendingLink[]
+  externalIdentities    LtiExternalIdentity[]
+  courseMappings        LtiCourseMapping[]
+  auditEvents           LtiAuditEvent[]
+
+  @@unique([issuer, clientId, deploymentId])
+  @@unique([id, organizationId])
+  @@index([organizationId, enabled])
+}
+
+model LtiLaunchTransaction {
+  id                  String          @id @default(cuid())
+  createdAt           DateTime        @default(now()) @db.Timestamptz(6)
+  expiresAt           DateTime        @db.Timestamptz(6)
+  consumedAt          DateTime?       @db.Timestamptz(6)
+  stateHash           String          @unique
+  nonceHash           String          @unique
+  loginHintHash       String
+  messageHintHash     String?
+  targetLinkUri       String
+  expectedMessageType String
+  registrationId      String
+  organizationId      String
+  registration        LtiRegistration @relation(fields: [registrationId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  organization        Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  pendingLink         LtiPendingLink?
+
+  @@index([registrationId, expiresAt])
+  @@index([organizationId, consumedAt])
+}
+
+model LtiPendingLink {
+  id              String               @id @default(cuid())
+  createdAt       DateTime             @default(now()) @db.Timestamptz(6)
+  expiresAt       DateTime             @db.Timestamptz(6)
+  consumedAt      DateTime?            @db.Timestamptz(6)
+  secretHash      String               @unique
+  subjectHash     String
+  membershipRole  MembershipRole
+  transactionId   String               @unique
+  registrationId  String
+  organizationId  String
+  courseMappingId String
+  transaction     LtiLaunchTransaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  registration    LtiRegistration      @relation(fields: [registrationId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  organization    Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  courseMapping   LtiCourseMapping     @relation(fields: [courseMappingId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  @@index([registrationId, subjectHash])
+  @@index([organizationId, expiresAt])
+}
+
+model LtiExternalIdentity {
+  id             String          @id @default(cuid())
+  createdAt      DateTime        @default(now()) @db.Timestamptz(6)
+  updatedAt      DateTime        @updatedAt @db.Timestamptz(6)
+  lastLaunchedAt DateTime?       @db.Timestamptz(6)
+  subjectHash    String
+  registrationId String
+  organizationId String
+  membershipId   String
+  registration   LtiRegistration @relation(fields: [registrationId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  membership     OrgMembership   @relation(fields: [membershipId, organizationId], references: [id, organizationId], onDelete: Restrict)
+
+  @@unique([registrationId, subjectHash])
+  @@unique([registrationId, membershipId])
+  @@index([organizationId, membershipId])
+}
+
+model LtiCourseMapping {
+  id             String           @id @default(cuid())
+  createdAt      DateTime         @default(now()) @db.Timestamptz(6)
+  updatedAt      DateTime         @updatedAt @db.Timestamptz(6)
+  contextId      String
+  enabled        Boolean          @default(true)
+  registrationId String
+  organizationId String
+  classId        String
+  registration   LtiRegistration  @relation(fields: [registrationId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  class          Class            @relation(fields: [classId], references: [id], onDelete: Cascade)
+  pendingLinks   LtiPendingLink[]
+
+  @@unique([registrationId, contextId])
+  @@unique([registrationId, classId])
+  @@unique([id, organizationId])
+  @@index([organizationId, enabled])
+  @@index([classId])
+}
+
+model LtiAuditEvent {
+  id             String           @id @default(cuid())
+  createdAt      DateTime         @default(now()) @db.Timestamptz(6)
+  eventType      String
+  outcome        String
+  subjectHash    String?
+  contextId      String?
+  requestId      String?
+  details        Json?
+  registrationId String?
+  organizationId String
+  actorUserId    String?
+  registration   LtiRegistration? @relation(fields: [registrationId], references: [id], onDelete: SetNull)
+  organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  actor          User?            @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, createdAt(sort: Desc)])
+  @@index([registrationId, createdAt(sort: Desc)])
+  @@index([eventType, outcome, createdAt(sort: Desc)])
 }
 
 model OrganizationAssignmentType {
@@ -447,6 +594,7 @@ model OrgMembership {
   writingPracticeAttempts           WritingPracticeAttempt[]    @relation("WritingPracticeAttemptStudent")
   writingPracticePromptSets         WritingPracticePromptSet[]  @relation("WritingPracticePromptSetStudent")
   classAssignmentInsightsGenerated  ClassAssignmentInsight[]
+  ltiExternalIdentities             LtiExternalIdentity[]
 
   @@unique([userId, organizationId])
   @@unique([id, organizationId])
@@ -598,16 +746,17 @@ model Setting {
 // Upload table removed. Videos will be stored in S3 and referenced by key.
 
 model User {
-  id           String          @id @default(cuid())
-  createdAt    DateTime        @default(now()) @db.Timestamptz(6)
-  updatedAt    DateTime        @default(now()) @db.Timestamptz(6)
-  email        String          @unique
-  name         String?
-  password     Password?
-  sessions     Session[]
-  memberships  OrgMembership[]
-  isAdmin      Boolean         @default(false)
-  isSuperAdmin Boolean         @default(false)
+  id             String          @id @default(cuid())
+  createdAt      DateTime        @default(now()) @db.Timestamptz(6)
+  updatedAt      DateTime        @default(now()) @db.Timestamptz(6)
+  email          String          @unique
+  name           String?
+  password       Password?
+  sessions       Session[]
+  memberships    OrgMembership[]
+  isAdmin        Boolean         @default(false)
+  isSuperAdmin   Boolean         @default(false)
+  ltiAuditEvents LtiAuditEvent[]
 }
 
 model Invitation {
