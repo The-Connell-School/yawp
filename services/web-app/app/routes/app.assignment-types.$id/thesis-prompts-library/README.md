@@ -40,6 +40,29 @@ Prompts are grouped by `category`, the primary facet:
 | `sourceNeed` | `none` \| `optional` \| `required` |
 | `gradeBands` | subset of `9` \| `10` \| `11` \| `12` |
 
+## Prompt generator (LLM)
+
+Alongside browsing the fixed corpus, teachers can **generate** a new prompt.
+The **"Generate a prompt"** option in the New menu (third item, next to
+Document and Assignment) opens a chat sheet where the teacher describes the
+essay they want and iterates with an LLM until they have a draft they like;
+"Use this prompt" drops it straight into the Create Assignment sheet.
+
+- `prompt-generator.ts` — framework-free shared module: the `GeneratorMessage`
+  / `GeneratedPrompt` types, the zod `GeneratorResponseSchema` output contract
+  (`{ reply, prompt }`), `selectFewShotExamples`, and
+  `buildGeneratorSystemPrompt`, which teaches the model the three-part house
+  style and seeds it with real corpus prompts as few-shot examples. Unit-tested
+  in `prompt-generator.test.ts`.
+- `thesis-prompt-generator.tsx` — the chat sheet UI (`useFetcher`).
+- `../../api.domain.thesis-prompt-generator/route.ts` — the teacher-gated POST
+  action that calls `getLLMCompletion` and parses the structured reply
+  (`route.test.ts`).
+
+The generator is gated exactly like the library: teachers only, and only on
+the Thesis-Driven Essay assignment type. Its drafts follow the same three-part
+structure as the corpus, so anything it produces reads like a library prompt.
+
 ## Updating the corpus
 
 Edit `prompts.json` directly, keeping the three-part prompt structure and the
