@@ -61,7 +61,7 @@ const FACET_SECTIONS: FacetSpec[] = [
   {
     facetKey: 'cognitiveMoves',
     paramKey: FACET_KEYS.cognitiveMoves,
-    title: 'Cognitive move',
+    title: 'Cognitive mode',
     renderLabel: (v) => COGNITIVE_MOVE_LABEL[v as ThesisCognitiveMove],
   },
   {
