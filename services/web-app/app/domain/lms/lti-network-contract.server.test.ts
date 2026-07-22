@@ -310,6 +310,9 @@ describe('LTI 1.3 launch over the network boundary', () => {
     ['fabricated-lis-role', 'standard LTI'],
     ['lis-context-type-as-role', 'standard LTI'],
     ['test-user-only-role', 'real role'],
+    ['test-user-with-fabricated-lis-role', 'defined roles'],
+    ['test-user-with-context-type-role', 'defined roles'],
+    ['test-user-with-fabricated-lti-role', 'defined roles'],
   ])(
     'rejects authorization-unsafe role scenario %s',
     async (scenario, message) => {
@@ -1025,6 +1028,27 @@ describe('LTI Advantage service authentication and roster shape', () => {
       [
         ['http://purl.imsglobal.org/vocab/lti/system/person#TestUser'],
         'real role',
+      ],
+      [
+        [
+          'http://purl.imsglobal.org/vocab/lti/system/person#TestUser',
+          'http://purl.imsglobal.org/vocab/lis/v2/membership#SuperAdmin',
+        ],
+        'defined roles',
+      ],
+      [
+        [
+          'http://purl.imsglobal.org/vocab/lti/system/person#TestUser',
+          'http://purl.imsglobal.org/vocab/lis/v2/course#CourseOffering',
+        ],
+        'defined roles',
+      ],
+      [
+        [
+          'http://purl.imsglobal.org/vocab/lti/system/person#TestUser',
+          'http://purl.imsglobal.org/vocab/lti/system/person#SuperAdmin',
+        ],
+        'defined roles',
       ],
     ] as const) {
       platform.failNext('nrps', {

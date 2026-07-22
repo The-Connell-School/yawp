@@ -100,7 +100,8 @@ The signed launch must:
   explicitly enumerated by Core Appendix A.2 (including defined sub-roles);
   extension roles may accompany that standard authorization anchor, while
   namespace lookalikes and context-type URIs do not count. Appendix A.2.4's
-  `TestUser` marker is recognized but must accompany a second real role;
+  `TestUser` marker is recognized but must accompany an enumerated LIS role or
+  a genuine extension outside reserved IMS vocabulary namespaces;
 - consume state and nonce exactly once in the persisted launch flow in #212.
 
 A Deep Linking launch may omit subject, roles, and context under Deep Linking

@@ -1174,6 +1174,21 @@ export async function startMockLtiPlatform(): Promise<MockLtiPlatform> {
             'http://purl.imsglobal.org/vocab/lti/system/person#TestUser',
             'https://roles.example.test/PreviewLearner',
           ];
+        } else if (scenario === 'test-user-with-fabricated-lis-role') {
+          payload[CLAIMS.roles] = [
+            'http://purl.imsglobal.org/vocab/lti/system/person#TestUser',
+            'http://purl.imsglobal.org/vocab/lis/v2/membership#SuperAdmin',
+          ];
+        } else if (scenario === 'test-user-with-context-type-role') {
+          payload[CLAIMS.roles] = [
+            'http://purl.imsglobal.org/vocab/lti/system/person#TestUser',
+            'http://purl.imsglobal.org/vocab/lis/v2/course#CourseOffering',
+          ];
+        } else if (scenario === 'test-user-with-fabricated-lti-role') {
+          payload[CLAIMS.roles] = [
+            'http://purl.imsglobal.org/vocab/lti/system/person#TestUser',
+            'http://purl.imsglobal.org/vocab/lti/system/person#SuperAdmin',
+          ];
         } else if (scenario === 'mixed-standard-custom-roles') {
           payload[CLAIMS.roles] = [
             'https://roles.example.test/DepartmentChair',

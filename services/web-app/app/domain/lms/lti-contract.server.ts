@@ -170,12 +170,26 @@ const STANDARD_LTI_ROLE_URIS = new Set([
   LTI_TEST_USER_ROLE,
 ]);
 
+function isReservedImsVocabularyUri(value: string) {
+  if (!URL.canParse(value)) return false;
+  const url = new URL(value);
+  return (
+    url.hostname.toLowerCase() === 'purl.imsglobal.org' &&
+    url.pathname.startsWith('/vocab/')
+  );
+}
+
 const LtiRoleUriSchema = z
   .string()
   .min(1)
   .refine(
     (value) => URL.canParse(value),
     'LTI roles must be absolute URI values.'
+  )
+  .refine(
+    (value) =>
+      !isReservedImsVocabularyUri(value) || STANDARD_LTI_ROLE_URIS.has(value),
+    'LTI roles in reserved IMS vocabulary namespaces must be defined roles.'
   );
 
 export const LtiRolesSchema = z
@@ -193,7 +207,12 @@ export const LtiRolesSchema = z
     }
     if (
       roles.includes(LTI_TEST_USER_ROLE) &&
-      !roles.some((role) => role !== LTI_TEST_USER_ROLE)
+      !roles.some(
+        (role) =>
+          role !== LTI_TEST_USER_ROLE &&
+          (STANDARD_LIS_ROLE_URIS.has(role) ||
+            !isReservedImsVocabularyUri(role))
+      )
     ) {
       context.addIssue({
         code: z.ZodIssueCode.custom,
