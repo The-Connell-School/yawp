@@ -12,10 +12,8 @@ const INSTRUCTOR =
   'http://purl.imsglobal.org/vocab/lis/v2/membership#Instructor';
 const INSTRUCTOR_SUBROLE =
   'http://purl.imsglobal.org/vocab/lis/v2/membership/Instructor#TeachingAssistant';
-const LEARNER =
-  'http://purl.imsglobal.org/vocab/lis/v2/membership#Learner';
-const TEST_USER =
-  'http://purl.imsglobal.org/vocab/lti/system/person#TestUser';
+const LEARNER = 'http://purl.imsglobal.org/vocab/lis/v2/membership#Learner';
+const TEST_USER = 'http://purl.imsglobal.org/vocab/lti/system/person#TestUser';
 
 describe('LTI launch pilot primitives', () => {
   test('hashes state and nonce without persisting their raw values', () => {
@@ -52,11 +50,11 @@ describe('LTI launch pilot primitives', () => {
   });
 
   test.each([
-    [],
-    [TEST_USER],
-    [INSTRUCTOR, LEARNER],
-    ['https://roles.example.test/Instructor'],
-    ['http://purl.imsglobal.org/vocab/lis/v2/membership#Mentor'],
+    [[]],
+    [[TEST_USER]],
+    [[INSTRUCTOR, LEARNER]],
+    [['https://roles.example.test/Instructor']],
+    [['http://purl.imsglobal.org/vocab/lis/v2/membership#Mentor']],
   ])('rejects absent, mixed, or unauthorized role sets %j', (roles) => {
     expect(() => mapLtiRolesToMembershipRole(roles)).toThrow(
       'exactly one Yawp membership role'
