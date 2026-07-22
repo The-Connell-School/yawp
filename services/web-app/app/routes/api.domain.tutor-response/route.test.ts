@@ -3,15 +3,21 @@ import { beforeEach, describe, expect, mock, test } from 'bun:test';
 
 const getLLMCompletion = mock();
 const requireMutableRequest = mock();
-const requireAdmin = mock();
+const requireUserId = mock();
+const requireMembership = mock();
 const prisma = {
   assignmentModuleSession: {
+    findFirst: mock(),
     findUnique: mock(),
     update: mock(),
   },
 };
 
-mock.module('~/utils/auth.server', () => ({ requireMutableRequest, requireAdmin }));
+mock.module('~/utils/auth.server', () => ({
+  requireMutableRequest,
+  requireUserId,
+  requireMembership,
+}));
 mock.module('~/utils/db.server', () => ({ prisma }));
 mock.module('~/utils/getLLMCompletion', () => ({
   AgentType: {
@@ -30,14 +36,22 @@ describe('api.domain.tutor-response read-only impersonation', () => {
   beforeEach(() => {
     getLLMCompletion.mockReset();
     requireMutableRequest.mockReset();
-    requireAdmin.mockReset();
+    requireUserId.mockReset();
+    requireMembership.mockReset();
     requireMutableRequest.mockResolvedValue(undefined);
+    requireUserId.mockResolvedValue('user-1');
+    requireMembership.mockResolvedValue({
+      id: 'student-1',
+      role: 'STUDENT',
+      organization: { id: 'org-1' },
+    });
+    prisma.assignmentModuleSession.findFirst.mockReset();
     prisma.assignmentModuleSession.findUnique.mockReset();
     prisma.assignmentModuleSession.update.mockReset();
   });
 
   function mockCms() {
-    prisma.assignmentModuleSession.findUnique.mockResolvedValueOnce({
+    const cms = {
       id: 'cms-1',
       instructionsCompleted: 0,
       assignmentModule: {
@@ -77,8 +91,11 @@ describe('api.domain.tutor-response read-only impersonation', () => {
       document: {
         id: 'doc-1',
         text: 'Original draft',
+        assignment: { tutorEnabled: true },
       },
-    });
+    };
+    prisma.assignmentModuleSession.findFirst.mockResolvedValueOnce(cms);
+    return cms;
   }
 
   test('preserves the read-only mutation guard response', async () => {
@@ -136,6 +153,15 @@ describe('api.domain.tutor-response read-only impersonation', () => {
         body,
       }),
     } as any);
+
+    expect(prisma.assignmentModuleSession.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          id: 'cms-1',
+          document: { membershipId: 'student-1' },
+        },
+      }),
+    );
 
     const completionArgs = getLLMCompletion.mock.calls[0]?.[0] as any;
     expect(completionArgs.tools).toBeUndefined();
@@ -263,5 +289,52 @@ describe('api.domain.tutor-response read-only impersonation', () => {
       agent: 'assistant',
       content: 'Draft a clearer thesis.',
     });
+  });
+
+  test('enforces an assignment tutor-off policy before calling the model', async () => {
+    const cms = mockCms();
+    prisma.assignmentModuleSession.findFirst.mockReset();
+    prisma.assignmentModuleSession.findFirst.mockResolvedValue({
+      ...cms,
+      document: {
+        ...cms.document,
+        assignment: { tutorEnabled: false },
+      },
+    });
+
+    const body = new FormData();
+    body.set('response', 'Can you review this?');
+    body.set('cmsId', 'cms-1');
+
+    const response = await action({
+      request: new Request('https://example.com/api/domain/tutor-response', {
+        method: 'POST',
+        body,
+      }),
+    } as any);
+
+    expect(response.init?.status).toBe(403);
+    expect((response.data as { error?: string }).error).toBe(
+      'Tutor is disabled for this assignment.',
+    );
+    expect(getLLMCompletion).not.toHaveBeenCalled();
+    expect(prisma.assignmentModuleSession.update).not.toHaveBeenCalled();
+  });
+
+  test('does not disclose another student session', async () => {
+    prisma.assignmentModuleSession.findFirst.mockResolvedValue(null);
+    const body = new FormData();
+    body.set('response', 'Can you review this?');
+    body.set('cmsId', 'other-student-cms');
+
+    const response = await action({
+      request: new Request('https://example.com/api/domain/tutor-response', {
+        method: 'POST',
+        body,
+      }),
+    } as any);
+
+    expect(response.init?.status).toBe(404);
+    expect(getLLMCompletion).not.toHaveBeenCalled();
   });
 });

@@ -4,7 +4,11 @@ import { z } from 'zod';
 import { prisma } from '~/utils/db.server';
 import { AgentType, getLLMCompletion } from '~/utils/getLLMCompletion';
 import { isLlmFallbackRetrySignal } from '~/utils/getLLMCompletion/llm-provider-errors.server';
-import { requireMutableRequest } from '~/utils/auth.server';
+import {
+  requireMembership,
+  requireMutableRequest,
+  requireUserId,
+} from '~/utils/auth.server';
 import {
   buildModuleRubricGuidance,
   buildTutorSystemPrompt,
@@ -50,13 +54,18 @@ function buildDocumentContextMessage({
 
 export async function action({ request }: ActionFunctionArgs) {
   await requireMutableRequest(request);
+  const userId = await requireUserId(request);
+  const profile = await requireMembership(request, userId);
 
   try {
     const { error, data } = await parseFormData(request, POST);
     if (error) return validationError(error);
 
-    const cms = await prisma.assignmentModuleSession.findUnique({
-      where: { id: data.cmsId },
+    const cms = await prisma.assignmentModuleSession.findFirst({
+      where: {
+        id: data.cmsId,
+        document: { membershipId: profile.id },
+      },
       include: {
         assignmentModule: {
           include: {
@@ -75,6 +84,7 @@ export async function action({ request }: ActionFunctionArgs) {
           select: {
             id: true,
             text: true,
+            assignment: { select: { tutorEnabled: true } },
           },
         },
       },
@@ -84,6 +94,13 @@ export async function action({ request }: ActionFunctionArgs) {
       return dataResponse(
         { error: 'No course module session found' },
         { status: 404 }
+      );
+    }
+
+    if (cms.document.assignment?.tutorEnabled === false) {
+      return dataResponse(
+        { error: 'Tutor is disabled for this assignment.' },
+        { status: 403 }
       );
     }
 
