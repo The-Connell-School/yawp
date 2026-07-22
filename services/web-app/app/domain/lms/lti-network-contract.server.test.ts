@@ -313,6 +313,10 @@ describe('LTI 1.3 launch over the network boundary', () => {
     ['test-user-with-fabricated-lis-role', 'defined roles'],
     ['test-user-with-context-type-role', 'defined roles'],
     ['test-user-with-fabricated-lti-role', 'defined roles'],
+    ['test-user-with-trailing-dot-ims-role', 'defined roles'],
+    ['test-user-with-encoded-ims-role', 'defined roles'],
+    ['test-user-with-ims-vocab-root-role', 'defined roles'],
+    ['test-user-with-legacy-ims-urn-role', 'defined roles'],
   ])(
     'rejects authorization-unsafe role scenario %s',
     async (scenario, message) => {
@@ -1047,6 +1051,34 @@ describe('LTI Advantage service authentication and roster shape', () => {
         [
           'http://purl.imsglobal.org/vocab/lti/system/person#TestUser',
           'http://purl.imsglobal.org/vocab/lti/system/person#SuperAdmin',
+        ],
+        'defined roles',
+      ],
+      [
+        [
+          'http://purl.imsglobal.org/vocab/lti/system/person#TestUser',
+          'http://purl.imsglobal.org./vocab/lis/v2/membership#SuperAdmin',
+        ],
+        'defined roles',
+      ],
+      [
+        [
+          'http://purl.imsglobal.org/vocab/lti/system/person#TestUser',
+          'http://purl.imsglobal.org/%76ocab/lis/v2/membership#SuperAdmin',
+        ],
+        'defined roles',
+      ],
+      [
+        [
+          'http://purl.imsglobal.org/vocab/lti/system/person#TestUser',
+          'http://purl.imsglobal.org/vocab#SuperAdmin',
+        ],
+        'defined roles',
+      ],
+      [
+        [
+          'http://purl.imsglobal.org/vocab/lti/system/person#TestUser',
+          'urn:lti:role:ims/lis/SuperAdmin',
         ],
         'defined roles',
       ],

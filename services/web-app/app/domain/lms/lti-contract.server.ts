@@ -171,12 +171,11 @@ const STANDARD_LTI_ROLE_URIS = new Set([
 ]);
 
 function isReservedImsVocabularyUri(value: string) {
+  if (/^urn:lti:role:ims\//i.test(value)) return true;
   if (!URL.canParse(value)) return false;
   const url = new URL(value);
-  return (
-    url.hostname.toLowerCase() === 'purl.imsglobal.org' &&
-    url.pathname.startsWith('/vocab/')
-  );
+  const canonicalHostname = url.hostname.toLowerCase().replace(/\.+$/, '');
+  return canonicalHostname === 'purl.imsglobal.org';
 }
 
 const LtiRoleUriSchema = z

@@ -101,7 +101,9 @@ The signed launch must:
   extension roles may accompany that standard authorization anchor, while
   namespace lookalikes and context-type URIs do not count. Appendix A.2.4's
   `TestUser` marker is recognized but must accompany an enumerated LIS role or
-  a genuine extension outside reserved IMS vocabulary namespaces;
+  a genuine extension outside IMS-owned role namespaces; all spellings on the
+  canonical `purl.imsglobal.org` authority and deprecated `urn:lti:role:ims/`
+  families are reserved, including terminal-DNS-dot and encoded-path variants;
 - consume state and nonce exactly once in the persisted launch flow in #212.
 
 A Deep Linking launch may omit subject, roles, and context under Deep Linking
