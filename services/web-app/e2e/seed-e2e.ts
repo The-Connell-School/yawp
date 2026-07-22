@@ -95,6 +95,7 @@ export type E2EContext = {
   teacherEmail: string;
   assignmentTypeId: string;
   dailyPagesAssignmentTypeId: string;
+  thesisEssayAssignmentTypeId: string;
   apHistoryAssignmentTypeId: string;
   apHistoryDbqEntryKey: string;
   apHistoryLeqEntryKey: string;
@@ -272,6 +273,39 @@ export async function seedE2E(): Promise<E2EContext> {
                 {
                   title: 'Write',
                   prompt: 'Write freely for ten minutes.',
+                  position: 1,
+                  showChatButton: true,
+                },
+              ],
+            },
+          },
+        ],
+      },
+    },
+    select: { id: true },
+  });
+
+  const thesisEssayAssignmentType = await prisma.assignmentType.create({
+    data: {
+      title: 'The Thesis-Driven Essay',
+      description:
+        'Formal, thesis-driven essays. Teachers build assignments from the prompt library.',
+      position: 3,
+      ownerOrgId: org.id,
+      organizationAssignments: {
+        create: { organizationId: org.id },
+      },
+      assignmentModules: {
+        create: [
+          {
+            title: 'The Thesis-Driven Essay',
+            position: 1,
+            description: 'Write a formal, thesis-driven essay.',
+            instructions: {
+              create: [
+                {
+                  title: 'Draft',
+                  prompt: 'Draft your thesis-driven essay.',
                   position: 1,
                   showChatButton: true,
                 },
@@ -616,6 +650,7 @@ export async function seedE2E(): Promise<E2EContext> {
     teacherEmail: seededTeacherEmail,
     assignmentTypeId: assignmentType.id,
     dailyPagesAssignmentTypeId: dailyPagesAssignmentType.id,
+    thesisEssayAssignmentTypeId: thesisEssayAssignmentType.id,
     apHistoryAssignmentTypeId: apHistoryAssignmentType.id,
     apHistoryDbqEntryKey: apHistoryDbqEntry.externalKey,
     apHistoryLeqEntryKey: apHistoryLeqEntry.externalKey,
