@@ -389,6 +389,7 @@ model Organization {
   numOfTeacherSeats          Int                          @default(10)
   reporterEnabled            Boolean                      @default(false)
   writingFundamentalsEnabled Boolean                      @default(false)
+  compositionDrillsEnabled   Boolean                      @default(false)
   classInsightsEnabled       Boolean                      @default(false)
   ltiEnabled                 Boolean                      @default(false)
   memberships                OrgMembership[]
@@ -1200,6 +1201,10 @@ model WritingPracticeAttempt {
   membership           OrgMembership                  @relation("WritingPracticeAttemptStudent", fields: [membershipId], references: [id], onDelete: Cascade)
   /// Immutable 1-based position in this student's stored assignment sequence.
   position             Int
+  /// ACT remains revision 1; Composition creates an append-only revision trail.
+  revision             Int                            @default(1)
+  /// SHA-256 of a normalized Composition response for network-retry idempotency.
+  responseDigest       String?
   /// False only for quarantined legacy replays that must not inflate progress.
   countsTowardProgress Boolean                        @default(true)
   lessonSlug           String
@@ -1211,7 +1216,8 @@ model WritingPracticeAttempt {
   status               String
   feedbackJson         Json
 
-  @@unique([classAssignmentId, membershipId, position])
+  @@unique([classAssignmentId, membershipId, position, revision], map: "writing_attempt_position_revision_uq")
+  @@unique([classAssignmentId, membershipId, position, responseDigest], map: "writing_attempt_position_digest_uq")
   @@index([classAssignmentId, membershipId, createdAt(sort: Desc)])
   @@index([membershipId, createdAt(sort: Desc)])
 }

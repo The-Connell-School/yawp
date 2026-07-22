@@ -130,6 +130,7 @@ export async function seedE2E(): Promise<E2EContext> {
       // remains disabled here because its spec explicitly verifies both flag
       // states and restores the disabled state after every test.
       writingFundamentalsEnabled: true,
+      compositionDrillsEnabled: true,
       classInsightsEnabled: true,
     },
   });
@@ -185,7 +186,11 @@ export async function seedE2E(): Promise<E2EContext> {
       password: { create: createPassword('johndoe') },
       memberships: {
         create: [
-          { organizationId: org.id, isOrgOwner: false, role: 'STUDENT' as const },
+          {
+            organizationId: org.id,
+            isOrgOwner: false,
+            role: 'STUDENT' as const,
+          },
         ],
       },
     },
@@ -196,7 +201,11 @@ export async function seedE2E(): Promise<E2EContext> {
       password: { create: createPassword('admin-e2e-password') },
       memberships: {
         create: [
-          { organizationId: org.id, isOrgOwner: true, role: 'TEACHER' as const },
+          {
+            organizationId: org.id,
+            isOrgOwner: true,
+            role: 'TEACHER' as const,
+          },
         ],
       },
     },
@@ -368,14 +377,16 @@ export async function seedE2E(): Promise<E2EContext> {
     select: { id: true },
   });
 
-  const { assignment: seededAssignment, classAssignment: seededClassAssignment } =
-    await createDeployedAssignment({
-      prisma,
-      classId: seededClass.id,
-      assignmentTypeId: assignmentType.id,
-      title: 'E2E Class Assignment',
-      prompt: 'E2E prompt for class assignment.',
-    });
+  const {
+    assignment: seededAssignment,
+    classAssignment: seededClassAssignment,
+  } = await createDeployedAssignment({
+    prisma,
+    classId: seededClass.id,
+    assignmentTypeId: assignmentType.id,
+    title: 'E2E Class Assignment',
+    prompt: 'E2E prompt for class assignment.',
+  });
 
   const teacherTraining = await prisma.teacherTraining.create({
     data: {

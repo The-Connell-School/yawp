@@ -34,15 +34,17 @@ import {
 } from '~/components/ui/sheet';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
+import { isCompositionPracticeEnabled } from '~/utils/writing-lessons/composition-flag.server';
 import {
   getStudentPreviewState,
   shouldUseStudentExperience,
 } from '~/utils/student-preview.server';
 import {
+  computeAssignedProgress,
   getAssignedPracticeForStudent,
   getWritingPracticeAssignmentsForTeacher,
 } from '~/utils/writing-lessons/practice-assignments.server';
-import { getQuickWritingLessonGroups } from '~/utils/writing-lessons/static-lessons.server';
+import { getQuickWritingLessonSections } from '~/utils/writing-lessons/static-lessons.server';
 
 export function assignedPracticeProgressLabels(
   completedCount: number,
@@ -62,16 +64,33 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const profile = await requireMembership(request, userId);
   const preview = await getStudentPreviewState(request);
 
-  const groups = getQuickWritingLessonGroups();
+  // Composition requires both the parent Writing Fundamentals gate and its own
+  // default-off tenant gate; the environment can only kill it.
+  const compositionEnabled =
+    profile.organization.writingFundamentalsEnabled &&
+    isCompositionPracticeEnabled(profile.organization.compositionDrillsEnabled);
+  const sections = getQuickWritingLessonSections().filter(
+    (section) => compositionEnabled || section.section !== 'Composition'
+  );
+
+  // The student's self-directed session is ACT multiple-choice only, so its
+  // builder lists grammar skills exclusively. Teacher-assigned practice
+  // supports both kinds: grammar skills drill ACT items and composition
+  // skills are constructed response, mixed freely in one assignment.
+  const grammarLessons = getQuickWritingLessonSections()
+    .filter((section) => section.section === 'Grammar & Mechanics')
+    .flatMap((section) => section.groups)
+    .flatMap((group) => group.lessons);
+  const assignableLessons = sections
+    .flatMap((section) => section.groups)
+    .flatMap((group) => group.lessons);
 
   // Flat skill list for the student "Create practice" builder.
-  const practiceSkillOptions = groups.flatMap((group) =>
-    group.lessons.map((lesson) => ({
-      slug: lesson.slug,
-      title: lesson.title,
-      category: lesson.category,
-    }))
-  );
+  const practiceSkillOptions = grammarLessons.map((lesson) => ({
+    slug: lesson.slug,
+    title: lesson.title,
+    category: lesson.category,
+  }));
 
   const studentExperience = shouldUseStudentExperience({
     membershipRole: profile.role,
@@ -101,13 +120,11 @@ export async function loader({ request }: LoaderFunctionArgs) {
       : [];
   const writingPracticeLessons =
     isTeacher && writingFundamentalsEnabled
-      ? groups.flatMap((group) =>
-          group.lessons.map((lesson) => ({
-            slug: lesson.slug,
-            title: lesson.title,
-            category: lesson.category,
-          }))
-        )
+      ? assignableLessons.map((lesson) => ({
+          slug: lesson.slug,
+          title: lesson.title,
+          category: lesson.category,
+        }))
       : [];
 
   const assignedPractice =
@@ -121,7 +138,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
               ? classAssignment.assignment.dueAt.toISOString()
               : null,
             completedCount: Math.min(
-              classAssignment.attempts.length,
+              computeAssignedProgress(classAssignment.attempts).doneCount,
               classAssignment.assignment.problemCount
             ),
           })
@@ -147,7 +164,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       : [];
 
   return dataResponse({
-    groups,
+    sections,
     isTeacher,
     teacherClasses,
     writingPracticeLessons,
@@ -341,7 +358,7 @@ function TeacherDirections() {
 
 export default function WritingLessonsIndexRoute() {
   const {
-    groups,
+    sections,
     isTeacher,
     teacherClasses,
     writingPracticeLessons,
@@ -521,36 +538,56 @@ export default function WritingLessonsIndexRoute() {
           </section>
         ) : null}
 
-        {groups.map((group) => (
-          <section key={group.category} className="flex flex-col gap-3">
-            <div className="flex items-center gap-2">
-              <h3 className="text-lg font-semibold">{group.category}</h3>
-              <Badge variant="secondary" size="sm">
-                {group.lessons.length}
-              </Badge>
-            </div>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {group.lessons.map((lesson) => (
-                <Link
-                  key={lesson.slug}
-                  to={`/app/writing-lessons/${lesson.slug}`}
-                  className="block h-full"
-                >
-                  <Card className="h-full shadow-none hover:shadow-sm">
-                    <CardHeader className="p-4">
-                      <CardTitle className="text-base leading-snug">
-                        {lesson.title}
-                      </CardTitle>
-                      <CardDescription className="text-base sm:text-sm">
-                        {lesson.description}
-                      </CardDescription>
-                    </CardHeader>
-                  </Card>
-                </Link>
+        {sections.map((section) => {
+          const sectionCount = section.groups.reduce(
+            (total, group) => total + group.lessons.length,
+            0
+          );
+          return (
+            <div key={section.section} className="flex flex-col gap-5">
+              <div className="flex items-center gap-2 border-b pb-2">
+                <h3 className="text-xl font-bold tracking-tight">
+                  {section.section}
+                </h3>
+                <Badge variant="secondary" size="sm">
+                  {sectionCount}
+                </Badge>
+              </div>
+              {section.groups.map((group) => (
+                <section key={group.category} className="flex flex-col gap-3">
+                  <div className="flex items-center gap-2">
+                    <h4 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                      {group.category}
+                    </h4>
+                    <Badge variant="secondary" size="sm">
+                      {group.lessons.length}
+                    </Badge>
+                  </div>
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                    {group.lessons.map((lesson) => (
+                      <Link
+                        key={lesson.slug}
+                        to={`/app/writing-lessons/${lesson.slug}`}
+                        className="block h-full"
+                      >
+                        <Card className="h-full shadow-none hover:shadow-sm">
+                          <CardHeader className="p-4">
+                            <CardTitle className="text-base leading-snug">
+                              {lesson.title}
+                            </CardTitle>
+                            <CardDescription className="text-base sm:text-sm">
+                              {lesson.description}
+                            </CardDescription>
+                          </CardHeader>
+                        </Card>
+                      </Link>
+                    ))}
+                  </div>
+                </section>
               ))}
             </div>
-          </section>
-        ))}
+          );
+        })}
       </div>
     </section>
   );

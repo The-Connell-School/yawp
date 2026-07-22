@@ -36,6 +36,7 @@ try {
       // Enable Yawp Reporter locally so teachers can exercise it in dev.
       reporterEnabled: true,
       writingFundamentalsEnabled: true,
+      compositionDrillsEnabled: true,
       classInsightsEnabled: true,
     },
   });

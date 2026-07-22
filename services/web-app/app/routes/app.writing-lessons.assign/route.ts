@@ -3,6 +3,7 @@ import { data as dataResponse, type ActionFunctionArgs } from 'react-router';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { createWritingPracticeAssignmentForClasses } from '~/utils/writing-lessons/practice-assignments.server';
+import { isCompositionPracticeEnabled } from '~/utils/writing-lessons/composition-flag.server';
 import { getQuickWritingLessonBySlug } from '~/utils/writing-lessons/static-lessons.server';
 
 const MIN_PROBLEM_COUNT = 1;
@@ -47,6 +48,15 @@ export async function action({ request }: ActionFunctionArgs) {
   );
   if (invalidSlug) {
     return fail(`Unknown lesson: ${invalidSlug}.`);
+  }
+  const includesComposition = lessonSlugs.some(
+    (slug) => getQuickWritingLessonBySlug(slug)?.section === 'Composition'
+  );
+  if (
+    includesComposition &&
+    !isCompositionPracticeEnabled(profile.organization.compositionDrillsEnabled)
+  ) {
+    return fail('Composition Drills are not enabled.', 404);
   }
 
   if (classIds.length === 0) {

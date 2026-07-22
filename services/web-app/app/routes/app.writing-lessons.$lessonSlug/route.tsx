@@ -4,8 +4,10 @@ import {
   ClipboardCheck,
   Lightbulb,
   Loader2,
+  MessageSquareText,
   PenLine,
   RotateCcw,
+  Sparkles,
   XCircle,
 } from 'lucide-react';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
@@ -43,6 +45,12 @@ import {
   type ActGradeResult,
   type ActPracticeQuestion,
 } from '~/utils/writing-lessons/act-practice.shared';
+import { isCompositionPracticeEnabled } from '~/utils/writing-lessons/composition-flag.server';
+import { generatePracticeFeedback } from '~/utils/writing-lessons/practice-feedback.server';
+import {
+  practiceFeedbackStatusLabel,
+  type PracticeFeedbackResult,
+} from '~/utils/writing-lessons/practice-feedback.shared';
 import {
   getQuickWritingLessonBody,
   getQuickWritingLessonBySlug,
@@ -68,12 +76,20 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     throw new Response('Lesson not found', { status: 404 });
   }
 
+  const isComposition = lesson.section === 'Composition';
+  const writingFundamentalsEnabled =
+    profile.organization.writingFundamentalsEnabled;
+  const compositionEnabled =
+    writingFundamentalsEnabled &&
+    isCompositionPracticeEnabled(profile.organization.compositionDrillsEnabled);
+  if (isComposition && !compositionEnabled) {
+    throw new Response('Lesson not found', { status: 404 });
+  }
+
   const studentExperience = shouldUseStudentExperience({
     membershipRole: profile.role,
     previewActive: preview.active,
   });
-  const writingFundamentalsEnabled =
-    profile.organization.writingFundamentalsEnabled;
   const isTeacher =
     profile.role === 'TEACHER' &&
     !studentExperience &&
@@ -88,11 +104,15 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
   return dataResponse({
     lesson,
+    isComposition,
     lessonBody: getQuickWritingLessonBody(lesson.content),
-    // Kept for the teacher assign panel's default problem count.
+    // For grammar this feeds the teacher assign panel's default problem count;
+    // for composition these are the constructed-response prompts the panel
+    // works through.
     practicePrompts: getQuickWritingPracticePrompts(params.lessonSlug),
-    // The offline ACT bank powers the "Try it yourself" panel and is the
-    // fallback whenever AI generation is unavailable.
+    // The offline ACT bank powers the grammar "Try it yourself" panel and is
+    // the fallback whenever AI generation is unavailable. Composition lessons
+    // have no ACT bank (they are constructed response), so this is empty.
     actQuestions: getActPracticeQuestions(params.lessonSlug),
     isTeacher,
     teacherClasses,
@@ -105,6 +125,14 @@ type ActGenerateActionData = {
   questions: ActPracticeQuestion[];
 };
 
+type CompositionCheckActionData = {
+  intent: 'check-composition';
+  promptId: string;
+  feedback: PracticeFeedbackResult;
+};
+
+const MAX_COMPOSITION_RESPONSE_LENGTH = 4_000;
+
 export async function action({ request, params }: ActionFunctionArgs) {
   const userId = await requireUserId(request);
   const profile = await requireMembership(request, userId);
@@ -112,18 +140,65 @@ export async function action({ request, params }: ActionFunctionArgs) {
     throw new Response('Lesson action not found', { status: 404 });
   }
 
+  const lesson = getQuickWritingLessonBySlug(params.lessonSlug);
   const context = getQuickWritingLessonContext(params.lessonSlug);
-  if (!context) {
+  if (!lesson || !context) {
     throw new Response('Lesson not found', { status: 404 });
   }
 
   const formData = await request.formData();
   const intent = String(formData.get('intent') ?? '');
 
-  // Self-serve students can keep drilling a skill indefinitely: once they work
-  // through the offline ACT bank we generate fresh items grounded in the same
-  // rule and examples, so the panel never runs dry. Grading itself is done on
-  // the client (a deterministic index comparison), so there is no check intent.
+  // Composition lessons are constructed response: the student writes a response
+  // and the tutor feedback service (grounded in the lesson's
+  // skill + rule) responds. It degrades to a deterministic self-check when the
+  // tutor is unavailable, so this works with no ANTHROPIC_API_KEY too.
+  if (intent === 'check-composition') {
+    if (
+      lesson.section !== 'Composition' ||
+      !isCompositionPracticeEnabled(
+        profile.organization.compositionDrillsEnabled
+      )
+    ) {
+      throw new Response('Lesson action not found', { status: 404 });
+    }
+    const promptId = String(formData.get('promptId') ?? '');
+    const prompt = getQuickWritingPracticePrompts(context.slug).find(
+      (candidate) => candidate.id === promptId
+    );
+    if (!prompt) {
+      throw new Response('Practice prompt not found', { status: 400 });
+    }
+    const response = String(formData.get('response') ?? '').trim();
+    if (response.length > MAX_COMPOSITION_RESPONSE_LENGTH) {
+      return dataResponse(
+        {
+          error: `Response must be ${MAX_COMPOSITION_RESPONSE_LENGTH.toLocaleString()} characters or fewer.`,
+        },
+        { status: 400 }
+      );
+    }
+
+    const feedback = await generatePracticeFeedback({
+      lessonTitle: context.title,
+      skill: context.skill,
+      rule: context.rule,
+      exercise: prompt.exercise,
+      instruction: prompt.instruction,
+      response,
+    });
+    return dataResponse<CompositionCheckActionData>({
+      intent: 'check-composition',
+      promptId: prompt.id,
+      feedback,
+    });
+  }
+
+  // Self-serve grammar students can keep drilling a skill indefinitely: once
+  // they work through the offline ACT bank we generate fresh items grounded in
+  // the same rule and examples, so the panel never runs dry. Grading itself is
+  // done on the client (a deterministic index comparison), so there is no check
+  // intent for grammar.
   if (intent !== 'generate-act') {
     throw new Response('Unsupported action', { status: 400 });
   }
@@ -176,6 +251,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
 export default function WritingLessonDetailRoute() {
   const {
     lesson,
+    isComposition,
     lessonBody,
     practicePrompts,
     actQuestions,
@@ -183,6 +259,14 @@ export default function WritingLessonDetailRoute() {
     teacherClasses,
     writingFundamentalsEnabled,
   } = useLoaderData<typeof loader>();
+
+  // Grammar lessons drill ACT multiple choice; composition lessons are
+  // constructed response graded by the tutor feedback service.
+  const practicePanel = isComposition ? (
+    <CompositionPracticePanel prompts={practicePrompts} />
+  ) : (
+    <StudentPracticePanel actQuestions={actQuestions} />
+  );
 
   return (
     <section className="no-scrollbar flex h-full w-full flex-col overflow-y-scroll">
@@ -230,10 +314,10 @@ export default function WritingLessonDetailRoute() {
                 classes={teacherClasses}
                 promptCount={practicePrompts.length}
               />
-              <StudentPracticePanel actQuestions={actQuestions} />
+              {practicePanel}
             </div>
           ) : (
-            <StudentPracticePanel actQuestions={actQuestions} />
+            practicePanel
           )}
         </aside>
       </div>
@@ -536,6 +620,198 @@ function StudentPracticePanel({
         )}
       </CardContent>
     </Card>
+  );
+}
+
+function CompositionPracticePanel({
+  prompts,
+}: {
+  prompts: QuickWritingPracticePrompt[];
+}) {
+  const feedbackFetcher = useFetcher<CompositionCheckActionData>();
+  const [promptIndex, setPromptIndex] = useState(0);
+  const [response, setResponse] = useState('');
+  const [feedback, setFeedback] = useState<PracticeFeedbackResult | null>(null);
+
+  const activePrompt = prompts[promptIndex] ?? null;
+  const isChecking = feedbackFetcher.state !== 'idle';
+
+  // Adopt feedback once it comes back for the prompt currently on screen — a
+  // late response for a prompt the student already moved past is ignored.
+  useEffect(() => {
+    const data = feedbackFetcher.data;
+    if (
+      data?.intent === 'check-composition' &&
+      data.promptId === activePrompt?.id
+    ) {
+      setFeedback(data.feedback);
+    }
+  }, [feedbackFetcher.data, activePrompt?.id]);
+
+  function checkResponse() {
+    if (activePrompt === null || isChecking) return;
+    feedbackFetcher.submit(
+      {
+        intent: 'check-composition',
+        promptId: activePrompt.id,
+        exercise: activePrompt.exercise,
+        instruction: activePrompt.instruction,
+        response,
+      },
+      { method: 'post' }
+    );
+  }
+
+  function showNextPrompt() {
+    if (prompts.length === 0) return;
+    setPromptIndex((current) => (current + 1) % prompts.length);
+    setResponse('');
+    setFeedback(null);
+  }
+
+  return (
+    <Card className="overflow-hidden rounded-2xl border-border/70 shadow-sm">
+      <CardHeader className="border-b bg-muted/40 pb-4">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
+              <PenLine className="h-4 w-4" />
+            </span>
+            <CardTitle className="text-lg">Try it yourself</CardTitle>
+          </div>
+          {activePrompt ? (
+            <span className="text-xs font-medium text-muted-foreground">
+              Prompt {promptIndex + 1}
+            </span>
+          ) : null}
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4 p-5">
+        {activePrompt ? (
+          <div className="space-y-4">
+            <div className="rounded-xl border border-border/70 bg-muted/30 p-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Your prompt
+              </p>
+              <p className="mt-2 text-base leading-relaxed text-foreground">
+                {activePrompt.exercise}
+              </p>
+              <p className="mt-3 flex gap-2 text-sm font-medium text-foreground">
+                <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                <span>{activePrompt.instruction}</span>
+              </p>
+            </div>
+
+            <Textarea
+              data-testid="composition-response"
+              aria-label="Your response"
+              value={response}
+              onChange={(event) => setResponse(event.target.value)}
+              placeholder="Write your response here…"
+              maxLength={MAX_COMPOSITION_RESPONSE_LENGTH}
+              className="min-h-28 text-base sm:text-sm"
+            />
+
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                className="rounded-full"
+                disabled={isChecking}
+                onClick={checkResponse}
+              >
+                {isChecking ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <MessageSquareText className="mr-2 h-4 w-4" />
+                )}
+                Check my answer
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                className="rounded-full text-muted-foreground"
+                onClick={showNextPrompt}
+              >
+                <RotateCcw className="mr-2 h-4 w-4" />
+                New prompt
+              </Button>
+            </div>
+
+            {feedback ? <PracticeFeedbackPanel feedback={feedback} /> : null}
+          </div>
+        ) : (
+          <p className="text-base text-muted-foreground sm:text-sm">
+            This lesson does not have practice prompts yet.
+          </p>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function PracticeFeedbackPanel({
+  feedback,
+}: {
+  feedback: PracticeFeedbackResult;
+}) {
+  const tone =
+    feedback.status === 'strong'
+      ? 'border-emerald-300 bg-emerald-50'
+      : feedback.status === 'developing'
+        ? 'border-amber-300 bg-amber-50'
+        : 'border-rose-300 bg-rose-50';
+
+  return (
+    <div
+      data-testid="composition-result"
+      className={`space-y-3 rounded-xl border p-4 ${tone}`}
+    >
+      <div className="flex items-center gap-2">
+        <MessageSquareText className="h-4 w-4 text-foreground" />
+        <span className="text-sm font-semibold text-foreground">
+          {practiceFeedbackStatusLabel(feedback.status)}
+        </span>
+        {feedback.degraded ? (
+          <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+            Quick self-check
+          </span>
+        ) : null}
+      </div>
+
+      <p className="text-sm leading-relaxed text-foreground">
+        {feedback.summary}
+      </p>
+
+      {feedback.strengths.length > 0 ? (
+        <div className="space-y-1">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            What's working
+          </p>
+          <ul className="ml-1 space-y-1 border-l-2 border-border pl-3 text-sm text-foreground">
+            {feedback.strengths.map((item, index) => (
+              <li key={index}>{item}</li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      {feedback.focus.length > 0 ? (
+        <div className="space-y-1">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Try next
+          </p>
+          <ul className="ml-1 space-y-1 border-l-2 border-border pl-3 text-sm text-foreground">
+            {feedback.focus.map((item, index) => (
+              <li key={index}>{item}</li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      <p className="text-sm font-medium italic text-muted-foreground">
+        {feedback.encouragement}
+      </p>
+    </div>
   );
 }
 

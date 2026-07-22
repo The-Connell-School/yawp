@@ -127,12 +127,14 @@ describe('local dev seed fixtures', () => {
     );
 
     expect(seedSource).toContain('writingFundamentalsEnabled: true');
+    expect(seedSource).toContain('compositionDrillsEnabled: true');
     expect(seedSource).toContain('classInsightsEnabled: true');
     expect(syntheticSeedSource).not.toContain('prisma.featureFlag');
     expect(syntheticSeedSource).not.toContain('writing_practice');
     expect(schemaSource).not.toContain(['Organization', 'Flag'].join(''));
     expect(schemaSource).not.toContain(['feature', 'Flag'].join(''));
     expect(schemaSource).toContain('writingFundamentalsEnabled Boolean');
+    expect(schemaSource).toContain('compositionDrillsEnabled');
     expect(schemaSource).toContain('classInsightsEnabled');
   });
 

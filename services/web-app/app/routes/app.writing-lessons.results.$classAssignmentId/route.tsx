@@ -24,8 +24,11 @@ import {
   splitAroundUnderline,
 } from '~/utils/writing-lessons/act-practice.shared';
 import { getWritingPracticeResultsForTeacher } from '~/utils/writing-lessons/practice-assignments.server';
+import { isCompositionPracticeEnabled } from '~/utils/writing-lessons/composition-flag.server';
 import {
+  isCompositionAttemptRecord,
   practiceFeedbackStatusLabel,
+  type CompositionAttemptRecord,
   type PracticeFeedbackStatus,
 } from '~/utils/writing-lessons/practice-feedback.shared';
 import { getQuickWritingLessonBySlug } from '~/utils/writing-lessons/static-lessons.server';
@@ -55,6 +58,15 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   }
 
   const { classAssignment, results, attemptsByStudent } = data;
+  const hasComposition = classAssignment.assignment.lessonSlugs.some(
+    (slug) => getQuickWritingLessonBySlug(slug)?.section === 'Composition'
+  );
+  if (
+    hasComposition &&
+    !isCompositionPracticeEnabled(profile.organization.compositionDrillsEnabled)
+  ) {
+    throw new Response('Assigned practice not found', { status: 404 });
+  }
   const lessonTitles = classAssignment.assignment.lessonSlugs
     .map((slug) => getQuickWritingLessonBySlug(slug)?.title)
     .filter((title): title is string => Boolean(title));
@@ -62,18 +74,41 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const completedCount = results.filter((row) => row.completed).length;
   const startedCount = results.filter((row) => row.attemptCount > 0).length;
 
-  // Attach each student's ACT attempts (question + their pick + grade) to their row.
-  const resultsWithAttempts = results.map((row) => ({
-    ...row,
-    attempts: (attemptsByStudent[row.membershipId] ?? []).map((attempt) => ({
-      id: attempt.id,
-      lessonTitle:
-        getQuickWritingLessonBySlug(attempt.lessonSlug)?.title ?? 'Practice',
-      status: attempt.status,
-      record: attempt.attempt,
-      createdAt: attempt.createdAt.toISOString(),
-    })),
-  }));
+  // Attach each student's attempts, collapsing composition revisions to the
+  // latest attempt per immutable sequence position so the teacher sees one
+  // card per problem rather than one per resubmission.
+  const resultsWithAttempts = results.map((row) => {
+    const byPosition = new Map<
+      number,
+      { latest: (typeof attemptsByStudent)[string][number]; revisions: number }
+    >();
+    for (const attempt of attemptsByStudent[row.membershipId] ?? []) {
+      const existing = byPosition.get(attempt.position);
+      if (!existing) {
+        byPosition.set(attempt.position, { latest: attempt, revisions: 1 });
+      } else {
+        existing.revisions += 1;
+        if (attempt.revision > existing.latest.revision) {
+          existing.latest = attempt;
+        }
+      }
+    }
+    return {
+      ...row,
+      attempts: Array.from(byPosition.values())
+        .sort((left, right) => left.latest.position - right.latest.position)
+        .map(({ latest, revisions }) => ({
+          id: latest.id,
+          position: latest.position,
+          lessonTitle:
+            getQuickWritingLessonBySlug(latest.lessonSlug)?.title ?? 'Practice',
+          status: latest.status,
+          record: latest.attempt,
+          revisions,
+          createdAt: latest.createdAt.toISOString(),
+        })),
+    };
+  });
 
   return dataResponse({
     classLabel:
@@ -81,6 +116,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       `Grade ${classAssignment.class.grade} · Period ${classAssignment.class.period}`,
     title: classAssignment.assignment.title,
     lessonTitles,
+    hasComposition,
     problemCount: classAssignment.assignment.problemCount,
     dueAt: classAssignment.assignment.dueAt
       ? classAssignment.assignment.dueAt.toISOString()
@@ -110,6 +146,7 @@ export default function WritingPracticeResultsRoute() {
     classLabel,
     title,
     lessonTitles,
+    hasComposition,
     problemCount,
     dueAt,
     results,
@@ -194,6 +231,11 @@ export default function WritingPracticeResultsRoute() {
                         </div>
                       </div>
                       <div className="flex shrink-0 items-center gap-3">
+                        {hasComposition && row.masteredCount > 0 ? (
+                          <span className="hidden items-center rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-900 sm:inline-flex">
+                            {row.masteredCount} mastered
+                          </span>
+                        ) : null}
                         {row.latestStatus ? (
                           <span
                             className={`hidden items-center rounded-full px-2.5 py-0.5 text-xs font-medium sm:inline-flex ${
@@ -223,12 +265,8 @@ export default function WritingPracticeResultsRoute() {
                             &rsquo;t started this practice yet.
                           </p>
                         ) : (
-                          row.attempts.map((attempt, index) => (
-                            <AttemptCard
-                              key={attempt.id}
-                              position={index + 1}
-                              attempt={attempt}
-                            />
+                          row.attempts.map((attempt) => (
+                            <AttemptCard key={attempt.id} attempt={attempt} />
                           ))
                         )}
                       </div>
@@ -246,31 +284,38 @@ export default function WritingPracticeResultsRoute() {
 
 type AttemptView = {
   id: string;
+  position: number;
   lessonTitle: string;
   status: string;
   record: unknown;
+  revisions: number;
   createdAt: string;
 };
 
-function AttemptCard({
-  position,
-  attempt,
-}: {
-  position: number;
-  attempt: AttemptView;
-}) {
+function AttemptCard({ attempt }: { attempt: AttemptView }) {
   const { record } = attempt;
+  // Constructed-response attempts show the prompt, the student's writing, and
+  // the tutor feedback it earned.
+  if (isCompositionAttemptRecord(record)) {
+    return (
+      <CompositionAttemptCard
+        position={attempt.position}
+        attempt={attempt}
+        record={record}
+      />
+    );
+  }
   // Older attempts stored free-text feedback rather than an ACT record; render a
   // graceful summary for those instead of crashing on the missing ACT fields.
   if (!isActAttemptRecord(record)) {
-    return <LegacyAttemptCard position={position} attempt={attempt} />;
+    return <LegacyAttemptCard position={attempt.position} attempt={attempt} />;
   }
   const parts = splitAroundUnderline(record.sentence, record.underline);
   return (
     <div className="rounded-lg border border-border/70 bg-background p-3.5">
       <div className="mb-2 flex items-center justify-between gap-3">
         <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Problem {position} · {attempt.lessonTitle}
+          Problem {attempt.position} · {attempt.lessonTitle}
         </span>
         <span
           className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium ${
@@ -332,6 +377,71 @@ function AttemptCard({
       <div className="mt-3 border-t border-border/60 pt-2.5">
         <p className="text-sm leading-relaxed text-muted-foreground">
           {record.explanation}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * A constructed-response (composition) attempt: the prompt, the student's
+ * exact writing, and the tutor feedback it earned — the teacher-facing
+ * counterpart of the student's in-flow feedback panel.
+ */
+function CompositionAttemptCard({
+  position,
+  attempt,
+  record,
+}: {
+  position: number;
+  attempt: AttemptView;
+  record: CompositionAttemptRecord;
+}) {
+  const status = record.status as PracticeFeedbackStatus;
+  return (
+    <div className="rounded-lg border border-border/70 bg-background p-3.5">
+      <div className="mb-2 flex items-center justify-between gap-3">
+        <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          Problem {position} · {attempt.lessonTitle}
+          {attempt.revisions > 1 ? (
+            <span className="ml-2 font-normal normal-case text-muted-foreground/80">
+              · revised {attempt.revisions}×
+            </span>
+          ) : null}
+        </span>
+        {STATUS_STYLES[status] ? (
+          <span
+            className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${STATUS_STYLES[status]}`}
+          >
+            {practiceFeedbackStatusLabel(status)}
+          </span>
+        ) : null}
+      </div>
+
+      <div className="space-y-2 text-sm">
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            Prompt
+          </p>
+          <p className="text-foreground">{record.exercise}</p>
+          <p className="mt-0.5 text-muted-foreground">{record.instruction}</p>
+        </div>
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            Their response
+          </p>
+          <p className="whitespace-pre-wrap rounded-md bg-muted/50 px-2.5 py-1.5 text-foreground">
+            {record.response}
+          </p>
+        </div>
+      </div>
+
+      <div className="mt-3 border-t border-border/60 pt-2.5">
+        <p className="text-sm leading-relaxed text-muted-foreground">
+          {record.summary}
+          {record.degraded
+            ? ' (Quick self-check — the tutor was offline for this attempt.)'
+            : ''}
         </p>
       </div>
     </div>

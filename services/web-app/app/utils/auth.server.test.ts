@@ -11,6 +11,7 @@ const prisma = {
     findFirst: mock(),
   },
   session: {
+    findFirst: mock(),
     findUnique: mock(),
   },
 };
@@ -51,6 +52,7 @@ const membershipFixture = {
     name: 'Yawp Org',
     reporterEnabled: false,
     writingFundamentalsEnabled: false,
+    compositionDrillsEnabled: false,
     classInsightsEnabled: false,
   },
 };
@@ -64,6 +66,7 @@ describe('membership auth helpers', () => {
     prisma.orgMembership.findFirst.mockReset();
     prisma.user.findFirst.mockReset();
     prisma.session.findUnique.mockReset();
+    prisma.session.findFirst.mockReset();
     setMembershipId.mockResolvedValue('membership-id=; Path=/');
   });
 
@@ -95,6 +98,7 @@ describe('membership auth helpers', () => {
             name: true,
             reporterEnabled: true,
             writingFundamentalsEnabled: true,
+            compositionDrillsEnabled: true,
             classInsightsEnabled: true,
           },
         },
@@ -125,6 +129,7 @@ describe('membership auth helpers', () => {
             name: true,
             reporterEnabled: true,
             writingFundamentalsEnabled: true,
+            compositionDrillsEnabled: true,
             classInsightsEnabled: true,
           },
         },
@@ -157,7 +162,7 @@ describe('membership auth helpers', () => {
     getSession.mockResolvedValue({
       get: (key: string) => (key === 'sessionId' ? 'session-1' : undefined),
     });
-    prisma.session.findUnique.mockResolvedValue({
+    prisma.session.findFirst.mockResolvedValue({
       user: { id: 'user-1' },
     });
     prisma.user.findFirst.mockResolvedValue({
@@ -192,7 +197,7 @@ describe('membership auth helpers', () => {
     getSession.mockResolvedValue({
       get: (key: string) => (key === 'sessionId' ? 'session-1' : undefined),
     });
-    prisma.session.findUnique.mockResolvedValue({
+    prisma.session.findFirst.mockResolvedValue({
       user: { id: 'user-1' },
     });
     prisma.user.findFirst.mockResolvedValue(null);

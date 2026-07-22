@@ -1,8 +1,25 @@
 import promptContent from './prompt-content';
+import compositionPromptContent from './composition-prompt-content';
+
+/**
+ * The two top-level strands of Writing Fundamentals Practice. Grammar &
+ * Mechanics is the original ACT-English-style multiple-choice work; Composition
+ * is constructed-response practice graded by the tutor feedback service.
+ */
+export type LessonSection = 'Grammar & Mechanics' | 'Composition';
+
+export type LessonCategory =
+  | 'Punctuation'
+  | 'Sentence Structure'
+  | 'Agreement'
+  | 'Flow'
+  | 'Making Claims'
+  | 'Supporting Claims';
 
 type LessonMetadata = {
   slug: string;
-  category: 'Punctuation' | 'Sentence Structure' | 'Agreement' | 'Flow';
+  section: LessonSection;
+  category: LessonCategory;
   description: string;
   /** Short concept label used to ground practice feedback, e.g. "comma splices". */
   skill: string;
@@ -29,64 +46,102 @@ export type QuickWritingPracticePrompt = {
 
 const LESSON_METADATA: Record<string, LessonMetadata> = {
   'Fixing Comma Splices': {
+    section: 'Grammar & Mechanics',
     slug: 'fixing-comma-splices',
     category: 'Punctuation',
     description: 'Recognizing and fixing comma splices',
     skill: 'comma splices',
   },
   'Revising for Wordiness': {
+    section: 'Grammar & Mechanics',
     slug: 'revising-for-wordiness',
     category: 'Sentence Structure',
     description: 'Cutting clutter and tightening sentences',
     skill: 'revising for wordiness',
   },
   'Transition Sentences': {
+    section: 'Grammar & Mechanics',
     slug: 'transition-sentences',
     category: 'Flow',
     description: 'Connecting ideas between paragraphs',
     skill: 'transition sentences',
   },
   'The Oxford Comma': {
+    section: 'Grammar & Mechanics',
     slug: 'the-oxford-comma',
     category: 'Punctuation',
     description: 'Using commas clearly in lists',
     skill: 'the Oxford comma',
   },
   'Commas: Sentences with Independent and Dependent Clauses': {
+    section: 'Grammar & Mechanics',
     slug: 'commas-independent-dependent-clauses',
     category: 'Punctuation',
     description: 'Using commas with dependent clauses',
     skill: 'commas with independent and dependent clauses',
   },
   'Passive Voice': {
+    section: 'Grammar & Mechanics',
     slug: 'passive-voice',
     category: 'Sentence Structure',
     description: 'Identifying and revising passive constructions',
     skill: 'passive voice',
   },
   'Parallel Construction': {
+    section: 'Grammar & Mechanics',
     slug: 'parallel-construction',
     category: 'Sentence Structure',
     description: 'Keeping grammatical structures consistent',
     skill: 'parallel construction',
   },
   'Subject-Verb Agreement': {
+    section: 'Grammar & Mechanics',
     slug: 'subject-verb-agreement',
     category: 'Agreement',
     description: 'Matching subjects and verbs correctly',
     skill: 'subject-verb agreement',
   },
   'Pronoun Agreement': {
+    section: 'Grammar & Mechanics',
     slug: 'pronoun-agreement',
     category: 'Agreement',
     description: 'Making pronouns clear, consistent, and inclusive',
     skill: 'pronoun agreement',
   },
   'Commas: Introductory Phrases': {
+    section: 'Grammar & Mechanics',
     slug: 'commas-introductory-phrases',
     category: 'Punctuation',
     description: 'Choosing commas after introductory elements',
     skill: 'commas after introductory phrases',
+  },
+  'Topic Sentences': {
+    section: 'Composition',
+    slug: 'topic-sentences',
+    category: 'Making Claims',
+    description: 'Opening a paragraph with an arguable claim',
+    skill: 'topic sentences',
+  },
+  'Paragraph Transitions': {
+    section: 'Composition',
+    slug: 'paragraph-transitions',
+    category: 'Flow',
+    description: 'Bridging one paragraph-level idea to the next',
+    skill: 'paragraph transitions',
+  },
+  Evidence: {
+    section: 'Composition',
+    slug: 'evidence',
+    category: 'Supporting Claims',
+    description: 'Backing a claim with specific, relevant support',
+    skill: 'evidence',
+  },
+  Analysis: {
+    section: 'Composition',
+    slug: 'analysis',
+    category: 'Supporting Claims',
+    description: 'Explaining how evidence proves the claim',
+    skill: 'analysis',
   },
 };
 
@@ -97,9 +152,33 @@ const PRACTICE_EXERCISE_PATTERN =
 
 let cachedLessons: QuickWritingLesson[] | null = null;
 
+const LESSON_ORDER = [
+  'fixing-comma-splices',
+  'revising-for-wordiness',
+  'transition-sentences',
+  'the-oxford-comma',
+  'commas-independent-dependent-clauses',
+  'passive-voice',
+  'parallel-construction',
+  'subject-verb-agreement',
+  'pronoun-agreement',
+  'commas-introductory-phrases',
+  'topic-sentences',
+  'paragraph-transitions',
+  'evidence',
+  'analysis',
+] as const;
+
 export function getQuickWritingLessons(): QuickWritingLesson[] {
   if (!cachedLessons) {
-    cachedLessons = parseArchivedLessons(promptContent);
+    const order = new Map(LESSON_ORDER.map((slug, index) => [slug, index]));
+    cachedLessons = parseArchivedLessons(
+      `${promptContent}\n${compositionPromptContent}`
+    ).sort(
+      (left, right) =>
+        (order.get(left.slug as (typeof LESSON_ORDER)[number]) ?? Infinity) -
+        (order.get(right.slug as (typeof LESSON_ORDER)[number]) ?? Infinity)
+    );
   }
 
   return cachedLessons;
@@ -115,12 +194,41 @@ export function getQuickWritingLessonBySlug(
 }
 
 export function getQuickWritingLessonGroups() {
-  const groups = new Map<
-    QuickWritingLesson['category'],
-    QuickWritingLesson[]
-  >();
+  return groupByCategory(getQuickWritingLessons());
+}
+
+const SECTION_ORDER: LessonSection[] = ['Grammar & Mechanics', 'Composition'];
+
+/**
+ * Lessons grouped by their top-level section (Grammar & Mechanics, then
+ * Composition), and within each section by category — the shape the lessons
+ * index renders. Sections follow {@link SECTION_ORDER}; categories keep their
+ * first-appearance order within a section.
+ */
+export function getQuickWritingLessonSections(): Array<{
+  section: LessonSection;
+  groups: ReturnType<typeof groupByCategory>;
+}> {
+  const bySection = new Map<LessonSection, QuickWritingLesson[]>();
 
   for (const lesson of getQuickWritingLessons()) {
+    const existing = bySection.get(lesson.section) ?? [];
+    existing.push(lesson);
+    bySection.set(lesson.section, existing);
+  }
+
+  return SECTION_ORDER.filter((section) => bySection.has(section)).map(
+    (section) => ({
+      section,
+      groups: groupByCategory(bySection.get(section) ?? []),
+    })
+  );
+}
+
+function groupByCategory(lessons: QuickWritingLesson[]) {
+  const groups = new Map<LessonCategory, QuickWritingLesson[]>();
+
+  for (const lesson of lessons) {
     const existing = groups.get(lesson.category) ?? [];
     existing.push(lesson);
     groups.set(lesson.category, existing);

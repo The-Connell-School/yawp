@@ -153,9 +153,17 @@ test('PostgreSQL advisory lock and retry admit one reservation, provider call, a
     expect(results.every((result) => result.length === 4)).toBe(true);
     expect(
       results.every(
-        (result) => result[0]!.question.id === results[0]![0]!.question.id
+        (result) =>
+          result[0]!.kind === 'act' &&
+          results[0]![0]!.kind === 'act' &&
+          result[0]!.question.id === results[0]![0]!.question.id
       )
     ).toBe(true);
+    expect(retry[0]!.kind).toBe('act');
+    expect(results[0]![0]!.kind).toBe('act');
+    if (retry[0]!.kind !== 'act' || results[0]![0]!.kind !== 'act') {
+      throw new Error('Grammar-only proof returned a Composition item');
+    }
     expect(retry[0]!.question.id).toBe(results[0]![0]!.question.id);
     expect(getLLMCompletion).toHaveBeenCalledTimes(1);
     expect(

@@ -53,6 +53,7 @@ beforeEach(() => {
       id: 'org-1',
       name: 'Org',
       writingFundamentalsEnabled: true,
+      compositionDrillsEnabled: false,
     },
   });
   classFindMany.mockResolvedValue([{ id: 'class-a' }]);
@@ -136,6 +137,53 @@ describe('writing-lessons assign action', () => {
     expect(result.success).toBe(false);
     expect(result.message).toContain('Number of problems');
     expect(createWritingPracticeAssignmentForClasses).not.toHaveBeenCalled();
+  });
+
+  test('keeps Composition assignment default-off for the tenant', async () => {
+    const result = (await run({
+      lessonSlugs: 'topic-sentences',
+      classIds: 'class-a',
+      problemCount: '5',
+    })) as { success: boolean; message: string };
+
+    expect(result.success).toBe(false);
+    expect(result.message).toContain('Composition Drills are not enabled');
+    expect(classFindMany).not.toHaveBeenCalled();
+    expect(createWritingPracticeAssignmentForClasses).not.toHaveBeenCalled();
+  });
+
+  test('assigns only the four bounded Composition skills when enabled', async () => {
+    requireMembership.mockResolvedValue({
+      id: 'teacher-1',
+      role: 'TEACHER',
+      organization: {
+        id: 'org-1',
+        name: 'Org',
+        writingFundamentalsEnabled: true,
+        compositionDrillsEnabled: true,
+      },
+    });
+
+    const result = (await run({
+      lessonSlugs: [
+        'topic-sentences',
+        'paragraph-transitions',
+        'evidence',
+        'analysis',
+      ],
+      classIds: 'class-a',
+      problemCount: '8',
+    })) as { success: boolean };
+
+    expect(result.success).toBe(true);
+    expect(
+      createWritingPracticeAssignmentForClasses.mock.calls[0][0].lessonSlugs
+    ).toEqual([
+      'topic-sentences',
+      'paragraph-transitions',
+      'evidence',
+      'analysis',
+    ]);
   });
 
   test('rejects direct assignment requests while the organization gate is off', async () => {

@@ -1,4 +1,5 @@
 import { Prisma } from '@app/prisma';
+import { createHash } from 'node:crypto';
 import { prisma } from '~/utils/db.server';
 import {
   AiRateLimitError,
@@ -13,6 +14,10 @@ import type {
   ActGradeResult,
   ActPracticeQuestion,
 } from './act-practice.shared';
+import type {
+  CompositionAttemptRecord,
+  PracticeFeedbackResult,
+} from './practice-feedback.shared';
 import { generatePracticePrompts } from './practice-prompt-generation.server';
 import {
   getQuickWritingLessonBySlug,
@@ -319,6 +324,177 @@ export async function buildGeneratedPracticeSequence(
 }
 
 /**
+ * One item in a student's assigned-practice sequence. Grammar skills drill ACT
+ * multiple choice; composition skills are constructed response. Sets stored
+ * before composition joined the assignment flow have no `kind` — treat those
+ * items as ACT.
+ */
+export type MixedAssignedPracticeItem =
+  | (ActAssignedPracticeItem & { kind?: 'act' })
+  | {
+      kind: 'composition';
+      position: number;
+      lessonSlug: string;
+      lessonTitle: string;
+      prompt: QuickWritingPracticePrompt;
+    };
+
+function interleaveMixedPracticeItems(
+  actItems: MixedAssignedPracticeItem[],
+  compositionItems: MixedAssignedPracticeItem[],
+  problemCount: number
+): MixedAssignedPracticeItem[] {
+  const items: MixedAssignedPracticeItem[] = [];
+  const maxLength = Math.max(actItems.length, compositionItems.length);
+  for (let i = 0; i < maxLength && items.length < problemCount; i += 1) {
+    const actItem = actItems[i];
+    if (actItem) items.push(actItem);
+    const compositionItem = compositionItems[i];
+    if (compositionItem && items.length < problemCount) {
+      items.push(compositionItem);
+    }
+  }
+  return items.map((item, index) => ({ ...item, position: index + 1 }));
+}
+
+/** Builds the same mixed shape without making any provider request. */
+export function buildMixedStaticPracticeSequence(
+  lessonSlugs: string[],
+  problemCount: number
+): MixedAssignedPracticeItem[] {
+  const grammarSlugs: string[] = [];
+  const compositionSlugs: string[] = [];
+  for (const slug of lessonSlugs) {
+    const lesson = getQuickWritingLessonBySlug(slug);
+    if (!lesson) continue;
+    if (lesson.section === 'Composition') compositionSlugs.push(slug);
+    else grammarSlugs.push(slug);
+  }
+
+  const total = grammarSlugs.length + compositionSlugs.length;
+  if (total === 0 || problemCount <= 0) return [];
+  const grammarCount =
+    compositionSlugs.length === 0
+      ? problemCount
+      : grammarSlugs.length === 0
+        ? 0
+        : Math.min(
+            problemCount - 1,
+            Math.max(
+              1,
+              Math.round((problemCount * grammarSlugs.length) / total)
+            )
+          );
+  const compositionCount = problemCount - grammarCount;
+  const actItems: MixedAssignedPracticeItem[] = buildActPracticeSequence(
+    grammarSlugs,
+    grammarCount
+  ).map((item) => ({ ...item, kind: 'act' as const }));
+  const compositionItems: MixedAssignedPracticeItem[] =
+    buildAssignedPracticeSequence(compositionSlugs, compositionCount).map(
+      (item) => ({
+        kind: 'composition' as const,
+        position: item.position,
+        lessonSlug: item.lessonSlug,
+        lessonTitle: item.lessonTitle,
+        prompt: item.prompt,
+      })
+    );
+  return interleaveMixedPracticeItems(actItems, compositionItems, problemCount);
+}
+
+/**
+ * Expands an assignment into a practice sequence that can mix skill kinds:
+ * grammar slugs become interleaved ACT items, composition slugs become
+ * interleaved constructed-response items, and when both are present the two
+ * streams alternate so mixed assignments switch between answering and writing.
+ */
+export async function buildMixedGeneratedPracticeSequence(
+  lessonSlugs: string[],
+  problemCount: number
+): Promise<{
+  items: MixedAssignedPracticeItem[];
+  source: WritingPracticeSetSource;
+}> {
+  const grammarSlugs: string[] = [];
+  const compositionSlugs: string[] = [];
+  for (const slug of lessonSlugs) {
+    const lesson = getQuickWritingLessonBySlug(slug);
+    if (!lesson) continue;
+    if (lesson.section === 'Composition') compositionSlugs.push(slug);
+    else grammarSlugs.push(slug);
+  }
+
+  if (compositionSlugs.length === 0) {
+    const act = await buildGeneratedActPracticeSequence(
+      grammarSlugs,
+      problemCount
+    );
+    return {
+      items: act.items.map((item) => ({ ...item, kind: 'act' as const })),
+      source: act.source,
+    };
+  }
+
+  if (grammarSlugs.length === 0) {
+    const composed = await buildGeneratedPracticeSequence(
+      compositionSlugs,
+      problemCount
+    );
+    return {
+      items: composed.items.map((item) => ({
+        kind: 'composition' as const,
+        position: item.position,
+        lessonSlug: item.lessonSlug,
+        lessonTitle: item.lessonTitle,
+        prompt: item.prompt,
+      })),
+      source: composed.source,
+    };
+  }
+
+  // Both kinds: split the problem count proportionally to how many skills of
+  // each kind were selected (each side gets at least one problem), then
+  // alternate between the two streams.
+  const totalSlugs = grammarSlugs.length + compositionSlugs.length;
+  const grammarCount = Math.min(
+    problemCount - 1,
+    Math.max(1, Math.round((problemCount * grammarSlugs.length) / totalSlugs))
+  );
+  const compositionCount = problemCount - grammarCount;
+
+  const [act, composed] = await Promise.all([
+    buildGeneratedActPracticeSequence(grammarSlugs, grammarCount),
+    buildGeneratedPracticeSequence(compositionSlugs, compositionCount),
+  ]);
+
+  const actItems: MixedAssignedPracticeItem[] = act.items.map((item) => ({
+    ...item,
+    kind: 'act' as const,
+  }));
+  const compositionItems: MixedAssignedPracticeItem[] = composed.items.map(
+    (item) => ({
+      kind: 'composition' as const,
+      position: item.position,
+      lessonSlug: item.lessonSlug,
+      lessonTitle: item.lessonTitle,
+      prompt: item.prompt,
+    })
+  );
+
+  const renumbered = interleaveMixedPracticeItems(
+    actItems,
+    compositionItems,
+    problemCount
+  );
+
+  const sources = new Set([act.source, composed.source]);
+  const source: WritingPracticeSetSource =
+    sources.size === 1 ? act.source : 'mixed';
+  return { items: renumbered, source };
+}
+
+/**
  * Returns the student's stored practice sequence for an assignment, generating
  * and persisting it on first access so their prompts stay stable across reloads
  * and don't repeat across the assignment.
@@ -329,7 +505,7 @@ export async function getOrCreateStudentPracticeSet(params: {
   organizationId: string;
   lessonSlugs: string[];
   problemCount: number;
-}): Promise<ActAssignedPracticeItem[]> {
+}): Promise<MixedAssignedPracticeItem[]> {
   const where = {
     classAssignmentId_membershipId: {
       classAssignmentId: params.classAssignmentId,
@@ -349,11 +525,11 @@ export async function getOrCreateStudentPracticeSet(params: {
         where,
       });
       if (existing) {
-        return existing.promptsJson as unknown as ActAssignedPracticeItem[];
+        return existing.promptsJson as unknown as MixedAssignedPracticeItem[];
       }
 
       let generated: {
-        items: ActAssignedPracticeItem[];
+        items: MixedAssignedPracticeItem[];
         source: WritingPracticeSetSource;
       };
       try {
@@ -364,14 +540,14 @@ export async function getOrCreateStudentPracticeSet(params: {
           policy: WRITING_AI_ADMISSION_POLICY,
           units: Math.max(1, new Set(params.lessonSlugs).size),
         });
-        generated = await buildGeneratedActPracticeSequence(
+        generated = await buildMixedGeneratedPracticeSequence(
           params.lessonSlugs,
           params.problemCount
         );
       } catch (error) {
         if (!(error instanceof AiRateLimitError)) throw error;
         generated = {
-          items: buildActPracticeSequence(
+          items: buildMixedStaticPracticeSequence(
             params.lessonSlugs,
             params.problemCount
           ),
@@ -388,7 +564,7 @@ export async function getOrCreateStudentPracticeSet(params: {
           promptsJson: items as unknown as object,
         },
       });
-      return created.promptsJson as unknown as ActAssignedPracticeItem[];
+      return created.promptsJson as unknown as MixedAssignedPracticeItem[];
     },
     { maxWait: 5_000, timeout: 60_000 }
   );
@@ -398,7 +574,7 @@ export async function getOrCreateStudentPracticeSet(params: {
 export async function getStudentPracticeSet(params: {
   classAssignmentId: string;
   membershipId: string;
-}): Promise<ActAssignedPracticeItem[] | null> {
+}): Promise<MixedAssignedPracticeItem[] | null> {
   const existing = await prisma.writingPracticePromptSet.findUnique({
     where: {
       classAssignmentId_membershipId: {
@@ -408,7 +584,7 @@ export async function getStudentPracticeSet(params: {
     },
   });
   return existing
-    ? (existing.promptsJson as unknown as ActAssignedPracticeItem[])
+    ? (existing.promptsJson as unknown as MixedAssignedPracticeItem[])
     : null;
 }
 
@@ -487,6 +663,7 @@ export async function recordWritingPracticeAttempt(
     classAssignmentId: input.classAssignmentId,
     membershipId: input.membershipId,
     position: input.position,
+    revision: 1,
     lessonSlug: input.lessonSlug,
     promptId: question.id,
     exercise: question.sentence,
@@ -498,15 +675,92 @@ export async function recordWritingPracticeAttempt(
 
   return prisma.writingPracticeAttempt.upsert({
     where: {
-      classAssignmentId_membershipId_position: {
+      classAssignmentId_membershipId_position_revision: {
         classAssignmentId: input.classAssignmentId,
         membershipId: input.membershipId,
         position: input.position,
+        revision: 1,
       },
     },
     // A retry must return the first immutable answer, not rewrite history.
     update: {},
     create,
+  });
+}
+
+export type RecordCompositionPracticeAttemptInput = {
+  classAssignmentId: string;
+  membershipId: string;
+  position: number;
+  lessonSlug: string;
+  prompt: QuickWritingPracticePrompt;
+  response: string;
+  feedback: PracticeFeedbackResult;
+};
+
+/**
+ * Persists a constructed-response (composition) practice attempt: the prompt
+ * snapshot, the student's writing, and the tutor feedback it earned. `status`
+ * is the tutor's verdict, which the teacher roll-up already understands.
+ */
+export async function recordCompositionPracticeAttempt(
+  input: RecordCompositionPracticeAttemptInput
+) {
+  const normalizedResponse = input.response.trim().replace(/\r\n/g, '\n');
+  const responseDigest = createHash('sha256')
+    .update(normalizedResponse, 'utf8')
+    .digest('hex');
+  const record: CompositionAttemptRecord = {
+    kind: 'composition',
+    exercise: input.prompt.exercise,
+    instruction: input.prompt.instruction,
+    response: normalizedResponse,
+    ...input.feedback,
+  };
+
+  const lockKey = `writing-practice-attempt:${input.classAssignmentId}:${input.membershipId}:${input.position}`;
+  return prisma.$transaction(async (transaction) => {
+    await transaction.$queryRaw`
+      SELECT 1::integer AS "locked"
+      FROM pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))
+    `;
+
+    const duplicate = await transaction.writingPracticeAttempt.findFirst({
+      where: {
+        classAssignmentId: input.classAssignmentId,
+        membershipId: input.membershipId,
+        position: input.position,
+        responseDigest,
+      },
+    });
+    if (duplicate) return duplicate;
+
+    const latest = await transaction.writingPracticeAttempt.findFirst({
+      where: {
+        classAssignmentId: input.classAssignmentId,
+        membershipId: input.membershipId,
+        position: input.position,
+      },
+      orderBy: { revision: 'desc' },
+      select: { revision: true },
+    });
+
+    return transaction.writingPracticeAttempt.create({
+      data: {
+        classAssignmentId: input.classAssignmentId,
+        membershipId: input.membershipId,
+        position: input.position,
+        revision: (latest?.revision ?? 0) + 1,
+        responseDigest,
+        lessonSlug: input.lessonSlug,
+        promptId: input.prompt.id,
+        exercise: input.prompt.exercise,
+        instruction: input.prompt.instruction,
+        response: normalizedResponse,
+        status: input.feedback.status,
+        feedbackJson: record,
+      },
+    });
   });
 }
 
@@ -584,18 +838,79 @@ export type WritingPracticeStudentResult = {
   membershipId: string;
   name: string | null;
   email: string;
+  /** Distinct problems the student has submitted at least once (revisions of
+   *  the same prompt count once). */
   attemptCount: number;
+  /** Distinct problems the student has demonstrated mastery on (a `strong`
+   *  attempt). Composition problems are "done" only once mastered; ACT
+   *  problems are done as soon as they're answered. */
+  masteredCount: number;
   completed: boolean;
   latestStatus: string | null;
 };
 
-/** One recorded student attempt: which ACT question, their pick, and the grade. */
+type ProgressAttempt = {
+  position: number;
+  lessonSlug: string;
+  status: string;
+};
+
+export type AssignedProgress = {
+  /** Distinct prompts attempted (revisions collapsed). */
+  attemptedCount: number;
+  /** Distinct prompts with a `strong` attempt. */
+  masteredCount: number;
+  /** Distinct prompts "done": mastered for composition, attempted for ACT. */
+  doneCount: number;
+};
+
+/**
+ * Collapses a student's raw attempt rows (which include every revision) into
+ * per-problem progress. A composition problem counts as done only once it has
+ * a `strong` attempt — so a wrong-then-abandoned answer never reads as
+ * complete — while an ACT problem is done as soon as it is answered, preserving
+ * the multiple-choice flow. Mastery is tracked for both.
+ */
+export function computeAssignedProgress(
+  attempts: ProgressAttempt[]
+): AssignedProgress {
+  const byPosition = new Map<
+    number,
+    { lessonSlug: string; mastered: boolean }
+  >();
+  for (const attempt of attempts) {
+    const existing = byPosition.get(attempt.position);
+    byPosition.set(attempt.position, {
+      lessonSlug: attempt.lessonSlug,
+      mastered: (existing?.mastered ?? false) || attempt.status === 'strong',
+    });
+  }
+
+  let attemptedCount = 0;
+  let masteredCount = 0;
+  let doneCount = 0;
+  for (const { lessonSlug, mastered } of byPosition.values()) {
+    attemptedCount += 1;
+    if (mastered) masteredCount += 1;
+    const isComposition =
+      getQuickWritingLessonBySlug(lessonSlug)?.section === 'Composition';
+    if (isComposition ? mastered : true) doneCount += 1;
+  }
+  return { attemptedCount, masteredCount, doneCount };
+}
+
+/**
+ * One recorded student attempt: an ACT question + their pick + the grade, or a
+ * composition prompt + their writing + the tutor feedback.
+ */
 export type WritingPracticeAttemptDetail = {
   id: string;
+  position: number;
+  revision: number;
   lessonSlug: string;
   promptId: string;
   status: string;
-  attempt: ActAttemptRecord;
+  attempt: ActAttemptRecord | CompositionAttemptRecord;
   createdAt: Date;
 };
 
@@ -610,6 +925,7 @@ export function summarizeWritingPracticeResults(params: {
   attempts: Array<{
     membershipId: string;
     position: number;
+    lessonSlug: string;
     status: string;
     createdAt: Date;
   }>;
@@ -618,22 +934,27 @@ export function summarizeWritingPracticeResults(params: {
   const byStudent = new Map<
     string,
     {
-      positions: Set<number>;
+      attempts: ProgressAttempt[];
       latestStatus: string;
       latestAt: Date;
     }
   >();
   for (const attempt of params.attempts) {
     const existing = byStudent.get(attempt.membershipId);
+    const progressAttempt: ProgressAttempt = {
+      position: attempt.position,
+      lessonSlug: attempt.lessonSlug,
+      status: attempt.status,
+    };
     if (!existing) {
       byStudent.set(attempt.membershipId, {
-        positions: new Set([attempt.position]),
+        attempts: [progressAttempt],
         latestStatus: attempt.status,
         latestAt: attempt.createdAt,
       });
       continue;
     }
-    existing.positions.add(attempt.position);
+    existing.attempts.push(progressAttempt);
     if (attempt.createdAt >= existing.latestAt) {
       existing.latestStatus = attempt.status;
       existing.latestAt = attempt.createdAt;
@@ -643,13 +964,14 @@ export function summarizeWritingPracticeResults(params: {
   return params.students
     .map((student) => {
       const summary = byStudent.get(student.id);
-      const attemptCount = summary?.positions.size ?? 0;
+      const progress = computeAssignedProgress(summary?.attempts ?? []);
       return {
         membershipId: student.id,
         name: student.user.name,
         email: student.user.email,
-        attemptCount,
-        completed: attemptCount >= params.problemCount,
+        attemptCount: progress.attemptedCount,
+        masteredCount: progress.masteredCount,
+        completed: progress.doneCount >= params.problemCount,
         latestStatus: summary?.latestStatus ?? null,
       };
     })
@@ -693,6 +1015,7 @@ export async function getWritingPracticeResultsForTeacher(
             id: true,
             membershipId: true,
             position: true,
+            revision: true,
             lessonSlug: true,
             promptId: true,
             exercise: true,
@@ -721,10 +1044,14 @@ export async function getWritingPracticeResultsForTeacher(
   for (const attempt of classAssignment.attempts) {
     const detail: WritingPracticeAttemptDetail = {
       id: attempt.id,
+      position: attempt.position,
+      revision: attempt.revision,
       lessonSlug: attempt.lessonSlug,
       promptId: attempt.promptId,
       status: attempt.status,
-      attempt: attempt.feedbackJson as unknown as ActAttemptRecord,
+      attempt: attempt.feedbackJson as unknown as
+        | ActAttemptRecord
+        | CompositionAttemptRecord,
       createdAt: attempt.createdAt,
     };
     (attemptsByStudent[attempt.membershipId] ??= []).push(detail);

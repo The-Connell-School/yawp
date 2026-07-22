@@ -1,0 +1,240 @@
+import AxeBuilder from '@axe-core/playwright';
+
+import { test, expect } from '../test-setup';
+
+// The Composition strand of Writing Fundamentals Practice is constructed
+// response, not ACT multiple choice: the student writes a short response and
+// the tutor feedback service responds. E2E runs offline (no
+// ANTHROPIC_API_KEY), so the feedback service degrades to its deterministic
+// self-check — which is exactly what we assert here.
+test.describe.serial('Writing Fundamentals Practice — Composition', () => {
+  test('surfaces a Composition section on the practice index', async ({
+    page,
+    e2eContext,
+    signIn,
+  }) => {
+    await signIn(e2eContext.userEmail, 'johndoe');
+    await page.goto('/app/writing-lessons');
+
+    await expect(
+      page.getByRole('heading', { name: /writing fundamentals practice/i })
+    ).toBeVisible();
+
+    // The two strands each get their own heading.
+    await expect(
+      page.getByRole('heading', { name: 'Grammar & Mechanics' })
+    ).toBeVisible();
+    await expect(
+      page.getByRole('heading', { name: 'Composition' })
+    ).toBeVisible();
+
+    // Composition links through to the constructed-response lessons, grouped
+    // into the four bounded summer skills.
+    await expect(
+      page.getByRole('link', { name: /topic sentences/i })
+    ).toBeVisible();
+    await expect(
+      page.getByRole('link', { name: /^evidence\b/i })
+    ).toBeVisible();
+    await expect(
+      page.getByRole('link', { name: /^analysis\b/i })
+    ).toBeVisible();
+    await page.getByRole('link', { name: /paragraph transitions/i }).click();
+    await expect(
+      page.getByRole('heading', { name: 'Paragraph Transitions' })
+    ).toBeVisible();
+  });
+
+  test('a composition assignment reaches the student and records written attempts', async ({
+    page,
+    e2eContext,
+    signIn,
+  }) => {
+    // Teacher assigns Topic Sentences (constructed response) to their class.
+    await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
+    await page.goto('/app/writing-lessons/topic-sentences');
+    await page.locator('input[name="classIds"]').first().check();
+    await page.locator('input[name="problemCount"]').fill('3');
+    await page.getByRole('button', { name: /assign practice/i }).click();
+    await expect(page.getByTestId('assign-result')).toContainText(
+      /assigned to/i
+    );
+
+    // Student opens it and gets a writing box, not ACT answer choices.
+    await page.request.post('/auth/logout');
+    await page.context().clearCookies();
+    await signIn(e2eContext.userEmail, 'johndoe');
+    await page.goto('/app/writing-lessons');
+    await page.getByTestId('assigned-practice-card').first().click();
+    const startAssignedPractice = page.getByRole('button', {
+      name: /start assigned practice/i,
+    });
+    await expect(startAssignedPractice).toBeVisible();
+    await startAssignedPractice.click();
+    await expect(
+      page.getByRole('heading', { name: /problem 1 of/i })
+    ).toBeVisible();
+    await expect(page.getByText(/choose the best answer/i)).toHaveCount(0);
+
+    const response = page.getByTestId('assigned-composition-response');
+    await expect(response).toBeVisible();
+    await response.fill(
+      'The cafeteria menu punishes the students who most need a real lunch.'
+    );
+    await page.getByRole('button', { name: /check & save/i }).click();
+
+    // Feedback appears and the attempt is recorded. Offline (e2e) the tutor
+    // degrades to "developing", so the problem isn't mastered yet — the student
+    // is offered a revision loop rather than being pushed straight on.
+    await expect(
+      page.getByTestId('assigned-composition-feedback')
+    ).toBeVisible();
+    const draftHistory = page.getByTestId('composition-draft-history');
+    await expect(draftHistory).toBeVisible();
+    await expect(draftHistory.getByText('Draft 1')).toBeVisible();
+    await expect(
+      page.getByRole('button', { name: /revise & resubmit/i })
+    ).toBeVisible();
+    // Nothing mastered yet, but the attempt is on record.
+    await expect(page.getByText(/0 of 3 mastered/i)).toBeVisible();
+
+    // Revising keeps the earlier draft visible, so the progression builds up.
+    await response.fill(
+      'The cafeteria menu quietly punishes the students who most need a real lunch, and the school should fix it.'
+    );
+    await page.getByRole('button', { name: /revise & resubmit/i }).click();
+    await expect(draftHistory.getByText('Draft 1')).toBeVisible();
+    await expect(draftHistory.getByText('Draft 2')).toBeVisible();
+
+    // The trail is database-backed, not merely local component state.
+    await page.reload();
+    await expect(
+      page.getByTestId('composition-draft-history').getByText('Draft 1')
+    ).toBeVisible();
+    await expect(
+      page.getByTestId('composition-draft-history').getByText('Draft 2')
+    ).toBeVisible();
+
+    // The student can move on without being hard-blocked.
+    await page.getByRole('button', { name: /skip for now/i }).click();
+    await expect(
+      page.getByRole('heading', { name: /problem 2 of/i })
+    ).toBeVisible();
+
+    // Teacher reads the student's exact writing in results.
+    await page.request.post('/auth/logout');
+    await page.context().clearCookies();
+    await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
+    await page.goto('/app/writing-lessons');
+    await page.getByTestId('assigned-by-teacher-card').first().click();
+    await expect(
+      page.getByRole('heading', { name: /student progress/i })
+    ).toBeVisible();
+    const studentRow = page
+      .getByTestId('student-progress-row')
+      .filter({ hasText: '1/3' });
+    await expect(studentRow).toBeVisible();
+    await studentRow.click();
+
+    const attempts = page.getByTestId('student-attempts');
+    await expect(attempts).toBeVisible();
+    await expect(attempts.getByText(/their response/i)).toBeVisible();
+    await expect(
+      attempts.getByText(/punishes the students who most need a real lunch/i)
+    ).toBeVisible();
+  });
+
+  test('keeps Composition lessons out of the ACT session builder', async ({
+    page,
+    e2eContext,
+    signIn,
+  }) => {
+    await signIn(e2eContext.userEmail, 'johndoe');
+    await page.goto('/app/writing-lessons');
+
+    await page.getByRole('button', { name: /create practice/i }).click();
+    const dialog = page.getByRole('dialog');
+    await expect(dialog.getByText(/skills to practice/i)).toBeVisible();
+
+    // The self-directed session is ACT multiple choice only, so composition
+    // skills must not be selectable there.
+    await expect(
+      dialog.getByText('Fixing Comma Splices', { exact: true })
+    ).toBeVisible();
+    await expect(
+      dialog.getByText('Topic Sentences', { exact: true })
+    ).toHaveCount(0);
+    await expect(
+      dialog.getByText('Paragraph Transitions', { exact: true })
+    ).toHaveCount(0);
+  });
+
+  test('lets a student write a topic sentence and get tutor feedback', async ({
+    page,
+    e2eContext,
+    signIn,
+  }) => {
+    await signIn(e2eContext.userEmail, 'johndoe');
+    await page.goto('/app/writing-lessons/topic-sentences');
+
+    await expect(
+      page.getByRole('heading', { name: 'Topic Sentences' })
+    ).toBeVisible();
+
+    const panel = page.getByRole('complementary');
+    await expect(panel.getByText(/try it yourself/i)).toBeVisible();
+    // Constructed response, not multiple choice: there is a writing box and no
+    // ACT answer choices.
+    await expect(panel.getByText(/choose the best answer/i)).toHaveCount(0);
+    const response = panel.getByTestId('composition-response');
+    await expect(response).toBeVisible();
+
+    // A guardrail catches a blank submission before it ever reaches the tutor.
+    await panel.getByRole('button', { name: /check my answer/i }).click();
+    const result = page.getByTestId('composition-result');
+    await expect(result).toBeVisible();
+    await expect(result).toContainText(/add your revision/i);
+
+    // A real attempt gets real (here, offline-degraded) tutor feedback.
+    await response.fill(
+      'The cafeteria menu punishes the students who most need a real lunch.'
+    );
+    await panel.getByRole('button', { name: /check my answer/i }).click();
+    await expect(result).toBeVisible();
+    await expect(result).toContainText(/tutor is offline/i);
+
+    // The student can move on to a fresh prompt without dead-ending.
+    await panel.getByRole('button', { name: /new prompt/i }).click();
+    await expect(page.getByTestId('composition-result')).toHaveCount(0);
+    await expect(panel.getByTestId('composition-response')).toHaveValue('');
+  });
+
+  test('keeps Composition self-practice accessible and usable on mobile', async ({
+    page,
+    e2eContext,
+    signIn,
+  }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await signIn(e2eContext.userEmail, 'johndoe');
+    await page.goto('/app/writing-lessons/analysis');
+
+    const response = page.getByTestId('composition-response');
+    await expect(response).toBeVisible();
+    await expect(
+      page.getByRole('button', { name: /check my answer/i })
+    ).toBeVisible();
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth > window.innerWidth
+    );
+    expect(overflow).toBe(false);
+
+    const results = await new AxeBuilder({ page })
+      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
+      .analyze();
+    expect(
+      results.violations.filter((violation) =>
+        ['serious', 'critical'].includes(violation.impact ?? '')
+      )
+    ).toEqual([]);
+  });
+});

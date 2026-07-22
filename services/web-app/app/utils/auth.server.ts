@@ -26,6 +26,7 @@ const membershipSelect = {
       name: true,
       reporterEnabled: true,
       writingFundamentalsEnabled: true,
+      compositionDrillsEnabled: true,
       classInsightsEnabled: true,
     },
   },

@@ -177,13 +177,14 @@ describe('admin organization detail route', () => {
     expect(updateArg.data.reporterEnabled).toBe(false);
   });
 
-  test('updates the independent Writing Fundamentals and class insight gates', async () => {
+  test('updates the independent Writing Fundamentals, Composition, and class insight gates', async () => {
     const form = new URLSearchParams();
     form.set('intent', 'update');
     form.set('name', 'Test Org');
     form.set('numOfStudentSeats', '30');
     form.set('numOfTeacherSeats', '10');
     form.set('writingFundamentalsEnabled', 'true');
+    form.set('compositionDrillsEnabled', 'true');
     form.set('classInsightsEnabled', 'true');
 
     await action({
@@ -195,7 +196,28 @@ describe('admin organization detail route', () => {
     const updateArg = prisma.organization.update.mock.calls[0][0];
     expect(updateArg.data).toMatchObject({
       writingFundamentalsEnabled: true,
+      compositionDrillsEnabled: true,
       classInsightsEnabled: true,
+    });
+  });
+
+  test('cannot enable Composition while Writing Fundamentals is off', async () => {
+    const form = new URLSearchParams();
+    form.set('intent', 'update');
+    form.set('name', 'Test Org');
+    form.set('numOfStudentSeats', '30');
+    form.set('numOfTeacherSeats', '10');
+    form.set('compositionDrillsEnabled', 'true');
+
+    await action({
+      request: updateRequest(form),
+      params: { id: 'org-1' },
+      context: {} as never,
+    });
+
+    expect(prisma.organization.update.mock.calls[0][0].data).toMatchObject({
+      writingFundamentalsEnabled: false,
+      compositionDrillsEnabled: false,
     });
   });
 });

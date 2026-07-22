@@ -164,6 +164,9 @@ export async function action({ request, params }: ActionFunctionArgs) {
     const reporterEnabled = formData.get('reporterEnabled') === 'true';
     const writingFundamentalsEnabled =
       formData.get('writingFundamentalsEnabled') === 'true';
+    const compositionDrillsEnabled =
+      writingFundamentalsEnabled &&
+      formData.get('compositionDrillsEnabled') === 'true';
     const classInsightsEnabled =
       formData.get('classInsightsEnabled') === 'true';
     const assignmentTypeIds = Array.from(
@@ -198,6 +201,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
           accessExpiresAt: accessExpiresAt ? new Date(accessExpiresAt) : null,
           reporterEnabled,
           writingFundamentalsEnabled,
+          compositionDrillsEnabled,
           classInsightsEnabled,
         },
       }),
@@ -492,6 +496,25 @@ export default function OrganizationRoute() {
                     <label className="flex min-h-12 items-start gap-3 rounded-md border bg-background px-3 py-2 text-sm">
                       <input
                         type="checkbox"
+                        name="compositionDrillsEnabled"
+                        value="true"
+                        defaultChecked={organization.compositionDrillsEnabled}
+                        className="mt-1 h-4 w-4"
+                      />
+                      <span className="min-w-0">
+                        <span className="block font-medium">
+                          Composition Drills
+                        </span>
+                        <span className="block text-xs text-muted-foreground">
+                          Enables constructed-response topic, transition,
+                          evidence, and analysis practice. Requires Writing
+                          Fundamentals.
+                        </span>
+                      </span>
+                    </label>
+                    <label className="flex min-h-12 items-start gap-3 rounded-md border bg-background px-3 py-2 text-sm">
+                      <input
+                        type="checkbox"
                         name="classInsightsEnabled"
                         value="true"
                         defaultChecked={organization.classInsightsEnabled}
@@ -757,9 +780,7 @@ export default function OrganizationRoute() {
                       </div>
                     </TableCell>
                     <TableCell>{profile.user.email}</TableCell>
-                    <TableCell>
-                      {formatDateOnly(profile.createdAt)}
-                    </TableCell>
+                    <TableCell>{formatDateOnly(profile.createdAt)}</TableCell>
                   </TableRow>
                 ))
               ) : (
