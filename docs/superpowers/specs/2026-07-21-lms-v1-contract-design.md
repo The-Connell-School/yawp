@@ -102,8 +102,9 @@ The signed launch must:
   namespace lookalikes and context-type URIs do not count. Appendix A.2.4's
   `TestUser` marker is recognized but must accompany an enumerated LIS role or
   a genuine extension outside IMS-owned role namespaces; all spellings on the
-  canonical `purl.imsglobal.org` authority and deprecated `urn:lti:role:ims/`
-  families are reserved, including terminal-DNS-dot and encoded-path variants;
+  canonical `purl.imsglobal.org` authority and deprecated `urn:lti:` families
+  are reserved, including terminal-DNS-dot and percent-encoded variants; role
+  URI strings with URL-trimmable surrounding whitespace are invalid;
 - consume state and nonce exactly once in the persisted launch flow in #212.
 
 A Deep Linking launch may omit subject, roles, and context under Deep Linking

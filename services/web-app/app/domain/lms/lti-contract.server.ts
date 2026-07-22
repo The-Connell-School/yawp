@@ -171,7 +171,13 @@ const STANDARD_LTI_ROLE_URIS = new Set([
 ]);
 
 function isReservedImsVocabularyUri(value: string) {
-  if (/^urn:lti:role:ims\//i.test(value)) return true;
+  let percentNormalizedValue: string;
+  try {
+    percentNormalizedValue = decodeURIComponent(value);
+  } catch {
+    return true;
+  }
+  if (/^urn:lti:/i.test(percentNormalizedValue)) return true;
   if (!URL.canParse(value)) return false;
   const url = new URL(value);
   const canonicalHostname = url.hostname.toLowerCase().replace(/\.+$/, '');
@@ -181,6 +187,10 @@ function isReservedImsVocabularyUri(value: string) {
 const LtiRoleUriSchema = z
   .string()
   .min(1)
+  .refine(
+    (value) => value === value.trim(),
+    'LTI roles must not contain surrounding whitespace.'
+  )
   .refine(
     (value) => URL.canParse(value),
     'LTI roles must be absolute URI values.'
