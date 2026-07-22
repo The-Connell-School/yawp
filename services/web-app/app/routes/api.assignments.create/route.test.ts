@@ -25,6 +25,7 @@ const requireUserId = mock();
 const requireMembership = mock();
 const createAssignmentDeployedToClasses = mock();
 const isAssignmentTypeAvailableForEveryScope = mock();
+const isApHistoryPdfImportEnabled = mock();
 
 mock.module('~/utils/db.server', () => ({ prisma }));
 mock.module('~/utils/auth.server', () => ({
@@ -36,6 +37,9 @@ mock.module('~/utils/assignment-deployment.server', () => ({
 }));
 mock.module('~/utils/assignment-type-access.server', () => ({
   isAssignmentTypeAvailableForEveryScope,
+}));
+mock.module('~/domain/ap-history/pdf-import-flag.server', () => ({
+  isApHistoryPdfImportEnabled,
 }));
 
 const { action } = await import('./route');
@@ -80,6 +84,7 @@ describe('api.assignments.create', () => {
     prisma.apHistoryPromptLibraryEntry.findFirst.mockReset();
     createAssignmentDeployedToClasses.mockReset();
     isAssignmentTypeAvailableForEveryScope.mockReset();
+    isApHistoryPdfImportEnabled.mockReset();
     requireUserId.mockReset();
     requireMembership.mockReset();
 
@@ -101,6 +106,7 @@ describe('api.assignments.create', () => {
     prisma.orgMembership.findMany.mockResolvedValue([]);
     mockAssignmentTypeAvailable();
     isAssignmentTypeAvailableForEveryScope.mockResolvedValue(true);
+    isApHistoryPdfImportEnabled.mockReturnValue(true);
     prisma.apHistoryPromptLibraryEntry.findFirst.mockResolvedValue(null);
     createAssignmentDeployedToClasses.mockResolvedValue({ id: 'assignment-1' });
   });
@@ -125,6 +131,7 @@ describe('api.assignments.create', () => {
           id: { in: ['class-1', 'class-2'] },
           teachers: { some: { id: 'teacher-1' } },
           isArchived: false,
+          school: { organizationId: 'org-1' },
         }),
       })
     );
@@ -341,6 +348,8 @@ describe('api.assignments.create', () => {
           imageUrl: null,
           imageAlt: null,
           provenanceUrl: 'https://example.test/doc-1',
+          licenseName: 'Public Domain (U.S. federal government work)',
+          licenseUrl: 'https://www.usa.gov/government-copyright',
         },
       ],
     };
@@ -380,7 +389,8 @@ describe('api.assignments.create', () => {
         title: 'Unit 7 DBQ',
         prompt: libraryEntry.prompt,
         apHistorySnapshot: expect.objectContaining({
-          schemaVersion: 1,
+          schemaVersion: 2,
+          origin: 'library',
           libraryEntryId: 'apush-dbq-new-deal-federal-power',
           essayType: 'dbq',
           sources: [
@@ -389,6 +399,7 @@ describe('api.assignments.create', () => {
             }),
           ],
         }),
+        tutorEnabled: true,
         gradingAssistantStrictnessLevel: 'intermediate',
       }),
       classIds: ['class-1', 'class-2'],
@@ -446,6 +457,125 @@ describe('api.assignments.create', () => {
     expect(body.success).toBe(false);
     expect(responseStatus(response)).toBe(400);
     expect(body.message).toBe('AP History library entry is unavailable.');
+    expect(createAssignmentDeployedToClasses).not.toHaveBeenCalled();
+  });
+
+  test('creates a gated public-domain PDF import with tutor disabled', async () => {
+    mockAssignmentTypeAvailable({
+      id: 'ap-type-1',
+      systemKey: 'ap_history_essay',
+    });
+    prisma.class.findMany.mockResolvedValue([
+      {
+        id: 'class-1',
+        school: {
+          id: 'school-1',
+          organizationId: 'org-1',
+          organization: { apHistoryPdfImportEnabled: true },
+        },
+      },
+    ]);
+
+    const response = await action({
+      request: requestFor({
+        intent: 'create-assignment',
+        assignmentTypeId: 'ap-type-1',
+        classIds: ['class-1'],
+        apHistoryMode: 'pdf-import',
+        apHistoryImportDigest: 'a'.repeat(64),
+        publicDomainAttested: 'true',
+        essayType: 'dbq',
+        title: 'Imported New Deal DBQ',
+        prompt: 'Evaluate the extent to which the New Deal expanded federal power.',
+        period: 'Period 7: 1890-1945',
+        periodNumber: '7',
+        reasoningSkill: 'causation',
+        timeMode: 'timed',
+        durationMinutes: '60',
+        provenanceUrl:
+          'https://www.archives.gov/education/lessons/fdr-inaugural',
+        tutorEnabled: 'false',
+        apHistorySourcesJson: JSON.stringify([
+          {
+            position: 1,
+            title: 'Document 1',
+            attribution:
+              'Franklin D. Roosevelt, First Inaugural Address, 1933',
+            body: 'This Nation asks for action, and action now.',
+          },
+        ]),
+      }),
+      params: {},
+    } as any);
+
+    expect((await readBody(response)).success).toBe(true);
+    expect(isApHistoryPdfImportEnabled).toHaveBeenCalledWith(true);
+    expect(createAssignmentDeployedToClasses).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        title: 'Imported New Deal DBQ',
+        tutorEnabled: false,
+        apHistorySnapshot: expect.objectContaining({
+          schemaVersion: 2,
+          origin: 'pdf-import',
+          importDigest: 'a'.repeat(64),
+          sources: [
+            expect.objectContaining({
+              licenseName: 'Public Domain',
+              provenanceUrl:
+                'https://www.archives.gov/education/lessons/fdr-inaugural',
+            }),
+          ],
+        }),
+      }),
+      classIds: ['class-1'],
+    });
+  });
+
+  test('rejects PDF imports without public-domain attestation or tenant enablement', async () => {
+    mockAssignmentTypeAvailable({
+      id: 'ap-type-1',
+      systemKey: 'ap_history_essay',
+    });
+    prisma.class.findMany.mockResolvedValue([
+      {
+        id: 'class-1',
+        school: {
+          id: 'school-1',
+          organizationId: 'org-1',
+          organization: { apHistoryPdfImportEnabled: true },
+        },
+      },
+    ]);
+    const base = {
+      intent: 'create-assignment',
+      assignmentTypeId: 'ap-type-1',
+      classIds: ['class-1'],
+      apHistoryMode: 'pdf-import',
+      apHistoryImportDigest: 'b'.repeat(64),
+      essayType: 'leq',
+      prompt: 'Evaluate the causes of the Market Revolution.',
+      period: 'Period 4: 1800-1848',
+      periodNumber: '4',
+      reasoningSkill: 'causation',
+      timeMode: 'untimed',
+      durationMinutes: '40',
+      provenanceUrl: 'https://www.archives.gov/',
+      apHistorySourcesJson: '[]',
+    };
+
+    let response = await action({
+      request: requestFor(base),
+      params: {},
+    } as any);
+    expect(responseStatus(response)).toBe(400);
+    expect((await readBody(response)).message).toContain('public domain');
+
+    isApHistoryPdfImportEnabled.mockReturnValue(false);
+    response = await action({
+      request: requestFor({ ...base, publicDomainAttested: 'true' }),
+      params: {},
+    } as any);
+    expect(responseStatus(response)).toBe(404);
     expect(createAssignmentDeployedToClasses).not.toHaveBeenCalled();
   });
 });

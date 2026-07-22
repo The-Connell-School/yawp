@@ -1,8 +1,10 @@
 import { type ActionFunctionArgs, data as dataResponse } from 'react-router';
 import {
   buildAssignmentCreateInputFromApHistoryEntry,
+  buildAssignmentCreateInputFromImportedApHistory,
   getApHistoryLibraryEntryForSnapshot,
 } from '~/domain/ap-history/library.server';
+import { isApHistoryPdfImportEnabled } from '~/domain/ap-history/pdf-import-flag.server';
 import { AP_HISTORY_ASSIGNMENT_TYPE_KEY } from '~/domain/ap-history/schema';
 import {
   DEFAULT_GRADING_ASSISTANT_STRICTNESS_LEVEL,
@@ -43,11 +45,19 @@ export async function action({ request }: ActionFunctionArgs) {
   const promptRaw = formData.get('prompt')?.toString() ?? '';
   const apHistoryLibraryEntryIdRaw =
     formData.get('apHistoryLibraryEntryId')?.toString() ?? '';
+  const apHistoryMode = formData.get('apHistoryMode')?.toString() ?? 'library';
   const strictnessRaw = formData.get('gradingAssistantStrictnessLevel');
+  const tutorEnabledRaw = formData.get('tutorEnabled')?.toString();
 
   const title = titleRaw.trim() || null;
   const prompt = promptRaw.trim();
   const apHistoryLibraryEntryId = apHistoryLibraryEntryIdRaw.trim();
+  const tutorEnabled =
+    tutorEnabledRaw === undefined || tutorEnabledRaw === 'true'
+      ? true
+      : tutorEnabledRaw === 'false'
+        ? false
+        : null;
   const gradingAssistantStrictnessLevel = strictnessRaw
     ? parseGradingAssistantStrictnessLevel(strictnessRaw)
     : DEFAULT_GRADING_ASSISTANT_STRICTNESS_LEVEL;
@@ -73,16 +83,29 @@ export async function action({ request }: ActionFunctionArgs) {
       { status: 400 }
     );
   }
+  if (tutorEnabled === null) {
+    return dataResponse(
+      { success: false, message: 'Tutor availability is invalid.' },
+      { status: 400 }
+    );
+  }
 
   const classes = await prisma.class.findMany({
     where: {
       id: { in: classIds },
       teachers: { some: { id: profile.id } },
       isArchived: false,
+      school: { organizationId: profile.organization.id },
     },
     select: {
       id: true,
-      school: { select: { id: true, organizationId: true } },
+      school: {
+        select: {
+          id: true,
+          organizationId: true,
+          organization: { select: { apHistoryPdfImportEnabled: true } },
+        },
+      },
     },
   });
 
@@ -131,6 +154,102 @@ export async function action({ request }: ActionFunctionArgs) {
   const deployClassIds = classes.map((klass) => klass.id);
 
   if (assignmentType.systemKey === AP_HISTORY_ASSIGNMENT_TYPE_KEY) {
+    const assignmentGrading = gradingIntent?.success
+      ? {
+          submitForGrade: gradingIntent.data.submitForGrade,
+          pointValue: gradingIntent.data.pointValue,
+        }
+      : {};
+
+    if (apHistoryMode === 'pdf-import') {
+      const importEnabledForEveryClass = classes.every((klass) =>
+        isApHistoryPdfImportEnabled(
+          klass.school.organization.apHistoryPdfImportEnabled
+        )
+      );
+      if (!importEnabledForEveryClass) {
+        return dataResponse(
+          { success: false, message: 'AP History PDF import is unavailable.' },
+          { status: 404 }
+        );
+      }
+      if (formData.get('publicDomainAttested')?.toString() !== 'true') {
+        return dataResponse(
+          {
+            success: false,
+            message:
+              'Confirm that the imported document is in the public domain.',
+          },
+          { status: 400 }
+        );
+      }
+
+      let createData: ReturnType<
+        typeof buildAssignmentCreateInputFromImportedApHistory
+      >;
+      try {
+        const imported = {
+          importDigest:
+            formData.get('apHistoryImportDigest')?.toString() ?? '',
+          essayType: formData.get('essayType')?.toString() as 'dbq' | 'leq',
+          prompt,
+          period: formData.get('period')?.toString() ?? '',
+          periodNumber: Number(formData.get('periodNumber')?.toString()),
+          reasoningSkill: formData
+            .get('reasoningSkill')
+            ?.toString() as
+            | 'causation'
+            | 'comparison'
+            | 'continuity-and-change'
+            | 'periodization',
+          timeMode: formData.get('timeMode')?.toString() as
+            | 'untimed'
+            | 'timed',
+          durationMinutes: Number(
+            formData.get('durationMinutes')?.toString()
+          ),
+          provenanceUrl: formData.get('provenanceUrl')?.toString() ?? '',
+          sources: JSON.parse(
+            formData.get('apHistorySourcesJson')?.toString() ?? '[]'
+          ),
+        };
+
+        createData = buildAssignmentCreateInputFromImportedApHistory({
+          assignmentTypeId: assignmentType.id,
+          title,
+          imported,
+          tutorEnabled,
+          gradingAssistantStrictnessLevel,
+          ...assignmentGrading,
+        });
+      } catch {
+        return dataResponse(
+          {
+            success: false,
+            message: 'Imported AP History assignment data is invalid.',
+          },
+          { status: 400 }
+        );
+      }
+
+      await createAssignmentDeployedToClasses({
+        data: createData,
+        classIds: deployClassIds,
+      });
+
+      return dataResponse({
+        success: true,
+        message: 'Assignment created and applied to classes.',
+      });
+    }
+
+    if (apHistoryMode !== 'library') {
+      return dataResponse(
+        { success: false, message: 'AP History assignment mode is invalid.' },
+        { status: 400 }
+      );
+    }
+
     if (!apHistoryLibraryEntryId) {
       return dataResponse(
         { success: false, message: 'AP History library entry is required.' },
@@ -154,7 +273,9 @@ export async function action({ request }: ActionFunctionArgs) {
         assignmentTypeId: assignmentType.id,
         title,
         entry,
+        tutorEnabled,
         gradingAssistantStrictnessLevel,
+        ...assignmentGrading,
       }),
       classIds: deployClassIds,
     });

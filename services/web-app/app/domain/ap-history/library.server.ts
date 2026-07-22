@@ -4,6 +4,8 @@ import { prisma } from '~/utils/db.server';
 import {
   AP_HISTORY_ASSIGNMENT_TYPE_KEY,
   buildApHistorySnapshot,
+  buildImportedApHistorySnapshot,
+  type ImportedApHistoryInput,
 } from './schema';
 
 export async function findApHistoryAssignmentTypeForOrg(organizationId: string) {
@@ -44,6 +46,9 @@ export function buildAssignmentCreateInputFromApHistoryEntry(params: {
   assignmentTypeId: string;
   title: string | null;
   gradingAssistantStrictnessLevel?: string;
+  tutorEnabled?: boolean;
+  submitForGrade?: boolean;
+  pointValue?: number | null;
   entry: NonNullable<
     Awaited<ReturnType<typeof getApHistoryLibraryEntryForSnapshot>>
   >;
@@ -59,6 +64,46 @@ export function buildAssignmentCreateInputFromApHistoryEntry(params: {
     gradingAssistantStrictnessLevel:
       params.gradingAssistantStrictnessLevel ??
       DEFAULT_GRADING_ASSISTANT_STRICTNESS_LEVEL,
+    tutorEnabled: params.tutorEnabled ?? true,
+    ...(params.submitForGrade === undefined
+      ? {}
+      : {
+          submitForGrade: params.submitForGrade,
+          pointValue: params.pointValue ?? null,
+        }),
+    apHistorySnapshot: snapshot as Prisma.InputJsonValue,
+  };
+}
+
+export function buildAssignmentCreateInputFromImportedApHistory(params: {
+  assignmentTypeId: string;
+  title: string | null;
+  gradingAssistantStrictnessLevel?: string;
+  tutorEnabled?: boolean;
+  submitForGrade?: boolean;
+  pointValue?: number | null;
+  imported: ImportedApHistoryInput;
+}): Omit<
+  Prisma.AssignmentUncheckedCreateInput,
+  'id' | 'createdAt' | 'updatedAt'
+> {
+  const snapshot = buildImportedApHistorySnapshot(params.imported);
+  return {
+    assignmentTypeId: params.assignmentTypeId,
+    title:
+      params.title ??
+      `Imported AP U.S. History ${snapshot.essayType.toUpperCase()}`,
+    prompt: snapshot.prompt,
+    gradingAssistantStrictnessLevel:
+      params.gradingAssistantStrictnessLevel ??
+      DEFAULT_GRADING_ASSISTANT_STRICTNESS_LEVEL,
+    tutorEnabled: params.tutorEnabled ?? true,
+    ...(params.submitForGrade === undefined
+      ? {}
+      : {
+          submitForGrade: params.submitForGrade,
+          pointValue: params.pointValue ?? null,
+        }),
     apHistorySnapshot: snapshot as Prisma.InputJsonValue,
   };
 }
