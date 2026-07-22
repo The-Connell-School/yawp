@@ -71,7 +71,25 @@ function mockAssignmentTypeAvailable({
   id = 'at-1',
   systemKey = 'generic_essay',
 } = {}) {
-  prisma.assignmentType.findFirst.mockResolvedValue({ id, systemKey });
+  prisma.assignmentType.findFirst.mockResolvedValue({
+    id,
+    systemKey,
+    gradingAssistantVersion: 3,
+    scoringScaleJson: { type: 'weighted_1_5', minScore: 1, maxScore: 5 },
+    rubricJson: {
+      categories: [
+        {
+          key: 'claim',
+          label: 'Claim',
+          weight: 1,
+          description: 'States a defensible claim.',
+        },
+      ],
+    },
+    gradingPromptConfigJson: { gradingInstructions: 'Use the rubric.' },
+    gradingOutputSchemaJson: { schemaVersion: 1 },
+    gradingCalibrationNotes: null,
+  });
 }
 
 describe('api.assignments.create', () => {
@@ -140,7 +158,16 @@ describe('api.assignments.create', () => {
         id: 'at-1',
         archivedAt: null,
       },
-      select: { id: true, systemKey: true },
+      select: {
+        id: true,
+        systemKey: true,
+        gradingAssistantVersion: true,
+        scoringScaleJson: true,
+        rubricJson: true,
+        gradingPromptConfigJson: true,
+        gradingOutputSchemaJson: true,
+        gradingCalibrationNotes: true,
+      },
     });
     expect(createAssignmentDeployedToClasses).toHaveBeenCalledWith({
       data: expect.objectContaining({
@@ -150,6 +177,14 @@ describe('api.assignments.create', () => {
         submitForGrade: true,
         pointValue: 100,
         gradingAssistantStrictnessLevel: 'intermediate',
+        aiContextSnapshot: expect.objectContaining({
+          schemaVersion: 1,
+          assignmentTypeId: 'at-1',
+          assignmentPrompt: 'Write the essay.',
+          assignmentTypeGradingVersion: 3,
+          rubricHash: expect.any(String),
+          contextHash: expect.any(String),
+        }),
       }),
       classIds: ['class-1', 'class-2'],
     });
@@ -318,7 +353,16 @@ describe('api.assignments.create', () => {
         id: 'at-forbidden',
         archivedAt: null,
       },
-      select: { id: true, systemKey: true },
+      select: {
+        id: true,
+        systemKey: true,
+        gradingAssistantVersion: true,
+        scoringScaleJson: true,
+        rubricJson: true,
+        gradingPromptConfigJson: true,
+        gradingOutputSchemaJson: true,
+        gradingCalibrationNotes: true,
+      },
     });
     expect(createAssignmentDeployedToClasses).not.toHaveBeenCalled();
   });
@@ -486,7 +530,8 @@ describe('api.assignments.create', () => {
         publicDomainAttested: 'true',
         essayType: 'dbq',
         title: 'Imported New Deal DBQ',
-        prompt: 'Evaluate the extent to which the New Deal expanded federal power.',
+        prompt:
+          'Evaluate the extent to which the New Deal expanded federal power.',
         period: 'Period 7: 1890-1945',
         periodNumber: '7',
         reasoningSkill: 'causation',
@@ -499,8 +544,7 @@ describe('api.assignments.create', () => {
           {
             position: 1,
             title: 'Document 1',
-            attribution:
-              'Franklin D. Roosevelt, First Inaugural Address, 1933',
+            attribution: 'Franklin D. Roosevelt, First Inaugural Address, 1933',
             body: 'This Nation asks for action, and action now.',
           },
         ]),

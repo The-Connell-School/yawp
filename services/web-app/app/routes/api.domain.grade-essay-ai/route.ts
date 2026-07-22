@@ -13,7 +13,9 @@ import {
 } from '~/domain/grading/gradeMath';
 import { firstNameFromFullName } from '~/domain/grading/personalize';
 import { parseGrammarIssuesPayload } from '~/domain/grading/grammarIssues';
-import { resolveAssignmentTypeGradingConfig } from '~/domain/assignment-types/assignment-type-grading-config.server';
+import { resolveAssignmentGradingContext } from '~/domain/ai-evaluation/assignment-grading-context.server';
+import { resolveAiPromptVersion } from '~/domain/ai-evaluation/prompt-version-control.server';
+import { compileAiPromptTemplate } from '~/domain/ai-evaluation/prompt-template.shared';
 import type { RubricCategory as GradingRubricCategory } from '~/domain/assignment-types/assignment-type-rubric.shared';
 import {
   DEFAULT_GRADING_ASSISTANT_STRICTNESS_LEVEL,
@@ -189,7 +191,9 @@ function buildApHistoryPrompt({
     snapshot.essayType === 'dbq'
       ? snapshot.sources
           .map((source) => {
-            const caption = source.caption ? `\nCaption: ${source.caption}` : '';
+            const caption = source.caption
+              ? `\nCaption: ${source.caption}`
+              : '';
             return `Document ${source.position}: ${source.title}\nAttribution: ${source.attribution}${caption}\nBody: ${source.body}`;
           })
           .join('\n\n')
@@ -423,6 +427,8 @@ export async function action({ request }: ActionFunctionArgs) {
         assignment: {
           select: {
             id: true,
+            prompt: true,
+            aiContextSnapshot: true,
             gradingAssistantStrictnessLevel: true,
             apHistorySnapshot: true,
           },
@@ -497,10 +503,7 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 
   if (
-    isGradingOwnDocument(
-      actor.membershipId,
-      submission.document.membershipId
-    )
+    isGradingOwnDocument(actor.membershipId, submission.document.membershipId)
   ) {
     return dataResponse(
       {
@@ -522,11 +525,14 @@ export async function action({ request }: ActionFunctionArgs) {
     );
   }
 
-  const resolvedGradingConfig = await resolveAssignmentTypeGradingConfig({
-      assignmentTypeId: submission.document.assignmentTypeId,
-      assignmentTypeKind: submission.document.assignmentType?.kind ?? null,
-      assignmentTypeTitle: submission.document.assignmentType?.title ?? null,
-    });
+  const assignmentGradingContext = await resolveAssignmentGradingContext({
+    assignmentTypeId: submission.document.assignmentTypeId,
+    assignmentTypeKind: submission.document.assignmentType?.kind ?? null,
+    assignmentTypeTitle: submission.document.assignmentType?.title ?? null,
+    assignmentPrompt: submission.document.assignment?.prompt ?? '',
+    storedSnapshot: submission.document.assignment?.aiContextSnapshot,
+  });
+  const resolvedGradingConfig = assignmentGradingContext.config;
   const requestedStrictnessLevel = data.gradingAssistantStrictnessLevel
     ? parseGradingAssistantStrictnessLevel(data.gradingAssistantStrictnessLevel)
     : null;
@@ -583,13 +589,17 @@ export async function action({ request }: ActionFunctionArgs) {
     forceFallback,
     signalFallbackRetry: !forceFallback,
   };
-  const retryResponse = () =>
-    dataResponse({ retrying: true }, { status: 202 });
+  const retryResponse = () => dataResponse({ retrying: true }, { status: 202 });
   const getGradingLlmCompletion = (
     params: Parameters<typeof getLLMCompletion>[0]
   ) =>
     runWithGradingRequestDeadline(gradingDeadlineSignal, (signal) =>
-      getLLMCompletion({ ...params, ...llmRetryOptions, signal })
+      getLLMCompletion({
+        ...params,
+        ...llmRetryOptions,
+        signal,
+        logPayload: 'metadata-only',
+      })
     );
   const useE2EFixture = shouldUseE2EGradingFixture();
   const documentContext = buildAiTextContextAudit({
@@ -776,6 +786,23 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
     userPrompt = `Student first name: ${studentFirstName}\n\nAssignment type grading config: ${resolvedGradingConfig.label}\n\n${strictnessBlock}Rubric category keys (use these exact keys in categories[].key):\n${rubricText}\n\nRubric Instructions:\n${rubricInstructions}\n\nEssay:\n${submission.text}`;
   }
 
+  const gradingPromptVersion = await resolveAiPromptVersion({
+    assignmentTypeId: submission.document.assignmentTypeId,
+    surface: 'grading',
+  });
+  const compiledGradingPrompt = compileAiPromptTemplate({
+    surface: 'grading',
+    template: gradingPromptVersion.template,
+    variables: {
+      base_system: system,
+      base_user_message: userPrompt,
+      assignment_prompt: assignmentGradingContext.snapshot.assignmentPrompt,
+      rubric_version: `assignment-v${assignmentGradingContext.snapshot.assignmentTypeGradingVersion}:${assignmentGradingContext.snapshot.rubricHash.slice(0, 12)}`,
+    },
+  });
+  system = compiledGradingPrompt.system;
+  userPrompt = compiledGradingPrompt.userMessage;
+
   let responseText = '';
 
   if (useE2EFixture) {
@@ -798,11 +825,20 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
           gradingConfigSource: resolvedGradingConfig.source,
           ...gradingAiContextMetadata,
           assignmentTypeGradingLabel: resolvedGradingConfig.label,
-          assignmentTypeSourceTemplateId: resolvedGradingConfig.sourceTemplateId,
+          assignmentTypeSourceTemplateId:
+            resolvedGradingConfig.sourceTemplateId,
           assignmentTypeSourceTemplateSlug:
             resolvedGradingConfig.sourceTemplateSlug,
           gradingAssistantStrictnessLevel,
           assignmentTypeKind: submission.document.assignmentType?.kind ?? null,
+          promptVersionId: gradingPromptVersion.id,
+          promptVersion: gradingPromptVersion.version,
+          promptRevision: gradingPromptVersion.revision,
+          promptContentHash: gradingPromptVersion.contentHash,
+          promptSource: gradingPromptVersion.source,
+          assignmentContextSource: assignmentGradingContext.source,
+          assignmentContextHash: assignmentGradingContext.snapshot.contextHash,
+          rubricSnapshotHash: assignmentGradingContext.snapshot.rubricHash,
         },
       });
     } catch (error) {
@@ -1079,13 +1115,22 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
         assignmentTypeGradingVersion: resolvedGradingConfig.version,
         assignmentTypeGradingLabel: resolvedGradingConfig.label,
         assignmentTypeSourceTemplateId: resolvedGradingConfig.sourceTemplateId,
-        assignmentTypeSourceTemplateSlug: resolvedGradingConfig.sourceTemplateSlug,
+        assignmentTypeSourceTemplateSlug:
+          resolvedGradingConfig.sourceTemplateSlug,
         gradingAssistantStrictnessLevel,
         assignmentTypeId: submission.document.assignmentTypeId,
         assignmentId: submission.document.assignment?.id ?? null,
         assignmentTypeKind: submission.document.assignmentType?.kind ?? null,
         rubricCategoryKeys: rubricKeys,
         documentContext,
+        promptVersionId: gradingPromptVersion.id,
+        promptVersion: gradingPromptVersion.version,
+        promptRevision: gradingPromptVersion.revision,
+        promptContentHash: gradingPromptVersion.contentHash,
+        promptSource: gradingPromptVersion.source,
+        assignmentContextSource: assignmentGradingContext.source,
+        assignmentContextHash: assignmentGradingContext.snapshot.contextHash,
+        rubricSnapshotHash: assignmentGradingContext.snapshot.rubricHash,
       } satisfies Prisma.InputJsonValue,
       ...(!submission.gradedAt
         ? { gradedAt: now, gradedByMembershipId: actor.membershipId }
@@ -1103,6 +1148,16 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
         resolvedGradingConfig.rubricSnapshot as Prisma.InputJsonValue,
       assignmentTypePromptConfigSnapshot:
         resolvedGradingConfig.promptConfigSnapshot as Prisma.InputJsonValue,
+      promptVersionId: gradingPromptVersion.id,
+      promptSnapshotJson: {
+        version: gradingPromptVersion.version,
+        revision: gradingPromptVersion.revision,
+        source: gradingPromptVersion.source,
+        contentHash: gradingPromptVersion.contentHash,
+        template: gradingPromptVersion.template,
+        assignmentContextHash: assignmentGradingContext.snapshot.contextHash,
+        rubricHash: assignmentGradingContext.snapshot.rubricHash,
+      } satisfies Prisma.InputJsonValue,
       source: resolvedGradingConfig.source,
       model,
       status: 'succeeded',
@@ -1121,6 +1176,14 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
         rubricCategoryKeys: rubricKeys,
         gradedAt: now.toISOString(),
         documentContext,
+        promptVersionId: gradingPromptVersion.id,
+        promptVersion: gradingPromptVersion.version,
+        promptRevision: gradingPromptVersion.revision,
+        promptContentHash: gradingPromptVersion.contentHash,
+        promptSource: gradingPromptVersion.source,
+        assignmentContextSource: assignmentGradingContext.source,
+        assignmentContextHash: assignmentGradingContext.snapshot.contextHash,
+        rubricSnapshotHash: assignmentGradingContext.snapshot.rubricHash,
       } satisfies Prisma.InputJsonValue,
     },
   });

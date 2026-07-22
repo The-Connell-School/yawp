@@ -2,6 +2,9 @@ import { data as dataResponse, type ActionFunctionArgs } from 'react-router';
 import { parseFormData, validationError } from '@rvf/react-router';
 import { z } from 'zod';
 import { prisma } from '~/utils/db.server';
+import { parseAssignmentAiContextSnapshot } from '~/domain/ai-evaluation/assignment-ai-context';
+import { resolveAiPromptVersion } from '~/domain/ai-evaluation/prompt-version-control.server';
+import { compileAiPromptTemplate } from '~/domain/ai-evaluation/prompt-template.shared';
 import { isApHistorySnapshot } from '~/domain/ap-history/schema';
 import { buildApHistoryTutorSystemPrompt } from '~/domain/ap-history/tutor-prompt';
 import {
@@ -90,8 +93,15 @@ export async function action({ request }: ActionFunctionArgs) {
           select: {
             id: true,
             text: true,
+            classAssignment: { select: { class: { select: { grade: true } } } },
+            membership: { select: { grade: true } },
             assignment: {
-              select: { tutorEnabled: true, apHistorySnapshot: true },
+              select: {
+                tutorEnabled: true,
+                prompt: true,
+                apHistorySnapshot: true,
+                aiContextSnapshot: true,
+              },
             },
           },
         },
@@ -121,8 +131,16 @@ export async function action({ request }: ActionFunctionArgs) {
       );
     }
 
+    const assignmentTypeId = cms.assignmentModule.assignmentType?.id ?? null;
+    const assignmentContext = assignmentTypeId
+      ? parseAssignmentAiContextSnapshot(
+          cms.document.assignment?.aiContextSnapshot,
+          { assignmentTypeId }
+        )
+      : null;
     const moduleRubric = parseRubric(
-      cms.assignmentModule.assignmentType?.rubricJson
+      assignmentContext?.rubricSnapshot ??
+        cms.assignmentModule.assignmentType?.rubricJson
     );
     const moduleRubricGuidance = buildModuleRubricGuidance({
       categories: moduleRubric.categories,
@@ -131,13 +149,13 @@ export async function action({ request }: ActionFunctionArgs) {
 
     const apHistorySnapshot = cms.document.assignment?.apHistorySnapshot;
     const hasApHistorySnapshot = isApHistorySnapshot(apHistorySnapshot);
-    const system = hasApHistorySnapshot
+    let system = hasApHistorySnapshot
       ? buildApHistoryTutorSystemPrompt(apHistorySnapshot, {
           title: cms.assignmentModule.title,
           tutorInstructions:
             resolveApHistorySectionTutorInstructions(
               apHistorySnapshot.essayType,
-              cms.assignmentModule.title,
+              cms.assignmentModule.title
             ) ?? cms.assignmentModule.tutorInstructions,
           instruction: {
             title: instruction.title,
@@ -145,7 +163,7 @@ export async function action({ request }: ActionFunctionArgs) {
               resolveApHistoryStepTutorInstructions(
                 apHistorySnapshot.essayType,
                 cms.assignmentModule.title,
-                instruction.title,
+                instruction.title
               ) ?? instruction.tutorInstructions,
           },
         })
@@ -154,6 +172,11 @@ export async function action({ request }: ActionFunctionArgs) {
           instructionTutorInstructions: instruction.tutorInstructions,
           moduleRubricGuidance,
         });
+    const studentReadingLevel =
+      cms.document.classAssignment?.class.grade ??
+      cms.document.membership?.grade ??
+      'the student’s demonstrated reading level';
+    system = `${system}\n\nUse clear language appropriate for ${studentReadingLevel}. Do not praise work as complete or excellent unless the visible document evidence supports that claim.`;
 
     const documentSource =
       data.content === undefined ? 'db-document-text' : 'client-content';
@@ -190,12 +213,63 @@ export async function action({ request }: ActionFunctionArgs) {
           : ['thesis', 'context', 'evidence', 'reasoning', 'complexity']
         : moduleRubric.categories.map((category) => category.key),
     });
+    const trustedAssignmentPrompt =
+      assignmentContext?.assignmentPrompt ??
+      (hasApHistorySnapshot ? apHistorySnapshot.prompt : null) ??
+      cms.document.assignment?.prompt ??
+      '';
+    const trustedRubricVersion = hasApHistorySnapshot
+      ? apHistorySnapshot.rubric.rubricId
+      : assignmentContext
+        ? `assignment-v${assignmentContext.assignmentTypeGradingVersion}:${assignmentContext.rubricHash.slice(0, 12)}`
+        : `assignment-v${cms.assignmentModule.assignmentType?.gradingAssistantVersion ?? 1}:legacy-live`;
+    const trustedRubricText = hasApHistorySnapshot
+      ? JSON.stringify(apHistorySnapshot.rubric)
+      : moduleRubric.categories
+          .map(
+            (category) =>
+              `${category.key}: ${category.label} (${Math.round(category.weight * 100)}%) - ${category.description}`
+          )
+          .join('\n');
 
     const currentMessages = cms.messages.map((m) => ({
       role: m.agent as AgentType,
       content: m.content,
       name: m.agent,
     }));
+
+    const tutorPromptVersion = assignmentTypeId
+      ? await resolveAiPromptVersion({
+          assignmentTypeId,
+          surface: 'tutor',
+        })
+      : null;
+    const compiledTutorPrompt = tutorPromptVersion
+      ? compileAiPromptTemplate({
+          surface: 'tutor',
+          template: tutorPromptVersion.template,
+          variables: {
+            base_system: system,
+            assignment_prompt: trustedAssignmentPrompt,
+            rubric_version: trustedRubricVersion,
+            rubric: trustedRubricText || 'No rubric categories configured.',
+            document_context: buildDocumentContextMessage({
+              documentText,
+              source: documentSource,
+              sha256: documentContext.documentTextSha256,
+            }),
+            student_message: data.response,
+          },
+        })
+      : {
+          system,
+          userMessage: `${buildDocumentContextMessage({
+            documentText,
+            source: documentSource,
+            sha256: documentContext.documentTextSha256,
+          })}\n${data.response}`,
+        };
+    system = compiledTutorPrompt.system;
 
     const messages: { role: AgentType; content: string; name?: string }[] = [
       {
@@ -208,18 +282,7 @@ export async function action({ request }: ActionFunctionArgs) {
     ]
       .concat(currentMessages)
       .concat([
-        {
-          role: AgentType.User,
-          content: buildDocumentContextMessage({
-            documentText,
-            source: documentSource,
-            sha256: documentContext.documentTextSha256,
-          }),
-        },
-        {
-          role: AgentType.User,
-          content: data.response,
-        },
+        { role: AgentType.User, content: compiledTutorPrompt.userMessage },
       ]);
 
     let completion: string;
@@ -240,7 +303,20 @@ export async function action({ request }: ActionFunctionArgs) {
           instructionId: instruction.id,
           ...aiContextMetadata,
           moduleRubricRelationships,
+          studentReadingLevel,
+          promptVersionId: tutorPromptVersion?.id ?? null,
+          promptVersion: tutorPromptVersion?.version ?? null,
+          promptRevision: tutorPromptVersion?.revision ?? null,
+          promptContentHash: tutorPromptVersion?.contentHash ?? null,
+          promptSource:
+            tutorPromptVersion?.source ?? 'legacy-no-assignment-type',
+          assignmentContextSource: assignmentContext
+            ? 'assignment-snapshot'
+            : 'legacy-live-config',
+          assignmentContextHash: assignmentContext?.contextHash ?? null,
+          rubricSnapshotHash: assignmentContext?.rubricHash ?? null,
         },
+        logPayload: 'metadata-only',
       });
     } catch (error) {
       if (isLlmFallbackRetrySignal(error)) {
@@ -260,6 +336,15 @@ export async function action({ request }: ActionFunctionArgs) {
               content: data.response,
               context: documentText,
               instructionId: instruction.id,
+              aiMeta: {
+                promptVersionId: tutorPromptVersion?.id ?? null,
+                promptVersion: tutorPromptVersion?.version ?? null,
+                promptRevision: tutorPromptVersion?.revision ?? null,
+                promptContentHash: tutorPromptVersion?.contentHash ?? null,
+                assignmentContextHash: assignmentContext?.contextHash ?? null,
+                documentTextSha256: documentContext.documentTextSha256,
+                documentTextLength: documentContext.documentTextLength,
+              },
             },
             {
               agent: AgentType.Assistant,

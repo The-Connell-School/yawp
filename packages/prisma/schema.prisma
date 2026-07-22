@@ -68,6 +68,8 @@ model AssignmentType {
   assignments                        Assignment[]
   documents                          Document[]
   apHistoryLibraryEntries            ApHistoryPromptLibraryEntry[]
+  promptVersions                     AssignmentTypePromptVersion[]
+  promptEvaluationRuns               AssignmentTypeEvaluationRun[]
 
   @@index([ownerOrgId])
   @@index([ownerMembershipId])
@@ -89,6 +91,7 @@ model Assignment {
   gradingAssistantStrictnessLevel String            @default("intermediate")
   tutorEnabled                    Boolean           @default(true)
   apHistorySnapshot               Json?
+  aiContextSnapshot               Json?
   classAssignments                ClassAssignment[]
   documents                       Document[]
 
@@ -256,6 +259,7 @@ model AssignmentModuleSessionMessage {
   agent                     String
   factCheckPrompt           String?
   context                   String?
+  aiMeta                    Json?
   assignmentModuleSessionId String
   assignmentModuleSession   AssignmentModuleSession @relation(fields: [assignmentModuleSessionId], references: [id], onDelete: Cascade)
 }
@@ -932,17 +936,20 @@ model Setting {
 // Upload table removed. Videos will be stored in S3 and referenced by key.
 
 model User {
-  id             String          @id @default(cuid())
-  createdAt      DateTime        @default(now()) @db.Timestamptz(6)
-  updatedAt      DateTime        @default(now()) @db.Timestamptz(6)
-  email          String          @unique
-  name           String?
-  password       Password?
-  sessions       Session[]
-  memberships    OrgMembership[]
-  isAdmin        Boolean         @default(false)
-  isSuperAdmin   Boolean         @default(false)
-  ltiAuditEvents LtiAuditEvent[]
+  id                          String                        @id @default(cuid())
+  createdAt                   DateTime                      @default(now()) @db.Timestamptz(6)
+  updatedAt                   DateTime                      @default(now()) @db.Timestamptz(6)
+  email                       String                        @unique
+  name                        String?
+  password                    Password?
+  sessions                    Session[]
+  memberships                 OrgMembership[]
+  isAdmin                     Boolean                       @default(false)
+  isSuperAdmin                Boolean                       @default(false)
+  ltiAuditEvents              LtiAuditEvent[]
+  promptVersionsAuthored      AssignmentTypePromptVersion[] @relation("PromptVersionAuthor")
+  promptEvaluationRunsStarted AssignmentTypeEvaluationRun[] @relation("PromptEvaluationRunAuthor")
+  promptCalibrationsReviewed  AssignmentTypeEvaluationRun[] @relation("PromptCalibrationReviewer")
 }
 
 model Invitation {
@@ -1092,15 +1099,18 @@ model Submission {
 }
 
 model SubmissionGradingAssistantRun {
-  id                                 String     @id @default(cuid())
-  createdAt                          DateTime   @default(now()) @db.Timestamptz(6)
-  updatedAt                          DateTime   @default(now()) @updatedAt @db.Timestamptz(6)
+  id                                 String                       @id @default(cuid())
+  createdAt                          DateTime                     @default(now()) @db.Timestamptz(6)
+  updatedAt                          DateTime                     @default(now()) @updatedAt @db.Timestamptz(6)
   submissionId                       String
-  submission                         Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  submission                         Submission                   @relation(fields: [submissionId], references: [id], onDelete: Cascade)
   assignmentTypeId                   String?
   assignmentTypeGradingVersion       Int?
   assignmentTypeRubricSnapshot       Json?
   assignmentTypePromptConfigSnapshot Json?
+  promptVersionId                    String?
+  promptVersion                      AssignmentTypePromptVersion? @relation(fields: [promptVersionId], references: [id], onDelete: SetNull)
+  promptSnapshotJson                 Json?
   source                             String
   model                              String?
   status                             String
@@ -1108,6 +1118,75 @@ model SubmissionGradingAssistantRun {
 
   @@index([submissionId, createdAt(sort: Desc)])
   @@index([assignmentTypeId])
+  @@index([promptVersionId])
+  @@index([status])
+}
+
+model AssignmentTypePromptVersion {
+  id                    String                          @id @default(cuid())
+  createdAt             DateTime                        @default(now()) @db.Timestamptz(6)
+  updatedAt             DateTime                        @updatedAt @db.Timestamptz(6)
+  promotedAt            DateTime?                       @db.Timestamptz(6)
+  assignmentTypeId      String
+  assignmentType        AssignmentType                  @relation(fields: [assignmentTypeId], references: [id], onDelete: Cascade)
+  surface               String
+  version               Int
+  revision              Int                             @default(1)
+  status                String                          @default("draft")
+  source                String
+  authorUserId          String
+  author                User                            @relation("PromptVersionAuthor", fields: [authorUserId], references: [id], onDelete: Restrict)
+  systemMessageTemplate String                          @db.Text
+  userMessageTemplate   String                          @db.Text
+  variableSchemaJson    Json
+  contentHash           String
+  rollbackTargetId      String?
+  rollbackTarget        AssignmentTypePromptVersion?    @relation("PromptRollback", fields: [rollbackTargetId], references: [id], onDelete: SetNull)
+  rollbackSuccessors    AssignmentTypePromptVersion[]   @relation("PromptRollback")
+  promotionRunId        String?                         @unique
+  promotionRun          AssignmentTypeEvaluationRun?    @relation("PromptPromotionRun", fields: [promotionRunId], references: [id], onDelete: SetNull)
+  evaluationRuns        AssignmentTypeEvaluationRun[]   @relation("PromptEvaluationCandidate")
+  submissionGradingRuns SubmissionGradingAssistantRun[]
+
+  @@unique([assignmentTypeId, surface, version])
+  @@index([assignmentTypeId, surface, status, version(sort: Desc)])
+  @@index([authorUserId, createdAt(sort: Desc)])
+  @@index([rollbackTargetId])
+}
+
+model AssignmentTypeEvaluationRun {
+  id                          String                       @id @default(cuid())
+  createdAt                   DateTime                     @default(now()) @db.Timestamptz(6)
+  completedAt                 DateTime?                    @db.Timestamptz(6)
+  assignmentTypeId            String
+  assignmentType              AssignmentType               @relation(fields: [assignmentTypeId], references: [id], onDelete: Cascade)
+  promptVersionId             String
+  promptVersion               AssignmentTypePromptVersion  @relation("PromptEvaluationCandidate", fields: [promptVersionId], references: [id], onDelete: Cascade)
+  promptContentHash           String
+  pairedPromptSnapshotJson    Json
+  suiteVersion                String
+  suiteSnapshotJson           Json
+  resultJson                  Json?
+  status                      String                       @default("running")
+  totalCases                  Int                          @default(0)
+  passedCases                 Int                          @default(0)
+  failedCases                 Int                          @default(0)
+  needsReviewCases            Int                          @default(0)
+  model                       String?
+  provider                    String?
+  durationMs                  Int?
+  inputTokens                 Int?
+  outputTokens                Int?
+  runByUserId                 String
+  runBy                       User                         @relation("PromptEvaluationRunAuthor", fields: [runByUserId], references: [id], onDelete: Restrict)
+  calibrationReviewedAt       DateTime?                    @db.Timestamptz(6)
+  calibrationReviewedByUserId String?
+  calibrationReviewedBy       User?                        @relation("PromptCalibrationReviewer", fields: [calibrationReviewedByUserId], references: [id], onDelete: SetNull)
+  promotedPromptVersion       AssignmentTypePromptVersion? @relation("PromptPromotionRun")
+
+  @@index([assignmentTypeId, createdAt(sort: Desc)])
+  @@index([promptVersionId, createdAt(sort: Desc)])
+  @@index([runByUserId, createdAt(sort: Desc)])
   @@index([status])
 }
 

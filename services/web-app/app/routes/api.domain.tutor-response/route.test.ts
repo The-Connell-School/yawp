@@ -11,6 +11,9 @@ const prisma = {
     findUnique: mock(),
     update: mock(),
   },
+  assignmentTypePromptVersion: {
+    findFirst: mock(),
+  },
 };
 
 mock.module('~/utils/auth.server', () => ({
@@ -27,9 +30,8 @@ mock.module('~/utils/getLLMCompletion', () => ({
   getLLMCompletion,
 }));
 
-const { LlmFallbackRetrySignal } = await import(
-  '~/utils/getLLMCompletion/llm-provider-errors.server'
-);
+const { LlmFallbackRetrySignal } =
+  await import('~/utils/getLLMCompletion/llm-provider-errors.server');
 const { action } = await import('./route');
 
 describe('api.domain.tutor-response read-only impersonation', () => {
@@ -48,6 +50,8 @@ describe('api.domain.tutor-response read-only impersonation', () => {
     prisma.assignmentModuleSession.findFirst.mockReset();
     prisma.assignmentModuleSession.findUnique.mockReset();
     prisma.assignmentModuleSession.update.mockReset();
+    prisma.assignmentTypePromptVersion.findFirst.mockReset();
+    prisma.assignmentTypePromptVersion.findFirst.mockResolvedValue(null);
   });
 
   function mockCms(apHistorySnapshot?: unknown) {
@@ -93,7 +97,14 @@ describe('api.domain.tutor-response read-only impersonation', () => {
       document: {
         id: 'doc-1',
         text: 'Original draft',
-        assignment: { tutorEnabled: true, apHistorySnapshot },
+        classAssignment: { class: { grade: '10th grade' } },
+        membership: { grade: '10' },
+        assignment: {
+          tutorEnabled: true,
+          prompt: 'Explain how the evidence supports the claim.',
+          apHistorySnapshot,
+          aiContextSnapshot: null,
+        },
       },
     };
     prisma.assignmentModuleSession.findFirst.mockResolvedValueOnce(cms);
@@ -162,7 +173,7 @@ describe('api.domain.tutor-response read-only impersonation', () => {
           id: 'cms-1',
           document: { membershipId: 'student-1' },
         },
-      }),
+      })
     );
 
     const completionArgs = getLLMCompletion.mock.calls[0]?.[0] as any;
@@ -172,7 +183,12 @@ describe('api.domain.tutor-response read-only impersonation', () => {
     expect(completionArgs.system).toContain('Module rubric guidance');
     expect(completionArgs.system).toContain('Primary');
     expect(completionArgs.system).toContain('Thesis/Content (25%)');
-    expect(completionArgs.system).not.toContain('Grammar/Syntax/Formatting');
+    expect(completionArgs.system).toContain('Grammar/Syntax/Formatting');
+    expect(completionArgs.system).toContain(
+      'Assignment prompt: Explain how the evidence supports the claim.'
+    );
+    expect(completionArgs.system).toContain('Rubric version: assignment-v7');
+    expect(completionArgs.logPayload).toBe('metadata-only');
 
     const documentContextMessage = completionArgs.messages.find(
       (message: { role: string; content: string }) =>
@@ -196,15 +212,15 @@ describe('api.domain.tutor-response read-only impersonation', () => {
         assignmentTypeId: 'assignment-type-1',
         assignmentTypeRubricSource: 'assignment-type',
         assignmentTypeGradingVersion: 7,
-        rubricCategoryKeys: [
-          'thesis_and_content',
-          'grammar_and_mechanics',
-        ],
+        rubricCategoryKeys: ['thesis_and_content', 'grammar_and_mechanics'],
         moduleRubricRelationships: {
           thesis_and_content: 'primary',
           grammar_and_mechanics: 'not-applicable',
         },
         instructionId: 'instruction-1',
+        promptContentHash: expect.any(String),
+        promptSource: 'canonical-runtime-v1',
+        studentReadingLevel: '10th grade',
       })
     );
 
@@ -334,13 +350,19 @@ describe('api.domain.tutor-response read-only impersonation', () => {
     expect(completionArgs.system).toContain(snapshot.prompt);
     expect(completionArgs.system).toContain('Current section: "Drafting"');
     expect(completionArgs.system).toContain(
-      'Current step: "Strengthen the Evidence"',
+      'Current step: "Strengthen the Evidence"'
     );
     expect(completionArgs.system).toContain('specific named evidence');
     expect(completionArgs.system).not.toContain('Source documents (');
     expect(completionArgs.metadata).toMatchObject({
       assignmentTypeRubricSource: 'ap-history-snapshot',
-      rubricCategoryKeys: ['thesis', 'context', 'evidence', 'reasoning', 'complexity'],
+      rubricCategoryKeys: [
+        'thesis',
+        'context',
+        'evidence',
+        'reasoning',
+        'complexity',
+      ],
     });
   });
 
@@ -368,7 +390,7 @@ describe('api.domain.tutor-response read-only impersonation', () => {
 
     expect(response.init?.status).toBe(403);
     expect((response.data as { error?: string }).error).toBe(
-      'Tutor is disabled for this assignment.',
+      'Tutor is disabled for this assignment.'
     );
     expect(getLLMCompletion).not.toHaveBeenCalled();
     expect(prisma.assignmentModuleSession.update).not.toHaveBeenCalled();

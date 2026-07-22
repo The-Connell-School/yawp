@@ -1,11 +1,17 @@
 import { type ActionFunctionArgs, data as dataResponse } from 'react-router';
+import type { Prisma } from '@app/prisma';
 import {
   buildAssignmentCreateInputFromApHistoryEntry,
   buildAssignmentCreateInputFromImportedApHistory,
   getApHistoryLibraryEntryForSnapshot,
 } from '~/domain/ap-history/library.server';
 import { isApHistoryPdfImportEnabled } from '~/domain/ap-history/pdf-import-flag.server';
-import { AP_HISTORY_ASSIGNMENT_TYPE_KEY } from '~/domain/ap-history/schema';
+import {
+  AP_HISTORY_ASSIGNMENT_TYPE_KEY,
+  parseApHistorySnapshot,
+} from '~/domain/ap-history/schema';
+import { buildAssignmentAiContextSnapshot } from '~/domain/ai-evaluation/assignment-ai-context';
+import { parseAssignmentTypeRubricConfig } from '~/domain/assignment-types/assignment-type-rubric-config';
 import {
   DEFAULT_GRADING_ASSISTANT_STRICTNESS_LEVEL,
   parseGradingAssistantStrictnessLevel,
@@ -20,7 +26,7 @@ export async function action({ request }: ActionFunctionArgs) {
   const userId = await requireUserId(request);
   const profile = await requireMembership(request, userId);
 
-  if (profile.role !== "TEACHER") {
+  if (profile.role !== 'TEACHER') {
     return dataResponse(
       { success: false, message: 'Only teachers can create assignments.' },
       { status: 403 }
@@ -138,7 +144,16 @@ export async function action({ request }: ActionFunctionArgs) {
       id: assignmentTypeId,
       archivedAt: null,
     },
-    select: { id: true, systemKey: true },
+    select: {
+      id: true,
+      systemKey: true,
+      gradingAssistantVersion: true,
+      scoringScaleJson: true,
+      rubricJson: true,
+      gradingPromptConfigJson: true,
+      gradingOutputSchemaJson: true,
+      gradingCalibrationNotes: true,
+    },
   });
 
   if (!assignmentTypeAvailable || !assignmentType) {
@@ -152,6 +167,41 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 
   const deployClassIds = classes.map((klass) => klass.id);
+  const parsedGradingConfig = parseAssignmentTypeRubricConfig({
+    scoringScaleJson: assignmentType.scoringScaleJson,
+    rubricJson: assignmentType.rubricJson,
+    gradingPromptConfigJson: assignmentType.gradingPromptConfigJson,
+    gradingOutputSchemaJson: assignmentType.gradingOutputSchemaJson,
+    gradingCalibrationNotes: assignmentType.gradingCalibrationNotes,
+  });
+  const buildAiContextSnapshot = ({
+    assignmentPrompt,
+    rubricSnapshot,
+  }: {
+    assignmentPrompt: string;
+    rubricSnapshot?: Record<string, unknown>;
+  }) =>
+    buildAssignmentAiContextSnapshot({
+      assignmentTypeId: assignmentType.id,
+      assignmentPrompt,
+      gradingVersion: assignmentType.gradingAssistantVersion ?? 1,
+      rubricSnapshot:
+        rubricSnapshot ??
+        ({
+          categories: parsedGradingConfig.rubric.categories,
+          minScore: parsedGradingConfig.scoringScale.minScore,
+          maxScore: parsedGradingConfig.scoringScale.maxScore,
+          scoringType: parsedGradingConfig.scoringScale.type,
+        } satisfies Record<string, unknown>),
+      promptConfigSnapshot: parsedGradingConfig.promptConfig as Record<
+        string,
+        unknown
+      >,
+      outputSchemaSnapshot: parsedGradingConfig.outputSchema as Record<
+        string,
+        unknown
+      >,
+    });
 
   if (assignmentType.systemKey === AP_HISTORY_ASSIGNMENT_TYPE_KEY) {
     const assignmentGrading = gradingIntent?.success
@@ -189,25 +239,18 @@ export async function action({ request }: ActionFunctionArgs) {
       >;
       try {
         const imported = {
-          importDigest:
-            formData.get('apHistoryImportDigest')?.toString() ?? '',
+          importDigest: formData.get('apHistoryImportDigest')?.toString() ?? '',
           essayType: formData.get('essayType')?.toString() as 'dbq' | 'leq',
           prompt,
           period: formData.get('period')?.toString() ?? '',
           periodNumber: Number(formData.get('periodNumber')?.toString()),
-          reasoningSkill: formData
-            .get('reasoningSkill')
-            ?.toString() as
+          reasoningSkill: formData.get('reasoningSkill')?.toString() as
             | 'causation'
             | 'comparison'
             | 'continuity-and-change'
             | 'periodization',
-          timeMode: formData.get('timeMode')?.toString() as
-            | 'untimed'
-            | 'timed',
-          durationMinutes: Number(
-            formData.get('durationMinutes')?.toString()
-          ),
+          timeMode: formData.get('timeMode')?.toString() as 'untimed' | 'timed',
+          durationMinutes: Number(formData.get('durationMinutes')?.toString()),
           provenanceUrl: formData.get('provenanceUrl')?.toString() ?? '',
           sources: JSON.parse(
             formData.get('apHistorySourcesJson')?.toString() ?? '[]'
@@ -233,7 +276,14 @@ export async function action({ request }: ActionFunctionArgs) {
       }
 
       await createAssignmentDeployedToClasses({
-        data: createData,
+        data: {
+          ...createData,
+          aiContextSnapshot: buildAiContextSnapshot({
+            assignmentPrompt: createData.prompt,
+            rubricSnapshot: parseApHistorySnapshot(createData.apHistorySnapshot)
+              .rubric,
+          }) as unknown as Prisma.InputJsonValue,
+        },
         classIds: deployClassIds,
       });
 
@@ -268,15 +318,23 @@ export async function action({ request }: ActionFunctionArgs) {
       );
     }
 
+    const createData = buildAssignmentCreateInputFromApHistoryEntry({
+      assignmentTypeId: assignmentType.id,
+      title,
+      entry,
+      tutorEnabled,
+      gradingAssistantStrictnessLevel,
+      ...assignmentGrading,
+    });
     await createAssignmentDeployedToClasses({
-      data: buildAssignmentCreateInputFromApHistoryEntry({
-        assignmentTypeId: assignmentType.id,
-        title,
-        entry,
-        tutorEnabled,
-        gradingAssistantStrictnessLevel,
-        ...assignmentGrading,
-      }),
+      data: {
+        ...createData,
+        aiContextSnapshot: buildAiContextSnapshot({
+          assignmentPrompt: createData.prompt,
+          rubricSnapshot: parseApHistorySnapshot(createData.apHistorySnapshot)
+            .rubric,
+        }) as unknown as Prisma.InputJsonValue,
+      },
       classIds: deployClassIds,
     });
 
@@ -298,6 +356,9 @@ export async function action({ request }: ActionFunctionArgs) {
       assignmentTypeId: assignmentType.id,
       title,
       prompt,
+      aiContextSnapshot: buildAiContextSnapshot({
+        assignmentPrompt: prompt,
+      }) as unknown as Prisma.InputJsonValue,
       gradingAssistantStrictnessLevel,
       ...(gradingIntent?.success
         ? {

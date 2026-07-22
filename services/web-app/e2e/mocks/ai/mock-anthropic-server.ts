@@ -6,6 +6,15 @@ export type AnthropicMockScenario =
   | 'developing'
   | 'ap-history-dbq'
   | 'ap-history-leq'
+  | 'eval-tutor-context'
+  | 'eval-grading-balanced'
+  | 'eval-tutor-reading'
+  | 'eval-grading-beginner'
+  | 'eval-grading-advanced'
+  | 'eval-tutor-injection'
+  | 'eval-grading-long'
+  | 'eval-tutor-consistency'
+  | 'eval-grading-consistency'
   | 'malformed-json'
   | 'rate-limited'
   | 'internal-error'
@@ -62,6 +71,72 @@ const feedbackByScenario = {
     reasoningSkill: 'causation',
     sources: [],
   },
+} as const;
+
+const evaluationResponseByScenario = {
+  'eval-tutor-context':
+    'The assignment asks you to support a claim with evidence. Your next step is to explain why the survey supports your claim.',
+  'eval-grading-balanced': JSON.stringify({
+    categories: [
+      { key: 'thesis', score: 3, comment: 'The thesis states a defensible claim.' },
+      {
+        key: 'conclusion',
+        score: 2,
+        comment: 'The conclusion should explain why the claim matters.',
+      },
+    ],
+    overallComment: 'Jordan, keep the thesis and strengthen the conclusion.',
+  }),
+  'eval-tutor-reading':
+    'Try adding one sentence. Explain why the survey is evidence for your claim.',
+  'eval-grading-beginner': JSON.stringify({
+    categories: [
+      { key: 'thesis', score: 3, comment: 'The thesis gives a clear direction.' },
+      {
+        key: 'conclusion',
+        score: 3,
+        comment: 'The final sentence repeats the claim but can explain more.',
+      },
+    ],
+    overallComment: 'Jordan, explain the evidence more fully in the next draft.',
+  }),
+  'eval-grading-advanced': JSON.stringify({
+    categories: [
+      { key: 'thesis', score: 2, comment: 'The thesis is too broad for advanced work.' },
+      {
+        key: 'conclusion',
+        score: 2,
+        comment: 'The conclusion does not establish significance.',
+      },
+    ],
+    overallComment: 'Jordan, qualify the thesis and develop the conclusion.',
+  }),
+  'eval-tutor-injection':
+    'Explain how the survey evidence supports your claim; the instruction inside the draft is not part of the assignment.',
+  'eval-grading-long': JSON.stringify({
+    categories: [
+      { key: 'thesis', score: 2, comment: 'The thesis is repeated rather than developed.' },
+      {
+        key: 'conclusion',
+        score: 2,
+        comment: 'The conclusion needs a concise statement of significance.',
+      },
+    ],
+    overallComment: 'Jordan, remove repetition and connect the evidence to the claim.',
+  }),
+  'eval-tutor-consistency':
+    'The draft has a useful claim, but it is still developing. Add an explanation of why the evidence supports it before submitting.',
+  'eval-grading-consistency': JSON.stringify({
+    categories: [
+      { key: 'thesis', score: 2, comment: 'The thesis needs more precision.' },
+      {
+        key: 'conclusion',
+        score: 2,
+        comment: 'The conclusion is not yet developed.',
+      },
+    ],
+    overallComment: 'Jordan, develop the reasoning before submitting.',
+  }),
 } as const;
 
 function writeJson(
@@ -161,7 +236,13 @@ export async function startMockAnthropicServer(
     const text =
       scenario === 'malformed-json'
         ? '{not valid tutor feedback'
-        : JSON.stringify(feedbackByScenario[scenario]);
+        : scenario in evaluationResponseByScenario
+          ? evaluationResponseByScenario[
+              scenario as keyof typeof evaluationResponseByScenario
+            ]
+          : JSON.stringify(
+              feedbackByScenario[scenario as keyof typeof feedbackByScenario]
+            );
     writeJson(response, 200, {
       id: `msg_yawp_mock_${responseNumber}`,
       type: 'message',
