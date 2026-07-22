@@ -304,6 +304,27 @@ describe('LTI 1.3 launch over the network boundary', () => {
     expect(launch.roles).toEqual([]);
   });
 
+  test('accepts an anonymous, context-free resource-link launch', async () => {
+    const platform = await startPlatform();
+    const form = await authorize(
+      platform,
+      'anonymous-resource-link-no-context'
+    );
+    const launch = await verifyLtiLaunchForm(form, {
+      registration: platform.registration,
+      expectedState: 'state-contract-001',
+      expectedNonce: 'nonce-contract-001',
+      expectedTargetLinkUri: platform.registration.launchUrl,
+      expectedMessageType: LTI_MESSAGE_TYPES.resourceLinkRequest,
+      nowSeconds: platform.seed.nowSeconds,
+    });
+
+    expect(launch.subject).toBeNull();
+    expect(launch.context).toBeNull();
+    expect(launch.resourceLink?.id).toBe('resource-argument-essay-001');
+    expect(launch.person.email).toBeNull();
+  });
+
   test('normalizes a signed Deep Linking request and returns signed content', async () => {
     const platform = await startPlatform();
     const form = await authorize(platform, 'deep-link');
@@ -640,9 +661,101 @@ describe('LTI 1.3 launch over the network boundary', () => {
       })
     ).toThrow('iframe');
   });
+
+  test('rejects non-HTTPS Deep Linking resource and image URLs before network I/O', async () => {
+    const platform = await startPlatform();
+    for (const url of [
+      'http://app.yawp.school/lti/launch',
+      'ftp://app.yawp.school/lti/launch',
+      'javascript:alert(1)',
+    ]) {
+      expect(() =>
+        createDeepLinkingResponseJwt({
+          clientId: platform.registration.clientId,
+          platformIssuer: platform.registration.issuer,
+          deploymentId: platform.registration.deploymentId,
+          privateKeyPem: platform.tool.privateKeyPem,
+          keyId: platform.tool.keyId,
+          nonce: `deep-link-unsafe-${url.length}`,
+          contentItems: [{ type: 'ltiResourceLink', url }],
+          acceptTypes: ['ltiResourceLink'],
+          documentTargets: [],
+          acceptsMultiple: false,
+          acceptLineItem: false,
+          nowSeconds: platform.seed.nowSeconds,
+        })
+      ).toThrow('HTTPS');
+    }
+    expect(() =>
+      createDeepLinkingResponseJwt({
+        clientId: platform.registration.clientId,
+        platformIssuer: platform.registration.issuer,
+        deploymentId: platform.registration.deploymentId,
+        privateKeyPem: platform.tool.privateKeyPem,
+        keyId: platform.tool.keyId,
+        nonce: 'deep-link-unsafe-icon',
+        contentItems: [
+          {
+            type: 'ltiResourceLink',
+            icon: { url: 'javascript:alert(1)' },
+          },
+        ],
+        acceptTypes: ['ltiResourceLink'],
+        documentTargets: [],
+        acceptsMultiple: false,
+        acceptLineItem: false,
+        nowSeconds: platform.seed.nowSeconds,
+      })
+    ).toThrow('HTTPS');
+
+    await authorize(platform, 'deep-link-no-data');
+    const unsafeProviderJwt = signLtiJwt({
+      header: { kid: platform.tool.keyId },
+      payload: {
+        iss: platform.registration.clientId,
+        aud: platform.registration.issuer,
+        iat: platform.seed.nowSeconds,
+        exp: platform.seed.nowSeconds + 300,
+        nonce: 'deep-link-unsafe-provider-response',
+        [LTI_CLAIMS.deploymentId]: platform.registration.deploymentId,
+        [LTI_CLAIMS.messageType]: LTI_MESSAGE_TYPES.deepLinkingResponse,
+        [LTI_CLAIMS.version]: '1.3.0',
+        [LTI_CLAIMS.contentItems]: [
+          { type: 'ltiResourceLink', url: 'javascript:alert(1)' },
+        ],
+      },
+      privateKeyPem: platform.tool.privateKeyPem,
+    });
+    const providerResponse = await networkFetch(
+      `${platform.baseUrl}/deep-link/return`,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ JWT: unsafeProviderJwt }),
+      }
+    );
+    expect(providerResponse.status).toBe(400);
+  });
 });
 
 describe('LTI Advantage service authentication and roster shape', () => {
+  test('canonicalizes a root token endpoint in the signed audience', async () => {
+    const platform = await startPlatform();
+    const assertion = createLtiClientAssertion({
+      clientId: platform.registration.clientId,
+      tokenEndpoint: 'https://lms.example',
+      deploymentId: platform.registration.deploymentId,
+      privateKeyPem: platform.tool.privateKeyPem,
+      keyId: platform.tool.keyId,
+      nowSeconds: platform.seed.nowSeconds,
+    });
+    const payload = JSON.parse(
+      Buffer.from(assertion.split('.')[1], 'base64url').toString('utf8')
+    );
+
+    expect(payload.aud).toEqual(['https://lms.example/']);
+  });
+
   test('uses a signed client assertion and follows real NRPS pagination', async () => {
     const platform = await startPlatform();
     const assertion = createLtiClientAssertion({
@@ -832,6 +945,39 @@ describe('LTI Advantage service authentication and roster shape', () => {
         expectedContextId: 'course-eng-101',
       })
     ).rejects.toThrow('NRPS');
+  });
+
+  test('surfaces a post-header socket failure as a network error', async () => {
+    const platform = await startPlatform();
+    const assertion = createLtiClientAssertion({
+      clientId: platform.registration.clientId,
+      tokenEndpoint: platform.registration.tokenEndpoint,
+      deploymentId: platform.registration.deploymentId,
+      privateKeyPem: platform.tool.privateKeyPem,
+      keyId: platform.tool.keyId,
+      jti: 'client-assertion-stream-failure',
+      nowSeconds: platform.seed.nowSeconds,
+    });
+    platform.failNext('token', {
+      status: 200,
+      contentType: 'application/json',
+      bodyChunks: ['{"access_token":"partial'],
+      chunkDelayMs: 10,
+      destroyAfterChunks: 1,
+    });
+
+    await expect(
+      requestLtiAccessToken({
+        registration: platform.registration,
+        clientAssertion: assertion,
+        scopes: [LTI_SCOPES.lineItem],
+        advertisedScopes: [LTI_SCOPES.lineItem],
+      })
+    ).rejects.toMatchObject({
+      name: 'LtiHttpError',
+      operation: 'LTI token endpoint',
+      status: 200,
+    });
   });
 
   test('rejects an invalid upstream status without escaping the network promise', async () => {
@@ -1155,6 +1301,22 @@ describe('LTI Advantage service authentication and roster shape', () => {
       gradesReleased: false,
       'https://provider.example/extension': { retained: true },
     });
+    const minimallyUpdated = await updateAgsLineItem({
+      lineItemsUrl: `${platform.baseUrl}/contexts/course-eng-101/lineitems`,
+      lineItemUrl: lineItem.id,
+      grant: token,
+      registration: platform.registration,
+      lineItem: {
+        id: lineItem.id,
+        scoreMaximum: 100,
+        label: 'Yawp Minimal Update',
+      },
+    });
+    expect(minimallyUpdated).toMatchObject({
+      id: lineItem.id,
+      resourceLinkId: lineItem.resourceLinkId,
+      label: 'Yawp Minimal Update',
+    });
     await submitAgsScore({
       lineItemsUrl: `${platform.baseUrl}/contexts/course-eng-101/lineitems`,
       lineItemUrl: lineItem.id,
@@ -1397,6 +1559,89 @@ describe('LTI Advantage service authentication and roster shape', () => {
       startDateTime: '',
       endDateTime: null,
     });
+  });
+
+  test('rejects impossible calendar dates in production and provider contracts', async () => {
+    const platform = await startPlatform();
+    const assertion = createLtiClientAssertion({
+      clientId: platform.registration.clientId,
+      tokenEndpoint: platform.registration.tokenEndpoint,
+      deploymentId: platform.registration.deploymentId,
+      privateKeyPem: platform.tool.privateKeyPem,
+      keyId: platform.tool.keyId,
+      jti: 'client-assertion-impossible-calendar-date',
+      nowSeconds: platform.seed.nowSeconds,
+    });
+    const grant = await requestLtiAccessToken({
+      registration: platform.registration,
+      clientAssertion: assertion,
+      scopes: [LTI_SCOPES.lineItem, LTI_SCOPES.score],
+      advertisedScopes: [LTI_SCOPES.lineItem, LTI_SCOPES.score],
+    });
+    const before = platform.journal.length;
+    await expect(
+      createAgsLineItem({
+        lineItemsUrl: `${platform.baseUrl}/contexts/course-eng-101/lineitems`,
+        grant,
+        registration: platform.registration,
+        lineItem: {
+          scoreMaximum: 100,
+          label: 'Impossible date',
+          startDateTime: '2026-02-30T12:00:00.000Z',
+        },
+      })
+    ).rejects.toThrow('date');
+    await expect(
+      submitAgsScore({
+        lineItemsUrl: `${platform.baseUrl}/contexts/course-eng-101/lineitems`,
+        lineItemUrl: `${platform.baseUrl}/lineitems/lineitem-argument-essay-001`,
+        grant,
+        registration: platform.registration,
+        score: {
+          userId: 'lti-learner-ada',
+          activityProgress: 'Completed',
+          gradingProgress: 'FullyGraded',
+          timestamp: '2026-02-30T12:00:00.000Z',
+        },
+      })
+    ).rejects.toThrow('precision');
+    expect(platform.journal).toHaveLength(before);
+
+    const invalidLineItemResponse = await networkFetch(
+      `${platform.baseUrl}/contexts/course-eng-101/lineitems`,
+      {
+        method: 'POST',
+        headers: {
+          accept: LTI_AGS_LINE_ITEM_MEDIA_TYPE,
+          authorization: `Bearer ${grant.accessToken}`,
+          'content-type': LTI_AGS_LINE_ITEM_MEDIA_TYPE,
+        },
+        body: JSON.stringify({
+          scoreMaximum: 100,
+          label: 'Impossible provider date',
+          startDateTime: '2026-02-30T12:00:00.000Z',
+        }),
+      }
+    );
+    expect(invalidLineItemResponse.status).toBe(400);
+
+    const invalidScoreResponse = await networkFetch(
+      `${platform.baseUrl}/lineitems/lineitem-argument-essay-001/scores`,
+      {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${grant.accessToken}`,
+          'content-type': 'application/vnd.ims.lis.v1.score+json',
+        },
+        body: JSON.stringify({
+          userId: 'lti-learner-ada',
+          activityProgress: 'Completed',
+          gradingProgress: 'FullyGraded',
+          timestamp: '2026-02-30T12:00:00.000Z',
+        }),
+      }
+    );
+    expect(invalidScoreResponse.status).toBe(400);
   });
 
   test('supports progress-only and clear scores, query-bearing IDs, and rejects negatives', async () => {

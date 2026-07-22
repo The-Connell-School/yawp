@@ -58,10 +58,12 @@ An enabled registration must identify one Yawp organization and contain:
   signed launch;
 - explicit enabled/disabled state.
 
-All non-loopback endpoints must use HTTPS. Plain HTTP is accepted only when the
-resolved hostname is an IP loopback or `localhost`, allowing the same
-production contract code to exercise an actual local network service. No
-environment-name or test-mode bypass is allowed. Public HTTPS requests resolve
+All persisted registration endpoints must use HTTPS. The local network harness
+constructs a loopback-only capability directly; the exported registration-data
+parser rejects that capability, so production configuration cannot enable it.
+Plain HTTP is then restricted to an IP loopback or `localhost`, allowing the
+same contract code to exercise an actual local network service without an
+environment-name bypass. Public HTTPS requests resolve
 the target before every request and reject private, loopback, link-local, and
 metadata-class addresses. The selected vetted address is pinned into the actual
 socket while the original host remains authoritative for HTTP Host, TLS SNI,
@@ -84,8 +86,9 @@ The signed launch must:
 - validate signature, issuer, audience/authorized-party, expiry, issued-at,
   not-before, nonce, deployment id, message type, LTI version, and target-link
   URI, including `exp > iat` and bounded token lifetimes;
-- require a stable subject, roles, context id, and resource-link id for a
-  resource-link launch;
+- require roles and a resource-link id for a resource-link launch while
+  preserving standards-valid anonymous or context-free launches as null
+  subject/context;
 - expose only validated claim data to account and tenant mapping;
 - consume state and nonce exactly once in the persisted launch flow in #212.
 
@@ -96,7 +99,8 @@ types, multiplicity, line-item metadata, and presentation modes advertised by
 that request. For `ltiResourceLink`, URL, title, and line-item label remain
 optional as required by the standard; date windows, images, window/iframe
 preferences, `gradesReleased`, and fully qualified extension properties are
-validated without inventing provider-only fields.
+validated without inventing provider-only fields. Resource, icon, and thumbnail
+URLs require HTTPS, and calendar fields reject impossible normalized dates.
 
 The contract parser returns a normalized value containing platform subject,
 deployment, context, resource link, roles, optional person attributes, and
@@ -133,6 +137,9 @@ The mock freezes the later #213 network boundary now:
   remain repeated provider requests; Yawp-owned grade-job idempotency is
   deliberately implemented in #213 rather than attributed to a provider
   extension not required by the standard.
+- AGS Result Service is an explicit non-goal for this v1 contract: the adoption
+  workflow needs Yawp-to-LMS score passback, not LMS-to-Yawp result reads, so the
+  client and mock do not advertise `result.readonly`.
 - The mock runs two registrations on one origin, binds OAuth assertions to the
   expected client and deployment, requires finite and fresh NumericDate claims
   (including `nbf`) plus bounded validity windows, a provider-required audience
@@ -232,7 +239,10 @@ No stage changes automatically because local tests pass.
   parser/verifier, and executable end-to-end spike.
 - #212 consumes this boundary in public OIDC initiation/callback routes, adds
   tenant-bound persistence, one-time state/nonce handling, account binding,
-  feature flags, audit, diagnostics, and uninstall behavior.
+  feature flags, audit, diagnostics, and uninstall behavior. The #211 proof
+  deliberately starts at the authorization request; #212 owns third-party login
+  parameter validation, registration selection, redirect construction, and
+  transaction consumption.
 - #213 consumes the already-frozen OAuth, NRPS, Deep Linking, and AGS mock
   surfaces to ship the instructor and grade workflows.
 

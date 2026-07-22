@@ -368,6 +368,14 @@ export async function readLtiJson(
         cause: error,
       });
     }
+  } catch (error) {
+    if (error instanceof LtiHttpError) throw error;
+    throw new LtiHttpError(`${operation} response stream failed.`, {
+      operation,
+      status: response.status,
+      retryAfter: response.headers.get('retry-after'),
+      cause: error,
+    });
   } finally {
     cleanupDeadline(response);
   }

@@ -47,13 +47,49 @@ export const LTI_MESSAGE_TYPES = {
   deepLinkingResponse: 'LtiDeepLinkingResponse',
 } as const;
 
+export function hasValidIsoDateTimeFields(value: string) {
+  const match =
+    /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?(?:Z|[+-](\d{2})(?::(\d{2}))?)$/.exec(
+      value
+    );
+  if (!match) return false;
+  const [year, month, day, hour, minute, second, offsetHour, offsetMinute] =
+    match.slice(1).map((part) => (part === undefined ? 0 : Number(part)));
+  const leapYear = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+  const daysInMonth = [
+    31,
+    leapYear ? 29 : 28,
+    31,
+    30,
+    31,
+    30,
+    31,
+    31,
+    30,
+    31,
+    30,
+    31,
+  ];
+  return (
+    month >= 1 &&
+    month <= 12 &&
+    day >= 1 &&
+    day <= daysInMonth[month - 1] &&
+    hour <= 23 &&
+    minute <= 59 &&
+    second <= 59 &&
+    offsetHour <= 23 &&
+    offsetMinute <= 59
+  );
+}
+
 const ExplicitIsoDateTimeSchema = z
   .string()
   .regex(
     /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/,
     'Date-time must be ISO 8601 with an explicit time-zone designator.'
   )
-  .refine((value) => !Number.isNaN(Date.parse(value)), 'Invalid date-time.');
+  .refine(hasValidIsoDateTimeFields, 'Invalid date-time.');
 
 function withQualifiedExtensions<T extends z.ZodRawShape>(
   schema: z.ZodObject<T>,
@@ -82,9 +118,17 @@ const DeepLinkLineItemSchema = withQualifiedExtensions(
   new Set(['scoreMaximum', 'label', 'resourceId', 'tag', 'gradesReleased'])
 );
 
+const LtiHttpsUrlSchema = z
+  .string()
+  .url()
+  .refine(
+    (value) => new URL(value).protocol === 'https:',
+    'LTI content URLs must use HTTPS.'
+  );
+
 const DeepLinkImageSchema = z
   .object({
-    url: z.string().url(),
+    url: LtiHttpsUrlSchema,
     width: z.number().int().positive().optional(),
     height: z.number().int().positive().optional(),
   })
@@ -117,7 +161,7 @@ export const LtiDeepLinkContentItemSchema = withQualifiedExtensions(
   z.object({
     type: z.literal('ltiResourceLink'),
     title: z.string().min(1).optional(),
-    url: z.string().url().optional(),
+    url: LtiHttpsUrlSchema.optional(),
     text: z.string().optional(),
     icon: DeepLinkImageSchema.optional(),
     thumbnail: DeepLinkImageSchema.optional(),
@@ -565,24 +609,22 @@ export async function verifyLtiLaunchForm(
   if (version !== '1.3.0') {
     throw new Error('LTI version must be 1.3.0.');
   }
-  const targetLinkUri = getRequiredString(
-    payload,
-    LTI_CLAIMS.targetLinkUri,
-    'target link'
-  );
-  assertAllowedLtiTargetLink(
+  const targetLinkUri = new URL(
+    LtiNetworkUrlSchema.parse(
+      getRequiredString(payload, LTI_CLAIMS.targetLinkUri, 'target link')
+    )
+  ).toString();
+  const expectedTargetLinkUri = assertAllowedLtiTargetLink(
     options.expectedTargetLinkUri,
     options.registration
-  );
-  if (targetLinkUri !== options.expectedTargetLinkUri) {
+  ).toString();
+  if (targetLinkUri !== expectedTargetLinkUri) {
     throw new Error('LTI target link does not match the initiated target.');
   }
 
   const isResourceLaunch =
     messageType === LTI_MESSAGE_TYPES.resourceLinkRequest;
-  const contextClaim = isResourceLaunch
-    ? getRequiredObject(payload, LTI_CLAIMS.context, 'context')
-    : getOptionalObject(payload, LTI_CLAIMS.context);
+  const contextClaim = getOptionalObject(payload, LTI_CLAIMS.context);
   const resourceLinkClaim = isResourceLaunch
     ? getRequiredObject(payload, LTI_CLAIMS.resourceLink, 'resource link')
     : null;
@@ -655,9 +697,7 @@ export async function verifyLtiLaunchForm(
 
   return {
     issuer,
-    subject: isResourceLaunch
-      ? getRequiredString(payload, 'sub', 'subject')
-      : getOptionalString(payload, 'sub'),
+    subject: getOptionalString(payload, 'sub'),
     audience,
     deploymentId,
     messageType,
@@ -744,7 +784,9 @@ export function createLtiClientAssertion(input: {
   jti?: string;
   nowSeconds?: number;
 }): string {
-  const tokenEndpoint = LtiNetworkUrlSchema.parse(input.tokenEndpoint);
+  const tokenEndpoint = new URL(
+    LtiNetworkUrlSchema.parse(input.tokenEndpoint)
+  ).toString();
   const now = input.nowSeconds ?? Math.floor(Date.now() / 1000);
   return signLtiJwt({
     header: { kid: input.keyId },

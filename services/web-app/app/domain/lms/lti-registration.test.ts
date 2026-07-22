@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import {
   BLACKBOARD_REFERENCE_PROFILE,
+  assertAllowedLtiTargetLink,
   parseLtiRegistration,
 } from './lti-registration';
 
@@ -31,7 +32,6 @@ const validRegistration = {
   enabledScopes: [
     'https://purl.imsglobal.org/spec/lti-nrps/scope/contextmembership.readonly',
     'https://purl.imsglobal.org/spec/lti-ags/scope/lineitem',
-    'https://purl.imsglobal.org/spec/lti-ags/scope/result.readonly',
     'https://purl.imsglobal.org/spec/lti-ags/scope/score',
   ],
   enabled: false,
@@ -66,28 +66,26 @@ describe('LTI registration contract', () => {
     ).toThrow('HTTPS');
   });
 
-  test('allows HTTP only for an explicit loopback integration endpoint', () => {
-    const registration = parseLtiRegistration({
-      ...validRegistration,
-      transportMode: 'loopback-http',
-      issuer: 'http://127.0.0.1:43123',
-      authorizationEndpoint: 'http://127.0.0.1:43123/oidc/auth',
-      tokenEndpoint: 'http://127.0.0.1:43123/oauth2/token',
-      jwksUrl: 'http://127.0.0.1:43123/.well-known/jwks.json',
-      allowedServiceOrigins: ['http://127.0.0.1:43123'],
-      loginInitiationUrl: 'http://127.0.0.1:5174/lti/login',
-      launchUrl: 'http://127.0.0.1:5174/lti/launch',
-      deepLinkingLaunchUrl: 'http://127.0.0.1:5174/lti/deep-link',
-      toolJwksUrl: 'http://127.0.0.1:5174/.well-known/jwks.json',
-      allowedTargetLinkUris: [
-        'http://127.0.0.1:5174/lti/launch',
-        'http://127.0.0.1:5174/lti/deep-link',
-      ],
-    });
-
-    expect(registration.jwksUrl).toBe(
-      'http://127.0.0.1:43123/.well-known/jwks.json'
-    );
+  test('does not load the loopback network harness capability from registration data', () => {
+    expect(() =>
+      parseLtiRegistration({
+        ...validRegistration,
+        transportMode: 'loopback-http',
+        issuer: 'http://127.0.0.1:43123',
+        authorizationEndpoint: 'http://127.0.0.1:43123/oidc/auth',
+        tokenEndpoint: 'http://127.0.0.1:43123/oauth2/token',
+        jwksUrl: 'http://127.0.0.1:43123/.well-known/jwks.json',
+        allowedServiceOrigins: ['http://127.0.0.1:43123'],
+        loginInitiationUrl: 'http://127.0.0.1:5174/lti/login',
+        launchUrl: 'http://127.0.0.1:5174/lti/launch',
+        deepLinkingLaunchUrl: 'http://127.0.0.1:5174/lti/deep-link',
+        toolJwksUrl: 'http://127.0.0.1:5174/.well-known/jwks.json',
+        allowedTargetLinkUris: [
+          'http://127.0.0.1:5174/lti/launch',
+          'http://127.0.0.1:5174/lti/deep-link',
+        ],
+      })
+    ).toThrow('cannot be loaded');
   });
 
   test('does not allow loopback HTTP without the explicit transport capability', () => {
@@ -148,6 +146,24 @@ describe('LTI registration contract', () => {
         allowedAudiences: ['other-client'],
       })
     ).toThrow('client');
+  });
+
+  test('canonicalizes root target URLs before allowlist comparison', () => {
+    const registration = parseLtiRegistration({
+      ...validRegistration,
+      launchUrl: 'https://app.yawp.school',
+      allowedTargetLinkUris: [
+        'https://app.yawp.school',
+        validRegistration.deepLinkingLaunchUrl,
+      ],
+    });
+
+    expect(
+      assertAllowedLtiTargetLink(
+        'https://app.yawp.school/',
+        registration
+      ).toString()
+    ).toBe('https://app.yawp.school/');
   });
 
   test('rejects credentials and fragments in network endpoints', () => {

@@ -118,8 +118,6 @@ const SCOPES = {
   lineItem: 'https://purl.imsglobal.org/spec/lti-ags/scope/lineitem',
   lineItemReadonly:
     'https://purl.imsglobal.org/spec/lti-ags/scope/lineitem.readonly',
-  resultReadonly:
-    'https://purl.imsglobal.org/spec/lti-ags/scope/result.readonly',
   score: 'https://purl.imsglobal.org/spec/lti-ags/scope/score',
 } as const;
 
@@ -144,6 +142,7 @@ type Failure = {
   delayMs?: number;
   headersFirstDelayMs?: number;
   chunkDelayMs?: number;
+  destroyAfterChunks?: number;
 };
 
 type TokenGrant = {
@@ -493,12 +492,16 @@ async function consumeFailure(
     );
   }
   if (failure.bodyChunks) {
-    for (const chunk of failure.bodyChunks) {
+    for (const [index, chunk] of failure.bodyChunks.entries()) {
       response.write(chunk);
       if (failure.chunkDelayMs) {
         await new Promise((resolve) =>
           setTimeout(resolve, failure.chunkDelayMs)
         );
+      }
+      if (failure.destroyAfterChunks === index + 1) {
+        response.destroy();
+        return true;
       }
     }
     response.end();
@@ -628,7 +631,7 @@ function isIsoDate(value: unknown) {
     /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}(?::\d{2})?)$/.test(
       value
     ) &&
-    !Number.isNaN(Date.parse(value.replace(/([+-]\d{2})$/, '$1:00')))
+    hasValidIsoDateTimeFields(value)
   );
 }
 
@@ -638,7 +641,43 @@ function isAgsTimestamp(value: unknown) {
     /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+(?:Z|[+-]\d{2}(?::\d{2})?)$/.test(
       value
     ) &&
-    !Number.isNaN(Date.parse(value.replace(/([+-]\d{2})$/, '$1:00')))
+    hasValidIsoDateTimeFields(value)
+  );
+}
+
+function hasValidIsoDateTimeFields(value: string) {
+  const match =
+    /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?(?:Z|[+-](\d{2})(?::(\d{2}))?)$/.exec(
+      value
+    );
+  if (!match) return false;
+  const [year, month, day, hour, minute, second, offsetHour, offsetMinute] =
+    match.slice(1).map((part) => (part === undefined ? 0 : Number(part)));
+  const leapYear = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+  const daysInMonth = [
+    31,
+    leapYear ? 29 : 28,
+    31,
+    30,
+    31,
+    30,
+    31,
+    31,
+    30,
+    31,
+    30,
+    31,
+  ];
+  return (
+    month >= 1 &&
+    month <= 12 &&
+    day >= 1 &&
+    day <= daysInMonth[month - 1] &&
+    hour <= 23 &&
+    minute <= 59 &&
+    second <= 59 &&
+    offsetHour <= 23 &&
+    offsetMinute <= 59
   );
 }
 
@@ -688,6 +727,14 @@ function isOptionalPositiveInteger(value: unknown) {
   return value === undefined || (Number.isInteger(value) && Number(value) > 0);
 }
 
+function isHttpsUrl(value: unknown) {
+  return (
+    typeof value === 'string' &&
+    URL.canParse(value) &&
+    new URL(value).protocol === 'https:'
+  );
+}
+
 function isDeepLinkImage(value: unknown) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   const image = value as Record<string, unknown>;
@@ -695,8 +742,7 @@ function isDeepLinkImage(value: unknown) {
     Object.keys(image).every((key) =>
       ['url', 'width', 'height'].includes(key)
     ) &&
-    typeof image.url === 'string' &&
-    URL.canParse(image.url) &&
+    isHttpsUrl(image.url) &&
     isOptionalPositiveInteger(image.width) &&
     isOptionalPositiveInteger(image.height)
   );
@@ -739,8 +785,7 @@ function isDeepLinkContentItem(value: unknown) {
     item.type !== 'ltiResourceLink' ||
     (item.title !== undefined &&
       (typeof item.title !== 'string' || !item.title)) ||
-    (item.url !== undefined &&
-      (typeof item.url !== 'string' || !URL.canParse(item.url))) ||
+    (item.url !== undefined && !isHttpsUrl(item.url)) ||
     (item.text !== undefined && typeof item.text !== 'string') ||
     (item.icon !== undefined && !isDeepLinkImage(item.icon)) ||
     (item.thumbnail !== undefined && !isDeepLinkImage(item.thumbnail)) ||
@@ -1049,7 +1094,13 @@ export async function startMockLtiPlatform(): Promise<MockLtiPlatform> {
           delete payload[CLAIMS.roles];
           delete payload[CLAIMS.context];
         }
-        if (!learner) {
+        if (scenario === 'anonymous-resource-link-no-context') {
+          delete payload.sub;
+          delete payload[CLAIMS.context];
+          delete payload[CLAIMS.namesRoleService];
+          delete payload[CLAIMS.endpoint];
+        }
+        if (!learner && scenario !== 'anonymous-resource-link-no-context') {
           Object.assign(payload, {
             email: 'kevin.instructor@example.test',
             given_name: 'Kevin',

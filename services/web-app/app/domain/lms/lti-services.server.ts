@@ -12,6 +12,7 @@ import {
 } from './lti-registration';
 import {
   assertLtiAccessGrant,
+  hasValidIsoDateTimeFields,
   type LtiAccessGrant,
 } from './lti-contract.server';
 
@@ -29,8 +30,6 @@ export const LTI_SCOPES = {
   lineItem: 'https://purl.imsglobal.org/spec/lti-ags/scope/lineitem',
   lineItemReadonly:
     'https://purl.imsglobal.org/spec/lti-ags/scope/lineitem.readonly',
-  resultReadonly:
-    'https://purl.imsglobal.org/spec/lti-ags/scope/result.readonly',
   score: 'https://purl.imsglobal.org/spec/lti-ags/scope/score',
 } as const;
 
@@ -175,10 +174,7 @@ function isValidIsoDate(value: string, requireSubseconds = false) {
   const pattern = requireSubseconds
     ? /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+(?:Z|[+-]\d{2}(?::\d{2})?)$/
     : /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}(?::\d{2})?)$/;
-  return (
-    pattern.test(value) &&
-    !Number.isNaN(Date.parse(value.replace(/([+-]\d{2})$/, '$1:00')))
-  );
+  return pattern.test(value) && hasValidIsoDateTimeFields(value);
 }
 
 const IsoDateSchema = z
@@ -529,7 +525,8 @@ export async function updateAgsLineItem(input: {
   );
   if (
     updated.id !== parsed.id ||
-    updated.resourceLinkId !== parsed.resourceLinkId
+    (parsed.resourceLinkId !== undefined &&
+      updated.resourceLinkId !== parsed.resourceLinkId)
   ) {
     throw new Error('AGS line-item update changed immutable identifiers.');
   }

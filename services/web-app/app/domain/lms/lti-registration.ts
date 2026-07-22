@@ -168,7 +168,7 @@ function transportError(value: string, mode: 'https' | 'loopback-http') {
     : 'The loopback-http transport capability permits only explicit loopback HTTP endpoints.';
 }
 
-export const LtiRegistrationSchema = RegistrationShape.superRefine(
+const LtiRegistrationSchema = RegistrationShape.superRefine(
   (registration, context) => {
     for (const field of NETWORK_FIELDS) {
       const message = transportError(
@@ -217,7 +217,12 @@ export const LtiRegistrationSchema = RegistrationShape.superRefine(
       registration.launchUrl,
       registration.deepLinkingLaunchUrl,
     ]) {
-      if (!registration.allowedTargetLinkUris.includes(requiredTarget)) {
+      if (
+        !registration.allowedTargetLinkUris.some(
+          (candidate) =>
+            new URL(candidate).toString() === new URL(requiredTarget).toString()
+        )
+      ) {
         context.addIssue({
           code: z.ZodIssueCode.custom,
           message: 'LTI allowed target links must include every launch URL.',
@@ -231,7 +236,13 @@ export const LtiRegistrationSchema = RegistrationShape.superRefine(
 export type LtiRegistration = z.infer<typeof LtiRegistrationSchema>;
 
 export function parseLtiRegistration(value: unknown): LtiRegistration {
-  return LtiRegistrationSchema.parse(value);
+  const registration = LtiRegistrationSchema.parse(value);
+  if (registration.transportMode !== 'https') {
+    throw new Error(
+      'Loopback LTI transport is reserved for the in-process network harness and cannot be loaded from registration data.'
+    );
+  }
+  return registration;
 }
 
 export const BLACKBOARD_REFERENCE_PROFILE = {
@@ -271,7 +282,11 @@ export function assertAllowedLtiTargetLink(
   registration: LtiRegistration
 ): URL {
   const url = assertRegistrationTransportUrl(value, registration);
-  if (!registration.allowedTargetLinkUris.includes(url.toString())) {
+  if (
+    !registration.allowedTargetLinkUris.some(
+      (candidate) => new URL(candidate).toString() === url.toString()
+    )
+  ) {
     throw new Error('LTI target link is not allowed by the registration.');
   }
   return url;
