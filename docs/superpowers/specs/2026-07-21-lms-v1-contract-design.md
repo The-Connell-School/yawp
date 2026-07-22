@@ -99,7 +99,8 @@ The signed launch must:
 - require absolute role URIs and, for any non-empty role list, at least one URI
   explicitly enumerated by Core Appendix A.2 (including defined sub-roles);
   extension roles may accompany that standard authorization anchor, while
-  namespace lookalikes and context-type URIs do not count;
+  namespace lookalikes and context-type URIs do not count. Appendix A.2.4's
+  `TestUser` marker is recognized but must accompany a second real role;
 - consume state and nonce exactly once in the persisted launch flow in #212.
 
 A Deep Linking launch may omit subject, roles, and context under Deep Linking

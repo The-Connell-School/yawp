@@ -306,9 +306,10 @@ describe('LTI 1.3 launch over the network boundary', () => {
 
   test.each([
     ['malformed-relative-role', 'absolute URI'],
-    ['nonstandard-only-role', 'standard LIS'],
-    ['fabricated-lis-role', 'standard LIS'],
-    ['lis-context-type-as-role', 'standard LIS'],
+    ['nonstandard-only-role', 'standard LTI'],
+    ['fabricated-lis-role', 'standard LTI'],
+    ['lis-context-type-as-role', 'standard LTI'],
+    ['test-user-only-role', 'real role'],
   ])(
     'rejects authorization-unsafe role scenario %s',
     async (scenario, message) => {
@@ -343,6 +344,32 @@ describe('LTI 1.3 launch over the network boundary', () => {
       'http://purl.imsglobal.org/vocab/lis/v2/membership#Instructor',
     ]);
   });
+
+  test.each([
+    [
+      'test-user-with-standard-role',
+      'http://purl.imsglobal.org/vocab/lis/v2/membership#Learner',
+    ],
+    ['test-user-with-custom-role', 'https://roles.example.test/PreviewLearner'],
+  ])(
+    'recognizes TestUser with its companion role in scenario %s',
+    async (scenario, companion) => {
+      const platform = await startPlatform();
+      const form = await authorize(platform, scenario);
+      const launch = await verifyLtiLaunchForm(form, {
+        registration: platform.registration,
+        expectedState: 'state-contract-001',
+        expectedNonce: 'nonce-contract-001',
+        expectedTargetLinkUri: platform.registration.launchUrl,
+        expectedMessageType: LTI_MESSAGE_TYPES.resourceLinkRequest,
+        nowSeconds: platform.seed.nowSeconds,
+      });
+      expect(launch.roles).toEqual([
+        'http://purl.imsglobal.org/vocab/lti/system/person#TestUser',
+        companion,
+      ]);
+    }
+  );
 
   test('accepts an anonymous, context-free resource-link launch', async () => {
     const platform = await startPlatform();
@@ -986,14 +1013,18 @@ describe('LTI Advantage service authentication and roster shape', () => {
 
     for (const [roles, message] of [
       [['Instructor'], 'absolute URI'],
-      [['https://roles.example.test/Instructor'], 'standard LIS'],
+      [['https://roles.example.test/Instructor'], 'standard LTI'],
       [
         ['http://purl.imsglobal.org/vocab/lis/v2/membership#SuperAdmin'],
-        'standard LIS',
+        'standard LTI',
       ],
       [
         ['http://purl.imsglobal.org/vocab/lis/v2/course#CourseOffering'],
-        'standard LIS',
+        'standard LTI',
+      ],
+      [
+        ['http://purl.imsglobal.org/vocab/lti/system/person#TestUser'],
+        'real role',
       ],
     ] as const) {
       platform.failNext('nrps', {
@@ -1028,6 +1059,40 @@ describe('LTI Advantage service authentication and roster shape', () => {
       expect(JSON.stringify((caught as { cause: unknown }).cause)).toContain(
         message
       );
+    }
+
+    for (const roles of [
+      [
+        'http://purl.imsglobal.org/vocab/lti/system/person#TestUser',
+        'http://purl.imsglobal.org/vocab/lis/v2/membership#Learner',
+      ],
+      [
+        'http://purl.imsglobal.org/vocab/lti/system/person#TestUser',
+        'https://roles.example.test/PreviewLearner',
+      ],
+    ]) {
+      platform.failNext('nrps', {
+        status: 200,
+        contentType: LTI_NRPS_MEDIA_TYPE,
+        body: JSON.stringify({
+          id: `${platform.baseUrl}/contexts/course-eng-101/memberships`,
+          context: { id: 'course-eng-101' },
+          members: [
+            {
+              status: 'Active',
+              user_id: 'lti-preview-user',
+              roles,
+            },
+          ],
+        }),
+      });
+      const memberships = await fetchAllNrpsMemberships({
+        membershipsUrl: `${platform.baseUrl}/contexts/course-eng-101/memberships`,
+        grant,
+        registration: platform.registration,
+        expectedContextId: 'course-eng-101',
+      });
+      expect(memberships.members[0]?.roles).toEqual(roles);
     }
   });
 

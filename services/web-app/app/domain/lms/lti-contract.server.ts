@@ -48,7 +48,7 @@ export const LTI_MESSAGE_TYPES = {
   deepLinkingResponse: 'LtiDeepLinkingResponse',
 } as const;
 
-const STANDARD_LTI_ROLE_URIS = new Set([
+const STANDARD_LIS_ROLE_URIS = new Set([
   ...[
     'Administrator',
     'None',
@@ -163,6 +163,13 @@ const STANDARD_LTI_ROLE_URIS = new Set([
   ),
 ]);
 
+const LTI_TEST_USER_ROLE =
+  'http://purl.imsglobal.org/vocab/lti/system/person#TestUser';
+const STANDARD_LTI_ROLE_URIS = new Set([
+  ...STANDARD_LIS_ROLE_URIS,
+  LTI_TEST_USER_ROLE,
+]);
+
 const LtiRoleUriSchema = z
   .string()
   .min(1)
@@ -181,7 +188,16 @@ export const LtiRolesSchema = z
       context.addIssue({
         code: z.ZodIssueCode.custom,
         message:
-          'A non-empty LTI role list must include a standard LIS vocabulary role.',
+          'A non-empty LTI role list must include a standard LTI vocabulary role.',
+      });
+    }
+    if (
+      roles.includes(LTI_TEST_USER_ROLE) &&
+      !roles.some((role) => role !== LTI_TEST_USER_ROLE)
+    ) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'The LTI TestUser marker must accompany a real role.',
       });
     }
   });
