@@ -1,7 +1,14 @@
 import { type ActionFunctionArgs, type LoaderFunctionArgs } from 'react-router';
-import { data as dataResponse, redirect, useLoaderData } from 'react-router';
+import {
+  data as dataResponse,
+  Link,
+  redirect,
+  useLoaderData,
+} from 'react-router';
+import { FlaskConical } from 'lucide-react';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { AssignmentTypeEditorForm } from '~/components/admin/assignment-type-editor-form';
+import { Button } from '~/components/ui/button';
 import { requireAdmin } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import {
@@ -10,6 +17,7 @@ import {
   parseRubric,
   parseScoringScale,
 } from '~/domain/assignment-types/assignment-type-rubric.shared';
+import { isAiBehaviorEvalLabEnabled } from '~/domain/ai-evaluation/prompt-version-control.server';
 
 function parseJsonFormField(formData: FormData, name: string) {
   const value = formData.get(name);
@@ -45,7 +53,10 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     throw new Response('Not Found', { status: 404 });
   }
 
-  return dataResponse({ course });
+  return dataResponse({
+    course,
+    aiBehaviorEvalLabEnabled: isAiBehaviorEvalLabEnabled(),
+  });
 }
 
 export async function action({ request, params }: ActionFunctionArgs) {
@@ -195,21 +206,35 @@ export async function action({ request, params }: ActionFunctionArgs) {
 }
 
 export default function AssignmentTypeRoute() {
-  const { course } = useLoaderData<typeof loader>();
+  const { course, aiBehaviorEvalLabEnabled } = useLoaderData<typeof loader>();
 
   return (
-    <AssignmentTypeEditorForm
-      mode="edit"
-      assignmentTypeId={course.id}
-      titleDefaultValue={course.title}
-      descriptionDefaultValue={course.description}
-      scoringScale={parseScoringScale(course.scoringScaleJson)}
-      rubric={parseRubric(course.rubricJson)}
-      promptConfig={parsePromptConfig(course.gradingPromptConfigJson)}
-      archivedAt={course.archivedAt}
-      imageId={course.image?.id ?? null}
-      modules={course.assignmentModules}
-    />
+    <>
+      {aiBehaviorEvalLabEnabled ? (
+        <div className="mx-auto flex max-w-5xl justify-end px-3 pt-5 md:px-6">
+          <Button variant="outline" size="sm" asChild>
+            <Link
+              to={`/app/admin/assignment-types/${course.id}/ai-behavior-lab`}
+            >
+              <FlaskConical className="mr-2 size-4 shrink-0" />
+              AI behavior evaluation lab
+            </Link>
+          </Button>
+        </div>
+      ) : null}
+      <AssignmentTypeEditorForm
+        mode="edit"
+        assignmentTypeId={course.id}
+        titleDefaultValue={course.title}
+        descriptionDefaultValue={course.description}
+        scoringScale={parseScoringScale(course.scoringScaleJson)}
+        rubric={parseRubric(course.rubricJson)}
+        promptConfig={parsePromptConfig(course.gradingPromptConfigJson)}
+        archivedAt={course.archivedAt}
+        imageId={course.image?.id ?? null}
+        modules={course.assignmentModules}
+      />
+    </>
   );
 }
 

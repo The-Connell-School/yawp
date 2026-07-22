@@ -640,14 +640,30 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
       essayText: submission.text,
       studentFirstName,
     });
+    const apGradingPromptVersion = await resolveAiPromptVersion({
+      assignmentTypeId: submission.document.assignmentTypeId,
+      surface: 'grading',
+    });
+    const compiledApGradingPrompt = compileAiPromptTemplate({
+      surface: 'grading',
+      template: apGradingPromptVersion.template,
+      variables: {
+        base_system: apSystem,
+        base_user_message: apUserPrompt,
+        assignment_prompt: apHistorySnapshot.prompt,
+        rubric_version: apHistorySnapshot.rubric.rubricId,
+      },
+    });
 
     let parsedJson: Record<string, unknown>;
     let points: Prisma.InputJsonObject;
     try {
       const apResponseText = await getGradingLlmCompletion({
         model,
-        system: apSystem,
-        messages: [{ role: 'user', content: apUserPrompt }],
+        system: compiledApGradingPrompt.system,
+        messages: [
+          { role: 'user', content: compiledApGradingPrompt.userMessage },
+        ],
         maxTokens: 1200,
         temperature: 0.2,
         metadata: {
@@ -655,6 +671,12 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
           kind: 'ap-history-rubric',
           rubricId: apHistorySnapshot.rubric.rubricId,
           essayType: apHistorySnapshot.essayType,
+          promptVersionId: apGradingPromptVersion.id,
+          promptVersion: apGradingPromptVersion.version,
+          promptRevision: apGradingPromptVersion.revision,
+          promptContentHash: apGradingPromptVersion.contentHash,
+          promptSource: apGradingPromptVersion.source,
+          assignmentContextSource: 'ap-history-snapshot',
           ...buildAiContextAuditMetadata({
             textContext: documentContext,
             assignmentTypeId: submission.document.assignmentTypeId,
@@ -732,6 +754,11 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
           model,
           rubricMode: 'ap_history',
           gradingAssistantStrictnessLevel,
+          promptVersionId: apGradingPromptVersion.id,
+          promptVersion: apGradingPromptVersion.version,
+          promptRevision: apGradingPromptVersion.revision,
+          promptContentHash: apGradingPromptVersion.contentHash,
+          promptSource: apGradingPromptVersion.source,
           gradedAt: now.toISOString(),
           documentContext,
         } satisfies Prisma.InputJsonValue,

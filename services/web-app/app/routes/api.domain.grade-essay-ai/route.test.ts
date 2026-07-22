@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
+import { aiPromptContentHash } from '~/domain/ai-evaluation/prompt-template.shared';
 import { rubricKeys } from '~/domain/grading/rubric';
 
 const prisma = {
@@ -925,6 +926,20 @@ describe('api.domain.grade-essay-ai', () => {
   });
 
   test('grades AP History DBQ submissions with AP rubric points and skips grammar pass', async () => {
+    const promotedApTemplate = {
+      systemMessage: 'PROMOTED_AP_GRADING_WRAPPER\n{{base_system}}',
+      userMessage:
+        '{{base_user_message}}\nAssignment: {{assignment_prompt}}\nRubric: {{rubric_version}}',
+    };
+    prisma.assignmentTypePromptVersion.findFirst.mockResolvedValue({
+      id: 'ap-grading-prompt-v2',
+      version: 2,
+      revision: 3,
+      source: 'teacher-calibrated',
+      contentHash: aiPromptContentHash('grading', promotedApTemplate),
+      systemMessageTemplate: promotedApTemplate.systemMessage,
+      userMessageTemplate: promotedApTemplate.userMessage,
+    });
     getLLMCompletion.mockReset();
     getLLMCompletion.mockResolvedValueOnce(
       JSON.stringify({
@@ -1008,6 +1023,7 @@ describe('api.domain.grade-essay-ai', () => {
     const firstCallArgs = getLLMCompletion.mock.calls[0]?.[0];
     const system = firstCallArgs?.system;
     const prompt = firstCallArgs?.messages?.[0]?.content;
+    expect(system).toContain('PROMOTED_AP_GRADING_WRAPPER');
     expect(system).toContain('Return ONLY valid JSON with the schema');
     expect(system).toContain('"rubricVersion": "ap-history-dbq-2026"');
     expect(prompt).toContain('APUSH DBQ');
@@ -1028,6 +1044,10 @@ describe('api.domain.grade-essay-ai', () => {
       kind: 'ap-history-rubric',
       rubricId: 'ap-history-dbq-2026',
       essayType: 'dbq',
+      promptVersionId: 'ap-grading-prompt-v2',
+      promptVersion: 2,
+      promptRevision: 3,
+      promptSource: 'teacher-calibrated',
       assignmentTypeId: 'ap-history-type',
       assignmentTypeRubricSource: 'ap-history-snapshot',
       rubricCategoryKeys: [
@@ -1109,6 +1129,10 @@ describe('api.domain.grade-essay-ai', () => {
         rubricScores: payload.rubricScores,
         aiMeta: expect.objectContaining({
           rubricMode: 'ap_history',
+          promptVersionId: 'ap-grading-prompt-v2',
+          promptVersion: 2,
+          promptRevision: 3,
+          promptSource: 'teacher-calibrated',
           documentContext: {
             documentSource: 'submission-snapshot',
             documentId: 'ap-doc-1',
