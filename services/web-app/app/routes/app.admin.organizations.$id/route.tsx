@@ -19,7 +19,13 @@ import {
   TableHeader,
   TableRow,
 } from '~/components/ui/table';
-import { ChevronLeft, Settings, UserPlus, TrashIcon } from 'lucide-react';
+import {
+  Cable,
+  ChevronLeft,
+  Settings,
+  UserPlus,
+  TrashIcon,
+} from 'lucide-react';
 import { ConfirmationDialog } from '~/components/confirmation-dialog';
 import { Badge } from '~/components/ui/badge';
 import {
@@ -384,6 +390,12 @@ export default function OrganizationRoute() {
           </Link>
         </Button>
         <div className="flex gap-2">
+          <Button variant="outline" asChild>
+            <Link to={`/app/admin/organizations/${organization.id}/lti`}>
+              <Cable className="mr-2 h-4 w-4" />
+              LMS integration
+            </Link>
+          </Button>
           <Button onClick={() => setIsInviteSheetOpen(true)}>
             <UserPlus className="mr-2 h-4 w-4" />
             Invite Owner

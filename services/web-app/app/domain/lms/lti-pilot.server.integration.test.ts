@@ -4,11 +4,17 @@ import type { MockLtiPlatform } from '../../../e2e/mocks/lti/mock-lti-platform';
 import { startMockLtiPlatform } from '../../../e2e/mocks/lti/mock-lti-platform';
 import {
   completeLtiLaunch,
+  createLtiRegistration,
+  disableLtiRegistration,
+  enableLtiRegistration,
   initiateLtiLogin,
   inspectPendingLtiLink,
   linkPendingLtiIdentity,
+  setLtiCourseMappingEnabled,
   setOrganizationLtiGate,
+  upsertLtiCourseMapping,
 } from './lti-pilot.server';
+import { parseLtiRegistration } from './lti-registration';
 
 const HAS_DATABASE = Boolean(
   process.env.E2E_DATABASE_URL || process.env.DATABASE_URL
@@ -322,6 +328,90 @@ describe('persisted LTI launch pilot over a real database and LMS network', () =
           },
         })
       ).toBe(1);
+    }
+  );
+
+  test.skipIf(!HAS_DATABASE)(
+    'administers disabled-first registrations and tenant-bound course mappings',
+    async () => {
+      const registrationId = 'lti-pilot-it-admin-registration';
+      const adminRegistration = parseLtiRegistration({
+        id: registrationId,
+        organizationId: FIXTURE.organizationId,
+        provider: 'blackboard',
+        displayName: 'Admin Configuration Proof',
+        transportMode: 'https',
+        issuer: 'https://admin-proof.lms.example.test',
+        clientId: 'admin-proof-client',
+        allowedAudiences: ['admin-proof-client'],
+        deploymentId: 'admin-proof-deployment',
+        authorizationEndpoint: 'https://admin-proof.lms.example.test/oidc/auth',
+        tokenEndpoint: 'https://admin-proof.lms.example.test/oauth2/token',
+        jwksUrl: 'https://admin-proof.lms.example.test/.well-known/jwks.json',
+        allowedServiceOrigins: ['https://admin-proof.lms.example.test'],
+        loginInitiationUrl: 'https://yawp.example.test/lti/login',
+        launchUrl: 'https://yawp.example.test/lti/launch',
+        deepLinkingLaunchUrl: 'https://yawp.example.test/lti/deep-link',
+        toolJwksUrl: 'https://yawp.example.test/.well-known/jwks.json',
+        allowedTargetLinkUris: [
+          'https://yawp.example.test/lti/launch',
+          'https://yawp.example.test/lti/deep-link',
+        ],
+        enabledScopes: [
+          'https://purl.imsglobal.org/spec/lti-nrps/scope/contextmembership.readonly',
+        ],
+        enabled: false,
+      });
+      await createLtiRegistration({
+        registration: adminRegistration,
+        actorUserId: FIXTURE.teacherUserId,
+      });
+      expect(
+        await prisma.ltiRegistration.findUniqueOrThrow({
+          where: { id: registrationId },
+          select: { enabled: true },
+        })
+      ).toEqual({ enabled: false });
+
+      await enableLtiRegistration({
+        registrationId,
+        organizationId: FIXTURE.organizationId,
+        actorUserId: FIXTURE.teacherUserId,
+      });
+      const mapping = await upsertLtiCourseMapping({
+        registrationId,
+        organizationId: FIXTURE.organizationId,
+        contextId: 'admin-proof-context',
+        classId: FIXTURE.classId,
+        actorUserId: FIXTURE.teacherUserId,
+      });
+      await setLtiCourseMappingEnabled({
+        mappingId: mapping.id,
+        organizationId: FIXTURE.organizationId,
+        enabled: false,
+        actorUserId: FIXTURE.teacherUserId,
+      });
+      await expect(
+        setLtiCourseMappingEnabled({
+          mappingId: mapping.id,
+          organizationId: FIXTURE.otherOrganizationId,
+          enabled: true,
+          actorUserId: FIXTURE.otherUserId,
+        })
+      ).rejects.toThrow();
+      await disableLtiRegistration({
+        registrationId,
+        organizationId: FIXTURE.organizationId,
+        actorUserId: FIXTURE.teacherUserId,
+        uninstall: true,
+      });
+      await expect(
+        enableLtiRegistration({
+          registrationId,
+          organizationId: FIXTURE.organizationId,
+          actorUserId: FIXTURE.teacherUserId,
+        })
+      ).rejects.toMatchObject({ code: 'invalid_request' });
     }
   );
 

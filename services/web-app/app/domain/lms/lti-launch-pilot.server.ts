@@ -180,5 +180,7 @@ export function resolveLtiLaunchDestination(input: {
   if (input.role !== 'TEACHER' && input.role !== 'STUDENT') {
     throw new Error('LTI membership role is invalid.');
   }
-  return `/app/my-classes/${encodeURIComponent(input.classId)}`;
+  return input.role === 'TEACHER'
+    ? `/app/my-classes/${encodeURIComponent(input.classId)}`
+    : '/app';
 }

@@ -903,7 +903,9 @@ function isScore(value: unknown) {
   return true;
 }
 
-export async function startMockLtiPlatform(): Promise<MockLtiPlatform> {
+export async function startMockLtiPlatform(
+  options: { toolBaseUrl?: string; nowSeconds?: number } = {}
+): Promise<MockLtiPlatform> {
   const journal: MockLtiJournalEntry[] = [];
   const failures = new Map<FailureKind, Failure>();
   const tokens = new Map<string, TokenGrant>();
@@ -924,7 +926,7 @@ export async function startMockLtiPlatform(): Promise<MockLtiPlatform> {
     scores: [],
   };
   let baseUrl = '';
-  let nowSeconds = NOW_SECONDS;
+  let nowSeconds = options.nowSeconds ?? NOW_SECONDS;
   let platformSigningKey = {
     keyId: PLATFORM_KEY_ID,
     privateKeyPem: PLATFORM_PRIVATE_KEY,
@@ -975,7 +977,8 @@ export async function startMockLtiPlatform(): Promise<MockLtiPlatform> {
   toolServer.listen(0, '127.0.0.1');
   await once(toolServer, 'listening');
   const toolAddress = toolServer.address() as AddressInfo;
-  const toolBaseUrl = `http://127.0.0.1:${toolAddress.port}`;
+  const internalToolBaseUrl = `http://127.0.0.1:${toolAddress.port}`;
+  const toolBaseUrl = options.toolBaseUrl ?? internalToolBaseUrl;
 
   const server = createServer((request, response) => {
     void (async () => {

@@ -26,6 +26,7 @@
     "org-membership:precheck": "bun run scripts/org-membership-precheck.ts",
     "org-membership:postcheck": "bun run scripts/org-membership-postcheck.ts",
     "org-membership:staging-verify": "bun run scripts/org-membership-staging-verify.ts",
+    "lti-launch:postcheck": "bun run scripts/lti-launch-pilot-postcheck.ts",
     "test": "bun test scripts/*.test.ts"
   },
   "devDependencies": {

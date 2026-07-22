@@ -162,7 +162,8 @@ function writeE2EEnv(e2eDir: string, databaseUrl: string) {
     CACHE_DATABASE_PATH: path.join(e2eDir, '.cache.sqlite'),
     DATABASE_URL: databaseUrl,
     E2E_DATABASE_URL: databaseUrl,
-    SESSION_SECRET: process.env.SESSION_SECRET || 'dev-secret',
+    SESSION_SECRET:
+      process.env.SESSION_SECRET || 'e2e-session-secret-at-least-32-characters',
     INTERNAL_COMMAND_TOKEN: process.env.INTERNAL_COMMAND_TOKEN || 'dev-token',
     HONEYPOT_SECRET: process.env.HONEYPOT_SECRET || 'dev-honeypot',
     AWS_S3_BUCKET_FOR_VIDEOS: process.env.AWS_S3_BUCKET_FOR_VIDEOS || 'e2e-bucket',
@@ -170,6 +171,7 @@ function writeE2EEnv(e2eDir: string, databaseUrl: string) {
     E2E: 'true',
     E2E_GRADE_ESSAY_AI_FIXTURE: 'true',
     E2E_ASSIGNMENT_INSIGHTS_FIXTURE: 'true',
+    LTI_ALLOW_LOOPBACK_HTTP: 'true',
     ANTHROPIC_API_KEY: '',
   };
 

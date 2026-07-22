@@ -35,8 +35,9 @@ remain explicit human-review markers.
 7. Instructor-only roles map to `TEACHER`; learner-only roles map to `STUDENT`.
    Mixed, absent, or unrelated roles fail closed.
 8. A context launch requires an active course mapping whose class belongs to
-   the registration organization. Teacher and learner destinations remain
-   inside that mapped class route.
+   the registration organization. Teachers enter mapped-class management;
+   learners enter the student workspace, which is already scoped to their
+   mapped-class enrollment.
 9. Public errors are generic. Audit records contain event type, outcome,
    registration/tenant identifiers, subject digest, context id, and bounded
    non-secret metadata—never tokens, raw state/nonce, email, or provider bearer

@@ -143,12 +143,12 @@ describe('LTI launch pilot primitives', () => {
     expect(url.searchParams.has('lti_message_hint')).toBe(false);
   });
 
-  test('keeps teacher and student destinations inside the mapped class', () => {
+  test('routes teachers to class management and students to their workspace', () => {
     expect(
       resolveLtiLaunchDestination({ classId: 'class/unsafe', role: 'TEACHER' })
     ).toBe('/app/my-classes/class%2Funsafe');
     expect(
       resolveLtiLaunchDestination({ classId: 'class-1', role: 'STUDENT' })
-    ).toBe('/app/my-classes/class-1');
+    ).toBe('/app');
   });
 });

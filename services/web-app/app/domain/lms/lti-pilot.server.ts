@@ -90,6 +90,13 @@ function allowLoopbackHttp() {
   return process.env.LTI_ALLOW_LOOPBACK_HTTP === 'true';
 }
 
+function registrationTransportMode(registration: PersistedLtiRegistration) {
+  return allowLoopbackHttp() &&
+    new URL(registration.issuer).protocol === 'http:'
+    ? ('loopback-http' as const)
+    : ('https' as const);
+}
+
 export function toLtiContractRegistration(
   registration: PersistedLtiRegistration
 ): LtiRegistration {
@@ -99,7 +106,7 @@ export function toLtiContractRegistration(
       organizationId: registration.organizationId,
       provider: registration.provider,
       displayName: registration.displayName,
-      transportMode: allowLoopbackHttp() ? 'loopback-http' : 'https',
+      transportMode: registrationTransportMode(registration),
       issuer: registration.issuer,
       clientId: registration.clientId,
       allowedAudiences: registration.allowedAudiences,
@@ -771,6 +778,63 @@ export async function linkPendingLtiIdentity(input: {
   };
 }
 
+export async function cancelPendingLtiLink(input: {
+  pendingLinkId: string;
+  secret: string;
+  actorUserId: string;
+  now?: Date;
+}) {
+  const now = input.now ?? new Date();
+  return prisma.$transaction(async (database) => {
+    const pending = await database.ltiPendingLink.findUnique({
+      where: { id: input.pendingLinkId },
+      include: {
+        registration: { select: { enabled: true, uninstalledAt: true } },
+        organization: { select: { ltiEnabled: true } },
+        courseMapping: { select: { contextId: true, enabled: true } },
+      },
+    });
+    if (
+      !pending ||
+      pending.consumedAt !== null ||
+      pending.expiresAt <= now ||
+      !pending.registration.enabled ||
+      pending.registration.uninstalledAt !== null ||
+      !pending.organization.ltiEnabled ||
+      !pending.courseMapping.enabled ||
+      !ltiOneTimeValueMatches(input.secret, pending.secretHash)
+    ) {
+      throw new LtiPilotError(
+        'link_expired',
+        'This account-link request is unavailable.',
+        410
+      );
+    }
+    const consumed = await database.ltiPendingLink.updateMany({
+      where: { id: pending.id, consumedAt: null, expiresAt: { gt: now } },
+      data: { consumedAt: now },
+    });
+    if (consumed.count !== 1) {
+      throw new LtiPilotError(
+        'link_expired',
+        'This account-link request is unavailable.',
+        410
+      );
+    }
+    await database.ltiAuditEvent.create({
+      data: {
+        eventType: 'identity_link_cancelled',
+        outcome: 'accepted',
+        registrationId: pending.registrationId,
+        organizationId: pending.organizationId,
+        subjectHash: pending.subjectHash,
+        contextId: pending.courseMapping.contextId,
+        actorUserId: input.actorUserId,
+      },
+    });
+  });
+}
+
 export async function disableLtiRegistration(input: {
   registrationId: string;
   organizationId: string;
@@ -824,6 +888,223 @@ export async function disableLtiRegistration(input: {
     return updated;
   });
   signingKeyCache.clearRegistration(registration.id);
+}
+
+export async function createLtiRegistration(input: {
+  registration: LtiRegistration;
+  actorUserId: string;
+}) {
+  if (
+    input.registration.transportMode !== 'https' ||
+    input.registration.enabled
+  ) {
+    throw new LtiPilotError(
+      'invalid_request',
+      'New LTI registrations must use HTTPS and begin disabled.'
+    );
+  }
+  return prisma.$transaction(async (database) => {
+    const organization = await database.organization.findUnique({
+      where: { id: input.registration.organizationId },
+      select: { id: true },
+    });
+    if (!organization) {
+      throw new LtiPilotError(
+        'invalid_request',
+        'Organization not found.',
+        404
+      );
+    }
+    const registration = await database.ltiRegistration.create({
+      data: {
+        id: input.registration.id,
+        organizationId: input.registration.organizationId,
+        provider: input.registration.provider,
+        displayName: input.registration.displayName,
+        issuer: input.registration.issuer,
+        clientId: input.registration.clientId,
+        deploymentId: input.registration.deploymentId,
+        authorizationEndpoint: input.registration.authorizationEndpoint,
+        tokenEndpoint: input.registration.tokenEndpoint,
+        jwksUrl: input.registration.jwksUrl,
+        loginInitiationUrl: input.registration.loginInitiationUrl,
+        launchUrl: input.registration.launchUrl,
+        deepLinkingLaunchUrl: input.registration.deepLinkingLaunchUrl,
+        toolJwksUrl: input.registration.toolJwksUrl,
+        allowedAudiences: input.registration.allowedAudiences,
+        allowedServiceOrigins: input.registration.allowedServiceOrigins,
+        allowedTargetLinkUris: input.registration.allowedTargetLinkUris,
+        enabledScopes: input.registration.enabledScopes,
+        jwksCacheTtlSeconds: input.registration.jwksCacheTtlSeconds,
+        enabled: false,
+      },
+      select: { id: true, organizationId: true },
+    });
+    await database.ltiAuditEvent.create({
+      data: {
+        eventType: 'registration_created',
+        outcome: 'accepted',
+        registrationId: registration.id,
+        organizationId: registration.organizationId,
+        actorUserId: input.actorUserId,
+      },
+    });
+    return registration;
+  });
+}
+
+export async function enableLtiRegistration(input: {
+  registrationId: string;
+  organizationId: string;
+  actorUserId: string;
+}) {
+  const registration = await prisma.ltiRegistration.findUnique({
+    where: {
+      id_organizationId: {
+        id: input.registrationId,
+        organizationId: input.organizationId,
+      },
+    },
+    include: { organization: { select: { ltiEnabled: true } } },
+  });
+  if (!registration || registration.uninstalledAt !== null) {
+    throw new LtiPilotError('invalid_request', 'Registration not found.', 404);
+  }
+  if (!registration.organization.ltiEnabled) {
+    throw new LtiPilotError(
+      'not_available',
+      'Enable the organization LTI gate before this registration.',
+      409
+    );
+  }
+  toLtiContractRegistration({ ...registration, enabled: true });
+  await prisma.$transaction(async (database) => {
+    await database.ltiRegistration.update({
+      where: {
+        id_organizationId: {
+          id: input.registrationId,
+          organizationId: input.organizationId,
+        },
+      },
+      data: { enabled: true, disabledAt: null },
+    });
+    await database.ltiAuditEvent.create({
+      data: {
+        eventType: 'registration_enabled',
+        outcome: 'accepted',
+        registrationId: input.registrationId,
+        organizationId: input.organizationId,
+        actorUserId: input.actorUserId,
+      },
+    });
+  });
+  signingKeyCache.clearRegistration(input.registrationId);
+}
+
+export async function upsertLtiCourseMapping(input: {
+  registrationId: string;
+  organizationId: string;
+  contextId: string;
+  classId: string;
+  actorUserId: string;
+}) {
+  if (!input.contextId || input.contextId.length > 255) {
+    throw new LtiPilotError(
+      'invalid_request',
+      'LMS context id must contain 1 to 255 characters.'
+    );
+  }
+  return prisma.$transaction(async (database) => {
+    const [registration, classRecord] = await Promise.all([
+      database.ltiRegistration.findUnique({
+        where: {
+          id_organizationId: {
+            id: input.registrationId,
+            organizationId: input.organizationId,
+          },
+        },
+        select: { id: true, uninstalledAt: true },
+      }),
+      database.class.findUnique({
+        where: { id: input.classId },
+        select: { id: true, school: { select: { organizationId: true } } },
+      }),
+    ]);
+    if (!registration || registration.uninstalledAt !== null) {
+      throw new LtiPilotError(
+        'invalid_request',
+        'Registration not found.',
+        404
+      );
+    }
+    if (
+      !classRecord ||
+      classRecord.school.organizationId !== input.organizationId
+    ) {
+      throw new LtiPilotError('invalid_request', 'Class not found.', 404);
+    }
+    const mapping = await database.ltiCourseMapping.upsert({
+      where: {
+        registrationId_contextId: {
+          registrationId: input.registrationId,
+          contextId: input.contextId,
+        },
+      },
+      create: {
+        registrationId: input.registrationId,
+        organizationId: input.organizationId,
+        contextId: input.contextId,
+        classId: input.classId,
+        enabled: true,
+      },
+      update: { classId: input.classId, enabled: true },
+      select: { id: true, contextId: true },
+    });
+    await database.ltiAuditEvent.create({
+      data: {
+        eventType: 'course_mapping_saved',
+        outcome: 'accepted',
+        registrationId: input.registrationId,
+        organizationId: input.organizationId,
+        contextId: mapping.contextId,
+        actorUserId: input.actorUserId,
+      },
+    });
+    return mapping;
+  });
+}
+
+export async function setLtiCourseMappingEnabled(input: {
+  mappingId: string;
+  organizationId: string;
+  enabled: boolean;
+  actorUserId: string;
+}) {
+  return prisma.$transaction(async (database) => {
+    const mapping = await database.ltiCourseMapping.update({
+      where: {
+        id_organizationId: {
+          id: input.mappingId,
+          organizationId: input.organizationId,
+        },
+      },
+      data: { enabled: input.enabled },
+      select: { registrationId: true, contextId: true },
+    });
+    await database.ltiAuditEvent.create({
+      data: {
+        eventType: input.enabled
+          ? 'course_mapping_enabled'
+          : 'course_mapping_disabled',
+        outcome: 'accepted',
+        registrationId: mapping.registrationId,
+        organizationId: input.organizationId,
+        contextId: mapping.contextId,
+        actorUserId: input.actorUserId,
+      },
+    });
+    return mapping;
+  });
 }
 
 export async function setOrganizationLtiGate(input: {
