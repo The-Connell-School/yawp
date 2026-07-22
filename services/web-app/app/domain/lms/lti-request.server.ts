@@ -5,6 +5,36 @@ export class LtiRequestError extends Error {
   }
 }
 
+const EMBEDDED_DESTINATIONS = new Set(['iframe', 'embed', 'object']);
+
+/**
+ * The pilot deliberately uses a top-level/new-window presentation. Yawp's
+ * primary auth cookies remain SameSite=Lax, so silently accepting an embedded
+ * launch would create an authentication loop and an inconsistent CSRF model.
+ */
+export function isEmbeddedLtiRequest(request: Request) {
+  const destination = request.headers
+    .get('sec-fetch-dest')
+    ?.trim()
+    .toLowerCase();
+  return destination ? EMBEDDED_DESTINATIONS.has(destination) : false;
+}
+
+/**
+ * Only infrastructure-owned client-address headers are trusted. A direct
+ * request falls back to one bounded shared bucket rather than trusting a
+ * caller-controlled X-Forwarded-For value.
+ */
+export function getLtiRequesterFingerprint(request: Request) {
+  const candidate =
+    request.headers.get('x-nf-client-connection-ip') ??
+    request.headers.get('cf-connecting-ip') ??
+    request.headers.get('fly-client-ip') ??
+    'unattributed';
+  const normalized = candidate.trim().toLowerCase();
+  return normalized && normalized.length <= 128 ? normalized : 'unattributed';
+}
+
 export async function readBoundedLtiForm(
   request: Request,
   options: { maxBytes: number }

@@ -16,6 +16,7 @@ const REGISTRATION_ID = 'e2e-lti-launch-registration';
 let platform: MockLtiPlatform;
 let organizationId: string;
 let classId: string;
+let classLabel: string;
 
 async function expectNoBlockingAccessibilityViolations(
   page: Page,
@@ -75,10 +76,11 @@ test.describe.serial('secure LTI launch pilot', () => {
       const classRecord = await prisma.class.findFirstOrThrow({
         where: { school: { organizationId: organization.id } },
         orderBy: { createdAt: 'asc' },
-        select: { id: true },
+        select: { id: true, title: true, code: true },
       });
       organizationId = organization.id;
       classId = classRecord.id;
+      classLabel = classRecord.title ?? classRecord.code;
       await prisma.organization.update({
         where: { id: organizationId },
         data: { ltiEnabled: true },
@@ -124,28 +126,30 @@ test.describe.serial('secure LTI launch pilot', () => {
     await platform?.close();
   });
 
-  async function beginLaunch(page: Page, scenario: string) {
-    const parameters = new URLSearchParams({
-      iss: platform.registration.issuer,
-      client_id: platform.registration.clientId,
-      lti_deployment_id: platform.registration.deploymentId,
-      login_hint: `opaque-${scenario}`,
-      lti_message_hint: scenario,
-      target_link_uri: platform.registration.launchUrl,
-    });
-    await page.goto(`/lti/login?${parameters}`);
-    await expect(page.locator('form')).toHaveAttribute(
+  async function beginLaunch(page: Page, scenario: string, submit = true) {
+    await page.goto(
+      `${platform.baseUrl}/browser/launch?scenario=${encodeURIComponent(scenario)}`
+    );
+    await expect(
+      page.getByRole('heading', { name: 'Mock LMS course' })
+    ).toBeVisible();
+    const popupPromise = page.waitForEvent('popup');
+    await page.getByRole('link', { name: 'Open Yawp in a new window' }).click();
+    const toolPage = await popupPromise;
+    await expect(toolPage.locator('form')).toHaveAttribute(
       'action',
       `${APP_BASE_URL}/lti/launch`
     );
     const form = {
-      idToken: await page.locator('input[name="id_token"]').inputValue(),
-      state: await page.locator('input[name="state"]').inputValue(),
+      idToken: await toolPage.locator('input[name="id_token"]').inputValue(),
+      state: await toolPage.locator('input[name="state"]').inputValue(),
     };
-    await page
-      .locator('form')
-      .evaluate((element) => (element as HTMLFormElement).submit());
-    return form;
+    if (submit) {
+      await toolPage
+        .locator('form')
+        .evaluate((element) => (element as HTMLFormElement).submit());
+    }
+    return { form, toolPage };
   }
 
   async function signInFromLaunch(page: Page, email: string, password: string) {
@@ -159,73 +163,159 @@ test.describe.serial('secure LTI launch pilot', () => {
     await page.waitForURL((url) => url.pathname === '/lti/link');
   }
 
+  test('rejects embedded presentation before creating launch data', async ({
+    page,
+  }) => {
+    const prisma = createE2EPrismaClient();
+    try {
+      const before = await prisma.$transaction([
+        prisma.ltiLaunchTransaction.count({
+          where: { registrationId: REGISTRATION_ID },
+        }),
+        prisma.ltiAuditEvent.count({
+          where: { registrationId: REGISTRATION_ID },
+        }),
+      ]);
+      await page.goto(
+        `${platform.baseUrl}/browser/iframe-launch?scenario=instructor-resource-link`
+      );
+      const frame = page.frameLocator('iframe[title="Yawp embedded launch"]');
+      await expect(
+        frame.getByRole('heading', {
+          name: "We couldn't open Yawp from your LMS",
+          level: 1,
+        })
+      ).toBeVisible();
+      const after = await prisma.$transaction([
+        prisma.ltiLaunchTransaction.count({
+          where: { registrationId: REGISTRATION_ID },
+        }),
+        prisma.ltiAuditEvent.count({
+          where: { registrationId: REGISTRATION_ID },
+        }),
+      ]);
+      expect(after).toEqual(before);
+    } finally {
+      await prisma.$disconnect();
+    }
+  });
+
+  test('rejects a valid form transferred to a second browser context', async ({
+    page,
+    browser,
+  }) => {
+    const launch = await beginLaunch(page, 'instructor-resource-link', false);
+    const secondContext = await browser.newContext();
+    try {
+      const transferred = await secondContext.request.post(
+        `${APP_BASE_URL}/lti/launch`,
+        {
+          form: {
+            id_token: launch.form.idToken,
+            state: launch.form.state,
+          },
+          maxRedirects: 0,
+        }
+      );
+      expect(transferred.status()).toBe(303);
+      expect(transferred.headers().location).toBe('/lti/error');
+
+      await launch.toolPage
+        .locator('form')
+        .evaluate((element) => (element as HTMLFormElement).submit());
+      await launch.toolPage.waitForURL((url) => url.pathname === '/auth/login');
+    } finally {
+      await secondContext.close();
+      await launch.toolPage.close();
+    }
+  });
+
   test('teacher explicitly links, reaches the mapped class, and replay fails generically', async ({
     page,
     e2eContext,
   }, testInfo) => {
-    const firstForm = await beginLaunch(page, 'instructor-resource-link');
+    const first = await beginLaunch(page, 'instructor-resource-link');
+    const firstForm = first.form;
+    const toolPage = first.toolPage;
     await signInFromLaunch(
-      page,
+      toolPage,
       e2eContext.teacherEmail,
       'teacher-e2e-password'
     );
 
     await expect(
-      page.getByRole('heading', { name: 'Connect this LMS identity?' })
+      toolPage.getByRole('heading', {
+        name: 'Connect this LMS identity?',
+        level: 1,
+      })
     ).toBeVisible();
-    await expect(page.getByText('The Connell School')).toBeVisible();
-    await expect(page.getByText('Teacher', { exact: true })).toBeVisible();
-    await expect(page.locator('body')).not.toContainText(
+    await expect(toolPage.getByText('The Connell School')).toBeVisible();
+    await expect(toolPage.getByText('Teacher', { exact: true })).toBeVisible();
+    await expect(toolPage.locator('body')).not.toContainText(
       'kevin.instructor@example.test'
     );
     await expectNoBlockingAccessibilityViolations(
-      page,
+      toolPage,
       testInfo,
       'lti-link-confirmation'
     );
-    await holdForVideoReview(page);
-    await page.getByRole('button', { name: 'Connect and open course' }).click();
-    await page.waitForURL(`**/app/my-classes/${classId}`);
-    await holdForVideoReview(page);
+    await holdForVideoReview(toolPage);
+    await toolPage
+      .getByRole('button', { name: 'Connect and open course' })
+      .click();
+    await toolPage.waitForURL(`**/app/my-classes/${classId}`);
+    await holdForVideoReview(toolPage);
 
-    const replay = await page.request.post(`${APP_BASE_URL}/lti/launch`, {
+    const replay = await toolPage.request.post(`${APP_BASE_URL}/lti/launch`, {
       form: { id_token: firstForm.idToken, state: firstForm.state },
       maxRedirects: 0,
     });
     expect(replay.status()).toBe(303);
     expect(replay.headers().location).toBe('/lti/error');
 
-    await page.goto('/lti/error');
+    await toolPage.goto('/lti/error');
     await expect(
-      page.getByRole('heading', {
+      toolPage.getByRole('heading', {
         name: "We couldn't open Yawp from your LMS",
+        level: 1,
       })
     ).toBeVisible();
     await expectNoBlockingAccessibilityViolations(
-      page,
+      toolPage,
       testInfo,
       'lti-generic-error'
     );
-    await holdForVideoReview(page);
+    await holdForVideoReview(toolPage);
 
     const second = await beginLaunch(page, 'instructor-resource-link');
-    expect(second.state).not.toBe(firstForm.state);
-    await page.waitForURL(`**/app/my-classes/${classId}`);
+    expect(second.form.state).not.toBe(firstForm.state);
+    await second.toolPage.waitForURL(`**/app/my-classes/${classId}`);
   });
 
   test('learner explicitly links to the mapped class and reaches the student workspace', async ({
     page,
     e2eContext,
   }) => {
-    await beginLaunch(page, 'learner-resource-link-no-pii');
-    await signInFromLaunch(page, e2eContext.userEmail, 'johndoe');
-    await expect(page.getByText('Student', { exact: true })).toBeVisible();
-    await expect(page.locator('body')).not.toContainText('@');
-    await holdForVideoReview(page);
-    await page.getByRole('button', { name: 'Connect and open course' }).click();
-    await page.waitForURL((url) => url.pathname === '/app');
-    await expect(page.getByText('E2E Course')).toBeVisible();
-    await holdForVideoReview(page);
+    const launch = await beginLaunch(page, 'learner-resource-link-no-pii');
+    const toolPage = launch.toolPage;
+    await signInFromLaunch(toolPage, e2eContext.userEmail, 'johndoe');
+    await expect(toolPage.getByText('Student', { exact: true })).toBeVisible();
+    await expect(toolPage.locator('body')).not.toContainText('@');
+    await holdForVideoReview(toolPage);
+    await toolPage
+      .getByRole('button', { name: 'Connect and open course' })
+      .click();
+    await toolPage.waitForURL(
+      (url) =>
+        url.pathname === '/app' &&
+        url.searchParams.get('ltiClassId') === classId
+    );
+    await expect(
+      toolPage.getByText(
+        `Opened from your LMS for ${classLabel}. Only this mapped class is shown.`
+      )
+    ).toBeVisible();
+    await holdForVideoReview(toolPage);
 
     const prisma = createE2EPrismaClient();
     try {
@@ -254,6 +344,18 @@ test.describe.serial('secure LTI launch pilot', () => {
       page.getByRole('heading', { name: 'Organization LTI access' })
     ).toBeVisible();
     await expect(page.getByText('Blackboard browser pilot')).toBeVisible();
+    await page
+      .getByText('Review registration diagnostics', { exact: true })
+      .click();
+    await expect(
+      page.getByText(platform.registration.issuer, { exact: true }).first()
+    ).toBeVisible();
+    await expect(
+      page.getByText(platform.registration.clientId, { exact: true }).first()
+    ).toBeVisible();
+    await expect(
+      page.getByText(platform.registration.jwksUrl, { exact: true }).first()
+    ).toBeVisible();
     await expect(
       page.getByRole('tab', { name: 'Course mappings' })
     ).toBeVisible();

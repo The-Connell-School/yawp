@@ -1,22 +1,28 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from 'react-router';
 import { redirect } from 'react-router';
 import { authSessionStorage } from '~/cookie-session-storages/authentication.server';
+import {
+  destroyLtiBrowserBinding,
+  getLtiBrowserBinding,
+} from '~/cookies/lti-browser-binding.server';
 import { setMembershipId } from '~/cookies/membership-id.server';
 import { setPendingLtiLink } from '~/cookies/lti-pending-link.server';
 import {
   completeLtiLaunch,
+  createLtiAuthenticatedSession,
   LtiPilotError,
 } from '~/domain/lms/lti-pilot.server';
-import { readBoundedLtiForm } from '~/domain/lms/lti-request.server';
+import { admitLtiPublicRequest } from '~/domain/lms/lti-rate-limit.server';
 import {
-  getSessionExpirationDate,
-  getUserId,
-  sessionKey,
-} from '~/utils/auth.server';
-import { prisma } from '~/utils/db.server';
+  getLtiRequesterFingerprint,
+  isEmbeddedLtiRequest,
+  readBoundedLtiForm,
+} from '~/domain/lms/lti-request.server';
+import { getUserId, sessionKey } from '~/utils/auth.server';
 
 const MAX_LAUNCH_BODY_BYTES = 24 * 1024;
 const MAX_ID_TOKEN_LENGTH = 20 * 1024;
+const LTI_SESSION_TTL_MS = 8 * 60 * 60 * 1000;
 
 function redirectToError(error: unknown, headers?: Headers) {
   void error;
@@ -54,13 +60,21 @@ export function loader(_args: LoaderFunctionArgs) {
 }
 
 export async function action({ request }: ActionFunctionArgs) {
+  const headers = new Headers({ 'cache-control': 'no-store' });
+  headers.append('set-cookie', await destroyLtiBrowserBinding());
   try {
+    if (isEmbeddedLtiRequest(request)) throw new Error('Embedded launch.');
+    admitLtiPublicRequest({
+      kind: 'launch',
+      requester: getLtiRequesterFingerprint(request),
+    });
     const form = await parseLaunchForm(request);
+    const browserBinding = await getLtiBrowserBinding(request);
     const currentUserId = await getUserId(request);
     const result = await completeLtiLaunch(form, {
       currentUserId,
+      browserBinding,
     });
-    const headers = new Headers({ 'cache-control': 'no-store' });
 
     if (result.kind === 'link_required') {
       headers.append(
@@ -74,12 +88,15 @@ export async function action({ request }: ActionFunctionArgs) {
     }
 
     if (!currentUserId) {
-      const session = await prisma.session.create({
-        data: {
-          expirationDate: getSessionExpirationDate(),
-          userId: result.userId,
-        },
-        select: { id: true, expirationDate: true },
+      const session = await createLtiAuthenticatedSession({
+        expirationDate: new Date(Date.now() + LTI_SESSION_TTL_MS),
+        userId: result.userId,
+        membershipId: result.membershipId,
+        organizationId: result.organizationId,
+        registrationId: result.registrationId,
+        externalIdentityId: result.externalIdentityId,
+        classId: result.classId,
+        role: result.role,
       });
       const authSession = await authSessionStorage.getSession(
         request.headers.get('cookie')
@@ -95,6 +112,6 @@ export async function action({ request }: ActionFunctionArgs) {
     headers.append('set-cookie', await setMembershipId(result.membershipId));
     return redirect(result.destination, { status: 303, headers });
   } catch (error) {
-    return redirectToError(error);
+    return redirectToError(error, headers);
   }
 }

@@ -290,11 +290,83 @@ describe('LTI 1.3 launch over the network boundary', () => {
     ['untrusted-service-origin', 'service origin'],
     ['alg-none', 'algorithm'],
     ['jku-header', 'JOSE header'],
+    ['crit-header', 'JOSE header'],
+    ['b64-header', 'JOSE header'],
+    ['bad-signature', 'signature'],
     ['unknown-kid', 'signing key'],
   ])('fail-closes the %s launch scenario', async (scenario, message) => {
     const platform = await startPlatform();
     const form = await authorize(platform, scenario);
 
+    await expect(
+      verifyLtiLaunchForm(form, {
+        registration: platform.registration,
+        expectedState: 'state-contract-001',
+        expectedNonce: 'nonce-contract-001',
+        expectedTargetLinkUri: platform.registration.launchUrl,
+        expectedMessageType: LTI_MESSAGE_TYPES.resourceLinkRequest,
+        nowSeconds: platform.seed.nowSeconds,
+      })
+    ).rejects.toThrow(message);
+  });
+
+  test.each([
+    [
+      'encryption-only use',
+      [
+        {
+          kty: 'RSA',
+          kid: 'mock-platform-rs256-2026',
+          alg: 'RS256',
+          use: 'enc',
+          n: 'AQAB',
+          e: 'AQAB',
+        },
+      ],
+      'not permitted',
+    ],
+    [
+      'key operations without verify',
+      [
+        {
+          kty: 'RSA',
+          kid: 'mock-platform-rs256-2026',
+          alg: 'RS256',
+          key_ops: ['encrypt'],
+          n: 'AQAB',
+          e: 'AQAB',
+        },
+      ],
+      'not permitted',
+    ],
+    [
+      'ambiguous duplicate kid',
+      [
+        {
+          kty: 'RSA',
+          kid: 'mock-platform-rs256-2026',
+          alg: 'RS256',
+          n: 'AQAB',
+          e: 'AQAB',
+        },
+        {
+          kty: 'RSA',
+          kid: 'mock-platform-rs256-2026',
+          alg: 'RS256',
+          n: 'Ag',
+          e: 'AQAB',
+        },
+      ],
+      'ambiguous',
+    ],
+  ])('rejects provider JWKS %s', async (_label, keys, message) => {
+    const platform = await startPlatform();
+    const form = await authorize(platform);
+    platform.failNext('jwks', {
+      status: 200,
+      body: JSON.stringify({ keys }),
+      contentType: 'application/jwk-set+json',
+    });
     await expect(
       verifyLtiLaunchForm(form, {
         registration: platform.registration,

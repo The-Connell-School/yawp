@@ -182,5 +182,5 @@ export function resolveLtiLaunchDestination(input: {
   }
   return input.role === 'TEACHER'
     ? `/app/my-classes/${encodeURIComponent(input.classId)}`
-    : '/app';
+    : `/app?ltiClassId=${encodeURIComponent(input.classId)}`;
 }

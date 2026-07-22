@@ -1,5 +1,7 @@
-import { createHmac } from 'node:crypto';
-import type { LtiRegistration as PersistedLtiRegistration } from '@app/prisma';
+import {
+  Prisma,
+  type LtiRegistration as PersistedLtiRegistration,
+} from '@app/prisma';
 import { prisma } from '~/utils/db.server';
 import {
   LTI_MESSAGE_TYPES,
@@ -9,7 +11,6 @@ import {
 import { createLtiSigningKeyCache } from './lti-jwks-cache.server';
 import {
   buildLtiOidcAuthorizationUrl,
-  deriveLtiSubjectHash,
   generateLtiOneTimeValue,
   hashLtiOneTimeValue,
   ltiOneTimeValueMatches,
@@ -20,6 +21,10 @@ import {
   type LtiMembershipRole,
 } from './lti-launch-pilot.server';
 import {
+  deriveLtiIdentityHashCandidates,
+  hashLtiOperationalValue,
+} from './lti-identity-keyset.server';
+import {
   assertAllowedLtiTargetLink,
   parseLtiRegistration,
   type LtiRegistration,
@@ -27,6 +32,19 @@ import {
 
 const LAUNCH_TTL_MS = 5 * 60 * 1000;
 const LINK_TTL_MS = 15 * 60 * 1000;
+const LOGIN_WINDOW_MS = 60 * 1000;
+const OPERATIONAL_RETENTION_MS = 24 * 60 * 60 * 1000;
+const MAX_REQUESTER_LOGINS_PER_WINDOW = 30;
+const MAX_REGISTRATION_LOGINS_PER_WINDOW = 120;
+const MAX_OUTSTANDING_REGISTRATION_LAUNCHES = 500;
+const MAX_VERIFICATION_ATTEMPTS = 8;
+const MAX_ACTIVE_REGISTRATION_VERIFICATIONS = 120;
+const MAX_FAILURE_AUDITS_PER_FIVE_MINUTES = 10;
+export const LTI_PILOT_LIMITS = {
+  registrationLoginsPerMinute: MAX_REGISTRATION_LOGINS_PER_WINDOW,
+  activeRegistrationVerifications: MAX_ACTIVE_REGISTRATION_VERIFICATIONS,
+  failureAuditsPerFiveMinutes: MAX_FAILURE_AUDITS_PER_FIVE_MINUTES,
+} as const;
 const signingKeyCache = createLtiSigningKeyCache();
 
 export type LtiPilotErrorCode =
@@ -39,7 +57,8 @@ export type LtiPilotErrorCode =
   | 'course_unmapped'
   | 'account_conflict'
   | 'link_expired'
-  | 'membership_not_allowed';
+  | 'membership_not_allowed'
+  | 'rate_limited';
 
 export class LtiPilotError extends Error {
   readonly code: LtiPilotErrorCode;
@@ -58,32 +77,21 @@ export class LtiPilotError extends Error {
   }
 }
 
-function getRootSecret() {
-  const rootSecret = process.env.SESSION_SECRET?.split(',')[0]?.trim();
-  if (!rootSecret || rootSecret.length < 16) {
-    throw new Error('SESSION_SECRET must contain a stable LTI HMAC root.');
-  }
-  return rootSecret;
-}
-
-export function getLtiIdentityHmacSecret() {
-  return createHmac('sha256', getRootSecret())
-    .update('yawp:lti:identity:v1', 'utf8')
-    .digest('hex');
-}
-
 function hashScopedOpaqueValue(
   registrationId: string,
   label: string,
   value: string
 ) {
-  return createHmac('sha256', getRootSecret())
-    .update(`yawp:lti:${label}:v1`, 'utf8')
-    .update('\0', 'utf8')
-    .update(registrationId, 'utf8')
-    .update('\0', 'utf8')
-    .update(value, 'utf8')
-    .digest('hex');
+  return hashLtiOperationalValue({ label, registrationId, value });
+}
+
+function mappedClassMembershipWhere(
+  role: LtiMembershipRole,
+  classId: string
+): Prisma.OrgMembershipWhereInput {
+  return role === 'TEACHER'
+    ? { classesAsTeacher: { some: { id: classId } } }
+    : { classesAsStudent: { some: { id: classId } } };
 }
 
 function allowLoopbackHttp() {
@@ -166,7 +174,7 @@ async function findAvailableRegistration(initiation: LtiLoginInitiation) {
 
 export async function initiateLtiLogin(
   parameters: URLSearchParams,
-  options: { now?: Date } = {}
+  options: { now?: Date; requesterFingerprint?: string } = {}
 ) {
   let initiation: LtiLoginInitiation;
   try {
@@ -194,15 +202,59 @@ export async function initiateLtiLogin(
 
   const state = generateLtiOneTimeValue();
   const nonce = generateLtiOneTimeValue();
+  const browserBindingSecret = generateLtiOneTimeValue();
   const now = options.now ?? new Date();
   const expiresAt = new Date(now.getTime() + LAUNCH_TTL_MS);
+  const requesterHash = hashScopedOpaqueValue(
+    registration.id,
+    'requester',
+    options.requesterFingerprint ?? 'internal'
+  );
 
   const transaction = await prisma.$transaction(async (database) => {
+    await database.$executeRaw(
+      Prisma.sql`SELECT pg_advisory_xact_lock(hashtextextended(${`lti-login:${registration.id}`}, 0))`
+    );
+    await database.ltiLaunchTransaction.deleteMany({
+      where: {
+        expiresAt: { lt: new Date(now.getTime() - OPERATIONAL_RETENTION_MS) },
+      },
+    });
+    const windowStartedAt = new Date(now.getTime() - LOGIN_WINDOW_MS);
+    const requesterRecent = await database.ltiLaunchTransaction.count({
+      where: { requesterHash, createdAt: { gte: windowStartedAt } },
+    });
+    const registrationRecent = await database.ltiLaunchTransaction.count({
+      where: {
+        registrationId: registration.id,
+        createdAt: { gte: windowStartedAt },
+      },
+    });
+    const outstanding = await database.ltiLaunchTransaction.count({
+      where: {
+        registrationId: registration.id,
+        consumedAt: null,
+        expiresAt: { gt: now },
+      },
+    });
+    if (
+      requesterRecent >= MAX_REQUESTER_LOGINS_PER_WINDOW ||
+      registrationRecent >= MAX_REGISTRATION_LOGINS_PER_WINDOW ||
+      outstanding >= MAX_OUTSTANDING_REGISTRATION_LAUNCHES
+    ) {
+      throw new LtiPilotError(
+        'rate_limited',
+        'The LTI integration is temporarily busy.',
+        429
+      );
+    }
     const created = await database.ltiLaunchTransaction.create({
       data: {
         createdAt: now,
         stateHash: hashLtiOneTimeValue(state),
         nonceHash: hashLtiOneTimeValue(nonce),
+        browserBindingHash: hashLtiOneTimeValue(browserBindingSecret),
+        requesterHash,
         loginHintHash: hashScopedOpaqueValue(
           registration.id,
           'login-hint',
@@ -237,6 +289,7 @@ export async function initiateLtiLogin(
 
   return {
     transactionId: transaction.id,
+    browserBindingSecret,
     authorizationUrl: buildLtiOidcAuthorizationUrl({
       authorizationEndpoint: registration.authorizationEndpoint,
       clientId: registration.clientId,
@@ -255,6 +308,9 @@ type CompletedLtiLaunch =
       userId: string;
       membershipId: string;
       organizationId: string;
+      registrationId: string;
+      externalIdentityId: string;
+      classId: string;
       role: LtiMembershipRole;
       destination: string;
     }
@@ -304,6 +360,7 @@ export async function completeLtiLaunch(
     now?: Date;
     currentUserId?: string | null;
     resolveSigningKey?: LtiSigningKeyResolver;
+    browserBinding?: { transactionId: string; secret: string } | null;
   } = {}
 ): Promise<CompletedLtiLaunch> {
   if (!form.state || !form.idToken) {
@@ -338,6 +395,54 @@ export async function completeLtiLaunch(
   if (transaction.expiresAt <= now) {
     throw new LtiPilotError('expired', 'This LTI launch has expired.', 410);
   }
+  if (
+    !options.browserBinding ||
+    options.browserBinding.transactionId !== transaction.id ||
+    !ltiOneTimeValueMatches(
+      options.browserBinding.secret,
+      transaction.browserBindingHash
+    )
+  ) {
+    throw new LtiPilotError(
+      'invalid_launch',
+      'The LTI browser binding did not match this launch.',
+      403
+    );
+  }
+  const admitted = await prisma.$transaction(async (database) => {
+    await database.$executeRaw(
+      Prisma.sql`SELECT pg_advisory_xact_lock(hashtextextended(${`lti-verify:${transaction.registrationId}`}, 0))`
+    );
+    const activeAttempts = await database.ltiLaunchTransaction.aggregate({
+      where: {
+        registrationId: transaction.registrationId,
+        expiresAt: { gt: now },
+      },
+      _sum: { verificationAttempts: true },
+    });
+    if (
+      (activeAttempts._sum.verificationAttempts ?? 0) >=
+      MAX_ACTIVE_REGISTRATION_VERIFICATIONS
+    ) {
+      return { count: 0 };
+    }
+    return database.ltiLaunchTransaction.updateMany({
+      where: {
+        id: transaction.id,
+        consumedAt: null,
+        expiresAt: { gt: now },
+        verificationAttempts: { lt: MAX_VERIFICATION_ATTEMPTS },
+      },
+      data: { verificationAttempts: { increment: 1 } },
+    });
+  });
+  if (admitted.count !== 1) {
+    throw new LtiPilotError(
+      'rate_limited',
+      'This LTI launch cannot be verified again.',
+      429
+    );
+  }
   const registration = toLtiContractRegistration(transaction.registration);
 
   let launch;
@@ -355,6 +460,36 @@ export async function completeLtiLaunch(
         options.resolveSigningKey ?? signingKeyCache.resolveSigningKey,
     });
   } catch (error) {
+    const message = error instanceof Error ? error.message.toLowerCase() : '';
+    const outcome = message.includes('signature')
+      ? 'invalid_signature'
+      : message.includes('signing key') || message.includes('jwks')
+        ? 'signing_key_unavailable'
+        : message.includes('network') || message.includes('http')
+          ? 'provider_unavailable'
+          : 'invalid_token';
+    await prisma.$transaction(async (database) => {
+      await database.$executeRaw(
+        Prisma.sql`SELECT pg_advisory_xact_lock(hashtextextended(${`lti-verification-audit:${registration.id}`}, 0))`
+      );
+      const recentFailureAudits = await database.ltiAuditEvent.count({
+        where: {
+          registrationId: registration.id,
+          eventType: 'launch_verification_failed',
+          createdAt: { gte: new Date(now.getTime() - LAUNCH_TTL_MS) },
+        },
+      });
+      if (recentFailureAudits >= MAX_FAILURE_AUDITS_PER_FIVE_MINUTES) return;
+      await database.ltiAuditEvent.create({
+        data: {
+          eventType: 'launch_verification_failed',
+          outcome,
+          registrationId: registration.id,
+          organizationId: registration.organizationId,
+          details: { attempt: transaction.verificationAttempts + 1 },
+        },
+      });
+    });
     throw publicFailure(error, 'invalid_launch');
   }
   if (!launch.subject || !launch.context?.id) {
@@ -405,11 +540,15 @@ export async function completeLtiLaunch(
       { cause: error }
     );
   }
-  const subjectHash = deriveLtiSubjectHash({
-    hmacSecret: getLtiIdentityHmacSecret(),
+  const subjectHashCandidates = deriveLtiIdentityHashCandidates({
     registrationId: registration.id,
     subject: launch.subject,
   });
+  const activeSubject = subjectHashCandidates[0];
+  if (!activeSubject) {
+    throw new Error('LTI identity HMAC keyset is empty.');
+  }
+  const subjectHash = activeSubject.subjectHash;
 
   const result = await prisma.$transaction(async (database) => {
     const consumed = await database.ltiLaunchTransaction.updateMany({
@@ -460,25 +599,43 @@ export async function completeLtiLaunch(
       classId: courseMapping.class.id,
       role,
     });
-    const identity = await database.ltiExternalIdentity.findUnique({
+    const identity = await database.ltiExternalIdentity.findFirst({
       where: {
-        registrationId_subjectHash: {
-          registrationId: registration.id,
-          subjectHash,
+        registrationId: registration.id,
+        subjectHash: {
+          in: subjectHashCandidates.map((candidate) => candidate.subjectHash),
         },
       },
       include: {
         membership: {
-          select: { id: true, userId: true, role: true, isActive: true },
+          select: {
+            id: true,
+            userId: true,
+            role: true,
+            isActive: true,
+            classesAsTeacher: {
+              where: { id: courseMapping.class.id },
+              select: { id: true },
+            },
+            classesAsStudent: {
+              where: { id: courseMapping.class.id },
+              select: { id: true },
+            },
+          },
         },
       },
     });
 
     if (identity) {
+      const mappedClassAllowed =
+        role === 'TEACHER'
+          ? identity.membership.classesAsTeacher.length === 1
+          : identity.membership.classesAsStudent.length === 1;
       if (
         identity.organizationId !== registration.organizationId ||
         !identity.membership.isActive ||
         identity.membership.role !== role ||
+        !mappedClassAllowed ||
         (options.currentUserId &&
           options.currentUserId !== identity.membership.userId)
       ) {
@@ -496,7 +653,11 @@ export async function completeLtiLaunch(
       }
       await database.ltiExternalIdentity.update({
         where: { id: identity.id },
-        data: { lastLaunchedAt: now },
+        data: {
+          lastLaunchedAt: now,
+          subjectHash: activeSubject.subjectHash,
+          subjectHashKeyId: activeSubject.keyId,
+        },
       });
       await database.ltiAuditEvent.create({
         data: {
@@ -512,6 +673,8 @@ export async function completeLtiLaunch(
         outcome: 'linked' as const,
         userId: identity.membership.userId,
         membershipId: identity.membership.id,
+        externalIdentityId: identity.id,
+        classId: courseMapping.class.id,
         destination,
       };
     }
@@ -522,6 +685,7 @@ export async function completeLtiLaunch(
         createdAt: now,
         secretHash: hashLtiOneTimeValue(pendingLinkSecret),
         subjectHash,
+        subjectHashKeyId: activeSubject.keyId,
         membershipRole: role,
         transactionId: transaction.id,
         registrationId: registration.id,
@@ -572,6 +736,9 @@ export async function completeLtiLaunch(
       userId: result.userId,
       membershipId: result.membershipId,
       organizationId: registration.organizationId,
+      registrationId: registration.id,
+      externalIdentityId: result.externalIdentityId,
+      classId: result.classId,
       role,
       destination: result.destination,
     };
@@ -670,6 +837,10 @@ export async function linkPendingLtiIdentity(input: {
         organizationId: pending.organizationId,
         role: pending.membershipRole,
         isActive: true,
+        ...mappedClassMembershipWhere(
+          pending.membershipRole,
+          pending.courseMapping.classId
+        ),
       },
       select: { id: true },
     });
@@ -726,6 +897,7 @@ export async function linkPendingLtiIdentity(input: {
       await database.ltiExternalIdentity.create({
         data: {
           subjectHash: pending.subjectHash,
+          subjectHashKeyId: pending.subjectHashKeyId,
           registrationId: pending.registrationId,
           organizationId: pending.organizationId,
           membershipId: membership.id,
@@ -844,6 +1016,9 @@ export async function disableLtiRegistration(input: {
 }) {
   const now = input.now ?? new Date();
   const registration = await prisma.$transaction(async (database) => {
+    await database.$queryRaw(
+      Prisma.sql`SELECT id FROM "Organization" WHERE id = ${input.organizationId} FOR UPDATE`
+    );
     const updated = await database.ltiRegistration.update({
       where: {
         id_organizationId: {
@@ -873,6 +1048,12 @@ export async function disableLtiRegistration(input: {
         consumedAt: null,
       },
       data: { consumedAt: now },
+    });
+    await database.session.deleteMany({
+      where: {
+        ltiRegistrationId: input.registrationId,
+        ltiOrganizationId: input.organizationId,
+      },
     });
     await database.ltiAuditEvent.create({
       data: {
@@ -1015,21 +1196,19 @@ export async function upsertLtiCourseMapping(input: {
     );
   }
   return prisma.$transaction(async (database) => {
-    const [registration, classRecord] = await Promise.all([
-      database.ltiRegistration.findUnique({
-        where: {
-          id_organizationId: {
-            id: input.registrationId,
-            organizationId: input.organizationId,
-          },
+    const registration = await database.ltiRegistration.findUnique({
+      where: {
+        id_organizationId: {
+          id: input.registrationId,
+          organizationId: input.organizationId,
         },
-        select: { id: true, uninstalledAt: true },
-      }),
-      database.class.findUnique({
-        where: { id: input.classId },
-        select: { id: true, school: { select: { organizationId: true } } },
-      }),
-    ]);
+      },
+      select: { id: true, uninstalledAt: true },
+    });
+    const classRecord = await database.class.findUnique({
+      where: { id: input.classId },
+      select: { id: true, school: { select: { organizationId: true } } },
+    });
     if (!registration || registration.uninstalledAt !== null) {
       throw new LtiPilotError(
         'invalid_request',
@@ -1132,6 +1311,9 @@ export async function setOrganizationLtiGate(input: {
         where: { organizationId: input.organizationId, consumedAt: null },
         data: { consumedAt: now },
       });
+      await database.session.deleteMany({
+        where: { ltiOrganizationId: input.organizationId },
+      });
     }
     await database.ltiAuditEvent.create({
       data: {
@@ -1150,4 +1332,186 @@ export async function setOrganizationLtiGate(input: {
       signingKeyCache.clearRegistration(registrationId);
     }
   }
+}
+
+export async function unlinkLtiExternalIdentity(input: {
+  identityId: string;
+  organizationId: string;
+  actorUserId: string;
+}) {
+  return prisma.$transaction(async (database) => {
+    const identity = await database.ltiExternalIdentity.findUnique({
+      where: {
+        id_organizationId: {
+          id: input.identityId,
+          organizationId: input.organizationId,
+        },
+      },
+      select: {
+        id: true,
+        registrationId: true,
+        organizationId: true,
+        subjectHash: true,
+      },
+    });
+    if (!identity) {
+      throw new LtiPilotError(
+        'invalid_request',
+        'Linked identity not found.',
+        404
+      );
+    }
+    await database.session.deleteMany({
+      where: { ltiExternalIdentityId: identity.id },
+    });
+    await database.ltiExternalIdentity.delete({ where: { id: identity.id } });
+    await database.ltiAuditEvent.create({
+      data: {
+        eventType: 'identity_unlinked',
+        outcome: 'accepted',
+        registrationId: identity.registrationId,
+        organizationId: identity.organizationId,
+        subjectHash: identity.subjectHash,
+        actorUserId: input.actorUserId,
+      },
+    });
+  });
+}
+
+/** Creates an LTI-sourced session under the same tenant/registration locks used
+ * by disablement. This closes the launch-completion/session-insert race: if a
+ * disablement linearizes first, the recheck fails; if session creation
+ * linearizes first, disablement waits and then deletes the new session. */
+export async function createLtiAuthenticatedSession(input: {
+  userId: string;
+  membershipId: string;
+  organizationId: string;
+  registrationId: string;
+  externalIdentityId: string;
+  classId: string;
+  role: LtiMembershipRole;
+  expirationDate: Date;
+  beforeInsert?: () => Promise<void>;
+}) {
+  return prisma.$transaction(async (database) => {
+    const organizations = await database.$queryRaw<Array<{ id: string }>>(
+      Prisma.sql`SELECT id FROM "Organization" WHERE id = ${input.organizationId} FOR UPDATE`
+    );
+    if (organizations.length !== 1) {
+      throw new LtiPilotError(
+        'not_available',
+        'LTI access is unavailable.',
+        404
+      );
+    }
+    const registrations = await database.$queryRaw<Array<{ id: string }>>(
+      Prisma.sql`SELECT id FROM "LtiRegistration" WHERE id = ${input.registrationId} AND "organizationId" = ${input.organizationId} FOR UPDATE`
+    );
+    if (registrations.length !== 1) {
+      throw new LtiPilotError(
+        'not_available',
+        'LTI access is unavailable.',
+        404
+      );
+    }
+
+    const registration = await database.ltiRegistration.findUnique({
+      where: {
+        id_organizationId: {
+          id: input.registrationId,
+          organizationId: input.organizationId,
+        },
+      },
+      include: { organization: { select: { ltiEnabled: true } } },
+    });
+    const identity = await database.ltiExternalIdentity.findUnique({
+      where: {
+        id_organizationId: {
+          id: input.externalIdentityId,
+          organizationId: input.organizationId,
+        },
+      },
+      include: {
+        membership: {
+          select: {
+            id: true,
+            userId: true,
+            role: true,
+            isActive: true,
+            classesAsTeacher: {
+              where: { id: input.classId },
+              select: { id: true },
+            },
+            classesAsStudent: {
+              where: { id: input.classId },
+              select: { id: true },
+            },
+          },
+        },
+      },
+    });
+    const mapping = await database.ltiCourseMapping.findFirst({
+      where: {
+        registrationId: input.registrationId,
+        organizationId: input.organizationId,
+        classId: input.classId,
+        enabled: true,
+      },
+      select: { id: true },
+    });
+    const mappedClassAllowed =
+      input.role === 'TEACHER'
+        ? identity?.membership.classesAsTeacher.length === 1
+        : identity?.membership.classesAsStudent.length === 1;
+    if (
+      !registration?.enabled ||
+      registration.uninstalledAt !== null ||
+      !registration.organization.ltiEnabled ||
+      identity?.registrationId !== input.registrationId ||
+      identity.membershipId !== input.membershipId ||
+      identity.membership.userId !== input.userId ||
+      identity.membership.role !== input.role ||
+      !identity.membership.isActive ||
+      !mappedClassAllowed ||
+      !mapping
+    ) {
+      throw new LtiPilotError(
+        'not_available',
+        'LTI access is unavailable.',
+        403
+      );
+    }
+    await input.beforeInsert?.();
+    return database.session.create({
+      data: {
+        expirationDate: input.expirationDate,
+        userId: input.userId,
+        ltiRegistrationId: input.registrationId,
+        ltiOrganizationId: input.organizationId,
+        ltiExternalIdentityId: input.externalIdentityId,
+      },
+      select: { id: true, expirationDate: true },
+    });
+  });
+}
+
+/** Removes only short-lived operational artifacts; append-only audit rows and
+ * durable identity links are deliberately outside this cleanup boundary. */
+export async function pruneExpiredLtiOperationalData(
+  input: {
+    now?: Date;
+    retentionMs?: number;
+  } = {}
+) {
+  const now = input.now ?? new Date();
+  const retentionMs = input.retentionMs ?? OPERATIONAL_RETENTION_MS;
+  if (!Number.isFinite(retentionMs) || retentionMs < OPERATIONAL_RETENTION_MS) {
+    throw new LtiPilotError(
+      'invalid_request',
+      'LTI operational retention must be at least 24 hours.'
+    );
+  }
+  return prisma.ltiLaunchTransaction.deleteMany({
+    where: { expiresAt: { lt: new Date(now.getTime() - retentionMs) } },
+  });
 }

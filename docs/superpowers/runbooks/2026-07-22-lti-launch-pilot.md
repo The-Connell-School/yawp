@@ -17,6 +17,12 @@ Pilot reference shape: provisional Blackboard Learn LTI 1.3 registration
   configuration. Do not paste private keys, bearer tokens, launch JWTs, raw
   subjects, state, nonce, email, or student data into the admin screen, logs,
   issues, or evidence.
+- Launches are top-level/new-window navigation only. Yawp rejects iframe,
+  embed, and object presentation before creating a launch transaction.
+- Configure `LTI_IDENTITY_HMAC_KEYS` independently from the session secret as
+  newest-first `keyId=base64url` entries separated by commas. Every decoded
+  key must be at least 32 bytes. Keep the previous key during rotation so
+  existing subject hashes can be matched and migrated on the next launch.
 
 ## Registration
 
@@ -47,6 +53,9 @@ policy, and the provider's production support contact.
    organization, course, and mapped role before explicit linking. Verify the
    teacher reaches mapped-class management and the learner reaches the student
    workspace with that class enrollment.
+8. Launch from the LMS in a new window. Verify that moving the generated form
+   to another browser profile, replaying it, or embedding it does not create a
+   session, identity, pending link, or audit success.
 
 ## Credential-independent proof
 
@@ -74,6 +83,18 @@ the mock proof for institution approval.
 - A new or same-`kid` rotated key triggers one forced refresh. If refresh fails,
   signature verification fails closed; no account link or tenant session is
   created.
+- JWKS keys with duplicate `kid`, non-signing `use`, missing `verify` key
+  operation, or unsupported critical/protected headers fail closed. Fetches
+  are single-flight by registration. A healthy JWKS is cached as a validated
+  key map: an unknown attacker key is negative-cached without poisoning
+  published keys, and additional unknown-key refreshes receive a short
+  registration cooldown. Only genuine provider/network/malformed-JWKS failures
+  enter the registration-wide failure cache.
+- Distributed database limits admit at most 120 initiations per registration
+  per minute and 120 verification attempts across active five-minute launch
+  state. Verification-failure audits are capped at 10 per registration per
+  five minutes. The application also applies a smaller per-requester/process
+  guard before database work.
 - During planned rotation, ask the provider to overlap old and new public keys.
   Run a new teacher and learner launch while both keys are published, then after
   the old key is removed.
@@ -116,9 +137,38 @@ For immediate containment:
 4. Reproduce with the network mock and review provider metadata before any
    re-enable.
 
+Gate-off, registration disablement/uninstall, identity unlink, and membership
+deletion revoke every session sourced from the affected LTI identity. Admin
+unlink additionally requires the administrator's current password and writes
+an append-only `identity_unlinked` audit event.
+
+Session issuance and registration/organization disablement share row locks and
+recheck the gate, registration, identity, user, role, and mapped class before a
+session insert. Do not bypass `createLtiAuthenticatedSession` with a direct
+`Session` insert in future launch routes; doing so would reopen the revocation
+race.
+
 Uninstall is intentionally stronger and cannot be reversed in place. Confirm
 the exact organization and registration with a second human, then use
 **Uninstall**. Create and review a fresh registration for any later reinstall.
+
+## Operational retention
+
+Prune expired transactions and their cascade-owned pending links with:
+
+```sh
+bun run --cwd services/web-app lti:prune-operational --confirm \
+  --retention-days=1
+```
+
+The command refuses to run without `--confirm` or with a retention period below
+24 hours. It never deletes durable external identities or append-only audit
+events. Schedule it only after reviewing the target environment and database
+backup posture.
+
+Human policy marker: legal/security must approve an explicit audit-retention
+period and export process before an audit purge mechanism is designed. The
+current pilot intentionally provides no audit-purge command.
 
 ## Rollback
 
@@ -130,3 +180,13 @@ the exact organization and registration with a second human, then use
    reversal requires a separately reviewed data-retention/export plan.
 4. Re-enable only after security/data review, selected-provider sandbox proof,
    UX/admin-copy review, release approval, and a documented support owner.
+
+## Human review markers
+
+- Confirm Blackboard Learn versus Blackbaud and the exact pilot/version.
+- Obtain institution-owned sandbox and production credentials and placement
+  approval without copying secrets into GitHub.
+- Complete live teacher and learner sandbox acceptance, privacy/security review,
+  accessibility/UX copy review, and audit-retention policy approval.
+- Obtain normal code review, migration approval, release approval, and a named
+  support/incident owner before merge or deployment.

@@ -149,6 +149,6 @@ describe('LTI launch pilot primitives', () => {
     ).toBe('/app/my-classes/class%2Funsafe');
     expect(
       resolveLtiLaunchDestination({ classId: 'class-1', role: 'STUDENT' })
-    ).toBe('/app');
+    ).toBe('/app?ltiClassId=class-1');
   });
 });

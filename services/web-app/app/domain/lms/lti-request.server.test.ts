@@ -1,5 +1,48 @@
 import { describe, expect, test } from 'bun:test';
-import { readBoundedLtiForm } from './lti-request.server';
+import {
+  getLtiRequesterFingerprint,
+  isEmbeddedLtiRequest,
+  readBoundedLtiForm,
+} from './lti-request.server';
+
+describe('LTI browser request boundary', () => {
+  test.each(['iframe', 'embed', 'object'])(
+    'rejects %s presentation while allowing a top-level document',
+    (destination) => {
+      expect(
+        isEmbeddedLtiRequest(
+          new Request('https://yawp.example/lti/login', {
+            headers: { 'sec-fetch-dest': destination },
+          })
+        )
+      ).toBe(true);
+      expect(
+        isEmbeddedLtiRequest(
+          new Request('https://yawp.example/lti/login', {
+            headers: { 'sec-fetch-dest': 'document' },
+          })
+        )
+      ).toBe(false);
+    }
+  );
+
+  test('does not trust caller-controlled forwarded-for values', () => {
+    expect(
+      getLtiRequesterFingerprint(
+        new Request('https://yawp.example/lti/login', {
+          headers: { 'x-forwarded-for': '203.0.113.8' },
+        })
+      )
+    ).toBe('unattributed');
+    expect(
+      getLtiRequesterFingerprint(
+        new Request('https://yawp.example/lti/login', {
+          headers: { 'x-nf-client-connection-ip': '203.0.113.9' },
+        })
+      )
+    ).toBe('203.0.113.9');
+  });
+});
 
 describe('bounded LTI form reader', () => {
   test('accepts the exact form media type with an optional charset', async () => {

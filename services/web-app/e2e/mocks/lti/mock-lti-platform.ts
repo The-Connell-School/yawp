@@ -133,7 +133,12 @@ const TOOL_KEY_ID = 'mock-yawp-tool-rs256-2026';
 const NOW_SECONDS = 1_784_678_400;
 
 type FailureKind =
-  'jwks' | 'tool-jwks' | 'token' | 'nrps' | 'deep-link' | 'ags';
+  | 'jwks'
+  | 'tool-jwks'
+  | 'token'
+  | 'nrps'
+  | 'deep-link'
+  | 'ags';
 type Failure = {
   status: number;
   body?: string;
@@ -1006,6 +1011,33 @@ export async function startMockLtiPlatform(
 
       if (
         request.method === 'GET' &&
+        ['/browser/launch', '/browser/iframe-launch'].includes(url.pathname)
+      ) {
+        const scenario =
+          url.searchParams.get('scenario') ?? 'instructor-resource-link';
+        const loginUrl = new URL('/lti/login', toolBaseUrl);
+        loginUrl.search = new URLSearchParams({
+          iss: baseUrl,
+          client_id: MOCK_LTI_SEED.clientId,
+          lti_deployment_id: MOCK_LTI_SEED.deploymentId,
+          login_hint: `opaque-browser-${scenario}`,
+          lti_message_hint: scenario,
+          target_link_uri: `${toolBaseUrl}/lti/launch`,
+        }).toString();
+        response.writeHead(200, {
+          'content-type': 'text/html; charset=utf-8',
+          'cache-control': 'no-store',
+        });
+        response.end(
+          url.pathname === '/browser/iframe-launch'
+            ? `<!doctype html><html><body><h1>Mock LMS course</h1><iframe title="Yawp embedded launch" src="${escapeHtml(loginUrl.toString())}"></iframe></body></html>`
+            : `<!doctype html><html><body><h1>Mock LMS course</h1><a id="open-yawp" target="_blank" rel="noopener" href="${escapeHtml(loginUrl.toString())}">Open Yawp in a new window</a></body></html>`
+        );
+        return;
+      }
+
+      if (
+        request.method === 'GET' &&
         url.pathname === '/.well-known/jwks.json'
       ) {
         if (await consumeFailure(failures, 'jwks', response)) return;
@@ -1031,12 +1063,19 @@ export async function startMockLtiPlatform(
       }
 
       if (request.method === 'GET' && url.pathname === '/oidc/auth') {
+        const requestedClientId = url.searchParams.get('client_id');
+        if (
+          requestedClientId !== MOCK_LTI_SEED.clientId &&
+          requestedClientId !== MOCK_LTI_SEED.alternateClientId
+        ) {
+          json(response, 400, { error: 'invalid_client_id' });
+          return;
+        }
         for (const [key, expected] of [
           ['scope', 'openid'],
           ['response_type', 'id_token'],
           ['response_mode', 'form_post'],
           ['prompt', 'none'],
-          ['client_id', MOCK_LTI_SEED.clientId],
         ]) {
           if (url.searchParams.get(key) !== expected) {
             json(response, 400, { error: `invalid_${key}` });
@@ -1058,12 +1097,15 @@ export async function startMockLtiPlatform(
         }
         const payload: Record<string, unknown> = {
           iss: baseUrl,
-          aud: MOCK_LTI_SEED.clientId,
+          aud: requestedClientId,
           sub: learner ? 'lti-learner-ada' : 'lti-instructor-kevin',
           iat: nowSeconds,
           exp: nowSeconds + 300,
           nonce: url.searchParams.get('nonce'),
-          [CLAIMS.deploymentId]: MOCK_LTI_SEED.deploymentId,
+          [CLAIMS.deploymentId]:
+            requestedClientId === MOCK_LTI_SEED.alternateClientId
+              ? MOCK_LTI_SEED.alternateDeploymentId
+              : MOCK_LTI_SEED.deploymentId,
           [CLAIMS.messageType]: deepLink
             ? 'LtiDeepLinkingRequest'
             : 'LtiResourceLinkRequest',
@@ -1351,10 +1393,19 @@ export async function startMockLtiPlatform(
             payload,
             scenario === 'jku-header'
               ? { jku: 'https://attacker.example/jwks' }
-              : scenario === 'unknown-kid'
-                ? { kid: 'unknown-platform-key' }
-                : {},
-            platformSigningKey
+              : scenario === 'crit-header'
+                ? { crit: ['exp'] }
+                : scenario === 'b64-header'
+                  ? { b64: false }
+                  : scenario === 'unknown-kid'
+                    ? { kid: 'unknown-platform-key' }
+                    : {},
+            scenario === 'bad-signature'
+              ? {
+                  keyId: platformSigningKey.keyId,
+                  privateKeyPem: TOOL_PRIVATE_KEY,
+                }
+              : platformSigningKey
           );
         }
         const stateValue = url.searchParams.get('state') ?? '';

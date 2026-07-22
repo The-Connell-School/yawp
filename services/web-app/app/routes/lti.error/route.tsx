@@ -2,7 +2,7 @@ import type { MetaFunction } from 'react-router';
 import { Link, useLoaderData } from 'react-router';
 import { AlertTriangle } from 'lucide-react';
 import { Button } from '~/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
+import { Card, CardContent, CardHeader } from '~/components/ui/card';
 
 export function loader() {
   return Response.json(
@@ -22,9 +22,9 @@ export default function LtiErrorRoute() {
           <span className="mx-auto grid size-12 place-items-center rounded-full bg-amber-100 text-amber-700">
             <AlertTriangle aria-hidden="true" className="size-6" />
           </span>
-          <CardTitle className="text-2xl">
+          <h1 className="text-2xl font-semibold leading-none tracking-tight">
             We couldn&apos;t open Yawp from your LMS
-          </CardTitle>
+          </h1>
         </CardHeader>
         <CardContent className="space-y-5 text-center">
           <p className="text-sm leading-6 text-muted-foreground">

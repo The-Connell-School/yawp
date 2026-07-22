@@ -11,7 +11,7 @@ import {
   useNavigation,
 } from 'react-router';
 import { Button } from '~/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
+import { Card, CardContent, CardHeader } from '~/components/ui/card';
 import { Badge } from '~/components/ui/badge';
 import {
   destroyPendingLtiLink,
@@ -102,7 +102,9 @@ export default function LtiLinkRoute() {
           <Badge variant="secondary" className="w-fit">
             Secure LMS connection
           </Badge>
-          <CardTitle className="text-2xl">Connect this LMS identity?</CardTitle>
+          <h1 className="text-2xl font-semibold leading-none tracking-tight">
+            Connect this LMS identity?
+          </h1>
           <p className="text-sm leading-6 text-muted-foreground">
             Confirm that this launch should use your signed-in Yawp account. We
             do not match accounts by LMS email.

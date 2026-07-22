@@ -9,6 +9,9 @@ describe('LTI login initiation route', () => {
   beforeEach(() => {
     initiateLtiLogin.mockReset();
     initiateLtiLogin.mockResolvedValue({
+      transactionId: 'transaction-1',
+      browserBindingSecret:
+        'browser-binding-secret-with-at-least-thirty-two-characters',
       authorizationUrl: new URL('https://lms.example.edu/oidc/auth?state=safe'),
     });
   });
@@ -26,7 +29,20 @@ describe('LTI login initiation route', () => {
       'https://lms.example.edu/oidc/auth?state=safe'
     );
     expect(response.headers.get('cache-control')).toBe('no-store');
+    expect(response.headers.get('set-cookie')).toContain('yawp-lti-bind');
     expect(initiateLtiLogin).toHaveBeenCalledTimes(1);
+  });
+
+  test('rejects an iframe presentation before persistence', async () => {
+    const response = await loader({
+      request: new Request('https://yawp.example/lti/login?iss=x', {
+        headers: { 'sec-fetch-dest': 'iframe' },
+      }),
+      params: {},
+      context: undefined,
+    } as never);
+    expect(response.headers.get('location')).toBe('/lti/error');
+    expect(initiateLtiLogin).not.toHaveBeenCalled();
   });
 
   test('rejects media-type prefix tricks without calling the launch service', async () => {

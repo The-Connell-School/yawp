@@ -35,10 +35,11 @@ import {
   LtiPilotError,
   setLtiCourseMappingEnabled,
   setOrganizationLtiGate,
+  unlinkLtiExternalIdentity,
   upsertLtiCourseMapping,
 } from '~/domain/lms/lti-pilot.server';
 import { parseLtiRegistration } from '~/domain/lms/lti-registration';
-import { requireAdmin } from '~/utils/auth.server';
+import { requireAdmin, verifyUserPassword } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 
 function requiredString(formData: FormData, field: string, maxLength = 255) {
@@ -91,11 +92,24 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           id: true,
           displayName: true,
           provider: true,
+          issuer: true,
+          clientId: true,
           deploymentId: true,
+          authorizationEndpoint: true,
+          tokenEndpoint: true,
+          jwksUrl: true,
+          loginInitiationUrl: true,
+          launchUrl: true,
+          allowedAudiences: true,
+          allowedServiceOrigins: true,
+          allowedTargetLinkUris: true,
+          enabledScopes: true,
           enabled: true,
           disabledAt: true,
           uninstalledAt: true,
-          _count: { select: { courseMappings: true } },
+          _count: {
+            select: { courseMappings: true, externalIdentities: true },
+          },
           courseMappings: {
             orderBy: { createdAt: 'asc' },
             select: {
@@ -103,6 +117,23 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
               contextId: true,
               enabled: true,
               class: { select: { id: true, title: true, code: true } },
+            },
+          },
+        },
+      },
+      ltiExternalIdentities: {
+        orderBy: { createdAt: 'asc' },
+        select: {
+          id: true,
+          createdAt: true,
+          lastLaunchedAt: true,
+          subjectHash: true,
+          subjectHashKeyId: true,
+          registration: { select: { displayName: true } },
+          membership: {
+            select: {
+              role: true,
+              user: { select: { name: true, email: true } },
             },
           },
         },
@@ -205,6 +236,20 @@ export async function action({ request, params }: ActionFunctionArgs) {
         mappingId: requiredString(formData, 'mappingId'),
         organizationId,
         enabled: intent === 'enable-course-mapping',
+        actorUserId: admin.id,
+      });
+    } else if (intent === 'unlink-identity') {
+      const password = requiredString(formData, 'password', 512);
+      if (!(await verifyUserPassword({ id: admin.id }, password))) {
+        throw new LtiPilotError(
+          'membership_not_allowed',
+          'Re-authentication failed. The linked account was not changed.',
+          403
+        );
+      }
+      await unlinkLtiExternalIdentity({
+        identityId: requiredString(formData, 'identityId'),
+        organizationId,
         actorUserId: admin.id,
       });
     } else {
@@ -346,6 +391,48 @@ function MappingAction({
   );
 }
 
+function IdentityUnlinkAction({ identityId }: { identityId: string }) {
+  const fetcher = useFetcher<typeof action>();
+  return (
+    <details className="min-w-52 text-left">
+      <summary className="cursor-pointer text-sm font-medium text-destructive">
+        Unlink…
+      </summary>
+      <fetcher.Form method="post" className="mt-2 space-y-2">
+        <input type="hidden" name="intent" value="unlink-identity" />
+        <input type="hidden" name="identityId" value={identityId} />
+        <Label htmlFor={`unlink-password-${identityId}`}>
+          Confirm your admin password
+        </Label>
+        <Input
+          id={`unlink-password-${identityId}`}
+          name="password"
+          type="password"
+          autoComplete="current-password"
+          required
+        />
+        <p className="text-xs text-muted-foreground">
+          Revokes every LTI session for this identity. The next launch must be
+          linked explicitly again.
+        </p>
+        {fetcher.data && !fetcher.data.ok ? (
+          <p role="alert" className="text-xs text-destructive">
+            {fetcher.data.error}
+          </p>
+        ) : null}
+        <Button
+          type="submit"
+          size="sm"
+          variant="destructive"
+          isLoading={fetcher.state !== 'idle'}
+        >
+          Re-authenticate and unlink
+        </Button>
+      </fetcher.Form>
+    </details>
+  );
+}
+
 export default function OrganizationLtiRoute() {
   const { organization } = useLoaderData<typeof loader>();
   const createFetcher = useFetcher<typeof action>();
@@ -396,6 +483,7 @@ export default function OrganizationLtiRoute() {
         <TabsList>
           <TabsTrigger value="registrations">Registrations</TabsTrigger>
           <TabsTrigger value="mappings">Course mappings</TabsTrigger>
+          <TabsTrigger value="identities">Linked accounts</TabsTrigger>
           <TabsTrigger value="audit">Recent activity</TabsTrigger>
         </TabsList>
 
@@ -478,6 +566,58 @@ export default function OrganizationLtiRoute() {
                         <div className="text-xs capitalize text-muted-foreground">
                           {registration.provider.replaceAll('-', ' ')}
                         </div>
+                        <details className="mt-2 max-w-xl text-xs">
+                          <summary className="cursor-pointer font-medium text-primary">
+                            Review registration diagnostics
+                          </summary>
+                          <dl className="mt-2 grid gap-2 rounded-md border bg-muted/30 p-3">
+                            {[
+                              ['Issuer', registration.issuer],
+                              ['Client ID', registration.clientId],
+                              ['Deployment ID', registration.deploymentId],
+                              [
+                                'Authorization endpoint',
+                                registration.authorizationEndpoint,
+                              ],
+                              ['Token endpoint', registration.tokenEndpoint],
+                              ['JWKS URL', registration.jwksUrl],
+                              [
+                                'Login initiation URL',
+                                registration.loginInitiationUrl,
+                              ],
+                              ['Launch URL', registration.launchUrl],
+                              [
+                                'Allowed audiences',
+                                registration.allowedAudiences.join(', '),
+                              ],
+                              [
+                                'Service origins',
+                                registration.allowedServiceOrigins.join(', '),
+                              ],
+                              [
+                                'Target links',
+                                registration.allowedTargetLinkUris.join(', '),
+                              ],
+                              [
+                                'Scopes',
+                                registration.enabledScopes.join(', ') || 'None',
+                              ],
+                            ].map(([label, value]) => (
+                              <div key={label} className="min-w-0">
+                                <dt className="font-medium text-muted-foreground">
+                                  {label}
+                                </dt>
+                                <dd className="break-all font-mono">{value}</dd>
+                              </div>
+                            ))}
+                            <div>
+                              <dt className="font-medium text-muted-foreground">
+                                Linked identities
+                              </dt>
+                              <dd>{registration._count.externalIdentities}</dd>
+                            </div>
+                          </dl>
+                        </details>
                       </TableCell>
                       <TableCell>
                         <Badge
@@ -514,6 +654,63 @@ export default function OrganizationLtiRoute() {
                     className="py-8 text-center text-muted-foreground"
                   >
                     No LTI registrations yet for this organization.
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </TabsContent>
+
+        <TabsContent value="identities">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Yawp account</TableHead>
+                <TableHead>Registration</TableHead>
+                <TableHead>Role</TableHead>
+                <TableHead>Subject fingerprint</TableHead>
+                <TableHead>Last launch</TableHead>
+                <TableHead className="text-right">Recovery</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {organization.ltiExternalIdentities.length ? (
+                organization.ltiExternalIdentities.map((identity) => (
+                  <TableRow key={identity.id}>
+                    <TableCell>
+                      <div className="font-medium">
+                        {identity.membership.user.name ?? 'Unnamed user'}
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        {identity.membership.user.email}
+                      </div>
+                    </TableCell>
+                    <TableCell>{identity.registration.displayName}</TableCell>
+                    <TableCell>{identity.membership.role}</TableCell>
+                    <TableCell className="font-mono text-xs">
+                      {identity.subjectHashKeyId}:
+                      {identity.subjectHash.slice(0, 12)}…
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap text-xs">
+                      {identity.lastLaunchedAt
+                        ? new Date(identity.lastLaunchedAt)
+                            .toISOString()
+                            .replace('T', ' ')
+                            .slice(0, 16)
+                        : 'Never'}
+                    </TableCell>
+                    <TableCell className="text-right align-top">
+                      <IdentityUnlinkAction identityId={identity.id} />
+                    </TableCell>
+                  </TableRow>
+                ))
+              ) : (
+                <TableRow>
+                  <TableCell
+                    colSpan={6}
+                    className="py-8 text-center text-muted-foreground"
+                  >
+                    No LMS identities are linked for this organization.
                   </TableCell>
                 </TableRow>
               )}

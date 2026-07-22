@@ -127,15 +127,21 @@ async function main() {
         WHERE LENGTH("stateHash") <> 64
           OR LENGTH("nonceHash") <> 64
           OR LENGTH("loginHintHash") <> 64
+          OR LENGTH("browserBindingHash") <> 64
+          OR LENGTH("requesterHash") <> 64
+          OR "verificationAttempts" NOT BETWEEN 0 AND 8
           OR ("messageHintHash" IS NOT NULL AND LENGTH("messageHintHash") <> 64)
         UNION ALL
         SELECT 'pending:' || id AS id
         FROM "LtiPendingLink"
-        WHERE LENGTH("secretHash") <> 64 OR LENGTH("subjectHash") <> 64
+        WHERE LENGTH("secretHash") <> 64
+          OR LENGTH("subjectHash") <> 64
+          OR LENGTH("subjectHashKeyId") NOT BETWEEN 1 AND 40
         UNION ALL
         SELECT 'identity:' || id AS id
         FROM "LtiExternalIdentity"
         WHERE LENGTH("subjectHash") <> 64
+          OR LENGTH("subjectHashKeyId") NOT BETWEEN 1 AND 40
       `,
       prisma.$queryRaw<Array<{ id: string }>>`
         SELECT 'transaction:' || tx.id AS id
@@ -163,6 +169,17 @@ async function main() {
             OR registration."uninstalledAt" IS NOT NULL
             OR NOT organization."ltiEnabled"
           )
+        UNION ALL
+        SELECT 'session:' || session.id AS id
+        FROM "Session" session
+        JOIN "LtiRegistration" registration
+          ON registration.id = session."ltiRegistrationId"
+         AND registration."organizationId" = session."ltiOrganizationId"
+        JOIN "Organization" organization
+          ON organization.id = session."ltiOrganizationId"
+        WHERE NOT registration.enabled
+          OR registration."uninstalledAt" IS NOT NULL
+          OR NOT organization."ltiEnabled"
       `,
       Promise.all([
         prisma.ltiRegistration.count(),

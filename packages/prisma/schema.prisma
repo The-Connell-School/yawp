@@ -438,6 +438,7 @@ model LtiRegistration {
   externalIdentities    LtiExternalIdentity[]
   courseMappings        LtiCourseMapping[]
   auditEvents           LtiAuditEvent[]
+  sessions              Session[]              @relation("LtiRegistrationSessions")
 
   @@unique([issuer, clientId, deploymentId])
   @@unique([id, organizationId])
@@ -445,62 +446,70 @@ model LtiRegistration {
 }
 
 model LtiLaunchTransaction {
-  id                  String          @id @default(cuid())
-  createdAt           DateTime        @default(now()) @db.Timestamptz(6)
-  expiresAt           DateTime        @db.Timestamptz(6)
-  consumedAt          DateTime?       @db.Timestamptz(6)
-  stateHash           String          @unique
-  nonceHash           String          @unique
-  loginHintHash       String
-  messageHintHash     String?
-  targetLinkUri       String
-  expectedMessageType String
-  registrationId      String
-  organizationId      String
-  registration        LtiRegistration @relation(fields: [registrationId, organizationId], references: [id, organizationId], onDelete: Cascade)
-  organization        Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  pendingLink         LtiPendingLink?
+  id                   String          @id @default(cuid())
+  createdAt            DateTime        @default(now()) @db.Timestamptz(6)
+  expiresAt            DateTime        @db.Timestamptz(6)
+  consumedAt           DateTime?       @db.Timestamptz(6)
+  stateHash            String          @unique
+  nonceHash            String          @unique
+  browserBindingHash   String          @unique
+  requesterHash        String
+  verificationAttempts Int             @default(0)
+  loginHintHash        String
+  messageHintHash      String?
+  targetLinkUri        String
+  expectedMessageType  String
+  registrationId       String
+  organizationId       String
+  registration         LtiRegistration @relation(fields: [registrationId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  organization         Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  pendingLink          LtiPendingLink?
 
   @@index([registrationId, expiresAt])
   @@index([organizationId, consumedAt])
+  @@index([requesterHash, createdAt(sort: Desc)])
 }
 
 model LtiPendingLink {
-  id              String               @id @default(cuid())
-  createdAt       DateTime             @default(now()) @db.Timestamptz(6)
-  expiresAt       DateTime             @db.Timestamptz(6)
-  consumedAt      DateTime?            @db.Timestamptz(6)
-  secretHash      String               @unique
-  subjectHash     String
-  membershipRole  MembershipRole
-  transactionId   String               @unique
-  registrationId  String
-  organizationId  String
-  courseMappingId String
-  transaction     LtiLaunchTransaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
-  registration    LtiRegistration      @relation(fields: [registrationId, organizationId], references: [id, organizationId], onDelete: Cascade)
-  organization    Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  courseMapping   LtiCourseMapping     @relation(fields: [courseMappingId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  id               String               @id @default(cuid())
+  createdAt        DateTime             @default(now()) @db.Timestamptz(6)
+  expiresAt        DateTime             @db.Timestamptz(6)
+  consumedAt       DateTime?            @db.Timestamptz(6)
+  secretHash       String               @unique
+  subjectHash      String
+  subjectHashKeyId String
+  membershipRole   MembershipRole
+  transactionId    String               @unique
+  registrationId   String
+  organizationId   String
+  courseMappingId  String
+  transaction      LtiLaunchTransaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  registration     LtiRegistration      @relation(fields: [registrationId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  organization     Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  courseMapping    LtiCourseMapping     @relation(fields: [courseMappingId, organizationId], references: [id, organizationId], onDelete: Cascade)
 
   @@index([registrationId, subjectHash])
   @@index([organizationId, expiresAt])
 }
 
 model LtiExternalIdentity {
-  id             String          @id @default(cuid())
-  createdAt      DateTime        @default(now()) @db.Timestamptz(6)
-  updatedAt      DateTime        @updatedAt @db.Timestamptz(6)
-  lastLaunchedAt DateTime?       @db.Timestamptz(6)
-  subjectHash    String
-  registrationId String
-  organizationId String
-  membershipId   String
-  registration   LtiRegistration @relation(fields: [registrationId, organizationId], references: [id, organizationId], onDelete: Cascade)
-  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  membership     OrgMembership   @relation(fields: [membershipId, organizationId], references: [id, organizationId], onDelete: Restrict)
+  id               String          @id @default(cuid())
+  createdAt        DateTime        @default(now()) @db.Timestamptz(6)
+  updatedAt        DateTime        @updatedAt @db.Timestamptz(6)
+  lastLaunchedAt   DateTime?       @db.Timestamptz(6)
+  subjectHash      String
+  subjectHashKeyId String
+  registrationId   String
+  organizationId   String
+  membershipId     String
+  registration     LtiRegistration @relation(fields: [registrationId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  organization     Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  membership       OrgMembership   @relation(fields: [membershipId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  sessions         Session[]       @relation("LtiIdentitySessions")
 
   @@unique([registrationId, subjectHash])
   @@unique([registrationId, membershipId])
+  @@unique([id, organizationId])
   @@index([organizationId, membershipId])
 }
 
@@ -723,14 +732,21 @@ model TeacherAssignmentType {
 }
 
 model Session {
-  id             String   @id @default(cuid())
-  createdAt      DateTime @default(now()) @db.Timestamptz(6)
-  updatedAt      DateTime @default(now()) @db.Timestamptz(6)
-  expirationDate DateTime @default(now()) @db.Timestamptz(6)
-  userId         String
-  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id                    String               @id @default(cuid())
+  createdAt             DateTime             @default(now()) @db.Timestamptz(6)
+  updatedAt             DateTime             @default(now()) @db.Timestamptz(6)
+  expirationDate        DateTime             @default(now()) @db.Timestamptz(6)
+  userId                String
+  user                  User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ltiRegistrationId     String?
+  ltiOrganizationId     String?
+  ltiExternalIdentityId String?
+  ltiRegistration       LtiRegistration?     @relation("LtiRegistrationSessions", fields: [ltiRegistrationId, ltiOrganizationId], references: [id, organizationId], onDelete: Cascade)
+  ltiExternalIdentity   LtiExternalIdentity? @relation("LtiIdentitySessions", fields: [ltiExternalIdentityId, ltiOrganizationId], references: [id, organizationId], onDelete: Cascade)
 
   @@index([userId])
+  @@index([ltiRegistrationId, expirationDate])
+  @@index([ltiExternalIdentityId])
 }
 
 model Setting {

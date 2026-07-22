@@ -119,11 +119,12 @@ export async function getUserId(request: Request) {
   );
   const sessionId = authSession.get(sessionKey);
   if (!sessionId) return null;
-  const session = await prisma.session.findUnique({
+  const session = await prisma.session.findFirst({
     select: { user: { select: { id: true } } },
-    where: { id: sessionId },
+    where: { id: sessionId, expirationDate: { gt: new Date() } },
   });
   if (!session?.user) {
+    void prisma.session.deleteMany({ where: { id: sessionId } });
     throw redirect('/', {
       headers: {
         'set-cookie': await authSessionStorage.destroySession(authSession),

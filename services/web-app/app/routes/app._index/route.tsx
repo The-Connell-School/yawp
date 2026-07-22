@@ -82,6 +82,32 @@ export async function loader({ request }: LoaderFunctionArgs) {
     membershipRole: profile.role,
     previewActive: preview.active,
   });
+  const requestUrl = new URL(request.url);
+  const ltiClassIds = requestUrl.searchParams.getAll('ltiClassId');
+  if (ltiClassIds.length > 1 || (ltiClassIds[0]?.length ?? 0) > 255) {
+    throw new Response('Not Found', { status: 404 });
+  }
+  const requestedLtiClassId = ltiClassIds[0] || null;
+  const ltiClassContext = requestedLtiClassId
+    ? useStudentExperience
+      ? await prisma.class.findFirst({
+          where: {
+            id: requestedLtiClassId,
+            students: { some: { id: profile.id } },
+          },
+          select: {
+            id: true,
+            title: true,
+            code: true,
+            grade: true,
+            period: true,
+          },
+        })
+      : null
+    : null;
+  if (requestedLtiClassId && !ltiClassContext) {
+    throw new Response('Not Found', { status: 404 });
+  }
 
   const studentClassCount = useStudentExperience
     ? ((
@@ -102,12 +128,14 @@ export async function loader({ request }: LoaderFunctionArgs) {
   // Determine which class IDs this student belongs to (for assignment fetching).
   let studentAssignmentClassIds: string[] = [];
   if (useStudentExperience) {
-    const studentClasses = await prisma.class.findMany({
-      where: {
-        students: { some: { id: profile.id } },
-      },
-      select: { id: true },
-    });
+    const studentClasses = ltiClassContext
+      ? [{ id: ltiClassContext.id }]
+      : await prisma.class.findMany({
+          where: {
+            students: { some: { id: profile.id } },
+          },
+          select: { id: true },
+        });
     studentAssignmentClassIds = studentClasses.map((klass) => klass.id);
   }
 
@@ -148,7 +176,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   const [courses, documents, archivedDocuments, teacherClasses, assignments] =
     await Promise.all([
-      !useStudentExperience
+      !useStudentExperience || ltiClassContext
         ? ([] as AssignmentTypeRow[])
         : prisma.assignmentType.findMany({
             where: {
@@ -167,7 +195,14 @@ export async function loader({ request }: LoaderFunctionArgs) {
           }),
       prisma.document.findMany({
         orderBy: { createdAt: 'desc' },
-        where: { membershipId: profile.id, deletedAt: null, archivedAt: null },
+        where: {
+          membershipId: profile.id,
+          deletedAt: null,
+          archivedAt: null,
+          ...(ltiClassContext
+            ? { classAssignment: { is: { classId: ltiClassContext.id } } }
+            : {}),
+        },
         include: {
           assignmentModuleSessions: {
             include: {
@@ -197,6 +232,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
           membershipId: profile.id,
           deletedAt: null,
           archivedAt: { not: null },
+          ...(ltiClassContext
+            ? { classAssignment: { is: { classId: ltiClassContext.id } } }
+            : {}),
         },
         include: {
           assignmentModuleSessions: {
@@ -414,6 +452,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     assignmentCreationTypes,
     writingPracticeLessons,
     writingFundamentalsEnabled: profile.organization.writingFundamentalsEnabled,
+    ltiClassContext,
   });
 }
 
@@ -433,7 +472,8 @@ export default function AppRoute() {
   const assignmentsEnabled = data.assignmentsEnabled ?? false;
   const writingFundamentalsEnabled = data.writingFundamentalsEnabled ?? false;
   const currentStudentTab =
-    assignmentsEnabled && searchParams.get('tab') === 'assignments'
+    data.ltiClassContext ||
+    (assignmentsEnabled && searchParams.get('tab') === 'assignments')
       ? 'assignments'
       : 'courses';
 
@@ -521,15 +561,16 @@ export default function AppRoute() {
           <div className="flex flex-col">
             <h2>Welcome, {user.name}!</h2>
             <p className="mt-3 max-w-full text-muted-foreground sm:max-w-[400px]">
-              Welcome to your dashboard. Here you can view and manage your
-              courses.
+              {data.ltiClassContext
+                ? `Opened from your LMS for ${data.ltiClassContext.title ?? data.ltiClassContext.code}. Only this mapped class is shown.`
+                : 'Welcome to your dashboard. Here you can view and manage your courses.'}
             </p>
           </div>
         </div>
       </div>
       <div className="mx-auto w-full max-w-screen-lg px-3 py-3 pb-24 sm:px-5">
         <div className="flex flex-col">
-          {assignmentsEnabled ? (
+          {assignmentsEnabled && !data.ltiClassContext ? (
             <div className="mb-2">
               <Tabs
                 value={currentStudentTab}
@@ -629,29 +670,31 @@ export default function AppRoute() {
             </>
           )}
         </div>
-        <div className="mt-8 flex flex-col">
-          <p className="my-2 text-foreground/60">Practice</p>
-          <Link
-            to="/app/writing-lessons"
-            className="group flex flex-col overflow-hidden rounded-lg border bg-muted text-left hover:shadow sm:flex-row"
-          >
-            <img
-              src="/img/writing-fundamentals-cafe-cat.png"
-              alt=""
-              data-testid="writing-fundamentals-card-image"
-              className="h-40 w-full shrink-0 object-cover object-center sm:h-auto sm:w-56"
-            />
-            <div className="min-w-0 p-4">
-              <h3 className="text-lg font-semibold text-foreground">
-                Writing Fundamentals Practice
-              </h3>
-              <p className="mt-1 max-w-[62ch] text-base text-muted-foreground sm:text-sm">
-                Browse focused grammar and revision lessons and practice on your
-                own — you&rsquo;ll get instant feedback on every rewrite.
-              </p>
-            </div>
-          </Link>
-        </div>
+        {!data.ltiClassContext ? (
+          <div className="mt-8 flex flex-col">
+            <p className="my-2 text-foreground/60">Practice</p>
+            <Link
+              to="/app/writing-lessons"
+              className="group flex flex-col overflow-hidden rounded-lg border bg-muted text-left hover:shadow sm:flex-row"
+            >
+              <img
+                src="/img/writing-fundamentals-cafe-cat.png"
+                alt=""
+                data-testid="writing-fundamentals-card-image"
+                className="h-40 w-full shrink-0 object-cover object-center sm:h-auto sm:w-56"
+              />
+              <div className="min-w-0 p-4">
+                <h3 className="text-lg font-semibold text-foreground">
+                  Writing Fundamentals Practice
+                </h3>
+                <p className="mt-1 max-w-[62ch] text-base text-muted-foreground sm:text-sm">
+                  Browse focused grammar and revision lessons and practice on
+                  your own — you&rsquo;ll get instant feedback on every rewrite.
+                </p>
+              </div>
+            </Link>
+          </div>
+        ) : null}
         <div className="mt-8 flex flex-col">
           <p className="my-2 text-foreground/60">Documents</p>
           {data.documents.length ? (
@@ -660,7 +703,11 @@ export default function AppRoute() {
                 <DocumentLink
                   key={doc.id}
                   doc={doc}
-                  exitTo="/app"
+                  exitTo={
+                    data.ltiClassContext
+                      ? `/app?ltiClassId=${encodeURIComponent(data.ltiClassContext.id)}`
+                      : '/app'
+                  }
                   isStudentView
                 />
               ))}
@@ -684,7 +731,11 @@ export default function AppRoute() {
                         <DocumentLink
                           key={doc.id}
                           doc={doc}
-                          exitTo="/app"
+                          exitTo={
+                            data.ltiClassContext
+                              ? `/app?ltiClassId=${encodeURIComponent(data.ltiClassContext.id)}`
+                              : '/app'
+                          }
                           isArchived
                           isStudentView
                         />

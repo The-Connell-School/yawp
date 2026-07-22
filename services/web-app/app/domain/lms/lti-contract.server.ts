@@ -481,6 +481,7 @@ const JwksSchema = z.object({
           kid: z.string().min(1),
           use: z.string().optional(),
           alg: z.string().optional(),
+          key_ops: z.array(z.string()).optional(),
         })
         .passthrough()
     )
@@ -625,6 +626,16 @@ function getStringArray(
   return value as string[];
 }
 
+export class LtiSigningKeyNotFoundError extends Error {
+  readonly availableKeys: ReadonlyMap<string, KeyObject>;
+
+  constructor(keyId: string, availableKeys: ReadonlyMap<string, KeyObject>) {
+    super(`LTI platform signing key ${keyId} was not found.`);
+    this.name = 'LtiSigningKeyNotFoundError';
+    this.availableKeys = availableKeys;
+  }
+}
+
 export async function fetchPlatformSigningKey(
   registration: LtiRegistration,
   keyId: string,
@@ -664,12 +675,53 @@ export async function fetchPlatformSigningKey(
     });
   }
 
-  const key = jwks.keys.find((candidate) => candidate.kid === keyId);
-  if (!key) {
-    throw new Error(`LTI platform signing key ${keyId} was not found.`);
+  const keyIds = new Set<string>();
+  for (const candidate of jwks.keys) {
+    if (keyIds.has(candidate.kid)) {
+      throw new Error(
+        'LTI platform JWKS contains an ambiguous signing key id.'
+      );
+    }
+    keyIds.add(candidate.kid);
   }
+  const matchingKeys = jwks.keys.filter((candidate) => candidate.kid === keyId);
+  if (matchingKeys.length === 0) {
+    const availableKeys = new Map<string, KeyObject>();
+    for (const candidate of jwks.keys) {
+      if (
+        candidate.kty !== 'RSA' ||
+        (candidate.alg && candidate.alg !== 'RS256') ||
+        (candidate.use !== undefined && candidate.use !== 'sig') ||
+        (candidate.key_ops !== undefined &&
+          !candidate.key_ops.includes('verify'))
+      ) {
+        continue;
+      }
+      try {
+        availableKeys.set(
+          candidate.kid,
+          createPublicKey({ key: candidate as JsonWebKey, format: 'jwk' })
+        );
+      } catch {
+        // An invalid unrelated key cannot be selected and is not cached.
+      }
+    }
+    throw new LtiSigningKeyNotFoundError(keyId, availableKeys);
+  }
+  if (matchingKeys.length !== 1) {
+    throw new Error('LTI platform JWKS contains an ambiguous signing key id.');
+  }
+  const key = matchingKeys[0]!;
   if (key.kty !== 'RSA' || (key.alg && key.alg !== 'RS256')) {
     throw new Error('LTI platform signing key is not an RS256 RSA key.');
+  }
+  if (
+    (key.use !== undefined && key.use !== 'sig') ||
+    (key.key_ops !== undefined && !key.key_ops.includes('verify'))
+  ) {
+    throw new Error(
+      'LTI platform key is not permitted for signature verification.'
+    );
   }
 
   try {
@@ -793,7 +845,7 @@ export async function verifyLtiLaunchForm(
   if (header.alg !== 'RS256') {
     throw new Error('LTI token algorithm must be RS256.');
   }
-  for (const prohibited of ['jwk', 'jku', 'x5u', 'x5c']) {
+  for (const prohibited of ['jwk', 'jku', 'x5u', 'x5c', 'crit', 'b64']) {
     if (prohibited in decoded.header) {
       throw new Error(`LTI JOSE header must not contain ${prohibited}.`);
     }
