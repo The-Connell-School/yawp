@@ -246,7 +246,7 @@ export function ThesisPromptsLibrary({
                   No prompts match the current filters.
                 </p>
               ) : (
-                <ul className="grid gap-3">
+                <ul className="flex min-w-0 flex-col gap-3">
                   {prompts.map((p) => (
                     <PromptCard
                       key={p.id}
@@ -275,24 +275,23 @@ function PromptCard({
   const move = prompt.cognitiveMoves[0];
 
   return (
-    <li>
-      <Button
+    <li className="min-w-0">
+      <button
         type="button"
-        variant="unstyled"
-        className="h-auto w-full rounded-lg border bg-card p-4 text-left text-card-foreground shadow-sm transition hover:bg-accent hover:text-accent-foreground"
         onClick={onSelect}
+        className="block w-full min-w-0 cursor-pointer rounded-lg border bg-card p-4 text-left text-card-foreground shadow-sm transition hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
-        <div className="flex w-full flex-col gap-3">
+        <div className="flex w-full min-w-0 flex-col gap-3">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-            <h3 className="text-base font-semibold leading-snug">
+            <h3 className="min-w-0 break-words text-base font-semibold leading-snug">
               {prompt.title}
             </h3>
-            <Badge variant="secondary" size="sm" className="w-fit">
+            <Badge variant="secondary" size="sm" className="w-fit shrink-0">
               {CATEGORY_LABEL[prompt.category]}
             </Badge>
           </div>
 
-          <p className="line-clamp-3 whitespace-normal text-sm font-normal leading-6 text-muted-foreground">
+          <p className="line-clamp-3 whitespace-normal break-words text-sm font-normal leading-6 text-muted-foreground">
             {prompt.prompt}
           </p>
 
@@ -319,7 +318,7 @@ function PromptCard({
             ) : null}
           </div>
         </div>
-      </Button>
+      </button>
     </li>
   );
 }
