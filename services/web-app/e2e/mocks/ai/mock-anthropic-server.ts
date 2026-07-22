@@ -1,5 +1,5 @@
 import { createServer, type IncomingHttpHeaders } from 'node:http';
-import type { AddressInfo } from 'node:net';
+import type { AddressInfo, Socket } from 'node:net';
 
 export type AnthropicMockScenario =
   | 'strong'
@@ -40,8 +40,7 @@ const feedbackByScenario = {
   'ap-history-dbq': {
     title: 'New Deal and Federal Power DBQ',
     essayType: 'dbq',
-    prompt:
-      'Evaluate the extent to which the New Deal expanded federal power.',
+    prompt: 'Evaluate the extent to which the New Deal expanded federal power.',
     periodNumber: 7,
     reasoningSkill: 'causation',
     sources: [
@@ -85,6 +84,7 @@ export async function startMockAnthropicServer(
   const scenarios = [...(options.scenarios ?? [])];
   let fallbackScenario: AnthropicMockScenario = 'strong';
   let responseNumber = 0;
+  const sockets = new Set<Socket>();
 
   const server = createServer(async (request, response) => {
     const chunks: Buffer[] = [];
@@ -174,6 +174,11 @@ export async function startMockAnthropicServer(
     });
   });
 
+  server.on('connection', (socket) => {
+    sockets.add(socket);
+    socket.once('close', () => sockets.delete(socket));
+  });
+
   await new Promise<void>((resolve, reject) => {
     server.once('error', reject);
     server.listen(0, '127.0.0.1', () => {
@@ -195,6 +200,11 @@ export async function startMockAnthropicServer(
     async close() {
       await new Promise<void>((resolve, reject) => {
         server.close((error) => (error ? reject(error) : resolve()));
+        for (const socket of sockets) {
+          socket.destroy();
+        }
+        server.closeIdleConnections();
+        server.closeAllConnections();
       });
     },
   };

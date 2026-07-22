@@ -94,8 +94,11 @@ const {
   loader,
   shouldShowGenericAssignmentPrompt,
 } = await import('./route');
-const { ApHistoryAssignmentPanel } =
-  await import('./ap-history-assignment-panel');
+const {
+  ApHistoryAssignmentPanel,
+  ApHistorySourcesPanel,
+  getApHistoryTimerView,
+} = await import('./ap-history-assignment-panel');
 
 const assignmentModules = [
   { id: 'module-prewriting', position: 1 },
@@ -161,11 +164,13 @@ function makeDocument({
     title: 'APUSH DBQ',
     html: '<p>Draft</p>',
     text: 'Draft',
+    apHistoryTimerStartedAt: null,
     assignmentType: { id: 'type-1', title: 'AP History Essay' },
     assignment: {
       id: 'assignment-1',
       title: 'Revolutionary Ideals DBQ',
       prompt: apHistorySnapshot.prompt,
+      tutorEnabled: true,
       ...(includeSnapshot ? { apHistorySnapshot } : {}),
     },
     classAssignment: {
@@ -253,8 +258,10 @@ describe('app_.documents_.$id loader', () => {
           assignment: expect.objectContaining({
             select: expect.objectContaining({
               apHistorySnapshot: true,
+              tutorEnabled: true,
             }),
           }),
+          apHistoryTimerStartedAt: true,
         }),
       })
     );
@@ -394,12 +401,37 @@ describe('app_.documents_.$id AP History assignment rendering', () => {
 
   test('renders AP History source content inside a bounded scroll area', () => {
     const html = renderToStaticMarkup(
+      createElement(ApHistorySourcesPanel, { snapshot: apHistorySnapshot })
+    );
+
+    expect(html).toContain('Document 1');
+    expect(html).toContain('free and independent States');
+    expect(html).toContain('overflow-y-auto');
+  });
+
+  test('renders the AP prompt separately from the source rail', () => {
+    const html = renderToStaticMarkup(
       createElement(ApHistoryAssignmentPanel, { snapshot: apHistorySnapshot })
     );
 
     expect(html).toContain('Evaluate the extent');
-    expect(html).toContain('Source 1');
-    expect(html).toContain('max-h-');
-    expect(html).toContain('overflow-y-auto');
+    expect(html).not.toContain('free and independent States');
+  });
+
+  test('derives a reload-safe timer without auto-submit state', () => {
+    expect(
+      getApHistoryTimerView(
+        '2026-07-22T16:00:00.000Z',
+        60,
+        new Date('2026-07-22T16:15:30.000Z').getTime()
+      )
+    ).toEqual({ remainingSeconds: 2_670, expired: false });
+    expect(
+      getApHistoryTimerView(
+        '2026-07-22T16:00:00.000Z',
+        60,
+        new Date('2026-07-22T17:00:01.000Z').getTime()
+      )
+    ).toEqual({ remainingSeconds: 0, expired: true });
   });
 });

@@ -31,9 +31,8 @@ const createDocumentForAssignmentType = mock();
 const redirectWithToast = mock();
 const getAvailableAssignmentTypesForScopes = mock();
 
-const assignmentTypeAccessActual = await import(
-  '~/utils/assignment-type-access.server'
-);
+const assignmentTypeAccessActual =
+  await import('~/utils/assignment-type-access.server');
 
 mock.module('~/utils/db.server', () => ({ prisma }));
 mock.module('~/utils/auth.server', () => ({
@@ -88,9 +87,7 @@ function mockActionAssignmentTypeAvailable({
   systemKey = null as string | null,
 } = {}) {
   prisma.assignmentType.findFirst.mockImplementation(async (args: any) =>
-    args.select?.systemKey !== undefined
-      ? { id, systemKey }
-      : { id }
+    args.select?.systemKey !== undefined ? { id, systemKey } : { id }
   );
 }
 
@@ -218,7 +215,11 @@ describe('app.assignment-types.$id loader Daily Pages prompt library', () => {
     requireMembership.mockResolvedValue({
       id: 'teacher-1',
       role: 'TEACHER',
-      organization: { id: 'org-1', name: 'Org' },
+      organization: {
+        id: 'org-1',
+        name: 'Org',
+        apHistoryPdfImportEnabled: true,
+      },
     });
     getAvailableAssignmentTypesForScopes.mockResolvedValue([
       withOrganizationAssignment(makeAssignmentType()),
@@ -374,6 +375,7 @@ describe('app.assignment-types.$id loader Daily Pages prompt library', () => {
 
     expect(response.data.promptLibrary).toBeNull();
     expect(response.data.apHistoryLibrary.entries).toHaveLength(1);
+    expect(response.data.apHistoryLibrary.pdfImportEnabled).toBe(true);
     expect(response.data.apHistoryLibrary.entries[0]).toMatchObject({
       externalKey: 'apush-dbq-period-3',
       title: 'Revolutionary Ideals DBQ',
@@ -389,6 +391,14 @@ describe('app.assignment-types.$id loader Daily Pages prompt library', () => {
         teachers: [{ id: 'teacher-1' }],
       },
     ]);
+    expect(prisma.class.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          teachers: { some: { id: 'teacher-1' } },
+          school: { organizationId: 'org-1' },
+        }),
+      })
+    );
   });
 
   test('provides AP History library for all teacher classes', async () => {

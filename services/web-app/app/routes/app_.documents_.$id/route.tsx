@@ -84,7 +84,10 @@ import {
   isApHistorySnapshot,
   type ApHistorySnapshot,
 } from '~/domain/ap-history/schema';
-import { ApHistoryAssignmentPanel } from './ap-history-assignment-panel';
+import {
+  ApHistoryAssignmentPanel,
+  ApHistorySourcesPanel,
+} from './ap-history-assignment-panel';
 import { pickLatestReleasedSubmission } from '~/utils/document-link-target';
 
 const SUBMIT_EMPTY_TOOLTIP =
@@ -193,6 +196,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       title: true,
       html: true,
       text: true,
+      apHistoryTimerStartedAt: true,
       assignmentType: {
         select: {
           id: true,
@@ -204,6 +208,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           id: true,
           title: true,
           prompt: true,
+          tutorEnabled: true,
           apHistorySnapshot: true,
         },
       },
@@ -376,7 +381,6 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           (cm) => cm.position === currentCms.assignmentModule.position + 1
         )?.id;
 
-
   const sortedComments = sortDocumentCommentsByMarkupOrder(
     doc.comments,
     doc.html
@@ -458,6 +462,9 @@ export default function Route() {
   const [showOldComments, setShowOldComments] = useState(false);
   const [archiveDialogOpen, setArchiveDialogOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [apResourceTab, setApResourceTab] = useState<'sources' | 'comments'>(
+    'sources'
+  );
   const [localSubmissions, setLocalSubmissions] = useState<SubmissionRow[]>([]);
   const isMobile = ['base', 'sm', 'md'].includes(breakpoint ?? '');
   const [searchParams, setSearchParams] = useSearchParams();
@@ -467,12 +474,24 @@ export default function Route() {
       ? data.currentCmsIdx
       : fallbackCmsIdx;
   const explicitExitTarget = sanitizeExitTarget(searchParams.get('exitTo'));
-  const tab = searchParams.get('tab') ?? 'tutor';
-  const isViewingAsTeacher = data.doc && user.id !== data.doc?.membership.userId;
+  const isViewingAsTeacher =
+    data.doc && user.id !== data.doc?.membership.userId;
   // Owner or class teacher (loader); api.model.document allows both to persist edits.
   const isDocumentEditable = true;
   const assignment = data.doc.assignment;
   const apHistorySnapshot = getRenderableApHistorySnapshot(assignment);
+  const tutorEnabled = assignment?.tutorEnabled !== false;
+  const canUseTutor = !isViewingAsTeacher && tutorEnabled;
+  const requestedTab = searchParams.get('tab');
+  const defaultTab = apHistorySnapshot
+    ? apHistorySnapshot.essayType === 'dbq'
+      ? 'sources'
+      : 'editor'
+    : 'tutor';
+  const tab =
+    requestedTab === 'tutor' && !canUseTutor
+      ? 'editor'
+      : (requestedTab ?? defaultTab);
   const editorAssignmentPrompt = getGenericAssignmentPromptForEditor(
     assignment,
     apHistorySnapshot
@@ -571,7 +590,8 @@ export default function Route() {
       ? allComments
       : activeComments
     : activeComments;
-  const studentName = data.doc.membership.user.name?.trim() || 'Unknown student';
+  const studentName =
+    data.doc.membership.user.name?.trim() || 'Unknown student';
   const cannotSubmitEmpty = !editorSubmittable;
   const isSubmitting = submit.isSubmitting;
   const submitActionDisabled = isSubmitting || cannotSubmitEmpty;
@@ -673,7 +693,23 @@ export default function Route() {
     <>
       <main className="flex h-screen w-screen flex-col overflow-hidden bg-white">
         {apHistorySnapshot ? (
-          <ApHistoryAssignmentPanel snapshot={apHistorySnapshot} />
+          <>
+            <ApHistoryAssignmentPanel
+              snapshot={apHistorySnapshot}
+              documentId={data.doc.id}
+              initialTimerStartedAt={data.doc.apHistoryTimerStartedAt}
+              canStartTimer={!isViewingAsTeacher}
+            />
+            {!tutorEnabled ? (
+              <div
+                className="shrink-0 border-b bg-amber-50 px-3 py-1.5 text-center text-xs font-medium text-amber-900"
+                data-testid="ap-history-tutor-disabled"
+              >
+                Tutor is off for this assignment. You can still use the sources,
+                write, save, and submit normally.
+              </div>
+            ) : null}
+          </>
         ) : null}
         <nav className="mx-auto flex w-full max-w-screen-2xl items-center gap-4 border-b px-3 py-2">
           <div className="flex items-center gap-4">
@@ -924,13 +960,20 @@ export default function Route() {
             />
           </div>
         </nav>
-        <Tabs onValueChange={changeTab} value={tab} className="md:hidden">
-          <TabsList className="w-full rounded-none border-b px-3">
-            <TabsTrigger value="tutor" className="w-full">
-              Tutor
-            </TabsTrigger>
+        <Tabs onValueChange={changeTab} value={tab} className="lg:hidden">
+          <TabsList className="w-full rounded-none border-b px-2">
+            {apHistorySnapshot?.essayType === 'dbq' ? (
+              <TabsTrigger value="sources" className="w-full">
+                Sources
+              </TabsTrigger>
+            ) : null}
+            {canUseTutor ? (
+              <TabsTrigger value="tutor" className="w-full">
+                Tutor
+              </TabsTrigger>
+            ) : null}
             <TabsTrigger value="editor" className="w-full">
-              Editor
+              Write
             </TabsTrigger>
             <TabsTrigger value="comments" className="w-full">
               Comments
@@ -938,177 +981,329 @@ export default function Route() {
           </TabsList>
         </Tabs>
         <CommentsSelectionProvider>
-          <div className="mx-auto flex min-h-0 flex-1 w-full max-w-screen-2xl overflow-hidden">
-            {isMobile && tab !== 'tutor' ? null : (
-              <Tutor
-                docId={data.doc.id}
-                cms={(tutor.cms ?? data.currentCms) as any}
-                cmsIdx={cmsIdx}
-                nextCmId={data.nextCmId}
-                hasPreviousCms={tutorHasPreviousCms}
-                isSessionLocked={auth.isLocked}
-                beforeRespond={handleTutorBeforeRespond}
-                onCmsUpdate={tutor.updateCms}
-                getCurrentDocumentText={() =>
-                  editorBridgeRef.current?.getContent().text ??
-                  data.doc.text ??
-                  ''
-                }
-              />
-            )}
-            {isMobile && tab !== 'editor' ? null : (
-              <DocumentEditor
-                docId={data.doc.id}
-                assignment={editorAssignmentPrompt}
-                serverHtml={editorServerHtml}
-                serverText={editorServerText}
-                serverUpdatedAt={data.doc.updatedAt}
-                initialRevision={data.doc.revision}
-                isEditable={isEditorEditable}
-                onBridgeReady={(b) => {
-                  editorBridgeRef.current = b;
-                }}
-                onSyncStatusChange={setSyncStatus}
-                onSubmittableContentChange={handleSubmittableContentChange}
-                onCommentCreated={(c) => commentsState.addComment(c as any)}
-              />
-            )}
-            {isMobile && tab !== 'comments' ? null : (
-              <Comments
-                className="md:w-3/5"
-                comments={visibleComments as any}
-                readOnly={!isDocumentEditable}
-                onCommentRemoved={commentsState.removeComment}
-                onResponseAdded={commentsState.addResponse}
-                autoFocusReplyCommentId={commentsState.pendingFocusCommentId}
-              />
-            )}
-          </div>
+          {apHistorySnapshot ? (
+            <div className="mx-auto flex min-h-0 flex-1 w-full max-w-screen-2xl overflow-hidden">
+              <div className="flex min-h-0 w-full lg:hidden">
+                {tab === 'sources' && apHistorySnapshot.essayType === 'dbq' ? (
+                  <ApHistorySourcesPanel snapshot={apHistorySnapshot} />
+                ) : null}
+                {tab === 'tutor' && canUseTutor ? (
+                  <Tutor
+                    docId={data.doc.id}
+                    cms={(tutor.cms ?? data.currentCms) as any}
+                    cmsIdx={cmsIdx}
+                    nextCmId={data.nextCmId}
+                    hasPreviousCms={tutorHasPreviousCms}
+                    isSessionLocked={auth.isLocked}
+                    beforeRespond={handleTutorBeforeRespond}
+                    onCmsUpdate={tutor.updateCms}
+                    getCurrentDocumentText={() =>
+                      editorBridgeRef.current?.getContent().text ??
+                      data.doc.text ??
+                      ''
+                    }
+                  />
+                ) : null}
+                {tab === 'editor' ? (
+                  <DocumentEditor
+                    docId={data.doc.id}
+                    assignment={editorAssignmentPrompt}
+                    serverHtml={editorServerHtml}
+                    serverText={editorServerText}
+                    serverUpdatedAt={data.doc.updatedAt}
+                    initialRevision={data.doc.revision}
+                    isEditable={isEditorEditable}
+                    onBridgeReady={(b) => {
+                      editorBridgeRef.current = b;
+                    }}
+                    onSyncStatusChange={setSyncStatus}
+                    onSubmittableContentChange={handleSubmittableContentChange}
+                    onCommentCreated={(c) => commentsState.addComment(c as any)}
+                  />
+                ) : null}
+                {tab === 'comments' ? (
+                  <Comments
+                    className="w-full"
+                    comments={visibleComments as any}
+                    readOnly={!isDocumentEditable}
+                    showCollapsibleHeader={false}
+                    onCommentRemoved={commentsState.removeComment}
+                    onResponseAdded={commentsState.addResponse}
+                    autoFocusReplyCommentId={
+                      commentsState.pendingFocusCommentId
+                    }
+                  />
+                ) : null}
+              </div>
+
+              <div className="hidden min-h-0 w-full lg:flex">
+                {canUseTutor ? (
+                  <aside
+                    className="min-h-0 w-[21rem] shrink-0 border-r [&>div]:!w-full"
+                    aria-label="AP History tutor"
+                  >
+                    <Tutor
+                      docId={data.doc.id}
+                      cms={(tutor.cms ?? data.currentCms) as any}
+                      cmsIdx={cmsIdx}
+                      nextCmId={data.nextCmId}
+                      hasPreviousCms={tutorHasPreviousCms}
+                      isSessionLocked={auth.isLocked}
+                      beforeRespond={handleTutorBeforeRespond}
+                      onCmsUpdate={tutor.updateCms}
+                      getCurrentDocumentText={() =>
+                        editorBridgeRef.current?.getContent().text ??
+                        data.doc.text ??
+                        ''
+                      }
+                    />
+                  </aside>
+                ) : null}
+                <div className="min-h-0 min-w-0 flex-1 overflow-hidden">
+                  <DocumentEditor
+                    docId={data.doc.id}
+                    assignment={editorAssignmentPrompt}
+                    serverHtml={editorServerHtml}
+                    serverText={editorServerText}
+                    serverUpdatedAt={data.doc.updatedAt}
+                    initialRevision={data.doc.revision}
+                    isEditable={isEditorEditable}
+                    onBridgeReady={(b) => {
+                      editorBridgeRef.current = b;
+                    }}
+                    onSyncStatusChange={setSyncStatus}
+                    onSubmittableContentChange={handleSubmittableContentChange}
+                    onCommentCreated={(c) => commentsState.addComment(c as any)}
+                  />
+                </div>
+                <aside
+                  className="flex min-h-0 w-[23rem] shrink-0 flex-col border-l bg-white xl:w-[27rem]"
+                  aria-label="AP History assignment resources"
+                >
+                  <div className="grid shrink-0 grid-cols-2 border-b p-1">
+                    {apHistorySnapshot.essayType === 'dbq' ? (
+                      <Button
+                        type="button"
+                        variant={
+                          apResourceTab === 'sources' ? 'secondary' : 'ghost'
+                        }
+                        size="sm"
+                        aria-pressed={apResourceTab === 'sources'}
+                        onClick={() => setApResourceTab('sources')}
+                      >
+                        Sources ({apHistorySnapshot.sources.length})
+                      </Button>
+                    ) : (
+                      <span className="px-2 py-1.5 text-center text-xs font-medium text-muted-foreground">
+                        LEQ resources
+                      </span>
+                    )}
+                    <Button
+                      type="button"
+                      variant={
+                        apResourceTab === 'comments' ? 'secondary' : 'ghost'
+                      }
+                      size="sm"
+                      aria-pressed={apResourceTab === 'comments'}
+                      onClick={() => setApResourceTab('comments')}
+                    >
+                      Comments
+                    </Button>
+                  </div>
+                  <div className="min-h-0 flex-1 overflow-hidden">
+                    {apHistorySnapshot.essayType === 'dbq' &&
+                    apResourceTab === 'sources' ? (
+                      <ApHistorySourcesPanel snapshot={apHistorySnapshot} />
+                    ) : (
+                      <Comments
+                        className="w-full"
+                        comments={visibleComments as any}
+                        readOnly={!isDocumentEditable}
+                        showCollapsibleHeader={false}
+                        onCommentRemoved={commentsState.removeComment}
+                        onResponseAdded={commentsState.addResponse}
+                        autoFocusReplyCommentId={
+                          commentsState.pendingFocusCommentId
+                        }
+                      />
+                    )}
+                  </div>
+                </aside>
+              </div>
+            </div>
+          ) : (
+            <div className="mx-auto flex min-h-0 flex-1 w-full max-w-screen-2xl overflow-hidden">
+              {isMobile && tab !== 'tutor' ? null : (
+                <Tutor
+                  docId={data.doc.id}
+                  cms={(tutor.cms ?? data.currentCms) as any}
+                  cmsIdx={cmsIdx}
+                  nextCmId={data.nextCmId}
+                  hasPreviousCms={tutorHasPreviousCms}
+                  isSessionLocked={auth.isLocked}
+                  beforeRespond={handleTutorBeforeRespond}
+                  onCmsUpdate={tutor.updateCms}
+                  getCurrentDocumentText={() =>
+                    editorBridgeRef.current?.getContent().text ??
+                    data.doc.text ??
+                    ''
+                  }
+                />
+              )}
+              {isMobile && tab !== 'editor' ? null : (
+                <DocumentEditor
+                  docId={data.doc.id}
+                  assignment={editorAssignmentPrompt}
+                  serverHtml={editorServerHtml}
+                  serverText={editorServerText}
+                  serverUpdatedAt={data.doc.updatedAt}
+                  initialRevision={data.doc.revision}
+                  isEditable={isEditorEditable}
+                  onBridgeReady={(b) => {
+                    editorBridgeRef.current = b;
+                  }}
+                  onSyncStatusChange={setSyncStatus}
+                  onSubmittableContentChange={handleSubmittableContentChange}
+                  onCommentCreated={(c) => commentsState.addComment(c as any)}
+                />
+              )}
+              {isMobile && tab !== 'comments' ? null : (
+                <Comments
+                  className="md:w-3/5"
+                  comments={visibleComments as any}
+                  readOnly={!isDocumentEditable}
+                  onCommentRemoved={commentsState.removeComment}
+                  onResponseAdded={commentsState.addResponse}
+                  autoFocusReplyCommentId={commentsState.pendingFocusCommentId}
+                />
+              )}
+            </div>
+          )}
         </CommentsSelectionProvider>
       </main>
       <Dialog
         open={isFinalizeDialogOpen}
         onOpenChange={setIsFinalizeDialogOpen}
       >
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <AlertCircle className="h-5 w-5 text-yellow-600" />
-                Submit Version {versionNumber}
-              </DialogTitle>
-              <DialogDescription asChild>
-                <div className="space-y-4 pt-2">
-                  <div className="space-y-2">
-                    <label
-                      htmlFor="submission-title"
-                      className="text-sm font-medium text-foreground"
-                    >
-                      Submission Title
-                    </label>
-                    <Input
-                      id="submission-title"
-                      value={submissionTitle}
-                      onChange={(e) => setSubmissionTitle(e.target.value)}
-                      placeholder="Enter a title for this submission"
-                    />
-                  </div>
-                  <ul className="list-disc space-y-1.5 pl-5 text-sm">
-                    <li>
-                      Submitting creates a snapshot of your essay for your
-                      teacher to grade.
-                    </li>
-                    <li>You can keep editing and submit again after this.</li>
-                  </ul>
-                  {activeSubmissions.length > 0 && (
-                    <div className="space-y-2">
-                      <p className="text-sm font-medium text-foreground">
-                        Previous submissions
-                      </p>
-                      <div className="max-h-32 overflow-y-auto rounded-md border">
-                        {activeSubmissions.map((s) => {
-                          const v = versionLabelForActiveSubmission(
-                            activeSubmissions,
-                            s.id
-                          );
-                          const isGraded = s.releasedAt != null;
-                          const label = displaySubmissionTitle(
-                            s.title,
-                            v,
-                            'Untitled submission'
-                          );
-                          return (
-                            <a
-                              key={s.id}
-                              href={`/app/submissions/${s.id}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="flex items-center justify-between gap-2 border-b px-3 py-2 text-sm hover:bg-muted/50 last:border-0"
-                            >
-                              <div className="flex min-w-0 items-center gap-2">
-                                <span className="truncate">{label}</span>
-                                <ExternalLink className="h-3 w-3 shrink-0 text-muted-foreground" />
-                              </div>
-                              <Badge
-                                variant={isGraded ? 'success' : 'secondary'}
-                                className="shrink-0 text-[10px]"
-                              >
-                                {isGraded ? 'Graded' : 'Submitted'}
-                              </Badge>
-                            </a>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </DialogDescription>
-            </DialogHeader>
-            <DialogFooter>
-              <Button
-                variant="outline"
-                onClick={() => setIsFinalizeDialogOpen(false)}
-                disabled={isSubmitting}
-              >
-                Cancel
-              </Button>
-              {cannotSubmitEmpty && !isSubmitting ? (
-                <Tooltip text={SUBMIT_EMPTY_TOOLTIP} delayDuration={0}>
-                  <span
-                    className="inline-flex"
-                    data-testid="document-finalize-submit-empty-trigger"
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertCircle className="h-5 w-5 text-yellow-600" />
+              Submit Version {versionNumber}
+            </DialogTitle>
+            <DialogDescription asChild>
+              <div className="space-y-4 pt-2">
+                <div className="space-y-2">
+                  <label
+                    htmlFor="submission-title"
+                    className="text-sm font-medium text-foreground"
                   >
-                    <Button
-                      variant="default"
-                      data-testid="document-finalize-submit"
-                      disabled
-                    >
-                      {`Submit Version ${versionNumber}`}
-                    </Button>
-                  </span>
-                </Tooltip>
-              ) : (
-                <Button
-                  variant="default"
-                  data-testid="document-finalize-submit"
-                  onClick={() => {
-                    const resolved =
-                      submissionTitle.trim() || getLiveDocumentTitle().trim();
-                    void submit.submitNow(resolved);
-                  }}
-                  disabled={submitActionDisabled}
+                    Submission Title
+                  </label>
+                  <Input
+                    id="submission-title"
+                    value={submissionTitle}
+                    onChange={(e) => setSubmissionTitle(e.target.value)}
+                    placeholder="Enter a title for this submission"
+                  />
+                </div>
+                <ul className="list-disc space-y-1.5 pl-5 text-sm">
+                  <li>
+                    Submitting creates a snapshot of your essay for your teacher
+                    to grade.
+                  </li>
+                  <li>You can keep editing and submit again after this.</li>
+                </ul>
+                {activeSubmissions.length > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-sm font-medium text-foreground">
+                      Previous submissions
+                    </p>
+                    <div className="max-h-32 overflow-y-auto rounded-md border">
+                      {activeSubmissions.map((s) => {
+                        const v = versionLabelForActiveSubmission(
+                          activeSubmissions,
+                          s.id
+                        );
+                        const isGraded = s.releasedAt != null;
+                        const label = displaySubmissionTitle(
+                          s.title,
+                          v,
+                          'Untitled submission'
+                        );
+                        return (
+                          <a
+                            key={s.id}
+                            href={`/app/submissions/${s.id}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center justify-between gap-2 border-b px-3 py-2 text-sm hover:bg-muted/50 last:border-0"
+                          >
+                            <div className="flex min-w-0 items-center gap-2">
+                              <span className="truncate">{label}</span>
+                              <ExternalLink className="h-3 w-3 shrink-0 text-muted-foreground" />
+                            </div>
+                            <Badge
+                              variant={isGraded ? 'success' : 'secondary'}
+                              className="shrink-0 text-[10px]"
+                            >
+                              {isGraded ? 'Graded' : 'Submitted'}
+                            </Badge>
+                          </a>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setIsFinalizeDialogOpen(false)}
+              disabled={isSubmitting}
+            >
+              Cancel
+            </Button>
+            {cannotSubmitEmpty && !isSubmitting ? (
+              <Tooltip text={SUBMIT_EMPTY_TOOLTIP} delayDuration={0}>
+                <span
+                  className="inline-flex"
+                  data-testid="document-finalize-submit-empty-trigger"
                 >
-                  {isSubmitting ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Submitting...
-                    </>
-                  ) : (
-                    `Submit Version ${versionNumber}`
-                  )}
-                </Button>
-              )}
-            </DialogFooter>
-          </DialogContent>
+                  <Button
+                    variant="default"
+                    data-testid="document-finalize-submit"
+                    disabled
+                  >
+                    {`Submit Version ${versionNumber}`}
+                  </Button>
+                </span>
+              </Tooltip>
+            ) : (
+              <Button
+                variant="default"
+                data-testid="document-finalize-submit"
+                onClick={() => {
+                  const resolved =
+                    submissionTitle.trim() || getLiveDocumentTitle().trim();
+                  void submit.submitNow(resolved);
+                }}
+                disabled={submitActionDisabled}
+              >
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Submitting...
+                  </>
+                ) : (
+                  `Submit Version ${versionNumber}`
+                )}
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
       </Dialog>
       <Dialog open={archiveDialogOpen} onOpenChange={setArchiveDialogOpen}>
         <DialogContent className="sm:max-w-md">

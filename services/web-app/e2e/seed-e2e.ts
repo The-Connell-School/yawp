@@ -133,6 +133,7 @@ export async function seedE2E(): Promise<E2EContext> {
       writingFundamentalsEnabled: true,
       compositionDrillsEnabled: true,
       classInsightsEnabled: true,
+      apHistoryPdfImportEnabled: true,
     },
   });
 

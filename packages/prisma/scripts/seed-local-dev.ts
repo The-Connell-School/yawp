@@ -38,6 +38,7 @@ try {
       writingFundamentalsEnabled: true,
       compositionDrillsEnabled: true,
       classInsightsEnabled: true,
+      apHistoryPdfImportEnabled: true,
     },
   });
   console.timeEnd('organization');

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useFetcher } from 'react-router';
 import { AssignmentCreationSheet } from '~/components/assignments/assignment-creation-sheet';
 import { Button } from '~/components/ui/button';
+import { Checkbox } from '~/components/ui/checkbox';
 import { Input } from '~/components/ui/input';
 import { Label } from '~/components/ui/label';
 import {
@@ -18,6 +19,10 @@ import {
   SheetHeader,
   SheetTitle,
 } from '~/components/ui/sheet';
+import {
+  DEFAULT_GRADING_ASSISTANT_STRICTNESS_LEVEL,
+  gradingAssistantStrictnessOptions,
+} from '~/domain/grading/grading-assistant-strictness';
 
 type TeacherClass = {
   id: string;
@@ -38,6 +43,13 @@ type Props = {
     title: string;
     prompt: string;
     essayType: string;
+    sources: Array<{
+      externalKey?: string;
+      position: number;
+      title: string;
+      attribution: string;
+      body: string;
+    }>;
   } | null;
 };
 
@@ -54,19 +66,29 @@ export function CreateAssignmentSheet({
   initialPrompt = '',
   apHistoryEntry = null,
 }: Props) {
+  const defaultClassId = teacherClasses[0]?.id ?? '';
+  const apHistoryEntryKey = apHistoryEntry?.externalKey ?? null;
   const fetcher = useFetcher<{ success?: boolean; message?: string }>();
-  const [selectedClassId, setSelectedClassId] = useState(
-    teacherClasses[0]?.id ?? ''
-  );
+  const [selectedClassId, setSelectedClassId] = useState(defaultClassId);
   const [title, setTitle] = useState('');
+  const [tutorEnabled, setTutorEnabled] = useState(true);
+  const [submitForGrade, setSubmitForGrade] = useState(true);
+  const [pointValue, setPointValue] = useState('100');
+  const [strictness, setStrictness] = useState(
+    DEFAULT_GRADING_ASSISTANT_STRICTNESS_LEVEL
+  );
 
   const isSaving = fetcher.state !== 'idle';
 
   useEffect(() => {
-    if (!open || !apHistoryEntry) return;
-    setSelectedClassId(teacherClasses[0]?.id ?? '');
+    if (!open || !apHistoryEntryKey) return;
+    setSelectedClassId(defaultClassId);
     setTitle('');
-  }, [open, teacherClasses, apHistoryEntry]);
+    setTutorEnabled(true);
+    setSubmitForGrade(true);
+    setPointValue('100');
+    setStrictness(DEFAULT_GRADING_ASSISTANT_STRICTNESS_LEVEL);
+  }, [apHistoryEntryKey, defaultClassId, open]);
 
   useEffect(() => {
     if (fetcher.state === 'idle' && fetcher.data?.success) {
@@ -115,6 +137,21 @@ export function CreateAssignmentSheet({
             name="apHistoryLibraryEntryId"
             value={apHistoryEntry.externalKey}
           />
+          <input
+            type="hidden"
+            name="tutorEnabled"
+            value={String(tutorEnabled)}
+          />
+          <input
+            type="hidden"
+            name="submitForGrade"
+            value={String(submitForGrade)}
+          />
+          <input
+            type="hidden"
+            name="gradingAssistantStrictnessLevel"
+            value={strictness}
+          />
 
           <div className="space-y-2">
             <Label>Class</Label>
@@ -159,6 +196,95 @@ export function CreateAssignmentSheet({
             <p className="whitespace-pre-wrap text-sm leading-6 text-muted-foreground">
               {apHistoryEntry.prompt}
             </p>
+            {apHistoryEntry.sources.length > 0 ? (
+              <details className="rounded-md border bg-background p-3">
+                <summary className="cursor-pointer text-sm font-medium">
+                  Preview {apHistoryEntry.sources.length} source
+                  {apHistoryEntry.sources.length === 1 ? '' : 's'}
+                </summary>
+                <div className="mt-3 max-h-72 space-y-3 overflow-y-auto">
+                  {apHistoryEntry.sources.map((source) => (
+                    <article
+                      key={source.externalKey ?? source.position}
+                      className="rounded-md bg-muted/40 p-3"
+                    >
+                      <p className="text-sm font-semibold">
+                        Document {source.position}: {source.title}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {source.attribution}
+                      </p>
+                      <p className="mt-2 whitespace-pre-wrap text-sm leading-5">
+                        {source.body}
+                      </p>
+                    </article>
+                  ))}
+                </div>
+              </details>
+            ) : null}
+          </div>
+
+          <div className="grid gap-4 rounded-lg border p-4 sm:grid-cols-2">
+            <div className="flex items-start gap-2">
+              <Checkbox
+                id="ap-library-tutor"
+                checked={tutorEnabled}
+                onCheckedChange={(checked) => setTutorEnabled(checked === true)}
+                disabled={isSaving}
+              />
+              <Label htmlFor="ap-library-tutor" className="font-normal">
+                Enable AP History tutor
+              </Label>
+            </div>
+            <div className="flex items-start gap-2">
+              <Checkbox
+                id="ap-library-graded"
+                checked={submitForGrade}
+                onCheckedChange={(checked) =>
+                  setSubmitForGrade(checked === true)
+                }
+                disabled={isSaving}
+              />
+              <Label htmlFor="ap-library-graded" className="font-normal">
+                Submit for a grade
+              </Label>
+            </div>
+            {submitForGrade ? (
+              <div className="space-y-2">
+                <Label htmlFor="ap-library-points">Point value</Label>
+                <Input
+                  id="ap-library-points"
+                  name="pointValue"
+                  type="number"
+                  min={1}
+                  max={1000}
+                  value={pointValue}
+                  onChange={(event) => setPointValue(event.target.value)}
+                  disabled={isSaving}
+                />
+              </div>
+            ) : null}
+            <div className="space-y-2">
+              <Label>Grading strictness</Label>
+              <Select
+                value={strictness}
+                onValueChange={(value) =>
+                  setStrictness(value as typeof strictness)
+                }
+                disabled={isSaving}
+              >
+                <SelectTrigger aria-label="Grading assistant strictness">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {gradingAssistantStrictnessOptions.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
           {fetcher.data && !fetcher.data.success ? (
