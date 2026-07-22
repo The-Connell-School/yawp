@@ -3,8 +3,14 @@ import { data as dataResponse, type ActionFunctionArgs } from 'react-router';
 import { validationError, parseFormData } from '@rvf/react-router';
 import { z } from 'zod';
 import { zfd } from 'zod-form-data';
-import { requireUserId } from '~/utils/auth.server.js';
+import {
+  requireMembership,
+  requireMutableRequest,
+  requireUserId,
+} from '~/utils/auth.server.js';
 import { prisma } from '~/utils/db.server.js';
+import { isApHistorySnapshot } from '~/domain/ap-history/schema';
+import { resolveApHistoryInstructionPrompt } from '../../../../../packages/prisma/scripts/ap-history-module-data';
 import omit from 'lodash/omit';
 
 const validator = z.object({
@@ -38,18 +44,30 @@ function sortInstructionsByPosition<T extends { position?: number | null }>(
 
 export async function action({ request, params }: ActionFunctionArgs) {
   invariant(params.id, 'Missing cms id');
-  await requireUserId(request);
+  await requireMutableRequest(request);
+  const userId = await requireUserId(request);
+  const profile = await requireMembership(request, userId);
   const { error, data } = await parseFormData(request, validator);
   if (error) return validationError(error);
 
-  const cms = await prisma.assignmentModuleSession.findUnique({
-    where: { id: params.id },
+  const cms = await prisma.assignmentModuleSession.findFirst({
+    where: {
+      id: params.id,
+      document: { membershipId: profile.id },
+    },
     include: {
       assignmentModule: {
         include: {
           instructions: {
             orderBy: { position: 'asc' },
             include: { buttons: { orderBy: { position: 'asc' } } },
+          },
+        },
+      },
+      document: {
+        select: {
+          assignment: {
+            select: { tutorEnabled: true, apHistorySnapshot: true },
           },
         },
       },
@@ -62,6 +80,12 @@ export async function action({ request, params }: ActionFunctionArgs) {
       { status: 404 }
     );
   }
+  if (cms.document.assignment?.tutorEnabled === false) {
+    return dataResponse(
+      { error: 'Tutor is disabled for this assignment.' },
+      { status: 403 }
+    );
+  }
 
   const instructions = sortInstructionsByPosition(
     cms.assignmentModule.instructions
@@ -69,6 +93,15 @@ export async function action({ request, params }: ActionFunctionArgs) {
   const instructionsLength = instructions.length;
   const currentInstruction = instructions[cms.instructionsCompleted];
   const nextInstructionRecord = instructions[cms.instructionsCompleted + 1];
+  const apHistorySnapshot = cms.document.assignment?.apHistorySnapshot;
+  const nextInstructionContent =
+    nextInstructionRecord && isApHistorySnapshot(apHistorySnapshot)
+      ? (resolveApHistoryInstructionPrompt(
+          apHistorySnapshot.essayType,
+          cms.assignmentModule.title,
+          nextInstructionRecord.title
+        ) ?? nextInstructionRecord.prompt)
+      : nextInstructionRecord?.prompt;
 
   const isIncrementing =
     typeof data.instructionsCompleted === 'object' &&
@@ -104,7 +137,8 @@ export async function action({ request, params }: ActionFunctionArgs) {
                   instructionId: currentInstruction.id,
                 },
                 {
-                  content: nextInstructionRecord.prompt,
+                  content:
+                    nextInstructionContent ?? nextInstructionRecord.prompt,
                   agent: 'assistant',
                   instructionId: nextInstructionRecord.id,
                 },

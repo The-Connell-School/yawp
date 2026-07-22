@@ -12,7 +12,7 @@ const existingCms = {
 
 const prisma = {
   document: {
-    findUnique: mock(),
+    findFirst: mock(),
   },
   assignmentModule: {
     findUnique: mock(),
@@ -26,10 +26,14 @@ const prisma = {
 };
 
 const requireUserId = mock();
+const requireMembership = mock();
+const requireMutableRequest = mock();
 
 mock.module('~/utils/db.server', () => ({ prisma }));
 mock.module('~/utils/auth.server.js', () => ({
   requireUserId,
+  requireMembership,
+  requireMutableRequest,
 }));
 
 const { action } = await import('./route');
@@ -54,21 +58,35 @@ async function readBody(response: any) {
 
 describe('api.model.assignment-module-session', () => {
   beforeEach(() => {
-    prisma.document.findUnique.mockReset();
+    prisma.document.findFirst.mockReset();
     prisma.assignmentModule.findUnique.mockReset();
     prisma.assignmentModuleSession.findFirst.mockReset();
     prisma.assignmentModuleSession.create.mockReset();
     prisma.assignmentModuleSession.update.mockReset();
     prisma.assignmentModuleSession.findUnique.mockReset();
     requireUserId.mockReset();
+    requireMembership.mockReset();
+    requireMutableRequest.mockReset();
 
     requireUserId.mockResolvedValue('user-1');
-    prisma.document.findUnique.mockResolvedValue({
+    requireMembership.mockResolvedValue({
+      id: 'student-profile-1',
+      role: 'STUDENT',
+      organization: { id: 'org-1' },
+    });
+    requireMutableRequest.mockResolvedValue(undefined);
+    prisma.document.findFirst.mockResolvedValue({
       membershipId: 'student-profile-1',
+      assignmentTypeId: 'type-1',
+      assignment: { tutorEnabled: true, apHistorySnapshot: null },
     });
     prisma.assignmentModule.findUnique.mockResolvedValue({
       id: 'module-1',
-      instructions: [{ id: 'instruction-1', prompt: 'Prompt' }],
+      title: 'Generic module',
+      assignmentTypeId: 'type-1',
+      instructions: [
+        { id: 'instruction-1', title: 'Write', prompt: 'Prompt' },
+      ],
     });
   });
 
@@ -181,5 +199,94 @@ describe('api.model.assignment-module-session', () => {
         updatedAt: expect.any(Date),
       }),
     });
+  });
+
+  test('uses the essay-type-specific APUSH opening message', async () => {
+    prisma.document.findFirst.mockResolvedValue({
+      membershipId: 'student-profile-1',
+      assignmentTypeId: 'type-1',
+      assignment: {
+        tutorEnabled: true,
+        apHistorySnapshot: {
+          schemaVersion: 2,
+          origin: 'library',
+          libraryEntryId: 'apush-leq-market-revolution',
+          course: 'apush',
+          essayType: 'leq',
+          prompt: 'Evaluate the causes of the Market Revolution.',
+          period: '1800-1848',
+          periodNumber: 4,
+          reasoningSkill: 'causation',
+          rubric: { rubricId: 'ap-history-leq-2026', totalPoints: 6 },
+          timing: { mode: 'untimed', durationMinutes: 40 },
+          sources: [],
+        },
+      },
+    });
+    prisma.assignmentModule.findUnique.mockResolvedValue({
+      id: 'module-1',
+      title: 'Read the Documents',
+      assignmentTypeId: 'type-1',
+      instructions: [
+        {
+          id: 'instruction-1',
+          title: 'Analyze the sources',
+          prompt: 'DBQ fallback',
+        },
+      ],
+    });
+    prisma.assignmentModuleSession.findFirst.mockResolvedValue(null);
+    prisma.assignmentModuleSession.create.mockResolvedValue({ id: 'cms-created' });
+    prisma.assignmentModuleSession.findUnique.mockResolvedValue({
+      ...existingCms,
+      id: 'cms-created',
+    });
+
+    await action({
+      request: requestFor({
+        documentId: 'document-1',
+        assignmentModuleId: 'module-1',
+      }),
+      params: {},
+    } as any);
+
+    const firstMessage =
+      prisma.assignmentModuleSession.create.mock.calls[0]?.[0].data.messages
+        .create[0];
+    expect(firstMessage.content).toContain('There are no documents on an LEQ');
+    expect(firstMessage.content).not.toBe('DBQ fallback');
+  });
+
+  test('fails closed for a cross-membership document or mismatched module', async () => {
+    prisma.document.findFirst.mockResolvedValueOnce(null);
+    let response = await action({
+      request: requestFor({
+        documentId: 'other-document',
+        assignmentModuleId: 'module-1',
+      }),
+      params: {},
+    } as any);
+    expect(response.init?.status).toBe(404);
+
+    prisma.document.findFirst.mockResolvedValueOnce({
+      membershipId: 'student-profile-1',
+      assignmentTypeId: 'type-1',
+      assignment: null,
+    });
+    prisma.assignmentModule.findUnique.mockResolvedValueOnce({
+      id: 'wrong-module',
+      title: 'Wrong type',
+      assignmentTypeId: 'type-2',
+      instructions: [],
+    });
+    response = await action({
+      request: requestFor({
+        documentId: 'document-1',
+        assignmentModuleId: 'wrong-module',
+      }),
+      params: {},
+    } as any);
+    expect(response.init?.status).toBe(404);
+    expect(prisma.assignmentModuleSession.create).not.toHaveBeenCalled();
   });
 });

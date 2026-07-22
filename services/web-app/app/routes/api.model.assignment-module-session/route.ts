@@ -1,8 +1,14 @@
 import { data as dataResponse, type ActionFunctionArgs } from 'react-router';
 import { validationError, parseFormData } from '@rvf/react-router';
 import { z } from 'zod';
-import { requireUserId } from '~/utils/auth.server.js';
+import {
+  requireMembership,
+  requireMutableRequest,
+  requireUserId,
+} from '~/utils/auth.server.js';
 import { prisma } from '~/utils/db.server.js';
+import { isApHistorySnapshot } from '~/domain/ap-history/schema';
+import { resolveApHistoryInstructionPrompt } from '../../../../../packages/prisma/scripts/ap-history-module-data';
 
 const POST = z.object({
   assignmentModuleId: z.string(),
@@ -34,15 +40,21 @@ function cmsInclude() {
 }
 
 export async function action({ request }: ActionFunctionArgs) {
-  await requireUserId(request);
+  await requireMutableRequest(request);
+  const userId = await requireUserId(request);
+  const profile = await requireMembership(request, userId);
   const { error, data } = await parseFormData(request, POST);
   if (error) return validationError(error);
 
   const [document, assignmentModule] = await Promise.all([
-    prisma.document.findUnique({
-      where: { id: data.documentId },
+    prisma.document.findFirst({
+      where: { id: data.documentId, membershipId: profile.id },
       select: {
         membershipId: true,
+        assignmentTypeId: true,
+        assignment: {
+          select: { tutorEnabled: true, apHistorySnapshot: true },
+        },
       },
     }),
     prisma.assignmentModule.findUnique({
@@ -58,6 +70,19 @@ export async function action({ request }: ActionFunctionArgs) {
     );
   } else if (!document) {
     return dataResponse({ error: 'No document found.' }, { status: 404 });
+  }
+
+  if (assignmentModule.assignmentTypeId !== document.assignmentTypeId) {
+    return dataResponse(
+      { error: 'No assignment module found.' },
+      { status: 404 }
+    );
+  }
+  if (document.assignment?.tutorEnabled === false) {
+    return dataResponse(
+      { error: 'Tutor is disabled for this assignment.' },
+      { status: 403 }
+    );
   }
 
   if (!document.membershipId) {
@@ -90,6 +115,15 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 
   const firstInstruction = assignmentModule.instructions[0];
+  const apHistorySnapshot = document.assignment?.apHistorySnapshot;
+  const firstInstructionContent =
+    firstInstruction && isApHistorySnapshot(apHistorySnapshot)
+      ? (resolveApHistoryInstructionPrompt(
+          apHistorySnapshot.essayType,
+          assignmentModule.title,
+          firstInstruction.title
+        ) ?? firstInstruction.prompt)
+      : firstInstruction?.prompt;
   const createdAt = new Date();
   const updatedAt = new Date(createdAt.getTime() + 1);
   const created = await prisma.assignmentModuleSession.create({
@@ -103,7 +137,7 @@ export async function action({ request }: ActionFunctionArgs) {
         messages: {
           create: [
             {
-              content: firstInstruction.prompt,
+              content: firstInstructionContent ?? firstInstruction.prompt,
               agent: 'assistant',
               instructionId: firstInstruction.id,
             },

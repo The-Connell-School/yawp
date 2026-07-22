@@ -50,11 +50,12 @@ describe('api.domain.tutor-response read-only impersonation', () => {
     prisma.assignmentModuleSession.update.mockReset();
   });
 
-  function mockCms() {
+  function mockCms(apHistorySnapshot?: unknown) {
     const cms = {
       id: 'cms-1',
       instructionsCompleted: 0,
       assignmentModule: {
+        title: 'Drafting',
         tutorInstructions: 'Coach the student.',
         rubricAlignmentJson: {
           thesis_and_content: 'primary',
@@ -83,6 +84,7 @@ describe('api.domain.tutor-response read-only impersonation', () => {
         instructions: [
           {
             id: 'instruction-1',
+            title: 'Strengthen the Evidence',
             tutorInstructions: 'Focus on thesis clarity.',
           },
         ],
@@ -91,7 +93,7 @@ describe('api.domain.tutor-response read-only impersonation', () => {
       document: {
         id: 'doc-1',
         text: 'Original draft',
-        assignment: { tutorEnabled: true },
+        assignment: { tutorEnabled: true, apHistorySnapshot },
       },
     };
     prisma.assignmentModuleSession.findFirst.mockResolvedValueOnce(cms);
@@ -288,6 +290,57 @@ describe('api.domain.tutor-response read-only impersonation', () => {
     expect(createPayload[1]).toMatchObject({
       agent: 'assistant',
       content: 'Draft a clearer thesis.',
+    });
+  });
+
+  test('grounds APUSH coaching in the immutable snapshot and current section', async () => {
+    const snapshot = {
+      schemaVersion: 2,
+      origin: 'library',
+      libraryEntryId: 'apush-leq-market-revolution',
+      course: 'apush',
+      essayType: 'leq',
+      prompt: 'Evaluate the causes of the Market Revolution.',
+      period: '1800-1848',
+      periodNumber: 4,
+      reasoningSkill: 'causation',
+      rubric: { rubricId: 'ap-history-leq-2026', totalPoints: 6 },
+      timing: { mode: 'untimed', durationMinutes: 40 },
+      sources: [],
+    };
+    getLLMCompletion.mockResolvedValue('Name one specific law or event.');
+    mockCms(snapshot);
+    prisma.assignmentModuleSession.findUnique.mockResolvedValueOnce({
+      id: 'cms-1',
+      messages: [],
+      assignmentModule: {
+        instructions: [],
+        assignmentType: { assignmentModules: [] },
+      },
+    });
+
+    const body = new FormData();
+    body.set('response', 'What evidence should I use?');
+    body.set('cmsId', 'cms-1');
+    await action({
+      request: new Request('https://example.com/api/domain/tutor-response', {
+        method: 'POST',
+        body,
+      }),
+    } as any);
+
+    const completionArgs = getLLMCompletion.mock.calls[0]?.[0] as any;
+    expect(completionArgs.system).toContain('LEQ Rubric (6 points');
+    expect(completionArgs.system).toContain(snapshot.prompt);
+    expect(completionArgs.system).toContain('Current section: "Drafting"');
+    expect(completionArgs.system).toContain(
+      'Current step: "Strengthen the Evidence"',
+    );
+    expect(completionArgs.system).toContain('specific named evidence');
+    expect(completionArgs.system).not.toContain('Source documents (');
+    expect(completionArgs.metadata).toMatchObject({
+      assignmentTypeRubricSource: 'ap-history-snapshot',
+      rubricCategoryKeys: ['thesis', 'context', 'evidence', 'reasoning', 'complexity'],
     });
   });
 

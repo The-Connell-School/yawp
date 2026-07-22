@@ -2,6 +2,12 @@ import { data as dataResponse, type ActionFunctionArgs } from 'react-router';
 import { parseFormData, validationError } from '@rvf/react-router';
 import { z } from 'zod';
 import { prisma } from '~/utils/db.server';
+import { isApHistorySnapshot } from '~/domain/ap-history/schema';
+import { buildApHistoryTutorSystemPrompt } from '~/domain/ap-history/tutor-prompt';
+import {
+  resolveApHistorySectionTutorInstructions,
+  resolveApHistoryStepTutorInstructions,
+} from '../../../../../packages/prisma/scripts/ap-history-module-data';
 import { AgentType, getLLMCompletion } from '~/utils/getLLMCompletion';
 import { isLlmFallbackRetrySignal } from '~/utils/getLLMCompletion/llm-provider-errors.server';
 import {
@@ -84,7 +90,9 @@ export async function action({ request }: ActionFunctionArgs) {
           select: {
             id: true,
             text: true,
-            assignment: { select: { tutorEnabled: true } },
+            assignment: {
+              select: { tutorEnabled: true, apHistorySnapshot: true },
+            },
           },
         },
       },
@@ -121,11 +129,31 @@ export async function action({ request }: ActionFunctionArgs) {
       alignment: cms.assignmentModule.rubricAlignmentJson,
     });
 
-    const system = buildTutorSystemPrompt({
-      tutorInstructions: cms.assignmentModule.tutorInstructions,
-      instructionTutorInstructions: instruction.tutorInstructions,
-      moduleRubricGuidance,
-    });
+    const apHistorySnapshot = cms.document.assignment?.apHistorySnapshot;
+    const hasApHistorySnapshot = isApHistorySnapshot(apHistorySnapshot);
+    const system = hasApHistorySnapshot
+      ? buildApHistoryTutorSystemPrompt(apHistorySnapshot, {
+          title: cms.assignmentModule.title,
+          tutorInstructions:
+            resolveApHistorySectionTutorInstructions(
+              apHistorySnapshot.essayType,
+              cms.assignmentModule.title,
+            ) ?? cms.assignmentModule.tutorInstructions,
+          instruction: {
+            title: instruction.title,
+            tutorInstructions:
+              resolveApHistoryStepTutorInstructions(
+                apHistorySnapshot.essayType,
+                cms.assignmentModule.title,
+                instruction.title,
+              ) ?? instruction.tutorInstructions,
+          },
+        })
+      : buildTutorSystemPrompt({
+          tutorInstructions: cms.assignmentModule.tutorInstructions,
+          instructionTutorInstructions: instruction.tutorInstructions,
+          moduleRubricGuidance,
+        });
 
     const documentSource =
       data.content === undefined ? 'db-document-text' : 'client-content';
@@ -142,11 +170,25 @@ export async function action({ request }: ActionFunctionArgs) {
     const aiContextMetadata = buildAiContextAuditMetadata({
       textContext: documentContext,
       assignmentTypeId: cms.assignmentModule.assignmentType?.id ?? null,
-      assignmentTypeRubricSource:
-        moduleRubric.categories.length > 0 ? 'assignment-type' : 'missing',
+      assignmentTypeRubricSource: hasApHistorySnapshot
+        ? 'ap-history-snapshot'
+        : moduleRubric.categories.length > 0
+          ? 'assignment-type'
+          : 'missing',
       assignmentTypeGradingVersion:
         cms.assignmentModule.assignmentType?.gradingAssistantVersion ?? null,
-      rubricCategoryKeys: moduleRubric.categories.map((category) => category.key),
+      rubricCategoryKeys: hasApHistorySnapshot
+        ? apHistorySnapshot.essayType === 'dbq'
+          ? [
+              'thesis',
+              'context',
+              'document-use',
+              'outside-evidence',
+              'sourcing',
+              'complexity',
+            ]
+          : ['thesis', 'context', 'evidence', 'reasoning', 'complexity']
+        : moduleRubric.categories.map((category) => category.key),
     });
 
     const currentMessages = cms.messages.map((m) => ({

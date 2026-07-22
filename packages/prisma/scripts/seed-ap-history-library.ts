@@ -2,6 +2,7 @@
 import { PrismaClient } from '../generated/prisma';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { AP_HISTORY_LIBRARY_ENTRIES } from './ap-history-library-data';
+import { AP_HISTORY_SEED_MODULES } from './ap-history-module-data';
 import { isLocalDatabaseUrl } from './seed-overlay-connection';
 
 const AP_HISTORY_ASSIGNMENT_TYPE_KEY = 'ap_history_essay';
@@ -10,19 +11,6 @@ const ASSIGNMENT_TYPE_DATA = {
   title: 'AP History Essay',
   description: 'Curated APUSH DBQ and LEQ practice with AP rubric coaching.',
   position: 50,
-} as const;
-
-const MODULE_DATA = {
-  title: 'AP History Essay',
-  position: 1,
-  description: 'Write an APUSH DBQ or LEQ with AP-specific coaching.',
-} as const;
-
-const INSTRUCTION_DATA = {
-  title: 'Write',
-  prompt: 'Use the prompt and AP History coach to draft your response.',
-  position: 1,
-  showChatButton: true,
 } as const;
 
 const connectionString = process.env.DATABASE_URL;
@@ -82,12 +70,15 @@ async function seedApHistoryLibrary() {
         create: { organizationId: org.id },
       },
       assignmentModules: {
-        create: {
-          ...MODULE_DATA,
+        create: AP_HISTORY_SEED_MODULES.map((moduleData) => ({
+          title: moduleData.title,
+          position: moduleData.position,
+          description: moduleData.description,
+          tutorInstructions: moduleData.tutorInstructions,
           instructions: {
-            create: INSTRUCTION_DATA,
+            create: moduleData.instructions,
           },
-        },
+        })),
       },
     },
     select: { id: true },
@@ -107,48 +98,57 @@ async function seedApHistoryLibrary() {
     update: {},
   });
 
-  const existingModule = await prisma.assignmentModule.findFirst({
-    where: {
-      assignmentTypeId: assignmentType.id,
-      position: MODULE_DATA.position,
-    },
-    select: { id: true },
-  });
-
-  const module = existingModule
-    ? await prisma.assignmentModule.update({
-        where: { id: existingModule.id },
-        data: MODULE_DATA,
-        select: { id: true },
-      })
-    : await prisma.assignmentModule.create({
-        data: {
-          ...MODULE_DATA,
-          assignmentTypeId: assignmentType.id,
-        },
-        select: { id: true },
-      });
-
-  const existingInstruction = await prisma.assignmentModuleInstruction.findFirst({
-    where: {
-      assignmentModuleId: module.id,
-      position: INSTRUCTION_DATA.position,
-    },
-    select: { id: true },
-  });
-
-  if (existingInstruction) {
-    await prisma.assignmentModuleInstruction.update({
-      where: { id: existingInstruction.id },
-      data: INSTRUCTION_DATA,
-    });
-  } else {
-    await prisma.assignmentModuleInstruction.create({
-      data: {
-        ...INSTRUCTION_DATA,
-        assignmentModuleId: module.id,
+  // Position 1 upgrades the legacy catch-all module in place so existing
+  // sessions stay attached; positions 2-4 are additive and start on demand.
+  for (const moduleData of AP_HISTORY_SEED_MODULES) {
+    const moduleFields = {
+      title: moduleData.title,
+      position: moduleData.position,
+      description: moduleData.description,
+      tutorInstructions: moduleData.tutorInstructions,
+    };
+    const existingModule = await prisma.assignmentModule.findFirst({
+      where: {
+        assignmentTypeId: assignmentType.id,
+        position: moduleData.position,
+        deletedAt: null,
       },
+      select: { id: true },
     });
+    const assignmentModule = existingModule
+      ? await prisma.assignmentModule.update({
+          where: { id: existingModule.id },
+          data: moduleFields,
+          select: { id: true },
+        })
+      : await prisma.assignmentModule.create({
+          data: { ...moduleFields, assignmentTypeId: assignmentType.id },
+          select: { id: true },
+        });
+
+    for (const instructionData of moduleData.instructions) {
+      const existingInstruction =
+        await prisma.assignmentModuleInstruction.findFirst({
+          where: {
+            assignmentModuleId: assignmentModule.id,
+            position: instructionData.position,
+          },
+          select: { id: true },
+        });
+      if (existingInstruction) {
+        await prisma.assignmentModuleInstruction.update({
+          where: { id: existingInstruction.id },
+          data: instructionData,
+        });
+      } else {
+        await prisma.assignmentModuleInstruction.create({
+          data: {
+            ...instructionData,
+            assignmentModuleId: assignmentModule.id,
+          },
+        });
+      }
+    }
   }
 
   for (const entry of AP_HISTORY_LIBRARY_ENTRIES) {
