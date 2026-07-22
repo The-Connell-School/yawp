@@ -54,9 +54,23 @@ import {
   type PromptType,
 } from './prompts-library/data';
 import promptsRaw from './prompts-library/prompts.json';
+import { ThesisPromptsLibrary } from './thesis-prompts-library/thesis-prompts-library';
+import { ThesisTeacherDirections } from './thesis-prompts-library/thesis-teacher-directions';
+import {
+  applyFilters as applyThesisFilters,
+  buildFacets as buildThesisFacets,
+  buildOptionCounts as buildThesisOptionCounts,
+  readFilters as readThesisFilters,
+  type ThesisPrompt,
+} from './thesis-prompts-library/data';
+import thesisPromptsRaw from './thesis-prompts-library/prompts.json';
 
 const DAILY_PAGES_TITLE = 'daily pages';
+const THESIS_ESSAY_TITLE = 'the thesis-driven essay';
 const ALL_PROMPTS = promptsRaw as LibraryPrompt[];
+const ALL_THESIS_PROMPTS = thesisPromptsRaw as ThesisPrompt[];
+const ALL_THESIS_FACETS = buildThesisFacets(ALL_THESIS_PROMPTS);
+const ALL_THESIS_OPTION_COUNTS = buildThesisOptionCounts(ALL_THESIS_PROMPTS);
 const SERIOUSNESS_ORDER: PromptSeriousness[] = [
   'playful',
   'light',
@@ -355,8 +369,9 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     });
   }
 
-  const isDailyPages =
-    assignmentType.title.trim().toLowerCase() === DAILY_PAGES_TITLE;
+  const normalizedTitle = assignmentType.title.trim().toLowerCase();
+  const isDailyPages = normalizedTitle === DAILY_PAGES_TITLE;
+  const isThesisEssay = normalizedTitle === THESIS_ESSAY_TITLE;
   const isApHistory =
     assignmentType.systemKey === AP_HISTORY_ASSIGNMENT_TYPE_KEY;
   const promptLibrary =
@@ -366,6 +381,18 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           facets: ALL_FACETS,
           optionCounts: ALL_OPTION_COUNTS,
           totalCount: ALL_PROMPTS.length,
+        }
+      : null;
+  const thesisPromptLibrary =
+    profile.role === "TEACHER" && isThesisEssay
+      ? {
+          prompts: applyThesisFilters(
+            ALL_THESIS_PROMPTS,
+            readThesisFilters(new URL(request.url))
+          ),
+          facets: ALL_THESIS_FACETS,
+          optionCounts: ALL_THESIS_OPTION_COUNTS,
+          totalCount: ALL_THESIS_PROMPTS.length,
         }
       : null;
   const enabledTeacherClassIds = profile.role === "TEACHER"
@@ -390,6 +417,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     archivedDocuments,
     teacherClasses: assignmentEnabledTeacherClasses,
     promptLibrary,
+    thesisPromptLibrary,
     apHistoryLibrary,
   });
 }
@@ -491,6 +519,7 @@ export default function AppAssignmentTypesIdRoute() {
     essayType: string;
   } | null>(null);
   const showPromptsLibrary = data.promptLibrary != null;
+  const showThesisLibrary = data.thesisPromptLibrary != null;
   const isApHistoryAssignmentType =
     data.assignmentType.systemKey === AP_HISTORY_ASSIGNMENT_TYPE_KEY;
   const canCreateDirectDocument = !isApHistoryAssignmentType;
@@ -579,6 +608,7 @@ export default function AppAssignmentTypesIdRoute() {
           </div>
         </div>
         {showPromptsLibrary ? <TeacherDirections /> : null}
+        {showThesisLibrary ? <ThesisTeacherDirections /> : null}
         {hasModules ? (
           <>
             <h3 className="mb-2 text-foreground/75">Modules</h3>
@@ -604,6 +634,21 @@ export default function AppAssignmentTypesIdRoute() {
               facets={data.promptLibrary.facets}
               optionCounts={data.promptLibrary.optionCounts}
               totalCount={data.promptLibrary.totalCount}
+              onSelectPrompt={(prompt) => {
+                setApHistoryEntry(null);
+                setLibraryPrompt(prompt);
+                setIsAssignmentSheetOpen(true);
+              }}
+            />
+          </div>
+        ) : null}
+        {data.thesisPromptLibrary ? (
+          <div className="pb-6">
+            <ThesisPromptsLibrary
+              prompts={data.thesisPromptLibrary.prompts}
+              facets={data.thesisPromptLibrary.facets}
+              optionCounts={data.thesisPromptLibrary.optionCounts}
+              totalCount={data.thesisPromptLibrary.totalCount}
               onSelectPrompt={(prompt) => {
                 setApHistoryEntry(null);
                 setLibraryPrompt(prompt);
