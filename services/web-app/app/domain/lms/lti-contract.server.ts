@@ -5,7 +5,9 @@ import {
   createSign,
   createVerify,
   randomUUID,
+  timingSafeEqual,
   type JsonWebKey,
+  type KeyObject,
 } from 'node:crypto';
 import { z } from 'zod';
 import {
@@ -623,7 +625,7 @@ function getStringArray(
   return value as string[];
 }
 
-async function fetchPlatformSigningKey(
+export async function fetchPlatformSigningKey(
   registration: LtiRegistration,
   keyId: string,
   timeoutMs?: number
@@ -677,6 +679,38 @@ async function fetchPlatformSigningKey(
   }
 }
 
+export type LtiSigningKeyResolver = (input: {
+  registration: LtiRegistration;
+  keyId: string;
+  timeoutMs?: number;
+  forceRefresh: boolean;
+}) => Promise<KeyObject>;
+
+function oneTimeValueMatches(input: {
+  actual: string;
+  expected: string | null;
+  expectedHash?: string;
+  label: 'state' | 'nonce';
+}) {
+  if ((input.expected === null) === (input.expectedHash === undefined)) {
+    throw new Error(
+      `LTI ${input.label} verification requires exactly one expected value form.`
+    );
+  }
+  if (input.expected !== null) {
+    if (!input.expected) {
+      throw new Error(`LTI expected ${input.label} value is empty.`);
+    }
+    return input.actual === input.expected;
+  }
+  if (!/^[0-9a-f]{64}$/.test(input.expectedHash!)) {
+    throw new Error(`LTI expected ${input.label} digest is invalid.`);
+  }
+  const actual = createHash('sha256').update(input.actual, 'utf8').digest();
+  const expected = Buffer.from(input.expectedHash!, 'hex');
+  return timingSafeEqual(actual, expected);
+}
+
 function normalizeAudiences(payload: JsonObject): string[] {
   const aud = payload.aud;
   if (typeof aud === 'string' && aud.length > 0) return [aud];
@@ -723,27 +757,34 @@ export async function verifyLtiLaunchForm(
   form: { idToken: string; state: string },
   options: {
     registration: LtiRegistration;
-    expectedState: string;
-    expectedNonce: string;
+    expectedState: string | null;
+    expectedStateHash?: string;
+    expectedNonce: string | null;
+    expectedNonceHash?: string;
     expectedTargetLinkUri: string;
     expectedMessageType:
       | typeof LTI_MESSAGE_TYPES.resourceLinkRequest
       | typeof LTI_MESSAGE_TYPES.deepLinkingRequest;
     nowSeconds?: number;
     timeoutMs?: number;
+    resolveSigningKey?: LtiSigningKeyResolver;
   }
 ): Promise<VerifiedLtiLaunch> {
   if (!options.registration.enabled) {
     throw new Error('LTI registration is disabled.');
   }
-  if (
-    !options.expectedState ||
-    !options.expectedNonce ||
-    !options.expectedTargetLinkUri
-  ) {
+  if (!options.expectedTargetLinkUri) {
     throw new Error('LTI launch transaction values must be non-empty.');
   }
-  if (!form.state || form.state !== options.expectedState) {
+  if (
+    !form.state ||
+    !oneTimeValueMatches({
+      actual: form.state,
+      expected: options.expectedState,
+      expectedHash: options.expectedStateHash,
+      label: 'state',
+    })
+  ) {
     throw new Error('LTI OIDC state did not match the initiated launch.');
   }
 
@@ -758,15 +799,37 @@ export async function verifyLtiLaunchForm(
     }
   }
 
-  const publicKey = await fetchPlatformSigningKey(
-    options.registration,
-    header.kid,
-    options.timeoutMs
-  );
-  const verifier = createVerify('RSA-SHA256');
-  verifier.update(decoded.signingInput);
-  verifier.end();
-  if (!verifier.verify(publicKey, decoded.signature)) {
+  const resolveSigningKey: LtiSigningKeyResolver =
+    options.resolveSigningKey ??
+    ((input) =>
+      fetchPlatformSigningKey(
+        input.registration,
+        input.keyId,
+        input.timeoutMs
+      ));
+  let publicKey = await resolveSigningKey({
+    registration: options.registration,
+    keyId: header.kid,
+    timeoutMs: options.timeoutMs,
+    forceRefresh: false,
+  });
+  const signatureIsValid = (key: KeyObject) => {
+    const verifier = createVerify('RSA-SHA256');
+    verifier.update(decoded.signingInput);
+    verifier.end();
+    return verifier.verify(key, decoded.signature);
+  };
+  let validSignature = signatureIsValid(publicKey);
+  if (!validSignature && options.resolveSigningKey) {
+    publicKey = await resolveSigningKey({
+      registration: options.registration,
+      keyId: header.kid,
+      timeoutMs: options.timeoutMs,
+      forceRefresh: true,
+    });
+    validSignature = signatureIsValid(publicKey);
+  }
+  if (!validSignature) {
     throw new Error('LTI token signature is invalid.');
   }
 
@@ -819,7 +882,15 @@ export async function verifyLtiLaunchForm(
   if (payload.exp - payload.iat > 600) {
     throw new Error('LTI token lifetime exceeds 10 minutes.');
   }
-  if (payload.nonce !== options.expectedNonce) {
+  if (
+    typeof payload.nonce !== 'string' ||
+    !oneTimeValueMatches({
+      actual: payload.nonce,
+      expected: options.expectedNonce,
+      expectedHash: options.expectedNonceHash,
+      label: 'nonce',
+    })
+  ) {
     throw new Error('LTI nonce did not match the initiated launch.');
   }
 

@@ -21,6 +21,7 @@ import {
   updateAgsLineItem,
 } from './lti-services.server';
 import { LtiHttpError } from './lti-http.server';
+import { createLtiSigningKeyCache } from './lti-jwks-cache.server';
 import {
   type MockLtiPlatform,
   type MockHttpCaptureServer,
@@ -180,6 +181,103 @@ describe('LTI 1.3 launch over the network boundary', () => {
       familyName: null,
       name: null,
     });
+  });
+
+  test('caches provider JWKS within the bounded registration TTL', async () => {
+    const platform = await startPlatform();
+    const cache = createLtiSigningKeyCache({
+      now: () => platform.seed.nowSeconds * 1000,
+    });
+
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const form = await authorize(platform);
+      await verifyLtiLaunchForm(form, {
+        registration: platform.registration,
+        expectedState: 'state-contract-001',
+        expectedNonce: 'nonce-contract-001',
+        expectedTargetLinkUri: platform.registration.launchUrl,
+        expectedMessageType: LTI_MESSAGE_TYPES.resourceLinkRequest,
+        nowSeconds: platform.seed.nowSeconds,
+        resolveSigningKey: cache.resolveSigningKey,
+      });
+    }
+
+    expect(
+      platform.journal.filter(
+        (entry) => entry.path === '/.well-known/jwks.json'
+      )
+    ).toHaveLength(1);
+    expect(cache.size).toBe(1);
+  });
+
+  test('refreshes JWKS when a provider rotates to a new key id', async () => {
+    const platform = await startPlatform();
+    const cache = createLtiSigningKeyCache();
+    const initial = await authorize(platform);
+    await verifyLtiLaunchForm(initial, {
+      registration: platform.registration,
+      expectedState: 'state-contract-001',
+      expectedNonce: 'nonce-contract-001',
+      expectedTargetLinkUri: platform.registration.launchUrl,
+      expectedMessageType: LTI_MESSAGE_TYPES.resourceLinkRequest,
+      nowSeconds: platform.seed.nowSeconds,
+      resolveSigningKey: cache.resolveSigningKey,
+    });
+
+    platform.rotatePlatformSigningKey();
+    const rotated = await authorize(platform);
+    await expect(
+      verifyLtiLaunchForm(rotated, {
+        registration: platform.registration,
+        expectedState: 'state-contract-001',
+        expectedNonce: 'nonce-contract-001',
+        expectedTargetLinkUri: platform.registration.launchUrl,
+        expectedMessageType: LTI_MESSAGE_TYPES.resourceLinkRequest,
+        nowSeconds: platform.seed.nowSeconds,
+        resolveSigningKey: cache.resolveSigningKey,
+      })
+    ).resolves.toMatchObject({ subject: 'lti-instructor-kevin' });
+
+    expect(
+      platform.journal.filter(
+        (entry) => entry.path === '/.well-known/jwks.json'
+      )
+    ).toHaveLength(2);
+  });
+
+  test('force-refreshes a cached key after same-kid rotation', async () => {
+    const platform = await startPlatform();
+    const cache = createLtiSigningKeyCache();
+    const initial = await authorize(platform);
+    await verifyLtiLaunchForm(initial, {
+      registration: platform.registration,
+      expectedState: 'state-contract-001',
+      expectedNonce: 'nonce-contract-001',
+      expectedTargetLinkUri: platform.registration.launchUrl,
+      expectedMessageType: LTI_MESSAGE_TYPES.resourceLinkRequest,
+      nowSeconds: platform.seed.nowSeconds,
+      resolveSigningKey: cache.resolveSigningKey,
+    });
+
+    platform.rotatePlatformSigningKey({ reuseKeyId: true });
+    const rotated = await authorize(platform);
+    await expect(
+      verifyLtiLaunchForm(rotated, {
+        registration: platform.registration,
+        expectedState: 'state-contract-001',
+        expectedNonce: 'nonce-contract-001',
+        expectedTargetLinkUri: platform.registration.launchUrl,
+        expectedMessageType: LTI_MESSAGE_TYPES.resourceLinkRequest,
+        nowSeconds: platform.seed.nowSeconds,
+        resolveSigningKey: cache.resolveSigningKey,
+      })
+    ).resolves.toMatchObject({ subject: 'lti-instructor-kevin' });
+
+    expect(
+      platform.journal.filter(
+        (entry) => entry.path === '/.well-known/jwks.json'
+      )
+    ).toHaveLength(2);
   });
 
   test.each([

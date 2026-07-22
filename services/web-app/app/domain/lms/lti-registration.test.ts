@@ -88,6 +88,31 @@ describe('LTI registration contract', () => {
     ).toThrow('cannot be loaded');
   });
 
+  test('accepts loopback transport only with the explicit process capability', () => {
+    expect(
+      parseLtiRegistration(
+        {
+          ...validRegistration,
+          transportMode: 'loopback-http',
+          issuer: 'http://127.0.0.1:43123',
+          authorizationEndpoint: 'http://127.0.0.1:43123/oidc/auth',
+          tokenEndpoint: 'http://127.0.0.1:43123/oauth2/token',
+          jwksUrl: 'http://127.0.0.1:43123/.well-known/jwks.json',
+          allowedServiceOrigins: ['http://127.0.0.1:43123'],
+          loginInitiationUrl: 'http://127.0.0.1:5174/lti/login',
+          launchUrl: 'http://127.0.0.1:5174/lti/launch',
+          deepLinkingLaunchUrl: 'http://127.0.0.1:5174/lti/deep-link',
+          toolJwksUrl: 'http://127.0.0.1:5174/.well-known/jwks.json',
+          allowedTargetLinkUris: [
+            'http://127.0.0.1:5174/lti/launch',
+            'http://127.0.0.1:5174/lti/deep-link',
+          ],
+        },
+        { allowLoopbackHttp: true }
+      ).transportMode
+    ).toBe('loopback-http');
+  });
+
   test('does not allow loopback HTTP without the explicit transport capability', () => {
     expect(() =>
       parseLtiRegistration({

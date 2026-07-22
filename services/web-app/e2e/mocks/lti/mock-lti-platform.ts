@@ -128,6 +128,7 @@ const ALLOWED_SCOPES = new Set<string>([
   SCOPES.score,
 ]);
 const PLATFORM_KEY_ID = 'mock-platform-rs256-2026';
+const ROTATED_PLATFORM_KEY_ID = 'mock-platform-rs256-2026-rotated';
 const TOOL_KEY_ID = 'mock-yawp-tool-rs256-2026';
 const NOW_SECONDS = 1_784_678_400;
 
@@ -186,6 +187,8 @@ export type MockLtiPlatform = {
   journal: MockLtiJournalEntry[];
   state: MockState;
   failNext: (kind: FailureKind, failure: Failure) => void;
+  rotatePlatformSigningKey: (options?: { reuseKeyId?: boolean }) => void;
+  restorePlatformSigningKey: () => void;
   advanceTime: (seconds: number) => void;
   close: () => Promise<void>;
 };
@@ -298,13 +301,17 @@ function b64(value: string | Uint8Array) {
 
 function signJwt(
   payload: Record<string, unknown>,
-  header: Record<string, unknown> = {}
+  header: Record<string, unknown> = {},
+  signingKey: { keyId: string; privateKeyPem: string } = {
+    keyId: PLATFORM_KEY_ID,
+    privateKeyPem: PLATFORM_PRIVATE_KEY,
+  }
 ) {
   const encodedHeader = b64(
     JSON.stringify({
       alg: 'RS256',
       typ: 'JWT',
-      kid: PLATFORM_KEY_ID,
+      kid: signingKey.keyId,
       ...header,
     })
   );
@@ -313,7 +320,7 @@ function signJwt(
   const signer = createSign('RSA-SHA256');
   signer.update(input);
   signer.end();
-  return `${input}.${b64(signer.sign(createPrivateKey(PLATFORM_PRIVATE_KEY)))}`;
+  return `${input}.${b64(signer.sign(createPrivateKey(signingKey.privateKeyPem)))}`;
 }
 
 function fetchToolJwks(toolJwksUrl: string) {
@@ -918,6 +925,11 @@ export async function startMockLtiPlatform(): Promise<MockLtiPlatform> {
   };
   let baseUrl = '';
   let nowSeconds = NOW_SECONDS;
+  let platformSigningKey = {
+    keyId: PLATFORM_KEY_ID,
+    privateKeyPem: PLATFORM_PRIVATE_KEY,
+    publicKeyPem: PLATFORM_PUBLIC_KEY,
+  };
 
   const toolServer = createServer((request, response) => {
     void (async () => {
@@ -994,14 +1006,21 @@ export async function startMockLtiPlatform(): Promise<MockLtiPlatform> {
         url.pathname === '/.well-known/jwks.json'
       ) {
         if (await consumeFailure(failures, 'jwks', response)) return;
-        const jwk = createPublicKey(PLATFORM_PUBLIC_KEY).export({
+        const jwk = createPublicKey(platformSigningKey.publicKeyPem).export({
           format: 'jwk',
         });
         json(
           response,
           200,
           {
-            keys: [{ ...jwk, kid: PLATFORM_KEY_ID, use: 'sig', alg: 'RS256' }],
+            keys: [
+              {
+                ...jwk,
+                kid: platformSigningKey.keyId,
+                use: 'sig',
+                alg: 'RS256',
+              },
+            ],
           },
           { 'content-type': 'application/jwk-set+json' }
         );
@@ -1331,7 +1350,8 @@ export async function startMockLtiPlatform(): Promise<MockLtiPlatform> {
               ? { jku: 'https://attacker.example/jwks' }
               : scenario === 'unknown-kid'
                 ? { kid: 'unknown-platform-key' }
-                : {}
+                : {},
+            platformSigningKey
           );
         }
         const stateValue = url.searchParams.get('state') ?? '';
@@ -1792,6 +1812,7 @@ export async function startMockLtiPlatform(): Promise<MockLtiPlatform> {
       `${toolBaseUrl}/lti/deep-link`,
     ],
     enabledScopes: [...ALLOWED_SCOPES],
+    jwksCacheTtlSeconds: 300,
     enabled: true,
   };
   const alternateRegistration: LtiRegistration = {
@@ -1821,6 +1842,20 @@ export async function startMockLtiPlatform(): Promise<MockLtiPlatform> {
     state,
     failNext(kind, failure) {
       failures.set(kind, failure);
+    },
+    rotatePlatformSigningKey(options = {}) {
+      platformSigningKey = {
+        keyId: options.reuseKeyId ? PLATFORM_KEY_ID : ROTATED_PLATFORM_KEY_ID,
+        privateKeyPem: TOOL_PRIVATE_KEY,
+        publicKeyPem: TOOL_PUBLIC_KEY,
+      };
+    },
+    restorePlatformSigningKey() {
+      platformSigningKey = {
+        keyId: PLATFORM_KEY_ID,
+        privateKeyPem: PLATFORM_PRIVATE_KEY,
+        publicKeyPem: PLATFORM_PUBLIC_KEY,
+      };
     },
     advanceTime(seconds) {
       if (!Number.isFinite(seconds) || seconds < 0) {

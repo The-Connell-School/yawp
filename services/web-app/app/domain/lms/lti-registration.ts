@@ -146,6 +146,7 @@ const RegistrationShape = z
     toolJwksUrl: LtiNetworkUrlSchema,
     allowedTargetLinkUris: z.array(LtiNetworkUrlSchema).min(1),
     enabledScopes: z.array(z.string().url()).min(1),
+    jwksCacheTtlSeconds: z.number().int().min(30).max(3600).default(300),
     enabled: z.boolean().default(false),
   })
   .strict();
@@ -246,9 +247,15 @@ const LtiRegistrationSchema = RegistrationShape.superRefine(
 
 export type LtiRegistration = z.infer<typeof LtiRegistrationSchema>;
 
-export function parseLtiRegistration(value: unknown): LtiRegistration {
+export function parseLtiRegistration(
+  value: unknown,
+  options: { allowLoopbackHttp?: boolean } = {}
+): LtiRegistration {
   const registration = LtiRegistrationSchema.parse(value);
-  if (registration.transportMode !== 'https') {
+  if (
+    registration.transportMode !== 'https' &&
+    options.allowLoopbackHttp !== true
+  ) {
     throw new Error(
       'Loopback LTI transport is reserved for the in-process network harness and cannot be loaded from registration data.'
     );
