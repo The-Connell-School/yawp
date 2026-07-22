@@ -1152,6 +1152,14 @@ export async function startMockLtiPlatform(): Promise<MockLtiPlatform> {
           payload[CLAIMS.roles] = ['Instructor'];
         } else if (scenario === 'nonstandard-only-role') {
           payload[CLAIMS.roles] = ['https://roles.example.test/Instructor'];
+        } else if (scenario === 'fabricated-lis-role') {
+          payload[CLAIMS.roles] = [
+            'http://purl.imsglobal.org/vocab/lis/v2/membership#SuperAdmin',
+          ];
+        } else if (scenario === 'lis-context-type-as-role') {
+          payload[CLAIMS.roles] = [
+            'http://purl.imsglobal.org/vocab/lis/v2/course#CourseOffering',
+          ];
         } else if (scenario === 'mixed-standard-custom-roles') {
           payload[CLAIMS.roles] = [
             'https://roles.example.test/DepartmentChair',

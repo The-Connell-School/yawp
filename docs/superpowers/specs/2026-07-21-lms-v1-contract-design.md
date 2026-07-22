@@ -96,9 +96,10 @@ The signed launch must:
   authorized-party, and service URLs non-empty; require every Core custom value
   to be a string and every present Deep Linking capability flag to be boolean;
 - expose only validated claim data to account and tenant mapping;
-- require absolute role URIs and, for any non-empty role list, at least one
-  standard LIS vocabulary role; extension roles may accompany that standard
-  authorization anchor;
+- require absolute role URIs and, for any non-empty role list, at least one URI
+  explicitly enumerated by Core Appendix A.2 (including defined sub-roles);
+  extension roles may accompany that standard authorization anchor, while
+  namespace lookalikes and context-type URIs do not count;
 - consume state and nonce exactly once in the persisted launch flow in #212.
 
 A Deep Linking launch may omit subject, roles, and context under Deep Linking

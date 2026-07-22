@@ -48,7 +48,120 @@ export const LTI_MESSAGE_TYPES = {
   deepLinkingResponse: 'LtiDeepLinkingResponse',
 } as const;
 
-const STANDARD_LTI_ROLE_PREFIX = 'http://purl.imsglobal.org/vocab/lis/v2/';
+const STANDARD_LTI_ROLE_URIS = new Set([
+  ...[
+    'Administrator',
+    'None',
+    'AccountAdmin',
+    'Creator',
+    'SysAdmin',
+    'SysSupport',
+    'User',
+  ].map(
+    (role) => `http://purl.imsglobal.org/vocab/lis/v2/system/person#${role}`
+  ),
+  ...[
+    'Administrator',
+    'Faculty',
+    'Guest',
+    'None',
+    'Other',
+    'Staff',
+    'Student',
+    'Alumni',
+    'Instructor',
+    'Learner',
+    'Member',
+    'Mentor',
+    'Observer',
+    'ProspectiveStudent',
+  ].map(
+    (role) =>
+      `http://purl.imsglobal.org/vocab/lis/v2/institution/person#${role}`
+  ),
+  ...[
+    'Administrator',
+    'ContentDeveloper',
+    'Instructor',
+    'Learner',
+    'Mentor',
+    'Manager',
+    'Member',
+    'Officer',
+  ].map((role) => `http://purl.imsglobal.org/vocab/lis/v2/membership#${role}`),
+  ...Object.entries({
+    Administrator: [
+      'Administrator',
+      'Developer',
+      'ExternalDeveloper',
+      'ExternalSupport',
+      'ExternalSystemAdministrator',
+      'Support',
+      'SystemAdministrator',
+    ],
+    ContentDeveloper: [
+      'ContentDeveloper',
+      'ContentExpert',
+      'ExternalContentExpert',
+      'Librarian',
+    ],
+    Instructor: [
+      'ExternalInstructor',
+      'Grader',
+      'GuestInstructor',
+      'Lecturer',
+      'PrimaryInstructor',
+      'SecondaryInstructor',
+      'TeachingAssistant',
+      'TeachingAssistantGroup',
+      'TeachingAssistantOffering',
+      'TeachingAssistantSection',
+      'TeachingAssistantSectionAssociation',
+      'TeachingAssistantTemplate',
+    ],
+    Learner: [
+      'ExternalLearner',
+      'GuestLearner',
+      'Instructor',
+      'Learner',
+      'NonCreditLearner',
+    ],
+    Manager: [
+      'AreaManager',
+      'CourseCoordinator',
+      'ExternalObserver',
+      'Manager',
+      'Observer',
+    ],
+    Member: ['Member'],
+    Mentor: [
+      'Advisor',
+      'Auditor',
+      'ExternalAdvisor',
+      'ExternalAuditor',
+      'ExternalLearningFacilitator',
+      'ExternalMentor',
+      'ExternalReviewer',
+      'ExternalTutor',
+      'LearningFacilitator',
+      'Mentor',
+      'Reviewer',
+      'Tutor',
+    ],
+    Officer: [
+      'Chair',
+      'Communications',
+      'Secretary',
+      'Treasurer',
+      'Vice-Chair',
+    ],
+  }).flatMap(([principal, subRoles]) =>
+    subRoles.map(
+      (subRole) =>
+        `http://purl.imsglobal.org/vocab/lis/v2/membership/${principal}#${subRole}`
+    )
+  ),
+]);
 
 const LtiRoleUriSchema = z
   .string()
@@ -63,7 +176,7 @@ export const LtiRolesSchema = z
   .superRefine((roles, context) => {
     if (
       roles.length > 0 &&
-      !roles.some((role) => role.startsWith(STANDARD_LTI_ROLE_PREFIX))
+      !roles.some((role) => STANDARD_LTI_ROLE_URIS.has(role))
     ) {
       context.addIssue({
         code: z.ZodIssueCode.custom,

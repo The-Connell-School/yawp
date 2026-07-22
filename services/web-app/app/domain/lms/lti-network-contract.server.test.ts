@@ -307,6 +307,8 @@ describe('LTI 1.3 launch over the network boundary', () => {
   test.each([
     ['malformed-relative-role', 'absolute URI'],
     ['nonstandard-only-role', 'standard LIS'],
+    ['fabricated-lis-role', 'standard LIS'],
+    ['lis-context-type-as-role', 'standard LIS'],
   ])(
     'rejects authorization-unsafe role scenario %s',
     async (scenario, message) => {
@@ -985,6 +987,14 @@ describe('LTI Advantage service authentication and roster shape', () => {
     for (const [roles, message] of [
       [['Instructor'], 'absolute URI'],
       [['https://roles.example.test/Instructor'], 'standard LIS'],
+      [
+        ['http://purl.imsglobal.org/vocab/lis/v2/membership#SuperAdmin'],
+        'standard LIS',
+      ],
+      [
+        ['http://purl.imsglobal.org/vocab/lis/v2/course#CourseOffering'],
+        'standard LIS',
+      ],
     ] as const) {
       platform.failNext('nrps', {
         status: 200,
