@@ -61,7 +61,11 @@ An enabled registration must identify one Yawp organization and contain:
 All non-loopback endpoints must use HTTPS. Plain HTTP is accepted only when the
 resolved hostname is an IP loopback or `localhost`, allowing the same
 production contract code to exercise an actual local network service. No
-environment-name or test-mode bypass is allowed.
+environment-name or test-mode bypass is allowed. Public HTTPS requests resolve
+the target before every request and reject private, loopback, link-local, and
+metadata-class addresses. Redirects are handled manually and revalidated.
+Provider response bodies share the request deadline and are streamed through a
+one-megabyte cap, including responses whose headers arrive before the body.
 
 ## Launch shape
 
@@ -75,11 +79,21 @@ The signed launch must:
 - resolve the key from the configured platform JWKS URL;
 - reject `none`, embedded `jwk`, `jku`, `x5u`, and `x5c` JOSE headers;
 - validate signature, issuer, audience/authorized-party, expiry, issued-at,
-  nonce, deployment id, message type, LTI version, and target-link URI;
+  not-before, nonce, deployment id, message type, LTI version, and target-link
+  URI, including `exp > iat` and bounded token lifetimes;
 - require a stable subject, roles, context id, and resource-link id for a
   resource-link launch;
 - expose only validated claim data to account and tenant mapping;
 - consume state and nonce exactly once in the persisted launch flow in #212.
+
+A Deep Linking launch may omit subject, roles, and context under Deep Linking
+2.0. Its required settings are still validated and normalized. A response uses
+a fresh signed nonce, returns the request's opaque `data`, and accepts only item
+types, multiplicity, line-item metadata, and presentation modes advertised by
+that request. For `ltiResourceLink`, URL, title, and line-item label remain
+optional as required by the standard; date windows, images, window/iframe
+preferences, `gradesReleased`, and fully qualified extension properties are
+validated without inventing provider-only fields.
 
 The contract parser returns a normalized value containing platform subject,
 deployment, context, resource link, roles, optional person attributes, and
@@ -97,12 +111,21 @@ The mock freezes the later #213 network boundary now:
   learners, one inactive learner, missing optional PII, role filtering, and
   paginated results with a `rel="next"` link.
 - Deep Linking authorization returns a signed `LtiDeepLinkingRequest`; the mock
-  accepts a signed `LtiDeepLinkingResponse` at its return endpoint and preserves
-  opaque `data`.
-- AGS exposes line-item create/read/update and score submission. Score state is
-  stored by the mock service. Repeated writes remain repeated provider requests;
-  Yawp-owned grade-job idempotency is deliberately implemented in #213 rather
-  than attributed to a provider extension not required by the standard.
+  independently validates a signed `LtiDeepLinkingResponse`, its fresh nonce,
+  item schema, advertised capabilities, and opaque `data`, and rejects replay.
+- AGS exposes paginated/filterable line-item collection reads, single-item
+  reads, create/update, and score submission with normative media types. A
+  read-only token can list/read but cannot write. Line items preserve offset or
+  null dates, `gradesReleased`, and qualified extensions; scores preserve clear
+  (`null`) updates, scoring-user and submission metadata, progress enums, and
+  qualified extensions. Query parameters on line-item IDs survive `/scores`
+  URL derivation. Score state is stored by the mock service. Repeated writes
+  remain repeated provider requests; Yawp-owned grade-job idempotency is
+  deliberately implemented in #213 rather than attributed to a provider
+  extension not required by the standard.
+- The mock runs two registrations on one origin, binds OAuth assertions to the
+  expected client and deployment, expires bearer grants on a controllable
+  clock, and validates provider requests independently from Yawp schemas.
 - Seeded controls can force 401, 403, 429, 500, redirect, timeout, malformed
   JSON, invalid media type, invalid context, and cross-origin resource responses.
 
@@ -153,8 +176,8 @@ display name, course label, or mutable title is used as an identity key.
 | Context `id` | LMS course context mapped to a Yawp class | Unique within registration; every NRPS page must repeat the signed context id |
 | Resource-link `id` | LMS placement mapped to a Yawp assignment | Unique within registration and context; target link must match the initiated transaction |
 | NRPS member `user_id` | External identity and class-enrollment membership | Reconcile active/inactive/deleted status without assuming PII is present; minimize stored person fields per institutional approval |
-| Deep Linking content-item URL + custom data | Yawp assignment selected for placement | Signed response returns only accepted item types and the platform's opaque `data` when present |
-| AGS line-item `id` | External grade-column binding | Validate returned URL against the registration origin; preserve resource-link identity on update |
+| Deep Linking content-item URL + custom data | Yawp assignment selected for placement | Signed response returns only advertised item/presentation capabilities, a fresh nonce, and the platform's opaque `data` when present |
+| AGS line-item `id` | External grade-column binding | Validate returned URL against the exact advertised service origin, even when another origin is registration-allowlisted; preserve immutable identity on update |
 | AGS score `userId` | External learner identity on a released Yawp submission | #213 gates on tenant, enrollment, release state, and a durable Yawp grade job before any provider write |
 
 ## Audit and data handling contract
@@ -206,12 +229,14 @@ selection, deployment confusion, replay, account takeover through email,
 over-broad service scopes, grade changes before release, retry duplication, and
 credential leakage in logs.
 
-The contract therefore fail-closes unknown issuers/deployments, binds every
-launch to registration metadata, ignores untrusted key URLs in JOSE headers,
-allows only HTTPS or explicit loopback network targets, validates service URLs
-before use, preserves opaque platform ids, requests least-privilege scopes, and
-redacts security material from diagnostic output. Persistence-level replay,
-tenant, release, and audit guarantees are completed in #212 and #213.
+The contract therefore fail-closes unknown issuers/deployments and disabled
+registrations before network I/O, binds every launch and client assertion to
+registration metadata before disclosing credentials, ignores untrusted key
+URLs in JOSE headers, blocks redirects and non-public network targets, validates
+returned resources against the exact source-service origin, preserves opaque
+platform ids, requests least-privilege scopes, and redacts security material
+from diagnostic output. Persistence-level launch replay, tenant, release, and
+audit guarantees are completed in #212 and #213.
 
 ## Alternatives considered
 

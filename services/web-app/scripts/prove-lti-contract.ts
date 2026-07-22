@@ -8,6 +8,7 @@ import {
 import {
   LTI_SCOPES,
   createAgsLineItem,
+  fetchAllAgsLineItems,
   fetchAllNrpsMemberships,
   getAgsLineItem,
   submitAgsScore,
@@ -93,6 +94,10 @@ async function run() {
       nowSeconds: platform.seed.nowSeconds,
       fetchImpl: Bun.fetch as unknown as typeof fetch,
     });
+    invariant(
+      resourceLaunch.context,
+      'Resource launch did not include context.'
+    );
 
     const assertion = createLtiClientAssertion({
       clientId: platform.registration.clientId,
@@ -148,12 +153,14 @@ async function run() {
       },
     });
     const readLineItem = await getAgsLineItem({
+      lineItemsUrl: resourceLaunch.services.lineItemsUrl,
       lineItemUrl: lineItem.id,
       accessToken: token.accessToken,
       registration: platform.registration,
       fetchImpl: Bun.fetch as unknown as typeof fetch,
     });
     const updatedLineItem = await updateAgsLineItem({
+      lineItemsUrl: resourceLaunch.services.lineItemsUrl,
       lineItemUrl: lineItem.id,
       accessToken: token.accessToken,
       registration: platform.registration,
@@ -163,6 +170,17 @@ async function run() {
     invariant(
       updatedLineItem.label.endsWith('Updated'),
       'AGS line-item update drifted.'
+    );
+    const listedLineItems = await fetchAllAgsLineItems({
+      lineItemsUrl: resourceLaunch.services.lineItemsUrl,
+      accessToken: token.accessToken,
+      registration: platform.registration,
+      filters: { resourceId: 'resource-proof-001', limit: 1 },
+      fetchImpl: Bun.fetch as unknown as typeof fetch,
+    });
+    invariant(
+      listedLineItems.length === 1 && listedLineItems[0].id === lineItem.id,
+      'AGS filtered line-item listing drifted.'
     );
     const score = {
       userId: 'lti-learner-ada',
@@ -174,6 +192,7 @@ async function run() {
     };
     for (let attempt = 0; attempt < 2; attempt += 1) {
       await submitAgsScore({
+        lineItemsUrl: resourceLaunch.services.lineItemsUrl,
         lineItemUrl: lineItem.id,
         accessToken: token.accessToken,
         registration: platform.registration,
@@ -212,8 +231,13 @@ async function run() {
       deploymentId: platform.registration.deploymentId,
       privateKeyPem: platform.tool.privateKeyPem,
       keyId: platform.tool.keyId,
+      nonce: 'proof-deep-link-response-001',
       data: deepLinkLaunch.deepLinking.data,
       contentItems: [platform.seed.contentItem],
+      acceptTypes: deepLinkLaunch.deepLinking.acceptTypes,
+      documentTargets: deepLinkLaunch.deepLinking.documentTargets,
+      acceptsMultiple: deepLinkLaunch.deepLinking.acceptsMultiple,
+      acceptLineItem: deepLinkLaunch.deepLinking.acceptLineItem,
       nowSeconds: platform.seed.nowSeconds,
     });
     const returnResponse = await Bun.fetch(
@@ -268,6 +292,7 @@ async function run() {
             ).length,
             lineItemCreated: lineItem.id,
             lineItemReadAndUpdated: true,
+            lineItemsListedAndFiltered: listedLineItems.length,
             scoreWritesReceived: platform.journal.filter((entry) =>
               entry.path.endsWith('/scores')
             ).length,

@@ -16,6 +16,8 @@ import {
 } from './lti-registration';
 import {
   fetchLtiNetwork,
+  finishLtiNetwork,
+  LtiHttpError,
   readLtiJson,
   throwLtiHttpStatus,
 } from './lti-http.server';
@@ -43,6 +45,107 @@ export const LTI_MESSAGE_TYPES = {
   deepLinkingRequest: 'LtiDeepLinkingRequest',
   deepLinkingResponse: 'LtiDeepLinkingResponse',
 } as const;
+
+const ExplicitIsoDateTimeSchema = z
+  .string()
+  .regex(
+    /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/,
+    'Date-time must be ISO 8601 with an explicit time-zone designator.'
+  )
+  .refine((value) => !Number.isNaN(Date.parse(value)), 'Invalid date-time.');
+
+function withQualifiedExtensions<T extends z.ZodRawShape>(
+  schema: z.ZodObject<T>,
+  standardKeys: ReadonlySet<string>
+) {
+  return schema.catchall(z.unknown()).superRefine((value, context) => {
+    for (const key of Object.keys(value)) {
+      if (standardKeys.has(key) || URL.canParse(key)) continue;
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: [key],
+        message: 'Extension property names must be fully qualified URLs.',
+      });
+    }
+  });
+}
+
+const DeepLinkLineItemSchema = withQualifiedExtensions(
+  z.object({
+    scoreMaximum: z.number().positive(),
+    label: z.string().min(1).optional(),
+    resourceId: z.string().min(1).optional(),
+    tag: z.string().min(1).optional(),
+    gradesReleased: z.boolean().optional(),
+  }),
+  new Set(['scoreMaximum', 'label', 'resourceId', 'tag', 'gradesReleased'])
+);
+
+const DeepLinkImageSchema = z
+  .object({
+    url: z.string().url(),
+    width: z.number().int().positive().optional(),
+    height: z.number().int().positive().optional(),
+  })
+  .strict();
+
+const DeepLinkWindowSchema = z
+  .object({
+    targetName: z.string().min(1).optional(),
+    width: z.number().int().positive().optional(),
+    height: z.number().int().positive().optional(),
+    windowFeatures: z.string().optional(),
+  })
+  .strict();
+
+const DeepLinkIframeSchema = z
+  .object({
+    width: z.number().int().positive().optional(),
+    height: z.number().int().positive().optional(),
+  })
+  .strict();
+
+const DeepLinkTimePeriodSchema = z
+  .object({
+    startDateTime: ExplicitIsoDateTimeSchema.optional(),
+    endDateTime: ExplicitIsoDateTimeSchema.optional(),
+  })
+  .strict();
+
+export const LtiDeepLinkContentItemSchema = withQualifiedExtensions(
+  z.object({
+    type: z.literal('ltiResourceLink'),
+    title: z.string().min(1).optional(),
+    url: z.string().url().optional(),
+    text: z.string().optional(),
+    icon: DeepLinkImageSchema.optional(),
+    thumbnail: DeepLinkImageSchema.optional(),
+    window: DeepLinkWindowSchema.optional(),
+    iframe: DeepLinkIframeSchema.optional(),
+    custom: z.record(z.string(), z.string()).optional(),
+    lineItem: DeepLinkLineItemSchema.optional(),
+    available: DeepLinkTimePeriodSchema.optional(),
+    submission: DeepLinkTimePeriodSchema.optional(),
+  }),
+  new Set([
+    'type',
+    'title',
+    'url',
+    'text',
+    'icon',
+    'thumbnail',
+    'window',
+    'iframe',
+    'custom',
+    'lineItem',
+    'available',
+    'submission',
+  ])
+);
+
+export type LtiDeepLinkContentItem = z.infer<
+  typeof LtiDeepLinkContentItemSchema
+>;
 
 type JsonObject = Record<string, unknown>;
 
@@ -127,6 +230,13 @@ function getRequiredObject(
   return value as JsonObject;
 }
 
+function getOptionalObject(object: JsonObject, key: string): JsonObject | null {
+  const value = object[key];
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as JsonObject)
+    : null;
+}
+
 function getStringArray(
   value: unknown,
   label: string,
@@ -152,6 +262,7 @@ async function fetchPlatformSigningKey(
   const response = await fetchLtiNetwork({
     operation: 'LTI platform JWKS',
     url: registration.jwksUrl,
+    registration,
     fetchImpl,
     timeoutMs,
     init: {
@@ -162,6 +273,7 @@ async function fetchPlatformSigningKey(
     throwLtiHttpStatus(response, 'LTI platform JWKS');
   }
   if (!response.headers.get('content-type')?.includes('application/json')) {
+    finishLtiNetwork(response);
     throw new Error(
       'LTI platform JWKS response used an unexpected media type.'
     );
@@ -171,6 +283,7 @@ async function fetchPlatformSigningKey(
   try {
     jwks = JwksSchema.parse(await readLtiJson(response, 'LTI platform JWKS'));
   } catch (error) {
+    if (error instanceof LtiHttpError) throw error;
     throw new Error('LTI platform JWKS response is malformed.', {
       cause: error,
     });
@@ -199,14 +312,14 @@ function normalizeAudiences(payload: JsonObject): string[] {
 
 export type VerifiedLtiLaunch = {
   issuer: string;
-  subject: string;
+  subject: string | null;
   audience: string[];
   deploymentId: string;
   messageType: string;
   version: '1.3.0';
   targetLinkUri: string;
   roles: string[];
-  context: { id: string; label: string | null; title: string | null };
+  context: { id: string; label: string | null; title: string | null } | null;
   resourceLink: { id: string; title: string | null } | null;
   person: {
     email: string | null;
@@ -228,6 +341,7 @@ export type VerifiedLtiLaunch = {
     documentTargets: string[];
     acceptsMultiple: boolean;
     autoCreate: boolean;
+    acceptLineItem: boolean | null;
     data: string | null;
   } | null;
 };
@@ -249,6 +363,13 @@ export async function verifyLtiLaunchForm(
 ): Promise<VerifiedLtiLaunch> {
   if (!options.registration.enabled) {
     throw new Error('LTI registration is disabled.');
+  }
+  if (
+    !options.expectedState ||
+    !options.expectedNonce ||
+    !options.expectedTargetLinkUri
+  ) {
+    throw new Error('LTI launch transaction values must be non-empty.');
   }
   if (!form.state || form.state !== options.expectedState) {
     throw new Error('LTI OIDC state did not match the initiated launch.');
@@ -310,6 +431,14 @@ export async function verifyLtiLaunchForm(
   if (typeof payload.iat !== 'number' || payload.iat > now + 60) {
     throw new Error('LTI token issued-at time is invalid.');
   }
+  if (payload.exp <= payload.iat) {
+    throw new Error('LTI token expiry must be after its issued-at time.');
+  }
+  if (payload.nbf !== undefined) {
+    if (typeof payload.nbf !== 'number' || payload.nbf > now + 60) {
+      throw new Error('LTI token is not yet valid.');
+    }
+  }
   if (payload.iat < now - 300) {
     throw new Error('LTI token issued-at time is too old.');
   }
@@ -353,18 +482,20 @@ export async function verifyLtiLaunchForm(
     throw new Error('LTI target link does not match the initiated target.');
   }
 
-  const contextClaim = getRequiredObject(
-    payload,
-    LTI_CLAIMS.context,
-    'context'
-  );
-  const resourceLinkClaim =
-    messageType === LTI_MESSAGE_TYPES.resourceLinkRequest
-      ? getRequiredObject(payload, LTI_CLAIMS.resourceLink, 'resource link')
-      : null;
-  const roles = getStringArray(payload[LTI_CLAIMS.roles], 'roles', {
-    allowEmpty: true,
-  });
+  const isResourceLaunch =
+    messageType === LTI_MESSAGE_TYPES.resourceLinkRequest;
+  const contextClaim = isResourceLaunch
+    ? getRequiredObject(payload, LTI_CLAIMS.context, 'context')
+    : getOptionalObject(payload, LTI_CLAIMS.context);
+  const resourceLinkClaim = isResourceLaunch
+    ? getRequiredObject(payload, LTI_CLAIMS.resourceLink, 'resource link')
+    : null;
+  const roles =
+    payload[LTI_CLAIMS.roles] === undefined && !isResourceLaunch
+      ? []
+      : getStringArray(payload[LTI_CLAIMS.roles], 'roles', {
+          allowEmpty: true,
+        });
   const nrps = payload[LTI_CLAIMS.namesRoleService];
   const ags = payload[LTI_CLAIMS.endpoint];
   const nrpsClaim =
@@ -428,18 +559,22 @@ export async function verifyLtiLaunchForm(
 
   return {
     issuer,
-    subject: getRequiredString(payload, 'sub', 'subject'),
+    subject: isResourceLaunch
+      ? getRequiredString(payload, 'sub', 'subject')
+      : getOptionalString(payload, 'sub'),
     audience,
     deploymentId,
     messageType,
     version,
     targetLinkUri,
     roles,
-    context: {
-      id: getRequiredString(contextClaim, 'id', 'context id'),
-      label: getOptionalString(contextClaim, 'label'),
-      title: getOptionalString(contextClaim, 'title'),
-    },
+    context: contextClaim
+      ? {
+          id: getRequiredString(contextClaim, 'id', 'context id'),
+          label: getOptionalString(contextClaim, 'label'),
+          title: getOptionalString(contextClaim, 'title'),
+        }
+      : null,
     resourceLink: resourceLinkClaim
       ? {
           id: getRequiredString(resourceLinkClaim, 'id', 'resource link id'),
@@ -476,6 +611,10 @@ export async function verifyLtiLaunchForm(
             ),
             acceptsMultiple: deepLinkingClaim.accept_multiple === true,
             autoCreate: deepLinkingClaim.auto_create === true,
+            acceptLineItem:
+              typeof deepLinkingClaim.accept_lineitem === 'boolean'
+                ? deepLinkingClaim.accept_lineitem
+                : null,
             data: getOptionalString(deepLinkingClaim, 'data'),
           }
         : null,
@@ -531,10 +670,36 @@ export function createDeepLinkingResponseJwt(input: {
   deploymentId: string;
   privateKeyPem: string;
   keyId: string;
+  nonce: string;
   data?: string | null;
   contentItems: unknown[];
+  acceptTypes: string[];
+  documentTargets: string[];
+  acceptsMultiple: boolean;
+  acceptLineItem: boolean | null;
   nowSeconds?: number;
 }): string {
+  if (!input.nonce) throw new Error('Deep Linking response nonce is required.');
+  const contentItems = input.contentItems.map((item) =>
+    LtiDeepLinkContentItemSchema.parse(item)
+  );
+  if (contentItems.length > 1 && !input.acceptsMultiple) {
+    throw new Error('Deep Linking request did not accept multiple items.');
+  }
+  for (const item of contentItems) {
+    if (!input.acceptTypes.includes(item.type)) {
+      throw new Error(`Deep Linking request did not accept ${item.type}.`);
+    }
+    if (item.lineItem && input.acceptLineItem !== true) {
+      throw new Error('Deep Linking request did not accept line items.');
+    }
+    if (item.window && !input.documentTargets.includes('window')) {
+      throw new Error('Deep Linking request did not accept window content.');
+    }
+    if (item.iframe && !input.documentTargets.includes('iframe')) {
+      throw new Error('Deep Linking request did not accept iframe content.');
+    }
+  }
   const now = input.nowSeconds ?? Math.floor(Date.now() / 1000);
   return signLtiJwt({
     header: { kid: input.keyId },
@@ -543,11 +708,12 @@ export function createDeepLinkingResponseJwt(input: {
       aud: input.platformIssuer,
       iat: now,
       exp: now + 300,
+      nonce: input.nonce,
       [LTI_CLAIMS.deploymentId]: input.deploymentId,
       [LTI_CLAIMS.messageType]: LTI_MESSAGE_TYPES.deepLinkingResponse,
       [LTI_CLAIMS.version]: '1.3.0',
       ...(input.data ? { [LTI_CLAIMS.data]: input.data } : {}),
-      [LTI_CLAIMS.contentItems]: input.contentItems,
+      [LTI_CLAIMS.contentItems]: contentItems,
     },
     privateKeyPem: input.privateKeyPem,
   });
@@ -573,6 +739,16 @@ export async function requestLtiAccessToken(input: {
     input.registration.tokenEndpoint,
     input.registration
   );
+  const assertionPayload = decodeJwt(input.clientAssertion).payload;
+  if (
+    assertionPayload.iss !== input.registration.clientId ||
+    assertionPayload.sub !== input.registration.clientId ||
+    assertionPayload.aud !== tokenEndpoint.toString() ||
+    assertionPayload[LTI_CLAIMS.deploymentId] !==
+      input.registration.deploymentId
+  ) {
+    throw new Error('LTI client assertion is not bound to the registration.');
+  }
   if (input.scopes.length === 0 || input.scopes.some((scope) => !scope)) {
     throw new Error('LTI service token requires at least one scope.');
   }
@@ -589,6 +765,7 @@ export async function requestLtiAccessToken(input: {
   const response = await fetchLtiNetwork({
     operation: 'LTI token endpoint',
     url: tokenEndpoint,
+    registration: input.registration,
     fetchImpl: input.fetchImpl,
     timeoutMs: input.timeoutMs,
     init: {
@@ -607,6 +784,7 @@ export async function requestLtiAccessToken(input: {
     throwLtiHttpStatus(response, 'LTI token endpoint');
   }
   if (!response.headers.get('content-type')?.includes('application/json')) {
+    finishLtiNetwork(response);
     throw new Error(
       'LTI token endpoint response used an unexpected media type.'
     );
@@ -615,6 +793,7 @@ export async function requestLtiAccessToken(input: {
   try {
     body = await readLtiJson(response, 'LTI token endpoint');
   } catch (error) {
+    if (error instanceof LtiHttpError) throw error;
     throw new Error('LTI token endpoint returned malformed JSON.', {
       cause: error,
     });

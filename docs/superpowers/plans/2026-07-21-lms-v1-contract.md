@@ -21,10 +21,13 @@ with Blackboard Learn as the first documented reference profile.
    injection, in-memory state, and a redacted request journal.
 4. Add a network contract test that runs the actual OIDC form-post flow, fetches
    JWKS over HTTP, exchanges a signed client assertion, follows NRPS pagination,
-   performs a Deep Linking round trip, and creates/deduplicates an AGS score.
+   performs a nonce-bound Deep Linking round trip, lists/filters AGS line items,
+   and creates/reads/updates a line item before submitting an AGS score.
 5. Add cross-role and hostile-network tests for learner/instructor separation,
-   wrong deployment, wrong nonce, replay marker compatibility, unauthorized
-   scopes, missing bearer tokens, tenant-crossed service URLs, malformed JSON,
+   wrong deployment, wrong nonce, Deep Linking replay/capability violations,
+   unauthorized or expired scopes, disabled registrations, missing bearer
+   tokens, cross-origin service resources, private-network destinations,
+   streamed timeout/body-limit failures, malformed JSON/provider payloads,
    provider errors, and secret redaction.
 6. Add an executable `proof:lti-contract` command that starts the platform,
    runs the integration, prints a redacted machine-readable result, and exits

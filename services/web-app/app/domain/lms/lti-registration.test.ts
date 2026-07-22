@@ -99,6 +99,31 @@ describe('LTI registration contract', () => {
     ).toThrow('transport');
   });
 
+  test('rejects private destinations even when they use HTTPS', () => {
+    for (const endpoint of [
+      'https://127.0.0.1/jwks',
+      'https://10.0.0.8/jwks',
+      'https://169.254.169.254/latest/meta-data',
+      'https://[::1]/jwks',
+      'https://[fd00::1]/jwks',
+    ]) {
+      expect(() =>
+        parseLtiRegistration({ ...validRegistration, jwksUrl: endpoint })
+      ).toThrow('private');
+    }
+  });
+
+  test('reports malformed URLs as structured registration validation errors', () => {
+    let caught: unknown;
+    try {
+      parseLtiRegistration({ ...validRegistration, issuer: 'not a URL' });
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toMatchObject({ name: 'ZodError' });
+    expect((caught as Error).message).toContain('absolute URL');
+  });
+
   test('rejects issuer query strings and audiences that exclude the client', () => {
     expect(() =>
       parseLtiRegistration({

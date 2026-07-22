@@ -12,6 +12,7 @@ import {
   LTI_NRPS_MEDIA_TYPE,
   LTI_SCOPES,
   createAgsLineItem as createAgsLineItemWithTransport,
+  fetchAllAgsLineItems as fetchAllAgsLineItemsWithTransport,
   fetchAllNrpsMemberships as fetchAllNrpsMembershipsWithTransport,
   getAgsLineItem as getAgsLineItemWithTransport,
   submitAgsScore as submitAgsScoreWithTransport,
@@ -70,6 +71,18 @@ function createAgsLineItem(
   input: Omit<Parameters<typeof createAgsLineItemWithTransport>[0], 'fetchImpl'>
 ) {
   return createAgsLineItemWithTransport({
+    ...input,
+    fetchImpl: networkFetch,
+  });
+}
+
+function fetchAllAgsLineItems(
+  input: Omit<
+    Parameters<typeof fetchAllAgsLineItemsWithTransport>[0],
+    'fetchImpl'
+  >
+) {
+  return fetchAllAgsLineItemsWithTransport({
     ...input,
     fetchImpl: networkFetch,
   });
@@ -338,6 +351,8 @@ describe('LTI 1.3 launch over the network boundary', () => {
   test.each([
     ['stale-issued-at', 'too old'],
     ['excessive-lifetime', 'lifetime'],
+    ['future-not-before', 'not yet valid'],
+    ['expiry-before-issued-at', 'after its issued-at'],
     ['untrusted-additional-audience', 'audience'],
     ['wrong-authorized-party', 'authorized-party'],
   ])('rejects bounded-token scenario %s', async (scenario, message) => {
@@ -388,6 +403,7 @@ describe('LTI 1.3 launch over the network boundary', () => {
       documentTargets: ['iframe', 'window'],
       acceptsMultiple: true,
       autoCreate: false,
+      acceptLineItem: true,
       data: 'opaque-deep-link-data-001',
     });
 
@@ -397,8 +413,13 @@ describe('LTI 1.3 launch over the network boundary', () => {
       deploymentId: platform.registration.deploymentId,
       privateKeyPem: platform.tool.privateKeyPem,
       keyId: platform.tool.keyId,
+      nonce: 'deep-link-response-contract-001',
       data: launch.deepLinking?.data ?? '',
       contentItems: [platform.seed.contentItem],
+      acceptTypes: launch.deepLinking!.acceptTypes,
+      documentTargets: launch.deepLinking!.documentTargets,
+      acceptsMultiple: launch.deepLinking!.acceptsMultiple,
+      acceptLineItem: launch.deepLinking!.acceptLineItem,
       nowSeconds: platform.seed.nowSeconds,
     });
     const response = await networkFetch(launch.deepLinking!.returnUrl, {
@@ -408,6 +429,12 @@ describe('LTI 1.3 launch over the network boundary', () => {
     });
 
     expect(response.status).toBe(204);
+    const replay = await networkFetch(launch.deepLinking!.returnUrl, {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ JWT: responseJwt }),
+    });
+    expect(replay.status).toBe(400);
     expect(platform.state.deepLinkContentItems).toEqual([
       platform.seed.contentItem,
     ]);
@@ -433,8 +460,13 @@ describe('LTI 1.3 launch over the network boundary', () => {
       deploymentId: platform.registration.deploymentId,
       privateKeyPem: platform.tool.privateKeyPem,
       keyId: platform.tool.keyId,
+      nonce: 'deep-link-response-contract-002',
       data: launch.deepLinking?.data,
       contentItems: [platform.seed.contentItem],
+      acceptTypes: launch.deepLinking!.acceptTypes,
+      documentTargets: launch.deepLinking!.documentTargets,
+      acceptsMultiple: launch.deepLinking!.acceptsMultiple,
+      acceptLineItem: launch.deepLinking!.acceptLineItem,
       nowSeconds: platform.seed.nowSeconds,
     });
     const response = await networkFetch(launch.deepLinking!.returnUrl, {
@@ -443,6 +475,94 @@ describe('LTI 1.3 launch over the network boundary', () => {
       body: new URLSearchParams({ JWT: responseJwt }),
     });
     expect(response.status).toBe(204);
+  });
+
+  test('accepts a minimal Deep Linking request without subject, roles, or context', async () => {
+    const platform = await startPlatform();
+    const form = await authorize(platform, 'deep-link-minimal');
+    const launch = await verifyLtiLaunchForm(form, {
+      registration: platform.registration,
+      expectedState: 'state-contract-001',
+      expectedNonce: 'nonce-contract-001',
+      expectedTargetLinkUri: platform.registration.deepLinkingLaunchUrl,
+      expectedMessageType: LTI_MESSAGE_TYPES.deepLinkingRequest,
+      nowSeconds: platform.seed.nowSeconds,
+    });
+
+    expect(launch.subject).toBeNull();
+    expect(launch.roles).toEqual([]);
+    expect(launch.context).toBeNull();
+  });
+
+  test('accepts the minimal standards-valid LTI resource link shape', async () => {
+    const platform = await startPlatform();
+    const jwt = createDeepLinkingResponseJwt({
+      clientId: platform.registration.clientId,
+      platformIssuer: platform.registration.issuer,
+      deploymentId: platform.registration.deploymentId,
+      privateKeyPem: platform.tool.privateKeyPem,
+      keyId: platform.tool.keyId,
+      nonce: 'deep-link-response-minimal-item',
+      contentItems: [
+        {
+          type: 'ltiResourceLink',
+          lineItem: { scoreMaximum: 10 },
+          'https://example.test/deep-link-extension': { value: true },
+        },
+      ],
+      acceptTypes: ['ltiResourceLink'],
+      documentTargets: [],
+      acceptsMultiple: false,
+      acceptLineItem: true,
+      nowSeconds: platform.seed.nowSeconds,
+    });
+
+    const response = await networkFetch(
+      `${platform.baseUrl}/deep-link/return`,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ JWT: jwt }),
+      }
+    );
+    expect(response.status).toBe(204);
+  });
+
+  test('rejects content outside the Deep Linking capabilities before network I/O', async () => {
+    const platform = await startPlatform();
+    expect(() =>
+      createDeepLinkingResponseJwt({
+        clientId: platform.registration.clientId,
+        platformIssuer: platform.registration.issuer,
+        deploymentId: platform.registration.deploymentId,
+        privateKeyPem: platform.tool.privateKeyPem,
+        keyId: platform.tool.keyId,
+        nonce: 'deep-link-response-capability-negative',
+        contentItems: [platform.seed.contentItem],
+        acceptTypes: ['ltiResourceLink'],
+        documentTargets: ['iframe', 'window'],
+        acceptsMultiple: true,
+        acceptLineItem: false,
+        nowSeconds: platform.seed.nowSeconds,
+      })
+    ).toThrow('line items');
+
+    expect(() =>
+      createDeepLinkingResponseJwt({
+        clientId: platform.registration.clientId,
+        platformIssuer: platform.registration.issuer,
+        deploymentId: platform.registration.deploymentId,
+        privateKeyPem: platform.tool.privateKeyPem,
+        keyId: platform.tool.keyId,
+        nonce: 'deep-link-response-document-target-negative',
+        contentItems: [{ type: 'ltiResourceLink', iframe: { height: 720 } }],
+        acceptTypes: ['ltiResourceLink'],
+        documentTargets: ['window'],
+        acceptsMultiple: false,
+        acceptLineItem: false,
+        nowSeconds: platform.seed.nowSeconds,
+      })
+    ).toThrow('iframe');
   });
 });
 
@@ -568,7 +688,7 @@ describe('LTI Advantage service authentication and roster shape', () => {
     });
     platform.failNext('token', {
       status: 200,
-      delayMs: 50,
+      headersFirstDelayMs: 50,
       contentType: 'application/json',
       body: JSON.stringify({
         access_token: 'too-late',
@@ -597,6 +717,33 @@ describe('LTI Advantage service authentication and roster shape', () => {
       retryAfter: null,
     });
     expect((caught as Error).message).toContain('timed out');
+  });
+
+  test('stops reading a chunked provider response at the body limit', async () => {
+    const platform = await startPlatform();
+    const assertion = createLtiClientAssertion({
+      clientId: platform.registration.clientId,
+      tokenEndpoint: platform.registration.tokenEndpoint,
+      deploymentId: platform.registration.deploymentId,
+      privateKeyPem: platform.tool.privateKeyPem,
+      keyId: platform.tool.keyId,
+      jti: 'client-assertion-body-limit',
+      nowSeconds: platform.seed.nowSeconds,
+    });
+    platform.failNext('token', {
+      status: 200,
+      contentType: 'application/json',
+      bodyChunks: ['{"padding":"', 'x'.repeat(600_000), 'y'.repeat(600_000)],
+    });
+
+    await expect(
+      requestLtiAccessToken({
+        registration: platform.registration,
+        clientAssertion: assertion,
+        scopes: [LTI_SCOPES.lineItem],
+        advertisedScopes: [LTI_SCOPES.lineItem],
+      })
+    ).rejects.toThrow('exceeded');
   });
 
   test('rejects a roster whose context differs from the signed launch', async () => {
@@ -785,6 +932,10 @@ describe('LTI Advantage service authentication and roster shape', () => {
         label: 'Yawp Network Contract',
         resourceId: 'resource-network-contract-001',
         tag: 'yawp-contract',
+        startDateTime: '2026-08-01T09:00:00-05:00',
+        endDateTime: null,
+        gradesReleased: false,
+        'https://provider.example/extension': { retained: true },
       },
     });
     const score = {
@@ -797,12 +948,14 @@ describe('LTI Advantage service authentication and roster shape', () => {
     };
     expect(
       await getAgsLineItem({
+        lineItemsUrl: `${platform.baseUrl}/contexts/course-eng-101/lineitems`,
         lineItemUrl: lineItem.id,
         accessToken: token.accessToken,
         registration: platform.registration,
       })
     ).toEqual(lineItem);
     const updated = await updateAgsLineItem({
+      lineItemsUrl: `${platform.baseUrl}/contexts/course-eng-101/lineitems`,
       lineItemUrl: lineItem.id,
       accessToken: token.accessToken,
       registration: platform.registration,
@@ -811,14 +964,20 @@ describe('LTI Advantage service authentication and roster shape', () => {
     expect(updated).toMatchObject({
       id: lineItem.id,
       label: 'Yawp Network Contract Updated',
+      startDateTime: '2026-08-01T09:00:00-05:00',
+      endDateTime: null,
+      gradesReleased: false,
+      'https://provider.example/extension': { retained: true },
     });
     await submitAgsScore({
+      lineItemsUrl: `${platform.baseUrl}/contexts/course-eng-101/lineitems`,
       lineItemUrl: lineItem.id,
       accessToken: token.accessToken,
       registration: platform.registration,
       score,
     });
     await submitAgsScore({
+      lineItemsUrl: `${platform.baseUrl}/contexts/course-eng-101/lineitems`,
       lineItemUrl: lineItem.id,
       accessToken: token.accessToken,
       registration: platform.registration,
@@ -835,6 +994,89 @@ describe('LTI Advantage service authentication and roster shape', () => {
       scoreGiven: 91,
       gradingProgress: 'FullyGraded',
     });
+  });
+
+  test('lists and filters line items with read-only scope and blocks writes', async () => {
+    const platform = await startPlatform();
+    const writeAssertion = createLtiClientAssertion({
+      clientId: platform.registration.clientId,
+      tokenEndpoint: platform.registration.tokenEndpoint,
+      deploymentId: platform.registration.deploymentId,
+      privateKeyPem: platform.tool.privateKeyPem,
+      keyId: platform.tool.keyId,
+      jti: 'client-assertion-lineitem-list-write',
+      nowSeconds: platform.seed.nowSeconds,
+    });
+    const writeToken = await requestLtiAccessToken({
+      registration: platform.registration,
+      clientAssertion: writeAssertion,
+      scopes: [LTI_SCOPES.lineItem],
+      advertisedScopes: [LTI_SCOPES.lineItem],
+    });
+    await createAgsLineItem({
+      lineItemsUrl: `${platform.baseUrl}/contexts/course-eng-101/lineitems`,
+      accessToken: writeToken.accessToken,
+      registration: platform.registration,
+      lineItem: {
+        scoreMaximum: 20,
+        label: 'Second item',
+        resourceId: 'resource-second',
+        resourceLinkId: 'resource-link-second',
+        tag: 'second-tag',
+      },
+    });
+
+    const readAssertion = createLtiClientAssertion({
+      clientId: platform.registration.clientId,
+      tokenEndpoint: platform.registration.tokenEndpoint,
+      deploymentId: platform.registration.deploymentId,
+      privateKeyPem: platform.tool.privateKeyPem,
+      keyId: platform.tool.keyId,
+      jti: 'client-assertion-lineitem-list-read',
+      nowSeconds: platform.seed.nowSeconds,
+    });
+    const readToken = await requestLtiAccessToken({
+      registration: platform.registration,
+      clientAssertion: readAssertion,
+      scopes: [LTI_SCOPES.lineItemReadonly],
+      advertisedScopes: [LTI_SCOPES.lineItemReadonly],
+    });
+    const all = await fetchAllAgsLineItems({
+      lineItemsUrl: `${platform.baseUrl}/contexts/course-eng-101/lineitems`,
+      accessToken: readToken.accessToken,
+      registration: platform.registration,
+      filters: { limit: 1 },
+    });
+    expect(all).toHaveLength(2);
+    const filtered = await fetchAllAgsLineItems({
+      lineItemsUrl: `${platform.baseUrl}/contexts/course-eng-101/lineitems`,
+      accessToken: readToken.accessToken,
+      registration: platform.registration,
+      filters: {
+        resourceLinkId: 'resource-link-second',
+        resourceId: 'resource-second',
+        tag: 'second-tag',
+      },
+    });
+    expect(filtered).toHaveLength(1);
+    expect(filtered[0]?.label).toBe('Second item');
+    expect(
+      await getAgsLineItem({
+        lineItemsUrl: `${platform.baseUrl}/contexts/course-eng-101/lineitems`,
+        lineItemUrl: filtered[0]!.id,
+        accessToken: readToken.accessToken,
+        registration: platform.registration,
+      })
+    ).toEqual(filtered[0]);
+    await expect(
+      updateAgsLineItem({
+        lineItemsUrl: `${platform.baseUrl}/contexts/course-eng-101/lineitems`,
+        lineItemUrl: filtered[0]!.id,
+        accessToken: readToken.accessToken,
+        registration: platform.registration,
+        lineItem: { ...filtered[0]!, label: 'Forbidden update' },
+      })
+    ).rejects.toMatchObject({ status: 403 });
   });
 
   test('enforces provider media types at the real HTTP boundary', async () => {
@@ -921,11 +1163,12 @@ describe('LTI Advantage service authentication and roster shape', () => {
     ).rejects.toThrow('media type');
   });
 
-  test('supports progress-only scores and rejects negative scores before network I/O', async () => {
+  test('supports progress-only and clear scores, query-bearing IDs, and rejects negatives', async () => {
     const platform = await startPlatform();
     const before = platform.journal.length;
     await expect(
       submitAgsScore({
+        lineItemsUrl: `${platform.baseUrl}/contexts/course-eng-101/lineitems`,
         lineItemUrl: `${platform.baseUrl}/lineitems/lineitem-argument-essay-001`,
         accessToken: 'unused',
         registration: platform.registration,
@@ -957,6 +1200,7 @@ describe('LTI Advantage service authentication and roster shape', () => {
       advertisedScopes: [LTI_SCOPES.score],
     });
     await submitAgsScore({
+      lineItemsUrl: `${platform.baseUrl}/contexts/course-eng-101/lineitems`,
       lineItemUrl: `${platform.baseUrl}/lineitems/lineitem-argument-essay-001`,
       accessToken: token.accessToken,
       registration: platform.registration,
@@ -970,6 +1214,36 @@ describe('LTI Advantage service authentication and roster shape', () => {
     expect(platform.state.scores.at(-1)).toMatchObject({
       userId: 'lti-learner-ada',
       activityProgress: 'InProgress',
+    });
+
+    platform.state.lineItems.set('lineitem-query-001', {
+      id: `${platform.baseUrl}/lineitems/lineitem-query-001?tenant=ua`,
+      scoreMaximum: 100,
+      label: 'Query-bound item',
+      resourceLinkId: 'resource-query-001',
+    });
+    await submitAgsScore({
+      lineItemsUrl: `${platform.baseUrl}/contexts/course-eng-101/lineitems`,
+      lineItemUrl: `${platform.baseUrl}/lineitems/lineitem-query-001?tenant=ua`,
+      accessToken: token.accessToken,
+      registration: platform.registration,
+      score: {
+        userId: 'lti-learner-ada',
+        scoreGiven: null,
+        activityProgress: 'Completed',
+        gradingProgress: 'FullyGraded',
+        timestamp: '2026-07-21T07:00:00-05:00',
+        scoringUserId: 'lti-instructor-kevin',
+        submission: { submittedAt: '2026-07-21T06:30:00-05:00' },
+      },
+    });
+    expect(platform.state.scores.at(-1)).toMatchObject({
+      scoreGiven: null,
+      scoringUserId: 'lti-instructor-kevin',
+    });
+    expect(platform.journal.at(-1)).toMatchObject({
+      path: '/lineitems/lineitem-query-001/scores',
+      queryKeys: ['tenant'],
     });
   });
 
@@ -1006,11 +1280,139 @@ describe('LTI Advantage service authentication and roster shape', () => {
       createAgsLineItem({
         lineItemsUrl: `${platform.baseUrl}/contexts/course-eng-101/lineitems`,
         accessToken: token.accessToken,
-        registration: platform.registration,
+        registration: {
+          ...platform.registration,
+          allowedServiceOrigins: [platform.baseUrl, capture.baseUrl],
+        },
         lineItem: { scoreMaximum: 100, label: 'Expected item' },
       })
     ).rejects.toThrow('origin');
     expect(capture.requests).toHaveLength(0);
+  });
+
+  test('rejects a client assertion bound to another registration before disclosure', async () => {
+    const platform = await startPlatform();
+    const capture = await startMockHttpCaptureServer();
+    captureServers.push(capture);
+    const assertion = createLtiClientAssertion({
+      clientId: platform.registration.clientId,
+      tokenEndpoint: platform.registration.tokenEndpoint,
+      deploymentId: platform.registration.deploymentId,
+      privateKeyPem: platform.tool.privateKeyPem,
+      keyId: platform.tool.keyId,
+      jti: 'client-assertion-wrong-registration',
+      nowSeconds: platform.seed.nowSeconds,
+    });
+    const otherRegistration = {
+      ...platform.alternateRegistration,
+      tokenEndpoint: `${capture.baseUrl}/oauth2/token`,
+      allowedServiceOrigins: [capture.baseUrl],
+    };
+
+    await expect(
+      requestLtiAccessToken({
+        registration: otherRegistration,
+        clientAssertion: assertion,
+        scopes: [LTI_SCOPES.lineItem],
+        advertisedScopes: [LTI_SCOPES.lineItem],
+      })
+    ).rejects.toThrow('bound');
+    expect(capture.requests).toHaveLength(0);
+  });
+
+  test('expires provider grants and stops all service traffic after disablement', async () => {
+    const platform = await startPlatform();
+    const assertion = createLtiClientAssertion({
+      clientId: platform.registration.clientId,
+      tokenEndpoint: platform.registration.tokenEndpoint,
+      deploymentId: platform.registration.deploymentId,
+      privateKeyPem: platform.tool.privateKeyPem,
+      keyId: platform.tool.keyId,
+      jti: 'client-assertion-expiry-disable',
+      nowSeconds: platform.seed.nowSeconds,
+    });
+    const token = await requestLtiAccessToken({
+      registration: platform.registration,
+      clientAssertion: assertion,
+      scopes: [
+        LTI_SCOPES.contextMembershipReadonly,
+        LTI_SCOPES.lineItem,
+        LTI_SCOPES.score,
+      ],
+      advertisedScopes: [
+        LTI_SCOPES.contextMembershipReadonly,
+        LTI_SCOPES.lineItem,
+        LTI_SCOPES.score,
+      ],
+    });
+    platform.advanceTime(301);
+    const expired = await networkFetch(
+      `${platform.baseUrl}/contexts/course-eng-101/memberships`,
+      {
+        headers: {
+          accept: LTI_NRPS_MEDIA_TYPE,
+          authorization: `Bearer ${token.accessToken}`,
+        },
+      }
+    );
+    expect(expired.status).toBe(401);
+
+    platform.journal.splice(0);
+    const registration = { ...platform.registration, enabled: false };
+    const lineItemsUrl = `${platform.baseUrl}/contexts/course-eng-101/lineitems`;
+    const lineItemUrl = `${platform.baseUrl}/lineitems/lineitem-argument-essay-001`;
+    const attempts = await Promise.allSettled([
+      fetchAllNrpsMemberships({
+        membershipsUrl: `${platform.baseUrl}/contexts/course-eng-101/memberships`,
+        accessToken: token.accessToken,
+        registration,
+        expectedContextId: 'course-eng-101',
+      }),
+      fetchAllAgsLineItems({
+        lineItemsUrl,
+        accessToken: token.accessToken,
+        registration,
+      }),
+      createAgsLineItem({
+        lineItemsUrl,
+        accessToken: token.accessToken,
+        registration,
+        lineItem: { scoreMaximum: 100, label: 'Disabled create' },
+      }),
+      getAgsLineItem({
+        lineItemsUrl,
+        lineItemUrl,
+        accessToken: token.accessToken,
+        registration,
+      }),
+      updateAgsLineItem({
+        lineItemsUrl,
+        lineItemUrl,
+        accessToken: token.accessToken,
+        registration,
+        lineItem: {
+          id: lineItemUrl,
+          scoreMaximum: 100,
+          label: 'Disabled update',
+        },
+      }),
+      submitAgsScore({
+        lineItemsUrl,
+        lineItemUrl,
+        accessToken: token.accessToken,
+        registration,
+        score: {
+          userId: 'lti-learner-ada',
+          activityProgress: 'InProgress',
+          gradingProgress: 'Pending',
+          timestamp: '2026-07-21T12:00:00.000Z',
+        },
+      }),
+    ]);
+    expect(attempts.every((attempt) => attempt.status === 'rejected')).toBe(
+      true
+    );
+    expect(platform.journal).toHaveLength(0);
   });
 
   test('does not follow a token redirect carrying the signed client assertion', async () => {

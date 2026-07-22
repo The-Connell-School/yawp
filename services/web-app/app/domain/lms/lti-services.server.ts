@@ -1,6 +1,8 @@
 import { z } from 'zod';
 import {
   fetchLtiNetwork,
+  finishLtiNetwork,
+  LtiHttpError,
   readLtiJson,
   throwLtiHttpStatus,
 } from './lti-http.server';
@@ -13,6 +15,8 @@ export const LTI_NRPS_MEDIA_TYPE =
   'application/vnd.ims.lti-nrps.v2.membershipcontainer+json';
 export const LTI_AGS_LINE_ITEM_MEDIA_TYPE =
   'application/vnd.ims.lis.v2.lineitem+json';
+export const LTI_AGS_LINE_ITEM_CONTAINER_MEDIA_TYPE =
+  'application/vnd.ims.lis.v2.lineitemcontainer+json';
 export const LTI_AGS_SCORE_MEDIA_TYPE = 'application/vnd.ims.lis.v1.score+json';
 
 export const LTI_SCOPES = {
@@ -25,6 +29,10 @@ export const LTI_SCOPES = {
     'https://purl.imsglobal.org/spec/lti-ags/scope/result.readonly',
   score: 'https://purl.imsglobal.org/spec/lti-ags/scope/score',
 } as const;
+
+function assertEnabledRegistration(registration: LtiRegistration) {
+  if (!registration.enabled) throw new Error('LTI registration is disabled.');
+}
 
 const ContextSchema = z.object({
   id: z.string().min(1),
@@ -77,6 +85,7 @@ export async function fetchAllNrpsMemberships(input: {
   fetchImpl?: typeof fetch;
   timeoutMs?: number;
 }) {
+  assertEnabledRegistration(input.registration);
   const initialUrl = assertAllowedLtiServiceUrl(
     input.membershipsUrl,
     input.registration
@@ -98,6 +107,7 @@ export async function fetchAllNrpsMemberships(input: {
     const response = await fetchLtiNetwork({
       operation: 'NRPS request',
       url: current,
+      registration: input.registration,
       fetchImpl: input.fetchImpl,
       timeoutMs: input.timeoutMs,
       init: {
@@ -109,6 +119,7 @@ export async function fetchAllNrpsMemberships(input: {
     });
     if (!response.ok) throwLtiHttpStatus(response, 'NRPS request');
     if (!response.headers.get('content-type')?.includes(LTI_NRPS_MEDIA_TYPE)) {
+      finishLtiNetwork(response);
       throw new Error('NRPS response used an unexpected media type.');
     }
     let page: z.infer<typeof MembershipContainerSchema>;
@@ -117,6 +128,7 @@ export async function fetchAllNrpsMemberships(input: {
         await readLtiJson(response, 'NRPS response')
       );
     } catch (error) {
+      if (error instanceof LtiHttpError) throw error;
       throw new Error('NRPS response did not match the membership contract.', {
         cause: error,
       });
@@ -152,23 +164,83 @@ export async function fetchAllNrpsMemberships(input: {
   };
 }
 
-const AgsLineItemSchema = z.object({
-  id: z.string().url(),
+const IsoDateSchema = z.string().datetime({ offset: true });
+const LINE_ITEM_STANDARD_KEYS = new Set([
+  'id',
+  'scoreMaximum',
+  'label',
+  'resourceId',
+  'resourceLinkId',
+  'tag',
+  'startDateTime',
+  'endDateTime',
+  'gradesReleased',
+]);
+
+function validateQualifiedExtensions(
+  value: Record<string, unknown>,
+  context: z.RefinementCtx,
+  standardKeys: Set<string>
+) {
+  for (const key of Object.keys(value)) {
+    if (standardKeys.has(key)) continue;
+    try {
+      new URL(key);
+    } catch {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'LTI extensions must use fully qualified URL keys.',
+        path: [key],
+      });
+    }
+  }
+}
+
+const AgsLineItemFields = {
   scoreMaximum: z.number().positive(),
   label: z.string().min(1),
   resourceId: z.string().min(1).optional(),
   resourceLinkId: z.string().min(1).optional(),
   tag: z.string().min(1).optional(),
-  startDateTime: z.string().datetime().optional(),
-  endDateTime: z.string().datetime().optional(),
-});
+  startDateTime: IsoDateSchema.nullable().optional(),
+  endDateTime: IsoDateSchema.nullable().optional(),
+  gradesReleased: z.boolean().nullable().optional(),
+};
 
-const AgsLineItemInputSchema = AgsLineItemSchema.omit({ id: true });
+const AgsLineItemSchema = z
+  .object({ id: z.string().url(), ...AgsLineItemFields })
+  .catchall(z.unknown())
+  .superRefine((value, context) =>
+    validateQualifiedExtensions(value, context, LINE_ITEM_STANDARD_KEYS)
+  );
+
+const AgsLineItemInputSchema = z
+  .object(AgsLineItemFields)
+  .catchall(z.unknown())
+  .superRefine((value, context) =>
+    validateQualifiedExtensions(value, context, LINE_ITEM_STANDARD_KEYS)
+  );
+
+export type AgsLineItem = z.infer<typeof AgsLineItemSchema>;
 export type AgsLineItemInput = z.input<typeof AgsLineItemInputSchema>;
+
+function assertAgsServiceBinding(
+  lineItemsUrl: string,
+  resourceUrl: string,
+  registration: LtiRegistration
+) {
+  const container = assertAllowedLtiServiceUrl(lineItemsUrl, registration);
+  const resource = assertAllowedLtiServiceUrl(resourceUrl, registration);
+  if (resource.origin !== container.origin) {
+    throw new Error('AGS resource changed the advertised service origin.');
+  }
+  return { container, resource };
+}
 
 async function parseAgsLineItemResponse(
   response: Response,
-  registration: LtiRegistration
+  registration: LtiRegistration,
+  expectedOrigin: string
 ) {
   if (!response.ok) throwLtiHttpStatus(response, 'AGS line-item request');
   if (
@@ -176,19 +248,24 @@ async function parseAgsLineItemResponse(
       .get('content-type')
       ?.includes(LTI_AGS_LINE_ITEM_MEDIA_TYPE)
   ) {
+    finishLtiNetwork(response);
     throw new Error('AGS line-item response used an unexpected media type.');
   }
-  let lineItem: z.infer<typeof AgsLineItemSchema>;
+  let lineItem: AgsLineItem;
   try {
     lineItem = AgsLineItemSchema.parse(
       await readLtiJson(response, 'AGS line-item response')
     );
   } catch (error) {
+    if (error instanceof LtiHttpError) throw error;
     throw new Error('AGS line-item response did not match the contract.', {
       cause: error,
     });
   }
-  assertAllowedLtiServiceUrl(lineItem.id, registration);
+  const id = assertAllowedLtiServiceUrl(lineItem.id, registration);
+  if (id.origin !== expectedOrigin) {
+    throw new Error('AGS line-item response changed service origin.');
+  }
   return lineItem;
 }
 
@@ -200,6 +277,7 @@ export async function createAgsLineItem(input: {
   fetchImpl?: typeof fetch;
   timeoutMs?: number;
 }) {
+  assertEnabledRegistration(input.registration);
   const lineItemsUrl = assertAllowedLtiServiceUrl(
     input.lineItemsUrl,
     input.registration
@@ -208,6 +286,7 @@ export async function createAgsLineItem(input: {
   const response = await fetchLtiNetwork({
     operation: 'AGS line-item create',
     url: lineItemsUrl,
+    registration: input.registration,
     fetchImpl: input.fetchImpl,
     timeoutMs: input.timeoutMs,
     init: {
@@ -220,20 +299,125 @@ export async function createAgsLineItem(input: {
       body: JSON.stringify(body),
     },
   });
-  return parseAgsLineItemResponse(response, input.registration);
+  return parseAgsLineItemResponse(
+    response,
+    input.registration,
+    lineItemsUrl.origin
+  );
+}
+
+export async function fetchAllAgsLineItems(input: {
+  lineItemsUrl: string;
+  accessToken: string;
+  registration: LtiRegistration;
+  filters?: {
+    resourceLinkId?: string;
+    resourceId?: string;
+    tag?: string;
+    limit?: number;
+  };
+  fetchImpl?: typeof fetch;
+  timeoutMs?: number;
+}) {
+  assertEnabledRegistration(input.registration);
+  const initialUrl = assertAllowedLtiServiceUrl(
+    input.lineItemsUrl,
+    input.registration
+  );
+  if (input.filters?.resourceLinkId)
+    initialUrl.searchParams.set(
+      'resource_link_id',
+      input.filters.resourceLinkId
+    );
+  if (input.filters?.resourceId)
+    initialUrl.searchParams.set('resource_id', input.filters.resourceId);
+  if (input.filters?.tag) initialUrl.searchParams.set('tag', input.filters.tag);
+  if (input.filters?.limit !== undefined) {
+    if (
+      !Number.isSafeInteger(input.filters.limit) ||
+      input.filters.limit < 1 ||
+      input.filters.limit > 100
+    ) {
+      throw new Error('AGS line-item limit must be between 1 and 100.');
+    }
+    initialUrl.searchParams.set('limit', String(input.filters.limit));
+  }
+
+  const lineItems: AgsLineItem[] = [];
+  const visited = new Set<string>();
+  let nextUrl: string | null = initialUrl.toString();
+  while (nextUrl) {
+    if (visited.size >= 100 || visited.has(nextUrl)) {
+      throw new Error('AGS line-item pagination loop or page limit detected.');
+    }
+    visited.add(nextUrl);
+    const current = assertAllowedLtiServiceUrl(nextUrl, input.registration);
+    if (current.origin !== initialUrl.origin) {
+      throw new Error('AGS next-page URL changed service origin.');
+    }
+    const response = await fetchLtiNetwork({
+      operation: 'AGS line-item list',
+      url: current,
+      registration: input.registration,
+      fetchImpl: input.fetchImpl,
+      timeoutMs: input.timeoutMs,
+      init: {
+        headers: {
+          accept: LTI_AGS_LINE_ITEM_CONTAINER_MEDIA_TYPE,
+          authorization: `Bearer ${input.accessToken}`,
+        },
+      },
+    });
+    if (!response.ok) throwLtiHttpStatus(response, 'AGS line-item list');
+    if (
+      !response.headers
+        .get('content-type')
+        ?.includes(LTI_AGS_LINE_ITEM_CONTAINER_MEDIA_TYPE)
+    ) {
+      finishLtiNetwork(response);
+      throw new Error('AGS line-item list used an unexpected media type.');
+    }
+    let page: AgsLineItem[];
+    try {
+      page = z
+        .array(AgsLineItemSchema)
+        .parse(await readLtiJson(response, 'AGS line-item list'));
+    } catch (error) {
+      if (error instanceof LtiHttpError) throw error;
+      throw new Error('AGS line-item list did not match the contract.', {
+        cause: error,
+      });
+    }
+    for (const lineItem of page) {
+      const id = assertAllowedLtiServiceUrl(lineItem.id, input.registration);
+      if (id.origin !== initialUrl.origin) {
+        throw new Error('AGS line-item list changed service origin.');
+      }
+      lineItems.push(lineItem);
+    }
+    nextUrl = parseNextLink(response.headers.get('link'), current);
+  }
+  return lineItems;
 }
 
 export async function getAgsLineItem(input: {
+  lineItemsUrl: string;
   lineItemUrl: string;
   accessToken: string;
   registration: LtiRegistration;
   fetchImpl?: typeof fetch;
   timeoutMs?: number;
 }) {
-  const url = assertAllowedLtiServiceUrl(input.lineItemUrl, input.registration);
+  assertEnabledRegistration(input.registration);
+  const { container, resource } = assertAgsServiceBinding(
+    input.lineItemsUrl,
+    input.lineItemUrl,
+    input.registration
+  );
   const response = await fetchLtiNetwork({
     operation: 'AGS line-item read',
-    url,
+    url: resource,
+    registration: input.registration,
     fetchImpl: input.fetchImpl,
     timeoutMs: input.timeoutMs,
     init: {
@@ -243,10 +427,15 @@ export async function getAgsLineItem(input: {
       },
     },
   });
-  return parseAgsLineItemResponse(response, input.registration);
+  return parseAgsLineItemResponse(
+    response,
+    input.registration,
+    container.origin
+  );
 }
 
 export async function updateAgsLineItem(input: {
+  lineItemsUrl: string;
   lineItemUrl: string;
   accessToken: string;
   registration: LtiRegistration;
@@ -254,15 +443,21 @@ export async function updateAgsLineItem(input: {
   fetchImpl?: typeof fetch;
   timeoutMs?: number;
 }) {
-  const url = assertAllowedLtiServiceUrl(input.lineItemUrl, input.registration);
+  assertEnabledRegistration(input.registration);
+  const { container, resource } = assertAgsServiceBinding(
+    input.lineItemsUrl,
+    input.lineItemUrl,
+    input.registration
+  );
   const parsed = AgsLineItemSchema.parse(input.lineItem);
-  if (parsed.id !== url.toString()) {
+  if (parsed.id !== resource.toString()) {
     throw new Error('AGS line-item update cannot change the immutable id.');
   }
   const { id: _id, ...body } = parsed;
   const response = await fetchLtiNetwork({
     operation: 'AGS line-item update',
-    url,
+    url: resource,
+    registration: input.registration,
     fetchImpl: input.fetchImpl,
     timeoutMs: input.timeoutMs,
     init: {
@@ -275,7 +470,11 @@ export async function updateAgsLineItem(input: {
       body: JSON.stringify(body),
     },
   });
-  const updated = await parseAgsLineItemResponse(response, input.registration);
+  const updated = await parseAgsLineItemResponse(
+    response,
+    input.registration,
+    container.origin
+  );
   if (
     updated.id !== parsed.id ||
     updated.resourceLinkId !== parsed.resourceLinkId
@@ -285,10 +484,29 @@ export async function updateAgsLineItem(input: {
   return updated;
 }
 
-const AgsScoreSchema = z
+const ScoreSubmissionSchema = z
+  .object({
+    startedAt: IsoDateSchema.nullable().optional(),
+    submittedAt: IsoDateSchema.nullable().optional(),
+  })
+  .catchall(z.unknown());
+
+const SCORE_STANDARD_KEYS = new Set([
+  'userId',
+  'scoreGiven',
+  'scoreMaximum',
+  'activityProgress',
+  'gradingProgress',
+  'timestamp',
+  'comment',
+  'scoringUserId',
+  'submission',
+]);
+
+export const AgsScoreSchema = z
   .object({
     userId: z.string().min(1),
-    scoreGiven: z.number().nonnegative().optional(),
+    scoreGiven: z.number().nonnegative().nullable().optional(),
     scoreMaximum: z.number().positive().optional(),
     activityProgress: z.enum([
       'Initialized',
@@ -304,11 +522,18 @@ const AgsScoreSchema = z
       'PendingManual',
       'FullyGraded',
     ]),
-    timestamp: z.string().datetime(),
+    timestamp: IsoDateSchema,
     comment: z.string().optional(),
+    scoringUserId: z.string().min(1).optional(),
+    submission: ScoreSubmissionSchema.optional(),
   })
+  .catchall(z.unknown())
   .superRefine((score, context) => {
-    if (score.scoreGiven !== undefined && score.scoreMaximum === undefined) {
+    validateQualifiedExtensions(score, context, SCORE_STANDARD_KEYS);
+    if (
+      typeof score.scoreGiven === 'number' &&
+      score.scoreMaximum === undefined
+    ) {
       context.addIssue({
         code: z.ZodIssueCode.custom,
         message: 'AGS scoreMaximum is required when scoreGiven is present.',
@@ -318,6 +543,7 @@ const AgsScoreSchema = z
   });
 
 export async function submitAgsScore(input: {
+  lineItemsUrl: string;
   lineItemUrl: string;
   accessToken: string;
   registration: LtiRegistration;
@@ -325,16 +551,20 @@ export async function submitAgsScore(input: {
   fetchImpl?: typeof fetch;
   timeoutMs?: number;
 }) {
-  const lineItemUrl = assertAllowedLtiServiceUrl(
+  assertEnabledRegistration(input.registration);
+  const { resource } = assertAgsServiceBinding(
+    input.lineItemsUrl,
     input.lineItemUrl,
     input.registration
-  )
-    .toString()
-    .replace(/\/$/, '');
+  );
   const score = AgsScoreSchema.parse(input.score);
+  const scoreUrl = new URL(resource);
+  scoreUrl.pathname = `${scoreUrl.pathname.replace(/\/$/, '')}/scores`;
+  assertAllowedLtiServiceUrl(scoreUrl.toString(), input.registration);
   const response = await fetchLtiNetwork({
     operation: 'AGS score submission',
-    url: `${lineItemUrl}/scores`,
+    url: scoreUrl,
+    registration: input.registration,
     fetchImpl: input.fetchImpl,
     timeoutMs: input.timeoutMs,
     init: {
@@ -347,4 +577,5 @@ export async function submitAgsScore(input: {
     },
   });
   if (!response.ok) throwLtiHttpStatus(response, 'AGS score submission');
+  finishLtiNetwork(response);
 }

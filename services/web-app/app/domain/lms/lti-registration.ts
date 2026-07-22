@@ -1,6 +1,54 @@
 import { z } from 'zod';
+import { isIP } from 'node:net';
 
 const LOOPBACK_HOSTS = new Set(['127.0.0.1', '::1', '[::1]', 'localhost']);
+
+function parseUrl(value: string) {
+  try {
+    return new URL(value);
+  } catch {
+    return null;
+  }
+}
+
+function isBlockedIpv4(hostname: string) {
+  const parts = hostname.split('.').map(Number);
+  if (parts.length !== 4 || parts.some((part) => !Number.isInteger(part))) {
+    return false;
+  }
+  const [a, b] = parts;
+  return (
+    a === 0 ||
+    a === 10 ||
+    a === 127 ||
+    (a === 100 && b >= 64 && b <= 127) ||
+    (a === 169 && b === 254) ||
+    (a === 172 && b >= 16 && b <= 31) ||
+    (a === 192 && b === 168) ||
+    (a === 198 && (b === 18 || b === 19)) ||
+    a >= 224
+  );
+}
+
+export function isBlockedLtiAddress(address: string) {
+  const hostname = address.replace(/^\[|\]$/g, '').toLowerCase();
+  if (hostname === 'localhost' || hostname.endsWith('.localhost')) return true;
+  const ipVersion = isIP(hostname);
+  if (ipVersion === 4) return isBlockedIpv4(hostname);
+  if (ipVersion === 6) {
+    if (hostname.startsWith('::ffff:')) {
+      return isBlockedIpv4(hostname.slice('::ffff:'.length));
+    }
+    return (
+      hostname === '::' ||
+      hostname === '::1' ||
+      hostname.startsWith('fc') ||
+      hostname.startsWith('fd') ||
+      /^fe[89ab]/.test(hostname)
+    );
+  }
+  return false;
+}
 
 function validateAbsoluteUrl(value: string, context: z.RefinementCtx) {
   let url: URL;
@@ -40,7 +88,8 @@ export const LtiNetworkUrlSchema = z
 
 const LtiServiceOriginSchema = LtiNetworkUrlSchema.superRefine(
   (value, context) => {
-    const url = new URL(value);
+    const url = parseUrl(value);
+    if (!url) return;
     if (
       value !== url.origin ||
       url.pathname !== '/' ||
@@ -91,11 +140,15 @@ const NETWORK_FIELDS = [
 ] as const;
 
 function transportError(value: string, mode: 'https' | 'loopback-http') {
-  const url = new URL(value);
+  const url = parseUrl(value);
+  if (!url) return null;
   if (mode === 'https') {
-    return url.protocol === 'https:'
-      ? null
-      : 'HTTPS transport is required by this LTI registration.';
+    if (url.protocol !== 'https:') {
+      return 'HTTPS transport is required by this LTI registration.';
+    }
+    return isBlockedLtiAddress(url.hostname)
+      ? 'HTTPS LTI endpoints must not use private, loopback, or link-local addresses.'
+      : null;
   }
   return url.protocol === 'http:' && LOOPBACK_HOSTS.has(url.hostname)
     ? null
@@ -132,8 +185,8 @@ export const LtiRegistrationSchema = RegistrationShape.superRefine(
         }
       }
     }
-    const issuer = new URL(registration.issuer);
-    if (issuer.search) {
+    const issuer = parseUrl(registration.issuer);
+    if (issuer?.search) {
       context.addIssue({
         code: z.ZodIssueCode.custom,
         message: 'LTI issuer must not contain a query string.',
