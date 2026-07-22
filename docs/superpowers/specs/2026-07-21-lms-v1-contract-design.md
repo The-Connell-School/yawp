@@ -89,6 +89,9 @@ The signed launch must:
 - require roles and a resource-link id for a resource-link launch while
   preserving standards-valid anonymous or context-free launches as null
   subject/context;
+- treat a missing subject as anonymous and discard person claims, reject every
+  malformed present optional claim, and enforce the 255-ASCII-character Core
+  bounds on deployment, subject, context, and resource-link identifiers;
 - expose only validated claim data to account and tenant mapping;
 - consume state and nonce exactly once in the persisted launch flow in #212.
 
@@ -121,6 +124,9 @@ The mock freezes the later #213 network boundary now:
   LTI membership media type. The seed contains active instructors, active
   learners, one inactive learner, missing optional PII, role filtering, and
   paginated results with a `rel="next"` link.
+- Response media types are compared by exact, case-insensitive MIME essence
+  after stripping parameters; valid case/charset variants pass while prefix and
+  suffix lookalikes fail.
 - Deep Linking authorization returns a signed `LtiDeepLinkingRequest`; the mock
   independently validates a signed `LtiDeepLinkingResponse`, its fresh nonce,
   item schema, advertised capabilities, and opaque `data` (including a present

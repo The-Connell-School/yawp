@@ -20,6 +20,7 @@ import {
   finishLtiNetwork,
   LtiHttpError,
   readLtiJson,
+  responseHasLtiMediaType,
   throwLtiHttpStatus,
 } from './lti-http.server';
 
@@ -122,7 +123,7 @@ const LtiHttpsUrlSchema = z
   .string()
   .url()
   .refine(
-    (value) => new URL(value).protocol === 'https:',
+    (value) => URL.canParse(value) && new URL(value).protocol === 'https:',
     'LTI content URLs must use HTTPS.'
   );
 
@@ -337,7 +338,29 @@ function getRequiredString(
 
 function getOptionalString(object: JsonObject, key: string): string | null {
   const value = object[key];
-  return typeof value === 'string' && value.length > 0 ? value : null;
+  if (value === undefined) return null;
+  if (typeof value !== 'string' || value.length === 0) {
+    throw new Error(
+      `LTI ${key} claim must be a non-empty string when present.`
+    );
+  }
+  return value;
+}
+
+function assertLtiIdentifier(value: string, label: string) {
+  if (value.length > 255 || !/^[\x00-\x7f]+$/.test(value)) {
+    throw new Error(`LTI ${label} must contain at most 255 ASCII characters.`);
+  }
+  return value;
+}
+
+function getRequiredIdentifier(object: JsonObject, key: string, label: string) {
+  return assertLtiIdentifier(getRequiredString(object, key, label), label);
+}
+
+function getOptionalIdentifier(object: JsonObject, key: string, label: string) {
+  const value = getOptionalString(object, key);
+  return value === null ? null : assertLtiIdentifier(value, label);
 }
 
 function getOptionalOpaqueString(
@@ -364,11 +387,17 @@ function getRequiredObject(
   return value as JsonObject;
 }
 
-function getOptionalObject(object: JsonObject, key: string): JsonObject | null {
+function getOptionalObject(
+  object: JsonObject,
+  key: string,
+  label = key
+): JsonObject | null {
   const value = object[key];
-  return value && typeof value === 'object' && !Array.isArray(value)
-    ? (value as JsonObject)
-    : null;
+  if (value === undefined) return null;
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error(`LTI ${label} claim must be an object when present.`);
+  }
+  return value as JsonObject;
 }
 
 function getStringArray(
@@ -404,13 +433,10 @@ async function fetchPlatformSigningKey(
   if (!response.ok) {
     throwLtiHttpStatus(response, 'LTI platform JWKS');
   }
-  const mediaType = response.headers
-    .get('content-type')
-    ?.split(';', 1)[0]
-    .trim()
-    .toLowerCase();
   if (
-    !['application/jwk-set+json', 'application/json'].includes(mediaType ?? '')
+    !['application/jwk-set+json', 'application/json'].some((mediaType) =>
+      responseHasLtiMediaType(response, mediaType)
+    )
   ) {
     finishLtiNetwork(response);
     throw new Error(
@@ -589,7 +615,7 @@ export async function verifyLtiLaunchForm(
     throw new Error('LTI nonce did not match the initiated launch.');
   }
 
-  const deploymentId = getRequiredString(
+  const deploymentId = getRequiredIdentifier(
     payload,
     LTI_CLAIMS.deploymentId,
     'deployment'
@@ -624,7 +650,11 @@ export async function verifyLtiLaunchForm(
 
   const isResourceLaunch =
     messageType === LTI_MESSAGE_TYPES.resourceLinkRequest;
-  const contextClaim = getOptionalObject(payload, LTI_CLAIMS.context);
+  const contextClaim = getOptionalObject(
+    payload,
+    LTI_CLAIMS.context,
+    'context'
+  );
   const resourceLinkClaim = isResourceLaunch
     ? getRequiredObject(payload, LTI_CLAIMS.resourceLink, 'resource link')
     : null;
@@ -634,16 +664,12 @@ export async function verifyLtiLaunchForm(
       : getStringArray(payload[LTI_CLAIMS.roles], 'roles', {
           allowEmpty: true,
         });
-  const nrps = payload[LTI_CLAIMS.namesRoleService];
-  const ags = payload[LTI_CLAIMS.endpoint];
-  const nrpsClaim =
-    nrps && typeof nrps === 'object' && !Array.isArray(nrps)
-      ? (nrps as JsonObject)
-      : null;
-  const agsClaim =
-    ags && typeof ags === 'object' && !Array.isArray(ags)
-      ? (ags as JsonObject)
-      : null;
+  const nrpsClaim = getOptionalObject(
+    payload,
+    LTI_CLAIMS.namesRoleService,
+    'NRPS'
+  );
+  const agsClaim = getOptionalObject(payload, LTI_CLAIMS.endpoint, 'AGS');
 
   const membershipsUrl = nrpsClaim
     ? getRequiredString(
@@ -660,24 +686,19 @@ export async function verifyLtiLaunchForm(
     if (url) assertAllowedLtiServiceUrl(url, options.registration);
   }
 
-  const customClaim = payload[LTI_CLAIMS.custom];
-  const custom =
-    customClaim &&
-    typeof customClaim === 'object' &&
-    !Array.isArray(customClaim)
-      ? Object.fromEntries(
-          Object.entries(customClaim).filter(
-            (entry): entry is [string, string] => typeof entry[1] === 'string'
-          )
+  const customClaim = getOptionalObject(payload, LTI_CLAIMS.custom, 'custom');
+  const custom = customClaim
+    ? Object.fromEntries(
+        Object.entries(customClaim).filter(
+          (entry): entry is [string, string] => typeof entry[1] === 'string'
         )
-      : {};
-  const deepLinkingClaimValue = payload[LTI_CLAIMS.deepLinkingSettings];
-  const deepLinkingClaim =
-    deepLinkingClaimValue &&
-    typeof deepLinkingClaimValue === 'object' &&
-    !Array.isArray(deepLinkingClaimValue)
-      ? (deepLinkingClaimValue as JsonObject)
-      : null;
+      )
+    : {};
+  const deepLinkingClaim = getOptionalObject(
+    payload,
+    LTI_CLAIMS.deepLinkingSettings,
+    'Deep Linking settings'
+  );
   if (
     messageType === LTI_MESSAGE_TYPES.deepLinkingRequest &&
     !deepLinkingClaim
@@ -695,9 +716,20 @@ export async function verifyLtiLaunchForm(
     assertAllowedLtiServiceUrl(deepLinkReturnUrl, options.registration);
   }
 
+  const subject = getOptionalIdentifier(payload, 'sub', 'subject');
+  const person =
+    subject === null
+      ? { email: null, givenName: null, familyName: null, name: null }
+      : {
+          email: getOptionalString(payload, 'email'),
+          givenName: getOptionalString(payload, 'given_name'),
+          familyName: getOptionalString(payload, 'family_name'),
+          name: getOptionalString(payload, 'name'),
+        };
+
   return {
     issuer,
-    subject: getOptionalString(payload, 'sub'),
+    subject,
     audience,
     deploymentId,
     messageType,
@@ -706,23 +738,22 @@ export async function verifyLtiLaunchForm(
     roles,
     context: contextClaim
       ? {
-          id: getRequiredString(contextClaim, 'id', 'context id'),
+          id: getRequiredIdentifier(contextClaim, 'id', 'context id'),
           label: getOptionalString(contextClaim, 'label'),
           title: getOptionalString(contextClaim, 'title'),
         }
       : null,
     resourceLink: resourceLinkClaim
       ? {
-          id: getRequiredString(resourceLinkClaim, 'id', 'resource link id'),
+          id: getRequiredIdentifier(
+            resourceLinkClaim,
+            'id',
+            'resource link id'
+          ),
           title: getOptionalString(resourceLinkClaim, 'title'),
         }
       : null,
-    person: {
-      email: getOptionalString(payload, 'email'),
-      givenName: getOptionalString(payload, 'given_name'),
-      familyName: getOptionalString(payload, 'family_name'),
-      name: getOptionalString(payload, 'name'),
-    },
+    person,
     services: {
       membershipsUrl,
       nrpsVersions: nrpsClaim
@@ -919,7 +950,7 @@ export async function requestLtiAccessToken(input: {
   if (!response.ok) {
     throwLtiHttpStatus(response, 'LTI token endpoint');
   }
-  if (!response.headers.get('content-type')?.includes('application/json')) {
+  if (!responseHasLtiMediaType(response, 'application/json')) {
     finishLtiNetwork(response);
     throw new Error(
       'LTI token endpoint response used an unexpected media type.'

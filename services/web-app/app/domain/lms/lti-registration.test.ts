@@ -122,14 +122,20 @@ describe('LTI registration contract', () => {
   });
 
   test('reports malformed URLs as structured registration validation errors', () => {
-    let caught: unknown;
-    try {
-      parseLtiRegistration({ ...validRegistration, issuer: 'not a URL' });
-    } catch (error) {
-      caught = error;
+    for (const patch of [
+      { issuer: 'not a URL' },
+      { launchUrl: 'bad' },
+      { allowedTargetLinkUris: ['bad'] },
+    ]) {
+      let caught: unknown;
+      try {
+        parseLtiRegistration({ ...validRegistration, ...patch });
+      } catch (error) {
+        caught = error;
+      }
+      expect(caught).toMatchObject({ name: 'ZodError' });
+      expect((caught as Error).message).toContain('absolute URL');
     }
-    expect(caught).toMatchObject({ name: 'ZodError' });
-    expect((caught as Error).message).toContain('absolute URL');
   });
 
   test('rejects issuer query strings and audiences that exclude the client', () => {
@@ -193,5 +199,19 @@ describe('LTI registration contract', () => {
         parseLtiRegistration({ ...validRegistration, [field]: '' })
       ).toThrow();
     }
+  });
+
+  test('enforces the LTI deployment identifier bounds', () => {
+    for (const deploymentId of ['d'.repeat(256), 'deployment-é']) {
+      expect(() =>
+        parseLtiRegistration({ ...validRegistration, deploymentId })
+      ).toThrow();
+    }
+    expect(
+      parseLtiRegistration({
+        ...validRegistration,
+        deploymentId: 'd'.repeat(255),
+      }).deploymentId
+    ).toHaveLength(255);
   });
 });

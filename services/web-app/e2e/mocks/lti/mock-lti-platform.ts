@@ -1100,6 +1100,9 @@ export async function startMockLtiPlatform(): Promise<MockLtiPlatform> {
           delete payload[CLAIMS.namesRoleService];
           delete payload[CLAIMS.endpoint];
         }
+        if (scenario === 'anonymous-resource-link-with-pii') {
+          delete payload.sub;
+        }
         if (!learner && scenario !== 'anonymous-resource-link-no-context') {
           Object.assign(payload, {
             email: 'kevin.instructor@example.test',
@@ -1144,6 +1147,32 @@ export async function startMockLtiPlatform(): Promise<MockLtiPlatform> {
           payload[CLAIMS.namesRoleService] = {
             context_memberships_url: 'https://other-tenant.example/memberships',
             service_versions: ['2.0'],
+          };
+        } else if (scenario === 'malformed-sub-nonstring') {
+          payload.sub = { unexpected: true };
+        } else if (scenario === 'malformed-sub-empty') {
+          payload.sub = '';
+        } else if (scenario === 'malformed-context-scalar') {
+          payload[CLAIMS.context] = 'course-eng-101';
+        } else if (scenario === 'malformed-nrps-array') {
+          payload[CLAIMS.namesRoleService] = [];
+        } else if (scenario === 'malformed-ags-null') {
+          payload[CLAIMS.endpoint] = null;
+        } else if (scenario === 'overlong-sub') {
+          payload.sub = 's'.repeat(256);
+        } else if (scenario === 'non-ascii-sub') {
+          payload.sub = 'student-é';
+        } else if (scenario === 'overlong-deployment') {
+          payload[CLAIMS.deploymentId] = 'd'.repeat(256);
+        } else if (scenario === 'overlong-context-id') {
+          payload[CLAIMS.context] = {
+            ...MOCK_LTI_SEED.context,
+            id: 'c'.repeat(256),
+          };
+        } else if (scenario === 'overlong-resource-link-id') {
+          payload[CLAIMS.resourceLink] = {
+            ...MOCK_LTI_SEED.resourceLink,
+            id: 'r'.repeat(256),
           };
         }
 

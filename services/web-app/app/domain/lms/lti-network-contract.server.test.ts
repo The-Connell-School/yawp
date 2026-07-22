@@ -325,6 +325,75 @@ describe('LTI 1.3 launch over the network boundary', () => {
     expect(launch.person.email).toBeNull();
   });
 
+  test('discards identity claims on a signed anonymous launch', async () => {
+    const platform = await startPlatform();
+    const form = await authorize(platform, 'anonymous-resource-link-with-pii');
+    const launch = await verifyLtiLaunchForm(form, {
+      registration: platform.registration,
+      expectedState: 'state-contract-001',
+      expectedNonce: 'nonce-contract-001',
+      expectedTargetLinkUri: platform.registration.launchUrl,
+      expectedMessageType: LTI_MESSAGE_TYPES.resourceLinkRequest,
+      nowSeconds: platform.seed.nowSeconds,
+    });
+
+    expect(launch.subject).toBeNull();
+    expect(launch.person).toEqual({
+      email: null,
+      givenName: null,
+      familyName: null,
+      name: null,
+    });
+  });
+
+  test.each([
+    ['malformed-sub-nonstring', 'sub'],
+    ['malformed-sub-empty', 'sub'],
+    ['malformed-context-scalar', 'context'],
+    ['malformed-nrps-array', 'NRPS'],
+    ['malformed-ags-null', 'AGS'],
+  ])(
+    'rejects malformed present optional claim scenario %s',
+    async (scenario, message) => {
+      const platform = await startPlatform();
+      const form = await authorize(platform, scenario);
+      await expect(
+        verifyLtiLaunchForm(form, {
+          registration: platform.registration,
+          expectedState: 'state-contract-001',
+          expectedNonce: 'nonce-contract-001',
+          expectedTargetLinkUri: platform.registration.launchUrl,
+          expectedMessageType: LTI_MESSAGE_TYPES.resourceLinkRequest,
+          nowSeconds: platform.seed.nowSeconds,
+        })
+      ).rejects.toThrow(message);
+    }
+  );
+
+  test.each([
+    ['overlong-sub', 'ASCII'],
+    ['non-ascii-sub', 'ASCII'],
+    ['overlong-deployment', 'ASCII'],
+    ['overlong-context-id', 'ASCII'],
+    ['overlong-resource-link-id', 'ASCII'],
+  ])(
+    'rejects invalid bounded identifier scenario %s',
+    async (scenario, message) => {
+      const platform = await startPlatform();
+      const form = await authorize(platform, scenario);
+      await expect(
+        verifyLtiLaunchForm(form, {
+          registration: platform.registration,
+          expectedState: 'state-contract-001',
+          expectedNonce: 'nonce-contract-001',
+          expectedTargetLinkUri: platform.registration.launchUrl,
+          expectedMessageType: LTI_MESSAGE_TYPES.resourceLinkRequest,
+          nowSeconds: platform.seed.nowSeconds,
+        })
+      ).rejects.toThrow(message);
+    }
+  );
+
   test('normalizes a signed Deep Linking request and returns signed content', async () => {
     const platform = await startPlatform();
     const form = await authorize(platform, 'deep-link');
@@ -665,6 +734,7 @@ describe('LTI 1.3 launch over the network boundary', () => {
   test('rejects non-HTTPS Deep Linking resource and image URLs before network I/O', async () => {
     const platform = await startPlatform();
     for (const url of [
+      'not a URL',
       'http://app.yawp.school/lti/launch',
       'ftp://app.yawp.school/lti/launch',
       'javascript:alert(1)',
@@ -684,7 +754,7 @@ describe('LTI 1.3 launch over the network boundary', () => {
           acceptLineItem: false,
           nowSeconds: platform.seed.nowSeconds,
         })
-      ).toThrow('HTTPS');
+      ).toThrow(url === 'not a URL' ? 'url' : 'HTTPS');
     }
     expect(() =>
       createDeepLinkingResponseJwt({
@@ -1507,6 +1577,146 @@ describe('LTI Advantage service authentication and roster shape', () => {
         grant: token,
         registration: platform.registration,
         lineItem: { scoreMaximum: 100, label: 'Expected media type' },
+      })
+    ).rejects.toThrow('media type');
+  });
+
+  test('matches provider media-type essence exactly and case-insensitively', async () => {
+    const platform = await startPlatform();
+    const tokenScope = LTI_SCOPES.contextMembershipReadonly;
+    const mixedCaseAssertion = createLtiClientAssertion({
+      clientId: platform.registration.clientId,
+      tokenEndpoint: platform.registration.tokenEndpoint,
+      deploymentId: platform.registration.deploymentId,
+      privateKeyPem: platform.tool.privateKeyPem,
+      keyId: platform.tool.keyId,
+      jti: 'client-assertion-media-essence-mixed',
+      nowSeconds: platform.seed.nowSeconds,
+    });
+    platform.failNext('token', {
+      status: 200,
+      contentType: 'Application/JSON ; charset=UTF-8',
+      body: JSON.stringify({
+        access_token: 'mixed-case-media-token',
+        token_type: 'Bearer',
+        expires_in: 300,
+        scope: tokenScope,
+      }),
+    });
+    await expect(
+      requestLtiAccessToken({
+        registration: platform.registration,
+        clientAssertion: mixedCaseAssertion,
+        scopes: [tokenScope],
+        advertisedScopes: [tokenScope],
+      })
+    ).resolves.toMatchObject({ accessToken: 'mixed-case-media-token' });
+
+    const lookalikeAssertion = createLtiClientAssertion({
+      clientId: platform.registration.clientId,
+      tokenEndpoint: platform.registration.tokenEndpoint,
+      deploymentId: platform.registration.deploymentId,
+      privateKeyPem: platform.tool.privateKeyPem,
+      keyId: platform.tool.keyId,
+      jti: 'client-assertion-media-essence-lookalike',
+      nowSeconds: platform.seed.nowSeconds,
+    });
+    platform.failNext('token', {
+      status: 200,
+      contentType: 'application/jsonp',
+      body: JSON.stringify({
+        access_token: 'lookalike-media-token',
+        token_type: 'Bearer',
+        expires_in: 300,
+        scope: tokenScope,
+      }),
+    });
+    await expect(
+      requestLtiAccessToken({
+        registration: platform.registration,
+        clientAssertion: lookalikeAssertion,
+        scopes: [tokenScope],
+        advertisedScopes: [tokenScope],
+      })
+    ).rejects.toThrow('media type');
+
+    const serviceAssertion = createLtiClientAssertion({
+      clientId: platform.registration.clientId,
+      tokenEndpoint: platform.registration.tokenEndpoint,
+      deploymentId: platform.registration.deploymentId,
+      privateKeyPem: platform.tool.privateKeyPem,
+      keyId: platform.tool.keyId,
+      jti: 'client-assertion-media-essence-services',
+      nowSeconds: platform.seed.nowSeconds,
+    });
+    const serviceGrant = await requestLtiAccessToken({
+      registration: platform.registration,
+      clientAssertion: serviceAssertion,
+      scopes: [
+        LTI_SCOPES.contextMembershipReadonly,
+        LTI_SCOPES.lineItemReadonly,
+      ],
+      advertisedScopes: [
+        LTI_SCOPES.contextMembershipReadonly,
+        LTI_SCOPES.lineItemReadonly,
+      ],
+    });
+
+    platform.failNext('nrps', {
+      status: 200,
+      contentType: `${LTI_NRPS_MEDIA_TYPE.toUpperCase()}; charset=utf-8`,
+      body: JSON.stringify({
+        id: `${platform.baseUrl}/contexts/course-eng-101/memberships`,
+        context: { id: 'course-eng-101' },
+        members: [],
+      }),
+    });
+    await expect(
+      fetchAllNrpsMemberships({
+        membershipsUrl: `${platform.baseUrl}/contexts/course-eng-101/memberships`,
+        grant: serviceGrant,
+        registration: platform.registration,
+        expectedContextId: 'course-eng-101',
+      })
+    ).resolves.toEqual({
+      context: { id: 'course-eng-101', label: null, title: null },
+      members: [],
+    });
+
+    const lineItemUrl = `${platform.baseUrl}/lineitems/lineitem-argument-essay-001`;
+    platform.failNext('ags', {
+      status: 200,
+      contentType: `${LTI_AGS_LINE_ITEM_MEDIA_TYPE.toUpperCase()}; charset=utf-8`,
+      body: JSON.stringify({
+        id: lineItemUrl,
+        scoreMaximum: 100,
+        label: 'Mixed-case media item',
+      }),
+    });
+    await expect(
+      getAgsLineItem({
+        lineItemsUrl: `${platform.baseUrl}/contexts/course-eng-101/lineitems`,
+        lineItemUrl,
+        grant: serviceGrant,
+        registration: platform.registration,
+      })
+    ).resolves.toMatchObject({ label: 'Mixed-case media item' });
+
+    platform.failNext('ags', {
+      status: 200,
+      contentType: `${LTI_AGS_LINE_ITEM_MEDIA_TYPE}-malformed`,
+      body: JSON.stringify({
+        id: lineItemUrl,
+        scoreMaximum: 100,
+        label: 'Lookalike media item',
+      }),
+    });
+    await expect(
+      getAgsLineItem({
+        lineItemsUrl: `${platform.baseUrl}/contexts/course-eng-101/lineitems`,
+        lineItemUrl,
+        grant: serviceGrant,
+        registration: platform.registration,
       })
     ).rejects.toThrow('media type');
   });

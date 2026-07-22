@@ -116,6 +116,15 @@ const LtiServiceOriginSchema = LtiNetworkUrlSchema.superRefine(
   }
 );
 
+const LtiIdentifierSchema = z
+  .string()
+  .min(1)
+  .max(255)
+  .regex(
+    /^[\x00-\x7f]+$/,
+    'LTI identifiers must contain only ASCII characters.'
+  );
+
 const RegistrationShape = z
   .object({
     id: z.string().min(1),
@@ -126,7 +135,7 @@ const RegistrationShape = z
     issuer: LtiNetworkUrlSchema,
     clientId: z.string().min(1),
     allowedAudiences: z.array(z.string().min(1)).min(1),
-    deploymentId: z.string().min(1),
+    deploymentId: LtiIdentifierSchema,
     authorizationEndpoint: LtiNetworkUrlSchema,
     tokenEndpoint: LtiNetworkUrlSchema,
     jwksUrl: LtiNetworkUrlSchema,
@@ -217,10 +226,12 @@ const LtiRegistrationSchema = RegistrationShape.superRefine(
       registration.launchUrl,
       registration.deepLinkingLaunchUrl,
     ]) {
+      const requiredTargetUrl = parseUrl(requiredTarget);
       if (
+        requiredTargetUrl &&
         !registration.allowedTargetLinkUris.some(
           (candidate) =>
-            new URL(candidate).toString() === new URL(requiredTarget).toString()
+            parseUrl(candidate)?.toString() === requiredTargetUrl.toString()
         )
       ) {
         context.addIssue({

@@ -4,6 +4,7 @@ import {
   finishLtiNetwork,
   LtiHttpError,
   readLtiJson,
+  responseHasLtiMediaType,
   throwLtiHttpStatus,
 } from './lti-http.server';
 import {
@@ -124,7 +125,7 @@ export async function fetchAllNrpsMemberships(input: {
       },
     });
     if (!response.ok) throwLtiHttpStatus(response, 'NRPS request');
-    if (!response.headers.get('content-type')?.includes(LTI_NRPS_MEDIA_TYPE)) {
+    if (!responseHasLtiMediaType(response, LTI_NRPS_MEDIA_TYPE)) {
       finishLtiNetwork(response);
       throw new Error('NRPS response used an unexpected media type.');
     }
@@ -281,11 +282,7 @@ async function parseAgsLineItemResponse(
   expectedOrigin: string
 ) {
   if (!response.ok) throwLtiHttpStatus(response, 'AGS line-item request');
-  if (
-    !response.headers
-      .get('content-type')
-      ?.includes(LTI_AGS_LINE_ITEM_MEDIA_TYPE)
-  ) {
+  if (!responseHasLtiMediaType(response, LTI_AGS_LINE_ITEM_MEDIA_TYPE)) {
     finishLtiNetwork(response);
     throw new Error('AGS line-item response used an unexpected media type.');
   }
@@ -413,9 +410,7 @@ export async function fetchAllAgsLineItems(input: {
     });
     if (!response.ok) throwLtiHttpStatus(response, 'AGS line-item list');
     if (
-      !response.headers
-        .get('content-type')
-        ?.includes(LTI_AGS_LINE_ITEM_CONTAINER_MEDIA_TYPE)
+      !responseHasLtiMediaType(response, LTI_AGS_LINE_ITEM_CONTAINER_MEDIA_TYPE)
     ) {
       finishLtiNetwork(response);
       throw new Error('AGS line-item list used an unexpected media type.');

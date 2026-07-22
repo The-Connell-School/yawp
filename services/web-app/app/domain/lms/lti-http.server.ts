@@ -61,6 +61,18 @@ export function finishLtiNetwork(response: Response) {
   }
 }
 
+export function responseHasLtiMediaType(
+  response: Response,
+  expectedMediaType: string
+) {
+  const essence = response.headers
+    .get('content-type')
+    ?.split(';', 1)[0]
+    ?.trim()
+    .toLowerCase();
+  return essence === expectedMediaType.toLowerCase();
+}
+
 async function assertPublicDestination(
   url: URL,
   registration: LtiRegistration,
