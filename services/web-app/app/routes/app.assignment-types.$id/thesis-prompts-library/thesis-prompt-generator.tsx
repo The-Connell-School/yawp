@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
+import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { useFetcher } from 'react-router';
-import { ChevronLeftIcon, ChevronRightIcon, SparklesIcon } from 'lucide-react';
+import { ChevronLeftIcon, ChevronRightIcon } from 'lucide-react';
 import { Button } from '~/components/ui/button';
 import {
   Sheet,
@@ -133,10 +133,7 @@ export function ThesisPromptGenerator({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="flex w-full flex-col overflow-hidden sm:max-w-2xl">
         <SheetHeader>
-          <SheetTitle className="flex items-center gap-2">
-            <SparklesIcon className="h-5 w-5" />
-            Generate a prompt
-          </SheetTitle>
+          <SheetTitle>Generate a prompt</SheetTitle>
           <SheetDescription>
             Describe the essay you have in mind and work with the assistant to
             draft a prompt in the style of the library. When you like it, use it
@@ -182,7 +179,13 @@ export function ThesisPromptGenerator({
                     : 'w-full space-y-3'
                 }
               >
-                <p className="whitespace-pre-wrap leading-6">{turn.content}</p>
+                {turn.role === 'user' ? (
+                  <p className="whitespace-pre-wrap leading-6">
+                    {turn.content}
+                  </p>
+                ) : (
+                  <FormattedReply text={turn.content} />
+                )}
                 {turn.role === 'assistant' &&
                 turn.options &&
                 turn.options.length > 0 ? (
@@ -220,7 +223,7 @@ export function ThesisPromptGenerator({
                 send(input);
               }
             }}
-            placeholder="Describe the prompt you want, or ask for a change…"
+            placeholder="Describe the prompt you want or just say what you're teaching"
             rows={2}
             className="min-h-[44px] resize-none"
             disabled={isThinking}
@@ -231,6 +234,106 @@ export function ThesisPromptGenerator({
         </form>
       </SheetContent>
     </Sheet>
+  );
+}
+
+type ReplyBlock =
+  | { kind: 'paragraph'; text: string }
+  | { kind: 'bullet' | 'ordered'; items: string[] };
+
+/**
+ * Split an assistant reply into paragraph / bullet / ordered-list blocks. Pure
+ * and exported so the formatting is unit-tested without a DOM. Keeps just enough
+ * Markdown to make replies skimmable — no dependency, no raw HTML.
+ */
+export function parseReplyBlocks(text: string): ReplyBlock[] {
+  return text
+    .trim()
+    .split(/\n\s*\n/)
+    .map((block) => {
+      const lines = block.split('\n').filter((line) => line.trim().length > 0);
+      const isBulleted =
+        lines.length > 0 && lines.every((line) => /^\s*[-*•]\s+/.test(line));
+      const isNumbered =
+        lines.length > 0 && lines.every((line) => /^\s*\d+[.)]\s+/.test(line));
+
+      if (isBulleted || isNumbered) {
+        return {
+          kind: isNumbered ? 'ordered' : 'bullet',
+          items: lines.map((line) =>
+            line.replace(/^\s*(?:[-*•]|\d+[.)])\s+/, '')
+          ),
+        };
+      }
+      return { kind: 'paragraph', text: block };
+    })
+    .filter(
+      (block) =>
+        block.kind === 'paragraph'
+          ? block.text.trim().length > 0
+          : block.items.length > 0
+    );
+}
+
+/** Split a line into plain and `**bold**` segments. Pure and exported. */
+export function parseInlineSegments(
+  text: string
+): Array<{ bold: boolean; text: string }> {
+  return text
+    .split(/(\*\*[^*]+\*\*)/g)
+    .filter((part) => part.length > 0)
+    .map((part) => {
+      const bold = /^\*\*([^*]+)\*\*$/.exec(part);
+      return bold ? { bold: true, text: bold[1] } : { bold: false, text: part };
+    });
+}
+
+function renderInline(text: string, keyPrefix: string): ReactNode[] {
+  return parseInlineSegments(text).map((segment, i) =>
+    segment.bold ? (
+      <strong key={`${keyPrefix}-${i}`}>{segment.text}</strong>
+    ) : (
+      <span key={`${keyPrefix}-${i}`}>{segment.text}</span>
+    )
+  );
+}
+
+/**
+ * A deliberately small Markdown renderer for the assistant's chat replies —
+ * just enough to keep them lively and skimmable (short paragraphs, bullet /
+ * numbered lists, and **bold**) without pulling in a Markdown dependency or
+ * ever setting raw HTML.
+ */
+function FormattedReply({ text }: { text: string }) {
+  return (
+    <div className="space-y-2 leading-6">
+      {parseReplyBlocks(text).map((block, blockIndex) => {
+        if (block.kind === 'paragraph') {
+          return (
+            <p key={blockIndex} className="whitespace-pre-line">
+              {renderInline(block.text, `${blockIndex}`)}
+            </p>
+          );
+        }
+        const ListTag = block.kind === 'ordered' ? 'ol' : 'ul';
+        return (
+          <ListTag
+            key={blockIndex}
+            className={
+              block.kind === 'ordered'
+                ? 'list-decimal space-y-1 pl-5'
+                : 'list-disc space-y-1 pl-5'
+            }
+          >
+            {block.items.map((item, itemIndex) => (
+              <li key={itemIndex}>
+                {renderInline(item, `${blockIndex}-${itemIndex}`)}
+              </li>
+            ))}
+          </ListTag>
+        );
+      })}
+    </div>
   );
 }
 

@@ -58,6 +58,12 @@ describe('buildGeneratorSystemPrompt', () => {
     expect(system).toContain('distinct');
   });
 
+  test('asks for short, lively, skimmable replies (no walls of text)', () => {
+    expect(system.toLowerCase()).toContain('skimmable');
+    expect(system).toContain('**bold**');
+    expect(system).toContain('bullet');
+  });
+
   test('includes at least one real corpus prompt as a few-shot example', () => {
     const example = selectFewShotExamples(ALL_PROMPTS)[0];
     expect(system).toContain(example.title);

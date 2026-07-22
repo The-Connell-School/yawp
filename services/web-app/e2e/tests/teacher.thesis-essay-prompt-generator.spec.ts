@@ -66,7 +66,9 @@ test.describe.serial('Thesis-Driven Essay prompt generator', () => {
     ).toBeVisible();
 
     await page
-      .getByPlaceholder('Describe the prompt you want, or ask for a change…')
+      .getByPlaceholder(
+        "Describe the prompt you want or just say what you're teaching"
+      )
       .fill('A prompt about ambition for 10th graders reading Macbeth');
     await page.getByRole('button', { name: 'Send' }).click();
 
