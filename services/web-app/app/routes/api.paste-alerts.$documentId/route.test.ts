@@ -142,6 +142,28 @@ describe('api.paste-alerts.$documentId', () => {
     expect((response as any).data.hasMore).toBe(true);
   });
 
+  test('bounds oversized historical content in the detail payload', async () => {
+    prisma.pasteAlert.findMany.mockResolvedValue([
+      {
+        id: 'legacy-alert',
+        createdAt: new Date('2025-01-01T00:00:00Z'),
+        textLength: 75_000,
+        content: 'x'.repeat(75_000),
+        reviewedAt: null,
+        reviewedByMembership: null,
+      },
+    ]);
+
+    const response = await loader({
+      request: new Request('https://example.test/api/paste-alerts/doc-1'),
+      params: { documentId: 'doc-1' },
+      context: {},
+    } as any);
+
+    expect((response as any).data.alerts[0].content).toHaveLength(50_000);
+    expect((response as any).data.alerts[0].contentTruncated).toBe(true);
+  });
+
   test('rejects students', async () => {
     requireMembership.mockResolvedValue({
       id: 'student-1',

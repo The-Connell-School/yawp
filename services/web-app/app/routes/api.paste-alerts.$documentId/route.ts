@@ -6,6 +6,7 @@ import {
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { buildTeacherClassWorkDocumentWhere } from '~/utils/class-assignment-scope.server';
+import { boundPasteAlertContent } from '~/utils/paste-alert-constraints';
 
 export const MAX_ALERTS_RETURNED = 200;
 
@@ -89,7 +90,10 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
   return dataResponse({
     document: result.document,
-    alerts: alerts.slice(0, MAX_ALERTS_RETURNED),
+    alerts: alerts.slice(0, MAX_ALERTS_RETURNED).map((alert) => ({
+      ...alert,
+      ...boundPasteAlertContent(alert.content),
+    })),
     hasMore: alerts.length > MAX_ALERTS_RETURNED,
   });
 }

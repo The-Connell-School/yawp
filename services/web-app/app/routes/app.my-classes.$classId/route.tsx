@@ -174,6 +174,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
     where: {
       id: classId,
       teachers: { some: { id: profile.id } },
+      school: { organizationId: profile.organization.id },
     },
     select: {
       id: true,
@@ -492,6 +493,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
         id: targetClassId,
         isArchived: false,
         teachers: { some: { id: profile.id } },
+        school: { organizationId: profile.organization.id },
       },
       select: { id: true },
     });
@@ -786,6 +788,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const teacherClasses = await prisma.class.findMany({
     where: {
       teachers: { some: { id: profile.id } },
+      school: { organizationId: profile.organization.id },
       isArchived: false,
       id: { not: classId },
     },

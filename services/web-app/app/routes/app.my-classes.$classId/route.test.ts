@@ -4,7 +4,7 @@ const prisma = {
   class: { findFirst: mock(), findMany: mock() },
   documentClassForensic: { findMany: mock() },
   assignmentType: { findMany: mock() },
-  orgMembership: { findUnique: mock(), findMany: mock() },
+  orgMembership: { findUnique: mock(), findMany: mock(), update: mock() },
   pasteAlert: { groupBy: mock() },
   submission: { findMany: mock() },
   document: { findMany: mock() },
@@ -95,6 +95,7 @@ describe('class detail loader document visibility', () => {
     prisma.assignmentType.findMany.mockResolvedValue([]);
     prisma.orgMembership.findUnique.mockResolvedValue({ schools: [] });
     prisma.orgMembership.findMany.mockResolvedValue([]);
+    prisma.orgMembership.update.mockResolvedValue({});
     prisma.pasteAlert.groupBy.mockResolvedValue([]);
     prisma.submission.findMany.mockResolvedValue([]);
     prisma.document.findMany.mockResolvedValue([]);
@@ -144,6 +145,85 @@ describe('class detail loader document visibility', () => {
       expect.objectContaining({
         where: {
           id: 'class-1',
+          teachers: { some: { id: 'teacher-1' } },
+          school: { organizationId: 'org-1' },
+        },
+      })
+    );
+    expect(prisma.class.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          teachers: { some: { id: 'teacher-1' } },
+          school: { organizationId: 'org-1' },
+          isArchived: false,
+          id: { not: 'class-1' },
+        },
+      })
+    );
+  });
+
+  test('rejects class actions when the teacher link crosses organizations', async () => {
+    prisma.class.findFirst.mockResolvedValue(null);
+    const form = new FormData();
+    form.set('intent', 'move-students');
+    form.set('studentProfileIds', 'foreign-student');
+    form.set('targetClassId', 'class-1');
+
+    const response = await action({
+      request: new Request(
+        'https://example.test/app/my-classes/foreign-class',
+        {
+          method: 'POST',
+          body: form,
+        }
+      ),
+      params: { classId: 'foreign-class' },
+      context: {} as never,
+    });
+
+    expect(response.init).toMatchObject({ status: 404 });
+    expect(prisma.class.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          id: 'foreign-class',
+          teachers: { some: { id: 'teacher-1' } },
+          school: { organizationId: 'org-1' },
+        },
+      })
+    );
+    expect(prisma.orgMembership.update).not.toHaveBeenCalled();
+  });
+
+  test('scopes student move targets to the active organization', async () => {
+    prisma.class.findFirst
+      .mockResolvedValueOnce({
+        id: 'class-1',
+        school: { id: 'school-1', organizationId: 'org-1' },
+      })
+      .mockResolvedValueOnce({ id: 'class-2' });
+    prisma.orgMembership.findMany.mockResolvedValue([{ id: 'student-1' }]);
+
+    const form = new FormData();
+    form.set('intent', 'move-students');
+    form.set('studentProfileIds', 'student-1');
+    form.set('targetClassId', 'class-2');
+
+    const response = await action({
+      request: new Request('https://example.test/app/my-classes/class-1', {
+        method: 'POST',
+        body: form,
+      }),
+      params: { classId: 'class-1' },
+      context: {} as never,
+    });
+
+    expect(response.data).toMatchObject({ success: true });
+    expect(prisma.class.findFirst).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        where: {
+          id: 'class-2',
+          isArchived: false,
           teachers: { some: { id: 'teacher-1' } },
           school: { organizationId: 'org-1' },
         },

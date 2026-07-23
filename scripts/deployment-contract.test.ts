@@ -189,6 +189,10 @@ describe('production deployment contract', () => {
     expect(deployWorkflow).toContain('PROD_DB_NAME');
     expect(deployWorkflow).toContain('PROD_DB_USER');
     expect(deployWorkflow).toContain('PROD_DB_PASSWORD');
+    expect(deployWorkflow).toContain('cancel-in-progress: false');
+    expect(deployWorkflow).toContain('PROD_MIGRATION_LOCK_TIMEOUT_MS');
+    expect(deployWorkflow).toContain('PROD_MIGRATION_STATEMENT_TIMEOUT_MS');
+    expect(deployWorkflow).toContain('PROD_MIGRATION_BLOCKING_TRANSACTION_AGE_MS');
     expect(deployGenerateIndex).toBeGreaterThan(-1);
     expect(deployValidateMigrateIndex).toBeGreaterThan(deployGenerateIndex);
     expect(deployTrainingMigrationTestIndex).toBeGreaterThan(-1);

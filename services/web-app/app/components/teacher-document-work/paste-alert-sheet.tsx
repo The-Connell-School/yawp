@@ -16,6 +16,7 @@ type PasteAlertDetail = {
   createdAt: string;
   textLength: number;
   content: string | null;
+  contentTruncated?: boolean;
   reviewedAt: string | null;
   reviewedByMembership: {
     user: { name: string | null; email: string };
@@ -182,9 +183,16 @@ export function PasteAlertSheet({
                   )}
                 </div>
                 {alert.content ? (
-                  <p className="max-h-40 overflow-y-auto whitespace-pre-wrap rounded bg-white/70 p-2 text-sm text-foreground">
-                    {alert.content}
-                  </p>
+                  <>
+                    <p className="max-h-40 overflow-y-auto whitespace-pre-wrap rounded bg-white/70 p-2 text-sm text-foreground">
+                      {alert.content}
+                    </p>
+                    {alert.contentTruncated ? (
+                      <p className="text-xs text-muted-foreground">
+                        Showing the first 50,000 captured characters.
+                      </p>
+                    ) : null}
+                  </>
                 ) : null}
                 {!alert.reviewedAt ? (
                   <Button

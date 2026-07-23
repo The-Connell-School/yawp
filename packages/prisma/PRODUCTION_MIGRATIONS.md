@@ -9,6 +9,10 @@ Production deploys must use `bun prisma:migrate-remote production`. The wrapper:
 - runs the existing fail-closed preflight and postcheck around
   `prisma migrate deploy`.
 
+The production workflow queues newer pushes instead of canceling a running
+deploy. This protects non-transactional concurrent-index migrations from normal
+workflow cancellation.
+
 The deploy workflow sets these budgets explicitly with
 `PROD_MIGRATION_LOCK_TIMEOUT_MS`,
 `PROD_MIGRATION_STATEMENT_TIMEOUT_MS`, and

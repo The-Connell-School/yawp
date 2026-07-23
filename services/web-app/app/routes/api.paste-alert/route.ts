@@ -1,9 +1,10 @@
 import { type ActionFunctionArgs, data as dataResponse } from 'react-router';
 import { requireMembership, requireUserId } from '~/utils/auth.server.js';
 import { prisma } from '~/utils/db.server.js';
-
-const PASTE_ALERT_MIN_CHARS = 200;
-const PASTE_ALERT_MAX_CONTENT_CHARS = 50_000;
+import {
+  PASTE_ALERT_MAX_CONTENT_CHARS,
+  PASTE_ALERT_MIN_CHARS,
+} from '~/utils/paste-alert-constraints';
 
 export async function action({ request }: ActionFunctionArgs) {
   if (request.method !== 'POST') {

@@ -6,7 +6,9 @@ on:
 
 concurrency:
   group: deploy-${{ github.ref }}
-  cancel-in-progress: true
+  # Queue production deploys so a newer push cannot interrupt a non-transactional
+  # CREATE INDEX CONCURRENTLY migration and leave its Prisma ledger unresolved.
+  cancel-in-progress: false
 
 permissions:
   actions: write
