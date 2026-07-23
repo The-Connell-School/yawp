@@ -5,6 +5,10 @@ import { existsSync } from 'fs';
 import { join } from 'path';
 import pg from 'pg';
 import { runCombinedFeatureGate } from './combined-feature-gate';
+import {
+  assertNoBlockingMigrationTransactions,
+  withProductionMigrationTimeouts,
+} from './production-migration-safety';
 
 const prismaRoot = join(import.meta.dir, '..');
 const RECOVERABLE_FAILED_MIGRATIONS = [
@@ -37,7 +41,9 @@ const missing = [
 ].filter(([, value]) => !value);
 
 if (missing.length > 0) {
-  console.error(`Error: Missing required environment variables: ${missing.map(([name]) => name).join(', ')}`);
+  console.error(
+    `Error: Missing required environment variables: ${missing.map(([name]) => name).join(', ')}`
+  );
   process.exit(1);
 }
 
@@ -46,7 +52,11 @@ if (!existsSync(SSH_KEY_PATH!)) {
   process.exit(1);
 }
 
-function runCommand(command: string, args: string[], env: NodeJS.ProcessEnv): Promise<number> {
+function runCommand(
+  command: string,
+  args: string[],
+  env: NodeJS.ProcessEnv
+): Promise<number> {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, {
       stdio: 'inherit',
@@ -66,9 +76,10 @@ async function listRecoverableFailedMigrations(env: NodeJS.ProcessEnv) {
 
   const client = new pg.Client({
     connectionString: env.DATABASE_URL,
-    ssl: env.REMOTE_MIGRATE_TUNNEL === '1'
-      ? { rejectUnauthorized: false }
-      : undefined,
+    ssl:
+      env.REMOTE_MIGRATE_TUNNEL === '1'
+        ? { rejectUnauthorized: false }
+        : undefined,
   });
   try {
     await client.connect();
@@ -100,7 +111,9 @@ async function resolveRecoverableFailedMigrations(env: NodeJS.ProcessEnv) {
   const failedMigrations = await listRecoverableFailedMigrations(env);
 
   for (const migrationName of failedMigrations) {
-    console.log(`Marking failed migration ${migrationName} as rolled back before retrying deploy.`);
+    console.log(
+      `Marking failed migration ${migrationName} as rolled back before retrying deploy.`
+    );
     const resolveCode = await runCommand(
       'bun',
       ['prisma', 'migrate', 'resolve', '--rolled-back', migrationName],
@@ -116,24 +129,35 @@ async function resolveRecoverableFailedMigrations(env: NodeJS.ProcessEnv) {
 }
 
 async function runProductionMigrations(env: NodeJS.ProcessEnv) {
-  const generateCode = await runCommand('bun', ['prisma', 'generate'], env);
+  const migrationEnv = withProductionMigrationTimeouts(env);
+  const generateCode = await runCommand(
+    'bun',
+    ['prisma', 'generate'],
+    migrationEnv
+  );
   if (generateCode !== 0) {
     return generateCode;
   }
 
-  const resolveCode = await resolveRecoverableFailedMigrations(env);
+  await assertNoBlockingMigrationTransactions(migrationEnv);
+
+  const resolveCode = await resolveRecoverableFailedMigrations(migrationEnv);
   if (resolveCode !== 0) {
     return resolveCode;
   }
 
-  await runCombinedFeatureGate('combined-feature-preflight.sql', env);
+  await runCombinedFeatureGate('combined-feature-preflight.sql', migrationEnv);
 
-  const migrateCode = await runCommand('bun', ['prisma', 'migrate', 'deploy'], env);
+  const migrateCode = await runCommand(
+    'bun',
+    ['prisma', 'migrate', 'deploy'],
+    migrationEnv
+  );
   if (migrateCode !== 0) {
     return migrateCode;
   }
 
-  await runCombinedFeatureGate('combined-feature-postcheck.sql', env);
+  await runCombinedFeatureGate('combined-feature-postcheck.sql', migrationEnv);
 
   const backfillCode = await runCommand(
     'bun',
@@ -175,7 +199,9 @@ sshProcess.on('error', (error) => {
 
 sshProcess.on('close', (code) => {
   if (!migrationStarted) {
-    console.error(`SSH tunnel exited before migrations started with code ${code ?? 'unknown'}`);
+    console.error(
+      `SSH tunnel exited before migrations started with code ${code ?? 'unknown'}`
+    );
     process.exit(code || 1);
   }
 });

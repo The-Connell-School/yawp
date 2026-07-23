@@ -21,7 +21,6 @@ async function loadAuthorizedDocumentId(request: Request, documentId: string) {
     where: {
       teachers: { some: { id: profile.id } },
       school: { organizationId: profile.organization.id },
-      isArchived: false,
     },
     select: { id: true },
   });

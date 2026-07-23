@@ -85,7 +85,6 @@ describe('api.paste-alerts.$documentId', () => {
         where: {
           teachers: { some: { id: 'teacher-1' } },
           school: { organizationId: 'org-1' },
-          isArchived: false,
         },
       })
     );
@@ -95,6 +94,28 @@ describe('api.paste-alerts.$documentId', () => {
           id: 'doc-1',
           membership: { organizationId: 'org-1' },
         }),
+      })
+    );
+  });
+
+  test('keeps paste details available on archived teacher-owned class pages', async () => {
+    prisma.class.findMany.mockResolvedValue([
+      { id: 'class-1', isArchived: true },
+    ]);
+
+    const response = await loader({
+      request: new Request('https://example.test/api/paste-alerts/doc-1'),
+      params: { documentId: 'doc-1' },
+      context: {},
+    } as any);
+
+    expect((response as any).data.document.id).toBe('doc-1');
+    expect(prisma.class.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          teachers: { some: { id: 'teacher-1' } },
+          school: { organizationId: 'org-1' },
+        },
       })
     );
   });

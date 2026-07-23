@@ -128,6 +128,9 @@ jobs:
           PROD_DB_USER: ${{ secrets.PROD_DB_USER }}
           PROD_SSH_HOST: ${{ secrets.PROD_SSH_HOST }}
           PROD_SSH_KEY_PATH: ${{ runner.temp }}/yawp-production-bastion
+          PROD_MIGRATION_LOCK_TIMEOUT_MS: '5000'
+          PROD_MIGRATION_STATEMENT_TIMEOUT_MS: '600000'
+          PROD_MIGRATION_BLOCKING_TRANSACTION_AGE_MS: '5000'
 
       - name: 📦 Build Docker image
         run: bun web-app:docker:build

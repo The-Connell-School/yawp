@@ -3,8 +3,7 @@ import { join } from 'path';
 import pg from 'pg';
 
 export type CombinedFeatureGateScript =
-  | 'combined-feature-preflight.sql'
-  | 'combined-feature-postcheck.sql';
+  'combined-feature-preflight.sql' | 'combined-feature-postcheck.sql';
 
 type QueryClient = {
   query: (sql: string) => Promise<unknown>;
@@ -21,7 +20,9 @@ export function stripPsqlMetaCommands(sql: string) {
   );
 }
 
-export function loadCombinedFeatureGateSql(scriptName: CombinedFeatureGateScript) {
+export function loadCombinedFeatureGateSql(
+  scriptName: CombinedFeatureGateScript
+) {
   return stripPsqlMetaCommands(
     readFileSync(join(scriptsRoot, scriptName), 'utf8')
   );
@@ -48,12 +49,15 @@ export async function runCombinedFeatureGate(
 
   const client = new pg.Client({
     connectionString: env.DATABASE_URL,
+    options: env.PGOPTIONS,
     ssl:
       env.REMOTE_MIGRATE_TUNNEL === '1'
         ? { rejectUnauthorized: false }
         : undefined,
   });
-  client.on('notice', (notice) => console.log(`${scriptName}: ${notice.message}`));
+  client.on('notice', (notice) =>
+    console.log(`${scriptName}: ${notice.message}`)
+  );
   await client.connect();
   try {
     await executeCombinedFeatureGate(client, scriptName);
