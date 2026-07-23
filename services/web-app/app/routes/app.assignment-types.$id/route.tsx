@@ -587,22 +587,49 @@ export default function AppAssignmentTypesIdRoute() {
         </div>
         {showPromptsLibrary ? <TeacherDirections /> : null}
         {hasModules ? (
-          <>
-            <h3 className="mb-2 text-foreground/75">Modules</h3>
-            <div className="border-b" />
-            <Accordion type="multiple" className="pb-6">
-              {data.assignmentType.assignmentModules.map((cm) => (
-                <AccordionItem key={cm.id} value={cm.id}>
-                  <AccordionTrigger className="py-2 text-base">
-                    {cm.title}
+          isCollegeEssayAssignmentType ? (
+            <div className="pb-6">
+              <div className="border-b" />
+              <Accordion type="single" collapsible>
+                <AccordionItem value="modules" className="border-none">
+                  <AccordionTrigger className="py-2 text-base font-semibold text-foreground/75">
+                    Modules
                   </AccordionTrigger>
-                  <AccordionContent className="text-muted-foreground">
-                    {cm.description || 'No description.'}
+                  <AccordionContent>
+                    <ol className="flex flex-col gap-4">
+                      {data.assignmentType.assignmentModules.map((cm, index) => (
+                        <li key={cm.id}>
+                          <p className="font-medium text-foreground">
+                            {index + 1}. {cm.title}
+                          </p>
+                          <p className="text-sm text-muted-foreground">
+                            {cm.description || 'No description.'}
+                          </p>
+                        </li>
+                      ))}
+                    </ol>
                   </AccordionContent>
                 </AccordionItem>
-              ))}
-            </Accordion>
-          </>
+              </Accordion>
+            </div>
+          ) : (
+            <>
+              <h3 className="mb-2 text-foreground/75">Modules</h3>
+              <div className="border-b" />
+              <Accordion type="multiple" className="pb-6">
+                {data.assignmentType.assignmentModules.map((cm) => (
+                  <AccordionItem key={cm.id} value={cm.id}>
+                    <AccordionTrigger className="py-2 text-base">
+                      {cm.title}
+                    </AccordionTrigger>
+                    <AccordionContent className="text-muted-foreground">
+                      {cm.description || 'No description.'}
+                    </AccordionContent>
+                  </AccordionItem>
+                ))}
+              </Accordion>
+            </>
+          )
         ) : null}
         {isCollegeEssayAssignmentType ? (
           <div className="pb-6">
