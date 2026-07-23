@@ -10,10 +10,30 @@ export async function action({ request }: ActionFunctionArgs) {
   const userId = await requireUserId(request);
   const membership = await requireMembership(request, userId);
 
-  const body = await request.json();
-  const { documentId, textLength, content } = body;
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return dataResponse({ error: 'Invalid request' }, { status: 400 });
+  }
 
-  if (!documentId || typeof textLength !== 'number') {
+  if (!body || typeof body !== 'object') {
+    return dataResponse({ error: 'Invalid request' }, { status: 400 });
+  }
+
+  const { documentId, textLength, content } = body as Record<string, unknown>;
+
+  if (
+    typeof documentId !== 'string' ||
+    !documentId ||
+    typeof textLength !== 'number' ||
+    !Number.isInteger(textLength) ||
+    textLength <= 0
+  ) {
+    return dataResponse({ error: 'Invalid request' }, { status: 400 });
+  }
+
+  if (content !== undefined && content !== null && typeof content !== 'string') {
     return dataResponse({ error: 'Invalid request' }, { status: 400 });
   }
 
