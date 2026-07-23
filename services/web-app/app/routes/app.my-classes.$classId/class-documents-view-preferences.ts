@@ -15,6 +15,10 @@ import {
   parseDocumentGroupMode,
   type DocumentGroupMode,
 } from './class-documents-grouping';
+import {
+  parseWritingSignalFilter,
+  type WritingSignalFilter,
+} from '~/utils/paste-alert-summary.server';
 
 export type ClassDocumentsViewPreferences = {
   studentIds?: string[];
@@ -25,6 +29,7 @@ export type ClassDocumentsViewPreferences = {
     Record<Exclude<DocumentGroupMode, 'none'>, string[]>
   >;
   documentSort?: DocumentWorkSort;
+  writingSignal?: Exclude<WritingSignalFilter, 'all'>;
 };
 
 const DOCUMENT_GROUP_MODES = ['class', 'student', 'assignment', 'status'] as const;
@@ -147,6 +152,13 @@ export function parseClassDocumentsViewPreferences(
     preferences.collapsedGroups = parseCollapsedGroups(parsed.collapsedGroups);
     preferences.documentSort = parseDocumentWorkSort(parsed.documentSort);
 
+    const writingSignal = parseWritingSignalFilter(
+      typeof parsed.writingSignal === 'string' ? parsed.writingSignal : null
+    );
+    if (writingSignal !== 'all') {
+      preferences.writingSignal = writingSignal;
+    }
+
     return preferences;
   } catch {
     return {};
@@ -221,6 +233,15 @@ function applyClassDocumentsSearchParamsToPreferences(
     delete next.documentGroup;
   }
 
+  const writingSignal = parseWritingSignalFilter(
+    searchParams.get('writingSignal')
+  );
+  if (writingSignal !== 'all') {
+    next.writingSignal = writingSignal;
+  } else {
+    delete next.writingSignal;
+  }
+
   return next;
 }
 
@@ -251,6 +272,9 @@ export function preferencesFromSearchParams(
   );
   const status = searchParams.get('status');
   const documentGroup = parseDocumentGroupMode(searchParams.get('documentGroup'));
+  const writingSignal = parseWritingSignalFilter(
+    searchParams.get('writingSignal')
+  );
 
   if (studentIds.length > 0) preferences.studentIds = studentIds;
   if (assignmentIds.length > 0) preferences.assignmentIds = assignmentIds;
@@ -262,6 +286,9 @@ export function preferencesFromSearchParams(
   }
   if (documentGroup !== 'none') {
     preferences.documentGroup = documentGroup;
+  }
+  if (writingSignal !== 'all') {
+    preferences.writingSignal = writingSignal;
   }
 
   return preferences;
@@ -301,6 +328,11 @@ export function mergeStoredClassDocumentsSearchParams(params: {
 
   if (!next.has('documentGroup') && params.storedPreferences.documentGroup) {
     next.set('documentGroup', params.storedPreferences.documentGroup);
+    shouldReplace = true;
+  }
+
+  if (!next.has('writingSignal') && params.storedPreferences.writingSignal) {
+    next.set('writingSignal', params.storedPreferences.writingSignal);
     shouldReplace = true;
   }
 

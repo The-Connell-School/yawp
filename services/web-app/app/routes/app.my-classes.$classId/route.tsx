@@ -47,6 +47,10 @@ import { DocumentLink } from '~/components/document-link';
 import { Checkbox } from '~/components/ui/checkbox';
 import { ReleaseGradesSheet } from '~/components/teacher-document-work/release-grades-sheet';
 import {
+  PasteAlertSheet,
+  type PasteAlertSheetTarget,
+} from '~/components/teacher-document-work/paste-alert-sheet';
+import {
   ArrowDown,
   ArrowUp,
   ArrowRightLeft,
@@ -114,6 +118,10 @@ import {
   sendStudentClassInvite,
 } from './class-student-enrollment.server';
 import { filterClassStudentsByQuery } from './class-students-search';
+import {
+  parseWritingSignalFilter,
+  summarizePasteAlertsByDocument,
+} from '~/utils/paste-alert-summary.server';
 
 export function getDraftDisplayTitle(document: {
   title?: string | null;
@@ -702,6 +710,22 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     },
   });
 
+  const classDocumentIds = [
+    ...new Set([
+      ...submissions.map((submission) => submission.documentId),
+      ...inProgressDocuments.map((document) => document.id),
+    ]),
+  ];
+  const pasteAlertRows =
+    classDocumentIds.length > 0
+      ? await prisma.pasteAlert.findMany({
+          where: { documentId: { in: classDocumentIds } },
+          select: { documentId: true, reviewedAt: true },
+        })
+      : [];
+  const pasteAlertSummaryByDocument =
+    summarizePasteAlertsByDocument(pasteAlertRows);
+
   const classAssignments = await prisma.classAssignment.findMany({
     where: { classId },
     select: {
@@ -768,6 +792,9 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     assignmentsEnabled: true,
     manageSchools: manageSchools?.schools ?? [],
     teacherClasses,
+    pasteAlertSummaryByDocument: Object.fromEntries(
+      pasteAlertSummaryByDocument.entries()
+    ),
   });
 }
 
@@ -845,6 +872,8 @@ function ClassDetailPage() {
   const [releaseGradesForSheet, setReleaseGradesForSheet] = useState<
     ReleaseGradeRow[]
   >([]);
+  const [pasteAlertSheetTarget, setPasteAlertSheetTarget] =
+    useState<PasteAlertSheetTarget | null>(null);
   const classDetailPath = `/app/my-classes/${data.klass.id}`;
   const classDetailSearch = searchParams.toString();
   const classDetailExitTo = classDetailSearch
@@ -1099,17 +1128,23 @@ function ClassDetailPage() {
   }, [allSubmissions, data.inProgressDocuments]);
 
   const teacherDocumentWorkRows = useMemo((): TeacherDocumentWorkRow[] => {
-    return classDocuments.map((document) => ({
-      ...document,
-      resolvedClass: {
-        id: data.klass.id,
-        grade: data.klass.grade,
-        period: data.klass.period,
-        title: data.klass.title,
-      },
-      submissionCount: document.submissions.length,
-    }));
-  }, [classDocuments, data.klass]);
+    return classDocuments.map((document) => {
+      const pasteAlertSummary =
+        data.pasteAlertSummaryByDocument[document.id];
+      return {
+        ...document,
+        resolvedClass: {
+          id: data.klass.id,
+          grade: data.klass.grade,
+          period: data.klass.period,
+          title: data.klass.title,
+        },
+        submissionCount: document.submissions.length,
+        pasteAlertCount: pasteAlertSummary?.count ?? 0,
+        unreviewedPasteAlertCount: pasteAlertSummary?.unreviewedCount ?? 0,
+      };
+    });
+  }, [classDocuments, data.klass, data.pasteAlertSummaryByDocument]);
 
   const unreleasedGrades = useMemo(() => {
     const rows =
@@ -1155,6 +1190,10 @@ function ClassDetailPage() {
     [teacherDocumentWorkRows]
   );
 
+  const writingSignalParam = parseWritingSignalFilter(
+    searchParams.get('writingSignal')
+  );
+
   const documentWorkFilters = useMemo(
     (): TeacherDocumentWorkFilters => ({
       studentIds: documentFilterStudentIds,
@@ -1163,6 +1202,7 @@ function ClassDetailPage() {
       status: statusFilter,
       group: documentGroupMode,
       query: searchParams.get('q') ?? '',
+      writingSignal: writingSignalParam,
     }),
     [
       documentGroupMode,
@@ -1170,6 +1210,7 @@ function ClassDetailPage() {
       selectedAssignmentIds,
       documentFilterStudentIds,
       statusFilter,
+      writingSignalParam,
     ]
   );
 
@@ -1356,6 +1397,14 @@ function ClassDetailPage() {
       }
     }
 
+    if ('writingSignal' in updates) {
+      if (!updates.writingSignal || updates.writingSignal === 'all') {
+        next.delete('writingSignal');
+      } else {
+        next.set('writingSignal', updates.writingSignal);
+      }
+    }
+
     navigateWithDocumentPreferences(next);
   };
 
@@ -1395,6 +1444,7 @@ function ClassDetailPage() {
             next.delete('assignmentId');
             next.delete('status');
             next.delete('q');
+            next.delete('writingSignal');
             navigateWithDocumentPreferences(next);
           }}
           collapsedGroups={collapsedDocumentGroups}
@@ -1430,6 +1480,15 @@ function ClassDetailPage() {
           compactRows
           sort={documentSort}
           onSortChange={handleDocumentSortChange}
+          onOpenPasteAlerts={(document) =>
+            setPasteAlertSheetTarget({
+              documentId: document.id,
+              documentTitle: document.title,
+              studentName:
+                document.membership.user.name ||
+                document.membership.user.email,
+            })
+          }
         />
       );
     }
@@ -1901,6 +1960,12 @@ function ClassDetailPage() {
         isOpen={isReleaseGradesSheetOpen}
         onClose={() => setIsReleaseGradesSheetOpen(false)}
         onSuccess={handleGradingSuccess}
+      />
+
+      <PasteAlertSheet
+        target={pasteAlertSheetTarget}
+        onClose={() => setPasteAlertSheetTarget(null)}
+        onReviewed={() => revalidator.revalidate()}
       />
     </section>
   );
