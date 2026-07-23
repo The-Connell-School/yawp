@@ -459,6 +459,69 @@ export async function seedSyntheticLocalDevData(
     },
   });
 
+  // Paste activity: deterministic realistic paste alerts across a practice
+  // draft, a submitted document, and a graded document — mixing reviewed and
+  // unreviewed evidence so the teacher-facing "Paste · N" signal, the Writing
+  // signals filter, and the review action all have real seeded data to exercise.
+  const practiceDraftPasteContent =
+    'The rise of social media has fundamentally reshaped how teenagers communicate, learn, and form their identities in ways that previous generations never experienced growing up.';
+  const practiceDraftPasteAlert = await prisma.pasteAlert.create({
+    data: {
+      documentId: editedDocument.id,
+      membershipId: studentDraft.membershipId,
+      textLength: practiceDraftPasteContent.length,
+      content: practiceDraftPasteContent,
+    },
+  });
+
+  const submittedCivicPasteContent =
+    'Civic engagement among young people has declined steadily over the past two decades, according to several national surveys of voter turnout and volunteer participation rates.';
+  const submittedCivicPasteAlert = await prisma.pasteAlert.create({
+    data: {
+      documentId: submittedDocument.id,
+      membershipId: studentSubmitted.membershipId,
+      textLength: submittedCivicPasteContent.length,
+      content: submittedCivicPasteContent,
+      reviewedAt: new Date(),
+      reviewedByMembershipId: primaryTeacher.membershipId,
+    },
+  });
+
+  const gradedCivicPasteContentUnreviewed =
+    'A healthy democracy depends on citizens who are willing to question claims, weigh competing evidence fairly, and defend their conclusions when someone else pushes back on them.';
+  const gradedCivicPasteAlertUnreviewed = await prisma.pasteAlert.create({
+    data: {
+      documentId: gradedDocument.id,
+      membershipId: studentGraded.membershipId,
+      textLength: gradedCivicPasteContentUnreviewed.length,
+      content: gradedCivicPasteContentUnreviewed,
+    },
+  });
+
+  const gradedCivicPasteContentReviewed =
+    'Student government and service projects give young people real responsibility, and most students rise to meet that responsibility when they are trusted with it early on.';
+  const gradedCivicPasteAlertReviewed = await prisma.pasteAlert.create({
+    data: {
+      documentId: gradedDocument.id,
+      membershipId: studentGraded.membershipId,
+      textLength: gradedCivicPasteContentReviewed.length,
+      content: gradedCivicPasteContentReviewed,
+      reviewedAt: new Date(),
+      reviewedByMembershipId: primaryTeacher.membershipId,
+    },
+  });
+
+  console.log('[seed] Paste activity fixtures:');
+  console.log(
+    `[seed]   Practice essay draft — class=${primaryClass.id} document=${editedDocument.id} alert=${practiceDraftPasteAlert.id} (unreviewed, ${practiceDraftPasteContent.length} chars)`
+  );
+  console.log(
+    `[seed]   Submitted civic essay — class=${primaryClass.id} document=${submittedDocument.id} alert=${submittedCivicPasteAlert.id} (reviewed, ${submittedCivicPasteContent.length} chars)`
+  );
+  console.log(
+    `[seed]   Graded civic essay — class=${primaryClass.id} document=${gradedDocument.id} alert=${gradedCivicPasteAlertUnreviewed.id} (unreviewed, ${gradedCivicPasteContentUnreviewed.length} chars), alert=${gradedCivicPasteAlertReviewed.id} (reviewed, ${gradedCivicPasteContentReviewed.length} chars)`
+  );
+
   // Writing practice: add a sample teacher-assigned practice (with one student
   // attempt) so every surface — student "Assigned to you", teacher "Assigned
   // by you", and the results view — is populated out of the box in
