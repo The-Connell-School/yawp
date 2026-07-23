@@ -250,7 +250,7 @@ export function parseReplyBlocks(text: string): ReplyBlock[] {
   return text
     .trim()
     .split(/\n\s*\n/)
-    .map((block) => {
+    .map((block): ReplyBlock => {
       const lines = block.split('\n').filter((line) => line.trim().length > 0);
       const isBulleted =
         lines.length > 0 && lines.every((line) => /^\s*[-*•]\s+/.test(line));
