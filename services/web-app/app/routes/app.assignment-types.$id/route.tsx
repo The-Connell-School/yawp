@@ -32,6 +32,11 @@ import {
 import { listApHistoryLibraryEntries } from '~/domain/ap-history/library.server';
 import { AP_HISTORY_ASSIGNMENT_TYPE_KEY } from '~/domain/ap-history/schema';
 import {
+  COLLEGE_ESSAY_ASSIGNMENT_TYPE_KEY,
+  COLLEGE_ESSAY_EXEMPLARS,
+  COLLEGE_ESSAY_EXEMPLARS_INTRO,
+} from '~/domain/college-essay/course-meta';
+import {
   getAvailableAssignmentTypesForScopes,
   isAssignmentTypeAvailableForAnyScope,
   type AssignmentTypeAccessScope,
@@ -493,6 +498,8 @@ export default function AppAssignmentTypesIdRoute() {
   const showPromptsLibrary = data.promptLibrary != null;
   const isApHistoryAssignmentType =
     data.assignmentType.systemKey === AP_HISTORY_ASSIGNMENT_TYPE_KEY;
+  const isCollegeEssayAssignmentType =
+    data.assignmentType.systemKey === COLLEGE_ESSAY_ASSIGNMENT_TYPE_KEY;
   const canCreateDirectDocument = !isApHistoryAssignmentType;
   const assignmentSheetClasses = isApHistoryAssignmentType
     ? (data.apHistoryLibrary?.teacherClasses ?? [])
@@ -596,6 +603,35 @@ export default function AppAssignmentTypesIdRoute() {
               ))}
             </Accordion>
           </>
+        ) : null}
+        {isCollegeEssayAssignmentType ? (
+          <div className="pb-6">
+            <Accordion type="single" collapsible>
+              <AccordionItem value="exemplars" className="border-none">
+                <AccordionTrigger className="py-2 text-base">
+                  These are hard. Want to see what they look like?
+                </AccordionTrigger>
+                <AccordionContent className="text-muted-foreground">
+                  <p className="mb-3">{COLLEGE_ESSAY_EXEMPLARS_INTRO}</p>
+                  <ul className="flex flex-col gap-2">
+                    {COLLEGE_ESSAY_EXEMPLARS.map((exemplar) => (
+                      <li key={exemplar.href}>
+                        <a
+                          href={exemplar.href}
+                          target="_blank"
+                          rel="noreferrer noopener"
+                          className="font-medium text-foreground underline underline-offset-2"
+                        >
+                          {exemplar.label}
+                        </a>
+                        <span> — {exemplar.blurb}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </AccordionContent>
+              </AccordionItem>
+            </Accordion>
+          </div>
         ) : null}
         {data.promptLibrary ? (
           <div className="pb-6">
