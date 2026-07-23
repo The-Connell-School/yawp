@@ -1,11 +1,15 @@
 import { type LoaderFunctionArgs, redirect } from 'react-router';
-import { useLoaderData, useSearchParams } from 'react-router';
+import { useLoaderData, useRevalidator, useSearchParams } from 'react-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   TeacherDocumentWorkPanel,
   type TeacherDocumentWorkFilters,
 } from '~/components/teacher-document-work/teacher-document-work-panel';
 import { ReleaseGradesSheet } from '~/components/teacher-document-work/release-grades-sheet';
+import {
+  PasteAlertSheet,
+  type PasteAlertSheetTarget,
+} from '~/components/teacher-document-work/paste-alert-sheet';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { buildTeacherClassWorkDocumentWhere } from '~/utils/class-assignment-scope.server';
@@ -35,6 +39,12 @@ import {
   DEFAULT_DOCUMENT_WORK_SORT,
   type DocumentWorkSort,
 } from '~/utils/teacher-document-work-sort';
+import {
+  buildPasteAlertRelationWhere,
+  parseWritingSignalFilter,
+  summarizePasteAlertsByDocument,
+  type WritingSignalFilter,
+} from '~/utils/paste-alert-summary.server';
 import type { Prisma } from '@app/prisma';
 import {
   mergeStoredStudentWorkSearchParams,
@@ -103,6 +113,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
       : 'all';
   const group = parseDocumentGroupMode(url.searchParams.get('group'));
   const query = (url.searchParams.get('q') ?? '').trim();
+  const writingSignal = parseWritingSignalFilter(
+    url.searchParams.get('writingSignal')
+  );
 
   const classes = await prisma.class.findMany({
     where: {
@@ -148,6 +161,14 @@ export async function loader({ request }: LoaderFunctionArgs) {
       classIds,
       legacyDocumentIds: forensicRows.map((row) => row.documentId),
     });
+
+  const pasteAlertRelationWhere = buildPasteAlertRelationWhere(writingSignal);
+  if (pasteAlertRelationWhere) {
+    documentWhere.AND = [
+      ...(Array.isArray(documentWhere.AND) ? documentWhere.AND : []),
+      pasteAlertRelationWhere,
+    ];
+  }
 
   const allDocuments = await prisma.document.findMany({
     where: documentWhere,
@@ -214,6 +235,31 @@ export async function loader({ request }: LoaderFunctionArgs) {
     take: 250,
   });
 
+  const documentIds = allDocuments.map((document) => document.id);
+  const pasteAlertCounts =
+    documentIds.length > 0
+      ? await prisma.pasteAlert.findMany({
+          where: { documentId: { in: documentIds } },
+          select: { documentId: true },
+        })
+      : [];
+  const unreviewedPasteAlertCounts =
+    documentIds.length > 0
+      ? await prisma.pasteAlert.findMany({
+          where: { documentId: { in: documentIds }, reviewedAt: null },
+          select: { documentId: true },
+        })
+      : [];
+  const pasteAlertCountByDocument = summarizePasteAlertsByDocument(
+    pasteAlertCounts.map((row) => ({ documentId: row.documentId }))
+  );
+  const unreviewedPasteAlertCountByDocument = summarizePasteAlertsByDocument(
+    unreviewedPasteAlertCounts.map((row) => ({
+      documentId: row.documentId,
+      reviewedAt: null,
+    }))
+  );
+
   const documents: TeacherDocumentWorkRow[] = allDocuments.map((document) => {
     const submissions = document.submissions;
     return {
@@ -231,6 +277,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
       submissions,
       latestSubmission: submissions[0] ?? null,
       submissionCount: document._count.submissions,
+      pasteAlertCount:
+        pasteAlertCountByDocument.get(document.id)?.count ?? 0,
+      unreviewedPasteAlertCount:
+        unreviewedPasteAlertCountByDocument.get(document.id)?.count ?? 0,
     };
   });
 
@@ -260,6 +310,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       status,
       group,
       query,
+      writingSignal,
     } satisfies TeacherDocumentWorkFilters,
   };
 }
@@ -278,6 +329,9 @@ export default function StudentWorkRoute() {
   const [releaseGradesForSheet, setReleaseGradesForSheet] = useState<
     ReleaseGradeRow[]
   >([]);
+  const [pasteAlertSheetTarget, setPasteAlertSheetTarget] =
+    useState<PasteAlertSheetTarget | null>(null);
+  const revalidator = useRevalidator();
   const hasHydratedStudentWorkPreferences = useRef(false);
   const hasHydratedCollapsedStudentWorkGroups = useRef(false);
   const hasHydratedDocumentSort = useRef(false);
@@ -386,6 +440,7 @@ export default function StudentWorkRoute() {
       status: data.filters.status,
       group: data.filters.group,
       query: data.filters.query,
+      writingSignal: data.filters.writingSignal,
     }),
     [data.filters]
   );
@@ -395,7 +450,12 @@ export default function StudentWorkRoute() {
 
     const apply = (
       key: string,
-      value: string | DocumentGroupMode | TeacherDocumentStatus | 'all'
+      value:
+        | string
+        | DocumentGroupMode
+        | TeacherDocumentStatus
+        | WritingSignalFilter
+        | 'all'
     ) => {
       if (!value || value === 'all' || value === 'none') {
         next.delete(key);
@@ -430,6 +490,9 @@ export default function StudentWorkRoute() {
     }
     if ('query' in updates) {
       apply('q', updates.query ?? '');
+    }
+    if ('writingSignal' in updates) {
+      apply('writingSignal', updates.writingSignal ?? 'all');
     }
 
     persistStudentWorkViewPreferences(next);
@@ -493,12 +556,26 @@ export default function StudentWorkRoute() {
           compactRows
           sort={documentSort}
           onSortChange={handleDocumentSortChange}
+          onOpenPasteAlerts={(document) =>
+            setPasteAlertSheetTarget({
+              documentId: document.id,
+              documentTitle: document.title,
+              studentName:
+                document.membership.user.name ||
+                document.membership.user.email,
+            })
+          }
         />
         <ReleaseGradesSheet
           grades={releaseGradesForSheet}
           isOpen={isReleaseGradesSheetOpen}
           onClose={() => setIsReleaseGradesSheetOpen(false)}
           onSuccess={handleReleaseGradesSuccess}
+        />
+        <PasteAlertSheet
+          target={pasteAlertSheetTarget}
+          onClose={() => setPasteAlertSheetTarget(null)}
+          onReviewed={() => revalidator.revalidate()}
         />
       </div>
     </section>

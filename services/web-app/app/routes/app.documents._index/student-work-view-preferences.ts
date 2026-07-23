@@ -14,6 +14,10 @@ import {
   parseDocumentWorkSort,
   type DocumentWorkSort,
 } from '~/utils/teacher-document-work-sort';
+import {
+  parseWritingSignalFilter,
+  type WritingSignalFilter,
+} from '~/utils/paste-alert-summary.server';
 
 import {
   getStoredCollapsedDocumentGroups,
@@ -30,6 +34,7 @@ export type StudentWorkViewPreferences = {
     Record<Exclude<DocumentGroupMode, 'none'>, string[]>
   >;
   documentSort?: DocumentWorkSort;
+  writingSignal?: Exclude<WritingSignalFilter, 'all'>;
 };
 
 export const STUDENT_WORK_VIEW_STORAGE_KEY = 'yawp.student-work-view';
@@ -125,6 +130,13 @@ export function parseStudentWorkViewPreferences(
     preferences.collapsedGroups = parseCollapsedGroups(parsed.collapsedGroups);
     preferences.documentSort = parseDocumentWorkSort(parsed.documentSort);
 
+    const writingSignal = parseWritingSignalFilter(
+      typeof parsed.writingSignal === 'string' ? parsed.writingSignal : null
+    );
+    if (writingSignal !== 'all') {
+      preferences.writingSignal = writingSignal;
+    }
+
     return preferences;
   } catch {
     return {};
@@ -205,6 +217,15 @@ function applyStudentWorkSearchParamsToPreferences(
     next.documentGroup = documentGroup;
   } else {
     delete next.documentGroup;
+  }
+
+  const writingSignal = parseWritingSignalFilter(
+    searchParams.get('writingSignal')
+  );
+  if (writingSignal !== 'all') {
+    next.writingSignal = writingSignal;
+  } else {
+    delete next.writingSignal;
   }
 
   return next;
@@ -300,6 +321,11 @@ export function mergeStoredStudentWorkSearchParams(params: {
 
   if (!next.has('group') && params.storedPreferences.documentGroup) {
     next.set('group', params.storedPreferences.documentGroup);
+    shouldReplace = true;
+  }
+
+  if (!next.has('writingSignal') && params.storedPreferences.writingSignal) {
+    next.set('writingSignal', params.storedPreferences.writingSignal);
     shouldReplace = true;
   }
 
