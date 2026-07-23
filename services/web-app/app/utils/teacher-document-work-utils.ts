@@ -48,6 +48,8 @@ export type TeacherDocumentWorkRow = {
   submissions: TeacherDocumentWorkSubmission[];
   latestSubmission: TeacherDocumentWorkSubmission | null;
   submissionCount: number;
+  pasteAlertCount?: number;
+  unreviewedPasteAlertCount?: number;
 };
 
 export type ReleaseGradeRow = {
