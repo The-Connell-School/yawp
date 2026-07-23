@@ -190,4 +190,102 @@ test.describe('Teacher paste activity signal', () => {
       await prisma.$disconnect();
     }
   });
+
+  test('teacher can load and review an older event beyond the first bounded page', async ({
+    page,
+    e2eContext,
+    signIn,
+  }) => {
+    const prisma = createE2EPrismaClient();
+    const suffix = Date.now().toString(36);
+    let documentId = '';
+    let oldestAlertId = '';
+
+    try {
+      const document = await prisma.document.create({
+        data: {
+          title: `Paste history essay ${suffix}`,
+          text: 'Original student text.',
+          html: '<p>Original student text.</p>',
+          membershipId: e2eContext.membershipId,
+          assignmentTypeId: e2eContext.assignmentTypeId,
+          assignmentId: e2eContext.assignmentId,
+          classAssignmentId: e2eContext.classAssignmentId,
+        },
+        select: { id: true },
+      });
+      documentId = document.id;
+
+      const createdAt = new Date('2026-01-01T00:00:00.000Z').getTime();
+      await prisma.pasteAlert.createMany({
+        data: Array.from({ length: 201 }, (_, index) => ({
+          documentId,
+          membershipId: e2eContext.membershipId,
+          textLength: 250 + index,
+          content: index === 0 ? null : `Reviewed paste ${index}`,
+          createdAt: new Date(createdAt + index * 1_000),
+          reviewedAt: index === 0 ? null : new Date(createdAt + index * 1_000),
+          reviewedByMembershipId:
+            index === 0 ? null : e2eContext.teacherMembershipId,
+        })),
+      });
+      const oldestAlert = await prisma.pasteAlert.findFirstOrThrow({
+        where: { documentId },
+        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+        select: { id: true },
+      });
+      oldestAlertId = oldestAlert.id;
+
+      await signIn(
+        e2eContext.teacherEmail,
+        process.env.E2E_TEACHER_PASSWORD ?? 'teacher-e2e-password'
+      );
+      await page.addInitScript(() => {
+        localStorage.removeItem('yawp.student-work-view');
+      });
+      await page.goto('/app/documents?group=none&writingSignal=any');
+      await page.waitForLoadState('networkidle');
+
+      await page
+        .getByRole('row', { name: new RegExp(`Paste history essay ${suffix}`) })
+        .getByRole('button', { name: /Paste · 201; 1 unreviewed event/ })
+        .click();
+      await expect(
+        page.getByRole('button', { name: 'Load older activity' })
+      ).toBeVisible();
+
+      await page
+        .getByRole('button', { name: 'Load older activity' })
+        .click();
+      const legacyAlertRow = page
+        .getByTestId('paste-alert-row')
+        .filter({ hasText: 'Pasted text unavailable' });
+      await expect(legacyAlertRow).toBeVisible();
+      await legacyAlertRow
+        .getByRole('button', { name: 'Mark reviewed' })
+        .click();
+      await expect(
+        legacyAlertRow.getByText('Reviewed', { exact: true })
+      ).toBeVisible();
+
+      const reviewed = await prisma.pasteAlert.findUniqueOrThrow({
+        where: { id: oldestAlertId },
+        select: { reviewedAt: true, reviewedByMembershipId: true },
+      });
+      expect(reviewed.reviewedAt).not.toBeNull();
+      expect(reviewed.reviewedByMembershipId).toBe(
+        e2eContext.teacherMembershipId
+      );
+    } finally {
+      if (documentId) {
+        await prisma.pasteAlert
+          .deleteMany({ where: { documentId } })
+          .catch(() => {});
+        await prisma.document
+          .deleteMany({ where: { id: documentId } })
+          .catch(() => {});
+      }
+      await prisma.$disconnect();
+    }
+  });
 });

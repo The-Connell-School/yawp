@@ -79,6 +79,8 @@ describe('api.paste-alerts.$documentId', () => {
         take: 201,
       })
     );
+    expect((response as any).data.pageCursor).toBe(null);
+    expect((response as any).data.nextCursor).toBe(null);
     expect((response as any).data.hasMore).toBe(false);
     expect(prisma.class.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -140,6 +142,60 @@ describe('api.paste-alerts.$documentId', () => {
 
     expect((response as any).data.alerts).toHaveLength(200);
     expect((response as any).data.hasMore).toBe(true);
+    expect((response as any).data.nextCursor).toBe('alert-199');
+  });
+
+  test('pages to and reviews an older unreviewed alert', async () => {
+    prisma.pasteAlert.findFirst.mockResolvedValue({ id: 'alert-199' });
+    prisma.pasteAlert.findMany.mockResolvedValue([
+      {
+        id: 'alert-200',
+        createdAt: new Date('2026-06-01T00:00:00Z'),
+        textLength: 250,
+        content: null,
+        reviewedAt: null,
+        reviewedByMembership: null,
+      },
+    ]);
+
+    const response = await loader({
+      request: new Request(
+        'https://example.test/api/paste-alerts/doc-1?cursor=alert-199'
+      ),
+      params: { documentId: 'doc-1' },
+      context: {},
+    } as any);
+
+    expect(prisma.pasteAlert.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        cursor: { id: 'alert-199' },
+        skip: 1,
+        take: 201,
+      })
+    );
+    expect((response as any).data.pageCursor).toBe('alert-199');
+    expect((response as any).data.alerts[0]).toMatchObject({
+      id: 'alert-200',
+      reviewedAt: null,
+      content: null,
+    });
+
+    prisma.pasteAlert.findFirst.mockResolvedValue({ id: 'alert-200' });
+    const reviewResponse = await action({
+      request: reviewRequest('alert-200'),
+      params: { documentId: 'doc-1' },
+      context: {},
+    } as any);
+
+    expect((reviewResponse as any).data.success).toBe(true);
+    expect(prisma.pasteAlert.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          id: 'alert-200',
+          reviewedAt: null,
+        }),
+      })
+    );
   });
 
   test('bounds oversized historical content in the detail payload', async () => {

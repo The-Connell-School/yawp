@@ -1,5 +1,5 @@
 import { useFetcher } from 'react-router';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Sheet,
   SheetContent,
@@ -30,6 +30,8 @@ type PasteAlertSheetData = {
     membership: { user: { name: string | null; email: string } };
   };
   alerts: PasteAlertDetail[];
+  pageCursor: string | null;
+  nextCursor: string | null;
   hasMore: boolean;
 };
 
@@ -66,6 +68,54 @@ export function resolvePasteAlertSheetView(
   };
 }
 
+export function mergePasteAlertSheetPage(
+  current: PasteAlertSheetData | undefined,
+  incoming: PasteAlertSheetData
+) {
+  if (
+    !incoming.pageCursor ||
+    !current ||
+    current.document.id !== incoming.document.id
+  ) {
+    return incoming;
+  }
+
+  const alertIds = new Set(current.alerts.map((alert) => alert.id));
+  return {
+    ...incoming,
+    alerts: [
+      ...current.alerts,
+      ...incoming.alerts.filter((alert) => !alertIds.has(alert.id)),
+    ],
+  };
+}
+
+export function PasteAlertCapturedContent({
+  content,
+  contentTruncated,
+}: Pick<PasteAlertDetail, 'content' | 'contentTruncated'>) {
+  if (!content) {
+    return (
+      <p className="rounded bg-white/70 p-2 text-sm text-muted-foreground">
+        Pasted text unavailable
+      </p>
+    );
+  }
+
+  return (
+    <>
+      <p className="max-h-40 overflow-y-auto whitespace-pre-wrap rounded bg-white/70 p-2 text-sm text-foreground">
+        {content}
+      </p>
+      {contentTruncated ? (
+        <p className="text-xs text-muted-foreground">
+          Showing the first 50,000 captured characters.
+        </p>
+      ) : null}
+    </>
+  );
+}
+
 export type PasteAlertSheetTarget = {
   documentId: string;
   documentTitle: string | null;
@@ -86,15 +136,30 @@ export function PasteAlertSheet({
   const loadFetcher = useFetcher<PasteAlertSheetResponse>();
   const reviewFetcher = useFetcher<{ success?: boolean }>();
   const handledReviewResponse = useRef<typeof reviewFetcher.data>(undefined);
+  const [loadedData, setLoadedData] = useState<
+    PasteAlertSheetData | undefined
+  >();
   const isOpen = target !== null;
   const documentId = target?.documentId;
 
   useEffect(() => {
+    setLoadedData(undefined);
     if (documentId) {
       loadFetcher.load(`/api/paste-alerts/${documentId}`);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [documentId]);
+
+  useEffect(() => {
+    const response = loadFetcher.data;
+    if (
+      response &&
+      'document' in response &&
+      response.document.id === documentId
+    ) {
+      setLoadedData((current) => mergePasteAlertSheetPage(current, response));
+    }
+  }, [loadFetcher.data, documentId]);
 
   useEffect(() => {
     if (
@@ -106,6 +171,7 @@ export function PasteAlertSheet({
       documentId
     ) {
       handledReviewResponse.current = reviewFetcher.data;
+      setLoadedData(undefined);
       loadFetcher.load(`/api/paste-alerts/${documentId}`);
       onReviewed?.();
     }
@@ -114,9 +180,15 @@ export function PasteAlertSheet({
 
   const { alerts, hasMore, isLoading, hasError } = resolvePasteAlertSheetView(
     documentId,
-    loadFetcher.data,
+    loadedData ?? loadFetcher.data,
     loadFetcher.state
   );
+  const nextCursor =
+    loadedData && loadedData.document.id === documentId
+      ? loadedData.nextCursor
+      : null;
+  const isLoadingMore =
+    Boolean(loadedData) && loadFetcher.state !== 'idle';
 
   const markReviewed = (alertId: string) => {
     if (!documentId) return;
@@ -126,6 +198,13 @@ export function PasteAlertSheet({
       method: 'POST',
       action: `/api/paste-alerts/${documentId}`,
     });
+  };
+
+  const loadOlder = () => {
+    if (!documentId || !nextCursor || loadFetcher.state !== 'idle') return;
+    loadFetcher.load(
+      `/api/paste-alerts/${documentId}?cursor=${encodeURIComponent(nextCursor)}`
+    );
   };
 
   return (
@@ -182,18 +261,10 @@ export function PasteAlertSheet({
                     </Badge>
                   )}
                 </div>
-                {alert.content ? (
-                  <>
-                    <p className="max-h-40 overflow-y-auto whitespace-pre-wrap rounded bg-white/70 p-2 text-sm text-foreground">
-                      {alert.content}
-                    </p>
-                    {alert.contentTruncated ? (
-                      <p className="text-xs text-muted-foreground">
-                        Showing the first 50,000 captured characters.
-                      </p>
-                    ) : null}
-                  </>
-                ) : null}
+                <PasteAlertCapturedContent
+                  content={alert.content}
+                  contentTruncated={alert.contentTruncated}
+                />
                 {!alert.reviewedAt ? (
                   <Button
                     type="button"
@@ -216,10 +287,21 @@ export function PasteAlertSheet({
             ))
           )}
           {hasMore ? (
-            <p className="text-xs text-muted-foreground">
-              Showing the newest {alerts.length} events. Older paste activity
-              remains stored.
-            </p>
+            <div className="space-y-2">
+              <p className="text-xs text-muted-foreground">
+                Showing the newest {alerts.length} events. Older paste activity
+                is available.
+              </p>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={!nextCursor || isLoadingMore}
+                onClick={loadOlder}
+              >
+                {isLoadingMore ? 'Loading…' : 'Load older activity'}
+              </Button>
+            </div>
           ) : null}
         </div>
       </SheetContent>

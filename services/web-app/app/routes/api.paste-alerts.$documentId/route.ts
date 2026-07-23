@@ -72,6 +72,17 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     return dataResponse({ error: 'Not found' }, { status: 404 });
   }
 
+  const cursor = new URL(request.url).searchParams.get('cursor')?.trim() || null;
+  if (cursor) {
+    const cursorAlert = await prisma.pasteAlert.findFirst({
+      where: { id: cursor, documentId },
+      select: { id: true },
+    });
+    if (!cursorAlert) {
+      return dataResponse({ error: 'Invalid cursor' }, { status: 400 });
+    }
+  }
+
   const alerts = await prisma.pasteAlert.findMany({
     where: { documentId },
     select: {
@@ -84,17 +95,23 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         select: { user: { select: { name: true, email: true } } },
       },
     },
-    orderBy: { createdAt: 'desc' },
+    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     take: MAX_ALERTS_RETURNED + 1,
+    ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
   });
+
+  const pageAlerts = alerts.slice(0, MAX_ALERTS_RETURNED);
+  const hasMore = alerts.length > MAX_ALERTS_RETURNED;
 
   return dataResponse({
     document: result.document,
-    alerts: alerts.slice(0, MAX_ALERTS_RETURNED).map((alert) => ({
+    alerts: pageAlerts.map((alert) => ({
       ...alert,
       ...boundPasteAlertContent(alert.content),
     })),
-    hasMore: alerts.length > MAX_ALERTS_RETURNED,
+    pageCursor: cursor,
+    nextCursor: hasMore ? (pageAlerts.at(-1)?.id ?? null) : null,
+    hasMore,
   });
 }
 
