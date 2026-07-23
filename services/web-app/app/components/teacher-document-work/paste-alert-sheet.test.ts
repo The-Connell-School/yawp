@@ -1,5 +1,8 @@
 import { describe, expect, test } from 'bun:test';
-import { resolvePasteAlertSheetView } from './paste-alert-sheet';
+import {
+  isUnhandledReviewSuccess,
+  resolvePasteAlertSheetView,
+} from './paste-alert-sheet';
 
 const alert = {
   id: 'alert-1',
@@ -64,5 +67,13 @@ describe('paste alert sheet target binding', () => {
     expect(failed.alerts).toEqual([]);
     expect(failed.isLoading).toBe(false);
     expect(failed.hasError).toBe(true);
+  });
+
+  test('consumes a completed review response only once', () => {
+    const response = { success: true };
+
+    expect(isUnhandledReviewSuccess(response, undefined)).toBe(true);
+    expect(isUnhandledReviewSuccess(response, response)).toBe(false);
+    expect(isUnhandledReviewSuccess({ success: false }, undefined)).toBe(false);
   });
 });

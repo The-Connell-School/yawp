@@ -120,6 +120,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const classes = await prisma.class.findMany({
     where: {
       teachers: { some: { id: profile.id } },
+      school: { organizationId: profile.organization.id },
       isArchived: false,
     },
     select: {

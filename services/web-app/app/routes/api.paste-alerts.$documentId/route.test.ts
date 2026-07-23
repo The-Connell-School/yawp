@@ -84,6 +84,7 @@ describe('api.paste-alerts.$documentId', () => {
       expect.objectContaining({
         where: {
           teachers: { some: { id: 'teacher-1' } },
+          school: { organizationId: 'org-1' },
           isArchived: false,
         },
       })

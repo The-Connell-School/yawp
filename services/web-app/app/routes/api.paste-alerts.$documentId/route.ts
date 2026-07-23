@@ -18,7 +18,11 @@ async function loadAuthorizedDocumentId(request: Request, documentId: string) {
   }
 
   const classes = await prisma.class.findMany({
-    where: { teachers: { some: { id: profile.id } }, isArchived: false },
+    where: {
+      teachers: { some: { id: profile.id } },
+      school: { organizationId: profile.organization.id },
+      isArchived: false,
+    },
     select: { id: true },
   });
   const classIds = classes.map((klass) => klass.id);

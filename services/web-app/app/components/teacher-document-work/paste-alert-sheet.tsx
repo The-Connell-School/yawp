@@ -1,5 +1,5 @@
 import { useFetcher } from 'react-router';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import {
   Sheet,
   SheetContent,
@@ -37,6 +37,13 @@ type PasteAlertSheetResponse =
   | {
       error: string;
     };
+
+export function isUnhandledReviewSuccess(
+  response: { success?: boolean } | undefined,
+  handledResponse: { success?: boolean } | undefined
+) {
+  return Boolean(response?.success && response !== handledResponse);
+}
 
 export function resolvePasteAlertSheetView(
   documentId: string | undefined,
@@ -77,6 +84,7 @@ export function PasteAlertSheet({
 }: PasteAlertSheetProps) {
   const loadFetcher = useFetcher<PasteAlertSheetResponse>();
   const reviewFetcher = useFetcher<{ success?: boolean }>();
+  const handledReviewResponse = useRef<typeof reviewFetcher.data>(undefined);
   const isOpen = target !== null;
   const documentId = target?.documentId;
 
@@ -89,10 +97,14 @@ export function PasteAlertSheet({
 
   useEffect(() => {
     if (
-      reviewFetcher.data?.success &&
+      isUnhandledReviewSuccess(
+        reviewFetcher.data,
+        handledReviewResponse.current
+      ) &&
       reviewFetcher.state === 'idle' &&
       documentId
     ) {
+      handledReviewResponse.current = reviewFetcher.data;
       loadFetcher.load(`/api/paste-alerts/${documentId}`);
       onReviewed?.();
     }

@@ -555,6 +555,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       where: {
         id: classId,
         teachers: { some: { id: profile.id } },
+        school: { organizationId: profile.organization.id },
       },
       select: {
         id: true,
@@ -618,7 +619,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       document: {
         is: {
           ...classDocumentScope,
-          membership: { organizationId: klass.school.organizationId },
+          membership: { organizationId: profile.organization.id },
           deletedAt: null,
         },
       },
@@ -676,7 +677,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const inProgressDocuments = await prisma.document.findMany({
     where: {
       ...classDocumentScope,
-      membership: { organizationId: klass.school.organizationId },
+      membership: { organizationId: profile.organization.id },
       deletedAt: null,
       archivedAt: null,
       submissions: { none: {} },
@@ -964,6 +965,9 @@ function ClassDetailPage() {
   const documentGroupMode = parseDocumentGroupMode(
     searchParams.get('documentGroup')
   );
+  const writingSignalParam = parseWritingSignalFilter(
+    searchParams.get('writingSignal')
+  );
   const [pagination, setPagination] = useState({ skip: 0, take: 20 });
   const hasHydratedDocumentPreferences = useRef(false);
 
@@ -1032,6 +1036,7 @@ function ClassDetailPage() {
     documentGroupMode,
     documentSort,
     searchParams.get('q'),
+    writingSignalParam,
   ]);
 
   useEffect(() => {
@@ -1201,10 +1206,6 @@ function ClassDetailPage() {
   const documentWorkStatusCounts = useMemo(
     () => countTeacherDocumentWorkStatuses(teacherDocumentWorkRows),
     [teacherDocumentWorkRows]
-  );
-
-  const writingSignalParam = parseWritingSignalFilter(
-    searchParams.get('writingSignal')
   );
 
   const documentWorkFilters = useMemo(

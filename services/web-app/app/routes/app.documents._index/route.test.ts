@@ -114,6 +114,15 @@ describe('documents loader paste activity', () => {
         }),
       })
     );
+    expect(prisma.class.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          teachers: { some: { id: 'teacher-1' } },
+          school: { organizationId: 'org-1' },
+          isArchived: false,
+        },
+      })
+    );
   });
 
   test('applies an unreviewed writing-signal filter before the 250-row limit', async () => {

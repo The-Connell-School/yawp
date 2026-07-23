@@ -140,6 +140,15 @@ describe('class detail loader document visibility', () => {
       archivedAt: null,
       submissions: { none: {} },
     });
+    expect(prisma.class.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          id: 'class-1',
+          teachers: { some: { id: 'teacher-1' } },
+          school: { organizationId: 'org-1' },
+        },
+      })
+    );
   });
 
   test('keeps existing submissions visible for teachers', async () => {
