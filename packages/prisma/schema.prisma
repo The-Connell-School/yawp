@@ -428,6 +428,7 @@ model OrgMembership {
   documentComments              DocumentComment[]
   documentCommentResponses      DocumentCommentResponse[]
   pasteAlerts                   PasteAlert[]
+  reviewedPasteAlerts           PasteAlert[]                   @relation("PasteAlertReviewedBy")
   submissionsGraded             Submission[]                   @relation("SubmissionGradedBy")
   submissionComments            SubmissionComment[]            @relation("SubmissionCommentProfile")
   ownedAssignmentTypes          AssignmentType[]               @relation("AssignmentTypeOwner")
@@ -707,14 +708,17 @@ model TeacherTrainingModuleSession {
 }
 
 model PasteAlert {
-  id           String        @id @default(cuid())
-  createdAt    DateTime      @default(now()) @db.Timestamptz(6)
-  textLength   Int
-  content      String?
-  documentId   String
-  document     Document      @relation(fields: [documentId], references: [id], onDelete: Cascade)
-  membershipId String
-  membership   OrgMembership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  id                   String         @id @default(cuid())
+  createdAt            DateTime       @default(now()) @db.Timestamptz(6)
+  textLength           Int
+  content              String?
+  documentId           String
+  document             Document       @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  membershipId         String
+  membership           OrgMembership  @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  reviewedAt           DateTime?      @db.Timestamptz(6)
+  reviewedByMembershipId String?
+  reviewedByMembership OrgMembership? @relation("PasteAlertReviewedBy", fields: [reviewedByMembershipId], references: [id], onDelete: SetNull)
 
   @@index([documentId, createdAt(sort: Desc)])
   @@index([membershipId, createdAt(sort: Desc)])
