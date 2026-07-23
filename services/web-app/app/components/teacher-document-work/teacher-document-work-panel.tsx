@@ -74,6 +74,7 @@ import {
   sortTeacherDocumentWorkRows,
   toggleDocumentWorkSort,
 } from '~/utils/teacher-document-work-sort';
+import type { WritingSignalFilter } from '~/utils/paste-alert-summary.server';
 import { cn } from '~/utils/misc';
 import { timeAgo } from '~/utils/timeAgo';
 
@@ -123,6 +124,7 @@ export type TeacherDocumentWorkFilters = {
   status: TeacherDocumentStatus | 'all';
   group: DocumentGroupMode;
   query: string;
+  writingSignal: WritingSignalFilter;
 };
 
 export type TeacherDocumentWorkAction = {
@@ -174,6 +176,7 @@ export type TeacherDocumentWorkPanelProps = {
   compactRows?: boolean;
   sort?: DocumentWorkSort;
   onSortChange?: (sort: DocumentWorkSort) => void;
+  onOpenPasteAlerts?: (document: TeacherDocumentWorkRow) => void;
 };
 
 export function TeacherDocumentWorkPanel({
@@ -200,6 +203,7 @@ export function TeacherDocumentWorkPanel({
   compactRows = false,
   sort,
   onSortChange,
+  onOpenPasteAlerts,
 }: TeacherDocumentWorkPanelProps) {
   const navigate = useNavigate();
   const [searchValue, setSearchValue] = useState(filters.query);
@@ -258,6 +262,20 @@ export function TeacherDocumentWorkPanel({
         filters.assignmentIds.length > 0 &&
         (!document.assignment?.id ||
           !filters.assignmentIds.includes(document.assignment.id))
+      ) {
+        return false;
+      }
+
+      if (
+        filters.writingSignal === 'any' &&
+        !((document.pasteAlertCount ?? 0) > 0)
+      ) {
+        return false;
+      }
+
+      if (
+        filters.writingSignal === 'unreviewed' &&
+        !((document.unreviewedPasteAlertCount ?? 0) > 0)
       ) {
         return false;
       }
@@ -360,7 +378,8 @@ export function TeacherDocumentWorkPanel({
     filters.classIds.length > 0 ||
     filters.assignmentIds.length > 0 ||
     filters.status !== 'all' ||
-    filters.query.trim().length > 0;
+    filters.query.trim().length > 0 ||
+    filters.writingSignal !== 'all';
 
   const statusChips = TEACHER_DOCUMENT_STATUSES.map((status) => ({
     status,
@@ -451,10 +470,31 @@ export function TeacherDocumentWorkPanel({
           ) : null}
           <TableCell className={rowClasses?.cell} title={displayTitle}>
             {clickableRows ? (
-              <span className="flex min-w-0 items-center gap-1">
+              <span className="flex min-w-0 items-center gap-1.5">
                 <span className="min-w-0 truncate group-hover:underline">
                   {displayTitle}
                 </span>
+                {(document.pasteAlertCount ?? 0) > 0 && onOpenPasteAlerts ? (
+                  <button
+                    type="button"
+                    className={cn(
+                      'inline-flex shrink-0 items-center gap-1 rounded-full border px-1.5 py-0.5 text-xs font-medium',
+                      (document.unreviewedPasteAlertCount ?? 0) > 0
+                        ? 'border-amber-300 bg-amber-100 text-amber-900'
+                        : 'border-border bg-muted text-muted-foreground'
+                    )}
+                    aria-label={`Paste activity, ${document.pasteAlertCount} detected event${document.pasteAlertCount === 1 ? '' : 's'}`}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onOpenPasteAlerts(document);
+                    }}
+                    onKeyDown={(event) => {
+                      event.stopPropagation();
+                    }}
+                  >
+                    Paste · {document.pasteAlertCount}
+                  </button>
+                ) : null}
                 <ChevronRight
                   className="size-3.5 shrink-0 text-muted-foreground opacity-0 group-hover:opacity-100"
                   aria-hidden="true"
@@ -1013,6 +1053,28 @@ function DocumentWorkRefinementFields({
     />
   );
 
+  const writingSignalSelect = (
+    <Select
+      value={filters.writingSignal}
+      onValueChange={(value) =>
+        onFiltersChange({ writingSignal: value as WritingSignalFilter })
+      }
+    >
+      <SelectTrigger
+        className="h-9 w-full rounded-md bg-background"
+        data-testid="teacher-document-work-writing-signal-select"
+        aria-label="Writing signals"
+      >
+        <SelectValue placeholder="All documents" />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value="all">All documents</SelectItem>
+        <SelectItem value="any">Any paste activity</SelectItem>
+        <SelectItem value="unreviewed">Unreviewed paste activity</SelectItem>
+      </SelectContent>
+    </Select>
+  );
+
   return (
     <div className="flex flex-col gap-3">
       {searchField}
@@ -1041,6 +1103,12 @@ function DocumentWorkRefinementFields({
             Assignment
           </span>
           {assignmentSelect}
+        </div>
+        <div className="flex flex-col gap-1.5 sm:col-span-2">
+          <span className="text-xs font-medium text-muted-foreground">
+            Writing signals
+          </span>
+          {writingSignalSelect}
         </div>
       </div>
     </div>
@@ -1097,6 +1165,7 @@ function DocumentWorkToolbar(props: DocumentWorkToolbarProps) {
     props.showClassFilter && props.filters.classIds.length > 0,
     props.filters.assignmentIds.length > 0,
     props.filters.query.trim().length > 0,
+    props.filters.writingSignal !== 'all',
   ].filter(Boolean).length;
 
   return (
