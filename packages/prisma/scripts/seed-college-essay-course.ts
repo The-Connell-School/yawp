@@ -9,6 +9,9 @@
  * Or call `seedCollegeEssayCourse(prisma)` from another seed pipeline (it is
  * wired into the local-dev / preview seed so the course appears automatically).
  */
+import { existsSync, readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
 import { PrismaClient } from '../generated/prisma';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { isLocalDatabaseUrl } from './seed-overlay-connection';
@@ -21,6 +24,7 @@ import {
   COLLEGE_ESSAY_OUTPUT_SCHEMA,
   COLLEGE_ESSAY_RUBRIC_CATEGORIES,
   COLLEGE_ESSAY_SCORING_SCALE,
+  imageContentTypeForPath,
   type CourseModule,
 } from './college-essay-course-data';
 
@@ -43,6 +47,52 @@ const ASSIGNMENT_TYPE_DATA = {
   gradingOutputSchemaJson: COLLEGE_ESSAY_OUTPUT_SCHEMA,
   gradingCalibrationNotes: COLLEGE_ESSAY_CALIBRATION_NOTES,
 } as const;
+
+/** Candidate course-image filenames, checked in order (first match wins). */
+const COURSE_IMAGE_BASENAMES = [
+  'college-essay-course.png',
+  'college-essay-course.jpg',
+  'college-essay-course.jpeg',
+  'college-essay-course.webp',
+];
+
+/** Resolves the committed course-image asset, if one has been added. */
+function resolveCourseImageAsset(): { path: string; contentType: string } | null {
+  const assetsDir = join(
+    dirname(fileURLToPath(import.meta.url)),
+    'assets'
+  );
+  for (const basename of COURSE_IMAGE_BASENAMES) {
+    const path = join(assetsDir, basename);
+    if (!existsSync(path)) continue;
+    const contentType = imageContentTypeForPath(path);
+    if (contentType) return { path, contentType };
+  }
+  return null;
+}
+
+/**
+ * Sets the course header image from the committed asset, if present. No-ops
+ * when no asset file has been added yet, so the seed stays safe to run.
+ */
+async function upsertCourseImage(
+  prisma: PrismaClient,
+  assignmentTypeId: string
+) {
+  const asset = resolveCourseImageAsset();
+  if (!asset) return;
+
+  const blob = readFileSync(asset.path);
+  await prisma.assignmentTypeImage.deleteMany({ where: { assignmentTypeId } });
+  await prisma.assignmentTypeImage.create({
+    data: {
+      assignmentTypeId,
+      contentType: asset.contentType,
+      altText: 'College Admissions Essay course',
+      blob,
+    },
+  });
+}
 
 async function upsertModule(
   prisma: PrismaClient,
@@ -165,6 +215,8 @@ export async function seedCollegeEssayCourse(prisma: PrismaClient) {
     },
     update: {},
   });
+
+  await upsertCourseImage(prisma, assignmentType.id);
 
   for (const moduleData of COLLEGE_ESSAY_MODULES) {
     await upsertModule(prisma, assignmentType.id, moduleData);

@@ -14,6 +14,24 @@
 
 export const COLLEGE_ESSAY_ASSIGNMENT_TYPE_KEY = 'college_admissions_essay';
 
+/** Maps a course-image file path to its MIME content type (null if unsupported). */
+export function imageContentTypeForPath(path: string): string | null {
+  const ext = path.toLowerCase().match(/\.([a-z0-9]+)$/)?.[1];
+  switch (ext) {
+    case 'png':
+      return 'image/png';
+    case 'jpg':
+    case 'jpeg':
+      return 'image/jpeg';
+    case 'webp':
+      return 'image/webp';
+    case 'gif':
+      return 'image/gif';
+    default:
+      return null;
+  }
+}
+
 /** Common App personal statement hard limit. */
 export const COLLEGE_ESSAY_WORD_LIMIT = 650;
 

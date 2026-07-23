@@ -9,6 +9,7 @@ import {
   COLLEGE_ESSAY_RUBRIC_CATEGORIES,
   COLLEGE_ESSAY_SCORING_SCALE,
   COLLEGE_ESSAY_WORD_LIMIT,
+  imageContentTypeForPath,
 } from './college-essay-course-data';
 
 describe('College essay rubric', () => {
@@ -222,5 +223,22 @@ describe('College essay seed script', () => {
     )?.[0];
     expect(updatePayload).toBeDefined();
     expect(updatePayload).not.toContain('ownerOrgId');
+  });
+});
+
+describe('Course image content type', () => {
+  test('maps common image extensions to MIME types', () => {
+    expect(imageContentTypeForPath('/x/college-essay-course.png')).toBe(
+      'image/png'
+    );
+    expect(imageContentTypeForPath('a.jpg')).toBe('image/jpeg');
+    expect(imageContentTypeForPath('a.JPEG')).toBe('image/jpeg');
+    expect(imageContentTypeForPath('a.webp')).toBe('image/webp');
+    expect(imageContentTypeForPath('a.gif')).toBe('image/gif');
+  });
+
+  test('returns null for unsupported or missing extensions', () => {
+    expect(imageContentTypeForPath('a.svg')).toBeNull();
+    expect(imageContentTypeForPath('noext')).toBeNull();
   });
 });
