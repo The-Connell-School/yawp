@@ -39,7 +39,11 @@ describe('documents loader paste activity', () => {
     requireMembership.mockResolvedValue({
       id: 'teacher-1',
       role: 'TEACHER',
-      organization: { id: 'org-1', name: 'Org' },
+      organization: {
+        id: 'org-1',
+        name: 'Org',
+        pasteActivityEnabled: true,
+      },
     });
 
     prisma.class.findMany.mockResolvedValue([
@@ -142,6 +146,37 @@ describe('documents loader paste activity', () => {
           ]),
         }),
         take: 250,
+      })
+    );
+  });
+
+  test('ignores paste filters and aggregation while the rollout gate is off', async () => {
+    requireMembership.mockResolvedValue({
+      id: 'teacher-1',
+      role: 'TEACHER',
+      organization: {
+        id: 'org-1',
+        name: 'Org',
+        pasteActivityEnabled: false,
+      },
+    });
+
+    const data = await loader({
+      request: new Request(
+        'https://example.test/app/documents?writingSignal=unreviewed'
+      ),
+      params: {},
+      context: {} as never,
+    });
+
+    expect(data.pasteActivityEnabled).toBe(false);
+    expect(data.filters.writingSignal).toBe('all');
+    expect(prisma.pasteAlert.groupBy).not.toHaveBeenCalled();
+    expect(prisma.document.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.not.objectContaining({
+          pasteAlerts: expect.anything(),
+        }),
       })
     );
   });

@@ -6,7 +6,8 @@ import {
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { buildTeacherClassWorkDocumentWhere } from '~/utils/class-assignment-scope.server';
-import { boundPasteAlertContent } from '~/utils/paste-alert-constraints';
+import { PASTE_ALERT_MAX_CONTENT_CHARS } from '~/utils/paste-alert-constraints';
+import { Prisma } from '@app/prisma';
 
 export const MAX_ALERTS_RETURNED = 200;
 
@@ -14,7 +15,10 @@ async function loadAuthorizedDocumentId(request: Request, documentId: string) {
   const userId = await requireUserId(request);
   const profile = await requireMembership(request, userId);
 
-  if (profile.role !== 'TEACHER') {
+  if (
+    profile.role !== 'TEACHER' ||
+    !profile.organization.pasteActivityEnabled
+  ) {
     return { authorized: false as const };
   }
 
@@ -72,7 +76,8 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     return dataResponse({ error: 'Not found' }, { status: 404 });
   }
 
-  const cursor = new URL(request.url).searchParams.get('cursor')?.trim() || null;
+  const cursor =
+    new URL(request.url).searchParams.get('cursor')?.trim() || null;
   if (cursor) {
     const cursorAlert = await prisma.pasteAlert.findFirst({
       where: { id: cursor, documentId },
@@ -89,7 +94,6 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       id: true,
       createdAt: true,
       textLength: true,
-      content: true,
       reviewedAt: true,
       reviewedByMembership: {
         select: { user: { select: { name: true, email: true } } },
@@ -102,12 +106,37 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
   const pageAlerts = alerts.slice(0, MAX_ALERTS_RETURNED);
   const hasMore = alerts.length > MAX_ALERTS_RETURNED;
+  const boundedContentRows =
+    pageAlerts.length > 0
+      ? await prisma.$queryRaw<
+          Array<{
+            id: string;
+            content: string | null;
+            contentTruncated: boolean;
+          }>
+        >(Prisma.sql`
+          SELECT
+            "id",
+            LEFT("content", ${PASTE_ALERT_MAX_CONTENT_CHARS}) AS "content",
+            COALESCE(
+              LENGTH("content") > ${PASTE_ALERT_MAX_CONTENT_CHARS},
+              false
+            ) AS "contentTruncated"
+          FROM "PasteAlert"
+          WHERE "id" IN (${Prisma.join(pageAlerts.map((alert) => alert.id))})
+        `)
+      : [];
+  const boundedContentById = new Map(
+    boundedContentRows.map((row) => [row.id, row])
+  );
 
   return dataResponse({
     document: result.document,
     alerts: pageAlerts.map((alert) => ({
       ...alert,
-      ...boundPasteAlertContent(alert.content),
+      content: boundedContentById.get(alert.id)?.content ?? null,
+      contentTruncated:
+        boundedContentById.get(alert.id)?.contentTruncated ?? false,
     })),
     pageCursor: cursor,
     nextCursor: hasMore ? (pageAlerts.at(-1)?.id ?? null) : null,

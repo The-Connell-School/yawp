@@ -95,6 +95,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   if (profile.role !== 'TEACHER') {
     return redirect('/app');
   }
+  const pasteActivityEnabled = profile.organization.pasteActivityEnabled;
 
   const url = new URL(request.url);
   const studentIds = parseDocumentWorkFilterIds(
@@ -113,9 +114,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
       : 'all';
   const group = parseDocumentGroupMode(url.searchParams.get('group'));
   const query = (url.searchParams.get('q') ?? '').trim();
-  const writingSignal = parseWritingSignalFilter(
-    url.searchParams.get('writingSignal')
-  );
+  const writingSignal = pasteActivityEnabled
+    ? parseWritingSignalFilter(url.searchParams.get('writingSignal'))
+    : 'all';
 
   const classes = await prisma.class.findMany({
     where: {
@@ -243,7 +244,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   const documentIds = allDocuments.map((document) => document.id);
   const [pasteAlertCounts, unreviewedPasteAlertCounts] =
-    documentIds.length > 0
+    pasteActivityEnabled && documentIds.length > 0
       ? await Promise.all([
           prisma.pasteAlert.groupBy({
             by: ['documentId'],
@@ -296,6 +297,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   );
 
   return {
+    pasteActivityEnabled,
     documents,
     statusCounts: countTeacherDocumentWorkStatuses(documents),
     classes: classes.map((klass) => ({
@@ -524,6 +526,7 @@ export default function StudentWorkRoute() {
           assignments={data.assignments}
           exitTo={exitTo}
           filters={filters}
+          pasteActivityEnabled={data.pasteActivityEnabled}
           onFiltersChange={updateFilters}
           onClearFilters={() => {
             const next = new URLSearchParams();
@@ -557,13 +560,17 @@ export default function StudentWorkRoute() {
           compactRows
           sort={documentSort}
           onSortChange={handleDocumentSortChange}
-          onOpenPasteAlerts={(document) =>
-            setPasteAlertSheetTarget({
-              documentId: document.id,
-              documentTitle: document.title,
-              studentName:
-                document.membership.user.name || document.membership.user.email,
-            })
+          onOpenPasteAlerts={
+            data.pasteActivityEnabled
+              ? (document) =>
+                  setPasteAlertSheetTarget({
+                    documentId: document.id,
+                    documentTitle: document.title,
+                    studentName:
+                      document.membership.user.name ||
+                      document.membership.user.email,
+                  })
+              : undefined
           }
         />
         <ReleaseGradesSheet
@@ -572,11 +579,13 @@ export default function StudentWorkRoute() {
           onClose={() => setIsReleaseGradesSheetOpen(false)}
           onSuccess={handleReleaseGradesSuccess}
         />
-        <PasteAlertSheet
-          target={pasteAlertSheetTarget}
-          onClose={() => setPasteAlertSheetTarget(null)}
-          onReviewed={() => revalidator.revalidate()}
-        />
+        {data.pasteActivityEnabled ? (
+          <PasteAlertSheet
+            target={pasteAlertSheetTarget}
+            onClose={() => setPasteAlertSheetTarget(null)}
+            onReviewed={() => revalidator.revalidate()}
+          />
+        ) : null}
       </div>
     </section>
   );

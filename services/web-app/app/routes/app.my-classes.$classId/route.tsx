@@ -545,6 +545,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   if (profile.role !== 'TEACHER') {
     return redirect('/app');
   }
+  const pasteActivityEnabled = profile.organization.pasteActivityEnabled;
   const classId = params.classId!;
 
   // Assignment management moved to the teacher-level Assignments surface.
@@ -721,7 +722,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     ]),
   ];
   const [pasteAlertCounts, unreviewedPasteAlertCounts] =
-    classDocumentIds.length > 0
+    pasteActivityEnabled && classDocumentIds.length > 0
       ? await Promise.all([
           prisma.pasteAlert.groupBy({
             by: ['documentId'],
@@ -803,6 +804,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   });
 
   return dataResponse({
+    pasteActivityEnabled,
     klass,
     submissions,
     inProgressDocuments,
@@ -968,9 +970,9 @@ function ClassDetailPage() {
   const documentGroupMode = parseDocumentGroupMode(
     searchParams.get('documentGroup')
   );
-  const writingSignalParam = parseWritingSignalFilter(
-    searchParams.get('writingSignal')
-  );
+  const writingSignalParam = data.pasteActivityEnabled
+    ? parseWritingSignalFilter(searchParams.get('writingSignal'))
+    : 'all';
   const [pagination, setPagination] = useState({ skip: 0, take: 20 });
   const hasHydratedDocumentPreferences = useRef(false);
 
@@ -1454,6 +1456,7 @@ function ClassDetailPage() {
           assignmentsEnabled={assignmentsEnabled}
           exitTo={classDetailExitTo}
           filters={documentWorkFilters}
+          pasteActivityEnabled={data.pasteActivityEnabled}
           onFiltersChange={handleDocumentWorkFiltersChange}
           onClearFilters={() => {
             const next = new URLSearchParams(searchParams);
@@ -1497,13 +1500,17 @@ function ClassDetailPage() {
           compactRows
           sort={documentSort}
           onSortChange={handleDocumentSortChange}
-          onOpenPasteAlerts={(document) =>
-            setPasteAlertSheetTarget({
-              documentId: document.id,
-              documentTitle: document.title,
-              studentName:
-                document.membership.user.name || document.membership.user.email,
-            })
+          onOpenPasteAlerts={
+            data.pasteActivityEnabled
+              ? (document) =>
+                  setPasteAlertSheetTarget({
+                    documentId: document.id,
+                    documentTitle: document.title,
+                    studentName:
+                      document.membership.user.name ||
+                      document.membership.user.email,
+                  })
+              : undefined
           }
         />
       );
@@ -1978,11 +1985,13 @@ function ClassDetailPage() {
         onSuccess={handleGradingSuccess}
       />
 
-      <PasteAlertSheet
-        target={pasteAlertSheetTarget}
-        onClose={() => setPasteAlertSheetTarget(null)}
-        onReviewed={() => revalidator.revalidate()}
-      />
+      {data.pasteActivityEnabled ? (
+        <PasteAlertSheet
+          target={pasteAlertSheetTarget}
+          onClose={() => setPasteAlertSheetTarget(null)}
+          onReviewed={() => revalidator.revalidate()}
+        />
+      ) : null}
     </section>
   );
 }

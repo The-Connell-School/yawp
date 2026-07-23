@@ -160,6 +160,8 @@ export async function action({ request, params }: ActionFunctionArgs) {
       formData.get('writingFundamentalsEnabled') === 'true';
     const classInsightsEnabled =
       formData.get('classInsightsEnabled') === 'true';
+    const pasteActivityEnabled =
+      formData.get('pasteActivityEnabled') === 'true';
     const assignmentTypeIds = Array.from(
       new Set(
         formData
@@ -193,6 +195,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
           reporterEnabled,
           writingFundamentalsEnabled,
           classInsightsEnabled,
+          pasteActivityEnabled,
         },
       }),
       prisma.organizationAssignmentType.deleteMany({
@@ -455,8 +458,8 @@ export default function OrganizationRoute() {
                       Production pilot features
                     </h3>
                     <p className="text-sm text-muted-foreground">
-                      Roll out Writing Fundamentals assignments and class
-                      insights independently by organization.
+                      Roll out Writing Fundamentals, class insights, and paste
+                      review independently by organization.
                     </p>
                   </div>
                   <div className="mt-3 grid gap-2 sm:grid-cols-2">
@@ -491,6 +494,25 @@ export default function OrganizationRoute() {
                         </span>
                         <span className="block text-xs text-muted-foreground">
                           Enables assignment-level AI class summaries.
+                        </span>
+                      </span>
+                    </label>
+                    <label className="flex min-h-12 items-start gap-3 rounded-md border bg-background px-3 py-2 text-sm sm:col-span-2">
+                      <input
+                        type="checkbox"
+                        name="pasteActivityEnabled"
+                        value="true"
+                        defaultChecked={organization.pasteActivityEnabled}
+                        className="mt-1 h-4 w-4"
+                      />
+                      <span className="min-w-0">
+                        <span className="block font-medium">
+                          Paste activity review
+                        </span>
+                        <span className="block text-xs text-muted-foreground">
+                          Enables teacher paste signals, filters, detail, and
+                          review actions. Turn this off for an immediate
+                          organization-wide UI rollback.
                         </span>
                       </span>
                     </label>
@@ -745,9 +767,7 @@ export default function OrganizationRoute() {
                       </div>
                     </TableCell>
                     <TableCell>{profile.user.email}</TableCell>
-                    <TableCell>
-                      {formatDateOnly(profile.createdAt)}
-                    </TableCell>
+                    <TableCell>{formatDateOnly(profile.createdAt)}</TableCell>
                   </TableRow>
                 ))
               ) : (

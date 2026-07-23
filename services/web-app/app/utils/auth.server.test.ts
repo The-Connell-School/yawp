@@ -52,6 +52,7 @@ const membershipFixture = {
     reporterEnabled: false,
     writingFundamentalsEnabled: false,
     classInsightsEnabled: false,
+    pasteActivityEnabled: false,
   },
 };
 
@@ -96,6 +97,7 @@ describe('membership auth helpers', () => {
             reporterEnabled: true,
             writingFundamentalsEnabled: true,
             classInsightsEnabled: true,
+            pasteActivityEnabled: true,
           },
         },
       },
@@ -126,6 +128,7 @@ describe('membership auth helpers', () => {
             reporterEnabled: true,
             writingFundamentalsEnabled: true,
             classInsightsEnabled: true,
+            pasteActivityEnabled: true,
           },
         },
       },

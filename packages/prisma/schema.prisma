@@ -388,6 +388,7 @@ model Organization {
   reporterEnabled            Boolean                      @default(false)
   writingFundamentalsEnabled Boolean                      @default(false)
   classInsightsEnabled       Boolean                      @default(false)
+  pasteActivityEnabled       Boolean                      @default(false)
   memberships                OrgMembership[]
   invitations                Invitation[]
   schools                    School[]

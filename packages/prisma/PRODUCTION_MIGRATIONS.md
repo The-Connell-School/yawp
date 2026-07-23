@@ -26,9 +26,10 @@ If `20260723220000_add_paste_alert_reviewer_index` is interrupted:
 
 1. Confirm `_prisma_migrations` contains an unfinished, non-rolled-back row for
    the migration.
-2. Inspect `pg_index.indisvalid` and `pg_index.indisready` for
-   `PasteAlert_reviewedByMembershipId_idx`.
-3. If the index exists and is invalid, run:
+2. Inspect the index definition plus `pg_index.indisvalid` and
+   `pg_index.indisready` for `PasteAlert_reviewedByMembershipId_idx`.
+3. If an index with that exact name exists in either a valid or invalid state,
+   remove it before retrying:
 
    ```sql
    DROP INDEX CONCURRENTLY "PasteAlert_reviewedByMembershipId_idx";
@@ -46,3 +47,52 @@ If `20260723220000_add_paste_alert_reviewer_index` is interrupted:
    reports no pending migrations.
 
 Never mark this migration applied while its index is absent or invalid.
+
+## Interrupted paste review-metadata recovery
+
+If `20260723210000_add_paste_alert_review_metadata` is unfinished, inspect the
+catalog before reconciling Prisma:
+
+1. Confirm whether `reviewedAt` and `reviewedByMembershipId` exist on
+   `PasteAlert`; both must be nullable, with the expected timestamp/text types.
+2. Inspect `PasteAlert_reviewedByMembershipId_fkey` in `pg_constraint`,
+   including `pg_get_constraintdef(oid)` and `convalidated`.
+3. If neither column exists, resolve the failed attempt as rolled back and
+   rerun the wrapper.
+4. If both columns exist but the foreign key is absent, add the exact foreign
+   key `NOT VALID`. If it exists but is unvalidated, validate it:
+
+   ```sql
+   ALTER TABLE "PasteAlert"
+   VALIDATE CONSTRAINT "PasteAlert_reviewedByMembershipId_fkey";
+   ```
+
+5. Only after both nullable columns and the validated `ON DELETE SET NULL ON
+   UPDATE CASCADE` foreign key match the migration, reconcile it:
+
+   ```sh
+   bun prisma migrate resolve \
+     --applied 20260723210000_add_paste_alert_review_metadata
+   ```
+
+6. Rerun the production wrapper. Its postcheck must confirm the columns,
+   validated foreign key, valid/ready reviewer index, default-off organization
+   flag, and all three completed migration ledger rows.
+
+## Paste activity staged rollout and rollback
+
+`Organization.pasteActivityEnabled` is default-off. The migration does not
+enable any production organization.
+
+1. Enable one pilot organization from Admin → Organizations → Edit
+   Organization → Paste activity review.
+2. Verify teacher Documents and class Documents queues, review persistence,
+   request/error rates, and support feedback before expanding the pilot.
+3. Expand organization by organization after the pilot observation window.
+4. For an instant UI rollback, clear the same organization checkbox. The next
+   request stops aggregation and hides filters, badges, sheets, and the
+   detail/review endpoint with no deploy or data change.
+
+Paste capture continues through the existing ingestion path while the review UI
+is disabled, preserving backward compatibility and avoiding a data-model
+cutover.

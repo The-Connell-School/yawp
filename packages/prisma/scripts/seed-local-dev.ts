@@ -37,6 +37,7 @@ try {
       reporterEnabled: true,
       writingFundamentalsEnabled: true,
       classInsightsEnabled: true,
+      pasteActivityEnabled: true,
     },
   });
   console.timeEnd('organization');

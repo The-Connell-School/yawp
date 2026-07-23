@@ -73,7 +73,11 @@ describe('class detail loader document visibility', () => {
     requireMembership.mockResolvedValue({
       id: 'teacher-1',
       role: 'TEACHER',
-      organization: { id: 'org-1', name: 'Org' },
+      organization: {
+        id: 'org-1',
+        name: 'Org',
+        pasteActivityEnabled: true,
+      },
     });
     prisma.class.findFirst.mockResolvedValue({
       id: 'class-1',
@@ -160,6 +164,28 @@ describe('class detail loader document visibility', () => {
         },
       })
     );
+  });
+
+  test('skips class paste aggregation while the rollout gate is off', async () => {
+    requireMembership.mockResolvedValue({
+      id: 'teacher-1',
+      role: 'TEACHER',
+      organization: {
+        id: 'org-1',
+        name: 'Org',
+        pasteActivityEnabled: false,
+      },
+    });
+
+    const response = await loader({
+      request: new Request('https://example.test/app/my-classes/class-1'),
+      params: { classId: 'class-1' },
+      context: {} as never,
+    });
+
+    expect(response.data.pasteActivityEnabled).toBe(false);
+    expect(prisma.pasteAlert.groupBy).not.toHaveBeenCalled();
+    expect(response.data.pasteAlertSummaryByDocument).toEqual({});
   });
 
   test('rejects class actions when the teacher link crosses organizations', async () => {

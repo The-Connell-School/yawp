@@ -17,4 +17,16 @@ describe('stripPsqlMetaCommands', () => {
       expect(executableSql).toContain('DO $$');
     });
   }
+
+  test('postcheck verifies the paste activity rollout and review schema', () => {
+    const source = readFileSync(
+      join(import.meta.dir, 'combined-feature-postcheck.sql'),
+      'utf8'
+    );
+
+    expect(source).toContain('pasteActivityEnabled');
+    expect(source).toContain('PasteAlert_reviewedByMembershipId_fkey');
+    expect(source).toContain('PasteAlert_reviewedByMembershipId_idx');
+    expect(source).toContain('20260723230000_add_paste_activity_rollout_gate');
+  });
 });

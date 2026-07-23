@@ -152,6 +152,7 @@ export type TeacherDocumentWorkPanelProps = {
   assignmentsEnabled?: boolean;
   exitTo: string;
   filters: TeacherDocumentWorkFilters;
+  pasteActivityEnabled: boolean;
   onFiltersChange: (updates: Partial<TeacherDocumentWorkFilters>) => void;
   onClearFilters: () => void;
   collapsedGroups: Set<string>;
@@ -189,6 +190,7 @@ export function TeacherDocumentWorkPanel({
   assignmentsEnabled = true,
   exitTo,
   filters,
+  pasteActivityEnabled,
   onFiltersChange,
   onClearFilters,
   collapsedGroups,
@@ -267,6 +269,7 @@ export function TeacherDocumentWorkPanel({
       }
 
       if (
+        pasteActivityEnabled &&
         filters.writingSignal === 'any' &&
         !((document.pasteAlertCount ?? 0) > 0)
       ) {
@@ -274,6 +277,7 @@ export function TeacherDocumentWorkPanel({
       }
 
       if (
+        pasteActivityEnabled &&
         filters.writingSignal === 'unreviewed' &&
         !((document.unreviewedPasteAlertCount ?? 0) > 0)
       ) {
@@ -300,7 +304,7 @@ export function TeacherDocumentWorkPanel({
 
       return haystack.includes(query);
     });
-  }, [documents, filters, uniqueStudents]);
+  }, [documents, filters, pasteActivityEnabled, uniqueStudents]);
 
   const filteredDocuments = useMemo(() => {
     if (filters.status === 'all') {
@@ -379,7 +383,7 @@ export function TeacherDocumentWorkPanel({
     filters.assignmentIds.length > 0 ||
     filters.status !== 'all' ||
     filters.query.trim().length > 0 ||
-    filters.writingSignal !== 'all';
+    (pasteActivityEnabled && filters.writingSignal !== 'all');
 
   const statusChips = TEACHER_DOCUMENT_STATUSES.map((status) => ({
     status,
@@ -474,7 +478,9 @@ export function TeacherDocumentWorkPanel({
                 <span className="min-w-0 truncate group-hover:underline">
                   {displayTitle}
                 </span>
-                {(document.pasteAlertCount ?? 0) > 0 && onOpenPasteAlerts ? (
+                {pasteActivityEnabled &&
+                (document.pasteAlertCount ?? 0) > 0 &&
+                onOpenPasteAlerts ? (
                   <button
                     type="button"
                     className={cn(
@@ -677,6 +683,7 @@ export function TeacherDocumentWorkPanel({
   const toolbarProps: DocumentWorkToolbarProps = {
     tableLabel,
     filters,
+    pasteActivityEnabled,
     statusChips,
     totalDocumentCount: Object.values(effectiveStatusCounts).reduce(
       (total, count) => total + count,
@@ -803,6 +810,7 @@ export function TeacherDocumentWorkPanel({
 type DocumentWorkToolbarProps = {
   tableLabel: string;
   filters: TeacherDocumentWorkFilters;
+  pasteActivityEnabled: boolean;
   statusChips: Array<{ status: TeacherDocumentStatus; count: number }>;
   totalDocumentCount: number;
   searchValue: string;
@@ -967,6 +975,7 @@ function DocumentWorkRefinementFields({
   assignments,
   showClassFilter,
   onFiltersChange,
+  pasteActivityEnabled,
 }: Pick<
   DocumentWorkToolbarProps,
   | 'tableLabel'
@@ -977,7 +986,9 @@ function DocumentWorkRefinementFields({
   | 'classes'
   | 'assignments'
   | 'showClassFilter'
+  | 'pasteActivityEnabled'
   | 'onFiltersChange'
+  | 'pasteActivityEnabled'
 >) {
   const searchField = (
     <div className="flex flex-col gap-1.5">
@@ -1111,12 +1122,14 @@ function DocumentWorkRefinementFields({
           </span>
           {assignmentSelect}
         </div>
-        <div className="flex flex-col gap-1.5 sm:col-span-2">
-          <span className="text-xs font-medium text-muted-foreground">
-            Writing signals
-          </span>
-          {writingSignalSelect}
-        </div>
+        {pasteActivityEnabled ? (
+          <div className="flex flex-col gap-1.5 sm:col-span-2">
+            <span className="text-xs font-medium text-muted-foreground">
+              Writing signals
+            </span>
+            {writingSignalSelect}
+          </div>
+        ) : null}
       </div>
     </div>
   );
@@ -1136,6 +1149,7 @@ function FilterDropdownPanel({
   | 'classes'
   | 'assignments'
   | 'showClassFilter'
+  | 'pasteActivityEnabled'
   | 'onFiltersChange'
   | 'hasActiveFilters'
   | 'onClearFilters'
@@ -1146,7 +1160,8 @@ function FilterDropdownPanel({
         <div>
           <p className="text-sm font-medium">Filter results</p>
           <p className="text-xs text-muted-foreground">
-            Narrow by student, class, assignment, or writing signal
+            Narrow by student, class, assignment
+            {fieldsProps.pasteActivityEnabled ? ', or writing signal' : ''}
           </p>
         </div>
         {hasActiveFilters ? (
@@ -1172,7 +1187,7 @@ function DocumentWorkToolbar(props: DocumentWorkToolbarProps) {
     props.showClassFilter && props.filters.classIds.length > 0,
     props.filters.assignmentIds.length > 0,
     props.filters.query.trim().length > 0,
-    props.filters.writingSignal !== 'all',
+    props.pasteActivityEnabled && props.filters.writingSignal !== 'all',
   ].filter(Boolean).length;
 
   return (

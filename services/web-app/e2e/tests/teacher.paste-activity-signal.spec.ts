@@ -97,9 +97,7 @@ test.describe('Teacher paste activity signal', () => {
       );
       await page.waitForLoadState('networkidle');
       await page.getByRole('button', { name: 'go forward' }).click();
-      await expect(
-        page.getByRole('button', { name: 'go back' })
-      ).toBeEnabled();
+      await expect(page.getByRole('button', { name: 'go back' })).toBeEnabled();
       await page.getByRole('button', { name: /^Filter/ }).click();
       await page
         .getByTestId('teacher-document-work-writing-signal-select')
@@ -161,7 +159,9 @@ test.describe('Teacher paste activity signal', () => {
       await page.waitForLoadState('networkidle');
       await expect(
         page
-          .getByRole('row', { name: new RegExp(`Paste signal essay ${suffix}`) })
+          .getByRole('row', {
+            name: new RegExp(`Paste signal essay ${suffix}`),
+          })
           .getByRole('button', { name: /Paste · 1; all reviewed/ })
       ).toBeVisible();
       await page
@@ -254,9 +254,7 @@ test.describe('Teacher paste activity signal', () => {
         page.getByRole('button', { name: 'Load older activity' })
       ).toBeVisible();
 
-      await page
-        .getByRole('button', { name: 'Load older activity' })
-        .click();
+      await page.getByRole('button', { name: 'Load older activity' }).click();
       const legacyAlertRow = page
         .getByTestId('paste-alert-row')
         .filter({ hasText: 'Pasted text unavailable' });
@@ -277,6 +275,108 @@ test.describe('Teacher paste activity signal', () => {
         e2eContext.teacherMembershipId
       );
     } finally {
+      if (documentId) {
+        await prisma.pasteAlert
+          .deleteMany({ where: { documentId } })
+          .catch(() => {});
+        await prisma.document
+          .deleteMany({ where: { id: documentId } })
+          .catch(() => {});
+      }
+      await prisma.$disconnect();
+    }
+  });
+
+  test('organization rollout gate hides and restores every teacher review surface', async ({
+    page,
+    e2eContext,
+    signIn,
+  }) => {
+    const prisma = createE2EPrismaClient();
+    const suffix = Date.now().toString(36);
+    let documentId = '';
+    const originalOrganization = await prisma.organization.findUniqueOrThrow({
+      where: { id: e2eContext.organizationId },
+      select: { pasteActivityEnabled: true },
+    });
+
+    try {
+      const document = await prisma.document.create({
+        data: {
+          title: `Paste rollout essay ${suffix}`,
+          text: 'Original student text.',
+          html: '<p>Original student text.</p>',
+          membershipId: e2eContext.membershipId,
+          assignmentTypeId: e2eContext.assignmentTypeId,
+          assignmentId: e2eContext.assignmentId,
+          classAssignmentId: e2eContext.classAssignmentId,
+          pasteAlerts: {
+            create: {
+              membershipId: e2eContext.membershipId,
+              textLength: 280,
+              content: 'Paste activity captured before the review UI rollout.',
+            },
+          },
+        },
+        select: { id: true },
+      });
+      documentId = document.id;
+
+      await prisma.organization.update({
+        where: { id: e2eContext.organizationId },
+        data: { pasteActivityEnabled: false },
+      });
+      await signIn(
+        e2eContext.teacherEmail,
+        process.env.E2E_TEACHER_PASSWORD ?? 'teacher-e2e-password'
+      );
+      await page.goto('/app/documents?group=none&writingSignal=unreviewed');
+      await page.waitForLoadState('networkidle');
+
+      const rolloutRow = page.getByRole('row', {
+        name: new RegExp(`Paste rollout essay ${suffix}`),
+      });
+      await expect(rolloutRow).toBeVisible();
+      await expect(
+        rolloutRow.getByRole('button', { name: /Paste ·/ })
+      ).toHaveCount(0);
+      await page.getByRole('button', { name: /^Filter/ }).click();
+      await expect(
+        page.getByTestId('teacher-document-work-writing-signal-select')
+      ).toHaveCount(0);
+      const disabledApiResponse = await page
+        .context()
+        .request.get(`/api/paste-alerts/${documentId}`);
+      expect(disabledApiResponse.status()).toBe(404);
+
+      await prisma.organization.update({
+        where: { id: e2eContext.organizationId },
+        data: { pasteActivityEnabled: true },
+      });
+      await page.reload();
+      await page.waitForLoadState('networkidle');
+      await expect(
+        rolloutRow.getByRole('button', {
+          name: /Paste · 1; 1 unreviewed event/,
+        })
+      ).toBeVisible();
+      await page.getByRole('button', { name: /^Filter/ }).click();
+      await expect(
+        page.getByTestId('teacher-document-work-writing-signal-select')
+      ).toBeVisible();
+      const enabledApiResponse = await page
+        .context()
+        .request.get(`/api/paste-alerts/${documentId}`);
+      expect(enabledApiResponse.status()).toBe(200);
+    } finally {
+      await prisma.organization
+        .update({
+          where: { id: e2eContext.organizationId },
+          data: {
+            pasteActivityEnabled: originalOrganization.pasteActivityEnabled,
+          },
+        })
+        .catch(() => {});
       if (documentId) {
         await prisma.pasteAlert
           .deleteMany({ where: { documentId } })

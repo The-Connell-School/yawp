@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
 
 const prisma = {
+  $queryRaw: mock(),
   class: { findMany: mock() },
   documentClassForensic: { findMany: mock() },
   document: { findFirst: mock() },
@@ -30,6 +31,10 @@ function reviewRequest(alertId: string) {
 describe('api.paste-alerts.$documentId', () => {
   beforeEach(() => {
     for (const model of Object.values(prisma)) {
+      if (typeof model === 'function') {
+        model.mockReset();
+        continue;
+      }
       for (const fn of Object.values(model)) {
         fn.mockReset();
       }
@@ -41,7 +46,11 @@ describe('api.paste-alerts.$documentId', () => {
     requireMembership.mockResolvedValue({
       id: 'teacher-1',
       role: 'TEACHER',
-      organization: { id: 'org-1', name: 'Org' },
+      organization: {
+        id: 'org-1',
+        name: 'Org',
+        pasteActivityEnabled: true,
+      },
     });
     prisma.class.findMany.mockResolvedValue([{ id: 'class-1' }]);
     prisma.documentClassForensic.findMany.mockResolvedValue([]);
@@ -58,6 +67,13 @@ describe('api.paste-alerts.$documentId', () => {
         content: 'pasted text',
         reviewedAt: null,
         reviewedByMembership: null,
+      },
+    ]);
+    prisma.$queryRaw.mockResolvedValue([
+      {
+        id: 'alert-1',
+        content: 'pasted text',
+        contentTruncated: false,
       },
     ]);
     prisma.pasteAlert.findFirst.mockResolvedValue({ id: 'alert-1' });
@@ -79,6 +95,10 @@ describe('api.paste-alerts.$documentId', () => {
         take: 201,
       })
     );
+    expect(
+      prisma.pasteAlert.findMany.mock.calls[0][0].select
+    ).not.toHaveProperty('content');
+    expect(prisma.$queryRaw).toHaveBeenCalledTimes(1);
     expect((response as any).data.pageCursor).toBe(null);
     expect((response as any).data.nextCursor).toBe(null);
     expect((response as any).data.hasMore).toBe(false);
@@ -157,6 +177,13 @@ describe('api.paste-alerts.$documentId', () => {
         reviewedByMembership: null,
       },
     ]);
+    prisma.$queryRaw.mockResolvedValue([
+      {
+        id: 'alert-200',
+        content: null,
+        contentTruncated: false,
+      },
+    ]);
 
     const response = await loader({
       request: new Request(
@@ -209,6 +236,13 @@ describe('api.paste-alerts.$documentId', () => {
         reviewedByMembership: null,
       },
     ]);
+    prisma.$queryRaw.mockResolvedValue([
+      {
+        id: 'legacy-alert',
+        content: 'x'.repeat(50_000),
+        contentTruncated: true,
+      },
+    ]);
 
     const response = await loader({
       request: new Request('https://example.test/api/paste-alerts/doc-1'),
@@ -234,6 +268,34 @@ describe('api.paste-alerts.$documentId', () => {
     } as any);
 
     expect(response.init?.status).toBe(404);
+  });
+
+  test('hides detail reads and review writes while the rollout gate is off', async () => {
+    requireMembership.mockResolvedValue({
+      id: 'teacher-1',
+      role: 'TEACHER',
+      organization: {
+        id: 'org-1',
+        name: 'Org',
+        pasteActivityEnabled: false,
+      },
+    });
+
+    const readResponse = await loader({
+      request: new Request('https://example.test/api/paste-alerts/doc-1'),
+      params: { documentId: 'doc-1' },
+      context: {},
+    } as any);
+    const writeResponse = await action({
+      request: reviewRequest('alert-1'),
+      params: { documentId: 'doc-1' },
+      context: {},
+    } as any);
+
+    expect(readResponse.init?.status).toBe(404);
+    expect(writeResponse.init?.status).toBe(404);
+    expect(prisma.document.findFirst).not.toHaveBeenCalled();
+    expect(prisma.pasteAlert.updateMany).not.toHaveBeenCalled();
   });
 
   test('rejects a same-org teacher without class access', async () => {

@@ -119,6 +119,69 @@ BEGIN
     RAISE EXCEPTION
       'postcheck: class insight generator foreign key is missing';
   END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'Organization'
+      AND column_name = 'pasteActivityEnabled'
+      AND is_nullable = 'NO'
+      AND column_default IN ('false', 'false::boolean')
+  ) THEN
+    RAISE EXCEPTION
+      'postcheck: default-off paste activity rollout gate is missing';
+  END IF;
+
+  IF (
+    SELECT COUNT(*)
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'PasteAlert'
+      AND column_name IN ('reviewedAt', 'reviewedByMembershipId')
+      AND is_nullable = 'YES'
+  ) <> 2 THEN
+    RAISE EXCEPTION
+      'postcheck: nullable paste review metadata columns are incomplete';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'PasteAlert_reviewedByMembershipId_fkey'
+      AND contype = 'f'
+      AND convalidated
+  ) THEN
+    RAISE EXCEPTION
+      'postcheck: validated paste reviewer foreign key is missing';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_class index_class
+    JOIN pg_index index_row ON index_row.indexrelid = index_class.oid
+    WHERE index_class.relname = 'PasteAlert_reviewedByMembershipId_idx'
+      AND index_row.indisvalid
+      AND index_row.indisready
+  ) THEN
+    RAISE EXCEPTION
+      'postcheck: paste reviewer index is absent, invalid, or not ready';
+  END IF;
+
+  IF (
+    SELECT COUNT(*)
+    FROM "_prisma_migrations"
+    WHERE migration_name IN (
+      '20260723210000_add_paste_alert_review_metadata',
+      '20260723220000_add_paste_alert_reviewer_index',
+      '20260723230000_add_paste_activity_rollout_gate'
+    )
+      AND finished_at IS NOT NULL
+      AND rolled_back_at IS NULL
+  ) <> 3 THEN
+    RAISE EXCEPTION
+      'postcheck: one or more paste activity migrations are incomplete';
+  END IF;
 END $$;
 
 SELECT
@@ -127,6 +190,8 @@ SELECT
   (SELECT COUNT(*) FROM "WritingPracticeAttempt"
     WHERE NOT "countsTowardProgress") AS quarantined_attempt_rows,
   (SELECT COUNT(*) FROM "AiRequestReservation") AS ai_reservation_rows,
+  (SELECT COUNT(*) FROM "Organization"
+    WHERE "pasteActivityEnabled") AS paste_activity_enabled_organizations,
   (SELECT COUNT(*) FROM pg_trigger
     WHERE NOT tgisinternal
       AND tgname LIKE '%tenant_check') AS tenant_trigger_count;
