@@ -75,6 +75,18 @@ describe('local dev seed fixtures', () => {
     expect(typeof seedModule.seedSyntheticLocalDevData).toBe('function');
   });
 
+  test('wires the College Admissions Essay course into the seed pipeline', () => {
+    const source = readFileSync(
+      join(import.meta.dirname, 'seed-local-dev.ts'),
+      'utf8'
+    );
+
+    expect(source).toContain(
+      "import { seedCollegeEssayCourse } from './seed-college-essay-course'"
+    );
+    expect(source).toContain('await seedCollegeEssayCourse(prisma)');
+  });
+
   test('connects cumulative staff personas to seeded schools and classes', () => {
     const source = readFileSync(
       join(import.meta.dirname, 'local-dev/seed-synthetic-data.ts'),

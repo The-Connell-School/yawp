@@ -3,7 +3,11 @@
  * Seeds the "College Admissions Essay" system course (The Object & Two-Traits
  * method). Idempotent: safe to re-run. Mirrors seed-ap-history-library.ts.
  *
+ * Run standalone against any environment's database:
  *   bun run scripts/seed-college-essay-course.ts
+ *
+ * Or call `seedCollegeEssayCourse(prisma)` from another seed pipeline (it is
+ * wired into the local-dev / preview seed so the course appears automatically).
  */
 import { PrismaClient } from '../generated/prisma';
 import { PrismaPg } from '@prisma/adapter-pg';
@@ -40,40 +44,11 @@ const ASSIGNMENT_TYPE_DATA = {
   gradingCalibrationNotes: COLLEGE_ESSAY_CALIBRATION_NOTES,
 } as const;
 
-const connectionString = process.env.DATABASE_URL;
-if (!connectionString) {
-  throw new Error('DATABASE_URL environment variable is not set');
-}
-
-function getSchemaFromDatabaseUrl(url: string): string | undefined {
-  const match = url.match(/[?&]schema=([^&]+)/i);
-  if (!match) return undefined;
-  return decodeURIComponent(match[1]);
-}
-
-const schema =
-  process.env.DATABASE_SCHEMA?.trim() ||
-  getSchemaFromDatabaseUrl(connectionString);
-
-const isLocal = isLocalDatabaseUrl(connectionString);
-const isSimpleLocal =
-  !schema &&
-  (connectionString.includes('localhost') ||
-    connectionString.includes('127.0.0.1'));
-
-const adapter = isSimpleLocal
-  ? new PrismaPg({ connectionString, ssl: false })
-  : new PrismaPg(
-      {
-        connectionString,
-        ssl: isLocal ? false : { rejectUnauthorized: false },
-      },
-      schema ? { schema } : undefined
-    );
-
-const prisma = new PrismaClient({ adapter });
-
-async function upsertModule(assignmentTypeId: string, moduleData: CourseModule) {
+async function upsertModule(
+  prisma: PrismaClient,
+  assignmentTypeId: string,
+  moduleData: CourseModule
+) {
   const moduleFields = {
     title: moduleData.title,
     position: moduleData.position,
@@ -148,7 +123,7 @@ async function upsertModule(assignmentTypeId: string, moduleData: CourseModule) 
   return module.id;
 }
 
-async function seedCollegeEssayCourse() {
+export async function seedCollegeEssayCourse(prisma: PrismaClient) {
   const org = await prisma.organization.findFirst({
     orderBy: { createdAt: 'asc' },
     select: { id: true },
@@ -192,7 +167,7 @@ async function seedCollegeEssayCourse() {
   });
 
   for (const moduleData of COLLEGE_ESSAY_MODULES) {
-    await upsertModule(assignmentType.id, moduleData);
+    await upsertModule(prisma, assignmentType.id, moduleData);
   }
 
   console.log(
@@ -200,9 +175,49 @@ async function seedCollegeEssayCourse() {
   );
 }
 
-seedCollegeEssayCourse()
-  .catch((error) => {
-    console.error(error);
-    process.exit(1);
-  })
-  .finally(() => prisma.$disconnect());
+function createStandalonePrismaClient(): PrismaClient {
+  const connectionString = process.env.DATABASE_URL;
+  if (!connectionString) {
+    throw new Error('DATABASE_URL environment variable is not set');
+  }
+
+  const getSchemaFromDatabaseUrl = (url: string): string | undefined => {
+    const match = url.match(/[?&]schema=([^&]+)/i);
+    if (!match) return undefined;
+    return decodeURIComponent(match[1]);
+  };
+
+  const schema =
+    process.env.DATABASE_SCHEMA?.trim() ||
+    getSchemaFromDatabaseUrl(connectionString);
+
+  const isLocal = isLocalDatabaseUrl(connectionString);
+  const isSimpleLocal =
+    !schema &&
+    (connectionString.includes('localhost') ||
+      connectionString.includes('127.0.0.1'));
+
+  const adapter = isSimpleLocal
+    ? new PrismaPg({ connectionString, ssl: false })
+    : new PrismaPg(
+        {
+          connectionString,
+          ssl: isLocal ? false : { rejectUnauthorized: false },
+        },
+        schema ? { schema } : undefined
+      );
+
+  return new PrismaClient({ adapter });
+}
+
+// Only run the standalone CLI path when executed directly, so importing the
+// `seedCollegeEssayCourse` function from another seed pipeline does not connect.
+if (import.meta.main) {
+  const prisma = createStandalonePrismaClient();
+  seedCollegeEssayCourse(prisma)
+    .catch((error) => {
+      console.error(error);
+      process.exit(1);
+    })
+    .finally(() => prisma.$disconnect());
+}

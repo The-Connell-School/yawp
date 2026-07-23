@@ -8,6 +8,7 @@ import {
   loadProdFidelityBundle,
 } from './local-dev/import-prod-fidelity-fixtures';
 import { seedSyntheticLocalDevData } from './local-dev/seed-synthetic-data';
+import { seedCollegeEssayCourse } from './seed-college-essay-course';
 import { truncateAllPublicTables } from './local-dev/truncate-all';
 import {
   LOCAL_DEV_ORG_ID,
@@ -41,6 +42,10 @@ try {
   const bundle = await loadProdFidelityBundle();
   await importProdFidelityFixtures(prisma, bundle);
   console.timeEnd('prod-fidelity');
+
+  console.time('college-essay-course');
+  await seedCollegeEssayCourse(prisma);
+  console.timeEnd('college-essay-course');
 
   console.time('synthetic');
   const context = await seedSyntheticLocalDevData(prisma);
