@@ -13,6 +13,13 @@ export function ThesisTeacherDirections() {
         Create Assignment — every student in that class gets the prompt as a
         formal, thesis-driven essay.
       </p>
+      <p className="mb-3 text-sm text-muted-foreground">
+        We&rsquo;ve found it works best to give students open-ended prompts that
+        let them write about what interests them within a given text or topic.
+        Very specific prompts can feel restrictive and tend to produce 75+
+        essays on the same narrow question — the prompts below are written to
+        leave room for students to find their own angle.
+      </p>
       <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
         Keep in mind
       </p>

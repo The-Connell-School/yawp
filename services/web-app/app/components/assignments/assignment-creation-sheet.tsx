@@ -80,6 +80,8 @@ export type AssignmentCreationSheetProps = {
   initialTitle?: string;
   initialPrompt?: string;
   emptyClassesMessage?: string;
+  /** When true, a title must be entered before the assignment can be created. */
+  titleRequired?: boolean;
 };
 
 type AssignmentCreationSheetContentProps = AssignmentCreationSheetProps & {
@@ -143,6 +145,7 @@ export function AssignmentCreationSheetContent({
   initialTitle = '',
   initialPrompt = '',
   emptyClassesMessage = "You don't have any assignment-enabled classes yet.",
+  titleRequired = false,
   createFetcher,
   extractFetcher,
   renderSheet = true,
@@ -287,6 +290,7 @@ export function AssignmentCreationSheetContent({
     !assignmentTypeId ||
     selectedClassCount === 0 ||
     !prompt.trim() ||
+    (titleRequired && !title.trim()) ||
     (submitForGrade && !pointValue.trim());
 
   const header = renderSheet ? (
@@ -374,7 +378,9 @@ export function AssignmentCreationSheetContent({
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="assignment-create-title">Title (optional)</Label>
+          <Label htmlFor="assignment-create-title">
+            {titleRequired ? 'Title' : 'Title (optional)'}
+          </Label>
           <Input
             id="assignment-create-title"
             name="title"
@@ -382,6 +388,7 @@ export function AssignmentCreationSheetContent({
             onChange={(event) => setTitle(event.target.value)}
             placeholder="e.g., Rhetorical Analysis Essay"
             disabled={isSaving}
+            required={titleRequired}
           />
         </div>
 

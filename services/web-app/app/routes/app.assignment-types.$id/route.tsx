@@ -586,6 +586,7 @@ export default function AppAssignmentTypesIdRoute() {
                 open={isAssignmentSheetOpen}
                 onOpenChange={setIsAssignmentSheetOpen}
                 initialPrompt={libraryPrompt}
+                titleRequired={showThesisLibrary}
                 apHistoryEntry={apHistoryEntry}
               />
               {showThesisLibrary ? (
@@ -638,6 +639,14 @@ export default function AppAssignmentTypesIdRoute() {
                 Modules
               </AccordionTrigger>
               <AccordionContent>
+                {showThesisLibrary ? (
+                  <p className="mb-3 text-sm text-muted-foreground">
+                    Click on the modules to see the overview of the writing
+                    process that you&rsquo;ll teach your students. Training
+                    videos and lesson materials are available in the
+                    Teachers&rsquo; Lounge.
+                  </p>
+                ) : null}
                 <Accordion type="multiple">
                   {data.assignmentType.assignmentModules.map((cm) => (
                     <AccordionItem
