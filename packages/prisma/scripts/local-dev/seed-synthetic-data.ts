@@ -464,7 +464,7 @@ export async function seedSyntheticLocalDevData(
   // unreviewed evidence so the teacher-facing "Paste · N" signal, the Writing
   // signals filter, and the review action all have real seeded data to exercise.
   const practiceDraftPasteContent =
-    'The rise of social media has fundamentally reshaped how teenagers communicate, learn, and form their identities in ways that previous generations never experienced growing up.';
+    'The rise of social media has fundamentally reshaped how teenagers communicate, learn, and form their identities in ways that previous generations never experienced growing up. Researchers also note that constant comparison can make ordinary social pressure feel public, permanent, and difficult to escape.';
   const practiceDraftPasteAlert = await prisma.pasteAlert.create({
     data: {
       documentId: editedDocument.id,
@@ -475,7 +475,7 @@ export async function seedSyntheticLocalDevData(
   });
 
   const submittedCivicPasteContent =
-    'Civic engagement among young people has declined steadily over the past two decades, according to several national surveys of voter turnout and volunteer participation rates.';
+    'Civic engagement among young people has declined steadily over the past two decades, according to several national surveys of voter turnout and volunteer participation rates. Schools can reverse that trend by giving students regular opportunities to deliberate, organize, and solve visible problems in their own communities.';
   const submittedCivicPasteAlert = await prisma.pasteAlert.create({
     data: {
       documentId: submittedDocument.id,
@@ -488,7 +488,7 @@ export async function seedSyntheticLocalDevData(
   });
 
   const gradedCivicPasteContentUnreviewed =
-    'A healthy democracy depends on citizens who are willing to question claims, weigh competing evidence fairly, and defend their conclusions when someone else pushes back on them.';
+    'A healthy democracy depends on citizens who are willing to question claims, weigh competing evidence fairly, and defend their conclusions when someone else pushes back on them. Those habits develop through repeated practice with real disagreements, not by memorizing a list of institutions before a test.';
   const gradedCivicPasteAlertUnreviewed = await prisma.pasteAlert.create({
     data: {
       documentId: gradedDocument.id,
@@ -499,7 +499,7 @@ export async function seedSyntheticLocalDevData(
   });
 
   const gradedCivicPasteContentReviewed =
-    'Student government and service projects give young people real responsibility, and most students rise to meet that responsibility when they are trusted with it early on.';
+    'Student government and service projects give young people real responsibility, and most students rise to meet that responsibility when they are trusted with it early on. Adults still need to provide useful boundaries, but students should be allowed to make consequential choices and learn from the results.';
   const gradedCivicPasteAlertReviewed = await prisma.pasteAlert.create({
     data: {
       documentId: gradedDocument.id,

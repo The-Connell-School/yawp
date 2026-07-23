@@ -42,9 +42,9 @@ import {
 import {
   buildPasteAlertRelationWhere,
   parseWritingSignalFilter,
-  summarizePasteAlertsByDocument,
+  summarizePasteAlertGroups,
   type WritingSignalFilter,
-} from '~/utils/paste-alert-summary.server';
+} from '~/utils/paste-alert-summary';
 import type { Prisma } from '@app/prisma';
 import {
   mergeStoredStudentWorkSearchParams,
@@ -236,28 +236,24 @@ export async function loader({ request }: LoaderFunctionArgs) {
   });
 
   const documentIds = allDocuments.map((document) => document.id);
-  const pasteAlertCounts =
+  const [pasteAlertCounts, unreviewedPasteAlertCounts] =
     documentIds.length > 0
-      ? await prisma.pasteAlert.findMany({
-          where: { documentId: { in: documentIds } },
-          select: { documentId: true },
-        })
-      : [];
-  const unreviewedPasteAlertCounts =
-    documentIds.length > 0
-      ? await prisma.pasteAlert.findMany({
-          where: { documentId: { in: documentIds }, reviewedAt: null },
-          select: { documentId: true },
-        })
-      : [];
-  const pasteAlertCountByDocument = summarizePasteAlertsByDocument(
-    pasteAlertCounts.map((row) => ({ documentId: row.documentId }))
-  );
-  const unreviewedPasteAlertCountByDocument = summarizePasteAlertsByDocument(
-    unreviewedPasteAlertCounts.map((row) => ({
-      documentId: row.documentId,
-      reviewedAt: null,
-    }))
+      ? await Promise.all([
+          prisma.pasteAlert.groupBy({
+            by: ['documentId'],
+            where: { documentId: { in: documentIds } },
+            _count: { _all: true },
+          }),
+          prisma.pasteAlert.groupBy({
+            by: ['documentId'],
+            where: { documentId: { in: documentIds }, reviewedAt: null },
+            _count: { _all: true },
+          }),
+        ])
+      : [[], []];
+  const pasteAlertSummaryByDocument = summarizePasteAlertGroups(
+    pasteAlertCounts,
+    unreviewedPasteAlertCounts
   );
 
   const documents: TeacherDocumentWorkRow[] = allDocuments.map((document) => {
@@ -277,10 +273,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
       submissions,
       latestSubmission: submissions[0] ?? null,
       submissionCount: document._count.submissions,
-      pasteAlertCount:
-        pasteAlertCountByDocument.get(document.id)?.count ?? 0,
+      pasteAlertCount: pasteAlertSummaryByDocument.get(document.id)?.count ?? 0,
       unreviewedPasteAlertCount:
-        unreviewedPasteAlertCountByDocument.get(document.id)?.count ?? 0,
+        pasteAlertSummaryByDocument.get(document.id)?.unreviewedCount ?? 0,
     };
   });
 
@@ -561,8 +556,7 @@ export default function StudentWorkRoute() {
               documentId: document.id,
               documentTitle: document.title,
               studentName:
-                document.membership.user.name ||
-                document.membership.user.email,
+                document.membership.user.name || document.membership.user.email,
             })
           }
         />

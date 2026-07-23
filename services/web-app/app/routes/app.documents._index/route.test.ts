@@ -5,7 +5,7 @@ const prisma = {
   classAssignment: { findMany: mock() },
   documentClassForensic: { findMany: mock() },
   document: { findMany: mock() },
-  pasteAlert: { findMany: mock() },
+  pasteAlert: { groupBy: mock() },
 };
 
 const requireUserId = mock();
@@ -63,20 +63,30 @@ describe('documents loader paste activity', () => {
         title: 'Essay Draft',
         updatedAt: new Date('2026-07-01T00:00:00Z'),
         assignment: null,
-        classAssignment: { class: { id: 'class-1', grade: '9', period: '2', title: 'World History' } },
+        classAssignment: {
+          class: {
+            id: 'class-1',
+            grade: '9',
+            period: '2',
+            title: 'World History',
+          },
+        },
         membership: {
           id: 'membership-1',
-          user: { id: 'student-1', name: 'Student One', email: 'student1@example.test' },
+          user: {
+            id: 'student-1',
+            name: 'Student One',
+            email: 'student1@example.test',
+          },
           classesAsStudent: [],
         },
         submissions: [],
         _count: { submissions: 0 },
       },
     ]);
-    prisma.pasteAlert.findMany.mockResolvedValue([
-      { documentId: 'doc-1', textLength: 400 },
-      { documentId: 'doc-1', textLength: 250 },
-    ]);
+    prisma.pasteAlert.groupBy
+      .mockResolvedValueOnce([{ documentId: 'doc-1', _count: { _all: 2 } }])
+      .mockResolvedValueOnce([{ documentId: 'doc-1', _count: { _all: 1 } }]);
   });
 
   test('surfaces paste alert counts per document for teacher review', async () => {
@@ -86,12 +96,35 @@ describe('documents loader paste activity', () => {
       context: {} as never,
     });
 
-    expect(prisma.pasteAlert.findMany).toHaveBeenCalledWith({
+    expect(prisma.pasteAlert.groupBy).toHaveBeenNthCalledWith(1, {
+      by: ['documentId'],
       where: { documentId: { in: ['doc-1'] } },
-      select: { documentId: true },
+      _count: { _all: true },
     });
 
     const document = data.documents.find((doc: any) => doc.id === 'doc-1');
     expect(document.pasteAlertCount).toBe(2);
+    expect(document.unreviewedPasteAlertCount).toBe(1);
+  });
+
+  test('applies an unreviewed writing-signal filter before the 250-row limit', async () => {
+    await loader({
+      request: new Request(
+        'https://example.test/app/documents?writingSignal=unreviewed'
+      ),
+      params: {},
+      context: {} as never,
+    });
+
+    expect(prisma.document.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          AND: expect.arrayContaining([
+            { pasteAlerts: { some: { reviewedAt: null } } },
+          ]),
+        }),
+        take: 250,
+      })
+    );
   });
 });

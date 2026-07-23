@@ -92,6 +92,39 @@ describe('api.paste-alert action', () => {
     expect(prisma.pasteAlert.create).not.toHaveBeenCalled();
   });
 
+  test('rejects paste events below the detector threshold', async () => {
+    const response = await action({
+      request: jsonRequest({ documentId: 'doc-1', textLength: 199 }),
+      params: {},
+      context: {},
+    } as any);
+
+    expect(response.init?.status).toBe(400);
+    expect(prisma.pasteAlert.create).not.toHaveBeenCalled();
+  });
+
+  test('preserves older clients by truncating oversized paste content', async () => {
+    const response = await action({
+      request: jsonRequest({
+        documentId: 'doc-1',
+        textLength: 50_001,
+        content: 'x'.repeat(50_001),
+      }),
+      params: {},
+      context: {},
+    } as any);
+
+    expect(response.init?.status ?? 200).toBe(200);
+    expect(prisma.pasteAlert.create).toHaveBeenCalledWith({
+      data: {
+        documentId: 'doc-1',
+        membershipId: 'membership-1',
+        textLength: 50_001,
+        content: 'x'.repeat(50_000),
+      },
+    });
+  });
+
   test('rejects non-string content', async () => {
     const response = await action({
       request: jsonRequest({

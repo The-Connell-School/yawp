@@ -4,7 +4,7 @@ const prisma = {
   class: { findMany: mock() },
   documentClassForensic: { findMany: mock() },
   document: { findFirst: mock() },
-  pasteAlert: { findMany: mock(), findFirst: mock(), update: mock() },
+  pasteAlert: { findMany: mock(), findFirst: mock(), updateMany: mock() },
 };
 
 const requireUserId = mock();
@@ -61,7 +61,7 @@ describe('api.paste-alerts.$documentId', () => {
       },
     ]);
     prisma.pasteAlert.findFirst.mockResolvedValue({ id: 'alert-1' });
-    prisma.pasteAlert.update.mockResolvedValue({ id: 'alert-1' });
+    prisma.pasteAlert.updateMany.mockResolvedValue({ count: 1 });
   });
 
   test('returns bounded alert details for an authorized document', async () => {
@@ -74,7 +74,26 @@ describe('api.paste-alerts.$documentId', () => {
     expect((response as any).data.document.id).toBe('doc-1');
     expect((response as any).data.alerts).toHaveLength(1);
     expect(prisma.pasteAlert.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { documentId: 'doc-1' } })
+      expect.objectContaining({
+        where: { documentId: 'doc-1' },
+        take: 200,
+      })
+    );
+    expect(prisma.class.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          teachers: { some: { id: 'teacher-1' } },
+          isArchived: false,
+        },
+      })
+    );
+    expect(prisma.document.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          id: 'doc-1',
+          membership: { organizationId: 'org-1' },
+        }),
+      })
     );
   });
 
@@ -114,8 +133,12 @@ describe('api.paste-alerts.$documentId', () => {
     } as any);
 
     expect((response as any).data.success).toBe(true);
-    expect(prisma.pasteAlert.update).toHaveBeenCalledWith({
-      where: { id: 'alert-1' },
+    expect(prisma.pasteAlert.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: 'alert-1',
+        documentId: 'doc-1',
+        reviewedAt: null,
+      },
       data: {
         reviewedAt: expect.any(Date),
         reviewedByMembershipId: 'teacher-1',
@@ -133,6 +156,49 @@ describe('api.paste-alerts.$documentId', () => {
     } as any);
 
     expect(response.init?.status).toBe(404);
-    expect(prisma.pasteAlert.update).not.toHaveBeenCalled();
+    expect(prisma.pasteAlert.updateMany).not.toHaveBeenCalled();
+  });
+
+  test('rejects an alert id from another authorized document', async () => {
+    prisma.pasteAlert.findFirst.mockResolvedValue(null);
+
+    const response = await action({
+      request: reviewRequest('alert-from-another-document'),
+      params: { documentId: 'doc-1' },
+      context: {},
+    } as any);
+
+    expect(response.init?.status).toBe(404);
+    expect(prisma.pasteAlert.findFirst).toHaveBeenCalledWith({
+      where: {
+        id: 'alert-from-another-document',
+        documentId: 'doc-1',
+      },
+      select: { id: true },
+    });
+    expect(prisma.pasteAlert.updateMany).not.toHaveBeenCalled();
+  });
+
+  test('keeps the original reviewer when a reviewed alert is retried', async () => {
+    prisma.pasteAlert.updateMany.mockResolvedValue({ count: 0 });
+
+    const response = await action({
+      request: reviewRequest('alert-1'),
+      params: { documentId: 'doc-1' },
+      context: {},
+    } as any);
+
+    expect((response as any).data.success).toBe(true);
+    expect(prisma.pasteAlert.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: 'alert-1',
+        documentId: 'doc-1',
+        reviewedAt: null,
+      },
+      data: {
+        reviewedAt: expect.any(Date),
+        reviewedByMembershipId: 'teacher-1',
+      },
+    });
   });
 });

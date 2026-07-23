@@ -33,20 +33,30 @@ export type PasteAlertSummary = {
   unreviewedCount: number;
 };
 
-export function summarizePasteAlertsByDocument(
-  rows: Array<{ documentId: string; reviewedAt?: Date | null }>
+type PasteAlertCountGroup = {
+  documentId: string;
+  _count: { _all: number };
+};
+
+export function summarizePasteAlertGroups(
+  totalRows: PasteAlertCountGroup[],
+  unreviewedRows: PasteAlertCountGroup[]
 ): Map<string, PasteAlertSummary> {
   const summaries = new Map<string, PasteAlertSummary>();
 
-  for (const row of rows) {
+  for (const row of totalRows) {
+    summaries.set(row.documentId, {
+      count: row._count._all,
+      unreviewedCount: 0,
+    });
+  }
+
+  for (const row of unreviewedRows) {
     const existing = summaries.get(row.documentId) ?? {
-      count: 0,
+      count: row._count._all,
       unreviewedCount: 0,
     };
-    existing.count += 1;
-    if (!row.reviewedAt) {
-      existing.unreviewedCount += 1;
-    }
+    existing.unreviewedCount = row._count._all;
     summaries.set(row.documentId, existing);
   }
 

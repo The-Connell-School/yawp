@@ -36,7 +36,11 @@ async function loadAuthorizedDocumentId(request: Request, documentId: string) {
   });
 
   const document = await prisma.document.findFirst({
-    where: { ...documentWhere, id: documentId },
+    where: {
+      ...documentWhere,
+      id: documentId,
+      membership: { organizationId: profile.organization.id },
+    },
     select: {
       id: true,
       title: true,
@@ -115,8 +119,8 @@ export async function action({ request, params }: ActionFunctionArgs) {
     return dataResponse({ error: 'Alert not found' }, { status: 404 });
   }
 
-  await prisma.pasteAlert.update({
-    where: { id: alertId },
+  await prisma.pasteAlert.updateMany({
+    where: { id: alertId, documentId, reviewedAt: null },
     data: {
       reviewedAt: new Date(),
       reviewedByMembershipId: result.profile.id,

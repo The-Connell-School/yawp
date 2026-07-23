@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import type { Editor } from '@tiptap/core';
 
 const PASTE_ALERT_MIN_CHARS = 200;
+const PASTE_ALERT_MAX_CONTENT_CHARS = 50_000;
 
 /**
  * Detects pastes of 200+ characters that did NOT originate from the same
@@ -60,7 +61,11 @@ export function usePasteAlert(editor: Editor | null, docId: string) {
         fetch('/api/paste-alert', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ documentId: docId, textLength, content: pastedText }),
+          body: JSON.stringify({
+            documentId: docId,
+            textLength,
+            content: pastedText.slice(0, PASTE_ALERT_MAX_CONTENT_CHARS),
+          }),
         }).catch(() => {});
       }
     };

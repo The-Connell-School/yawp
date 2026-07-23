@@ -18,7 +18,7 @@ import {
 import {
   parseWritingSignalFilter,
   type WritingSignalFilter,
-} from '~/utils/paste-alert-summary.server';
+} from '~/utils/paste-alert-summary';
 
 export type ClassDocumentsViewPreferences = {
   studentIds?: string[];

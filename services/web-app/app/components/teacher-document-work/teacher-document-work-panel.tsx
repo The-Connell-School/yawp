@@ -74,12 +74,12 @@ import {
   sortTeacherDocumentWorkRows,
   toggleDocumentWorkSort,
 } from '~/utils/teacher-document-work-sort';
-import type { WritingSignalFilter } from '~/utils/paste-alert-summary.server';
+import type { WritingSignalFilter } from '~/utils/paste-alert-summary';
 import { cn } from '~/utils/misc';
 import { timeAgo } from '~/utils/timeAgo';
 
 const DOCUMENT_TABLE_ROW_CLASSES = {
-  table: 'w-full table-fixed text-sm',
+  table: 'w-full min-w-[64rem] table-fixed text-sm',
   head: 'h-9 whitespace-nowrap px-2 py-1.5 text-sm',
   cell: 'max-w-0 truncate whitespace-nowrap px-2 py-2 text-sm',
   dateCell: 'text-sm text-muted-foreground',
@@ -483,7 +483,11 @@ export function TeacherDocumentWorkPanel({
                         ? 'border-amber-300 bg-amber-100 text-amber-900'
                         : 'border-border bg-muted text-muted-foreground'
                     )}
-                    aria-label={`Paste activity, ${document.pasteAlertCount} detected event${document.pasteAlertCount === 1 ? '' : 's'}`}
+                    aria-label={`Paste · ${document.pasteAlertCount}; ${
+                      (document.unreviewedPasteAlertCount ?? 0) > 0
+                        ? `${document.unreviewedPasteAlertCount} unreviewed event${document.unreviewedPasteAlertCount === 1 ? '' : 's'}`
+                        : 'all reviewed'
+                    }`}
                     onClick={(event) => {
                       event.stopPropagation();
                       onOpenPasteAlerts(document);
@@ -1139,7 +1143,7 @@ function FilterDropdownPanel({
         <div>
           <p className="text-sm font-medium">Filter results</p>
           <p className="text-xs text-muted-foreground">
-            Narrow by student, class, or assignment
+            Narrow by student, class, assignment, or writing signal
           </p>
         </div>
         {hasActiveFilters ? (

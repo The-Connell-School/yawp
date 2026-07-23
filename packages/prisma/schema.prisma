@@ -708,20 +708,21 @@ model TeacherTrainingModuleSession {
 }
 
 model PasteAlert {
-  id                   String         @id @default(cuid())
-  createdAt            DateTime       @default(now()) @db.Timestamptz(6)
-  textLength           Int
-  content              String?
-  documentId           String
-  document             Document       @relation(fields: [documentId], references: [id], onDelete: Cascade)
-  membershipId         String
-  membership           OrgMembership  @relation(fields: [membershipId], references: [id], onDelete: Cascade)
-  reviewedAt           DateTime?      @db.Timestamptz(6)
+  id                     String         @id @default(cuid())
+  createdAt              DateTime       @default(now()) @db.Timestamptz(6)
+  textLength             Int
+  content                String?
+  documentId             String
+  document               Document       @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  membershipId           String
+  membership             OrgMembership  @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  reviewedAt             DateTime?      @db.Timestamptz(6)
   reviewedByMembershipId String?
-  reviewedByMembership OrgMembership? @relation("PasteAlertReviewedBy", fields: [reviewedByMembershipId], references: [id], onDelete: SetNull)
+  reviewedByMembership   OrgMembership? @relation("PasteAlertReviewedBy", fields: [reviewedByMembershipId], references: [id], onDelete: SetNull)
 
   @@index([documentId, createdAt(sort: Desc)])
   @@index([membershipId, createdAt(sort: Desc)])
+  @@index([reviewedByMembershipId])
 }
 
 model Submission {

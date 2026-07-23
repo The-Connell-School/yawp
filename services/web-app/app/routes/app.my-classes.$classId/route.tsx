@@ -120,8 +120,8 @@ import {
 import { filterClassStudentsByQuery } from './class-students-search';
 import {
   parseWritingSignalFilter,
-  summarizePasteAlertsByDocument,
-} from '~/utils/paste-alert-summary.server';
+  summarizePasteAlertGroups,
+} from '~/utils/paste-alert-summary';
 
 export function getDraftDisplayTitle(document: {
   title?: string | null;
@@ -612,7 +612,6 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       : { enrolledMembershipIds: klass.students.map((student) => student.id) }
   );
 
-
   // Get all submissions for this class
   const submissions = await prisma.submission.findMany({
     where: {
@@ -716,15 +715,28 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       ...inProgressDocuments.map((document) => document.id),
     ]),
   ];
-  const pasteAlertRows =
+  const [pasteAlertCounts, unreviewedPasteAlertCounts] =
     classDocumentIds.length > 0
-      ? await prisma.pasteAlert.findMany({
-          where: { documentId: { in: classDocumentIds } },
-          select: { documentId: true, reviewedAt: true },
-        })
-      : [];
-  const pasteAlertSummaryByDocument =
-    summarizePasteAlertsByDocument(pasteAlertRows);
+      ? await Promise.all([
+          prisma.pasteAlert.groupBy({
+            by: ['documentId'],
+            where: { documentId: { in: classDocumentIds } },
+            _count: { _all: true },
+          }),
+          prisma.pasteAlert.groupBy({
+            by: ['documentId'],
+            where: {
+              documentId: { in: classDocumentIds },
+              reviewedAt: null,
+            },
+            _count: { _all: true },
+          }),
+        ])
+      : [[], []];
+  const pasteAlertSummaryByDocument = summarizePasteAlertGroups(
+    pasteAlertCounts,
+    unreviewedPasteAlertCounts
+  );
 
   const classAssignments = await prisma.classAssignment.findMany({
     where: { classId },
@@ -1129,8 +1141,7 @@ function ClassDetailPage() {
 
   const teacherDocumentWorkRows = useMemo((): TeacherDocumentWorkRow[] => {
     return classDocuments.map((document) => {
-      const pasteAlertSummary =
-        data.pasteAlertSummaryByDocument[document.id];
+      const pasteAlertSummary = data.pasteAlertSummaryByDocument[document.id];
       return {
         ...document,
         resolvedClass: {
@@ -1485,8 +1496,7 @@ function ClassDetailPage() {
               documentId: document.id,
               documentTitle: document.title,
               studentName:
-                document.membership.user.name ||
-                document.membership.user.email,
+                document.membership.user.name || document.membership.user.email,
             })
           }
         />

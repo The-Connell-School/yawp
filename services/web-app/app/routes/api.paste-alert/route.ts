@@ -2,6 +2,9 @@ import { type ActionFunctionArgs, data as dataResponse } from 'react-router';
 import { requireMembership, requireUserId } from '~/utils/auth.server.js';
 import { prisma } from '~/utils/db.server.js';
 
+const PASTE_ALERT_MIN_CHARS = 200;
+const PASTE_ALERT_MAX_CONTENT_CHARS = 50_000;
+
 export async function action({ request }: ActionFunctionArgs) {
   if (request.method !== 'POST') {
     return dataResponse({ error: 'Method not allowed' }, { status: 405 });
@@ -28,12 +31,16 @@ export async function action({ request }: ActionFunctionArgs) {
     !documentId ||
     typeof textLength !== 'number' ||
     !Number.isInteger(textLength) ||
-    textLength <= 0
+    textLength < PASTE_ALERT_MIN_CHARS
   ) {
     return dataResponse({ error: 'Invalid request' }, { status: 400 });
   }
 
-  if (content !== undefined && content !== null && typeof content !== 'string') {
+  if (
+    content !== undefined &&
+    content !== null &&
+    typeof content !== 'string'
+  ) {
     return dataResponse({ error: 'Invalid request' }, { status: 400 });
   }
 
@@ -53,7 +60,10 @@ export async function action({ request }: ActionFunctionArgs) {
       documentId,
       membershipId: membership.id,
       textLength,
-      content: content || null,
+      content:
+        typeof content === 'string'
+          ? content.slice(0, PASTE_ALERT_MAX_CONTENT_CHARS) || null
+          : null,
     },
   });
 

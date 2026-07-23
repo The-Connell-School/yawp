@@ -5,7 +5,7 @@ const prisma = {
   documentClassForensic: { findMany: mock() },
   assignmentType: { findMany: mock() },
   orgMembership: { findUnique: mock(), findMany: mock() },
-  pasteAlert: { findMany: mock() },
+  pasteAlert: { groupBy: mock() },
   submission: { findMany: mock() },
   document: { findMany: mock() },
   assignment: {
@@ -95,7 +95,7 @@ describe('class detail loader document visibility', () => {
     prisma.assignmentType.findMany.mockResolvedValue([]);
     prisma.orgMembership.findUnique.mockResolvedValue({ schools: [] });
     prisma.orgMembership.findMany.mockResolvedValue([]);
-    prisma.pasteAlert.findMany.mockResolvedValue([]);
+    prisma.pasteAlert.groupBy.mockResolvedValue([]);
     prisma.submission.findMany.mockResolvedValue([]);
     prisma.document.findMany.mockResolvedValue([]);
     prisma.classAssignment.findMany.mockResolvedValue([]);
@@ -156,6 +156,40 @@ describe('class detail loader document visibility', () => {
       { id: 'submission-1', title: 'Submitted essay' },
     ]);
     expect(prisma.submission.findMany).toHaveBeenCalledTimes(1);
+  });
+
+  test('returns database-aggregated paste activity for class documents', async () => {
+    prisma.submission.findMany.mockResolvedValue([
+      {
+        id: 'submission-1',
+        documentId: 'doc-1',
+        title: 'Submitted essay',
+      },
+    ]);
+    prisma.pasteAlert.groupBy
+      .mockResolvedValueOnce([
+        { documentId: 'doc-1', _count: { _all: 4 } },
+      ])
+      .mockResolvedValueOnce([
+        { documentId: 'doc-1', _count: { _all: 2 } },
+      ]);
+
+    const response = await loader({
+      request: new Request('https://example.test/app/my-classes/class-1'),
+      params: { classId: 'class-1' },
+      context: {} as never,
+    });
+    const data = (response as { data: any }).data;
+
+    expect(prisma.pasteAlert.groupBy).toHaveBeenNthCalledWith(1, {
+      by: ['documentId'],
+      where: { documentId: { in: ['doc-1'] } },
+      _count: { _all: true },
+    });
+    expect(data.pasteAlertSummaryByDocument['doc-1']).toEqual({
+      count: 4,
+      unreviewedCount: 2,
+    });
   });
 
   test('redirects the retired assignments tab to the teacher Assignments page', async () => {
@@ -353,7 +387,8 @@ describe('class detail loader document visibility', () => {
 
     expect(response.data).toMatchObject({
       success: false,
-      message: 'Point value must be a positive whole number no greater than 1000.',
+      message:
+        'Point value must be a positive whole number no greater than 1000.',
     });
     expect(response.init).toMatchObject({ status: 400 });
     expect(createAssignmentDeployedToClasses).not.toHaveBeenCalled();
