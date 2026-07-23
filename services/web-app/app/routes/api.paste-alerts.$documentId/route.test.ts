@@ -76,9 +76,10 @@ describe('api.paste-alerts.$documentId', () => {
     expect(prisma.pasteAlert.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { documentId: 'doc-1' },
-        take: 200,
+        take: 201,
       })
     );
+    expect((response as any).data.hasMore).toBe(false);
     expect(prisma.class.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: {
@@ -95,6 +96,28 @@ describe('api.paste-alerts.$documentId', () => {
         }),
       })
     );
+  });
+
+  test('bounds the response and reports when older alert history exists', async () => {
+    prisma.pasteAlert.findMany.mockResolvedValue(
+      Array.from({ length: 201 }, (_, index) => ({
+        id: `alert-${index}`,
+        createdAt: new Date('2026-07-01T00:00:00Z'),
+        textLength: 250,
+        content: `paste ${index}`,
+        reviewedAt: null,
+        reviewedByMembership: null,
+      }))
+    );
+
+    const response = await loader({
+      request: new Request('https://example.test/api/paste-alerts/doc-1'),
+      params: { documentId: 'doc-1' },
+      context: {},
+    } as any);
+
+    expect((response as any).data.alerts).toHaveLength(200);
+    expect((response as any).data.hasMore).toBe(true);
   });
 
   test('rejects students', async () => {

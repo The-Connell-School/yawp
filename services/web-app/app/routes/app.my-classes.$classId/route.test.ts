@@ -129,11 +129,13 @@ describe('class detail loader document visibility', () => {
     expect(prisma.submission.findMany.mock.calls[0][0].where.document).toEqual({
       is: {
         ...expectedScope,
+        membership: { organizationId: 'org-1' },
         deletedAt: null,
       },
     });
     expect(prisma.document.findMany.mock.calls[0][0].where).toEqual({
       ...expectedScope,
+      membership: { organizationId: 'org-1' },
       deletedAt: null,
       archivedAt: null,
       submissions: { none: {} },
@@ -167,12 +169,8 @@ describe('class detail loader document visibility', () => {
       },
     ]);
     prisma.pasteAlert.groupBy
-      .mockResolvedValueOnce([
-        { documentId: 'doc-1', _count: { _all: 4 } },
-      ])
-      .mockResolvedValueOnce([
-        { documentId: 'doc-1', _count: { _all: 2 } },
-      ]);
+      .mockResolvedValueOnce([{ documentId: 'doc-1', _count: { _all: 4 } }])
+      .mockResolvedValueOnce([{ documentId: 'doc-1', _count: { _all: 2 } }]);
 
     const response = await loader({
       request: new Request('https://example.test/app/my-classes/class-1'),

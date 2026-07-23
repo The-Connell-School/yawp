@@ -29,7 +29,34 @@ type PasteAlertSheetData = {
     membership: { user: { name: string | null; email: string } };
   };
   alerts: PasteAlertDetail[];
+  hasMore: boolean;
 };
+
+type PasteAlertSheetResponse =
+  | PasteAlertSheetData
+  | {
+      error: string;
+    };
+
+export function resolvePasteAlertSheetView(
+  documentId: string | undefined,
+  data: PasteAlertSheetResponse | undefined,
+  fetcherState: 'idle' | 'loading' | 'submitting'
+) {
+  const matchingData =
+    data && 'document' in data && data.document.id === documentId ? data : null;
+  const hasError =
+    Boolean(documentId) &&
+    fetcherState === 'idle' &&
+    Boolean(data && 'error' in data);
+
+  return {
+    alerts: matchingData?.alerts ?? [],
+    hasMore: matchingData?.hasMore ?? false,
+    isLoading: Boolean(documentId) && !matchingData && !hasError,
+    hasError,
+  };
+}
 
 export type PasteAlertSheetTarget = {
   documentId: string;
@@ -48,7 +75,7 @@ export function PasteAlertSheet({
   onClose,
   onReviewed,
 }: PasteAlertSheetProps) {
-  const loadFetcher = useFetcher<PasteAlertSheetData>();
+  const loadFetcher = useFetcher<PasteAlertSheetResponse>();
   const reviewFetcher = useFetcher<{ success?: boolean }>();
   const isOpen = target !== null;
   const documentId = target?.documentId;
@@ -72,8 +99,11 @@ export function PasteAlertSheet({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reviewFetcher.data, reviewFetcher.state, documentId]);
 
-  const alerts = loadFetcher.data?.alerts ?? [];
-  const isInitialLoad = loadFetcher.state !== 'idle' && !loadFetcher.data;
+  const { alerts, hasMore, isLoading, hasError } = resolvePasteAlertSheetView(
+    documentId,
+    loadFetcher.data,
+    loadFetcher.state
+  );
 
   const markReviewed = (alertId: string) => {
     if (!documentId) return;
@@ -98,9 +128,14 @@ export function PasteAlertSheet({
         </SheetHeader>
 
         <div className="mt-4 space-y-3" data-testid="paste-alert-sheet-list">
-          {isInitialLoad ? (
+          {isLoading ? (
             <p className="text-sm text-muted-foreground">
               Loading paste activity…
+            </p>
+          ) : hasError ? (
+            <p className="text-sm text-destructive">
+              Paste activity could not be loaded. Close this panel and try
+              again.
             </p>
           ) : alerts.length === 0 ? (
             <p className="text-sm text-muted-foreground">
@@ -160,6 +195,12 @@ export function PasteAlertSheet({
               </div>
             ))
           )}
+          {hasMore ? (
+            <p className="text-xs text-muted-foreground">
+              Showing the newest {alerts.length} events. Older paste activity
+              remains stored.
+            </p>
+          ) : null}
         </div>
       </SheetContent>
     </Sheet>

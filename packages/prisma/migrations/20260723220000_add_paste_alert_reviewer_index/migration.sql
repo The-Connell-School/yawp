@@ -1,2 +1,2 @@
 -- CreateIndex
-CREATE INDEX "PasteAlert_reviewedByMembershipId_idx" ON "PasteAlert"("reviewedByMembershipId");
+CREATE INDEX CONCURRENTLY "PasteAlert_reviewedByMembershipId_idx" ON "PasteAlert"("reviewedByMembershipId");

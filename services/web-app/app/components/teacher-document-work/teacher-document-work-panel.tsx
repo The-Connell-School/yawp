@@ -497,6 +497,9 @@ export function TeacherDocumentWorkPanel({
                     }}
                   >
                     Paste · {document.pasteAlertCount}
+                    {(document.unreviewedPasteAlertCount ?? 0) > 0 ? (
+                      <span className="font-semibold">· Review</span>
+                    ) : null}
                   </button>
                 ) : null}
                 <ChevronRight

@@ -7,7 +7,7 @@ import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { buildTeacherClassWorkDocumentWhere } from '~/utils/class-assignment-scope.server';
 
-const MAX_ALERTS_RETURNED = 200;
+export const MAX_ALERTS_RETURNED = 200;
 
 async function loadAuthorizedDocumentId(request: Request, documentId: string) {
   const userId = await requireUserId(request);
@@ -81,12 +81,13 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       },
     },
     orderBy: { createdAt: 'desc' },
-    take: MAX_ALERTS_RETURNED,
+    take: MAX_ALERTS_RETURNED + 1,
   });
 
   return dataResponse({
     document: result.document,
-    alerts,
+    alerts: alerts.slice(0, MAX_ALERTS_RETURNED),
+    hasMore: alerts.length > MAX_ALERTS_RETURNED,
   });
 }
 

@@ -618,6 +618,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       document: {
         is: {
           ...classDocumentScope,
+          membership: { organizationId: klass.school.organizationId },
           deletedAt: null,
         },
       },
@@ -675,6 +676,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const inProgressDocuments = await prisma.document.findMany({
     where: {
       ...classDocumentScope,
+      membership: { organizationId: klass.school.organizationId },
       deletedAt: null,
       archivedAt: null,
       submissions: { none: {} },

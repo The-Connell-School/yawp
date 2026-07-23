@@ -54,7 +54,9 @@ test.describe('Teacher paste activity signal', () => {
       await page
         .getByTestId('teacher-document-work-writing-signal-select')
         .click();
-      await page.getByRole('option', { name: 'Unreviewed paste activity' }).click();
+      await page
+        .getByRole('option', { name: 'Unreviewed paste activity' })
+        .click();
       await page.waitForLoadState('networkidle');
       await expect(pasteBadge).toBeVisible();
       expect(page.url()).toContain('writingSignal=unreviewed');
@@ -80,9 +82,35 @@ test.describe('Teacher paste activity signal', () => {
       });
       expect(reviewed?.reviewedAt).not.toBeNull();
       expect(reviewed?.reviewedByMembershipId).toBeTruthy();
+
+      // The class Documents surface shows the persisted reviewed state too.
+      await page.goto(
+        `/app/my-classes/${e2eContext.classId}?tab=documents&writingSignal=any`
+      );
+      await page.waitForLoadState('networkidle');
+      const classPasteBadge = page.getByRole('button', {
+        name: /Paste · 1; all reviewed/,
+      });
+      await expect(classPasteBadge).toBeVisible();
+      await classPasteBadge.click();
+      await expect(page.getByText('Reviewed')).toBeVisible();
+
+      // The same queue and sheet remain usable at a narrow viewport.
+      await page.setViewportSize({ width: 390, height: 844 });
+      await page.reload();
+      await page.waitForLoadState('networkidle');
+      await expect(
+        page.getByRole('button', { name: /Paste · 1; all reviewed/ })
+      ).toBeVisible();
+      await page
+        .getByRole('button', { name: /Paste · 1; all reviewed/ })
+        .click();
+      await expect(page.getByText('Reviewed')).toBeVisible();
     } finally {
       if (alertId) {
-        await prisma.pasteAlert.deleteMany({ where: { id: alertId } }).catch(() => {});
+        await prisma.pasteAlert
+          .deleteMany({ where: { id: alertId } })
+          .catch(() => {});
       }
       if (documentId) {
         await prisma.document

@@ -105,6 +105,15 @@ describe('documents loader paste activity', () => {
     const document = data.documents.find((doc: any) => doc.id === 'doc-1');
     expect(document.pasteAlertCount).toBe(2);
     expect(document.unreviewedPasteAlertCount).toBe(1);
+    expect(prisma.document.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          AND: expect.arrayContaining([
+            { membership: { organizationId: 'org-1' } },
+          ]),
+        }),
+      })
+    );
   });
 
   test('applies an unreviewed writing-signal filter before the 250-row limit', async () => {

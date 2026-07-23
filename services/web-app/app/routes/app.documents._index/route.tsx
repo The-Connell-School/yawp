@@ -162,6 +162,11 @@ export async function loader({ request }: LoaderFunctionArgs) {
       legacyDocumentIds: forensicRows.map((row) => row.documentId),
     });
 
+  documentWhere.AND = [
+    ...(Array.isArray(documentWhere.AND) ? documentWhere.AND : []),
+    { membership: { organizationId: profile.organization.id } },
+  ];
+
   const pasteAlertRelationWhere = buildPasteAlertRelationWhere(writingSignal);
   if (pasteAlertRelationWhere) {
     documentWhere.AND = [
