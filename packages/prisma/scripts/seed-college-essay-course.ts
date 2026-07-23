@@ -1,0 +1,208 @@
+/* eslint-disable no-console */
+/**
+ * Seeds the "College Admissions Essay" system course (The Object & Two-Traits
+ * method). Idempotent: safe to re-run. Mirrors seed-ap-history-library.ts.
+ *
+ *   bun run scripts/seed-college-essay-course.ts
+ */
+import { PrismaClient } from '../generated/prisma';
+import { PrismaPg } from '@prisma/adapter-pg';
+import { isLocalDatabaseUrl } from './seed-overlay-connection';
+import {
+  COLLEGE_ESSAY_ASSIGNMENT_TYPE,
+  COLLEGE_ESSAY_ASSIGNMENT_TYPE_KEY,
+  COLLEGE_ESSAY_CALIBRATION_NOTES,
+  COLLEGE_ESSAY_GRADING_INSTRUCTIONS,
+  COLLEGE_ESSAY_MODULES,
+  COLLEGE_ESSAY_OUTPUT_SCHEMA,
+  COLLEGE_ESSAY_RUBRIC_CATEGORIES,
+  COLLEGE_ESSAY_SCORING_SCALE,
+  type CourseModule,
+} from './college-essay-course-data';
+
+const ASSIGNMENT_TYPE_DATA = {
+  title: COLLEGE_ESSAY_ASSIGNMENT_TYPE.title,
+  description: COLLEGE_ESSAY_ASSIGNMENT_TYPE.description,
+  position: COLLEGE_ESSAY_ASSIGNMENT_TYPE.position,
+  scoringScaleJson: COLLEGE_ESSAY_SCORING_SCALE,
+  rubricJson: {
+    categories: COLLEGE_ESSAY_RUBRIC_CATEGORIES.map((category) => ({
+      key: category.key,
+      label: category.label,
+      weight: category.weight,
+      description: category.description,
+    })),
+  },
+  gradingPromptConfigJson: {
+    gradingInstructions: COLLEGE_ESSAY_GRADING_INSTRUCTIONS,
+  },
+  gradingOutputSchemaJson: COLLEGE_ESSAY_OUTPUT_SCHEMA,
+  gradingCalibrationNotes: COLLEGE_ESSAY_CALIBRATION_NOTES,
+} as const;
+
+const connectionString = process.env.DATABASE_URL;
+if (!connectionString) {
+  throw new Error('DATABASE_URL environment variable is not set');
+}
+
+function getSchemaFromDatabaseUrl(url: string): string | undefined {
+  const match = url.match(/[?&]schema=([^&]+)/i);
+  if (!match) return undefined;
+  return decodeURIComponent(match[1]);
+}
+
+const schema =
+  process.env.DATABASE_SCHEMA?.trim() ||
+  getSchemaFromDatabaseUrl(connectionString);
+
+const isLocal = isLocalDatabaseUrl(connectionString);
+const isSimpleLocal =
+  !schema &&
+  (connectionString.includes('localhost') ||
+    connectionString.includes('127.0.0.1'));
+
+const adapter = isSimpleLocal
+  ? new PrismaPg({ connectionString, ssl: false })
+  : new PrismaPg(
+      {
+        connectionString,
+        ssl: isLocal ? false : { rejectUnauthorized: false },
+      },
+      schema ? { schema } : undefined
+    );
+
+const prisma = new PrismaClient({ adapter });
+
+async function upsertModule(assignmentTypeId: string, moduleData: CourseModule) {
+  const moduleFields = {
+    title: moduleData.title,
+    position: moduleData.position,
+    description: moduleData.description,
+    tutorInstructions: moduleData.tutorInstructions,
+    isSelfGuided: moduleData.isSelfGuided ?? false,
+  };
+
+  const existing = await prisma.assignmentModule.findFirst({
+    where: { assignmentTypeId, position: moduleData.position },
+    select: { id: true },
+  });
+
+  const module = existing
+    ? await prisma.assignmentModule.update({
+        where: { id: existing.id },
+        data: { ...moduleFields, deletedAt: null },
+        select: { id: true },
+      })
+    : await prisma.assignmentModule.create({
+        data: { ...moduleFields, assignmentTypeId },
+        select: { id: true },
+      });
+
+  for (const instruction of moduleData.instructions) {
+    const instructionFields = {
+      position: instruction.position,
+      title: instruction.title,
+      prompt: instruction.prompt,
+      tutorInstructions: instruction.tutorInstructions ?? null,
+      showChatButton: instruction.showChatButton ?? false,
+      showNextButton: instruction.showNextButton ?? true,
+    };
+
+    const existingInstruction =
+      await prisma.assignmentModuleInstruction.findFirst({
+        where: { assignmentModuleId: module.id, position: instruction.position },
+        select: { id: true },
+      });
+
+    const instructionId = existingInstruction
+      ? (
+          await prisma.assignmentModuleInstruction.update({
+            where: { id: existingInstruction.id },
+            data: instructionFields,
+            select: { id: true },
+          })
+        ).id
+      : (
+          await prisma.assignmentModuleInstruction.create({
+            data: { ...instructionFields, assignmentModuleId: module.id },
+            select: { id: true },
+          })
+        ).id;
+
+    // Buttons have no natural unique key; rewrite them for a clean idempotent state.
+    await prisma.assignmentModuleInstructionButton.deleteMany({
+      where: { assignmentModuleInstructionId: instructionId },
+    });
+    if (instruction.buttons?.length) {
+      await prisma.assignmentModuleInstructionButton.createMany({
+        data: instruction.buttons.map((button) => ({
+          assignmentModuleInstructionId: instructionId,
+          position: button.position,
+          label: button.label,
+          action: button.action,
+        })),
+      });
+    }
+  }
+
+  return module.id;
+}
+
+async function seedCollegeEssayCourse() {
+  const org = await prisma.organization.findFirst({
+    orderBy: { createdAt: 'asc' },
+    select: { id: true },
+  });
+
+  if (!org) {
+    throw new Error(
+      'Cannot seed the College Admissions Essay course without an organization.'
+    );
+  }
+
+  const assignmentType = await prisma.assignmentType.upsert({
+    where: { systemKey: COLLEGE_ESSAY_ASSIGNMENT_TYPE_KEY },
+    update: {
+      ...ASSIGNMENT_TYPE_DATA,
+      archivedAt: null,
+    },
+    create: {
+      ...ASSIGNMENT_TYPE_DATA,
+      systemKey: COLLEGE_ESSAY_ASSIGNMENT_TYPE_KEY,
+      ownerOrgId: org.id,
+      organizationAssignments: {
+        create: { organizationId: org.id },
+      },
+    },
+    select: { id: true },
+  });
+
+  await prisma.organizationAssignmentType.upsert({
+    where: {
+      organizationId_assignmentTypeId: {
+        organizationId: org.id,
+        assignmentTypeId: assignmentType.id,
+      },
+    },
+    create: {
+      organizationId: org.id,
+      assignmentTypeId: assignmentType.id,
+    },
+    update: {},
+  });
+
+  for (const moduleData of COLLEGE_ESSAY_MODULES) {
+    await upsertModule(assignmentType.id, moduleData);
+  }
+
+  console.log(
+    `Seeded College Admissions Essay course with ${COLLEGE_ESSAY_MODULES.length} modules.`
+  );
+}
+
+seedCollegeEssayCourse()
+  .catch((error) => {
+    console.error(error);
+    process.exit(1);
+  })
+  .finally(() => prisma.$disconnect());
