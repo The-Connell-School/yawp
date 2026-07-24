@@ -608,6 +608,19 @@ export default function AppAssignmentTypesIdRoute() {
                   </DropdownMenu>
                 </>
               ) : null}
+              {isApEnglishLitAssignmentType && data.apEnglishLitLibrary ? (
+                <Button
+                  type="button"
+                  className="w-fit"
+                  onClick={() =>
+                    document
+                      .getElementById('ap-english-lit-library')
+                      ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                  }
+                >
+                  New Assignment <PlusIcon className="ml-1 h-5 w-5" />
+                </Button>
+              ) : null}
               <CreateAssignmentSheet
                 assignmentTypeId={data.assignmentType.id}
                 assignmentTypeTitle={data.assignmentType.title}
@@ -697,7 +710,7 @@ export default function AppAssignmentTypesIdRoute() {
           </div>
         ) : null}
         {data.apEnglishLitLibrary ? (
-          <div className="pb-6">
+          <div className="pb-6" id="ap-english-lit-library">
             <ApEnglishLitLibrary
               entries={data.apEnglishLitLibrary.entries}
               facets={data.apEnglishLitLibrary.facets}
