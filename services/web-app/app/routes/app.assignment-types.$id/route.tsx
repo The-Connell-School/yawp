@@ -611,10 +611,9 @@ export default function AppAssignmentTypesIdRoute() {
         {hasModules ? (
           isCollegeEssayAssignmentType ? (
             <div className="pb-6">
-              <div className="border-b" />
               <Accordion type="single" collapsible>
                 <AccordionItem value="modules" className="border-none">
-                  <AccordionTrigger className="py-2 text-base font-semibold text-foreground/75">
+                  <AccordionTrigger className="py-2 text-base">
                     Modules
                   </AccordionTrigger>
                   <AccordionContent>
