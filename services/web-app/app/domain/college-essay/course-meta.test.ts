@@ -1,12 +1,15 @@
 import { describe, expect, test } from 'bun:test';
 import {
   COLLEGE_ESSAY_ASSIGNMENT_TYPE_KEY,
+  COLLEGE_ESSAY_COMMON_APP_PROMPTS,
   COLLEGE_ESSAY_DIRECTIONS_INTRO,
   COLLEGE_ESSAY_DIRECTIONS_STEPS,
   COLLEGE_ESSAY_DIRECTIONS_TITLE,
   COLLEGE_ESSAY_EXEMPLARS,
   COLLEGE_ESSAY_EXEMPLARS_INTRO,
   COLLEGE_ESSAY_EXEMPLARS_TAGLINE,
+  COLLEGE_ESSAY_PROMPTS_NOTE,
+  COLLEGE_ESSAY_PROMPTS_TITLE,
 } from './course-meta';
 
 describe('College essay course meta', () => {
@@ -17,6 +20,26 @@ describe('College essay course meta', () => {
   test('exposes a non-empty explanatory intro and tagline', () => {
     expect(COLLEGE_ESSAY_EXEMPLARS_INTRO.trim().length).toBeGreaterThan(0);
     expect(COLLEGE_ESSAY_EXEMPLARS_TAGLINE.trim().length).toBeGreaterThan(0);
+  });
+});
+
+describe('Common App prompts', () => {
+  test('lists exactly the seven prompts', () => {
+    expect(COLLEGE_ESSAY_COMMON_APP_PROMPTS).toHaveLength(7);
+  });
+
+  test('every prompt is non-empty and unique', () => {
+    for (const prompt of COLLEGE_ESSAY_COMMON_APP_PROMPTS) {
+      expect(prompt.trim().length).toBeGreaterThan(0);
+    }
+    expect(new Set(COLLEGE_ESSAY_COMMON_APP_PROMPTS).size).toBe(
+      COLLEGE_ESSAY_COMMON_APP_PROMPTS.length
+    );
+  });
+
+  test('the note reinforces choosing a prompt last', () => {
+    expect(COLLEGE_ESSAY_PROMPTS_TITLE.trim().length).toBeGreaterThan(0);
+    expect(COLLEGE_ESSAY_PROMPTS_NOTE.toLowerCase()).toContain('last');
   });
 });
 
