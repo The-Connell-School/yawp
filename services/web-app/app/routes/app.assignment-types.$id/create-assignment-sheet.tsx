@@ -18,6 +18,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from '~/components/ui/sheet';
+import type { ApEnglishLitLibraryEntry } from './ap-english-lit-facets';
 
 type TeacherClass = {
   id: string;
@@ -39,12 +40,7 @@ type Props = {
     prompt: string;
     essayType: string;
   } | null;
-  apEnglishLitEntry?: {
-    externalKey: string;
-    title: string;
-    prompt: string;
-    frqType: string;
-  } | null;
+  apEnglishLitEntry?: ApEnglishLitLibraryEntry | null;
 };
 
 const FRQ_TYPE_LABEL: Record<string, string> = {
@@ -199,6 +195,10 @@ export function CreateAssignmentSheet({
             </p>
           </div>
 
+          {apEnglishLitEntry ? (
+            <ApEnglishLitTextPreview entry={apEnglishLitEntry} />
+          ) : null}
+
           {fetcher.data && !fetcher.data.success ? (
             <p className="text-sm text-destructive">
               {fetcher.data.message || 'Unable to create assignment.'}
@@ -222,4 +222,66 @@ export function CreateAssignmentSheet({
       </SheetContent>
     </Sheet>
   );
+}
+
+function ApEnglishLitTextPreview({
+  entry,
+}: {
+  entry: ApEnglishLitLibraryEntry;
+}) {
+  const works =
+    entry.suggestedWorks
+      ?.split('\n')
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0) ?? [];
+
+  if (entry.sources.length > 0) {
+    return (
+      <div className="space-y-2">
+        <Label>{entry.frqType === 'poetry' ? 'Poem' : 'Passage'}</Label>
+        <div className="grid gap-2">
+          {entry.sources.map((source) => (
+            <section
+              key={source.externalKey}
+              className="rounded-md border bg-white p-3"
+            >
+              <h4 className="text-sm font-semibold">{source.title}</h4>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                {source.attribution}
+              </p>
+              {source.caption ? (
+                <p className="mt-2 text-sm italic text-muted-foreground">
+                  {source.caption}
+                </p>
+              ) : null}
+              <p className="mt-2 max-h-64 overflow-y-auto whitespace-pre-wrap text-sm leading-6">
+                {source.body}
+              </p>
+            </section>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (works.length > 0) {
+    return (
+      <div className="space-y-2">
+        <Label>Suggested works</Label>
+        <div className="rounded-md border bg-white p-3">
+          <p className="text-xs text-muted-foreground">
+            Students choose one of these works of literary merit, or another
+            they know well:
+          </p>
+          <ul className="mt-2 list-disc space-y-1 pl-5 text-sm leading-6">
+            {works.map((work) => (
+              <li key={work}>{work}</li>
+            ))}
+          </ul>
+        </div>
+      </div>
+    );
+  }
+
+  return null;
 }

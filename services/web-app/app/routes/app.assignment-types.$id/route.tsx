@@ -43,6 +43,13 @@ import { prisma } from '~/utils/db.server';
 import { redirectWithToast } from '~/utils/toast.server';
 import { ApHistoryLibrary } from './ap-history-library';
 import { ApEnglishLitLibrary } from './ap-english-lit-library';
+import {
+  applyApEnglishLitFilters,
+  buildApEnglishLitFacets,
+  buildApEnglishLitOptionCounts,
+  readApEnglishLitFilters,
+  type ApEnglishLitLibraryEntry,
+} from './ap-english-lit-facets';
 import { CreateAssignmentSheet } from './create-assignment-sheet';
 import { PromptsLibrary } from './prompts-library/prompts-library';
 import { TeacherDirections } from './prompts-library/teacher-directions';
@@ -390,13 +397,41 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   }
 
   let apEnglishLitLibrary = null;
-  if (profile.role === "TEACHER" && isApEnglishLit) {
-    if (assignmentEnabledTeacherClasses.length > 0) {
-      apEnglishLitLibrary = {
-        entries: await listApEnglishLitLibraryEntries(assignmentType.id),
-        teacherClasses: assignmentEnabledTeacherClasses,
-      };
-    }
+  if (
+    profile.role === "TEACHER" &&
+    isApEnglishLit &&
+    assignmentEnabledTeacherClasses.length > 0
+  ) {
+    const rows = await listApEnglishLitLibraryEntries(assignmentType.id);
+    const entries: ApEnglishLitLibraryEntry[] = rows.map((row) => ({
+      externalKey: row.externalKey,
+      title: row.title,
+      prompt: row.prompt,
+      frqType: row.frqType,
+      focusSkill: row.focusSkill,
+      difficulty: row.difficulty,
+      skillEmphasis: row.skillEmphasis,
+      suggestedWorks: row.suggestedWorks,
+      sources: row.sources.map((source) => ({
+        externalKey: source.externalKey,
+        position: source.position,
+        title: source.title,
+        attribution: source.attribution,
+        body: source.body,
+        caption: source.caption,
+      })),
+    }));
+    const filtered = applyApEnglishLitFilters(
+      entries,
+      readApEnglishLitFilters(new URL(request.url)),
+    );
+    apEnglishLitLibrary = {
+      entries: filtered,
+      facets: buildApEnglishLitFacets(entries),
+      optionCounts: buildApEnglishLitOptionCounts(entries),
+      totalCount: entries.length,
+      teacherClasses: assignmentEnabledTeacherClasses,
+    };
   }
 
   return dataResponse({
@@ -513,12 +548,8 @@ export default function AppAssignmentTypesIdRoute() {
     prompt: string;
     essayType: string;
   } | null>(null);
-  const [apEnglishLitEntry, setApEnglishLitEntry] = useState<{
-    externalKey: string;
-    title: string;
-    prompt: string;
-    frqType: string;
-  } | null>(null);
+  const [apEnglishLitEntry, setApEnglishLitEntry] =
+    useState<ApEnglishLitLibraryEntry | null>(null);
   const showPromptsLibrary = data.promptLibrary != null;
   const isApHistoryAssignmentType =
     data.assignmentType.systemKey === AP_HISTORY_ASSIGNMENT_TYPE_KEY;
@@ -667,13 +698,11 @@ export default function AppAssignmentTypesIdRoute() {
           <div className="pb-6">
             <ApEnglishLitLibrary
               entries={data.apEnglishLitLibrary.entries}
+              facets={data.apEnglishLitLibrary.facets}
+              optionCounts={data.apEnglishLitLibrary.optionCounts}
+              totalCount={data.apEnglishLitLibrary.totalCount}
               onSelectEntry={(entry) => {
-                setApEnglishLitEntry({
-                  externalKey: entry.externalKey,
-                  title: entry.title,
-                  prompt: entry.prompt,
-                  frqType: entry.frqType,
-                });
+                setApEnglishLitEntry(entry);
                 setApHistoryEntry(null);
                 setLibraryPrompt('');
                 setIsAssignmentSheetOpen(true);
