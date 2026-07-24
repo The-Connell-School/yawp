@@ -27,7 +27,7 @@ export const AP_ENGLISH_LIT_LIBRARY_ENTRIES = [
         attribution: 'Robert Frost, 1928 (public domain)',
         body: [
           'I have been one acquainted with the night.',
-          'I have walked out in rain — and back in rain.',
+          'I have walked out in rain—and back in rain.',
           'I have outwalked the furthest city light.',
           '',
           'I have looked down the saddest city lane.',
@@ -76,7 +76,7 @@ export const AP_ENGLISH_LIT_LIBRARY_ENTRIES = [
         body: [
           'It is a truth universally acknowledged, that a single man in possession of a good fortune, must be in want of a wife.',
           '',
-          'However little known the feelings or views of such a man may be on his first entering a neighbourhood, this truth is so well fixed in the minds of the surrounding families, that he is considered the rightful property of some one or other of their daughters.',
+          'However little known the feelings or views of such a man may be on his first entering a neighbourhood, this truth is so well fixed in the minds of the surrounding families, that he is considered as the rightful property of some one or other of their daughters.',
           '',
           '"My dear Mr. Bennet," said his lady to him one day, "have you heard that Netherfield Park is let at last?"',
           '',
@@ -146,7 +146,7 @@ export const AP_ENGLISH_LIT_LIBRARY_ENTRIES = [
   {
     externalKey: 'ap-lit-poetry-dickinson-hope',
     frqType: 'poetry',
-    title: '"Hope is the thing with feathers" — Poetry Analysis',
+    title: '"Hope" is the thing with feathers — Poetry Analysis',
     prompt:
       "Read the following poem carefully. Then, in a well-written essay, analyze how Dickinson uses figurative language and form to develop the speaker's complex understanding of hope.",
     focusSkill: 'figurative-language',
@@ -160,10 +160,10 @@ export const AP_ENGLISH_LIT_LIBRARY_ENTRIES = [
       {
         externalKey: 'ap-lit-poetry-dickinson-hope-poem',
         position: 1,
-        title: '"Hope is the thing with feathers"',
+        title: '"Hope" is the thing with feathers',
         attribution: 'Emily Dickinson, c. 1861 (public domain)',
         body: [
-          'Hope is the thing with feathers -',
+          '"Hope" is the thing with feathers -',
           'That perches in the soul -',
           'And sings the tune without the words -',
           'And never stops - at all -',
