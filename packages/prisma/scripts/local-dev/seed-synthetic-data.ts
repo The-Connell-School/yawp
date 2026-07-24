@@ -1,6 +1,6 @@
 /* eslint-disable no-console */
-import { existsSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { extname, join } from 'node:path';
 import type { PrismaClient } from '../../generated/prisma';
 import { createPassword } from '../utils';
 import { getClassArtByIndex } from '../../../../services/web-app/app/utils/class-art.ts';
@@ -24,23 +24,35 @@ const COURSE_IMAGE_DIR = join(
   import.meta.dir,
   '../../../../services/web-app/public/img/course-images'
 );
-const COURSE_IMAGE_CANDIDATES: Array<{ file: string; contentType: string }> = [
-  { file: 'ap-english-literature.jpg', contentType: 'image/jpeg' },
-  { file: 'ap-english-literature.jpeg', contentType: 'image/jpeg' },
-  { file: 'ap-english-literature.png', contentType: 'image/png' },
-  { file: 'ap-english-literature.webp', contentType: 'image/webp' },
-];
+const IMAGE_CONTENT_TYPE_BY_EXT: Record<string, string> = {
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.png': 'image/png',
+  '.webp': 'image/webp',
+};
 
+// Prefer the canonical name, but fall back to any committed image file in the
+// folder so a differently-named upload still works.
 function loadApEnglishLitCourseImage():
   | { contentType: string; blob: Buffer }
   | null {
-  for (const candidate of COURSE_IMAGE_CANDIDATES) {
-    const path = join(COURSE_IMAGE_DIR, candidate.file);
-    if (existsSync(path)) {
-      return { contentType: candidate.contentType, blob: readFileSync(path) };
-    }
-  }
-  return null;
+  if (!existsSync(COURSE_IMAGE_DIR)) return null;
+
+  const files = readdirSync(COURSE_IMAGE_DIR);
+  const imageFiles = files.filter((file) =>
+    Object.keys(IMAGE_CONTENT_TYPE_BY_EXT).includes(extname(file).toLowerCase())
+  );
+  if (imageFiles.length === 0) return null;
+
+  const preferred =
+    imageFiles.find((file) =>
+      file.toLowerCase().startsWith('ap-english-literature.')
+    ) ?? imageFiles.sort()[0];
+
+  return {
+    contentType: IMAGE_CONTENT_TYPE_BY_EXT[extname(preferred).toLowerCase()],
+    blob: readFileSync(join(COURSE_IMAGE_DIR, preferred)),
+  };
 }
 
 async function seedApEnglishLitCourseImage(
