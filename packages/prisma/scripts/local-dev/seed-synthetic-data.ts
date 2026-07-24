@@ -2,12 +2,132 @@
 import type { PrismaClient } from '../../generated/prisma';
 import { createPassword } from '../utils';
 import { getClassArtByIndex } from '../../../../services/web-app/app/utils/class-art.ts';
+import { AP_ENGLISH_LIT_LIBRARY_ENTRIES } from '../ap-english-lit-library-data';
 import {
   LOCAL_DEV_ORG_ID,
   LOCAL_DEV_ORG_NAME,
   LOCAL_DEV_PERSONAS,
   type LocalDevPersona,
 } from './dev-personas';
+
+// Keep in sync with AP_ENGLISH_LIT_ASSIGNMENT_TYPE_KEY in the web app domain.
+// AP Literature is not part of the prod-fidelity fixtures, so it is seeded
+// explicitly here to make the course browsable in local dev and previews.
+const AP_ENGLISH_LIT_ASSIGNMENT_TYPE_KEY = 'ap_english_lit_essay';
+
+async function seedApEnglishLitCourse(
+  prisma: PrismaClient,
+  organizationId: string
+): Promise<void> {
+  const assignmentType = await prisma.assignmentType.upsert({
+    where: { systemKey: AP_ENGLISH_LIT_ASSIGNMENT_TYPE_KEY },
+    update: { archivedAt: null },
+    create: {
+      title: 'AP English Literature Essay',
+      description:
+        'Curated AP Lit poetry, prose, and literary-argument practice with 6-point rubric coaching.',
+      position: 51,
+      systemKey: AP_ENGLISH_LIT_ASSIGNMENT_TYPE_KEY,
+      ownerOrgId: organizationId,
+      organizationAssignments: { create: { organizationId } },
+      assignmentModules: {
+        create: {
+          title: 'AP English Literature Essay',
+          position: 1,
+          description:
+            'Write an AP Lit free-response essay with rubric-anchored coaching.',
+          instructions: {
+            create: {
+              title: 'Write',
+              prompt:
+                'Use the prompt and AP Literature coach to draft your response.',
+              position: 1,
+              showChatButton: true,
+            },
+          },
+        },
+      },
+    },
+    select: { id: true },
+  });
+
+  await prisma.organizationAssignmentType.upsert({
+    where: {
+      organizationId_assignmentTypeId: {
+        organizationId,
+        assignmentTypeId: assignmentType.id,
+      },
+    },
+    create: { organizationId, assignmentTypeId: assignmentType.id },
+    update: {},
+  });
+
+  for (const entry of AP_ENGLISH_LIT_LIBRARY_ENTRIES) {
+    const libraryEntry = await prisma.apEnglishLitPromptLibraryEntry.upsert({
+      where: { externalKey: entry.externalKey },
+      update: {
+        assignmentTypeId: assignmentType.id,
+        frqType: entry.frqType,
+        title: entry.title,
+        prompt: entry.prompt,
+        focusSkill: entry.focusSkill,
+        difficulty: entry.difficulty,
+        skillEmphasis: entry.skillEmphasis,
+        defaultTimeMode: entry.defaultTimeMode,
+        defaultDurationMinutes: entry.defaultDurationMinutes,
+        suggestedWorks: entry.suggestedWorks,
+        provenanceUrl: entry.provenanceUrl,
+        archivedAt: null,
+      },
+      create: {
+        externalKey: entry.externalKey,
+        assignmentTypeId: assignmentType.id,
+        frqType: entry.frqType,
+        title: entry.title,
+        prompt: entry.prompt,
+        focusSkill: entry.focusSkill,
+        difficulty: entry.difficulty,
+        skillEmphasis: entry.skillEmphasis,
+        defaultTimeMode: entry.defaultTimeMode,
+        defaultDurationMinutes: entry.defaultDurationMinutes,
+        suggestedWorks: entry.suggestedWorks,
+        provenanceUrl: entry.provenanceUrl,
+      },
+      select: { id: true },
+    });
+
+    for (const source of entry.sources) {
+      await prisma.apEnglishLitPromptLibrarySource.upsert({
+        where: { externalKey: source.externalKey },
+        update: {
+          promptLibraryEntryId: libraryEntry.id,
+          position: source.position,
+          title: source.title,
+          attribution: source.attribution,
+          body: source.body,
+          caption: source.caption,
+          mediaType: source.mediaType,
+          imageUrl: source.imageUrl,
+          imageAlt: source.imageAlt,
+          provenanceUrl: source.provenanceUrl,
+        },
+        create: {
+          externalKey: source.externalKey,
+          promptLibraryEntryId: libraryEntry.id,
+          position: source.position,
+          title: source.title,
+          attribution: source.attribution,
+          body: source.body,
+          caption: source.caption,
+          mediaType: source.mediaType,
+          imageUrl: source.imageUrl,
+          imageAlt: source.imageAlt,
+          provenanceUrl: source.provenanceUrl,
+        },
+      });
+    }
+  }
+}
 
 type PersonaRecord = {
   persona: LocalDevPersona;
@@ -200,6 +320,8 @@ export async function seedSyntheticLocalDevData(
   if (!thesisAssignmentTypeId) {
     throw new Error('Expected at least one imported assignment type.');
   }
+
+  await seedApEnglishLitCourse(prisma, LOCAL_DEV_ORG_ID);
 
   const dailyPagesAssignmentTypeId = pickAssignmentTypeId(
     assignmentTypes,
