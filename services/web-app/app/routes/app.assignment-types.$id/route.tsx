@@ -43,6 +43,7 @@ import { prisma } from '~/utils/db.server';
 import { redirectWithToast } from '~/utils/toast.server';
 import { ApHistoryLibrary } from './ap-history-library';
 import { ApEnglishLitLibrary } from './ap-english-lit-library';
+import { ApEnglishLitOverview } from './ap-english-lit-overview';
 import {
   applyApEnglishLitFilters,
   buildApEnglishLitFacets,
@@ -647,7 +648,8 @@ export default function AppAssignmentTypesIdRoute() {
           </div>
         </div>
         {showPromptsLibrary ? <TeacherDirections /> : null}
-        {hasModules ? (
+        {isApEnglishLitAssignmentType ? <ApEnglishLitOverview /> : null}
+        {hasModules && !isApEnglishLitAssignmentType ? (
           <>
             <h3 className="mb-2 text-foreground/75">Modules</h3>
             <div className="border-b" />
