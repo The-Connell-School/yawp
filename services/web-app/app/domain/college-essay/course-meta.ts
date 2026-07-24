@@ -48,10 +48,29 @@ export const COLLEGE_ESSAY_EXEMPLARS: CollegeEssayExemplar[] = [
   },
 ];
 
-/** Empathetic intro shown above the exemplar links. */
+/** Short empathetic tagline shown as the lead line inside the Examples dropdown. */
+export const COLLEGE_ESSAY_EXEMPLARS_TAGLINE =
+  'These are hard. Want to see what they look like?';
+
+/** Explanatory intro shown above the exemplar links. */
 export const COLLEGE_ESSAY_EXEMPLARS_INTRO =
-  'These essays are genuinely hard, and it helps to see what "good" actually ' +
-  'looks like. Here are a few colleges and coaches who publish real personal ' +
-  'statements that worked. Read them for the feel — the object, the voice, the ' +
-  'turn — not to copy. Every one belongs to the student who wrote it, and yours ' +
-  'has to sound unmistakably like you.';
+  'Here are a few colleges and coaches who publish real personal statements ' +
+  'that worked. Read them for the feel — the object, the voice, the turn — not ' +
+  'to copy. Every one belongs to the student who wrote it, and yours has to ' +
+  'sound unmistakably like you.';
+
+/** Heading for the how-to-use directions at the top of the course page. */
+export const COLLEGE_ESSAY_DIRECTIONS_TITLE = 'How this works';
+
+/** Lead paragraph for the directions callout. */
+export const COLLEGE_ESSAY_DIRECTIONS_INTRO =
+  'This is a self-discovery process that happens to end in a 650-word essay. ' +
+  'The pre-writing is not a warm-up — it is half the work.';
+
+/** Ordered steps for the directions callout. */
+export const COLLEGE_ESSAY_DIRECTIONS_STEPS: string[] = [
+  'Work through the modules in order — start with Orientation and resist jumping ahead to drafting.',
+  "Do the pre-writing first. You won't start writing until you've found a topic you'd be proud to talk about — that's the one hard gate in this course.",
+  'Use the Tutor as a coach: it asks questions and points at what is working, but it will never write the essay for you.',
+  'Want to see what a strong one looks like? Open Examples below for real personal statements to read.',
+];

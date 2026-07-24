@@ -33,8 +33,12 @@ import { listApHistoryLibraryEntries } from '~/domain/ap-history/library.server'
 import { AP_HISTORY_ASSIGNMENT_TYPE_KEY } from '~/domain/ap-history/schema';
 import {
   COLLEGE_ESSAY_ASSIGNMENT_TYPE_KEY,
+  COLLEGE_ESSAY_DIRECTIONS_INTRO,
+  COLLEGE_ESSAY_DIRECTIONS_STEPS,
+  COLLEGE_ESSAY_DIRECTIONS_TITLE,
   COLLEGE_ESSAY_EXEMPLARS,
   COLLEGE_ESSAY_EXEMPLARS_INTRO,
+  COLLEGE_ESSAY_EXEMPLARS_TAGLINE,
 } from '~/domain/college-essay/course-meta';
 import {
   getAvailableAssignmentTypesForScopes,
@@ -585,6 +589,21 @@ export default function AppAssignmentTypesIdRoute() {
             </p>
           </div>
         </div>
+        {isCollegeEssayAssignmentType ? (
+          <div className="mb-6 rounded-lg border bg-muted/30 p-4">
+            <h2 className="mb-2 font-semibold text-foreground">
+              {COLLEGE_ESSAY_DIRECTIONS_TITLE}
+            </h2>
+            <p className="mb-3 text-sm text-muted-foreground">
+              {COLLEGE_ESSAY_DIRECTIONS_INTRO}
+            </p>
+            <ol className="flex list-decimal flex-col gap-2 pl-5 text-sm text-muted-foreground">
+              {COLLEGE_ESSAY_DIRECTIONS_STEPS.map((step) => (
+                <li key={step}>{step}</li>
+              ))}
+            </ol>
+          </div>
+        ) : null}
         {showPromptsLibrary ? <TeacherDirections /> : null}
         {hasModules ? (
           isCollegeEssayAssignmentType ? (
@@ -636,9 +655,12 @@ export default function AppAssignmentTypesIdRoute() {
             <Accordion type="single" collapsible>
               <AccordionItem value="exemplars" className="border-none">
                 <AccordionTrigger className="py-2 text-base">
-                  These are hard. Want to see what they look like?
+                  Examples
                 </AccordionTrigger>
                 <AccordionContent className="text-muted-foreground">
+                  <p className="mb-2 font-medium text-foreground">
+                    {COLLEGE_ESSAY_EXEMPLARS_TAGLINE}
+                  </p>
                   <p className="mb-3">{COLLEGE_ESSAY_EXEMPLARS_INTRO}</p>
                   <ul className="flex flex-col gap-2">
                     {COLLEGE_ESSAY_EXEMPLARS.map((exemplar) => (

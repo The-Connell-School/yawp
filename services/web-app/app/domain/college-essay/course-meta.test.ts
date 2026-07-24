@@ -1,8 +1,12 @@
 import { describe, expect, test } from 'bun:test';
 import {
   COLLEGE_ESSAY_ASSIGNMENT_TYPE_KEY,
+  COLLEGE_ESSAY_DIRECTIONS_INTRO,
+  COLLEGE_ESSAY_DIRECTIONS_STEPS,
+  COLLEGE_ESSAY_DIRECTIONS_TITLE,
   COLLEGE_ESSAY_EXEMPLARS,
   COLLEGE_ESSAY_EXEMPLARS_INTRO,
+  COLLEGE_ESSAY_EXEMPLARS_TAGLINE,
 } from './course-meta';
 
 describe('College essay course meta', () => {
@@ -10,8 +14,20 @@ describe('College essay course meta', () => {
     expect(COLLEGE_ESSAY_ASSIGNMENT_TYPE_KEY).toBe('college_admissions_essay');
   });
 
-  test('exposes a non-empty empathetic intro', () => {
+  test('exposes a non-empty explanatory intro and tagline', () => {
     expect(COLLEGE_ESSAY_EXEMPLARS_INTRO.trim().length).toBeGreaterThan(0);
+    expect(COLLEGE_ESSAY_EXEMPLARS_TAGLINE.trim().length).toBeGreaterThan(0);
+  });
+});
+
+describe('College essay directions', () => {
+  test('has a title, intro, and several ordered steps', () => {
+    expect(COLLEGE_ESSAY_DIRECTIONS_TITLE.trim().length).toBeGreaterThan(0);
+    expect(COLLEGE_ESSAY_DIRECTIONS_INTRO.trim().length).toBeGreaterThan(0);
+    expect(COLLEGE_ESSAY_DIRECTIONS_STEPS.length).toBeGreaterThanOrEqual(3);
+    for (const step of COLLEGE_ESSAY_DIRECTIONS_STEPS) {
+      expect(step.trim().length).toBeGreaterThan(0);
+    }
   });
 });
 
