@@ -39,6 +39,18 @@ type Props = {
     prompt: string;
     essayType: string;
   } | null;
+  apEnglishLitEntry?: {
+    externalKey: string;
+    title: string;
+    prompt: string;
+    frqType: string;
+  } | null;
+};
+
+const FRQ_TYPE_LABEL: Record<string, string> = {
+  poetry: 'Poetry',
+  prose: 'Prose',
+  literary_argument: 'Literary Argument',
 };
 
 function classLabel(klass: TeacherClass) {
@@ -53,6 +65,7 @@ export function CreateAssignmentSheet({
   onOpenChange,
   initialPrompt = '',
   apHistoryEntry = null,
+  apEnglishLitEntry = null,
 }: Props) {
   const fetcher = useFetcher<{ success?: boolean; message?: string }>();
   const [selectedClassId, setSelectedClassId] = useState(
@@ -62,11 +75,35 @@ export function CreateAssignmentSheet({
 
   const isSaving = fetcher.state !== 'idle';
 
+  const libraryEntry = apHistoryEntry
+    ? {
+        externalKey: apHistoryEntry.externalKey,
+        title: apHistoryEntry.title,
+        prompt: apHistoryEntry.prompt,
+        typeLabel: apHistoryEntry.essayType,
+        courseLabel: 'APUSH',
+        fieldName: 'apHistoryLibraryEntryId',
+        titlePlaceholder: 'e.g., Revolutionary Ideals DBQ',
+      }
+    : apEnglishLitEntry
+      ? {
+          externalKey: apEnglishLitEntry.externalKey,
+          title: apEnglishLitEntry.title,
+          prompt: apEnglishLitEntry.prompt,
+          typeLabel:
+            FRQ_TYPE_LABEL[apEnglishLitEntry.frqType] ??
+            apEnglishLitEntry.frqType,
+          courseLabel: 'AP Literature',
+          fieldName: 'apEnglishLitLibraryEntryId',
+          titlePlaceholder: 'e.g., Poetry Analysis — Frost',
+        }
+      : null;
+
   useEffect(() => {
-    if (!open || !apHistoryEntry) return;
+    if (!open || !libraryEntry) return;
     setSelectedClassId(teacherClasses[0]?.id ?? '');
     setTitle('');
-  }, [open, teacherClasses, apHistoryEntry]);
+  }, [open, teacherClasses, libraryEntry]);
 
   useEffect(() => {
     if (fetcher.state === 'idle' && fetcher.data?.success) {
@@ -74,7 +111,7 @@ export function CreateAssignmentSheet({
     }
   }, [fetcher.state, fetcher.data, onOpenChange]);
 
-  if (!apHistoryEntry) {
+  if (!libraryEntry) {
     return (
       <AssignmentCreationSheet
         open={open}
@@ -94,7 +131,8 @@ export function CreateAssignmentSheet({
         <SheetHeader>
           <SheetTitle>New Assignment</SheetTitle>
           <SheetDescription>
-            Create an APUSH assignment from the selected prompt.
+            Create a {libraryEntry.courseLabel} assignment from the selected
+            prompt.
           </SheetDescription>
         </SheetHeader>
 
@@ -112,8 +150,8 @@ export function CreateAssignmentSheet({
           />
           <input
             type="hidden"
-            name="apHistoryLibraryEntryId"
-            value={apHistoryEntry.externalKey}
+            name={libraryEntry.fieldName}
+            value={libraryEntry.externalKey}
           />
 
           <div className="space-y-2">
@@ -143,21 +181,21 @@ export function CreateAssignmentSheet({
               name="title"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder="e.g., Revolutionary Ideals DBQ"
+              placeholder={libraryEntry.titlePlaceholder}
               disabled={isSaving}
             />
           </div>
 
           <div className="space-y-2 rounded-lg border bg-muted/40 p-4">
             <div className="flex items-center justify-between gap-3">
-              <Label>Selected APUSH Prompt</Label>
+              <Label>Selected {libraryEntry.courseLabel} Prompt</Label>
               <span className="text-xs font-medium uppercase text-muted-foreground">
-                {apHistoryEntry.essayType}
+                {libraryEntry.typeLabel}
               </span>
             </div>
-            <h3 className="text-base font-semibold">{apHistoryEntry.title}</h3>
+            <h3 className="text-base font-semibold">{libraryEntry.title}</h3>
             <p className="whitespace-pre-wrap text-sm leading-6 text-muted-foreground">
-              {apHistoryEntry.prompt}
+              {libraryEntry.prompt}
             </p>
           </div>
 

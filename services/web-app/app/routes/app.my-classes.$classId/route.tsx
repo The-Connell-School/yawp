@@ -86,7 +86,7 @@ import {
   DEFAULT_DOCUMENT_WORK_SORT,
   type DocumentWorkSort,
 } from '~/utils/teacher-document-work-sort';
-import { AP_HISTORY_ASSIGNMENT_TYPE_KEY } from '~/domain/ap-history/schema';
+import { isLibraryBackedAssignmentType } from '~/domain/assignment-types/library-backed';
 import {
   ClassDetailHeader,
   type ClassHeaderTab,
@@ -195,7 +195,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
   });
   const allowedAssignmentTypeIds = new Set(
     allowedAssignmentTypes
-      .filter((type) => type.systemKey !== AP_HISTORY_ASSIGNMENT_TYPE_KEY)
+      .filter((type) => !isLibraryBackedAssignmentType(type.systemKey))
       .map((type) => type.id)
   );
 
@@ -286,9 +286,10 @@ export async function action({ request, params }: ActionFunctionArgs) {
       (type) => type.id === assignmentTypeId
     );
     if (
-      selectedAssignmentType?.systemKey === AP_HISTORY_ASSIGNMENT_TYPE_KEY ||
-      existingAssignment?.assignmentType.systemKey ===
-        AP_HISTORY_ASSIGNMENT_TYPE_KEY
+      isLibraryBackedAssignmentType(selectedAssignmentType?.systemKey) ||
+      isLibraryBackedAssignmentType(
+        existingAssignment?.assignmentType.systemKey
+      )
     ) {
       return dataResponse(
         {

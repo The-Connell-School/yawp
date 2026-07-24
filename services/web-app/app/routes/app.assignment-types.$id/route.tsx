@@ -31,6 +31,8 @@ import {
 } from '~/domain/documents.server';
 import { listApHistoryLibraryEntries } from '~/domain/ap-history/library.server';
 import { AP_HISTORY_ASSIGNMENT_TYPE_KEY } from '~/domain/ap-history/schema';
+import { listApEnglishLitLibraryEntries } from '~/domain/ap-english-lit/library.server';
+import { AP_ENGLISH_LIT_ASSIGNMENT_TYPE_KEY } from '~/domain/ap-english-lit/schema';
 import {
   getAvailableAssignmentTypesForScopes,
   isAssignmentTypeAvailableForAnyScope,
@@ -40,6 +42,7 @@ import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { redirectWithToast } from '~/utils/toast.server';
 import { ApHistoryLibrary } from './ap-history-library';
+import { ApEnglishLitLibrary } from './ap-english-lit-library';
 import { CreateAssignmentSheet } from './create-assignment-sheet';
 import { PromptsLibrary } from './prompts-library/prompts-library';
 import { TeacherDirections } from './prompts-library/teacher-directions';
@@ -359,6 +362,8 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     assignmentType.title.trim().toLowerCase() === DAILY_PAGES_TITLE;
   const isApHistory =
     assignmentType.systemKey === AP_HISTORY_ASSIGNMENT_TYPE_KEY;
+  const isApEnglishLit =
+    assignmentType.systemKey === AP_ENGLISH_LIT_ASSIGNMENT_TYPE_KEY;
   const promptLibrary =
     profile.role === "TEACHER" && isDailyPages
       ? {
@@ -384,6 +389,16 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     }
   }
 
+  let apEnglishLitLibrary = null;
+  if (profile.role === "TEACHER" && isApEnglishLit) {
+    if (assignmentEnabledTeacherClasses.length > 0) {
+      apEnglishLitLibrary = {
+        entries: await listApEnglishLitLibraryEntries(assignmentType.id),
+        teacherClasses: assignmentEnabledTeacherClasses,
+      };
+    }
+  }
+
   return dataResponse({
     assignmentType,
     documents,
@@ -391,6 +406,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     teacherClasses: assignmentEnabledTeacherClasses,
     promptLibrary,
     apHistoryLibrary,
+    apEnglishLitLibrary,
   });
 }
 export async function action({ request, params }: ActionFunctionArgs) {
@@ -442,6 +458,13 @@ export async function action({ request, params }: ActionFunctionArgs) {
     });
   }
 
+  if (assignmentType.systemKey === AP_ENGLISH_LIT_ASSIGNMENT_TYPE_KEY) {
+    return redirectWithToast(`/app/assignment-types/${params.id}`, {
+      type: 'error',
+      description: 'Choose an AP Literature prompt from the library first.',
+    });
+  }
+
   let documentId = '';
   try {
     const created = await createDocumentForAssignmentType({
@@ -490,13 +513,25 @@ export default function AppAssignmentTypesIdRoute() {
     prompt: string;
     essayType: string;
   } | null>(null);
+  const [apEnglishLitEntry, setApEnglishLitEntry] = useState<{
+    externalKey: string;
+    title: string;
+    prompt: string;
+    frqType: string;
+  } | null>(null);
   const showPromptsLibrary = data.promptLibrary != null;
   const isApHistoryAssignmentType =
     data.assignmentType.systemKey === AP_HISTORY_ASSIGNMENT_TYPE_KEY;
-  const canCreateDirectDocument = !isApHistoryAssignmentType;
+  const isApEnglishLitAssignmentType =
+    data.assignmentType.systemKey === AP_ENGLISH_LIT_ASSIGNMENT_TYPE_KEY;
+  const isLibraryAssignmentType =
+    isApHistoryAssignmentType || isApEnglishLitAssignmentType;
+  const canCreateDirectDocument = !isLibraryAssignmentType;
   const assignmentSheetClasses = isApHistoryAssignmentType
     ? (data.apHistoryLibrary?.teacherClasses ?? [])
-    : data.teacherClasses;
+    : isApEnglishLitAssignmentType
+      ? (data.apEnglishLitLibrary?.teacherClasses ?? [])
+      : data.teacherClasses;
 
   return (
     <div className="no-scrollbar h-full w-full overflow-y-scroll">
@@ -531,6 +566,7 @@ export default function AppAssignmentTypesIdRoute() {
                         onSelect={() => {
                           setLibraryPrompt('');
                           setApHistoryEntry(null);
+                          setApEnglishLitEntry(null);
                           setIsAssignmentSheetOpen(true);
                         }}
                       >
@@ -548,6 +584,7 @@ export default function AppAssignmentTypesIdRoute() {
                 onOpenChange={setIsAssignmentSheetOpen}
                 initialPrompt={libraryPrompt}
                 apHistoryEntry={apHistoryEntry}
+                apEnglishLitEntry={apEnglishLitEntry}
               />
             </>
           ) : canCreateDirectDocument ? (
@@ -606,6 +643,7 @@ export default function AppAssignmentTypesIdRoute() {
               totalCount={data.promptLibrary.totalCount}
               onSelectPrompt={(prompt) => {
                 setApHistoryEntry(null);
+                setApEnglishLitEntry(null);
                 setLibraryPrompt(prompt);
                 setIsAssignmentSheetOpen(true);
               }}
@@ -618,6 +656,25 @@ export default function AppAssignmentTypesIdRoute() {
               entries={data.apHistoryLibrary.entries}
               onSelectEntry={(entry) => {
                 setApHistoryEntry(entry);
+                setApEnglishLitEntry(null);
+                setLibraryPrompt('');
+                setIsAssignmentSheetOpen(true);
+              }}
+            />
+          </div>
+        ) : null}
+        {data.apEnglishLitLibrary ? (
+          <div className="pb-6">
+            <ApEnglishLitLibrary
+              entries={data.apEnglishLitLibrary.entries}
+              onSelectEntry={(entry) => {
+                setApEnglishLitEntry({
+                  externalKey: entry.externalKey,
+                  title: entry.title,
+                  prompt: entry.prompt,
+                  frqType: entry.frqType,
+                });
+                setApHistoryEntry(null);
                 setLibraryPrompt('');
                 setIsAssignmentSheetOpen(true);
               }}
