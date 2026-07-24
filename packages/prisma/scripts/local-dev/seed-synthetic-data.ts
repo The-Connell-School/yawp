@@ -1,4 +1,6 @@
 /* eslint-disable no-console */
+import { existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import type { PrismaClient } from '../../generated/prisma';
 import { createPassword } from '../utils';
 import { getClassArtByIndex } from '../../../../services/web-app/app/utils/class-art.ts';
@@ -14,6 +16,48 @@ import {
 // AP Literature is not part of the prod-fidelity fixtures, so it is seeded
 // explicitly here to make the course browsable in local dev and previews.
 const AP_ENGLISH_LIT_ASSIGNMENT_TYPE_KEY = 'ap_english_lit_essay';
+
+// Committed course tile image, loaded from the repo so it persists across
+// reseeds (the admin-uploaded blob is wiped on every reseed). Drop a file named
+// ap-english-literature.{jpg,jpeg,png,webp} in the directory below to set it.
+const COURSE_IMAGE_DIR = join(
+  import.meta.dir,
+  '../../../../services/web-app/public/img/course-images'
+);
+const COURSE_IMAGE_CANDIDATES: Array<{ file: string; contentType: string }> = [
+  { file: 'ap-english-literature.jpg', contentType: 'image/jpeg' },
+  { file: 'ap-english-literature.jpeg', contentType: 'image/jpeg' },
+  { file: 'ap-english-literature.png', contentType: 'image/png' },
+  { file: 'ap-english-literature.webp', contentType: 'image/webp' },
+];
+
+function loadApEnglishLitCourseImage():
+  | { contentType: string; blob: Buffer }
+  | null {
+  for (const candidate of COURSE_IMAGE_CANDIDATES) {
+    const path = join(COURSE_IMAGE_DIR, candidate.file);
+    if (existsSync(path)) {
+      return { contentType: candidate.contentType, blob: readFileSync(path) };
+    }
+  }
+  return null;
+}
+
+async function seedApEnglishLitCourseImage(
+  prisma: PrismaClient,
+  assignmentTypeId: string
+): Promise<void> {
+  const image = loadApEnglishLitCourseImage();
+  await prisma.assignmentTypeImage.deleteMany({ where: { assignmentTypeId } });
+  if (!image) return;
+  await prisma.assignmentTypeImage.create({
+    data: {
+      assignmentTypeId,
+      contentType: image.contentType,
+      blob: image.blob,
+    },
+  });
+}
 
 async function seedApEnglishLitCourse(
   prisma: PrismaClient,
@@ -61,6 +105,8 @@ async function seedApEnglishLitCourse(
     create: { organizationId, assignmentTypeId: assignmentType.id },
     update: {},
   });
+
+  await seedApEnglishLitCourseImage(prisma, assignmentType.id);
 
   for (const entry of AP_ENGLISH_LIT_LIBRARY_ENTRIES) {
     const libraryEntry = await prisma.apEnglishLitPromptLibraryEntry.upsert({
