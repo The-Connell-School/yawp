@@ -75,6 +75,28 @@ describe('local dev seed fixtures', () => {
     expect(typeof seedModule.seedSyntheticLocalDevData).toBe('function');
   });
 
+  test('pins paste activity fixtures to the documented verification ids', () => {
+    const source = readFileSync(
+      join(import.meta.dirname, 'local-dev/seed-synthetic-data.ts'),
+      'utf8'
+    );
+
+    expect(source).toContain("primaryClass: 'cmrxzqtfm000jxlvsxgzhfbga'");
+    expect(source).toContain(
+      "practiceDraftDocument: 'cmrxzqthc000qxlvsgjm6og7r'"
+    );
+    expect(source).toContain(
+      "submittedCivicDocument: 'cmrxzqthq000uxlvs2bwhhnpj'"
+    );
+    expect(source).toContain(
+      "gradedCivicDocument: 'cmrxzqthv000wxlvsibdv3iau'"
+    );
+    expect(source).toContain("practiceDraftAlert: 'cmrxzqti80012xlvse3qgsm4u'");
+    expect(source).toContain(
+      "submittedCivicAlert: 'cmrxzqtia0013xlvs5o27y8ox'"
+    );
+  });
+
   test('connects cumulative staff personas to seeded schools and classes', () => {
     const source = readFileSync(
       join(import.meta.dirname, 'local-dev/seed-synthetic-data.ts'),

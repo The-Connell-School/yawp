@@ -48,6 +48,13 @@ export function isUnhandledReviewSuccess(
   return Boolean(response?.success && response !== handledResponse);
 }
 
+export function resolveReviewedDocumentReload(
+  submittedDocumentId: string | null,
+  activeDocumentId: string | undefined
+) {
+  return submittedDocumentId === activeDocumentId ? submittedDocumentId : null;
+}
+
 export function resolvePasteAlertSheetView(
   documentId: string | undefined,
   data: PasteAlertSheetResponse | undefined,
@@ -136,6 +143,7 @@ export function PasteAlertSheet({
   const loadFetcher = useFetcher<PasteAlertSheetResponse>();
   const reviewFetcher = useFetcher<{ success?: boolean }>();
   const handledReviewResponse = useRef<typeof reviewFetcher.data>(undefined);
+  const submittedReviewDocumentId = useRef<string | null>(null);
   const [loadedData, setLoadedData] = useState<
     PasteAlertSheetData | undefined
   >();
@@ -167,12 +175,18 @@ export function PasteAlertSheet({
         reviewFetcher.data,
         handledReviewResponse.current
       ) &&
-      reviewFetcher.state === 'idle' &&
-      documentId
+      reviewFetcher.state === 'idle'
     ) {
       handledReviewResponse.current = reviewFetcher.data;
-      setLoadedData(undefined);
-      loadFetcher.load(`/api/paste-alerts/${documentId}`);
+      const reloadDocumentId = resolveReviewedDocumentReload(
+        submittedReviewDocumentId.current,
+        documentId
+      );
+      submittedReviewDocumentId.current = null;
+      if (reloadDocumentId) {
+        setLoadedData(undefined);
+        loadFetcher.load(`/api/paste-alerts/${reloadDocumentId}`);
+      }
       onReviewed?.();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -187,11 +201,11 @@ export function PasteAlertSheet({
     loadedData && loadedData.document.id === documentId
       ? loadedData.nextCursor
       : null;
-  const isLoadingMore =
-    Boolean(loadedData) && loadFetcher.state !== 'idle';
+  const isLoadingMore = Boolean(loadedData) && loadFetcher.state !== 'idle';
 
   const markReviewed = (alertId: string) => {
     if (!documentId) return;
+    submittedReviewDocumentId.current = documentId;
     const formData = new FormData();
     formData.append('alertId', alertId);
     reviewFetcher.submit(formData, {

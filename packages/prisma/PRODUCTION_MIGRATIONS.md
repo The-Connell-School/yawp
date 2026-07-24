@@ -84,6 +84,38 @@ catalog before reconciling Prisma:
 `Organization.pasteActivityEnabled` is default-off. The migration does not
 enable any production organization.
 
+If `20260723230000_add_paste_activity_rollout_gate` is unfinished, recover from
+the catalog state instead of blindly rerunning:
+
+1. Inspect `_prisma_migrations` for an unfinished, non-rolled-back row and
+   inspect the exact `Organization.pasteActivityEnabled` definition.
+2. If the column is absent, resolve the failed attempt as rolled back and rerun
+   the wrapper:
+
+   ```sh
+   bun prisma migrate resolve \
+     --rolled-back 20260723230000_add_paste_activity_rollout_gate
+   ```
+
+3. If the column already exists, confirm it is exactly `BOOLEAN NOT NULL
+   DEFAULT false` and verify all existing organizations remain disabled. Only
+   then reconcile the failed migration as applied:
+
+   ```sh
+   bun prisma migrate resolve \
+     --applied 20260723230000_add_paste_activity_rollout_gate
+   ```
+
+4. Rerun the production wrapper. Its postcheck must confirm the exact column
+   definition, all three completed migration rows, the exact validated reviewer
+   foreign key, and the exact valid/ready reviewer index.
+
+Never mark the rollout migration applied when the column is absent, nullable,
+enabled by default, or any existing organization was enabled by the interrupted
+attempt.
+
+After the migration ledger is healthy, stage the product rollout:
+
 1. Enable one pilot organization from Admin → Organizations → Edit
    Organization → Paste activity review.
 2. Verify teacher Documents and class Documents queues, review persistence,

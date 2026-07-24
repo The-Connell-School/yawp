@@ -126,6 +126,7 @@ BEGIN
     WHERE table_schema = 'public'
       AND table_name = 'Organization'
       AND column_name = 'pasteActivityEnabled'
+      AND data_type = 'boolean'
       AND is_nullable = 'NO'
       AND column_default IN ('false', 'false::boolean')
   ) THEN
@@ -138,8 +139,17 @@ BEGIN
     FROM information_schema.columns
     WHERE table_schema = 'public'
       AND table_name = 'PasteAlert'
-      AND column_name IN ('reviewedAt', 'reviewedByMembershipId')
       AND is_nullable = 'YES'
+      AND (
+        (
+          column_name = 'reviewedAt'
+          AND data_type = 'timestamp with time zone'
+        )
+        OR (
+          column_name = 'reviewedByMembershipId'
+          AND data_type = 'text'
+        )
+      )
   ) <> 2 THEN
     RAISE EXCEPTION
       'postcheck: nullable paste review metadata columns are incomplete';
@@ -147,10 +157,33 @@ BEGIN
 
   IF NOT EXISTS (
     SELECT 1
-    FROM pg_constraint
-    WHERE conname = 'PasteAlert_reviewedByMembershipId_fkey'
-      AND contype = 'f'
-      AND convalidated
+    FROM pg_constraint constraint_row
+    WHERE constraint_row.conname =
+        'PasteAlert_reviewedByMembershipId_fkey'
+      AND constraint_row.contype = 'f'
+      AND constraint_row.convalidated
+      AND constraint_row.conrelid = 'public."PasteAlert"'::regclass
+      AND constraint_row.confrelid = 'public."OrgMembership"'::regclass
+      AND constraint_row.conkey = ARRAY[
+        (
+          SELECT attnum
+          FROM pg_attribute
+          WHERE attrelid = 'public."PasteAlert"'::regclass
+            AND attname = 'reviewedByMembershipId'
+            AND NOT attisdropped
+        )
+      ]::smallint[]
+      AND constraint_row.confkey = ARRAY[
+        (
+          SELECT attnum
+          FROM pg_attribute
+          WHERE attrelid = 'public."OrgMembership"'::regclass
+            AND attname = 'id'
+            AND NOT attisdropped
+        )
+      ]::smallint[]
+      AND constraint_row.confdeltype = 'n'
+      AND constraint_row.confupdtype = 'c'
   ) THEN
     RAISE EXCEPTION
       'postcheck: validated paste reviewer foreign key is missing';
@@ -160,7 +193,22 @@ BEGIN
     SELECT 1
     FROM pg_class index_class
     JOIN pg_index index_row ON index_row.indexrelid = index_class.oid
+    JOIN pg_namespace index_namespace
+      ON index_namespace.oid = index_class.relnamespace
     WHERE index_class.relname = 'PasteAlert_reviewedByMembershipId_idx'
+      AND index_namespace.nspname = 'public'
+      AND index_row.indrelid = 'public."PasteAlert"'::regclass
+      AND index_row.indnatts = 1
+      AND index_row.indnkeyatts = 1
+      AND index_row.indkey[0] = (
+        SELECT attnum
+        FROM pg_attribute
+        WHERE attrelid = 'public."PasteAlert"'::regclass
+          AND attname = 'reviewedByMembershipId'
+          AND NOT attisdropped
+      )
+      AND index_row.indexprs IS NULL
+      AND index_row.indpred IS NULL
       AND index_row.indisvalid
       AND index_row.indisready
   ) THEN

@@ -5,6 +5,7 @@ import {
   isUnhandledReviewSuccess,
   mergePasteAlertSheetPage,
   PasteAlertCapturedContent,
+  resolveReviewedDocumentReload,
   resolvePasteAlertSheetView,
 } from './paste-alert-sheet';
 
@@ -83,6 +84,12 @@ describe('paste alert sheet target binding', () => {
     expect(isUnhandledReviewSuccess(response, undefined)).toBe(true);
     expect(isUnhandledReviewSuccess(response, response)).toBe(false);
     expect(isUnhandledReviewSuccess({ success: false }, undefined)).toBe(false);
+  });
+
+  test('reloads only the document whose review request completed', () => {
+    expect(resolveReviewedDocumentReload('doc-a', 'doc-a')).toBe('doc-a');
+    expect(resolveReviewedDocumentReload('doc-a', 'doc-b')).toBeNull();
+    expect(resolveReviewedDocumentReload('doc-a', undefined)).toBeNull();
   });
 
   test('appends a bounded older page without duplicating alerts', () => {

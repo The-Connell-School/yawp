@@ -28,5 +28,12 @@ describe('stripPsqlMetaCommands', () => {
     expect(source).toContain('PasteAlert_reviewedByMembershipId_fkey');
     expect(source).toContain('PasteAlert_reviewedByMembershipId_idx');
     expect(source).toContain('20260723230000_add_paste_activity_rollout_gate');
+    expect(source).toContain("data_type = 'timestamp with time zone'");
+    expect(source).toContain("constraint_row.confdeltype = 'n'");
+    expect(source).toContain("constraint_row.confupdtype = 'c'");
+    expect(source).toContain(
+      'index_row.indrelid = \'public."PasteAlert"\'::regclass'
+    );
+    expect(source).toContain('index_row.indnatts = 1');
   });
 });

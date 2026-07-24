@@ -16,6 +16,19 @@ type PersonaRecord = {
   membershipId: string;
 };
 
+const PASTE_ACTIVITY_FIXTURE_IDS = {
+  teacherUser: 'cmrxzqtdz0004xlvs1qflmnm5',
+  teacherMembership: 'cmrxzqte50009xlvs93841vwa',
+  primaryClass: 'cmrxzqtfm000jxlvsxgzhfbga',
+  practiceDraftDocument: 'cmrxzqthc000qxlvsgjm6og7r',
+  submittedCivicDocument: 'cmrxzqthq000uxlvs2bwhhnpj',
+  gradedCivicDocument: 'cmrxzqthv000wxlvsibdv3iau',
+  practiceDraftAlert: 'cmrxzqti80012xlvse3qgsm4u',
+  submittedCivicAlert: 'cmrxzqtia0013xlvs5o27y8ox',
+  gradedCivicUnreviewedAlert: 'cmrxzqtie0014xlvscezfgswm',
+  gradedCivicReviewedAlert: 'cmrxzqtih0015xlvsbyojcbgw',
+} as const;
+
 export type LocalDevSeedContext = {
   organizationId: string;
   schoolIds: string[];
@@ -32,14 +45,23 @@ async function upsertPersona(
   persona: LocalDevPersona,
   organizationId: string
 ): Promise<PersonaRecord> {
+  const stableTeacherIds =
+    persona.key === 'teacher'
+      ? {
+          userId: PASTE_ACTIVITY_FIXTURE_IDS.teacherUser,
+          membershipId: PASTE_ACTIVITY_FIXTURE_IDS.teacherMembership,
+        }
+      : null;
   const user = await prisma.user.create({
     data: {
+      id: stableTeacherIds?.userId,
       email: persona.email,
       name: persona.name,
       isAdmin: persona.isAdmin ?? false,
       password: { create: createPassword(persona.password) },
       memberships: {
         create: {
+          id: stableTeacherIds?.membershipId,
           organizationId,
           isOrgOwner: persona.isOrgOwner ?? false,
           role: persona.role,
@@ -144,6 +166,7 @@ export async function seedSyntheticLocalDevData(
 
   const primaryClass = await prisma.class.create({
     data: {
+      id: PASTE_ACTIVITY_FIXTURE_IDS.primaryClass,
       code: 'DEV-CLASS-101',
       schoolYear: '2025-2026',
       period: '3',
@@ -307,6 +330,7 @@ export async function seedSyntheticLocalDevData(
   const editedHtml = `<p>${editedText}</p>`;
   const editedDocument = await prisma.document.create({
     data: {
+      id: PASTE_ACTIVITY_FIXTURE_IDS.practiceDraftDocument,
       title: 'Practice essay draft',
       text: editedText,
       html: editedHtml,
@@ -350,6 +374,7 @@ export async function seedSyntheticLocalDevData(
   const submittedHtml = `<p>${submittedText}</p>`;
   const submittedDocument = await prisma.document.create({
     data: {
+      id: PASTE_ACTIVITY_FIXTURE_IDS.submittedCivicDocument,
       title: 'Submitted civic essay',
       text: submittedText,
       html: submittedHtml,
@@ -378,6 +403,7 @@ export async function seedSyntheticLocalDevData(
   const gradedHtml = paragraphsToHtml(gradedText);
   const gradedDocument = await prisma.document.create({
     data: {
+      id: PASTE_ACTIVITY_FIXTURE_IDS.gradedCivicDocument,
       title: 'Graded civic essay',
       text: gradedText,
       html: gradedHtml,
@@ -467,6 +493,7 @@ export async function seedSyntheticLocalDevData(
     'The rise of social media has fundamentally reshaped how teenagers communicate, learn, and form their identities in ways that previous generations never experienced growing up. Researchers also note that constant comparison can make ordinary social pressure feel public, permanent, and difficult to escape.';
   const practiceDraftPasteAlert = await prisma.pasteAlert.create({
     data: {
+      id: PASTE_ACTIVITY_FIXTURE_IDS.practiceDraftAlert,
       documentId: editedDocument.id,
       membershipId: studentDraft.membershipId,
       textLength: practiceDraftPasteContent.length,
@@ -478,6 +505,7 @@ export async function seedSyntheticLocalDevData(
     'Civic engagement among young people has declined steadily over the past two decades, according to several national surveys of voter turnout and volunteer participation rates. Schools can reverse that trend by giving students regular opportunities to deliberate, organize, and solve visible problems in their own communities.';
   const submittedCivicPasteAlert = await prisma.pasteAlert.create({
     data: {
+      id: PASTE_ACTIVITY_FIXTURE_IDS.submittedCivicAlert,
       documentId: submittedDocument.id,
       membershipId: studentSubmitted.membershipId,
       textLength: submittedCivicPasteContent.length,
@@ -491,6 +519,7 @@ export async function seedSyntheticLocalDevData(
     'A healthy democracy depends on citizens who are willing to question claims, weigh competing evidence fairly, and defend their conclusions when someone else pushes back on them. Those habits develop through repeated practice with real disagreements, not by memorizing a list of institutions before a test.';
   const gradedCivicPasteAlertUnreviewed = await prisma.pasteAlert.create({
     data: {
+      id: PASTE_ACTIVITY_FIXTURE_IDS.gradedCivicUnreviewedAlert,
       documentId: gradedDocument.id,
       membershipId: studentGraded.membershipId,
       textLength: gradedCivicPasteContentUnreviewed.length,
@@ -502,6 +531,7 @@ export async function seedSyntheticLocalDevData(
     'Student government and service projects give young people real responsibility, and most students rise to meet that responsibility when they are trusted with it early on. Adults still need to provide useful boundaries, but students should be allowed to make consequential choices and learn from the results.';
   const gradedCivicPasteAlertReviewed = await prisma.pasteAlert.create({
     data: {
+      id: PASTE_ACTIVITY_FIXTURE_IDS.gradedCivicReviewedAlert,
       documentId: gradedDocument.id,
       membershipId: studentGraded.membershipId,
       textLength: gradedCivicPasteContentReviewed.length,

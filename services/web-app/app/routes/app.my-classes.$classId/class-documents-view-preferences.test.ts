@@ -23,6 +23,7 @@ describe('class documents view preferences', () => {
       status: 'needs-grading',
       documentGroup: 'status',
       documentSort: { field: 'assignment', direction: 'desc' },
+      writingSignal: 'unreviewed',
       collapsedGroups: {
         status: ['needs-grading', 'released'],
       },
@@ -34,6 +35,7 @@ describe('class documents view preferences', () => {
       status: 'needs-grading',
       documentGroup: 'status',
       documentSort: { field: 'assignment', direction: 'desc' },
+      writingSignal: 'unreviewed',
       collapsedGroups: {
         status: ['needs-grading', 'released'],
       },
@@ -53,7 +55,7 @@ describe('class documents view preferences', () => {
 
   test('extracts preferences from search params', () => {
     const params = new URLSearchParams(
-      'tab=documents&studentId=student-1,student-2&assignmentId=assignment-1&status=graded&documentGroup=assignment'
+      'tab=documents&studentId=student-1,student-2&assignmentId=assignment-1&status=graded&documentGroup=assignment&writingSignal=unreviewed'
     );
 
     expect(preferencesFromSearchParams(params)).toEqual({
@@ -61,6 +63,7 @@ describe('class documents view preferences', () => {
       assignmentIds: ['assignment-1'],
       status: 'graded',
       documentGroup: 'assignment',
+      writingSignal: 'unreviewed',
     });
   });
 
@@ -71,6 +74,7 @@ describe('class documents view preferences', () => {
         studentIds: ['student-1'],
         status: 'needs-grading',
         documentGroup: 'status',
+        writingSignal: 'unreviewed',
       },
     });
 
@@ -79,20 +83,25 @@ describe('class documents view preferences', () => {
     expect(merged.searchParams.get('studentId')).toBe('student-1');
     expect(merged.searchParams.get('status')).toBe('needs-grading');
     expect(merged.searchParams.get('documentGroup')).toBe('status');
+    expect(merged.searchParams.get('writingSignal')).toBe('unreviewed');
   });
 
   test('does not override explicit URL params with stored preferences', () => {
     const merged = mergeStoredClassDocumentsSearchParams({
-      searchParams: new URLSearchParams('tab=documents&status=released'),
+      searchParams: new URLSearchParams(
+        'tab=documents&status=released&writingSignal=any'
+      ),
       storedPreferences: {
         status: 'needs-grading',
         documentGroup: 'student',
+        writingSignal: 'unreviewed',
       },
     });
 
     expect(merged.shouldReplace).toBe(true);
     expect(merged.searchParams.get('status')).toBe('released');
     expect(merged.searchParams.get('documentGroup')).toBe('student');
+    expect(merged.searchParams.get('writingSignal')).toBe('any');
   });
 
   test('stores collapsed groups per grouping mode', () => {
@@ -139,6 +148,7 @@ describe('class documents view preferences', () => {
           assignmentIds: ['assignment-1'],
           status: 'needs-grading',
           documentGroup: 'student',
+          writingSignal: 'unreviewed',
         })
       );
 

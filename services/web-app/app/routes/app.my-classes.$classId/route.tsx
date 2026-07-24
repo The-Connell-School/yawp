@@ -1000,7 +1000,8 @@ function ClassDetailPage() {
       searchParams.get('status') ||
       searchParams.get('documentGroup') ||
       searchParams.get('studentId') ||
-      searchParams.get('assignmentId')
+      searchParams.get('assignmentId') ||
+      searchParams.get('writingSignal')
     ) {
       mergeClassDocumentsViewPreferences(searchParams);
     }
