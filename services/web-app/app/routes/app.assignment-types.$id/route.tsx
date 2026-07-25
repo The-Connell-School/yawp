@@ -565,6 +565,14 @@ export default function AppAssignmentTypesIdRoute() {
       ? (data.apEnglishLitLibrary?.teacherClasses ?? [])
       : data.teacherClasses;
 
+  // AP Literature documents and assignments are both built from a library
+  // prompt, so either menu choice takes the teacher to the prompt library.
+  function focusApEnglishLitLibrary() {
+    document
+      .getElementById('ap-english-lit-library')
+      ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
   return (
     <div className="no-scrollbar h-full w-full overflow-y-scroll">
       <div className="mx-auto flex h-full w-full max-w-screen-md flex-col p-3 sm:p-5">
@@ -609,17 +617,35 @@ export default function AppAssignmentTypesIdRoute() {
                 </>
               ) : null}
               {isApEnglishLitAssignmentType && data.apEnglishLitLibrary ? (
-                <Button
-                  type="button"
-                  className="w-fit"
-                  onClick={() =>
-                    document
-                      .getElementById('ap-english-lit-library')
-                      ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-                  }
-                >
-                  New Assignment <PlusIcon className="ml-1 h-5 w-5" />
-                </Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button type="button" className="w-fit">
+                      New <ChevronDownIcon className="ml-1 h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-56">
+                    <DropdownMenuItem
+                      onSelect={() => focusApEnglishLitLibrary()}
+                    >
+                      <span className="flex flex-col">
+                        <span>Document</span>
+                        <span className="text-xs text-muted-foreground">
+                          Pick a prompt to open as a document
+                        </span>
+                      </span>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onSelect={() => focusApEnglishLitLibrary()}
+                    >
+                      <span className="flex flex-col">
+                        <span>Assignment</span>
+                        <span className="text-xs text-muted-foreground">
+                          Pick a prompt to assign to a class
+                        </span>
+                      </span>
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               ) : null}
               <CreateAssignmentSheet
                 assignmentTypeId={data.assignmentType.id}
