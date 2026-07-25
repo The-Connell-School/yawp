@@ -141,6 +141,23 @@ export function readApEnglishLitFilters(url: URL): ApEnglishLitFilters {
   };
 }
 
+/**
+ * Pick one entry at random from a list. `random` returns a float in [0, 1)
+ * and defaults to `Math.random`; it is injectable so the selection is
+ * deterministic under test. Returns `null` for an empty list.
+ */
+export function pickRandomEntry<T>(
+  entries: readonly T[],
+  random: () => number = Math.random,
+): T | null {
+  if (entries.length === 0) return null;
+  const index = Math.min(
+    entries.length - 1,
+    Math.max(0, Math.floor(random() * entries.length)),
+  );
+  return entries[index];
+}
+
 export function applyApEnglishLitFilters(
   entries: ApEnglishLitLibraryEntry[],
   filters: ApEnglishLitFilters,

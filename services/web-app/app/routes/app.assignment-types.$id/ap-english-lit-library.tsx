@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router';
-import { FilterIcon, XIcon } from 'lucide-react';
+import { DicesIcon, FilterIcon, XIcon } from 'lucide-react';
 import {
   Accordion,
   AccordionContent,
@@ -24,6 +24,7 @@ import {
   type ApEnglishLitOptionCounts,
   frqTypeLabel,
   humanizeFacetValue,
+  pickRandomEntry,
 } from './ap-english-lit-facets';
 
 export type { ApEnglishLitLibraryEntry } from './ap-english-lit-facets';
@@ -152,6 +153,14 @@ export function ApEnglishLitLibrary({
     setSearchParams(next, { preventScrollReset: true });
   }
 
+  function handleSurpriseMe() {
+    const entry = pickRandomEntry(entries);
+    if (entry) {
+      setFilterSheetOpen(false);
+      onSelectEntry(entry);
+    }
+  }
+
   const filterPanel = (
     <FilterPanel
       facets={facets}
@@ -163,6 +172,8 @@ export function ApEnglishLitLibrary({
       searchInput={searchInput}
       onSearchInputChange={setSearchInput}
       onSearchCommit={() => commitSearch(searchInput)}
+      onSurpriseMe={handleSurpriseMe}
+      matchCount={entries.length}
     />
   );
 
@@ -360,6 +371,8 @@ function FilterPanel({
   searchInput,
   onSearchInputChange,
   onSearchCommit,
+  onSurpriseMe,
+  matchCount,
 }: {
   facets: ApEnglishLitFacetValues;
   optionCounts: ApEnglishLitOptionCounts;
@@ -370,6 +383,8 @@ function FilterPanel({
   searchInput: string;
   onSearchInputChange: (v: string) => void;
   onSearchCommit: () => void;
+  onSurpriseMe: () => void;
+  matchCount: number;
 }) {
   return (
     <div className="space-y-2">
@@ -398,6 +413,28 @@ function FilterPanel({
             </button>
           </div>
         ) : null}
+      </div>
+
+      <div className="px-0.5 pb-1">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="w-full"
+          data-testid="ap-lit-surprise-me"
+          disabled={matchCount === 0}
+          onClick={onSurpriseMe}
+        >
+          <DicesIcon className="mr-1.5 h-4 w-4" />
+          Surprise me
+        </Button>
+        <p className="mt-1 text-center text-[11px] leading-4 text-muted-foreground">
+          {matchCount === 0
+            ? 'No prompts to choose from'
+            : hasAnyFilter
+              ? `Pick a random prompt from the ${matchCount} matching your filters`
+              : `Pick a random prompt from all ${matchCount}`}
+        </p>
       </div>
 
       <Accordion type="multiple" className="border-none">

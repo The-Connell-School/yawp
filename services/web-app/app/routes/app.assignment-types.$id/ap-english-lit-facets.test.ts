@@ -4,6 +4,7 @@ import {
   buildApEnglishLitFacets,
   buildApEnglishLitOptionCounts,
   frqTypeLabel,
+  pickRandomEntry,
   readApEnglishLitFilters,
   type ApEnglishLitLibraryEntry,
 } from './ap-english-lit-facets';
@@ -90,5 +91,23 @@ describe('AP English Literature library facets', () => {
     expect(frqTypeLabel('literary_argument')).toBe('Literary Argument');
     expect(frqTypeLabel('poetry')).toBe('Poetry Analysis');
     expect(frqTypeLabel('something-else')).toBe('Something Else');
+  });
+
+  test('pickRandomEntry chooses from the (filtered) list using the injected RNG', () => {
+    // Randomly picks within bounds — here from the poetry-only filtered set.
+    const poetryOnly = applyApEnglishLitFilters(
+      entries,
+      readApEnglishLitFilters(urlWith({ ael_type: 'poetry' })),
+    );
+    expect(pickRandomEntry(poetryOnly, () => 0)?.externalKey).toBe('poem');
+
+    // A value near 1 lands on the last element without going out of bounds.
+    expect(pickRandomEntry(entries, () => 0)?.externalKey).toBe('poem');
+    expect(pickRandomEntry(entries, () => 0.5)?.externalKey).toBe('prose');
+    expect(pickRandomEntry(entries, () => 0.999)?.externalKey).toBe('arg1');
+  });
+
+  test('pickRandomEntry returns null for an empty list', () => {
+    expect(pickRandomEntry([], () => 0)).toBeNull();
   });
 });
