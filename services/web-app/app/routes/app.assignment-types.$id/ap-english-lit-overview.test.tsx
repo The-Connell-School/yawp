@@ -49,14 +49,13 @@ describe('ApEnglishLitOverview', () => {
     root = null;
   });
 
-  it('always shows the compact scoring summary with all three rows', () => {
+  it('shows a "How grading works" trigger and keeps detail collapsed', () => {
     ({ root } = render(<ApEnglishLitOverview />));
 
     const text = document.body.textContent ?? '';
-    expect(text).toContain('6-point analytic rubric');
-    expect(text).toContain('Thesis');
-    expect(text).toContain('Evidence and Commentary');
-    expect(text).toContain('Sophistication');
+    expect(text).toContain('How grading works');
+    // The rubric explanation lives inside the dropdown, not the trigger.
+    expect(text).not.toContain('presents a defensible interpretation');
   });
 
   it('renders the rubric detail as a collapsed dropdown by default', () => {

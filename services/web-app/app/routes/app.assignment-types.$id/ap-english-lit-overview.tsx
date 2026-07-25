@@ -114,29 +114,12 @@ export function ApEnglishLitOverview() {
           aria-expanded={showRubricDetail}
           aria-controls={detailId}
           onClick={() => setShowRubricDetail((open) => !open)}
-          className="flex w-full items-start justify-between gap-3 rounded-lg p-3 text-left transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="flex w-full items-center justify-between gap-3 rounded-lg p-3 text-left transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Scoring — {AP_ENGLISH_LIT_RUBRIC.totalPoints}-point analytic
-              rubric
-            </p>
-            <ul className="mt-2 grid gap-1.5 sm:grid-cols-3">
-              {AP_ENGLISH_LIT_RUBRIC.rows.map((row) => (
-                <li key={row.rowId} className="text-xs leading-5">
-                  <span className="font-semibold">
-                    Row {row.label} · {row.title}
-                  </span>{' '}
-                  <span className="text-muted-foreground">
-                    (0–{row.maxPoints})
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </div>
-          <span className="mt-0.5 flex items-center gap-1 whitespace-nowrap text-xs font-medium text-muted-foreground">
+          <span className="text-sm font-semibold">How grading works</span>
+          <span className="flex items-center gap-1 whitespace-nowrap text-xs font-medium text-muted-foreground">
             <span className="hidden sm:inline">
-              {showRubricDetail ? 'Hide details' : 'How it works'}
+              {showRubricDetail ? 'Hide details' : 'Show details'}
             </span>
             <ChevronDown
               aria-hidden
