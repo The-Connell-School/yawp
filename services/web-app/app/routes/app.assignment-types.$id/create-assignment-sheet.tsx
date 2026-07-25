@@ -39,6 +39,18 @@ type Props = {
     prompt: string;
     essayType: string;
   } | null;
+  apEnglishLangEntry?: {
+    externalKey: string;
+    title: string;
+    prompt: string;
+    frqType: string;
+  } | null;
+};
+
+const AP_ENGLISH_LANG_FRQ_TYPE_LABELS: Record<string, string> = {
+  synthesis: 'Synthesis',
+  rhetorical_analysis: 'Rhetorical Analysis',
+  argument: 'Argument',
 };
 
 function classLabel(klass: TeacherClass) {
@@ -53,6 +65,7 @@ export function CreateAssignmentSheet({
   onOpenChange,
   initialPrompt = '',
   apHistoryEntry = null,
+  apEnglishLangEntry = null,
 }: Props) {
   const fetcher = useFetcher<{ success?: boolean; message?: string }>();
   const [selectedClassId, setSelectedClassId] = useState(
@@ -61,18 +74,121 @@ export function CreateAssignmentSheet({
   const [title, setTitle] = useState('');
 
   const isSaving = fetcher.state !== 'idle';
+  const libraryEntry = apHistoryEntry ?? apEnglishLangEntry;
 
   useEffect(() => {
-    if (!open || !apHistoryEntry) return;
+    if (!open || !libraryEntry) return;
     setSelectedClassId(teacherClasses[0]?.id ?? '');
     setTitle('');
-  }, [open, teacherClasses, apHistoryEntry]);
+  }, [open, teacherClasses, libraryEntry]);
 
   useEffect(() => {
     if (fetcher.state === 'idle' && fetcher.data?.success) {
       onOpenChange(false);
     }
   }, [fetcher.state, fetcher.data, onOpenChange]);
+
+  if (apEnglishLangEntry) {
+    return (
+      <Sheet open={open} onOpenChange={onOpenChange}>
+        <SheetContent className="w-full overflow-y-auto sm:max-w-2xl">
+          <SheetHeader>
+            <SheetTitle>New Assignment</SheetTitle>
+            <SheetDescription>
+              Create an AP Language assignment from the selected prompt.
+            </SheetDescription>
+          </SheetHeader>
+
+          <fetcher.Form
+            method="post"
+            action="/api/assignments/create"
+            className="mt-6 space-y-4"
+          >
+            <input type="hidden" name="intent" value="create-assignment" />
+            <input type="hidden" name="classIds" value={selectedClassId} />
+            <input
+              type="hidden"
+              name="assignmentTypeId"
+              value={assignmentTypeId}
+            />
+            <input
+              type="hidden"
+              name="apEnglishLangLibraryEntryId"
+              value={apEnglishLangEntry.externalKey}
+            />
+
+            <div className="space-y-2">
+              <Label>Class</Label>
+              <Select
+                value={selectedClassId}
+                onValueChange={setSelectedClassId}
+                disabled={isSaving}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a class" />
+                </SelectTrigger>
+                <SelectContent>
+                  {teacherClasses.map((klass) => (
+                    <SelectItem key={klass.id} value={klass.id}>
+                      {classLabel(klass)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="cs-title">Title (optional)</Label>
+              <Input
+                id="cs-title"
+                name="title"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="e.g., Synthesis Practice — School Start Times"
+                disabled={isSaving}
+              />
+            </div>
+
+            <div className="space-y-2 rounded-lg border bg-muted/40 p-4">
+              <div className="flex items-center justify-between gap-3">
+                <Label>Selected AP Language Prompt</Label>
+                <span className="text-xs font-medium uppercase text-muted-foreground">
+                  {AP_ENGLISH_LANG_FRQ_TYPE_LABELS[apEnglishLangEntry.frqType] ??
+                    apEnglishLangEntry.frqType}
+                </span>
+              </div>
+              <h3 className="text-base font-semibold">
+                {apEnglishLangEntry.title}
+              </h3>
+              <p className="whitespace-pre-wrap text-sm leading-6 text-muted-foreground">
+                {apEnglishLangEntry.prompt}
+              </p>
+            </div>
+
+            {fetcher.data && !fetcher.data.success ? (
+              <p className="text-sm text-destructive">
+                {fetcher.data.message || 'Unable to create assignment.'}
+              </p>
+            ) : null}
+
+            <div className="flex items-center justify-end gap-2 pt-4">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => onOpenChange(false)}
+                disabled={isSaving}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" disabled={isSaving || !selectedClassId}>
+                {isSaving ? 'Creating…' : 'Create Assignment'}
+              </Button>
+            </div>
+          </fetcher.Form>
+        </SheetContent>
+      </Sheet>
+    );
+  }
 
   if (!apHistoryEntry) {
     return (

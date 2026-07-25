@@ -85,6 +85,11 @@ import {
   type ApHistorySnapshot,
 } from '~/domain/ap-history/schema';
 import { ApHistoryAssignmentPanel } from './ap-history-assignment-panel';
+import {
+  isApEnglishLangSnapshot,
+  type ApEnglishLangSnapshot,
+} from '~/domain/ap-english-lang/schema';
+import { ApEnglishLangAssignmentPanel } from './ap-english-lang-assignment-panel';
 import { pickLatestReleasedSubmission } from '~/utils/document-link-target';
 
 const SUBMIT_EMPTY_TOOLTIP =
@@ -205,6 +210,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           title: true,
           prompt: true,
           apHistorySnapshot: true,
+          apEnglishLangSnapshot: true,
         },
       },
       classAssignment: {
@@ -421,6 +427,10 @@ type AssignmentWithApHistorySnapshot = {
   apHistorySnapshot?: unknown;
 } | null;
 
+type AssignmentWithApEnglishLangSnapshot = {
+  apEnglishLangSnapshot?: unknown;
+} | null;
+
 export function getRenderableApHistorySnapshot(
   assignment: AssignmentWithApHistorySnapshot
 ): ApHistorySnapshot | null {
@@ -428,18 +438,31 @@ export function getRenderableApHistorySnapshot(
   return isApHistorySnapshot(raw) ? raw : null;
 }
 
+export function getRenderableApEnglishLangSnapshot(
+  assignment: AssignmentWithApEnglishLangSnapshot
+): ApEnglishLangSnapshot | null {
+  const raw = assignment?.apEnglishLangSnapshot;
+  return isApEnglishLangSnapshot(raw) ? raw : null;
+}
+
 export function shouldShowGenericAssignmentPrompt(
   assignment: unknown,
-  apHistorySnapshot: ApHistorySnapshot | null
+  apHistorySnapshot: ApHistorySnapshot | null,
+  apEnglishLangSnapshot: ApEnglishLangSnapshot | null = null
 ) {
-  return Boolean(assignment && !apHistorySnapshot);
+  return Boolean(assignment && !apHistorySnapshot && !apEnglishLangSnapshot);
 }
 
 export function getGenericAssignmentPromptForEditor<T>(
   assignment: T,
-  apHistorySnapshot: ApHistorySnapshot | null
+  apHistorySnapshot: ApHistorySnapshot | null,
+  apEnglishLangSnapshot: ApEnglishLangSnapshot | null = null
 ): T | null {
-  return shouldShowGenericAssignmentPrompt(assignment, apHistorySnapshot)
+  return shouldShowGenericAssignmentPrompt(
+    assignment,
+    apHistorySnapshot,
+    apEnglishLangSnapshot
+  )
     ? assignment
     : null;
 }
@@ -473,9 +496,11 @@ export default function Route() {
   const isDocumentEditable = true;
   const assignment = data.doc.assignment;
   const apHistorySnapshot = getRenderableApHistorySnapshot(assignment);
+  const apEnglishLangSnapshot = getRenderableApEnglishLangSnapshot(assignment);
   const editorAssignmentPrompt = getGenericAssignmentPromptForEditor(
     assignment,
-    apHistorySnapshot
+    apHistorySnapshot,
+    apEnglishLangSnapshot
   );
 
   // Merge server + optimistic submissions
@@ -674,6 +699,9 @@ export default function Route() {
       <main className="flex h-screen w-screen flex-col overflow-hidden bg-white">
         {apHistorySnapshot ? (
           <ApHistoryAssignmentPanel snapshot={apHistorySnapshot} />
+        ) : null}
+        {apEnglishLangSnapshot ? (
+          <ApEnglishLangAssignmentPanel snapshot={apEnglishLangSnapshot} />
         ) : null}
         <nav className="mx-auto flex w-full max-w-screen-2xl items-center gap-4 border-b px-3 py-2">
           <div className="flex items-center gap-4">

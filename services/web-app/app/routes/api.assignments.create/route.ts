@@ -5,6 +5,11 @@ import {
 } from '~/domain/ap-history/library.server';
 import { AP_HISTORY_ASSIGNMENT_TYPE_KEY } from '~/domain/ap-history/schema';
 import {
+  buildAssignmentCreateInputFromApEnglishLangEntry,
+  getApEnglishLangLibraryEntryForSnapshot,
+} from '~/domain/ap-english-lang/library.server';
+import { AP_ENGLISH_LANG_ASSIGNMENT_TYPE_KEY } from '~/domain/ap-english-lang/schema';
+import {
   DEFAULT_GRADING_ASSISTANT_STRICTNESS_LEVEL,
   parseGradingAssistantStrictnessLevel,
 } from '~/domain/grading/grading-assistant-strictness';
@@ -43,11 +48,14 @@ export async function action({ request }: ActionFunctionArgs) {
   const promptRaw = formData.get('prompt')?.toString() ?? '';
   const apHistoryLibraryEntryIdRaw =
     formData.get('apHistoryLibraryEntryId')?.toString() ?? '';
+  const apEnglishLangLibraryEntryIdRaw =
+    formData.get('apEnglishLangLibraryEntryId')?.toString() ?? '';
   const strictnessRaw = formData.get('gradingAssistantStrictnessLevel');
 
   const title = titleRaw.trim() || null;
   const prompt = promptRaw.trim();
   const apHistoryLibraryEntryId = apHistoryLibraryEntryIdRaw.trim();
+  const apEnglishLangLibraryEntryId = apEnglishLangLibraryEntryIdRaw.trim();
   const gradingAssistantStrictnessLevel = strictnessRaw
     ? parseGradingAssistantStrictnessLevel(strictnessRaw)
     : DEFAULT_GRADING_ASSISTANT_STRICTNESS_LEVEL;
@@ -151,6 +159,47 @@ export async function action({ request }: ActionFunctionArgs) {
 
     await createAssignmentDeployedToClasses({
       data: buildAssignmentCreateInputFromApHistoryEntry({
+        assignmentTypeId: assignmentType.id,
+        title,
+        entry,
+        gradingAssistantStrictnessLevel,
+      }),
+      classIds: deployClassIds,
+    });
+
+    return dataResponse({
+      success: true,
+      message: 'Assignment created and applied to classes.',
+    });
+  }
+
+  if (assignmentType.systemKey === AP_ENGLISH_LANG_ASSIGNMENT_TYPE_KEY) {
+    if (!apEnglishLangLibraryEntryId) {
+      return dataResponse(
+        {
+          success: false,
+          message: 'AP Language library entry is required.',
+        },
+        { status: 400 }
+      );
+    }
+
+    const entry = await getApEnglishLangLibraryEntryForSnapshot({
+      assignmentTypeId: assignmentType.id,
+      externalKey: apEnglishLangLibraryEntryId,
+    });
+    if (!entry) {
+      return dataResponse(
+        {
+          success: false,
+          message: 'AP Language library entry is unavailable.',
+        },
+        { status: 400 }
+      );
+    }
+
+    await createAssignmentDeployedToClasses({
+      data: buildAssignmentCreateInputFromApEnglishLangEntry({
         assignmentTypeId: assignmentType.id,
         title,
         entry,
