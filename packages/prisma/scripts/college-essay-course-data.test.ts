@@ -113,6 +113,63 @@ describe('College essay grading instructions', () => {
   });
 });
 
+describe('No-writing-for-the-student guarantee', () => {
+  const NO_WRITE_RULE = 'NON-NEGOTIABLE — NO WRITING FOR THE STUDENT';
+
+  test('every module system prompt carries the absolute no-writing rule', () => {
+    // Module tutorInstructions become the tutor's system prompt verbatim
+    // (build-system-prompt.ts just concatenates), so the rule must be present
+    // in every module — there is no shared base prompt to rely on.
+    for (const module of COLLEGE_ESSAY_MODULES) {
+      expect(module.tutorInstructions).toContain(NO_WRITE_RULE);
+    }
+  });
+
+  test('the rule forbids rewriting, rewording, and paste-in suggestions', () => {
+    for (const module of COLLEGE_ESSAY_MODULES) {
+      const text = module.tutorInstructions.toLowerCase();
+      expect(text).toContain('never write, rewrite, reword');
+      expect(text).toContain('no exception');
+    }
+  });
+
+  test('the rule requires examples to be hypothetical and off-topic', () => {
+    for (const module of COLLEGE_ESSAY_MODULES) {
+      const text = module.tutorInstructions.toLowerCase();
+      expect(text).toContain('completely different, invented topic');
+      expect(text).toContain("never demonstrate using the student's own topic");
+    }
+  });
+
+  test('grading instructions carry the same absolute rule', () => {
+    expect(COLLEGE_ESSAY_GRADING_INSTRUCTIONS).toContain(
+      'ABSOLUTE RULE — NO WRITING FOR THE STUDENT'
+    );
+    const text = COLLEGE_ESSAY_GRADING_INSTRUCTIONS.toLowerCase();
+    expect(text).toContain('never write, rewrite, reword');
+    expect(text).toContain('completely different, invented topic');
+    expect(text).toContain('there is no exception');
+  });
+
+  test('no tutor text anywhere asks the tutor to write for the student', () => {
+    const allTutorTexts = COLLEGE_ESSAY_MODULES.flatMap((module) => [
+      module.tutorInstructions,
+      ...module.instructions.map((i) => i.tutorInstructions ?? ''),
+    ]);
+    const forbidden = [
+      /help the student write\b/i,
+      /write (a|the|one|an) (sentence|line|paragraph|opening|ending|draft) for/i,
+      /offer (a|an) (better|smoother|improved) (line|sentence|version)/i,
+      /rewrite (it|this|the sentence|the line) for/i,
+    ];
+    for (const text of allTutorTexts) {
+      for (const pattern of forbidden) {
+        expect(text).not.toMatch(pattern);
+      }
+    }
+  });
+});
+
 describe('College essay module arc', () => {
   test('has the seven modules (0-6) of the gated linear arc', () => {
     const positions = COLLEGE_ESSAY_MODULES.map((m) => m.position);
