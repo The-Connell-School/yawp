@@ -409,3 +409,71 @@ describe('api.domain.thesis-prompt-generator history', () => {
     expect(findMany).not.toHaveBeenCalled();
   });
 });
+
+describe('api.domain.thesis-prompt-generator e2e fixture', () => {
+  const E2E_KEYS = [
+    'E2E',
+    'E2E_THESIS_PROMPT_GENERATOR_FIXTURE',
+    'ANTHROPIC_API_KEY',
+  ] as const;
+  const previous = E2E_KEYS.map((key) => [key, process.env[key]] as const);
+
+  beforeEach(resetMocks);
+
+  afterEach(() => {
+    for (const [key, value] of previous) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  });
+
+  test('answers from the fixture without calling the model', async () => {
+    process.env.E2E = 'true';
+    process.env.E2E_THESIS_PROMPT_GENERATOR_FIXTURE = 'true';
+    delete process.env.ANTHROPIC_API_KEY;
+
+    const response = await action({
+      request: request([{ role: 'user', content: 'A prompt about ambition.' }]),
+    } as never);
+    const body = await readBody(response);
+
+    expect(getLLMCompletion).not.toHaveBeenCalled();
+    expect(body.options).toHaveLength(3);
+    expect(body.options[0].title).toBe('Ambition and Its Costs');
+    // The fixture must still read like a library prompt.
+    expect(body.options[0].body).toContain('thesis-driven critical essay');
+    expect(body.options[0].body).toContain(
+      'introduction, thesis statement, body paragraphs, and a conclusion'
+    );
+  });
+
+  test('never displaces the real model outside e2e', async () => {
+    delete process.env.E2E;
+    process.env.E2E_THESIS_PROMPT_GENERATOR_FIXTURE = 'true';
+    getLLMCompletion.mockResolvedValue(
+      JSON.stringify({ reply: 'From the model.', options: [] })
+    );
+
+    const response = await action({
+      request: request([{ role: 'user', content: 'A prompt about ambition.' }]),
+    } as never);
+
+    expect(getLLMCompletion).toHaveBeenCalledTimes(1);
+    expect((await readBody(response)).reply).toBe('From the model.');
+  });
+
+  test('defers to a real key even inside e2e', async () => {
+    process.env.E2E = 'true';
+    process.env.E2E_THESIS_PROMPT_GENERATOR_FIXTURE = 'true';
+    process.env.ANTHROPIC_API_KEY = 'sk-ant-real-key';
+    getLLMCompletion.mockResolvedValue(
+      JSON.stringify({ reply: 'From the model.', options: [] })
+    );
+
+    await action({
+      request: request([{ role: 'user', content: 'A prompt about ambition.' }]),
+    } as never);
+
+    expect(getLLMCompletion).toHaveBeenCalledTimes(1);
+  });
+});

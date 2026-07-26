@@ -169,6 +169,8 @@ function writeE2EEnv(e2eDir: string, databaseUrl: string) {
     AWS_S3_REGION_FOR_VIDEOS: process.env.AWS_S3_REGION_FOR_VIDEOS || 'us-east-1',
     E2E: 'true',
     E2E_GRADE_ESSAY_AI_FIXTURE: 'true',
+    E2E_THESIS_PROMPT_GENERATOR_FIXTURE: 'true',
+    THESIS_PROMPT_GENERATOR_HISTORY_ENABLED: 'true',
     ANTHROPIC_API_KEY: '',
   };
 

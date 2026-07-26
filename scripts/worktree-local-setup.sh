@@ -130,6 +130,7 @@ HONEYPOT_SECRET="${SLUG}-worktree-honeypot"
 INTERNAL_COMMAND_TOKEN="${SLUG}-worktree-internal-token"
 AWS_S3_BUCKET_FOR_VIDEOS="${SLUG}-local-dev-bucket"
 AWS_S3_REGION_FOR_VIDEOS="us-east-1"
+THESIS_PROMPT_GENERATOR_HISTORY_ENABLED="true"
 ${ai_model_line:-AI_MODEL="claude-sonnet-4-5"}
 ${anthropic_line:-ANTHROPIC_API_KEY=""}
 EOF

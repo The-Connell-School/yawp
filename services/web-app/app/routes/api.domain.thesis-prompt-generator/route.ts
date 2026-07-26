@@ -64,6 +64,43 @@ function parseMessages(raw: FormDataEntryValue | null): GeneratorMessage[] | nul
   return messages;
 }
 
+/**
+ * Deterministic stand-in for the model in e2e, mirroring
+ * E2E_GRADE_ESSAY_AI_FIXTURE. Letting the real action run (rather than stubbing
+ * the request in the browser) is what makes the saved-history flow testable
+ * end to end: the turns actually get written.
+ */
+function shouldUseE2EGeneratorFixture() {
+  return (
+    process.env.E2E === 'true' &&
+    process.env.E2E_THESIS_PROMPT_GENERATOR_FIXTURE === 'true' &&
+    !process.env.ANTHROPIC_API_KEY
+  );
+}
+
+function e2eGeneratorFixtureResponse() {
+  const body = (topic: string) =>
+    [
+      `Write a thesis-driven critical essay on ${topic}.`,
+      '',
+      'Find the angle that actually grabs you and take an original position. Go where the emotional charge is.',
+      '',
+      'Your essay should be organized formally, with an introduction, thesis statement, body paragraphs, and a conclusion.',
+    ].join('\n');
+
+  return JSON.stringify({
+    reply: 'Here are three drafts about ambition — tweak anything you like.',
+    options: [
+      { title: 'Ambition and Its Costs', body: body('ambition and its costs') },
+      { title: 'The Price of Power', body: body('the price of unchecked power') },
+      {
+        title: 'Who Pays for Ambition',
+        body: body('who pays the price for another person’s ambition'),
+      },
+    ],
+  });
+}
+
 function parseConversationId(raw: FormDataEntryValue | null): string | null {
   if (typeof raw !== 'string') return null;
   const trimmed = raw.trim();
@@ -137,18 +174,20 @@ export async function action({ request }: ActionFunctionArgs) {
 
   let completion: string;
   try {
-    completion = await getLLMCompletion({
-      model,
-      system: SYSTEM_PROMPT,
-      messages: selectRecentMessages(messages),
-      temperature: 0.7,
-      maxTokens: MAX_GENERATOR_OUTPUT_TOKENS,
-      metadata: {
-        route: '/api/domain/thesis-prompt-generator',
-        membershipId: profile.id,
-        turnCount: messages.length,
-      },
-    });
+    completion = shouldUseE2EGeneratorFixture()
+      ? e2eGeneratorFixtureResponse()
+      : await getLLMCompletion({
+          model,
+          system: SYSTEM_PROMPT,
+          messages: selectRecentMessages(messages),
+          temperature: 0.7,
+          maxTokens: MAX_GENERATOR_OUTPUT_TOKENS,
+          metadata: {
+            route: '/api/domain/thesis-prompt-generator',
+            membershipId: profile.id,
+            turnCount: messages.length,
+          },
+        });
   } catch {
     return dataResponse(
       { success: false, message: GENERIC_ERROR },
