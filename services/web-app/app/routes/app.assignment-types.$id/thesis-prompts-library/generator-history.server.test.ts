@@ -1,27 +1,29 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 
-const findMany = mock();
-const findFirst = mock();
-const create = mock();
-const update = mock();
-const createMany = mock();
-
-mock.module('~/utils/db.server', () => ({
-  prisma: {
-    thesisPromptGeneratorConversation: { findMany, findFirst, create, update },
-    thesisPromptGeneratorTurn: { createMany },
-  },
-}));
-
-const {
+import {
   deriveConversationTitle,
+  type GeneratorHistoryClient,
   isGeneratorHistoryEnabled,
   listConversations,
   loadConversation,
   MAX_CONVERSATION_TITLE_LENGTH,
   MAX_HISTORY_CONVERSATIONS,
   recordExchange,
-} = await import('./generator-history.server');
+} from './generator-history.server';
+
+const findMany = mock();
+const findFirst = mock();
+const create = mock();
+const update = mock();
+const createMany = mock();
+
+// Injected rather than registered with mock.module: Bun's module mocks are a
+// global registry keyed by file path, so a mock of this module in another test
+// file would otherwise silently replace the real one under these tests.
+const client = {
+  thesisPromptGeneratorConversation: { findMany, findFirst, create, update },
+  thesisPromptGeneratorTurn: { createMany },
+} as unknown as GeneratorHistoryClient;
 
 const FLAG = 'THESIS_PROMPT_GENERATOR_HISTORY_ENABLED';
 const previousFlag = process.env[FLAG];
@@ -78,7 +80,7 @@ describe('listConversations', () => {
       },
     ]);
 
-    const result = await listConversations('teacher-1');
+    const result = await listConversations('teacher-1', client);
 
     expect(result).toEqual([
       {
@@ -96,13 +98,13 @@ describe('listConversations', () => {
 
   test('reads as empty when the flag is off, without touching the database', async () => {
     process.env[FLAG] = 'false';
-    expect(await listConversations('teacher-1')).toEqual([]);
+    expect(await listConversations('teacher-1', client)).toEqual([]);
     expect(findMany).not.toHaveBeenCalled();
   });
 
   test('degrades to empty when the query fails', async () => {
     findMany.mockRejectedValue(new Error('db down'));
-    expect(await listConversations('teacher-1')).toEqual([]);
+    expect(await listConversations('teacher-1', client)).toEqual([]);
   });
 });
 
@@ -125,7 +127,7 @@ describe('loadConversation', () => {
       ],
     });
 
-    const result = await loadConversation('conv-1', 'teacher-1');
+    const result = await loadConversation('conv-1', 'teacher-1', client);
 
     expect(result?.turns).toHaveLength(2);
     expect(result?.turns[0]).toEqual({
@@ -142,7 +144,7 @@ describe('loadConversation', () => {
   test('scopes the read to the requesting teacher', async () => {
     findFirst.mockResolvedValue(null);
 
-    expect(await loadConversation('someone-elses-conv', 'teacher-1')).toBeNull();
+    expect(await loadConversation('someone-elses-conv', 'teacher-1', client)).toBeNull();
     expect(findFirst.mock.calls[0][0].where).toEqual({
       id: 'someone-elses-conv',
       membershipId: 'teacher-1',
@@ -158,7 +160,7 @@ describe('loadConversation', () => {
       turns: [{ role: 'system', content: 'nope', options: null }],
     });
 
-    expect((await loadConversation('conv-1', 'teacher-1'))?.turns).toEqual([]);
+    expect((await loadConversation('conv-1', 'teacher-1', client))?.turns).toEqual([]);
   });
 });
 
@@ -173,7 +175,7 @@ describe('recordExchange', () => {
   test('creates the conversation and both turns on the first exchange', async () => {
     create.mockResolvedValue({ id: 'conv-new' });
 
-    const id = await recordExchange(exchange);
+    const id = await recordExchange({ ...exchange, client });
 
     expect(id).toBe('conv-new');
     expect(create.mock.calls[0][0].data).toEqual({
@@ -194,7 +196,7 @@ describe('recordExchange', () => {
   test('appends to an existing conversation the teacher owns', async () => {
     findFirst.mockResolvedValue({ id: 'conv-1' });
 
-    const id = await recordExchange({ ...exchange, conversationId: 'conv-1' });
+    const id = await recordExchange({ ...exchange, conversationId: 'conv-1', client });
 
     expect(id).toBe('conv-1');
     expect(create).not.toHaveBeenCalled();
@@ -207,10 +209,7 @@ describe('recordExchange', () => {
     findFirst.mockResolvedValue(null);
     create.mockResolvedValue({ id: 'conv-new' });
 
-    const id = await recordExchange({
-      ...exchange,
-      conversationId: 'someone-elses-conv',
-    });
+    const id = await recordExchange({ ...exchange, conversationId: 'someone-elses-conv', client });
 
     expect(id).toBe('conv-new');
     expect(createMany.mock.calls[0][0].data[0].conversationId).toBe('conv-new');
@@ -219,20 +218,20 @@ describe('recordExchange', () => {
   test('omits options entirely for a clarifying question', async () => {
     create.mockResolvedValue({ id: 'conv-new' });
 
-    await recordExchange({ ...exchange, options: [] });
+    await recordExchange({ ...exchange, options: [], client });
 
     expect(createMany.mock.calls[0][0].data[1].options).toBeUndefined();
   });
 
   test('saves nothing when the flag is off', async () => {
     process.env[FLAG] = 'false';
-    expect(await recordExchange(exchange)).toBeNull();
+    expect(await recordExchange({ ...exchange, client })).toBeNull();
     expect(create).not.toHaveBeenCalled();
     expect(createMany).not.toHaveBeenCalled();
   });
 
   test('never throws into the request path when the write fails', async () => {
     create.mockRejectedValue(new Error('db down'));
-    expect(await recordExchange(exchange)).toBeNull();
+    expect(await recordExchange({ ...exchange, client })).toBeNull();
   });
 });

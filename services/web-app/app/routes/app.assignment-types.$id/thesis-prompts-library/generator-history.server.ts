@@ -59,6 +59,43 @@ export function deriveConversationTitle(firstTeacherMessage: string): string {
   return `${trimmed.trimEnd()}…`;
 }
 
+type ConversationListRow = {
+  id: string;
+  title: string;
+  updatedAt: Date;
+  _count: { turns: number };
+};
+
+type StoredTurnRow = { role: string; content: string; options: unknown };
+
+type ConversationDetailRow = {
+  id: string;
+  title: string;
+  updatedAt: Date;
+  turns: StoredTurnRow[];
+};
+
+/**
+ * The slice of the Prisma client this module needs. Declaring it explicitly
+ * gives each function an injection seam, so the tests below pass a double
+ * instead of reaching for `mock.module` — Bun's module mocks are a global
+ * registry keyed by file path, so a mock registered by a route test would
+ * otherwise replace this module for every other test in the run.
+ */
+export type GeneratorHistoryClient = {
+  thesisPromptGeneratorConversation: {
+    findMany(args: unknown): Promise<ConversationListRow[]>;
+    findFirst(args: unknown): Promise<{ id: string } | ConversationDetailRow | null>;
+    create(args: unknown): Promise<{ id: string }>;
+    update(args: unknown): Promise<unknown>;
+  };
+  thesisPromptGeneratorTurn: {
+    createMany(args: unknown): Promise<unknown>;
+  };
+};
+
+const defaultClient = prisma as unknown as GeneratorHistoryClient;
+
 export type SavedGeneratorTurn = GeneratorMessage & {
   options: GeneratedPrompt[];
 };
@@ -93,12 +130,13 @@ function parseStoredRole(value: string): 'user' | 'assistant' | null {
 
 /** The teacher's recent conversations, newest first. */
 export async function listConversations(
-  membershipId: string
+  membershipId: string,
+  client: GeneratorHistoryClient = defaultClient
 ): Promise<SavedConversationSummary[]> {
   if (!isGeneratorHistoryEnabled()) return [];
 
   try {
-    const rows = await prisma.thesisPromptGeneratorConversation.findMany({
+    const rows = await client.thesisPromptGeneratorConversation.findMany({
       where: { membershipId, deletedAt: null },
       orderBy: { updatedAt: 'desc' },
       take: MAX_HISTORY_CONVERSATIONS,
@@ -110,7 +148,7 @@ export async function listConversations(
       },
     });
 
-    return rows.map((row) => ({
+    return rows.map((row: ConversationListRow) => ({
       id: row.id,
       title: row.title,
       updatedAt: row.updatedAt.toISOString(),
@@ -129,12 +167,13 @@ export async function listConversations(
  */
 export async function loadConversation(
   conversationId: string,
-  membershipId: string
+  membershipId: string,
+  client: GeneratorHistoryClient = defaultClient
 ): Promise<SavedConversation | null> {
   if (!isGeneratorHistoryEnabled()) return null;
 
   try {
-    const row = await prisma.thesisPromptGeneratorConversation.findFirst({
+    const row = (await client.thesisPromptGeneratorConversation.findFirst({
       where: { id: conversationId, membershipId, deletedAt: null },
       select: {
         id: true,
@@ -145,14 +184,14 @@ export async function loadConversation(
           select: { role: true, content: true, options: true },
         },
       },
-    });
+    })) as ConversationDetailRow | null;
     if (!row) return null;
 
     return {
       id: row.id,
       title: row.title,
       updatedAt: row.updatedAt.toISOString(),
-      turns: row.turns.flatMap((turn) => {
+      turns: row.turns.flatMap((turn: StoredTurnRow) => {
         const role = parseStoredRole(turn.role);
         if (!role) return [];
         return [
@@ -179,12 +218,14 @@ export async function recordExchange({
   teacherMessage,
   reply,
   options,
+  client = defaultClient,
 }: {
   conversationId?: string | null;
   membershipId: string;
   teacherMessage: string;
   reply: string;
   options: GeneratedPrompt[];
+  client?: GeneratorHistoryClient;
 }): Promise<string | null> {
   if (!isGeneratorHistoryEnabled()) return null;
 
@@ -192,7 +233,7 @@ export async function recordExchange({
     // An unknown or someone else's id starts a fresh conversation rather than
     // failing the turn or writing into a thread the teacher doesn't own.
     const existing = conversationId
-      ? await prisma.thesisPromptGeneratorConversation.findFirst({
+      ? await client.thesisPromptGeneratorConversation.findFirst({
           where: { id: conversationId, membershipId, deletedAt: null },
           select: { id: true },
         })
@@ -200,7 +241,7 @@ export async function recordExchange({
 
     const conversation =
       existing ??
-      (await prisma.thesisPromptGeneratorConversation.create({
+      (await client.thesisPromptGeneratorConversation.create({
         data: {
           membershipId,
           title: deriveConversationTitle(teacherMessage),
@@ -208,7 +249,7 @@ export async function recordExchange({
         select: { id: true },
       }));
 
-    await prisma.thesisPromptGeneratorTurn.createMany({
+    await client.thesisPromptGeneratorTurn.createMany({
       data: [
         {
           conversationId: conversation.id,
@@ -224,7 +265,7 @@ export async function recordExchange({
       ],
     });
 
-    await prisma.thesisPromptGeneratorConversation.update({
+    await client.thesisPromptGeneratorConversation.update({
       where: { id: conversation.id },
       data: { updatedAt: new Date() },
     });

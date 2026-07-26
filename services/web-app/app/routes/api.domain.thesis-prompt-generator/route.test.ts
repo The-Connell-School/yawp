@@ -1,18 +1,26 @@
-import { beforeEach, describe, expect, mock, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 
 const requireUserId = mock();
 const requireMembership = mock();
 const getLLMCompletion = mock();
-const recordExchange = mock();
-const listConversations = mock();
-const loadConversation = mock();
+
+// History is exercised through the real module against a Prisma double. Mocking
+// the history module itself would replace it globally — Bun's module mocks are a
+// registry keyed by file path — and break its own unit tests in the same run.
+const findMany = mock();
+const findFirst = mock();
+const create = mock();
+const update = mock();
+const createMany = mock();
 
 mock.module('~/utils/auth.server', () => ({ requireUserId, requireMembership }));
 mock.module('~/utils/getLLMCompletion', () => ({ getLLMCompletion }));
-mock.module(
-  '../app.assignment-types.$id/thesis-prompts-library/generator-history.server',
-  () => ({ recordExchange, listConversations, loadConversation })
-);
+mock.module('~/utils/db.server', () => ({
+  prisma: {
+    thesisPromptGeneratorConversation: { findMany, findFirst, create, update },
+    thesisPromptGeneratorTurn: { createMany },
+  },
+}));
 
 const { action, loader } = await import('./route');
 const { MAX_GENERATOR_MESSAGES } = await import(
@@ -37,19 +45,32 @@ function request(messages: unknown, conversationId?: string) {
   return new Request(ROUTE_URL, { method: 'POST', body });
 }
 
-describe('api.domain.thesis-prompt-generator', () => {
-  beforeEach(() => {
-    requireUserId.mockReset();
-    requireMembership.mockReset();
-    getLLMCompletion.mockReset();
-    recordExchange.mockReset();
-    listConversations.mockReset();
-    loadConversation.mockReset();
+const HISTORY_FLAG = 'THESIS_PROMPT_GENERATOR_HISTORY_ENABLED';
+const previousHistoryFlag = process.env[HISTORY_FLAG];
 
-    requireUserId.mockResolvedValue('user-1');
-    requireMembership.mockResolvedValue({ id: 'teacher-1', role: 'TEACHER' });
-    recordExchange.mockResolvedValue(null);
-  });
+function resetMocks() {
+  [
+    requireUserId,
+    requireMembership,
+    getLLMCompletion,
+    findMany,
+    findFirst,
+    create,
+    update,
+    createMany,
+  ].forEach((m) => m.mockReset());
+
+  requireUserId.mockResolvedValue('user-1');
+  requireMembership.mockResolvedValue({ id: 'teacher-1', role: 'TEACHER' });
+}
+
+afterEach(() => {
+  if (previousHistoryFlag === undefined) delete process.env[HISTORY_FLAG];
+  else process.env[HISTORY_FLAG] = previousHistoryFlag;
+});
+
+describe('api.domain.thesis-prompt-generator', () => {
+  beforeEach(resetMocks);
 
   test('returns the reply and drafted options from the model', async () => {
     getLLMCompletion.mockResolvedValue(
@@ -226,15 +247,8 @@ describe('api.domain.thesis-prompt-generator', () => {
 
 describe('api.domain.thesis-prompt-generator history', () => {
   beforeEach(() => {
-    requireUserId.mockReset();
-    requireMembership.mockReset();
-    getLLMCompletion.mockReset();
-    recordExchange.mockReset();
-    listConversations.mockReset();
-    loadConversation.mockReset();
-
-    requireUserId.mockResolvedValue('user-1');
-    requireMembership.mockResolvedValue({ id: 'teacher-1', role: 'TEACHER' });
+    resetMocks();
+    process.env[HISTORY_FLAG] = 'true';
     getLLMCompletion.mockResolvedValue(
       JSON.stringify({
         reply: 'Here are three drafts about ambition.',
@@ -244,7 +258,7 @@ describe('api.domain.thesis-prompt-generator history', () => {
   });
 
   test('saves the exchange and returns the conversation id', async () => {
-    recordExchange.mockResolvedValue('conv-new');
+    create.mockResolvedValue({ id: 'conv-new' });
 
     const response = await action({
       request: request([{ role: 'user', content: 'A prompt about ambition.' }]),
@@ -252,20 +266,25 @@ describe('api.domain.thesis-prompt-generator history', () => {
     const body = await readBody(response);
 
     expect(body.conversationId).toBe('conv-new');
-    expect(recordExchange).toHaveBeenCalledTimes(1);
-    expect(recordExchange.mock.calls[0][0]).toEqual({
-      conversationId: null,
+    // Titled after the teacher's ask, and both turns stored.
+    expect(create.mock.calls[0][0].data).toEqual({
       membershipId: 'teacher-1',
-      teacherMessage: 'A prompt about ambition.',
-      reply: 'Here are three drafts about ambition.',
-      options: [{ title: 'Ambition and Its Costs', body: 'Write a…' }],
+      title: 'A prompt about ambition.',
     });
+    const turns = createMany.mock.calls[0][0].data;
+    expect(turns.map((t: { role: string }) => t.role)).toEqual([
+      'user',
+      'assistant',
+    ]);
+    expect(turns[1].options).toEqual([
+      { title: 'Ambition and Its Costs', body: 'Write a…' },
+    ]);
   });
 
   test('appends to the conversation the client is already in', async () => {
-    recordExchange.mockResolvedValue('conv-1');
+    findFirst.mockResolvedValue({ id: 'conv-1' });
 
-    await action({
+    const response = await action({
       request: request(
         [
           { role: 'user', content: 'A prompt about ambition.' },
@@ -276,14 +295,16 @@ describe('api.domain.thesis-prompt-generator history', () => {
       ),
     } as never);
 
-    const saved = recordExchange.mock.calls[0][0];
-    expect(saved.conversationId).toBe('conv-1');
-    // Only the newest teacher turn is saved; earlier turns are already stored.
-    expect(saved.teacherMessage).toBe('Make them more about fate.');
+    expect((await readBody(response)).conversationId).toBe('conv-1');
+    expect(create).not.toHaveBeenCalled();
+    // Only the newest teacher turn is added; earlier turns are already stored.
+    const turns = createMany.mock.calls[0][0].data;
+    expect(turns[0].content).toBe('Make them more about fate.');
+    expect(turns[0].conversationId).toBe('conv-1');
   });
 
-  test('still answers when saving is unavailable', async () => {
-    recordExchange.mockResolvedValue(null);
+  test('still answers when saving fails', async () => {
+    create.mockRejectedValue(new Error('db down'));
 
     const response = await action({
       request: request([{ role: 'user', content: 'A prompt about ambition.' }]),
@@ -295,6 +316,18 @@ describe('api.domain.thesis-prompt-generator history', () => {
     expect(body.conversationId).toBeNull();
   });
 
+  test('saves nothing while the flag is off', async () => {
+    process.env[HISTORY_FLAG] = 'false';
+
+    const response = await action({
+      request: request([{ role: 'user', content: 'A prompt about ambition.' }]),
+    } as never);
+
+    expect((await readBody(response)).success).toBe(true);
+    expect(create).not.toHaveBeenCalled();
+    expect(createMany).not.toHaveBeenCalled();
+  });
+
   test('does not save the truncated-response retry nudge', async () => {
     getLLMCompletion.mockResolvedValue('{"reply": "Here are three dra');
 
@@ -303,30 +336,44 @@ describe('api.domain.thesis-prompt-generator history', () => {
     } as never);
     const body = await readBody(response);
 
-    expect(body.success).toBe(true);
     expect(body.reply).toContain('got tangled on my end');
-    expect(recordExchange).not.toHaveBeenCalled();
+    expect(create).not.toHaveBeenCalled();
+    expect(createMany).not.toHaveBeenCalled();
   });
 
   test('lists the teacher’s conversations', async () => {
-    listConversations.mockResolvedValue([
-      { id: 'conv-1', title: 'Macbeth and ambition', updatedAt: 'x', turnCount: 4 },
+    findMany.mockResolvedValue([
+      {
+        id: 'conv-1',
+        title: 'Macbeth and ambition',
+        updatedAt: new Date('2026-07-20T10:00:00.000Z'),
+        _count: { turns: 4 },
+      },
     ]);
 
     const response = await loader({ request: new Request(ROUTE_URL) } as never);
     const body = await readBody(response);
 
     expect(body.success).toBe(true);
-    expect(body.conversations).toHaveLength(1);
-    expect(listConversations).toHaveBeenCalledWith('teacher-1');
+    expect(body.conversations).toEqual([
+      {
+        id: 'conv-1',
+        title: 'Macbeth and ambition',
+        updatedAt: '2026-07-20T10:00:00.000Z',
+        turnCount: 4,
+      },
+    ]);
+    expect(findMany.mock.calls[0][0].where.membershipId).toBe('teacher-1');
   });
 
   test('loads one conversation, scoped to the teacher', async () => {
-    loadConversation.mockResolvedValue({
+    findFirst.mockResolvedValue({
       id: 'conv-1',
       title: 'Macbeth and ambition',
-      updatedAt: 'x',
-      turns: [{ role: 'user', content: 'A prompt about ambition', options: [] }],
+      updatedAt: new Date('2026-07-20T10:00:00.000Z'),
+      turns: [
+        { role: 'user', content: 'A prompt about ambition', options: null },
+      ],
     });
 
     const response = await loader({
@@ -335,11 +382,15 @@ describe('api.domain.thesis-prompt-generator history', () => {
     const body = await readBody(response);
 
     expect(body.conversation.turns).toHaveLength(1);
-    expect(loadConversation).toHaveBeenCalledWith('conv-1', 'teacher-1');
+    expect(findFirst.mock.calls[0][0].where).toEqual({
+      id: 'conv-1',
+      membershipId: 'teacher-1',
+      deletedAt: null,
+    });
   });
 
   test('404s a conversation the teacher cannot read', async () => {
-    loadConversation.mockResolvedValue(null);
+    findFirst.mockResolvedValue(null);
 
     const response = await loader({
       request: new Request(`${ROUTE_URL}?conversationId=someone-elses`),
@@ -355,6 +406,6 @@ describe('api.domain.thesis-prompt-generator history', () => {
     const response = await loader({ request: new Request(ROUTE_URL) } as never);
 
     expect((response as any).init?.status).toBe(403);
-    expect(listConversations).not.toHaveBeenCalled();
+    expect(findMany).not.toHaveBeenCalled();
   });
 });

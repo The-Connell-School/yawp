@@ -1,6 +1,11 @@
 import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { useFetcher } from 'react-router';
-import { ChevronLeftIcon, ChevronRightIcon } from 'lucide-react';
+import {
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  ClockIcon,
+  PlusIcon,
+} from 'lucide-react';
 import { Button } from '~/components/ui/button';
 import {
   Sheet,
@@ -10,6 +15,7 @@ import {
   SheetTitle,
 } from '~/components/ui/sheet';
 import { Textarea } from '~/components/ui/textarea';
+import { timeAgo } from '~/utils/timeAgo';
 import type {
   GeneratedPrompt,
   GeneratorMessage,
@@ -36,6 +42,36 @@ type GeneratorFetcherData = {
   reply?: string;
   options?: GeneratedPrompt[];
   message?: string;
+  /** The thread this exchange was saved to, when history is on. */
+  conversationId?: string | null;
+};
+
+/** One row in the saved-conversations list. */
+type SavedConversationSummary = {
+  id: string;
+  title: string;
+  updatedAt: string;
+  turnCount: number;
+};
+
+type HistoryFetcherData = {
+  success: boolean;
+  conversations?: SavedConversationSummary[];
+};
+
+type ConversationFetcherData = {
+  success: boolean;
+  message?: string;
+  conversation?: {
+    id: string;
+    title: string;
+    updatedAt: string;
+    turns: Array<{
+      role: 'user' | 'assistant';
+      content: string;
+      options: GeneratedPrompt[];
+    }>;
+  };
 };
 
 type Props = {
@@ -67,22 +103,41 @@ export function ThesisPromptGenerator({
   onUsePrompt,
 }: Props) {
   const fetcher = useFetcher<GeneratorFetcherData>();
+  const historyFetcher = useFetcher<HistoryFetcherData>();
+  const conversationFetcher = useFetcher<ConversationFetcherData>();
   const [turns, setTurns] = useState<GeneratorTurn[]>([]);
   const [input, setInput] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [conversationId, setConversationId] = useState<string | null>(null);
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const lastHandled = useRef<GeneratorFetcherData | null>(null);
+  const lastLoaded = useRef<ConversationFetcherData | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const isThinking = fetcher.state !== 'idle';
+  const conversations = historyFetcher.data?.conversations ?? [];
+  // The loader returns an empty list when saved history is switched off, so the
+  // sheet looks exactly as it did before the feature when the flag is off.
+  const hasHistory = conversations.length > 0;
 
-  // Reset the conversation each time the sheet is opened fresh.
+  function startFreshConversation() {
+    setTurns([]);
+    setInput('');
+    setError(null);
+    setConversationId(null);
+    setIsHistoryOpen(false);
+    lastHandled.current = null;
+    lastLoaded.current = null;
+  }
+
+  // Open on a fresh chat, and pull the teacher's saved conversations so they can
+  // get back to earlier work from here.
   useEffect(() => {
-    if (open) {
-      setTurns([]);
-      setInput('');
-      setError(null);
-      lastHandled.current = null;
-    }
+    if (!open) return;
+    startFreshConversation();
+    historyFetcher.load(GENERATOR_ACTION);
+    // historyFetcher is stable for the life of the component.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
   // Append the assistant's reply once a response arrives (dedup by identity).
@@ -100,6 +155,10 @@ export function ThesisPromptGenerator({
           options: fetcher.data!.options ?? [],
         },
       ]);
+      // Keep appending to whatever thread the server saved this exchange to.
+      if (fetcher.data.conversationId) {
+        setConversationId(fetcher.data.conversationId);
+      }
     } else {
       setError(
         fetcher.data.message ??
@@ -107,6 +166,34 @@ export function ThesisPromptGenerator({
       );
     }
   }, [fetcher.state, fetcher.data]);
+
+  // Replay a conversation the teacher picked out of their history.
+  useEffect(() => {
+    if (conversationFetcher.state !== 'idle' || !conversationFetcher.data) return;
+    if (lastLoaded.current === conversationFetcher.data) return;
+    lastLoaded.current = conversationFetcher.data;
+
+    const loaded = conversationFetcher.data.conversation;
+    if (!loaded) {
+      setError(
+        conversationFetcher.data.message ??
+          'That conversation could not be opened.'
+      );
+      return;
+    }
+
+    setTurns(
+      loaded.turns.map((turn) => ({
+        role: turn.role,
+        content: turn.content,
+        options: turn.options,
+      }))
+    );
+    setConversationId(loaded.id);
+    setError(null);
+    setIsHistoryOpen(false);
+    lastHandled.current = null;
+  }, [conversationFetcher.state, conversationFetcher.data]);
 
   // Keep the newest message in view.
   useEffect(() => {
@@ -123,9 +210,19 @@ export function ThesisPromptGenerator({
     ];
     setTurns(nextTurns);
     setInput('');
+    setIsHistoryOpen(false);
     fetcher.submit(
-      { messages: JSON.stringify(toApiMessages(nextTurns)) },
+      {
+        messages: JSON.stringify(toApiMessages(nextTurns)),
+        conversationId: conversationId ?? '',
+      },
       { method: 'post', action: GENERATOR_ACTION }
+    );
+  }
+
+  function openSavedConversation(id: string) {
+    conversationFetcher.load(
+      `${GENERATOR_ACTION}?conversationId=${encodeURIComponent(id)}`
     );
   }
 
@@ -139,7 +236,41 @@ export function ThesisPromptGenerator({
             draft a prompt in the style of the library. When you like it, use it
             to start an assignment.
           </SheetDescription>
+          {hasHistory ? (
+            <div className="flex items-center gap-2 pt-1">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                aria-expanded={isHistoryOpen}
+                onClick={() => setIsHistoryOpen((open) => !open)}
+              >
+                <ClockIcon className="mr-1.5 h-4 w-4" />
+                {isHistoryOpen ? 'Hide past prompts' : 'Past prompts'}
+              </Button>
+              {turns.length > 0 ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={startFreshConversation}
+                >
+                  <PlusIcon className="mr-1.5 h-4 w-4" />
+                  New chat
+                </Button>
+              ) : null}
+            </div>
+          ) : null}
         </SheetHeader>
+
+        {isHistoryOpen ? (
+          <SavedConversationList
+            conversations={conversations}
+            activeId={conversationId}
+            isLoading={conversationFetcher.state !== 'idle'}
+            onOpen={openSavedConversation}
+          />
+        ) : null}
 
         <div
           ref={scrollRef}
@@ -234,6 +365,53 @@ export function ThesisPromptGenerator({
         </form>
       </SheetContent>
     </Sheet>
+  );
+}
+
+/**
+ * The teacher's saved generator chats, newest first. Only rendered when there
+ * is something to show, so the sheet is unchanged for a first-time teacher (or
+ * when saved history is switched off).
+ */
+function SavedConversationList({
+  conversations,
+  activeId,
+  isLoading,
+  onOpen,
+}: {
+  conversations: SavedConversationSummary[];
+  activeId: string | null;
+  isLoading: boolean;
+  onOpen: (id: string) => void;
+}) {
+  return (
+    <div className="mt-3 rounded-lg border bg-muted/40 p-3">
+      <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+        Past prompts
+      </p>
+      <ul className="max-h-48 space-y-1 overflow-y-auto">
+        {conversations.map((conversation) => (
+          <li key={conversation.id}>
+            <button
+              type="button"
+              disabled={isLoading}
+              onClick={() => onOpen(conversation.id)}
+              aria-current={conversation.id === activeId}
+              className={
+                conversation.id === activeId
+                  ? 'flex w-full items-baseline justify-between gap-3 rounded-md bg-accent px-2 py-1.5 text-left text-sm text-accent-foreground'
+                  : 'flex w-full items-baseline justify-between gap-3 rounded-md px-2 py-1.5 text-left text-sm transition hover:bg-accent hover:text-accent-foreground disabled:opacity-60'
+              }
+            >
+              <span className="truncate">{conversation.title}</span>
+              <span className="shrink-0 text-xs text-muted-foreground">
+                {timeAgo(conversation.updatedAt)}
+              </span>
+            </button>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 
