@@ -258,10 +258,10 @@ run_tooling_if_needed() {
   local tooling_command
   case "$DATA_MODE" in
     seed)
-      tooling_command='bun install --ignore-scripts && bun prisma generate && cd packages/prisma && bun prisma migrate deploy && bun run scripts/backfill-class-art-key.ts && bun run seed-local-dev && bun run scripts/assignment-type-release-gate.ts --require-data'
+      tooling_command='bun install --ignore-scripts && bun prisma generate && cd packages/prisma && bun prisma migrate deploy && bun run scripts/backfill-class-art-key.ts && bun run seed-local-dev && bun run seed-ap-english-lang-library && bun run scripts/assignment-type-release-gate.ts --require-data'
       ;;
     production-dump)
-      tooling_command='bun install --ignore-scripts && bun prisma generate && cd packages/prisma && bun prisma migrate deploy && bun run scripts/backfill-class-art-key.ts && bun run scripts/assignment-type-release-gate.ts --require-data'
+      tooling_command='bun install --ignore-scripts && bun prisma generate && cd packages/prisma && bun prisma migrate deploy && bun run scripts/backfill-class-art-key.ts && bun run seed-ap-english-lang-library && bun run scripts/assignment-type-release-gate.ts --require-data'
       ;;
   esac
 
