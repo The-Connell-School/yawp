@@ -381,15 +381,15 @@ model OrganizationAssignmentType {
 }
 
 model OrgMembership {
-  id                            String                         @id @default(cuid())
-  createdAt                     DateTime                       @default(now()) @db.Timestamptz(6)
+  id                            String                              @id @default(cuid())
+  createdAt                     DateTime                            @default(now()) @db.Timestamptz(6)
   userId                        String
-  user                          User                           @relation(fields: [userId], references: [id])
+  user                          User                                @relation(fields: [userId], references: [id])
   organizationId                String
-  organization                  Organization                   @relation(fields: [organizationId], references: [id])
+  organization                  Organization                        @relation(fields: [organizationId], references: [id])
   role                          MembershipRole
-  isOrgOwner                    Boolean                        @default(false)
-  isActive                      Boolean                        @default(true)
+  isOrgOwner                    Boolean                             @default(false)
+  isActive                      Boolean                             @default(true)
   school                        String?
   schoolTeacher                 String?
   grade                         String?
@@ -398,16 +398,17 @@ model OrgMembership {
   documentComments              DocumentComment[]
   documentCommentResponses      DocumentCommentResponse[]
   pasteAlerts                   PasteAlert[]
-  submissionsGraded             Submission[]                   @relation("SubmissionGradedBy")
-  submissionComments            SubmissionComment[]            @relation("SubmissionCommentProfile")
-  ownedAssignmentTypes          AssignmentType[]               @relation("AssignmentTypeOwner")
-  classesAsTeacher              Class[]                        @relation("ClassTeachers")
-  classesAsStudent              Class[]                        @relation("ClassStudents")
-  schools                       School[]                       @relation("SchoolTeachers")
+  submissionsGraded             Submission[]                        @relation("SubmissionGradedBy")
+  submissionComments            SubmissionComment[]                 @relation("SubmissionCommentProfile")
+  ownedAssignmentTypes          AssignmentType[]                    @relation("AssignmentTypeOwner")
+  classesAsTeacher              Class[]                             @relation("ClassTeachers")
+  classesAsStudent              Class[]                             @relation("ClassStudents")
+  schools                       School[]                            @relation("SchoolTeachers")
   teacherTrainingModuleSessions TeacherTrainingModuleSession[]
-  assignedTeacherTrainings      TeacherTraining[]              @relation("TeacherTrainingAssignments")
-  assignmentTypesCustomized     Boolean                        @default(false)
+  assignedTeacherTrainings      TeacherTraining[]                   @relation("TeacherTrainingAssignments")
+  assignmentTypesCustomized     Boolean                             @default(false)
   assignmentTypeAssignments     TeacherAssignmentType[]
+  thesisPromptGeneratorChats    ThesisPromptGeneratorConversation[]
 
   @@unique([userId, organizationId])
   @@map("OrgMembership")
@@ -677,6 +678,37 @@ model LegacyGradeRedirect {
   gradeId      String   @id
   submissionId String
   createdAt    DateTime @default(now()) @db.Timestamptz(6)
+}
+
+/// A teacher's saved chat with the Thesis-Driven Essay prompt generator, so
+/// they can come back to a set of drafts instead of starting over. Distinct
+/// from LlmLog, which is an ops audit trail of individual provider calls.
+model ThesisPromptGeneratorConversation {
+  id           String                      @id @default(cuid())
+  createdAt    DateTime                    @default(now()) @db.Timestamptz(6)
+  updatedAt    DateTime                    @default(now()) @db.Timestamptz(6)
+  deletedAt    DateTime?                   @db.Timestamptz(6)
+  /// Derived from the teacher's opening message, for the history list.
+  title        String                      @default("Untitled")
+  membershipId String
+  membership   OrgMembership               @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  turns        ThesisPromptGeneratorTurn[]
+
+  @@index([membershipId, updatedAt(sort: Desc)])
+}
+
+model ThesisPromptGeneratorTurn {
+  id             String                            @id @default(cuid())
+  createdAt      DateTime                          @default(now()) @db.Timestamptz(6)
+  /// 'user' for the teacher, 'assistant' for the generator.
+  role           String
+  content        String
+  /// The drafted { title, body } options offered on an assistant turn.
+  options        Json?
+  conversationId String
+  conversation   ThesisPromptGeneratorConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, createdAt])
 }
 
 model LlmLog {
