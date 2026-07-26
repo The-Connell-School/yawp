@@ -7,9 +7,9 @@ import {
   type GeneratorMessage,
   GeneratorResponseSchema,
   MAX_GENERATOR_MESSAGE_LENGTH,
-  MAX_GENERATOR_MESSAGES,
   MAX_GENERATOR_OUTPUT_TOKENS,
   resolveGeneratorModel,
+  selectRecentMessages,
 } from '../app.assignment-types.$id/thesis-prompts-library/prompt-generator';
 import type { ThesisPrompt } from '../app.assignment-types.$id/thesis-prompts-library/data';
 import thesisPromptsRaw from '../app.assignment-types.$id/thesis-prompts-library/prompts.json';
@@ -88,7 +88,7 @@ export async function action({ request }: ActionFunctionArgs) {
     completion = await getLLMCompletion({
       model,
       system: SYSTEM_PROMPT,
-      messages: messages.slice(-MAX_GENERATOR_MESSAGES),
+      messages: selectRecentMessages(messages),
       temperature: 0.7,
       maxTokens: MAX_GENERATOR_OUTPUT_TOKENS,
       metadata: {

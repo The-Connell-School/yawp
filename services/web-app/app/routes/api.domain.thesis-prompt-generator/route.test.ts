@@ -8,6 +8,9 @@ mock.module('~/utils/auth.server', () => ({ requireUserId, requireMembership }))
 mock.module('~/utils/getLLMCompletion', () => ({ getLLMCompletion }));
 
 const { action } = await import('./route');
+const { MAX_GENERATOR_MESSAGES } = await import(
+  '../app.assignment-types.$id/thesis-prompts-library/prompt-generator'
+);
 
 async function readBody(response: any) {
   return typeof response.json === 'function' ? response.json() : response.data;
@@ -163,6 +166,39 @@ describe('api.domain.thesis-prompt-generator', () => {
 
     expect((response as any).init?.status).toBe(400);
     expect(getLLMCompletion).not.toHaveBeenCalled();
+  });
+
+  test('keeps the forwarded window starting on a teacher message', async () => {
+    getLLMCompletion.mockResolvedValue(
+      JSON.stringify({ reply: 'Here are three drafts.', options: [] })
+    );
+
+    // A long conversation alternates teacher/assistant and always ends on the
+    // teacher, so its length is odd. Anthropic rejects a request whose first
+    // message is from the assistant, so the trimmed window must never start
+    // there no matter how long the history gets.
+    for (const teacherTurns of [12, 13, 14, 20]) {
+      getLLMCompletion.mockClear();
+      const messages: Array<{ role: string; content: string }> = [];
+      for (let i = 0; i < teacherTurns; i++) {
+        messages.push({ role: 'user', content: `Teacher turn ${i + 1}` });
+        if (i < teacherTurns - 1) {
+          messages.push({ role: 'assistant', content: `Draft ${i + 1}` });
+        }
+      }
+
+      const response = await action({ request: request(messages) } as never);
+      expect((await readBody(response)).success).toBe(true);
+
+      const forwarded = getLLMCompletion.mock.calls[0][0].messages;
+      expect(forwarded[0].role).toBe('user');
+      expect(forwarded[forwarded.length - 1].role).toBe('user');
+      expect(forwarded.length).toBeLessThanOrEqual(MAX_GENERATOR_MESSAGES);
+      // Whatever we keep has to stay a strictly alternating transcript.
+      forwarded.forEach((message: { role: string }, index: number) => {
+        expect(message.role).toBe(index % 2 === 0 ? 'user' : 'assistant');
+      });
+    }
   });
 
   test('surfaces a friendly error when the model call throws', async () => {

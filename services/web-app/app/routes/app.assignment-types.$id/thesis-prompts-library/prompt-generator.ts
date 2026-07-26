@@ -72,6 +72,27 @@ export const MAX_GENERATOR_OUTPUT_TOKENS = 4000;
 export const MAX_GENERATOR_MESSAGE_LENGTH = 4000;
 
 /**
+ * Trim a conversation down to the most recent `limit` turns for the provider.
+ *
+ * Slicing alone is not enough: the transcript alternates teacher/assistant and
+ * always ends on the teacher, so its length is odd — and taking an even-sized
+ * window off the end of an odd-length transcript opens on an *assistant* turn.
+ * Anthropic rejects a request whose first message is not from the user, so a
+ * long-running chat would fail on every turn once it outgrew the window. Drop
+ * any leading assistant turns so what we forward always starts with a teacher
+ * message and stays a strictly alternating transcript.
+ */
+export function selectRecentMessages(
+  messages: GeneratorMessage[],
+  limit = MAX_GENERATOR_MESSAGES
+): GeneratorMessage[] {
+  const window = messages.slice(-limit);
+  const firstTeacherTurn = window.findIndex((m) => m.role === 'user');
+  if (firstTeacherTurn === -1) return [];
+  return firstTeacherTurn === 0 ? window : window.slice(firstTeacherTurn);
+}
+
+/**
  * The Anthropic model to use, mirroring the rubric-extract route: honor
  * `AI_MODEL` when it points at a Claude model, otherwise fall back to a stable
  * default. getLLMCompletion handles provider fallback from here.

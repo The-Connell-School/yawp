@@ -1,9 +1,12 @@
 import { describe, expect, test } from 'bun:test';
 import {
   buildGeneratorSystemPrompt,
+  type GeneratorMessage,
   GeneratorResponseSchema,
+  MAX_GENERATOR_MESSAGES,
   resolveGeneratorModel,
   selectFewShotExamples,
+  selectRecentMessages,
 } from './prompt-generator';
 import type { ThesisPrompt } from './data';
 import promptsRaw from './prompts.json';
@@ -110,5 +113,57 @@ describe('GeneratorResponseSchema', () => {
         options: [{ title: 'x' }],
       }).success
     ).toBe(false);
+  });
+});
+
+describe('selectRecentMessages', () => {
+  /** A transcript of `teacherTurns` exchanges, always ending on the teacher. */
+  function transcript(teacherTurns: number): GeneratorMessage[] {
+    const messages: GeneratorMessage[] = [];
+    for (let i = 0; i < teacherTurns; i++) {
+      messages.push({ role: 'user', content: `Teacher ${i + 1}` });
+      if (i < teacherTurns - 1) {
+        messages.push({ role: 'assistant', content: `Draft ${i + 1}` });
+      }
+    }
+    return messages;
+  }
+
+  test('leaves a short conversation untouched', () => {
+    const messages = transcript(3);
+    expect(selectRecentMessages(messages)).toEqual(messages);
+  });
+
+  test('always starts on a teacher turn once the window is exceeded', () => {
+    // 13 teacher turns is the first history longer than the 24-message window,
+    // and the point where a plain slice(-24) would open on the assistant.
+    for (const teacherTurns of [12, 13, 14, 30]) {
+      const trimmed = selectRecentMessages(transcript(teacherTurns));
+
+      expect(trimmed.length).toBeLessThanOrEqual(MAX_GENERATOR_MESSAGES);
+      expect(trimmed[0]?.role).toBe('user');
+      expect(trimmed[trimmed.length - 1]?.role).toBe('user');
+      trimmed.forEach((message, index) => {
+        expect(message.role).toBe(index % 2 === 0 ? 'user' : 'assistant');
+      });
+    }
+  });
+
+  test('keeps the most recent turns, not the oldest', () => {
+    const trimmed = selectRecentMessages(transcript(30));
+    expect(trimmed[trimmed.length - 1]?.content).toBe('Teacher 30');
+    expect(trimmed.some((m) => m.content === 'Teacher 1')).toBe(false);
+  });
+
+  test('honors an explicit limit', () => {
+    const trimmed = selectRecentMessages(transcript(10), 5);
+    expect(trimmed).toHaveLength(5);
+    expect(trimmed[0]?.role).toBe('user');
+  });
+
+  test('drops a window that holds no teacher turn at all', () => {
+    expect(
+      selectRecentMessages([{ role: 'assistant', content: 'Draft' }])
+    ).toEqual([]);
   });
 });
