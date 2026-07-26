@@ -58,12 +58,45 @@ the Create Assignment sheet.
   prompts as few-shot examples. Unit-tested in `prompt-generator.test.ts`.
 - `thesis-prompt-generator.tsx` — the chat sheet UI (`useFetcher`).
 - `../../api.domain.thesis-prompt-generator/route.ts` — the teacher-gated POST
-  action that calls `getLLMCompletion` and parses the structured reply
-  (`route.test.ts`).
+  action that calls `getLLMCompletion` and parses the structured reply, plus the
+  GET loader that serves saved history (`route.test.ts`).
 
 The generator is gated exactly like the library: teachers only, and only on
 the Thesis-Driven Essay assignment type. Its drafts follow the same three-part
 structure as the corpus, so anything it produces reads like a library prompt.
+
+Only the most recent turns are forwarded to the model, via
+`selectRecentMessages`. It trims to `MAX_GENERATOR_MESSAGES` *and* drops any
+leading assistant turn: a transcript alternates and always ends on the teacher,
+so an even-sized window off an odd-length transcript would otherwise open on an
+assistant turn, which the provider rejects.
+
+## Saved history
+
+`generator-history.server.ts` persists each exchange so a teacher can reopen
+prompts they worked on earlier, rather than losing the chat when the sheet
+closes. The sheet grows a **"Past prompts"** button listing recent conversations;
+picking one replays it, and continuing appends to the same thread.
+
+- Conversations and turns are scoped to the teacher's `OrgMembership`
+  (`ThesisPromptGeneratorConversation` / `ThesisPromptGeneratorTurn`). Every read
+  filters by membership, so another teacher's id reads as missing.
+- Titles come from the teacher's opening ask (`deriveConversationTitle`).
+- Rollout is behind `THESIS_PROMPT_GENERATOR_HISTORY_ENABLED=true`. With the flag
+  off, nothing is written, the list reads empty, and the sheet looks exactly as
+  it did before the feature.
+- History is additive by design: a failed write or a disabled flag degrades to
+  "not saved" and never throws into the request path, so the generator itself
+  cannot be broken by the code that records it. The truncated-response retry
+  nudge is deliberately not saved.
+
+This is distinct from `LlmLog`, which is an ops audit trail of individual
+provider calls rather than a teacher-facing history.
+
+For e2e, `E2E_THESIS_PROMPT_GENERATOR_FIXTURE=true` (with `E2E=true` and no
+`ANTHROPIC_API_KEY`) makes the action answer from a deterministic fixture,
+mirroring `E2E_GRADE_ESSAY_AI_FIXTURE`. That lets the real action run — and
+actually save — so the history flow is testable end to end.
 
 ## Updating the corpus
 
