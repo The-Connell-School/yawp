@@ -3,11 +3,18 @@ import { beforeEach, describe, expect, mock, test } from 'bun:test';
 const requireUserId = mock();
 const requireMembership = mock();
 const getLLMCompletion = mock();
+const recordExchange = mock();
+const listConversations = mock();
+const loadConversation = mock();
 
 mock.module('~/utils/auth.server', () => ({ requireUserId, requireMembership }));
 mock.module('~/utils/getLLMCompletion', () => ({ getLLMCompletion }));
+mock.module(
+  '../app.assignment-types.$id/thesis-prompts-library/generator-history.server',
+  () => ({ recordExchange, listConversations, loadConversation })
+);
 
-const { action } = await import('./route');
+const { action, loader } = await import('./route');
 const { MAX_GENERATOR_MESSAGES } = await import(
   '../app.assignment-types.$id/thesis-prompts-library/prompt-generator'
 );
@@ -16,7 +23,9 @@ async function readBody(response: any) {
   return typeof response.json === 'function' ? response.json() : response.data;
 }
 
-function request(messages: unknown) {
+const ROUTE_URL = 'https://example.test/api/domain/thesis-prompt-generator';
+
+function request(messages: unknown, conversationId?: string) {
   const body = new URLSearchParams();
   if (messages !== undefined) {
     body.set(
@@ -24,10 +33,8 @@ function request(messages: unknown) {
       typeof messages === 'string' ? messages : JSON.stringify(messages)
     );
   }
-  return new Request('https://example.test/api/domain/thesis-prompt-generator', {
-    method: 'POST',
-    body,
-  });
+  if (conversationId !== undefined) body.set('conversationId', conversationId);
+  return new Request(ROUTE_URL, { method: 'POST', body });
 }
 
 describe('api.domain.thesis-prompt-generator', () => {
@@ -35,9 +42,13 @@ describe('api.domain.thesis-prompt-generator', () => {
     requireUserId.mockReset();
     requireMembership.mockReset();
     getLLMCompletion.mockReset();
+    recordExchange.mockReset();
+    listConversations.mockReset();
+    loadConversation.mockReset();
 
     requireUserId.mockResolvedValue('user-1');
     requireMembership.mockResolvedValue({ id: 'teacher-1', role: 'TEACHER' });
+    recordExchange.mockResolvedValue(null);
   });
 
   test('returns the reply and drafted options from the model', async () => {
@@ -210,5 +221,140 @@ describe('api.domain.thesis-prompt-generator', () => {
 
     expect((response as any).init?.status).toBe(500);
     expect((await readBody(response)).success).toBe(false);
+  });
+});
+
+describe('api.domain.thesis-prompt-generator history', () => {
+  beforeEach(() => {
+    requireUserId.mockReset();
+    requireMembership.mockReset();
+    getLLMCompletion.mockReset();
+    recordExchange.mockReset();
+    listConversations.mockReset();
+    loadConversation.mockReset();
+
+    requireUserId.mockResolvedValue('user-1');
+    requireMembership.mockResolvedValue({ id: 'teacher-1', role: 'TEACHER' });
+    getLLMCompletion.mockResolvedValue(
+      JSON.stringify({
+        reply: 'Here are three drafts about ambition.',
+        options: [{ title: 'Ambition and Its Costs', body: 'Write a…' }],
+      })
+    );
+  });
+
+  test('saves the exchange and returns the conversation id', async () => {
+    recordExchange.mockResolvedValue('conv-new');
+
+    const response = await action({
+      request: request([{ role: 'user', content: 'A prompt about ambition.' }]),
+    } as never);
+    const body = await readBody(response);
+
+    expect(body.conversationId).toBe('conv-new');
+    expect(recordExchange).toHaveBeenCalledTimes(1);
+    expect(recordExchange.mock.calls[0][0]).toEqual({
+      conversationId: null,
+      membershipId: 'teacher-1',
+      teacherMessage: 'A prompt about ambition.',
+      reply: 'Here are three drafts about ambition.',
+      options: [{ title: 'Ambition and Its Costs', body: 'Write a…' }],
+    });
+  });
+
+  test('appends to the conversation the client is already in', async () => {
+    recordExchange.mockResolvedValue('conv-1');
+
+    await action({
+      request: request(
+        [
+          { role: 'user', content: 'A prompt about ambition.' },
+          { role: 'assistant', content: 'Here are three drafts.' },
+          { role: 'user', content: 'Make them more about fate.' },
+        ],
+        'conv-1'
+      ),
+    } as never);
+
+    const saved = recordExchange.mock.calls[0][0];
+    expect(saved.conversationId).toBe('conv-1');
+    // Only the newest teacher turn is saved; earlier turns are already stored.
+    expect(saved.teacherMessage).toBe('Make them more about fate.');
+  });
+
+  test('still answers when saving is unavailable', async () => {
+    recordExchange.mockResolvedValue(null);
+
+    const response = await action({
+      request: request([{ role: 'user', content: 'A prompt about ambition.' }]),
+    } as never);
+    const body = await readBody(response);
+
+    expect(body.success).toBe(true);
+    expect(body.options).toHaveLength(1);
+    expect(body.conversationId).toBeNull();
+  });
+
+  test('does not save the truncated-response retry nudge', async () => {
+    getLLMCompletion.mockResolvedValue('{"reply": "Here are three dra');
+
+    const response = await action({
+      request: request([{ role: 'user', content: 'A prompt about ambition.' }]),
+    } as never);
+    const body = await readBody(response);
+
+    expect(body.success).toBe(true);
+    expect(body.reply).toContain('got tangled on my end');
+    expect(recordExchange).not.toHaveBeenCalled();
+  });
+
+  test('lists the teacher’s conversations', async () => {
+    listConversations.mockResolvedValue([
+      { id: 'conv-1', title: 'Macbeth and ambition', updatedAt: 'x', turnCount: 4 },
+    ]);
+
+    const response = await loader({ request: new Request(ROUTE_URL) } as never);
+    const body = await readBody(response);
+
+    expect(body.success).toBe(true);
+    expect(body.conversations).toHaveLength(1);
+    expect(listConversations).toHaveBeenCalledWith('teacher-1');
+  });
+
+  test('loads one conversation, scoped to the teacher', async () => {
+    loadConversation.mockResolvedValue({
+      id: 'conv-1',
+      title: 'Macbeth and ambition',
+      updatedAt: 'x',
+      turns: [{ role: 'user', content: 'A prompt about ambition', options: [] }],
+    });
+
+    const response = await loader({
+      request: new Request(`${ROUTE_URL}?conversationId=conv-1`),
+    } as never);
+    const body = await readBody(response);
+
+    expect(body.conversation.turns).toHaveLength(1);
+    expect(loadConversation).toHaveBeenCalledWith('conv-1', 'teacher-1');
+  });
+
+  test('404s a conversation the teacher cannot read', async () => {
+    loadConversation.mockResolvedValue(null);
+
+    const response = await loader({
+      request: new Request(`${ROUTE_URL}?conversationId=someone-elses`),
+    } as never);
+
+    expect((response as any).init?.status).toBe(404);
+    expect((await readBody(response)).success).toBe(false);
+  });
+
+  test('keeps history teacher-only', async () => {
+    requireMembership.mockResolvedValue({ id: 'student-1', role: 'STUDENT' });
+
+    const response = await loader({ request: new Request(ROUTE_URL) } as never);
+
+    expect((response as any).init?.status).toBe(403);
+    expect(listConversations).not.toHaveBeenCalled();
   });
 });
