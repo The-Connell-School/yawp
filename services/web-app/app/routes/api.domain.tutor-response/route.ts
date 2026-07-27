@@ -12,6 +12,7 @@ import {
 import { isApHistorySnapshot } from '~/domain/ap-history/schema';
 import { buildApHistoryTutorSystemPrompt } from '~/domain/ap-history/tutor-prompt';
 import {
+  resolveApHistoryRegisterMode,
   resolveApHistorySectionTutorInstructions,
   resolveApHistoryStepTutorInstructions,
 } from '../../../../../packages/prisma/scripts/ap-history-module-data';
@@ -132,6 +133,11 @@ export async function action({ request }: ActionFunctionArgs) {
               apHistorySnapshot.essayType,
               cms.assignmentModule.title
             ) ?? cms.assignmentModule.tutorInstructions,
+          // DRAFTING or POLISHED for this section. Null for legacy
+          // single-module documents, which then carry no register directive.
+          registerMode: resolveApHistoryRegisterMode(
+            cms.assignmentModule.title
+          ),
           instruction: {
             title: instruction.title,
             tutorInstructions:

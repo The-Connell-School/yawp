@@ -20,6 +20,13 @@
 
 export type ApHistoryEssayType = 'dbq' | 'leq';
 
+// Which register the Universal YAWP! Tutor Instructions put the student in for
+// this section. The universal block defines both modes and defers the choice
+// to the course-builder, per module; this is where AP History makes it.
+// Mirrors TutorRegisterMode in
+// services/web-app/app/domain/tutor/universal-tutor-block.ts, which renders it.
+export type ApHistoryRegisterMode = 'drafting' | 'polished';
+
 // A pair of strings, one authored for each essay type.
 export type ApHistoryEssayVariants = {
   dbq: string;
@@ -45,6 +52,8 @@ export type ApHistoryModuleDefinition = {
   // Section-level guidance appended to the tutor system prompt, authored per
   // essay type.
   tutorInstructions: ApHistoryEssayVariants;
+  // DRAFTING or POLISHED for this section, per the universal tutor block.
+  registerMode: ApHistoryRegisterMode;
   instructions: ApHistoryInstructionDefinition[];
 };
 
@@ -60,6 +69,9 @@ export const AP_HISTORY_MODULES: ApHistoryModuleDefinition[] = [
     position: 1,
     description:
       'Get grounded in your materials and evidence before you write a word.',
+    // Source notes and evidence inventories are thinking on paper — no
+    // mechanics feedback here.
+    registerMode: 'drafting',
     tutorInstructions: {
       dbq: `Current section: Reading the Documents.
 HIPP stands for:
@@ -90,6 +102,10 @@ Keep the focus on evidence gathering rather than thesis-writing or drafting. If 
     position: 2,
     description:
       'Plan before drafting: a defensible thesis with a clear line of reasoning, plus specific contextualization.',
+    // Planning output, not submitted prose: the working thesis and context
+    // sentences get their polish when they move into the introduction under
+    // Drafting. Coach the argument here, never the commas.
+    registerMode: 'drafting',
     tutorInstructions: {
       dbq: `Current section: Pre-Writing.
 Coach the student to a historically defensible thesis with an explicit line of reasoning — a real "because" clause structured around the document groupings their body paragraphs will follow. A thesis that restates the prompt is not done.
@@ -117,6 +133,8 @@ Hold off on full body paragraphs in this section; planning here pays off in draf
     position: 3,
     description:
       'Write the essay: argument-first body paragraphs that put your evidence to work.',
+    // Prose an AP reader will read.
+    registerMode: 'polished',
     tutorInstructions: {
       dbq: `Current section: Drafting.
 Coach body paragraphs that lead with the argument, not the evidence. Weave 2–3 documents into each paragraph as evidence for a claim (never a walk-through of documents in order), source at least 2 documents with HIPP relevance that connects back to the argument, and work in specific outside evidence from inside the prompt's date window.
@@ -191,6 +209,7 @@ Make the reasoning skill visible in the paragraph structure and push evidence sp
     position: 4,
     description:
       'A whole-essay pass against the rubric, pushing hardest on the complexity point.',
+    registerMode: 'polished',
     tutorInstructions: {
       dbq: `Current section: Revision.
 Run a whole-essay pass against the rubric — thesis, contextualization, document use and sourcing, outside evidence, and complexity.
@@ -245,6 +264,15 @@ export function resolveApHistorySectionTutorInstructions(
   const module = findModule(moduleTitle);
   if (!module) return null;
   return pickApHistoryEssayVariant(module.tutorInstructions, essayType);
+}
+
+// The register (DRAFTING/POLISHED) for a section, or null when the module is
+// not one of the canonical AP History sections — legacy single-module
+// documents get no register directive, leaving their prompt unchanged.
+export function resolveApHistoryRegisterMode(
+  moduleTitle: string
+): ApHistoryRegisterMode | null {
+  return findModule(moduleTitle)?.registerMode ?? null;
 }
 
 // Step-level tutor guidance for the essay type, or null when the step has no

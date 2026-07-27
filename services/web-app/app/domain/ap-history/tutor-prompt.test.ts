@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test';
+import { UNIVERSAL_TUTOR_BLOCK } from '~/domain/tutor/universal-tutor-block';
 import { buildApHistorySnapshot } from './schema';
 import { buildApHistoryTutorSystemPrompt } from './tutor-prompt';
 
@@ -76,6 +77,104 @@ describe('buildApHistoryTutorSystemPrompt', () => {
     expect(prompt).toContain('student_document_context');
     // never writes the essay for the student
     expect(prompt).toContain('Never write for the student');
+  });
+
+  describe('universal YAWP! Tutor layer', () => {
+    test('leads with the universal block verbatim, before any AP-specific coaching', () => {
+      const prompt = buildApHistoryTutorSystemPrompt(dbqSnapshot);
+
+      expect(prompt).toContain(UNIVERSAL_TUTOR_BLOCK);
+      expect(prompt.startsWith(UNIVERSAL_TUTOR_BLOCK)).toBe(true);
+      // The AP layer is a specialization underneath the universal character,
+      // not a replacement for it.
+      expect(prompt.indexOf(UNIVERSAL_TUTOR_BLOCK)).toBeLessThan(
+        prompt.indexOf('AP History')
+      );
+    });
+
+    test('carries the universal guardrails into both essay types', () => {
+      for (const snapshot of [dbqSnapshot, leqSnapshot]) {
+        const prompt = buildApHistoryTutorSystemPrompt(snapshot);
+        expect(prompt).toContain('You are the YAWP! Tutor');
+        expect(prompt).toContain("I'm not that kind of guy!");
+        expect(prompt).toContain('I am mysterious and I contain so many');
+        expect(prompt).toContain('MULTILINGUAL.');
+      }
+    });
+
+    test('the AP layer no longer contradicts the universal encouragement rule', () => {
+      // The universal block asks the tutor to lead with genuine encouragement
+      // and to bless excellent work. A blanket ban on praise would cancel it.
+      const prompt = buildApHistoryTutorSystemPrompt(dbqSnapshot);
+
+      expect(prompt).not.toContain('No "great job" praise');
+      // The intent behind that old rule survives: praise must be specific.
+      expect(prompt).toContain('Praise is specific or it is noise');
+    });
+
+    test('reconciles "never say ready to submit" with honoring "I\'m ready"', () => {
+      const prompt = buildApHistoryTutorSystemPrompt(dbqSnapshot, {
+        title: 'Revision',
+        tutorInstructions: 'Whole-essay pass.',
+        registerMode: 'polished',
+      });
+
+      // Submission stays the student's call, but the tutor still may not keep
+      // inventing new problems once a step's bar is met.
+      expect(prompt).toContain('ready to submit');
+      expect(prompt).toContain('do not move the goalposts');
+    });
+
+    test('tells the tutor mechanics never cost AP rubric points, even when polished', () => {
+      const prompt = buildApHistoryTutorSystemPrompt(dbqSnapshot, {
+        title: 'Drafting',
+        tutorInstructions: 'Argument-first paragraphs.',
+        registerMode: 'polished',
+      });
+
+      expect(prompt).toContain('mechanics never cost a rubric point');
+    });
+  });
+
+  describe('register mode', () => {
+    test('a drafting section tells the tutor to give zero mechanics feedback', () => {
+      const prompt = buildApHistoryTutorSystemPrompt(dbqSnapshot, {
+        title: 'Pre-Writing',
+        tutorInstructions: 'Coach thesis and contextualization.',
+        registerMode: 'drafting',
+      });
+
+      expect(prompt).toContain('REGISTER MODE FOR THIS MODULE: DRAFTING');
+      expect(prompt).not.toContain('REGISTER MODE FOR THIS MODULE: POLISHED');
+    });
+
+    test('a polished section asks the tutor to balance voice with correctness', () => {
+      const prompt = buildApHistoryTutorSystemPrompt(dbqSnapshot, {
+        title: 'Drafting',
+        tutorInstructions: 'Argument-first paragraphs.',
+        registerMode: 'polished',
+      });
+
+      expect(prompt).toContain('REGISTER MODE FOR THIS MODULE: POLISHED');
+      expect(prompt).not.toContain('REGISTER MODE FOR THIS MODULE: DRAFTING');
+    });
+
+    test('the register directive sits with the section it governs', () => {
+      const prompt = buildApHistoryTutorSystemPrompt(dbqSnapshot, {
+        title: 'Pre-Writing',
+        tutorInstructions: 'Coach thesis and contextualization.',
+        registerMode: 'drafting',
+      });
+
+      expect(prompt.indexOf('Current section: "Pre-Writing"')).toBeLessThan(
+        prompt.indexOf('REGISTER MODE FOR THIS MODULE:')
+      );
+    });
+
+    test('legacy sessions with no section carry no register directive', () => {
+      const prompt = buildApHistoryTutorSystemPrompt(dbqSnapshot);
+      expect(prompt).not.toContain('REGISTER MODE FOR THIS MODULE:');
+    });
   });
 
   test('focuses coaching on the current section when the module provides guidance', () => {

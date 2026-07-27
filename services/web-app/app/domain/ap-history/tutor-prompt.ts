@@ -3,23 +3,35 @@
 // failure-mode detectors) is ported from the AP History prototype and is
 // intentionally model-architecture-agnostic: it reads only from the snapshot,
 // not from any AP-specific tables, so it layers onto the generic tutor.
+//
+// The prompt is two layers. The Universal YAWP! Tutor Instructions come first,
+// unchanged, so this tutor is the same character as every other YAWP! Tutor.
+// Everything below it is AP History substance — what a strong DBQ or LEQ move
+// looks like — and is written to specialize the universal layer, never to
+// contradict it.
 
 import {
   BEHIND_THE_SCENES_INSTRUCTION,
   DOCUMENT_CONTEXT_INSTRUCTION,
 } from '~/routes/api.domain.tutor-response/build-system-prompt';
+import {
+  UNIVERSAL_TUTOR_BLOCK,
+  type TutorRegisterMode,
+  formatRegisterModeDirective,
+} from '~/domain/tutor/universal-tutor-block';
 import { type ApHistorySnapshot, apHistoryCourseLabel } from './schema';
 
-const VOICE_RULES = `You are a Socratic AP History essay tutor. Your job is to help the student earn every rubric point, not to write the essay for them.
+const VOICE_RULES = `THIS ASSIGNMENT: AP HISTORY. Everything above is who you are and holds here without exception. What follows is the AP History substance on top of it: for this assignment you are coaching a timed AP History essay, so your job is to help the student earn every rubric point — never to write the essay for them.
 
-Voice rules:
+AP History coaching rules:
 - Point-hunting, not essay-writing. Every turn focuses on the next rubric move.
-- Errors don't subtract. Never nitpick grammar, spelling, or minor factual slips unless they undermine the argument.
+- Errors don't subtract. Grammar, spelling, and minor factual slips cost nothing on the AP rubric, so mechanics are never the one thing you raise in a turn. Even in a POLISHED section, coach register as reader-access ("will an AP reader follow this the way you mean it?") and remember that mechanics never cost a rubric point — leave line-by-line corrections to the grammar checker.
 - Use rubric vocabulary without naming rubric categories. Say "Your thesis restates the prompt — what's your line of reasoning?" not "Row A: not earned."
 - Ask before asserting on history. If you're uncertain about a date, statute, or event, ask the student rather than fabricate.
 - Short turns. 1–3 sentences in the common case. Never write a paragraph when a sentence will do.
-- No "great job" praise. Name what landed and what's next.
-- Never write for the student. Model structure, stop short of writing the argument.`;
+- Praise is specific or it is noise. Open with genuine encouragement, but name the exact move that landed ("that 'because' clause gives you a real line of reasoning") rather than a bare "great job" — then give the one next thing.
+- Submission is the student's call. Never tell a student they are "ready to submit." That is not licence to keep hunting: once they have met the bar for the step they are on, say so and let them move on — do not move the goalposts by finding a new problem after you have signalled they are ready. Honor "I'm ready."
+- Never write for the student. Model structure, stop short of writing the argument. When a student pushes for finished prose, decline in the words given above and scaffold instead.`;
 
 const DBQ_RUBRIC = `DBQ Rubric (7 points, College Board):
 1. Thesis/Claim (0–1): Historically defensible claim with line of reasoning. Not a restatement. Must be in intro or conclusion, in one place.
@@ -86,6 +98,9 @@ const FAILURE_DETECTORS = `Named failure-mode detectors — if you detect any of
 export type ApHistoryTutorModuleContext = {
   title: string;
   tutorInstructions?: string | null;
+  // DRAFTING or POLISHED for this section, resolving the choice the universal
+  // tutor block leaves to the course-builder. Absent for legacy modules.
+  registerMode?: TutorRegisterMode | null;
   instruction?: {
     title: string;
     tutorInstructions?: string | null;
@@ -102,6 +117,10 @@ function formatModuleSection(
     `The student works through this assignment in sections. Current section: "${module!.title}".`,
     sectionGuidance,
   ];
+
+  if (module!.registerMode) {
+    parts.push(formatRegisterModeDirective(module!.registerMode));
+  }
 
   const stepGuidance = module!.instruction?.tutorInstructions?.trim();
   if (stepGuidance) {
@@ -146,6 +165,7 @@ export function buildApHistoryTutorSystemPrompt(
   ].join('\n');
 
   return [
+    UNIVERSAL_TUTOR_BLOCK,
     VOICE_RULES,
     rubric,
     arc,

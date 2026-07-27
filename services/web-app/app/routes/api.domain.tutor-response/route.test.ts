@@ -287,6 +287,15 @@ describe('api.domain.tutor-response read-only impersonation', () => {
     expect(completionArgs.system).toContain(
       'Build a working sense of each document before drafting.'
     );
+    // The universal YAWP! Tutor character rides at the top of every AP History
+    // prompt, and the section's register mode resolves from its title.
+    expect(completionArgs.system).toContain('You are the YAWP! Tutor');
+    expect(completionArgs.system).toContain(
+      'REGISTER MODE FOR THIS MODULE: DRAFTING'
+    );
+    expect(completionArgs.system).not.toContain(
+      'REGISTER MODE FOR THIS MODULE: POLISHED'
+    );
   });
 
   test('AP History LEQ sessions get LEQ-specific section coaching, not the DBQ playbook', async () => {

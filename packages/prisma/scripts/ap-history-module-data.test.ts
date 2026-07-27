@@ -5,6 +5,7 @@ import {
   AP_HISTORY_SEED_MODULES,
   pickApHistoryEssayVariant,
   resolveApHistoryInstructionPrompt,
+  resolveApHistoryRegisterMode,
   resolveApHistorySectionTutorInstructions,
   resolveApHistoryStepTutorInstructions,
 } from './ap-history-module-data';
@@ -140,6 +141,28 @@ describe('AP History module (section) seed data', () => {
       )!;
       expect(readSection.toLowerCase()).toContain('meet them where they are');
     }
+  });
+
+  test('every section declares the register mode the universal tutor block reads', () => {
+    // The Universal YAWP! Tutor Instructions leave DRAFTING vs POLISHED to the
+    // course-builder, per module. Every canonical section must answer it, or
+    // the tutor is left guessing whether mechanics feedback is in scope.
+    expect(
+      AP_HISTORY_MODULES.map((module) => [module.title, module.registerMode])
+    ).toEqual([
+      ['Read the Documents', 'drafting'],
+      ['Pre-Writing', 'drafting'],
+      ['Drafting', 'polished'],
+      ['Revision', 'polished'],
+    ]);
+  });
+
+  test('resolveApHistoryRegisterMode answers per section and null off the canonical path', () => {
+    expect(resolveApHistoryRegisterMode('Pre-Writing')).toBe('drafting');
+    expect(resolveApHistoryRegisterMode('Revision')).toBe('polished');
+    // Legacy single-module documents get no register directive at all, which
+    // leaves their prompt exactly as it was.
+    expect(resolveApHistoryRegisterMode('AP History Essay')).toBeNull();
   });
 
   describe('resolvers', () => {
