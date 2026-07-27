@@ -9,6 +9,8 @@ import {
   buildModuleRubricGuidance,
   buildTutorSystemPrompt,
 } from './build-system-prompt';
+import { isApEnglishLangSnapshot } from '~/domain/ap-english-lang/schema';
+import { buildApEnglishLangCoachInstructions } from '~/domain/ap-english-lang/coach';
 import { parseRubric } from '~/domain/assignment-types/assignment-type-rubric.shared';
 import { normalizeModuleRubricAlignment } from '~/domain/assignment-types/assignment-type-rubric-config';
 import {
@@ -75,6 +77,12 @@ export async function action({ request }: ActionFunctionArgs) {
           select: {
             id: true,
             text: true,
+            // AP English Language assignments carry an immutable snapshot of
+            // the prompt, source packet, and timing. When present, the tutor
+            // coaches against the AP Lang rubric and those sources.
+            assignment: {
+              select: { apEnglishLangSnapshot: true },
+            },
           },
         },
       },
@@ -104,8 +112,21 @@ export async function action({ request }: ActionFunctionArgs) {
       alignment: cms.assignmentModule.rubricAlignmentJson,
     });
 
+    // AP English Language assignments get the AP Lang coach: the stored
+    // coaching block (what admin shows and edits) plus the parts that can only
+    // come from this assignment's snapshot. Falls back to the authored block
+    // when the module has not been seeded, so the tutor is never left without
+    // instructions.
+    const apEnglishLangSnapshot = cms.document.assignment?.apEnglishLangSnapshot;
+    const tutorInstructions = isApEnglishLangSnapshot(apEnglishLangSnapshot)
+      ? buildApEnglishLangCoachInstructions({
+          snapshot: apEnglishLangSnapshot,
+          coachingBlock: cms.assignmentModule.tutorInstructions,
+        })
+      : cms.assignmentModule.tutorInstructions;
+
     const system = buildTutorSystemPrompt({
-      tutorInstructions: cms.assignmentModule.tutorInstructions,
+      tutorInstructions,
       instructionTutorInstructions: instruction.tutorInstructions,
       moduleRubricGuidance,
     });

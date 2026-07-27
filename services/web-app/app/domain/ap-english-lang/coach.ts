@@ -1,20 +1,14 @@
-import { AP_ENGLISH_LANG_RUBRIC, SYNTHESIS_SOURCE_RULES } from './rubric';
+import { SYNTHESIS_SOURCE_RULES } from './rubric';
 import type { ApEnglishLangFrqType, ApEnglishLangSnapshot } from './schema';
+import { buildApEnglishLangCoachingBlock } from '../../../../../packages/prisma/scripts/ap-english-lang-coach-block';
 
-/**
- * The non-negotiable posture of the AP Language coach. These principles are a
- * direct translation of expert-teacher practice: the tutor coaches the student
- * to argue like a rhetorician — it never does the thinking for them and it
- * never hands over finished analytical prose.
- */
-export const AP_ENGLISH_LANG_COACH_PRINCIPLES: readonly string[] = [
-  'Coach, do not ghostwrite. Do not write the thesis, a paragraph, or the essay for the student. Ask questions, reflect their own words back, and prompt them toward the next move.',
-  'Teach to the rubric, transparently. Tie every piece of feedback to a specific rubric row (Thesis, Evidence and Commentary, or Sophistication) and name which one you are working on.',
-  'Push from identification to explanation. When the student names a device, a source, or a fact, respond with "so what does that do for the argument?" until they stop labeling and start explaining effect.',
-  'Protect the line of reasoning. Treat the argument as a single thread that must run through every paragraph back to the thesis; flag where it drops out and ask the student to restore it.',
-  'Question before answer. On any weak spot, ask a prompting question first. Only if the student is genuinely stuck do you model one possibility, clearly framed as an example to learn from, never as text to paste.',
-  'Be warm and honest. Praise argumentative risk even when imperfect, name the one or two highest-leverage fixes rather than burying the student in corrections, and say when a draft is genuinely borderline instead of inventing false precision.',
-];
+// The coaching block -- posture, principles, rubric, register -- is authored in
+// packages/prisma so the seed can write it into the database. Re-exported so
+// the rest of the app keeps importing the coach from one place.
+export {
+  AP_ENGLISH_LANG_COACH_PRINCIPLES,
+  buildApEnglishLangCoachingBlock,
+} from '../../../../../packages/prisma/scripts/ap-english-lang-coach-block';
 
 const FRQ_TYPE_GUIDANCE: Record<ApEnglishLangFrqType, string> = {
   synthesis: [
@@ -37,14 +31,6 @@ const FRQ_TYPE_GUIDANCE: Record<ApEnglishLangFrqType, string> = {
   ].join(' '),
 };
 
-function renderRubricSummary(): string {
-  return AP_ENGLISH_LANG_RUBRIC.rows
-    .map(
-      (row) =>
-        `Row ${row.label} — ${row.title} (0-${row.maxPoints}): ${row.description}`,
-    )
-    .join('\n');
-}
 
 function renderProvidedSources(snapshot: ApEnglishLangSnapshot): string {
   if (snapshot.sources.length === 0) return '';
@@ -89,35 +75,26 @@ function renderTimeBudget(snapshot: ApEnglishLangSnapshot): string {
 
 /**
  * Composes the full system instructions for the AP Language coach on a
- * specific assignment snapshot: the fixed coaching posture, the shared 6-point
- * rubric, the question-type guidance, and the provided sources (Q1/Q2) or
- * suggested evidence domains (Q3).
+ * specific assignment snapshot: the coaching block (stored or authored) plus
+ * the parts that can only come from this assignment — the question-type
+ * guidance, the prompt, the provided sources or suggested evidence, and the
+ * timing.
  */
 export function buildApEnglishLangCoachInstructions(params: {
   snapshot: ApEnglishLangSnapshot;
+  /**
+   * The coaching block as stored on the assignment module and edited in admin.
+   * Blank or missing falls back to the authored default, so an unseeded
+   * environment behaves exactly as a seeded one.
+   */
+  coachingBlock?: string | null;
 }): string {
-  const { snapshot } = params;
-
-  const header =
-    'You are an expert AP English Language and Composition writing coach. ' +
-    'Your job is to teach the student to build and defend an argument the way an expert rhetorician does, and to move them up the rubric — not to write for them.';
-
-  const principles = AP_ENGLISH_LANG_COACH_PRINCIPLES.map(
-    (principle, index) => `${index + 1}. ${principle}`,
-  ).join('\n');
+  const { snapshot, coachingBlock } = params;
 
   const promptBlock = `Prompt the student is answering:\n${snapshot.prompt}`;
 
   return [
-    header,
-    '',
-    'Coaching principles (always follow):',
-    principles,
-    '',
-    'The scoring rubric (all three questions share this 6-point analytic rubric):',
-    renderRubricSummary(),
-    '',
-    'The rubric is additive: each row is earned independently and nothing is deducted for errors. Be generous on grammar and minor factual slips unless they obscure meaning. Do not reward length — a short, tightly argued essay can earn every point. A response that does not address the prompt earns 0.',
+    coachingBlock?.trim() || buildApEnglishLangCoachingBlock(),
     '',
     'Before drafting, require prompt deconstruction: have the student restate the prompt as guiding questions so they answer what is actually asked.',
     '',

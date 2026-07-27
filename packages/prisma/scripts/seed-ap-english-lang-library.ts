@@ -3,6 +3,11 @@ import { PrismaClient } from '../generated/prisma';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { AP_ENGLISH_LANG_LIBRARY_ENTRIES } from './ap-english-lang-library-data';
 import { isLocalDatabaseUrl } from './seed-overlay-connection';
+import {
+  tutorInstructionSeedUpdate,
+  withoutTutorInstructionFields,
+} from './tutor-instructions-seed';
+import { buildApEnglishLangCoachingBlock } from './ap-english-lang-coach-block';
 
 const AP_ENGLISH_LANG_ASSIGNMENT_TYPE_KEY = 'ap_english_lang_essay';
 
@@ -13,12 +18,18 @@ const ASSIGNMENT_TYPE_DATA = {
   position: 52,
 } as const;
 
+// The module's tutorInstructions are the coaching block: the Universal YAWP!
+// Tutor Instructions plus the AP Lang posture, rubric, and register. Seeding
+// them is what makes the tutor visible and editable in admin Tutor settings;
+// the runtime prefers this stored value and appends the assignment-specific
+// half (prompt, sources, timing) from the snapshot.
 const MODULE_DATA = {
   title: 'AP English Language Essay',
   position: 1,
   description:
     'Write an AP Lang free-response essay with rubric-anchored coaching.',
-} as const;
+  tutorInstructions: buildApEnglishLangCoachingBlock(),
+};
 
 const INSTRUCTION_DATA = {
   title: 'Write',
@@ -116,13 +127,19 @@ async function seedApEnglishLangLibrary() {
       assignmentTypeId: assignmentType.id,
       position: MODULE_DATA.position,
     },
-    select: { id: true },
+    select: { id: true, tutorInstructions: true },
   });
 
   const module = existingModule
     ? await prisma.assignmentModule.update({
         where: { id: existingModule.id },
-        data: MODULE_DATA,
+        // Structural fields refresh every run; the coaching block is only
+        // written when admin has not put anything there, so a re-seed on
+        // deploy cannot revert an edit.
+        data: {
+          ...withoutTutorInstructionFields(MODULE_DATA),
+          ...tutorInstructionSeedUpdate(MODULE_DATA, existingModule),
+        },
         select: { id: true },
       })
     : await prisma.assignmentModule.create({

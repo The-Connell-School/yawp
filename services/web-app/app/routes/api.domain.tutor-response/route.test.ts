@@ -26,6 +26,10 @@ const { LlmFallbackRetrySignal } = await import(
 );
 const { action } = await import('./route');
 
+const { buildApEnglishLangSnapshot } = await import(
+  '~/domain/ap-english-lang/schema'
+);
+
 describe('api.domain.tutor-response read-only impersonation', () => {
   beforeEach(() => {
     getLLMCompletion.mockReset();
@@ -263,5 +267,117 @@ describe('api.domain.tutor-response read-only impersonation', () => {
       agent: 'assistant',
       content: 'Draft a clearer thesis.',
     });
+  });
+});
+
+describe('AP English Language tutor', () => {
+  beforeEach(() => {
+    getLLMCompletion.mockReset();
+    requireMutableRequest.mockReset();
+    requireMutableRequest.mockResolvedValue(undefined);
+    prisma.assignmentModuleSession.findUnique.mockReset();
+    prisma.assignmentModuleSession.update.mockReset();
+  });
+
+  function mockApLangCms(tutorInstructions: string | null) {
+    const snapshot = buildApEnglishLangSnapshot({
+      externalKey: 'ap-lang-synthesis-route',
+      frqType: 'synthesis',
+      title: 'Route demo',
+      prompt: 'Take a position on school start times.',
+      focusSkill: 'source-integration',
+      difficulty: 'exam-ready',
+      skillEmphasis: 'evidence-commentary',
+      defaultTimeMode: 'untimed',
+      defaultDurationMinutes: 40,
+      suggestedEvidence: null,
+      provenanceUrl: null,
+      sources: [1, 2, 3, 4, 5, 6].map((position) => ({
+        externalKey: `route-source-${position}`,
+        position,
+        title: `Source ${String.fromCharCode(64 + position)}`,
+        attribution: 'Practice source',
+        body: `Body of source ${position}.`,
+        caption: null,
+        mediaType: position === 6 ? 'image' : 'text',
+        imageUrl: position === 6 ? '/img/chart.png' : null,
+        imageAlt: position === 6 ? 'A chart' : null,
+        provenanceUrl: null,
+      })),
+    });
+
+    prisma.assignmentModuleSession.findUnique.mockResolvedValueOnce({
+      id: 'cms-1',
+      instructionsCompleted: 0,
+      assignmentModule: {
+        tutorInstructions,
+        rubricAlignmentJson: null,
+        assignmentType: {
+          id: 'ap-lang-type',
+          gradingAssistantVersion: 1,
+          rubricJson: null,
+        },
+        instructions: [{ id: 'instruction-1', tutorInstructions: null }],
+      },
+      messages: [],
+      document: {
+        id: 'doc-1',
+        text: 'Original draft',
+        assignment: { apEnglishLangSnapshot: snapshot },
+      },
+    });
+    prisma.assignmentModuleSession.findUnique.mockResolvedValueOnce({
+      id: 'cms-1',
+      messages: [],
+      assignmentModule: {
+        instructions: [],
+        assignmentType: { assignmentModules: [] },
+      },
+    });
+  }
+
+  async function runTutor() {
+    const body = new FormData();
+    body.set('response', 'Where do I start?');
+    body.set('cmsId', 'cms-1');
+    body.set('content', 'Current draft');
+
+    await action({
+      request: new Request('https://example.com/api/domain/tutor-response', {
+        method: 'POST',
+        body,
+      }),
+    } as any);
+
+    return (getLLMCompletion.mock.calls[0]?.[0] as any).system as string;
+  }
+
+  test('an unseeded module still gets the full authored coach, not an empty prompt', async () => {
+    // Before this wiring the AP Lang tutor ran with no instructions at all:
+    // the module carries no tutorInstructions and nothing called the coach.
+    getLLMCompletion.mockResolvedValue('What does that source do for you?');
+    mockApLangCms(null);
+
+    const system = await runTutor();
+
+    expect(system).toContain('You are the YAWP! Tutor');
+    expect(system).toContain('AP ENGLISH LANGUAGE');
+    expect(system).toContain('Coaching principles');
+    expect(system).toContain('REGISTER MODE FOR THIS MODULE: POLISHED');
+    // and the assignment-specific half comes from the snapshot
+    expect(system).toContain('school start times');
+    expect(system).toContain('synthesis question (Q1)');
+    expect(system).toContain('40-minute budget');
+  });
+
+  test('a coaching block edited in admin replaces the authored default', async () => {
+    getLLMCompletion.mockResolvedValue('What does that source do for you?');
+    mockApLangCms('EDITED IN ADMIN. Coach tersely.');
+
+    const system = await runTutor();
+
+    expect(system).toContain('EDITED IN ADMIN. Coach tersely.');
+    expect(system).not.toContain('You are the YAWP! Tutor');
+    expect(system).toContain('school start times');
   });
 });

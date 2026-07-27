@@ -2,7 +2,9 @@ import { describe, expect, test } from 'bun:test';
 import {
   AP_ENGLISH_LANG_COACH_PRINCIPLES,
   buildApEnglishLangCoachInstructions,
+  buildApEnglishLangCoachingBlock,
 } from './coach';
+import { UNIVERSAL_TUTOR_BLOCK } from '../../../../../packages/prisma/scripts/universal-tutor-block';
 import { buildApEnglishLangSnapshot } from './schema';
 
 function snapshotFor(frqType: 'synthesis' | 'rhetorical_analysis' | 'argument') {
@@ -160,5 +162,111 @@ describe('buildApEnglishLangCoachInstructions', () => {
     });
     expect(instructions).toContain('40-minute');
     expect(instructions.toLowerCase()).toContain('reading period');
+  });
+});
+
+describe('Universal YAWP! Tutor layer', () => {
+  test('the coaching block opens with the universal block verbatim', () => {
+    const block = buildApEnglishLangCoachingBlock();
+
+    expect(block).toContain(UNIVERSAL_TUTOR_BLOCK);
+    expect(block.startsWith(UNIVERSAL_TUTOR_BLOCK)).toBe(true);
+  });
+
+  test('every built prompt carries the guardrails this course was missing', () => {
+    for (const frqType of [
+      'synthesis',
+      'rhetorical_analysis',
+      'argument',
+    ] as const) {
+      const prompt = buildApEnglishLangCoachInstructions({
+        snapshot: snapshotFor(frqType),
+      });
+
+      expect(prompt).toContain('You are the YAWP! Tutor');
+      expect(prompt).toContain("I'm not that kind of guy!");
+      expect(prompt).toContain('I am mysterious and I contain');
+      expect(prompt).toContain('MULTILINGUAL.');
+      // and still carries the AP Lang substance
+      expect(prompt).toContain('AP ENGLISH LANGUAGE');
+      expect(prompt).toContain('The rubric is additive');
+    }
+  });
+
+  test('the universal character comes before the AP Lang specialization', () => {
+    const prompt = buildApEnglishLangCoachInstructions({
+      snapshot: snapshotFor('synthesis'),
+    });
+
+    expect(prompt.indexOf('You are the YAWP! Tutor')).toBeLessThan(
+      prompt.indexOf('AP ENGLISH LANGUAGE')
+    );
+  });
+});
+
+describe('Where AP Lang narrows the universal rules', () => {
+  test('a modeled example may not be built from the source packet or passage', () => {
+    // Principle 5 allows modeling "one possibility" when a student is stuck.
+    // On Q1 the student has the sources and on Q2 the passage, so a modeled
+    // sentence about those is exactly what they would paste.
+    const block = buildApEnglishLangCoachingBlock();
+
+    expect(block).toContain('A MODELED EXAMPLE USES A DIFFERENT TEXT');
+    expect(block.indexOf('model one possibility')).toBeLessThan(
+      block.indexOf('A MODELED EXAMPLE USES A DIFFERENT TEXT')
+    );
+  });
+
+  test('turn discipline is one note, not two', () => {
+    expect(buildApEnglishLangCoachingBlock()).toContain('ONE NOTE PER TURN');
+  });
+});
+
+describe('Register mode', () => {
+  test('the coaching block declares the register', () => {
+    expect(buildApEnglishLangCoachingBlock()).toContain(
+      'REGISTER MODE FOR THIS MODULE: POLISHED'
+    );
+  });
+
+  test('the additive rubric keeps mechanics out of the single note', () => {
+    expect(buildApEnglishLangCoachingBlock()).toContain(
+      'mechanics are never the one thing you raise'
+    );
+  });
+});
+
+describe('Admin-editable coaching block', () => {
+  test('a stored block replaces the authored default', () => {
+    const snapshot = snapshotFor('synthesis');
+    const prompt = buildApEnglishLangCoachInstructions({
+      snapshot,
+      coachingBlock: 'EDITED IN ADMIN. Coach tersely.',
+    });
+
+    expect(prompt.startsWith('EDITED IN ADMIN.')).toBe(true);
+    expect(prompt).not.toContain(UNIVERSAL_TUTOR_BLOCK);
+    // The assignment-specific half is still composed from the snapshot.
+    expect(prompt).toContain(snapshot.prompt);
+  });
+
+  test('a blank stored block falls back to the authored default', () => {
+    for (const empty of [undefined, null, '', '   \n ']) {
+      const prompt = buildApEnglishLangCoachInstructions({
+        snapshot: snapshotFor('argument'),
+        coachingBlock: empty,
+      });
+      expect(prompt.startsWith(UNIVERSAL_TUTOR_BLOCK)).toBe(true);
+    }
+  });
+
+  test('seeding the authored block produces the identical prompt', () => {
+    const snapshot = snapshotFor('rhetorical_analysis');
+    expect(
+      buildApEnglishLangCoachInstructions({
+        snapshot,
+        coachingBlock: buildApEnglishLangCoachingBlock(),
+      })
+    ).toBe(buildApEnglishLangCoachInstructions({ snapshot }));
   });
 });
