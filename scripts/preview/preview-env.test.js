@@ -1,5 +1,9 @@
 import { describe, expect, test } from 'bun:test';
-import { buildPreviewEnv } from './preview-env.mjs';
+import { readFileSync } from 'node:fs';
+import {
+  buildPreviewEnv,
+  requirePreviewBasicAuth,
+} from './preview-env.mjs';
 
 describe('buildPreviewEnv', () => {
   test('derives stable PR-scoped names and URLs', () => {
@@ -90,5 +94,59 @@ describe('buildPreviewEnv', () => {
         dataMode: 'prod',
       }),
     ).toThrow('PREVIEW_DATA_MODE must be seed or production-dump');
+  });
+
+  test('accepts one htpasswd-format preview credential', () => {
+    expect(
+      requirePreviewBasicAuth('preview-admin:$apr1$salt$hash'),
+    ).toBe('preview-admin:$apr1$salt$hash');
+  });
+
+  test('fails closed when the preview credential is missing or malformed', () => {
+    expect(() => requirePreviewBasicAuth('')).toThrow(
+      'PREVIEW_BASIC_AUTH is required',
+    );
+    expect(() => requirePreviewBasicAuth('preview-admin:plaintext')).toThrow(
+      'PREVIEW_BASIC_AUTH must be a single htpasswd-format credential',
+    );
+  });
+
+  test('threads basic-auth secrets through the preview workflow and deploy', () => {
+    const workflow = readFileSync(
+      new URL('../../.github/workflows/preview-environments.yml', import.meta.url),
+      'utf8',
+    );
+    const deploy = readFileSync(new URL('./deploy.sh', import.meta.url), 'utf8');
+    const githubConfig = readFileSync(
+      new URL('../github-preview-config.sh', import.meta.url),
+      'utf8',
+    );
+
+    expect(workflow).toContain(
+      'PREVIEW_BASIC_AUTH: ${{ secrets.PREVIEW_BASIC_AUTH }}',
+    );
+    expect(workflow).toContain(
+      'PREVIEW_BASIC_AUTH_PASSWORD: ${{ secrets.PREVIEW_BASIC_AUTH_PASSWORD }}',
+    );
+    expect(workflow).toContain(
+      '"PREVIEW_BASIC_AUTH=$(shell_quote "$PREVIEW_BASIC_AUTH")"',
+    );
+    expect(workflow).toContain(
+      '"PREVIEW_BASIC_AUTH_PASSWORD=$(shell_quote "$PREVIEW_BASIC_AUTH_PASSWORD")"',
+    );
+    expect(deploy).toContain('Missing PREVIEW_BASIC_AUTH');
+    expect(deploy).toContain('Missing PREVIEW_BASIC_AUTH_PASSWORD');
+    expect(deploy).toContain('gate_status');
+    expect(deploy).toContain('[[ "$gate_status" != "401" ]]');
+    expect(deploy).toContain(
+      "grep -qi '^www-authenticate:[[:space:]]*Basic'",
+    );
+    expect(deploy).toContain('if [[ -z "${DIRECT_PORT:-}" ]]');
+    expect(githubConfig).toContain(
+      'gh_sec PREVIEW_BASIC_AUTH "$PREVIEW_BASIC_AUTH"',
+    );
+    expect(githubConfig).toContain(
+      'gh_sec PREVIEW_BASIC_AUTH_PASSWORD "$PREVIEW_BASIC_AUTH_PASSWORD"',
+    );
   });
 });

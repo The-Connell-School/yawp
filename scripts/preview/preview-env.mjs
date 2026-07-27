@@ -44,6 +44,23 @@ function requireDataMode(value) {
   return dataMode;
 }
 
+export function requirePreviewBasicAuth(value) {
+  const credential = String(value ?? '').trim();
+  if (!credential) {
+    throw new Error(
+      'PREVIEW_BASIC_AUTH is required for preview deployments',
+    );
+  }
+  if (
+    !/^[A-Za-z0-9._-]+:\$apr1\$[^$\r\n]+\$[^$\r\n]+$/.test(credential)
+  ) {
+    throw new Error(
+      'PREVIEW_BASIC_AUTH must be a single htpasswd-format credential (user:$apr1$...)',
+    );
+  }
+  return credential;
+}
+
 export function buildPreviewEnv({
   prNumber = process.env.PR_NUMBER,
   domain = process.env.PREVIEW_DOMAIN,

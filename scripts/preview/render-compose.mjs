@@ -1,5 +1,8 @@
 import { fileURLToPath } from 'node:url';
-import { buildPreviewEnv } from './preview-env.mjs';
+import {
+  buildPreviewEnv,
+  requirePreviewBasicAuth,
+} from './preview-env.mjs';
 
 function q(value) {
   return JSON.stringify(String(value));
@@ -7,6 +10,10 @@ function q(value) {
 
 function optionalEnv(name, fallback = '') {
   return process.env[name] || fallback;
+}
+
+function escapeComposeInterpolation(value) {
+  return value.replace(/\$/g, () => '$$');
 }
 
 export function renderPreviewCompose({
@@ -18,7 +25,9 @@ export function renderPreviewCompose({
   enableTls = process.env.PREVIEW_TLS !== 'false',
   runtime = process.env.PREVIEW_RUNTIME || 'fast',
   dataMode = process.env.PREVIEW_DATA_MODE || 'seed',
+  basicAuth = process.env.PREVIEW_BASIC_AUTH,
 } = {}) {
+  const previewBasicAuth = requirePreviewBasicAuth(basicAuth);
   const env = buildPreviewEnv({
     prNumber,
     domain,
@@ -30,11 +39,13 @@ export function renderPreviewCompose({
     dataMode,
   });
   const routerBase = env.composeProject;
+  const authMiddleware = `${routerBase}-auth`;
+  const escapedBasicAuth = escapeComposeInterpolation(previewBasicAuth);
   const directPortBlock = env.directPort
     ? `\n    ports:\n      - ${q(`127.0.0.1:${env.directPort}:8080`)}`
     : '';
   const tlsLabels = enableTls
-    ? `\n      - ${q(`traefik.http.routers.${routerBase}-https.rule=Host(\`${env.hostname}\`)`)}\n      - ${q(`traefik.http.routers.${routerBase}-https.entrypoints=websecure`)}\n      - ${q(`traefik.http.routers.${routerBase}-https.tls.certresolver=letsencrypt`)}\n      - ${q(`traefik.http.routers.${routerBase}-https.service=${routerBase}`)}`
+    ? `\n      - ${q(`traefik.http.routers.${routerBase}-https.rule=Host(\`${env.hostname}\`)`)}\n      - ${q(`traefik.http.routers.${routerBase}-https.entrypoints=websecure`)}\n      - ${q(`traefik.http.routers.${routerBase}-https.tls.certresolver=letsencrypt`)}\n      - ${q(`traefik.http.routers.${routerBase}-https.service=${routerBase}`)}\n      - ${q(`traefik.http.routers.${routerBase}-https.middlewares=${authMiddleware}`)}`
     : '';
   const cookieSecure = enableTls ? '"true"' : '"false"';
   const commonEnvironment = `      DATABASE_URL: ${q(env.databaseUrl)}
@@ -114,7 +125,10 @@ ${webService}    labels:
       - "traefik.docker.network=preview"
       - ${q(`traefik.http.routers.${routerBase}-http.rule=Host(\`${env.hostname}\`)`)}
       - ${q(`traefik.http.routers.${routerBase}-http.entrypoints=web`)}
-      - ${q(`traefik.http.routers.${routerBase}-http.service=${routerBase}`)}${tlsLabels}
+      - ${q(`traefik.http.routers.${routerBase}-http.service=${routerBase}`)}
+      - ${q(`traefik.http.routers.${routerBase}-http.middlewares=${authMiddleware}`)}${tlsLabels}
+      - ${q(`traefik.http.middlewares.${authMiddleware}.basicauth.users=${escapedBasicAuth}`)}
+      - ${q(`traefik.http.middlewares.${authMiddleware}.basicauth.removeheader=true`)}
       - ${q(`traefik.http.services.${routerBase}.loadbalancer.server.port=8080`)}
     networks:
       - default
