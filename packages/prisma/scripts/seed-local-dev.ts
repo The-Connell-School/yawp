@@ -33,6 +33,8 @@ try {
       name: LOCAL_DEV_ORG_NAME,
       numOfStudentSeats: 200,
       numOfTeacherSeats: 40,
+      reporterEnabled: true,
+      classInsightsEnabled: true,
     },
   });
   console.timeEnd('organization');

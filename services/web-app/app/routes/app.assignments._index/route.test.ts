@@ -346,4 +346,16 @@ describe('app.assignments loader', () => {
     );
     expect(source).toContain('You are not assigned to any active classes yet.');
   });
+
+  test('links each deployed assignment to its class performance summary', () => {
+    const source = readFileSync(new URL('./route.tsx', import.meta.url), 'utf8');
+
+    expect(source).toContain('<TableHead>Class summary</TableHead>');
+    expect(source).toContain(
+      'to={`/app/my-classes/${deployment.class.id}/assignments/${assignment.id}`}'
+    );
+    expect(source).not.toContain(
+      'to={`/app/my-classes/${deployment.class.id}/assignments/${deployment.id}`}'
+    );
+  });
 });

@@ -159,6 +159,9 @@ export async function action({ request, params }: ActionFunctionArgs) {
       formData.get('numOfTeacherSeats')?.toString() || '10'
     );
     const accessExpiresAt = formData.get('accessExpiresAt')?.toString();
+    const reporterEnabled = formData.get('reporterEnabled') === 'true';
+    const classInsightsEnabled =
+      formData.get('classInsightsEnabled') === 'true';
     const assignmentTypeIds = Array.from(
       new Set(
         formData
@@ -189,6 +192,8 @@ export async function action({ request, params }: ActionFunctionArgs) {
           numOfStudentSeats,
           numOfTeacherSeats,
           accessExpiresAt: accessExpiresAt ? new Date(accessExpiresAt) : null,
+          reporterEnabled,
+          classInsightsEnabled,
         },
       }),
       prisma.organizationAssignmentType.deleteMany({
@@ -444,6 +449,55 @@ export default function OrganizationRoute() {
                         ?.toISOString()
                         .slice(0, 16)}
                     />
+                  </div>
+                </div>
+
+                <div
+                  className="border-t pt-5"
+                  data-testid="organization-ai-feature-manager"
+                >
+                  <div className="space-y-1">
+                    <h3 className="text-sm font-semibold">
+                      Production pilot features
+                    </h3>
+                    <p className="text-sm text-muted-foreground">
+                      Roll out Class Summary and Yawp Reporter independently by
+                      organization.
+                    </p>
+                  </div>
+                  <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                    <label className="flex min-h-12 items-start gap-3 rounded-md border bg-background px-3 py-2 text-sm">
+                      <input
+                        type="checkbox"
+                        name="classInsightsEnabled"
+                        value="true"
+                        defaultChecked={organization.classInsightsEnabled}
+                        className="mt-1 h-4 w-4"
+                      />
+                      <span className="min-w-0">
+                        <span className="block font-medium">Class Summary</span>
+                        <span className="block text-xs text-muted-foreground">
+                          Enables assignment-level AI class summaries.
+                        </span>
+                      </span>
+                    </label>
+                    <label className="flex min-h-12 items-start gap-3 rounded-md border bg-background px-3 py-2 text-sm">
+                      <input
+                        type="checkbox"
+                        name="reporterEnabled"
+                        value="true"
+                        defaultChecked={organization.reporterEnabled}
+                        className="mt-1 h-4 w-4"
+                      />
+                      <span className="min-w-0">
+                        <span className="block font-medium">
+                          Yawp Reporter
+                        </span>
+                        <span className="block text-xs text-muted-foreground">
+                          Adds Reporter to the teacher sidebar.
+                        </span>
+                      </span>
+                    </label>
                   </div>
                 </div>
 

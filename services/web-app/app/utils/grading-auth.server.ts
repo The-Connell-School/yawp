@@ -8,6 +8,7 @@ import { prisma } from '~/utils/db.server';
 
 export type GradingActor = {
   membershipId: string;
+  organizationId: string;
   teacherProfileId: string | null;
   isTeacher: boolean;
   isAdmin: boolean;
@@ -25,6 +26,7 @@ export async function getGradingActor(request: Request): Promise<GradingActor> {
 
   return {
     membershipId: membership.id,
+    organizationId: membership.organization.id,
     teacherProfileId: isTeacherMembership(membership) ? membership.id : null,
     isTeacher: isTeacherMembership(membership),
     isAdmin: Boolean(user?.isAdmin),

@@ -130,6 +130,16 @@ describe('local dev seed fixtures', () => {
     expect(schemaSource).not.toContain(['feature', 'Flag'].join(''));
   });
 
+  test('enables Reporter and Class Summary for local development', () => {
+    const seedSource = readFileSync(
+      join(import.meta.dirname, 'seed-local-dev.ts'),
+      'utf8'
+    );
+
+    expect(seedSource).toContain('reporterEnabled: true');
+    expect(seedSource).toContain('classInsightsEnabled: true');
+  });
+
   test('treats localhost database urls as local seed targets', () => {
     expect(
       isLocalDatabaseUrl('postgresql://postgres:postgres@localhost:5432/yawp')

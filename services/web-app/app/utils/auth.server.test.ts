@@ -45,7 +45,12 @@ const membershipFixture = {
   id: 'membership-1',
   role: 'TEACHER' as const,
   isOrgOwner: false,
-  organization: { id: 'org-1', name: 'Yawp Org' },
+  organization: {
+    id: 'org-1',
+    name: 'Yawp Org',
+    reporterEnabled: false,
+    classInsightsEnabled: false,
+  },
 };
 
 describe('membership auth helpers', () => {
@@ -82,7 +87,14 @@ describe('membership auth helpers', () => {
         id: true,
         role: true,
         isOrgOwner: true,
-        organization: { select: { id: true, name: true } },
+        organization: {
+          select: {
+            id: true,
+            name: true,
+            reporterEnabled: true,
+            classInsightsEnabled: true,
+          },
+        },
       },
     });
     expect(membership).toEqual(membershipFixture);
@@ -104,7 +116,14 @@ describe('membership auth helpers', () => {
         id: true,
         role: true,
         isOrgOwner: true,
-        organization: { select: { id: true, name: true } },
+        organization: {
+          select: {
+            id: true,
+            name: true,
+            reporterEnabled: true,
+            classInsightsEnabled: true,
+          },
+        },
       },
     });
     expect(membership).toEqual(membershipFixture);
