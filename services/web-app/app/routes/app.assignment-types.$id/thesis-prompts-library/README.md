@@ -76,8 +76,9 @@ Prompts the teacher generates are kept, so a good draft is never lost:
 
 Saved prompts are per teacher and per assignment type, and they appear in the
 same Prompt Library as the corpus with a **Collection** filter offering
-*Library* and *My prompts*. The filter section only appears once the teacher
-has saved something.
+*Library* and *My prompts*. Both options are always shown — *My prompts* reads
+`0` before anything is saved — so the collection is discoverable, and selecting
+it while empty explains how to fill it.
 
 - `SavedThesisPrompt` (Prisma) — one row per (membership, assignment type,
   prompt body). The body is identified by a sha256 `promptHash`, so saving a

@@ -213,7 +213,6 @@ export type ThesisLibraryFilters = {
 };
 
 export function buildFacets(prompts: ThesisLibraryEntry[]): FacetValues {
-  const collections = new Set<ThesisCollection>();
   const categories = new Set<ThesisCategory>();
   const subjects = new Set<string>();
   const textsOrUnits = new Set<string>();
@@ -222,7 +221,6 @@ export function buildFacets(prompts: ThesisLibraryEntry[]): FacetValues {
   const gradeBands = new Set<GradeBand>();
 
   for (const prompt of prompts) {
-    collections.add(prompt.collection);
     if (prompt.category) categories.add(prompt.category);
     prompt.subjects.forEach((subject) => subjects.add(subject));
     prompt.textsOrUnits.forEach((textOrUnit) => textsOrUnits.add(textOrUnit));
@@ -232,7 +230,9 @@ export function buildFacets(prompts: ThesisLibraryEntry[]): FacetValues {
   }
 
   return {
-    collections: COLLECTION_ORDER.filter((value) => collections.has(value)),
+    // Both collections are always offered, even when the teacher has saved
+    // nothing yet — "My prompts" has to be visible to be discovered.
+    collections: [...COLLECTION_ORDER],
     categories: CATEGORY_ORDER.filter((value) => categories.has(value)),
     subjects: [...subjects].sort(),
     textsOrUnits: [...textsOrUnits].sort(),
@@ -246,7 +246,10 @@ export function buildOptionCounts(
   prompts: ThesisLibraryEntry[]
 ): OptionCounts {
   const counts: OptionCounts = {
-    collections: {},
+    // Seeded so an empty collection still reports a count of 0.
+    collections: Object.fromEntries(
+      COLLECTION_ORDER.map((collection) => [collection, 0])
+    ),
     categories: {},
     subjects: {},
     textsOrUnits: {},

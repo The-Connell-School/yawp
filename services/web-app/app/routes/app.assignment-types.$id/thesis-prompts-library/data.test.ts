@@ -223,15 +223,20 @@ describe('saved prompts ("My prompts")', () => {
     expect(ALL.every((entry) => entry.collection === 'library')).toBe(true);
   });
 
-  test('the collections facet only appears once something is saved', () => {
-    expect(buildFacets([makePrompt()]).collections).toEqual(['library']);
+  test('the collections facet is always offered so My prompts is discoverable', () => {
+    // Both collections show even before anything is saved — a teacher should be
+    // able to see that "My prompts" exists (and that it is empty).
+    expect(buildFacets([makePrompt()]).collections).toEqual([
+      'library',
+      'mine',
+    ]);
     expect(buildFacets([makePrompt(), makeSaved()]).collections).toEqual([
       'library',
       'mine',
     ]);
   });
 
-  test('counts each collection', () => {
+  test('counts each collection, including an empty one', () => {
     const counts = buildOptionCounts([
       makePrompt(),
       makePrompt({ id: 'TD-001' }),
@@ -239,6 +244,10 @@ describe('saved prompts ("My prompts")', () => {
     ]);
     expect(counts.collections.library).toBe(2);
     expect(counts.collections.mine).toBe(1);
+    expect(buildOptionCounts([makePrompt()]).collections).toEqual({
+      library: 1,
+      mine: 0,
+    });
   });
 
   test('the My prompts filter narrows the list to saved prompts', () => {

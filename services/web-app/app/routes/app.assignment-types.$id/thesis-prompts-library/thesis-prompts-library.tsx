@@ -45,8 +45,6 @@ type FacetSpec = {
   paramKey: string;
   title: string;
   renderLabel?: (v: string) => string;
-  /** Hide the section until it offers a real choice. */
-  minValues?: number;
 };
 
 const FACET_SECTIONS: FacetSpec[] = [
@@ -55,8 +53,6 @@ const FACET_SECTIONS: FacetSpec[] = [
     paramKey: FACET_KEYS.collections,
     title: 'Collection',
     renderLabel: (v) => COLLECTION_LABEL[v as ThesisCollection],
-    // Only worth showing once the teacher has prompts of their own.
-    minValues: 2,
   },
   {
     facetKey: 'categories',
@@ -191,6 +187,10 @@ export function ThesisPromptsLibrary({
     />
   );
 
+  const selectedCollections = readSelected(FACET_KEYS.collections);
+  const showingOnlyMine =
+    selectedCollections.has('mine') && !selectedCollections.has('library');
+
   const countLabel =
     prompts.length === totalCount
       ? `${totalCount} prompts`
@@ -255,7 +255,9 @@ export function ThesisPromptsLibrary({
 
               {prompts.length === 0 ? (
                 <p className="py-12 text-center text-sm text-muted-foreground">
-                  No prompts match the current filters.
+                  {showingOnlyMine
+                    ? 'You haven’t saved any prompts yet. Use New → Generate a prompt, then “Save prompt” (or “Use this prompt”) to keep one here.'
+                    : 'No prompts match the current filters.'}
                 </p>
               ) : (
                 <ul className="flex min-w-0 flex-col gap-3">
@@ -395,7 +397,7 @@ function FilterPanel({
       >
         {FACET_SECTIONS.map((f) => {
           const values = facets[f.facetKey] as string[];
-          if (!values || values.length < (f.minValues ?? 1)) return null;
+          if (!values || values.length === 0) return null;
           const counts = optionCounts[f.facetKey] ?? {};
           const selected = readSelected(f.paramKey);
           return (
