@@ -49,7 +49,69 @@ export type ThesisPrompt = {
   gradeBands: GradeBand[];
 };
 
+/**
+ * Which collection a row in the library comes from: the fixed corpus that ships
+ * with the app, or a prompt this teacher generated and saved ("My prompts").
+ */
+export type ThesisCollection = 'library' | 'mine';
+
+/** A prompt the teacher generated and saved, as returned by the loader. */
+export type SavedThesisPrompt = {
+  id: string;
+  title: string;
+  prompt: string;
+  /** ISO timestamp of when it was saved. */
+  savedAt: string;
+};
+
+/**
+ * A row in the library. Corpus prompts bring their full facet metadata; saved
+ * prompts are free-form, so their facet fields are empty/null and they only
+ * match the search box and the "My prompts" collection filter.
+ */
+export type ThesisLibraryEntry = {
+  id: string;
+  title: string;
+  prompt: string;
+  collection: ThesisCollection;
+  category: ThesisCategory | null;
+  subjects: string[];
+  textsOrUnits: string[];
+  cognitiveMoves: ThesisCognitiveMove[];
+  sourceNeed: ThesisSourceNeed | null;
+  gradeBands: GradeBand[];
+  /** Present only on saved prompts. */
+  savedAt?: string;
+};
+
+export function toLibraryEntry(prompt: ThesisPrompt): ThesisLibraryEntry {
+  return { ...prompt, collection: 'library' };
+}
+
+export function toLibraryEntries(prompts: ThesisPrompt[]): ThesisLibraryEntry[] {
+  return prompts.map(toLibraryEntry);
+}
+
+export function savedPromptToLibraryEntry(
+  saved: SavedThesisPrompt
+): ThesisLibraryEntry {
+  return {
+    id: saved.id,
+    title: saved.title,
+    prompt: saved.prompt,
+    collection: 'mine',
+    category: null,
+    subjects: [],
+    textsOrUnits: [],
+    cognitiveMoves: [],
+    sourceNeed: null,
+    gradeBands: [],
+    savedAt: saved.savedAt,
+  };
+}
+
 export type FacetValues = {
+  collections: ThesisCollection[];
   categories: ThesisCategory[];
   subjects: string[];
   textsOrUnits: string[];
@@ -59,6 +121,7 @@ export type FacetValues = {
 };
 
 export type OptionCounts = {
+  collections: Record<string, number>;
   categories: Record<string, number>;
   subjects: Record<string, number>;
   textsOrUnits: Record<string, number>;
@@ -66,6 +129,13 @@ export type OptionCounts = {
   sourceNeeds: Record<string, number>;
   gradeBands: Record<string, number>;
 };
+
+export const COLLECTION_LABEL: Record<ThesisCollection, string> = {
+  library: 'Library',
+  mine: 'My prompts',
+};
+
+export const COLLECTION_ORDER: ThesisCollection[] = ['library', 'mine'];
 
 export const CATEGORY_LABEL: Record<ThesisCategory, string> = {
   theme: 'Theme',
@@ -122,6 +192,7 @@ export const TEACHING_NOTES: string[] = [
 /** URL search-param keys. Prefixed `tp_` so they never collide with Daily Pages. */
 export const FACET_KEYS = {
   search: 'tp_q',
+  collections: 'tp_coll',
   categories: 'tp_cat',
   subjects: 'tp_subjects',
   textsOrUnits: 'tp_texts',
@@ -132,6 +203,7 @@ export const FACET_KEYS = {
 
 export type ThesisLibraryFilters = {
   q: string;
+  collections: Set<string>;
   categories: Set<string>;
   subjects: Set<string>;
   textsOrUnits: Set<string>;
@@ -140,7 +212,8 @@ export type ThesisLibraryFilters = {
   gradeBands: Set<string>;
 };
 
-export function buildFacets(prompts: ThesisPrompt[]): FacetValues {
+export function buildFacets(prompts: ThesisLibraryEntry[]): FacetValues {
+  const collections = new Set<ThesisCollection>();
   const categories = new Set<ThesisCategory>();
   const subjects = new Set<string>();
   const textsOrUnits = new Set<string>();
@@ -149,15 +222,17 @@ export function buildFacets(prompts: ThesisPrompt[]): FacetValues {
   const gradeBands = new Set<GradeBand>();
 
   for (const prompt of prompts) {
-    categories.add(prompt.category);
+    collections.add(prompt.collection);
+    if (prompt.category) categories.add(prompt.category);
     prompt.subjects.forEach((subject) => subjects.add(subject));
     prompt.textsOrUnits.forEach((textOrUnit) => textsOrUnits.add(textOrUnit));
     prompt.cognitiveMoves.forEach((move) => cognitiveMoves.add(move));
-    sourceNeeds.add(prompt.sourceNeed);
+    if (prompt.sourceNeed) sourceNeeds.add(prompt.sourceNeed);
     prompt.gradeBands.forEach((gradeBand) => gradeBands.add(gradeBand));
   }
 
   return {
+    collections: COLLECTION_ORDER.filter((value) => collections.has(value)),
     categories: CATEGORY_ORDER.filter((value) => categories.has(value)),
     subjects: [...subjects].sort(),
     textsOrUnits: [...textsOrUnits].sort(),
@@ -167,8 +242,11 @@ export function buildFacets(prompts: ThesisPrompt[]): FacetValues {
   };
 }
 
-export function buildOptionCounts(prompts: ThesisPrompt[]): OptionCounts {
+export function buildOptionCounts(
+  prompts: ThesisLibraryEntry[]
+): OptionCounts {
   const counts: OptionCounts = {
+    collections: {},
     categories: {},
     subjects: {},
     textsOrUnits: {},
@@ -181,13 +259,14 @@ export function buildOptionCounts(prompts: ThesisPrompt[]): OptionCounts {
   };
 
   for (const prompt of prompts) {
-    bump(counts.categories, prompt.category);
+    bump(counts.collections, prompt.collection);
+    if (prompt.category) bump(counts.categories, prompt.category);
     prompt.subjects.forEach((subject) => bump(counts.subjects, subject));
     prompt.textsOrUnits.forEach((textOrUnit) =>
       bump(counts.textsOrUnits, textOrUnit)
     );
     prompt.cognitiveMoves.forEach((move) => bump(counts.cognitiveMoves, move));
-    bump(counts.sourceNeeds, prompt.sourceNeed);
+    if (prompt.sourceNeed) bump(counts.sourceNeeds, prompt.sourceNeed);
     prompt.gradeBands.forEach((gradeBand) => bump(counts.gradeBands, gradeBand));
   }
 
@@ -200,6 +279,7 @@ export function readFilters(url: URL): ThesisLibraryFilters {
 
   return {
     q: (url.searchParams.get(FACET_KEYS.search) ?? '').trim().toLowerCase(),
+    collections: readSet(FACET_KEYS.collections),
     categories: readSet(FACET_KEYS.categories),
     subjects: readSet(FACET_KEYS.subjects),
     textsOrUnits: readSet(FACET_KEYS.textsOrUnits),
@@ -210,11 +290,22 @@ export function readFilters(url: URL): ThesisLibraryFilters {
 }
 
 export function applyFilters(
-  prompts: ThesisPrompt[],
+  prompts: ThesisLibraryEntry[],
   filters: ThesisLibraryFilters
-): ThesisPrompt[] {
+): ThesisLibraryEntry[] {
   return prompts.filter((prompt) => {
-    if (filters.categories.size && !filters.categories.has(prompt.category)) {
+    if (
+      filters.collections.size &&
+      !filters.collections.has(prompt.collection)
+    ) {
+      return false;
+    }
+    // Saved prompts carry no corpus metadata, so any corpus facet filters them
+    // out rather than matching a missing value.
+    if (
+      filters.categories.size &&
+      (!prompt.category || !filters.categories.has(prompt.category))
+    ) {
       return false;
     }
     if (
@@ -237,7 +328,10 @@ export function applyFilters(
     ) {
       return false;
     }
-    if (filters.sourceNeeds.size && !filters.sourceNeeds.has(prompt.sourceNeed)) {
+    if (
+      filters.sourceNeeds.size &&
+      (!prompt.sourceNeed || !filters.sourceNeeds.has(prompt.sourceNeed))
+    ) {
       return false;
     }
     if (

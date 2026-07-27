@@ -5,14 +5,19 @@ import {
   buildOptionCounts,
   FACET_KEYS,
   readFilters,
+  toLibraryEntries,
+  toLibraryEntry,
+  savedPromptToLibraryEntry,
+  type SavedThesisPrompt,
+  type ThesisLibraryEntry,
   type ThesisPrompt,
 } from './data';
 import promptsRaw from './prompts.json';
 
-const ALL = promptsRaw as ThesisPrompt[];
+const ALL = toLibraryEntries(promptsRaw as ThesisPrompt[]);
 
-function makePrompt(overrides: Partial<ThesisPrompt> = {}): ThesisPrompt {
-  return {
+function makePrompt(overrides: Partial<ThesisPrompt> = {}): ThesisLibraryEntry {
+  return toLibraryEntry({
     id: 'TD-000',
     title: 'Sample',
     prompt: 'A sample thesis-driven prompt body.',
@@ -23,7 +28,19 @@ function makePrompt(overrides: Partial<ThesisPrompt> = {}): ThesisPrompt {
     sourceNeed: 'none',
     gradeBands: ['9', '10'],
     ...overrides,
-  };
+  });
+}
+
+function makeSaved(
+  overrides: Partial<SavedThesisPrompt> = {}
+): ThesisLibraryEntry {
+  return savedPromptToLibraryEntry({
+    id: 'saved-1',
+    title: 'Loyalty Under Pressure',
+    prompt: 'Write a thesis-driven critical essay on loyalty under pressure.',
+    savedAt: '2026-07-27T00:00:00.000Z',
+    ...overrides,
+  });
 }
 
 function url(search: string) {
@@ -183,5 +200,85 @@ describe('readFilters + applyFilters', () => {
       readFilters(url(`?${FACET_KEYS.subjects}=Nonexistent Subject`))
     );
     expect(filtered).toEqual([]);
+  });
+});
+
+describe('saved prompts ("My prompts")', () => {
+  test('a saved prompt becomes a library entry in the "mine" collection', () => {
+    const entry = makeSaved();
+    expect(entry.collection).toBe('mine');
+    expect(entry.title).toBe('Loyalty Under Pressure');
+    expect(entry.savedAt).toBe('2026-07-27T00:00:00.000Z');
+    // Saved prompts carry no corpus metadata, so their facet fields are empty.
+    expect(entry.category).toBeNull();
+    expect(entry.sourceNeed).toBeNull();
+    expect(entry.subjects).toEqual([]);
+    expect(entry.textsOrUnits).toEqual([]);
+    expect(entry.cognitiveMoves).toEqual([]);
+    expect(entry.gradeBands).toEqual([]);
+  });
+
+  test('corpus prompts default to the "library" collection', () => {
+    expect(makePrompt().collection).toBe('library');
+    expect(ALL.every((entry) => entry.collection === 'library')).toBe(true);
+  });
+
+  test('the collections facet only appears once something is saved', () => {
+    expect(buildFacets([makePrompt()]).collections).toEqual(['library']);
+    expect(buildFacets([makePrompt(), makeSaved()]).collections).toEqual([
+      'library',
+      'mine',
+    ]);
+  });
+
+  test('counts each collection', () => {
+    const counts = buildOptionCounts([
+      makePrompt(),
+      makePrompt({ id: 'TD-001' }),
+      makeSaved(),
+    ]);
+    expect(counts.collections.library).toBe(2);
+    expect(counts.collections.mine).toBe(1);
+  });
+
+  test('the My prompts filter narrows the list to saved prompts', () => {
+    const entries = [makePrompt(), makeSaved()];
+    const mine = applyFilters(
+      entries,
+      readFilters(url(`?${FACET_KEYS.collections}=mine`))
+    );
+    expect(mine.map((entry) => entry.id)).toEqual(['saved-1']);
+
+    const library = applyFilters(
+      entries,
+      readFilters(url(`?${FACET_KEYS.collections}=library`))
+    );
+    expect(library.map((entry) => entry.id)).toEqual(['TD-000']);
+  });
+
+  test('saved prompts show alongside the corpus when no collection is chosen', () => {
+    const entries = [makePrompt(), makeSaved()];
+    expect(applyFilters(entries, readFilters(url(''))).length).toBe(2);
+  });
+
+  test('search still matches a saved prompt by title or body', () => {
+    const entries = [makePrompt(), makeSaved()];
+    expect(
+      applyFilters(entries, readFilters(url(`?${FACET_KEYS.search}=loyalty`)))
+        .map((entry) => entry.id)
+    ).toEqual(['saved-1']);
+  });
+
+  test('corpus-only facets exclude saved prompts, which carry no metadata', () => {
+    const entries = [makePrompt(), makeSaved()];
+    for (const search of [
+      `?${FACET_KEYS.categories}=general`,
+      `?${FACET_KEYS.gradeBands}=9`,
+      `?${FACET_KEYS.sourceNeeds}=none`,
+      `?${FACET_KEYS.subjects}=Civics %26 society`,
+    ]) {
+      const filtered = applyFilters(entries, readFilters(url(search)));
+      expect(filtered.map((entry) => entry.id)).toEqual(['TD-000']);
+    }
   });
 });
