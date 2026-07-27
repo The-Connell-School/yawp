@@ -224,6 +224,33 @@ describe('Where this course overrides the universal rules', () => {
     }
   });
 
+  test('every sentence-starter offer in the universal block is withdrawn by name', () => {
+    // The universal block offers sentence-starters in TWO places: the ONE RULE
+    // and PAIR VIVID LANGUAGE WITH CONCRETE HELP. The second is the more
+    // dangerous one — it asks for a starter "tailored to what THIS student
+    // actually wrote," i.e. built from the student's own material. Withdrawing
+    // only the first would leave that one standing.
+    const offers = [
+      'a sentence-starter they finish',
+      'a sentence-starter to finish',
+    ];
+    for (const offer of offers) {
+      expect(UNIVERSAL_TUTOR_BLOCK).toContain(offer);
+    }
+    for (const module of COLLEGE_ESSAY_MODULES) {
+      expect(module.tutorInstructions).toContain(
+        'SENTENCE-STARTERS ARE NOT ALLOWED HERE, IN ANY FORM'
+      );
+      // Both universal offers are named in the override, so neither is left
+      // standing as the looser instruction a student could argue for.
+      expect(module.tutorInstructions).toContain('the ONE RULE lists');
+      expect(module.tutorInstructions).toContain(
+        'PAIR VIVID LANGUAGE WITH CONCRETE HELP asks for'
+      );
+      expect(module.tutorInstructions).toContain('BOTH are withdrawn');
+    }
+  });
+
   test('the Brainstorm Gate is protected from "Honor I am ready"', () => {
     // "Don't move the goalposts / honor I'm ready" must not read as licence to
     // wave a student through the one hard gate in the course.
