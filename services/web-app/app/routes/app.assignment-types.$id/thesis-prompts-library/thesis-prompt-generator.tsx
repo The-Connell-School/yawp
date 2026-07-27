@@ -1,6 +1,6 @@
 import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { useFetcher } from 'react-router';
-import { ChevronLeftIcon, ChevronRightIcon } from 'lucide-react';
+import { CheckIcon, ChevronLeftIcon, ChevronRightIcon } from 'lucide-react';
 import { Button } from '~/components/ui/button';
 import {
   Sheet,
@@ -16,6 +16,7 @@ import type {
 } from './prompt-generator';
 
 const GENERATOR_ACTION = '/api/domain/thesis-prompt-generator';
+const SAVE_ACTION = '/api/domain/thesis-prompt-save';
 
 const STARTER_PROMPTS = [
   'A prompt about ambition and its costs for 10th graders reading Macbeth',
@@ -38,12 +39,24 @@ type GeneratorFetcherData = {
   message?: string;
 };
 
+type SaveFetcherData = {
+  success: boolean;
+  message?: string;
+};
+
 type Props = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** Assignment type the saved prompt belongs to ("My prompts" is per type). */
+  assignmentTypeId: string;
   /** Called with the drafted prompt body when the teacher chooses to use it. */
   onUsePrompt: (promptBody: string) => void;
 };
+
+/** Identity of a draft for save bookkeeping — the body is what gets stored. */
+function promptKey(option: GeneratedPrompt): string {
+  return option.body.trim();
+}
 
 /** Flatten display turns into the {role, content} history the API expects. */
 function toApiMessages(turns: GeneratorTurn[]): GeneratorMessage[] {
@@ -64,13 +77,18 @@ function toApiMessages(turns: GeneratorTurn[]): GeneratorMessage[] {
 export function ThesisPromptGenerator({
   open,
   onOpenChange,
+  assignmentTypeId,
   onUsePrompt,
 }: Props) {
   const fetcher = useFetcher<GeneratorFetcherData>();
+  const saveFetcher = useFetcher<SaveFetcherData>();
   const [turns, setTurns] = useState<GeneratorTurn[]>([]);
   const [input, setInput] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [savedKeys, setSavedKeys] = useState<Set<string>>(new Set());
   const lastHandled = useRef<GeneratorFetcherData | null>(null);
+  const lastSaveHandled = useRef<SaveFetcherData | null>(null);
+  const pendingSaveKey = useRef<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const isThinking = fetcher.state !== 'idle';
@@ -81,9 +99,33 @@ export function ThesisPromptGenerator({
       setTurns([]);
       setInput('');
       setError(null);
+      setSavedKeys(new Set());
       lastHandled.current = null;
+      lastSaveHandled.current = null;
+      pendingSaveKey.current = null;
     }
   }, [open]);
+
+  // A save that failed shouldn't keep claiming the prompt is in the library.
+  useEffect(() => {
+    if (saveFetcher.state !== 'idle' || !saveFetcher.data) return;
+    if (lastSaveHandled.current === saveFetcher.data) return;
+    lastSaveHandled.current = saveFetcher.data;
+    if (saveFetcher.data.success) return;
+
+    const failedKey = pendingSaveKey.current;
+    if (failedKey) {
+      setSavedKeys((prev) => {
+        const next = new Set(prev);
+        next.delete(failedKey);
+        return next;
+      });
+    }
+    setError(
+      saveFetcher.data.message ??
+        "That prompt couldn't be saved. Please try again."
+    );
+  }, [saveFetcher.state, saveFetcher.data]);
 
   // Append the assistant's reply once a response arrives (dedup by identity).
   useEffect(() => {
@@ -127,6 +169,29 @@ export function ThesisPromptGenerator({
       { messages: JSON.stringify(toApiMessages(nextTurns)) },
       { method: 'post', action: GENERATOR_ACTION }
     );
+  }
+
+  /**
+   * Keep a draft in the teacher's "My prompts" collection. Optimistic: the
+   * button flips to "Saved" right away and only reverts if the write fails.
+   * Saving is idempotent server-side, so re-saving the same body is a no-op.
+   */
+  function savePrompt(option: GeneratedPrompt) {
+    const key = promptKey(option);
+    if (savedKeys.has(key)) return;
+    setError(null);
+    setSavedKeys((prev) => new Set(prev).add(key));
+    pendingSaveKey.current = key;
+    saveFetcher.submit(
+      { assignmentTypeId, title: option.title, prompt: option.body },
+      { method: 'post', action: SAVE_ACTION }
+    );
+  }
+
+  /** Using a prompt keeps it too — anything assigned lands in "My prompts". */
+  function usePrompt(option: GeneratedPrompt) {
+    savePrompt(option);
+    onUsePrompt(option.body);
   }
 
   return (
@@ -191,7 +256,9 @@ export function ThesisPromptGenerator({
                 turn.options.length > 0 ? (
                   <PromptOptionsCarousel
                     options={turn.options}
-                    onUse={onUsePrompt}
+                    onUse={usePrompt}
+                    onSave={savePrompt}
+                    isSaved={(option) => savedKeys.has(promptKey(option))}
                   />
                 ) : null}
               </div>
@@ -337,19 +404,24 @@ function FormattedReply({ text }: { text: string }) {
   );
 }
 
-/** A pageable set of drafted prompts: arrows to move between options, with a
- * "Use this prompt" action on whichever option is showing. */
+/** A pageable set of drafted prompts: arrows to move between options, with
+ * "Save prompt" and "Use this prompt" actions on whichever option is showing. */
 function PromptOptionsCarousel({
   options,
   onUse,
+  onSave,
+  isSaved,
 }: {
   options: GeneratedPrompt[];
-  onUse: (promptBody: string) => void;
+  onUse: (option: GeneratedPrompt) => void;
+  onSave: (option: GeneratedPrompt) => void;
+  isSaved: (option: GeneratedPrompt) => boolean;
 }) {
   const [index, setIndex] = useState(0);
   const count = options.length;
   const active = options[Math.min(index, count - 1)];
   if (!active) return null;
+  const saved = isSaved(active);
 
   return (
     <div className="space-y-3 rounded-lg border bg-muted/40 p-4">
@@ -386,11 +458,31 @@ function PromptOptionsCarousel({
       <p className="whitespace-pre-wrap text-sm leading-6 text-muted-foreground">
         {active.body}
       </p>
-      <div className="flex justify-end">
-        <Button type="button" size="sm" onClick={() => onUse(active.body)}>
+      <div className="flex flex-wrap justify-end gap-2">
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          disabled={saved}
+          onClick={() => onSave(active)}
+        >
+          {saved ? (
+            <>
+              <CheckIcon className="mr-1.5 h-4 w-4" />
+              Saved
+            </>
+          ) : (
+            'Save prompt'
+          )}
+        </Button>
+        <Button type="button" size="sm" onClick={() => onUse(active)}>
           Use this prompt
         </Button>
       </div>
+      <p className="text-right text-xs text-muted-foreground">
+        Saved prompts show up under <strong>My prompts</strong> in the Prompt
+        Library. Using a prompt saves it too.
+      </p>
     </div>
   );
 }

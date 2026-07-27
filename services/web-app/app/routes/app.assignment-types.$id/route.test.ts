@@ -23,6 +23,9 @@ const prisma = {
   apHistoryPromptLibraryEntry: {
     findMany: mock(),
   },
+  savedThesisPrompt: {
+    findMany: mock(),
+  },
 };
 
 const requireUserId = mock();
@@ -102,6 +105,8 @@ describe('app.assignment-types.$id action', () => {
     prisma.organizationAssignmentType.findMany.mockReset();
     prisma.school.findMany.mockReset();
     prisma.orgMembership.findMany.mockReset();
+    prisma.savedThesisPrompt.findMany.mockReset();
+    prisma.savedThesisPrompt.findMany.mockResolvedValue([]);
     requireUserId.mockReset();
     requireMembership.mockReset();
     createDocumentForAssignmentType.mockReset();
@@ -284,6 +289,49 @@ describe('app.assignment-types.$id loader Daily Pages prompt library', () => {
     ).toBe(true);
     expect(response.data.thesisPromptLibrary.facets.categories).toContain(
       'general'
+    );
+  });
+
+  test('merges the teacher\'s saved prompts into the thesis library as "My prompts"', async () => {
+    getAvailableAssignmentTypesForScopes.mockResolvedValue([
+      withOrganizationAssignment(
+        makeAssignmentType({ title: 'The Thesis-Driven Essay' })
+      ),
+    ]);
+    prisma.savedThesisPrompt.findMany.mockResolvedValue([
+      {
+        id: 'saved-1',
+        title: 'Loyalty Under Pressure',
+        prompt: 'Write a thesis-driven critical essay on loyalty.',
+        createdAt: new Date('2026-07-27T12:00:00.000Z'),
+      },
+    ]);
+
+    const response = (await loader({
+      request: new Request(
+        'https://example.test/app/assignment-types/at-1?tp_coll=mine'
+      ),
+      params: { id: 'at-1' },
+    } as never)) as any;
+
+    expect(prisma.savedThesisPrompt.findMany.mock.calls[0][0].where).toEqual({
+      membershipId: 'teacher-1',
+      assignmentTypeId: 'at-1',
+      archivedAt: null,
+    });
+    // The saved prompt is the only thing the "My prompts" filter keeps.
+    expect(response.data.thesisPromptLibrary.prompts).toHaveLength(1);
+    expect(response.data.thesisPromptLibrary.prompts[0]).toMatchObject({
+      id: 'saved-1',
+      title: 'Loyalty Under Pressure',
+      collection: 'mine',
+    });
+    expect(response.data.thesisPromptLibrary.facets.collections).toEqual([
+      'library',
+      'mine',
+    ]);
+    expect(response.data.thesisPromptLibrary.optionCounts.collections.mine).toBe(
+      1
     );
   });
 

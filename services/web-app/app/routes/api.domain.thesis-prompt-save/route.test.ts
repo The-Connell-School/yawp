@@ -26,6 +26,10 @@ async function readBody(response: any) {
   return typeof response.json === 'function' ? response.json() : response.data;
 }
 
+function statusOf(response: any) {
+  return response.init?.status ?? response.status ?? 200;
+}
+
 function request(fields: Record<string, string | undefined>) {
   const body = new URLSearchParams();
   for (const [key, value] of Object.entries(fields)) {
@@ -106,7 +110,7 @@ describe('api.domain.thesis-prompt-save', () => {
       context: {},
     } as any);
 
-    expect(response.init?.status ?? response.status).toBe(403);
+    expect(statusOf(response)).toBe(403);
     expect((await readBody(response)).success).toBe(false);
     expect(saveThesisPrompt).not.toHaveBeenCalled();
   });
@@ -120,7 +124,7 @@ describe('api.domain.thesis-prompt-save', () => {
       context: {},
     } as any);
 
-    expect(response.init?.status ?? response.status).toBe(404);
+    expect(statusOf(response)).toBe(404);
     expect(saveThesisPrompt).not.toHaveBeenCalled();
   });
 
@@ -131,7 +135,7 @@ describe('api.domain.thesis-prompt-save', () => {
       context: {},
     } as any);
 
-    expect(response.init?.status ?? response.status).toBe(400);
+    expect(statusOf(response)).toBe(400);
     expect(saveThesisPrompt).not.toHaveBeenCalled();
   });
 
@@ -142,7 +146,7 @@ describe('api.domain.thesis-prompt-save', () => {
       context: {},
     } as any);
 
-    expect(response.init?.status ?? response.status).toBe(400);
+    expect(statusOf(response)).toBe(400);
     expect(saveThesisPrompt).not.toHaveBeenCalled();
   });
 
@@ -157,7 +161,7 @@ describe('api.domain.thesis-prompt-save', () => {
       context: {},
     } as any);
 
-    expect(response.init?.status ?? response.status).toBe(400);
+    expect(statusOf(response)).toBe(400);
     expect((await readBody(response)).message).toBe(
       'That prompt is too long to save.'
     );
@@ -172,7 +176,7 @@ describe('api.domain.thesis-prompt-save', () => {
       context: {},
     } as any);
 
-    expect(response.init?.status ?? response.status).toBe(500);
+    expect(statusOf(response)).toBe(500);
     expect((await readBody(response)).success).toBe(false);
   });
 });
