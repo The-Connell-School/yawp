@@ -5,7 +5,15 @@ const requireMembership = mock();
 const getLLMCompletion = mock();
 
 mock.module('~/utils/auth.server', () => ({ requireUserId, requireMembership }));
-mock.module('~/utils/getLLMCompletion', () => ({ getLLMCompletion }));
+// bun's module mocks are global to the test run, so the stub has to keep the
+// whole module surface — dropping AgentType breaks other suites that import it.
+mock.module('~/utils/getLLMCompletion', () => ({
+  AgentType: {
+    Assistant: 'assistant',
+    User: 'user',
+  },
+  getLLMCompletion,
+}));
 
 const { action } = await import('./route');
 
