@@ -396,10 +396,13 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           assignmentTypeId: assignmentType.id,
         })
       : [];
-  const thesisLibraryEntries = [
-    ...savedThesisPrompts.map(savedPromptToLibraryEntry),
-    ...ALL_THESIS_PROMPTS,
-  ];
+  const thesisLibraryEntries =
+    profile.role === "TEACHER" && isThesisEssay
+      ? [
+          ...savedThesisPrompts.map(savedPromptToLibraryEntry),
+          ...ALL_THESIS_PROMPTS,
+        ]
+      : [];
   const thesisPromptLibrary =
     profile.role === "TEACHER" && isThesisEssay
       ? {

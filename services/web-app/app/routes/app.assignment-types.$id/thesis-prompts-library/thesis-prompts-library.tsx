@@ -387,7 +387,12 @@ function FilterPanel({
         ) : null}
       </div>
 
-      <Accordion type="multiple" className="border-none">
+      {/* The collection section starts open so "My prompts" is discoverable. */}
+      <Accordion
+        type="multiple"
+        defaultValue={['collections']}
+        className="border-none"
+      >
         {FACET_SECTIONS.map((f) => {
           const values = facets[f.facetKey] as string[];
           if (!values || values.length < (f.minValues ?? 1)) return null;
