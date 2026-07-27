@@ -41,6 +41,7 @@ import { prisma } from '~/utils/db.server';
 import { redirectWithToast } from '~/utils/toast.server';
 import { ApHistoryLibrary } from './ap-history-library';
 import { CreateAssignmentSheet } from './create-assignment-sheet';
+import { DailyPagesPromptGenerator } from './prompts-library/daily-pages-prompt-generator';
 import { PromptsLibrary } from './prompts-library/prompts-library';
 import { TeacherDirections } from './prompts-library/teacher-directions';
 import {
@@ -483,6 +484,7 @@ export default function AppAssignmentTypesIdRoute() {
   const isLoading = navigation.state !== 'idle';
   const docFormRef = useRef<HTMLFormElement>(null);
   const [isAssignmentSheetOpen, setIsAssignmentSheetOpen] = useState(false);
+  const [isPromptGeneratorOpen, setIsPromptGeneratorOpen] = useState(false);
   const [libraryPrompt, setLibraryPrompt] = useState('');
   const [apHistoryEntry, setApHistoryEntry] = useState<{
     externalKey: string;
@@ -536,6 +538,14 @@ export default function AppAssignmentTypesIdRoute() {
                       >
                         Assignment
                       </DropdownMenuItem>
+                      {showPromptsLibrary ? (
+                        <DropdownMenuItem
+                          disabled={data.teacherClasses.length === 0}
+                          onSelect={() => setIsPromptGeneratorOpen(true)}
+                        >
+                          Generate a prompt
+                        </DropdownMenuItem>
+                      ) : null}
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </>
@@ -549,6 +559,18 @@ export default function AppAssignmentTypesIdRoute() {
                 initialPrompt={libraryPrompt}
                 apHistoryEntry={apHistoryEntry}
               />
+              {showPromptsLibrary ? (
+                <DailyPagesPromptGenerator
+                  open={isPromptGeneratorOpen}
+                  onOpenChange={setIsPromptGeneratorOpen}
+                  onUsePrompt={(prompt) => {
+                    setApHistoryEntry(null);
+                    setLibraryPrompt(prompt);
+                    setIsPromptGeneratorOpen(false);
+                    setIsAssignmentSheetOpen(true);
+                  }}
+                />
+              ) : null}
             </>
           ) : canCreateDirectDocument ? (
             <Form method="post">
