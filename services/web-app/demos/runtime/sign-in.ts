@@ -49,7 +49,8 @@ export async function signIn(page: Page, role: DemoRole): Promise<void> {
 
   await page
     .waitForURL(
-      (url) => url.pathname.startsWith('/app') || url.pathname === '/enter-code',
+      (url) =>
+        url.pathname.startsWith('/app') || url.pathname === '/enter-code',
       { timeout: 15_000 }
     )
     .catch(() => {

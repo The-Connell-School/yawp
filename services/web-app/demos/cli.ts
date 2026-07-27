@@ -70,9 +70,9 @@ async function loadDemo(name: string): Promise<DemoDefinition> {
     );
   }
 
-  const module = (await import(
-    path.join(SCRIPTS_DIR, `${name}.demo.ts`)
-  )) as { default?: DemoDefinition };
+  const module = (await import(path.join(SCRIPTS_DIR, `${name}.demo.ts`))) as {
+    default?: DemoDefinition;
+  };
 
   if (!module.default) {
     throw new Error(`${name}.demo.ts has no default export`);
@@ -124,6 +124,8 @@ async function main(): Promise<void> {
 }
 
 main().catch((error: unknown) => {
-  console.error(`\n${error instanceof Error ? error.message : String(error)}\n`);
+  console.error(
+    `\n${error instanceof Error ? error.message : String(error)}\n`
+  );
   process.exit(1);
 });

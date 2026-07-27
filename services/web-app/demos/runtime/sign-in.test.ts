@@ -35,6 +35,8 @@ describe('demoCredentials', () => {
 
   it('does not leak one role’s override onto another', () => {
     const env = { DEMO_STUDENT_EMAIL: 'someone@example.test' };
-    expect(demoCredentials('teacher', env).email).toBe('dev.teacher@yawp.local');
+    expect(demoCredentials('teacher', env).email).toBe(
+      'dev.teacher@yawp.local'
+    );
   });
 });

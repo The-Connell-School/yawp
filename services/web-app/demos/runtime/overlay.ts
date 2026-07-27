@@ -349,10 +349,10 @@ export function installOverlay(config: OverlayConfig): void {
 
       // A quick press-and-release on the cursor itself, so the click reads
       // even when the underlying element has no hover or active state.
-      cursorEl.animate(
-        [{ scale: '1' }, { scale: '0.82' }, { scale: '1' }],
-        { duration: 220, easing: 'ease-out' }
-      );
+      cursorEl.animate([{ scale: '1' }, { scale: '0.82' }, { scale: '1' }], {
+        duration: 220,
+        easing: 'ease-out',
+      });
       await wait(120);
     },
 

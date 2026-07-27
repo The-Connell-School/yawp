@@ -126,7 +126,10 @@ export async function recordDemo(
     await stage.hush();
     await stage.clearHighlight();
     await stage.showCard(
-      definition.endCard ?? { kicker: definition.kicker, title: definition.title },
+      definition.endCard ?? {
+        kicker: definition.kicker,
+        title: definition.title,
+      },
       scaled(BEATS.endCard, options.rate)
     );
 

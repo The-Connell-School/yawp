@@ -36,9 +36,10 @@ export default defineDemo({
   async fixtureServer() {
     const server = Bun.serve({
       port: 0,
-      fetch: () => new Response(Bun.file(FIXTURE), {
-        headers: { 'content-type': 'text/html; charset=utf-8' },
-      }),
+      fetch: () =>
+        new Response(Bun.file(FIXTURE), {
+          headers: { 'content-type': 'text/html; charset=utf-8' },
+        }),
     });
     return {
       url: `http://127.0.0.1:${server.port}`,

@@ -117,7 +117,9 @@ export async function encodeToMp4(spec: EncodeSpec): Promise<string> {
   const args = buildFfmpegArgs(spec);
 
   await new Promise<void>((resolve, reject) => {
-    const child = spawn(ffmpegPath, args, { stdio: ['ignore', 'ignore', 'pipe'] });
+    const child = spawn(ffmpegPath, args, {
+      stdio: ['ignore', 'ignore', 'pipe'],
+    });
 
     let stderr = '';
     child.stderr.on('data', (chunk) => {

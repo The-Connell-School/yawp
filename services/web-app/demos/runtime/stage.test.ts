@@ -15,7 +15,8 @@ type Call = { kind: string; detail?: unknown };
 
 function makeStage() {
   const calls: Call[] = [];
-  const record = (kind: string, detail?: unknown) => calls.push({ kind, detail });
+  const record = (kind: string, detail?: unknown) =>
+    calls.push({ kind, detail });
 
   const overlayApi = new Proxy(
     {},
@@ -31,7 +32,9 @@ function makeStage() {
   );
 
   // Stage's overlay() dispatch reaches for window.__demo inside page.evaluate.
-  (globalThis as unknown as { window: unknown }).window = { __demo: overlayApi };
+  (globalThis as unknown as { window: unknown }).window = {
+    __demo: overlayApi,
+  };
 
   const locator = {
     first: () => locator,
@@ -48,7 +51,9 @@ function makeStage() {
     waitForTimeout: async (ms: number) => record('wait', ms),
     waitForLoadState: async () => undefined,
     goto: async (url: string) => record('goto', url),
-    mouse: { move: async (x: number, y: number) => record('mouse:move', [x, y]) },
+    mouse: {
+      move: async (x: number, y: number) => record('mouse:move', [x, y]),
+    },
     keyboard: { type: async (text: string) => record('key', text) },
   };
 
@@ -70,7 +75,9 @@ describe('Stage.click', () => {
     const order = kinds();
 
     expect(at(order, 'overlay:moveCursor')).toBeGreaterThan(-1);
-    expect(at(order, 'overlay:moveCursor')).toBeLessThan(at(order, 'locator:click'));
+    expect(at(order, 'overlay:moveCursor')).toBeLessThan(
+      at(order, 'locator:click')
+    );
   });
 
   it('moves the real mouse only after the drawn cursor has arrived', async () => {
@@ -80,7 +87,9 @@ describe('Stage.click', () => {
     await stage.click(locator);
     const order = kinds();
 
-    expect(at(order, 'overlay:moveCursor')).toBeLessThan(at(order, 'mouse:move'));
+    expect(at(order, 'overlay:moveCursor')).toBeLessThan(
+      at(order, 'mouse:move')
+    );
     expect(at(order, 'mouse:move')).toBeLessThan(at(order, 'locator:click'));
   });
 
@@ -170,7 +179,9 @@ describe('Stage.click with spotlight', () => {
     const { stage, locator, calls } = makeStage();
     await stage.click(locator, { spotlight: true });
 
-    const spotlights = calls.filter((call) => call.kind === 'overlay:spotlight');
+    const spotlights = calls.filter(
+      (call) => call.kind === 'overlay:spotlight'
+    );
     expect(spotlights.length).toBe(2);
     expect((spotlights[1]?.detail as unknown[])[0]).toBeNull();
   });
@@ -209,8 +220,7 @@ describe('Stage.type', () => {
 
     // A wait precedes each of the three keystrokes.
     const waitsBeforeKeys = calls.filter(
-      (call, index) =>
-        call.kind === 'wait' && calls[index + 1]?.kind === 'key'
+      (call, index) => call.kind === 'wait' && calls[index + 1]?.kind === 'key'
     );
     expect(waitsBeforeKeys.length).toBe(3);
   });
@@ -221,7 +231,10 @@ describe('Stage.type', () => {
     await stage.type(locator, 'abcdefgh');
 
     const waits = calls
-      .filter((call, index) => call.kind === 'wait' && calls[index + 1]?.kind === 'key')
+      .filter(
+        (call, index) =>
+          call.kind === 'wait' && calls[index + 1]?.kind === 'key'
+      )
       .map((call) => call.detail as number);
 
     const first = waits.slice(0, 8);
