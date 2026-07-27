@@ -20,18 +20,20 @@ import {
 import {
   CATEGORY_LABEL,
   COGNITIVE_MOVE_LABEL,
+  COLLECTION_LABEL,
   FACET_KEYS,
   type FacetValues,
   type OptionCounts,
   SOURCE_NEED_LABEL,
   type ThesisCategory,
   type ThesisCognitiveMove,
-  type ThesisPrompt,
+  type ThesisCollection,
+  type ThesisLibraryEntry,
   type ThesisSourceNeed,
 } from './data';
 
 type Props = {
-  prompts: ThesisPrompt[];
+  prompts: ThesisLibraryEntry[];
   facets: FacetValues;
   optionCounts: OptionCounts;
   totalCount: number;
@@ -43,9 +45,19 @@ type FacetSpec = {
   paramKey: string;
   title: string;
   renderLabel?: (v: string) => string;
+  /** Hide the section until it offers a real choice. */
+  minValues?: number;
 };
 
 const FACET_SECTIONS: FacetSpec[] = [
+  {
+    facetKey: 'collections',
+    paramKey: FACET_KEYS.collections,
+    title: 'Collection',
+    renderLabel: (v) => COLLECTION_LABEL[v as ThesisCollection],
+    // Only worth showing once the teacher has prompts of their own.
+    minValues: 2,
+  },
   {
     facetKey: 'categories',
     paramKey: FACET_KEYS.categories,
@@ -268,7 +280,7 @@ function PromptCard({
   prompt,
   onSelect,
 }: {
-  prompt: ThesisPrompt;
+  prompt: ThesisLibraryEntry;
   onSelect: () => void;
 }) {
   const text = prompt.textsOrUnits[0];
@@ -287,7 +299,9 @@ function PromptCard({
               {prompt.title}
             </h3>
             <Badge variant="secondary" size="sm" className="w-fit shrink-0">
-              {CATEGORY_LABEL[prompt.category]}
+              {prompt.category
+                ? CATEGORY_LABEL[prompt.category]
+                : COLLECTION_LABEL[prompt.collection]}
             </Badge>
           </div>
 
@@ -376,7 +390,7 @@ function FilterPanel({
       <Accordion type="multiple" className="border-none">
         {FACET_SECTIONS.map((f) => {
           const values = facets[f.facetKey] as string[];
-          if (!values || values.length === 0) return null;
+          if (!values || values.length < (f.minValues ?? 1)) return null;
           const counts = optionCounts[f.facetKey] ?? {};
           const selected = readSelected(f.paramKey);
           return (

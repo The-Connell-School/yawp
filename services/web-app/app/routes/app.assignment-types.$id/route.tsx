@@ -30,6 +30,7 @@ import {
   DocumentCreationError,
 } from '~/domain/documents.server';
 import { listApHistoryLibraryEntries } from '~/domain/ap-history/library.server';
+import { listSavedThesisPrompts } from '~/domain/thesis-prompts/saved-prompts.server';
 import { AP_HISTORY_ASSIGNMENT_TYPE_KEY } from '~/domain/ap-history/schema';
 import {
   getAvailableAssignmentTypesForScopes,
@@ -62,6 +63,8 @@ import {
   buildFacets as buildThesisFacets,
   buildOptionCounts as buildThesisOptionCounts,
   readFilters as readThesisFilters,
+  savedPromptToLibraryEntry,
+  toLibraryEntries as toThesisLibraryEntries,
   type ThesisPrompt,
 } from './thesis-prompts-library/data';
 import thesisPromptsRaw from './thesis-prompts-library/prompts.json';
@@ -69,9 +72,9 @@ import thesisPromptsRaw from './thesis-prompts-library/prompts.json';
 const DAILY_PAGES_TITLE = 'daily pages';
 const THESIS_ESSAY_TITLE = 'the thesis-driven essay';
 const ALL_PROMPTS = promptsRaw as LibraryPrompt[];
-const ALL_THESIS_PROMPTS = thesisPromptsRaw as ThesisPrompt[];
-const ALL_THESIS_FACETS = buildThesisFacets(ALL_THESIS_PROMPTS);
-const ALL_THESIS_OPTION_COUNTS = buildThesisOptionCounts(ALL_THESIS_PROMPTS);
+const ALL_THESIS_PROMPTS = toThesisLibraryEntries(
+  thesisPromptsRaw as ThesisPrompt[]
+);
 const SERIOUSNESS_ORDER: PromptSeriousness[] = [
   'playful',
   'light',
@@ -384,16 +387,29 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           totalCount: ALL_PROMPTS.length,
         }
       : null;
+  // "My prompts": prompts this teacher generated and kept, shown in the same
+  // library alongside the fixed corpus and filterable on their own.
+  const savedThesisPrompts =
+    profile.role === "TEACHER" && isThesisEssay
+      ? await listSavedThesisPrompts({
+          membershipId: profile.id,
+          assignmentTypeId: assignmentType.id,
+        })
+      : [];
+  const thesisLibraryEntries = [
+    ...savedThesisPrompts.map(savedPromptToLibraryEntry),
+    ...ALL_THESIS_PROMPTS,
+  ];
   const thesisPromptLibrary =
     profile.role === "TEACHER" && isThesisEssay
       ? {
           prompts: applyThesisFilters(
-            ALL_THESIS_PROMPTS,
+            thesisLibraryEntries,
             readThesisFilters(new URL(request.url))
           ),
-          facets: ALL_THESIS_FACETS,
-          optionCounts: ALL_THESIS_OPTION_COUNTS,
-          totalCount: ALL_THESIS_PROMPTS.length,
+          facets: buildThesisFacets(thesisLibraryEntries),
+          optionCounts: buildThesisOptionCounts(thesisLibraryEntries),
+          totalCount: thesisLibraryEntries.length,
         }
       : null;
   const enabledTeacherClassIds = profile.role === "TEACHER"
@@ -593,6 +609,7 @@ export default function AppAssignmentTypesIdRoute() {
                 <ThesisPromptGenerator
                   open={isPromptGeneratorOpen}
                   onOpenChange={setIsPromptGeneratorOpen}
+                  assignmentTypeId={data.assignmentType.id}
                   onUsePrompt={(promptBody) => {
                     setApHistoryEntry(null);
                     setLibraryPrompt(promptBody);
