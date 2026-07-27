@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { UNIVERSAL_TUTOR_BLOCK } from '~/domain/tutor/universal-tutor-block';
+import { UNIVERSAL_TUTOR_BLOCK } from '../../../../../packages/prisma/scripts/universal-tutor-block';
 import { buildApHistorySnapshot } from './schema';
 import { buildApHistoryTutorSystemPrompt } from './tutor-prompt';
 
@@ -116,7 +116,6 @@ describe('buildApHistoryTutorSystemPrompt', () => {
       const prompt = buildApHistoryTutorSystemPrompt(dbqSnapshot, {
         title: 'Revision',
         tutorInstructions: 'Whole-essay pass.',
-        registerMode: 'polished',
       });
 
       // Submission stays the student's call, but the tutor still may not keep
@@ -129,43 +128,62 @@ describe('buildApHistoryTutorSystemPrompt', () => {
       const prompt = buildApHistoryTutorSystemPrompt(dbqSnapshot, {
         title: 'Drafting',
         tutorInstructions: 'Argument-first paragraphs.',
-        registerMode: 'polished',
       });
 
       expect(prompt).toContain('mechanics never cost a rubric point');
     });
   });
 
+  describe('assignment-level General Tutor Instructions', () => {
+    test('uses the stored assignment-level instructions when admin has set them', () => {
+      const prompt = buildApHistoryTutorSystemPrompt(
+        dbqSnapshot,
+        undefined,
+        'EDITED IN ADMIN. You are the YAWP! Tutor with a house rule.'
+      );
+
+      expect(prompt.startsWith('EDITED IN ADMIN.')).toBe(true);
+      expect(prompt).not.toContain(UNIVERSAL_TUTOR_BLOCK);
+      // The AP History substance is unaffected by the swap.
+      expect(prompt).toContain('DBQ Rubric (7 points');
+    });
+
+    test('falls back to the authored universal block when the row is empty', () => {
+      for (const empty of [undefined, null, '', '   \n  ']) {
+        const prompt = buildApHistoryTutorSystemPrompt(
+          dbqSnapshot,
+          undefined,
+          empty
+        );
+        expect(prompt.startsWith(UNIVERSAL_TUTOR_BLOCK)).toBe(true);
+      }
+    });
+
+    test('a seeded row and an unseeded environment produce the same prompt', () => {
+      // This is what makes writing the defaults into the database safe: the
+      // stored value is the authored value until somebody edits it.
+      expect(
+        buildApHistoryTutorSystemPrompt(
+          dbqSnapshot,
+          undefined,
+          UNIVERSAL_TUTOR_BLOCK
+        )
+      ).toBe(buildApHistoryTutorSystemPrompt(dbqSnapshot));
+    });
+  });
+
   describe('register mode', () => {
-    test('a drafting section tells the tutor to give zero mechanics feedback', () => {
+    test('rides along inside the section guidance it governs', () => {
+      // Register mode is composed onto the section guidance upstream, so the
+      // prompt builder passes it through with the rest of that string. That is
+      // what lets an admin edit it in the same textarea.
       const prompt = buildApHistoryTutorSystemPrompt(dbqSnapshot, {
         title: 'Pre-Writing',
-        tutorInstructions: 'Coach thesis and contextualization.',
-        registerMode: 'drafting',
+        tutorInstructions:
+          'Coach thesis and contextualization.\nREGISTER MODE FOR THIS MODULE: DRAFTING — ideas only.',
       });
 
       expect(prompt).toContain('REGISTER MODE FOR THIS MODULE: DRAFTING');
-      expect(prompt).not.toContain('REGISTER MODE FOR THIS MODULE: POLISHED');
-    });
-
-    test('a polished section asks the tutor to balance voice with correctness', () => {
-      const prompt = buildApHistoryTutorSystemPrompt(dbqSnapshot, {
-        title: 'Drafting',
-        tutorInstructions: 'Argument-first paragraphs.',
-        registerMode: 'polished',
-      });
-
-      expect(prompt).toContain('REGISTER MODE FOR THIS MODULE: POLISHED');
-      expect(prompt).not.toContain('REGISTER MODE FOR THIS MODULE: DRAFTING');
-    });
-
-    test('the register directive sits with the section it governs', () => {
-      const prompt = buildApHistoryTutorSystemPrompt(dbqSnapshot, {
-        title: 'Pre-Writing',
-        tutorInstructions: 'Coach thesis and contextualization.',
-        registerMode: 'drafting',
-      });
-
       expect(prompt.indexOf('Current section: "Pre-Writing"')).toBeLessThan(
         prompt.indexOf('REGISTER MODE FOR THIS MODULE:')
       );

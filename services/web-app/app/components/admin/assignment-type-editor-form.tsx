@@ -32,6 +32,7 @@ type AssignmentTypeEditorFormProps = {
   assignmentTypeId?: string;
   titleDefaultValue?: string;
   descriptionDefaultValue?: string | null;
+  tutorInstructionsDefaultValue?: string | null;
   scoringScale?: ScoringScaleData;
   rubric?: RubricData;
   promptConfig?: PromptConfigData;
@@ -43,6 +44,7 @@ type AssignmentTypeEditorFormProps = {
 function formSnapshot(values: {
   title: string;
   description: string;
+  tutorInstructions: string;
   scoringScale: ScoringScaleData;
   rubric: RubricData;
   promptConfig: PromptConfigData;
@@ -50,6 +52,7 @@ function formSnapshot(values: {
   return [
     values.title.trim(),
     values.description.trim(),
+    values.tutorInstructions.trim(),
     scoringScaleSnapshot(values.scoringScale),
     rubricSnapshot(values.rubric),
     promptConfigSnapshot(values.promptConfig),
@@ -107,6 +110,7 @@ export function AssignmentTypeEditorForm({
   assignmentTypeId,
   titleDefaultValue = '',
   descriptionDefaultValue = '',
+  tutorInstructionsDefaultValue = '',
   scoringScale = DEFAULT_SCORING_SCALE,
   rubric = DEFAULT_RUBRIC,
   promptConfig = DEFAULT_PROMPT_CONFIG,
@@ -124,6 +128,9 @@ export function AssignmentTypeEditorForm({
 
   const [title, setTitle] = useState(titleDefaultValue);
   const [description, setDescription] = useState(descriptionDefaultValue ?? '');
+  const [tutorInstructions, setTutorInstructions] = useState(
+    tutorInstructionsDefaultValue ?? ''
+  );
   const [scoringScaleState, setScoringScaleState] =
     useState<ScoringScaleData>(scoringScale);
   const [rubricState, setRubricState] = useState<RubricData>(rubric);
@@ -137,16 +144,25 @@ export function AssignmentTypeEditorForm({
       formSnapshot({
         title: titleDefaultValue,
         description: descriptionDefaultValue ?? '',
+        tutorInstructions: tutorInstructionsDefaultValue ?? '',
         scoringScale,
         rubric,
         promptConfig,
       }),
-    [titleDefaultValue, descriptionDefaultValue, scoringScale, rubric, promptConfig]
+    [
+      titleDefaultValue,
+      descriptionDefaultValue,
+      tutorInstructionsDefaultValue,
+      scoringScale,
+      rubric,
+      promptConfig,
+    ]
   );
 
   useEffect(() => {
     setTitle(titleDefaultValue);
     setDescription(descriptionDefaultValue ?? '');
+    setTutorInstructions(tutorInstructionsDefaultValue ?? '');
     setScoringScaleState(scoringScale);
     setRubricState(rubric);
     setPromptConfigState(promptConfig);
@@ -179,11 +195,19 @@ export function AssignmentTypeEditorForm({
       formSnapshot({
         title,
         description,
+        tutorInstructions,
         scoringScale: scoringScaleState,
         rubric: rubricState,
         promptConfig: promptConfigState,
       }),
-    [title, description, scoringScaleState, rubricState, promptConfigState]
+    [
+      title,
+      description,
+      tutorInstructions,
+      scoringScaleState,
+      rubricState,
+      promptConfigState,
+    ]
   );
 
   const isDirty = currentSnapshot !== savedSnapshot || imageDirty;
@@ -199,6 +223,7 @@ export function AssignmentTypeEditorForm({
   function handleCancel() {
     setTitle(titleDefaultValue);
     setDescription(descriptionDefaultValue ?? '');
+    setTutorInstructions(tutorInstructionsDefaultValue ?? '');
     setScoringScaleState(scoringScale);
     setRubricState(rubric);
     setPromptConfigState(promptConfig);
@@ -306,6 +331,29 @@ export function AssignmentTypeEditorForm({
               value={description}
               onChange={(event) => setDescription(event.target.value)}
             />
+          </div>
+        </Section>
+
+        <Section
+          title="General tutor instructions"
+          description="The top of every tutor prompt for this assignment type. Paste the Universal YAWP! Tutor Instructions here and leave them unedited — this is the Tutor's character, identical across every course. Per-step substance belongs in the modules below."
+        >
+          <div className="space-y-2">
+            <FieldLabel htmlFor="tutorInstructions">
+              Universal tutor instructions
+            </FieldLabel>
+            <Textarea
+              id="tutorInstructions"
+              name="tutorInstructions"
+              rows={14}
+              className="font-mono text-xs"
+              placeholder="WHO YOU ARE. You are the YAWP! Tutor..."
+              value={tutorInstructions}
+              onChange={(event) => setTutorInstructions(event.target.value)}
+            />
+            <p className="text-sm text-muted-foreground">
+              Leave this empty to fall back to the built-in universal block.
+            </p>
           </div>
         </Section>
 

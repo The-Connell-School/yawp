@@ -14,11 +14,7 @@ import {
   BEHIND_THE_SCENES_INSTRUCTION,
   DOCUMENT_CONTEXT_INSTRUCTION,
 } from '~/routes/api.domain.tutor-response/build-system-prompt';
-import {
-  UNIVERSAL_TUTOR_BLOCK,
-  type TutorRegisterMode,
-  formatRegisterModeDirective,
-} from '~/domain/tutor/universal-tutor-block';
+import { UNIVERSAL_TUTOR_BLOCK } from '../../../../../packages/prisma/scripts/universal-tutor-block';
 import { type ApHistorySnapshot, apHistoryCourseLabel } from './schema';
 
 const VOICE_RULES = `THIS ASSIGNMENT: AP HISTORY. Everything above is who you are and holds here without exception. What follows is the AP History substance on top of it: for this assignment you are coaching a timed AP History essay, so your job is to help the student earn every rubric point — never to write the essay for them.
@@ -97,10 +93,9 @@ const FAILURE_DETECTORS = `Named failure-mode detectors — if you detect any of
 // sections existed.
 export type ApHistoryTutorModuleContext = {
   title: string;
+  // Section guidance, already resolved from the stored row or the authored
+  // default. Carries this section's REGISTER MODE line at the end.
   tutorInstructions?: string | null;
-  // DRAFTING or POLISHED for this section, resolving the choice the universal
-  // tutor block leaves to the course-builder. Absent for legacy modules.
-  registerMode?: TutorRegisterMode | null;
   instruction?: {
     title: string;
     tutorInstructions?: string | null;
@@ -118,9 +113,6 @@ function formatModuleSection(
     sectionGuidance,
   ];
 
-  if (module!.registerMode) {
-    parts.push(formatRegisterModeDirective(module!.registerMode));
-  }
 
   const stepGuidance = module!.instruction?.tutorInstructions?.trim();
   if (stepGuidance) {
@@ -152,6 +144,10 @@ function formatSources(snapshot: ApHistorySnapshot): string | null {
 export function buildApHistoryTutorSystemPrompt(
   snapshot: ApHistorySnapshot,
   module?: ApHistoryTutorModuleContext,
+  // The assignment-level General Tutor Instructions, as stored on the
+  // assignment type and edited in admin. Falls back to the authored universal
+  // block so an unseeded environment behaves identically to a seeded one.
+  generalTutorInstructions?: string | null,
 ): string {
   const isDbq = snapshot.essayType === 'dbq';
   const rubric = isDbq ? DBQ_RUBRIC : LEQ_RUBRIC;
@@ -165,7 +161,7 @@ export function buildApHistoryTutorSystemPrompt(
   ].join('\n');
 
   return [
-    UNIVERSAL_TUTOR_BLOCK,
+    generalTutorInstructions?.trim() || UNIVERSAL_TUTOR_BLOCK,
     VOICE_RULES,
     rubric,
     arc,

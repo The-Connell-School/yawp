@@ -298,6 +298,92 @@ describe('api.domain.tutor-response read-only impersonation', () => {
     );
   });
 
+  test('AP History prompts prefer what an admin stored over the code defaults', async () => {
+    getLLMCompletion.mockResolvedValue('Which documents group together?');
+    const apHistorySnapshot = buildApHistorySnapshot({
+      externalKey: 'apush-dbq-new-deal-federal-power',
+      course: 'apush',
+      essayType: 'dbq',
+      prompt:
+        'Evaluate the extent to which the New Deal changed federal power.',
+      period: '1932-1980',
+      periodNumber: 7,
+      reasoningSkill: 'causation',
+      defaultTimeMode: 'untimed',
+      defaultDurationMinutes: 60,
+      sources: [],
+    });
+    prisma.assignmentModuleSession.findUnique.mockResolvedValueOnce({
+      id: 'cms-1',
+      instructionsCompleted: 0,
+      assignmentModule: {
+        title: 'Read the Documents',
+        tutorInstructions: 'Legacy single-string guidance.',
+        // Edited in admin: both essay types, stored per variant.
+        tutorInstructionsVariantsJson: {
+          dbq: 'ADMIN DBQ SECTION GUIDANCE.',
+          leq: 'ADMIN LEQ SECTION GUIDANCE.',
+        },
+        rubricAlignmentJson: null,
+        assignmentType: {
+          id: 'assignment-type-1',
+          gradingAssistantVersion: 1,
+          rubricJson: null,
+          tutorInstructions: 'ADMIN GENERAL TUTOR INSTRUCTIONS.',
+        },
+        instructions: [
+          {
+            id: 'instruction-1',
+            title: 'Analyze the sources',
+            tutorInstructions: null,
+            tutorInstructionsVariantsJson: {
+              dbq: 'ADMIN DBQ STEP GUIDANCE.',
+              leq: 'ADMIN LEQ STEP GUIDANCE.',
+            },
+          },
+        ],
+      },
+      messages: [],
+      document: { id: 'doc-1', text: 'Original draft', apHistorySnapshot },
+    });
+    prisma.assignmentModuleSession.findUnique.mockResolvedValueOnce({
+      id: 'cms-1',
+      messages: [],
+      assignmentModule: {
+        instructions: [],
+        assignmentType: { assignmentModules: [] },
+      },
+    });
+
+    const body = new FormData();
+    body.set('response', 'Where do I start?');
+    body.set('cmsId', 'cms-1');
+    body.set('content', 'Current draft');
+
+    await action({
+      request: new Request('https://example.com/api/domain/tutor-response', {
+        method: 'POST',
+        body,
+      }),
+    } as any);
+
+    const completionArgs = getLLMCompletion.mock.calls[0]?.[0] as any;
+    // All three layers come from the database.
+    expect(completionArgs.system.startsWith('ADMIN GENERAL TUTOR INSTRUCTIONS.')).toBe(
+      true
+    );
+    expect(completionArgs.system).toContain('ADMIN DBQ SECTION GUIDANCE.');
+    expect(completionArgs.system).toContain('ADMIN DBQ STEP GUIDANCE.');
+    // The stored LEQ variants are not leaked into a DBQ document, and the code
+    // defaults and legacy string are both superseded.
+    expect(completionArgs.system).not.toContain('ADMIN LEQ');
+    expect(completionArgs.system).not.toContain('Legacy single-string guidance.');
+    expect(completionArgs.system).not.toContain('You are the YAWP! Tutor');
+    expect(completionArgs.system).not.toContain('HIPP angle');
+    // AP History substance still comes from code.
+    expect(completionArgs.system).toContain('DBQ Rubric (7 points');
+  });
+
   test('AP History LEQ sessions get LEQ-specific section coaching, not the DBQ playbook', async () => {
     getLLMCompletion.mockResolvedValue('What evidence supports that claim?');
     const apHistorySnapshot = buildApHistorySnapshot({

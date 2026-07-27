@@ -3,6 +3,11 @@ import { PrismaClient } from '../generated/prisma';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { AP_HISTORY_LIBRARY_ENTRIES } from './ap-history-library-data';
 import { AP_HISTORY_SEED_MODULES } from './ap-history-module-data';
+import {
+  tutorInstructionSeedUpdate,
+  withoutTutorInstructionFields,
+} from './tutor-instructions-seed';
+import { UNIVERSAL_TUTOR_BLOCK } from './universal-tutor-block';
 import { isLocalDatabaseUrl } from './seed-overlay-connection';
 
 const AP_HISTORY_ASSIGNMENT_TYPE_KEY = 'ap_history_essay';
@@ -13,6 +18,12 @@ const ASSIGNMENT_TYPE_DATA = {
     'Curated AP U.S., European, and World History DBQ and LEQ practice with AP rubric coaching.',
   position: 50,
 } as const;
+
+// The assignment-level General Tutor Instructions. Every YAWP! Tutor starts
+// here, which is why it is the universal block verbatim.
+const ASSIGNMENT_TYPE_TUTOR_INSTRUCTIONS = {
+  tutorInstructions: UNIVERSAL_TUTOR_BLOCK,
+};
 
 const connectionString = process.env.DATABASE_URL;
 if (!connectionString) {
@@ -57,14 +68,26 @@ async function seedApHistoryLibrary() {
     throw new Error('Cannot seed AP History library without an organization.');
   }
 
+  const existingAssignmentType = await prisma.assignmentType.findUnique({
+    where: { systemKey: AP_HISTORY_ASSIGNMENT_TYPE_KEY },
+    select: { tutorInstructions: true },
+  });
+
   const assignmentType = await prisma.assignmentType.upsert({
     where: { systemKey: AP_HISTORY_ASSIGNMENT_TYPE_KEY },
     update: {
       ...ASSIGNMENT_TYPE_DATA,
+      // Only fills the General Tutor Instructions box when it is still empty,
+      // so an admin's edit survives the next deploy.
+      ...tutorInstructionSeedUpdate(
+        ASSIGNMENT_TYPE_TUTOR_INSTRUCTIONS,
+        existingAssignmentType ?? {}
+      ),
       archivedAt: null,
     },
     create: {
       ...ASSIGNMENT_TYPE_DATA,
+      ...ASSIGNMENT_TYPE_TUTOR_INSTRUCTIONS,
       systemKey: AP_HISTORY_ASSIGNMENT_TYPE_KEY,
       ownerOrgId: org.id,
       organizationAssignments: {
@@ -76,6 +99,7 @@ async function seedApHistoryLibrary() {
           position: moduleData.position,
           description: moduleData.description,
           tutorInstructions: moduleData.tutorInstructions,
+          tutorInstructionsVariantsJson: moduleData.tutorInstructionsVariantsJson,
           instructions: {
             create: moduleData.instructions,
           },
@@ -109,6 +133,7 @@ async function seedApHistoryLibrary() {
       position: moduleData.position,
       description: moduleData.description,
       tutorInstructions: moduleData.tutorInstructions,
+      tutorInstructionsVariantsJson: moduleData.tutorInstructionsVariantsJson,
     };
 
     const existingModule = await prisma.assignmentModule.findFirst({
@@ -117,13 +142,22 @@ async function seedApHistoryLibrary() {
         position: moduleData.position,
         deletedAt: null,
       },
-      select: { id: true },
+      select: {
+        id: true,
+        tutorInstructions: true,
+        tutorInstructionsVariantsJson: true,
+      },
     });
 
     const module = existingModule
       ? await prisma.assignmentModule.update({
           where: { id: existingModule.id },
-          data: moduleFields,
+          // Structural fields are always refreshed; tutor guidance is only
+          // written where admin has not put anything of its own.
+          data: {
+            ...withoutTutorInstructionFields(moduleFields),
+            ...tutorInstructionSeedUpdate(moduleFields, existingModule),
+          },
           select: { id: true },
         })
       : await prisma.assignmentModule.create({
@@ -141,13 +175,20 @@ async function seedApHistoryLibrary() {
             assignmentModuleId: module.id,
             position: instructionData.position,
           },
-          select: { id: true },
+          select: {
+            id: true,
+            tutorInstructions: true,
+            tutorInstructionsVariantsJson: true,
+          },
         });
 
       if (existingInstruction) {
         await prisma.assignmentModuleInstruction.update({
           where: { id: existingInstruction.id },
-          data: instructionData,
+          data: {
+            ...withoutTutorInstructionFields(instructionData),
+            ...tutorInstructionSeedUpdate(instructionData, existingInstruction),
+          },
         });
       } else {
         await prisma.assignmentModuleInstruction.create({

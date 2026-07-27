@@ -2,13 +2,19 @@
 // YAWP! Tutor the same character and guardrails, identical across every
 // assignment and every course.
 //
-// This file is the single canonical source. YAWP has no global/base prompt, so
-// this block is what an assignment's "General Tutor Instructions" would hold:
-// it goes at the TOP of every assignment-level tutor system prompt, unchanged.
-// Course-specific prompt builders add only their own substance underneath it.
+// This file is the authoring source. YAWP has no global/base prompt, so the
+// block is seeded into AssignmentType.tutorInstructions -- the assignment-level
+// "General Tutor Instructions" box in admin -- and that DB row is what the
+// runtime reads. This constant is the value the seeds write and the fallback
+// the runtime uses when the row is empty, so an unseeded environment behaves
+// exactly as a seeded one until an admin edits it.
+//
+// It lives in packages/prisma/scripts (not the web app) because both the seeds
+// and the web app need it, and the web app already reaches down into this
+// directory for ap-history-module-data.
 //
 // Do not reword this per course. If the universal wording needs to change, it
-// changes here, and every course picks the change up.
+// changes here, then re-seed; per-assignment edits belong in admin.
 //
 // Source: "Universal YAWP! Tutor Instructions" (drafted 2026-07 from the
 // existing module prompts).

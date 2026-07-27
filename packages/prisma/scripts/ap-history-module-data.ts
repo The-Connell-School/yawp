@@ -18,6 +18,8 @@
 // module in place: existing documents keep their position-1 session and can
 // advance into the new sections, which are created on demand.
 
+import { formatRegisterModeDirective } from './universal-tutor-block';
+
 export type ApHistoryEssayType = 'dbq' | 'leq';
 
 // Which register the Universal YAWP! Tutor Instructions put the student in for
@@ -257,13 +259,21 @@ function findInstruction(
 
 // Section-level tutor guidance for the essay type, or null when the module is
 // not one of the canonical AP History sections (e.g. the legacy single module).
+//
+// The section's REGISTER MODE is composed onto the end of the guidance rather
+// than carried alongside it, so this string is exactly what gets seeded into
+// the DB and exactly what an admin sees and can edit. Code default and stored
+// value are the same text, which is what makes the DB-first read safe.
 export function resolveApHistorySectionTutorInstructions(
   essayType: ApHistoryEssayType,
   moduleTitle: string
 ): string | null {
   const module = findModule(moduleTitle);
   if (!module) return null;
-  return pickApHistoryEssayVariant(module.tutorInstructions, essayType);
+  return [
+    pickApHistoryEssayVariant(module.tutorInstructions, essayType),
+    formatRegisterModeDirective(module.registerMode),
+  ].join('\n');
 }
 
 // The register (DRAFTING/POLISHED) for a section, or null when the module is
@@ -307,10 +317,18 @@ export const AP_HISTORY_SEED_MODULES = AP_HISTORY_MODULES.map((module) => ({
   title: module.title,
   position: module.position,
   description: module.description,
-  tutorInstructions: pickApHistoryEssayVariant(
-    module.tutorInstructions,
-    AP_HISTORY_SEED_DEFAULT_ESSAY_TYPE
-  ),
+  tutorInstructions: resolveApHistorySectionTutorInstructions(
+    AP_HISTORY_SEED_DEFAULT_ESSAY_TYPE,
+    module.title
+  )!,
+  // Both essay types' guidance, written to tutorInstructionsVariantsJson so
+  // admin can edit each one and the runtime can pick the right one. The
+  // single-string column above stays populated for any reader that predates
+  // variants.
+  tutorInstructionsVariantsJson: {
+    dbq: resolveApHistorySectionTutorInstructions('dbq', module.title)!,
+    leq: resolveApHistorySectionTutorInstructions('leq', module.title)!,
+  },
   instructions: module.instructions.map((instruction) => ({
     title: instruction.title,
     position: instruction.position,
@@ -325,6 +343,7 @@ export const AP_HISTORY_SEED_MODULES = AP_HISTORY_MODULES.map((module) => ({
             instruction.tutorInstructions,
             AP_HISTORY_SEED_DEFAULT_ESSAY_TYPE
           ),
+          tutorInstructionsVariantsJson: { ...instruction.tutorInstructions },
         }
       : {}),
   })),

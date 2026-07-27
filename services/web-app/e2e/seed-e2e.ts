@@ -3,6 +3,7 @@ import { createE2EPrismaClient, type E2EPrismaClient } from './prisma-client';
 import { createDeployedAssignment } from './db-helpers';
 import { AP_HISTORY_LIBRARY_ENTRIES } from '../../../packages/prisma/scripts/ap-history-library-data';
 import { AP_HISTORY_SEED_MODULES } from '../../../packages/prisma/scripts/ap-history-module-data';
+import { UNIVERSAL_TUTOR_BLOCK } from '../../../packages/prisma/scripts/universal-tutor-block';
 import bcrypt from 'bcryptjs';
 
 let prisma: E2EPrismaClient | null = null;
@@ -298,6 +299,7 @@ export async function seedE2E(): Promise<E2EContext> {
       systemKey: 'ap_history_essay',
       description: 'Curated APUSH DBQ and LEQ practice.',
       position: 3,
+      tutorInstructions: UNIVERSAL_TUTOR_BLOCK,
       ownerOrgId: org.id,
       organizationAssignments: {
         create: { organizationId: org.id },
@@ -308,6 +310,8 @@ export async function seedE2E(): Promise<E2EContext> {
           position: moduleData.position,
           description: moduleData.description,
           tutorInstructions: moduleData.tutorInstructions,
+          tutorInstructionsVariantsJson:
+            moduleData.tutorInstructionsVariantsJson,
           instructions: {
             create: moduleData.instructions,
           },

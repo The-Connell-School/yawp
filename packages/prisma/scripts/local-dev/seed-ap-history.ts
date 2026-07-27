@@ -2,6 +2,7 @@
 import type { Prisma, PrismaClient } from '../../generated/prisma';
 import { AP_HISTORY_LIBRARY_ENTRIES } from '../ap-history-library-data';
 import { AP_HISTORY_SEED_MODULES } from '../ap-history-module-data';
+import { UNIVERSAL_TUTOR_BLOCK } from '../universal-tutor-block';
 import {
   AP_HISTORY_HERO_IMAGE,
   apHistoryHeroImageBytes,
@@ -25,6 +26,9 @@ export function buildApHistoryAssignmentTypeCreateInput(
     description:
       'Curated AP U.S., European, and World History DBQ and LEQ practice with AP rubric coaching.',
     position: 50,
+    // The assignment-level General Tutor Instructions box: the universal
+    // YAWP! Tutor character, which every module's guidance sits underneath.
+    tutorInstructions: UNIVERSAL_TUTOR_BLOCK,
     ownerOrgId: organizationId,
     organizationAssignments: {
       create: { organizationId },
@@ -42,6 +46,7 @@ export function buildApHistoryAssignmentTypeCreateInput(
         position: moduleData.position,
         description: moduleData.description,
         tutorInstructions: moduleData.tutorInstructions,
+        tutorInstructionsVariantsJson: moduleData.tutorInstructionsVariantsJson,
         instructions: {
           create: moduleData.instructions,
         },

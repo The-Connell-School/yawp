@@ -157,6 +157,63 @@ describe('AP History module (section) seed data', () => {
     ]);
   });
 
+  test('section guidance ends with the section register directive', () => {
+    // The directive is composed into the guidance string so the value seeded
+    // into the database is exactly what the runtime would have built, and an
+    // admin can edit both in one textarea.
+    for (const essayType of ['dbq', 'leq'] as const) {
+      const preWriting = resolveApHistorySectionTutorInstructions(
+        essayType,
+        'Pre-Writing'
+      )!;
+      const drafting = resolveApHistorySectionTutorInstructions(
+        essayType,
+        'Drafting'
+      )!;
+
+      expect(preWriting).toContain('REGISTER MODE FOR THIS MODULE: DRAFTING');
+      expect(preWriting).not.toContain(
+        'REGISTER MODE FOR THIS MODULE: POLISHED'
+      );
+      expect(drafting).toContain('REGISTER MODE FOR THIS MODULE: POLISHED');
+      expect(drafting).not.toContain('REGISTER MODE FOR THIS MODULE: DRAFTING');
+
+      // It closes the guidance rather than interrupting it.
+      expect(preWriting.trimEnd().split('\n').at(-1)).toContain(
+        'REGISTER MODE FOR THIS MODULE:'
+      );
+    }
+  });
+
+  test('the seeded variants are exactly what the runtime resolves', () => {
+    // The DB-first read is only safe because seeding writes the authored value
+    // byte for byte. If these ever diverge, seeding silently changes coaching.
+    for (const seedModule of AP_HISTORY_SEED_MODULES) {
+      for (const essayType of ['dbq', 'leq'] as const) {
+        expect(seedModule.tutorInstructionsVariantsJson[essayType]).toBe(
+          resolveApHistorySectionTutorInstructions(essayType, seedModule.title)!
+        );
+      }
+    }
+  });
+
+  test('seeded step variants match the runtime step resolver', () => {
+    for (const seedModule of AP_HISTORY_SEED_MODULES) {
+      for (const seedStep of seedModule.instructions) {
+        if (!('tutorInstructionsVariantsJson' in seedStep)) continue;
+        for (const essayType of ['dbq', 'leq'] as const) {
+          expect(seedStep.tutorInstructionsVariantsJson![essayType]).toBe(
+            resolveApHistoryStepTutorInstructions(
+              essayType,
+              seedModule.title,
+              seedStep.title
+            )!
+          );
+        }
+      }
+    }
+  });
+
   test('resolveApHistoryRegisterMode answers per section and null off the canonical path', () => {
     expect(resolveApHistoryRegisterMode('Pre-Writing')).toBe('drafting');
     expect(resolveApHistoryRegisterMode('Revision')).toBe('polished');
@@ -202,7 +259,15 @@ describe('AP History module (section) seed data', () => {
         const canonical = AP_HISTORY_MODULES[index];
         expect(seedModule.position).toBe(canonical.position);
         expect(typeof seedModule.tutorInstructions).toBe('string');
+        // The single-string column carries the default essay type's fully
+        // composed guidance, register directive included.
         expect(seedModule.tutorInstructions).toBe(
+          resolveApHistorySectionTutorInstructions(
+            AP_HISTORY_SEED_DEFAULT_ESSAY_TYPE,
+            canonical.title
+          )!
+        );
+        expect(seedModule.tutorInstructions).toContain(
           canonical.tutorInstructions[AP_HISTORY_SEED_DEFAULT_ESSAY_TYPE]
         );
         expect(seedModule.instructions).toHaveLength(

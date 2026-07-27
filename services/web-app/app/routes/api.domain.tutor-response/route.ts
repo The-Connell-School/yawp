@@ -12,10 +12,13 @@ import {
 import { isApHistorySnapshot } from '~/domain/ap-history/schema';
 import { buildApHistoryTutorSystemPrompt } from '~/domain/ap-history/tutor-prompt';
 import {
-  resolveApHistoryRegisterMode,
   resolveApHistorySectionTutorInstructions,
   resolveApHistoryStepTutorInstructions,
 } from '../../../../../packages/prisma/scripts/ap-history-module-data';
+import {
+  readTutorInstructionVariant,
+  resolveTutorInstructions,
+} from '~/domain/tutor/tutor-instructions-source';
 import { parseRubric } from '~/domain/assignment-types/assignment-type-rubric.shared';
 import { normalizeModuleRubricAlignment } from '~/domain/assignment-types/assignment-type-rubric-config';
 import {
@@ -73,6 +76,10 @@ export async function action({ request }: ActionFunctionArgs) {
                 id: true,
                 gradingAssistantVersion: true,
                 rubricJson: true,
+                // The assignment-level General Tutor Instructions, edited in
+                // admin. Empty on assignment types that have not been seeded
+                // or configured, which falls back to the authored default.
+                tutorInstructions: true,
               },
             },
           },
@@ -125,30 +132,49 @@ export async function action({ request }: ActionFunctionArgs) {
     // one representative variant; select the variant matching this document's
     // essay type, falling back to the stored value for legacy/uncanonical
     // modules that have no essay-type-specific guidance.
+    // Every tutor prompt layer prefers what admin has stored over the
+    // code-authored default, so an admin edit takes effect without a deploy.
+    // Seeds write the authored defaults into those rows, so this reads the
+    // same text either way until somebody actually changes something.
     const system = isApHistorySnapshot(apHistorySnapshot)
-      ? buildApHistoryTutorSystemPrompt(apHistorySnapshot, {
-          title: cms.assignmentModule.title,
-          tutorInstructions:
-            resolveApHistorySectionTutorInstructions(
-              apHistorySnapshot.essayType,
-              cms.assignmentModule.title
-            ) ?? cms.assignmentModule.tutorInstructions,
-          // DRAFTING or POLISHED for this section. Null for legacy
-          // single-module documents, which then carry no register directive.
-          registerMode: resolveApHistoryRegisterMode(
-            cms.assignmentModule.title
-          ),
-          instruction: {
-            title: instruction.title,
-            tutorInstructions:
-              resolveApHistoryStepTutorInstructions(
+      ? buildApHistoryTutorSystemPrompt(
+          apHistorySnapshot,
+          {
+            title: cms.assignmentModule.title,
+            tutorInstructions: resolveTutorInstructions(
+              readTutorInstructionVariant(
+                cms.assignmentModule.tutorInstructionsVariantsJson,
+                apHistorySnapshot.essayType
+              ),
+              resolveApHistorySectionTutorInstructions(
                 apHistorySnapshot.essayType,
-                cms.assignmentModule.title,
-                instruction.title
-              ) ?? instruction.tutorInstructions,
+                cms.assignmentModule.title
+              ),
+              // Legacy single-module documents have no canonical guidance and
+              // no variants; their stored single string is all there is.
+              cms.assignmentModule.tutorInstructions
+            ),
+            instruction: {
+              title: instruction.title,
+              tutorInstructions: resolveTutorInstructions(
+                readTutorInstructionVariant(
+                  instruction.tutorInstructionsVariantsJson,
+                  apHistorySnapshot.essayType
+                ),
+                resolveApHistoryStepTutorInstructions(
+                  apHistorySnapshot.essayType,
+                  cms.assignmentModule.title,
+                  instruction.title
+                ),
+                instruction.tutorInstructions
+              ),
+            },
           },
-        })
+          cms.assignmentModule.assignmentType?.tutorInstructions
+        )
       : buildTutorSystemPrompt({
+          generalTutorInstructions:
+            cms.assignmentModule.assignmentType?.tutorInstructions,
           tutorInstructions: cms.assignmentModule.tutorInstructions,
           instructionTutorInstructions: instruction.tutorInstructions,
           moduleRubricGuidance,

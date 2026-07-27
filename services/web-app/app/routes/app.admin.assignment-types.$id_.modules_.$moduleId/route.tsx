@@ -64,6 +64,11 @@ import {
   type ModuleRubricRelationship,
 } from '~/domain/assignment-types/assignment-type-rubric-config';
 import { ModuleRubricAlignmentEditor } from '~/components/admin/module-rubric-alignment-editor';
+import {
+  TUTOR_VARIANT_FIELD_PREFIX,
+  TUTOR_VARIANT_KEYS_FIELD,
+  TutorInstructionVariantsEditor,
+} from '~/components/admin/tutor-instruction-variants-editor';
 
 const moduleRubricRelationshipSet = new Set<string>(
   MODULE_RUBRIC_RELATIONSHIPS
@@ -94,6 +99,30 @@ function parseRubricAlignmentJson(formData: FormData) {
         : 'not-applicable',
     ])
   );
+}
+
+// Reads the per-variant tutor instruction textareas back out of a submitted
+// form. Returns undefined when the form carried no variant fields at all, so
+// a row without variants is left untouched rather than overwritten with {}.
+// A variant an admin clears is dropped, which makes the runtime fall back to
+// the authored default rather than run the tutor with no section guidance.
+export function parseTutorInstructionVariantsJson(
+  formData: FormData
+): Record<string, string> | undefined {
+  const rawKeys = formData.get(TUTOR_VARIANT_KEYS_FIELD);
+  if (typeof rawKeys !== 'string' || !rawKeys.trim()) return undefined;
+
+  const entries = rawKeys
+    .split(',')
+    .map((key) => key.trim())
+    .filter(Boolean)
+    .map((key) => {
+      const value = formData.get(`${TUTOR_VARIANT_FIELD_PREFIX}${key}`);
+      return [key, typeof value === 'string' ? value.trim() : ''] as const;
+    })
+    .filter(([, value]) => value.length > 0);
+
+  return Object.fromEntries(entries);
 }
 
 const moduleSchema = z.object({
@@ -170,6 +199,8 @@ export async function action({ request, params }: ActionFunctionArgs) {
     const { error, data } = await parseFormData(formData, moduleSchema);
     if (error) return validationError(error);
 
+    const variantsJson = parseTutorInstructionVariantsJson(formData);
+
     await prisma.assignmentModule.update({
       where: { id: params.moduleId },
       data: {
@@ -177,6 +208,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
         description: data.description || null,
         isSelfGuided: data.isSelfGuided === 'on',
         tutorInstructions: data.tutorInstructions || null,
+        ...(variantsJson ? { tutorInstructionsVariantsJson: variantsJson } : {}),
         rubricAlignmentJson: parseRubricAlignmentJson(formData),
       },
     });
@@ -232,12 +264,15 @@ export async function action({ request, params }: ActionFunctionArgs) {
     const { error, data } = await parseFormData(formData, instructionSchema);
     if (error) return validationError(error);
 
+    const variantsJson = parseTutorInstructionVariantsJson(formData);
+
     await prisma.assignmentModuleInstruction.update({
       where: { id: instructionId },
       data: {
         title: data.title,
         prompt: data.prompt,
         tutorInstructions: data.tutorInstructions || null,
+        ...(variantsJson ? { tutorInstructionsVariantsJson: variantsJson } : {}),
         showChatButton: data.showChatButton === 'on',
         showNextButton: data.showNextButton === 'on',
         buttons: {
@@ -588,6 +623,12 @@ export default function AssignmentModuleRoute() {
                     rows={4}
                   />
                 )}
+                {!moduleForm.value('isSelfGuided') && (
+                  <TutorInstructionVariantsEditor
+                    variantsJson={module.tutorInstructionsVariantsJson}
+                    description="This section coaches both essay types. The tutor reads the version matching the student's essay (the single box above is only a fallback), so edit the essay type you mean."
+                  />
+                )}
                 <div className="space-y-2">
                   <Label>Rubric relationships</Label>
                   <ModuleRubricAlignmentEditor
@@ -808,6 +849,14 @@ export default function AssignmentModuleRoute() {
                       placeholder="Special instructions for the tutor..."
                       rows={2}
                     />
+                    {editingInstruction ? (
+                      <TutorInstructionVariantsEditor
+                        variantsJson={
+                          editingInstruction.tutorInstructionsVariantsJson
+                        }
+                        description="This step coaches both essay types. The tutor reads the version matching the student's essay (the single box above is only a fallback), so edit the essay type you mean."
+                      />
+                    ) : null}
                     <Button
                       type="submit"
                       className="w-full"
