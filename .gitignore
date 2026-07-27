@@ -212,3 +212,6 @@ scripts/production-sync.env
 .claude/worktrees/
 .superpowers/
 .cursor
+
+# Demo videos: recorded output is regenerated, never committed
+services/web-app/demos/out/

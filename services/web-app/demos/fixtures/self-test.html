@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Yawp — demo runtime check</title>
+    <style>
+      :root {
+        --paper: #f7f5ee;
+        --ink: #252523;
+        --primary: #d27151;
+        --muted: #6f6b62;
+        --line: #e3ded1;
+        --card: #fffefb;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        grid-template-columns: 232px 1fr;
+        background: var(--paper);
+        color: var(--ink);
+        font: 15px/1.5 -apple-system, BlinkMacSystemFont, 'Segoe UI',
+          ui-sans-serif, Roboto, Helvetica, Arial, sans-serif;
+        letter-spacing: -0.008em;
+      }
+      aside {
+        border-right: 1px solid var(--line);
+        padding: 24px 16px;
+        background: #fbf9f3;
+      }
+      .brand {
+        font-size: 19px; font-weight: 650; letter-spacing: -0.02em;
+        padding: 0 10px 22px;
+      }
+      .brand span { color: var(--primary); }
+      nav a {
+        display: block; padding: 9px 10px; margin-bottom: 2px;
+        border-radius: 8px; color: var(--muted);
+        text-decoration: none; font-weight: 500;
+        transition: background 140ms ease, color 140ms ease;
+      }
+      nav a:hover { background: #f1ece0; color: var(--ink); }
+      nav a.active { background: #efe7db; color: var(--ink); }
+      main { padding: 36px 44px; }
+      h1 {
+        margin: 0 0 6px; font-size: 29px; font-weight: 620;
+        letter-spacing: -0.028em;
+      }
+      .sub { color: var(--muted); margin: 0 0 28px; }
+      .grid {
+        display: grid; grid-template-columns: repeat(3, 1fr);
+        gap: 16px; margin-bottom: 30px;
+      }
+      .card {
+        background: var(--card); border: 1px solid var(--line);
+        border-radius: 13px; padding: 18px;
+        transition: transform 180ms ease, box-shadow 180ms ease;
+      }
+      .card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 26px rgba(37, 37, 35, 0.09);
+      }
+      .card h3 { margin: 0 0 5px; font-size: 16px; font-weight: 600; }
+      .card p { margin: 0; color: var(--muted); font-size: 14px; }
+      .panel {
+        background: var(--card); border: 1px solid var(--line);
+        border-radius: 13px; padding: 22px; max-width: 640px;
+      }
+      label {
+        display: block; font-size: 13px; font-weight: 600;
+        margin-bottom: 7px; color: var(--muted);
+      }
+      input[type='text'] {
+        width: 100%; padding: 11px 13px; font: inherit;
+        border: 1px solid var(--line); border-radius: 9px;
+        background: #fffdf8; color: var(--ink); outline: none;
+        transition: border-color 140ms ease, box-shadow 140ms ease;
+      }
+      input[type='text']:focus {
+        border-color: var(--primary);
+        box-shadow: 0 0 0 3px rgba(210, 113, 81, 0.16);
+      }
+      button {
+        margin-top: 14px; padding: 10px 18px; font: inherit; font-weight: 600;
+        color: #fffdf8; background: var(--primary);
+        border: 0; border-radius: 9px; cursor: pointer;
+        transition: filter 140ms ease;
+      }
+      button:hover { filter: brightness(1.06); }
+      #result {
+        margin-top: 16px; padding: 13px 15px; border-radius: 10px;
+        background: #f0f6ef; border: 1px solid #cfe0cb;
+        color: #2f5b2c; font-weight: 500; display: none;
+      }
+      #result.visible { display: block; }
+      .spacer { height: 460px; }
+    </style>
+  </head>
+  <body>
+    <aside>
+      <div class="brand">yawp<span>.</span></div>
+      <nav>
+        <a href="#" class="active">Dashboard</a>
+        <a href="#" id="nav-practice">Writing Practice</a>
+        <a href="#">Assignments</a>
+        <a href="#">Students</a>
+      </nav>
+    </aside>
+
+    <main>
+      <h1>Grade 9 English · Period 1</h1>
+      <p class="sub">28 students · 3 assignments due this week</p>
+
+      <div class="grid">
+        <div class="card" id="card-splices">
+          <h3>Comma Splices</h3>
+          <p>18 of 28 students completed</p>
+        </div>
+        <div class="card" id="card-wordiness">
+          <h3>Revising for Wordiness</h3>
+          <p>New lesson · not yet assigned</p>
+        </div>
+        <div class="card" id="card-pronoun">
+          <h3>Pronoun Agreement</h3>
+          <p>24 of 28 students completed</p>
+        </div>
+      </div>
+
+      <div class="panel">
+        <label for="prompt">Practice prompt</label>
+        <input id="prompt" type="text" placeholder="Write a prompt for your class…" />
+        <button id="assign">Assign to class</button>
+        <div id="result">Assigned to Grade 9 English · Period 1</div>
+      </div>
+
+      <!-- Gives the scroll beat somewhere to go. -->
+      <div class="spacer"></div>
+      <div class="panel" id="footer-panel">
+        <h3 style="margin: 0 0 6px; font-size: 16px">Recent activity</h3>
+        <p style="margin: 0; color: var(--muted); font-size: 14px">
+          This panel exists so the demo runtime has something to scroll to.
+        </p>
+      </div>
+    </main>
+
+    <script>
+      document.getElementById('assign').addEventListener('click', () => {
+        document.getElementById('result').classList.add('visible');
+      });
+    </script>
+  </body>
+</html>

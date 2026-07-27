@@ -52,11 +52,21 @@ declare global {
   }
 }
 
-const CURSOR_POSITION_KEY = 'yawp-demo-cursor-position';
+export type OverlayConfig = { theme: OverlayTheme; fadeMs: number };
 
-export function installOverlay(theme: OverlayTheme, fadeMs: number): void {
+/**
+ * Injected with `page.addInitScript`, which serializes this function with
+ * `toString()`. It therefore cannot reference anything in module scope —
+ * every constant it needs is declared inside the body, and its whole
+ * configuration arrives as the single `config` argument.
+ */
+export function installOverlay(config: OverlayConfig): void {
   // addInitScript fires once per document; bail if a re-entrant load beat us.
   if (window.__demo) return;
+
+  const { theme, fadeMs } = config;
+  const CURSOR_POSITION_KEY = 'yawp-demo-cursor-position';
+  const CARD_STATE_KEY = 'yawp-demo-card-state';
 
   const EASE = 'cubic-bezier(0.22, 0.85, 0.24, 1)';
   let cursorX = window.innerWidth / 2;
@@ -111,6 +121,40 @@ export function installOverlay(theme: OverlayTheme, fadeMs: number): void {
     spotlightEl = root.getElementById('spotlight') as HTMLElement;
 
     applyCursorPosition();
+    restoreCard();
+  }
+
+  function setCardContent(content: CardContent): void {
+    (root.querySelector('#card .kicker') as HTMLElement).textContent =
+      content.kicker ?? '';
+    (root.querySelector('#card .title') as HTMLElement).textContent =
+      content.title;
+    (root.querySelector('#card .subtitle') as HTMLElement).textContent =
+      content.subtitle ?? '';
+  }
+
+  /**
+   * Bring back a card that was up before a navigation.
+   *
+   * Cards double as a curtain: sign-in and setup happen behind one so the
+   * finished video never shows a login form. Because this script re-runs per
+   * document, the card would otherwise drop on every route change and flash
+   * the app underneath — so it is restored instantly, with transitions
+   * suppressed for one frame.
+   */
+  function restoreCard(): void {
+    let stored: CardContent | null = null;
+    try {
+      const raw = sessionStorage.getItem(CARD_STATE_KEY);
+      if (raw) stored = JSON.parse(raw) as CardContent;
+    } catch {
+      return;
+    }
+    if (!stored || typeof stored.title !== 'string') return;
+
+    setCardContent(stored);
+    cardEl.classList.add('no-transition', 'is-visible');
+    requestAnimationFrame(() => cardEl.classList.remove('no-transition'));
   }
 
   function template(): string {
@@ -202,6 +246,7 @@ export function installOverlay(theme: OverlayTheme, fadeMs: number): void {
         #card.is-visible .kicker,
         #card.is-visible .title,
         #card.is-visible .subtitle { transform: translateY(0); }
+        #card.no-transition, #card.no-transition * { transition: none !important; }
 
         #spotlight {
           position: fixed; top: 0; left: 0;
@@ -345,18 +390,23 @@ export function installOverlay(theme: OverlayTheme, fadeMs: number): void {
     },
 
     async showCard(content) {
-      (root.querySelector('#card .kicker') as HTMLElement).textContent =
-        content.kicker ?? '';
-      (root.querySelector('#card .title') as HTMLElement).textContent =
-        content.title;
-      (root.querySelector('#card .subtitle') as HTMLElement).textContent =
-        content.subtitle ?? '';
+      setCardContent(content);
+      try {
+        sessionStorage.setItem(CARD_STATE_KEY, JSON.stringify(content));
+      } catch {
+        // Non-fatal: the card just will not survive a navigation.
+      }
       void cardEl.offsetWidth;
       cardEl.classList.add('is-visible');
       await wait(fadeMs + 140);
     },
 
     async hideCard() {
+      try {
+        sessionStorage.removeItem(CARD_STATE_KEY);
+      } catch {
+        // Ignore; the card is being torn down anyway.
+      }
       if (!cardEl.classList.contains('is-visible')) return;
       cardEl.classList.remove('is-visible');
       await wait(fadeMs);
