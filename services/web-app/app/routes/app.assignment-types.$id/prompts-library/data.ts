@@ -80,6 +80,36 @@ export const COGNITIVE_MOVE_LABEL: Record<CognitiveMove, string> = {
   'tell-a-story': 'Tell a story',
 };
 
+// The controlled vocabularies as value tuples. The label maps above already
+// pin the display order; these give the same values in a form the prompt
+// generator can validate an LLM-tagged draft against (`z.enum` needs a tuple).
+export const PROMPT_TYPES = [
+  'agree-disagree',
+  'open-reflection',
+  'narrative-anchor',
+  'hypothetical',
+  'provocation',
+  'definitional',
+] as const satisfies readonly PromptType[];
+
+export const SERIOUSNESS_LEVELS = [
+  'playful',
+  'light',
+  'moderate',
+  'serious',
+  'heavy',
+] as const satisfies readonly PromptSeriousness[];
+
+export const COGNITIVE_MOVES = [
+  'compare',
+  'complicate',
+  'define-a-term',
+  'imagine',
+  'introspect',
+  'take-a-stance',
+  'tell-a-story',
+] as const satisfies readonly CognitiveMove[];
+
 export const INSPIRATIONAL_EXAMPLES: string[] = [
   'Pick something in this room nobody else has noticed today. Make the case that it deserves attention.',
   "What's a belief you held two years ago that you no longer hold? What changed?",
