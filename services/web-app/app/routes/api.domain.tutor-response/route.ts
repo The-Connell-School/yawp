@@ -9,6 +9,8 @@ import {
   buildModuleRubricGuidance,
   buildTutorSystemPrompt,
 } from './build-system-prompt';
+import { isApEnglishLitSnapshot } from '~/domain/ap-english-lit/schema';
+import { buildApEnglishLitCoachInstructions } from '~/domain/ap-english-lit/coach';
 import { parseRubric } from '~/domain/assignment-types/assignment-type-rubric.shared';
 import { normalizeModuleRubricAlignment } from '~/domain/assignment-types/assignment-type-rubric-config';
 import {
@@ -75,6 +77,12 @@ export async function action({ request }: ActionFunctionArgs) {
           select: {
             id: true,
             text: true,
+            // AP English Literature assignments carry an immutable snapshot
+            // of the prompt, provided text, and timing. When present, the
+            // tutor coaches against the AP Lit rubric and that text.
+            assignment: {
+              select: { apEnglishLitSnapshot: true },
+            },
           },
         },
       },
@@ -104,8 +112,21 @@ export async function action({ request }: ActionFunctionArgs) {
       alignment: cms.assignmentModule.rubricAlignmentJson,
     });
 
+    // AP English Literature assignments get the AP Lit coach: the stored
+    // coaching block (what admin shows and edits) plus the parts that can only
+    // come from this assignment's snapshot. Falls back to the authored block
+    // when the module has not been seeded, so the tutor is never left without
+    // instructions.
+    const apEnglishLitSnapshot = cms.document.assignment?.apEnglishLitSnapshot;
+    const tutorInstructions = isApEnglishLitSnapshot(apEnglishLitSnapshot)
+      ? buildApEnglishLitCoachInstructions({
+          snapshot: apEnglishLitSnapshot,
+          coachingBlock: cms.assignmentModule.tutorInstructions,
+        })
+      : cms.assignmentModule.tutorInstructions;
+
     const system = buildTutorSystemPrompt({
-      tutorInstructions: cms.assignmentModule.tutorInstructions,
+      tutorInstructions,
       instructionTutorInstructions: instruction.tutorInstructions,
       moduleRubricGuidance,
     });

@@ -2,7 +2,9 @@ import { describe, expect, test } from 'bun:test';
 import {
   AP_ENGLISH_LIT_COACH_PRINCIPLES,
   buildApEnglishLitCoachInstructions,
+  buildApEnglishLitCoachingBlock,
 } from './coach';
+import { UNIVERSAL_TUTOR_BLOCK } from '../../../../../packages/prisma/scripts/universal-tutor-block';
 import { buildApEnglishLitSnapshot } from './schema';
 
 const poetrySnapshot = buildApEnglishLitSnapshot({
@@ -95,5 +97,111 @@ describe('AP English Literature coach instructions', () => {
       snapshot: poetrySnapshot,
     });
     expect(text).toContain('40');
+  });
+});
+
+describe('Universal YAWP! Tutor layer', () => {
+  test('the coaching block opens with the universal block verbatim', () => {
+    const block = buildApEnglishLitCoachingBlock();
+
+    expect(block).toContain(UNIVERSAL_TUTOR_BLOCK);
+    expect(block.startsWith(UNIVERSAL_TUTOR_BLOCK)).toBe(true);
+  });
+
+  test('every built prompt carries the guardrails this course was missing', () => {
+    for (const snapshot of [poetrySnapshot, argumentSnapshot]) {
+      const prompt = buildApEnglishLitCoachInstructions({ snapshot });
+
+      expect(prompt).toContain('You are the YAWP! Tutor');
+      expect(prompt).toContain("I'm not that kind of guy!");
+      expect(prompt).toContain('I am mysterious and I contain');
+      expect(prompt).toContain('MULTILINGUAL.');
+      // and still carries the AP Lit substance
+      expect(prompt).toContain('AP English Literature');
+      expect(prompt).toContain(snapshot.prompt);
+    }
+  });
+
+  test('the universal character comes before the AP Lit specialization', () => {
+    const prompt = buildApEnglishLitCoachInstructions({
+      snapshot: poetrySnapshot,
+    });
+
+    expect(prompt.indexOf('You are the YAWP! Tutor')).toBeLessThan(
+      prompt.indexOf('AP English Literature')
+    );
+  });
+});
+
+describe('Where AP Lit narrows the universal rules', () => {
+  test('a modeled example may not be built from the student text', () => {
+    // Principle 5 allows modeling "one possibility" when a student is stuck.
+    // On Q1/Q2 the student has a passage in front of them, so a modeled
+    // reading of THAT passage is exactly what they would paste. The universal
+    // ONE RULE requires examples be generic; this makes it explicit here.
+    const block = buildApEnglishLitCoachingBlock();
+
+    expect(block).toContain('A MODELED EXAMPLE USES A DIFFERENT TEXT');
+    expect(block.indexOf('model one possibility')).toBeLessThan(
+      block.indexOf('A MODELED EXAMPLE USES A DIFFERENT TEXT')
+    );
+  });
+
+  test('turn discipline is one note, not two', () => {
+    // Principle 6 says "one or two highest-leverage fixes"; the universal rule
+    // is the SINGLE most important thing, then let the student act.
+    const block = buildApEnglishLitCoachingBlock();
+
+    expect(block).toContain('ONE NOTE PER TURN');
+  });
+});
+
+describe('Register mode', () => {
+  test('the coaching block declares the register', () => {
+    expect(buildApEnglishLitCoachingBlock()).toContain(
+      'REGISTER MODE FOR THIS MODULE: POLISHED'
+    );
+  });
+
+  test('mechanics are never the single note on an AP Lit essay', () => {
+    expect(buildApEnglishLitCoachingBlock()).toContain(
+      'mechanics are never the one thing you raise'
+    );
+  });
+});
+
+describe('Admin-editable coaching block', () => {
+  test('a stored block replaces the authored default', () => {
+    const prompt = buildApEnglishLitCoachInstructions({
+      snapshot: poetrySnapshot,
+      coachingBlock: 'EDITED IN ADMIN. Coach like a pirate.',
+    });
+
+    expect(prompt.startsWith('EDITED IN ADMIN.')).toBe(true);
+    expect(prompt).not.toContain(UNIVERSAL_TUTOR_BLOCK);
+    // The assignment-specific half is still composed from the snapshot.
+    expect(prompt).toContain(poetrySnapshot.prompt);
+    expect(prompt).toContain('Time, that old gardener');
+  });
+
+  test('a blank stored block falls back to the authored default', () => {
+    for (const empty of [undefined, null, '', '   \n ']) {
+      const prompt = buildApEnglishLitCoachInstructions({
+        snapshot: poetrySnapshot,
+        coachingBlock: empty,
+      });
+      expect(prompt.startsWith(UNIVERSAL_TUTOR_BLOCK)).toBe(true);
+    }
+  });
+
+  test('seeding the authored block produces the identical prompt', () => {
+    // What the seed writes is what the code would have built, so populating
+    // the database changes nothing until an admin edits it.
+    expect(
+      buildApEnglishLitCoachInstructions({
+        snapshot: poetrySnapshot,
+        coachingBlock: buildApEnglishLitCoachingBlock(),
+      })
+    ).toBe(buildApEnglishLitCoachInstructions({ snapshot: poetrySnapshot }));
   });
 });
