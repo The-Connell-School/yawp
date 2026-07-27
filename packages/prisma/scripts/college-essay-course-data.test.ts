@@ -6,11 +6,13 @@ import {
   COLLEGE_ESSAY_CALIBRATION_NOTES,
   COLLEGE_ESSAY_GRADING_INSTRUCTIONS,
   COLLEGE_ESSAY_MODULES,
+  COLLEGE_ESSAY_MODULE_SUBSTANCE,
   COLLEGE_ESSAY_RUBRIC_CATEGORIES,
   COLLEGE_ESSAY_SCORING_SCALE,
   COLLEGE_ESSAY_WORD_LIMIT,
   imageContentTypeForPath,
 } from './college-essay-course-data';
+import { UNIVERSAL_TUTOR_BLOCK } from './universal-tutor-block';
 
 describe('College essay rubric', () => {
   test('has the seven method dimensions', () => {
@@ -152,7 +154,10 @@ describe('No-writing-for-the-student guarantee', () => {
   });
 
   test('no tutor text anywhere asks the tutor to write for the student', () => {
-    const allTutorTexts = COLLEGE_ESSAY_MODULES.flatMap((module) => [
+    // Scans what this course authors, not the composed prompt. The universal
+    // block quotes the dodges students use ("rewrite this for me") in order to
+    // forbid them, which would trip these patterns; it has its own test.
+    const allTutorTexts = COLLEGE_ESSAY_MODULE_SUBSTANCE.flatMap((module) => [
       module.tutorInstructions,
       ...module.instructions.map((i) => i.tutorInstructions ?? ''),
     ]);
@@ -166,6 +171,123 @@ describe('No-writing-for-the-student guarantee', () => {
       for (const pattern of forbidden) {
         expect(text).not.toMatch(pattern);
       }
+    }
+  });
+});
+
+describe('Universal YAWP! Tutor layer', () => {
+  test('every module system prompt opens with the universal block verbatim', () => {
+    // Module tutorInstructions are the tutor's system prompt, and this course
+    // has no assignment-level box to hold the block, so it leads every module.
+    for (const module of COLLEGE_ESSAY_MODULES) {
+      expect(module.tutorInstructions).toContain(UNIVERSAL_TUTOR_BLOCK);
+      expect(module.tutorInstructions.startsWith(UNIVERSAL_TUTOR_BLOCK)).toBe(
+        true
+      );
+    }
+  });
+
+  test('the universal character comes before the course-specific persona', () => {
+    for (const module of COLLEGE_ESSAY_MODULES) {
+      expect(module.tutorInstructions.indexOf('You are the YAWP! Tutor')).
+        toBeLessThan(
+          module.tutorInstructions.indexOf('YAWP! College Essay Coach')
+        );
+    }
+  });
+
+  test('carries the universal guardrails this course was missing', () => {
+    for (const module of COLLEGE_ESSAY_MODULES) {
+      // The off-topic deflection, the multilingual rule, and the house
+      // refusal wording all arrive with the block.
+      expect(module.tutorInstructions).toContain('I am mysterious and I contain');
+      expect(module.tutorInstructions).toContain('MULTILINGUAL.');
+      expect(module.tutorInstructions).toContain("I'm not that kind of guy!");
+    }
+  });
+});
+
+describe('Where this course overrides the universal rules', () => {
+  test('sentence-starters are withdrawn, not left contradicting the no-writing rule', () => {
+    // The universal ONE RULE offers "a sentence-starter they finish" as a
+    // scaffold. This course forbids sentence starters outright. Both strings
+    // are in the same prompt, so the override has to be stated or the tutor is
+    // holding two instructions that disagree.
+    for (const module of COLLEGE_ESSAY_MODULES) {
+      expect(module.tutorInstructions).toContain(
+        'SENTENCE-STARTERS ARE NOT ALLOWED HERE'
+      );
+      expect(module.tutorInstructions.indexOf('sentence-starter they finish')).
+        toBeLessThan(
+          module.tutorInstructions.indexOf('SENTENCE-STARTERS ARE NOT ALLOWED')
+        );
+    }
+  });
+
+  test('the Brainstorm Gate is protected from "Honor I am ready"', () => {
+    // "Don't move the goalposts / honor I'm ready" must not read as licence to
+    // wave a student through the one hard gate in the course.
+    for (const module of COLLEGE_ESSAY_MODULES) {
+      expect(module.tutorInstructions).toContain(
+        'THE BRAINSTORM GATE STILL HOLDS'
+      );
+    }
+  });
+
+  test('the no-writing rule still outranks everything, block included', () => {
+    for (const module of COLLEGE_ESSAY_MODULES) {
+      expect(module.tutorInstructions).toContain(
+        'This rule overrides every other instruction'
+      );
+    }
+  });
+});
+
+describe('Register mode', () => {
+  test('each module declares the register the universal block asks for', () => {
+    expect(
+      COLLEGE_ESSAY_MODULES.map((m) => [m.position, m.registerMode])
+    ).toEqual([
+      // Nothing is being submitted until Module 5: the arc is orientation,
+      // brainstorming, planning, then a deliberately bad first draft.
+      [0, 'drafting'],
+      [1, 'drafting'],
+      [2, 'drafting'],
+      [3, 'drafting'],
+      [4, 'drafting'],
+      // Revision and Final Polish are where the reader's expectations land.
+      [5, 'polished'],
+      [6, 'polished'],
+    ]);
+  });
+
+  test('the declared register reaches the system prompt', () => {
+    for (const module of COLLEGE_ESSAY_MODULES) {
+      const expected =
+        module.registerMode === 'drafting'
+          ? 'REGISTER MODE FOR THIS MODULE: DRAFTING'
+          : 'REGISTER MODE FOR THIS MODULE: POLISHED';
+      expect(module.tutorInstructions).toContain(expected);
+    }
+  });
+
+  test('"Write It Badly, On Purpose" is a drafting module, whatever else changes', () => {
+    const drafting = COLLEGE_ESSAY_MODULES.find((m) => m.position === 4)!;
+    expect(drafting.title).toContain('Write It Badly');
+    expect(drafting.registerMode).toBe('drafting');
+    expect(drafting.tutorInstructions).toContain(
+      'REGISTER MODE FOR THIS MODULE: DRAFTING'
+    );
+  });
+
+  test('polished modules still never let the tutor fix the prose itself', () => {
+    // POLISHED raises the reader's bar; it does not unlock ghostwriting.
+    for (const module of COLLEGE_ESSAY_MODULES.filter(
+      (m) => m.registerMode === 'polished'
+    )) {
+      expect(module.tutorInstructions).toContain(
+        'the student writes the correction'
+      );
     }
   });
 });

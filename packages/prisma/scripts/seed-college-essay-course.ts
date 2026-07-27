@@ -16,6 +16,10 @@ import { PrismaClient } from '../generated/prisma';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { isLocalDatabaseUrl } from './seed-overlay-connection';
 import {
+  tutorInstructionSeedUpdate,
+  withoutTutorInstructionFields,
+} from './tutor-instructions-seed';
+import {
   COLLEGE_ESSAY_ASSIGNMENT_TYPE,
   COLLEGE_ESSAY_ASSIGNMENT_TYPE_KEY,
   COLLEGE_ESSAY_CALIBRATION_NOTES,
@@ -109,13 +113,20 @@ async function upsertModule(
 
   const existing = await prisma.assignmentModule.findFirst({
     where: { assignmentTypeId, position: moduleData.position },
-    select: { id: true },
+    select: { id: true, tutorInstructions: true },
   });
 
   const module = existing
     ? await prisma.assignmentModule.update({
         where: { id: existing.id },
-        data: { ...moduleFields, deletedAt: null },
+        // Structural fields are refreshed every run; the tutor instructions
+        // are only written when admin has not put anything there, so a
+        // re-seed on deploy cannot revert somebody's edit.
+        data: {
+          ...withoutTutorInstructionFields(moduleFields),
+          ...tutorInstructionSeedUpdate(moduleFields, existing),
+          deletedAt: null,
+        },
         select: { id: true },
       })
     : await prisma.assignmentModule.create({
@@ -136,14 +147,20 @@ async function upsertModule(
     const existingInstruction =
       await prisma.assignmentModuleInstruction.findFirst({
         where: { assignmentModuleId: module.id, position: instruction.position },
-        select: { id: true },
+        select: { id: true, tutorInstructions: true },
       });
 
     const instructionId = existingInstruction
       ? (
           await prisma.assignmentModuleInstruction.update({
             where: { id: existingInstruction.id },
-            data: instructionFields,
+            data: {
+              ...withoutTutorInstructionFields(instructionFields),
+              ...tutorInstructionSeedUpdate(
+                instructionFields,
+                existingInstruction
+              ),
+            },
             select: { id: true },
           })
         ).id
