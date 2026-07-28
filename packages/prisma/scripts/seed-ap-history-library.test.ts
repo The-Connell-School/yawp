@@ -1,5 +1,13 @@
 import { describe, expect, test } from 'bun:test';
 import { AP_HISTORY_LIBRARY_ENTRIES } from './ap-history-library-data';
+import {
+  AP_HISTORY_MODULE_DATA,
+  buildApHistoryModuleUpdateData,
+} from './ap-history-module-data';
+import {
+  UNIVERSAL_TUTOR_INSTRUCTIONS,
+  hasUniversalTutorInstructions,
+} from './universal-tutor-instructions';
 import { readFileSync } from 'node:fs';
 
 describe('AP History library seed data', () => {
@@ -64,5 +72,53 @@ describe('AP History assignment type seed behavior', () => {
 
     expect(updatePayload).toBeDefined();
     expect(updatePayload).not.toContain('ownerOrgId');
+  });
+});
+
+describe('AP History module tutor instructions', () => {
+  test('the seeded module ships the universal tutor block', () => {
+    expect(AP_HISTORY_MODULE_DATA.tutorInstructions).toBe(
+      UNIVERSAL_TUTOR_INSTRUCTIONS
+    );
+    expect(
+      hasUniversalTutorInstructions(AP_HISTORY_MODULE_DATA.tutorInstructions)
+    ).toBe(true);
+  });
+
+  test('an existing module with no tutor instructions gets the universal block', () => {
+    const update = buildApHistoryModuleUpdateData(null);
+
+    expect(update.tutorInstructions).toBe(UNIVERSAL_TUTOR_INSTRUCTIONS);
+    expect(update.title).toBe(AP_HISTORY_MODULE_DATA.title);
+    expect(update.position).toBe(AP_HISTORY_MODULE_DATA.position);
+  });
+
+  test('existing AP-specific tutor wording is preserved, not overwritten', () => {
+    const existing =
+      'Coach the student through an APUSH DBQ using the AP rubric.';
+
+    const update = buildApHistoryModuleUpdateData(existing);
+
+    expect(update.tutorInstructions).toContain(existing);
+    expect(update.tutorInstructions.startsWith(UNIVERSAL_TUTOR_INSTRUCTIONS)).toBe(
+      true
+    );
+  });
+
+  test('re-running the seed does not duplicate the universal block', () => {
+    const first = buildApHistoryModuleUpdateData(null).tutorInstructions;
+    const second = buildApHistoryModuleUpdateData(first).tutorInstructions;
+
+    expect(second).toBe(first);
+  });
+
+  test('the seed reads the existing module tutor instructions before updating', () => {
+    const seedScript = readFileSync(
+      new URL('./seed-ap-history-library.ts', import.meta.url),
+      'utf8'
+    );
+
+    expect(seedScript).toContain('buildApHistoryModuleUpdateData');
+    expect(seedScript).toContain('tutorInstructions: true');
   });
 });
