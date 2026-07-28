@@ -296,7 +296,42 @@ describe('PR preview deployment contract', () => {
     expect(cleanupScript).toContain('dropdb -U postgres --if-exists "$database_name"');
     expect(cleanupScript).toContain('docker volume rm "${project}_${project}-postgres-data"');
     expect(previewWorkflow).toContain('schedule:');
-    expect(previewWorkflow).toContain('bash -s < scripts/preview/cleanup.sh');
+    // Cleanup is still streamed from the repo rather than run from a copy on
+    // the host, with the removal helper prepended so it arrives in the pipe.
+    expect(previewWorkflow).toContain(
+      'cat scripts/preview/remove-preview-path.sh scripts/preview/cleanup.sh'
+    );
+    expect(previewWorkflow).toContain('bash -s"');
+  });
+
+  test('preview cleanup can remove container-owned files and survives one that sticks', () => {
+    const cleanupScript = readRepoFile('scripts/preview/cleanup.sh');
+    const removeHelper = readRepoFile('scripts/preview/remove-preview-path.sh');
+    const destroyScript = readRepoFile('scripts/preview/destroy.sh');
+
+    // Container-written build output is root-owned, so a plain rm is not enough.
+    expect(removeHelper).toContain('PREVIEW_REMOVE_SUDO');
+    expect(removeHelper).toContain('docker_cmd" run --rm -v "$parent:/preview-target"');
+    expect(removeHelper).toContain('preview_remove_path_is_safe');
+
+    // Every removal goes through the helper, and one failure does not abort.
+    expect(cleanupScript).toContain('preview_remove_path "$source_path"');
+    expect(cleanupScript).toContain('CLEANUP_FAILURES=$((CLEANUP_FAILURES + 1))');
+    expect(cleanupScript).not.toContain('rm -rf "$source_path"');
+    expect(destroyScript).toContain('preview_remove_path "$PREVIEW_DIR"');
+  });
+
+  test('preview jobs report an unreachable host instead of a bare exit code', () => {
+    const previewWorkflow = readRepoFile('.github/workflows/preview-environments.yml');
+    const prepareSsh = readRepoFile('scripts/preview/prepare-ssh.sh');
+
+    // All three preview jobs share the retrying, diagnosable SSH setup.
+    expect(previewWorkflow).not.toContain('ssh-keyscan -H "$PREVIEW_HOST"');
+    expect(
+      previewWorkflow.match(/bash scripts\/preview\/prepare-ssh\.sh/g)?.length
+    ).toBe(3);
+    expect(prepareSsh).toContain('PREVIEW_SSH_KEYSCAN_ATTEMPTS');
+    expect(prepareSsh).toContain('did not answer SSH on port');
   });
 
   test('preview workflow passes seeded preview mode to remote deploy', () => {

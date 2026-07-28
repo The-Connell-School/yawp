@@ -70,13 +70,7 @@ jobs:
       - name: Prepare SSH
         env:
           PREVIEW_SSH_PRIVATE_KEY: ${{ secrets.PREVIEW_SSH_PRIVATE_KEY }}
-        run: |
-          set -euo pipefail
-          mkdir -p ~/.ssh
-          chmod 700 ~/.ssh
-          printf '%s\n' "$PREVIEW_SSH_PRIVATE_KEY" > ~/.ssh/preview_key
-          chmod 600 ~/.ssh/preview_key
-          ssh-keyscan -H "$PREVIEW_HOST" >> ~/.ssh/known_hosts
+        run: bash scripts/preview/prepare-ssh.sh
 
       - name: Sync source to preview host
         run: |
@@ -170,16 +164,15 @@ jobs:
           test -n "$PREVIEW_DOMAIN" || { echo "Missing repository variable PREVIEW_DOMAIN"; exit 1; }
           test -n "$PREVIEW_SSH_PRIVATE_KEY" || { echo "Missing repository secret PREVIEW_SSH_PRIVATE_KEY"; exit 1; }
 
+      # Needed for scripts/preview/prepare-ssh.sh; the destroy itself runs from
+      # the copy of the repo already on the preview host.
+      - name: Checkout
+        uses: actions/checkout@v4
+
       - name: Prepare SSH
         env:
           PREVIEW_SSH_PRIVATE_KEY: ${{ secrets.PREVIEW_SSH_PRIVATE_KEY }}
-        run: |
-          set -euo pipefail
-          mkdir -p ~/.ssh
-          chmod 700 ~/.ssh
-          printf '%s\n' "$PREVIEW_SSH_PRIVATE_KEY" > ~/.ssh/preview_key
-          chmod 600 ~/.ssh/preview_key
-          ssh-keyscan -H "$PREVIEW_HOST" >> ~/.ssh/known_hosts
+        run: bash scripts/preview/prepare-ssh.sh
 
       - name: Destroy preview
         run: |
@@ -218,13 +211,7 @@ jobs:
       - name: Prepare SSH
         env:
           PREVIEW_SSH_PRIVATE_KEY: ${{ secrets.PREVIEW_SSH_PRIVATE_KEY }}
-        run: |
-          set -euo pipefail
-          mkdir -p ~/.ssh
-          chmod 700 ~/.ssh
-          printf '%s\n' "$PREVIEW_SSH_PRIVATE_KEY" > ~/.ssh/preview_key
-          chmod 600 ~/.ssh/preview_key
-          ssh-keyscan -H "$PREVIEW_HOST" >> ~/.ssh/known_hosts
+        run: bash scripts/preview/prepare-ssh.sh
 
       - name: Clean stale previews
         env:
@@ -241,5 +228,8 @@ jobs:
             "PREVIEW_TTL_HOURS=$(shell_quote "$PREVIEW_TTL_HOURS")"
             "OPEN_PR_NUMBERS=$(shell_quote "$open_pr_numbers")"
           )
-          # Keep the cleanup script as a local redirect: bash -s < scripts/preview/cleanup.sh
-          ssh -i ~/.ssh/preview_key "$ssh_target" "${remote_env[*]} bash -s" < scripts/preview/cleanup.sh
+          # Keep the cleanup script as a local redirect: bash -s < script.
+          # The removal helper is prepended because the host only ever sees
+          # what this pipe sends it — there is no sibling file to source.
+          cat scripts/preview/remove-preview-path.sh scripts/preview/cleanup.sh \
+            | ssh -i ~/.ssh/preview_key "$ssh_target" "${remote_env[*]} bash -s"
