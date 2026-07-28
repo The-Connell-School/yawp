@@ -122,6 +122,7 @@
     "@happy-dom/global-registrator": "^20.8.9",
     "@playwright/test": "^1.49.0",
     "@react-router/dev": "^7.3.0",
+    "@tailwindcss/container-queries": "^0.1.1",
     "@types/bun": "^1.2.13",
     "@types/node": "^20",
     "@types/qrcode": "^1.5.5",
