@@ -88,6 +88,10 @@ import {
 } from '~/utils/teacher-document-work-sort';
 import { AP_HISTORY_ASSIGNMENT_TYPE_KEY } from '~/domain/ap-history/schema';
 import {
+  DEFAULT_GRADING_ASSISTANT_STRICTNESS_LEVEL,
+  parseGradingAssistantStrictnessLevel,
+} from '~/domain/grading/grading-assistant-strictness';
+import {
   ClassDetailHeader,
   type ClassHeaderTab,
   resolveClassHeaderTab,
@@ -296,9 +300,16 @@ export async function action({ request, params }: ActionFunctionArgs) {
     const assignmentTypeId = formData.get('assignmentTypeId')?.toString();
     const titleRaw = formData.get('title')?.toString() ?? '';
     const promptRaw = formData.get('prompt')?.toString() ?? '';
+    const strictnessRaw = formData.get('gradingAssistantStrictnessLevel');
 
     const title = titleRaw.trim() || null;
     const prompt = promptRaw.trim();
+    const gradingAssistantStrictnessLevel =
+      intent === 'create-assignment'
+        ? strictnessRaw
+          ? parseGradingAssistantStrictnessLevel(strictnessRaw)
+          : DEFAULT_GRADING_ASSISTANT_STRICTNESS_LEVEL
+        : null;
 
     if (!assignmentTypeId) {
       return dataResponse(
@@ -378,6 +389,18 @@ export async function action({ request, params }: ActionFunctionArgs) {
         { status: 400 }
       );
     }
+    if (
+      intent === 'create-assignment' &&
+      !gradingAssistantStrictnessLevel
+    ) {
+      return dataResponse(
+        {
+          success: false,
+          message: 'Grading assistant strictness level is invalid.',
+        },
+        { status: 400 }
+      );
+    }
 
     const gradingIntent = parseAssignmentGradingIntent(formData);
     if (!gradingIntent.success) {
@@ -395,6 +418,8 @@ export async function action({ request, params }: ActionFunctionArgs) {
           prompt,
           submitForGrade: gradingIntent.data.submitForGrade,
           pointValue: gradingIntent.data.pointValue,
+          gradingAssistantStrictnessLevel:
+            gradingAssistantStrictnessLevel!,
         },
         classIds: [classId],
       });
@@ -791,19 +816,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
                 systemKey: true,
               },
             },
-            classAssignments: {
-              where: { classId: { not: classId } },
-              select: {
-                class: {
-                  select: {
-                    id: true,
-                    grade: true,
-                    period: true,
-                    title: true,
-                  },
-                },
-              },
-            },
+            _count: { select: { classAssignments: true } },
           },
         },
         _count: {
@@ -872,8 +885,9 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     pointValue: classAssignment.assignment.pointValue,
     assignmentTypeId: classAssignment.assignment.assignmentTypeId,
     assignmentType: classAssignment.assignment.assignmentType,
-    otherClasses: classAssignment.assignment.classAssignments.map(
-      (deployment) => deployment.class
+    otherClassCount: Math.max(
+      classAssignment.assignment._count.classAssignments - 1,
+      0
     ),
     _count: classAssignment._count,
     insight: insightByClassAssignmentId.get(classAssignment.id) ?? null,

@@ -247,10 +247,30 @@ describe('ClassInsightsPanel', () => {
     )!;
 
     expect(panel.className).toContain('@container');
+    expect(panel.className).toContain('dark:shadow-none');
     expect(header.className).toContain('flex-col');
     expect(header.className).toContain('@xl:flex-row');
     expect(categories.className).toContain('@xl:grid-cols-2');
     expect(categories.className).not.toContain('sm:grid-cols-2');
+  });
+
+  it('keeps headings readable when the panel is rendered in dark mode', () => {
+    const el = render(
+      <ClassInsightsPanel
+        classAssignmentId="ca-1"
+        initialInsight={READY_INSIGHT}
+      />
+    );
+
+    const panelHeading = Array.from(el.querySelectorAll('h3')).find((heading) =>
+      heading.textContent?.includes('Class performance summary')
+    )!;
+    const categoryHeading = Array.from(el.querySelectorAll('span')).find(
+      (span) => span.textContent === 'Thesis/Content'
+    )!;
+
+    expect(panelHeading.className).toContain('text-foreground');
+    expect(categoryHeading.className).toContain('text-foreground');
   });
 
   it('allows long generated text to wrap without forcing horizontal scroll', () => {

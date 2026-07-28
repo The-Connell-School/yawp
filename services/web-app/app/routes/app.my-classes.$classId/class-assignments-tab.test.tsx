@@ -45,7 +45,10 @@ mock.module('~/components/assignments/assignment-edit-sheet', () => ({
 }));
 
 const { MemoryRouter } = actualReactRouter;
-const { ClassAssignmentsTab } = await import('./class-assignments-tab');
+const {
+  ClassAssignmentsTab,
+  clampAssignmentPaginationSkip,
+} = await import('./class-assignments-tab');
 type ClassAssignmentsTabAssignment =
   import('./class-assignments-tab').ClassAssignmentsTabAssignment;
 
@@ -65,14 +68,7 @@ const ASSIGNMENTS: ClassAssignmentsTabAssignment[] = [
     },
     gradedCount: 5,
     documentCount: 12,
-    otherClasses: [
-      {
-        id: 'class-2',
-        grade: '10',
-        period: '3',
-        title: 'US History',
-      },
-    ],
+    otherClassCount: 1,
   },
   {
     id: 'assignment-2',
@@ -89,7 +85,7 @@ const ASSIGNMENTS: ClassAssignmentsTabAssignment[] = [
     },
     gradedCount: 2,
     documentCount: 7,
-    otherClasses: [],
+    otherClassCount: 0,
   },
 ];
 
@@ -220,7 +216,11 @@ describe('ClassAssignmentsTab', () => {
   it('shows a compact indicator when an assignment is deployed elsewhere', () => {
     const el = renderTab();
     expect(el.textContent).toContain('Also in 1 other class');
-    expect(el.textContent).not.toContain('Grade 10 • Period 3 — US History');
+    expect(
+      el.querySelector(
+        '[aria-label="This assignment is also deployed to 1 other class"]'
+      )
+    ).toBeTruthy();
   });
 
   it('keeps search alongside the new management controls', () => {
@@ -230,6 +230,31 @@ describe('ClassAssignmentsTab', () => {
     ) as HTMLInputElement;
 
     expect(search.placeholder).toBe('Search assignments');
+    expect(search.parentElement?.className).toContain('basis-full');
+    expect(search.className).toContain('ring-border');
     expect(el.textContent).toContain('New Assignment');
+  });
+
+  it('sets an explicit themed foreground for inherited table and action text', () => {
+    const el = renderTab();
+    expect(el.firstElementChild?.className).toContain('text-foreground');
+  });
+
+  it('keeps the creation close handler stable across tab rerenders', () => {
+    const el = renderTab();
+    const initialOnOpenChange = creationProps.onOpenChange;
+    const createButton = Array.from(el.querySelectorAll('button')).find(
+      (button) => button.textContent?.includes('New Assignment')
+    )!;
+
+    act(() => createButton.click());
+
+    expect(creationProps.onOpenChange).toBe(initialOnOpenChange);
+  });
+
+  it('clamps pagination to the last populated page after rows are removed', () => {
+    expect(clampAssignmentPaginationSkip(40, 20, 21)).toBe(20);
+    expect(clampAssignmentPaginationSkip(20, 20, 20)).toBe(0);
+    expect(clampAssignmentPaginationSkip(20, 20, 0)).toBe(0);
   });
 });

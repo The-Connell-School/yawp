@@ -293,16 +293,7 @@ describe('class detail loader document visibility', () => {
             title: 'DBQ',
             systemKey: null,
           },
-          classAssignments: [
-            {
-              class: {
-                id: 'class-2',
-                grade: '10',
-                period: '3',
-                title: 'US History',
-              },
-            },
-          ],
+          _count: { classAssignments: 2 },
         },
         _count: { documents: 2 },
       },
@@ -317,14 +308,18 @@ describe('class detail loader document visibility', () => {
     });
     const data = (response as { data: any }).data;
 
-    expect(data.assignments[0].otherClasses).toEqual([
-      {
-        id: 'class-2',
-        grade: '10',
-        period: '3',
-        title: 'US History',
-      },
-    ]);
+    expect(data.assignments[0].otherClassCount).toBe(1);
+    expect(prisma.classAssignment.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        select: expect.objectContaining({
+          assignment: {
+            select: expect.objectContaining({
+              _count: { select: { classAssignments: true } },
+            }),
+          },
+        }),
+      })
+    );
   });
 
   test('bulk deletes only assignments deployed to the current class', async () => {
@@ -541,6 +536,7 @@ describe('class detail loader document visibility', () => {
     form.set('prompt', 'Prompt');
     form.set('submitForGrade', 'true');
     form.set('pointValue', '25');
+    form.set('gradingAssistantStrictnessLevel', 'advanced');
 
     const response = await action({
       request: new Request('https://example.test/app/my-classes/class-1', {
@@ -559,9 +555,37 @@ describe('class detail loader document visibility', () => {
         prompt: 'Prompt',
         submitForGrade: true,
         pointValue: 25,
+        gradingAssistantStrictnessLevel: 'advanced',
       },
       classIds: ['class-1'],
     });
+  });
+
+  test('rejects invalid class assignment grading strictness', async () => {
+    getAvailableAssignmentTypesForScopes.mockResolvedValue([
+      { id: 'at-1', systemKey: null },
+    ]);
+    const form = new FormData();
+    form.set('intent', 'create-assignment');
+    form.set('assignmentTypeId', 'at-1');
+    form.set('prompt', 'Prompt');
+    form.set('gradingAssistantStrictnessLevel', 'punitive');
+
+    const response = await action({
+      request: new Request('https://example.test/app/my-classes/class-1', {
+        method: 'POST',
+        body: form,
+      }),
+      params: { classId: 'class-1' },
+      context: {} as never,
+    });
+
+    expect(response.init).toMatchObject({ status: 400 });
+    expect(response.data).toMatchObject({
+      success: false,
+      message: 'Grading assistant strictness level is invalid.',
+    });
+    expect(createAssignmentDeployedToClasses).not.toHaveBeenCalled();
   });
 
   test('rejects invalid class assignment point values', async () => {

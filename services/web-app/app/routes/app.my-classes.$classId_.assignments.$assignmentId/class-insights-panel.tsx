@@ -162,7 +162,9 @@ function CategoryCard({
         </span>
         <div className="flex min-w-0 flex-1 flex-col gap-1">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="font-medium leading-none">{category.label}</span>
+            <span className="font-medium leading-none text-foreground">
+              {category.label}
+            </span>
             <Badge variant={meta.badge} size="sm">
               {meta.label}
             </Badge>
@@ -471,12 +473,12 @@ export function ClassInsightsPanel({
   };
 
   return (
-    <section className="@container overflow-hidden rounded-xl border bg-card shadow-sm">
+    <section className="@container overflow-hidden rounded-xl border bg-card shadow-sm dark:shadow-none">
       {/* Header band */}
       <div className="flex flex-col items-stretch gap-3 border-b bg-gradient-to-r from-primary/[0.07] to-transparent p-4 @xl:flex-row @xl:items-start @xl:justify-between">
         <div className="flex min-w-0 gap-3">
           <div className="min-w-0">
-            <h3 className="text-base font-semibold leading-tight">
+            <h3 className="text-base font-semibold leading-tight text-foreground">
               Class performance summary
             </h3>
             <p className="mt-0.5 text-base/7 text-muted-foreground [overflow-wrap:anywhere] @sm:text-sm/6">

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Form } from 'react-router';
 import {
   ArrowDown,
@@ -34,13 +34,6 @@ import { useTable } from '~/hooks/useTable';
 import { cn } from '~/utils/misc';
 import { filterClassAssignmentsByQuery } from './class-assignments-search';
 
-type OtherClass = {
-  id: string;
-  grade: string;
-  period: string;
-  title: string | null;
-};
-
 export type ClassAssignmentsTabAssignment = AssignmentEditRecord & {
   classAssignmentId: string;
   assignmentType: AssignmentEditRecord['assignmentType'] & {
@@ -48,7 +41,7 @@ export type ClassAssignmentsTabAssignment = AssignmentEditRecord & {
   };
   gradedCount: number;
   documentCount: number;
-  otherClasses: OtherClass[];
+  otherClassCount: number;
 };
 
 type ClassAssignmentsTabProps = {
@@ -64,9 +57,14 @@ function assignmentTitle(assignment: ClassAssignmentsTabAssignment) {
   return assignment.title?.trim() || 'Untitled Assignment';
 }
 
-function classLabel(klass: OtherClass) {
-  const base = `Grade ${klass.grade} • Period ${klass.period}`;
-  return klass.title ? `${base} — ${klass.title}` : base;
+export function clampAssignmentPaginationSkip(
+  skip: number,
+  take: number,
+  totalCount: number
+) {
+  if (totalCount <= 0) return 0;
+  const lastPageSkip = Math.floor((totalCount - 1) / take) * take;
+  return Math.min(skip, lastPageSkip);
 }
 
 export function ClassAssignmentsTab({
@@ -119,6 +117,17 @@ export function ClassAssignmentsTab({
   }, [searchQuery, sortDirection]);
 
   useEffect(() => {
+    setPagination((current) => {
+      const skip = clampAssignmentPaginationSkip(
+        current.skip,
+        current.take,
+        filteredAssignments.length
+      );
+      return skip === current.skip ? current : { ...current, skip };
+    });
+  }, [filteredAssignments.length]);
+
+  useEffect(() => {
     const visibleIds = new Set(filteredAssignments.map(({ id }) => id));
     setSelectedAssignmentIds((current) => {
       const next = current.filter((id) => visibleIds.has(id));
@@ -134,23 +143,27 @@ export function ClassAssignmentsTab({
     [assignments, editingAssignmentId]
   );
   const hasSelection = selectedAssignmentIds.length > 0;
+  const handleCreateSheetOpenChange = useCallback((open: boolean) => {
+    setIsCreateSheetOpen(open);
+    if (!open) setDuplicateAssignment(null);
+  }, []);
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 text-foreground">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="relative min-w-0 w-full max-w-sm flex-1">
+        <div className="relative w-full basis-full sm:min-w-0 sm:max-w-sm sm:basis-0 sm:flex-1">
           <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             name="class-assignments-search"
             value={searchQuery}
             onChange={(event) => setSearchQuery(event.target.value)}
             placeholder="Search assignments"
-            className="h-9 rounded-md border-0 bg-background pl-9 shadow-none ring-1 ring-black/5 focus-visible:ring-2 focus-visible:ring-ring"
+            className="h-9 rounded-md border-0 bg-background pl-9 shadow-none ring-1 ring-border focus-visible:ring-2 focus-visible:ring-ring"
             aria-label="Search assignments"
             data-testid="class-assignments-search"
           />
         </div>
-        <div className="ml-auto flex shrink-0 items-center justify-end gap-2">
+        <div className="ml-auto flex w-full shrink-0 items-center justify-end gap-2 sm:w-auto">
           {hasSelection ? (
             <Form
               method="post"
@@ -197,6 +210,7 @@ export function ClassAssignmentsTab({
             type="button"
             size="sm"
             className="shrink-0"
+            data-testid="new-assignment-button"
             onClick={() => {
               setDuplicateAssignment(null);
               setIsCreateSheetOpen(true);
@@ -294,39 +308,44 @@ export function ClassAssignmentsTab({
                     </TableCell>
                     <TableCell className="min-w-[280px] max-w-[420px] font-medium">
                       <div className="flex items-start gap-1">
-                        <button
-                          type="button"
-                          data-testid={`assignment-open-${assignment.id}`}
-                          className={cn(
-                            'flex min-w-0 flex-1 flex-col gap-1 text-left',
-                            canEdit && !rowActionsDisabled
-                              ? 'cursor-pointer hover:text-primary'
-                              : 'cursor-default text-foreground'
-                          )}
-                          disabled={!canEdit || rowActionsDisabled}
-                          onClick={() => setEditingAssignmentId(assignment.id)}
-                        >
-                          <span className="[overflow-wrap:anywhere]">
-                            {title}
-                          </span>
-                          <span className="line-clamp-1 text-xs font-normal text-muted-foreground [overflow-wrap:anywhere]">
-                            {assignment.prompt}
-                          </span>
-                          {assignment.otherClasses.length > 0 ? (
-                            <Tooltip
-                              text={assignment.otherClasses
-                                .map(classLabel)
-                                .join(', ')}
-                            >
-                              <span className="w-fit text-xs font-normal text-muted-foreground underline decoration-dotted underline-offset-2">
-                                Also in {assignment.otherClasses.length} other{' '}
-                                {assignment.otherClasses.length === 1
+                        <div className="flex min-w-0 flex-1 flex-col gap-1">
+                          <button
+                            type="button"
+                            data-testid={`assignment-open-${assignment.id}`}
+                            className={cn(
+                              'flex min-w-0 flex-col gap-1 text-left',
+                              canEdit && !rowActionsDisabled
+                                ? 'cursor-pointer hover:text-primary'
+                                : 'cursor-default text-foreground'
+                            )}
+                            disabled={!canEdit || rowActionsDisabled}
+                            onClick={() =>
+                              setEditingAssignmentId(assignment.id)
+                            }
+                          >
+                            <span className="[overflow-wrap:anywhere]">
+                              {title}
+                            </span>
+                            <span className="line-clamp-1 text-xs font-normal text-muted-foreground [overflow-wrap:anywhere]">
+                              {assignment.prompt}
+                            </span>
+                          </button>
+                          {assignment.otherClassCount > 0 ? (
+                            <span
+                              className="w-fit text-xs font-normal text-muted-foreground"
+                              aria-label={`This assignment is also deployed to ${assignment.otherClassCount} other ${
+                                assignment.otherClassCount === 1
                                   ? 'class'
-                                  : 'classes'}
-                              </span>
-                            </Tooltip>
+                                  : 'classes'
+                              }`}
+                            >
+                              Also in {assignment.otherClassCount} other{' '}
+                              {assignment.otherClassCount === 1
+                                ? 'class'
+                                : 'classes'}
+                            </span>
                           ) : null}
-                        </button>
+                        </div>
                         {classInsightsEnabled ? (
                           <Tooltip text="Class performance summary">
                             <Button
@@ -407,10 +426,7 @@ export function ClassAssignmentsTab({
 
       <AssignmentCreationSheet
         open={isCreateSheetOpen}
-        onOpenChange={(open) => {
-          setIsCreateSheetOpen(open);
-          if (!open) setDuplicateAssignment(null);
-        }}
+        onOpenChange={handleCreateSheetOpenChange}
         entryPoint="class"
         fixedClassId={classOption.id}
         assignmentTypes={assignmentTypes}

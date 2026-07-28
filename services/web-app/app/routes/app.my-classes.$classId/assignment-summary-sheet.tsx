@@ -121,7 +121,7 @@ export function AssignmentSummarySheet({
 }) {
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-full overflow-y-auto sm:max-w-xl">
+      <SheetContent className="w-full overflow-y-auto text-foreground dark:bg-card sm:max-w-xl">
         <AssignmentSummarySheetContent
           assignment={assignment}
           classInsightsEnabled={classInsightsEnabled}
