@@ -189,8 +189,12 @@ test.describe.serial('Teacher class page redesign', () => {
     expect(
       Math.abs(studentsTabBox!.width - documentsTabBox!.width)
     ).toBeLessThan(4);
+    // The class now carries its own full-featured Assignments tab, which
+    // sits last in the tab bar — it owns the closing right border, not
+    // Documents.
+    const assignmentsTab = header.getByRole('tab', { name: /assignments/i });
+    await expect(assignmentsTab).toHaveCSS('border-right-width', '1px');
     const documentsTab = header.getByRole('tab', { name: /documents/i });
-    await expect(documentsTab).toHaveCSS('border-right-width', '1px');
     await documentsTab.click();
     await expect(documentsTab).toHaveAttribute('data-state', 'active');
     const activeIndicator = tablist.locator('[aria-hidden="true"]').first();
@@ -220,16 +224,22 @@ test.describe.serial('Teacher class page redesign', () => {
     expect(gradientCount).toBe(0);
   });
 
-  test('tab=assignments redirects to the teacher Assignments page', async ({
+  test('tab=assignments shows the class-scoped Assignments tab in place', async ({
     page,
     e2eContext,
     signIn,
   }) => {
+    // The standalone /app/assignments page was retired — assignments now
+    // live entirely inside the class detail header's Assignments tab.
     await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
     await page.goto(`/app/my-classes/${e2eContext.classId}?tab=assignments`);
-    await page.waitForURL('**/app/assignments');
+    await page.waitForLoadState('networkidle');
+
+    const header = page.getByTestId('class-detail-header');
+    const assignmentsTab = header.getByRole('tab', { name: /assignments/i });
+    await expect(assignmentsTab).toHaveAttribute('data-state', 'active');
     await expect(
-      page.getByRole('heading', { name: 'Assignments' })
+      page.getByRole('button', { name: /new assignment/i })
     ).toBeVisible();
   });
 

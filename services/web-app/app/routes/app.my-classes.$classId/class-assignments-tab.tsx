@@ -3,9 +3,7 @@ import { Form } from 'react-router';
 import {
   ArrowDown,
   ArrowUp,
-  BarChart3,
   ChevronRight,
-  Copy,
   Plus,
   Search,
   Trash2,
@@ -48,9 +46,7 @@ type ClassAssignmentsTabProps = {
   classOption: { id: string; name: string };
   assignments: ClassAssignmentsTabAssignment[];
   assignmentTypes: { id: string; title: string }[];
-  classInsightsEnabled: boolean;
   onViewDocuments: (assignmentId: string) => void;
-  onViewSummary: (classAssignmentId: string) => void;
 };
 
 function assignmentTitle(assignment: ClassAssignmentsTabAssignment) {
@@ -71,9 +67,7 @@ export function ClassAssignmentsTab({
   classOption,
   assignments,
   assignmentTypes,
-  classInsightsEnabled,
   onViewDocuments,
-  onViewSummary,
 }: ClassAssignmentsTabProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
@@ -151,14 +145,14 @@ export function ClassAssignmentsTab({
   return (
     <div className="space-y-4 text-foreground">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="relative w-full basis-full sm:min-w-0 sm:max-w-sm sm:basis-0 sm:flex-1">
+        <div className="relative min-w-0 w-full max-w-sm flex-1">
           <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             name="class-assignments-search"
             value={searchQuery}
             onChange={(event) => setSearchQuery(event.target.value)}
             placeholder="Search assignments"
-            className="h-9 rounded-md border-0 bg-background pl-9 shadow-none ring-1 ring-border focus-visible:ring-2 focus-visible:ring-ring"
+            className="h-9 rounded-md border-0 bg-background pl-9 shadow-none ring-1 ring-black/5 focus-visible:ring-2 focus-visible:ring-ring"
             aria-label="Search assignments"
             data-testid="class-assignments-search"
           />
@@ -299,89 +293,28 @@ export function ClassAssignmentsTab({
                         : undefined
                     }
                   >
-                    <TableCell className="pl-4">
+                    <TableCell className="max-h-[37px] pl-4">
                       <Checkbox
                         aria-label={`Select assignment ${title}`}
                         checked={selectedAssignmentIds.includes(assignment.id)}
                         onCheckedChange={() => handleSelect(assignment.id)}
                       />
                     </TableCell>
-                    <TableCell className="min-w-[280px] max-w-[420px] font-medium">
-                      <div className="flex items-start gap-1">
-                        <div className="flex min-w-0 flex-1 flex-col gap-1">
-                          <button
-                            type="button"
-                            data-testid={`assignment-open-${assignment.id}`}
-                            className={cn(
-                              'flex min-w-0 flex-col gap-1 text-left',
-                              canEdit && !rowActionsDisabled
-                                ? 'cursor-pointer hover:text-primary'
-                                : 'cursor-default text-foreground'
-                            )}
-                            disabled={!canEdit || rowActionsDisabled}
-                            onClick={() =>
-                              setEditingAssignmentId(assignment.id)
-                            }
-                          >
-                            <span className="[overflow-wrap:anywhere]">
-                              {title}
-                            </span>
-                            <span className="line-clamp-1 text-xs font-normal text-muted-foreground [overflow-wrap:anywhere]">
-                              {assignment.prompt}
-                            </span>
-                          </button>
-                          {assignment.otherClassCount > 0 ? (
-                            <span
-                              className="w-fit text-xs font-normal text-muted-foreground"
-                              aria-label={`This assignment is also deployed to ${assignment.otherClassCount} other ${
-                                assignment.otherClassCount === 1
-                                  ? 'class'
-                                  : 'classes'
-                              }`}
-                            >
-                              Also in {assignment.otherClassCount} other{' '}
-                              {assignment.otherClassCount === 1
-                                ? 'class'
-                                : 'classes'}
-                            </span>
-                          ) : null}
-                        </div>
-                        {classInsightsEnabled ? (
-                          <Tooltip text="Class performance summary">
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="ghost"
-                              className="h-8 shrink-0 gap-1 px-2"
-                              aria-label={`Open class performance summary for ${title}`}
-                              disabled={rowActionsDisabled}
-                              onClick={() =>
-                                onViewSummary(assignment.classAssignmentId)
-                              }
-                            >
-                              <BarChart3 className="h-4 w-4" />
-                              Summary
-                            </Button>
-                          </Tooltip>
-                        ) : null}
-                        {canEdit ? (
-                          <Tooltip text="Duplicate">
-                            <Button
-                              type="button"
-                              size="icon-sm"
-                              variant="ghost"
-                              aria-label={`Duplicate ${title}`}
-                              disabled={rowActionsDisabled}
-                              onClick={() => {
-                                setDuplicateAssignment(assignment);
-                                setIsCreateSheetOpen(true);
-                              }}
-                            >
-                              <Copy className="h-4 w-4" />
-                            </Button>
-                          </Tooltip>
-                        ) : null}
-                      </div>
+                    <TableCell className="font-medium">
+                      <button
+                        type="button"
+                        data-testid={`assignment-open-${assignment.id}`}
+                        className={cn(
+                          'text-left [overflow-wrap:anywhere]',
+                          canEdit && !rowActionsDisabled
+                            ? 'cursor-pointer hover:text-primary'
+                            : 'cursor-default text-foreground'
+                        )}
+                        disabled={!canEdit || rowActionsDisabled}
+                        onClick={() => setEditingAssignmentId(assignment.id)}
+                      >
+                        {title}
+                      </button>
                     </TableCell>
                     <TableCell className="text-muted-foreground">
                       {assignment.assignmentType.title}
@@ -449,6 +382,11 @@ export function ClassAssignmentsTab({
           pdfClassId={classOption.id}
           allowedAssignmentTypes={assignmentTypes}
           editingAssignment={editingAssignment}
+          onDuplicate={() => {
+            setDuplicateAssignment(editingAssignment);
+            setEditingAssignmentId(null);
+            setIsCreateSheetOpen(true);
+          }}
         />
       ) : null}
     </div>

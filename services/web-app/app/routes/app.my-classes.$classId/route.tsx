@@ -123,10 +123,6 @@ import {
   type StudentGrowthPlan,
 } from './student-growth-plans-sheet';
 import {
-  AssignmentSummarySheet,
-  type AssignmentSummarySheetAssignment,
-} from './assignment-summary-sheet';
-import {
   ClassAssignmentsTab,
   type ClassAssignmentsTabAssignment,
 } from './class-assignments-tab';
@@ -1037,9 +1033,6 @@ function ClassDetailPage() {
     name: string;
     email: string;
   } | null>(null);
-  const [summarySheetAssignmentId, setSummarySheetAssignmentId] = useState<
-    string | null
-  >(null);
   const classDetailPath = `/app/my-classes/${data.klass.id}`;
   const classDetailSearch = searchParams.toString();
   const classDetailExitTo = classDetailSearch
@@ -1256,25 +1249,6 @@ function ClassDetailPage() {
     }
     return counts;
   }, [allSubmissions]);
-
-  const summarySheetAssignment: AssignmentSummarySheetAssignment | null =
-    useMemo(() => {
-      const assignment = summarySheetAssignmentId
-        ? data.assignments.find(
-            (a) => a.classAssignmentId === summarySheetAssignmentId
-          )
-        : null;
-      if (!assignment) return null;
-      return {
-        id: assignment.id,
-        classAssignmentId: assignment.classAssignmentId,
-        title: assignment.title,
-        assignmentType: assignment.assignmentType,
-        documentCount: assignment._count.documents,
-        gradedCount: gradedCountByAssignmentId.get(assignment.id) ?? 0,
-        insight: assignment.insight,
-      };
-    }, [data.assignments, gradedCountByAssignmentId, summarySheetAssignmentId]);
 
   const managedAssignments = useMemo(
     (): ClassAssignmentsTabAssignment[] =>
@@ -1691,9 +1665,7 @@ function ClassDetailPage() {
           }}
           assignments={managedAssignments}
           assignmentTypes={data.assignmentTypes}
-          classInsightsEnabled={classInsightsEnabled}
           onViewDocuments={handleViewAssignmentDocuments}
-          onViewSummary={setSummarySheetAssignmentId}
         />
       );
     }
@@ -2203,21 +2175,6 @@ function ClassDetailPage() {
           const studentId = growthPlanStudent.id;
           setGrowthPlanStudent(null);
           handleViewStudentDocuments(studentId);
-        }}
-      />
-
-      <AssignmentSummarySheet
-        open={summarySheetAssignmentId !== null}
-        onOpenChange={(open) => {
-          if (!open) setSummarySheetAssignmentId(null);
-        }}
-        assignment={summarySheetAssignment}
-        classInsightsEnabled={classInsightsEnabled}
-        onViewDocuments={() => {
-          if (!summarySheetAssignment) return;
-          const assignmentId = summarySheetAssignment.id;
-          setSummarySheetAssignmentId(null);
-          handleViewAssignmentDocuments(assignmentId);
         }}
       />
     </section>

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useFetcher } from 'react-router';
+import { Copy } from 'lucide-react';
 import {
   Sheet,
   SheetContent,
@@ -39,6 +40,8 @@ export type AssignmentEditSheetProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   editingAssignment: AssignmentEditRecord;
+  /** Renders a Duplicate action in the footer when provided. */
+  onDuplicate?: () => void;
 };
 
 export function AssignmentEditSheet({
@@ -48,6 +51,7 @@ export function AssignmentEditSheet({
   open,
   onOpenChange,
   editingAssignment,
+  onDuplicate,
 }: AssignmentEditSheetProps) {
   const fetcher = useFetcher<any>();
   const extractFetcher = useFetcher<any>();
@@ -300,27 +304,42 @@ export function AssignmentEditSheet({
             <p className="text-sm text-destructive">{formError}</p>
           ) : null}
 
-          <div className="flex items-center justify-end gap-2 pt-4">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => onOpenChange(false)}
-              disabled={isSaving || isExtracting}
-            >
-              Cancel
-            </Button>
-            <Button
-              type="submit"
-              disabled={
-                isSaving ||
-                isExtracting ||
-                !assignmentTypeId ||
-                !prompt.trim() ||
-                (submitForGrade && !pointValue.trim())
-              }
-            >
-              {isSaving ? 'Saving...' : 'Save Assignment'}
-            </Button>
+          <div className="flex items-center justify-between gap-2 pt-4">
+            {onDuplicate ? (
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={onDuplicate}
+                disabled={isSaving || isExtracting}
+              >
+                <Copy className="mr-2 h-4 w-4" />
+                Duplicate
+              </Button>
+            ) : (
+              <div />
+            )}
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => onOpenChange(false)}
+                disabled={isSaving || isExtracting}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                disabled={
+                  isSaving ||
+                  isExtracting ||
+                  !assignmentTypeId ||
+                  !prompt.trim() ||
+                  (submitForGrade && !pointValue.trim())
+                }
+              >
+                {isSaving ? 'Saving...' : 'Save Assignment'}
+              </Button>
+            </div>
           </div>
         </fetcher.Form>
       </SheetContent>

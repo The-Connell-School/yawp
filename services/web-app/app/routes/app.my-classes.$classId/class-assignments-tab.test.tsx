@@ -107,9 +107,7 @@ function renderTab(overrides: Record<string, unknown> = {}) {
       classOption={{ id: 'class-1', name: 'Grade 9 • Period 2 — History' }}
       assignments={ASSIGNMENTS}
       assignmentTypes={[{ id: 'type-1', title: 'DBQ' }]}
-      classInsightsEnabled
       onViewDocuments={() => {}}
-      onViewSummary={() => {}}
       {...overrides}
     />
   );
@@ -169,13 +167,21 @@ describe('ClassAssignmentsTab', () => {
     expect(editProps.pdfClassId).toBe('class-1');
   });
 
-  it('prefills class-scoped creation when duplicating an editable assignment', () => {
+  it('prefills class-scoped creation when duplicating from the edit sheet', () => {
     const el = renderTab();
-    const duplicateButton = el.querySelector(
-      '[aria-label="Duplicate The Gilded Age DBQ"]'
+    const editableTitle = el.querySelector(
+      '[data-testid="assignment-open-assignment-1"]'
     ) as HTMLButtonElement;
-    act(() => duplicateButton.click());
+    act(() => editableTitle.click());
 
+    expect(el.querySelector('[data-testid="edit-sheet"]')).toBeTruthy();
+    expect(typeof editProps.onDuplicate).toBe('function');
+
+    act(() => editProps.onDuplicate());
+
+    // Duplicating closes the edit sheet and opens creation prefilled.
+    expect(el.querySelector('[data-testid="edit-sheet"]')).toBeFalsy();
+    expect(el.querySelector('[data-testid="creation-sheet"]')).toBeTruthy();
     expect(creationProps).toMatchObject({
       entryPoint: 'class',
       fixedClassId: 'class-1',
@@ -185,22 +191,13 @@ describe('ClassAssignmentsTab', () => {
     });
   });
 
-  it('uses a dedicated summary action and disables row actions during selection', () => {
-    const onViewSummary = mock();
-    const el = renderTab({ onViewSummary });
-    const summaryButton = el.querySelector(
-      '[aria-label="Open class performance summary for The Gilded Age DBQ"]'
-    ) as HTMLButtonElement;
-
-    act(() => summaryButton.click());
-    expect(onViewSummary).toHaveBeenCalledWith('class-assignment-1');
-
+  it('disables row title actions during selection', () => {
+    const el = renderTab();
     const checkbox = el.querySelector(
       '[aria-label="Select assignment The Gilded Age DBQ"]'
     ) as HTMLButtonElement;
     act(() => checkbox.click());
 
-    expect(summaryButton.disabled).toBe(true);
     expect(
       (
         el.querySelector(
@@ -213,14 +210,16 @@ describe('ClassAssignmentsTab', () => {
     ).toBeTruthy();
   });
 
-  it('shows a compact indicator when an assignment is deployed elsewhere', () => {
+  it('shows only the assignment title in the row — no subtitle, summary, or duplicate affordance', () => {
     const el = renderTab();
-    expect(el.textContent).toContain('Also in 1 other class');
+    expect(el.textContent).not.toContain('Analyze the effects');
+    expect(el.textContent).not.toContain('Also in');
     expect(
-      el.querySelector(
-        '[aria-label="This assignment is also deployed to 1 other class"]'
-      )
-    ).toBeTruthy();
+      el.querySelector('[aria-label*="class performance summary" i]')
+    ).toBeFalsy();
+    expect(
+      el.querySelector('[aria-label="Duplicate The Gilded Age DBQ"]')
+    ).toBeFalsy();
   });
 
   it('keeps search alongside the new management controls', () => {
@@ -230,8 +229,9 @@ describe('ClassAssignmentsTab', () => {
     ) as HTMLInputElement;
 
     expect(search.placeholder).toBe('Search assignments');
-    expect(search.parentElement?.className).toContain('basis-full');
-    expect(search.className).toContain('ring-border');
+    // Matches the Students tab search bar exactly.
+    expect(search.parentElement?.className).toContain('max-w-sm');
+    expect(search.className).toContain('ring-black/5');
     expect(el.textContent).toContain('New Assignment');
   });
 

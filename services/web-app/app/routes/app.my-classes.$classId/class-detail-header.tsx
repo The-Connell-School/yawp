@@ -144,7 +144,7 @@ function ClassHeaderTabBar({
       ref={listRef}
       role="tablist"
       aria-label="Class sections"
-      className="relative flex w-full max-w-md items-stretch"
+      className="relative flex w-full max-w-lg items-stretch"
     >
       <div
         className={cn(
