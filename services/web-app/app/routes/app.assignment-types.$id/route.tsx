@@ -589,16 +589,20 @@ export default function AppAssignmentTypesIdRoute() {
                       >
                         Document
                       </DropdownMenuItem>
-                      {/* An AP Lang assignment is always built from a prompt —
-                          a curated one or a generated one — so this points the
-                          teacher at the library rather than opening an empty
-                          sheet that could not be submitted. */}
+                      {/* Opens the same assignment form as every other course,
+                          with an empty prompt the teacher can write themselves.
+                          Picking a library or generated prompt instead fills
+                          that prompt in and locks it. */}
                       <DropdownMenuItem
-                        disabled={data.apEnglishLangLibrary == null}
+                        disabled={
+                          (data.apEnglishLangLibrary?.teacherClasses.length ??
+                            0) === 0
+                        }
                         onSelect={() => {
-                          document
-                            .getElementById(AP_ENGLISH_LANG_LIBRARY_ANCHOR)
-                            ?.scrollIntoView({ behavior: 'smooth' });
+                          setLibraryPrompt('');
+                          setApHistoryEntry(null);
+                          setApEnglishLangEntry(null);
+                          setIsAssignmentSheetOpen(true);
                         }}
                       >
                         Assignment

@@ -6,6 +6,7 @@ import {
 import { AP_HISTORY_ASSIGNMENT_TYPE_KEY } from '~/domain/ap-history/schema';
 import {
   buildAssignmentCreateInputFromApEnglishLangEntry,
+  buildAssignmentCreateInputFromApEnglishLangPromptText,
   buildAssignmentCreateInputFromSavedApEnglishLangPrompt,
   getApEnglishLangLibraryEntryForSnapshot,
   getSavedApEnglishLangPromptForSnapshot,
@@ -213,11 +214,32 @@ export async function action({ request }: ActionFunctionArgs) {
       });
     }
 
+    // A prompt typed straight into the assignment form, the way every other
+    // course works. Stored as an argument prompt so grading still gets a
+    // snapshot.
+    if (!apEnglishLangLibraryEntryId && prompt) {
+      await createAssignmentDeployedToClasses({
+        data: buildAssignmentCreateInputFromApEnglishLangPromptText({
+          assignmentTypeId: assignmentType.id,
+          title,
+          prompt,
+          gradingAssistantStrictnessLevel,
+        }),
+        classIds: deployClassIds,
+      });
+
+      return dataResponse({
+        success: true,
+        message: 'Assignment created and applied to classes.',
+      });
+    }
+
     if (!apEnglishLangLibraryEntryId) {
       return dataResponse(
         {
           success: false,
-          message: 'AP Language library entry is required.',
+          message:
+            'Choose an AP Language prompt, or write one in the prompt field.',
         },
         { status: 400 }
       );

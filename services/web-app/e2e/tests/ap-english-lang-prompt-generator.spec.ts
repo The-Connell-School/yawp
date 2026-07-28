@@ -91,6 +91,67 @@ test.describe.serial('AP English Language prompt generator', () => {
     ).toHaveCount(0);
   });
 
+  test('New > Assignment opens the real assignment form and creates one', async ({
+    page,
+    e2eContext,
+    signIn,
+  }) => {
+    await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
+    await page.goto(
+      `/app/assignment-types/${e2eContext.apEnglishLangAssignmentTypeId}`
+    );
+
+    await page.getByRole('button', { name: /^New/ }).click();
+    await page.getByRole('menuitem', { name: 'Assignment' }).click();
+
+    // The shared form every other course uses, not a stripped-down one.
+    const dialog = page.getByRole('dialog');
+    await expect(dialog.getByText('Assignment type')).toBeVisible();
+    await expect(dialog.getByText('Assign to')).toBeVisible();
+    await expect(dialog.getByText('Prompt Source')).toBeVisible();
+
+    await dialog.getByLabel('Title (optional)').fill('Typed AP Lang');
+    await dialog
+      .getByLabel('Prompt', { exact: true })
+      .fill('Write an essay that argues your position on what we owe strangers.');
+    await dialog.getByRole('checkbox').first().check();
+
+    const created = page.waitForResponse(
+      (response) =>
+        response.url().includes('/api/assignments/create') &&
+        response.status() === 200
+    );
+    await dialog.getByRole('button', { name: /Create Assignment/ }).click();
+    await created;
+    await expect(dialog).toHaveCount(0);
+  });
+
+  test('the selected-prompt form is the real assignment form', async ({
+    page,
+    e2eContext,
+    signIn,
+  }) => {
+    await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
+    await page.goto(
+      `/app/assignment-types/${e2eContext.apEnglishLangAssignmentTypeId}?ael_q=Gettysburg`
+    );
+
+    await page
+      .getByRole('button', {
+        name: /The Gettysburg Address — Rhetorical Analysis/,
+      })
+      .click();
+
+    const dialog = page.getByRole('dialog');
+    // Same controls as the shared form…
+    await expect(dialog.getByText('Assignment type')).toBeVisible();
+    await expect(dialog.getByText('Assign to')).toBeVisible();
+    await expect(dialog.getByText('Submit for grade')).toBeVisible();
+    // …with the chosen prompt locked in place of the prompt-source controls.
+    await expect(dialog.getByText('Selected AP Language Prompt')).toBeVisible();
+    await expect(dialog.getByText('Prompt Source')).toHaveCount(0);
+  });
+
   test('using a generated prompt starts an assignment from it', async ({
     page,
     e2eContext,

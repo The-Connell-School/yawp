@@ -5,7 +5,7 @@ import {
   AP_ENGLISH_LANG_ASSIGNMENT_TYPE_KEY,
   buildApEnglishLangSnapshot,
 } from './schema';
-import { sanitizeFacets } from './saved-prompts.server';
+import { hashPromptText, sanitizeFacets } from './saved-prompts.server';
 
 export async function findApEnglishLangAssignmentTypeForOrg(
   organizationId: string,
@@ -105,6 +105,46 @@ export function buildAssignmentCreateInputFromSavedApEnglishLangPrompt(params: {
   return {
     assignmentTypeId: params.assignmentTypeId,
     title: params.title ?? params.saved.title,
+    prompt: snapshot.prompt,
+    gradingAssistantStrictnessLevel:
+      params.gradingAssistantStrictnessLevel ??
+      DEFAULT_GRADING_ASSISTANT_STRICTNESS_LEVEL,
+    apEnglishLangSnapshot: snapshot as Prisma.InputJsonValue,
+  };
+}
+
+/**
+ * Build the assignment input for a prompt the teacher typed straight into the
+ * assignment form. Treated as a Q3 argument prompt — the only FRQ type that
+ * needs no provided source material — so grading and coaching still get a
+ * proper snapshot instead of a bare prompt string.
+ */
+export function buildAssignmentCreateInputFromApEnglishLangPromptText(params: {
+  assignmentTypeId: string;
+  title: string | null;
+  prompt: string;
+  gradingAssistantStrictnessLevel?: string;
+}): Omit<
+  Prisma.AssignmentUncheckedCreateInput,
+  'id' | 'createdAt' | 'updatedAt'
+> {
+  const title = params.title ?? 'AP Language Argument';
+  const snapshot = buildApEnglishLangSnapshot({
+    externalKey: `manual:${hashPromptText(params.prompt)}`,
+    frqType: 'argument',
+    title,
+    prompt: params.prompt,
+    focusSkill: GENERATED_PROMPT_FALLBACK_FOCUS_SKILL,
+    difficulty: 'developing',
+    sources: [],
+    suggestedEvidence: null,
+    defaultTimeMode: GENERATED_PROMPT_TIME_MODE,
+    defaultDurationMinutes: GENERATED_PROMPT_DURATION_MINUTES,
+  });
+
+  return {
+    assignmentTypeId: params.assignmentTypeId,
+    title,
     prompt: snapshot.prompt,
     gradingAssistantStrictnessLevel:
       params.gradingAssistantStrictnessLevel ??
