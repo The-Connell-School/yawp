@@ -2,6 +2,10 @@
 import { PrismaClient } from '../generated/prisma';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { AP_HISTORY_LIBRARY_ENTRIES } from './ap-history-library-data';
+import {
+  AP_HISTORY_MODULE_DATA,
+  buildApHistoryModuleUpdateData,
+} from './ap-history-module-data';
 import { isLocalDatabaseUrl } from './seed-overlay-connection';
 
 const AP_HISTORY_ASSIGNMENT_TYPE_KEY = 'ap_history_essay';
@@ -13,11 +17,7 @@ const ASSIGNMENT_TYPE_DATA = {
   position: 50,
 } as const;
 
-const MODULE_DATA = {
-  title: 'AP History Essay',
-  position: 1,
-  description: 'Write an AP History DBQ or LEQ with AP-specific coaching.',
-} as const;
+const MODULE_DATA = AP_HISTORY_MODULE_DATA;
 
 const INSTRUCTION_DATA = {
   title: 'Write',
@@ -113,13 +113,13 @@ async function seedApHistoryLibrary() {
       assignmentTypeId: assignmentType.id,
       position: MODULE_DATA.position,
     },
-    select: { id: true },
+    select: { id: true, tutorInstructions: true },
   });
 
   const module = existingModule
     ? await prisma.assignmentModule.update({
         where: { id: existingModule.id },
-        data: MODULE_DATA,
+        data: buildApHistoryModuleUpdateData(existingModule.tutorInstructions),
         select: { id: true },
       })
     : await prisma.assignmentModule.create({

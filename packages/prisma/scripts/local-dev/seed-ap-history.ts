@@ -1,6 +1,7 @@
 /* eslint-disable no-console */
 import type { Prisma, PrismaClient } from '../../generated/prisma';
 import { AP_HISTORY_LIBRARY_ENTRIES } from '../ap-history-library-data';
+import { AP_HISTORY_MODULE_DATA } from '../ap-history-module-data';
 import {
   AP_HISTORY_HERO_IMAGE,
   apHistoryHeroImageBytes,
@@ -38,9 +39,7 @@ export function buildApHistoryAssignmentTypeCreateInput(
     assignmentModules: {
       create: [
         {
-          title: 'AP History Essay',
-          position: 1,
-          description: 'Write an AP History DBQ or LEQ with AP-specific coaching.',
+          ...AP_HISTORY_MODULE_DATA,
           instructions: {
             create: [
               {

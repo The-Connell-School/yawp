@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { AP_HISTORY_LIBRARY_ENTRIES } from '../ap-history-library-data';
+import { UNIVERSAL_TUTOR_INSTRUCTIONS } from '../universal-tutor-instructions';
 import {
   AP_HISTORY_ASSIGNMENT_TYPE_SYSTEM_KEY,
   buildApHistoryAssignmentTypeCreateInput,
@@ -14,6 +15,14 @@ describe('buildApHistoryAssignmentTypeCreateInput', () => {
     expect(input.systemKey).toBe('ap_history_essay');
     expect(input.title).toBe('AP History Essay');
     expect(input.ownerOrgId).toBe(orgId);
+  });
+
+  test('ships the universal tutor block in the module tutor settings', () => {
+    const modules = input.assignmentModules?.create ?? [];
+    const moduleList = Array.isArray(modules) ? modules : [modules];
+
+    expect(moduleList).toHaveLength(1);
+    expect(moduleList[0]?.tutorInstructions).toBe(UNIVERSAL_TUTOR_INSTRUCTIONS);
   });
 
   test('links the type to the org so it appears in org defaults', () => {
