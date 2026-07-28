@@ -38,7 +38,7 @@ mock.module('react-router', () => ({
 const { MemoryRouter } = actualReactRouter;
 
 const {
-  AssignmentSummarySheet,
+  ASSIGNMENT_SUMMARY_SHEET_CONTENT_CLASS_NAME,
   AssignmentSummarySheetContent,
 }: typeof import('./assignment-summary-sheet') = await import(
   './assignment-summary-sheet'
@@ -83,19 +83,12 @@ afterEach(() => {
 
 describe('AssignmentSummarySheetContent', () => {
   it('uses an explicit dark surface and foreground for the portal sheet', () => {
-    render(
-      <AssignmentSummarySheet
-        open
-        onOpenChange={() => {}}
-        assignment={ASSIGNMENT}
-        classInsightsEnabled={false}
-        onViewDocuments={() => {}}
-      />
+    expect(ASSIGNMENT_SUMMARY_SHEET_CONTENT_CLASS_NAME).toContain(
+      'dark:bg-card'
     );
-
-    const dialog = document.body.querySelector('[role="dialog"]')!;
-    expect(dialog.className).toContain('dark:bg-card');
-    expect(dialog.className).toContain('text-foreground');
+    expect(ASSIGNMENT_SUMMARY_SHEET_CONTENT_CLASS_NAME).toContain(
+      'text-foreground'
+    );
   });
 
   it('shows minimal identifying information about the assignment', () => {

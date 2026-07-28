@@ -36,6 +36,9 @@ export type AssignmentSummarySheetContentProps = {
   renderSheet?: boolean;
 };
 
+export const ASSIGNMENT_SUMMARY_SHEET_CONTENT_CLASS_NAME =
+  'w-full overflow-y-auto text-foreground dark:bg-card sm:max-w-xl';
+
 /**
  * The sheet body, split out from the `<Sheet>`/`<SheetContent>` Radix
  * wrapper so it can be rendered and asserted on directly in tests without
@@ -121,7 +124,7 @@ export function AssignmentSummarySheet({
 }) {
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-full overflow-y-auto text-foreground dark:bg-card sm:max-w-xl">
+      <SheetContent className={ASSIGNMENT_SUMMARY_SHEET_CONTENT_CLASS_NAME}>
         <AssignmentSummarySheetContent
           assignment={assignment}
           classInsightsEnabled={classInsightsEnabled}
