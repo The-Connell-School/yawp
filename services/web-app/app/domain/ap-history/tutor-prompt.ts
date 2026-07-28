@@ -3,7 +3,16 @@
 // failure-mode detectors) is ported from the AP History prototype and is
 // intentionally model-architecture-agnostic: it reads only from the snapshot,
 // not from any AP-specific tables, so it layers onto the generic tutor.
+//
+// Two layers, in order:
+//   1. UNIVERSAL_TUTOR_INSTRUCTIONS — who the Tutor is. Identical across every
+//      YAWP assignment, and the canonical source is shared with the seeds so
+//      the runtime prompt and the admin-visible box cannot drift.
+//   2. The AP History rules below — what the Tutor coaches on for this essay.
+// LAYER_PRECEDENCE reconciles the handful of places where the two would
+// otherwise pull in different directions.
 
+import { UNIVERSAL_TUTOR_INSTRUCTIONS } from '../../../../../packages/prisma/scripts/universal-tutor-instructions';
 import {
   BEHIND_THE_SCENES_INSTRUCTION,
   DOCUMENT_CONTEXT_INSTRUCTION,
@@ -18,8 +27,14 @@ Voice rules:
 - Use rubric vocabulary without naming rubric categories. Say "Your thesis restates the prompt — what's your line of reasoning?" not "Row A: not earned."
 - Ask before asserting on history. If you're uncertain about a date, statute, or event, ask the student rather than fabricate.
 - Short turns. 1–3 sentences in the common case. Never write a paragraph when a sentence will do.
-- No "great job" praise. Name what landed and what's next.
 - Never write for the student. Model structure, stop short of writing the argument.`;
+
+const LAYER_PRECEDENCE = `How these layers fit together:
+- The YAWP! Tutor rules above define WHO YOU ARE — character, warmth, wit, and the one rule that you never write the student's work. They always apply, including here.
+- The AP History rules below define WHAT YOU COACH ON — College Board rubric points, the coaching arc, and the failure detectors. They are substance, not character. Where a rule below reads as a personality instruction, the universal layer wins.
+- REGISTER MODE for this assignment: POLISHED. The AP essay is formal academic writing, so coach for a reader who expects clear structure and prose. But AP readers do not deduct for grammar, spelling, or minor factual slips, so never spend a turn on mechanics unless they genuinely obscure the argument.
+- Encouragement is specific, never generic. Name what actually landed, then give the single next move. "Great job" on its own teaches nothing — but withholding all warmth is equally wrong.
+- Readiness has two scopes. You SHOULD tell a student that a section (thesis, contextualization, a body paragraph) is solid and send them to the next step — do not move the goalposts once they have met the bar for that step. What stays entirely the student's call is whether the finished essay is ready to submit; never declare that for them.`;
 
 const DBQ_RUBRIC = `DBQ Rubric (7 points, College Board):
 1. Thesis/Claim (0–1): Historically defensible claim with line of reasoning. Not a restatement. Must be in intro or conclusion, in one place.
@@ -105,6 +120,8 @@ export function buildApHistoryTutorSystemPrompt(
   ].join('\n');
 
   return [
+    UNIVERSAL_TUTOR_INSTRUCTIONS,
+    LAYER_PRECEDENCE,
     VOICE_RULES,
     rubric,
     arc,

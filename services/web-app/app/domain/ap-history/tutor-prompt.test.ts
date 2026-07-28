@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test';
+import { UNIVERSAL_TUTOR_INSTRUCTIONS } from '../../../../../packages/prisma/scripts/universal-tutor-instructions';
 import { buildApHistorySnapshot } from './schema';
 import { buildApHistoryTutorSystemPrompt } from './tutor-prompt';
 
@@ -76,5 +77,69 @@ describe('buildApHistoryTutorSystemPrompt', () => {
     expect(prompt).toContain('student_document_context');
     // never writes the essay for the student
     expect(prompt).toContain('Never write for the student');
+  });
+});
+
+describe('universal tutor layer', () => {
+  test('carries the full universal block verbatim, for both essay types', () => {
+    for (const snapshot of [dbqSnapshot, leqSnapshot]) {
+      expect(buildApHistoryTutorSystemPrompt(snapshot)).toContain(
+        UNIVERSAL_TUTOR_INSTRUCTIONS
+      );
+    }
+  });
+
+  test('leads with the universal character layer, before the AP substance', () => {
+    const prompt = buildApHistoryTutorSystemPrompt(dbqSnapshot);
+
+    expect(prompt.startsWith(UNIVERSAL_TUTOR_INSTRUCTIONS)).toBe(true);
+    expect(prompt.indexOf('WHO YOU ARE.')).toBeLessThan(
+      prompt.indexOf('DBQ Rubric (7 points')
+    );
+  });
+
+  test('keeps the universal guardrails the tutor is judged on', () => {
+    const prompt = buildApHistoryTutorSystemPrompt(dbqSnapshot);
+
+    expect(prompt).toContain("I'm not that kind of guy!");
+    expect(prompt).toContain('I am mysterious and I contain so many multitudes');
+    expect(prompt).toContain('MULTILINGUAL.');
+  });
+
+  test('still carries the AP-specific substance alongside it', () => {
+    const prompt = buildApHistoryTutorSystemPrompt(dbqSnapshot);
+
+    expect(prompt).toContain('DBQ Rubric (7 points');
+    expect(prompt).toContain('Coaching arc (DBQ)');
+    expect(prompt).toContain('Named failure-mode detectors');
+    expect(prompt).toContain('HIPP');
+  });
+});
+
+describe('layer precedence', () => {
+  test('resolves how the universal and AP layers fit together', () => {
+    const prompt = buildApHistoryTutorSystemPrompt(dbqSnapshot);
+
+    expect(prompt).toContain('How these layers fit together');
+  });
+
+  test('sets REGISTER MODE so the universal register rule is not left unset', () => {
+    const prompt = buildApHistoryTutorSystemPrompt(dbqSnapshot);
+
+    expect(prompt).toContain('REGISTER MODE for this assignment: POLISHED');
+  });
+
+  test('drops the blanket no-praise rule that contradicted the universal block', () => {
+    const prompt = buildApHistoryTutorSystemPrompt(dbqSnapshot);
+
+    expect(prompt).not.toContain('No "great job" praise');
+    expect(prompt).toContain('Encouragement is specific');
+  });
+
+  test('scopes readiness: sections can be blessed, submission stays the student call', () => {
+    const prompt = buildApHistoryTutorSystemPrompt(dbqSnapshot);
+
+    expect(prompt).toContain('ready to submit');
+    expect(prompt).toContain('send them to the next step');
   });
 });
