@@ -14,15 +14,47 @@ export type ApEnglishLangFilterableEntry = {
   focusSkill: string;
   difficulty: string | null;
   sources: Array<unknown>;
+  /**
+   * Which collection the row comes from: the curated library that ships with
+   * the course, or a prompt this teacher generated and kept ("My prompts").
+   * Rows loaded straight from the library table predate the field, so an
+   * absent value reads as 'library'.
+   */
+  collection?: ApEnglishLangCollection;
+  /** Present only on saved prompts. */
+  savedAt?: string;
 };
 
+export type ApEnglishLangCollection = 'library' | 'mine';
+
+export const AP_ENGLISH_LANG_COLLECTION_LABEL: Record<
+  ApEnglishLangCollection,
+  string
+> = {
+  library: 'Library',
+  mine: 'My prompts',
+};
+
+export const AP_ENGLISH_LANG_COLLECTION_ORDER: ApEnglishLangCollection[] = [
+  'library',
+  'mine',
+];
+
+export function collectionOf(
+  entry: ApEnglishLangFilterableEntry
+): ApEnglishLangCollection {
+  return entry.collection ?? 'library';
+}
+
 export type ApEnglishLangFacetValues = {
+  collections: string[];
   frqTypes: string[];
   focusSkills: string[];
   difficulties: string[];
 };
 
 export type ApEnglishLangOptionCounts = {
+  collections: Record<string, number>;
   frqTypes: Record<string, number>;
   focusSkills: Record<string, number>;
   difficulties: Record<string, number>;
@@ -30,6 +62,7 @@ export type ApEnglishLangOptionCounts = {
 
 export type ApEnglishLangLibraryFilters = {
   q: string;
+  collections: Set<string>;
   frqTypes: Set<string>;
   focusSkills: Set<string>;
   difficulties: Set<string>;
@@ -37,6 +70,7 @@ export type ApEnglishLangLibraryFilters = {
 
 export const AP_ENGLISH_LANG_FACET_KEYS = {
   search: 'ael_q',
+  collections: 'ael_coll',
   frqTypes: 'ael_frq',
   focusSkills: 'ael_skill',
   difficulties: 'ael_difficulty',
@@ -83,6 +117,9 @@ export function buildApEnglishLangFacets(
   }
 
   return {
+    // Both collections are always offered, even when the teacher has saved
+    // nothing yet — "My prompts" has to be visible to be discovered.
+    collections: [...AP_ENGLISH_LANG_COLLECTION_ORDER],
     frqTypes: orderedBy(FRQ_TYPE_ORDER, frqTypes),
     focusSkills: [...focusSkills].sort(),
     difficulties: orderedBy(DIFFICULTY_ORDER, difficulties),
@@ -93,6 +130,10 @@ export function buildApEnglishLangOptionCounts(
   entries: ApEnglishLangFilterableEntry[]
 ): ApEnglishLangOptionCounts {
   const counts: ApEnglishLangOptionCounts = {
+    // Seeded so an empty collection still reports a count of 0.
+    collections: Object.fromEntries(
+      AP_ENGLISH_LANG_COLLECTION_ORDER.map((collection) => [collection, 0])
+    ),
     frqTypes: {},
     focusSkills: {},
     difficulties: {},
@@ -102,6 +143,7 @@ export function buildApEnglishLangOptionCounts(
   };
 
   for (const entry of entries) {
+    bump(counts.collections, collectionOf(entry));
     bump(counts.frqTypes, entry.frqType);
     bump(counts.focusSkills, entry.focusSkill);
     if (entry.difficulty) bump(counts.difficulties, entry.difficulty);
@@ -118,6 +160,7 @@ export function readApEnglishLangFilters(url: URL): ApEnglishLangLibraryFilters 
     q: (url.searchParams.get(AP_ENGLISH_LANG_FACET_KEYS.search) ?? '')
       .trim()
       .toLowerCase(),
+    collections: readSet(AP_ENGLISH_LANG_FACET_KEYS.collections),
     frqTypes: readSet(AP_ENGLISH_LANG_FACET_KEYS.frqTypes),
     focusSkills: readSet(AP_ENGLISH_LANG_FACET_KEYS.focusSkills),
     difficulties: readSet(AP_ENGLISH_LANG_FACET_KEYS.difficulties),
@@ -128,6 +171,12 @@ export function applyApEnglishLangFilters<
   Entry extends ApEnglishLangFilterableEntry,
 >(entries: Entry[], filters: ApEnglishLangLibraryFilters): Entry[] {
   return entries.filter((entry) => {
+    if (
+      filters.collections.size &&
+      !filters.collections.has(collectionOf(entry))
+    ) {
+      return false;
+    }
     if (filters.frqTypes.size && !filters.frqTypes.has(entry.frqType)) {
       return false;
     }

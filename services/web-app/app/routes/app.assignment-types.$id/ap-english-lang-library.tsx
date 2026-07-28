@@ -18,10 +18,12 @@ import {
   SheetTrigger,
 } from '~/components/ui/sheet';
 import {
+  AP_ENGLISH_LANG_COLLECTION_LABEL,
   AP_ENGLISH_LANG_FACET_KEYS,
   type ApEnglishLangFacetValues,
   type ApEnglishLangFilterableEntry,
   type ApEnglishLangOptionCounts,
+  collectionOf,
   formatApEnglishLangFacetValue,
   formatApEnglishLangFrqType,
 } from './ap-english-lang-library-filters';
@@ -44,6 +46,15 @@ type FacetSpec = {
 };
 
 const FACET_SECTIONS: FacetSpec[] = [
+  {
+    facetKey: 'collections',
+    paramKey: AP_ENGLISH_LANG_FACET_KEYS.collections,
+    title: 'Collection',
+    renderLabel: (value) =>
+      AP_ENGLISH_LANG_COLLECTION_LABEL[
+        value as keyof typeof AP_ENGLISH_LANG_COLLECTION_LABEL
+      ] ?? value,
+  },
   {
     facetKey: 'frqTypes',
     paramKey: AP_ENGLISH_LANG_FACET_KEYS.frqTypes,
@@ -281,9 +292,16 @@ function LibraryEntryCard({
       <div className="flex w-full flex-col gap-3">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
           <h3 className="text-base font-semibold leading-snug">{entry.title}</h3>
-          <Badge variant="secondary" size="sm" className="w-fit">
-            {formatApEnglishLangFrqType(entry.frqType)}
-          </Badge>
+          <div className="flex w-fit shrink-0 flex-wrap gap-2">
+            {collectionOf(entry) === 'mine' ? (
+              <Badge variant="outline" size="sm" className="w-fit">
+                {AP_ENGLISH_LANG_COLLECTION_LABEL.mine}
+              </Badge>
+            ) : null}
+            <Badge variant="secondary" size="sm" className="w-fit">
+              {formatApEnglishLangFrqType(entry.frqType)}
+            </Badge>
+          </div>
         </div>
 
         <p className="line-clamp-3 whitespace-normal text-sm font-normal leading-6 text-muted-foreground">

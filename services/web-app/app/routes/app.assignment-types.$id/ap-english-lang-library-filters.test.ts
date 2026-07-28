@@ -201,6 +201,74 @@ describe('applyApEnglishLangFilters', () => {
   });
 });
 
+describe('collections', () => {
+  const savedPrompt = makeEntry({
+    externalKey: 'saved:abc',
+    title: 'What We Owe Strangers',
+    prompt: 'Write an essay that argues your position on obligation.',
+    frqType: 'argument',
+    focusSkill: 'line-of-reasoning',
+    difficulty: 'developing',
+    collection: 'mine',
+    savedAt: '2026-07-28T12:00:00.000Z',
+  });
+  const mixed = [savedPrompt, ...entries];
+
+  test('a curated entry with no collection reads as library', () => {
+    const result = applyApEnglishLangFilters(
+      mixed,
+      filtersFrom(`?${AP_ENGLISH_LANG_FACET_KEYS.collections}=library`)
+    );
+
+    expect(result.map((entry) => entry.externalKey)).toEqual([
+      'synthesis-1',
+      'entry-1',
+      'argument-1',
+    ]);
+  });
+
+  test('filters down to the teacher\'s own prompts', () => {
+    const result = applyApEnglishLangFilters(
+      mixed,
+      filtersFrom(`?${AP_ENGLISH_LANG_FACET_KEYS.collections}=mine`)
+    );
+
+    expect(result.map((entry) => entry.externalKey)).toEqual(['saved:abc']);
+  });
+
+  test('counts each collection, including an empty one', () => {
+    expect(buildApEnglishLangOptionCounts(mixed).collections).toEqual({
+      library: 3,
+      mine: 1,
+    });
+    expect(buildApEnglishLangOptionCounts(entries).collections).toEqual({
+      library: 3,
+      mine: 0,
+    });
+  });
+
+  test('a saved prompt is searchable alongside curated entries', () => {
+    const result = applyApEnglishLangFilters(
+      mixed,
+      filtersFrom(`?${AP_ENGLISH_LANG_FACET_KEYS.search}=strangers`)
+    );
+
+    expect(result.map((entry) => entry.externalKey)).toEqual(['saved:abc']);
+  });
+
+  test('stacks with the other facets', () => {
+    const result = applyApEnglishLangFilters(
+      mixed,
+      filtersFrom(
+        `?${AP_ENGLISH_LANG_FACET_KEYS.collections}=mine` +
+          `&${AP_ENGLISH_LANG_FACET_KEYS.difficulties}=exam-ready`
+      )
+    );
+
+    expect(result).toEqual([]);
+  });
+});
+
 describe('buildApEnglishLangFacets', () => {
   test('lists FRQ types in exam order and other facets alphabetically', () => {
     const facets = buildApEnglishLangFacets(entries);
@@ -237,6 +305,9 @@ describe('buildApEnglishLangFacets', () => {
 
   test('handles an empty library', () => {
     expect(buildApEnglishLangFacets([])).toEqual({
+      // Both collections are always offered so "My prompts" is discoverable
+      // before the teacher has saved anything.
+      collections: ['library', 'mine'],
       frqTypes: [],
       focusSkills: [],
       difficulties: [],
@@ -259,6 +330,7 @@ describe('buildApEnglishLangOptionCounts', () => {
 
   test('returns empty buckets for an empty library', () => {
     expect(buildApEnglishLangOptionCounts([])).toEqual({
+      collections: { library: 0, mine: 0 },
       frqTypes: {},
       focusSkills: {},
       difficulties: {},

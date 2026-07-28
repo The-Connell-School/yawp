@@ -5,6 +5,7 @@ import {
   AP_ENGLISH_LANG_ASSIGNMENT_TYPE_KEY,
   buildApEnglishLangSnapshot,
 } from './schema';
+import { sanitizeFacets } from './saved-prompts.server';
 
 export async function findApEnglishLangAssignmentTypeForOrg(
   organizationId: string,
@@ -39,6 +40,77 @@ export async function getApEnglishLangLibraryEntryForSnapshot(params: {
     },
     include: { sources: { orderBy: { position: 'asc' } } },
   });
+}
+
+/**
+ * Timing for a generated prompt. The generator only drafts Q3 argument
+ * prompts, and the exam allots 40 minutes for Q3 — the same defaults every
+ * curated argument entry carries.
+ */
+const GENERATED_PROMPT_TIME_MODE = 'untimed' as const;
+const GENERATED_PROMPT_DURATION_MINUTES = 40;
+const GENERATED_PROMPT_FALLBACK_FOCUS_SKILL = 'line-of-reasoning';
+
+/**
+ * Look up one of the teacher's own saved prompts so an assignment can be built
+ * from it. Scoped by membership as well as assignment type: a saved prompt
+ * belongs to the teacher who generated it, and nobody else can assign it.
+ */
+export async function getSavedApEnglishLangPromptForSnapshot(params: {
+  assignmentTypeId: string;
+  membershipId: string;
+  savedPromptId: string;
+}) {
+  return prisma.savedApEnglishLangPrompt.findFirst({
+    where: {
+      id: params.savedPromptId,
+      assignmentTypeId: params.assignmentTypeId,
+      membershipId: params.membershipId,
+      archivedAt: null,
+    },
+    select: { id: true, title: true, prompt: true, facets: true },
+  });
+}
+
+/**
+ * Build the assignment input for a generated prompt. It goes through the same
+ * snapshot builder as a curated entry, so grading and coaching read it exactly
+ * the same way — an argument prompt simply ships no sources.
+ */
+export function buildAssignmentCreateInputFromSavedApEnglishLangPrompt(params: {
+  assignmentTypeId: string;
+  title: string | null;
+  gradingAssistantStrictnessLevel?: string;
+  saved: { id: string; title: string; prompt: string; facets: unknown };
+}): Omit<
+  Prisma.AssignmentUncheckedCreateInput,
+  'id' | 'createdAt' | 'updatedAt'
+> {
+  const facets = sanitizeFacets(params.saved.facets);
+  const snapshot = buildApEnglishLangSnapshot({
+    externalKey: `saved:${params.saved.id}`,
+    // The generator drafts argument prompts only; anything else would need
+    // source material it is not allowed to invent.
+    frqType: 'argument',
+    title: params.saved.title,
+    prompt: params.saved.prompt,
+    focusSkill: facets.focusSkill ?? GENERATED_PROMPT_FALLBACK_FOCUS_SKILL,
+    difficulty: facets.difficulty ?? 'developing',
+    sources: [],
+    suggestedEvidence: null,
+    defaultTimeMode: GENERATED_PROMPT_TIME_MODE,
+    defaultDurationMinutes: GENERATED_PROMPT_DURATION_MINUTES,
+  });
+
+  return {
+    assignmentTypeId: params.assignmentTypeId,
+    title: params.title ?? params.saved.title,
+    prompt: snapshot.prompt,
+    gradingAssistantStrictnessLevel:
+      params.gradingAssistantStrictnessLevel ??
+      DEFAULT_GRADING_ASSISTANT_STRICTNESS_LEVEL,
+    apEnglishLangSnapshot: snapshot as Prisma.InputJsonValue,
+  };
 }
 
 export function buildAssignmentCreateInputFromApEnglishLangEntry(params: {

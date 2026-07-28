@@ -6,7 +6,9 @@ import {
 import { AP_HISTORY_ASSIGNMENT_TYPE_KEY } from '~/domain/ap-history/schema';
 import {
   buildAssignmentCreateInputFromApEnglishLangEntry,
+  buildAssignmentCreateInputFromSavedApEnglishLangPrompt,
   getApEnglishLangLibraryEntryForSnapshot,
+  getSavedApEnglishLangPromptForSnapshot,
 } from '~/domain/ap-english-lang/library.server';
 import { AP_ENGLISH_LANG_ASSIGNMENT_TYPE_KEY } from '~/domain/ap-english-lang/schema';
 import {
@@ -50,12 +52,15 @@ export async function action({ request }: ActionFunctionArgs) {
     formData.get('apHistoryLibraryEntryId')?.toString() ?? '';
   const apEnglishLangLibraryEntryIdRaw =
     formData.get('apEnglishLangLibraryEntryId')?.toString() ?? '';
+  const apEnglishLangSavedPromptIdRaw =
+    formData.get('apEnglishLangSavedPromptId')?.toString() ?? '';
   const strictnessRaw = formData.get('gradingAssistantStrictnessLevel');
 
   const title = titleRaw.trim() || null;
   const prompt = promptRaw.trim();
   const apHistoryLibraryEntryId = apHistoryLibraryEntryIdRaw.trim();
   const apEnglishLangLibraryEntryId = apEnglishLangLibraryEntryIdRaw.trim();
+  const apEnglishLangSavedPromptId = apEnglishLangSavedPromptIdRaw.trim();
   const gradingAssistantStrictnessLevel = strictnessRaw
     ? parseGradingAssistantStrictnessLevel(strictnessRaw)
     : DEFAULT_GRADING_ASSISTANT_STRICTNESS_LEVEL;
@@ -174,6 +179,40 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 
   if (assignmentType.systemKey === AP_ENGLISH_LANG_ASSIGNMENT_TYPE_KEY) {
+    // A prompt the teacher generated and kept. It carries no sources, so it
+    // can only be an argument prompt, and it is scoped to its author.
+    if (apEnglishLangSavedPromptId) {
+      const saved = await getSavedApEnglishLangPromptForSnapshot({
+        assignmentTypeId: assignmentType.id,
+        membershipId: profile.id,
+        savedPromptId: apEnglishLangSavedPromptId,
+      });
+      if (!saved) {
+        return dataResponse(
+          {
+            success: false,
+            message: 'That saved prompt is unavailable.',
+          },
+          { status: 400 }
+        );
+      }
+
+      await createAssignmentDeployedToClasses({
+        data: buildAssignmentCreateInputFromSavedApEnglishLangPrompt({
+          assignmentTypeId: assignmentType.id,
+          title,
+          saved,
+          gradingAssistantStrictnessLevel,
+        }),
+        classIds: deployClassIds,
+      });
+
+      return dataResponse({
+        success: true,
+        message: 'Assignment created and applied to classes.',
+      });
+    }
+
     if (!apEnglishLangLibraryEntryId) {
       return dataResponse(
         {

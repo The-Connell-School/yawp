@@ -40,7 +40,10 @@ type Props = {
     essayType: string;
   } | null;
   apEnglishLangEntry?: {
-    externalKey: string;
+    /** Curated library entries are identified by their external key… */
+    externalKey?: string;
+    /** …a generated prompt by the row it was saved to under "My prompts". */
+    savedPromptId?: string;
     title: string;
     prompt: string;
     frqType: string;
@@ -111,11 +114,19 @@ export function CreateAssignmentSheet({
               name="assignmentTypeId"
               value={assignmentTypeId}
             />
-            <input
-              type="hidden"
-              name="apEnglishLangLibraryEntryId"
-              value={apEnglishLangEntry.externalKey}
-            />
+            {apEnglishLangEntry.savedPromptId ? (
+              <input
+                type="hidden"
+                name="apEnglishLangSavedPromptId"
+                value={apEnglishLangEntry.savedPromptId}
+              />
+            ) : (
+              <input
+                type="hidden"
+                name="apEnglishLangLibraryEntryId"
+                value={apEnglishLangEntry.externalKey ?? ''}
+              />
+            )}
 
             <div className="space-y-2">
               <Label>Class</Label>

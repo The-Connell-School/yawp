@@ -26,6 +26,9 @@ const prisma = {
   apEnglishLangPromptLibraryEntry: {
     findMany: mock(),
   },
+  savedApEnglishLangPrompt: {
+    findMany: mock(),
+  },
 };
 
 const requireUserId = mock();
@@ -213,6 +216,7 @@ describe('app.assignment-types.$id loader Daily Pages prompt library', () => {
     prisma.orgMembership.findMany.mockReset();
     prisma.apHistoryPromptLibraryEntry.findMany.mockReset();
     prisma.apEnglishLangPromptLibraryEntry.findMany.mockReset();
+    prisma.savedApEnglishLangPrompt.findMany.mockReset();
     requireUserId.mockReset();
     requireMembership.mockReset();
     redirectWithToast.mockReset();
@@ -245,6 +249,7 @@ describe('app.assignment-types.$id loader Daily Pages prompt library', () => {
     prisma.orgMembership.findMany.mockResolvedValue([]);
     prisma.apHistoryPromptLibraryEntry.findMany.mockResolvedValue([]);
     prisma.apEnglishLangPromptLibraryEntry.findMany.mockResolvedValue([]);
+    prisma.savedApEnglishLangPrompt.findMany.mockResolvedValue([]);
   });
 
   test('provides prompt library data for teachers viewing Daily Pages', async () => {
@@ -596,6 +601,7 @@ describe('app.assignment-types.$id loader Daily Pages prompt library', () => {
         'ael-argument-role-of-failure',
       ]);
       expect(response.data.apEnglishLangLibrary.facets).toEqual({
+        collections: ['library', 'mine'],
         frqTypes: ['synthesis', 'rhetorical_analysis', 'argument'],
         focusSkills: [
           'counterargument',
@@ -661,6 +667,66 @@ describe('app.assignment-types.$id loader Daily Pages prompt library', () => {
 
       expect(response.data.apEnglishLangLibrary.entries).toEqual([]);
       expect(response.data.apEnglishLangLibrary.totalCount).toBe(3);
+    });
+
+    test('shows the teacher\'s saved prompts in the same library', async () => {
+      mockApEnglishLangAssignmentType();
+      prisma.savedApEnglishLangPrompt.findMany.mockResolvedValue([
+        {
+          id: 'saved-1',
+          title: 'What We Owe Strangers',
+          prompt: 'Write an essay that argues your position on obligation.',
+          facets: { frqType: 'argument', difficulty: 'developing' },
+          createdAt: new Date('2026-07-28T12:00:00.000Z'),
+        },
+      ]);
+
+      const response = await loadLibrary();
+      const library = response.data.apEnglishLangLibrary;
+
+      expect(library.totalCount).toBe(4);
+      // Newest first, ahead of the curated entries.
+      expect(library.entries[0]).toMatchObject({
+        externalKey: 'saved:saved-1',
+        title: 'What We Owe Strangers',
+        collection: 'mine',
+      });
+      expect(library.optionCounts.collections).toEqual({
+        library: 3,
+        mine: 1,
+      });
+      expect(prisma.savedApEnglishLangPrompt.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            membershipId: 'teacher-1',
+            assignmentTypeId: 'ap-english-lang-type',
+            archivedAt: null,
+          },
+        })
+      );
+    });
+
+    test('filters the library down to My prompts', async () => {
+      mockApEnglishLangAssignmentType();
+      prisma.savedApEnglishLangPrompt.findMany.mockResolvedValue([
+        {
+          id: 'saved-1',
+          title: 'What We Owe Strangers',
+          prompt: 'Write an essay that argues your position on obligation.',
+          facets: {},
+          createdAt: new Date('2026-07-28T12:00:00.000Z'),
+        },
+      ]);
+
+      const response = await loadLibrary('?ael_coll=mine');
+
+      expect(
+        response.data.apEnglishLangLibrary.entries.map(
+          (entry: { externalKey: string }) => entry.externalKey
+        )
+      ).toEqual(['saved:saved-1']);
+      // The unfiltered total still counts everything.
+      expect(response.data.apEnglishLangLibrary.totalCount).toBe(4);
     });
 
     test('omits the AP English Language library when the teacher has no classes', async () => {
