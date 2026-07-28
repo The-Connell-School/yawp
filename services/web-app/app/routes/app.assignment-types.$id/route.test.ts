@@ -23,6 +23,9 @@ const prisma = {
   apHistoryPromptLibraryEntry: {
     findMany: mock(),
   },
+  apEnglishLangPromptLibraryEntry: {
+    findMany: mock(),
+  },
 };
 
 const requireUserId = mock();
@@ -209,6 +212,7 @@ describe('app.assignment-types.$id loader Daily Pages prompt library', () => {
     prisma.school.findMany.mockReset();
     prisma.orgMembership.findMany.mockReset();
     prisma.apHistoryPromptLibraryEntry.findMany.mockReset();
+    prisma.apEnglishLangPromptLibraryEntry.findMany.mockReset();
     requireUserId.mockReset();
     requireMembership.mockReset();
     redirectWithToast.mockReset();
@@ -240,6 +244,7 @@ describe('app.assignment-types.$id loader Daily Pages prompt library', () => {
     prisma.school.findMany.mockResolvedValue([]);
     prisma.orgMembership.findMany.mockResolvedValue([]);
     prisma.apHistoryPromptLibraryEntry.findMany.mockResolvedValue([]);
+    prisma.apEnglishLangPromptLibraryEntry.findMany.mockResolvedValue([]);
   });
 
   test('provides prompt library data for teachers viewing Daily Pages', async () => {
@@ -515,5 +520,159 @@ describe('app.assignment-types.$id loader Daily Pages prompt library', () => {
 
     expect(response.data.apHistoryLibrary).toBeNull();
     expect(prisma.apHistoryPromptLibraryEntry.findMany).not.toHaveBeenCalled();
+  });
+
+  describe('AP English Language prompt library', () => {
+    const apEnglishLangEntries = [
+      {
+        id: 'ael-1',
+        externalKey: 'ael-synthesis-school-start-times',
+        title: 'School Start Times — Synthesis',
+        prompt: 'Argue a position on later school start times.',
+        frqType: 'synthesis',
+        focusSkill: 'source-integration',
+        difficulty: 'exam-ready',
+        sources: [{ id: 's-1' }, { id: 's-2' }, { id: 's-3' }],
+      },
+      {
+        id: 'ael-2',
+        externalKey: 'ael-rhetorical-gettysburg',
+        title: 'The Gettysburg Address — Rhetorical Analysis',
+        prompt: 'Analyze the rhetorical choices Lincoln makes.',
+        frqType: 'rhetorical_analysis',
+        focusSkill: 'rhetorical-situation',
+        difficulty: 'exam-ready',
+        sources: [{ id: 's-4' }],
+      },
+      {
+        id: 'ael-3',
+        externalKey: 'ael-argument-role-of-failure',
+        title: 'The Role of Failure — Argument',
+        prompt: 'Take a position on what failure teaches.',
+        frqType: 'argument',
+        focusSkill: 'counterargument',
+        difficulty: 'developing',
+        sources: [],
+      },
+    ];
+
+    function mockApEnglishLangAssignmentType() {
+      getAvailableAssignmentTypesForScopes.mockResolvedValue([
+        withOrganizationAssignment(
+          makeAssignmentType({
+            id: 'ap-english-lang-type',
+            title: 'AP English Language Essay',
+            systemKey: 'ap_english_lang_essay',
+          })
+        ),
+      ]);
+      prisma.apEnglishLangPromptLibraryEntry.findMany.mockResolvedValue(
+        apEnglishLangEntries
+      );
+    }
+
+    function loadLibrary(search = '') {
+      return loader({
+        request: new Request(
+          `https://example.test/app/assignment-types/ap-english-lang-type${search}`
+        ),
+        params: { id: 'ap-english-lang-type' },
+      } as never) as Promise<any>;
+    }
+
+    test('returns every entry plus facets when no filters are applied', async () => {
+      mockApEnglishLangAssignmentType();
+
+      const response = await loadLibrary();
+
+      expect(response.data.apEnglishLangLibrary.totalCount).toBe(3);
+      expect(
+        response.data.apEnglishLangLibrary.entries.map(
+          (entry: { externalKey: string }) => entry.externalKey
+        )
+      ).toEqual([
+        'ael-synthesis-school-start-times',
+        'ael-rhetorical-gettysburg',
+        'ael-argument-role-of-failure',
+      ]);
+      expect(response.data.apEnglishLangLibrary.facets).toEqual({
+        frqTypes: ['synthesis', 'rhetorical_analysis', 'argument'],
+        focusSkills: [
+          'counterargument',
+          'rhetorical-situation',
+          'source-integration',
+        ],
+        difficulties: ['developing', 'exam-ready'],
+      });
+      expect(
+        response.data.apEnglishLangLibrary.optionCounts.frqTypes
+      ).toEqual({
+        synthesis: 1,
+        rhetorical_analysis: 1,
+        argument: 1,
+      });
+    });
+
+    test('narrows entries by search term while keeping the full facet list', async () => {
+      mockApEnglishLangAssignmentType();
+
+      const response = await loadLibrary('?ael_q=Gettysburg');
+
+      expect(
+        response.data.apEnglishLangLibrary.entries.map(
+          (entry: { externalKey: string }) => entry.externalKey
+        )
+      ).toEqual(['ael-rhetorical-gettysburg']);
+      expect(response.data.apEnglishLangLibrary.totalCount).toBe(3);
+      expect(response.data.apEnglishLangLibrary.facets.frqTypes).toEqual([
+        'synthesis',
+        'rhetorical_analysis',
+        'argument',
+      ]);
+    });
+
+    test('narrows entries by FRQ type and difficulty facets', async () => {
+      mockApEnglishLangAssignmentType();
+
+      const byType = await loadLibrary('?ael_frq=argument,synthesis');
+      expect(
+        byType.data.apEnglishLangLibrary.entries.map(
+          (entry: { externalKey: string }) => entry.externalKey
+        )
+      ).toEqual([
+        'ael-synthesis-school-start-times',
+        'ael-argument-role-of-failure',
+      ]);
+
+      const byTypeAndDifficulty = await loadLibrary(
+        '?ael_frq=argument,synthesis&ael_difficulty=developing'
+      );
+      expect(
+        byTypeAndDifficulty.data.apEnglishLangLibrary.entries.map(
+          (entry: { externalKey: string }) => entry.externalKey
+        )
+      ).toEqual(['ael-argument-role-of-failure']);
+    });
+
+    test('returns an empty entry list when nothing matches', async () => {
+      mockApEnglishLangAssignmentType();
+
+      const response = await loadLibrary('?ael_q=zzzznotaprompt');
+
+      expect(response.data.apEnglishLangLibrary.entries).toEqual([]);
+      expect(response.data.apEnglishLangLibrary.totalCount).toBe(3);
+    });
+
+    test('omits the AP English Language library when the teacher has no classes', async () => {
+      mockApEnglishLangAssignmentType();
+      prisma.class.findMany.mockResolvedValue([]);
+
+      const response = await loadLibrary();
+
+      expect(response.data.apEnglishLangLibrary).toBeNull();
+      expect(
+        prisma.apEnglishLangPromptLibraryEntry.findMany
+      ).not.toHaveBeenCalled();
+    });
   });
 });

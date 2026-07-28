@@ -43,6 +43,12 @@ import { prisma } from '~/utils/db.server';
 import { redirectWithToast } from '~/utils/toast.server';
 import { ApHistoryLibrary } from './ap-history-library';
 import { ApEnglishLangLibrary } from './ap-english-lang-library';
+import {
+  applyApEnglishLangFilters,
+  buildApEnglishLangFacets,
+  buildApEnglishLangOptionCounts,
+  readApEnglishLangFilters,
+} from './ap-english-lang-library-filters';
 import { CreateAssignmentSheet } from './create-assignment-sheet';
 import { PromptsLibrary } from './prompts-library/prompts-library';
 import { TeacherDirections } from './prompts-library/teacher-directions';
@@ -391,8 +397,17 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   let apEnglishLangLibrary = null;
   if (profile.role === "TEACHER" && isApEnglishLang) {
     if (assignmentEnabledTeacherClasses.length > 0) {
+      const allEntries = await listApEnglishLangLibraryEntries(
+        assignmentType.id
+      );
       apEnglishLangLibrary = {
-        entries: await listApEnglishLangLibraryEntries(assignmentType.id),
+        entries: applyApEnglishLangFilters(
+          allEntries,
+          readApEnglishLangFilters(new URL(request.url))
+        ),
+        facets: buildApEnglishLangFacets(allEntries),
+        optionCounts: buildApEnglishLangOptionCounts(allEntries),
+        totalCount: allEntries.length,
         teacherClasses: assignmentEnabledTeacherClasses,
       };
     }
@@ -665,6 +680,9 @@ export default function AppAssignmentTypesIdRoute() {
           <div className="pb-6">
             <ApEnglishLangLibrary
               entries={data.apEnglishLangLibrary.entries}
+              facets={data.apEnglishLangLibrary.facets}
+              optionCounts={data.apEnglishLangLibrary.optionCounts}
+              totalCount={data.apEnglishLangLibrary.totalCount}
               onSelectEntry={(entry) => {
                 setApEnglishLangEntry(entry);
                 setApHistoryEntry(null);
