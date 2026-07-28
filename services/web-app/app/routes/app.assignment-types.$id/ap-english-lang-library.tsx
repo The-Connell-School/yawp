@@ -64,12 +64,6 @@ const FACET_SECTIONS: FacetSpec[] = [
   },
 ];
 
-/**
- * Question type and difficulty are short lists worth showing up front. Focus
- * skill has twenty-odd values, so it stays collapsed until a teacher opens it.
- */
-const DEFAULT_OPEN_FACETS = ['frqTypes', 'difficulties'];
-
 export function ApEnglishLangLibrary({
   entries,
   facets,
@@ -368,11 +362,9 @@ function FilterPanel({
         ) : null}
       </div>
 
-      <Accordion
-        type="multiple"
-        defaultValue={DEFAULT_OPEN_FACETS}
-        className="border-none"
-      >
+      {/* Every facet starts collapsed so the panel opens as a short list of
+          categories rather than a wall of options. */}
+      <Accordion type="multiple" className="border-none">
         {FACET_SECTIONS.map((facet) => {
           const values = facets[facet.facetKey];
           if (!values || values.length === 0) return null;

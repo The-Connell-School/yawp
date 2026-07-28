@@ -53,6 +53,9 @@ test.describe.serial('AP English Language prompt library search and filters', ()
       `/app/assignment-types/${e2eContext.apEnglishLangAssignmentTypeId}`
     );
 
+    // Facets start collapsed, so open the section before its options exist.
+    await page.getByRole('button', { name: 'Question type' }).click();
+
     // Filtering by FRQ type keeps only that question type. The checkboxes mirror
     // URL state the loader refreshes, so click them rather than using check().
     await page.getByRole('checkbox', { name: /^Argument/ }).click();
@@ -62,6 +65,7 @@ test.describe.serial('AP English Language prompt library search and filters', ()
     await expect(page.getByRole('button', { name: gettysburgTitle })).toHaveCount(0);
 
     // Difficulty stacks on top of the FRQ type filter.
+    await page.getByRole('button', { name: 'Difficulty' }).click();
     await page.getByRole('checkbox', { name: /^Developing/ }).click();
 
     await expect(page.getByRole('button', { name: roleOfFailureTitle })).toBeVisible();
