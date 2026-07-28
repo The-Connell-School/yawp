@@ -65,6 +65,7 @@ model AssignmentType {
   assignments                        Assignment[]
   documents                          Document[]
   apHistoryLibraryEntries            ApHistoryPromptLibraryEntry[]
+  savedDailyPagesPrompts             SavedDailyPagesPrompt[]
 
   @@index([ownerOrgId])
   @@index([ownerMembershipId])
@@ -103,6 +104,29 @@ model ClassAssignment {
 
   @@unique([assignmentId, classId])
   @@index([classId, createdAt(sort: Desc)])
+}
+
+/// A Daily Pages prompt a teacher generated and kept ("My prompts").
+/// Keyed by a hash of the prompt text so saving and then using the same draft
+/// leaves a single row. `facets` holds the generator's library-vocabulary tags
+/// ({ type, seriousness, cognitiveMoves }) so a saved prompt filters and reads
+/// like a corpus row; it is validated on the way out, never trusted raw.
+model SavedDailyPagesPrompt {
+  id               String         @id @default(cuid())
+  createdAt        DateTime       @default(now()) @db.Timestamptz(6)
+  updatedAt        DateTime       @default(now()) @updatedAt @db.Timestamptz(6)
+  membershipId     String
+  membership       OrgMembership  @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  assignmentTypeId String
+  assignmentType   AssignmentType @relation(fields: [assignmentTypeId], references: [id], onDelete: Cascade)
+  prompt           String
+  promptHash       String
+  facets           Json?
+  source           String         @default("generator")
+  archivedAt       DateTime?      @db.Timestamptz(6)
+
+  @@unique([membershipId, assignmentTypeId, promptHash])
+  @@index([membershipId, assignmentTypeId, archivedAt])
 }
 
 model ApHistoryPromptLibraryEntry {
@@ -408,6 +432,7 @@ model OrgMembership {
   assignedTeacherTrainings      TeacherTraining[]              @relation("TeacherTrainingAssignments")
   assignmentTypesCustomized     Boolean                        @default(false)
   assignmentTypeAssignments     TeacherAssignmentType[]
+  savedDailyPagesPrompts        SavedDailyPagesPrompt[]
 
   @@unique([userId, organizationId])
   @@map("OrgMembership")

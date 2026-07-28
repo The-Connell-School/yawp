@@ -35,7 +35,78 @@ export type LibraryPrompt = {
   gradeBands: GradeBand[];
 };
 
+/**
+ * Which collection a row in the library comes from: the fixed corpus that ships
+ * with the app, or a prompt this teacher generated and saved ("My prompts").
+ */
+export type PromptCollection = 'library' | 'mine';
+
+/**
+ * The library-vocabulary tags the generator gave a draft. Every field is
+ * optional — tagging is best-effort, and a saved prompt is still useful
+ * untagged.
+ */
+export type SavedPromptFacets = {
+  type?: PromptType;
+  seriousness?: PromptSeriousness;
+  cognitiveMoves?: CognitiveMove[];
+};
+
+/** A prompt the teacher generated and saved, as returned by the loader. */
+export type SavedDailyPagesPrompt = {
+  id: string;
+  prompt: string;
+  /** ISO timestamp of when it was saved. */
+  savedAt: string;
+  facets: SavedPromptFacets;
+};
+
+/**
+ * A row in the library. Corpus prompts bring their full facet metadata; saved
+ * prompts carry only what the generator tagged them with, so the rest of the
+ * facet fields are empty/null.
+ */
+export type LibraryEntry = {
+  id: string;
+  prompt: string;
+  collection: PromptCollection;
+  themes: string[];
+  textsOrUnits: string[];
+  seriousness: PromptSeriousness | null;
+  type: PromptType | null;
+  cognitiveMoves: CognitiveMove[];
+  gradeBands: GradeBand[];
+  /** Present only on saved prompts. */
+  savedAt?: string;
+};
+
+export function toLibraryEntry(prompt: LibraryPrompt): LibraryEntry {
+  return { ...prompt, collection: 'library' };
+}
+
+export function toLibraryEntries(prompts: LibraryPrompt[]): LibraryEntry[] {
+  return prompts.map(toLibraryEntry);
+}
+
+export function savedPromptToLibraryEntry(
+  saved: SavedDailyPagesPrompt
+): LibraryEntry {
+  return {
+    id: saved.id,
+    prompt: saved.prompt,
+    collection: 'mine',
+    themes: [],
+    textsOrUnits: [],
+    seriousness: saved.facets.seriousness ?? null,
+    type: saved.facets.type ?? null,
+    cognitiveMoves: saved.facets.cognitiveMoves ?? [],
+    gradeBands: [],
+    savedAt: saved.savedAt,
+  };
+}
+
 export type FacetValues = {
+  collections: PromptCollection[];
   themes: string[];
   textsOrUnits: string[];
   cognitiveMoves: CognitiveMove[];
@@ -45,6 +116,7 @@ export type FacetValues = {
 };
 
 export type OptionCounts = {
+  collections: Record<string, number>;
   themes: Record<string, number>;
   textsOrUnits: Record<string, number>;
   cognitiveMoves: Record<string, number>;
@@ -52,6 +124,13 @@ export type OptionCounts = {
   seriousness: Record<string, number>;
   gradeBands: Record<string, number>;
 };
+
+export const COLLECTION_LABEL: Record<PromptCollection, string> = {
+  library: 'Library',
+  mine: 'My prompts',
+};
+
+export const COLLECTION_ORDER: PromptCollection[] = ['library', 'mine'];
 
 export const PROMPT_TYPE_LABEL: Record<PromptType, string> = {
   'agree-disagree': 'Agree / disagree',
@@ -118,6 +197,7 @@ export const INSPIRATIONAL_EXAMPLES: string[] = [
 
 export const FACET_KEYS = {
   search: 'lp_q',
+  collections: 'lp_coll',
   themes: 'lp_themes',
   textsOrUnits: 'lp_texts',
   cognitiveMoves: 'lp_moves',
