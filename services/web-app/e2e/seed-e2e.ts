@@ -2,6 +2,7 @@
 import { createE2EPrismaClient, type E2EPrismaClient } from './prisma-client';
 import { createDeployedAssignment } from './db-helpers';
 import { AP_HISTORY_LIBRARY_ENTRIES } from '../../../packages/prisma/scripts/ap-history-library-data';
+import { UNIVERSAL_TUTOR_INSTRUCTIONS } from '../../../packages/prisma/scripts/universal-tutor-instructions';
 import bcrypt from 'bcryptjs';
 
 let prisma: E2EPrismaClient | null = null;
@@ -307,6 +308,7 @@ export async function seedE2E(): Promise<E2EContext> {
             title: 'AP History Essay',
             position: 1,
             description: 'Write an APUSH DBQ or LEQ with AP-specific coaching.',
+            tutorInstructions: UNIVERSAL_TUTOR_INSTRUCTIONS,
             instructions: {
               create: [
                 {
