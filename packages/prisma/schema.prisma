@@ -125,8 +125,10 @@ model SavedDailyPagesPrompt {
   source           String         @default("generator")
   archivedAt       DateTime?      @db.Timestamptz(6)
 
-  @@unique([membershipId, assignmentTypeId, promptHash])
-  @@index([membershipId, assignmentTypeId, archivedAt])
+  // Named explicitly: the default names would run past Postgres's 63-byte
+  // identifier limit and be silently truncated.
+  @@unique([membershipId, assignmentTypeId, promptHash], map: "SavedDailyPagesPrompt_membership_type_promptHash_key")
+  @@index([membershipId, assignmentTypeId, archivedAt], map: "SavedDailyPagesPrompt_membership_type_archivedAt_idx")
 }
 
 model ApHistoryPromptLibraryEntry {

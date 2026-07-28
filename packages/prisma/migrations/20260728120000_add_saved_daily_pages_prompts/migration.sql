@@ -21,10 +21,14 @@ CREATE TABLE "SavedDailyPagesPrompt" (
 -- One row per (teacher, assignment type, prompt text): saving a draft and then
 -- using it must not create a duplicate. The text itself is identified by a
 -- sha256 hash of its trimmed form so the index stays small.
-CREATE UNIQUE INDEX "SavedDailyPagesPrompt_membershipId_assignmentTypeId_promptHash_key"
+--
+-- Both index names are abbreviated: spelling out every column would exceed
+-- Postgres's 63-byte identifier limit and be silently truncated, so they are
+-- pinned here and in schema.prisma (via `map:`) to stay in agreement.
+CREATE UNIQUE INDEX "SavedDailyPagesPrompt_membership_type_promptHash_key"
   ON "SavedDailyPagesPrompt"("membershipId", "assignmentTypeId", "promptHash");
 
-CREATE INDEX "SavedDailyPagesPrompt_membershipId_assignmentTypeId_archivedAt_idx"
+CREATE INDEX "SavedDailyPagesPrompt_membership_type_archivedAt_idx"
   ON "SavedDailyPagesPrompt"("membershipId", "assignmentTypeId", "archivedAt");
 
 ALTER TABLE "SavedDailyPagesPrompt"
