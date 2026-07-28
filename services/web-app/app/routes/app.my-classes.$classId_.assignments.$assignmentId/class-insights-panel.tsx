@@ -173,7 +173,7 @@ function CategoryCard({
               aria-hidden
             />
           </div>
-          <p className="text-sm leading-relaxed text-muted-foreground">
+          <p className="text-base/7 text-muted-foreground [overflow-wrap:anywhere] @sm:text-sm/6">
             {category.summary}
           </p>
           <span className="text-xs font-medium text-primary">
@@ -202,7 +202,7 @@ function CategoryCard({
                   key={index}
                   className="rounded-md border-l-2 border-muted-foreground/25 bg-muted/40 p-2.5"
                 >
-                  <p className="text-sm italic leading-relaxed text-foreground/90">
+                  <p className="text-base/7 italic text-foreground/90 [overflow-wrap:anywhere] @sm:text-sm/6">
                     “{example.snippet}”
                   </p>
                   <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs">
@@ -321,7 +321,7 @@ function StatChip({
   className?: string;
 }) {
   return (
-    <div className="flex items-center gap-1.5 rounded-full border bg-card px-2.5 py-1">
+    <div className="flex w-fit max-w-full items-center gap-1.5 rounded-full border bg-card px-2.5 py-1">
       <span className={`text-sm font-semibold tabular-nums ${className ?? ''}`}>
         {value}
       </span>
@@ -370,7 +370,7 @@ function InsightBody({
 
       {/* Overview lede */}
       <div className="rounded-lg border border-primary/15 bg-primary/5 p-4">
-        <p className="text-sm leading-relaxed text-foreground">
+        <p className="text-base/7 text-foreground [overflow-wrap:anywhere] @sm:text-sm/6">
           {summary.overview}
         </p>
       </div>
@@ -380,7 +380,7 @@ function InsightBody({
           <h4 className="mb-2.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             How the class did
           </h4>
-          <ul className="grid gap-2.5 sm:grid-cols-2">
+          <ul className="grid gap-2.5 @xl:grid-cols-2">
             {summary.categories.map((category) => (
               <CategoryCard
                 key={category.key}
@@ -413,14 +413,20 @@ function InsightBody({
                   </span>
                   <div className="flex min-w-0 flex-col gap-1">
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                      <p className="text-sm font-semibold">{step.title}</p>
+                      <p className="text-base/7 font-semibold [overflow-wrap:anywhere] @sm:text-sm/6">
+                        {step.title}
+                      </p>
                       {step.rubricCategory && (
-                        <Badge variant="outline" size="sm">
+                        <Badge
+                          variant="outline"
+                          size="sm"
+                          className="max-w-full whitespace-normal text-left [overflow-wrap:anywhere]"
+                        >
                           {categoryLabel}
                         </Badge>
                       )}
                     </div>
-                    <p className="text-sm leading-relaxed text-muted-foreground">
+                    <p className="text-base/7 text-muted-foreground [overflow-wrap:anywhere] @sm:text-sm/6">
                       {step.detail}
                     </p>
                   </div>
@@ -465,15 +471,15 @@ export function ClassInsightsPanel({
   };
 
   return (
-    <section className="overflow-hidden rounded-xl border bg-card shadow-sm">
+    <section className="@container overflow-hidden rounded-xl border bg-card shadow-sm">
       {/* Header band */}
-      <div className="flex flex-wrap items-start justify-between gap-3 border-b bg-gradient-to-r from-primary/[0.07] to-transparent p-4">
+      <div className="flex flex-col items-stretch gap-3 border-b bg-gradient-to-r from-primary/[0.07] to-transparent p-4 @xl:flex-row @xl:items-start @xl:justify-between">
         <div className="flex min-w-0 gap-3">
           <div className="min-w-0">
             <h3 className="text-base font-semibold leading-tight">
               Class performance summary
             </h3>
-            <p className="mt-0.5 text-sm text-muted-foreground">
+            <p className="mt-0.5 text-base/7 text-muted-foreground [overflow-wrap:anywhere] @sm:text-sm/6">
               {hasInsight
                 ? `Based on ${insight!.submissionCount} submissions${
                     generatedAt ? ` · updated ${timeAgo(generatedAt)}` : ''
@@ -486,6 +492,7 @@ export function ClassInsightsPanel({
           type="button"
           size="sm"
           variant="outline"
+          className="w-full shrink-0 @xl:w-auto"
           onClick={generate}
           disabled={isWorking}
           isLoading={isWorking}
@@ -512,7 +519,7 @@ export function ClassInsightsPanel({
         {isWorking && !hasInsight && (
           <div className="flex flex-col gap-3" aria-hidden>
             <div className="h-16 animate-pulse rounded-lg bg-muted" />
-            <div className="grid gap-2.5 sm:grid-cols-2">
+            <div className="grid gap-2.5 @xl:grid-cols-2">
               <div className="h-20 animate-pulse rounded-lg bg-muted" />
               <div className="h-20 animate-pulse rounded-lg bg-muted" />
             </div>

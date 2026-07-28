@@ -212,6 +212,41 @@ export async function action({ request, params }: ActionFunctionArgs) {
   const formData = await request.formData();
   const intent = formData.get('intent')?.toString();
 
+  if (intent === 'delete-assignments') {
+    const assignmentIds = formData.getAll('assignmentIds') as string[];
+
+    if (!assignmentIds.length) {
+      return dataResponse(
+        { success: false, message: 'Select at least one assignment.' },
+        { status: 400 }
+      );
+    }
+
+    const assignments = await prisma.assignment.findMany({
+      where: {
+        id: { in: assignmentIds },
+        classAssignments: { some: { classId } },
+      },
+      select: { id: true },
+    });
+
+    if (assignments.length !== assignmentIds.length) {
+      return dataResponse(
+        { success: false, message: 'Some assignments were not found.' },
+        { status: 400 }
+      );
+    }
+
+    await prisma.assignment.deleteMany({
+      where: { id: { in: assignmentIds } },
+    });
+
+    return dataResponse({
+      success: true,
+      message: `Deleted ${assignmentIds.length} assignment(s).`,
+    });
+  }
+
   if (intent === 'delete-assignment') {
     const assignmentId = formData.get('assignmentId')?.toString();
     if (!assignmentId) {
@@ -547,9 +582,10 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   }
   const classId = params.classId!;
 
-  // Assignment management moved to the teacher-level Assignments surface.
-  if (new URL(request.url).searchParams.get('tab') === 'assignments') {
-    return redirect('/app/assignments');
+  const url = new URL(request.url);
+  if (url.searchParams.get('tab') === 'summary') {
+    url.searchParams.set('tab', 'assignments');
+    return redirect(`${url.pathname}?${url.searchParams.toString()}`);
   }
 
   const [klass, manageSchools] = await Promise.all([
@@ -609,7 +645,6 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     })
   ).map((row) => row.documentId);
 
-  const url = new URL(request.url);
   const studentProfileIdFilters = parseDocumentWorkFilterIds(
     url.searchParams.get('studentId')
   );
@@ -724,35 +759,65 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     },
   });
 
-  const classAssignments = await prisma.classAssignment.findMany({
-    where: { classId },
-    select: {
-      id: true,
-      assignment: {
-        select: {
-          id: true,
-          title: true,
-          prompt: true,
-          submitForGrade: true,
-          pointValue: true,
-          assignmentTypeId: true,
-          assignmentType: {
-            select: {
-              id: true,
-              title: true,
-              systemKey: true,
+  const [classAssignments, availableAssignmentTypes] = await Promise.all([
+    prisma.classAssignment.findMany({
+      where: { classId },
+      select: {
+        id: true,
+        assignment: {
+          select: {
+            id: true,
+            title: true,
+            prompt: true,
+            submitForGrade: true,
+            pointValue: true,
+            assignmentTypeId: true,
+            assignmentType: {
+              select: {
+                id: true,
+                title: true,
+                systemKey: true,
+              },
+            },
+            classAssignments: {
+              where: { classId: { not: classId } },
+              select: {
+                class: {
+                  select: {
+                    id: true,
+                    grade: true,
+                    period: true,
+                    title: true,
+                  },
+                },
+              },
             },
           },
         },
-      },
-      _count: {
-        select: {
-          documents: true,
+        _count: {
+          select: {
+            documents: true,
+          },
         },
       },
-    },
-    orderBy: [{ createdAt: 'desc' }],
-  });
+      orderBy: [{ createdAt: 'desc' }],
+    }),
+    getAvailableAssignmentTypesForScopes<{
+      id: string;
+      title: string;
+      systemKey: string | null;
+    }>({
+      scopes: [
+        {
+          organizationId: klass.school.organizationId,
+          schoolId: klass.school.id,
+          teacherProfileId: profile.id,
+        },
+      ],
+      select: { id: true, title: true, systemKey: true },
+      orderBy: { position: 'asc' },
+    }),
+  ]);
 
   // Class-wide, assignment-level performance summaries (see
   // ClassAssignmentInsight) are generated from the assignment sheet on this
@@ -795,6 +860,9 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     pointValue: classAssignment.assignment.pointValue,
     assignmentTypeId: classAssignment.assignment.assignmentTypeId,
     assignmentType: classAssignment.assignment.assignmentType,
+    otherClasses: classAssignment.assignment.classAssignments.map(
+      (deployment) => deployment.class
+    ),
     _count: classAssignment._count,
     insight: insightByClassAssignmentId.get(classAssignment.id) ?? null,
   }));
@@ -849,6 +917,12 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     submissions,
     inProgressDocuments,
     assignments,
+    assignmentTypes: availableAssignmentTypes
+      .filter(
+        (assignmentType) =>
+          assignmentType.systemKey !== AP_HISTORY_ASSIGNMENT_TYPE_KEY
+      )
+      .map(({ id, title }) => ({ id, title })),
     assignmentsEnabled: true,
     manageSchools: manageSchools?.schools ?? [],
     teacherClasses,
@@ -858,7 +932,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   });
 }
 
-type TabValue = 'students' | 'documents' | 'summary';
+type TabValue = 'students' | 'documents' | 'assignments';
 
 type ClassDocumentSubmission = {
   id: string;
@@ -961,8 +1035,8 @@ function ClassDetailPage() {
   const assignmentsEnabled = data.assignmentsEnabled === true;
   const classInsightsEnabled = data.classInsightsEnabled === true;
   const reporterEnabled = data.reporterEnabled === true;
-  const validTabs: TabValue[] = classInsightsEnabled
-    ? ['students', 'documents', 'summary']
+  const validTabs: TabValue[] = assignmentsEnabled
+    ? ['students', 'documents', 'assignments']
     : ['students', 'documents'];
   const requestedTab = searchParams.get('tab') as TabValue | null;
   const activeTab =
@@ -1396,7 +1470,7 @@ function ClassDetailPage() {
       return filteredStudents;
     }
 
-    if (activeTab === 'summary') {
+    if (activeTab === 'assignments') {
       return filteredAssignments;
     }
 
@@ -1440,7 +1514,7 @@ function ClassDetailPage() {
     const next = new URLSearchParams(searchParams);
     next.set('tab', tab);
 
-    if (tab === 'students' || tab === 'summary') {
+    if (tab === 'students' || tab === 'assignments') {
       next.delete('status');
       navigate(`?${next.toString()}`);
       return;
@@ -1595,7 +1669,7 @@ function ClassDetailPage() {
       );
     }
 
-    if (activeTab === 'summary') {
+    if (activeTab === 'assignments') {
       return (
         <div className="space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -2159,7 +2233,7 @@ function ClassDetailPage() {
           studentCount={students.length}
           documentCount={classDocuments.length}
           assignmentCount={data.assignments.length}
-          showAssignmentsTab={classInsightsEnabled}
+          showAssignmentsTab={assignmentsEnabled}
           activeTab={activeHeaderTab}
           onTabChange={handleHeaderTabChange}
           onEdit={() => setIsClassEditSheetOpen(true)}
@@ -2188,7 +2262,7 @@ function ClassDetailPage() {
             </div>
           ) : null}
           <div>{renderTable()}</div>
-          {(activeTab === 'students' || activeTab === 'summary') &&
+          {(activeTab === 'students' || activeTab === 'assignments') &&
           currentTabData.length > 0 ? (
             <div className="mt-4">
               <Pagination

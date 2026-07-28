@@ -12,10 +12,10 @@ import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
 import { cn } from '~/utils/misc';
 
-export type ClassHeaderTab = 'students' | 'documents' | 'summary';
+export type ClassHeaderTab = 'students' | 'documents' | 'assignments';
 
 export function resolveClassHeaderTab(
-  tab: 'students' | 'documents' | 'summary'
+  tab: 'students' | 'documents' | 'assignments'
 ): ClassHeaderTab {
   return tab;
 }
@@ -204,7 +204,7 @@ export function ClassDetailHeader({
     ];
     if (showAssignmentsTab) {
       base.push({
-        id: 'summary' as const,
+        id: 'assignments' as const,
         label: 'Assignments',
         value: assignmentCount,
       });

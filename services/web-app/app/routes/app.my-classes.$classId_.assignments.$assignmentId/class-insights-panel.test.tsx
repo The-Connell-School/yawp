@@ -232,6 +232,45 @@ describe('ClassInsightsPanel', () => {
     expect(button.hasAttribute('disabled')).toBe(true);
   });
 
+  it('uses container-aware layouts so the embedded sheet stays single-column', () => {
+    const el = render(
+      <ClassInsightsPanel
+        classAssignmentId="ca-1"
+        initialInsight={READY_INSIGHT}
+      />
+    );
+
+    const panel = el.querySelector('section')!;
+    const header = panel.firstElementChild as HTMLElement;
+    const categories = Array.from(panel.querySelectorAll('ul')).find((list) =>
+      list.textContent?.includes('Thesis/Content')
+    )!;
+
+    expect(panel.className).toContain('@container');
+    expect(header.className).toContain('flex-col');
+    expect(header.className).toContain('@xl:flex-row');
+    expect(categories.className).toContain('@xl:grid-cols-2');
+    expect(categories.className).not.toContain('sm:grid-cols-2');
+  });
+
+  it('allows long generated text to wrap without forcing horizontal scroll', () => {
+    const el = render(
+      <ClassInsightsPanel
+        classAssignmentId="ca-1"
+        initialInsight={READY_INSIGHT}
+      />
+    );
+
+    const generatedCopy = Array.from(el.querySelectorAll('p')).filter((node) =>
+      node.textContent?.match(/strong theses|Nearly every student|think-aloud/)
+    );
+
+    expect(generatedCopy).not.toHaveLength(0);
+    for (const node of generatedCopy) {
+      expect(node.className).toContain('[overflow-wrap:anywhere]');
+    }
+  });
+
   it('lazy-loads student examples when a category box is expanded', () => {
     const el = render(
       <ClassInsightsPanel
