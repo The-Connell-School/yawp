@@ -1,0 +1,108 @@
+<svg width="1080" height="1080" viewBox="0 0 1080 1080" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- Warm terracotta field, taken from the app's --primary token. -->
+    <linearGradient id="field" x1="0" y1="0" x2="0.35" y2="1">
+      <stop offset="0%" stop-color="#d98060"/>
+      <stop offset="60%" stop-color="#d27151"/>
+      <stop offset="100%" stop-color="#b95c3f"/>
+    </linearGradient>
+
+    <filter id="sheetShadow" x="-25%" y="-25%" width="150%" height="150%">
+      <feDropShadow dx="0" dy="10" stdDeviation="14" flood-color="#5c2b18" flood-opacity="0.28"/>
+    </filter>
+    <filter id="softShadow" x="-40%" y="-40%" width="180%" height="180%">
+      <feDropShadow dx="0" dy="6" stdDeviation="8" flood-color="#5c2b18" flood-opacity="0.3"/>
+    </filter>
+
+    <!-- One ruled sheet, reused for the fanned source packet behind the top one. -->
+    <g id="ruledSheet">
+      <rect x="0" y="0" width="620" height="800" rx="6" fill="#efece2"/>
+      <g stroke="#d9d3c2" stroke-width="2">
+        <line x1="46" y1="120" x2="574" y2="120"/>
+        <line x1="46" y1="180" x2="574" y2="180"/>
+        <line x1="46" y1="240" x2="574" y2="240"/>
+        <line x1="46" y1="300" x2="574" y2="300"/>
+        <line x1="46" y1="360" x2="574" y2="360"/>
+        <line x1="46" y1="420" x2="574" y2="420"/>
+        <line x1="46" y1="480" x2="574" y2="480"/>
+        <line x1="46" y1="540" x2="574" y2="540"/>
+        <line x1="46" y1="600" x2="574" y2="600"/>
+        <line x1="46" y1="660" x2="574" y2="660"/>
+        <line x1="46" y1="720" x2="574" y2="720"/>
+      </g>
+    </g>
+  </defs>
+
+  <rect width="1080" height="1080" fill="url(#field)"/>
+
+  <!-- Faint concentric warmth so the flat field isn't dead. -->
+  <circle cx="540" cy="470" r="430" fill="#ffffff" opacity="0.05"/>
+  <circle cx="540" cy="470" r="330" fill="#ffffff" opacity="0.05"/>
+
+  <!-- The source packet: two sheets fanned behind the main one. Q1 synthesis
+       hands the student a stack of sources, so the stack is the motif. -->
+  <g filter="url(#sheetShadow)" opacity="0.92">
+    <use href="#ruledSheet" transform="translate(196 168) rotate(-7 310 400)"/>
+  </g>
+  <g filter="url(#sheetShadow)" opacity="0.96">
+    <use href="#ruledSheet" transform="translate(264 158) rotate(5 310 400)"/>
+  </g>
+
+  <!-- The page the student actually writes on. -->
+  <g filter="url(#sheetShadow)" transform="translate(230 150) rotate(-1.5 310 400)">
+    <rect x="0" y="0" width="620" height="800" rx="6" fill="#f7f5ee"/>
+
+    <!-- Margin rule, the way a marked-up passage looks. -->
+    <line x1="96" y1="28" x2="96" y2="772" stroke="#d27151" stroke-width="2" opacity="0.45"/>
+
+    <!-- Title, set into the page itself like the other course images. -->
+    <text x="310" y="176" text-anchor="middle" font-family="'Liberation Serif','DejaVu Serif',serif"
+          font-size="62" font-weight="700" fill="#27251a" letter-spacing="-1">AP English</text>
+    <text x="310" y="248" text-anchor="middle" font-family="'Liberation Serif','DejaVu Serif',serif"
+          font-size="62" font-weight="700" fill="#27251a" letter-spacing="-1">Language</text>
+    <text x="310" y="308" text-anchor="middle" font-family="'Liberation Serif','DejaVu Serif',serif"
+          font-size="40" font-style="italic" fill="#6b6552">&amp; Composition</text>
+
+    <line x1="215" y1="346" x2="405" y2="346" stroke="#d27151" stroke-width="3"/>
+
+    <!-- An annotated passage: lines of text with the rhetorical moves marked,
+         which is what rhetorical analysis actually looks like on the page. -->
+    <g fill="#c9c3b1">
+      <rect x="128" y="404" width="404" height="11" rx="5.5"/>
+      <rect x="128" y="440" width="368" height="11" rx="5.5"/>
+      <rect x="128" y="476" width="404" height="11" rx="5.5"/>
+      <rect x="128" y="512" width="300" height="11" rx="5.5"/>
+      <rect x="128" y="566" width="404" height="11" rx="5.5"/>
+      <rect x="128" y="602" width="386" height="11" rx="5.5"/>
+      <rect x="128" y="638" width="256" height="11" rx="5.5"/>
+    </g>
+
+    <!-- Underlines on the marked lines. -->
+    <g stroke="#d27151" stroke-width="3" stroke-linecap="round">
+      <line x1="128" y1="424" x2="330" y2="424"/>
+      <line x1="128" y1="496" x2="404" y2="496"/>
+      <line x1="128" y1="622" x2="300" y2="622"/>
+    </g>
+
+    <!-- Margin marks: a bracket over the passage under discussion and a note. -->
+    <path d="M84 400 C68 400 78 466 62 466 C78 466 68 532 84 532"
+          fill="none" stroke="#27251a" stroke-width="3" stroke-linecap="round"
+          stroke-linejoin="round" opacity="0.6"/>
+    <circle cx="70" cy="612" r="13" fill="none" stroke="#27251a" stroke-width="3" opacity="0.6"/>
+    <path d="M64 612 L68 618 L78 605" fill="none" stroke="#27251a" stroke-width="3"
+          stroke-linecap="round" stroke-linejoin="round" opacity="0.6"/>
+
+    <!-- The three free-response questions this course is built around. -->
+    <text x="310" y="716" text-anchor="middle" font-family="'Liberation Sans','DejaVu Sans',sans-serif"
+          font-size="18" fill="#27251a" opacity="0.62" letter-spacing="2.6">SYNTHESIS · ANALYSIS · ARGUMENT</text>
+  </g>
+
+  <!-- Pen, resting across the corner: the argument is still the student's to make. -->
+  <g filter="url(#softShadow)" transform="translate(928 636) rotate(27)">
+    <rect x="0" y="0" width="34" height="252" rx="17" fill="#2f2c22"/>
+    <rect x="0" y="0" width="34" height="86" rx="17" fill="#1f1d16"/>
+    <rect x="6" y="96" width="22" height="8" rx="4" fill="#d27151"/>
+    <path d="M0 252 L34 252 L17 316 Z" fill="#3b372b"/>
+    <path d="M17 268 L17 306" stroke="#f7f5ee" stroke-width="3" stroke-linecap="round" opacity="0.65"/>
+  </g>
+</svg>

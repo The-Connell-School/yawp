@@ -8,8 +8,20 @@ import {
   withoutTutorInstructionFields,
 } from './tutor-instructions-seed';
 import { buildApEnglishLangCoachingBlock } from './ap-english-lang-coach-block';
+import { readFile } from 'node:fs/promises';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const AP_ENGLISH_LANG_ASSIGNMENT_TYPE_KEY = 'ap_english_lang_essay';
+
+/**
+ * Course card art, in the same paper-and-ink language as the other courses.
+ * The editable source sits beside it as ap-english-lang-course.svg.
+ */
+const COURSE_IMAGE_FILE = 'ap-english-lang-course.jpg';
+const COURSE_IMAGE_CONTENT_TYPE = 'image/jpeg';
+const COURSE_IMAGE_ALT_TEXT =
+  'A stack of ruled pages titled AP English Language & Composition, the top one marked up with underlines and margin notes, a pen resting beside it.';
 
 const ASSIGNMENT_TYPE_DATA = {
   title: 'AP English Language Essay',
@@ -107,6 +119,8 @@ async function seedApEnglishLangLibrary() {
     },
     select: { id: true },
   });
+
+  await upsertCourseImage(assignmentType.id);
 
   await prisma.organizationAssignmentType.upsert({
     where: {
@@ -244,6 +258,43 @@ async function seedApEnglishLangLibrary() {
   console.log(
     `Seeded ${AP_ENGLISH_LANG_LIBRARY_ENTRIES.length} AP English Language library entries.`
   );
+}
+
+/**
+ * Attach the course card art. Idempotent: re-running the seed refreshes the
+ * blob rather than adding a second image (one per assignment type).
+ */
+async function upsertCourseImage(assignmentTypeId: string) {
+  const assetPath = path.join(
+    path.dirname(fileURLToPath(import.meta.url)),
+    '..',
+    'assets',
+    COURSE_IMAGE_FILE
+  );
+
+  let blob: Buffer;
+  try {
+    blob = await readFile(assetPath);
+  } catch {
+    // The art is a nicety; a missing asset must not fail the library seed.
+    console.warn(`Course image ${COURSE_IMAGE_FILE} not found; skipping.`);
+    return;
+  }
+
+  await prisma.assignmentTypeImage.upsert({
+    where: { assignmentTypeId },
+    create: {
+      assignmentTypeId,
+      contentType: COURSE_IMAGE_CONTENT_TYPE,
+      altText: COURSE_IMAGE_ALT_TEXT,
+      blob,
+    },
+    update: {
+      contentType: COURSE_IMAGE_CONTENT_TYPE,
+      altText: COURSE_IMAGE_ALT_TEXT,
+      blob,
+    },
+  });
 }
 
 seedApEnglishLangLibrary()

@@ -4,6 +4,9 @@ import { createDeployedAssignment } from './db-helpers';
 import { AP_HISTORY_LIBRARY_ENTRIES } from '../../../packages/prisma/scripts/ap-history-library-data';
 import { AP_ENGLISH_LANG_LIBRARY_ENTRIES } from '../../../packages/prisma/scripts/ap-english-lang-library-data';
 import bcrypt from 'bcryptjs';
+import { readFile } from 'node:fs/promises';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 let prisma: E2EPrismaClient | null = null;
 
@@ -377,6 +380,14 @@ export async function seedE2E(): Promise<E2EContext> {
     );
   }
 
+  // The same course art the real seed attaches, so previews and e2e match prod.
+  const apEnglishLangCourseImage = await readFile(
+    path.join(
+      path.dirname(fileURLToPath(import.meta.url)),
+      '../../../packages/prisma/assets/ap-english-lang-course.jpg'
+    )
+  );
+
   const apEnglishLangAssignmentType = await prisma.assignmentType.create({
     data: {
       title: 'AP English Language Essay',
@@ -408,6 +419,14 @@ export async function seedE2E(): Promise<E2EContext> {
             },
           },
         ],
+      },
+      image: {
+        create: {
+          contentType: 'image/jpeg',
+          altText:
+            'A stack of ruled pages titled AP English Language & Composition, the top one marked up with underlines and margin notes, a pen resting beside it.',
+          blob: apEnglishLangCourseImage,
+        },
       },
       apEnglishLangLibraryEntries: {
         create: AP_ENGLISH_LANG_LIBRARY_ENTRIES.map((entry) => ({
