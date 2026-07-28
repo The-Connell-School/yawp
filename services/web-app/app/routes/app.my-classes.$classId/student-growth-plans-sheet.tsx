@@ -1,4 +1,4 @@
-import { ChevronRight, Sparkles } from 'lucide-react';
+import { ChevronRight } from 'lucide-react';
 import { Badge, badgeVariants } from '~/components/ui/badge';
 import {
   Sheet,
@@ -128,7 +128,6 @@ export function StudentGrowthPlansSheetContent({
       <div className="mt-4 space-y-3 pb-6">
         {growthPlans.length === 0 ? (
           <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed py-10 text-center">
-            <Sparkles className="size-5 text-muted-foreground" aria-hidden="true" />
             <p className="text-sm text-muted-foreground">
               No growth plans yet for this student.
             </p>

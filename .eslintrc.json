@@ -1,6 +1,9 @@
 {
   "parser": "@typescript-eslint/parser",
-  "plugins": ["@typescript-eslint", "unused-imports"],
+  "plugins": [
+    "@typescript-eslint",
+    "unused-imports"
+  ],
   "extends": [
     "eslint:recommended",
     "plugin:@typescript-eslint/recommended",
@@ -20,6 +23,30 @@
         "varsIgnorePattern": "^_",
         "args": "after-used",
         "argsIgnorePattern": "^_"
+      }
+    ],
+    "no-restricted-imports": [
+      "error",
+      {
+        "paths": [
+          {
+            "name": "lucide-react",
+            "importNames": [
+              "Sparkle",
+              "Sparkles",
+              "WandSparkles",
+              "SparklesIcon"
+            ],
+            "message": "No sparkles. They read as generic AI decoration and cheapen the UI. Pick an icon that describes the thing itself, or use no icon."
+          }
+        ]
+      }
+    ],
+    "no-restricted-syntax": [
+      "error",
+      {
+        "selector": "JSXIdentifier[name=/Sparkle/]",
+        "message": "No sparkles. They read as generic AI decoration and cheapen the UI. Pick an icon that describes the thing itself, or use no icon."
       }
     ]
   }
