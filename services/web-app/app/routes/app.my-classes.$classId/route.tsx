@@ -114,7 +114,6 @@ import {
   sendStudentClassInvite,
 } from './class-student-enrollment.server';
 import { filterClassStudentsByQuery } from './class-students-search';
-import { filterClassAssignmentsByQuery } from './class-assignments-search';
 import {
   StudentGrowthPlansSheet,
   type StudentGrowthPlan,
@@ -123,6 +122,10 @@ import {
   AssignmentSummarySheet,
   type AssignmentSummarySheetAssignment,
 } from './assignment-summary-sheet';
+import {
+  ClassAssignmentsTab,
+  type ClassAssignmentsTabAssignment,
+} from './class-assignments-tab';
 import type { ClassInsightSummary } from '../app.my-classes.$classId_.assignments.$assignmentId/class-insights-panel';
 
 export function getDraftDisplayTitle(document: {
@@ -136,6 +139,15 @@ export function getDraftDisplayTitle(document: {
   if (assignmentTitle) return assignmentTitle;
 
   return 'Untitled draft';
+}
+
+function classAssignmentOptionLabel(klass: {
+  grade: string;
+  period: string;
+  title: string | null;
+}) {
+  const base = `Grade ${klass.grade} • Period ${klass.period}`;
+  return klass.title ? `${base} — ${klass.title}` : base;
 }
 
 async function getClassStudentMemberships(
@@ -1003,9 +1015,6 @@ function ClassDetailPage() {
   const [studentNameSortDirection, setStudentNameSortDirection] =
     useState<SortDirection>('asc');
   const [studentSearchQuery, setStudentSearchQuery] = useState('');
-  const [assignmentSearchQuery, setAssignmentSearchQuery] = useState('');
-  const [assignmentNameSortDirection, setAssignmentNameSortDirection] =
-    useState<SortDirection>('asc');
   const [releaseGradesForSheet, setReleaseGradesForSheet] = useState<
     ReleaseGradeRow[]
   >([]);
@@ -1159,8 +1168,6 @@ function ClassDetailPage() {
     activeTab,
     studentNameSortDirection,
     studentSearchQuery,
-    assignmentNameSortDirection,
-    assignmentSearchQuery,
     documentFilterStudentIds,
     selectedAssignmentIds,
     statusFilter,
@@ -1236,20 +1243,6 @@ function ClassDetailPage() {
     return counts;
   }, [allSubmissions]);
 
-  const sortedAssignments = useMemo(() => {
-    const direction = assignmentNameSortDirection === 'asc' ? 1 : -1;
-    return [...data.assignments].sort((a, b) => {
-      const aTitle = a.title ?? 'Untitled assignment';
-      const bTitle = b.title ?? 'Untitled assignment';
-      return collator.compare(aTitle, bTitle) * direction;
-    });
-  }, [collator, assignmentNameSortDirection, data.assignments]);
-
-  const filteredAssignments = useMemo(
-    () => filterClassAssignmentsByQuery(sortedAssignments, assignmentSearchQuery),
-    [sortedAssignments, assignmentSearchQuery]
-  );
-
   const summarySheetAssignment: AssignmentSummarySheetAssignment | null =
     useMemo(() => {
       const assignment = summarySheetAssignmentId
@@ -1268,6 +1261,16 @@ function ClassDetailPage() {
         insight: assignment.insight,
       };
     }, [data.assignments, gradedCountByAssignmentId, summarySheetAssignmentId]);
+
+  const managedAssignments = useMemo(
+    (): ClassAssignmentsTabAssignment[] =>
+      data.assignments.map((assignment) => ({
+        ...assignment,
+        gradedCount: gradedCountByAssignmentId.get(assignment.id) ?? 0,
+        documentCount: assignment._count.documents,
+      })),
+    [data.assignments, gradedCountByAssignmentId]
+  );
 
   const classDocuments = useMemo((): ClassDocumentRow[] => {
     const byDocumentId = new Map<string, ClassDocumentRow>();
@@ -1470,12 +1473,8 @@ function ClassDetailPage() {
       return filteredStudents;
     }
 
-    if (activeTab === 'assignments') {
-      return filteredAssignments;
-    }
-
     return [];
-  }, [activeTab, filteredStudents, filteredAssignments]) as any[];
+  }, [activeTab, filteredStudents]) as any[];
 
   const paginatedData = useMemo(() => {
     return currentTabData.slice(
@@ -1671,134 +1670,17 @@ function ClassDetailPage() {
 
     if (activeTab === 'assignments') {
       return (
-        <div className="space-y-4">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="relative min-w-0 w-full max-w-sm flex-1">
-              <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                name="class-assignments-search"
-                value={assignmentSearchQuery}
-                onChange={(event) =>
-                  setAssignmentSearchQuery(event.target.value)
-                }
-                placeholder="Search assignments"
-                className="h-9 rounded-md border-0 bg-background pl-9 shadow-none ring-1 ring-black/5 focus-visible:ring-2 focus-visible:ring-ring"
-                aria-label="Search assignments"
-                data-testid="class-assignments-search"
-              />
-            </div>
-          </div>
-
-          {data.assignments.length === 0 ? (
-            <div className="flex flex-col items-center justify-center border border-dashed bg-muted/50 p-12 rounded-lg">
-              <span className="text-lg font-bold">No assignments yet</span>
-              <span className="text-sm text-muted-foreground">
-                Assignments given to this class will appear here
-              </span>
-            </div>
-          ) : filteredAssignments.length === 0 ? (
-            <div className="flex flex-col items-center justify-center border border-dashed bg-muted/50 p-12 rounded-lg">
-              <span className="text-lg font-bold">No assignments found</span>
-              <span className="text-sm text-muted-foreground">
-                Try a different search term
-              </span>
-            </div>
-          ) : (
-            <div className="rounded-lg bg-muted/50">
-              <Table aria-label="Assignments">
-                <TableHeader className="rounded-t-lg">
-                  <TableRow className="bg-muted/50 rounded-t-lg">
-                    <TableHead className="pl-4 rounded-tl-lg">
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="-ml-2 h-8 gap-2 px-2"
-                        aria-label={`Sort assignments by title ${
-                          assignmentNameSortDirection === 'asc'
-                            ? 'descending'
-                            : 'ascending'
-                        }`}
-                        onClick={() =>
-                          setAssignmentNameSortDirection((current) =>
-                            current === 'asc' ? 'desc' : 'asc'
-                          )
-                        }
-                      >
-                        Assignment
-                        {assignmentNameSortDirection === 'asc' ? (
-                          <ArrowUp className="h-4 w-4" />
-                        ) : (
-                          <ArrowDown className="h-4 w-4" />
-                        )}
-                      </Button>
-                    </TableHead>
-                    <TableHead className="whitespace-nowrap">Type</TableHead>
-                    <TableHead className="whitespace-nowrap">Graded</TableHead>
-                    <TableHead className="whitespace-nowrap pr-4">
-                      Documents
-                    </TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {(paginatedData as typeof filteredAssignments).map(
-                    (assignment) => {
-                      const gradedCount =
-                        gradedCountByAssignmentId.get(assignment.id) ?? 0;
-                      return (
-                        <TableRow
-                          key={assignment.classAssignmentId}
-                          className={cn(classInsightsEnabled && 'cursor-pointer')}
-                          onClick={() => {
-                            if (!classInsightsEnabled) return;
-                            setSummarySheetAssignmentId(
-                              assignment.classAssignmentId
-                            );
-                          }}
-                        >
-                          <TableCell className="max-h-[37px] pl-4 font-medium">
-                            {assignment.title ?? 'Untitled assignment'}
-                          </TableCell>
-                          <TableCell className="text-muted-foreground">
-                            {assignment.assignmentType?.title ?? '—'}
-                          </TableCell>
-                          <TableCell className="text-muted-foreground">
-                            {gradedCount}
-                          </TableCell>
-                          <TableCell className="pr-4">
-                            <button
-                              type="button"
-                              className={cn(
-                                badgeVariants({ variant: 'secondary' }),
-                                'cursor-pointer gap-1 py-1 pl-2 pr-1'
-                              )}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleViewAssignmentDocuments(assignment.id);
-                              }}
-                              aria-label={`View documents for ${
-                                assignment.title ?? 'this assignment'
-                              }`}
-                            >
-                              {assignment._count.documents}{' '}
-                              {assignment._count.documents === 1
-                                ? 'doc'
-                                : 'docs'}
-                              <ChevronRight
-                                className="size-3 shrink-0"
-                                aria-hidden="true"
-                              />
-                            </button>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    }
-                  )}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-        </div>
+        <ClassAssignmentsTab
+          classOption={{
+            id: data.klass.id,
+            name: classAssignmentOptionLabel(data.klass),
+          }}
+          assignments={managedAssignments}
+          assignmentTypes={data.assignmentTypes}
+          classInsightsEnabled={classInsightsEnabled}
+          onViewDocuments={handleViewAssignmentDocuments}
+          onViewSummary={setSummarySheetAssignmentId}
+        />
       );
     }
 
@@ -2262,8 +2144,7 @@ function ClassDetailPage() {
             </div>
           ) : null}
           <div>{renderTable()}</div>
-          {(activeTab === 'students' || activeTab === 'assignments') &&
-          currentTabData.length > 0 ? (
+          {activeTab === 'students' && currentTabData.length > 0 ? (
             <div className="mt-4">
               <Pagination
                 totalCount={currentTabData.length}
