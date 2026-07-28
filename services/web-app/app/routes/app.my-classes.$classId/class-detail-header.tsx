@@ -34,10 +34,10 @@ export type ClassDetailHeaderProps = {
   };
   studentCount: number;
   documentCount: number;
-  /** Number of assignments with a class performance summary available. */
-  summaryCount?: number;
+  /** Number of assignments in this class. */
+  assignmentCount?: number;
   /** Gated on the organization's classInsightsEnabled flag. */
-  showSummaryTab?: boolean;
+  showAssignmentsTab?: boolean;
   activeTab: ClassHeaderTab;
   onTabChange: (tab: ClassHeaderTab) => void;
   onEdit: () => void;
@@ -193,8 +193,8 @@ export function ClassDetailHeader({
   onTabChange,
   studentCount,
   documentCount,
-  summaryCount = 0,
-  showSummaryTab = false,
+  assignmentCount = 0,
+  showAssignmentsTab = false,
   ...props
 }: ClassDetailHeaderProps) {
   const tabs = useMemo(() => {
@@ -202,15 +202,15 @@ export function ClassDetailHeader({
       { id: 'students' as const, label: 'Students', value: studentCount },
       { id: 'documents' as const, label: 'Documents', value: documentCount },
     ];
-    if (showSummaryTab) {
+    if (showAssignmentsTab) {
       base.push({
         id: 'summary' as const,
-        label: 'Summary',
-        value: summaryCount,
+        label: 'Assignments',
+        value: assignmentCount,
       });
     }
     return base;
-  }, [studentCount, documentCount, summaryCount, showSummaryTab]);
+  }, [studentCount, documentCount, assignmentCount, showAssignmentsTab]);
 
   return (
     <div

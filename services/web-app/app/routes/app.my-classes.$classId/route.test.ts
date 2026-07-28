@@ -14,6 +14,7 @@ const prisma = {
     update: mock(),
   },
   classAssignment: { findMany: mock() },
+  classAssignmentInsight: { findMany: mock() },
   reporterGrowthPlan: { findMany: mock() },
 };
 
@@ -102,6 +103,7 @@ describe('class detail loader document visibility', () => {
     prisma.submission.findMany.mockResolvedValue([]);
     prisma.document.findMany.mockResolvedValue([]);
     prisma.classAssignment.findMany.mockResolvedValue([]);
+    prisma.classAssignmentInsight.findMany.mockResolvedValue([]);
     prisma.assignment.findMany.mockResolvedValue([]);
     prisma.assignment.findFirst.mockResolvedValue(null);
     prisma.assignment.update.mockResolvedValue({});

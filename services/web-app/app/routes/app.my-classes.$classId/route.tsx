@@ -114,10 +114,16 @@ import {
   sendStudentClassInvite,
 } from './class-student-enrollment.server';
 import { filterClassStudentsByQuery } from './class-students-search';
+import { filterClassAssignmentsByQuery } from './class-assignments-search';
 import {
   StudentGrowthPlansSheet,
   type StudentGrowthPlan,
 } from './student-growth-plans-sheet';
+import {
+  AssignmentSummarySheet,
+  type AssignmentSummarySheetAssignment,
+} from './assignment-summary-sheet';
+import type { ClassInsightSummary } from '../app.my-classes.$classId_.assignments.$assignmentId/class-insights-panel';
 
 export function getDraftDisplayTitle(document: {
   title?: string | null;
@@ -593,6 +599,9 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   ]);
   if (!klass) throw new Response('Class not found', { status: 404 });
 
+  const classInsightsEnabled = klass.school.organization.classInsightsEnabled;
+  const reporterEnabled = klass.school.organization.reporterEnabled;
+
   const legacyClassDocumentIds = (
     await prisma.documentClassForensic.findMany({
       where: { oldClassId: classId },
@@ -745,6 +754,38 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     orderBy: [{ createdAt: 'desc' }],
   });
 
+  // Class-wide, assignment-level performance summaries (see
+  // ClassAssignmentInsight) are generated from the assignment sheet on this
+  // page. Batch-load whatever's already been generated so the sheet can open
+  // straight to the cached summary instead of always starting blank.
+  const classAssignmentIds = classAssignments.map((ca) => ca.id);
+  const insightRows =
+    classInsightsEnabled && classAssignmentIds.length > 0
+      ? await prisma.classAssignmentInsight.findMany({
+          where: { classAssignmentId: { in: classAssignmentIds } },
+          select: {
+            classAssignmentId: true,
+            status: true,
+            submissionCount: true,
+            generatedAt: true,
+            summaryJson: true,
+          },
+        })
+      : [];
+  const insightByClassAssignmentId = new Map(
+    insightRows
+      .filter((row) => row.status === 'ready' && row.summaryJson)
+      .map((row) => [
+        row.classAssignmentId,
+        {
+          status: 'ready' as const,
+          submissionCount: row.submissionCount,
+          generatedAt: row.generatedAt ? row.generatedAt.toISOString() : null,
+          summary: row.summaryJson as unknown as ClassInsightSummary,
+        },
+      ])
+  );
+
   const assignments = classAssignments.map((classAssignment) => ({
     id: classAssignment.assignment.id,
     classAssignmentId: classAssignment.id,
@@ -755,6 +796,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     assignmentTypeId: classAssignment.assignment.assignmentTypeId,
     assignmentType: classAssignment.assignment.assignmentType,
     _count: classAssignment._count,
+    insight: insightByClassAssignmentId.get(classAssignment.id) ?? null,
   }));
 
   const teacherClasses = await prisma.class.findMany({
@@ -772,9 +814,6 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     },
     orderBy: [{ grade: 'asc' }, { period: 'asc' }],
   });
-
-  const classInsightsEnabled = klass.school.organization.classInsightsEnabled;
-  const reporterEnabled = klass.school.organization.reporterEnabled;
 
   // Growth plans are only ever created via Reporter, so skip the query
   // entirely for organizations that don't have it enabled.
@@ -890,6 +929,9 @@ function ClassDetailPage() {
   const [studentNameSortDirection, setStudentNameSortDirection] =
     useState<SortDirection>('asc');
   const [studentSearchQuery, setStudentSearchQuery] = useState('');
+  const [assignmentSearchQuery, setAssignmentSearchQuery] = useState('');
+  const [assignmentNameSortDirection, setAssignmentNameSortDirection] =
+    useState<SortDirection>('asc');
   const [releaseGradesForSheet, setReleaseGradesForSheet] = useState<
     ReleaseGradeRow[]
   >([]);
@@ -898,6 +940,9 @@ function ClassDetailPage() {
     name: string;
     email: string;
   } | null>(null);
+  const [summarySheetAssignmentId, setSummarySheetAssignmentId] = useState<
+    string | null
+  >(null);
   const classDetailPath = `/app/my-classes/${data.klass.id}`;
   const classDetailSearch = searchParams.toString();
   const classDetailExitTo = classDetailSearch
@@ -1040,6 +1085,8 @@ function ClassDetailPage() {
     activeTab,
     studentNameSortDirection,
     studentSearchQuery,
+    assignmentNameSortDirection,
+    assignmentSearchQuery,
     documentFilterStudentIds,
     selectedAssignmentIds,
     statusFilter,
@@ -1102,6 +1149,51 @@ function ClassDetailPage() {
     () => filterClassStudentsByQuery(sortedStudents, studentSearchQuery),
     [sortedStudents, studentSearchQuery]
   );
+
+  // Graded counts per assignment, derived from the same submissions already
+  // loaded for the Documents tab — no second query.
+  const gradedCountByAssignmentId = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const submission of allSubmissions) {
+      const assignmentId = submission.document.assignment?.id;
+      if (!assignmentId || !submission.gradedAt) continue;
+      counts.set(assignmentId, (counts.get(assignmentId) ?? 0) + 1);
+    }
+    return counts;
+  }, [allSubmissions]);
+
+  const sortedAssignments = useMemo(() => {
+    const direction = assignmentNameSortDirection === 'asc' ? 1 : -1;
+    return [...data.assignments].sort((a, b) => {
+      const aTitle = a.title ?? 'Untitled assignment';
+      const bTitle = b.title ?? 'Untitled assignment';
+      return collator.compare(aTitle, bTitle) * direction;
+    });
+  }, [collator, assignmentNameSortDirection, data.assignments]);
+
+  const filteredAssignments = useMemo(
+    () => filterClassAssignmentsByQuery(sortedAssignments, assignmentSearchQuery),
+    [sortedAssignments, assignmentSearchQuery]
+  );
+
+  const summarySheetAssignment: AssignmentSummarySheetAssignment | null =
+    useMemo(() => {
+      const assignment = summarySheetAssignmentId
+        ? data.assignments.find(
+            (a) => a.classAssignmentId === summarySheetAssignmentId
+          )
+        : null;
+      if (!assignment) return null;
+      return {
+        id: assignment.id,
+        classAssignmentId: assignment.classAssignmentId,
+        title: assignment.title,
+        assignmentType: assignment.assignmentType,
+        documentCount: assignment._count.documents,
+        gradedCount: gradedCountByAssignmentId.get(assignment.id) ?? 0,
+        insight: assignment.insight,
+      };
+    }, [data.assignments, gradedCountByAssignmentId, summarySheetAssignmentId]);
 
   const classDocuments = useMemo((): ClassDocumentRow[] => {
     const byDocumentId = new Map<string, ClassDocumentRow>();
@@ -1304,8 +1396,12 @@ function ClassDetailPage() {
       return filteredStudents;
     }
 
+    if (activeTab === 'summary') {
+      return filteredAssignments;
+    }
+
     return [];
-  }, [activeTab, filteredStudents]) as any[];
+  }, [activeTab, filteredStudents, filteredAssignments]) as any[];
 
   const paginatedData = useMemo(() => {
     return currentTabData.slice(
@@ -1357,6 +1453,14 @@ function ClassDetailPage() {
     const next = new URLSearchParams(searchParams);
     next.set('tab', 'documents');
     next.set('studentId', profileId);
+    navigateWithDocumentPreferences(next);
+  };
+
+  const handleViewAssignmentDocuments = (assignmentId: string) => {
+    const next = new URLSearchParams(searchParams);
+    next.set('tab', 'documents');
+    next.set('assignmentId', assignmentId);
+    next.delete('classAssignmentId');
     navigateWithDocumentPreferences(next);
   };
 
@@ -1492,42 +1596,134 @@ function ClassDetailPage() {
     }
 
     if (activeTab === 'summary') {
-      if (data.assignments.length === 0) {
-        return (
-          <div className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
-            Class performance summaries appear here once an assignment has
-            been given.
-          </div>
-        );
-      }
-
       return (
-        <div className="divide-y rounded-lg border bg-white">
-          {data.assignments.map((assignment) => (
-            <div
-              key={assignment.classAssignmentId}
-              className="flex items-center justify-between gap-3 p-4"
-            >
-              <div className="min-w-0">
-                <p className="truncate font-medium text-foreground">
-                  {assignment.title ?? 'Untitled assignment'}
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  {assignment._count.documents}{' '}
-                  {assignment._count.documents === 1
-                    ? 'submission'
-                    : 'submissions'}
-                </p>
-              </div>
-              <Button asChild variant="outline" size="sm" className="shrink-0">
-                <Link
-                  to={`/app/my-classes/${data.klass.id}/assignments/${assignment.id}`}
-                >
-                  Class performance summary
-                </Link>
-              </Button>
+        <div className="space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="relative min-w-0 w-full max-w-sm flex-1">
+              <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                name="class-assignments-search"
+                value={assignmentSearchQuery}
+                onChange={(event) =>
+                  setAssignmentSearchQuery(event.target.value)
+                }
+                placeholder="Search assignments"
+                className="h-9 rounded-md border-0 bg-background pl-9 shadow-none ring-1 ring-black/5 focus-visible:ring-2 focus-visible:ring-ring"
+                aria-label="Search assignments"
+                data-testid="class-assignments-search"
+              />
             </div>
-          ))}
+          </div>
+
+          {data.assignments.length === 0 ? (
+            <div className="flex flex-col items-center justify-center border border-dashed bg-muted/50 p-12 rounded-lg">
+              <span className="text-lg font-bold">No assignments yet</span>
+              <span className="text-sm text-muted-foreground">
+                Assignments given to this class will appear here
+              </span>
+            </div>
+          ) : filteredAssignments.length === 0 ? (
+            <div className="flex flex-col items-center justify-center border border-dashed bg-muted/50 p-12 rounded-lg">
+              <span className="text-lg font-bold">No assignments found</span>
+              <span className="text-sm text-muted-foreground">
+                Try a different search term
+              </span>
+            </div>
+          ) : (
+            <div className="rounded-lg bg-muted/50">
+              <Table aria-label="Assignments">
+                <TableHeader className="rounded-t-lg">
+                  <TableRow className="bg-muted/50 rounded-t-lg">
+                    <TableHead className="pl-4 rounded-tl-lg">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="-ml-2 h-8 gap-2 px-2"
+                        aria-label={`Sort assignments by title ${
+                          assignmentNameSortDirection === 'asc'
+                            ? 'descending'
+                            : 'ascending'
+                        }`}
+                        onClick={() =>
+                          setAssignmentNameSortDirection((current) =>
+                            current === 'asc' ? 'desc' : 'asc'
+                          )
+                        }
+                      >
+                        Assignment
+                        {assignmentNameSortDirection === 'asc' ? (
+                          <ArrowUp className="h-4 w-4" />
+                        ) : (
+                          <ArrowDown className="h-4 w-4" />
+                        )}
+                      </Button>
+                    </TableHead>
+                    <TableHead className="whitespace-nowrap">Type</TableHead>
+                    <TableHead className="whitespace-nowrap">Graded</TableHead>
+                    <TableHead className="whitespace-nowrap pr-4">
+                      Documents
+                    </TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {(paginatedData as typeof filteredAssignments).map(
+                    (assignment) => {
+                      const gradedCount =
+                        gradedCountByAssignmentId.get(assignment.id) ?? 0;
+                      return (
+                        <TableRow
+                          key={assignment.classAssignmentId}
+                          className={cn(classInsightsEnabled && 'cursor-pointer')}
+                          onClick={() => {
+                            if (!classInsightsEnabled) return;
+                            setSummarySheetAssignmentId(
+                              assignment.classAssignmentId
+                            );
+                          }}
+                        >
+                          <TableCell className="max-h-[37px] pl-4 font-medium">
+                            {assignment.title ?? 'Untitled assignment'}
+                          </TableCell>
+                          <TableCell className="text-muted-foreground">
+                            {assignment.assignmentType?.title ?? '—'}
+                          </TableCell>
+                          <TableCell className="text-muted-foreground">
+                            {gradedCount}
+                          </TableCell>
+                          <TableCell className="pr-4">
+                            <button
+                              type="button"
+                              className={cn(
+                                badgeVariants({ variant: 'secondary' }),
+                                'cursor-pointer gap-1 py-1 pl-2 pr-1'
+                              )}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleViewAssignmentDocuments(assignment.id);
+                              }}
+                              aria-label={`View documents for ${
+                                assignment.title ?? 'this assignment'
+                              }`}
+                            >
+                              {assignment._count.documents}{' '}
+                              {assignment._count.documents === 1
+                                ? 'doc'
+                                : 'docs'}
+                              <ChevronRight
+                                className="size-3 shrink-0"
+                                aria-hidden="true"
+                              />
+                            </button>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    }
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          )}
         </div>
       );
     }
@@ -1962,8 +2158,8 @@ function ClassDetailPage() {
           }}
           studentCount={students.length}
           documentCount={classDocuments.length}
-          summaryCount={data.assignments.length}
-          showSummaryTab={classInsightsEnabled}
+          assignmentCount={data.assignments.length}
+          showAssignmentsTab={classInsightsEnabled}
           activeTab={activeHeaderTab}
           onTabChange={handleHeaderTabChange}
           onEdit={() => setIsClassEditSheetOpen(true)}
@@ -1992,7 +2188,8 @@ function ClassDetailPage() {
             </div>
           ) : null}
           <div>{renderTable()}</div>
-          {activeTab === 'students' && currentTabData.length > 0 ? (
+          {(activeTab === 'students' || activeTab === 'summary') &&
+          currentTabData.length > 0 ? (
             <div className="mt-4">
               <Pagination
                 totalCount={currentTabData.length}
@@ -2037,6 +2234,21 @@ function ClassDetailPage() {
           const studentId = growthPlanStudent.id;
           setGrowthPlanStudent(null);
           handleViewStudentDocuments(studentId);
+        }}
+      />
+
+      <AssignmentSummarySheet
+        open={summarySheetAssignmentId !== null}
+        onOpenChange={(open) => {
+          if (!open) setSummarySheetAssignmentId(null);
+        }}
+        assignment={summarySheetAssignment}
+        classInsightsEnabled={classInsightsEnabled}
+        onViewDocuments={() => {
+          if (!summarySheetAssignment) return;
+          const assignmentId = summarySheetAssignment.id;
+          setSummarySheetAssignmentId(null);
+          handleViewAssignmentDocuments(assignmentId);
         }}
       />
     </section>
