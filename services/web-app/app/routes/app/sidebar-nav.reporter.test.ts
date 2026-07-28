@@ -33,6 +33,12 @@ function reporterVisible(user: any, studentPreviewActive = false) {
     .some((link) => link.to === '/app/reporter');
 }
 
+function allDestinations(user: any) {
+  return getVisibleSidebarSections(FLAT_SIDEBAR_SECTIONS, user, false).flatMap(
+    (section) => section.links.map((link) => link.to)
+  );
+}
+
 describe('Reporter sidebar gating', () => {
   test('visible for a teacher in a reporter-enabled org', () => {
     expect(
@@ -59,5 +65,15 @@ describe('Reporter sidebar gating', () => {
         true
       )
     ).toBe(false);
+  });
+});
+
+describe('retired assignment management navigation', () => {
+  test('does not link teachers to the removed standalone assignments page', () => {
+    expect(
+      allDestinations(
+        userWith({ role: 'TEACHER', reporterEnabled: true })
+      )
+    ).not.toContain('/app/assignments');
   });
 });

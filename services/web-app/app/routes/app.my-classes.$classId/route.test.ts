@@ -387,6 +387,31 @@ describe('class detail loader document visibility', () => {
     expect(prisma.assignment.deleteMany).not.toHaveBeenCalled();
   });
 
+  test('deletes one class deployment without directly changing student documents', async () => {
+    prisma.assignment.findFirst.mockResolvedValue({ id: 'assignment-1' });
+    const form = new FormData();
+    form.append('intent', 'delete-assignment');
+    form.append('assignmentId', 'assignment-1');
+
+    const response = await action({
+      request: new Request('https://example.test/app/my-classes/class-1', {
+        method: 'POST',
+        body: form,
+      }),
+      params: { classId: 'class-1' },
+      context: {} as never,
+    });
+
+    expect(response.data).toMatchObject({
+      success: true,
+      message: 'Assignment deleted successfully.',
+    });
+    expect(deleteClassAssignmentDeployment).toHaveBeenCalledWith({
+      assignmentId: 'assignment-1',
+      classId: 'class-1',
+    });
+  });
+
   test('rejects generic class-page AP History assignment creation', async () => {
     getAvailableAssignmentTypesForScopes.mockResolvedValue([
       {
