@@ -308,7 +308,7 @@ test.describe.serial('Teacher dashboard workspace', () => {
     );
   });
 
-  test('creates one assignment record for each selected class from the Assignments page', async ({
+  test('creates one assignment record for each selected class from the dashboard', async ({
     page,
     e2eContext,
     signIn,
@@ -321,13 +321,13 @@ test.describe.serial('Teacher dashboard workspace', () => {
 
     try {
       await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
-      await page.goto('/app/assignments');
+      await page.goto('/app');
       await page.waitForLoadState('networkidle');
 
       const prompt = `Multi-Class E2E prompt ${Date.now()}`;
       await page
+        .getByTestId('teacher-assignments-grid')
         .getByRole('button', { name: /new assignment/i })
-        .first()
         .click();
       await expectStandardizedAssignmentForm(page);
       await page.getByLabel(CLASS_LABEL).check();

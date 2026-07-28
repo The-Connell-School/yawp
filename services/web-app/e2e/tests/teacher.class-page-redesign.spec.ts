@@ -146,8 +146,9 @@ test.describe.serial('Teacher class page redesign', () => {
     await expect(header.getByRole('tab', { name: /documents/i })).toHaveCount(
       1
     );
+    // The class now carries its own full-featured Assignments tab.
     await expect(page.getByRole('tab', { name: /assignments/i })).toHaveCount(
-      0
+      1
     );
 
     const studentsTab = header.getByRole('tab', { name: /students/i });
