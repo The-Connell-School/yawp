@@ -5,5 +5,6 @@ describe('resolveClassHeaderTab', () => {
   test('maps page tab to header tab', () => {
     expect(resolveClassHeaderTab('students')).toBe('students');
     expect(resolveClassHeaderTab('documents')).toBe('documents');
+    expect(resolveClassHeaderTab('summary')).toBe('summary');
   });
 });

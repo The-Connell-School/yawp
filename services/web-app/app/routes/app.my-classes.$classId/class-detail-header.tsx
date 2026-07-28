@@ -12,10 +12,10 @@ import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
 import { cn } from '~/utils/misc';
 
-export type ClassHeaderTab = 'students' | 'documents';
+export type ClassHeaderTab = 'students' | 'documents' | 'summary';
 
 export function resolveClassHeaderTab(
-  tab: 'students' | 'documents'
+  tab: 'students' | 'documents' | 'summary'
 ): ClassHeaderTab {
   return tab;
 }
@@ -34,6 +34,10 @@ export type ClassDetailHeaderProps = {
   };
   studentCount: number;
   documentCount: number;
+  /** Number of assignments with a class performance summary available. */
+  summaryCount?: number;
+  /** Gated on the organization's classInsightsEnabled flag. */
+  showSummaryTab?: boolean;
   activeTab: ClassHeaderTab;
   onTabChange: (tab: ClassHeaderTab) => void;
   onEdit: () => void;
@@ -189,15 +193,24 @@ export function ClassDetailHeader({
   onTabChange,
   studentCount,
   documentCount,
+  summaryCount = 0,
+  showSummaryTab = false,
   ...props
 }: ClassDetailHeaderProps) {
-  const tabs = useMemo(
-    () => [
+  const tabs = useMemo(() => {
+    const base: HeaderTabConfig[] = [
       { id: 'students' as const, label: 'Students', value: studentCount },
       { id: 'documents' as const, label: 'Documents', value: documentCount },
-    ],
-    [studentCount, documentCount]
-  );
+    ];
+    if (showSummaryTab) {
+      base.push({
+        id: 'summary' as const,
+        label: 'Summary',
+        value: summaryCount,
+      });
+    }
+    return base;
+  }, [studentCount, documentCount, summaryCount, showSummaryTab]);
 
   return (
     <div

@@ -14,6 +14,7 @@ const prisma = {
     update: mock(),
   },
   classAssignment: { findMany: mock() },
+  reporterGrowthPlan: { findMany: mock() },
 };
 
 const requireUserId = mock();
@@ -84,10 +85,12 @@ describe('class detail loader document visibility', () => {
         id: 'school-1',
         name: 'Tallassee High School',
         organizationId: 'org-1',
+        organization: { classInsightsEnabled: false, reporterEnabled: false },
       },
       students: [],
     });
     prisma.class.findMany.mockResolvedValue([]);
+    prisma.reporterGrowthPlan.findMany.mockResolvedValue([]);
     prisma.documentClassForensic.findMany.mockResolvedValue([
       { documentId: 'legacy-doc-1' },
       { documentId: 'legacy-doc-2' },
@@ -156,6 +159,69 @@ describe('class detail loader document visibility', () => {
       { id: 'submission-1', title: 'Submitted essay' },
     ]);
     expect(prisma.submission.findMany).toHaveBeenCalledTimes(1);
+  });
+
+  test('skips the growth plans query and gates the summary tab when the organization has not enabled it', async () => {
+    const response = await loader({
+      request: new Request('https://example.test/app/my-classes/class-1'),
+      params: { classId: 'class-1' },
+      context: {} as never,
+    });
+    const data = (response as { data: any }).data;
+
+    expect(data.classInsightsEnabled).toBe(false);
+    expect(data.reporterEnabled).toBe(false);
+    expect(data.growthPlansByStudentId).toEqual({});
+    expect(prisma.reporterGrowthPlan.findMany).not.toHaveBeenCalled();
+  });
+
+  test('groups growth plans by student when reporter is enabled for the organization', async () => {
+    prisma.class.findFirst.mockResolvedValue({
+      id: 'class-1',
+      grade: '9',
+      period: '2',
+      title: 'World History',
+      school: {
+        id: 'school-1',
+        name: 'Tallassee High School',
+        organizationId: 'org-1',
+        organization: { classInsightsEnabled: true, reporterEnabled: true },
+      },
+      students: [
+        { id: 'student-1', user: { name: 'Ada Lovelace', email: 'ada@x.test' } },
+      ],
+    });
+    prisma.reporterGrowthPlan.findMany.mockResolvedValue([
+      {
+        id: 'plan-1',
+        focus: 'Thesis clarity',
+        targetSkills: ['thesis_and_content'],
+        body: 'Body',
+        checkInAt: null,
+        status: 'active',
+        createdAt: new Date('2026-07-01T00:00:00.000Z'),
+        studentMembershipId: 'student-1',
+      },
+    ]);
+
+    const response = await loader({
+      request: new Request('https://example.test/app/my-classes/class-1'),
+      params: { classId: 'class-1' },
+      context: {} as never,
+    });
+    const data = (response as { data: any }).data;
+
+    expect(data.classInsightsEnabled).toBe(true);
+    expect(prisma.reporterGrowthPlan.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          organizationId: 'org-1',
+          studentMembershipId: { in: ['student-1'] },
+        },
+      })
+    );
+    expect(Object.keys(data.growthPlansByStudentId)).toEqual(['student-1']);
+    expect(data.growthPlansByStudentId['student-1']).toHaveLength(1);
   });
 
   test('redirects the retired assignments tab to the teacher Assignments page', async () => {

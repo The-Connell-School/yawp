@@ -114,6 +114,10 @@ import {
   sendStudentClassInvite,
 } from './class-student-enrollment.server';
 import { filterClassStudentsByQuery } from './class-students-search';
+import {
+  StudentGrowthPlansSheet,
+  type StudentGrowthPlan,
+} from './student-growth-plans-sheet';
 
 export function getDraftDisplayTitle(document: {
   title?: string | null;
@@ -558,7 +562,16 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         title: true,
         classArtIndex: true,
         classArtKey: true,
-        school: { select: { id: true, name: true, organizationId: true } },
+        school: {
+          select: {
+            id: true,
+            name: true,
+            organizationId: true,
+            organization: {
+              select: { classInsightsEnabled: true, reporterEnabled: true },
+            },
+          },
+        },
         students: {
           select: {
             id: true,
@@ -760,6 +773,38 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     orderBy: [{ grade: 'asc' }, { period: 'asc' }],
   });
 
+  const classInsightsEnabled = klass.school.organization.classInsightsEnabled;
+  const reporterEnabled = klass.school.organization.reporterEnabled;
+
+  // Growth plans are only ever created via Reporter, so skip the query
+  // entirely for organizations that don't have it enabled.
+  const growthPlans = reporterEnabled
+    ? await prisma.reporterGrowthPlan.findMany({
+        where: {
+          organizationId: klass.school.organizationId,
+          studentMembershipId: { in: klass.students.map((s) => s.id) },
+        },
+        select: {
+          id: true,
+          focus: true,
+          targetSkills: true,
+          body: true,
+          checkInAt: true,
+          status: true,
+          createdAt: true,
+          studentMembershipId: true,
+        },
+        orderBy: { createdAt: 'desc' },
+      })
+    : [];
+
+  const growthPlansByStudentId = growthPlans.reduce<
+    Record<string, typeof growthPlans>
+  >((acc, plan) => {
+    (acc[plan.studentMembershipId] ??= []).push(plan);
+    return acc;
+  }, {});
+
   return dataResponse({
     klass,
     submissions,
@@ -768,10 +813,13 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     assignmentsEnabled: true,
     manageSchools: manageSchools?.schools ?? [],
     teacherClasses,
+    classInsightsEnabled,
+    reporterEnabled,
+    growthPlansByStudentId,
   });
 }
 
-type TabValue = 'students' | 'documents';
+type TabValue = 'students' | 'documents' | 'summary';
 
 type ClassDocumentSubmission = {
   id: string;
@@ -845,6 +893,11 @@ function ClassDetailPage() {
   const [releaseGradesForSheet, setReleaseGradesForSheet] = useState<
     ReleaseGradeRow[]
   >([]);
+  const [growthPlanStudent, setGrowthPlanStudent] = useState<{
+    id: string;
+    name: string;
+    email: string;
+  } | null>(null);
   const classDetailPath = `/app/my-classes/${data.klass.id}`;
   const classDetailSearch = searchParams.toString();
   const classDetailExitTo = classDetailSearch
@@ -861,7 +914,11 @@ function ClassDetailPage() {
   };
 
   const assignmentsEnabled = data.assignmentsEnabled === true;
-  const validTabs: TabValue[] = ['students', 'documents'];
+  const classInsightsEnabled = data.classInsightsEnabled === true;
+  const reporterEnabled = data.reporterEnabled === true;
+  const validTabs: TabValue[] = classInsightsEnabled
+    ? ['students', 'documents', 'summary']
+    : ['students', 'documents'];
   const requestedTab = searchParams.get('tab') as TabValue | null;
   const activeTab =
     requestedTab && validTabs.includes(requestedTab)
@@ -1287,7 +1344,7 @@ function ClassDetailPage() {
     const next = new URLSearchParams(searchParams);
     next.set('tab', tab);
 
-    if (tab === 'students') {
+    if (tab === 'students' || tab === 'summary') {
       next.delete('status');
       navigate(`?${next.toString()}`);
       return;
@@ -1431,6 +1488,47 @@ function ClassDetailPage() {
           sort={documentSort}
           onSortChange={handleDocumentSortChange}
         />
+      );
+    }
+
+    if (activeTab === 'summary') {
+      if (data.assignments.length === 0) {
+        return (
+          <div className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
+            Class performance summaries appear here once an assignment has
+            been given.
+          </div>
+        );
+      }
+
+      return (
+        <div className="divide-y rounded-lg border bg-white">
+          {data.assignments.map((assignment) => (
+            <div
+              key={assignment.classAssignmentId}
+              className="flex items-center justify-between gap-3 p-4"
+            >
+              <div className="min-w-0">
+                <p className="truncate font-medium text-foreground">
+                  {assignment.title ?? 'Untitled assignment'}
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  {assignment._count.documents}{' '}
+                  {assignment._count.documents === 1
+                    ? 'submission'
+                    : 'submissions'}
+                </p>
+              </div>
+              <Button asChild variant="outline" size="sm" className="shrink-0">
+                <Link
+                  to={`/app/my-classes/${data.klass.id}/assignments/${assignment.id}`}
+                >
+                  Class performance summary
+                </Link>
+              </Button>
+            </div>
+          ))}
+        </div>
       );
     }
 
@@ -1777,8 +1875,22 @@ function ClassDetailPage() {
                       ).size;
 
                     return (
-                      <TableRow key={s.id}>
-                        <TableCell className="max-h-[37px] pl-4">
+                      <TableRow
+                        key={s.id}
+                        className={cn(reporterEnabled && 'cursor-pointer')}
+                        onClick={() => {
+                          if (!reporterEnabled) return;
+                          setGrowthPlanStudent({
+                            id: s.id,
+                            name: s.user.name ?? s.user.email,
+                            email: s.user.email,
+                          });
+                        }}
+                      >
+                        <TableCell
+                          className="max-h-[37px] pl-4"
+                          onClick={(e) => e.stopPropagation()}
+                        >
                           <Checkbox
                             checked={selectedStudentIds.includes(s.id)}
                             onCheckedChange={() => handleSelectStudent(s.id)}
@@ -1797,7 +1909,10 @@ function ClassDetailPage() {
                               badgeVariants({ variant: 'secondary' }),
                               'cursor-pointer gap-1 py-1 pl-2 pr-1'
                             )}
-                            onClick={() => handleViewStudentDocuments(s.id)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleViewStudentDocuments(s.id);
+                            }}
                             aria-label={`View ${s.user.name ?? s.user.email}'s documents`}
                           >
                             {studentDocumentCount}{' '}
@@ -1847,6 +1962,8 @@ function ClassDetailPage() {
           }}
           studentCount={students.length}
           documentCount={classDocuments.length}
+          summaryCount={data.assignments.length}
+          showSummaryTab={classInsightsEnabled}
           activeTab={activeHeaderTab}
           onTabChange={handleHeaderTabChange}
           onEdit={() => setIsClassEditSheetOpen(true)}
@@ -1901,6 +2018,26 @@ function ClassDetailPage() {
         isOpen={isReleaseGradesSheetOpen}
         onClose={() => setIsReleaseGradesSheetOpen(false)}
         onSuccess={handleGradingSuccess}
+      />
+
+      <StudentGrowthPlansSheet
+        open={growthPlanStudent !== null}
+        onOpenChange={(open) => {
+          if (!open) setGrowthPlanStudent(null);
+        }}
+        student={growthPlanStudent}
+        growthPlans={
+          growthPlanStudent
+            ? ((data.growthPlansByStudentId[growthPlanStudent.id] ??
+                []) as unknown as StudentGrowthPlan[])
+            : []
+        }
+        onViewDocuments={() => {
+          if (!growthPlanStudent) return;
+          const studentId = growthPlanStudent.id;
+          setGrowthPlanStudent(null);
+          handleViewStudentDocuments(studentId);
+        }}
       />
     </section>
   );
