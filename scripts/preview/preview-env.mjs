@@ -44,7 +44,19 @@ function requireDataMode(value) {
   return dataMode;
 }
 
+// A named environment (the long-lived demo box) reuses this whole pipeline; only the
+// slug differs. Without the override every environment is forced to be "pr-<n>", which
+// would mean a second, divergent deploy path for the one environment that must not drift.
+function normaliseSlug(value) {
+  const slug = String(value ?? '').trim().toLowerCase();
+  if (!/^[a-z][a-z0-9-]{0,30}$/.test(slug)) {
+    throw new Error('PREVIEW_SLUG must be a short lowercase name like demo');
+  }
+  return slug;
+}
+
 export function buildPreviewEnv({
+  slug: slugOverride = process.env.PREVIEW_SLUG,
   prNumber = process.env.PR_NUMBER,
   domain = process.env.PREVIEW_DOMAIN,
   root = process.env.PREVIEW_ROOT || DEFAULT_ROOT,
@@ -62,14 +74,16 @@ export function buildPreviewEnv({
     process.env.PREVIEW_DB_TEMPLATE_DB || DEFAULT_TEMPLATE_DATABASE_NAME,
   databaseUrl = process.env.PREVIEW_DATABASE_URL,
 } = {}) {
-  const safePrNumber = requirePositiveInteger(prNumber);
+  const namedSlug = slugOverride ? normaliseSlug(slugOverride) : '';
+  // A named environment has no PR behind it, so PR_NUMBER stops being required.
+  const safePrNumber = namedSlug ? '' : requirePositiveInteger(prNumber);
   const safeDomain = requireDomain(domain);
   const safeRuntime = requireRuntime(runtime);
   const safeDataMode = requireDataMode(dataMode);
   const safeRoot = trimSlashes(String(root || DEFAULT_ROOT));
-  const slug = `pr-${safePrNumber}`;
+  const slug = namedSlug || `pr-${safePrNumber}`;
   const composeProject = `yawp-${slug}`;
-  const databaseName = `yawp_pr_${safePrNumber}`;
+  const databaseName = `yawp_${slug.replace(/-/g, '_')}`;
   const hostname = `${slug}.${safeDomain}`;
   const previewRoot = safeRoot.startsWith('/') ? safeRoot : `/${safeRoot}`;
   const previewDir = path.posix.join(previewRoot, 'previews', slug);

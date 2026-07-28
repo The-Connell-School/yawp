@@ -92,3 +92,31 @@ describe('buildPreviewEnv', () => {
     ).toThrow('PREVIEW_DATA_MODE must be seed or production-dump');
   });
 });
+
+describe('named environments', () => {
+  test('a slug override drops the pr- prefix and needs no PR number', () => {
+    const env = buildPreviewEnv({
+      slug: 'demo',
+      domain: 'yawp.school',
+      prNumber: undefined,
+      runtime: 'production'
+    });
+    expect(env.slug).toBe('demo');
+    expect(env.hostname).toBe('demo.yawp.school');
+    expect(env.url).toBe('https://demo.yawp.school');
+    expect(env.databaseName).toBe('yawp_demo');
+    expect(env.composeProject).toBe('yawp-demo');
+    expect(env.runtime).toBe('production');
+  });
+
+  test('PR previews are unchanged by the override existing', () => {
+    const env = buildPreviewEnv({ prNumber: '208', domain: 'preview.yawp.school' });
+    expect(env.slug).toBe('pr-208');
+    expect(env.hostname).toBe('pr-208.preview.yawp.school');
+    expect(env.databaseName).toBe('yawp_pr_208');
+  });
+
+  test('a nonsense slug is rejected rather than silently building a bad hostname', () => {
+    expect(() => buildPreviewEnv({ slug: 'Demo Box!', domain: 'yawp.school' })).toThrow();
+  });
+});
