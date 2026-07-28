@@ -23,6 +23,9 @@ const prisma = {
   apHistoryPromptLibraryEntry: {
     findMany: mock(),
   },
+  savedDailyPagesPrompt: {
+    findMany: mock(),
+  },
 };
 
 const requireUserId = mock();
@@ -240,6 +243,8 @@ describe('app.assignment-types.$id loader Daily Pages prompt library', () => {
     prisma.school.findMany.mockResolvedValue([]);
     prisma.orgMembership.findMany.mockResolvedValue([]);
     prisma.apHistoryPromptLibraryEntry.findMany.mockResolvedValue([]);
+    prisma.savedDailyPagesPrompt.findMany.mockReset();
+    prisma.savedDailyPagesPrompt.findMany.mockResolvedValue([]);
   });
 
   test('provides prompt library data for teachers viewing Daily Pages', async () => {
@@ -258,6 +263,85 @@ describe('app.assignment-types.$id loader Daily Pages prompt library', () => {
     expect(response.data.promptLibrary.facets.textsOrUnits).toContain(
       'Macbeth'
     );
+    // "My prompts" is offered even before the teacher has saved anything.
+    expect(response.data.promptLibrary.facets.collections).toEqual([
+      'library',
+      'mine',
+    ]);
+    expect(response.data.promptLibrary.optionCounts.collections).toEqual({
+      library: 200,
+      mine: 0,
+    });
+  });
+
+  test('merges the teacher\'s saved prompts into the library as "My prompts"', async () => {
+    prisma.savedDailyPagesPrompt.findMany.mockResolvedValue([
+      {
+        id: 'saved-1',
+        prompt: 'You become who you spend time with. Defend or reject this.',
+        facets: {
+          type: 'agree-disagree',
+          seriousness: 'moderate',
+          cognitiveMoves: ['take-a-stance'],
+        },
+        createdAt: new Date('2026-07-28T12:00:00.000Z'),
+      },
+    ]);
+
+    const response = (await loader({
+      request: new Request(
+        'https://example.test/app/assignment-types/at-1?lp_coll=mine'
+      ),
+      params: { id: 'at-1' },
+    } as never)) as any;
+
+    expect(prisma.savedDailyPagesPrompt.findMany.mock.calls[0][0].where).toEqual(
+      {
+        membershipId: 'teacher-1',
+        assignmentTypeId: 'at-1',
+        archivedAt: null,
+      }
+    );
+    // The saved prompt is the only thing the "My prompts" filter keeps.
+    expect(response.data.promptLibrary.prompts).toHaveLength(1);
+    expect(response.data.promptLibrary.prompts[0]).toMatchObject({
+      id: 'saved-1',
+      collection: 'mine',
+      type: 'agree-disagree',
+      seriousness: 'moderate',
+      cognitiveMoves: ['take-a-stance'],
+      savedAt: '2026-07-28T12:00:00.000Z',
+    });
+    expect(response.data.promptLibrary.totalCount).toBe(201);
+    expect(response.data.promptLibrary.optionCounts.collections.mine).toBe(1);
+  });
+
+  test('omits saved prompts for students and other assignment types', async () => {
+    requireMembership.mockResolvedValueOnce({
+      id: 'student-1',
+      role: 'STUDENT',
+      organization: { id: 'org-1', name: 'Org' },
+    });
+
+    const studentResponse = (await loader({
+      request: new Request('https://example.test/app/assignment-types/at-1'),
+      params: { id: 'at-1' },
+    } as never)) as any;
+
+    expect(studentResponse.data.promptLibrary).toBeNull();
+    expect(prisma.savedDailyPagesPrompt.findMany).not.toHaveBeenCalled();
+
+    getAvailableAssignmentTypesForScopes.mockResolvedValue([
+      withOrganizationAssignment(makeAssignmentType({ title: 'E2E Course' })),
+    ]);
+
+    const otherTypeResponse = (await loader({
+      request: new Request('https://example.test/app/assignment-types/at-1'),
+      params: { id: 'at-1' },
+    } as never)) as any;
+
+    expect(otherTypeResponse.data.promptLibrary).toBeNull();
+    expect(prisma.savedDailyPagesPrompt.findMany).not.toHaveBeenCalled();
   });
 
   test('returns all teacher classes for assignment creation', async () => {
