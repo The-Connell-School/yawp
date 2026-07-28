@@ -34,8 +34,10 @@ Browsing the corpus is not the only way in. **New → Generate a prompt** (teach
 | file | role |
 |---|---|
 | `prompt-generator.ts` | Framework-free contract: the `{ reply, options[] }` zod schema, token/limit constants, `selectFewShotExamples`, `resolveGeneratorModel`, `buildGeneratorSystemPrompt`. |
-| `daily-pages-prompt-generator.tsx` | The chat sheet: starter prompts, the options carousel, and a tiny dependency-free Markdown pass for replies. |
+| `daily-pages-prompt-generator.tsx` | The chat sheet: starter prompts, the options carousel with "Save prompt" / "Use this prompt", and a tiny dependency-free Markdown pass for replies. |
 | `../../api.domain.daily-pages-prompt-generator/route.ts` | Teacher-gated POST that calls `getLLMCompletion` and parses the structured reply. |
+| `../../api.domain.daily-pages-prompt-save/route.ts` | Teacher-gated POST that keeps a draft in "My prompts". |
+| `~/domain/daily-pages-prompts/saved-prompts.server.ts` | Read/write for the `SavedDailyPagesPrompt` table. |
 
 Notes on how it stays in style:
 
@@ -44,4 +46,14 @@ Notes on how it stays in style:
 - Each draft is tagged with this file's controlled vocabulary (`type`, `seriousness`, `cognitiveMoves`) so it reads like a library row. Tagging is best-effort: a value outside the vocabulary is dropped, never enough to lose the draft.
 - The model answers with strict JSON on every turn. `options` is empty while it is still asking a clarifying question. Parsing tolerates code fences and surrounding prose; a response that can't be structured yields a friendly retry message rather than raw JSON in the chat.
 
-Generated prompts are not persisted — using one pre-fills the Create Assignment sheet, the same path a library click takes.
+Using a generated prompt pre-fills the Create Assignment sheet, the same path a library click takes.
+
+## My prompts
+
+Generated prompts a teacher keeps land in **My prompts**, a collection inside the same Prompt Library. It's the first filter section and is open by default, so it's visible even when empty.
+
+- A prompt is kept two ways: explicitly with **"Save prompt"**, and implicitly by **"Use this prompt"** — anything actually assigned is worth keeping. Both go through the same upsert, so the two never duplicate.
+- Rows are keyed by `sha256(trimmed prompt)` per (teacher, assignment type), which is what makes save-then-use idempotent. Re-saving also clears `archivedAt`, so keeping a prompt again restores one that had been removed.
+- The generator's facet tags are stored alongside the text, so a saved prompt still answers the Type / Seriousness / Cognitive move filters and reads like a corpus row. Tags are re-validated on read — a value that has since left the vocabulary is dropped, not shown.
+- Saved prompts carry no theme, text/unit, or grade-band metadata, so those filters exclude them rather than matching a missing value.
+- Saves are scoped to the assignment type they were made from; another assignment type's library never shows them.

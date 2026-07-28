@@ -88,6 +88,14 @@ test.describe.serial('Daily Pages prompt generator', () => {
       page.getByRole('dialog').getByText('Agree / disagree')
     ).toBeVisible();
 
+    // Both actions are offered on whichever option is showing.
+    await expect(
+      page.getByRole('button', { name: 'Save prompt' })
+    ).toBeVisible();
+    await expect(
+      page.getByRole('button', { name: 'Use this prompt' })
+    ).toBeVisible();
+
     // Page forward to the third option, then use it.
     await page.getByRole('button', { name: 'Next option' }).click();
     await expect(page.getByText(GENERATED_OPTIONS[1].prompt)).toBeVisible();
