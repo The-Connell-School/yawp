@@ -4,13 +4,7 @@ import { AssignmentCreationSheet } from '~/components/assignments/assignment-cre
 import { Button } from '~/components/ui/button';
 import { Input } from '~/components/ui/input';
 import { Label } from '~/components/ui/label';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '~/components/ui/select';
+import { ClassCheckboxList } from '~/components/assignments/class-checkbox-list';
 import {
   Accordion,
   AccordionContent,
@@ -67,16 +61,22 @@ export function CreateAssignmentSheet({
   apHistoryEntry = null,
 }: Props) {
   const fetcher = useFetcher<{ success?: boolean; message?: string }>();
-  const [selectedClassId, setSelectedClassId] = useState(
-    teacherClasses[0]?.id ?? ''
-  );
+  const [selectedClassIds, setSelectedClassIds] = useState<string[]>([]);
   const [title, setTitle] = useState('');
 
   const isSaving = fetcher.state !== 'idle';
 
+  function toggleClass(classId: string) {
+    setSelectedClassIds((prev) =>
+      prev.includes(classId)
+        ? prev.filter((id) => id !== classId)
+        : [...prev, classId]
+    );
+  }
+
   useEffect(() => {
     if (!open || !apHistoryEntry) return;
-    setSelectedClassId(teacherClasses[0]?.id ?? '');
+    setSelectedClassIds([]);
     setTitle('');
   }, [open, teacherClasses, apHistoryEntry]);
 
@@ -116,7 +116,6 @@ export function CreateAssignmentSheet({
           className="mt-6 space-y-4"
         >
           <input type="hidden" name="intent" value="create-assignment" />
-          <input type="hidden" name="classIds" value={selectedClassId} />
           <input
             type="hidden"
             name="assignmentTypeId"
@@ -129,23 +128,18 @@ export function CreateAssignmentSheet({
           />
 
           <div className="space-y-2">
-            <Label>Class</Label>
-            <Select
-              value={selectedClassId}
-              onValueChange={setSelectedClassId}
+            <Label>Assign to</Label>
+            <ClassCheckboxList
+              idPrefix="ap-library"
+              name="classIds"
+              classes={teacherClasses.map((klass) => ({
+                id: klass.id,
+                label: classLabel(klass),
+              }))}
+              selectedIds={selectedClassIds}
+              onToggle={toggleClass}
               disabled={isSaving}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select a class" />
-              </SelectTrigger>
-              <SelectContent>
-                {teacherClasses.map((klass) => (
-                  <SelectItem key={klass.id} value={klass.id}>
-                    {classLabel(klass)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            />
           </div>
 
           <div className="space-y-2">
@@ -213,7 +207,10 @@ export function CreateAssignmentSheet({
             >
               Cancel
             </Button>
-            <Button type="submit" disabled={isSaving || !selectedClassId}>
+            <Button
+              type="submit"
+              disabled={isSaving || selectedClassIds.length === 0}
+            >
               {isSaving ? 'Creating…' : 'Create Assignment'}
             </Button>
           </div>

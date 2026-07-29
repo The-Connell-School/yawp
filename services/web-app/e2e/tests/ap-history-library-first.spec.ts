@@ -63,7 +63,7 @@ test.describe.serial('AP History library-first assignment flow', () => {
 
       const dialog = page.getByRole('dialog');
       await expect(dialog).toBeVisible();
-      await expect(dialog.getByText('Selected APUSH Prompt')).toBeVisible();
+      await expect(dialog.getByText('Selected Prompt')).toBeVisible();
       await expect(dialog.getByText(dbqEntry.title)).toBeVisible();
       await expect(dialog.getByText(dbqEntry.prompt)).toBeVisible();
       await expect(
@@ -81,6 +81,16 @@ test.describe.serial('AP History library-first assignment flow', () => {
         0
       );
 
+      // Classes are checkboxes, not a single-select dropdown, and nothing is
+      // preselected — the teacher must choose where this deploys.
+      await expect(dialog.getByText('Assign to')).toBeVisible();
+      const createButton = dialog.getByRole('button', {
+        name: 'Create Assignment',
+      });
+      await expect(createButton).toBeDisabled();
+      await dialog.getByRole('checkbox').first().check();
+      await expect(createButton).toBeEnabled();
+
       await dialog.getByLabel('Title (optional)').fill(title);
       await Promise.all([
         page.waitForResponse(
@@ -89,7 +99,7 @@ test.describe.serial('AP History library-first assignment flow', () => {
             response.request().method() === 'POST' &&
             response.ok()
         ),
-        dialog.getByRole('button', { name: 'Create Assignment' }).click(),
+        createButton.click(),
       ]);
       await expect(dialog).toHaveCount(0);
 
