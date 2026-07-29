@@ -4,19 +4,22 @@ import {
   ArrowDown,
   ArrowUp,
   ChevronRight,
+  Copy,
+  Pencil,
   Plus,
   Search,
   Trash2,
 } from 'lucide-react';
 import { AssignmentCreationSheet } from '~/components/assignments/assignment-creation-sheet';
 import {
-  AssignmentEditSheet,
+  AssignmentEditForm,
   type AssignmentEditRecord,
 } from '~/components/assignments/assignment-edit-sheet';
 import { badgeVariants } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
 import { Checkbox } from '~/components/ui/checkbox';
 import { Input } from '~/components/ui/input';
+import { Sheet, SheetContent } from '~/components/ui/sheet';
 import {
   Table,
   TableBody,
@@ -31,6 +34,11 @@ import { AP_HISTORY_ASSIGNMENT_TYPE_KEY } from '~/domain/ap-history/schema';
 import { useTable } from '~/hooks/useTable';
 import { cn } from '~/utils/misc';
 import { filterClassAssignmentsByQuery } from './class-assignments-search';
+import {
+  AssignmentSummarySheetContent,
+  ASSIGNMENT_SUMMARY_SHEET_CONTENT_CLASS_NAME,
+} from './assignment-summary-sheet';
+import type { ClassInsight } from '../app.my-classes.$classId_.assignments.$assignmentId/class-insights-panel';
 
 export type ClassAssignmentsTabAssignment = AssignmentEditRecord & {
   classAssignmentId: string;
@@ -40,12 +48,17 @@ export type ClassAssignmentsTabAssignment = AssignmentEditRecord & {
   gradedCount: number;
   documentCount: number;
   otherClassCount: number;
+  insight: ClassInsight | null;
 };
+
+const DISCARD_CONFIRM_MESSAGE = 'Discard your changes to this assignment?';
 
 type ClassAssignmentsTabProps = {
   classOption: { id: string; name: string };
   assignments: ClassAssignmentsTabAssignment[];
   assignmentTypes: { id: string; title: string }[];
+  /** Gated on the organization's classInsightsEnabled flag. */
+  classInsightsEnabled: boolean;
   onViewDocuments: (assignmentId: string) => void;
 };
 
@@ -67,6 +80,7 @@ export function ClassAssignmentsTab({
   classOption,
   assignments,
   assignmentTypes,
+  classInsightsEnabled,
   onViewDocuments,
 }: ClassAssignmentsTabProps) {
   const [searchQuery, setSearchQuery] = useState('');
@@ -75,9 +89,16 @@ export function ClassAssignmentsTab({
   const [isCreateSheetOpen, setIsCreateSheetOpen] = useState(false);
   const [duplicateAssignment, setDuplicateAssignment] =
     useState<ClassAssignmentsTabAssignment | null>(null);
-  const [editingAssignmentId, setEditingAssignmentId] = useState<string | null>(
+  // The assignment sheet: which assignment is open, in which mode. View is
+  // the default (identity + the class performance summary); Edit is only
+  // reached explicitly. isSheetEditDirty is reported up by the edit form so
+  // every way out of edit mode — Back, closing the sheet, clicking a
+  // different row — can guard against silently discarding it.
+  const [activeAssignmentId, setActiveAssignmentId] = useState<string | null>(
     null
   );
+  const [sheetMode, setSheetMode] = useState<'view' | 'edit'>('view');
+  const [isSheetEditDirty, setIsSheetEditDirty] = useState(false);
 
   const collator = useMemo(
     () => new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' }),
@@ -129,18 +150,63 @@ export function ClassAssignmentsTab({
     });
   }, [filteredAssignments, setSelectedAssignmentIds]);
 
-  const editingAssignment = useMemo(
+  const activeAssignment = useMemo(
     () =>
-      assignments.find(
-        (assignment) => assignment.id === editingAssignmentId
-      ) ?? null,
-    [assignments, editingAssignmentId]
+      assignments.find((assignment) => assignment.id === activeAssignmentId) ??
+      null,
+    [assignments, activeAssignmentId]
   );
+  const canEditActive =
+    activeAssignment != null &&
+    activeAssignment.assignmentType.systemKey !== AP_HISTORY_ASSIGNMENT_TYPE_KEY;
   const hasSelection = selectedAssignmentIds.length > 0;
   const handleCreateSheetOpenChange = useCallback((open: boolean) => {
     setIsCreateSheetOpen(open);
     if (!open) setDuplicateAssignment(null);
   }, []);
+
+  const confirmDiscardIfDirty = useCallback(() => {
+    if (sheetMode !== 'edit' || !isSheetEditDirty) return true;
+    return window.confirm(DISCARD_CONFIRM_MESSAGE);
+  }, [sheetMode, isSheetEditDirty]);
+
+  const openAssignmentSheet = useCallback(
+    (assignmentId: string) => {
+      if (activeAssignmentId && activeAssignmentId !== assignmentId) {
+        if (!confirmDiscardIfDirty()) return;
+      }
+      setActiveAssignmentId(assignmentId);
+      setSheetMode('view');
+      setIsSheetEditDirty(false);
+    },
+    [activeAssignmentId, confirmDiscardIfDirty]
+  );
+
+  const handleSheetOpenChange = useCallback(
+    (open: boolean) => {
+      if (open) return;
+      if (!confirmDiscardIfDirty()) return;
+      setActiveAssignmentId(null);
+      setSheetMode('view');
+      setIsSheetEditDirty(false);
+    },
+    [confirmDiscardIfDirty]
+  );
+
+  const handleBackToView = useCallback(() => {
+    if (!confirmDiscardIfDirty()) return;
+    setSheetMode('view');
+    setIsSheetEditDirty(false);
+  }, [confirmDiscardIfDirty]);
+
+  const handleDuplicateFromView = useCallback(() => {
+    if (!activeAssignment) return;
+    setDuplicateAssignment(activeAssignment);
+    setActiveAssignmentId(null);
+    setSheetMode('view');
+    setIsSheetEditDirty(false);
+    setIsCreateSheetOpen(true);
+  }, [activeAssignment]);
 
   return (
     <div className="space-y-4 text-foreground">
@@ -279,21 +345,22 @@ export function ClassAssignmentsTab({
             <TableBody>
               {paginatedAssignments.map((assignment) => {
                 const title = assignmentTitle(assignment);
-                const canEdit =
-                  assignment.assignmentType.systemKey !==
-                  AP_HISTORY_ASSIGNMENT_TYPE_KEY;
-                const rowActionsDisabled = hasSelection;
 
                 return (
                   <TableRow
                     key={assignment.classAssignmentId}
+                    className="cursor-pointer"
                     data-state={
                       selectedAssignmentIds.includes(assignment.id)
                         ? 'selected'
                         : undefined
                     }
+                    onClick={() => openAssignmentSheet(assignment.id)}
                   >
-                    <TableCell className="max-h-[37px] pl-4">
+                    <TableCell
+                      className="max-h-[37px] pl-4"
+                      onClick={(event) => event.stopPropagation()}
+                    >
                       <Checkbox
                         aria-label={`Select assignment ${title}`}
                         checked={selectedAssignmentIds.includes(assignment.id)}
@@ -301,20 +368,12 @@ export function ClassAssignmentsTab({
                       />
                     </TableCell>
                     <TableCell className="font-medium">
-                      <button
-                        type="button"
+                      <span
                         data-testid={`assignment-open-${assignment.id}`}
-                        className={cn(
-                          'text-left [overflow-wrap:anywhere]',
-                          canEdit && !rowActionsDisabled
-                            ? 'cursor-pointer hover:text-primary'
-                            : 'cursor-default text-foreground'
-                        )}
-                        disabled={!canEdit || rowActionsDisabled}
-                        onClick={() => setEditingAssignmentId(assignment.id)}
+                        className="[overflow-wrap:anywhere]"
                       >
                         {title}
-                      </button>
+                      </span>
                     </TableCell>
                     <TableCell className="text-muted-foreground">
                       {assignment.assignmentType.title}
@@ -329,7 +388,10 @@ export function ClassAssignmentsTab({
                           badgeVariants({ variant: 'secondary' }),
                           'cursor-pointer gap-1 py-1 pl-2 pr-1'
                         )}
-                        onClick={() => onViewDocuments(assignment.id)}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          onViewDocuments(assignment.id);
+                        }}
                         aria-label={`View documents for ${title}`}
                       >
                         {assignment.documentCount}{' '}
@@ -373,21 +435,60 @@ export function ClassAssignmentsTab({
         initialPrompt={duplicateAssignment?.prompt}
       />
 
-      {editingAssignment ? (
-        <AssignmentEditSheet
-          open
-          onOpenChange={(open) => {
-            if (!open) setEditingAssignmentId(null);
-          }}
-          pdfClassId={classOption.id}
-          allowedAssignmentTypes={assignmentTypes}
-          editingAssignment={editingAssignment}
-          onDuplicate={() => {
-            setDuplicateAssignment(editingAssignment);
-            setEditingAssignmentId(null);
-            setIsCreateSheetOpen(true);
-          }}
-        />
+      {activeAssignment ? (
+        <Sheet open onOpenChange={handleSheetOpenChange}>
+          <SheetContent className={ASSIGNMENT_SUMMARY_SHEET_CONTENT_CLASS_NAME}>
+            {sheetMode === 'view' ? (
+              <>
+                <AssignmentSummarySheetContent
+                  assignment={activeAssignment}
+                  classInsightsEnabled={classInsightsEnabled}
+                  onViewDocuments={() => {
+                    const assignmentId = activeAssignment.id;
+                    setActiveAssignmentId(null);
+                    onViewDocuments(assignmentId);
+                  }}
+                />
+                <div className="mt-6 flex items-center justify-between gap-2">
+                  {canEditActive ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      onClick={handleDuplicateFromView}
+                    >
+                      <Copy className="mr-2 h-4 w-4" />
+                      Duplicate
+                    </Button>
+                  ) : (
+                    <div />
+                  )}
+                  {canEditActive ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setSheetMode('edit')}
+                    >
+                      <Pencil className="mr-2 h-4 w-4" />
+                      Edit
+                    </Button>
+                  ) : null}
+                </div>
+              </>
+            ) : (
+              <AssignmentEditForm
+                pdfClassId={classOption.id}
+                allowedAssignmentTypes={assignmentTypes}
+                editingAssignment={activeAssignment}
+                onSaved={() => {
+                  setSheetMode('view');
+                  setIsSheetEditDirty(false);
+                }}
+                onBack={handleBackToView}
+                onDirtyChange={setIsSheetEditDirty}
+              />
+            )}
+          </SheetContent>
+        </Sheet>
       ) : null}
     </div>
   );

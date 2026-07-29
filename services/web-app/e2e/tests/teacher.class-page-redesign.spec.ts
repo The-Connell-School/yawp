@@ -243,6 +243,44 @@ test.describe.serial('Teacher class page redesign', () => {
     ).toBeVisible();
   });
 
+  test('clicking an assignment row opens the class performance summary in view mode', async ({
+    page,
+    e2eContext,
+    signIn,
+  }) => {
+    // This is the capability that regressed unnoticed when the row's
+    // Summary button was removed and the row started opening straight into
+    // edit — clicking a row must land on a read/view mode that surfaces the
+    // class performance summary (and lets the teacher generate it), not the
+    // edit form.
+    await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
+    await page.goto(`/app/my-classes/${e2eContext.classId}?tab=assignments`);
+    await page.waitForLoadState('networkidle');
+
+    await page.getByText('E2E Class Assignment', { exact: true }).click();
+
+    const sheet = page.getByRole('dialog');
+    await expect(
+      sheet.getByRole('heading', { name: /class performance summary/i })
+    ).toBeVisible();
+    // View mode, not edit — no prompt/title form fields.
+    await expect(sheet.getByLabel('Title (optional)')).toHaveCount(0);
+
+    const generateButton = sheet.getByRole('button', {
+      name: /summarize class performance|regenerate/i,
+    });
+    await expect(generateButton).toBeVisible();
+    await generateButton.click();
+    await expect(sheet.getByText(/how the class did/i)).toBeVisible({
+      timeout: 15000,
+    });
+    await expect(sheet.getByText(/suggested next steps/i)).toBeVisible();
+
+    // Edit is reachable explicitly, and switches the same sheet to the form.
+    await sheet.getByRole('button', { name: /^edit$/i }).click();
+    await expect(sheet.getByLabel('Title (optional)')).toBeVisible();
+  });
+
   test('documents tab rows open details by document state using the shared table', async ({
     page,
     e2eContext,

@@ -1665,6 +1665,7 @@ function ClassDetailPage() {
           }}
           assignments={managedAssignments}
           assignmentTypes={data.assignmentTypes}
+          classInsightsEnabled={classInsightsEnabled}
           onViewDocuments={handleViewAssignmentDocuments}
         />
       );

@@ -13,13 +13,23 @@ import { act, type ReactElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 
 const submit = mock();
-const fetcher = {
+const load = mock();
+// A single fetcher stub shared by every useFetcher() call in the tree —
+// the edit form, and the real ClassInsightsPanel/CategoryCard rendered
+// through the unmocked AssignmentSummarySheetContent.
+const fetcher: {
+  state: string;
+  data: unknown;
+  submit: typeof submit;
+  load: typeof load;
+} = {
   state: 'idle',
   data: null,
   submit,
+  load,
 };
 let creationProps: any = null;
-let editProps: any = null;
+let editFormProps: any = null;
 
 const actualReactRouter = await import('react-router');
 mock.module('react-router', () => ({
@@ -38,10 +48,27 @@ mock.module('~/components/assignments/assignment-creation-sheet', () => ({
 }));
 
 mock.module('~/components/assignments/assignment-edit-sheet', () => ({
-  AssignmentEditSheet: (props: any) => {
-    editProps = props;
-    return props.open ? <div data-testid="edit-sheet" /> : null;
+  AssignmentEditForm: (props: any) => {
+    editFormProps = props;
+    return <div data-testid="edit-form">Editing {props.editingAssignment.id}</div>;
   },
+}));
+
+// The real Sheet/SheetContent wrap Radix's Dialog.Title/Description, which
+// need a live Dialog context to avoid warnings. Swap in plain markup — this
+// also flows through to assignment-summary-sheet.tsx's unmocked import of
+// the same module, so its header renders as ordinary elements too.
+mock.module('~/components/ui/sheet', () => ({
+  Sheet: ({ children, open }: any) => (open ? <>{children}</> : null),
+  SheetContent: ({ children, className }: any) => (
+    <div data-testid="assignment-sheet" className={className}>
+      {children}
+    </div>
+  ),
+  SheetHeader: ({ children }: any) => <div>{children}</div>,
+  SheetTitle: ({ children }: any) => <h2>{children}</h2>,
+  SheetDescription: ({ children }: any) => <p>{children}</p>,
+  SheetFooter: ({ children }: any) => <div>{children}</div>,
 }));
 
 const { MemoryRouter } = actualReactRouter;
@@ -69,6 +96,7 @@ const ASSIGNMENTS: ClassAssignmentsTabAssignment[] = [
     gradedCount: 5,
     documentCount: 12,
     otherClassCount: 1,
+    insight: null,
   },
   {
     id: 'assignment-2',
@@ -86,6 +114,7 @@ const ASSIGNMENTS: ClassAssignmentsTabAssignment[] = [
     gradedCount: 2,
     documentCount: 7,
     otherClassCount: 0,
+    insight: null,
   },
 ];
 
@@ -107,16 +136,28 @@ function renderTab(overrides: Record<string, unknown> = {}) {
       classOption={{ id: 'class-1', name: 'Grade 9 • Period 2 — History' }}
       assignments={ASSIGNMENTS}
       assignmentTypes={[{ id: 'type-1', title: 'DBQ' }]}
+      classInsightsEnabled
       onViewDocuments={() => {}}
       {...overrides}
     />
   );
 }
 
+function clickRow(el: HTMLElement, testId: string) {
+  const cell = el.querySelector(`[data-testid="${testId}"]`) as HTMLElement;
+  const row = cell.closest('tr')!;
+  act(() => {
+    row.dispatchEvent(new Event('click', { bubbles: true }));
+  });
+}
+
 beforeEach(() => {
   submit.mockReset();
+  load.mockReset();
+  fetcher.state = 'idle';
+  fetcher.data = null;
   creationProps = null;
-  editProps = null;
+  editFormProps = null;
 });
 
 afterEach(() => {
@@ -149,38 +190,77 @@ describe('ClassAssignmentsTab', () => {
     });
   });
 
-  it('opens editable titles while leaving AP History rows read-only', () => {
+  it('clicking a row opens the sheet in view mode, not edit', () => {
     const el = renderTab();
-    const editableTitle = el.querySelector(
-      '[data-testid="assignment-open-assignment-1"]'
-    ) as HTMLButtonElement;
-    const apHistoryTitle = el.querySelector(
-      '[data-testid="assignment-open-assignment-2"]'
-    ) as HTMLButtonElement;
+    clickRow(el, 'assignment-open-assignment-1');
 
-    expect(editableTitle.disabled).toBe(false);
-    expect(apHistoryTitle.disabled).toBe(true);
-    act(() => editableTitle.click());
-
-    expect(el.querySelector('[data-testid="edit-sheet"]')).toBeTruthy();
-    expect(editProps.editingAssignment.id).toBe('assignment-1');
-    expect(editProps.pdfClassId).toBe('class-1');
+    expect(el.querySelector('[data-testid="assignment-sheet"]')).toBeTruthy();
+    expect(el.querySelector('[data-testid="edit-form"]')).toBeFalsy();
+    // View mode identity content, from the real AssignmentSummarySheetContent.
+    expect(el.textContent).toContain('The Gilded Age DBQ');
+    expect(el.textContent).toContain('Class performance summary');
   });
 
-  it('prefills class-scoped creation when duplicating from the edit sheet', () => {
+  it('the Edit button transitions view mode to edit mode', () => {
     const el = renderTab();
-    const editableTitle = el.querySelector(
-      '[data-testid="assignment-open-assignment-1"]'
-    ) as HTMLButtonElement;
-    act(() => editableTitle.click());
+    clickRow(el, 'assignment-open-assignment-1');
 
-    expect(el.querySelector('[data-testid="edit-sheet"]')).toBeTruthy();
-    expect(typeof editProps.onDuplicate).toBe('function');
+    const editButton = Array.from(el.querySelectorAll('button')).find(
+      (button) => button.textContent?.trim() === 'Edit'
+    )!;
+    expect(editButton).toBeDefined();
+    act(() => editButton.click());
 
-    act(() => editProps.onDuplicate());
+    expect(el.querySelector('[data-testid="edit-form"]')).toBeTruthy();
+    expect(editFormProps.editingAssignment.id).toBe('assignment-1');
+    expect(editFormProps.pdfClassId).toBe('class-1');
+  });
 
-    // Duplicating closes the edit sheet and opens creation prefilled.
-    expect(el.querySelector('[data-testid="edit-sheet"]')).toBeFalsy();
+  it('does not show an Edit button for AP History rows, only view mode', () => {
+    const el = renderTab();
+    clickRow(el, 'assignment-open-assignment-2');
+
+    expect(el.querySelector('[data-testid="assignment-sheet"]')).toBeTruthy();
+    const editButton = Array.from(el.querySelectorAll('button')).find(
+      (button) => button.textContent?.trim() === 'Edit'
+    );
+    expect(editButton).toBeUndefined();
+    const duplicateButton = Array.from(el.querySelectorAll('button')).find(
+      (button) => button.textContent?.trim().includes('Duplicate')
+    );
+    expect(duplicateButton).toBeUndefined();
+  });
+
+  it('the class performance summary is reachable and generatable from view mode', () => {
+    const el = renderTab();
+    clickRow(el, 'assignment-open-assignment-1');
+
+    const generateButton = Array.from(el.querySelectorAll('button')).find(
+      (button) => /summarize class performance/i.test(button.textContent ?? '')
+    )!;
+    expect(generateButton).toBeDefined();
+
+    act(() => generateButton.click());
+
+    // Same generation path as the full-page assignment route: POST to
+    // /api/domain/assignment-insights with the classAssignmentId.
+    expect(submit).toHaveBeenCalledWith(
+      { classAssignmentId: 'class-assignment-1' },
+      { method: 'post', action: '/api/domain/assignment-insights' }
+    );
+  });
+
+  it('prefills class-scoped creation when duplicating from view mode', () => {
+    const el = renderTab();
+    clickRow(el, 'assignment-open-assignment-1');
+
+    const duplicateButton = Array.from(el.querySelectorAll('button')).find(
+      (button) => button.textContent?.trim().includes('Duplicate')
+    )!;
+    act(() => duplicateButton.click());
+
+    // Duplicating closes the sheet and opens creation prefilled.
+    expect(el.querySelector('[data-testid="assignment-sheet"]')).toBeFalsy();
     expect(el.querySelector('[data-testid="creation-sheet"]')).toBeTruthy();
     expect(creationProps).toMatchObject({
       entryPoint: 'class',
@@ -191,35 +271,72 @@ describe('ClassAssignmentsTab', () => {
     });
   });
 
-  it('disables row title actions during selection', () => {
+  it('clicking a different row while mid-edit confirms before discarding', () => {
+    const confirmSpy = mock(() => false);
+    window.confirm = confirmSpy;
+
     const el = renderTab();
+    clickRow(el, 'assignment-open-assignment-1');
+    const editButton = Array.from(el.querySelectorAll('button')).find(
+      (button) => button.textContent?.trim() === 'Edit'
+    )!;
+    act(() => editButton.click());
+    // Simulate the form reporting unsaved changes.
+    act(() => editFormProps.onDirtyChange(true));
+
+    clickRow(el, 'assignment-open-assignment-2');
+
+    expect(confirmSpy).toHaveBeenCalled();
+    // User declined to discard — still editing assignment-1.
+    expect(el.querySelector('[data-testid="edit-form"]')).toBeTruthy();
+    expect(editFormProps.editingAssignment.id).toBe('assignment-1');
+  });
+
+  it('the row is entirely clickable — checkbox and Docs pill stop propagation', () => {
+    const onViewDocuments = mock();
+    const el = renderTab({ onViewDocuments });
+
     const checkbox = el.querySelector(
       '[aria-label="Select assignment The Gilded Age DBQ"]'
     ) as HTMLButtonElement;
     act(() => checkbox.click());
+    expect(el.querySelector('[data-testid="assignment-sheet"]')).toBeFalsy();
 
-    expect(
-      (
-        el.querySelector(
-          '[data-testid="assignment-open-assignment-1"]'
-        ) as HTMLButtonElement
-      ).disabled
-    ).toBe(true);
-    expect(
-      el.querySelector('[aria-label="Delete 1 assignment(s)"]')
-    ).toBeTruthy();
+    const docsPill = el.querySelector(
+      '[aria-label="View documents for The Gilded Age DBQ"]'
+    ) as HTMLButtonElement;
+    act(() => docsPill.click());
+    expect(onViewDocuments).toHaveBeenCalledWith('assignment-1');
+    expect(el.querySelector('[data-testid="assignment-sheet"]')).toBeFalsy();
   });
 
-  it('shows only the assignment title in the row — no subtitle, summary, or duplicate affordance', () => {
+  it('matches the Students table row hover/selected classes exactly', () => {
+    const el = renderTab();
+    const row = el
+      .querySelector('[data-testid="assignment-open-assignment-1"]')!
+      .closest('tr')!;
+    // Same shape as the Students row: TableRow's shared base classes plus a
+    // bare `cursor-pointer`, nothing else. No bespoke hover color — the
+    // amber-on-hover regression came from a title-only button with its own
+    // `hover:text-primary`, which is gone now that the whole row is the
+    // click target.
+    expect(row.className).toBe(
+      'border-b transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted cursor-pointer'
+    );
+    expect(row.className).not.toContain('hover:text-primary');
+    expect(row.className).not.toContain('amber');
+
+    const checkbox = el.querySelector(
+      '[aria-label="Select assignment The Gilded Age DBQ"]'
+    ) as HTMLButtonElement;
+    act(() => checkbox.click());
+    expect(row.getAttribute('data-state')).toBe('selected');
+  });
+
+  it('shows only the assignment title in the row — no subtitle or "also in" note', () => {
     const el = renderTab();
     expect(el.textContent).not.toContain('Analyze the effects');
     expect(el.textContent).not.toContain('Also in');
-    expect(
-      el.querySelector('[aria-label*="class performance summary" i]')
-    ).toBeFalsy();
-    expect(
-      el.querySelector('[aria-label="Duplicate The Gilded Age DBQ"]')
-    ).toBeFalsy();
   });
 
   it('keeps search alongside the new management controls', () => {
