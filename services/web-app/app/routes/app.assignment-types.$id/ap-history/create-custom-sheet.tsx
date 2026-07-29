@@ -4,6 +4,7 @@ import { FileUpIcon, ImageIcon, PlusIcon, Trash2Icon } from 'lucide-react';
 import { Button } from '~/components/ui/button';
 import { Input } from '~/components/ui/input';
 import { Label } from '~/components/ui/label';
+import { ClassCheckboxList } from '~/components/assignments/class-checkbox-list';
 import {
   Select,
   SelectContent,
@@ -88,7 +89,7 @@ export function CreateCustomApHistorySheet({
   const isSaving = fetcher.state !== 'idle';
   const isDbq = essayType === 'dbq';
 
-  const [selectedClassId, setSelectedClassId] = useState('');
+  const [selectedClassIds, setSelectedClassIds] = useState<string[]>([]);
   const [title, setTitle] = useState('');
   const [prompt, setPrompt] = useState('');
   const [periodNumber, setPeriodNumber] = useState('');
@@ -102,7 +103,7 @@ export function CreateCustomApHistorySheet({
   // Reset the form whenever the sheet opens or the essay type changes.
   useEffect(() => {
     if (!open) return;
-    setSelectedClassId(teacherClasses[0]?.id ?? '');
+    setSelectedClassIds([]);
     setTitle('');
     setPrompt('');
     setPeriodNumber('');
@@ -147,10 +148,18 @@ export function CreateCustomApHistorySheet({
     );
   const canSubmit =
     !isSaving &&
-    Boolean(selectedClassId) &&
+    selectedClassIds.length > 0 &&
     prompt.trim().length > 0 &&
     Boolean(periodNumber) &&
     dbqSourcesReady;
+
+  function toggleClass(classId: string) {
+    setSelectedClassIds((prev) =>
+      prev.includes(classId)
+        ? prev.filter((id) => id !== classId)
+        : [...prev, classId]
+    );
+  }
 
   function updateSource(id: string, patch: Partial<SourceDraft>) {
     setSources((prev) =>
@@ -274,7 +283,6 @@ export function CreateCustomApHistorySheet({
             name="assignmentTypeId"
             value={assignmentTypeId}
           />
-          <input type="hidden" name="classIds" value={selectedClassId} />
           <input type="hidden" name="essayType" value={essayType} />
           <input type="hidden" name="period" value={periodLabel} />
           <input
@@ -311,23 +319,18 @@ export function CreateCustomApHistorySheet({
           </div>
 
           <div className="space-y-2">
-            <Label>Class</Label>
-            <Select
-              value={selectedClassId}
-              onValueChange={setSelectedClassId}
+            <Label>Assign to</Label>
+            <ClassCheckboxList
+              idPrefix="ap-custom"
+              name="classIds"
+              classes={teacherClasses.map((klass) => ({
+                id: klass.id,
+                label: classLabel(klass),
+              }))}
+              selectedIds={selectedClassIds}
+              onToggle={toggleClass}
               disabled={isSaving}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select a class" />
-              </SelectTrigger>
-              <SelectContent>
-                {teacherClasses.map((klass) => (
-                  <SelectItem key={klass.id} value={klass.id}>
-                    {classLabel(klass)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            />
           </div>
 
           <div className="space-y-2">
