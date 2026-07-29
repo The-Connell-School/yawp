@@ -1,5 +1,13 @@
 import { describe, expect, test } from 'bun:test';
-import { AP_ENGLISH_LANG_LIBRARY_ENTRIES } from './ap-english-lang-library-data';
+import {
+  AP_ENGLISH_LANG_LIBRARY_ENTRIES,
+  COMPLETE_SHORT_PASSAGE_KEYS,
+  EXAM_SCALE_PASSAGE_MIN_WORDS,
+  SHORT_EXCERPT_PASSAGE_KEYS,
+} from './ap-english-lang-library-data';
+
+const countWords = (value: string) =>
+  value.trim().split(/\s+/).filter(Boolean).length;
 
 const VALID_FRQ_TYPES = new Set([
   'synthesis',
@@ -80,6 +88,57 @@ describe('AP English Language library seed data', () => {
         expect(entry.sources[0].mediaType).toBe('text');
         expect(entry.sources[0].body.trim().length).toBeGreaterThan(0);
         expect(entry.sources[0].attribution.trim().length).toBeGreaterThan(0);
+      }
+    });
+
+    // A Q2 passage IS the assignment: without the document in front of them a
+    // student has nothing to analyze. The exam supplies 500-750 words, and Row B
+    // 4 requires explaining how MULTIPLE choices work together, which a single
+    // quoted sentence cannot support.
+    test('every passage is exam-scale, or an explicitly tracked exception', () => {
+      const tracked = new Set([
+        ...SHORT_EXCERPT_PASSAGE_KEYS,
+        ...COMPLETE_SHORT_PASSAGE_KEYS,
+      ]);
+
+      const undersized = entries
+        .filter((entry) => !tracked.has(entry.externalKey))
+        .map((entry) => ({
+          key: entry.externalKey,
+          words: countWords(entry.sources[0].body),
+        }))
+        .filter((entry) => entry.words < EXAM_SCALE_PASSAGE_MIN_WORDS);
+
+      expect(undersized).toEqual([]);
+    });
+
+    test('a passage carrying a provenance URL is exam-scale', () => {
+      for (const entry of entries) {
+        if (!entry.sources[0].provenanceUrl) continue;
+        expect(countWords(entry.sources[0].body)).toBeGreaterThanOrEqual(
+          EXAM_SCALE_PASSAGE_MIN_WORDS,
+        );
+      }
+    });
+
+    // The tracked lists are a shrinking backlog, not a place to hide new gaps:
+    // a key may only sit on them while the entry it names actually exists.
+    test('the tracked-exception lists name only real entries', () => {
+      const keys = new Set(entries.map((entry) => entry.externalKey));
+      for (const key of [
+        ...SHORT_EXCERPT_PASSAGE_KEYS,
+        ...COMPLETE_SHORT_PASSAGE_KEYS,
+      ]) {
+        expect(keys.has(key)).toBe(true);
+      }
+    });
+
+    test('a tracked short excerpt is genuinely short', () => {
+      for (const key of SHORT_EXCERPT_PASSAGE_KEYS) {
+        const entry = entries.find((item) => item.externalKey === key);
+        expect(countWords(entry!.sources[0].body)).toBeLessThan(
+          EXAM_SCALE_PASSAGE_MIN_WORDS,
+        );
       }
     });
   });

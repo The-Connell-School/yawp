@@ -25,6 +25,19 @@
 // Visual sources currently carry their data as a described table in `body`
 // with `imageAlt` naming what the chart shows. Swapping in real chart assets
 // is a follow-up; the snapshot schema already carries `imageUrl` for it.
+//
+// PASSAGE LENGTH (Q2). The exam hands the student a complete, self-contained
+// passage of roughly 500-750 words. Entries whose passage comes from
+// ./ap-english-lang-passages meet that bar verbatim. The remaining entries still
+// ship the short excerpts this library launched with; they are listed in
+// SHORT_EXCERPT_PASSAGE_KEYS so the gap is visible and enforced rather than
+// silently shipped, and each needs a full text before it is exam-usable.
+
+import {
+  KENNEDY_INAUGURAL_OPENING,
+  LINCOLN_SECOND_INAUGURAL,
+  ROOSEVELT_FIRST_INAUGURAL_OPENING,
+} from './ap-english-lang-passages';
 
 type LibrarySource = {
   externalKey: string;
@@ -783,10 +796,11 @@ const SYNTHESIS_ENTRIES: LibraryEntry[] = [
  * Builds the single-source array a rhetorical analysis entry ships. The
  * snapshot schema requires exactly one source for this FRQ type.
  *
- * NOTE ON PROVENANCE: every passage below is a short, well-attested excerpt
- * from a public-domain speech or essay. `provenanceUrl` is intentionally left
- * null rather than pointing at a guessed archive URL — a teacher can attach
- * the exact citation later.
+ * NOTE ON PROVENANCE: every passage below is a public-domain speech or essay.
+ * Passages imported from ./ap-english-lang-passages are verbatim transcriptions
+ * of a named corpus and carry a `provenanceUrl`; the rest are still the short
+ * excerpts this library shipped first and are tracked as such in
+ * SHORT_EXCERPT_PASSAGE_KEYS below.
  */
 function passageSource(params: {
   key: string;
@@ -794,6 +808,7 @@ function passageSource(params: {
   attribution: string;
   body: string;
   caption?: string | null;
+  provenanceUrl?: string | null;
 }): LibrarySource[] {
   return [
     {
@@ -806,7 +821,7 @@ function passageSource(params: {
       mediaType: 'text',
       imageUrl: null,
       imageAlt: null,
-      provenanceUrl: null,
+      provenanceUrl: params.provenanceUrl ?? null,
     },
   ];
 }
@@ -864,17 +879,17 @@ const RHETORICAL_ANALYSIS_ENTRIES: LibraryEntry[] = [
     defaultTimeMode: 'untimed',
     defaultDurationMinutes: 40,
     suggestedEvidence: null,
-    provenanceUrl: null,
+    provenanceUrl:
+      'https://raw.githubusercontent.com/nltk/nltk_data/gh-pages/packages/corpora/inaugural.zip',
     sources: passageSource({
       key: 'ap-lang-rhetorical-lincoln-second-inaugural',
-      title: "Second Inaugural Address, closing paragraphs",
+      title: 'Second Inaugural Address',
       attribution: 'Abraham Lincoln, March 4, 1865 (public domain)',
-      body: [
-        'Fondly do we hope, fervently do we pray, that this mighty scourge of war may speedily pass away. Yet, if God wills that it continue until all the wealth piled by the bondsman\'s two hundred and fifty years of unrequited toil shall be sunk, and until every drop of blood drawn with the lash shall be paid by another drawn with the sword, as was said three thousand years ago, so still it must be said "the judgments of the Lord are true and righteous altogether."',
-        '',
-        'With malice toward none, with charity for all, with firmness in the right as God gives us to see the right, let us strive on to finish the work we are in, to bind up the nation\'s wounds, to care for him who shall have borne the battle and for his widow and his orphan, to do all which may achieve and cherish a just and lasting peace among ourselves and with all nations.',
-      ].join('\n'),
-      caption: 'The final two paragraphs of the address.',
+      body: LINCOLN_SECOND_INAUGURAL,
+      caption:
+        'The complete address. Lincoln moves from a near-refusal to give a speech at all, through a shared reading of the war\'s cause, to the reconciliation of the closing paragraph.',
+      provenanceUrl:
+        'https://raw.githubusercontent.com/nltk/nltk_data/gh-pages/packages/corpora/inaugural.zip',
     }),
   },
   {
@@ -916,17 +931,17 @@ const RHETORICAL_ANALYSIS_ENTRIES: LibraryEntry[] = [
     defaultTimeMode: 'untimed',
     defaultDurationMinutes: 40,
     suggestedEvidence: null,
-    provenanceUrl: null,
+    provenanceUrl:
+      'https://raw.githubusercontent.com/nltk/nltk_data/gh-pages/packages/corpora/inaugural.zip',
     sources: passageSource({
       key: 'ap-lang-rhetorical-jfk-inaugural',
-      title: 'Inaugural Address, closing appeal',
+      title: 'Inaugural Address, opening',
       attribution: 'John F. Kennedy, January 20, 1961 (public domain, U.S. government work)',
-      body: [
-        'And so, my fellow Americans: ask not what your country can do for you—ask what you can do for your country.',
-        '',
-        'My fellow citizens of the world: ask not what America will do for you, but what together we can do for the freedom of man.',
-      ].join('\n'),
-      caption: 'The address\'s best-known appeal, near its close.',
+      body: KENNEDY_INAUGURAL_OPENING,
+      caption:
+        'The opening of the address through the appeal to adversaries, ending on a complete movement of the argument.',
+      provenanceUrl:
+        'https://raw.githubusercontent.com/nltk/nltk_data/gh-pages/packages/corpora/inaugural.zip',
     }),
   },
   {
@@ -1038,6 +1053,72 @@ const RHETORICAL_ANALYSIS_ENTRIES: LibraryEntry[] = [
       caption: 'The speech\'s central extended metaphor, repeated across the address.',
     }),
   },
+  {
+    externalKey: 'ap-lang-rhetorical-fdr-first-inaugural',
+    frqType: 'rhetorical_analysis',
+    title: 'FDR\'s First Inaugural Address — Rhetorical Analysis',
+    prompt: rhetoricalPrompt(
+      'In March 1933, at the depth of the Great Depression, with roughly a quarter of American workers unemployed and the banking system closing down, Franklin D. Roosevelt took office and addressed a frightened national radio audience.',
+      'Roosevelt makes to reframe an economic collapse as a crisis of confidence and values that the nation can act on.',
+    ),
+    focusSkill: 'diagnosis-and-reframing',
+    difficulty: 'exam-ready',
+    skillEmphasis: 'evidence-commentary',
+    defaultTimeMode: 'untimed',
+    defaultDurationMinutes: 40,
+    suggestedEvidence: null,
+    provenanceUrl:
+      'https://raw.githubusercontent.com/nltk/nltk_data/gh-pages/packages/corpora/inaugural.zip',
+    sources: passageSource({
+      key: 'ap-lang-rhetorical-fdr-first-inaugural',
+      title: 'First Inaugural Address, opening',
+      attribution:
+        'Franklin D. Roosevelt, March 4, 1933 (public domain, U.S. government work)',
+      body: ROOSEVELT_FIRST_INAUGURAL_OPENING,
+      caption:
+        'The opening of the address, running from "the only thing we have to fear is fear itself" through the argument that recovery is a question of values rather than of substance.',
+      provenanceUrl:
+        'https://raw.githubusercontent.com/nltk/nltk_data/gh-pages/packages/corpora/inaugural.zip',
+    }),
+  },
+];
+
+/**
+ * Q2 entries that still ship a short excerpt rather than an exam-scale passage.
+ *
+ * These are the passages this library launched with: real public-domain quotations,
+ * but a sentence or a paragraph rather than the 500-750 word document the exam
+ * provides. A student cannot trace a line of reasoning through 46 words, and Row B
+ * 4 — which requires explaining how MULTIPLE rhetorical choices work together —
+ * is effectively unreachable on them.
+ *
+ * They are enumerated here, rather than left to be noticed, so that the library
+ * test can hold every OTHER Q2 passage to exam scale while this list shrinks. Add
+ * the full text to ./ap-english-lang-passages and delete the key from this list.
+ */
+export const SHORT_EXCERPT_PASSAGE_KEYS: readonly string[] = [
+  'ap-lang-rhetorical-paine-the-crisis',
+  'ap-lang-rhetorical-stanton-declaration-of-sentiments',
+  'ap-lang-rhetorical-henry-give-me-liberty',
+  'ap-lang-rhetorical-chief-joseph-surrender',
+  'ap-lang-rhetorical-washington-atlanta-address',
+];
+
+/**
+ * The floor for a Q2 passage that claims to be exam-usable. The real exam runs
+ * roughly 500-750 words; 400 leaves room for a genuinely short complete text
+ * (the Gettysburg Address is 264 words and is assigned whole) without letting a
+ * single-sentence excerpt through.
+ */
+export const EXAM_SCALE_PASSAGE_MIN_WORDS = 400;
+
+/**
+ * Complete short documents that clear the exam-usable bar despite falling under
+ * EXAM_SCALE_PASSAGE_MIN_WORDS, because the whole document is what the exam
+ * itself assigns.
+ */
+export const COMPLETE_SHORT_PASSAGE_KEYS: readonly string[] = [
+  'ap-lang-rhetorical-gettysburg-address',
 ];
 
 function argumentEntry(params: {
