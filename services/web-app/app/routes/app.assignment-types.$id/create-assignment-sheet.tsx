@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useFetcher } from 'react-router';
 import { AssignmentCreationSheet } from '~/components/assignments/assignment-creation-sheet';
+import type { ApEnglishLangSourcePreview } from './ap-english-lang-library-filters';
 import { Button } from '~/components/ui/button';
 import { Input } from '~/components/ui/input';
 import { Label } from '~/components/ui/label';
@@ -47,7 +48,19 @@ type Props = {
     title: string;
     prompt: string;
     frqType: string;
+    /**
+     * The provided passage or source packet. Q3 ships none; Q1 and Q2 do, and
+     * the teacher needs to read it here before assigning it.
+     */
+    sources?: ApEnglishLangSourcePreview[];
   } | null;
+};
+
+/** What the provided material is called, per question type. */
+const AP_ENGLISH_LANG_SOURCE_NOUN: Record<string, string> = {
+  synthesis: 'source',
+  rhetorical_analysis: 'passage',
+  argument: 'source',
 };
 
 const AP_ENGLISH_LANG_FRQ_TYPE_LABELS: Record<string, string> = {
@@ -111,6 +124,9 @@ export function CreateAssignmentSheet({
           badge:
             AP_ENGLISH_LANG_FRQ_TYPE_LABELS[apEnglishLangEntry.frqType] ??
             apEnglishLangEntry.frqType,
+          sources: apEnglishLangEntry.sources,
+          sourceNoun:
+            AP_ENGLISH_LANG_SOURCE_NOUN[apEnglishLangEntry.frqType] ?? 'source',
         }}
         extraHiddenFields={
           apEnglishLangEntry.savedPromptId

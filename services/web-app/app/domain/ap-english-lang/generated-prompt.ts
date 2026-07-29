@@ -127,7 +127,8 @@ export function savedPromptToLibraryEntry(saved: SavedApEnglishLangPrompt) {
     frqType: saved.facets.frqType ?? 'argument',
     focusSkill: saved.facets.focusSkill ?? 'line-of-reasoning',
     difficulty: saved.facets.difficulty ?? null,
-    sources: [] as Array<unknown>,
+    // A generated prompt is always Q3, which provides no source material.
+    sources: [],
     collection: 'mine' as const,
     savedAt: saved.savedAt,
   };

@@ -6,6 +6,22 @@
  * filtering server-side against the full entry list.
  */
 
+/**
+ * A provided source as the library UI needs to render it. Filtering only counts
+ * sources, but the teacher has to be able to READ the document before assigning
+ * it -- on a rhetorical analysis prompt the passage IS the assignment, and a
+ * headnote alone does not tell a teacher what their students will be analyzing.
+ */
+export type ApEnglishLangSourcePreview = {
+  position: number;
+  title: string;
+  attribution: string;
+  body: string;
+  caption?: string | null;
+  mediaType?: string;
+  imageAlt?: string | null;
+};
+
 export type ApEnglishLangFilterableEntry = {
   externalKey: string;
   title: string;
@@ -13,7 +29,7 @@ export type ApEnglishLangFilterableEntry = {
   frqType: string;
   focusSkill: string;
   difficulty: string | null;
-  sources: Array<unknown>;
+  sources: ApEnglishLangSourcePreview[];
   /**
    * Which collection the row comes from: the curated library that ships with
    * the course, or a prompt this teacher generated and kept ("My prompts").

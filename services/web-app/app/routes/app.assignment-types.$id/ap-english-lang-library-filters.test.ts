@@ -6,7 +6,17 @@ import {
   buildApEnglishLangOptionCounts,
   readApEnglishLangFilters,
   type ApEnglishLangFilterableEntry,
+  type ApEnglishLangSourcePreview,
 } from './ap-english-lang-library-filters';
+
+function makeSource(position: number): ApEnglishLangSourcePreview {
+  return {
+    position,
+    title: `Source ${position}`,
+    attribution: 'Composed for this exercise',
+    body: 'Source body text.',
+  };
+}
 
 function makeEntry(
   overrides: Partial<ApEnglishLangFilterableEntry> = {}
@@ -30,7 +40,7 @@ const synthesis = makeEntry({
   frqType: 'synthesis',
   focusSkill: 'source-integration',
   difficulty: 'exam-ready',
-  sources: [{}, {}, {}, {}, {}, {}],
+  sources: [1, 2, 3, 4, 5, 6].map(makeSource),
 });
 const rhetorical = makeEntry();
 const argument = makeEntry({

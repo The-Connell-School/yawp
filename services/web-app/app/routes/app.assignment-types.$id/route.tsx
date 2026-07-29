@@ -51,6 +51,7 @@ import {
   buildApEnglishLangFacets,
   buildApEnglishLangOptionCounts,
   readApEnglishLangFilters,
+  type ApEnglishLangSourcePreview,
 } from './ap-english-lang-library-filters';
 import { CreateAssignmentSheet } from './create-assignment-sheet';
 import { PromptsLibrary } from './prompts-library/prompts-library';
@@ -547,6 +548,7 @@ export default function AppAssignmentTypesIdRoute() {
     title: string;
     prompt: string;
     frqType: string;
+    sources?: ApEnglishLangSourcePreview[];
   } | null>(null);
   const showPromptsLibrary = data.promptLibrary != null;
   const isApHistoryAssignmentType =
@@ -774,6 +776,7 @@ export default function AppAssignmentTypesIdRoute() {
                   title: entry.title,
                   prompt: entry.prompt,
                   frqType: entry.frqType,
+                  sources: entry.sources,
                 });
                 setApHistoryEntry(null);
                 setLibraryPrompt('');

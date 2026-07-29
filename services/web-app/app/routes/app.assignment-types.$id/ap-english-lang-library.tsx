@@ -275,6 +275,25 @@ export function ApEnglishLangLibrary({
   );
 }
 
+/** What the provided material is called, per question type. */
+function sourceNoun(frqType: string) {
+  return frqType === 'rhetorical_analysis' ? 'Passage' : 'Source';
+}
+
+/**
+ * The document a card should name. Q2 provides exactly one passage, so naming it
+ * is unambiguous; a Q1 packet has several, and the first stands in for the set.
+ */
+function describeProvidedDocument(entry: ApEnglishLangLibraryEntry) {
+  const first = entry.sources[0];
+  if (!first) return null;
+  return {
+    title: first.title,
+    attribution: first.attribution,
+    words: first.body.trim().split(/\s+/).filter(Boolean).length,
+  };
+}
+
 function LibraryEntryCard({
   entry,
   onSelect,
@@ -282,6 +301,8 @@ function LibraryEntryCard({
   entry: ApEnglishLangLibraryEntry;
   onSelect: () => void;
 }) {
+  const providedDocument = describeProvidedDocument(entry);
+
   return (
     <Button
       type="button"
@@ -308,6 +329,22 @@ function LibraryEntryCard({
           {entry.prompt}
         </p>
 
+        {/*
+          The prompt above is only the headnote. Naming the provided document and
+          its length tells the teacher at a glance that a real passage is
+          attached, and roughly how long it will take a student to read -- a
+          bare "1 source" badge reads as though nothing is there.
+        */}
+        {providedDocument ? (
+          <p className="whitespace-normal text-xs font-normal leading-5 text-muted-foreground">
+            <span className="font-medium">{sourceNoun(entry.frqType)}:</span>{' '}
+            {providedDocument.title} · {providedDocument.attribution}
+            {providedDocument.words > 0
+              ? ` · ${providedDocument.words} words`
+              : ''}
+          </p>
+        ) : null}
+
         <div className="flex flex-wrap gap-2">
           <Badge variant="outline" size="sm">
             {formatApEnglishLangFacetValue(entry.focusSkill)}
@@ -319,7 +356,9 @@ function LibraryEntryCard({
           ) : null}
           <Badge variant="outline" size="sm">
             {entry.sources.length}{' '}
-            {entry.sources.length === 1 ? 'source' : 'sources'}
+            {entry.sources.length === 1
+              ? sourceNoun(entry.frqType).toLowerCase()
+              : `${sourceNoun(entry.frqType).toLowerCase()}s`}
           </Badge>
         </div>
       </div>

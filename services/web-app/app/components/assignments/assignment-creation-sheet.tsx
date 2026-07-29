@@ -92,6 +92,23 @@ export type AssignmentCreationSheetProps = {
     title: string;
     body: string;
     badge?: string;
+    /**
+     * The source material the prompt provides, shown under the prompt so the
+     * teacher can read the actual document before assigning it. On an AP Lang
+     * rhetorical analysis or synthesis prompt this IS the assignment; the prompt
+     * body alone is only the headnote.
+     */
+    sources?: Array<{
+      position: number;
+      title: string;
+      attribution: string;
+      body: string;
+      caption?: string | null;
+      mediaType?: string;
+      imageAlt?: string | null;
+    }>;
+    /** What to call a source in this context -- "passage" for Q2, "source" for Q1. */
+    sourceNoun?: string;
   } | null;
   /**
    * Extra hidden fields posted with the form, e.g. which library entry or saved
@@ -476,6 +493,48 @@ export function AssignmentCreationSheetContent({
             <p className="whitespace-pre-wrap text-sm leading-6 text-muted-foreground">
               {lockedPrompt.body}
             </p>
+
+            {lockedPrompt.sources?.length ? (
+              <details
+                className="rounded-md border bg-background"
+                // A single provided document is the assignment itself, so it
+                // opens by default; a six-source synthesis packet would push the
+                // form's controls off screen, so that stays collapsed.
+                open={lockedPrompt.sources.length === 1}
+              >
+                <summary className="cursor-pointer px-3 py-2 text-sm font-medium marker:text-muted-foreground">
+                  {lockedPrompt.sources.length}{' '}
+                  {lockedPrompt.sources.length === 1
+                    ? (lockedPrompt.sourceNoun ?? 'source')
+                    : `${lockedPrompt.sourceNoun ?? 'source'}s`}
+                </summary>
+                <div className="max-h-80 space-y-3 overflow-y-auto px-3 pb-3">
+                  {lockedPrompt.sources.map((source) => (
+                    <section key={`${source.position}-${source.title}`}>
+                      <h4 className="text-sm font-semibold">
+                        {source.title}
+                      </h4>
+                      <p className="text-xs text-muted-foreground">
+                        {source.attribution}
+                      </p>
+                      {source.caption ? (
+                        <p className="mt-1 text-xs italic text-muted-foreground">
+                          {source.caption}
+                        </p>
+                      ) : null}
+                      {source.mediaType === 'image' && source.imageAlt ? (
+                        <p className="mt-1 text-xs font-medium text-muted-foreground">
+                          [Visual source] {source.imageAlt}
+                        </p>
+                      ) : null}
+                      <p className="mt-1 whitespace-pre-wrap text-sm leading-6">
+                        {source.body}
+                      </p>
+                    </section>
+                  ))}
+                </div>
+              </details>
+            ) : null}
           </div>
         ) : (
           <div className="space-y-2">
