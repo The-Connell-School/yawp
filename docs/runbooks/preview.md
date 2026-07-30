@@ -10,6 +10,7 @@ The target behavior is:
 - The shared template database restores the configured production database dump from S3 once; new PR databases clone that template, then apply newer Prisma migrations.
 - Deploys avoid ECR pushes and Terraform applies on the hot path.
 - The preview URL is `https://pr-<number>.$PREVIEW_DOMAIN` when TLS is enabled.
+- Traefik protects every preview route, API, and static asset with one shared HTTP Basic credential. Deploys fail closed if that credential is missing.
 - The default runtime is `PREVIEW_RUNTIME=fast`: source is bind-mounted, Bun dependencies live in Docker volumes, React Router runs in dev mode, and warm deploys skip dependency install, Prisma generate, and migration work when the tooling fingerprint has not changed. The web container is still recreated after each source sync so the dev server starts from a clean process. Set `PREVIEW_RUNTIME=production` to use the production Dockerfile build path.
 
 ## Host Setup
@@ -64,19 +65,51 @@ Required repository settings:
 - Variable `PREVIEW_DB_DUMP_S3_URI`
 - Secret `PREVIEW_SSH_PRIVATE_KEY`
 - Secret `PREVIEW_ANTHROPIC_API_KEY` or repository secret `ANTHROPIC_API_KEY`
+- Secret `PREVIEW_BASIC_AUTH`, containing one htpasswd entry such as `preview-admin:$apr1$...`
+- Secret `PREVIEW_BASIC_AUTH_PASSWORD`, containing the plaintext password for authenticated deploy smoke checks
 - Secret `PREVIEW_DB_PASSWORD` if the shared preview Postgres password is not the default
 - Secret `PREVIEW_LOGIN_EMAIL`
 - Secret `PREVIEW_LOGIN_PASSWORD`
 
+### Create or rotate the shared access credential
+
+Generate the password and Apache MD5 htpasswd entry locally. The password never enters the Compose file; only its hash does.
+
+```bash
+read -rsp 'New preview password: ' PREVIEW_BASIC_AUTH_PASSWORD
+echo
+export PREVIEW_BASIC_AUTH_PASSWORD
+export PREVIEW_BASIC_AUTH="preview-admin:$(printf '%s' "$PREVIEW_BASIC_AUTH_PASSWORD" | openssl passwd -apr1 -stdin)"
+```
+
+In GitHub, open **Settings → Secrets and variables → Actions** and create or update both repository secrets:
+
+- `PREVIEW_BASIC_AUTH` with the complete `preview-admin:$apr1$...` value
+- `PREVIEW_BASIC_AUTH_PASSWORD` with the plaintext password used to generate it
+
+Alternatively, set both through the repository helper:
+
+```bash
+PREVIEW_HOST=<host-or-ip> \
+PREVIEW_DOMAIN=preview.yawp.school \
+PREVIEW_BASIC_AUTH="$PREVIEW_BASIC_AUTH" \
+PREVIEW_BASIC_AUTH_PASSWORD="$PREVIEW_BASIC_AUTH_PASSWORD" \
+./scripts/github-preview-config.sh
+```
+
+Always rotate the two secrets together, then rerun the preview workflow for every open PR so each generated Compose project receives the new hash. Give internal admins the username (`preview-admin` in this example) and the new password through the approved password manager.
+
 ## Local Smoke
 
-Run the same deployment path locally with a direct port:
+Run the same preview deployment path locally with a direct port. It intentionally keeps the access-gate requirement because it exercises preview publishing; ordinary non-preview local Compose and `bun dev` workflows are unchanged.
 
 ```bash
 PR_NUMBER=999 \
 PREVIEW_DOMAIN=localhost \
 PREVIEW_ROOT=/tmp/yawp-preview \
 PREVIEW_DIRECT_PORT=18080 \
+PREVIEW_BASIC_AUTH="$PREVIEW_BASIC_AUTH" \
+PREVIEW_BASIC_AUTH_PASSWORD="$PREVIEW_BASIC_AUTH_PASSWORD" \
 bash scripts/preview/deploy.sh
 ```
 
@@ -89,7 +122,7 @@ PREVIEW_ROOT=/tmp/yawp-preview \
 bash scripts/preview/destroy.sh
 ```
 
-Login smoke credentials come from `PREVIEW_LOGIN_EMAIL` and `PREVIEW_LOGIN_PASSWORD`.
+Production-dump app-login smoke credentials come from `PREVIEW_LOGIN_EMAIL` and `PREVIEW_LOGIN_PASSWORD`. Seeded previews use the dev-login route, while all health and login smoke requests also send the shared Basic credential.
 
 ## Performance Notes
 

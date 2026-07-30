@@ -338,7 +338,11 @@ describe('PR preview deployment contract', () => {
   test('preview deploy polls health quickly once containers are starting', () => {
     const deployScript = readRepoFile('scripts/preview/deploy.sh');
 
-    expect(deployScript).toContain('curl -fsS --connect-timeout 1 --max-time 2 "$health_url"');
+    // The subject here is poll SPEED, not the shape of the request. The health check now
+    // carries basic-auth credentials because the preview sits behind the shared gate, so
+    // the old exact-string match on an anonymous curl pinned a detail it never meant to
+    // own. Assert the timeouts and the cadence, which are what "quickly" means.
+    expect(deployScript).toContain('--connect-timeout 1 --max-time 2 "$health_url"');
     expect(deployScript).toContain('sleep 1');
     expect(deployScript).not.toContain('--max-time 5 "$health_url"');
     expect(deployScript).not.toContain('sleep 2');

@@ -44,6 +44,24 @@ function requireDataMode(value) {
   return dataMode;
 }
 
+export function requirePreviewBasicAuth(value) {
+  const credential = String(value ?? '').trim();
+  if (!credential) {
+    throw new Error(
+      'PREVIEW_BASIC_AUTH is required for preview deployments',
+    );
+  }
+  if (
+    !/^[A-Za-z0-9._-]+:\$apr1\$[^$\r\n]+\$[^$\r\n]+$/.test(credential)
+  ) {
+    throw new Error(
+      'PREVIEW_BASIC_AUTH must be a single htpasswd-format credential (user:$apr1$...)',
+    );
+  }
+  return credential;
+}
+
+
 // A named environment (the long-lived demo box) reuses this whole pipeline; only the
 // slug differs. Without the override every environment is forced to be "pr-<n>", which
 // would mean a second, divergent deploy path for the one environment that must not drift.

@@ -54,11 +54,30 @@ function resolveRedirect(baseUrl, location) {
   return new URL(location, baseUrl).toString();
 }
 
-async function getWithRedirects(url, { cookie, maxRedirects = 3 } = {}) {
+function getBasicAuthHeader(basicAuth) {
+  if (!basicAuth) return {};
+  if (!basicAuth.username || !basicAuth.password) {
+    throw new Error('basic auth username and password are required');
+  }
+  return {
+    authorization: `Basic ${Buffer.from(
+      `${basicAuth.username}:${basicAuth.password}`,
+    ).toString('base64')}`,
+  };
+}
+
+async function getWithRedirects(
+  url,
+  { cookie, basicAuth, maxRedirects = 3, requestFn = request } = {},
+) {
   let currentUrl = url;
+  const allowedOrigin = new URL(url).origin;
   for (let attempt = 0; attempt <= maxRedirects; attempt += 1) {
-    const response = await request(currentUrl, {
-      headers: cookie ? { cookie } : {},
+    const response = await requestFn(currentUrl, {
+      headers: {
+        ...getBasicAuthHeader(basicAuth),
+        ...(cookie ? { cookie } : {}),
+      },
     });
     if (response.status < 300 || response.status >= 400) {
       return response;
@@ -66,6 +85,11 @@ async function getWithRedirects(url, { cookie, maxRedirects = 3 } = {}) {
 
     const nextUrl = resolveRedirect(currentUrl, response.headers.location);
     if (!nextUrl) return response;
+    if (new URL(nextUrl).origin !== allowedOrigin) {
+      throw new Error(
+        `Refusing cross-origin redirect during preview smoke: ${nextUrl}`,
+      );
+    }
     currentUrl = nextUrl;
   }
 
@@ -76,6 +100,8 @@ export async function runLoginSmoke({
   baseUrl,
   email,
   password,
+  basicAuth,
+  requestFn = request,
 } = {}) {
   if (!baseUrl) throw new Error('baseUrl is required');
   if (!email || !password) throw new Error('email and password are required');
@@ -86,10 +112,11 @@ export async function runLoginSmoke({
     redirectTo: '/app',
   }).toString();
 
-  const login = await request(appendPath(baseUrl, '/auth/login'), {
+  const login = await requestFn(appendPath(baseUrl, '/auth/login'), {
     method: 'POST',
     body: form,
     headers: {
+      ...getBasicAuthHeader(basicAuth),
       'content-type': 'application/x-www-form-urlencoded',
     },
   });
@@ -104,7 +131,9 @@ export async function runLoginSmoke({
   }
 
   const app = await getWithRedirects(appendPath(baseUrl, '/app'), {
+    basicAuth,
     cookie: cookies,
+    requestFn,
   });
 
   if (app.status !== 200) {
@@ -117,6 +146,8 @@ export async function runLoginSmoke({
 export async function runDevLoginSmoke({
   baseUrl,
   email = 'dev.teacher@yawp.local',
+  basicAuth,
+  requestFn = request,
 } = {}) {
   if (!baseUrl) throw new Error('baseUrl is required');
   if (!email) throw new Error('email is required');
@@ -126,10 +157,11 @@ export async function runDevLoginSmoke({
     redirectTo: '/app',
   }).toString();
 
-  const login = await request(appendPath(baseUrl, '/auth/dev-login'), {
+  const login = await requestFn(appendPath(baseUrl, '/auth/dev-login'), {
     method: 'POST',
     body: form,
     headers: {
+      ...getBasicAuthHeader(basicAuth),
       'content-type': 'application/x-www-form-urlencoded',
     },
   });
@@ -144,7 +176,9 @@ export async function runDevLoginSmoke({
   }
 
   const app = await getWithRedirects(appendPath(baseUrl, '/app'), {
+    basicAuth,
     cookie: cookies,
+    requestFn,
   });
 
   if (app.status !== 200) {
@@ -166,6 +200,16 @@ export function shouldUseDevLogin({ dataMode, runtime } = {}) {
 async function main() {
   const baseUrl = (process.env.PREVIEW_BASE_URL || '').replace(/\/$/, '');
   const dataMode = process.env.PREVIEW_DATA_MODE || 'seed';
+  const htpasswdCredential = process.env.PREVIEW_BASIC_AUTH || '';
+  const usernameSeparator = htpasswdCredential.indexOf(':');
+  const basicAuth = {
+    username:
+      usernameSeparator === -1
+        ? ''
+        : htpasswdCredential.slice(0, usernameSeparator),
+    password: process.env.PREVIEW_BASIC_AUTH_PASSWORD || '',
+  };
+
   const runtime = process.env.PREVIEW_RUNTIME || 'fast';
 
   // Dev login is gated on NODE_ENV === 'development' AND a local DATABASE_URL
@@ -183,12 +227,12 @@ async function main() {
     if (canUseDevLogin) {
       const email =
         process.env.PREVIEW_DEV_LOGIN_EMAIL || 'dev.teacher@yawp.local';
-      await runDevLoginSmoke({ baseUrl, email });
+      await runDevLoginSmoke({ baseUrl, email, basicAuth });
       console.log(`OK preview dev login smoke: ${email} -> /app`);
     } else {
       const email = process.env.PREVIEW_LOGIN_EMAIL;
       const password = process.env.PREVIEW_LOGIN_PASSWORD;
-      await runLoginSmoke({ baseUrl, email, password });
+      await runLoginSmoke({ baseUrl, email, password, basicAuth });
       console.log(`OK preview login smoke: ${email} -> /app`);
     }
   } catch (error) {

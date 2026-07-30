@@ -7,6 +7,9 @@ export SOURCE_DIR
 
 source "$SCRIPT_DIR/tooling-artifacts.sh"
 
+: "${PREVIEW_BASIC_AUTH:?Missing PREVIEW_BASIC_AUTH (expected one htpasswd-format credential)}"
+: "${PREVIEW_BASIC_AUTH_PASSWORD:?Missing PREVIEW_BASIC_AUTH_PASSWORD for authenticated preview smoke checks}"
+
 export PREVIEW_DATA_MODE="${PREVIEW_DATA_MODE:-seed}"
 export PREVIEW_DEV_LOGIN_EMAIL="${PREVIEW_DEV_LOGIN_EMAIL:-dev.teacher@yawp.local}"
 eval "$(node "$SCRIPT_DIR/preview-env.mjs" --shell)"
@@ -294,14 +297,26 @@ start_or_refresh_web
 
 health_url="${PREVIEW_HEALTHCHECK_URL:-${URL}/api/healthcheck}"
 login_url="${PREVIEW_LOGIN_URL:-${URL}}"
+basic_auth_username="${PREVIEW_BASIC_AUTH%%:*}"
 if [[ -n "${DIRECT_PORT:-}" ]]; then
   health_url="http://127.0.0.1:${DIRECT_PORT}/api/healthcheck"
   login_url="http://127.0.0.1:${DIRECT_PORT}"
 fi
 
 for attempt in $(seq 1 90); do
-  if curl -fsS --connect-timeout 1 --max-time 2 "$health_url" >/dev/null; then
-    PREVIEW_BASE_URL="$login_url" PREVIEW_DATA_MODE="$DATA_MODE" node "$SCRIPT_DIR/smoke-login.mjs"
+  gate_status=""
+  gate_ready=1
+  if [[ -z "${DIRECT_PORT:-}" ]]; then
+    gate_response="$(curl -sS -D - -o /dev/null -w $'\n%{http_code}' --connect-timeout 1 --max-time 2 "$health_url" || true)"
+    gate_status="${gate_response##*$'\n'}"
+    gate_headers="${gate_response%$'\n'*}"
+    if [[ "$gate_status" != "401" ]] || ! grep -qi '^www-authenticate:[[:space:]]*Basic' <<<"$gate_headers"; then
+      gate_ready=0
+    fi
+  fi
+
+  if [[ "$gate_ready" == "1" ]] && curl -fsS --user "${basic_auth_username}:${PREVIEW_BASIC_AUTH_PASSWORD}" --connect-timeout 1 --max-time 2 "$health_url" >/dev/null; then
+    PREVIEW_BASE_URL="$login_url" PREVIEW_DATA_MODE="$DATA_MODE" PREVIEW_BASIC_AUTH="$PREVIEW_BASIC_AUTH" PREVIEW_BASIC_AUTH_PASSWORD="$PREVIEW_BASIC_AUTH_PASSWORD" node "$SCRIPT_DIR/smoke-login.mjs"
     end_ms="$(date +%s%3N)"
     elapsed_ms="$((end_ms - start_ms))"
     echo "PREVIEW_URL=$URL"
@@ -309,7 +324,7 @@ for attempt in $(seq 1 90); do
     echo "PREVIEW_ELAPSED_MS=$elapsed_ms"
     exit 0
   fi
-  echo "Waiting for preview healthcheck ($attempt/90): $health_url"
+  echo "Waiting for preview healthcheck ($attempt/90, anonymous=${gate_status:-direct}): $health_url"
   sleep 1
 done
 

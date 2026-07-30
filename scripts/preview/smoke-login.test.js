@@ -2,199 +2,216 @@ import { afterEach, describe, expect, test } from 'bun:test';
 import http from 'node:http';
 import { runDevLoginSmoke, runLoginSmoke, shouldUseDevLogin } from './smoke-login.mjs';
 
-const servers = [];
-
-function startServer(handler) {
-  const server = http.createServer(handler);
-  servers.push(server);
-
-  return new Promise((resolve, reject) => {
-    server.once('error', reject);
-    server.listen(0, '127.0.0.1', () => {
-      const address = server.address();
-      resolve({
-        url: `http://127.0.0.1:${address.port}`,
-        close: () => new Promise((done) => server.close(done)),
-      });
-    });
-  });
-}
-
-afterEach(async () => {
-  while (servers.length > 0) {
-    const server = servers.pop();
-    await new Promise((resolve) => server.close(resolve));
-  }
-});
+const basicAuth = {
+  username: 'preview-admin',
+  password: 'shared-pass',
+};
+const basicAuthorization =
+  'Basic cHJldmlldy1hZG1pbjpzaGFyZWQtcGFzcw==';
 
 describe('runLoginSmoke', () => {
   test('requires explicit preview credentials', async () => {
     await expect(
       runLoginSmoke({
-        baseUrl: 'http://127.0.0.1:1',
+        baseUrl: 'https://pr-142.preview.yawp.school',
       }),
     ).rejects.toThrow('email and password are required');
   });
 
-  test('passes when preview credentials can reach /app with a session cookie', async () => {
-    const seen = { loginBody: '', appCookie: '' };
-    const server = await startServer((req, res) => {
-      if (req.url === '/auth/login' && req.method === 'POST') {
-        req.on('data', (chunk) => {
-          seen.loginBody += chunk;
-        });
-        req.on('end', () => {
-          res.writeHead(302, {
+  test('passes basic auth and the app session cookie', async () => {
+    const seen = { login: null, app: null };
+    const requestFn = async (url, options = {}) => {
+      const pathname = new URL(url).pathname;
+      if (pathname === '/auth/login' && options.method === 'POST') {
+        seen.login = options;
+        return {
+          status: 302,
+          headers: {
             location: '/app',
             'set-cookie': 'auth_session=preview-ok; Path=/; HttpOnly',
-          });
-          res.end();
-        });
-        return;
+          },
+          body: '',
+        };
       }
-
-      if (req.url === '/app' && req.method === 'GET') {
-        seen.appCookie = req.headers.cookie || '';
-        res.writeHead(seen.appCookie.includes('auth_session=preview-ok') ? 200 : 401);
-        res.end('app');
-        return;
+      if (pathname === '/app') {
+        seen.app = options;
+        return { status: 200, headers: {}, body: 'app' };
       }
-
-      res.writeHead(404);
-      res.end();
-    });
+      return { status: 404, headers: {}, body: '' };
+    };
 
     await expect(
       runLoginSmoke({
-        baseUrl: server.url,
+        baseUrl: 'https://pr-142.preview.yawp.school',
         email: 'teacher.e2e@yawp.test',
         password: 'teacher-e2e-password',
+        basicAuth,
+        requestFn,
       }),
     ).resolves.toMatchObject({ ok: true });
 
-    expect(decodeURIComponent(seen.loginBody)).toContain(
+    expect(seen.login.headers.authorization).toBe(basicAuthorization);
+    expect(decodeURIComponent(seen.login.body)).toContain(
       'email=teacher.e2e@yawp.test',
     );
-    expect(decodeURIComponent(seen.loginBody)).toContain(
+    expect(decodeURIComponent(seen.login.body)).toContain(
       'password=teacher-e2e-password',
     );
-    expect(seen.appCookie).toContain('auth_session=preview-ok');
+    expect(seen.app.headers.authorization).toBe(basicAuthorization);
+    expect(seen.app.headers.cookie).toContain('auth_session=preview-ok');
   });
 
   test('fails when login does not create an authenticated app session', async () => {
-    const server = await startServer((req, res) => {
-      if (req.url === '/auth/login' && req.method === 'POST') {
-        res.writeHead(302, {
-          location: '/app',
-          'set-cookie': 'auth_session=wrong; Path=/; HttpOnly',
-        });
-        res.end();
-        return;
+    const requestFn = async (url, options = {}) => {
+      const pathname = new URL(url).pathname;
+      if (pathname === '/auth/login' && options.method === 'POST') {
+        return {
+          status: 302,
+          headers: {
+            location: '/app',
+            'set-cookie': 'auth_session=wrong; Path=/; HttpOnly',
+          },
+          body: '',
+        };
       }
-
-      if (req.url === '/app' && req.method === 'GET') {
-        res.writeHead(401);
-        res.end('not logged in');
-        return;
-      }
-
-      res.writeHead(404);
-      res.end();
-    });
+      return { status: 401, headers: {}, body: 'not logged in' };
+    };
 
     await expect(
       runLoginSmoke({
-        baseUrl: server.url,
+        baseUrl: 'https://pr-142.preview.yawp.school',
         email: 'teacher.e2e@yawp.test',
         password: 'teacher-e2e-password',
+        basicAuth,
+        requestFn,
       }),
-    ).rejects.toThrow('Expected /app to return HTTP 200 after login, got 401');
+    ).rejects.toThrow(
+      'Expected /app to return HTTP 200 after login, got 401',
+    );
   });
 
-  test('follows the dev-server /app redirect with the login cookie', async () => {
-    const seen = { redirectedCookie: '' };
-    const server = await startServer((req, res) => {
-      if (req.url === '/auth/login' && req.method === 'POST') {
-        res.writeHead(302, {
-          location: '/app',
-          'set-cookie': 'auth_session=preview-ok; Path=/; HttpOnly',
-        });
-        res.end();
-        return;
+  test('follows the dev-server /app redirect with both auth layers', async () => {
+    const seen = { redirectedHeaders: null };
+    const requestFn = async (url, options = {}) => {
+      const pathname = new URL(url).pathname;
+      if (pathname === '/auth/login' && options.method === 'POST') {
+        return {
+          status: 302,
+          headers: {
+            location: '/app',
+            'set-cookie': 'auth_session=preview-ok; Path=/; HttpOnly',
+          },
+          body: '',
+        };
       }
-
-      if (req.url === '/app' && req.method === 'GET') {
-        res.writeHead(308, { location: '/app/' });
-        res.end();
-        return;
+      if (pathname === '/app') {
+        return {
+          status: 308,
+          headers: { location: '/app/' },
+          body: '',
+        };
       }
-
-      if (req.url === '/app/' && req.method === 'GET') {
-        seen.redirectedCookie = req.headers.cookie || '';
-        res.writeHead(seen.redirectedCookie.includes('auth_session=preview-ok') ? 200 : 401);
-        res.end('app');
-        return;
+      if (pathname === '/app/') {
+        seen.redirectedHeaders = options.headers;
+        return { status: 200, headers: {}, body: 'app' };
       }
-
-      res.writeHead(404);
-      res.end();
-    });
+      return { status: 404, headers: {}, body: '' };
+    };
 
     await expect(
       runLoginSmoke({
-        baseUrl: server.url,
+        baseUrl: 'https://pr-142.preview.yawp.school',
         email: 'teacher.e2e@yawp.test',
         password: 'teacher-e2e-password',
+        basicAuth,
+        requestFn,
       }),
     ).resolves.toMatchObject({ ok: true });
 
-    expect(seen.redirectedCookie).toContain('auth_session=preview-ok');
+    expect(seen.redirectedHeaders.authorization).toBe(basicAuthorization);
+    expect(seen.redirectedHeaders.cookie).toContain(
+      'auth_session=preview-ok',
+    );
+  });
+
+  test('refuses to forward preview credentials across origins', async () => {
+    const requestFn = async (url, options = {}) => {
+      const pathname = new URL(url).pathname;
+      if (pathname === '/auth/login' && options.method === 'POST') {
+        return {
+          status: 302,
+          headers: {
+            location: '/app',
+            'set-cookie': 'auth_session=preview-ok; Path=/; HttpOnly',
+          },
+          body: '',
+        };
+      }
+      if (pathname === '/app') {
+        return {
+          status: 302,
+          headers: { location: 'https://attacker.example/collect' },
+          body: '',
+        };
+      }
+      throw new Error('request escaped the preview origin');
+    };
+
+    await expect(
+      runLoginSmoke({
+        baseUrl: 'https://pr-142.preview.yawp.school',
+        email: 'teacher.e2e@yawp.test',
+        password: 'teacher-e2e-password',
+        basicAuth,
+        requestFn,
+      }),
+    ).rejects.toThrow(
+      'Refusing cross-origin redirect during preview smoke',
+    );
   });
 });
 
 describe('runDevLoginSmoke', () => {
-  test('passes when a seeded dev persona can reach /app with a session cookie', async () => {
-    const seen = { loginBody: '', appCookie: '' };
-    const server = await startServer((req, res) => {
-      if (req.url === '/auth/dev-login' && req.method === 'POST') {
-        req.on('data', (chunk) => {
-          seen.loginBody += chunk;
-        });
-        req.on('end', () => {
-          res.writeHead(302, {
+  test('passes shared basic auth while checking a seeded dev persona', async () => {
+    const seen = { login: null, app: null };
+    const requestFn = async (url, options = {}) => {
+      const pathname = new URL(url).pathname;
+      if (pathname === '/auth/dev-login' && options.method === 'POST') {
+        seen.login = options;
+        return {
+          status: 302,
+          headers: {
             location: '/app',
             'set-cookie': 'auth_session=preview-dev-ok; Path=/; HttpOnly',
-          });
-          res.end();
-        });
-        return;
+          },
+          body: '',
+        };
       }
-
-      if (req.url === '/app' && req.method === 'GET') {
-        seen.appCookie = req.headers.cookie || '';
-        res.writeHead(
-          seen.appCookie.includes('auth_session=preview-dev-ok') ? 200 : 401,
-        );
-        res.end('app');
-        return;
+      if (pathname === '/app') {
+        seen.app = options;
+        return { status: 200, headers: {}, body: 'app' };
       }
-
-      res.writeHead(404);
-      res.end();
-    });
+      return { status: 404, headers: {}, body: '' };
+    };
 
     await expect(
       runDevLoginSmoke({
-        baseUrl: server.url,
+        baseUrl: 'https://pr-142.preview.yawp.school',
         email: 'dev.teacher@yawp.local',
+        basicAuth,
+        requestFn,
       }),
     ).resolves.toMatchObject({ ok: true });
 
-    expect(decodeURIComponent(seen.loginBody)).toContain(
+    expect(seen.login.headers.authorization).toBe(basicAuthorization);
+    expect(decodeURIComponent(seen.login.body)).toContain(
       'email=dev.teacher@yawp.local',
     );
-    expect(seen.loginBody).not.toContain('password=');
-    expect(seen.appCookie).toContain('auth_session=preview-dev-ok');
+    expect(seen.login.body).not.toContain('password=');
+    expect(seen.app.headers.authorization).toBe(basicAuthorization);
+    expect(seen.app.headers.cookie).toContain(
+      'auth_session=preview-dev-ok',
+    );
   });
 });
 
