@@ -37,6 +37,19 @@ function canReproduceRootOwnership() {
 }
 
 const canReproduce = canReproduceRootOwnership();
+
+// A skip is the correct outcome on a macOS workstation and an unacceptable one on Linux
+// CI, which is the only place this regression is covered at all. Without this gate the
+// coverage could evaporate — rootless Docker, a userns remap, a missing image — and
+// report a green suite that proves nothing, which is how the bug shipped the first time.
+const requireReproduction = process.env.ENFORCE_CAP_REQUIRE_ROOT_OWNERSHIP === '1';
+if (requireReproduction && !canReproduce) {
+  throw new Error(
+    'ENFORCE_CAP_REQUIRE_ROOT_OWNERSHIP=1 but container-root writes are not root-owned on '
+    + 'the host, so the reclaim regression cannot be exercised. Refusing to skip it here: '
+    + 'fix the runner (Docker present, not rootless, no userns remap) or unset the flag.',
+  );
+}
 if (!canReproduce) {
   console.warn(
     '[enforce-cap.test] SKIPPING the root-owned-build-output regression: this platform '
