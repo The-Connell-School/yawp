@@ -467,3 +467,43 @@ describe('PR preview deployment contract', () => {
     expect(previewWorkflow).not.toContain('seed overlay');
   });
 });
+
+describe('demo environment deployment contract', () => {
+  // deploy.sh runs ON THE DEMO HOST over SSH, so a secret declared in the job's `env:`
+  // reaches the runner and stops there. Adding PREVIEW_BASIC_AUTH to the job block and
+  // the pre-flight check — but not to remote_env — passed every local check and then
+  // failed the real deploy with "Missing PREVIEW_BASIC_AUTH", because the script that
+  // needed it was running on a different machine. Declared and forwarded are two
+  // different things; this asserts they agree.
+  test('every PREVIEW_ variable the demo job declares is forwarded to the host', () => {
+    const workflow = readRepoFile('.github/workflows/demo-environment.yml');
+
+    const declared = [...workflow.matchAll(/^ {6}(PREVIEW_[A-Z0-9_]+):/gm)].map((m) => m[1]);
+    expect(declared.length).toBeGreaterThan(5);
+
+    // Stop at the line that closes the array, not the first ')' — that one belongs to
+    // $(shell_quote ...) on the very first entry.
+    const remoteEnvStart = workflow.indexOf('remote_env=(');
+    const remoteEnvBlock = workflow.slice(
+      remoteEnvStart,
+      workflow.indexOf('\n          )', remoteEnvStart),
+    );
+    expect(remoteEnvBlock).toContain('SOURCE_DIR=');
+
+    // PREVIEW_HOST/SSH_USER address the machine itself; they are used to build the SSH
+    // connection, not consumed by the script on the far end.
+    const connectionOnly = new Set(['PREVIEW_HOST', 'PREVIEW_SSH_USER']);
+    const missing = declared
+      .filter((name) => !connectionOnly.has(name))
+      .filter((name) => !remoteEnvBlock.includes(`${name}=`));
+
+    expect(missing).toEqual([]);
+  });
+
+  test('the demo deploy proves the gate turns strangers away before trusting the password', () => {
+    const workflow = readRepoFile('.github/workflows/demo-environment.yml');
+
+    expect(workflow).toContain('expected 401');
+    expect(workflow).toContain('--user "${user}:${PREVIEW_BASIC_AUTH_PASSWORD}"');
+  });
+});

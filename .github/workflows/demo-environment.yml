@@ -136,6 +136,8 @@ jobs:
             "PREVIEW_DB_PASSWORD=$(shell_quote "$PREVIEW_DB_PASSWORD")"
             "PREVIEW_LOGIN_EMAIL=$(shell_quote "$PREVIEW_LOGIN_EMAIL")"
             "PREVIEW_LOGIN_PASSWORD=$(shell_quote "$PREVIEW_LOGIN_PASSWORD")"
+            "PREVIEW_BASIC_AUTH=$(shell_quote "$PREVIEW_BASIC_AUTH")"
+            "PREVIEW_BASIC_AUTH_PASSWORD=$(shell_quote "$PREVIEW_BASIC_AUTH_PASSWORD")"
             "DEMO_RESET_DATA=$(shell_quote "$DEMO_RESET_DATA")"
             "SOURCE_DIR=$(shell_quote "$remote_source")"
           )
