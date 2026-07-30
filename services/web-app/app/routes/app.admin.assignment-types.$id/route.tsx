@@ -77,6 +77,14 @@ export async function action({ request, params }: ActionFunctionArgs) {
     const description = formData.get('description')?.toString();
     const imageFile = formData.get('image') as File | null;
     const deleteImage = formData.get('deleteImage') === 'true';
+    // Only forms that render the field may change it; a form that omits it
+    // leaves the course-level tutor guidelines untouched.
+    const tutorInstructionsData = formData.has('tutorInstructions')
+      ? {
+          tutorInstructions:
+            formData.get('tutorInstructions')?.toString().trim() || null,
+        }
+      : {};
     const hasGradingConfigFields =
       formData.has('scoringScale') ||
       formData.has('rubricJson') ||
@@ -140,6 +148,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
         data: {
           title,
           description: description || null,
+          ...tutorInstructionsData,
           ...gradingConfigData,
         },
       });
@@ -209,6 +218,7 @@ export default function AssignmentTypeRoute() {
       archivedAt={course.archivedAt}
       imageId={course.image?.id ?? null}
       modules={course.assignmentModules}
+      tutorInstructionsDefaultValue={course.tutorInstructions}
     />
   );
 }

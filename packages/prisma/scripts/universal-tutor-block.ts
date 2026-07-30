@@ -3,10 +3,11 @@
 // assignment and every course.
 //
 // This file is the authoring source. YAWP has no global/base prompt, so the
-// block is seeded into the database as the top of each course's tutor
-// instructions -- which is what the admin Tutor settings screen shows and
-// edits, and what the tutor actually reads at runtime. Editing it in admin
-// takes effect immediately; editing it here changes what future seeds write.
+// block is seeded into the database as the course's own overarching tutor
+// instructions -- the AssignmentType.tutorInstructions column, shown at the
+// top of the admin Tutor settings screen above the module-by-module settings,
+// and put above them at runtime too. Editing it in admin takes effect
+// immediately; editing it here changes what future seeds write.
 //
 // It lives in packages/prisma/scripts (not the web app) because both the seeds
 // and the web app need it.

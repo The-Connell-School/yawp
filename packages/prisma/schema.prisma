@@ -45,6 +45,9 @@ model AssignmentType {
   position                           Int
   systemKey                          String?                       @unique
   archivedAt                         DateTime?                     @db.Timestamptz(6)
+  // The overarching tutor layer for the whole course, above every module's
+  // own instructions. Null for assignment types that have never set one.
+  tutorInstructions                  String?
   ownerOrgId                         String?
   ownerOrg                           Organization?                 @relation(fields: [ownerOrgId], references: [id], onDelete: Cascade)
   ownerMembershipId                  String?

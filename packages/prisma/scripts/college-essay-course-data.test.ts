@@ -9,7 +9,9 @@ import {
   COLLEGE_ESSAY_MODULE_SUBSTANCE,
   COLLEGE_ESSAY_RUBRIC_CATEGORIES,
   COLLEGE_ESSAY_SCORING_SCALE,
+  COLLEGE_ESSAY_TUTOR_INSTRUCTIONS,
   COLLEGE_ESSAY_WORD_LIMIT,
+  composeCollegeEssayTutorSystemPrompt,
   imageContentTypeForPath,
 } from './college-essay-course-data';
 import { UNIVERSAL_TUTOR_BLOCK } from './universal-tutor-block';
@@ -176,23 +178,33 @@ describe('No-writing-for-the-student guarantee', () => {
 });
 
 describe('Universal YAWP! Tutor layer', () => {
-  test('every module system prompt opens with the universal block verbatim', () => {
-    // Module tutorInstructions are the tutor's system prompt, and this course
-    // has no assignment-level box to hold the block, so it leads every module.
+  test('the course carries the universal block once, on the assignment type', () => {
+    // The overarching layer belongs to the course, not to each module: it is
+    // seeded onto the AssignmentType and shown at the top of admin's Tutor
+    // settings, above the module-by-module settings.
+    expect(COLLEGE_ESSAY_TUTOR_INSTRUCTIONS).toBe(UNIVERSAL_TUTOR_BLOCK);
+  });
+
+  test('no module repeats the universal block', () => {
     for (const module of COLLEGE_ESSAY_MODULES) {
-      expect(module.tutorInstructions).toContain(UNIVERSAL_TUTOR_BLOCK);
-      expect(module.tutorInstructions.startsWith(UNIVERSAL_TUTOR_BLOCK)).toBe(
-        true
-      );
+      expect(module.tutorInstructions).not.toContain(UNIVERSAL_TUTOR_BLOCK);
+    }
+  });
+
+  test('every module system prompt opens with the universal block verbatim', () => {
+    for (const module of COLLEGE_ESSAY_MODULES) {
+      const prompt = composeCollegeEssayTutorSystemPrompt(module);
+      expect(prompt).toContain(UNIVERSAL_TUTOR_BLOCK);
+      expect(prompt.startsWith(UNIVERSAL_TUTOR_BLOCK)).toBe(true);
     }
   });
 
   test('the universal character comes before the course-specific persona', () => {
     for (const module of COLLEGE_ESSAY_MODULES) {
-      expect(module.tutorInstructions.indexOf('You are the YAWP! Tutor')).
-        toBeLessThan(
-          module.tutorInstructions.indexOf('YAWP! College Essay Coach')
-        );
+      const prompt = composeCollegeEssayTutorSystemPrompt(module);
+      expect(prompt.indexOf('You are the YAWP! Tutor')).toBeLessThan(
+        prompt.indexOf('YAWP! College Essay Coach')
+      );
     }
   });
 
@@ -200,9 +212,10 @@ describe('Universal YAWP! Tutor layer', () => {
     for (const module of COLLEGE_ESSAY_MODULES) {
       // The off-topic deflection, the multilingual rule, and the house
       // refusal wording all arrive with the block.
-      expect(module.tutorInstructions).toContain('I am mysterious and I contain');
-      expect(module.tutorInstructions).toContain('MULTILINGUAL.');
-      expect(module.tutorInstructions).toContain("I'm not that kind of guy!");
+      const prompt = composeCollegeEssayTutorSystemPrompt(module);
+      expect(prompt).toContain('I am mysterious and I contain');
+      expect(prompt).toContain('MULTILINGUAL.');
+      expect(prompt).toContain("I'm not that kind of guy!");
     }
   });
 });
@@ -214,13 +227,13 @@ describe('Where this course overrides the universal rules', () => {
     // are in the same prompt, so the override has to be stated or the tutor is
     // holding two instructions that disagree.
     for (const module of COLLEGE_ESSAY_MODULES) {
-      expect(module.tutorInstructions).toContain(
-        'SENTENCE-STARTERS ARE NOT ALLOWED HERE'
+      const prompt = composeCollegeEssayTutorSystemPrompt(module);
+      expect(prompt).toContain('SENTENCE-STARTERS ARE NOT ALLOWED HERE');
+      // The course layer lands after the universal one, so the withdrawal is
+      // read as overriding the offer rather than competing with it.
+      expect(prompt.indexOf('sentence-starter they finish')).toBeLessThan(
+        prompt.indexOf('SENTENCE-STARTERS ARE NOT ALLOWED')
       );
-      expect(module.tutorInstructions.indexOf('sentence-starter they finish')).
-        toBeLessThan(
-          module.tutorInstructions.indexOf('SENTENCE-STARTERS ARE NOT ALLOWED')
-        );
     }
   });
 
@@ -238,16 +251,13 @@ describe('Where this course overrides the universal rules', () => {
       expect(UNIVERSAL_TUTOR_BLOCK).toContain(offer);
     }
     for (const module of COLLEGE_ESSAY_MODULES) {
-      expect(module.tutorInstructions).toContain(
-        'SENTENCE-STARTERS ARE NOT ALLOWED HERE, IN ANY FORM'
-      );
+      const prompt = composeCollegeEssayTutorSystemPrompt(module);
+      expect(prompt).toContain('SENTENCE-STARTERS ARE NOT ALLOWED HERE, IN ANY FORM');
       // Both universal offers are named in the override, so neither is left
       // standing as the looser instruction a student could argue for.
-      expect(module.tutorInstructions).toContain('the ONE RULE lists');
-      expect(module.tutorInstructions).toContain(
-        'PAIR VIVID LANGUAGE WITH CONCRETE HELP asks for'
-      );
-      expect(module.tutorInstructions).toContain('BOTH are withdrawn');
+      expect(prompt).toContain('the ONE RULE lists');
+      expect(prompt).toContain('PAIR VIVID LANGUAGE WITH CONCRETE HELP asks for');
+      expect(prompt).toContain('BOTH are withdrawn');
     }
   });
 
@@ -419,16 +429,35 @@ describe('College essay module instructions', () => {
 });
 
 describe('College essay seed script', () => {
+  const seedScript = readFileSync(
+    new URL('./seed-college-essay-course.ts', import.meta.url),
+    'utf8'
+  );
+
+  const assignmentTypeUpdate = seedScript.match(
+    /prisma\.assignmentType\.update\(\{[\s\S]*?\}\)/
+  )?.[0];
+
   test('update path does not overwrite ownerOrgId', () => {
-    const seedScript = readFileSync(
-      new URL('./seed-college-essay-course.ts', import.meta.url),
-      'utf8'
+    expect(assignmentTypeUpdate).toBeDefined();
+    expect(assignmentTypeUpdate).not.toContain('ownerOrgId');
+  });
+
+  test('seeds the universal guidelines onto the assignment type', () => {
+    expect(seedScript).toContain(
+      'tutorInstructions: COLLEGE_ESSAY_TUTOR_INSTRUCTIONS'
     );
-    const updatePayload = seedScript.match(
-      /update:\s*\{[\s\S]*?ASSIGNMENT_TYPE_DATA[\s\S]*?\},/
-    )?.[0];
-    expect(updatePayload).toBeDefined();
-    expect(updatePayload).not.toContain('ownerOrgId');
+  });
+
+  test('re-seeding does not revert guidelines an admin has edited', () => {
+    // Same seed-if-empty rule the modules already follow: structural fields
+    // are refreshed, tutor instructions only when the row is still empty.
+    expect(assignmentTypeUpdate).toContain(
+      'withoutTutorInstructionFields(ASSIGNMENT_TYPE_DATA)'
+    );
+    expect(assignmentTypeUpdate).toContain(
+      'tutorInstructionSeedUpdate(ASSIGNMENT_TYPE_DATA, existingType)'
+    );
   });
 });
 

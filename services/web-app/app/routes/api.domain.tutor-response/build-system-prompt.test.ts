@@ -44,6 +44,33 @@ describe('buildTutorSystemPrompt', () => {
     expect(result.endsWith('\n')).toBe(false);
   });
 
+  it('opens with the assignment-type guidelines, above the module instructions', () => {
+    const result = buildTutorSystemPrompt({
+      ...base,
+      assignmentTypeTutorInstructions:
+        'You are the YAWP! Tutor. Never write the work for the student.',
+    });
+
+    expect(result.startsWith('You are the YAWP! Tutor.')).toBe(true);
+    expect(result.indexOf('You are the YAWP! Tutor.')).toBeLessThan(
+      result.indexOf(base.tutorInstructions)
+    );
+    expect(result.indexOf(base.tutorInstructions)).toBeLessThan(
+      result.indexOf(base.instructionTutorInstructions)
+    );
+  });
+
+  it('is unchanged for assignment types with no overarching guidelines', () => {
+    const withoutLayer = buildTutorSystemPrompt(base);
+    const withEmptyLayer = buildTutorSystemPrompt({
+      ...base,
+      assignmentTypeTutorInstructions: null,
+    });
+
+    expect(withEmptyLayer).toBe(withoutLayer);
+    expect(withoutLayer.startsWith(base.tutorInstructions)).toBe(true);
+  });
+
   it('includes module rubric guidance and excludes not-applicable categories', () => {
     const guidance = buildModuleRubricGuidance({
       categories: [

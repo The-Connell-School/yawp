@@ -28,6 +28,7 @@ import {
   COLLEGE_ESSAY_OUTPUT_SCHEMA,
   COLLEGE_ESSAY_RUBRIC_CATEGORIES,
   COLLEGE_ESSAY_SCORING_SCALE,
+  COLLEGE_ESSAY_TUTOR_INSTRUCTIONS,
   imageContentTypeForPath,
   type CourseModule,
 } from './college-essay-course-data';
@@ -36,6 +37,8 @@ const ASSIGNMENT_TYPE_DATA = {
   title: COLLEGE_ESSAY_ASSIGNMENT_TYPE.title,
   description: COLLEGE_ESSAY_ASSIGNMENT_TYPE.description,
   position: COLLEGE_ESSAY_ASSIGNMENT_TYPE.position,
+  // The overarching layer, above the per-module tutor settings.
+  tutorInstructions: COLLEGE_ESSAY_TUTOR_INSTRUCTIONS,
   scoringScaleJson: COLLEGE_ESSAY_SCORING_SCALE,
   rubricJson: {
     categories: COLLEGE_ESSAY_RUBRIC_CATEGORIES.map((category) => ({
@@ -202,22 +205,35 @@ export async function seedCollegeEssayCourse(prisma: PrismaClient) {
     );
   }
 
-  const assignmentType = await prisma.assignmentType.upsert({
+  const existingType = await prisma.assignmentType.findUnique({
     where: { systemKey: COLLEGE_ESSAY_ASSIGNMENT_TYPE_KEY },
-    update: {
-      ...ASSIGNMENT_TYPE_DATA,
-      archivedAt: null,
-    },
-    create: {
-      ...ASSIGNMENT_TYPE_DATA,
-      systemKey: COLLEGE_ESSAY_ASSIGNMENT_TYPE_KEY,
-      ownerOrgId: org.id,
-      organizationAssignments: {
-        create: { organizationId: org.id },
-      },
-    },
-    select: { id: true },
+    select: { id: true, tutorInstructions: true },
   });
+
+  const assignmentType = existingType
+    ? await prisma.assignmentType.update({
+        where: { id: existingType.id },
+        // Same rule as the modules: structural fields are refreshed every run,
+        // the course-level tutor guidelines only when admin has left them
+        // empty, so a re-seed on deploy cannot revert somebody's edit.
+        data: {
+          ...withoutTutorInstructionFields(ASSIGNMENT_TYPE_DATA),
+          ...tutorInstructionSeedUpdate(ASSIGNMENT_TYPE_DATA, existingType),
+          archivedAt: null,
+        },
+        select: { id: true },
+      })
+    : await prisma.assignmentType.create({
+        data: {
+          ...ASSIGNMENT_TYPE_DATA,
+          systemKey: COLLEGE_ESSAY_ASSIGNMENT_TYPE_KEY,
+          ownerOrgId: org.id,
+          organizationAssignments: {
+            create: { organizationId: org.id },
+          },
+        },
+        select: { id: true },
+      });
 
   await prisma.organizationAssignmentType.upsert({
     where: {

@@ -38,6 +38,8 @@ type AssignmentTypeEditorFormProps = {
   archivedAt?: Date | string | null;
   imageId?: string | null;
   modules?: AssignmentTypeModuleRow[];
+  /** The assignment type's overarching tutor guidelines, above its modules. */
+  tutorInstructionsDefaultValue?: string | null;
 };
 
 function formSnapshot(values: {
@@ -46,6 +48,7 @@ function formSnapshot(values: {
   scoringScale: ScoringScaleData;
   rubric: RubricData;
   promptConfig: PromptConfigData;
+  tutorInstructions: string;
 }) {
   return [
     values.title.trim(),
@@ -53,6 +56,7 @@ function formSnapshot(values: {
     scoringScaleSnapshot(values.scoringScale),
     rubricSnapshot(values.rubric),
     promptConfigSnapshot(values.promptConfig),
+    values.tutorInstructions.trim(),
   ].join('\u0000');
 }
 
@@ -113,6 +117,7 @@ export function AssignmentTypeEditorForm({
   archivedAt = null,
   imageId = null,
   modules = [],
+  tutorInstructionsDefaultValue = '',
 }: AssignmentTypeEditorFormProps) {
   const fetcher = useFetcher();
   const imageFileInputRef = useRef<HTMLInputElement>(null);
@@ -129,6 +134,9 @@ export function AssignmentTypeEditorForm({
   const [rubricState, setRubricState] = useState<RubricData>(rubric);
   const [promptConfigState, setPromptConfigState] =
     useState<PromptConfigData>(promptConfig);
+  const [tutorInstructions, setTutorInstructions] = useState(
+    tutorInstructionsDefaultValue ?? ''
+  );
   const [editorGeneration, setEditorGeneration] = useState(0);
   const hasHydratedSavedValues = useRef(false);
 
@@ -140,8 +148,16 @@ export function AssignmentTypeEditorForm({
         scoringScale,
         rubric,
         promptConfig,
+        tutorInstructions: tutorInstructionsDefaultValue ?? '',
       }),
-    [titleDefaultValue, descriptionDefaultValue, scoringScale, rubric, promptConfig]
+    [
+      titleDefaultValue,
+      descriptionDefaultValue,
+      scoringScale,
+      rubric,
+      promptConfig,
+      tutorInstructionsDefaultValue,
+    ]
   );
 
   useEffect(() => {
@@ -150,6 +166,7 @@ export function AssignmentTypeEditorForm({
     setScoringScaleState(scoringScale);
     setRubricState(rubric);
     setPromptConfigState(promptConfig);
+    setTutorInstructions(tutorInstructionsDefaultValue ?? '');
 
     if (hasHydratedSavedValues.current) {
       setEditorGeneration((generation) => generation + 1);
@@ -182,8 +199,16 @@ export function AssignmentTypeEditorForm({
         scoringScale: scoringScaleState,
         rubric: rubricState,
         promptConfig: promptConfigState,
+        tutorInstructions,
       }),
-    [title, description, scoringScaleState, rubricState, promptConfigState]
+    [
+      title,
+      description,
+      scoringScaleState,
+      rubricState,
+      promptConfigState,
+      tutorInstructions,
+    ]
   );
 
   const isDirty = currentSnapshot !== savedSnapshot || imageDirty;
@@ -202,6 +227,7 @@ export function AssignmentTypeEditorForm({
     setScoringScaleState(scoringScale);
     setRubricState(rubric);
     setPromptConfigState(promptConfig);
+    setTutorInstructions(tutorInstructionsDefaultValue ?? '');
     setPreviewUrl(null);
     setHasRemovedImage(false);
     if (imageFileInputRef.current) {
@@ -354,8 +380,28 @@ export function AssignmentTypeEditorForm({
         <div className="mx-auto max-w-5xl px-3 pb-28 md:px-6">
           <Section
             title="Tutor settings"
-            description="Module instructions and rubric relationships are configured after this assignment type exists."
+            description="Guidelines that hold for the whole course, then the module-by-module instructions underneath them."
           >
+            <div className="space-y-2">
+              <FieldLabel htmlFor="assignmentTypeTutorInstructions">
+                Universal tutor guidelines
+              </FieldLabel>
+              <p className="text-sm text-muted-foreground">
+                Overarching instructions for this whole assignment type. They
+                sit above every module, so the tutor reads them first and reads
+                each module&apos;s own instructions as narrowing them.
+              </p>
+              <Textarea
+                // Distinct from the module sheet's own tutorInstructions box,
+                // which lives on the same page.
+                id="assignmentTypeTutorInstructions"
+                name="tutorInstructions"
+                form={formId}
+                rows={10}
+                value={tutorInstructions}
+                onChange={(event) => setTutorInstructions(event.target.value)}
+              />
+            </div>
             <AssignmentTypeModulesSection
               assignmentTypeId={assignmentTypeId!}
               modules={modules}

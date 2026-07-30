@@ -685,32 +685,53 @@ DONE WHEN: it's <= 650 words, sounds unmistakably like them, a stranger would re
 // ---------------------------------------------------------------------------
 
 /**
- * Builds a module's tutor system prompt from its step substance.
+ * The overarching tutor layer for the whole course.
  *
- * This course has no assignment-level General Tutor Instructions box to hold
- * the universal block, and `buildTutorSystemPrompt` simply concatenates what
- * it is given, so every layer has to travel in the module's own instructions:
+ * This is the Universal YAWP! Tutor Instructions, unchanged: the Tutor's
+ * character and guardrails, identical in every course. It is seeded onto the
+ * AssignmentType itself, which is what admin shows at the top of Tutor
+ * settings and what `buildTutorSystemPrompt` puts above the module layer. The
+ * course keeps one copy, not one per module.
+ */
+export const COLLEGE_ESSAY_TUTOR_INSTRUCTIONS = UNIVERSAL_TUTOR_BLOCK;
+
+/**
+ * Builds a module's tutor instructions from its step substance -- everything
+ * that is specific to THIS course, below the universal layer:
  *
- *   1. the Universal YAWP! Tutor Instructions -- the Tutor's character
- *   2. the College Essay Coach persona and the absolute no-writing rule
- *   3. where this course is deliberately stricter than the universal rules
- *   4. this module's own substance
- *   5. this module's REGISTER MODE
+ *   1. the College Essay Coach persona and the absolute no-writing rule
+ *   2. where this course is deliberately stricter than the universal rules
+ *   3. this module's own substance
+ *   4. this module's REGISTER MODE
  *
- * The composed string is what gets seeded, what admin shows and edits, and
- * what the tutor reads -- one text, not three that can drift apart.
+ * The composed string is what gets seeded into the module, what admin shows
+ * and edits there, and what the tutor reads after the course-level layer.
  */
 export function composeCollegeEssayModuleTutorInstructions(
   registerMode: TutorRegisterMode,
   substance: string
 ): string {
   return [
-    UNIVERSAL_TUTOR_BLOCK,
     TUTOR_PERSONA,
     COLLEGE_ESSAY_OVERRIDES,
     substance.trim(),
     formatRegisterModeDirective(registerMode),
   ]
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .join('\n\n');
+}
+
+/**
+ * The whole system prompt the tutor reads for a module: the course-level
+ * universal layer, then the module's own instructions. Mirrors the order
+ * `buildTutorSystemPrompt` assembles at runtime, so tests can assert on the
+ * text the tutor actually sees rather than on one layer of it.
+ */
+export function composeCollegeEssayTutorSystemPrompt(
+  module: Pick<CourseModule, 'tutorInstructions'>
+): string {
+  return [COLLEGE_ESSAY_TUTOR_INSTRUCTIONS, module.tutorInstructions]
     .map((part) => part.trim())
     .filter(Boolean)
     .join('\n\n');
