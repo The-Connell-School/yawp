@@ -20,13 +20,18 @@ function canReproduceRootOwnership() {
   if (spawnSync('docker', ['info'], { stdio: 'ignore' }).status !== 0) return false;
   const probe = mkdtempSync(path.join(tmpdir(), 'enforce-cap-probe-'));
   try {
+    // Unlink permission comes from the CONTAINING DIRECTORY, not the file — so a
+    // root-owned file inside a host-owned directory deletes fine, and probing with one
+    // reports "cannot reproduce" on a runner where the bug reproduces perfectly well.
+    // The real condition is a root-owned DIRECTORY (the build does `mkdir -p
+    // .react-router/types` as root), whose entries the host user then cannot remove.
     const written = spawnSync('docker', [
       'run', '--rm', '--user', '0:0', '--entrypoint', '/bin/sh',
-      '-v', `${probe}:/t`, 'oven/bun:1.3.1', '-c', 'echo x > /t/f.txt',
+      '-v', `${probe}:/t`, 'oven/bun:1.3.1', '-c', 'mkdir -p /t/d && echo x > /t/d/f.txt',
     ], { stdio: 'ignore' });
     if (written.status !== 0) return false;
-    // The condition exists only if the host user cannot delete what root wrote.
-    return spawnSync('rm', ['-f', path.join(probe, 'f.txt')], { stdio: 'ignore' }).status !== 0;
+    return spawnSync('rm', ['-rf', path.join(probe, 'd')], { stdio: 'ignore' }).status !== 0
+      || existsSync(path.join(probe, 'd'));
   } finally {
     spawnSync('docker', [
       'run', '--rm', '--user', '0:0', '--entrypoint', '/bin/sh',
