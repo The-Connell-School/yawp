@@ -262,7 +262,13 @@ describe('PR preview deployment contract', () => {
     expect(deployScript).toContain('yawp-preview-db');
     expect(deployScript).toContain('preview-postgres');
     expect(deployScript).toContain('Restoring production dump into template database');
-    expect(deployScript).toContain('DATABASE_NAME="yawp_pr_${PR_NUMBER}"');
+    // Was: toContain('DATABASE_NAME="yawp_pr_${PR_NUMBER}"'). This test cares that the
+    // production-dump path still clones per-environment databases, and used that line as a
+    // marker for "DATABASE_NAME is set" — but the line itself was the bug: it rebuilt a
+    // pr-prefixed name and so ignored the slug override that named environments (the demo
+    // box) depend on. The invariant is that DATABASE_NAME comes from preview-env.mjs.
+    expect(deployScript).toContain('${DATABASE_NAME:?');
+    expect(deployScript).not.toContain('DATABASE_NAME="yawp_pr_${PR_NUMBER}"');
     expect(deployScript).toContain('Preview database $DATABASE_NAME already exists; skipping clone.');
     expect(deployScript).toContain('production-dump)');
     expect(deployScript).toContain('createdb -U postgres -T "$TEMPLATE_DB" "$DATABASE_NAME"');
