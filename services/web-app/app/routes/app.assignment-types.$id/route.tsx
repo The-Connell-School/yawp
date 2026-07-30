@@ -31,6 +31,10 @@ import {
 } from '~/domain/documents.server';
 import { listApHistoryLibraryEntries } from '~/domain/ap-history/library.server';
 import { AP_HISTORY_ASSIGNMENT_TYPE_KEY } from '~/domain/ap-history/schema';
+import { listApEnglishLangLibraryEntries } from '~/domain/ap-english-lang/library.server';
+import { listSavedApEnglishLangPrompts } from '~/domain/ap-english-lang/saved-prompts.server';
+import { savedPromptToLibraryEntry } from '~/domain/ap-english-lang/generated-prompt';
+import { AP_ENGLISH_LANG_ASSIGNMENT_TYPE_KEY } from '~/domain/ap-english-lang/schema';
 import {
   getAvailableAssignmentTypesForScopes,
   isAssignmentTypeAvailableForAnyScope,
@@ -40,6 +44,15 @@ import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { redirectWithToast } from '~/utils/toast.server';
 import { ApHistoryLibrary } from './ap-history-library';
+import { ApEnglishLangLibrary } from './ap-english-lang-library';
+import { ApEnglishLangPromptGenerator } from './ap-english-lang-prompt-generator';
+import {
+  applyApEnglishLangFilters,
+  buildApEnglishLangFacets,
+  buildApEnglishLangOptionCounts,
+  readApEnglishLangFilters,
+  type ApEnglishLangSourcePreview,
+} from './ap-english-lang-library-filters';
 import { CreateAssignmentSheet } from './create-assignment-sheet';
 import { PromptsLibrary } from './prompts-library/prompts-library';
 import { TeacherDirections } from './prompts-library/teacher-directions';
@@ -56,6 +69,8 @@ import {
 import promptsRaw from './prompts-library/prompts.json';
 
 const DAILY_PAGES_TITLE = 'daily pages';
+/** Scroll target for the "Assignment" item in the AP Language New menu. */
+const AP_ENGLISH_LANG_LIBRARY_ANCHOR = 'ap-english-lang-library';
 const ALL_PROMPTS = promptsRaw as LibraryPrompt[];
 const SERIOUSNESS_ORDER: PromptSeriousness[] = [
   'playful',
@@ -359,6 +374,8 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     assignmentType.title.trim().toLowerCase() === DAILY_PAGES_TITLE;
   const isApHistory =
     assignmentType.systemKey === AP_HISTORY_ASSIGNMENT_TYPE_KEY;
+  const isApEnglishLang =
+    assignmentType.systemKey === AP_ENGLISH_LANG_ASSIGNMENT_TYPE_KEY;
   const promptLibrary =
     profile.role === "TEACHER" && isDailyPages
       ? {
@@ -383,6 +400,34 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       };
     }
   }
+  let apEnglishLangLibrary = null;
+  if (profile.role === "TEACHER" && isApEnglishLang) {
+    if (assignmentEnabledTeacherClasses.length > 0) {
+      // "My prompts": prompts this teacher generated and kept, shown in the
+      // same library alongside the curated entries and filterable on their own.
+      const [curatedEntries, savedPrompts] = await Promise.all([
+        listApEnglishLangLibraryEntries(assignmentType.id),
+        listSavedApEnglishLangPrompts({
+          membershipId: profile.id,
+          assignmentTypeId: assignmentType.id,
+        }),
+      ]);
+      const allEntries = [
+        ...savedPrompts.map(savedPromptToLibraryEntry),
+        ...curatedEntries,
+      ];
+      apEnglishLangLibrary = {
+        entries: applyApEnglishLangFilters(
+          allEntries,
+          readApEnglishLangFilters(new URL(request.url))
+        ),
+        facets: buildApEnglishLangFacets(allEntries),
+        optionCounts: buildApEnglishLangOptionCounts(allEntries),
+        totalCount: allEntries.length,
+        teacherClasses: assignmentEnabledTeacherClasses,
+      };
+    }
+  }
 
   return dataResponse({
     assignmentType,
@@ -391,6 +436,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     teacherClasses: assignmentEnabledTeacherClasses,
     promptLibrary,
     apHistoryLibrary,
+    apEnglishLangLibrary,
   });
 }
 export async function action({ request, params }: ActionFunctionArgs) {
@@ -442,6 +488,11 @@ export async function action({ request, params }: ActionFunctionArgs) {
     });
   }
 
+  // AP Language documents are the teacher's own scratch space and carry no FRQ
+  // snapshot, so they are allowed. Assignments — the thing students are graded
+  // on — still come from a library entry or a generated prompt, enforced in
+  // /api/assignments/create.
+
   let documentId = '';
   try {
     const created = await createDocumentForAssignmentType({
@@ -483,6 +534,7 @@ export default function AppAssignmentTypesIdRoute() {
   const isLoading = navigation.state !== 'idle';
   const docFormRef = useRef<HTMLFormElement>(null);
   const [isAssignmentSheetOpen, setIsAssignmentSheetOpen] = useState(false);
+  const [isPromptGeneratorOpen, setIsPromptGeneratorOpen] = useState(false);
   const [libraryPrompt, setLibraryPrompt] = useState('');
   const [apHistoryEntry, setApHistoryEntry] = useState<{
     externalKey: string;
@@ -490,13 +542,26 @@ export default function AppAssignmentTypesIdRoute() {
     prompt: string;
     essayType: string;
   } | null>(null);
+  const [apEnglishLangEntry, setApEnglishLangEntry] = useState<{
+    externalKey?: string;
+    savedPromptId?: string;
+    title: string;
+    prompt: string;
+    frqType: string;
+    sources?: ApEnglishLangSourcePreview[];
+  } | null>(null);
   const showPromptsLibrary = data.promptLibrary != null;
   const isApHistoryAssignmentType =
     data.assignmentType.systemKey === AP_HISTORY_ASSIGNMENT_TYPE_KEY;
-  const canCreateDirectDocument = !isApHistoryAssignmentType;
+  const isApEnglishLangAssignmentType =
+    data.assignmentType.systemKey === AP_ENGLISH_LANG_ASSIGNMENT_TYPE_KEY;
+  const canCreateDirectDocument =
+    !isApHistoryAssignmentType && !isApEnglishLangAssignmentType;
   const assignmentSheetClasses = isApHistoryAssignmentType
     ? (data.apHistoryLibrary?.teacherClasses ?? [])
-    : data.teacherClasses;
+    : isApEnglishLangAssignmentType
+      ? (data.apEnglishLangLibrary?.teacherClasses ?? [])
+      : data.teacherClasses;
 
   return (
     <div className="no-scrollbar h-full w-full overflow-y-scroll">
@@ -510,6 +575,70 @@ export default function AppAssignmentTypesIdRoute() {
 
           {isTeacher ? (
             <>
+              {isApEnglishLangAssignmentType ? (
+                <>
+                  <Form method="post" ref={docFormRef} className="hidden" />
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button type="button" className="w-fit">
+                        New <ChevronDownIcon className="ml-1 h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem
+                        disabled={!hasModules || isLoading}
+                        onSelect={() => docFormRef.current?.requestSubmit()}
+                      >
+                        Document
+                      </DropdownMenuItem>
+                      {/* Opens the same assignment form as every other course,
+                          with an empty prompt the teacher can write themselves.
+                          Picking a library or generated prompt instead fills
+                          that prompt in and locks it. */}
+                      <DropdownMenuItem
+                        disabled={
+                          (data.apEnglishLangLibrary?.teacherClasses.length ??
+                            0) === 0
+                        }
+                        onSelect={() => {
+                          setLibraryPrompt('');
+                          setApHistoryEntry(null);
+                          setApEnglishLangEntry(null);
+                          setIsAssignmentSheetOpen(true);
+                        }}
+                      >
+                        Assignment
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        disabled={
+                          (data.apEnglishLangLibrary?.teacherClasses.length ??
+                            0) === 0
+                        }
+                        onSelect={() => setIsPromptGeneratorOpen(true)}
+                      >
+                        Prompt generator
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                  <ApEnglishLangPromptGenerator
+                    open={isPromptGeneratorOpen}
+                    onOpenChange={setIsPromptGeneratorOpen}
+                    assignmentTypeId={data.assignmentType.id}
+                    onUsePrompt={(option) => {
+                      setApHistoryEntry(null);
+                      setLibraryPrompt('');
+                      setApEnglishLangEntry({
+                        savedPromptId: option.savedPromptId,
+                        title: option.title,
+                        prompt: option.prompt,
+                        frqType: option.frqType ?? 'argument',
+                      });
+                      setIsPromptGeneratorOpen(false);
+                      setIsAssignmentSheetOpen(true);
+                    }}
+                  />
+                </>
+              ) : null}
               {canCreateDirectDocument ? (
                 <>
                   <Form method="post" ref={docFormRef} className="hidden" />
@@ -531,6 +660,7 @@ export default function AppAssignmentTypesIdRoute() {
                         onSelect={() => {
                           setLibraryPrompt('');
                           setApHistoryEntry(null);
+                          setApEnglishLangEntry(null);
                           setIsAssignmentSheetOpen(true);
                         }}
                       >
@@ -548,6 +678,7 @@ export default function AppAssignmentTypesIdRoute() {
                 onOpenChange={setIsAssignmentSheetOpen}
                 initialPrompt={libraryPrompt}
                 apHistoryEntry={apHistoryEntry}
+                apEnglishLangEntry={apEnglishLangEntry}
               />
             </>
           ) : canCreateDirectDocument ? (
@@ -606,6 +737,7 @@ export default function AppAssignmentTypesIdRoute() {
               totalCount={data.promptLibrary.totalCount}
               onSelectPrompt={(prompt) => {
                 setApHistoryEntry(null);
+                setApEnglishLangEntry(null);
                 setLibraryPrompt(prompt);
                 setIsAssignmentSheetOpen(true);
               }}
@@ -618,6 +750,35 @@ export default function AppAssignmentTypesIdRoute() {
               entries={data.apHistoryLibrary.entries}
               onSelectEntry={(entry) => {
                 setApHistoryEntry(entry);
+                setApEnglishLangEntry(null);
+                setLibraryPrompt('');
+                setIsAssignmentSheetOpen(true);
+              }}
+            />
+          </div>
+        ) : null}
+        {data.apEnglishLangLibrary ? (
+          <div className="pb-6" id={AP_ENGLISH_LANG_LIBRARY_ANCHOR}>
+            <ApEnglishLangLibrary
+              entries={data.apEnglishLangLibrary.entries}
+              facets={data.apEnglishLangLibrary.facets}
+              optionCounts={data.apEnglishLangLibrary.optionCounts}
+              totalCount={data.apEnglishLangLibrary.totalCount}
+              onSelectEntry={(entry) => {
+                // A saved prompt has no row in the library table, so it is
+                // assigned by its saved id; the curated entries keep their key.
+                const isSaved = entry.collection === 'mine';
+                setApEnglishLangEntry({
+                  externalKey: isSaved ? undefined : entry.externalKey,
+                  savedPromptId: isSaved
+                    ? entry.externalKey.replace(/^saved:/, '')
+                    : undefined,
+                  title: entry.title,
+                  prompt: entry.prompt,
+                  frqType: entry.frqType,
+                  sources: entry.sources,
+                });
+                setApHistoryEntry(null);
                 setLibraryPrompt('');
                 setIsAssignmentSheetOpen(true);
               }}

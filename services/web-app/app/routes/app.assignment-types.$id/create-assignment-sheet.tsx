@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useFetcher } from 'react-router';
 import { AssignmentCreationSheet } from '~/components/assignments/assignment-creation-sheet';
+import type { ApEnglishLangSourcePreview } from './ap-english-lang-library-filters';
 import { Button } from '~/components/ui/button';
 import { Input } from '~/components/ui/input';
 import { Label } from '~/components/ui/label';
@@ -39,6 +40,33 @@ type Props = {
     prompt: string;
     essayType: string;
   } | null;
+  apEnglishLangEntry?: {
+    /** Curated library entries are identified by their external key… */
+    externalKey?: string;
+    /** …a generated prompt by the row it was saved to under "My prompts". */
+    savedPromptId?: string;
+    title: string;
+    prompt: string;
+    frqType: string;
+    /**
+     * The provided passage or source packet. Q3 ships none; Q1 and Q2 do, and
+     * the teacher needs to read it here before assigning it.
+     */
+    sources?: ApEnglishLangSourcePreview[];
+  } | null;
+};
+
+/** What the provided material is called, per question type. */
+const AP_ENGLISH_LANG_SOURCE_NOUN: Record<string, string> = {
+  synthesis: 'source',
+  rhetorical_analysis: 'passage',
+  argument: 'source',
+};
+
+const AP_ENGLISH_LANG_FRQ_TYPE_LABELS: Record<string, string> = {
+  synthesis: 'Synthesis',
+  rhetorical_analysis: 'Rhetorical Analysis',
+  argument: 'Argument',
 };
 
 function classLabel(klass: TeacherClass) {
@@ -53,6 +81,7 @@ export function CreateAssignmentSheet({
   onOpenChange,
   initialPrompt = '',
   apHistoryEntry = null,
+  apEnglishLangEntry = null,
 }: Props) {
   const fetcher = useFetcher<{ success?: boolean; message?: string }>();
   const [selectedClassId, setSelectedClassId] = useState(
@@ -61,18 +90,55 @@ export function CreateAssignmentSheet({
   const [title, setTitle] = useState('');
 
   const isSaving = fetcher.state !== 'idle';
+  const libraryEntry = apHistoryEntry ?? apEnglishLangEntry;
 
   useEffect(() => {
-    if (!open || !apHistoryEntry) return;
+    if (!open || !libraryEntry) return;
     setSelectedClassId(teacherClasses[0]?.id ?? '');
     setTitle('');
-  }, [open, teacherClasses, apHistoryEntry]);
+  }, [open, teacherClasses, libraryEntry]);
 
   useEffect(() => {
     if (fetcher.state === 'idle' && fetcher.data?.success) {
       onOpenChange(false);
     }
   }, [fetcher.state, fetcher.data, onOpenChange]);
+
+  // AP Language uses the same assignment form as every other course. The only
+  // difference is the prompt: it comes from a library entry or a prompt the
+  // teacher generated, so it is shown as a locked card and the assignment is
+  // built from that entry's snapshot server-side.
+  if (apEnglishLangEntry) {
+    return (
+      <AssignmentCreationSheet
+        open={open}
+        onOpenChange={onOpenChange}
+        entryPoint="assignment-type"
+        fixedAssignmentTypeId={assignmentTypeId}
+        assignmentTypes={[{ id: assignmentTypeId, title: assignmentTypeTitle }]}
+        teacherClasses={teacherClasses}
+        lockedPrompt={{
+          label: 'Selected AP Language Prompt',
+          title: apEnglishLangEntry.title,
+          body: apEnglishLangEntry.prompt,
+          badge:
+            AP_ENGLISH_LANG_FRQ_TYPE_LABELS[apEnglishLangEntry.frqType] ??
+            apEnglishLangEntry.frqType,
+          sources: apEnglishLangEntry.sources,
+          sourceNoun:
+            AP_ENGLISH_LANG_SOURCE_NOUN[apEnglishLangEntry.frqType] ?? 'source',
+        }}
+        extraHiddenFields={
+          apEnglishLangEntry.savedPromptId
+            ? { apEnglishLangSavedPromptId: apEnglishLangEntry.savedPromptId }
+            : {
+                apEnglishLangLibraryEntryId:
+                  apEnglishLangEntry.externalKey ?? '',
+              }
+        }
+      />
+    );
+  }
 
   if (!apHistoryEntry) {
     return (

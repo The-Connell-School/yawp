@@ -1,5 +1,12 @@
+import { useState } from 'react';
+import { Maximize2Icon } from 'lucide-react';
 import { Badge } from '~/components/ui/badge';
+import { Button } from '~/components/ui/button';
 import type { ApHistorySnapshot } from '~/domain/ap-history/schema';
+import {
+  SourceReaderDialog,
+  type ReadableSource,
+} from './source-reader-dialog';
 
 type Props = {
   snapshot: ApHistorySnapshot;
@@ -15,6 +22,11 @@ function titleCase(value: string) {
 
 export function ApHistoryAssignmentPanel({ snapshot }: Props) {
   const sourceCount = snapshot.sources.length;
+  // The document currently open in the fullscreen reader, if any.
+  const [reader, setReader] = useState<{
+    source: ReadableSource;
+    designation: string;
+  } | null>(null);
 
   return (
     <aside className="mx-auto w-full max-w-screen-2xl border-b bg-slate-50 px-3 py-3">
@@ -64,6 +76,21 @@ export function ApHistoryAssignmentPanel({ snapshot }: Props) {
                       Source {source.position}
                     </Badge>
                     <h3 className="text-sm font-semibold">{source.title}</h3>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="ml-auto h-7 gap-1 px-2 text-xs"
+                      onClick={() =>
+                        setReader({
+                          source,
+                          designation: `Source ${source.position}`,
+                        })
+                      }
+                    >
+                      <Maximize2Icon className="h-3.5 w-3.5" />
+                      Full screen
+                    </Button>
                   </div>
                   <p className="mt-1 text-xs text-muted-foreground">
                     {source.attribution}
@@ -82,6 +109,12 @@ export function ApHistoryAssignmentPanel({ snapshot }: Props) {
           </details>
         ) : null}
       </div>
+
+      <SourceReaderDialog
+        source={reader?.source ?? null}
+        sourceDesignation={reader?.designation ?? ''}
+        onClose={() => setReader(null)}
+      />
     </aside>
   );
 }

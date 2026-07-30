@@ -65,6 +65,8 @@ model AssignmentType {
   assignments                        Assignment[]
   documents                          Document[]
   apHistoryLibraryEntries            ApHistoryPromptLibraryEntry[]
+  apEnglishLangLibraryEntries        ApEnglishLangPromptLibraryEntry[]
+  savedApEnglishLangPrompts          SavedApEnglishLangPrompt[]
 
   @@index([ownerOrgId])
   @@index([ownerMembershipId])
@@ -85,6 +87,7 @@ model Assignment {
   pointValue                      Int?              @default(100)
   gradingAssistantStrictnessLevel String            @default("intermediate")
   apHistorySnapshot               Json?
+  apEnglishLangSnapshot           Json?
   classAssignments                ClassAssignment[]
   documents                       Document[]
 
@@ -145,6 +148,76 @@ model ApHistoryPromptLibrarySource {
   body                 String
   caption              String?
   mediaType            String                      @default("text")
+  imageUrl             String?
+  imageAlt             String?
+  provenanceUrl        String?
+
+  @@index([promptLibraryEntryId, position])
+}
+
+/// An AP English Language prompt a teacher generated and kept ("My prompts").
+/// Keyed by a hash of the prompt text so saving and then using the same draft
+/// leaves a single row. `facets` holds the generator's library-vocabulary tags
+/// ({ frqType, focusSkill, difficulty }) so a saved prompt filters and reads
+/// like a library row; it is validated on the way out, never trusted raw.
+model SavedApEnglishLangPrompt {
+  id               String         @id @default(cuid())
+  createdAt        DateTime       @default(now()) @db.Timestamptz(6)
+  updatedAt        DateTime       @default(now()) @updatedAt @db.Timestamptz(6)
+  membershipId     String
+  membership       OrgMembership  @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  assignmentTypeId String
+  assignmentType   AssignmentType @relation(fields: [assignmentTypeId], references: [id], onDelete: Cascade)
+  title            String
+  prompt           String
+  promptHash       String
+  facets           Json?
+  source           String         @default("generator")
+  archivedAt       DateTime?      @db.Timestamptz(6)
+
+  // Named explicitly: the default names would run past Postgres's 63-byte
+  // identifier limit and be silently truncated.
+  @@unique([membershipId, assignmentTypeId, promptHash], map: "SavedApEnglishLangPrompt_membership_type_hash_key")
+  @@index([membershipId, assignmentTypeId, archivedAt], map: "SavedApEnglishLangPrompt_membership_type_archived_idx")
+}
+
+model ApEnglishLangPromptLibraryEntry {
+  id                     String                             @id @default(cuid())
+  createdAt              DateTime                           @default(now()) @db.Timestamptz(6)
+  updatedAt              DateTime                           @default(now()) @updatedAt @db.Timestamptz(6)
+  externalKey            String                             @unique
+  assignmentTypeId       String
+  assignmentType         AssignmentType                     @relation(fields: [assignmentTypeId], references: [id], onDelete: Cascade)
+  frqType                String
+  title                  String
+  prompt                 String
+  focusSkill             String
+  difficulty             String
+  skillEmphasis          String?
+  defaultTimeMode        String                             @default("untimed")
+  defaultDurationMinutes Int
+  suggestedEvidence      String?
+  provenanceUrl          String?
+  archivedAt             DateTime?                          @db.Timestamptz(6)
+  sources                ApEnglishLangPromptLibrarySource[]
+
+  @@index([assignmentTypeId, frqType])
+  @@index([archivedAt])
+}
+
+model ApEnglishLangPromptLibrarySource {
+  id                   String                          @id @default(cuid())
+  createdAt            DateTime                        @default(now()) @db.Timestamptz(6)
+  updatedAt            DateTime                        @default(now()) @updatedAt @db.Timestamptz(6)
+  externalKey          String                          @unique
+  promptLibraryEntryId String
+  promptLibraryEntry   ApEnglishLangPromptLibraryEntry @relation(fields: [promptLibraryEntryId], references: [id], onDelete: Cascade)
+  position             Int
+  title                String
+  attribution          String
+  body                 String
+  caption              String?
+  mediaType            String                          @default("text")
   imageUrl             String?
   imageAlt             String?
   provenanceUrl        String?
@@ -408,6 +481,7 @@ model OrgMembership {
   assignedTeacherTrainings      TeacherTraining[]              @relation("TeacherTrainingAssignments")
   assignmentTypesCustomized     Boolean                        @default(false)
   assignmentTypeAssignments     TeacherAssignmentType[]
+  savedApEnglishLangPrompts     SavedApEnglishLangPrompt[]
 
   @@unique([userId, organizationId])
   @@map("OrgMembership")

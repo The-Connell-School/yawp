@@ -2,7 +2,11 @@
 import { createE2EPrismaClient, type E2EPrismaClient } from './prisma-client';
 import { createDeployedAssignment } from './db-helpers';
 import { AP_HISTORY_LIBRARY_ENTRIES } from '../../../packages/prisma/scripts/ap-history-library-data';
+import { AP_ENGLISH_LANG_LIBRARY_ENTRIES } from '../../../packages/prisma/scripts/ap-english-lang-library-data';
 import bcrypt from 'bcryptjs';
+import { readFile } from 'node:fs/promises';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 let prisma: E2EPrismaClient | null = null;
 
@@ -98,6 +102,9 @@ export type E2EContext = {
   apHistoryAssignmentTypeId: string;
   apHistoryDbqEntryKey: string;
   apHistoryLeqEntryKey: string;
+  apEnglishLangAssignmentTypeId: string;
+  apEnglishLangSynthesisEntryKey: string;
+  apEnglishLangArgumentEntryKey: string;
   assignmentId: string;
   classAssignmentId: string;
   teacherTrainingId: string;
@@ -339,6 +346,100 @@ export async function seedE2E(): Promise<E2EContext> {
           skillEmphasis: entry.skillEmphasis,
           defaultTimeMode: entry.defaultTimeMode,
           defaultDurationMinutes: entry.defaultDurationMinutes,
+          provenanceUrl: entry.provenanceUrl,
+          sources: {
+            create: entry.sources.map((source) => ({
+              externalKey: source.externalKey,
+              position: source.position,
+              title: source.title,
+              attribution: source.attribution,
+              body: source.body,
+              caption: source.caption,
+              mediaType: source.mediaType,
+              imageUrl: source.imageUrl,
+              imageAlt: source.imageAlt,
+              provenanceUrl: source.provenanceUrl,
+            })),
+          },
+        })),
+      },
+    },
+    select: { id: true },
+  });
+
+  const apEnglishLangSynthesisEntry = AP_ENGLISH_LANG_LIBRARY_ENTRIES.find(
+    (entry) => entry.frqType === 'synthesis'
+  );
+  const apEnglishLangArgumentEntry = AP_ENGLISH_LANG_LIBRARY_ENTRIES.find(
+    (entry) => entry.frqType === 'argument'
+  );
+
+  if (!apEnglishLangSynthesisEntry || !apEnglishLangArgumentEntry) {
+    throw new Error(
+      'E2E AP English Language seed requires synthesis and argument entries.'
+    );
+  }
+
+  // The same course art the real seed attaches, so previews and e2e match prod.
+  const apEnglishLangCourseImage = await readFile(
+    path.join(
+      path.dirname(fileURLToPath(import.meta.url)),
+      '../../../packages/prisma/assets/ap-english-lang-course.jpg'
+    )
+  );
+
+  const apEnglishLangAssignmentType = await prisma.assignmentType.create({
+    data: {
+      title: 'AP English Language Essay',
+      systemKey: 'ap_english_lang_essay',
+      description:
+        'Curated AP English Language synthesis, rhetorical analysis, and argument practice.',
+      position: 4,
+      ownerOrgId: org.id,
+      organizationAssignments: {
+        create: { organizationId: org.id },
+      },
+      assignmentModules: {
+        create: [
+          {
+            title: 'AP English Language Essay',
+            position: 1,
+            description:
+              'Write an AP Language free response with AP-specific coaching.',
+            instructions: {
+              create: [
+                {
+                  title: 'Write',
+                  prompt:
+                    'Use the selected AP Language prompt and source packet to draft your response.',
+                  position: 1,
+                  showChatButton: true,
+                },
+              ],
+            },
+          },
+        ],
+      },
+      image: {
+        create: {
+          contentType: 'image/jpeg',
+          altText:
+            'A stack of ruled pages titled AP English Language & Composition, the top one marked up with underlines and margin notes, a pen resting beside it.',
+          blob: apEnglishLangCourseImage,
+        },
+      },
+      apEnglishLangLibraryEntries: {
+        create: AP_ENGLISH_LANG_LIBRARY_ENTRIES.map((entry) => ({
+          externalKey: entry.externalKey,
+          frqType: entry.frqType,
+          title: entry.title,
+          prompt: entry.prompt,
+          focusSkill: entry.focusSkill,
+          difficulty: entry.difficulty,
+          skillEmphasis: entry.skillEmphasis,
+          defaultTimeMode: entry.defaultTimeMode,
+          defaultDurationMinutes: entry.defaultDurationMinutes,
+          suggestedEvidence: entry.suggestedEvidence,
           provenanceUrl: entry.provenanceUrl,
           sources: {
             create: entry.sources.map((source) => ({
@@ -619,6 +720,9 @@ export async function seedE2E(): Promise<E2EContext> {
     apHistoryAssignmentTypeId: apHistoryAssignmentType.id,
     apHistoryDbqEntryKey: apHistoryDbqEntry.externalKey,
     apHistoryLeqEntryKey: apHistoryLeqEntry.externalKey,
+    apEnglishLangAssignmentTypeId: apEnglishLangAssignmentType.id,
+    apEnglishLangSynthesisEntryKey: apEnglishLangSynthesisEntry.externalKey,
+    apEnglishLangArgumentEntryKey: apEnglishLangArgumentEntry.externalKey,
     assignmentId: seededAssignment.id,
     classAssignmentId: seededClassAssignment.id,
     teacherTrainingId: teacherTraining.id,

@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, mock, test } from 'bun:test';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import type { ApHistorySnapshot } from '~/domain/ap-history/schema';
+import type { ApEnglishLangSnapshot } from '~/domain/ap-english-lang/schema';
 
 const apHistorySnapshot: ApHistorySnapshot = {
   schemaVersion: 1,
@@ -30,6 +31,33 @@ const apHistorySnapshot: ApHistorySnapshot = {
   timing: {
     mode: 'untimed',
     durationMinutes: 60,
+  },
+};
+
+const apEnglishLangSnapshot: ApEnglishLangSnapshot = {
+  schemaVersion: 1,
+  libraryEntryId: 'ap-lang-rhetorical-test',
+  frqType: 'rhetorical_analysis',
+  prompt: "Analyze the rhetorical choices the writer makes.",
+  focusSkill: 'rhetorical-situation',
+  sources: [
+    {
+      externalKey: 'ap-lang-rhetorical-test-passage',
+      position: 1,
+      title: 'A Speech',
+      attribution: 'A Writer, 1900',
+      body: 'We hold this truth close: the argument matters more than the ornament.',
+      mediaType: 'text',
+    },
+  ],
+  suggestedEvidence: [],
+  rubric: {
+    rubricId: 'ap-english-lang-frq-2019',
+    totalPoints: 6,
+  },
+  timing: {
+    mode: 'untimed',
+    durationMinutes: 40,
   },
 };
 
@@ -91,11 +119,15 @@ mock.module('./hooks/use-document-submit', () => ({
 const {
   getGenericAssignmentPromptForEditor,
   getRenderableApHistorySnapshot,
+  getRenderableApEnglishLangSnapshot,
   loader,
   shouldShowGenericAssignmentPrompt,
 } = await import('./route');
 const { ApHistoryAssignmentPanel } =
   await import('./ap-history-assignment-panel');
+const { ApEnglishLangAssignmentPanel } = await import(
+  './ap-english-lang-assignment-panel'
+);
 
 const assignmentModules = [
   { id: 'module-prewriting', position: 1 },
@@ -398,6 +430,78 @@ describe('app_.documents_.$id AP History assignment rendering', () => {
     );
 
     expect(html).toContain('Evaluate the extent');
+    expect(html).toContain('Source 1');
+    expect(html).toContain('max-h-');
+    expect(html).toContain('overflow-y-auto');
+  });
+});
+
+describe('app_.documents_.$id AP English Language assignment rendering', () => {
+  test('uses the AP Language snapshot instead of the generic assignment prompt when snapshot is valid', () => {
+    const assignment = {
+      title: 'Rhetorical Analysis Practice',
+      prompt: 'Generic assignment prompt',
+      apEnglishLangSnapshot,
+    };
+
+    const renderableSnapshot = getRenderableApEnglishLangSnapshot(assignment);
+
+    expect(renderableSnapshot).toEqual(apEnglishLangSnapshot);
+    expect(
+      shouldShowGenericAssignmentPrompt(assignment, null, renderableSnapshot)
+    ).toBe(false);
+    expect(
+      getGenericAssignmentPromptForEditor(assignment, null, renderableSnapshot)
+    ).toBeNull();
+  });
+
+  test('falls back to the generic assignment prompt when AP Language snapshot is invalid', () => {
+    const assignment = {
+      title: 'Rhetorical Analysis Practice',
+      prompt: 'Generic assignment prompt',
+      apEnglishLangSnapshot: {
+        ...apEnglishLangSnapshot,
+        schemaVersion: 999,
+      },
+    };
+
+    const renderableSnapshot = getRenderableApEnglishLangSnapshot(assignment);
+
+    expect(renderableSnapshot).toBeNull();
+    expect(
+      shouldShowGenericAssignmentPrompt(assignment, null, renderableSnapshot)
+    ).toBe(true);
+    expect(
+      getGenericAssignmentPromptForEditor(assignment, null, renderableSnapshot)
+    ).toBe(assignment);
+  });
+
+  test('keeps ordinary non-AP assignments on the generic assignment prompt', () => {
+    const assignment = {
+      title: 'Literary Analysis',
+      prompt: 'Analyze the passage.',
+      apEnglishLangSnapshot: null,
+    };
+
+    const renderableSnapshot = getRenderableApEnglishLangSnapshot(assignment);
+
+    expect(renderableSnapshot).toBeNull();
+    expect(
+      shouldShowGenericAssignmentPrompt(assignment, null, renderableSnapshot)
+    ).toBe(true);
+    expect(
+      getGenericAssignmentPromptForEditor(assignment, null, renderableSnapshot)
+    ).toBe(assignment);
+  });
+
+  test('renders AP Language passage content inside a bounded scroll area', () => {
+    const html = renderToStaticMarkup(
+      createElement(ApEnglishLangAssignmentPanel, {
+        snapshot: apEnglishLangSnapshot,
+      })
+    );
+
+    expect(html).toContain('We hold this truth close');
     expect(html).toContain('Source 1');
     expect(html).toContain('max-h-');
     expect(html).toContain('overflow-y-auto');

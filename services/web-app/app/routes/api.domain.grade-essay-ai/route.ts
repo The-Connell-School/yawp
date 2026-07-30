@@ -42,6 +42,17 @@ import {
   type ApHistorySnapshot,
 } from '~/domain/ap-history/schema';
 import {
+  isApEnglishLangSnapshot,
+  parseApEnglishLangSnapshot,
+} from '~/domain/ap-english-lang/schema';
+import {
+  AP_ENGLISH_LANG_ROW_KEYS,
+  buildApEnglishLangGradingPrompt,
+  buildApEnglishLangGradingSystemPrompt,
+  countApEnglishLangEarnedPoints,
+  normalizeApEnglishLangRows,
+} from '~/domain/ap-english-lang/grading';
+import {
   createGradingRequestDeadlineSignal,
   isGradingRequestDeadlineError,
   runWithGradingRequestDeadline,
@@ -425,6 +436,7 @@ export async function action({ request }: ActionFunctionArgs) {
             id: true,
             gradingAssistantStrictnessLevel: true,
             apHistorySnapshot: true,
+            apEnglishLangSnapshot: true,
           },
         },
         classAssignment: {
@@ -721,6 +733,131 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
         aiMeta: {
           model,
           rubricMode: 'ap_history',
+          gradingAssistantStrictnessLevel,
+          gradedAt: now.toISOString(),
+          documentContext,
+        } satisfies Prisma.InputJsonValue,
+        ...(!submission.gradedAt
+          ? { gradedAt: now, gradedByMembershipId: actor.membershipId }
+          : {}),
+        updatedAt: now,
+      },
+    });
+
+    return dataResponse({
+      success: true,
+      message: 'Grading Assistant suggestions generated.',
+      rubricScores,
+      overallScore,
+      overallComment,
+      numericPercentage,
+      letterGrade,
+      score,
+      grammarIssues,
+    });
+  }
+
+  const apEnglishLangSnapshotCandidate =
+    submission.document.assignment?.apEnglishLangSnapshot;
+  const apEnglishLangSnapshot = isApEnglishLangSnapshot(
+    apEnglishLangSnapshotCandidate
+  )
+    ? parseApEnglishLangSnapshot(apEnglishLangSnapshotCandidate)
+    : null;
+
+  if (apEnglishLangSnapshot) {
+    const apSystem = buildApEnglishLangGradingSystemPrompt(studentFirstName);
+    const apUserPrompt = buildApEnglishLangGradingPrompt({
+      snapshot: apEnglishLangSnapshot,
+      essayText: submission.text,
+      studentFirstName,
+    });
+
+    let parsedJson: Record<string, unknown>;
+    let rows: ReturnType<typeof normalizeApEnglishLangRows>;
+    try {
+      const apResponseText = await getGradingLlmCompletion({
+        model,
+        system: apSystem,
+        messages: [{ role: 'user', content: apUserPrompt }],
+        maxTokens: 1200,
+        temperature: 0.2,
+        metadata: {
+          feature: 'grading',
+          kind: 'ap-english-lang-rubric',
+          rubricId: apEnglishLangSnapshot.rubric.rubricId,
+          frqType: apEnglishLangSnapshot.frqType,
+          ...buildAiContextAuditMetadata({
+            textContext: documentContext,
+            assignmentTypeId: submission.document.assignmentTypeId,
+            assignmentTypeRubricSource: 'ap-english-lang-snapshot',
+            rubricCategoryKeys: [...AP_ENGLISH_LANG_ROW_KEYS],
+          }),
+        },
+      });
+
+      const parsedJsonCandidate = parseFirstJsonValue(apResponseText);
+      if (
+        !isRecord(parsedJsonCandidate) ||
+        !isRecord(parsedJsonCandidate.rows)
+      ) {
+        throw new Error('Malformed AP Language grading assistant response');
+      }
+
+      parsedJson = parsedJsonCandidate;
+      rows = normalizeApEnglishLangRows(parsedJsonCandidate.rows);
+    } catch (error) {
+      if (isGradingRequestDeadlineError(error)) {
+        return gradingDeadlineResponse();
+      }
+      if (isLlmFallbackRetrySignal(error)) return retryResponse();
+      return dataResponse(
+        {
+          success: false,
+          message:
+            'Grading Assistant returned malformed data. Please try again.',
+        },
+        { status: 502 }
+      );
+    }
+
+    const earnedPoints = countApEnglishLangEarnedPoints(rows);
+    const totalPoints = apEnglishLangSnapshot.rubric.totalPoints;
+    const rubricScores = {
+      schemaVersion: 1,
+      rubricId: apEnglishLangSnapshot.rubric.rubricId,
+      totalPoints,
+      earnedPoints,
+      rows,
+    } satisfies Prisma.InputJsonObject;
+    const numericPercentage = Math.round((earnedPoints / totalPoints) * 100);
+    const letterGrade = letterFromPercent(numericPercentage);
+    const score = formatGrade(numericPercentage, letterGrade);
+    const overallScore = earnedPoints;
+    const overallComment =
+      typeof parsedJson.overallComment === 'string' &&
+      parsedJson.overallComment.trim()
+        ? parsedJson.overallComment
+        : `${studentFirstName}, your AP Language response has been scored with the ${apEnglishLangSnapshot.rubric.rubricId} rubric.`;
+    const grammarIssues = null;
+    const now = new Date();
+
+    if (gradingDeadlineSignal.aborted) {
+      return gradingDeadlineResponse();
+    }
+
+    await prisma.submission.update({
+      where: { id: submission.id },
+      data: {
+        rubricScores,
+        overallScore,
+        overallComment,
+        numericPercentage,
+        letterGrade,
+        score,
+        aiMeta: {
+          model,
+          rubricMode: 'ap_english_lang',
           gradingAssistantStrictnessLevel,
           gradedAt: now.toISOString(),
           documentContext,

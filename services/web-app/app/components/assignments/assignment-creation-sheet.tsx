@@ -80,6 +80,41 @@ export type AssignmentCreationSheetProps = {
   initialTitle?: string;
   initialPrompt?: string;
   emptyClassesMessage?: string;
+  /**
+   * A prompt the teacher already chose — a curated library entry or a prompt
+   * they generated. The prompt is then shown as a read-only card in place of
+   * the prompt-source controls, because the assignment is built from the
+   * entry's stored snapshot rather than from typed text. Everything else about
+   * the form (classes, title, grading) stays exactly as it is elsewhere.
+   */
+  lockedPrompt?: {
+    label: string;
+    title: string;
+    body: string;
+    badge?: string;
+    /**
+     * The source material the prompt provides, shown under the prompt so the
+     * teacher can read the actual document before assigning it. On an AP Lang
+     * rhetorical analysis or synthesis prompt this IS the assignment; the prompt
+     * body alone is only the headnote.
+     */
+    sources?: Array<{
+      position: number;
+      title: string;
+      attribution: string;
+      body: string;
+      caption?: string | null;
+      mediaType?: string;
+      imageAlt?: string | null;
+    }>;
+    /** What to call a source in this context -- "passage" for Q2, "source" for Q1. */
+    sourceNoun?: string;
+  } | null;
+  /**
+   * Extra hidden fields posted with the form, e.g. which library entry or saved
+   * prompt the assignment is being built from.
+   */
+  extraHiddenFields?: Record<string, string>;
 };
 
 type AssignmentCreationSheetContentProps = AssignmentCreationSheetProps & {
@@ -143,6 +178,8 @@ export function AssignmentCreationSheetContent({
   initialTitle = '',
   initialPrompt = '',
   emptyClassesMessage = "You don't have any assignment-enabled classes yet.",
+  lockedPrompt = null,
+  extraHiddenFields,
   createFetcher,
   extractFetcher,
   renderSheet = true,
@@ -281,12 +318,14 @@ export function AssignmentCreationSheetContent({
     });
   }
 
+  // A locked prompt carries its own text, so the textarea is not in play.
+  const hasPromptText = lockedPrompt ? true : Boolean(prompt.trim());
   const isSubmitDisabled =
     isSaving ||
     isExtracting ||
     !assignmentTypeId ||
     selectedClassCount === 0 ||
-    !prompt.trim() ||
+    !hasPromptText ||
     (submitForGrade && !pointValue.trim());
 
   const header = renderSheet ? (
@@ -310,6 +349,9 @@ export function AssignmentCreationSheetContent({
       <CreateForm method="post" action={formAction} className="mt-6 space-y-4">
         <input type="hidden" name="intent" value="create-assignment" />
         <input type="hidden" name="assignmentTypeId" value={assignmentTypeId} />
+        {Object.entries(extraHiddenFields ?? {}).map(([name, value]) => (
+          <input key={name} type="hidden" name={name} value={value} />
+        ))}
 
         {hasFixedClass ? (
           <input type="hidden" name="classId" value={fixedClassId} />
@@ -385,6 +427,7 @@ export function AssignmentCreationSheetContent({
           />
         </div>
 
+        {lockedPrompt ? null : (
         <div className="space-y-2">
           <Label>Prompt Source</Label>
           <div className="flex items-center gap-4 text-sm">
@@ -406,8 +449,9 @@ export function AssignmentCreationSheetContent({
             </label>
           </div>
         </div>
+        )}
 
-        {promptMode === 'pdf' ? (
+        {!lockedPrompt && promptMode === 'pdf' ? (
           <div className="space-y-2 rounded-md border p-3">
             <Label htmlFor="assignment-create-pdf">Assignment PDF</Label>
             <Input
@@ -435,19 +479,78 @@ export function AssignmentCreationSheetContent({
           </div>
         ) : null}
 
-        <div className="space-y-2">
-          <Label htmlFor="assignment-create-prompt">Prompt</Label>
-          <Textarea
-            id="assignment-create-prompt"
-            name="prompt"
-            value={prompt}
-            onChange={(event) => setPrompt(event.target.value)}
-            rows={8}
-            placeholder="Paste or type the full assignment prompt for students..."
-            disabled={isSaving}
-            required
-          />
-        </div>
+        {lockedPrompt ? (
+          <div className="space-y-2 rounded-lg border bg-muted/40 p-4">
+            <div className="flex items-center justify-between gap-3">
+              <Label>{lockedPrompt.label}</Label>
+              {lockedPrompt.badge ? (
+                <span className="text-xs font-medium uppercase text-muted-foreground">
+                  {lockedPrompt.badge}
+                </span>
+              ) : null}
+            </div>
+            <h3 className="text-base font-semibold">{lockedPrompt.title}</h3>
+            <p className="whitespace-pre-wrap text-sm leading-6 text-muted-foreground">
+              {lockedPrompt.body}
+            </p>
+
+            {lockedPrompt.sources?.length ? (
+              <details
+                className="rounded-md border bg-background"
+                // A single provided document is the assignment itself, so it
+                // opens by default; a six-source synthesis packet would push the
+                // form's controls off screen, so that stays collapsed.
+                open={lockedPrompt.sources.length === 1}
+              >
+                <summary className="cursor-pointer px-3 py-2 text-sm font-medium marker:text-muted-foreground">
+                  {lockedPrompt.sources.length}{' '}
+                  {lockedPrompt.sources.length === 1
+                    ? (lockedPrompt.sourceNoun ?? 'source')
+                    : `${lockedPrompt.sourceNoun ?? 'source'}s`}
+                </summary>
+                <div className="max-h-80 space-y-3 overflow-y-auto px-3 pb-3">
+                  {lockedPrompt.sources.map((source) => (
+                    <section key={`${source.position}-${source.title}`}>
+                      <h4 className="text-sm font-semibold">
+                        {source.title}
+                      </h4>
+                      <p className="text-xs text-muted-foreground">
+                        {source.attribution}
+                      </p>
+                      {source.caption ? (
+                        <p className="mt-1 text-xs italic text-muted-foreground">
+                          {source.caption}
+                        </p>
+                      ) : null}
+                      {source.mediaType === 'image' && source.imageAlt ? (
+                        <p className="mt-1 text-xs font-medium text-muted-foreground">
+                          [Visual source] {source.imageAlt}
+                        </p>
+                      ) : null}
+                      <p className="mt-1 whitespace-pre-wrap text-sm leading-6">
+                        {source.body}
+                      </p>
+                    </section>
+                  ))}
+                </div>
+              </details>
+            ) : null}
+          </div>
+        ) : (
+          <div className="space-y-2">
+            <Label htmlFor="assignment-create-prompt">Prompt</Label>
+            <Textarea
+              id="assignment-create-prompt"
+              name="prompt"
+              value={prompt}
+              onChange={(event) => setPrompt(event.target.value)}
+              rows={8}
+              placeholder="Paste or type the full assignment prompt for students..."
+              disabled={isSaving}
+              required
+            />
+          </div>
+        )}
 
         <div className="pt-6">
           <input type="hidden" name="submitForGrade" value="false" />
