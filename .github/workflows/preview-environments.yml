@@ -33,6 +33,7 @@ jobs:
       PREVIEW_SSH_USER: ${{ vars.PREVIEW_SSH_USER || 'ec2-user' }}
       PREVIEW_TLS: ${{ vars.PREVIEW_TLS || 'true' }}
       PREVIEW_RUNTIME: ${{ vars.PREVIEW_RUNTIME || 'fast' }}
+      PREVIEW_MAX_ENVS: ${{ vars.PREVIEW_MAX_ENVS || '30' }}
       PREVIEW_DATA_MODE: ${{ vars.PREVIEW_DATA_MODE || 'seed' }}
       PREVIEW_AI_MODEL: ${{ vars.PREVIEW_AI_MODEL || 'claude-sonnet-4-6' }}
       PREVIEW_ANTHROPIC_API_KEY: ${{ secrets.PREVIEW_ANTHROPIC_API_KEY || secrets.ANTHROPIC_API_KEY }}
@@ -94,6 +95,42 @@ jobs:
             --exclude '.worktrees' \
             -e "ssh -i ~/.ssh/preview_key" \
             ./ "$ssh_target:$remote_source/"
+
+      - name: Enforce preview capacity
+        id: capacity
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          # The host is a fixed-size box. Reclaim closed-PR environments, then evict the
+          # least active, before adding one more. Without this the box fills until it
+          # wedges and takes every preview down at once.
+          gh pr list --state open --limit 200 \
+            --json number,updatedAt,isDraft > /tmp/open-prs.json
+          open_numbers="$(jq -r '[.[].number] | join(" ")' /tmp/open-prs.json)"
+          activity="$(jq -r '.[] | "\(.number) \(.updatedAt | fromdateiso8601) \(if .isDraft then 1 else 0 end)"' /tmp/open-prs.json)"
+
+          ssh_target="${PREVIEW_SSH_USER}@${PREVIEW_HOST}"
+          remote_source="${PREVIEW_ROOT}/sources/pr-${PR_NUMBER}"
+          ssh -i ~/.ssh/preview_key "$ssh_target" \
+            "cd '$remote_source' && PREVIEW_ROOT='$PREVIEW_ROOT' PREVIEW_MAX_ENVS='$PREVIEW_MAX_ENVS' KEEP_PR='$PR_NUMBER' OPEN_PR_NUMBERS='$open_numbers' PR_ACTIVITY='$activity' bash scripts/preview/enforce-cap.sh" \
+            | tee /tmp/capacity.log
+
+          evicted="$(awk -F= '/^CAP_EVICTED=/{print $2}' /tmp/capacity.log | tail -1)"
+          result="$(awk -F= '/^CAP_RESULT=/{print $2}' /tmp/capacity.log | tail -1)"
+          live="$(awk -F= '/^CAP_LIVE=/{print $2}' /tmp/capacity.log | tail -1)"
+          echo "evicted=$evicted" >> "$GITHUB_OUTPUT"
+
+          # Tell anyone whose preview was reclaimed, so it is never a silent disappearance.
+          for pr in $evicted; do
+            gh pr comment "$pr" --body "This PR's preview environment was reclaimed to stay under the ${PREVIEW_MAX_ENVS}-environment cap (it was among the least recently active). Nothing was lost — push any commit, or re-run the PR preview workflow, and it rebuilds." || true
+          done
+
+          if [ "$result" = "full" ]; then
+            echo "::error::All ${PREVIEW_MAX_ENVS} preview slots are in use by active pull requests and none could be reclaimed. Close a PR or raise PREVIEW_MAX_ENVS."
+            exit 1
+          fi
+          echo "Preview capacity OK: ${live}/${PREVIEW_MAX_ENVS} in use."
 
       - name: Deploy preview
         id: deploy
