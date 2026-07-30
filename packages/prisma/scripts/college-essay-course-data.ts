@@ -309,7 +309,8 @@ EXIT CHECK: the student can say, in their own words, that a personal statement i
         position: 0,
         title: 'A short film about how your mind works',
         prompt:
-          "Your personal statement is not a school essay. It's not an argument with a thesis and three reasons. It's a short film about how your mind works — 650 words that make a stranger feel like they've met you.\n\nThree facts to hold onto:\n\n1. **You get 650 words. That's it.** About one and a quarter pages. Every word has to earn its place.\n2. **There are seven prompts, and the seventh is \"write about anything you want.\"** So we're going to do this backwards from how school trained you: we find *your* story first, then match it to a prompt at the very end.\n3. **We're going to break the five-paragraph essay on purpose.** No thesis. No \"firstly, secondly, in conclusion.\" That structure is for proving a point — you're showing a person.\n\nWhat readers actually remember: a specific object, a surprising quirk, a real moment of honesty, and the feeling that they now *know* you. That's what we're building.\n\nMake sense so far? Hit the **→** arrow to go to the next step — I'm going to ask you to say this back in your own words.",
+          "Your personal statement is not a school essay. It's not an argument with a thesis and three reasons. It's a short film about how your mind works — 650 words that make a stranger feel like they've met you.\n\nThree facts to hold onto:\n\n1. **You get 650 words. That's it.** About one and a quarter pages. Every word has to earn its place.\n2. **There are seven prompts, and the seventh is \"write about anything you want.\"** So we're going to do this backwards from how school trained you: we find *your* story first, then match it to a prompt at the very end.\n3. **We're going to break the five-paragraph essay on purpose.** No thesis. No \"firstly, secondly, in conclusion.\" That structure is for proving a point — you're showing a person.\n\nWhat readers actually remember: a specific object, a surprising quirk, a real moment of honesty, and the feeling that they now *know* you. That's what we're building.\n\nMake sense so far? If any of that doesn't land, hit **Chat** and ask me. Otherwise hit the **→** arrow to go to the next step — I'm going to ask you to say this back in your own words.",
+        showChatButton: true,
         showNextButton: true,
       },
       {
@@ -353,8 +354,14 @@ If any answer is no, loop them back into brainstorming. DO NOT advance a student
         position: 0,
         title: 'Find something you would be proud to tell',
         prompt:
-          "**You may not start drafting yet.** The single biggest mistake students make is writing a beautiful essay about the wrong thing. So first we find the right thing.\n\nThe test for the right thing is not \"what's most impressive?\" It's this:\n\n> **The Pride Test:** What could you talk about — or would you be genuinely happy and proud to tell someone you respect — for an hour, without getting bored?\n\nThat's your raw material. It might be a hobby, a relationship, a place, a failure, an obsession, a tiny daily ritual. Impressive is optional. *Alive* is required.",
+          "**You may not start drafting yet.** The single biggest mistake students make is writing a beautiful essay about the wrong thing. So first we find the right thing.\n\nThe test for the right thing is not \"what's most impressive?\" It's this:\n\n> **The Pride Test:** What could you talk about — or would you be genuinely happy and proud to tell someone you respect — for an hour, without getting bored?\n\nThat's your raw material. It might be a hobby, a relationship, a place, a failure, an obsession, a tiny daily ritual. Impressive is optional. *Alive* is required.\n\nAlready have a candidate in mind? Tell me what it is and I'll run the Pride Test on it with you. If nothing's coming yet, hit the **→** arrow — the next step is a brain-dump built to shake ideas loose.",
+        tutorInstructions:
+          "The student is floating an early topic candidate, before any brainstorming. Run the PRIDE TEST on it: would they be genuinely happy and proud to tell someone they respect about this, for an hour, without getting bored? Not \"is it impressive?\" Ask what specifically they'd say about it, and listen for heat — do they light up, or are they pitching an accomplishment? If it's alive, say so and tell them the brain-dump on the next step will surface more raw material before they commit. If it reads as résumé-shaped or dutiful, say that kindly and ask the fishing questions (what could you rant about for an hour, what do people tease you about, what would you do for free). Do not pick a topic for them, and don't push into anchors or traits yet — those are later steps.",
+        showChatButton: true,
         showNextButton: true,
+        buttons: [
+          { position: 0, label: 'Run the Pride Test on my idea', action: 'response' },
+        ],
       },
       {
         position: 1,

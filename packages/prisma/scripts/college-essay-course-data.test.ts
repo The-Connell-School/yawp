@@ -395,6 +395,16 @@ describe('College essay module instructions', () => {
     }
   });
 
+  test('every instruction can reach the tutor, not only the next arrow', () => {
+    // A step whose only control is the forward arrow strands a student who has
+    // a question or wants feedback on what they just wrote.
+    for (const module of COLLEGE_ESSAY_MODULES) {
+      for (const instruction of module.instructions) {
+        expect(instruction.showChatButton).toBe(true);
+      }
+    }
+  });
+
   test('every chat button instruction opens the chat surface', () => {
     // If an instruction offers a "response" button, it should show the chat.
     for (const module of COLLEGE_ESSAY_MODULES) {
