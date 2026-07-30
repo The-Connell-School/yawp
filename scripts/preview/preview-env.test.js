@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import {
   buildPreviewEnv,
   requirePreviewBasicAuth,
@@ -148,5 +149,49 @@ describe('buildPreviewEnv', () => {
     expect(githubConfig).toContain(
       'gh_sec PREVIEW_BASIC_AUTH_PASSWORD "$PREVIEW_BASIC_AUTH_PASSWORD"',
     );
+  });
+});
+
+describe('named environments', () => {
+  test('a slug override drops the pr- prefix and needs no PR number', () => {
+    const env = buildPreviewEnv({
+      slug: 'demo',
+      domain: 'yawp.school',
+      prNumber: undefined,
+      runtime: 'production'
+    });
+    expect(env.slug).toBe('demo');
+    expect(env.hostname).toBe('demo.yawp.school');
+    expect(env.url).toBe('https://demo.yawp.school');
+    expect(env.databaseName).toBe('yawp_demo');
+    expect(env.composeProject).toBe('yawp-demo');
+    expect(env.runtime).toBe('production');
+  });
+
+  test('PR previews are unchanged by the override existing', () => {
+    const env = buildPreviewEnv({ prNumber: '208', domain: 'preview.yawp.school' });
+    expect(env.slug).toBe('pr-208');
+    expect(env.hostname).toBe('pr-208.preview.yawp.school');
+    expect(env.databaseName).toBe('yawp_pr_208');
+  });
+
+  test('a nonsense slug is rejected rather than silently building a bad hostname', () => {
+    expect(() => buildPreviewEnv({ slug: 'Demo Box!', domain: 'yawp.school' })).toThrow();
+  });
+
+  // The slug override is only honored if the deploy path USES the names derived here.
+  // deploy.sh sourced the env and then rebuilt DATABASE_NAME as "yawp_pr_${PR_NUMBER}",
+  // which for a named environment (no PR number) silently became the database "yawp_pr_" —
+  // silently, because PR_NUMBER is exported as an empty string rather than left unset, so
+  // `set -u` never caught it. Naming belongs to preview-env.mjs; assert the consumer does
+  // not re-derive it.
+  test('deploy.sh does not re-derive names that preview-env.mjs owns', () => {
+    const deployScript = readFileSync(path.join(import.meta.dir, 'deploy.sh'), 'utf8');
+    const reDerived = deployScript
+      .split('\n')
+      .filter((line) => !line.trim().startsWith('#'))
+      .filter((line) => /^\s*(export\s+)?(DATABASE_NAME|SLUG|PREVIEW_DIR|COMPOSE_PROJECT)=/.test(line));
+    expect(reDerived).toEqual([]);
+    expect(deployScript).not.toMatch(/yawp_pr_\$\{?PR_NUMBER/);
   });
 });

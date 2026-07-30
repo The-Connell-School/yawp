@@ -14,7 +14,12 @@ export PREVIEW_DATA_MODE="${PREVIEW_DATA_MODE:-seed}"
 export PREVIEW_DEV_LOGIN_EMAIL="${PREVIEW_DEV_LOGIN_EMAIL:-dev.teacher@yawp.local}"
 eval "$(node "$SCRIPT_DIR/preview-env.mjs" --shell)"
 
-DATABASE_NAME="yawp_pr_${PR_NUMBER}"
+# preview-env.mjs already derives this and exports it in the eval above — yawp_pr_142 for
+# a PR preview, yawp_demo for a slug-named environment like the demo box. Recomputing it
+# from PR_NUMBER here defeated the slug override: a named environment has no PR number, so
+# this produced the database "yawp_pr_" and, because PR_NUMBER is exported as an empty
+# string rather than left unset, did it silently instead of failing under `set -u`.
+: "${DATABASE_NAME:?preview-env.mjs did not export DATABASE_NAME}"
 DUMP_URI="${PREVIEW_DB_DUMP_S3_URI:-s3://yawp-preview-videos/production.dump}"
 POSTGRES_CONTAINER="${PREVIEW_POSTGRES_CONTAINER:-preview-postgres}"
 POSTGRES_PROJECT="${PREVIEW_POSTGRES_PROJECT:-yawp-preview-db}"
