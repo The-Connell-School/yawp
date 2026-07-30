@@ -75,6 +75,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
   if (intent === 'updateCourse') {
     const title = formData.get('title')?.toString();
     const description = formData.get('description')?.toString();
+    const tutorInstructions = formData.get('tutorInstructions')?.toString();
     const imageFile = formData.get('image') as File | null;
     const deleteImage = formData.get('deleteImage') === 'true';
     const hasGradingConfigFields =
@@ -140,6 +141,11 @@ export async function action({ request, params }: ActionFunctionArgs) {
         data: {
           title,
           description: description || null,
+          // Submissions from older clients omit the field entirely; leave the
+          // stored course guidelines alone rather than clearing them.
+          ...(formData.has('tutorInstructions')
+            ? { tutorInstructions: tutorInstructions?.trim() || null }
+            : {}),
           ...gradingConfigData,
         },
       });
@@ -203,6 +209,7 @@ export default function AssignmentTypeRoute() {
       assignmentTypeId={course.id}
       titleDefaultValue={course.title}
       descriptionDefaultValue={course.description}
+      tutorInstructionsDefaultValue={course.tutorInstructions}
       scoringScale={parseScoringScale(course.scoringScaleJson)}
       rubric={parseRubric(course.rubricJson)}
       promptConfig={parsePromptConfig(course.gradingPromptConfigJson)}

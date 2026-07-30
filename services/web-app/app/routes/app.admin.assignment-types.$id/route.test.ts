@@ -172,6 +172,74 @@ describe('admin assignment type detail action', () => {
     });
   });
 
+  test('saves course tutor guidelines from the tutoring section', async () => {
+    const form = new FormData();
+    form.set('intent', 'updateCourse');
+    form.set('title', 'AP English Literature Essay');
+    form.set(
+      'tutorInstructions',
+      '  Coach AP Lit prose analysis against the 6-point rubric.  '
+    );
+
+    await action({
+      request: new Request(
+        'https://example.test/app/admin/assignment-types/at-1',
+        { method: 'POST', body: form }
+      ),
+      params: { id: 'at-1' },
+      context: {} as never,
+    });
+
+    expect(prisma.assignmentType.update).toHaveBeenCalledWith({
+      where: { id: 'at-1' },
+      data: expect.objectContaining({
+        tutorInstructions:
+          'Coach AP Lit prose analysis against the 6-point rubric.',
+      }),
+    });
+  });
+
+  test('clears course tutor guidelines when the field is submitted empty', async () => {
+    const form = new FormData();
+    form.set('intent', 'updateCourse');
+    form.set('title', 'AP English Literature Essay');
+    form.set('tutorInstructions', '   ');
+
+    await action({
+      request: new Request(
+        'https://example.test/app/admin/assignment-types/at-1',
+        { method: 'POST', body: form }
+      ),
+      params: { id: 'at-1' },
+      context: {} as never,
+    });
+
+    expect(prisma.assignmentType.update).toHaveBeenCalledWith({
+      where: { id: 'at-1' },
+      data: expect.objectContaining({ tutorInstructions: null }),
+    });
+  });
+
+  test('leaves course tutor guidelines untouched when the field is absent', async () => {
+    const form = new FormData();
+    form.set('intent', 'updateCourse');
+    form.set('title', 'AP English Literature Essay');
+
+    await action({
+      request: new Request(
+        'https://example.test/app/admin/assignment-types/at-1',
+        { method: 'POST', body: form }
+      ),
+      params: { id: 'at-1' },
+      context: {} as never,
+    });
+
+    const updateArgs = prisma.assignmentType.update.mock.calls.at(-1)?.[0] as {
+      data: Record<string, unknown>;
+    };
+    expect('tutorInstructions' in updateArgs.data).toBe(false);
+  });
+
   test('loads assignment type details without external rubric links', async () => {
     prisma.assignmentType.findUnique.mockResolvedValue({
       id: 'at-1',

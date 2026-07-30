@@ -65,6 +65,7 @@ describe('admin assignment type new action', () => {
         title: 'ACT Writing',
         kind: null,
         description: 'ACT writing assignment type',
+        tutorInstructions: null,
         position: 4,
         scoringScaleJson: {
           type: 'act_writing_2_12',

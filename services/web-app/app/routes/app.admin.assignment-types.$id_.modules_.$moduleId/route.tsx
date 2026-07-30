@@ -64,6 +64,8 @@ import {
   type ModuleRubricRelationship,
 } from '~/domain/assignment-types/assignment-type-rubric-config';
 import { ModuleRubricAlignmentEditor } from '~/components/admin/module-rubric-alignment-editor';
+import { TutorGuidelineLayerList } from '~/components/admin/tutor-guidelines-panel';
+import { buildTutorGuidelineLayers } from '~/domain/tutoring/tutor-guidelines';
 
 const moduleRubricRelationshipSet = new Set<string>(
   MODULE_RUBRIC_RELATIONSHIPS
@@ -156,6 +158,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     id: courseRecord.id,
     title: courseRecord.title,
     rubricJson: (courseRecord as { rubricJson?: unknown }).rubricJson ?? null,
+    tutorInstructions: courseRecord.tutorInstructions ?? null,
   };
 
   return dataResponse({ course, module });
@@ -303,6 +306,31 @@ export default function AssignmentModuleRoute() {
   const rubric = parseAssignmentTypeRubricConfig({
     rubricJson: course.rubricJson,
   }).rubric;
+
+  // Show every layer the tutor receives for this module, not just this
+  // module's own text, so "No instructions" never reads as "no guidance".
+  const stepsWithGuidelines = module.instructions.filter((instruction) =>
+    instruction.tutorInstructions?.trim()
+  );
+  const guidelineLayers = buildTutorGuidelineLayers({
+    course: course.tutorInstructions,
+    module: module.tutorInstructions,
+  }).map((layer) =>
+    layer.key === 'step'
+      ? {
+          ...layer,
+          isActive: stepsWithGuidelines.length > 0,
+          blurb: `Applies to a single step. ${stepsWithGuidelines.length} of ${module.instructions.length} steps add their own.`,
+          body: stepsWithGuidelines
+            .map(
+              (instruction) =>
+                `${instruction.title}: ${instruction.tutorInstructions?.trim()}`
+            )
+            .join('\n\n'),
+          emptyBlurb: 'No step in this module adds its own guidelines.',
+        }
+      : layer
+  );
 
   React.useEffect(() => {
     setIsMounted(true);
@@ -581,12 +609,18 @@ export default function AssignmentModuleRoute() {
                   label="Self-guided module"
                 />
                 {!moduleForm.value('isSelfGuided') && (
-                  <FormTextarea
-                    scope={moduleForm.scope('tutorInstructions')}
-                    label="Tutor Instructions"
-                    placeholder="Instructions for the tutor..."
-                    rows={4}
-                  />
+                  <div className="space-y-2">
+                    <FormTextarea
+                      scope={moduleForm.scope('tutorInstructions')}
+                      label="Module guidelines"
+                      placeholder="Coaching for this module only..."
+                      rows={4}
+                    />
+                    <p className="text-xs text-muted-foreground text-pretty">
+                      Adds to the universal YAWP guidelines and this course's
+                      guidelines, which always apply.
+                    </p>
+                  </div>
                 )}
                 <div className="space-y-2">
                   <Label>Rubric relationships</Label>
@@ -661,7 +695,7 @@ export default function AssignmentModuleRoute() {
               </div>
               <div>
                 <dt className="text-sm font-medium text-muted-foreground">
-                  Tutor Instructions
+                  Module guidelines
                 </dt>
                 <dd className="text-base">
                   {module.tutorInstructions &&
@@ -677,7 +711,8 @@ export default function AssignmentModuleRoute() {
                       </button>
                     </>
                   ) : (
-                    module.tutorInstructions || 'No instructions'
+                    module.tutorInstructions ||
+                    'None of its own - see the guidelines in effect below'
                   )}
                 </dd>
               </div>
@@ -711,6 +746,27 @@ export default function AssignmentModuleRoute() {
           </Card>
         </div>
       </div>
+
+      <Card className="bg-muted">
+        <CardHeader>
+          <CardTitle>Tutor guidelines in effect</CardTitle>
+          <p className="text-sm text-muted-foreground text-pretty">
+            Everything the tutor is told for this module, in the order it
+            receives it. Each layer adds to the ones above it.
+          </p>
+        </CardHeader>
+        <CardContent>
+          <TutorGuidelineLayerList
+            layers={guidelineLayers}
+            editHref={{
+              course: {
+                href: `/app/admin/assignment-types/${course.id}`,
+                label: `Add course guidelines to ${course.title}`,
+              },
+            }}
+          />
+        </CardContent>
+      </Card>
 
       <Card className="bg-muted">
         <CardHeader className="flex flex-row items-center justify-between">
@@ -802,12 +858,18 @@ export default function AssignmentModuleRoute() {
                         />
                       </div>
                     </div>
-                    <FormTextarea
-                      scope={instructionForm.scope('tutorInstructions')}
-                      label="Tutor Instructions"
-                      placeholder="Special instructions for the tutor..."
-                      rows={2}
-                    />
+                    <div className="space-y-2">
+                      <FormTextarea
+                        scope={instructionForm.scope('tutorInstructions')}
+                        label="Step guidelines"
+                        placeholder="Coaching for this step only..."
+                        rows={2}
+                      />
+                      <p className="text-xs text-muted-foreground text-pretty">
+                        Adds to the universal, course, and module guidelines,
+                        which always apply.
+                      </p>
+                    </div>
                     <Button
                       type="submit"
                       className="w-full"

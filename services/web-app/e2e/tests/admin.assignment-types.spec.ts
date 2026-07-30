@@ -110,7 +110,7 @@ test.describe.serial('Admin assignment types', () => {
         .locator('#moduleDescription')
         .fill('Module focused on thesis planning.');
       await page
-        .locator('#tutorInstructions')
+        .locator('#moduleTutorInstructions')
         .fill('Coach students toward a defensible thesis.');
       await page.getByRole('button', { name: 'Create module' }).click();
       await expect(page.getByRole('link', { name: 'View' })).toBeVisible();

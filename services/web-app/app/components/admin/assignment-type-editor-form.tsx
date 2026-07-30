@@ -26,12 +26,15 @@ import {
   type AssignmentTypeModuleRow,
 } from './assignment-type-modules-section';
 import { RubricSourceBanner } from './rubric-source-indicator';
+import { UniversalTutorGuidelinesBanner } from './tutor-guidelines-panel';
+import { TUTOR_GUIDELINE_LAYER_META } from '~/domain/tutoring/tutor-guidelines';
 
 type AssignmentTypeEditorFormProps = {
   mode: 'create' | 'edit';
   assignmentTypeId?: string;
   titleDefaultValue?: string;
   descriptionDefaultValue?: string | null;
+  tutorInstructionsDefaultValue?: string | null;
   scoringScale?: ScoringScaleData;
   rubric?: RubricData;
   promptConfig?: PromptConfigData;
@@ -43,6 +46,7 @@ type AssignmentTypeEditorFormProps = {
 function formSnapshot(values: {
   title: string;
   description: string;
+  tutorInstructions: string;
   scoringScale: ScoringScaleData;
   rubric: RubricData;
   promptConfig: PromptConfigData;
@@ -50,6 +54,7 @@ function formSnapshot(values: {
   return [
     values.title.trim(),
     values.description.trim(),
+    values.tutorInstructions.trim(),
     scoringScaleSnapshot(values.scoringScale),
     rubricSnapshot(values.rubric),
     promptConfigSnapshot(values.promptConfig),
@@ -107,6 +112,7 @@ export function AssignmentTypeEditorForm({
   assignmentTypeId,
   titleDefaultValue = '',
   descriptionDefaultValue = '',
+  tutorInstructionsDefaultValue = '',
   scoringScale = DEFAULT_SCORING_SCALE,
   rubric = DEFAULT_RUBRIC,
   promptConfig = DEFAULT_PROMPT_CONFIG,
@@ -124,6 +130,9 @@ export function AssignmentTypeEditorForm({
 
   const [title, setTitle] = useState(titleDefaultValue);
   const [description, setDescription] = useState(descriptionDefaultValue ?? '');
+  const [tutorInstructions, setTutorInstructions] = useState(
+    tutorInstructionsDefaultValue ?? ''
+  );
   const [scoringScaleState, setScoringScaleState] =
     useState<ScoringScaleData>(scoringScale);
   const [rubricState, setRubricState] = useState<RubricData>(rubric);
@@ -137,16 +146,25 @@ export function AssignmentTypeEditorForm({
       formSnapshot({
         title: titleDefaultValue,
         description: descriptionDefaultValue ?? '',
+        tutorInstructions: tutorInstructionsDefaultValue ?? '',
         scoringScale,
         rubric,
         promptConfig,
       }),
-    [titleDefaultValue, descriptionDefaultValue, scoringScale, rubric, promptConfig]
+    [
+      titleDefaultValue,
+      descriptionDefaultValue,
+      tutorInstructionsDefaultValue,
+      scoringScale,
+      rubric,
+      promptConfig,
+    ]
   );
 
   useEffect(() => {
     setTitle(titleDefaultValue);
     setDescription(descriptionDefaultValue ?? '');
+    setTutorInstructions(tutorInstructionsDefaultValue ?? '');
     setScoringScaleState(scoringScale);
     setRubricState(rubric);
     setPromptConfigState(promptConfig);
@@ -179,11 +197,19 @@ export function AssignmentTypeEditorForm({
       formSnapshot({
         title,
         description,
+        tutorInstructions,
         scoringScale: scoringScaleState,
         rubric: rubricState,
         promptConfig: promptConfigState,
       }),
-    [title, description, scoringScaleState, rubricState, promptConfigState]
+    [
+      title,
+      description,
+      tutorInstructions,
+      scoringScaleState,
+      rubricState,
+      promptConfigState,
+    ]
   );
 
   const isDirty = currentSnapshot !== savedSnapshot || imageDirty;
@@ -199,6 +225,7 @@ export function AssignmentTypeEditorForm({
   function handleCancel() {
     setTitle(titleDefaultValue);
     setDescription(descriptionDefaultValue ?? '');
+    setTutorInstructions(tutorInstructionsDefaultValue ?? '');
     setScoringScaleState(scoringScale);
     setRubricState(rubric);
     setPromptConfigState(promptConfig);
@@ -335,6 +362,36 @@ export function AssignmentTypeEditorForm({
             namePrefix="assignmentType"
             onChange={setPromptConfigState}
           />
+        </Section>
+
+        <Section
+          title="Tutoring guidelines"
+          description="What the tutor is told before it reads a student's draft, in the order it receives it."
+        >
+          <UniversalTutorGuidelinesBanner />
+          <div className="space-y-2">
+            <FieldLabel htmlFor="courseTutorInstructions">
+              Course guidelines
+            </FieldLabel>
+            <p className="text-sm text-muted-foreground text-pretty">
+              {TUTOR_GUIDELINE_LAYER_META.course.blurb} Put course-specific
+              coaching here — rubric language, genre moves, vocabulary — instead
+              of repeating it in every module.
+            </p>
+            <Textarea
+              id="courseTutorInstructions"
+              name="tutorInstructions"
+              rows={6}
+              value={tutorInstructions}
+              onChange={(event) => setTutorInstructions(event.target.value)}
+              placeholder="Course-wide coaching for this assignment type..."
+            />
+          </div>
+          <p className="text-sm text-muted-foreground text-pretty">
+            {isEdit
+              ? 'Module and step guidelines stack on top of these, and are edited on each module below.'
+              : 'Save the assignment type, then add modules for module- and step-level guidelines.'}
+          </p>
         </Section>
 
         {!isEdit ? (

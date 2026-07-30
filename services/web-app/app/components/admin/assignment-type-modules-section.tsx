@@ -232,13 +232,19 @@ export function AssignmentTypeModulesSection({
                 <Label htmlFor="isSelfGuided">Self-guided module</Label>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="tutorInstructions">Tutor instructions</Label>
+                <Label htmlFor="moduleTutorInstructions">
+                  Module guidelines
+                </Label>
                 <Textarea
-                  id="tutorInstructions"
+                  id="moduleTutorInstructions"
                   name="tutorInstructions"
-                  placeholder="Instructions for the tutor..."
+                  placeholder="Coaching for this module only..."
                   rows={4}
                 />
+                <p className="text-xs text-muted-foreground text-pretty">
+                  Adds to the universal YAWP guidelines and this course's
+                  guidelines, which always apply.
+                </p>
               </div>
               <p className="text-sm text-muted-foreground">
                 You can add instructions after creating the module.
