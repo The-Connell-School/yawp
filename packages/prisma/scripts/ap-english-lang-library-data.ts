@@ -37,6 +37,8 @@ import {
   KENNEDY_INAUGURAL_OPENING,
   LINCOLN_SECOND_INAUGURAL,
   ROOSEVELT_FIRST_INAUGURAL_OPENING,
+  STANTON_DECLARATION_OF_SENTIMENTS,
+  WASHINGTON_ATLANTA_EXPOSITION_ADDRESS,
 } from './ap-english-lang-passages';
 
 type LibrarySource = {
@@ -958,19 +960,18 @@ const RHETORICAL_ANALYSIS_ENTRIES: LibraryEntry[] = [
     defaultTimeMode: 'untimed',
     defaultDurationMinutes: 40,
     suggestedEvidence: null,
-    provenanceUrl: null,
+    provenanceUrl:
+      'https://raw.githubusercontent.com/GITenberg/History-of-Woman-Suffrage-Volume-I_28020/master/28020.txt',
     sources: passageSource({
       key: 'ap-lang-rhetorical-stanton-declaration-of-sentiments',
-      title: 'Declaration of Sentiments (opening)',
-      attribution: 'Elizabeth Cady Stanton, 1848 (public domain)',
-      body: [
-        'When, in the course of human events, it becomes necessary for one portion of the family of man to assume among the people of the earth a position different from that which they have hitherto occupied...',
-        '',
-        'We hold these truths to be self-evident: that all men and women are created equal; that they are endowed by their Creator with certain inalienable rights; that among these are life, liberty, and the pursuit of happiness...',
-        '',
-        'The history of mankind is a history of repeated injuries and usurpations on the part of man toward woman, having in direct object the establishment of an absolute tyranny over her.',
-      ].join('\n'),
-      caption: 'The declaration\'s opening, echoing the Declaration of Independence.',
+      title: 'Declaration of Sentiments',
+      attribution:
+        'Elizabeth Cady Stanton, Seneca Falls Convention, July 1848 (public domain)',
+      body: STANTON_DECLARATION_OF_SENTIMENTS,
+      caption:
+        'The complete declaration as adopted at Seneca Falls, including the full list of grievances. The convention\'s separate resolutions are not included.',
+      provenanceUrl:
+        'https://raw.githubusercontent.com/GITenberg/History-of-Woman-Suffrage-Volume-I_28020/master/28020.txt',
     }),
   },
   {
@@ -1040,17 +1041,17 @@ const RHETORICAL_ANALYSIS_ENTRIES: LibraryEntry[] = [
     defaultTimeMode: 'untimed',
     defaultDurationMinutes: 40,
     suggestedEvidence: null,
-    provenanceUrl: null,
+    provenanceUrl:
+      'https://raw.githubusercontent.com/GITenberg/Up-from-Slavery--An-Autobiography_2376/master/2376.txt',
     sources: passageSource({
       key: 'ap-lang-rhetorical-washington-atlanta-address',
-      title: 'Atlanta Exposition Address (excerpt)',
+      title: 'Atlanta Exposition Address',
       attribution: 'Booker T. Washington, September 18, 1895 (public domain)',
-      body: [
-        'A ship lost at sea for many days suddenly sighted a friendly vessel. From the mast of the unfortunate vessel was seen a signal, "Water, water; we die of thirst!" The answer from the friendly vessel at once came back, "Cast down your bucket where you are." ... The captain of the distressed vessel, at last heeding the injunction, cast down his bucket, and it came up full of fresh, sparkling water from the mouth of the Amazon River.',
-        '',
-        'To those of my race who depend on bettering their condition in a foreign land ... I would say: "Cast down your bucket where you are"—cast it down in making friends in every manly way of the people of all races by whom we are surrounded.',
-      ].join('\n'),
-      caption: 'The speech\'s central extended metaphor, repeated across the address.',
+      body: WASHINGTON_ATLANTA_EXPOSITION_ADDRESS,
+      caption:
+        'The complete address as Washington reproduces it in Up from Slavery, carrying the "cast down your bucket" metaphor to each of its audiences in turn.',
+      provenanceUrl:
+        'https://raw.githubusercontent.com/GITenberg/Up-from-Slavery--An-Autobiography_2376/master/2376.txt',
     }),
   },
   {
@@ -1098,10 +1099,8 @@ const RHETORICAL_ANALYSIS_ENTRIES: LibraryEntry[] = [
  */
 export const SHORT_EXCERPT_PASSAGE_KEYS: readonly string[] = [
   'ap-lang-rhetorical-paine-the-crisis',
-  'ap-lang-rhetorical-stanton-declaration-of-sentiments',
   'ap-lang-rhetorical-henry-give-me-liberty',
   'ap-lang-rhetorical-chief-joseph-surrender',
-  'ap-lang-rhetorical-washington-atlanta-address',
 ];
 
 /**

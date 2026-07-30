@@ -101,3 +101,91 @@ export const ROOSEVELT_FIRST_INAUGURAL_OPENING = [
   "",
   "Recognition of the falsity of material wealth as the standard of success goes hand in hand with the abandonment of the false belief that public office and high political position are to be valued only by the standards of pride of place and personal profit; and there must be an end to a conduct in banking and in business which too often has given to a sacred trust the likeness of callous and selfish wrongdoing. Small wonder that confidence languishes, for it thrives only on honesty, on honor, on the sacredness of obligations, on faithful protection, on unselfish performance; without them it cannot live.",
 ].join('\n');
+
+// The two passages below are transcribed from Project Gutenberg editions
+// mirrored by the GITenberg project (raw.githubusercontent.com/GITenberg/...),
+// with the same normalization policy as above: em dashes restored from "--",
+// hard-wrapped lines unwrapped, verse line breaks kept, nothing reworded.
+
+/**
+ * Booker T. Washington's Atlanta Exposition Address, September 18, 1895 -- the
+ * COMPLETE address (1,587 words) as Washington reproduces it in "Up from
+ * Slavery", chapter XIV (Project Gutenberg #2376). Published 1901; public
+ * domain. Carries the full "Cast down your bucket where you are" extended
+ * metaphor across both of its audiences.
+ */
+export const WASHINGTON_ATLANTA_EXPOSITION_ADDRESS = [
+  "Mr. President and Gentlemen of the Board of Directors and Citizens.",
+  "",
+  "One-third of the population of the South is of the Negro race. No enterprise seeking the material, civil, or moral welfare of this section can disregard this element of our population and reach the highest success. I but convey to you, Mr. President and Directors, the sentiment of the masses of my race when I say that in no way have the value and manhood of the American Negro been more fittingly and generously recognized than by the managers of this magnificent Exposition at every stage of its progress. It is a recognition that will do more to cement the friendship of the two races than any occurrence since the dawn of our freedom.",
+  "",
+  "Not only this, but the opportunity here afforded will awaken among us a new era of industrial progress. Ignorant and inexperienced, it is not strange that in the first years of our new life we began at the top instead of at the bottom; that a seat in Congress or the state legislature was more sought than real estate or industrial skill; that the political convention or stump speaking had more attractions than starting a dairy farm or truck garden.",
+  "",
+  "A ship lost at sea for many days suddenly sighted a friendly vessel. From the mast of the unfortunate vessel was seen a signal, \"Water, water; we die of thirst!\" The answer from the friendly vessel at once came back, \"Cast down your bucket where you are.\" A second time the signal, \"Water, water; send us water!\" ran up from the distressed vessel, and was answered, \"Cast down your bucket where you are.\" And a third and fourth signal for water was answered, \"Cast down your bucket where you are.\" The captain of the distressed vessel, at last heading the injunction, cast down his bucket, and it came up full of fresh, sparkling water from the mouth of the Amazon River. To those of my race who depend on bettering their condition in a foreign land or who underestimate the importance of cultivating friendly relations with the Southern white man, who is their next-door neighbour, I would say: \"Cast down your bucket where you are\"—cast it down in making friends in every manly way of the people of all races by whom we are surrounded.",
+  "",
+  "Cast it down in agriculture, mechanics, in commerce, in domestic service, and in the professions. And in this connection it is well to bear in mind that whatever other sins the South may be called to bear, when it comes to business, pure and simple, it is in the South that the Negro is given a man's chance in the commercial world, and in nothing is this Exposition more eloquent than in emphasizing this chance. Our greatest danger is that in the great leap from slavery to freedom we may overlook the fact that the masses of us are to live by the productions of our hands, and fail to keep in mind that we shall prosper in proportion as we learn to dignify and glorify common labour and put brains and skill into the common occupations of life; shall prosper in proportion as we learn to draw the line between the superficial and the substantial, the ornamental gewgaws of life and the useful. No race can prosper till it learns that there is as much dignity in tilling a field as in writing a poem. It is at the bottom of life we must begin, and not at the top. Nor should we permit our grievances to overshadow our opportunities.",
+  "",
+  "To those of the white race who look to the incoming of those of foreign birth and strange tongue and habits of the prosperity of the South, were I permitted I would repeat what I say to my own race: \"Cast down your bucket where you are.\" Cast it down among the eight millions of Negroes whose habits you know, whose fidelity and love you have tested in days when to have proved treacherous meant the ruin of your firesides. Cast down your bucket among these people who have, without strikes and labour wars, tilled your fields, cleared your forests, builded your railroads and cities, and brought forth treasures from the bowels of the earth, and helped make possible this magnificent representation of the progress of the South. Casting down your bucket among my people, helping and encouraging them as you are doing on these grounds, and to education of head, hand, and heart, you will find that they will buy your surplus land, make blossom the waste places in your fields, and run your factories. While doing this, you can be sure in the future, as in the past, that you and your families will be surrounded by the most patient, faithful, law-abiding, and unresentful people that the world has seen. As we have proved our loyalty to you in the past, nursing your children, watching by the sick-bed of your mothers and fathers, and often following them with tear-dimmed eyes to their graves, so in the future, in our humble way, we shall stand by you with a devotion that no foreigner can approach, ready to lay down our lives, if need be, in defence of yours, interlacing our industrial, commercial, civil, and religious life with yours in a way that shall make the interests of both races one. In all things that are purely social we can be as separate as the fingers, yet one as the hand in all things essential to mutual progress.",
+  "",
+  "There is no defence or security for any of us except in the highest intelligence and development of all. If anywhere there are efforts tending to curtail the fullest growth of the Negro, let these efforts be turned into stimulating, encouraging, and making him the most useful and intelligent citizen. Effort or means so invested will pay a thousand per cent interest. These efforts will be twice blessed—\"blessing him that gives and him that takes.\"",
+  "",
+  "There is no escape through law of man or God from the inevitable:—",
+  "",
+  "The laws of changeless justice bind\nOppressor with oppressed;\nAnd close as sin and suffering joined\nWe march to fate abreast.",
+  "",
+  "Nearly sixteen millions of hands will aid you in pulling the load upward, or they will pull against you the load downward. We shall constitute one-third and more of the ignorance and crime of the South, or one-third its intelligence and progress; we shall contribute one-third to the business and industrial prosperity of the South, or we shall prove a veritable body of death, stagnating, depressing, retarding every effort to advance the body politic.",
+  "",
+  "Gentlemen of the Exposition, as we present to you our humble effort at an exhibition of our progress, you must not expect overmuch. Starting thirty years ago with ownership here and there in a few quilts and pumpkins and chickens (gathered from miscellaneous sources), remember the path that has led from these to the inventions and production of agricultural implements, buggies, steam-engines, newspapers, books, statuary, carving, paintings, the management of drug-stores and banks, has not been trodden without contact with thorns and thistles. While we take pride in what we exhibit as a result of our independent efforts, we do not for a moment forget that our part in this exhibition would fall far short of your expectations but for the constant help that has come to our education life, not only from the Southern states, but especially from Northern philanthropists, who have made their gifts a constant stream of blessing and encouragement.",
+  "",
+  "The wisest among my race understand that the agitation of questions of social equality is the extremest folly, and that progress in the enjoyment of all the privileges that will come to us must be the result of severe and constant struggle rather than of artificial forcing. No race that has anything to contribute to the markets of the world is long in any degree ostracized. It is important and right that all privileges of the law be ours, but it is vastly more important that we be prepared for the exercises of these privileges. The opportunity to earn a dollar in a factory just now is worth infinitely more than the opportunity to spend a dollar in an opera-house.",
+  "",
+  "In conclusion, may I repeat that nothing in thirty years has given us more hope and encouragement, and drawn us so near to you of the white race, as this opportunity offered by the Exposition; and here bending, as it were, over the altar that represents the results of the struggles of your race and mine, both starting practically empty-handed three decades ago, I pledge that in your effort to work out the great and intricate problem which God has laid at the doors of the South, you shall have at all times the patient, sympathetic help of my race; only let this be constantly in mind, that, while from representations in these buildings of the product of field, of forest, of mine, of factory, letters, and art, much good will come, yet far above and beyond material benefits will be that higher good, that, let us pray God, will come, in a blotting out of sectional differences and racial animosities and suspicions, in a determination to administer absolute justice, in a willing obedience among all classes to the mandates of law. This, this, coupled with our material prosperity, will bring into our beloved South a new heaven and a new earth.",
+].join('\n');
+
+/**
+ * The Declaration of Sentiments, Seneca Falls Convention, July 1848 -- the
+ * COMPLETE declaration (969 words) as printed in "History of Woman Suffrage,
+ * Volume I" (Project Gutenberg #28020), including the full list of grievances.
+ * The convention's resolutions are a separate document and are not included.
+ */
+export const STANTON_DECLARATION_OF_SENTIMENTS = [
+  "When, in the course of human events, it becomes necessary for one portion of the family of man to assume among the people of the earth a position different from that which they have hitherto occupied, but one to which the laws of nature and of nature's God entitle them, a decent respect to the opinions of mankind requires that they should declare the causes that impel them to such a course.",
+  "",
+  "We hold these truths to be self-evident: that all men and women are created equal; that they are endowed by their Creator with certain inalienable rights; that among these are life, liberty, and the pursuit of happiness; that to secure these rights governments are instituted, deriving their just powers from the consent of the governed. Whenever any form of government becomes destructive of these ends, it is the right of those who suffer from it to refuse allegiance to it, and to insist upon the institution of a new government, laying its foundation on such principles, and organizing its powers in such form, as to them shall seem most likely to effect their safety and happiness. Prudence, indeed, will dictate that governments long established should not be changed for light and transient causes; and accordingly all experience hath shown that mankind are more disposed to suffer, while evils are sufferable, than to right themselves by abolishing the forms to which they were accustomed. But when a long train of abuses and usurpations, pursuing invariably the same object evinces a design to reduce them under absolute despotism, it is their duty to throw off such government, and to provide new guards for their future security. Such has been the patient sufferance of the women under this government, and such is now the necessity which constrains them to demand the equal station to which they are entitled.",
+  "",
+  "The history of mankind is a history of repeated injuries and usurpations on the part of man toward woman, having in direct object the establishment of an absolute tyranny over her. To prove this, let facts be submitted to a candid world.",
+  "",
+  "He has never permitted her to exercise her inalienable right to the elective franchise.",
+  "",
+  "He has compelled her to submit to laws, in the formation of which she had no voice.",
+  "",
+  "He has withheld from her rights which are given to the most ignorant and degraded men—both natives and foreigners.",
+  "",
+  "Having deprived her of this first right of a citizen, the elective franchise, thereby leaving her without representation in the halls of legislation, he has oppressed her on all sides.",
+  "",
+  "He has made her, if married, in the eye of the law, civilly dead.",
+  "",
+  "He has taken from her all right in property, even to the wages she earns.",
+  "",
+  "He has made her, morally, an irresponsible being, as she can commit many crimes with impunity, provided they be done in the presence of her husband. In the covenant of marriage, she is compelled to promise obedience to her husband, he becoming, to all intents and purposes, her master—the law giving him power to deprive her of her liberty, and to administer chastisement.",
+  "",
+  "He has so framed the laws of divorce, as to what shall be the proper causes, and in case of separation, to whom the guardianship of the children shall be given, as to be wholly regardless of the happiness of women—the law, in all cases, going upon a false supposition of the supremacy of man, and giving all power into his hands.",
+  "",
+  "After depriving her of all rights as a married woman, if single, and the owner of property, he has taxed her to support a government which recognizes her only when her property can be made profitable to it.",
+  "",
+  "He has monopolized nearly all the profitable employments, and from those she is permitted to follow, she receives but a scanty remuneration. He closes against her all the avenues to wealth and distinction which he considers most honorable to himself. As a teacher of theology, medicine, or law, she is not known.",
+  "",
+  "He has denied her the facilities for obtaining a thorough education, all colleges being closed against her.",
+  "",
+  "He allows her in Church, as well as State, but a subordinate position, claiming Apostolic authority for her exclusion from the ministry, and, with some exceptions, from any public participation in the affairs of the Church.",
+  "",
+  "He has created a false public sentiment by giving to the world a different code of morals for men and women, by which moral delinquencies which exclude women from society, are not only tolerated, but deemed of little account in man.",
+  "",
+  "He has usurped the prerogative of Jehovah himself, claiming it as his right to assign for her a sphere of action, when that belongs to her conscience and to her God.",
+  "",
+  "He has endeavored, in every way that he could, to destroy her confidence in her own powers, to lessen her self-respect, and to make her willing to lead a dependent and abject life.",
+  "",
+  "Now, in view of this entire disfranchisement of one-half the people of this country, their social and religious degradation—in view of the unjust laws above mentioned, and because women do feel themselves aggrieved, oppressed, and fraudulently deprived of their most sacred rights, we insist that they have immediate admission to all the rights and privileges which belong to them as citizens of the United States.",
+  "",
+  "In entering upon the great work before us, we anticipate no small amount of misconception, misrepresentation, and ridicule; but we shall use every instrumentality within our power to effect our object. We shall employ agents, circulate tracts, petition the State and National legislatures, and endeavor to enlist the pulpit and the press in our behalf. We hope this Convention will be followed by a series of Conventions embracing every part of the country.",
+].join('\n');
