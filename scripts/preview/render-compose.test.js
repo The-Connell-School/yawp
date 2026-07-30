@@ -78,6 +78,23 @@ describe('renderPreviewCompose', () => {
     );
   });
 
+  // The app trusts PREVIEW_ACCESS_GATE to decide whether role-swap may be exposed, so
+  // the flag is only safe if it cannot be emitted without the middleware that justifies
+  // it. Both come from this one render, and this test is what keeps them together: if
+  // anyone ever makes the basicauth labels conditional, the flag must become conditional
+  // in the same edit or this fails.
+  test('the access-gate flag ships with the middleware that earns it', () => {
+    const compose = renderCompose();
+
+    expect(compose).toContain('PREVIEW_ACCESS_GATE: "on"');
+    expect(compose).toContain('basicauth.users=');
+
+    const gateIndex = compose.indexOf('PREVIEW_ACCESS_GATE');
+    const authIndex = compose.indexOf('basicauth.users=');
+    expect(gateIndex).toBeGreaterThan(-1);
+    expect(authIndex).toBeGreaterThan(-1);
+  });
+
   test('requires a basic-auth credential before rendering a preview', () => {
     expect(() =>
       renderPreviewCompose({

@@ -48,11 +48,17 @@ export function renderPreviewCompose({
     ? `\n      - ${q(`traefik.http.routers.${routerBase}-https.rule=Host(\`${env.hostname}\`)`)}\n      - ${q(`traefik.http.routers.${routerBase}-https.entrypoints=websecure`)}\n      - ${q(`traefik.http.routers.${routerBase}-https.tls.certresolver=letsencrypt`)}\n      - ${q(`traefik.http.routers.${routerBase}-https.service=${routerBase}`)}\n      - ${q(`traefik.http.routers.${routerBase}-https.middlewares=${authMiddleware}`)}`
     : '';
   const cookieSecure = enableTls ? '"true"' : '"false"';
+  // PREVIEW_ACCESS_GATE below is emitted by the same render that attaches the basicauth
+  // middleware to the router, and is only reachable because requirePreviewBasicAuth()
+  // already accepted a credential above — so the flag and the gate cannot drift apart.
+  // The app reads it to decide whether role-swap may be exposed; absent, it falls back
+  // to the local-only rule, so a compose file rendered without a gate never enables it.
   const commonEnvironment = `      DATABASE_URL: ${q(env.databaseUrl)}
       DATABASE_SSL_REJECT_UNAUTHORIZED: "false"
       NODE_ENV: ${env.runtime === 'fast' ? 'development' : 'production'}
       YAWP_ENVIRONMENT: "preview"
       PREVIEW_DATA_MODE: ${q(env.dataMode)}
+      PREVIEW_ACCESS_GATE: "on"
       PORT: "8080"
       COOKIE_SECURE: ${cookieSecure}
       AWS_EC2_METADATA_DISABLED: "true"
