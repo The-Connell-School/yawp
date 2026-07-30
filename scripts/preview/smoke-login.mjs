@@ -154,12 +154,33 @@ export async function runDevLoginSmoke({
   return { ok: true, status: app.status };
 }
 
+/**
+ * Which login path a deployed environment actually supports. Dev login exists only on the
+ * dev-server runtime; the production build path gates it off (isLocalDevAuthEnabled needs
+ * NODE_ENV === 'development' and a local DATABASE_URL) and returns 403.
+ */
+export function shouldUseDevLogin({ dataMode, runtime } = {}) {
+  return (dataMode ?? 'seed') === 'seed' && (runtime ?? 'fast') !== 'production';
+}
+
 async function main() {
   const baseUrl = (process.env.PREVIEW_BASE_URL || '').replace(/\/$/, '');
   const dataMode = process.env.PREVIEW_DATA_MODE || 'seed';
+  const runtime = process.env.PREVIEW_RUNTIME || 'fast';
+
+  // Dev login is gated on NODE_ENV === 'development' AND a local DATABASE_URL
+  // (isLocalDevAuthEnabled), so the production build path never exposes /auth/dev-login
+  // no matter how the data was loaded — it returns 403. Selecting on data mode alone
+  // assumed seeded data implies the dev-server runtime, which held until the demo box
+  // became the first environment to run seeded data on the production runtime.
+  //
+  // Seeded personas carry a real password (LOCAL_DEV_PASSWORD in dev-personas.ts), so
+  // password login works against seeded data; the credentials come from the environment
+  // so nothing is hardcoded here.
+  const canUseDevLogin = shouldUseDevLogin({ dataMode, runtime });
 
   try {
-    if (dataMode === 'seed') {
+    if (canUseDevLogin) {
       const email =
         process.env.PREVIEW_DEV_LOGIN_EMAIL || 'dev.teacher@yawp.local';
       await runDevLoginSmoke({ baseUrl, email });
