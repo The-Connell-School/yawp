@@ -37,66 +37,59 @@ export function SubmissionLifecyclePanel({
       className="flex h-full w-full flex-col"
       data-testid="submission-lifecycle-panel"
     >
-      <div className="flex shrink-0 items-center justify-between border-b px-4 py-2.5">
+      {/* Label + the single, clear next action for the current state, combined in one row. */}
+      <div className="flex shrink-0 items-center justify-between gap-2 border-b px-4 py-2.5">
         <span className="text-sm font-semibold">{label}</span>
-        {canEdit ? (
-          <Button
-            size="icon"
-            variant="ghost"
-            className="h-7 w-7"
-            aria-label="Edit grade"
-            data-testid="submission-lifecycle-edit"
-            onClick={onEdit}
-          >
-            <Pencil className="h-3.5 w-3.5" />
-          </Button>
-        ) : null}
-      </div>
+        <div className="flex items-center gap-1.5">
+          {canEdit ? (
+            <Button
+              size="icon"
+              variant="ghost"
+              className="h-7 w-7"
+              aria-label="Edit grade"
+              data-testid="submission-lifecycle-edit"
+              onClick={onEdit}
+            >
+              <Pencil className="h-3.5 w-3.5" />
+            </Button>
+          ) : null}
 
-      {/* Exactly one action at a time, driven by the current lifecycle state. */}
-      {lifecycleState === 'needs_grading' ? (
-        <div className="shrink-0 border-b px-4 py-2.5">
-          <Button
-            size="sm"
-            className="w-full"
-            data-testid="submission-lifecycle-save"
-            disabled={isSavingGrade}
-            onClick={onMarkGraded}
-          >
-            {isSavingGrade ? 'Saving...' : 'Save'}
-          </Button>
-        </div>
-      ) : lifecycleState === 'graded' && isEditing ? (
-        <div className="shrink-0 border-b px-4 py-2.5">
-          <Button
-            size="sm"
-            className="w-full"
-            data-testid="submission-lifecycle-save"
-            onClick={onDoneEditing}
-          >
-            Save
-          </Button>
-        </div>
-      ) : lifecycleState === 'graded' ? (
-        <div className="shrink-0 border-b px-4 py-2.5">
-          <ConfirmationDialog
-            title="Release Grade?"
-            description="This will make the grade and all feedback visible to the student. This action cannot be undone."
-            confirmText="Release"
-            cancelText="Cancel"
-            onConfirm={onRelease}
-          >
+          {lifecycleState === 'needs_grading' ? (
             <Button
               size="sm"
-              className="w-full"
-              data-testid="submission-lifecycle-release"
-              disabled={isReleasing}
+              data-testid="submission-lifecycle-save"
+              disabled={isSavingGrade}
+              onClick={onMarkGraded}
             >
-              {isReleasing ? 'Releasing...' : 'Release Grade'}
+              {isSavingGrade ? 'Saving...' : 'Save'}
             </Button>
-          </ConfirmationDialog>
+          ) : lifecycleState === 'graded' && isEditing ? (
+            <Button
+              size="sm"
+              data-testid="submission-lifecycle-save"
+              onClick={onDoneEditing}
+            >
+              Save
+            </Button>
+          ) : lifecycleState === 'graded' ? (
+            <ConfirmationDialog
+              title="Release Grade?"
+              description="This will make the grade and all feedback visible to the student. This action cannot be undone."
+              confirmText="Release"
+              cancelText="Cancel"
+              onConfirm={onRelease}
+            >
+              <Button
+                size="sm"
+                data-testid="submission-lifecycle-release"
+                disabled={isReleasing}
+              >
+                {isReleasing ? 'Releasing...' : 'Release Grade'}
+              </Button>
+            </ConfirmationDialog>
+          ) : null}
         </div>
-      ) : null}
+      </div>
 
       <div className="no-scrollbar grow overflow-y-auto">
         {showForm ? (
