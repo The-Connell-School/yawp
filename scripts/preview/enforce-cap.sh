@@ -52,9 +52,41 @@ is_open_pr() {
   [[ " ${OPEN_PR_NUMBERS} " == *" ${1} "* ]]
 }
 
+# Remove a path that may contain files the host user does not own.
+#
+# The preview compose bind-mounts the source tree into the container (sourceDir:/app), and
+# the in-container build writes generated files there as root — .react-router/types/** is
+# the usual culprit. Those land on the host owned by root, so a plain `rm -rf` as the
+# deploy user fails with "Permission denied" on every one of them. Under `set -e` that
+# aborted cap enforcement before any deploy could run, which is how reclaiming closed
+# pr-232 broke every preview deploy on this branch.
+#
+# There is no sudo on the deploy path, so the fallback deletes from inside a container
+# running as root, bind-mounting the PARENT and removing the leaf by name. The image is
+# the same one every preview already runs, so this never needs a network pull.
+force_rm() {
+  local target="$1"
+  [[ -e "$target" ]] || return 0
+
+  rm -rf "$target" 2>/dev/null || true
+  [[ -e "$target" ]] || return 0
+
+  local parent leaf
+  parent="$(dirname "$target")"
+  leaf="$(basename "$target")"
+  docker run --rm --user 0:0 --entrypoint /bin/sh \
+    -v "${parent}:/target" oven/bun:1.3.1 \
+    -c 'rm -rf "/target/$1"' _ "$leaf" >/dev/null 2>&1 || true
+
+  [[ ! -e "$target" ]]
+}
+
 # Same teardown cleanup.sh performs, inline so this script needs nothing but bash+docker.
 destroy_env() {
   local pr="$1"
+  # This function removes trees as root. Callers pass validated numbers, but the guard
+  # stays local to the dangerous operation rather than relying on every call site.
+  [[ "$pr" =~ ^[1-9][0-9]*$ ]] || { echo "::error::refusing to destroy malformed env id '${pr}'"; return 1; }
   local path="$previews_dir/pr-${pr}"
   local project="yawp-pr-${pr}"
   local compose_file="$path/docker-compose.yml"
@@ -68,16 +100,33 @@ destroy_env() {
     docker exec "$POSTGRES_CONTAINER" dropdb -U postgres --if-exists "yawp_pr_${pr}" || true
   fi
   docker volume rm "${project}_${project}-postgres-data" >/dev/null 2>&1 || true
-  rm -rf "$path" "$ROOT/sources/pr-${pr}"
+
+  # The two paths fail differently and must not be collapsed. live_env_numbers() counts
+  # directories under previews/, so a surviving previews/pr-N means this env is still
+  # counted against the cap: reporting it reclaimed would make the cap silently
+  # unenforceable, which is the failure this whole script exists to prevent. A surviving
+  # sources/pr-N only leaks disk, so it warns and lets the deploy proceed.
+  if ! force_rm "$path"; then
+    echo "::error::could not remove ${path}; it still counts against the cap"
+    return 1
+  fi
+  if ! force_rm "$ROOT/sources/pr-${pr}"; then
+    echo "::warning::left ${ROOT}/sources/pr-${pr} on disk; environment is gone but the source tree leaked"
+  fi
 }
 
 # --- 1. reclaim environments whose PR is no longer open -----------------------------
+# A single stuck environment must not abort the pass: the others are still reclaimable,
+# and the cap math below recounts the filesystem rather than trusting this counter, so a
+# failure here simply leaves that environment in the live set and lets eviction — or the
+# final `full` result — deal with it honestly.
 reclaimed=0
 for pr in $(live_env_numbers); do
   if ! is_open_pr "$pr"; then
     echo "reclaim pr-${pr}: pull request is closed or merged"
-    destroy_env "$pr"
-    reclaimed=$((reclaimed + 1))
+    if destroy_env "$pr"; then
+      reclaimed=$((reclaimed + 1))
+    fi
   fi
 done
 
@@ -111,9 +160,13 @@ if [[ "$needed" -gt "$CAP" ]]; then
   for pr in $(rank_candidates "$KEEP_PR"); do
     [[ "$needed" -gt "$CAP" ]] || break
     echo "evict pr-${pr}: at the cap of ${CAP} environments, least active candidate"
-    destroy_env "$pr"
-    evicted="${evicted} ${pr}"
-    needed=$((needed - 1))
+    # Only a removal that actually happened frees a slot. Decrementing on a failed evict
+    # would let the deploy proceed over the cap — the memory exhaustion this guards
+    # against — and would comment "your preview was reclaimed" on a PR still holding one.
+    if destroy_env "$pr"; then
+      evicted="${evicted} ${pr}"
+      needed=$((needed - 1))
+    fi
   done
 fi
 
