@@ -3,33 +3,86 @@ import { describe, expect, test } from 'bun:test';
 import { resolveSubmissionGradeMode } from './submission-grade-mode';
 
 describe('submission grade mode', () => {
-  test('allows explicit edit mode for a grading teacher', () => {
-    expect(
-      resolveSubmissionGradeMode({
-        isGradingOther: true,
-        editParam: '1',
-        loaderGradeMode: false,
-      })
-    ).toBe(true);
-  });
-
-  test('falls back to loader grade mode when edit param is absent', () => {
-    expect(
-      resolveSubmissionGradeMode({
-        isGradingOther: true,
-        editParam: null,
-        loaderGradeMode: true,
-      })
-    ).toBe(true);
-  });
-
   test('does not allow edit mode when not grading another user', () => {
     expect(
       resolveSubmissionGradeMode({
         isGradingOther: false,
         editParam: '1',
-        loaderGradeMode: true,
+        lifecycleState: 'graded',
       })
     ).toBe(false);
+  });
+
+  describe('needs_grading', () => {
+    test('is always edit mode, regardless of edit param', () => {
+      expect(
+        resolveSubmissionGradeMode({
+          isGradingOther: true,
+          editParam: null,
+          lifecycleState: 'needs_grading',
+        })
+      ).toBe(true);
+      expect(
+        resolveSubmissionGradeMode({
+          isGradingOther: true,
+          editParam: '0',
+          lifecycleState: 'needs_grading',
+        })
+      ).toBe(true);
+    });
+  });
+
+  describe('graded', () => {
+    test('defaults to view mode when no edit param is present', () => {
+      expect(
+        resolveSubmissionGradeMode({
+          isGradingOther: true,
+          editParam: null,
+          lifecycleState: 'graded',
+        })
+      ).toBe(false);
+    });
+
+    test('enters edit mode when edit=1 is explicitly set', () => {
+      expect(
+        resolveSubmissionGradeMode({
+          isGradingOther: true,
+          editParam: '1',
+          lifecycleState: 'graded',
+        })
+      ).toBe(true);
+    });
+
+    test('stays in view mode when edit=0 is explicitly set', () => {
+      expect(
+        resolveSubmissionGradeMode({
+          isGradingOther: true,
+          editParam: '0',
+          lifecycleState: 'graded',
+        })
+      ).toBe(false);
+    });
+  });
+
+  describe('released', () => {
+    test('is always locked to view mode, even with edit=1', () => {
+      expect(
+        resolveSubmissionGradeMode({
+          isGradingOther: true,
+          editParam: '1',
+          lifecycleState: 'released',
+        })
+      ).toBe(false);
+    });
+
+    test('is locked to view mode with no edit param', () => {
+      expect(
+        resolveSubmissionGradeMode({
+          isGradingOther: true,
+          editParam: null,
+          lifecycleState: 'released',
+        })
+      ).toBe(false);
+    });
   });
 });
