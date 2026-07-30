@@ -44,6 +44,7 @@ model AssignmentType {
   description                        String?
   position                           Int
   systemKey                          String?                       @unique
+  tutorInstructions                  String?
   archivedAt                         DateTime?                     @db.Timestamptz(6)
   ownerOrgId                         String?
   ownerOrg                           Organization?                 @relation(fields: [ownerOrgId], references: [id], onDelete: Cascade)

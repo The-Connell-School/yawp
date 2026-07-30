@@ -3,11 +3,75 @@ import {
   buildModuleRubricGuidance,
   buildTutorSystemPrompt,
 } from './build-system-prompt';
+import {
+  TUTOR_GUIDELINE_LAYER_META,
+  UNIVERSAL_YAWP_TUTOR_GUIDELINES,
+} from '~/domain/tutoring/tutor-guidelines';
 
 const base = {
   tutorInstructions: 'You are a friendly English writing tutor.',
   instructionTutorInstructions: 'Focus on the current instruction only.',
 };
+
+describe('buildTutorSystemPrompt guideline layers', () => {
+  it('always includes the universal YAWP guidelines, even with nothing configured', () => {
+    const result = buildTutorSystemPrompt({
+      tutorInstructions: null,
+      instructionTutorInstructions: null,
+    });
+
+    expect(result).toContain(TUTOR_GUIDELINE_LAYER_META.universal.label);
+    expect(result).toContain(UNIVERSAL_YAWP_TUTOR_GUIDELINES);
+  });
+
+  it('includes course guidelines above module and step guidelines', () => {
+    const result = buildTutorSystemPrompt({
+      courseTutorInstructions: 'AP Lit: coach the 6-point rubric.',
+      tutorInstructions: 'Module: draft the free-response essay.',
+      instructionTutorInstructions: 'Step: get a defensible thesis down.',
+    });
+
+    const universalAt = result.indexOf(
+      TUTOR_GUIDELINE_LAYER_META.universal.label
+    );
+    const courseAt = result.indexOf(TUTOR_GUIDELINE_LAYER_META.course.label);
+    const moduleAt = result.indexOf(TUTOR_GUIDELINE_LAYER_META.module.label);
+    const stepAt = result.indexOf(TUTOR_GUIDELINE_LAYER_META.step.label);
+
+    expect(universalAt).toBeGreaterThanOrEqual(0);
+    expect(courseAt).toBeGreaterThan(universalAt);
+    expect(moduleAt).toBeGreaterThan(courseAt);
+    expect(stepAt).toBeGreaterThan(moduleAt);
+    expect(result).toContain('AP Lit: coach the 6-point rubric.');
+    expect(result).toContain('Module: draft the free-response essay.');
+    expect(result).toContain('Step: get a defensible thesis down.');
+  });
+
+  it('labels module guidance even when no course guidelines exist', () => {
+    const result = buildTutorSystemPrompt({
+      courseTutorInstructions: null,
+      tutorInstructions: 'Module: draft the free-response essay.',
+      instructionTutorInstructions: null,
+    });
+
+    expect(result).toContain(TUTOR_GUIDELINE_LAYER_META.module.label);
+    expect(result).not.toContain(TUTOR_GUIDELINE_LAYER_META.course.label);
+  });
+
+  it('keeps rubric guidance and system mechanics after the guideline layers', () => {
+    const result = buildTutorSystemPrompt({
+      ...base,
+      moduleRubricGuidance: 'Module rubric guidance:\n- Primary: Thesis',
+    });
+
+    expect(result.indexOf('Module rubric guidance')).toBeGreaterThan(
+      result.indexOf(TUTOR_GUIDELINE_LAYER_META.universal.label)
+    );
+    expect(result.indexOf('behind-the-scenes information')).toBeGreaterThan(
+      result.indexOf('Module rubric guidance')
+    );
+  });
+});
 
 describe('buildTutorSystemPrompt', () => {
   it('includes the behind-the-scenes instruction', () => {

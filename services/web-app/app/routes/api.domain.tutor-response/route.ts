@@ -66,6 +66,7 @@ export async function action({ request }: ActionFunctionArgs) {
                 id: true,
                 gradingAssistantVersion: true,
                 rubricJson: true,
+                tutorInstructions: true,
               },
             },
           },
@@ -105,6 +106,8 @@ export async function action({ request }: ActionFunctionArgs) {
     });
 
     const system = buildTutorSystemPrompt({
+      courseTutorInstructions:
+        cms.assignmentModule.assignmentType?.tutorInstructions ?? null,
       tutorInstructions: cms.assignmentModule.tutorInstructions,
       instructionTutorInstructions: instruction.tutorInstructions,
       moduleRubricGuidance,

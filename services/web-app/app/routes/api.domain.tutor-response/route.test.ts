@@ -48,6 +48,7 @@ describe('api.domain.tutor-response read-only impersonation', () => {
         },
         assignmentType: {
           id: 'assignment-type-1',
+          tutorInstructions: 'AP Lit: anchor coaching in the 6-point rubric.',
           gradingAssistantVersion: 7,
           rubricJson: {
             categories: [
@@ -188,6 +189,42 @@ describe('api.domain.tutor-response read-only impersonation', () => {
           messages: expect.any(Object),
         }),
       })
+    );
+  });
+
+  test('stacks universal, course, module, and step guidelines in the system prompt', async () => {
+    getLLMCompletion.mockResolvedValue('Draft a clearer thesis.');
+    mockCms();
+    prisma.assignmentModuleSession.findUnique.mockResolvedValueOnce({
+      id: 'cms-1',
+      messages: [],
+      assignmentModule: {
+        instructions: [],
+        assignmentType: { assignmentModules: [] },
+      },
+    });
+
+    const body = new FormData();
+    body.set('response', 'Can you review this?');
+    body.set('cmsId', 'cms-1');
+    body.set('content', 'Current draft');
+
+    await action({
+      request: new Request('https://example.com/api/domain/tutor-response', {
+        method: 'POST',
+        body,
+      }),
+    } as any);
+
+    const system = (getLLMCompletion.mock.calls[0]?.[0] as any).system as string;
+
+    expect(system).toContain('Universal YAWP tutoring guidelines');
+    expect(system).toContain('Guide, never ghostwrite');
+    expect(system).toContain('AP Lit: anchor coaching in the 6-point rubric.');
+    expect(system).toContain('Coach the student.');
+    expect(system).toContain('Focus on thesis clarity.');
+    expect(system.indexOf('Course guidelines')).toBeLessThan(
+      system.indexOf('Module guidelines')
     );
   });
 
