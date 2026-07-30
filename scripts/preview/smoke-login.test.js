@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 import http from 'node:http';
-import { runDevLoginSmoke, runLoginSmoke } from './smoke-login.mjs';
+import { runDevLoginSmoke, runLoginSmoke, shouldUseDevLogin } from './smoke-login.mjs';
 
 const servers = [];
 
@@ -195,5 +195,28 @@ describe('runDevLoginSmoke', () => {
     );
     expect(seen.loginBody).not.toContain('password=');
     expect(seen.appCookie).toContain('auth_session=preview-dev-ok');
+  });
+});
+
+describe('shouldUseDevLogin', () => {
+  // The demo box was the first environment to combine seeded data with the production
+  // runtime. Selecting on data mode alone sent it to /auth/dev-login, which the
+  // production build gates off, so the deploy failed its own smoke test with HTTP 403
+  // while the site itself was serving fine.
+  test('seeded data on the production runtime uses password login', () => {
+    expect(shouldUseDevLogin({ dataMode: 'seed', runtime: 'production' })).toBe(false);
+  });
+
+  test('seeded data on the dev-server runtime still uses dev login', () => {
+    expect(shouldUseDevLogin({ dataMode: 'seed', runtime: 'fast' })).toBe(true);
+  });
+
+  test('production-dump data never uses dev login', () => {
+    expect(shouldUseDevLogin({ dataMode: 'production-dump', runtime: 'fast' })).toBe(false);
+    expect(shouldUseDevLogin({ dataMode: 'production-dump', runtime: 'production' })).toBe(false);
+  });
+
+  test('defaults match the PR preview case', () => {
+    expect(shouldUseDevLogin({})).toBe(true);
   });
 });
