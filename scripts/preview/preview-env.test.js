@@ -1,4 +1,6 @@
 import { describe, expect, test } from 'bun:test';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import { buildPreviewEnv } from './preview-env.mjs';
 
 describe('buildPreviewEnv', () => {
@@ -118,5 +120,21 @@ describe('named environments', () => {
 
   test('a nonsense slug is rejected rather than silently building a bad hostname', () => {
     expect(() => buildPreviewEnv({ slug: 'Demo Box!', domain: 'yawp.school' })).toThrow();
+  });
+
+  // The slug override is only honored if the deploy path USES the names derived here.
+  // deploy.sh sourced the env and then rebuilt DATABASE_NAME as "yawp_pr_${PR_NUMBER}",
+  // which for a named environment (no PR number) silently became the database "yawp_pr_" —
+  // silently, because PR_NUMBER is exported as an empty string rather than left unset, so
+  // `set -u` never caught it. Naming belongs to preview-env.mjs; assert the consumer does
+  // not re-derive it.
+  test('deploy.sh does not re-derive names that preview-env.mjs owns', () => {
+    const deployScript = readFileSync(path.join(import.meta.dir, 'deploy.sh'), 'utf8');
+    const reDerived = deployScript
+      .split('\n')
+      .filter((line) => !line.trim().startsWith('#'))
+      .filter((line) => /^\s*(export\s+)?(DATABASE_NAME|SLUG|PREVIEW_DIR|COMPOSE_PROJECT)=/.test(line));
+    expect(reDerived).toEqual([]);
+    expect(deployScript).not.toMatch(/yawp_pr_\$\{?PR_NUMBER/);
   });
 });
