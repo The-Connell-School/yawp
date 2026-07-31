@@ -7,36 +7,12 @@ import {
   tutorInstructionSeedUpdate,
   withoutTutorInstructionFields,
 } from './tutor-instructions-seed';
-import { buildApEnglishLitCoachingBlock } from './ap-english-lit-coach-block';
-
-const AP_ENGLISH_LIT_ASSIGNMENT_TYPE_KEY = 'ap_english_lit_essay';
-
-const ASSIGNMENT_TYPE_DATA = {
-  title: 'AP English Literature Essay',
-  description:
-    'Curated AP Lit poetry, prose, and literary-argument practice with 6-point rubric coaching.',
-  position: 51,
-} as const;
-
-// The module's tutorInstructions are the coaching block: the Universal YAWP!
-// Tutor Instructions plus the AP Lit posture, rubric, and register. Seeding
-// them is what makes the tutor visible and editable in admin Tutor settings;
-// the runtime prefers this stored value and appends the assignment-specific
-// half (prompt, provided text, timing) from the snapshot.
-const MODULE_DATA = {
-  title: 'AP English Literature Essay',
-  position: 1,
-  description:
-    'Write an AP Lit free-response essay with rubric-anchored coaching.',
-  tutorInstructions: buildApEnglishLitCoachingBlock(),
-};
-
-const INSTRUCTION_DATA = {
-  title: 'Write',
-  prompt: 'Use the prompt and AP Literature coach to draft your response.',
-  position: 1,
-  showChatButton: true,
-} as const;
+import {
+  AP_ENGLISH_LIT_ASSIGNMENT_TYPE_DATA as ASSIGNMENT_TYPE_DATA,
+  AP_ENGLISH_LIT_ASSIGNMENT_TYPE_KEY,
+  AP_ENGLISH_LIT_INSTRUCTION_DATA as INSTRUCTION_DATA,
+  AP_ENGLISH_LIT_MODULE_DATA as MODULE_DATA,
+} from './ap-english-lit-course-data';
 
 const connectionString = process.env.DATABASE_URL;
 if (!connectionString) {
