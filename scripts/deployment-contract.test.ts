@@ -382,6 +382,20 @@ describe('PR preview deployment contract', () => {
     expect(bootstrapScript).toContain('awscli');
   });
 
+  test('preview host gate leaves the credential for the per-router gate behind it', () => {
+    const bootstrapScript = readRepoFile('scripts/preview/bootstrap-host.sh');
+    const renderCompose = readRepoFile('scripts/preview/render-compose.mjs');
+
+    // Two basicauth middlewares sit in series: the entrypoint gate the host applies to
+    // every router, then the one a preview's own compose attaches. Traefik strips the
+    // Authorization header before the next handler in the chain, so if the entrypoint
+    // gate removed it the second would see no credential and 401 an authenticated
+    // request. The per-router one does the stripping instead, on the way to the app.
+    expect(bootstrapScript).toContain('removeHeader: false');
+    expect(bootstrapScript).not.toContain('removeHeader: true');
+    expect(renderCompose).toContain('basicauth.removeheader=true');
+  });
+
   test('preview host bootstrap blocks container access to instance metadata', () => {
     const bootstrapScript = readRepoFile('scripts/preview/bootstrap-host.sh');
 
