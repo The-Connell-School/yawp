@@ -6,16 +6,27 @@ import { createPassword } from '../utils';
 import { getClassArtByIndex } from '../../../../services/web-app/app/utils/class-art.ts';
 import { AP_ENGLISH_LIT_LIBRARY_ENTRIES } from '../ap-english-lit-library-data';
 import {
+  AP_ENGLISH_LIT_ASSIGNMENT_TYPE_DATA,
+  AP_ENGLISH_LIT_ASSIGNMENT_TYPE_KEY,
+  AP_ENGLISH_LIT_INSTRUCTION_DATA,
+  AP_ENGLISH_LIT_MODULE_DATA,
+} from '../ap-english-lit-course-data';
+import {
+  tutorInstructionSeedUpdate,
+  withoutTutorInstructionFields,
+} from '../tutor-instructions-seed';
+import {
   LOCAL_DEV_ORG_ID,
   LOCAL_DEV_ORG_NAME,
   LOCAL_DEV_PERSONAS,
   type LocalDevPersona,
 } from './dev-personas';
 
-// Keep in sync with AP_ENGLISH_LIT_ASSIGNMENT_TYPE_KEY in the web app domain.
 // AP Literature is not part of the prod-fidelity fixtures, so it is seeded
-// explicitly here to make the course browsable in local dev and previews.
-const AP_ENGLISH_LIT_ASSIGNMENT_TYPE_KEY = 'ap_english_lit_essay';
+// explicitly here to make the course browsable in local dev and previews. The
+// course itself -- assignment type, module (including the tutor coaching
+// block), and instruction -- comes from ../ap-english-lit-course-data so this
+// seed and seed-ap-english-lit-library.ts cannot drift apart again.
 
 // Committed course tile image, loaded from the repo so it persists across
 // reseeds (the admin-uploaded blob is wiped on every reseed). Drop a file named
@@ -71,6 +82,63 @@ async function seedApEnglishLitCourseImage(
   });
 }
 
+// The assignment-type upsert only builds the module on the create path, so a
+// database that already carries the course needs the module reconciled
+// separately. Structural fields refresh every run; the coaching block is only
+// written when nothing is there, so a reseed cannot revert an admin's edit.
+async function seedApEnglishLitModule(
+  prisma: PrismaClient,
+  assignmentTypeId: string
+): Promise<void> {
+  const existingModule = await prisma.assignmentModule.findFirst({
+    where: { assignmentTypeId, position: AP_ENGLISH_LIT_MODULE_DATA.position },
+    select: { id: true, tutorInstructions: true },
+  });
+
+  if (!existingModule) {
+    await prisma.assignmentModule.create({
+      data: {
+        ...AP_ENGLISH_LIT_MODULE_DATA,
+        assignmentTypeId,
+        instructions: { create: { ...AP_ENGLISH_LIT_INSTRUCTION_DATA } },
+      },
+    });
+    return;
+  }
+
+  await prisma.assignmentModule.update({
+    where: { id: existingModule.id },
+    data: {
+      ...withoutTutorInstructionFields(AP_ENGLISH_LIT_MODULE_DATA),
+      ...tutorInstructionSeedUpdate(AP_ENGLISH_LIT_MODULE_DATA, existingModule),
+    },
+  });
+
+  const existingInstruction = await prisma.assignmentModuleInstruction.findFirst(
+    {
+      where: {
+        assignmentModuleId: existingModule.id,
+        position: AP_ENGLISH_LIT_INSTRUCTION_DATA.position,
+      },
+      select: { id: true },
+    }
+  );
+
+  if (existingInstruction) {
+    await prisma.assignmentModuleInstruction.update({
+      where: { id: existingInstruction.id },
+      data: AP_ENGLISH_LIT_INSTRUCTION_DATA,
+    });
+  } else {
+    await prisma.assignmentModuleInstruction.create({
+      data: {
+        ...AP_ENGLISH_LIT_INSTRUCTION_DATA,
+        assignmentModuleId: existingModule.id,
+      },
+    });
+  }
+}
+
 async function seedApEnglishLitCourse(
   prisma: PrismaClient,
   organizationId: string
@@ -79,28 +147,14 @@ async function seedApEnglishLitCourse(
     where: { systemKey: AP_ENGLISH_LIT_ASSIGNMENT_TYPE_KEY },
     update: { archivedAt: null },
     create: {
-      title: 'AP English Literature Essay',
-      description:
-        'Curated AP Lit poetry, prose, and literary-argument practice with 6-point rubric coaching.',
-      position: 51,
+      ...AP_ENGLISH_LIT_ASSIGNMENT_TYPE_DATA,
       systemKey: AP_ENGLISH_LIT_ASSIGNMENT_TYPE_KEY,
       ownerOrgId: organizationId,
       organizationAssignments: { create: { organizationId } },
       assignmentModules: {
         create: {
-          title: 'AP English Literature Essay',
-          position: 1,
-          description:
-            'Write an AP Lit free-response essay with rubric-anchored coaching.',
-          instructions: {
-            create: {
-              title: 'Write',
-              prompt:
-                'Use the prompt and AP Literature coach to draft your response.',
-              position: 1,
-              showChatButton: true,
-            },
-          },
+          ...AP_ENGLISH_LIT_MODULE_DATA,
+          instructions: { create: { ...AP_ENGLISH_LIT_INSTRUCTION_DATA } },
         },
       },
     },
@@ -118,6 +172,7 @@ async function seedApEnglishLitCourse(
     update: {},
   });
 
+  await seedApEnglishLitModule(prisma, assignmentType.id);
   await seedApEnglishLitCourseImage(prisma, assignmentType.id);
 
   for (const entry of AP_ENGLISH_LIT_LIBRARY_ENTRIES) {
