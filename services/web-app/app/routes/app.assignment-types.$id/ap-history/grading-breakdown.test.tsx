@@ -30,6 +30,18 @@ function render(audience: 'teacher' | 'student') {
   return container;
 }
 
+function trigger(): HTMLButtonElement {
+  const button = container!.querySelector('button');
+  if (!button) throw new Error('grading breakdown trigger not found');
+  return button as HTMLButtonElement;
+}
+
+function expand() {
+  act(() => {
+    trigger().click();
+  });
+}
+
 afterEach(() => {
   act(() => root?.unmount());
   container?.remove();
@@ -38,10 +50,20 @@ afterEach(() => {
 });
 
 describe('ApHistoryGradingBreakdown', () => {
-  it('lists every DBQ and LEQ rubric point with its point total', () => {
+  it('starts collapsed, showing only the trigger', () => {
     const text = render('teacher').textContent ?? '';
 
     expect(text).toContain('How DBQs and LEQs are graded');
+    expect(trigger().getAttribute('data-state')).toBe('closed');
+    expect(text).not.toContain('all-or-nothing');
+  });
+
+  it('lists every DBQ and LEQ rubric point once expanded', () => {
+    render('teacher');
+    expand();
+    const text = container!.textContent ?? '';
+
+    expect(trigger().getAttribute('data-state')).toBe('open');
     expect(text).toContain('DBQ — 7 points');
     expect(text).toContain('LEQ — 6 points');
     for (const point of [
@@ -54,14 +76,18 @@ describe('ApHistoryGradingBreakdown', () => {
   });
 
   it('addresses teachers in terms of their review and override', () => {
-    const text = render('teacher').textContent ?? '';
+    render('teacher');
+    expand();
+    const text = container!.textContent ?? '';
 
     expect(text).toContain('all-or-nothing');
     expect(text).toContain('override before releasing grades');
   });
 
   it('addresses students in the second person', () => {
-    const text = render('student').textContent ?? '';
+    render('student');
+    expand();
+    const text = container!.textContent ?? '';
 
     expect(text).toContain('you either earn it or you don’t');
     expect(text).toContain('after you submit');
