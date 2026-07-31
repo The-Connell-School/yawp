@@ -41,6 +41,23 @@ test.describe.serial('AP History library-first assignment flow', () => {
       await expect(
         page.getByRole('heading', { name: 'Prompt Library' })
       ).toBeVisible();
+
+      // The rubric is spelled out above the library, so "complexity" is
+      // readable before a prompt is chosen rather than only inside a tutor turn.
+      const gradingBreakdown = page
+        .locator('section')
+        .filter({ hasText: 'How DBQs and LEQs are graded' })
+        .first();
+      await expect(gradingBreakdown).toBeVisible();
+      await expect(gradingBreakdown).toContainText('DBQ — 7 points');
+      await expect(gradingBreakdown).toContainText('LEQ — 6 points');
+      await expect(gradingBreakdown).toContainText('Sourcing (HIPP)');
+      await expect(gradingBreakdown).toContainText('Complexity');
+      const breakdownBox = await gradingBreakdown.boundingBox();
+      const libraryHeadingBox = await page
+        .getByRole('heading', { name: 'Prompt Library' })
+        .boundingBox();
+      expect(breakdownBox!.y).toBeLessThan(libraryHeadingBox!.y);
       await expect(page.getByText('Upload PDF', { exact: true })).toHaveCount(
         0
       );
@@ -150,6 +167,21 @@ test.describe.serial('AP History library-first assignment flow', () => {
 
       await page.context().clearCookies();
       await signIn(e2eContext.userEmail, 'johndoe');
+
+      // Students see the same rubric above their library, in their own words.
+      await page.goto(
+        `/app/assignment-types/${e2eContext.apHistoryAssignmentTypeId}`
+      );
+      const studentBreakdown = page
+        .locator('section')
+        .filter({ hasText: 'How DBQs and LEQs are graded' })
+        .first();
+      await expect(studentBreakdown).toBeVisible();
+      await expect(studentBreakdown).toContainText(
+        'you either earn it or you don’t'
+      );
+      await expect(studentBreakdown).toContainText('Complexity');
+
       await page.goto('/app?tab=assignments');
       await expect(page.getByTestId('app._index')).toBeVisible();
 

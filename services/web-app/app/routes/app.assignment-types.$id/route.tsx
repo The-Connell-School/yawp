@@ -46,6 +46,7 @@ import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { redirectWithToast } from '~/utils/toast.server';
 import { ApPromptsLibrary } from './ap-history/ap-prompts-library';
+import { ApHistoryGradingBreakdown } from './ap-history/grading-breakdown';
 import { ApHistoryTeacherDirections } from './ap-history/teacher-directions';
 import {
   CreateCustomApHistorySheet,
@@ -719,23 +720,30 @@ export default function AppAssignmentTypesIdRoute() {
           </div>
         ) : null}
         {data.apHistoryLibrary ? (
-          <div className="pb-6">
-            <ApPromptsLibrary
-              entries={data.apHistoryLibrary.entries}
-              onSelectEntry={(entry) => {
-                if (data.apHistoryLibrary?.mode === 'student') {
-                  submit(
-                    { apHistoryLibraryEntryId: entry.externalKey },
-                    { method: 'post' }
-                  );
-                  return;
-                }
-                setApHistoryEntry(entry);
-                setLibraryPrompt('');
-                setIsAssignmentSheetOpen(true);
-              }}
+          <>
+            <ApHistoryGradingBreakdown
+              audience={
+                data.apHistoryLibrary.mode === 'student' ? 'student' : 'teacher'
+              }
             />
-          </div>
+            <div className="pb-6">
+              <ApPromptsLibrary
+                entries={data.apHistoryLibrary.entries}
+                onSelectEntry={(entry) => {
+                  if (data.apHistoryLibrary?.mode === 'student') {
+                    submit(
+                      { apHistoryLibraryEntryId: entry.externalKey },
+                      { method: 'post' }
+                    );
+                    return;
+                  }
+                  setApHistoryEntry(entry);
+                  setLibraryPrompt('');
+                  setIsAssignmentSheetOpen(true);
+                }}
+              />
+            </div>
+          </>
         ) : null}
         {data.documents.length ? (
           <>
