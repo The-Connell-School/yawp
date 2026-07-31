@@ -17,7 +17,7 @@ import {
 } from '~/utils/student-preview.server';
 import { prisma } from '~/utils/db.server.js';
 import { getAvailableAssignmentTypesForScopes } from '~/utils/assignment-type-access.server';
-import { AP_HISTORY_ASSIGNMENT_TYPE_KEY } from '~/domain/ap-history/schema';
+import { isLibraryBackedAssignmentType } from '~/domain/assignment-types/library-backed';
 import {
   Accordion,
   AccordionContent,
@@ -366,7 +366,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     !useStudentExperience && assignmentsEnabled ? teacherClassesOrdered : [];
   const assignmentCreationClasses = enabledTeacherClasses;
   const assignmentCreationTypes = teacherAssignmentTypes
-    .filter((type) => type.systemKey !== AP_HISTORY_ASSIGNMENT_TYPE_KEY)
+    .filter((type) => !isLibraryBackedAssignmentType(type.systemKey))
     .map((type) => ({
       id: type.id,
       title: type.title,

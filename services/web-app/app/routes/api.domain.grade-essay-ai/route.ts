@@ -42,6 +42,17 @@ import {
   type ApHistorySnapshot,
 } from '~/domain/ap-history/schema';
 import {
+  isApEnglishLitSnapshot,
+  parseApEnglishLitSnapshot,
+} from '~/domain/ap-english-lit/schema';
+import {
+  AP_ENGLISH_LIT_ROW_KEYS,
+  buildApEnglishLitGradingPrompt,
+  buildApEnglishLitGradingSystemPrompt,
+  countApEnglishLitEarnedPoints,
+  normalizeApEnglishLitRows,
+} from '~/domain/ap-english-lit/grading';
+import {
   createGradingRequestDeadlineSignal,
   isGradingRequestDeadlineError,
   runWithGradingRequestDeadline,
@@ -425,6 +436,7 @@ export async function action({ request }: ActionFunctionArgs) {
             id: true,
             gradingAssistantStrictnessLevel: true,
             apHistorySnapshot: true,
+            apEnglishLitSnapshot: true,
           },
         },
         classAssignment: {
@@ -612,6 +624,14 @@ export async function action({ request }: ActionFunctionArgs) {
     ? parseApHistorySnapshot(apHistorySnapshotCandidate)
     : null;
 
+  const apEnglishLitSnapshotCandidate =
+    submission.document.assignment?.apEnglishLitSnapshot;
+  const apEnglishLitSnapshot = isApEnglishLitSnapshot(
+    apEnglishLitSnapshotCandidate
+  )
+    ? parseApEnglishLitSnapshot(apEnglishLitSnapshotCandidate)
+    : null;
+
   if (apHistorySnapshot) {
     const apSystem = `You are the AP History Grading Assistant. Return ONLY valid JSON with the schema:
 {
@@ -721,6 +741,123 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
         aiMeta: {
           model,
           rubricMode: 'ap_history',
+          gradingAssistantStrictnessLevel,
+          gradedAt: now.toISOString(),
+          documentContext,
+        } satisfies Prisma.InputJsonValue,
+        ...(!submission.gradedAt
+          ? { gradedAt: now, gradedByMembershipId: actor.membershipId }
+          : {}),
+        updatedAt: now,
+      },
+    });
+
+    return dataResponse({
+      success: true,
+      message: 'Grading Assistant suggestions generated.',
+      rubricScores,
+      overallScore,
+      overallComment,
+      numericPercentage,
+      letterGrade,
+      score,
+      grammarIssues,
+    });
+  }
+
+  if (apEnglishLitSnapshot) {
+    const apSystem = buildApEnglishLitGradingSystemPrompt(studentFirstName);
+    const apUserPrompt = buildApEnglishLitGradingPrompt({
+      snapshot: apEnglishLitSnapshot,
+      essayText: submission.text,
+      studentFirstName,
+    });
+
+    let parsedJson: Record<string, unknown>;
+    let rows: ReturnType<typeof normalizeApEnglishLitRows>;
+    try {
+      const apResponseText = await getGradingLlmCompletion({
+        model,
+        system: apSystem,
+        messages: [{ role: 'user', content: apUserPrompt }],
+        maxTokens: 1200,
+        temperature: 0.2,
+        metadata: {
+          feature: 'grading',
+          kind: 'ap-english-lit-rubric',
+          rubricId: apEnglishLitSnapshot.rubric.rubricId,
+          frqType: apEnglishLitSnapshot.frqType,
+          ...buildAiContextAuditMetadata({
+            textContext: documentContext,
+            assignmentTypeId: submission.document.assignmentTypeId,
+            assignmentTypeRubricSource: 'ap-english-lit-snapshot',
+            rubricCategoryKeys: [...AP_ENGLISH_LIT_ROW_KEYS],
+          }),
+        },
+      });
+
+      const parsedJsonCandidate = parseFirstJsonValue(apResponseText);
+      if (
+        !isRecord(parsedJsonCandidate) ||
+        !isRecord(parsedJsonCandidate.rows)
+      ) {
+        throw new Error('Malformed AP Literature grading assistant response');
+      }
+
+      parsedJson = parsedJsonCandidate;
+      rows = normalizeApEnglishLitRows(parsedJsonCandidate.rows);
+    } catch (error) {
+      if (isGradingRequestDeadlineError(error)) {
+        return gradingDeadlineResponse();
+      }
+      if (isLlmFallbackRetrySignal(error)) return retryResponse();
+      return dataResponse(
+        {
+          success: false,
+          message:
+            'Grading Assistant returned malformed data. Please try again.',
+        },
+        { status: 502 }
+      );
+    }
+
+    const earnedPoints = countApEnglishLitEarnedPoints(rows);
+    const totalPoints = apEnglishLitSnapshot.rubric.totalPoints;
+    const rubricScores = {
+      schemaVersion: 1,
+      rubricId: apEnglishLitSnapshot.rubric.rubricId,
+      totalPoints,
+      earnedPoints,
+      rows,
+    } satisfies Prisma.InputJsonObject;
+    const numericPercentage = Math.round((earnedPoints / totalPoints) * 100);
+    const letterGrade = letterFromPercent(numericPercentage);
+    const score = formatGrade(numericPercentage, letterGrade);
+    const overallScore = earnedPoints;
+    const overallComment =
+      typeof parsedJson.overallComment === 'string' &&
+      parsedJson.overallComment.trim()
+        ? parsedJson.overallComment
+        : `${studentFirstName}, your AP Literature response has been scored with the ${apEnglishLitSnapshot.rubric.rubricId} rubric.`;
+    const grammarIssues = null;
+    const now = new Date();
+
+    if (gradingDeadlineSignal.aborted) {
+      return gradingDeadlineResponse();
+    }
+
+    await prisma.submission.update({
+      where: { id: submission.id },
+      data: {
+        rubricScores,
+        overallScore,
+        overallComment,
+        numericPercentage,
+        letterGrade,
+        score,
+        aiMeta: {
+          model,
+          rubricMode: 'ap_english_lit',
           gradingAssistantStrictnessLevel,
           gradedAt: now.toISOString(),
           documentContext,

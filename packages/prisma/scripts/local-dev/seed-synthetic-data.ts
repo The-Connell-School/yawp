@@ -1,13 +1,246 @@
 /* eslint-disable no-console */
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { extname, join } from 'node:path';
 import type { PrismaClient } from '../../generated/prisma';
 import { createPassword } from '../utils';
 import { getClassArtByIndex } from '../../../../services/web-app/app/utils/class-art.ts';
+import { AP_ENGLISH_LIT_LIBRARY_ENTRIES } from '../ap-english-lit-library-data';
+import {
+  AP_ENGLISH_LIT_ASSIGNMENT_TYPE_DATA,
+  AP_ENGLISH_LIT_ASSIGNMENT_TYPE_KEY,
+  AP_ENGLISH_LIT_INSTRUCTION_DATA,
+  AP_ENGLISH_LIT_MODULE_DATA,
+} from '../ap-english-lit-course-data';
+import {
+  tutorInstructionSeedUpdate,
+  withoutTutorInstructionFields,
+} from '../tutor-instructions-seed';
 import {
   LOCAL_DEV_ORG_ID,
   LOCAL_DEV_ORG_NAME,
   LOCAL_DEV_PERSONAS,
   type LocalDevPersona,
 } from './dev-personas';
+
+// AP Literature is not part of the prod-fidelity fixtures, so it is seeded
+// explicitly here to make the course browsable in local dev and previews. The
+// course itself -- assignment type, module (including the tutor coaching
+// block), and instruction -- comes from ../ap-english-lit-course-data so this
+// seed and seed-ap-english-lit-library.ts cannot drift apart again.
+
+// Committed course tile image, loaded from the repo so it persists across
+// reseeds (the admin-uploaded blob is wiped on every reseed). Drop a file named
+// ap-english-literature.{jpg,jpeg,png,webp} in the directory below to set it.
+const COURSE_IMAGE_DIR = join(
+  import.meta.dir,
+  '../../../../services/web-app/public/img/course-images'
+);
+const IMAGE_CONTENT_TYPE_BY_EXT: Record<string, string> = {
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.png': 'image/png',
+  '.webp': 'image/webp',
+};
+
+// Prefer the canonical name, but fall back to any committed image file in the
+// folder so a differently-named upload still works.
+function loadApEnglishLitCourseImage():
+  | { contentType: string; blob: Buffer }
+  | null {
+  if (!existsSync(COURSE_IMAGE_DIR)) return null;
+
+  const files = readdirSync(COURSE_IMAGE_DIR);
+  const imageFiles = files.filter((file) =>
+    Object.keys(IMAGE_CONTENT_TYPE_BY_EXT).includes(extname(file).toLowerCase())
+  );
+  if (imageFiles.length === 0) return null;
+
+  const preferred =
+    imageFiles.find((file) =>
+      file.toLowerCase().startsWith('ap-english-literature.')
+    ) ?? imageFiles.sort()[0];
+
+  return {
+    contentType: IMAGE_CONTENT_TYPE_BY_EXT[extname(preferred).toLowerCase()],
+    blob: readFileSync(join(COURSE_IMAGE_DIR, preferred)),
+  };
+}
+
+async function seedApEnglishLitCourseImage(
+  prisma: PrismaClient,
+  assignmentTypeId: string
+): Promise<void> {
+  const image = loadApEnglishLitCourseImage();
+  await prisma.assignmentTypeImage.deleteMany({ where: { assignmentTypeId } });
+  if (!image) return;
+  await prisma.assignmentTypeImage.create({
+    data: {
+      assignmentTypeId,
+      contentType: image.contentType,
+      blob: image.blob,
+    },
+  });
+}
+
+// The assignment-type upsert only builds the module on the create path, so a
+// database that already carries the course needs the module reconciled
+// separately. Structural fields refresh every run; the coaching block is only
+// written when nothing is there, so a reseed cannot revert an admin's edit.
+async function seedApEnglishLitModule(
+  prisma: PrismaClient,
+  assignmentTypeId: string
+): Promise<void> {
+  const existingModule = await prisma.assignmentModule.findFirst({
+    where: { assignmentTypeId, position: AP_ENGLISH_LIT_MODULE_DATA.position },
+    select: { id: true, tutorInstructions: true },
+  });
+
+  if (!existingModule) {
+    await prisma.assignmentModule.create({
+      data: {
+        ...AP_ENGLISH_LIT_MODULE_DATA,
+        assignmentTypeId,
+        instructions: { create: { ...AP_ENGLISH_LIT_INSTRUCTION_DATA } },
+      },
+    });
+    return;
+  }
+
+  await prisma.assignmentModule.update({
+    where: { id: existingModule.id },
+    data: {
+      ...withoutTutorInstructionFields(AP_ENGLISH_LIT_MODULE_DATA),
+      ...tutorInstructionSeedUpdate(AP_ENGLISH_LIT_MODULE_DATA, existingModule),
+    },
+  });
+
+  const existingInstruction = await prisma.assignmentModuleInstruction.findFirst(
+    {
+      where: {
+        assignmentModuleId: existingModule.id,
+        position: AP_ENGLISH_LIT_INSTRUCTION_DATA.position,
+      },
+      select: { id: true },
+    }
+  );
+
+  if (existingInstruction) {
+    await prisma.assignmentModuleInstruction.update({
+      where: { id: existingInstruction.id },
+      data: AP_ENGLISH_LIT_INSTRUCTION_DATA,
+    });
+  } else {
+    await prisma.assignmentModuleInstruction.create({
+      data: {
+        ...AP_ENGLISH_LIT_INSTRUCTION_DATA,
+        assignmentModuleId: existingModule.id,
+      },
+    });
+  }
+}
+
+async function seedApEnglishLitCourse(
+  prisma: PrismaClient,
+  organizationId: string
+): Promise<void> {
+  const assignmentType = await prisma.assignmentType.upsert({
+    where: { systemKey: AP_ENGLISH_LIT_ASSIGNMENT_TYPE_KEY },
+    update: { archivedAt: null },
+    create: {
+      ...AP_ENGLISH_LIT_ASSIGNMENT_TYPE_DATA,
+      systemKey: AP_ENGLISH_LIT_ASSIGNMENT_TYPE_KEY,
+      ownerOrgId: organizationId,
+      organizationAssignments: { create: { organizationId } },
+      assignmentModules: {
+        create: {
+          ...AP_ENGLISH_LIT_MODULE_DATA,
+          instructions: { create: { ...AP_ENGLISH_LIT_INSTRUCTION_DATA } },
+        },
+      },
+    },
+    select: { id: true },
+  });
+
+  await prisma.organizationAssignmentType.upsert({
+    where: {
+      organizationId_assignmentTypeId: {
+        organizationId,
+        assignmentTypeId: assignmentType.id,
+      },
+    },
+    create: { organizationId, assignmentTypeId: assignmentType.id },
+    update: {},
+  });
+
+  await seedApEnglishLitModule(prisma, assignmentType.id);
+  await seedApEnglishLitCourseImage(prisma, assignmentType.id);
+
+  for (const entry of AP_ENGLISH_LIT_LIBRARY_ENTRIES) {
+    const libraryEntry = await prisma.apEnglishLitPromptLibraryEntry.upsert({
+      where: { externalKey: entry.externalKey },
+      update: {
+        assignmentTypeId: assignmentType.id,
+        frqType: entry.frqType,
+        title: entry.title,
+        prompt: entry.prompt,
+        focusSkill: entry.focusSkill,
+        difficulty: entry.difficulty,
+        skillEmphasis: entry.skillEmphasis,
+        defaultTimeMode: entry.defaultTimeMode,
+        defaultDurationMinutes: entry.defaultDurationMinutes,
+        suggestedWorks: entry.suggestedWorks,
+        provenanceUrl: entry.provenanceUrl,
+        archivedAt: null,
+      },
+      create: {
+        externalKey: entry.externalKey,
+        assignmentTypeId: assignmentType.id,
+        frqType: entry.frqType,
+        title: entry.title,
+        prompt: entry.prompt,
+        focusSkill: entry.focusSkill,
+        difficulty: entry.difficulty,
+        skillEmphasis: entry.skillEmphasis,
+        defaultTimeMode: entry.defaultTimeMode,
+        defaultDurationMinutes: entry.defaultDurationMinutes,
+        suggestedWorks: entry.suggestedWorks,
+        provenanceUrl: entry.provenanceUrl,
+      },
+      select: { id: true },
+    });
+
+    for (const source of entry.sources) {
+      await prisma.apEnglishLitPromptLibrarySource.upsert({
+        where: { externalKey: source.externalKey },
+        update: {
+          promptLibraryEntryId: libraryEntry.id,
+          position: source.position,
+          title: source.title,
+          attribution: source.attribution,
+          body: source.body,
+          caption: source.caption,
+          mediaType: source.mediaType,
+          imageUrl: source.imageUrl,
+          imageAlt: source.imageAlt,
+          provenanceUrl: source.provenanceUrl,
+        },
+        create: {
+          externalKey: source.externalKey,
+          promptLibraryEntryId: libraryEntry.id,
+          position: source.position,
+          title: source.title,
+          attribution: source.attribution,
+          body: source.body,
+          caption: source.caption,
+          mediaType: source.mediaType,
+          imageUrl: source.imageUrl,
+          imageAlt: source.imageAlt,
+          provenanceUrl: source.provenanceUrl,
+        },
+      });
+    }
+  }
+}
 
 type PersonaRecord = {
   persona: LocalDevPersona;
@@ -200,6 +433,8 @@ export async function seedSyntheticLocalDevData(
   if (!thesisAssignmentTypeId) {
     throw new Error('Expected at least one imported assignment type.');
   }
+
+  await seedApEnglishLitCourse(prisma, LOCAL_DEV_ORG_ID);
 
   const dailyPagesAssignmentTypeId = pickAssignmentTypeId(
     assignmentTypes,

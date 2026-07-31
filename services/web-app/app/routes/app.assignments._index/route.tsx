@@ -39,7 +39,7 @@ import {
   AssignmentEditSheet,
   type AssignmentEditRecord,
 } from '~/components/assignments/assignment-edit-sheet';
-import { AP_HISTORY_ASSIGNMENT_TYPE_KEY } from '~/domain/ap-history/schema';
+import { isLibraryBackedAssignmentType } from '~/domain/assignment-types/library-backed';
 import { getAvailableAssignmentTypesForScopes } from '~/utils/assignment-type-access.server';
 import { parseAssignmentGradingIntent } from '~/utils/assignment-grading-intent.server';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
@@ -230,13 +230,13 @@ export async function action({ request }: ActionFunctionArgs) {
     (type) => type.id === assignmentTypeId
   );
   if (
-    selectedAssignmentType?.systemKey === AP_HISTORY_ASSIGNMENT_TYPE_KEY ||
-    assignment.assignmentType.systemKey === AP_HISTORY_ASSIGNMENT_TYPE_KEY
+    isLibraryBackedAssignmentType(selectedAssignmentType?.systemKey) ||
+    isLibraryBackedAssignmentType(assignment.assignmentType.systemKey)
   ) {
     return dataResponse(
       {
         success: false,
-        message: 'Choose an APUSH prompt from the library first.',
+        message: 'Choose a prompt from the library first.',
       },
       { status: 400 }
     );
@@ -356,7 +356,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   ]);
 
   const genericAssignmentTypes = allowedAssignmentTypes.filter(
-    (type) => type.systemKey !== AP_HISTORY_ASSIGNMENT_TYPE_KEY
+    (type) => !isLibraryBackedAssignmentType(type.systemKey)
   );
 
   return dataResponse({
@@ -501,8 +501,9 @@ export default function AssignmentsRoute() {
 
   const canEditSelectedAssignment =
     selectedAssignments.length === 1 &&
-    selectedAssignments[0]!.assignmentType.systemKey !==
-      AP_HISTORY_ASSIGNMENT_TYPE_KEY;
+    !isLibraryBackedAssignmentType(
+      selectedAssignments[0]!.assignmentType.systemKey
+    );
 
   const updateFilter = (key: 'class' | 'type', value: string) => {
     const next = new URLSearchParams(searchParams);
@@ -713,9 +714,9 @@ export default function AssignmentsRoute() {
                   </TableHeader>
                   <TableBody>
                     {filteredAssignments.map((assignment) => {
-                      const canEdit =
-                        assignment.assignmentType.systemKey !==
-                        AP_HISTORY_ASSIGNMENT_TYPE_KEY;
+                      const canEdit = !isLibraryBackedAssignmentType(
+                        assignment.assignmentType.systemKey
+                      );
 
                       return (
                         <TableRow key={assignment.id}>

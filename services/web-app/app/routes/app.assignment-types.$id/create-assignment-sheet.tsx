@@ -18,6 +18,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from '~/components/ui/sheet';
+import type { ApEnglishLitLibraryEntry } from './ap-english-lit-facets';
 
 type TeacherClass = {
   id: string;
@@ -39,6 +40,13 @@ type Props = {
     prompt: string;
     essayType: string;
   } | null;
+  apEnglishLitEntry?: ApEnglishLitLibraryEntry | null;
+};
+
+const FRQ_TYPE_LABEL: Record<string, string> = {
+  poetry: 'Poetry',
+  prose: 'Prose',
+  literary_argument: 'Literary Argument',
 };
 
 function classLabel(klass: TeacherClass) {
@@ -53,6 +61,7 @@ export function CreateAssignmentSheet({
   onOpenChange,
   initialPrompt = '',
   apHistoryEntry = null,
+  apEnglishLitEntry = null,
 }: Props) {
   const fetcher = useFetcher<{ success?: boolean; message?: string }>();
   const [selectedClassId, setSelectedClassId] = useState(
@@ -62,11 +71,35 @@ export function CreateAssignmentSheet({
 
   const isSaving = fetcher.state !== 'idle';
 
+  const libraryEntry = apHistoryEntry
+    ? {
+        externalKey: apHistoryEntry.externalKey,
+        title: apHistoryEntry.title,
+        prompt: apHistoryEntry.prompt,
+        typeLabel: apHistoryEntry.essayType,
+        courseLabel: 'APUSH',
+        fieldName: 'apHistoryLibraryEntryId',
+        titlePlaceholder: 'e.g., Revolutionary Ideals DBQ',
+      }
+    : apEnglishLitEntry
+      ? {
+          externalKey: apEnglishLitEntry.externalKey,
+          title: apEnglishLitEntry.title,
+          prompt: apEnglishLitEntry.prompt,
+          typeLabel:
+            FRQ_TYPE_LABEL[apEnglishLitEntry.frqType] ??
+            apEnglishLitEntry.frqType,
+          courseLabel: 'AP Literature',
+          fieldName: 'apEnglishLitLibraryEntryId',
+          titlePlaceholder: 'e.g., Poetry Analysis — Frost',
+        }
+      : null;
+
   useEffect(() => {
-    if (!open || !apHistoryEntry) return;
+    if (!open || !libraryEntry) return;
     setSelectedClassId(teacherClasses[0]?.id ?? '');
     setTitle('');
-  }, [open, teacherClasses, apHistoryEntry]);
+  }, [open, teacherClasses, libraryEntry]);
 
   useEffect(() => {
     if (fetcher.state === 'idle' && fetcher.data?.success) {
@@ -74,7 +107,7 @@ export function CreateAssignmentSheet({
     }
   }, [fetcher.state, fetcher.data, onOpenChange]);
 
-  if (!apHistoryEntry) {
+  if (!libraryEntry) {
     return (
       <AssignmentCreationSheet
         open={open}
@@ -94,7 +127,8 @@ export function CreateAssignmentSheet({
         <SheetHeader>
           <SheetTitle>New Assignment</SheetTitle>
           <SheetDescription>
-            Create an APUSH assignment from the selected prompt.
+            Create a {libraryEntry.courseLabel} assignment from the selected
+            prompt.
           </SheetDescription>
         </SheetHeader>
 
@@ -112,8 +146,8 @@ export function CreateAssignmentSheet({
           />
           <input
             type="hidden"
-            name="apHistoryLibraryEntryId"
-            value={apHistoryEntry.externalKey}
+            name={libraryEntry.fieldName}
+            value={libraryEntry.externalKey}
           />
 
           <div className="space-y-2">
@@ -143,23 +177,27 @@ export function CreateAssignmentSheet({
               name="title"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder="e.g., Revolutionary Ideals DBQ"
+              placeholder={libraryEntry.titlePlaceholder}
               disabled={isSaving}
             />
           </div>
 
           <div className="space-y-2 rounded-lg border bg-muted/40 p-4">
             <div className="flex items-center justify-between gap-3">
-              <Label>Selected APUSH Prompt</Label>
+              <Label>Selected {libraryEntry.courseLabel} Prompt</Label>
               <span className="text-xs font-medium uppercase text-muted-foreground">
-                {apHistoryEntry.essayType}
+                {libraryEntry.typeLabel}
               </span>
             </div>
-            <h3 className="text-base font-semibold">{apHistoryEntry.title}</h3>
+            <h3 className="text-base font-semibold">{libraryEntry.title}</h3>
             <p className="whitespace-pre-wrap text-sm leading-6 text-muted-foreground">
-              {apHistoryEntry.prompt}
+              {libraryEntry.prompt}
             </p>
           </div>
+
+          {apEnglishLitEntry ? (
+            <ApEnglishLitTextPreview entry={apEnglishLitEntry} />
+          ) : null}
 
           {fetcher.data && !fetcher.data.success ? (
             <p className="text-sm text-destructive">
@@ -184,4 +222,66 @@ export function CreateAssignmentSheet({
       </SheetContent>
     </Sheet>
   );
+}
+
+function ApEnglishLitTextPreview({
+  entry,
+}: {
+  entry: ApEnglishLitLibraryEntry;
+}) {
+  const works =
+    entry.suggestedWorks
+      ?.split('\n')
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0) ?? [];
+
+  if (entry.sources.length > 0) {
+    return (
+      <div className="space-y-2">
+        <Label>{entry.frqType === 'poetry' ? 'Poem' : 'Passage'}</Label>
+        <div className="grid gap-2">
+          {entry.sources.map((source) => (
+            <section
+              key={source.externalKey}
+              className="rounded-md border bg-white p-3"
+            >
+              <h4 className="text-sm font-semibold">{source.title}</h4>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                {source.attribution}
+              </p>
+              {source.caption ? (
+                <p className="mt-2 text-sm italic text-muted-foreground">
+                  {source.caption}
+                </p>
+              ) : null}
+              <p className="mt-2 max-h-64 overflow-y-auto whitespace-pre-wrap text-sm leading-6">
+                {source.body}
+              </p>
+            </section>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (works.length > 0) {
+    return (
+      <div className="space-y-2">
+        <Label>Suggested works</Label>
+        <div className="rounded-md border bg-white p-3">
+          <p className="text-xs text-muted-foreground">
+            Students choose one of these works of literary merit, or another
+            they know well:
+          </p>
+          <ul className="mt-2 list-disc space-y-1 pl-5 text-sm leading-6">
+            {works.map((work) => (
+              <li key={work}>{work}</li>
+            ))}
+          </ul>
+        </div>
+      </div>
+    );
+  }
+
+  return null;
 }

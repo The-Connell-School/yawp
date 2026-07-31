@@ -26,6 +26,10 @@ const { LlmFallbackRetrySignal } = await import(
 );
 const { action } = await import('./route');
 
+const { buildApEnglishLitSnapshot } = await import(
+  '~/domain/ap-english-lit/schema'
+);
+
 describe('api.domain.tutor-response read-only impersonation', () => {
   beforeEach(() => {
     getLLMCompletion.mockReset();
@@ -263,5 +267,124 @@ describe('api.domain.tutor-response read-only impersonation', () => {
       agent: 'assistant',
       content: 'Draft a clearer thesis.',
     });
+  });
+});
+
+describe('AP English Literature tutor', () => {
+  beforeEach(() => {
+    getLLMCompletion.mockReset();
+    requireMutableRequest.mockReset();
+    requireMutableRequest.mockResolvedValue(undefined);
+    prisma.assignmentModuleSession.findUnique.mockReset();
+    prisma.assignmentModuleSession.update.mockReset();
+  });
+
+  function mockApLitCms(overrides?: { tutorInstructions?: string | null }) {
+    const snapshot = buildApEnglishLitSnapshot({
+      externalKey: 'ap-lit-poetry-route',
+      frqType: 'poetry',
+      title: 'Poetry example',
+      prompt: "Analyze how the poet conveys the speaker's attitude toward time.",
+      focusSkill: 'speaker-attitude',
+      difficulty: 'exam-ready',
+      skillEmphasis: 'evidence-commentary',
+      defaultTimeMode: 'timed',
+      defaultDurationMinutes: 40,
+      suggestedWorks: null,
+      provenanceUrl: null,
+      sources: [
+        {
+          externalKey: 'ap-lit-poetry-route-poem',
+          position: 1,
+          title: 'The Poem',
+          attribution: 'A Poet, 1900',
+          body: 'Time, that old gardener, prunes us all.',
+          caption: null,
+          mediaType: 'text',
+          imageUrl: null,
+          imageAlt: null,
+          provenanceUrl: null,
+        },
+      ],
+    });
+
+    prisma.assignmentModuleSession.findUnique.mockResolvedValueOnce({
+      id: 'cms-1',
+      instructionsCompleted: 0,
+      assignmentModule: {
+        tutorInstructions:
+          overrides && 'tutorInstructions' in overrides
+            ? overrides.tutorInstructions
+            : null,
+        rubricAlignmentJson: null,
+        assignmentType: {
+          id: 'ap-lit-type',
+          gradingAssistantVersion: 1,
+          rubricJson: null,
+        },
+        instructions: [{ id: 'instruction-1', tutorInstructions: null }],
+      },
+      messages: [],
+      document: {
+        id: 'doc-1',
+        text: 'Original draft',
+        assignment: { apEnglishLitSnapshot: snapshot },
+      },
+    });
+    prisma.assignmentModuleSession.findUnique.mockResolvedValueOnce({
+      id: 'cms-1',
+      messages: [],
+      assignmentModule: {
+        instructions: [],
+        assignmentType: { assignmentModules: [] },
+      },
+    });
+  }
+
+  async function runTutor() {
+    const body = new FormData();
+    body.set('response', 'Where do I start?');
+    body.set('cmsId', 'cms-1');
+    body.set('content', 'Current draft');
+
+    await action({
+      request: new Request('https://example.com/api/domain/tutor-response', {
+        method: 'POST',
+        body,
+      }),
+    } as any);
+
+    return (getLLMCompletion.mock.calls[0]?.[0] as any).system as string;
+  }
+
+  test('an unseeded module still gets the full authored coach, not an empty prompt', async () => {
+    // Before this wiring the AP Lit tutor ran with no instructions at all:
+    // the module carries no tutorInstructions and nothing called the coach.
+    getLLMCompletion.mockResolvedValue('What does that image do?');
+    mockApLitCms({ tutorInstructions: null });
+
+    const system = await runTutor();
+
+    expect(system).toContain('You are the YAWP! Tutor');
+    expect(system).toContain('AP ENGLISH LITERATURE');
+    expect(system).toContain('Coaching principles');
+    expect(system).toContain('REGISTER MODE FOR THIS MODULE: POLISHED');
+    // and the assignment-specific half comes from the snapshot
+    expect(system).toContain("speaker's attitude toward time");
+    expect(system).toContain('Time, that old gardener');
+    expect(system).toContain('poetry analysis question (Q1)');
+    expect(system).toContain('40-minute budget');
+  });
+
+  test('a coaching block edited in admin replaces the authored default', async () => {
+    getLLMCompletion.mockResolvedValue('What does that image do?');
+    mockApLitCms({ tutorInstructions: 'EDITED IN ADMIN. Coach tersely.' });
+
+    const system = await runTutor();
+
+    expect(system).toContain('EDITED IN ADMIN. Coach tersely.');
+    expect(system).not.toContain('You are the YAWP! Tutor');
+    // the snapshot half is still composed by the route
+    expect(system).toContain('Time, that old gardener');
   });
 });

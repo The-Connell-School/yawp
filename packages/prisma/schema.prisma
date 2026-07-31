@@ -65,6 +65,7 @@ model AssignmentType {
   assignments                        Assignment[]
   documents                          Document[]
   apHistoryLibraryEntries            ApHistoryPromptLibraryEntry[]
+  apEnglishLitLibraryEntries         ApEnglishLitPromptLibraryEntry[]
 
   @@index([ownerOrgId])
   @@index([ownerMembershipId])
@@ -85,6 +86,7 @@ model Assignment {
   pointValue                      Int?              @default(100)
   gradingAssistantStrictnessLevel String            @default("intermediate")
   apHistorySnapshot               Json?
+  apEnglishLitSnapshot            Json?
   classAssignments                ClassAssignment[]
   documents                       Document[]
 
@@ -145,6 +147,50 @@ model ApHistoryPromptLibrarySource {
   body                 String
   caption              String?
   mediaType            String                      @default("text")
+  imageUrl             String?
+  imageAlt             String?
+  provenanceUrl        String?
+
+  @@index([promptLibraryEntryId, position])
+}
+
+model ApEnglishLitPromptLibraryEntry {
+  id                     String                            @id @default(cuid())
+  createdAt              DateTime                          @default(now()) @db.Timestamptz(6)
+  updatedAt              DateTime                          @default(now()) @updatedAt @db.Timestamptz(6)
+  externalKey            String                            @unique
+  assignmentTypeId       String
+  assignmentType         AssignmentType                    @relation(fields: [assignmentTypeId], references: [id], onDelete: Cascade)
+  frqType                String
+  title                  String
+  prompt                 String
+  focusSkill             String
+  difficulty             String
+  skillEmphasis          String?
+  defaultTimeMode        String                            @default("untimed")
+  defaultDurationMinutes Int
+  suggestedWorks         String?
+  provenanceUrl          String?
+  archivedAt             DateTime?                         @db.Timestamptz(6)
+  sources                ApEnglishLitPromptLibrarySource[]
+
+  @@index([assignmentTypeId, frqType])
+  @@index([archivedAt])
+}
+
+model ApEnglishLitPromptLibrarySource {
+  id                   String                         @id @default(cuid())
+  createdAt            DateTime                       @default(now()) @db.Timestamptz(6)
+  updatedAt            DateTime                       @default(now()) @updatedAt @db.Timestamptz(6)
+  externalKey          String                         @unique
+  promptLibraryEntryId String
+  promptLibraryEntry   ApEnglishLitPromptLibraryEntry @relation(fields: [promptLibraryEntryId], references: [id], onDelete: Cascade)
+  position             Int
+  title                String
+  attribution          String
+  body                 String
+  caption              String?
+  mediaType            String                         @default("text")
   imageUrl             String?
   imageAlt             String?
   provenanceUrl        String?
