@@ -421,6 +421,10 @@ export default function SubmissionRoute() {
   const [grammarIssues, setGrammarIssues] = useState<GrammarIssue[]>(
     persistedGrammarIssues
   );
+  const grammarIssuesRef = useRef(grammarIssues);
+  grammarIssuesRef.current = grammarIssues;
+  const grammarIssueSaveQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const grammarIssueSaveVersionRef = useRef(0);
   const [hiddenGrammarIssueIds, setHiddenGrammarIssueIds] = useState<string[]>(
     []
   );
@@ -432,6 +436,7 @@ export default function SubmissionRoute() {
   const lastPersistedRef = useRef(persistedGrammarIssues);
   if (lastPersistedRef.current !== persistedGrammarIssues) {
     lastPersistedRef.current = persistedGrammarIssues;
+    grammarIssuesRef.current = persistedGrammarIssues;
     setGrammarIssues(persistedGrammarIssues);
     setHiddenGrammarIssueIds([]);
   }
@@ -628,19 +633,32 @@ export default function SubmissionRoute() {
 
   const handleRemoveGrammarIssue = useCallback(
     async (id: string) => {
-      const nextIssues = grammarIssues.filter((issue) => issue.id !== id);
-      try {
-        await persistGrammarIssues(nextIssues);
-      } catch {
-        revalidator.revalidate();
-        return;
-      }
+      const nextIssues = grammarIssuesRef.current.filter(
+        (issue) => issue.id !== id
+      );
+      if (nextIssues.length === grammarIssuesRef.current.length) return;
+
+      grammarIssuesRef.current = nextIssues;
       setGrammarIssues(nextIssues);
       setHiddenGrammarIssueIds((prev) =>
         prev.filter((currentId) => currentId !== id)
       );
+
+      const saveVersion = ++grammarIssueSaveVersionRef.current;
+      const saveRequest = grammarIssueSaveQueueRef.current
+        .catch(() => undefined)
+        .then(() => persistGrammarIssues(nextIssues));
+      grammarIssueSaveQueueRef.current = saveRequest;
+
+      try {
+        await saveRequest;
+      } catch {
+        if (saveVersion === grammarIssueSaveVersionRef.current) {
+          revalidator.revalidate();
+        }
+      }
     },
-    [grammarIssues, persistGrammarIssues, revalidator]
+    [persistGrammarIssues, revalidator]
   );
 
   // ── Lifecycle panel: edit mode, Save, Release ───────────────────────
