@@ -130,7 +130,11 @@ afterEach(() => {
 describe('ClassInsightsPanel', () => {
   it('shows the generate action when there is no cached insight', () => {
     const el = render(
-      <ClassInsightsPanel classAssignmentId="ca-1" initialInsight={null} />
+      <ClassInsightsPanel
+        classAssignmentId="ca-1"
+        initialInsight={null}
+        gradedCount={3}
+      />
     );
     expect(el.textContent).toMatch(/summarize class performance/i);
     expect(el.textContent).not.toContain('strong theses');
@@ -138,7 +142,11 @@ describe('ClassInsightsPanel', () => {
 
   it('submits to the insights endpoint when generating', () => {
     const el = render(
-      <ClassInsightsPanel classAssignmentId="ca-1" initialInsight={null} />
+      <ClassInsightsPanel
+        classAssignmentId="ca-1"
+        initialInsight={null}
+        gradedCount={3}
+      />
     );
     const button = el.querySelector('button')!;
     act(() => {
@@ -158,6 +166,7 @@ describe('ClassInsightsPanel', () => {
       <ClassInsightsPanel
         classAssignmentId="ca-1"
         initialInsight={READY_INSIGHT}
+        gradedCount={30}
       />
     );
     expect(el.textContent).toContain('strong theses');
@@ -179,6 +188,7 @@ describe('ClassInsightsPanel', () => {
       <ClassInsightsPanel
         classAssignmentId="ca-1"
         initialInsight={INSIGHT_WITH_DIFFERENTIATION}
+        gradedCount={30}
       />
     );
     expect(el.textContent).toMatch(/differentiation starting points/i);
@@ -199,6 +209,7 @@ describe('ClassInsightsPanel', () => {
       <ClassInsightsPanel
         classAssignmentId="ca-1"
         initialInsight={READY_INSIGHT}
+        gradedCount={30}
       />
     );
     expect(el.textContent).not.toMatch(/differentiation starting points/i);
@@ -207,7 +218,11 @@ describe('ClassInsightsPanel', () => {
   it('renders a fresh insight returned by the fetcher', () => {
     fetcher.data = { success: true, insight: READY_INSIGHT };
     const el = render(
-      <ClassInsightsPanel classAssignmentId="ca-1" initialInsight={null} />
+      <ClassInsightsPanel
+        classAssignmentId="ca-1"
+        initialInsight={null}
+        gradedCount={5}
+      />
     );
     expect(el.textContent).toContain('strong theses');
   });
@@ -218,7 +233,11 @@ describe('ClassInsightsPanel', () => {
       message: 'No graded submissions yet.',
     };
     const el = render(
-      <ClassInsightsPanel classAssignmentId="ca-1" initialInsight={null} />
+      <ClassInsightsPanel
+        classAssignmentId="ca-1"
+        initialInsight={null}
+        gradedCount={0}
+      />
     );
     expect(el.textContent).toContain('No graded submissions yet.');
   });
@@ -226,10 +245,73 @@ describe('ClassInsightsPanel', () => {
   it('shows a working state while the fetcher is submitting', () => {
     fetcher.state = 'submitting';
     const el = render(
-      <ClassInsightsPanel classAssignmentId="ca-1" initialInsight={null} />
+      <ClassInsightsPanel
+        classAssignmentId="ca-1"
+        initialInsight={null}
+        gradedCount={5}
+      />
     );
     const button = el.querySelector('button')!;
     expect(button.hasAttribute('disabled')).toBe(true);
+  });
+
+  it('shows a reason instead of a button when there are no graded submissions', () => {
+    const el = render(
+      <ClassInsightsPanel
+        classAssignmentId="ca-1"
+        initialInsight={null}
+        gradedCount={0}
+      />
+    );
+    expect(el.querySelector('button')).toBeNull();
+    expect(el.textContent).toContain(
+      'Grade a few submissions first, then generate class insights.'
+    );
+  });
+
+  it('shows a reason instead of a button during the regeneration cooldown', () => {
+    const recentInsight: ClassInsight = {
+      ...READY_INSIGHT,
+      generatedAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+    };
+    const el = render(
+      <ClassInsightsPanel
+        classAssignmentId="ca-1"
+        initialInsight={recentInsight}
+        gradedCount={30}
+      />
+    );
+    expect(
+      el.querySelector('[data-testid="class-insight-generate-unavailable-reason"]')
+    ).not.toBeNull();
+    expect(el.textContent).toMatch(/regenerate in 23 hours/i);
+    expect(
+      Array.from(el.querySelectorAll('button')).some((button) =>
+        button.textContent?.match(/regenerate/i)
+      )
+    ).toBe(false);
+  });
+
+  it('shows a reason instead of a button when nothing new has been graded since the last summary', () => {
+    const staleInsight: ClassInsight = {
+      ...READY_INSIGHT,
+      generatedAt: new Date(Date.now() - 25 * 60 * 60 * 1000).toISOString(),
+    };
+    const el = render(
+      <ClassInsightsPanel
+        classAssignmentId="ca-1"
+        initialInsight={staleInsight}
+        gradedCount={staleInsight.submissionCount}
+      />
+    );
+    expect(el.textContent).toContain(
+      'No new graded submissions since the last summary.'
+    );
+    expect(
+      Array.from(el.querySelectorAll('button')).some((button) =>
+        button.textContent?.match(/regenerate/i)
+      )
+    ).toBe(false);
   });
 
   it('uses container-aware layouts so the embedded sheet stays single-column', () => {
@@ -237,6 +319,7 @@ describe('ClassInsightsPanel', () => {
       <ClassInsightsPanel
         classAssignmentId="ca-1"
         initialInsight={READY_INSIGHT}
+        gradedCount={30}
       />
     );
 
@@ -259,6 +342,7 @@ describe('ClassInsightsPanel', () => {
       <ClassInsightsPanel
         classAssignmentId="ca-1"
         initialInsight={READY_INSIGHT}
+        gradedCount={30}
       />
     );
 
@@ -278,6 +362,7 @@ describe('ClassInsightsPanel', () => {
       <ClassInsightsPanel
         classAssignmentId="ca-1"
         initialInsight={READY_INSIGHT}
+        gradedCount={30}
       />
     );
 
@@ -296,6 +381,7 @@ describe('ClassInsightsPanel', () => {
       <ClassInsightsPanel
         classAssignmentId="ca-1"
         initialInsight={READY_INSIGHT}
+        gradedCount={30}
       />
     );
     const categoryButton = Array.from(el.querySelectorAll('button')).find(

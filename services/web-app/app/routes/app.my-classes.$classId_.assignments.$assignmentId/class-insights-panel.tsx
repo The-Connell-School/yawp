@@ -12,6 +12,7 @@ import {
 import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
 import { timeAgo } from '~/utils/timeAgo';
+import { useClassInsightGenerateAvailability } from './use-class-insight-generate-availability';
 
 type CategoryStatus = 'strength' | 'mixed' | 'gap';
 
@@ -449,9 +450,11 @@ function InsightBody({
 export function ClassInsightsPanel({
   classAssignmentId,
   initialInsight,
+  gradedCount,
 }: {
   classAssignmentId: string;
   initialInsight: ClassInsight | null;
+  gradedCount: number;
 }) {
   const fetcher = useFetcher<InsightActionData>();
   const isWorking = fetcher.state !== 'idle';
@@ -464,6 +467,14 @@ export function ClassInsightsPanel({
   const insight = fetcherInsight ?? initialInsight;
   const hasInsight = Boolean(insight?.summary);
   const generatedAt = insight?.generatedAt ?? null;
+
+  const generateAvailability = useClassInsightGenerateAvailability({
+    classInsightsEnabled: true,
+    gradedCount,
+    existingInsight: hasInsight
+      ? { submissionCount: insight!.submissionCount, generatedAt }
+      : null,
+  });
 
   const generate = () => {
     fetcher.submit(
@@ -490,21 +501,30 @@ export function ClassInsightsPanel({
             </p>
           </div>
         </div>
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          className="w-full shrink-0 @xl:w-auto"
-          onClick={generate}
-          disabled={isWorking}
-          isLoading={isWorking}
-        >
-          {isWorking
-            ? 'Analyzing…'
-            : hasInsight
-              ? 'Regenerate'
-              : 'Summarize class performance'}
-        </Button>
+        {isWorking || generateAvailability.canGenerate ? (
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="w-full shrink-0 @xl:w-auto"
+            onClick={generate}
+            disabled={isWorking}
+            isLoading={isWorking}
+          >
+            {isWorking
+              ? 'Analyzing…'
+              : hasInsight
+                ? 'Regenerate'
+                : 'Summarize class performance'}
+          </Button>
+        ) : (
+          <p
+            className="w-full shrink-0 text-sm text-muted-foreground @xl:w-auto @xl:text-right"
+            data-testid="class-insight-generate-unavailable-reason"
+          >
+            {generateAvailability.reason}
+          </p>
+        )}
       </div>
 
       <div className="p-4">
