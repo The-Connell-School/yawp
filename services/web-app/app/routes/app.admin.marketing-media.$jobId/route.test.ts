@@ -43,6 +43,7 @@ function job(overrides: Record<string, unknown> = {}) {
   return {
     id: 'job-1',
     createdAt: new Date('2026-08-01T00:00:00Z'),
+    updatedAt: new Date(),
     kind: 'STILLS',
     status: 'QUEUED',
     brief: 'Show the teacher grading loop.',
@@ -121,6 +122,39 @@ describe('marketing media job page', () => {
 
     expect(result.data.storyboard?.slug).toBe('teacher-loop');
     expect(result.data.estimatedSeconds).toBeGreaterThan(0);
+  });
+
+  test('flags a queued job nobody is rendering, with how long it has waited', async () => {
+    prisma.marketingMediaJob.findUnique.mockResolvedValue(
+      job({ status: 'QUEUED', updatedAt: new Date(Date.now() - 10 * 60_000) })
+    );
+
+    const result = await loader(args(new Request('http://localhost/x')));
+
+    expect(result.data.queueStalled).toBe(true);
+    expect(result.data.queuedMinutes).toBe(10);
+  });
+
+  test('does not cry stalled while a renderer could still claim the job', async () => {
+    prisma.marketingMediaJob.findUnique.mockResolvedValue(
+      job({ status: 'QUEUED', updatedAt: new Date(Date.now() - 30_000) })
+    );
+
+    const result = await loader(args(new Request('http://localhost/x')));
+
+    expect(result.data.queueStalled).toBe(false);
+  });
+
+  test('never flags a job that is actually rendering or done', async () => {
+    for (const status of ['RENDERING', 'SUCCEEDED', 'FAILED']) {
+      prisma.marketingMediaJob.findUnique.mockResolvedValue(
+        job({ status, updatedAt: new Date(Date.now() - 60 * 60_000) })
+      );
+
+      const result = await loader(args(new Request('http://localhost/x')));
+
+      expect(result.data.queueStalled).toBe(false);
+    }
   });
 
   test('404s for an unknown job', async () => {

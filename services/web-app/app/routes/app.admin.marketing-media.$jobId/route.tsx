@@ -29,6 +29,9 @@ export const handle: BreadcrumbHandle = { breadcrumb: 'Render' };
 
 const ACTIVE_STATUSES = ['GENERATING', 'QUEUED', 'RENDERING'];
 
+/** A connected renderer polls every few seconds; two minutes queued means nobody is coming. */
+const STALLED_QUEUE_MS = 2 * 60 * 1000;
+
 export async function loader({ request, params }: LoaderFunctionArgs) {
   requireMarketingStudioEnabled();
   await requireAdmin(request);
@@ -38,6 +41,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     select: {
       id: true,
       createdAt: true,
+      updatedAt: true,
       kind: true,
       status: true,
       brief: true,
@@ -74,10 +78,17 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     ? safeParseStoryboard(job.storyboard)
     : null;
 
+  // A healthy renderer claims a queued job within seconds. A job still QUEUED
+  // after this long means no renderer is attached to this environment, and the
+  // page should say that instead of looking hung.
+  const queuedMs =
+    job.status === 'QUEUED' ? Date.now() - job.updatedAt.getTime() : 0;
+
   return dataResponse({
     job: {
       ...job,
       createdAt: job.createdAt.toISOString(),
+      updatedAt: job.updatedAt.toISOString(),
       startedAt: job.startedAt?.toISOString() ?? null,
       finishedAt: job.finishedAt?.toISOString() ?? null,
     },
@@ -86,6 +97,8 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     estimatedSeconds: parsedStoryboard?.success
       ? estimateRenderSeconds(parsedStoryboard.data)
       : null,
+    queueStalled: queuedMs > STALLED_QUEUE_MS,
+    queuedMinutes: Math.floor(queuedMs / 60_000),
   });
 }
 
@@ -148,8 +161,14 @@ export async function action({ request, params }: ActionFunctionArgs) {
 }
 
 export default function Route() {
-  const { job, outputs, storyboard, estimatedSeconds } =
-    useLoaderData<typeof loader>();
+  const {
+    job,
+    outputs,
+    storyboard,
+    estimatedSeconds,
+    queueStalled,
+    queuedMinutes,
+  } = useLoaderData<typeof loader>();
   const revalidator = useRevalidator();
   const active = ACTIVE_STATUSES.includes(job.status);
 
@@ -199,6 +218,34 @@ export default function Route() {
           </Form>
         </div>
       </div>
+
+      {queueStalled ? (
+        <Card className="border-amber-300">
+          <CardHeader>
+            <CardTitle className="text-amber-800">
+              Waiting for a renderer
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p
+              data-testid="marketing-job-stalled"
+              className="text-sm text-amber-800"
+            >
+              This job has been queued for {queuedMinutes} minute
+              {queuedMinutes === 1 ? '' : 's'}, and no renderer is attached to
+              this environment — nothing is picking jobs up. It is not stuck: it
+              starts the moment a renderer connects to this database. Until then
+              it will wait here, or you can cancel it.
+            </p>
+            <p className="mt-2 text-xs text-amber-700">
+              How to run a renderer:{' '}
+              <code>bun marketing-renderer:render-once</code> against this
+              environment, or see{' '}
+              <code>docs/work/marketing-media-studio.md</code>.
+            </p>
+          </CardContent>
+        </Card>
+      ) : null}
 
       {job.error ? (
         <Card className="border-red-300">
