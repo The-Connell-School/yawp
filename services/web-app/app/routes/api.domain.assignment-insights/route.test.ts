@@ -5,11 +5,40 @@ const prisma = {
   classAssignment: { findFirst: mock() },
   document: { findMany: mock() },
   classAssignmentInsight: {
+    findUnique: mock(),
     upsert: mock(),
     updateMany: mock(),
     create: mock(),
   },
 };
+
+const GENERATION_CLASS_ASSIGNMENT = {
+  id: 'ca-1',
+  assignment: { title: 'Macbeth Essay' },
+  class: {
+    grade: '10',
+    period: '3',
+    school: {
+      organizationId: 'org-1',
+      organization: { classInsightsEnabled: true },
+    },
+  },
+};
+
+function mockClassAssignmentAccess(
+  generationResult: typeof GENERATION_CLASS_ASSIGNMENT | null = GENERATION_CLASS_ASSIGNMENT
+) {
+  prisma.classAssignment.findFirst.mockImplementation(async (args: {
+    select?: Record<string, boolean>;
+  }) => {
+    const isAuthCheck =
+      args.select?.id === true && Object.keys(args.select).length === 1;
+    if (isAuthCheck) {
+      return generationResult ? { id: 'ca-1' } : null;
+    }
+    return generationResult;
+  });
+}
 
 const getGradingActor = mock();
 const canManageGrades = mock();
@@ -79,8 +108,10 @@ function payloadOf(response: unknown) {
 
 describe('api.domain.assignment-insights', () => {
   beforeEach(() => {
+    process.env.CLASS_INSIGHT_MOCK_MODE = 'live';
     prisma.classAssignment.findFirst.mockReset();
     prisma.document.findMany.mockReset();
+    prisma.classAssignmentInsight.findUnique.mockReset().mockResolvedValue(null);
     prisma.classAssignmentInsight.upsert.mockReset();
     prisma.classAssignmentInsight.updateMany.mockReset().mockResolvedValue({
       count: 0,
@@ -101,15 +132,7 @@ describe('api.domain.assignment-insights', () => {
       isAdmin: false,
     });
     canManageGrades.mockReturnValue(true);
-    prisma.classAssignment.findFirst.mockResolvedValue({
-      id: 'ca-1',
-      assignment: { title: 'Macbeth Essay' },
-      class: {
-        grade: '10',
-        period: '3',
-        school: { organization: { classInsightsEnabled: true } },
-      },
-    });
+    mockClassAssignmentAccess();
     prisma.document.findMany.mockResolvedValue([
       {
         id: 'doc-1',
@@ -145,6 +168,64 @@ describe('api.domain.assignment-insights', () => {
         ...create,
       })
     );
+  });
+
+  test('rejects regeneration while the 24-hour cooldown is active', async () => {
+    prisma.classAssignmentInsight.findUnique.mockResolvedValue({
+      status: 'ready',
+      generatedAt: new Date(Date.now() - 60 * 60 * 1000),
+      summaryJson: { overview: 'Cached summary.' },
+    });
+
+    const response = await action({
+      request: postRequest('ca-1'),
+    } as any);
+    const payload = payloadOf(response);
+
+    expect(payload.init?.status).toBe(429);
+    expect(payload.data.success).toBe(false);
+    expect(payload.data.message).toMatch(/regenerate in \d+ hours/i);
+    expect(getLLMCompletion).not.toHaveBeenCalled();
+    expect(prisma.classAssignmentInsight.upsert).not.toHaveBeenCalled();
+  });
+
+  test('rejects regeneration when nothing new has been graded since the last summary', async () => {
+    prisma.classAssignmentInsight.findUnique.mockResolvedValue({
+      status: 'ready',
+      generatedAt: new Date(Date.now() - 25 * 60 * 60 * 1000),
+      summaryJson: { overview: 'Cached summary.' },
+      submissionCount: 2,
+    });
+
+    const response = await action({
+      request: postRequest('ca-1'),
+    } as any);
+    const payload = payloadOf(response);
+
+    expect(payload.init?.status).toBe(409);
+    expect(payload.data).toEqual({
+      success: false,
+      message: 'No new graded submissions since the last summary.',
+    });
+    expect(getLLMCompletion).not.toHaveBeenCalled();
+    expect(prisma.classAssignmentInsight.upsert).not.toHaveBeenCalled();
+  });
+
+  test('allows regeneration once the cooldown ends and new submissions were graded', async () => {
+    prisma.classAssignmentInsight.findUnique.mockResolvedValue({
+      status: 'ready',
+      generatedAt: new Date(Date.now() - 25 * 60 * 60 * 1000),
+      summaryJson: { overview: 'Cached summary.' },
+      submissionCount: 1,
+    });
+
+    const response = await action({
+      request: postRequest('ca-1'),
+    } as any);
+    const payload = payloadOf(response);
+
+    expect(payload.data.success).toBe(true);
+    expect(getLLMCompletion).toHaveBeenCalledTimes(1);
   });
 
   test('generates and persists an insight for a teacher who owns the class', async () => {
@@ -275,7 +356,7 @@ describe('api.domain.assignment-insights', () => {
   });
 
   test('returns 404 when the class-assignment is not owned by the teacher', async () => {
-    prisma.classAssignment.findFirst.mockResolvedValue(null);
+    mockClassAssignmentAccess(null);
     const response = await action({ request: postRequest('ca-1') } as any);
     const payload = payloadOf(response);
     expect(payload.init?.status).toBe(404);
@@ -283,15 +364,7 @@ describe('api.domain.assignment-insights', () => {
   });
 
   test('rejects direct generation requests while the organization gate is off', async () => {
-    prisma.classAssignment.findFirst.mockResolvedValue({
-      id: 'ca-1',
-      assignment: { title: 'Macbeth Essay' },
-      class: {
-        grade: '10',
-        period: '3',
-        school: { organization: { classInsightsEnabled: false } },
-      },
-    });
+    mockClassAssignmentAccess(null);
 
     const response = await action({ request: postRequest('ca-1') } as any);
     const payload = payloadOf(response);
