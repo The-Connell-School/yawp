@@ -278,7 +278,7 @@ export default function Route() {
                   className="h-9 rounded-md border border-input bg-background px-3 py-1 text-sm"
                 >
                   <option value="STILLS">Screenshots</option>
-                  <option value="CLIP">Short silent clip</option>
+                  <option value="CLIP">Feature clip (5–15s, silent)</option>
                 </select>
               </div>
 

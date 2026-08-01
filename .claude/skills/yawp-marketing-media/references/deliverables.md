@@ -17,13 +17,14 @@ The main asset. One audience, one story, one take.
 - Ships with: a one-sentence description, a suggested title, and the screenshot
   set from the same run.
 
-## Feature clip (15–30s)
+## Feature clip (5–15s)
 
-One capability, for email, a release note, or a social post.
+One capability, one motion, for email, a release note, or a social post.
 
-- 2–3 scenes. One cue, sometimes zero — a silent clip with a caption often lands
-  better in a feed.
-- Cut the navigation. Start on the screen where the feature lives.
+- 1–2 scenes. Usually zero cues — a silent clip with a caption lands better in
+  a feed than narration nobody hears.
+- Cut the navigation. Start on the screen where the feature lives, do the one
+  thing (open the document, click the button), hold the result ~2 seconds, end.
 - Ships with: the caption text, since the clip will usually autoplay muted.
 
 ## Screenshot set

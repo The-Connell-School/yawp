@@ -169,12 +169,19 @@ export function shotFileName(index: number, name: string): string {
  */
 export function buildTranscodeArgs(
   inputPath: string,
-  outputPath: string
+  outputPath: string,
+  options: { trimStartSeconds?: number } = {}
 ): string[] {
+  const trim =
+    options.trimStartSeconds && options.trimStartSeconds > 0
+      ? ['-ss', options.trimStartSeconds.toFixed(2)]
+      : [];
   return [
     '-y',
     '-i',
     inputPath,
+    // Placed after -i so the cut is frame-accurate; we re-encode anyway.
+    ...trim,
     '-an',
     '-vf',
     'scale=trunc(iw/2)*2:trunc(ih/2)*2',

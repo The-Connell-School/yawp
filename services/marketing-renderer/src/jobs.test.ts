@@ -172,6 +172,27 @@ describe('buildTranscodeArgs', () => {
     expect(args[args.length - 1]).toBe('/tmp/out.mp4');
   });
 
+  test('trims the recorded lead-in when asked', () => {
+    const args = buildTranscodeArgs('/tmp/in.webm', '/tmp/out.mp4', {
+      trimStartSeconds: 6.42,
+    });
+
+    const ssIndex = args.indexOf('-ss');
+    expect(ssIndex).toBeGreaterThan(args.indexOf('/tmp/in.webm'));
+    expect(args[ssIndex + 1]).toBe('6.42');
+  });
+
+  test('does not emit a trim for zero or missing lead-in', () => {
+    expect(buildTranscodeArgs('/tmp/in.webm', '/tmp/out.mp4')).not.toContain(
+      '-ss'
+    );
+    expect(
+      buildTranscodeArgs('/tmp/in.webm', '/tmp/out.mp4', {
+        trimStartSeconds: 0,
+      })
+    ).not.toContain('-ss');
+  });
+
   test('forces even dimensions so h264 does not reject the input', () => {
     expect(
       buildTranscodeArgs('/tmp/in.webm', '/tmp/out.mp4').join(' ')

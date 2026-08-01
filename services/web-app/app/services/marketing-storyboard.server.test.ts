@@ -138,12 +138,76 @@ describe('generateStoryboard', () => {
     });
   });
 
-  test('asks for a clip-shaped storyboard when the job is a clip', async () => {
+  test('asks for a short-form single-feature storyboard when the job is a clip', async () => {
     getLLMCompletion.mockResolvedValueOnce(JSON.stringify(VALID_STORYBOARD));
 
     await generateStoryboard(brief({ kind: 'CLIP' }));
 
     const system = getLLMCompletion.mock.calls[0][0].system as string;
     expect(system.toLowerCase()).toContain('silent');
+    expect(system).toContain('5 to 15 seconds');
+    expect(system.toLowerCase()).toContain('one feature');
+  });
+
+  test('sends an overlong clip back for a shorter cut', async () => {
+    const longClip = {
+      ...VALID_STORYBOARD,
+      scenes: [
+        { id: 'one', goto: '/app', waitFor: 'main', hold: 20 },
+        { id: 'two', goto: '/app/my-classes', waitFor: 'main', hold: 20 },
+      ],
+    };
+    const shortClip = {
+      ...VALID_STORYBOARD,
+      scenes: [{ id: 'one', goto: '/app', waitFor: 'main', hold: 2 }],
+    };
+    getLLMCompletion
+      .mockResolvedValueOnce(JSON.stringify(longClip))
+      .mockResolvedValueOnce(JSON.stringify(shortClip));
+
+    const result = await generateStoryboard(brief({ kind: 'CLIP' }));
+
+    expect(result.storyboard.scenes).toHaveLength(1);
+    expect(getLLMCompletion).toHaveBeenCalledTimes(2);
+    expect(
+      JSON.stringify(getLLMCompletion.mock.calls[1][0].messages)
+    ).toContain('too long');
+  });
+
+  test('gives up on a clip that stays long after the retry', async () => {
+    const longClip = {
+      ...VALID_STORYBOARD,
+      scenes: [
+        { id: 'one', goto: '/app', waitFor: 'main', hold: 20 },
+        { id: 'two', goto: '/app/my-classes', waitFor: 'main', hold: 20 },
+      ],
+    };
+    getLLMCompletion.mockResolvedValue(JSON.stringify(longClip));
+
+    let thrown: unknown;
+    try {
+      await generateStoryboard(brief({ kind: 'CLIP' }));
+    } catch (err) {
+      thrown = err;
+    }
+
+    expect(thrown).toBeInstanceOf(StoryboardGenerationError);
+    expect((thrown as Error).message).toContain('short-form');
+  });
+
+  test('does not length-cap stills storyboards', async () => {
+    const longTour = {
+      ...VALID_STORYBOARD,
+      scenes: [
+        { id: 'one', goto: '/app', waitFor: 'main', hold: 20 },
+        { id: 'two', goto: '/app/my-classes', waitFor: 'main', hold: 20 },
+      ],
+    };
+    getLLMCompletion.mockResolvedValueOnce(JSON.stringify(longTour));
+
+    const result = await generateStoryboard(brief({ kind: 'STILLS' }));
+
+    expect(result.storyboard.scenes).toHaveLength(2);
+    expect(getLLMCompletion).toHaveBeenCalledTimes(1);
   });
 });

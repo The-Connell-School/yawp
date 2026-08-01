@@ -9,6 +9,7 @@ import {
   type StoryboardScene,
   type StoryboardStep,
 } from '@app/marketing-media';
+import { CURSOR_INIT_SCRIPT, setCursorVisibilityScript } from './cursor';
 import { buildTranscodeArgs, shotFileName } from './jobs';
 import { parseSessionCookies, personaEmail } from './session';
 
@@ -98,6 +99,25 @@ async function login(
   await context.addCookies(cookies);
 }
 
+/**
+ * Clip renders glide the mouse to its target before acting, so the enlarged
+ * cursor overlay travels visibly instead of teleporting. Stills skip this —
+ * nothing is watching between frames.
+ */
+async function glideTo(
+  page: Page,
+  locator: ReturnType<Page['locator']>
+): Promise<void> {
+  await locator
+    .scrollIntoViewIfNeeded({ timeout: STEP_TIMEOUT_MS })
+    .catch(() => {});
+  const box = await locator.boundingBox();
+  if (!box) return;
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2, {
+    steps: 24,
+  });
+}
+
 function locate(
   page: Page,
   step: Extract<StoryboardStep, { action: 'click' }>
@@ -121,6 +141,7 @@ async function runStep(
     context: BrowserContext;
     loginPath: string;
     basicAuth?: { username: string; password: string };
+    cinematic: boolean;
     shoot: (name: string, fullPage: boolean) => Promise<void>;
   }
 ): Promise<void> {
@@ -131,12 +152,18 @@ async function runStep(
         timeout: NAVIGATION_TIMEOUT_MS,
       });
       break;
-    case 'click':
-      await locate(page, step).click({ timeout: STEP_TIMEOUT_MS });
+    case 'click': {
+      const target = locate(page, step);
+      if (ctx.cinematic) await glideTo(page, target);
+      await target.click({ timeout: STEP_TIMEOUT_MS });
       break;
-    case 'hover':
-      await locate(page, step as never).hover({ timeout: STEP_TIMEOUT_MS });
+    }
+    case 'hover': {
+      const target = locate(page, step as never);
+      if (ctx.cinematic) await glideTo(page, target);
+      await target.hover({ timeout: STEP_TIMEOUT_MS });
       break;
+    }
     case 'scrollTo':
       await locate(page, step as never).scrollIntoViewIfNeeded({
         timeout: STEP_TIMEOUT_MS,
@@ -155,6 +182,7 @@ async function runStep(
       break;
     case 'type': {
       const field = locate(page, step as never);
+      if (ctx.cinematic) await glideTo(page, field);
       await field.click({ timeout: STEP_TIMEOUT_MS });
       // Clicking a rich text editor drops the caret where the click landed;
       // demos almost always want to continue the draft, not interrupt it.
@@ -203,12 +231,17 @@ async function runStep(
 async function transcode(
   ffmpegPath: string,
   inputPath: string,
-  outputPath: string
+  outputPath: string,
+  options: { trimStartSeconds?: number } = {}
 ): Promise<void> {
   await new Promise<void>((resolve, reject) => {
-    const child = spawn(ffmpegPath, buildTranscodeArgs(inputPath, outputPath), {
-      stdio: ['ignore', 'ignore', 'pipe'],
-    });
+    const child = spawn(
+      ffmpegPath,
+      buildTranscodeArgs(inputPath, outputPath, options),
+      {
+        stdio: ['ignore', 'ignore', 'pipe'],
+      }
+    );
     let stderr = '';
     child.stderr?.on('data', (chunk) => {
       stderr += String(chunk);
@@ -263,11 +296,19 @@ export async function renderStoryboard(
   const page = await context.newPage();
   const video = page.video();
   const startedAt = Date.now();
+  // Everything recorded before the first scene is ready — login, navigation,
+  // first paint — is dead footage in a short-form clip, so the transcode cuts
+  // it. A small margin keeps the scene's own settle in the take.
+  let firstSceneReadyAt: number | null = null;
 
   const shoot = async (name: string, fullPage: boolean) => {
     shotIndex += 1;
     const filePath = path.join(screenshotDir, shotFileName(shotIndex, name));
+    if (wantsVideo)
+      await page.evaluate(setCursorVisibilityScript(false)).catch(() => {});
     await page.screenshot({ path: filePath, fullPage });
+    if (wantsVideo)
+      await page.evaluate(setCursorVisibilityScript(true)).catch(() => {});
     files.push({
       path: filePath,
       kind: 'IMAGE',
@@ -302,6 +343,7 @@ export async function renderStoryboard(
       }
       if (scene.settle > 0)
         await page.waitForTimeout(Math.round(scene.settle * 1000));
+      if (firstSceneReadyAt === null) firstSceneReadyAt = Date.now();
 
       for (const step of scene.steps) {
         try {
@@ -310,6 +352,7 @@ export async function renderStoryboard(
             context,
             loginPath,
             basicAuth: params.basicAuth,
+            cinematic: wantsVideo,
             shoot,
           });
         } catch (err) {
@@ -339,7 +382,12 @@ export async function renderStoryboard(
   if (wantsVideo && video) {
     const recorded = await video.path();
     const mp4Path = path.join(videoDir, `${storyboard.slug}.mp4`);
-    await transcode(params.ffmpegPath ?? 'ffmpeg', recorded, mp4Path);
+    const trimStartSeconds = firstSceneReadyAt
+      ? Math.max(0, (firstSceneReadyAt - startedAt) / 1000 - 0.4)
+      : 0;
+    await transcode(params.ffmpegPath ?? 'ffmpeg', recorded, mp4Path, {
+      trimStartSeconds,
+    });
     fs.rmSync(recorded, { force: true });
     files.push({
       path: mp4Path,

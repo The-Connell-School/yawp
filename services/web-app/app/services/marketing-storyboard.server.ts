@@ -15,6 +15,13 @@ import { AgentType, getLLMCompletion } from '~/utils/getLLMCompletion';
 
 const STORYBOARD_MODEL = 'claude-sonnet-4-6';
 
+/**
+ * Clips are short-form marketing: one feature, one motion. The prompt asks for
+ * 5-15 seconds; this is the hard ceiling a generated clip storyboard may
+ * estimate before it is sent back for a shorter cut.
+ */
+export const MAX_CLIP_SECONDS = 20;
+
 export class StoryboardGenerationError extends Error {
   constructor(
     message: string,
@@ -43,9 +50,11 @@ function buildSystemPrompt(kind: MarketingJobKind): string {
   const shape =
     kind === 'CLIP'
       ? [
-          'This storyboard becomes a short silent clip, so it must read without narration or audio.',
-          'Keep it to four to six scenes and roughly thirty seconds of screen time.',
-          'Give each scene a hold of at least 1.5 seconds so a viewer can read the screen.',
+          'This storyboard becomes a short-form silent clip: 5 to 15 seconds of screen time showing ONE feature, and nothing else.',
+          'One or two scenes. Start on the screen where the feature lives — no tour, no navigation montage.',
+          'The clip is carried by the cursor: an enlarged cursor is rendered automatically, so write the steps as one legible motion — hover or click the feature, or open the thing and let it appear.',
+          'Give the final state a hold of 1.5 to 2.5 seconds so it can land, and keep every wait short.',
+          `Storyboards estimating over ${MAX_CLIP_SECONDS} seconds are rejected.`,
         ]
       : [
           'This storyboard becomes a set of still screenshots for a site, deck, or one-pager.',
@@ -199,6 +208,19 @@ export async function generateStoryboard(
 
     const result = safeParseStoryboard(candidate);
     if (result.success) {
+      const estimate = estimateRenderSeconds(result.data);
+      if (params.kind === 'CLIP' && estimate > MAX_CLIP_SECONDS) {
+        lastProblem = `the clip would run about ${Math.round(estimate)}s; clips are short-form and must estimate under ${MAX_CLIP_SECONDS}s. Cut scenes, holds, and waits until one feature fits.`;
+        if (attempt === 2) break;
+        messages.push(
+          { role: AgentType.Assistant, content: JSON.stringify(candidate) },
+          {
+            role: AgentType.User,
+            content: `That storyboard is too long: ${lastProblem}\nReturn the shortened storyboard JSON only.`,
+          }
+        );
+        continue;
+      }
       return { storyboard: result.data, model, raw };
     }
 
