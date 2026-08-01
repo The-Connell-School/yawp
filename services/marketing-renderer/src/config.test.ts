@@ -39,6 +39,30 @@ describe('loadConfig', () => {
     ).toThrow(ConfigError);
   });
 
+  test('parses a basic-auth credential for gated targets', () => {
+    const config = loadConfig({
+      ...BASE,
+      MARKETING_RENDERER_BASIC_AUTH: 'preview-admin:s3cret:with:colons',
+    });
+
+    expect(config.basicAuth).toEqual({
+      username: 'preview-admin',
+      password: 's3cret:with:colons',
+    });
+  });
+
+  test('omits the credential when none is configured', () => {
+    expect(loadConfig({ ...BASE }).basicAuth).toBeUndefined();
+  });
+
+  test('rejects a credential that is not user:password', () => {
+    for (const value of ['no-colon', ':leading', 'trailing:']) {
+      expect(() =>
+        loadConfig({ ...BASE, MARKETING_RENDERER_BASIC_AUTH: value })
+      ).toThrow(ConfigError);
+    }
+  });
+
   test('normalizes the target to an origin and fills defaults', () => {
     const config = loadConfig({
       ...BASE,

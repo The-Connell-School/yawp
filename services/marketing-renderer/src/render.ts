@@ -30,6 +30,8 @@ export type RenderParams = {
   loginPath?: string;
   chromiumPath?: string;
   ffmpegPath?: string;
+  /** Credential for a target behind a basic-auth gate, e.g. a preview environment. */
+  basicAuth?: { username: string; password: string };
   /** Scenes whose optional steps failed, reported back for the job record. */
   onWarning?: (message: string) => void;
 };
@@ -58,12 +60,23 @@ async function login(
   context: BrowserContext,
   baseUrl: string,
   loginPath: string,
-  persona: MarketingPersona
+  persona: MarketingPersona,
+  basicAuth?: { username: string; password: string }
 ): Promise<void> {
   const email = personaEmail(persona);
+  const headers: Record<string, string> = {
+    'content-type': 'application/x-www-form-urlencoded',
+  };
+  // The browser context sends its own httpCredentials, but this fetch bypasses
+  // the browser, so a gated target needs the header here too.
+  if (basicAuth) {
+    headers.authorization = `Basic ${Buffer.from(
+      `${basicAuth.username}:${basicAuth.password}`
+    ).toString('base64')}`;
+  }
   const response = await fetch(resolveUrl(baseUrl, loginPath), {
     method: 'POST',
-    headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    headers,
     body: new URLSearchParams({ email }).toString(),
     redirect: 'manual',
   });
@@ -107,6 +120,7 @@ async function runStep(
     baseUrl: string;
     context: BrowserContext;
     loginPath: string;
+    basicAuth?: { username: string; password: string };
     shoot: (name: string, fullPage: boolean) => Promise<void>;
   }
 ): Promise<void> {
@@ -167,7 +181,13 @@ async function runStep(
       await ctx.shoot(step.name, step.fullPage);
       break;
     case 'login':
-      await login(ctx.context, ctx.baseUrl, ctx.loginPath, step.persona);
+      await login(
+        ctx.context,
+        ctx.baseUrl,
+        ctx.loginPath,
+        step.persona,
+        ctx.basicAuth
+      );
       await page.goto(resolveUrl(ctx.baseUrl, step.path), {
         waitUntil: 'networkidle',
         timeout: NAVIGATION_TIMEOUT_MS,
@@ -259,7 +279,13 @@ export async function renderStoryboard(
   };
 
   try {
-    await login(context, baseUrl, loginPath, storyboard.persona);
+    await login(
+      context,
+      baseUrl,
+      loginPath,
+      storyboard.persona,
+      params.basicAuth
+    );
 
     for (const scene of storyboard.scenes as StoryboardScene[]) {
       if (scene.goto) {
@@ -279,7 +305,13 @@ export async function renderStoryboard(
 
       for (const step of scene.steps) {
         try {
-          await runStep(page, step, { baseUrl, context, loginPath, shoot });
+          await runStep(page, step, {
+            baseUrl,
+            context,
+            loginPath,
+            basicAuth: params.basicAuth,
+            shoot,
+          });
         } catch (err) {
           const optional = (step as { optional?: boolean }).optional === true;
           if (!optional) {

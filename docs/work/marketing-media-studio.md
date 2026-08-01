@@ -63,8 +63,12 @@ until the flag is on.
 
 1. Apply the migration (`20260801120000_add_marketing_media_job`).
 2. Stand up a demo environment with seeded personas and local dev auth enabled.
-   A preview environment already does both.
-3. Set the three studio variables on the web app; the tab appears for admins.
+   Seed-mode preview environments already do both, and their compose render sets
+   the three studio variables automatically, pointed at the preview itself — so
+   the Marketing tab appears on every seeded preview with no extra setup.
+   (Production-dump previews never get the variables.)
+3. For any other environment, set the three studio variables by hand; the tab
+   appears for admins.
 4. Build and push the renderer image, then set
    `marketing_renderer_desired_count = 1`. At zero, jobs queue and nothing films
    them, which is the safe default.

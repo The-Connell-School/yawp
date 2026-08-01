@@ -1,8 +1,5 @@
 import { fileURLToPath } from 'node:url';
-import {
-  buildPreviewEnv,
-  requirePreviewBasicAuth,
-} from './preview-env.mjs';
+import { buildPreviewEnv, requirePreviewBasicAuth } from './preview-env.mjs';
 
 function q(value) {
   return JSON.stringify(String(value));
@@ -48,6 +45,18 @@ export function renderPreviewCompose({
     ? `\n      - ${q(`traefik.http.routers.${routerBase}-https.rule=Host(\`${env.hostname}\`)`)}\n      - ${q(`traefik.http.routers.${routerBase}-https.entrypoints=websecure`)}\n      - ${q(`traefik.http.routers.${routerBase}-https.tls.certresolver=letsencrypt`)}\n      - ${q(`traefik.http.routers.${routerBase}-https.service=${routerBase}`)}\n      - ${q(`traefik.http.routers.${routerBase}-https.middlewares=${authMiddleware}`)}`
     : '';
   const cookieSecure = enableTls ? '"true"' : '"false"';
+  // The Marketing Studio films whatever these variables point at and publishes the
+  // result, so they follow the same rule as dev-login: seeded data only. A
+  // production-dump preview never gets them — "confirmed" is a statement that the
+  // target holds no real student work, and a dump is exactly that work. Seed-mode
+  // previews target themselves, which is the one URL this render can vouch for.
+  const marketingStudioEnvironment =
+    env.dataMode === 'seed'
+      ? `
+      MARKETING_STUDIO_ENABLED: "on"
+      MARKETING_RENDER_TARGET_URL: ${q(`${enableTls ? 'https' : 'http'}://${env.hostname}`)}
+      MARKETING_RENDER_TARGET_IS_DEMO: "confirmed"`
+      : '';
   // PREVIEW_ACCESS_GATE below is emitted by the same render that attaches the basicauth
   // middleware to the router, and is only reachable because requirePreviewBasicAuth()
   // already accepted a credential above — so the flag and the gate cannot drift apart.
@@ -72,7 +81,7 @@ export function renderPreviewCompose({
       OPENAI_ORGANIZATION_ID: ${q(optionalEnv('PREVIEW_OPENAI_ORGANIZATION_ID'))}
       OPENAI_API_KEY: ${q(optionalEnv('PREVIEW_OPENAI_API_KEY'))}
       ANTHROPIC_API_KEY: ${q(optionalEnv('PREVIEW_ANTHROPIC_API_KEY'))}
-      AI_MODEL: ${q(optionalEnv('PREVIEW_AI_MODEL', 'claude-sonnet-4-6'))}`;
+      AI_MODEL: ${q(optionalEnv('PREVIEW_AI_MODEL', 'claude-sonnet-4-6'))}${marketingStudioEnvironment}`;
   const fastVolumes = `    volumes:
       - ${q(`${env.sourceDir}:/app`)}
       - ${env.composeProject}-node-modules:/app/node_modules

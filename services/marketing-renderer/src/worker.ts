@@ -53,6 +53,7 @@ export async function processNextJob(params: {
       loginPath: params.config.loginPath,
       chromiumPath: params.config.chromiumPath,
       ffmpegPath: params.config.ffmpegPath,
+      basicAuth: params.config.basicAuth,
     });
 
     if (files.length === 0) {

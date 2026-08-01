@@ -1,7 +1,10 @@
 import { describe, expect, test } from 'bun:test';
 import { renderPreviewCompose } from './render-compose.mjs';
 
-const deprecatedPreviewSlug = ['preview', String.fromCharCode(102, 111, 114, 103, 101)].join('-');
+const deprecatedPreviewSlug = [
+  'preview',
+  String.fromCharCode(102, 111, 114, 103, 101),
+].join('-');
 const previewBasicAuth = 'preview-admin:$apr1$salt$hash';
 
 function renderCompose(overrides = {}) {
@@ -24,14 +27,20 @@ describe('renderPreviewCompose', () => {
     expect(compose).toContain('toolbox:');
     expect(compose).toContain('image: oven/bun:1.3.1');
     expect(compose).toContain('yawp-pr-142-node-modules');
-    expect(compose).not.toContain('rm -rf services/web-app/.react-router services/web-app/.vite');
-    expect(compose).toContain('cd services/web-app && bun run dev -- --host 0.0.0.0 --port 8080');
+    expect(compose).not.toContain(
+      'rm -rf services/web-app/.react-router services/web-app/.vite'
+    );
+    expect(compose).toContain(
+      'cd services/web-app && bun run dev -- --host 0.0.0.0 --port 8080'
+    );
     expect(compose).not.toContain('bun install --ignore-scripts');
     expect(compose).not.toContain('bun prisma generate');
     expect(compose).not.toContain('bun run --cwd services/web-app dev');
     expect(compose).toContain('web:');
     expect(compose).toContain('PORT: "8080"');
-    expect(compose).toContain('DATABASE_URL: "postgresql://postgres:postgres@preview-postgres:5432/yawp_pr_142"');
+    expect(compose).toContain(
+      'DATABASE_URL: "postgresql://postgres:postgres@preview-postgres:5432/yawp_pr_142"'
+    );
     expect(compose).toContain('AWS_EC2_METADATA_DISABLED: "true"');
     expect(compose).toContain('YAWP_ENVIRONMENT: "preview"');
     expect(compose).toContain('AI_MODEL: "claude-sonnet-4-6"');
@@ -65,16 +74,16 @@ describe('renderPreviewCompose', () => {
     const compose = renderCompose();
 
     expect(compose).toContain(
-      'traefik.http.middlewares.yawp-pr-142-auth.basicauth.users=preview-admin:$$apr1$$salt$$hash',
+      'traefik.http.middlewares.yawp-pr-142-auth.basicauth.users=preview-admin:$$apr1$$salt$$hash'
     );
     expect(compose).toContain(
-      'traefik.http.routers.yawp-pr-142-http.middlewares=yawp-pr-142-auth',
+      'traefik.http.routers.yawp-pr-142-http.middlewares=yawp-pr-142-auth'
     );
     expect(compose).toContain(
-      'traefik.http.routers.yawp-pr-142-https.middlewares=yawp-pr-142-auth',
+      'traefik.http.routers.yawp-pr-142-https.middlewares=yawp-pr-142-auth'
     );
     expect(compose).not.toContain(
-      'basicauth.users=preview-admin:$apr1$salt$hash',
+      'basicauth.users=preview-admin:$apr1$salt$hash'
     );
   });
 
@@ -95,6 +104,26 @@ describe('renderPreviewCompose', () => {
     expect(authIndex).toBeGreaterThan(-1);
   });
 
+  // The Marketing Studio films its target and publishes the result, so the same rule
+  // as dev-login applies: seeded data only, and the "confirmed" statement may only be
+  // emitted for a target this render can vouch for — the preview itself.
+  test('seed previews enable the Marketing Studio pointed at themselves', () => {
+    const compose = renderCompose();
+
+    expect(compose).toContain('MARKETING_STUDIO_ENABLED: "on"');
+    expect(compose).toContain(
+      'MARKETING_RENDER_TARGET_URL: "https://pr-142.preview.yawp.school"'
+    );
+    expect(compose).toContain('MARKETING_RENDER_TARGET_IS_DEMO: "confirmed"');
+  });
+
+  test('production-dump previews never claim to be a marketing demo target', () => {
+    const compose = renderCompose({ dataMode: 'production-dump' });
+
+    expect(compose).not.toContain('MARKETING_STUDIO_ENABLED');
+    expect(compose).not.toContain('MARKETING_RENDER_TARGET_IS_DEMO');
+  });
+
   test('requires a basic-auth credential before rendering a preview', () => {
     expect(() =>
       renderPreviewCompose({
@@ -102,7 +131,7 @@ describe('renderPreviewCompose', () => {
         domain: 'preview.yawp.school',
         sourceDir: '/srv/yawp-preview/sources/pr-142',
         basicAuth: '',
-      }),
+      })
     ).toThrow('PREVIEW_BASIC_AUTH is required');
   });
 
