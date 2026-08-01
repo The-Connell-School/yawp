@@ -92,6 +92,13 @@ connect_container_to_preview_network preview-postgres
 # entrypoint, and an entrypoint middleware there could block certificate renewal — a
 # failure that would not surface for weeks, on a host reachable only through CI.
 # HTTP is handled by redirecting to HTTPS instead, which leaves the challenge path alone.
+# removeHeader must stay FALSE here. Previews deployed since the gate existed attach
+# their own per-router basicauth middleware with the same credential; if the entrypoint
+# gate strips the Authorization header after validating it, that second middleware sees
+# an anonymous request and 401s every authenticated call — the healthcheck can never
+# pass and no new preview can deploy. The router-level middleware still sets
+# removeheader=true, so the credential is stripped before reaching the app on every
+# preview that carries those labels; only the legacy label-less previews forward it.
 mkdir -p "$ROOT/traefik/dynamic"
 if [[ -n "${PREVIEW_BASIC_AUTH:-}" ]]; then
   cat > "$ROOT/traefik/dynamic/access-gate.yml" <<YAML
@@ -101,7 +108,7 @@ http:
       basicAuth:
         users:
           - "${PREVIEW_BASIC_AUTH}"
-        removeHeader: true
+        removeHeader: false
 YAML
   gate_entrypoint_args='      - --entrypoints.websecure.http.middlewares=preview-gate@file'
 else
