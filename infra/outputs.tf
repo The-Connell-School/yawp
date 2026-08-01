@@ -57,3 +57,13 @@ output "videos_bucket_name" {
   description = "S3 bucket for videos/files"
   value       = aws_s3_bucket.videos.bucket
 }
+
+output "marketing_renderer_ecr_repository_url" {
+  description = "Push the marketing renderer image here"
+  value       = aws_ecr_repository.marketing_renderer.repository_url
+}
+
+output "marketing_renderer_service_name" {
+  description = "ECS service for the marketing renderer, scaled to zero by default"
+  value       = aws_ecs_service.marketing_renderer.name
+}
