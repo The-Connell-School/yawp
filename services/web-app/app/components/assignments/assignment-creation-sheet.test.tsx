@@ -173,8 +173,12 @@ describe('AssignmentCreationSheetContent', () => {
       expectText('Assignment type');
       expectText('Assign to');
       expectText('Title (optional)');
-      expectText('Prompt Source');
+      expectText('Attachment');
+      expectText(
+        "Any documents uploaded here will be attached to the prompt and available to be viewed by students as they're working on their document."
+      );
       expectText('Prompt');
+      expectText('Extract from PDF');
       expectText('Submit for grade');
       expectText('Point value');
       expectText('Grading assistant strictness');
@@ -208,7 +212,7 @@ describe('AssignmentCreationSheetContent', () => {
     expect(
       buttonByLabel('Grading assistant strictness help').getAttribute('title')
     ).toBe(
-      'Use beginner level for younger students or at the beginning of the year, and increase for older students or upper level classes or to increase standards as the year progresses. You can always change this during the act of grading.'
+      'Strictness only adjusts the overall grade number after Grading Assistant suggestions. Use beginner for a slightly higher grade, advanced for a slightly lower grade, and intermediate for no adjustment.'
     );
   });
 
@@ -279,6 +283,53 @@ describe('AssignmentCreationSheetContent', () => {
     expect(textareaByName('prompt').value).toBe(
       'Extracted prompt from Anthropic PDF processing.'
     );
+  });
+
+  it('exposes an optional PDF attachment input independent from the prompt', () => {
+    root = renderSheet().root;
+
+    const form = document.querySelector('form')!;
+    expect(form.getAttribute('enctype')).toBe('multipart/form-data');
+    const attachment = inputByName('promptAttachment');
+    expect(attachment.getAttribute('type')).toBe('file');
+    expect(attachment.getAttribute('accept')).toContain('application/pdf');
+  });
+
+  it('shows an extract-from-PDF button inside the prompt field', () => {
+    root = renderSheet().root;
+
+    const extractButton = buttonByLabel('Extract prompt from PDF');
+    expect(extractButton.textContent).toContain('Extract from PDF');
+  });
+
+  it('shows a red warning when PDF extraction was truncated at the token limit', () => {
+    root = renderSheet({
+      extractFetcher: idleFetcher({
+        success: true,
+        title: 'Extracted Title',
+        prompt: 'Truncated prompt text',
+        truncated: true,
+      }),
+    }).root;
+
+    expectText('cut off');
+    const warning = Array.from(document.querySelectorAll('p')).find((el) =>
+      el.textContent?.includes('cut off')
+    );
+    expect(warning?.className).toContain('text-destructive');
+  });
+
+  it('does not show a truncation warning for a complete extraction', () => {
+    root = renderSheet({
+      extractFetcher: idleFetcher({
+        success: true,
+        title: 'Extracted Title',
+        prompt: 'Complete prompt text',
+        truncated: false,
+      }),
+    }).root;
+
+    expectNoText('cut off');
   });
 
   it('uses the current class route fields when creating from a class page', () => {

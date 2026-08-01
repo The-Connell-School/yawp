@@ -1,6 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useFetcher } from 'react-router';
-import { SheetDescription, SheetHeader, SheetTitle } from '~/components/ui/sheet';
+import { FileUp, Loader2 } from 'lucide-react';
+import { SheetDescription, SheetFooter, SheetHeader, SheetTitle, SHEET_SCROLL_BODY_CLASS_NAME, SHEET_STICKY_FOOTER_CLASS_NAME } from '~/components/ui/sheet';
+import { cn } from '~/utils/misc';
 import { Button } from '~/components/ui/button';
 import { Checkbox } from '~/components/ui/checkbox';
 import { Label } from '~/components/ui/label';
@@ -18,6 +20,7 @@ export type AssignmentEditRecord = {
   id: string;
   title: string | null;
   prompt: string;
+  promptAttachmentName?: string | null;
   submitForGrade: boolean;
   pointValue: number | null;
   assignmentTypeId: string;
@@ -68,8 +71,11 @@ export function AssignmentEditForm({
   const [pointValue, setPointValue] = useState(
     (editingAssignment.pointValue ?? 100).toString()
   );
-  const [promptMode, setPromptMode] = useState<'manual' | 'pdf'>('manual');
-  const [pdfFile, setPdfFile] = useState<File | null>(null);
+  const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
+  const [attachmentRemoved, setAttachmentRemoved] = useState(false);
+  const [extractionTruncated, setExtractionTruncated] = useState(false);
+  const attachmentInputRef = useRef<HTMLInputElement>(null);
+  const extractFileInputRef = useRef<HTMLInputElement>(null);
 
   const isSaving = fetcher.state !== 'idle';
   const isExtracting = extractFetcher.state !== 'idle';
@@ -106,6 +112,8 @@ export function AssignmentEditForm({
     title !== (editingAssignment.title ?? '') ||
     assignmentTypeId !== editingAssignment.assignmentTypeId ||
     prompt !== editingAssignment.prompt ||
+    Boolean(attachmentFile) ||
+    attachmentRemoved ||
     submitForGrade !== (editingAssignment.submitForGrade ?? true) ||
     pointValue !== (editingAssignment.pointValue ?? 100).toString();
 
@@ -123,6 +131,7 @@ export function AssignmentEditForm({
     if (typeof extractFetcher.data.prompt === 'string') {
       setPrompt(extractFetcher.data.prompt);
     }
+    setExtractionTruncated(Boolean(extractFetcher.data.truncated));
   }, [extractFetcher.data]);
 
   useEffect(() => {
@@ -132,11 +141,11 @@ export function AssignmentEditForm({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fetcher.state, fetcher.data]);
 
-  const handleExtractPdf = () => {
-    if (!pdfFile) return;
+  const handleExtractPdf = (file: File) => {
+    setExtractionTruncated(false);
     const formData = new FormData();
     formData.append('classId', pdfClassId);
-    formData.append('file', pdfFile);
+    formData.append('file', file);
     extractFetcher.submit(formData, {
       method: 'POST',
       action: '/api/domain/assignment-pdf-extract',
@@ -145,15 +154,20 @@ export function AssignmentEditForm({
   };
 
   return (
-    <>
-      <SheetHeader>
-        <SheetTitle>Edit Assignment</SheetTitle>
-        <SheetDescription>
-          Configure the assignment prompt, grading, and due date.
-        </SheetDescription>
-      </SheetHeader>
+    <fetcher.Form
+      method="post"
+      action={action}
+      encType="multipart/form-data"
+      className="flex min-h-0 flex-1 flex-col overflow-hidden"
+    >
+      <div className={cn(SHEET_SCROLL_BODY_CLASS_NAME, 'space-y-4 px-6 pt-6')}>
+        <SheetHeader>
+          <SheetTitle>Edit Assignment</SheetTitle>
+          <SheetDescription>
+            Configure the assignment prompt, grading, and due date.
+          </SheetDescription>
+        </SheetHeader>
 
-      <fetcher.Form method="post" action={action} className="mt-6 space-y-4">
         <input type="hidden" name="intent" value="update-assignment" />
         <input type="hidden" name="assignmentId" value={editingAssignment.id} />
 
@@ -191,66 +205,126 @@ export function AssignmentEditForm({
         </div>
 
         <div className="space-y-2">
-          <Label>Prompt Source</Label>
-          <div className="flex items-center gap-4 text-sm">
-            <label className="flex items-center gap-2">
-              <input
-                type="radio"
-                checked={promptMode === 'manual'}
-                onChange={() => setPromptMode('manual')}
-              />
-              Type manually
-            </label>
-            <label className="flex items-center gap-2">
-              <input
-                type="radio"
-                checked={promptMode === 'pdf'}
-                onChange={() => setPromptMode('pdf')}
-              />
-              Upload PDF
-            </label>
-          </div>
-        </div>
+          <Label htmlFor="assignment-attachment">Attachment (optional)</Label>
+          <p className="text-sm text-muted-foreground">
+            Any documents uploaded here will be attached to the prompt and
+            available to be viewed by students as they&apos;re working on
+            their document.
+          </p>
 
-        {promptMode === 'pdf' ? (
-          <div className="space-y-2 rounded-md border p-3">
-            <Label htmlFor="assignment-pdf">Assignment PDF</Label>
-            <Input
-              id="assignment-pdf"
-              type="file"
-              accept="application/pdf,.pdf"
-              onChange={(event) => {
-                const nextFile = event.target.files?.[0] ?? null;
-                setPdfFile(nextFile);
-              }}
-              disabled={isExtracting || isSaving}
-            />
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={handleExtractPdf}
-              disabled={!pdfFile || isExtracting || isSaving}
-            >
-              {isExtracting ? 'Extracting…' : 'Extract Prompt from PDF'}
-            </Button>
-            {extractError ? (
-              <p className="text-sm text-destructive">{extractError}</p>
-            ) : null}
-          </div>
-        ) : null}
+          {editingAssignment.promptAttachmentName && !attachmentRemoved ? (
+            <div className="flex items-center justify-between gap-3 rounded-md border p-3 text-sm">
+              <span className="truncate">
+                {editingAssignment.promptAttachmentName}
+              </span>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                onClick={() => setAttachmentRemoved(true)}
+                disabled={isSaving}
+              >
+                Remove
+              </Button>
+            </div>
+          ) : (
+            <>
+              <Input
+                id="assignment-attachment"
+                ref={attachmentInputRef}
+                name="promptAttachment"
+                type="file"
+                accept="application/pdf,.pdf"
+                onChange={(event) => {
+                  setAttachmentFile(event.target.files?.[0] ?? null);
+                }}
+                disabled={isSaving}
+              />
+              {attachmentFile ? (
+                <div className="flex items-center justify-between gap-3 rounded-md border p-3 text-sm">
+                  <span className="truncate">{attachmentFile.name}</span>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => {
+                      setAttachmentFile(null);
+                      if (attachmentInputRef.current) {
+                        attachmentInputRef.current.value = '';
+                      }
+                    }}
+                    disabled={isSaving}
+                  >
+                    Remove
+                  </Button>
+                </div>
+              ) : null}
+            </>
+          )}
+          {attachmentRemoved ? (
+            <input type="hidden" name="removePromptAttachment" value="true" />
+          ) : null}
+        </div>
 
         <div className="space-y-2">
           <Label htmlFor="assignment-prompt">Prompt</Label>
-          <Textarea
-            id="assignment-prompt"
-            name="prompt"
-            value={prompt}
-            onChange={(event) => setPrompt(event.target.value)}
-            rows={8}
-            placeholder="Paste or type the full assignment prompt for students..."
-            disabled={isSaving}
-            required
-          />
+          <div className="relative">
+            <Textarea
+              id="assignment-prompt"
+              name="prompt"
+              value={prompt}
+              onChange={(event) => {
+                setPrompt(event.target.value);
+                setExtractionTruncated(false);
+              }}
+              rows={10}
+              className="pb-12"
+              placeholder="Type the full assignment prompt for students, or extract it from a PDF..."
+              disabled={isSaving}
+              required
+            />
+            <input
+              ref={extractFileInputRef}
+              type="file"
+              accept="application/pdf,.pdf"
+              className="hidden"
+              onChange={(event) => {
+                const file = event.target.files?.[0] ?? null;
+                event.target.value = '';
+                if (file) handleExtractPdf(file);
+              }}
+            />
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              aria-label="Extract prompt from PDF"
+              className="absolute bottom-2 right-2 shadow-sm"
+              onClick={() => extractFileInputRef.current?.click()}
+              disabled={isExtracting || isSaving}
+            >
+              {isExtracting ? (
+                <span className="flex items-center gap-2">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  Extracting...
+                </span>
+              ) : (
+                <span className="flex items-center gap-2">
+                  <FileUp className="h-3.5 w-3.5" />
+                  Extract from PDF
+                </span>
+              )}
+            </Button>
+          </div>
+          {extractError ? (
+            <p className="text-sm text-destructive">{extractError}</p>
+          ) : null}
+          {extractionTruncated ? (
+            <p className="text-sm text-destructive">
+              This PDF was too big — the extracted prompt got cut off. Please
+              review it and fill in the rest manually.
+            </p>
+          ) : null}
         </div>
 
         <div className="space-y-3 rounded-md border p-3">
@@ -300,30 +374,36 @@ export function AssignmentEditForm({
         {!submitForGrade ? <input type="hidden" name="pointValue" value="" /> : null}
 
         {formError ? <p className="text-sm text-destructive">{formError}</p> : null}
+      </div>
 
-        <div className="flex items-center justify-end gap-2 pt-4">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={onBack}
-            disabled={isSaving || isExtracting}
-          >
-            Back
-          </Button>
-          <Button
-            type="submit"
-            disabled={
-              isSaving ||
-              isExtracting ||
-              !assignmentTypeId ||
-              !prompt.trim() ||
-              (submitForGrade && !pointValue.trim())
-            }
-          >
-            {isSaving ? 'Saving...' : 'Save Assignment'}
-          </Button>
-        </div>
-      </fetcher.Form>
-    </>
+      <SheetFooter
+        className={cn(
+          SHEET_STICKY_FOOTER_CLASS_NAME,
+          'flex-row justify-end sm:justify-end'
+        )}
+        data-testid="assignment-sheet-footer"
+      >
+        <Button
+          type="button"
+          variant="outline"
+          onClick={onBack}
+          disabled={isSaving || isExtracting}
+        >
+          Back
+        </Button>
+        <Button
+          type="submit"
+          disabled={
+            isSaving ||
+            isExtracting ||
+            !assignmentTypeId ||
+            !prompt.trim() ||
+            (submitForGrade && !pointValue.trim())
+          }
+        >
+          {isSaving ? 'Saving...' : 'Save Assignment'}
+        </Button>
+      </SheetFooter>
+    </fetcher.Form>
   );
 }

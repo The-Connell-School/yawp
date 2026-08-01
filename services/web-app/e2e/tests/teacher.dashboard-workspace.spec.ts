@@ -12,7 +12,10 @@ async function expectStandardizedAssignmentForm(page: Page) {
   ).toBeVisible();
   await expect(dialog.getByText('Assign to', { exact: true })).toBeVisible();
   await expect(
-    dialog.getByText('Prompt Source', { exact: true })
+    dialog.getByText('Attachment (optional)', { exact: true })
+  ).toBeVisible();
+  await expect(
+    dialog.getByRole('button', { name: 'Extract prompt from PDF' })
   ).toBeVisible();
   await expect(dialog.getByLabel(/tutor context/i)).toHaveCount(0);
   await expect(
