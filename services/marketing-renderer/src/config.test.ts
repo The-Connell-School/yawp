@@ -63,6 +63,32 @@ describe('loadConfig', () => {
     }
   });
 
+  test('disk storage requires a media dir and drops the bucket requirement', () => {
+    expect(() =>
+      loadConfig({
+        ...BASE,
+        AWS_S3_BUCKET_FOR_VIDEOS: undefined,
+        MARKETING_MEDIA_STORAGE: 'disk',
+      })
+    ).toThrow(/MARKETING_MEDIA_DIR/);
+
+    const config = loadConfig({
+      ...BASE,
+      AWS_S3_BUCKET_FOR_VIDEOS: undefined,
+      MARKETING_MEDIA_STORAGE: 'disk',
+      MARKETING_MEDIA_DIR: '/media',
+    });
+    expect(config.storage).toBe('disk');
+    expect(config.mediaDir).toBe('/media');
+  });
+
+  test('defaults to s3 storage, which still demands a bucket', () => {
+    expect(loadConfig({ ...BASE }).storage).toBe('s3');
+    expect(() =>
+      loadConfig({ ...BASE, AWS_S3_BUCKET_FOR_VIDEOS: undefined })
+    ).toThrow(/AWS_S3_BUCKET_FOR_VIDEOS/);
+  });
+
   test('normalizes the target to an origin and fills defaults', () => {
     const config = loadConfig({
       ...BASE,

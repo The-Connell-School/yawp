@@ -15,7 +15,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
 import { requireAdmin, requireMutableRequest } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { getSignedGetUrl } from '~/services/s3.server';
-import { requireMarketingStudioEnabled } from '~/utils/marketing-studio.server';
+import {
+  getMarketingMediaDir,
+  requireMarketingStudioEnabled,
+} from '~/utils/marketing-studio.server';
 import {
   TERMINAL_JOB_STATUSES,
   estimateRenderSeconds,
@@ -66,11 +69,17 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const outputs = (
     Array.isArray(job.outputs) ? job.outputs : []
   ) as MarketingOutput[];
-  // Signed on read, never public: marketing media is unreleased product work.
+  // Never public either way: disk-stored media is served by the admin-gated
+  // file route below; S3 media gets a short-lived signed URL.
+  const mediaDir = getMarketingMediaDir();
   const signedOutputs = await Promise.all(
     outputs.map(async (output) => ({
       ...output,
-      url: await getSignedGetUrl(output.key, 60 * 60),
+      url: mediaDir
+        ? `/app/admin/marketing-media/${job.id}/file/${encodeURIComponent(
+            output.key.split('/').at(-1) ?? ''
+          )}`
+        : await getSignedGetUrl(output.key, 60 * 60),
     }))
   );
 

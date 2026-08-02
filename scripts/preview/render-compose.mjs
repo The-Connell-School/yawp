@@ -50,12 +50,24 @@ export function renderPreviewCompose({
   // production-dump preview never gets them — "confirmed" is a statement that the
   // target holds no real student work, and a dump is exactly that work. Seed-mode
   // previews target themselves, which is the one URL this render can vouch for.
+  const rendererEnabled = env.dataMode === 'seed' && env.runtime === 'fast';
+  const mediaVolumeMount = rendererEnabled
+    ? `\n      - ${env.composeProject}-media:/media`
+    : '';
+  const mediaVolumeDefinition = rendererEnabled
+    ? `\n  ${env.composeProject}-media:`
+    : '';
   const marketingStudioEnvironment =
     env.dataMode === 'seed'
       ? `
       MARKETING_STUDIO_ENABLED: "on"
       MARKETING_RENDER_TARGET_URL: ${q(`${enableTls ? 'https' : 'http'}://${env.hostname}`)}
-      MARKETING_RENDER_TARGET_IS_DEMO: "confirmed"`
+      MARKETING_RENDER_TARGET_IS_DEMO: "confirmed"${
+        rendererEnabled
+          ? `
+      MARKETING_MEDIA_DIR: "/media"`
+          : ''
+      }`
       : '';
   // PREVIEW_ACCESS_GATE below is emitted by the same render that attaches the basicauth
   // middleware to the router, and is only reachable because requirePreviewBasicAuth()
@@ -117,7 +129,7 @@ ${commonEnvironment}
     image: oven/bun:1.3.1
     working_dir: /app
     command: bash -lc "cd services/web-app && bun run dev -- --host 0.0.0.0 --port 8080"
-${fastVolumes}
+${fastVolumes}${mediaVolumeMount}
     environment:
 ${commonEnvironment}
 `
@@ -132,10 +144,43 @@ ${commonEnvironment}
 ${commonEnvironment}
 `;
 
+  // Renders the preview's own marketing jobs. Seed-mode fast previews only:
+  // the service mounts the same source volumes as the web container and stores
+  // outputs on a volume the app serves at /media. The worker films the web
+  // container over the internal network, so the public gate never applies.
+  const rendererService = rendererEnabled
+    ? `  renderer:
+    image: mcr.microsoft.com/playwright:v1.49.1-jammy
+    working_dir: /app
+    restart: unless-stopped
+${fastVolumes}
+      - ${env.composeProject}-media:/media
+    environment:
+      DATABASE_URL: ${q(env.databaseUrl)}
+      DATABASE_SSL_REJECT_UNAUTHORIZED: "false"
+      MARKETING_RENDER_TARGET_URL: "http://web:8080"
+      MARKETING_RENDER_TARGET_IS_DEMO: "confirmed"
+      MARKETING_MEDIA_STORAGE: "disk"
+      MARKETING_MEDIA_DIR: "/media"
+      FFMPEG_PATH: "ffmpeg"
+    command: >
+      bash -lc "
+      export PATH=\$$HOME/.bun/bin:\$$PATH;
+      command -v bun >/dev/null || (curl -fsSL https://bun.sh/install | bash);
+      command -v ffmpeg >/dev/null || (apt-get update -qq && apt-get install -y -qq ffmpeg);
+      export MARKETING_RENDERER_CHROMIUM_PATH=\$$(ls -d /ms-playwright/chromium-*/chrome-linux/chrome | head -1);
+      until curl -fsS -o /dev/null http://web:8080/api/healthcheck; do echo 'renderer: waiting for web'; sleep 3; done;
+      bun run --cwd services/marketing-renderer start"
+    networks:
+      - default
+      - preview
+`
+    : '';
+
   return `name: ${env.composeProject}
 services:
 ${toolboxService}
-${webService}    labels:
+${rendererService}${webService}    labels:
       - "traefik.enable=true"
       - "traefik.docker.network=preview"
       - ${q(`traefik.http.routers.${routerBase}-http.rule=Host(\`${env.hostname}\`)`)}
@@ -151,7 +196,7 @@ ${webService}    labels:
 
 volumes:
   ${env.composeProject}-node-modules:
-  ${env.composeProject}-web-node-modules:
+  ${env.composeProject}-web-node-modules:${mediaVolumeDefinition}
 
 networks:
   preview:

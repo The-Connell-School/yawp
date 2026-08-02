@@ -12,6 +12,9 @@ export type RendererConfig = {
   targetUrl: string;
   bucket: string;
   region: string;
+  /** 's3' uploads to the videos bucket; 'disk' copies onto a volume the web app serves. */
+  storage: 's3' | 'disk';
+  mediaDir: string | null;
   workerId: string;
   pollIntervalMs: number;
   chromiumPath?: string;
@@ -71,11 +74,23 @@ export function loadConfig(
     };
   }
 
+  const storage =
+    env.MARKETING_MEDIA_STORAGE?.trim() === 'disk' ? 'disk' : 's3';
+  const mediaDir = env.MARKETING_MEDIA_DIR?.trim() || null;
+  if (storage === 'disk' && !mediaDir) {
+    throw new ConfigError(
+      'MARKETING_MEDIA_DIR is required when MARKETING_MEDIA_STORAGE=disk'
+    );
+  }
+
   return {
     databaseUrl: requireEnv(env, 'DATABASE_URL'),
     targetUrl: target.origin,
-    bucket: requireEnv(env, 'AWS_S3_BUCKET_FOR_VIDEOS'),
+    // Disk mode has no bucket to demand; s3 mode fails without one.
+    bucket: storage === 's3' ? requireEnv(env, 'AWS_S3_BUCKET_FOR_VIDEOS') : '',
     region: env.AWS_S3_REGION_FOR_VIDEOS?.trim() || 'us-east-1',
+    storage,
+    mediaDir,
     workerId:
       env.MARKETING_RENDERER_WORKER_ID?.trim() ||
       `${env.HOSTNAME || 'renderer'}-${process.pid}`,

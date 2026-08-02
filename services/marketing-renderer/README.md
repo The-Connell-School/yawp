@@ -53,6 +53,8 @@ bun run --cwd services/marketing-renderer render-once  # drain one job and exit
 | `MARKETING_RENDERER_LOGIN_PATH` | Dev login endpoint. Defaults to `/auth/dev-login`. |
 | `FFMPEG_PATH` | ffmpeg binary. Defaults to `ffmpeg` on PATH. |
 | `MARKETING_RENDERER_BASIC_AUTH` | `user:password` for a target behind a basic-auth gate, e.g. a preview environment. |
+| `MARKETING_MEDIA_STORAGE` | `s3` (default) or `disk`. Disk mode copies outputs to `MARKETING_MEDIA_DIR`, a volume the web app serves itself — used by preview environments, which have no AWS credentials. |
+| `MARKETING_MEDIA_DIR` | Output directory for disk mode; the web app must mount the same path. |
 
 ## Tests
 

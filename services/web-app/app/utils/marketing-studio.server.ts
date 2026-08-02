@@ -40,6 +40,15 @@ export function isMarketingStudioEnabled(): boolean {
   );
 }
 
+/**
+ * Directory holding disk-stored render outputs, for environments without AWS
+ * credentials (previews). When set, the app serves media from this directory
+ * itself instead of signing S3 URLs.
+ */
+export function getMarketingMediaDir(): string | null {
+  return process.env.MARKETING_MEDIA_DIR?.trim() || null;
+}
+
 /** 404 rather than 403: a disabled surface should not advertise that it exists. */
 export function requireMarketingStudioEnabled(): void {
   if (!isMarketingStudioEnabled()) {

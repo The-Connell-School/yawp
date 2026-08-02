@@ -117,6 +117,30 @@ describe('renderPreviewCompose', () => {
     expect(compose).toContain('MARKETING_RENDER_TARGET_IS_DEMO: "confirmed"');
   });
 
+  // The renderer films the web container over the internal network and stores
+  // outputs on a volume the app serves, so seeded previews produce their own
+  // marketing media with no AWS anywhere.
+  test('seed previews run a renderer wired to internal web and shared media volume', () => {
+    const compose = renderCompose();
+
+    expect(compose).toContain('renderer:');
+    expect(compose).toContain('MARKETING_RENDER_TARGET_URL: "http://web:8080"');
+    expect(compose).toContain('MARKETING_MEDIA_STORAGE: "disk"');
+    expect(compose).toContain('MARKETING_MEDIA_DIR: "/media"');
+    expect(compose).toContain('yawp-pr-142-media:/media');
+    expect(compose).toContain('marketing-renderer start');
+  });
+
+  test('production-runtime and production-dump previews run no renderer', () => {
+    expect(renderCompose({ runtime: 'production' })).not.toContain('renderer:');
+    expect(renderCompose({ dataMode: 'production-dump' })).not.toContain(
+      'renderer:'
+    );
+    expect(renderCompose({ dataMode: 'production-dump' })).not.toContain(
+      '-media'
+    );
+  });
+
   test('production-dump previews never claim to be a marketing demo target', () => {
     const compose = renderCompose({ dataMode: 'production-dump' });
 

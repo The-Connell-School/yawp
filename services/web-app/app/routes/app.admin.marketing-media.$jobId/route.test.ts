@@ -15,8 +15,11 @@ mock.module('~/utils/auth.server', () => ({
 }));
 mock.module('~/utils/db.server', () => ({ prisma }));
 mock.module('~/services/s3.server', () => ({ getSignedGetUrl }));
+const getMarketingMediaDir = mock();
+
 mock.module('~/utils/marketing-studio.server', () => ({
   requireMarketingStudioEnabled,
+  getMarketingMediaDir,
   isMarketingStudioEnabled: () => true,
   getMarketingRenderTarget: () => 'https://demo.yawp.test',
 }));
@@ -85,6 +88,8 @@ describe('marketing media job page', () => {
     requireAdmin.mockResolvedValue({ id: 'admin-1' });
     requireMutableRequest.mockResolvedValue(undefined);
     requireMarketingStudioEnabled.mockReturnValue(undefined);
+    getMarketingMediaDir.mockReset();
+    getMarketingMediaDir.mockReturnValue(null);
     prisma.marketingMediaJob.update.mockResolvedValue({ id: 'job-1' });
     getSignedGetUrl.mockImplementation(
       async (key: string) => `https://signed/${key}`
@@ -113,6 +118,31 @@ describe('marketing media job page', () => {
       'https://signed/marketing-media/job-1/01-dashboard.png'
     );
     expect(getSignedGetUrl).toHaveBeenCalledTimes(1);
+  });
+
+  test('serves disk-stored outputs through the admin file route instead of S3', async () => {
+    getMarketingMediaDir.mockReturnValue('/media');
+    prisma.marketingMediaJob.findUnique.mockResolvedValue(
+      job({
+        status: 'SUCCEEDED',
+        outputs: [
+          {
+            kind: 'IMAGE',
+            key: 'marketing-media/job-1/01-dashboard.png',
+            contentType: 'image/png',
+            bytes: 1234,
+            label: 'dashboard',
+          },
+        ],
+      })
+    );
+
+    const result = await loader(args(new Request('http://localhost/x')));
+
+    expect(result.data.outputs[0].url).toBe(
+      '/app/admin/marketing-media/job-1/file/01-dashboard.png'
+    );
+    expect(getSignedGetUrl).not.toHaveBeenCalled();
   });
 
   test('reports the render estimate from the stored storyboard', async () => {

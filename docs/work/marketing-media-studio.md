@@ -63,10 +63,12 @@ until the flag is on.
 
 1. Apply the migration (`20260801120000_add_marketing_media_job`).
 2. Stand up a demo environment with seeded personas and local dev auth enabled.
-   Seed-mode preview environments already do both, and their compose render sets
-   the three studio variables automatically, pointed at the preview itself — so
-   the Marketing tab appears on every seeded preview with no extra setup.
-   (Production-dump previews never get the variables.)
+   Seed-mode preview environments already do both: their compose render sets
+   the three studio variables automatically, runs a renderer container that
+   films the web container over the internal network, and stores outputs on a
+   shared volume the app serves itself (`MARKETING_MEDIA_DIR`) — no AWS
+   anywhere. Queued jobs on a seeded preview render on their own.
+   (Production-dump previews get none of this.)
 3. For any other environment, set the three studio variables by hand; the tab
    appears for admins.
 4. Build and push the renderer image, then set

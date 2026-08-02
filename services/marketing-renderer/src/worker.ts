@@ -5,6 +5,7 @@ import { loadConfig, type RendererConfig } from './config';
 import { claimNextJob, markFailed, markSucceeded, type JobStore } from './jobs';
 import { renderStoryboard } from './render';
 import { createS3Client, uploadRenderedFiles } from './s3';
+import { storeRenderedFilesOnDisk } from './storage';
 
 function log(message: string, extra: Record<string, unknown> = {}) {
   // eslint-disable-next-line no-console
@@ -60,12 +61,19 @@ export async function processNextJob(params: {
       throw new Error('The render produced no media.');
     }
 
-    const outputs = await uploadRenderedFiles({
-      s3: params.s3,
-      bucket: params.config.bucket,
-      jobId: job.id,
-      files,
-    });
+    const outputs =
+      params.config.storage === 'disk'
+        ? storeRenderedFilesOnDisk({
+            mediaDir: params.config.mediaDir as string,
+            jobId: job.id,
+            files,
+          })
+        : await uploadRenderedFiles({
+            s3: params.s3,
+            bucket: params.config.bucket,
+            jobId: job.id,
+            files,
+          });
 
     await markSucceeded({ prisma: params.prisma, jobId: job.id, outputs });
     log('rendered', {
@@ -96,9 +104,24 @@ async function main() {
   const once = process.argv.includes('--once');
   const config = loadConfig();
   // Loaded here rather than at module scope so the job orchestration above can
-  // be tested without the generated Prisma client.
-  const { PrismaClient } = await import('@app/prisma');
-  const prisma = new PrismaClient() as unknown as JobStore & {
+  // be tested without the generated Prisma client. require() rather than
+  // import: the package's exports map only resolves correctly for CJS.
+  const { createRequire } = await import('node:module');
+  const requireCjs = createRequire(import.meta.url);
+  const { PrismaClient } = requireCjs('@app/prisma');
+  const { PrismaPg } = requireCjs('@prisma/adapter-pg');
+  // Prisma 7 has no built-in engine; it drives pg through the adapter, the
+  // same way the web app's db.server.ts constructs its client.
+  const prisma = new PrismaClient({
+    adapter: new PrismaPg({
+      connectionString: config.databaseUrl,
+      connectionTimeoutMillis: 15_000,
+      max: 2,
+      ...(process.env.DATABASE_SSL_REJECT_UNAUTHORIZED === 'false'
+        ? { ssl: { rejectUnauthorized: false } }
+        : {}),
+    }),
+  }) as unknown as JobStore & {
     $disconnect: () => Promise<void>;
   };
   const s3 = createS3Client(config.region);
