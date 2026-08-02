@@ -284,6 +284,12 @@ remove_legacy_project_postgres() {
 
 refresh_web_container_if_needed() {
   "${compose[@]}" up -d --force-recreate web
+  # Also start every other service the compose defines — the marketing
+  # renderer foremost. Without this, new services exist in the compose file
+  # but never run: `up web` starts exactly one container. No --force-recreate
+  # here, so they restart only when their own configuration changed, which
+  # preserves the renderer's bootstrapped toolchain across web-only deploys.
+  "${compose[@]}" up -d
   remove_legacy_project_postgres
 }
 
