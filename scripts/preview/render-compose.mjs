@@ -146,19 +146,29 @@ ${commonEnvironment}
 
   // Renders the preview's own marketing jobs. Seed-mode fast previews only:
   // the service mounts the same source volumes as the web container and stores
-  // outputs on a volume the app serves at /media. The worker films the web
-  // container over the internal network, so the public gate never applies.
+  // outputs on a volume the app serves at /media. The worker films the public
+  // https hostname — newer chromium refuses the session cookie over the plain
+  // internal http route, and every page it filmed there was the logged-out
+  // landing page. host-gateway points the hostname at this host's Traefik, and
+  // the worker carries the shared gate credential the way a reviewer's browser
+  // would.
+  const rendererBasicAuth = `${previewBasicAuth.split(':')[0]}:${optionalEnv(
+    'PREVIEW_BASIC_AUTH_PASSWORD'
+  )}`;
   const rendererService = rendererEnabled
     ? `  renderer:
     image: mcr.microsoft.com/playwright:v1.60.0-jammy
     working_dir: /app
     restart: unless-stopped
+    extra_hosts:
+      - ${q(`${env.hostname}:host-gateway`)}
 ${fastVolumes}
       - ${env.composeProject}-media:/media
     environment:
       DATABASE_URL: ${q(env.databaseUrl)}
       DATABASE_SSL_REJECT_UNAUTHORIZED: "false"
-      MARKETING_RENDER_TARGET_URL: "http://web:8080"
+      MARKETING_RENDER_TARGET_URL: ${q(`${enableTls ? 'https' : 'http'}://${env.hostname}`)}
+      MARKETING_RENDERER_BASIC_AUTH: ${q(escapeComposeInterpolation(rendererBasicAuth))}
       MARKETING_RENDER_TARGET_IS_DEMO: "confirmed"
       MARKETING_MEDIA_STORAGE: "disk"
       MARKETING_MEDIA_DIR: "/media"

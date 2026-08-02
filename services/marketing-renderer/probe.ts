@@ -14,9 +14,27 @@ import { parseSessionCookies } from './src/session';
 const base = process.env.MARKETING_RENDER_TARGET_URL;
 if (!base) throw new Error('MARKETING_RENDER_TARGET_URL is not set');
 
+// Same credential handling as the worker: a gated preview target needs the
+// shared basic-auth credential on the login fetch and in the browser.
+const rawBasicAuth = process.env.MARKETING_RENDERER_BASIC_AUTH?.trim();
+const basicAuth = rawBasicAuth
+  ? {
+      username: rawBasicAuth.slice(0, rawBasicAuth.indexOf(':')),
+      password: rawBasicAuth.slice(rawBasicAuth.indexOf(':') + 1),
+    }
+  : undefined;
+
+const loginHeaders: Record<string, string> = {
+  'content-type': 'application/x-www-form-urlencoded',
+};
+if (basicAuth) {
+  loginHeaders.authorization = `Basic ${Buffer.from(
+    `${basicAuth.username}:${basicAuth.password}`
+  ).toString('base64')}`;
+}
 const login = await fetch(new URL('/auth/dev-login', base), {
   method: 'POST',
-  headers: { 'content-type': 'application/x-www-form-urlencoded' },
+  headers: loginHeaders,
   body: new URLSearchParams({ email: 'dev.teacher@yawp.local' }).toString(),
   redirect: 'manual',
 });
@@ -30,7 +48,10 @@ console.log(
 const chromiumPath =
   process.env.MARKETING_RENDERER_CHROMIUM_PATH?.trim() || undefined;
 const browser = await chromium.launch({ headless: true, executablePath: chromiumPath });
-const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+const context = await browser.newContext({
+  viewport: { width: 1280, height: 800 },
+  httpCredentials: basicAuth,
+});
 await context.addCookies(parseSessionCookies(setCookies, base));
 const page = await context.newPage();
 

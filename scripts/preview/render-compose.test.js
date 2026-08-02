@@ -120,18 +120,40 @@ describe('renderPreviewCompose', () => {
     expect(compose).toContain('MARKETING_RENDER_TARGET_IS_DEMO: "confirmed"');
   });
 
-  // The renderer films the web container over the internal network and stores
-  // outputs on a volume the app serves, so seeded previews produce their own
-  // marketing media with no AWS anywhere.
-  test('seed previews run a renderer wired to internal web and shared media volume', () => {
-    const compose = renderCompose();
+  // The renderer stores outputs on a volume the app serves, so seeded previews
+  // produce their own marketing media with no AWS anywhere. It films the
+  // public https hostname, not the internal http route: newer chromium
+  // refuses the Secure session cookie over plain http to a non-localhost
+  // host, and every page filmed that way was the logged-out landing page.
+  // host-gateway makes the hostname resolve to this host's Traefik, and the
+  // worker carries the shared gate credential like any reviewer's browser.
+  test('seed previews run a renderer filming the gated https preview itself', () => {
+    const previous = process.env.PREVIEW_BASIC_AUTH_PASSWORD;
+    process.env.PREVIEW_BASIC_AUTH_PASSWORD = 'sw0rdf$sh';
+    try {
+      const compose = renderCompose();
 
-    expect(compose).toContain('renderer:');
-    expect(compose).toContain('MARKETING_RENDER_TARGET_URL: "http://web:8080"');
-    expect(compose).toContain('MARKETING_MEDIA_STORAGE: "disk"');
-    expect(compose).toContain('MARKETING_MEDIA_DIR: "/media"');
-    expect(compose).toContain('yawp-pr-142-media:/media');
-    expect(compose).toContain('marketing-renderer start');
+      expect(compose).toContain('renderer:');
+      expect(compose).toContain(
+        'MARKETING_RENDER_TARGET_URL: "https://pr-142.preview.yawp.school"'
+      );
+      expect(compose).toContain(
+        '"pr-142.preview.yawp.school:host-gateway"'
+      );
+      expect(compose).toContain(
+        'MARKETING_RENDERER_BASIC_AUTH: "preview-admin:sw0rdf$$sh"'
+      );
+      expect(compose).toContain('MARKETING_MEDIA_STORAGE: "disk"');
+      expect(compose).toContain('MARKETING_MEDIA_DIR: "/media"');
+      expect(compose).toContain('yawp-pr-142-media:/media');
+      expect(compose).toContain('marketing-renderer start');
+    } finally {
+      if (previous === undefined) {
+        delete process.env.PREVIEW_BASIC_AUTH_PASSWORD;
+      } else {
+        process.env.PREVIEW_BASIC_AUTH_PASSWORD = previous;
+      }
+    }
     // Playwright 1.60 images ship the browser as chrome-linux64 where 1.49
     // shipped chrome-linux; the narrow glob silently matched nothing and the
     // renderer fell back to the headless shell, which segfaulted on the host.
