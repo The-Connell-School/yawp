@@ -10,6 +10,7 @@ import {
   type StoryboardStep,
 } from '@app/marketing-media';
 import { CURSOR_INIT_SCRIPT, setCursorVisibilityScript } from './cursor';
+import { frameClip, frameGeometry } from './frame';
 import { buildTranscodeArgs, shotFileName } from './jobs';
 import { parseSessionCookies, personaEmail } from './session';
 
@@ -33,6 +34,8 @@ export type RenderParams = {
   ffmpegPath?: string;
   /** Credential for a target behind a basic-auth gate, e.g. a preview environment. */
   basicAuth?: { username: string; password: string };
+  /** Clip presentation. 'window' (default) re-shoots the capture inside a gradient + browser-chrome scene. */
+  frameStyle?: 'window' | 'none';
   /** Scenes whose optional steps failed, reported back for the job record. */
   onWarning?: (message: string) => void;
 };
@@ -104,18 +107,34 @@ async function login(
  * cursor overlay travels visibly instead of teleporting. Stills skip this —
  * nothing is watching between frames.
  */
+const GLIDE_STEPS = 16;
+const GLIDE_STEP_MS = 28;
+
 async function glideTo(
   page: Page,
-  locator: ReturnType<Page['locator']>
-): Promise<void> {
+  locator: ReturnType<Page['locator']>,
+  from: { x: number; y: number }
+): Promise<{ x: number; y: number }> {
   await locator
     .scrollIntoViewIfNeeded({ timeout: STEP_TIMEOUT_MS })
     .catch(() => {});
   const box = await locator.boundingBox();
-  if (!box) return;
-  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2, {
-    steps: 24,
-  });
+  if (!box) return from;
+  const to = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+  // Timed steps rather than mouse.move's own steps: those dispatch in one
+  // burst, which reads as teleporting on camera. ~450ms of travel reads as a
+  // hand moving a mouse.
+  for (let i = 1; i <= GLIDE_STEPS; i += 1) {
+    const t = i / GLIDE_STEPS;
+    // ease-in-out
+    const eased = t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2;
+    await page.mouse.move(
+      from.x + (to.x - from.x) * eased,
+      from.y + (to.y - from.y) * eased
+    );
+    await page.waitForTimeout(GLIDE_STEP_MS);
+  }
+  return to;
 }
 
 function locate(
@@ -142,6 +161,7 @@ async function runStep(
     loginPath: string;
     basicAuth?: { username: string; password: string };
     cinematic: boolean;
+    mouse: { x: number; y: number };
     shoot: (name: string, fullPage: boolean) => Promise<void>;
   }
 ): Promise<void> {
@@ -154,13 +174,15 @@ async function runStep(
       break;
     case 'click': {
       const target = locate(page, step);
-      if (ctx.cinematic) await glideTo(page, target);
+      if (ctx.cinematic)
+        Object.assign(ctx.mouse, await glideTo(page, target, ctx.mouse));
       await target.click({ timeout: STEP_TIMEOUT_MS });
       break;
     }
     case 'hover': {
       const target = locate(page, step as never);
-      if (ctx.cinematic) await glideTo(page, target);
+      if (ctx.cinematic)
+        Object.assign(ctx.mouse, await glideTo(page, target, ctx.mouse));
       await target.hover({ timeout: STEP_TIMEOUT_MS });
       break;
     }
@@ -182,7 +204,8 @@ async function runStep(
       break;
     case 'type': {
       const field = locate(page, step as never);
-      if (ctx.cinematic) await glideTo(page, field);
+      if (ctx.cinematic)
+        Object.assign(ctx.mouse, await glideTo(page, field, ctx.mouse));
       await field.click({ timeout: STEP_TIMEOUT_MS });
       // Clicking a rich text editor drops the caret where the click landed;
       // demos almost always want to continue the draft, not interrupt it.
@@ -300,6 +323,12 @@ export async function renderStoryboard(
   // first paint — is dead footage in a short-form clip, so the transcode cuts
   // it. A small margin keeps the scene's own settle in the take.
   let firstSceneReadyAt: number | null = null;
+  // Tracked pointer position so glides start where the last one ended rather
+  // than teleporting from the origin.
+  const mouse = {
+    x: storyboard.viewport.width / 2,
+    y: storyboard.viewport.height / 2,
+  };
 
   const shoot = async (name: string, fullPage: boolean) => {
     shotIndex += 1;
@@ -353,6 +382,7 @@ export async function renderStoryboard(
             loginPath,
             basicAuth: params.basicAuth,
             cinematic: wantsVideo,
+            mouse,
             shoot,
           });
         } catch (err) {
@@ -382,20 +412,53 @@ export async function renderStoryboard(
   if (wantsVideo && video) {
     const recorded = await video.path();
     const mp4Path = path.join(videoDir, `${storyboard.slug}.mp4`);
-    const trimStartSeconds = firstSceneReadyAt
+    const rawTrimSeconds = firstSceneReadyAt
       ? Math.max(0, (firstSceneReadyAt - startedAt) / 1000 - 0.4)
       : 0;
-    await transcode(params.ffmpegPath ?? 'ffmpeg', recorded, mp4Path, {
-      trimStartSeconds,
-    });
+
+    const frameStyle = params.frameStyle ?? 'window';
+    let outputWidth = storyboard.viewport.width;
+    let outputHeight = storyboard.viewport.height;
+
+    if (frameStyle === 'window') {
+      // The framed recording plays the raw capture from its very start, so the
+      // raw lead-in and the framing page's own setup are consecutive dead
+      // footage; one trim removes both.
+      const framed = await frameClip({
+        rawVideoPath: recorded,
+        outDir,
+        width: storyboard.viewport.width,
+        height: storyboard.viewport.height,
+        chromiumPath: params.chromiumPath,
+      });
+      await transcode(
+        params.ffmpegPath ?? 'ffmpeg',
+        framed.videoPath,
+        mp4Path,
+        {
+          trimStartSeconds: framed.leadInSeconds + rawTrimSeconds,
+        }
+      );
+      fs.rmSync(framed.videoPath, { force: true });
+      const geometry = frameGeometry(
+        storyboard.viewport.width,
+        storyboard.viewport.height
+      );
+      outputWidth = geometry.canvasWidth;
+      outputHeight = geometry.canvasHeight;
+    } else {
+      await transcode(params.ffmpegPath ?? 'ffmpeg', recorded, mp4Path, {
+        trimStartSeconds: rawTrimSeconds,
+      });
+    }
     fs.rmSync(recorded, { force: true });
     files.push({
       path: mp4Path,
       kind: 'VIDEO',
       label: storyboard.title,
       contentType: 'video/mp4',
-      width: storyboard.viewport.width,
-      height: storyboard.viewport.height,
+      width: outputWidth,
+      height: outputHeight,
       durationMs: Date.now() - startedAt,
     });
   }

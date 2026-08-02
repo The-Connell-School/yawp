@@ -45,11 +45,26 @@ export const CURSOR_INIT_SCRIPT = `(() => {
     return cursor;
   }
 
+  let lastX = null;
+  let lastY = null;
+
   function moveTo(x, y) {
+    lastX = x;
+    lastY = y;
     const cursor = ensureCursor();
     cursor.style.display = 'block';
     cursor.style.transform = 'translate(' + (x - 4) + 'px,' + (y - 3) + 'px)';
   }
+
+  // Full-document hydration reconciles <body> and removes nodes it does not
+  // know about — which silently deletes the cursor right after a navigation.
+  // Nothing re-adds it until the next mouse event, and typing produces none,
+  // so a keep-alive puts it back at its last position instead.
+  setInterval(() => {
+    if (lastX === null) return;
+    const cursor = document.getElementById(CURSOR_ID);
+    if (!cursor || !cursor.isConnected) moveTo(lastX, lastY);
+  }, 150);
 
   function pulse(x, y) {
     const ring = document.createElement('div');
