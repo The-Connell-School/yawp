@@ -6,8 +6,9 @@ const requireMarketingStudioEnabled = mock();
 const getSignedGetUrl = mock();
 
 const prisma = {
-  marketingMediaJob: { findUnique: mock(), update: mock() },
+  marketingMediaJob: { findUnique: mock(), update: mock(), create: mock() },
 };
+const reviseStoryboard = mock();
 
 mock.module('~/utils/auth.server', () => ({
   requireAdmin,
@@ -15,6 +16,13 @@ mock.module('~/utils/auth.server', () => ({
 }));
 mock.module('~/utils/db.server', () => ({ prisma }));
 mock.module('~/services/s3.server', () => ({ getSignedGetUrl }));
+// Exports the union of what any route imports from this module — module
+// mocks are process-global in bun and an incomplete one poisons other suites.
+mock.module('~/services/marketing-storyboard.server', () => ({
+  reviseStoryboard,
+  generateStoryboard: mock(),
+  StoryboardGenerationError: class StoryboardGenerationError extends Error {},
+}));
 const getMarketingMediaDir = mock();
 
 mock.module('~/utils/marketing-studio.server', () => ({
@@ -60,6 +68,8 @@ function job(overrides: Record<string, unknown> = {}) {
     attempts: 0,
     startedAt: null,
     finishedAt: null,
+    parentJobId: null,
+    revisions: [],
     createdBy: { email: 'admin@yawp.test', name: 'Admin' },
     ...overrides,
   };
@@ -84,6 +94,8 @@ describe('marketing media job page', () => {
     getSignedGetUrl.mockReset();
     prisma.marketingMediaJob.findUnique.mockReset();
     prisma.marketingMediaJob.update.mockReset();
+    prisma.marketingMediaJob.create.mockReset();
+    reviseStoryboard.mockReset();
 
     requireAdmin.mockResolvedValue({ id: 'admin-1' });
     requireMutableRequest.mockResolvedValue(undefined);
@@ -255,5 +267,81 @@ describe('marketing media job page', () => {
 
     expect(responseStatus(response)).toBe(400);
     expect(prisma.marketingMediaJob.update).not.toHaveBeenCalled();
+  });
+
+  // Watching a take and saying what to change is the whole workflow: the first
+  // render is a draft, the feedback box is the editor's chair.
+  test('revises a finished render from feedback into a new linked job', async () => {
+    prisma.marketingMediaJob.findUnique.mockResolvedValue(
+      job({ status: 'SUCCEEDED' })
+    );
+    prisma.marketingMediaJob.create.mockResolvedValue({ id: 'job-2' });
+    reviseStoryboard.mockResolvedValue({
+      storyboard: STORYBOARD,
+      model: 'claude-sonnet-4-6',
+      raw: '{}',
+    });
+
+    const response = await action(
+      args(
+        request({
+          intent: 'refine',
+          feedback: 'Scroll to the prompt library and hold on it.',
+        })
+      )
+    );
+
+    const created = prisma.marketingMediaJob.create.mock.calls[0][0].data;
+    expect(created).toMatchObject({
+      parentJobId: 'job-1',
+      status: 'GENERATING',
+      kind: 'STILLS',
+    });
+    expect(reviseStoryboard.mock.calls[0][0]).toMatchObject({
+      feedback: 'Scroll to the prompt library and hold on it.',
+      previousStoryboard: STORYBOARD,
+    });
+    const queued = prisma.marketingMediaJob.update.mock.calls[0][0];
+    expect(queued.where).toEqual({ id: 'job-2' });
+    expect(queued.data.status).toBe('QUEUED');
+    expect(response instanceof Response && response.status).toBe(302);
+    expect(
+      response instanceof Response && response.headers.get('location')
+    ).toBe('/app/admin/marketing-media/job-2');
+  });
+
+  test('refuses to refine without feedback or without a storyboard', async () => {
+    prisma.marketingMediaJob.findUnique.mockResolvedValue(
+      job({ status: 'SUCCEEDED' })
+    );
+    const noFeedback = await action(args(request({ intent: 'refine' })));
+    expect(responseStatus(noFeedback)).toBe(400);
+
+    prisma.marketingMediaJob.findUnique.mockResolvedValue(
+      job({ status: 'FAILED', storyboard: null })
+    );
+    const noStoryboard = await action(
+      args(request({ intent: 'refine', feedback: 'longer hold' }))
+    );
+    expect(responseStatus(noStoryboard)).toBe(400);
+    expect(prisma.marketingMediaJob.create).not.toHaveBeenCalled();
+  });
+
+  test('keeps the revision job with the reason when revision generation fails', async () => {
+    prisma.marketingMediaJob.findUnique.mockResolvedValue(
+      job({ status: 'SUCCEEDED' })
+    );
+    prisma.marketingMediaJob.create.mockResolvedValue({ id: 'job-2' });
+    reviseStoryboard.mockRejectedValue(new Error('model unavailable'));
+
+    const response = await action(
+      args(request({ intent: 'refine', feedback: 'longer hold' }))
+    );
+
+    const failed = prisma.marketingMediaJob.update.mock.calls[0][0];
+    expect(failed.where).toEqual({ id: 'job-2' });
+    expect(failed.data.status).toBe('FAILED');
+    expect(failed.data.error).toContain('model unavailable');
+    expect(response instanceof Response && response.status).toBe(302);
   });
 });

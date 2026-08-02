@@ -18,9 +18,13 @@ mock.module('~/utils/auth.server', () => ({
   requireMutableRequest,
 }));
 mock.module('~/utils/db.server', () => ({ prisma }));
+// Module mocks are process-global in bun: every suite that mocks this module
+// must export the union of names any route imports, or suites poison each
+// other when they share a test process.
 mock.module('~/utils/marketing-studio.server', () => ({
   requireMarketingStudioEnabled,
   getMarketingRenderTarget,
+  getMarketingMediaDir: () => null,
   isMarketingStudioEnabled: () => true,
 }));
 mock.module('~/services/marketing-storyboard.server', () => ({

@@ -168,10 +168,61 @@ function extractJson(raw: string): unknown {
 export async function generateStoryboard(
   params: GenerateStoryboardParams
 ): Promise<GenerateStoryboardResult> {
+  return runStoryboardGeneration({
+    kind: params.kind,
+    model: params.model,
+    initialUserMessage: buildUserPrompt(params),
+  });
+}
+
+export type ReviseStoryboardParams = {
+  brief: string;
+  kind: MarketingJobKind;
+  previousStoryboard: unknown;
+  feedback: string;
+  audience?: string | null;
+  model?: string;
+};
+
+/**
+ * Revise a rendered storyboard from operator feedback.
+ *
+ * A first take is rarely the final cut. The operator watches it and says what
+ * to change; the model gets the storyboard that produced the take being
+ * criticized and edits it, rather than re-imagining the brief from scratch —
+ * everything that was right about the take survives the revision.
+ */
+export async function reviseStoryboard(
+  params: ReviseStoryboardParams
+): Promise<GenerateStoryboardResult> {
+  const lines = [
+    `Original brief: ${params.brief.trim()}`,
+    ...(params.audience?.trim() ? [`Audience: ${params.audience.trim()}`] : []),
+    '',
+    'This storyboard was rendered, and the operator watched the result:',
+    JSON.stringify(params.previousStoryboard),
+    '',
+    'Operator feedback on that take:',
+    params.feedback.trim(),
+    '',
+    'Revise the storyboard to address the feedback. Keep what the feedback does not question. Return only the revised storyboard JSON.',
+  ];
+  return runStoryboardGeneration({
+    kind: params.kind,
+    model: params.model,
+    initialUserMessage: lines.join('\n'),
+  });
+}
+
+async function runStoryboardGeneration(params: {
+  kind: MarketingJobKind;
+  model?: string;
+  initialUserMessage: string;
+}): Promise<GenerateStoryboardResult> {
   const model = params.model || STORYBOARD_MODEL;
   const system = buildSystemPrompt(params.kind);
   const messages: { role: 'user' | 'assistant'; content: string }[] = [
-    { role: AgentType.User, content: buildUserPrompt(params) },
+    { role: AgentType.User, content: params.initialUserMessage },
   ];
 
   let lastRaw = '';

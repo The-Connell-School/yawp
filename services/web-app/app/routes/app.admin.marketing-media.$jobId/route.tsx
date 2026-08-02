@@ -2,7 +2,9 @@ import {
   Form,
   Link,
   data as dataResponse,
+  redirect,
   useLoaderData,
+  useNavigation,
   useRevalidator,
   type ActionFunctionArgs,
   type LoaderFunctionArgs,
@@ -13,6 +15,10 @@ import { JobStatusBadge } from '~/components/marketing/job-status-badge';
 import { Button } from '~/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
 import { requireAdmin, requireMutableRequest } from '~/utils/auth.server';
+import {
+  StoryboardGenerationError,
+  reviseStoryboard,
+} from '~/services/marketing-storyboard.server';
 import { prisma } from '~/utils/db.server';
 import { getSignedGetUrl } from '~/services/s3.server';
 import {
@@ -58,6 +64,11 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       attempts: true,
       startedAt: true,
       finishedAt: true,
+      parentJobId: true,
+      revisions: {
+        select: { id: true, status: true, createdAt: true },
+        orderBy: { createdAt: 'desc' },
+      },
       createdBy: { select: { email: true, name: true } },
     },
   });
@@ -100,6 +111,10 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       updatedAt: job.updatedAt.toISOString(),
       startedAt: job.startedAt?.toISOString() ?? null,
       finishedAt: job.finishedAt?.toISOString() ?? null,
+      revisions: job.revisions.map((revision) => ({
+        ...revision,
+        createdAt: revision.createdAt.toISOString(),
+      })),
     },
     outputs: signedOutputs,
     storyboard: parsedStoryboard?.success ? parsedStoryboard.data : null,
@@ -113,7 +128,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
 export async function action({ request, params }: ActionFunctionArgs) {
   requireMarketingStudioEnabled();
-  await requireAdmin(request);
+  const admin = await requireAdmin(request);
   await requireMutableRequest(request);
 
   const formData = await request.formData();
@@ -121,7 +136,18 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
   const job = await prisma.marketingMediaJob.findUnique({
     where: { id: params.jobId },
-    select: { id: true, status: true, storyboard: true },
+    select: {
+      id: true,
+      status: true,
+      storyboard: true,
+      kind: true,
+      brief: true,
+      audience: true,
+      subjectType: true,
+      subjectId: true,
+      subjectLabel: true,
+      targetUrl: true,
+    },
   });
   if (!job) throw new Response('Not Found', { status: 404 });
 
@@ -142,6 +168,75 @@ export async function action({ request, params }: ActionFunctionArgs) {
       },
     });
     return dataResponse({ ok: true });
+  }
+
+  // Watch the take, say what to change. The revision is a new job written by
+  // the model from this job's storyboard plus the feedback, so a good take
+  // survives its own critique — only what the feedback questions moves.
+  if (intent === 'refine') {
+    const feedback = String(formData.get('feedback') ?? '').trim();
+    if (!feedback) {
+      return dataResponse(
+        { error: 'Say what should change about this render.' },
+        { status: 400 }
+      );
+    }
+    if (!job.storyboard) {
+      return dataResponse(
+        { error: 'This job has no storyboard to revise.' },
+        { status: 400 }
+      );
+    }
+
+    const revisionJob = await prisma.marketingMediaJob.create({
+      data: {
+        createdById: admin.id,
+        kind: job.kind,
+        status: 'GENERATING',
+        brief: job.brief,
+        audience: job.audience,
+        subjectType: job.subjectType,
+        subjectId: job.subjectId,
+        subjectLabel: job.subjectLabel,
+        targetUrl: job.targetUrl,
+        parentJobId: job.id,
+      },
+      select: { id: true },
+    });
+
+    try {
+      const revised = await reviseStoryboard({
+        brief: job.brief,
+        kind: job.kind as 'STILLS' | 'CLIP',
+        previousStoryboard: job.storyboard,
+        feedback,
+        audience: job.audience,
+      });
+      await prisma.marketingMediaJob.update({
+        where: { id: revisionJob.id },
+        data: {
+          status: 'QUEUED',
+          storyboard: revised.storyboard,
+          model: revised.model,
+        },
+      });
+    } catch (err) {
+      // The revision job survives a generation failure on purpose, same as
+      // first-run generation: the admin needs to see why.
+      await prisma.marketingMediaJob.update({
+        where: { id: revisionJob.id },
+        data: {
+          status: 'FAILED',
+          error:
+            err instanceof StoryboardGenerationError
+              ? err.message
+              : `Storyboard revision failed: ${err instanceof Error ? err.message : String(err)}`,
+          finishedAt: new Date(),
+        },
+      });
+    }
+
+    return redirect(`/app/admin/marketing-media/${revisionJob.id}`);
   }
 
   if (intent === 'retry') {
@@ -179,7 +274,11 @@ export default function Route() {
     queuedMinutes,
   } = useLoaderData<typeof loader>();
   const revalidator = useRevalidator();
+  const navigation = useNavigation();
   const active = ACTIVE_STATUSES.includes(job.status);
+  const refining =
+    navigation.state === 'submitting' &&
+    navigation.formData?.get('intent') === 'refine';
 
   // A render takes minutes and finishes in a worker, so the page checks back
   // rather than making the admin reload to find out.
@@ -201,6 +300,14 @@ export default function Route() {
           </h1>
           <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
             <JobStatusBadge status={job.status} />
+            {job.parentJobId ? (
+              <Link
+                className="underline"
+                to={`/app/admin/marketing-media/${job.parentJobId}`}
+              >
+                Revision of an earlier take
+              </Link>
+            ) : null}
             <span>{job.kind === 'CLIP' ? 'Silent clip' : 'Screenshots'}</span>
             {estimatedSeconds ? (
               <span>~{estimatedSeconds}s of screen time</span>
@@ -338,6 +445,62 @@ export default function Route() {
           )}
         </CardContent>
       </Card>
+
+      {!active && storyboard ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Refine this render</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Form method="post" className="flex flex-col gap-3">
+              <input type="hidden" name="intent" value="refine" />
+              <p className="text-sm text-muted-foreground">
+                Watched the take? Say what should change — the storyboard is
+                revised from your notes and rendered again as a new take, with
+                this one kept for comparison.
+              </p>
+              <textarea
+                name="feedback"
+                data-testid="marketing-refine-feedback"
+                required
+                rows={3}
+                className="w-full rounded border bg-background p-2 text-sm"
+                placeholder={
+                  job.kind === 'CLIP'
+                    ? 'e.g. I can barely see the prompt library — scroll down to it and hold there for a couple of seconds.'
+                    : 'e.g. The second screenshot should show the class detail instead of the list.'
+                }
+              />
+              <div>
+                <Button type="submit" disabled={refining}>
+                  {refining ? 'Writing the revision…' : 'Render a new take'}
+                </Button>
+              </div>
+            </Form>
+            {job.revisions.length > 0 ? (
+              <div className="mt-4 border-t pt-3 text-sm">
+                <p className="mb-1 font-medium">Takes made from this one</p>
+                <ul className="flex flex-col gap-1">
+                  {job.revisions.map((revision) => (
+                    <li
+                      key={revision.id}
+                      className="flex items-center gap-2 text-muted-foreground"
+                    >
+                      <JobStatusBadge status={revision.status} />
+                      <Link
+                        className="underline"
+                        to={`/app/admin/marketing-media/${revision.id}`}
+                      >
+                        {new Date(revision.createdAt).toLocaleString()}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+          </CardContent>
+        </Card>
+      ) : null}
 
       <Card>
         <CardHeader>

@@ -7,7 +7,7 @@ mock.module('~/utils/getLLMCompletion', () => ({
   getLLMCompletion,
 }));
 
-const { StoryboardGenerationError, generateStoryboard } =
+const { StoryboardGenerationError, generateStoryboard, reviseStoryboard } =
   await import('./marketing-storyboard.server');
 
 const VALID_STORYBOARD = {
@@ -224,5 +224,76 @@ describe('generateStoryboard', () => {
 
     expect(result.storyboard.scenes).toHaveLength(2);
     expect(getLLMCompletion).toHaveBeenCalledTimes(1);
+  });
+});
+
+// A first render is rarely the final cut — the operator watches it and says
+// what to change ("the prompt library is barely visible; scroll to it and hold").
+// A revision is a fresh generation grounded in the storyboard that produced the
+// take being criticized, not a from-scratch rewrite of the brief.
+describe('reviseStoryboard', () => {
+  beforeEach(() => {
+    getLLMCompletion.mockReset();
+  });
+
+  function revision(overrides: Record<string, unknown> = {}) {
+    return {
+      brief: 'Show a teacher reviewing submitted essays.',
+      kind: 'CLIP' as const,
+      previousStoryboard: VALID_STORYBOARD,
+      feedback: 'The prompt library is barely visible. Scroll to it and hold.',
+      ...overrides,
+    };
+  }
+
+  test('sends the previous storyboard and the feedback to the model', async () => {
+    getLLMCompletion.mockResolvedValueOnce(JSON.stringify(VALID_STORYBOARD));
+
+    const result = await reviseStoryboard(revision());
+
+    expect(result.storyboard.slug).toBe('teacher-loop');
+    const userMessage = getLLMCompletion.mock.calls[0][0].messages[0]
+      .content as string;
+    expect(userMessage).toContain('teacher-loop');
+    expect(userMessage).toContain('barely visible');
+    expect(userMessage).toContain('Show a teacher reviewing submitted essays.');
+  });
+
+  test('revisions keep the page guide and validation', async () => {
+    getLLMCompletion
+      .mockResolvedValueOnce(
+        JSON.stringify({
+          ...VALID_STORYBOARD,
+          scenes: [{ id: 'admin', goto: '/app/admin/organizations' }],
+        })
+      )
+      .mockResolvedValueOnce(JSON.stringify(VALID_STORYBOARD));
+
+    const result = await reviseStoryboard(revision());
+
+    expect(result.storyboard.scenes[0].goto).toBe('/app');
+    const system = getLLMCompletion.mock.calls[0][0].system as string;
+    expect(system).toContain('Prompt Library');
+    expect(getLLMCompletion).toHaveBeenCalledTimes(2);
+  });
+
+  test('revised clips still get sent back when they run long', async () => {
+    const longClip = {
+      ...VALID_STORYBOARD,
+      scenes: [
+        { id: 'one', goto: '/app', waitFor: 'main', hold: 20 },
+        { id: 'two', goto: '/app/my-classes', waitFor: 'main', hold: 20 },
+      ],
+    };
+    getLLMCompletion.mockResolvedValue(JSON.stringify(longClip));
+
+    let thrown: unknown;
+    try {
+      await reviseStoryboard(revision());
+    } catch (err) {
+      thrown = err;
+    }
+
+    expect(thrown).toBeInstanceOf(StoryboardGenerationError);
   });
 });

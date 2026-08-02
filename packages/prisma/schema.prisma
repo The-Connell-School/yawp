@@ -736,7 +736,13 @@ model MarketingMediaJob {
   lockedBy     String?
   startedAt    DateTime? @db.Timestamptz(6)
   finishedAt   DateTime? @db.Timestamptz(6)
+  /// Set when this job was written by revising another render's storyboard
+  /// from operator feedback. Deleting the parent keeps the revision.
+  parentJobId  String?
+  parent       MarketingMediaJob?  @relation("MarketingMediaJobRevisions", fields: [parentJobId], references: [id], onDelete: SetNull)
+  revisions    MarketingMediaJob[] @relation("MarketingMediaJobRevisions")
 
   @@index([status, createdAt(sort: Desc)])
   @@index([createdById])
+  @@index([parentJobId])
 }
