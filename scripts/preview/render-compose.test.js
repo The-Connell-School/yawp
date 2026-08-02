@@ -1,5 +1,8 @@
 import { describe, expect, test } from 'bun:test';
+import { createRequire } from 'node:module';
 import { renderPreviewCompose } from './render-compose.mjs';
+
+const require = createRequire(import.meta.url);
 
 const deprecatedPreviewSlug = [
   'preview',
@@ -129,6 +132,19 @@ describe('renderPreviewCompose', () => {
     expect(compose).toContain('MARKETING_MEDIA_DIR: "/media"');
     expect(compose).toContain('yawp-pr-142-media:/media');
     expect(compose).toContain('marketing-renderer start');
+  });
+
+  // The library resolves browsers and its recording ffmpeg by revision paths
+  // baked into the image, so image tag and installed library version must move
+  // together. They drifted once — playwright's ^ range floated to 1.60 while
+  // the image stayed 1.49 — and every clip render died at newPage with
+  // "Executable doesn't exist". This reads the actually-installed version, so
+  // a future playwright bump fails here until the image tag is bumped with it.
+  test('renderer image ships browsers for the installed playwright version', () => {
+    const { version } = require('playwright-core/package.json');
+    expect(renderCompose()).toContain(
+      `image: mcr.microsoft.com/playwright:v${version}-jammy`
+    );
   });
 
   test('production-runtime and production-dump previews run no renderer', () => {

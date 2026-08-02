@@ -150,7 +150,7 @@ ${commonEnvironment}
   // container over the internal network, so the public gate never applies.
   const rendererService = rendererEnabled
     ? `  renderer:
-    image: mcr.microsoft.com/playwright:v1.49.1-jammy
+    image: mcr.microsoft.com/playwright:v1.60.0-jammy
     working_dir: /app
     restart: unless-stopped
 ${fastVolumes}
