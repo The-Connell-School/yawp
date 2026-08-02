@@ -24,6 +24,14 @@ export type RendererConfig = {
   databaseSsl: { rejectUnauthorized: false } | undefined;
   workerId: string;
   pollIntervalMs: number;
+  /**
+   * Hard deadline for one render attempt. The preview host's chromium dies in
+   * ways that leave playwright calls waiting forever; without this the
+   * single-threaded worker wedges with the job pinned in RENDERING. Must stay
+   * under RENDER_LOCK_TIMEOUT_MS so an abandoned attempt fails before another
+   * worker could legitimately re-claim the job.
+   */
+  attemptTimeoutMs: number;
   chromiumPath?: string;
   ffmpegPath: string;
   loginPath: string;
@@ -111,6 +119,9 @@ export function loadConfig(
       env.MARKETING_RENDERER_WORKER_ID?.trim() ||
       `${env.HOSTNAME || 'renderer'}-${process.pid}`,
     pollIntervalMs: Number(env.MARKETING_RENDERER_POLL_MS || 5000),
+    attemptTimeoutMs: Number(
+      env.MARKETING_RENDERER_ATTEMPT_MS || 8 * 60 * 1000
+    ),
     chromiumPath: env.MARKETING_RENDERER_CHROMIUM_PATH?.trim() || undefined,
     ffmpegPath: env.FFMPEG_PATH?.trim() || 'ffmpeg',
     loginPath: env.MARKETING_RENDERER_LOGIN_PATH?.trim() || '/auth/dev-login',

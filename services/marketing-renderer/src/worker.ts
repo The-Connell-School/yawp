@@ -46,16 +46,34 @@ export async function processNextJob(params: {
   });
 
   try {
-    const { files, warnings } = await renderStoryboard({
-      storyboard: job.storyboard,
-      kind: job.kind,
-      baseUrl,
-      outDir: workDir,
-      loginPath: params.config.loginPath,
-      chromiumPath: params.config.chromiumPath,
-      ffmpegPath: params.config.ffmpegPath,
-      basicAuth: params.config.basicAuth,
-    });
+    // A wedged browser must cost one abandoned attempt, not the worker: the
+    // deadline races the whole attempt, and losing it fails the job the same
+    // way any render error does. The leaked browser process, if any, is
+    // orphaned rather than awaited — acceptable on a preview-scale host.
+    const attemptTimeoutMs = params.config.attemptTimeoutMs ?? 8 * 60 * 1000;
+    const { files, warnings } = await Promise.race([
+      renderStoryboard({
+        storyboard: job.storyboard,
+        kind: job.kind,
+        baseUrl,
+        outDir: workDir,
+        loginPath: params.config.loginPath,
+        chromiumPath: params.config.chromiumPath,
+        ffmpegPath: params.config.ffmpegPath,
+        basicAuth: params.config.basicAuth,
+      }),
+      new Promise<never>((_, reject) =>
+        setTimeout(
+          () =>
+            reject(
+              new Error(
+                `The render attempt exceeded ${Math.round(attemptTimeoutMs / 1000)}s and was abandoned.`
+              )
+            ),
+          attemptTimeoutMs
+        )
+      ),
+    ]);
 
     if (files.length === 0) {
       throw new Error('The render produced no media.');

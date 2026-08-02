@@ -165,6 +165,27 @@ describe('processNextJob', () => {
     expect(finalUpdate.error).toContain('no media');
   });
 
+  // The preview host's chromium dies intermittently in ways that leave a
+  // playwright call waiting forever; an unbounded attempt then wedges the
+  // whole single-threaded worker with the job pinned in RENDERING and no
+  // error. An attempt is abandoned at its deadline and fails like any other
+  // error, so the worker lives to render again.
+  test('abandons a render attempt that exceeds the attempt deadline', async () => {
+    prisma.marketingMediaJob.findFirst.mockResolvedValue(queuedJob());
+    renderStoryboard.mockImplementation(() => new Promise(() => {}));
+
+    const result = await processNextJob({
+      prisma: prisma as never,
+      config: { ...CONFIG, attemptTimeoutMs: 40 } as never,
+      s3: {} as never,
+    });
+
+    expect(result).toBe('failed');
+    const finalUpdate =
+      prisma.marketingMediaJob.update.mock.calls.at(-1)?.[0].data;
+    expect(finalUpdate.error).toContain('abandoned');
+  });
+
   test('marks the job failed for good once attempts run out', async () => {
     prisma.marketingMediaJob.findFirst.mockResolvedValue(
       queuedJob({ attempts: 2 })
