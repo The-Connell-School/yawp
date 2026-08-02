@@ -110,6 +110,8 @@ function buildSystemPrompt(kind: MarketingJobKind): string {
     '',
     'Rules:',
     '- Never invent selectors, names, or text targets. Interact only with elements the page guide above names; any other interaction must be "optional": true.',
+    '- The render starts already signed in as the storyboard "persona". Never add a login step for that same persona — use "login" only to switch to a different persona mid-story.',
+    '- "goto" is optional on a scene. A scene with "goto" starts by navigating there, discarding whatever page the previous scene ended on. After a click that navigates, the next scene must OMIT "goto" to continue on the destination page.',
     `- Navigate only to the listed routes. Detail pages are reached by clicking a link, never by guessing a url.`,
     `- At most ${MAX_SCENES} scenes, and the whole storyboard must run in under ${MAX_RENDER_SECONDS} seconds.`,
     '- Use a "login" step to switch personas mid-storyboard, for example teacher to student.',

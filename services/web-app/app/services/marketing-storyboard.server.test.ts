@@ -82,6 +82,20 @@ describe('generateStoryboard', () => {
     expect(system.toLowerCase()).toContain('never invent');
   });
 
+  // Two facts the model kept getting wrong, read straight out of failed
+  // preview jobs: it wrote a redundant login step whose path navigated the
+  // scene off its own page, and it re-goto'd after a navigating click, which
+  // discarded the destination it had just clicked through to.
+  test('tells the model it is already signed in and that goto resets the page', async () => {
+    getLLMCompletion.mockResolvedValueOnce(JSON.stringify(VALID_STORYBOARD));
+
+    await generateStoryboard(brief());
+
+    const system = getLLMCompletion.mock.calls[0][0].system as string;
+    expect(system).toContain('already signed in');
+    expect(system).toContain('OMIT "goto"');
+  });
+
   test('passes the brief, audience, and subject to the model', async () => {
     getLLMCompletion.mockResolvedValueOnce(JSON.stringify(VALID_STORYBOARD));
 

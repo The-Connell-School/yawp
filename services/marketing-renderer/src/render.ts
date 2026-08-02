@@ -183,6 +183,7 @@ async function runStep(
     basicAuth?: { username: string; password: string };
     cinematic: boolean;
     mouse: { x: number; y: number };
+    persona: { current: MarketingPersona };
     shoot: (name: string, fullPage: boolean) => Promise<void>;
   }
 ): Promise<void> {
@@ -250,6 +251,12 @@ async function runStep(
       await ctx.shoot(step.name, step.fullPage);
       break;
     case 'login':
+      // The render begins signed in as the storyboard persona, and generated
+      // storyboards keep writing a redundant login step whose `path` then
+      // navigates away from the scene's own page — the take dies waiting for
+      // elements that are no longer there. A login step means "switch user",
+      // so signing in again as the current persona is a no-op.
+      if (step.persona === ctx.persona.current) break;
       await login(
         ctx.context,
         ctx.baseUrl,
@@ -257,6 +264,7 @@ async function runStep(
         step.persona,
         ctx.basicAuth
       );
+      ctx.persona.current = step.persona;
       await gotoAndSettle(page, resolveUrl(ctx.baseUrl, step.path));
       break;
     default: {
@@ -350,6 +358,7 @@ export async function renderStoryboard(
     x: storyboard.viewport.width / 2,
     y: storyboard.viewport.height / 2,
   };
+  const persona = { current: storyboard.persona };
 
   const shoot = async (name: string, fullPage: boolean) => {
     shotIndex += 1;
@@ -401,6 +410,7 @@ export async function renderStoryboard(
             basicAuth: params.basicAuth,
             cinematic: wantsVideo,
             mouse,
+            persona,
             shoot,
           });
         } catch (err) {
