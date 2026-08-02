@@ -314,7 +314,13 @@ export async function renderStoryboard(
     recordVideo: wantsVideo
       ? { dir: videoDir, size: storyboard.viewport }
       : undefined,
+    // Lets page navigations through a basic-auth gate (preview environments).
+    httpCredentials: params.basicAuth,
   });
+  // Headless captures show no cursor; clips get an enlarged one that follows
+  // real mouse events, because "click the thing" is the entire content of a
+  // short feature clip.
+  if (wantsVideo) await context.addInitScript(CURSOR_INIT_SCRIPT);
 
   const page = await context.newPage();
   const video = page.video();

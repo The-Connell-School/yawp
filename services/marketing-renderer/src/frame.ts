@@ -1,6 +1,7 @@
+import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
-import { chromium } from 'playwright';
+import { fileURLToPath } from 'node:url';
 
 /**
  * Short-form marketing framing: the captured clip re-shot inside a styled
@@ -114,108 +115,70 @@ export function buildFramingPage(options: {
  */
 export async function frameClip(options: FrameOptions): Promise<FramedResult> {
   const geometry = frameGeometry(options.width, options.height);
-  const raw = fs.readFileSync(options.rawVideoPath);
-  const videoSrc = `data:video/webm;base64,${raw.toString('base64')}`;
 
   const framedDir = path.join(options.outDir, 'framed');
   fs.mkdirSync(framedDir, { recursive: true });
 
-  const browser = await chromium.launch({
-    headless: true,
-    executablePath: options.chromiumPath,
-  });
-  const context = await browser.newContext({
-    viewport: { width: geometry.canvasWidth, height: geometry.canvasHeight },
-    recordVideo: {
-      dir: framedDir,
-      size: { width: geometry.canvasWidth, height: geometry.canvasHeight },
-    },
+  const pageHtml = buildFramingPage({
+    width: options.width,
+    height: options.height,
+    addressText: options.addressText ?? 'app.yawp.school',
+    videoSrc: 'clip.webm',
   });
 
-  const startedAt = Date.now();
-  const page = await context.newPage();
-  const video = page.video();
+  // The framing stage runs under Node rather than the worker's own runtime:
+  // several Playwright CDP paths hang under Bun, and the worker image ships
+  // Node anyway. The runner is plain JS and reports its result on stdout.
+  const runnerPath = path.join(
+    path.dirname(fileURLToPath(import.meta.url)),
+    'frame-runner.mjs'
+  );
+  const config = JSON.stringify({
+    rawVideoPath: options.rawVideoPath,
+    framedDir,
+    pageHtml,
+    canvasWidth: geometry.canvasWidth,
+    canvasHeight: geometry.canvasHeight,
+    chromiumPath: options.chromiumPath ?? null,
+  });
 
-  // Polling with evaluate instead of waitForFunction: the worker runs under
-  // Bun, where Playwright's waitForFunction never resolves. evaluate is
-  // reliable under both runtimes.
-  const poll = async (
-    expression: string,
-    what: string,
-    timeoutMs: number
-  ): Promise<void> => {
-    const deadline = Date.now() + timeoutMs;
-    for (;;) {
-      const errorText = (await page.evaluate(
-        "(() => { const clip = document.getElementById('clip'); return clip && clip.error ? String(clip.error.code) + ': playback error' : null })()"
-      )) as string | null;
-      if (errorText) throw new Error(`Framing playback failed (${errorText})`);
-      if (await page.evaluate(expression)) return;
-      if (Date.now() > deadline) {
-        throw new Error(`Framing timed out waiting for ${what}`);
-      }
-      await page.waitForTimeout(200);
-    }
-  };
+  const result = await new Promise<{
+    stdout: string;
+    stderr: string;
+    code: number | null;
+  }>((resolve, reject) => {
+    const child = spawn('node', [runnerPath, config], {
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    let stdout = '';
+    let stderr = '';
+    child.stdout.on('data', (chunk) => {
+      stdout += String(chunk);
+    });
+    child.stderr.on('data', (chunk) => {
+      stderr += String(chunk);
+    });
+    child.on('error', reject);
+    child.on('close', (code) => resolve({ stdout, stderr, code }));
+  });
 
-  let playbackStartedAt = startedAt;
-  try {
-    await page.setContent(
-      buildFramingPage({
-        width: options.width,
-        height: options.height,
-        addressText: options.addressText ?? 'app.yawp.school',
-        videoSrc,
-      }),
-      { waitUntil: 'load' }
+  if (result.code !== 0) {
+    throw new Error(
+      `Framing failed (exit ${result.code}): ${result.stderr.slice(-1500) || result.stdout.slice(-500)}`
     );
-    await poll(
-      "document.getElementById('clip').readyState >= 3",
-      'the clip to decode',
-      30_000
-    );
-    playbackStartedAt = Date.now();
-    // A Playwright recording is a WebM whose duration metadata is unreliable,
-    // so 'ended' cannot be trusted alone. Progress-stall detection covers both
-    // cases: once currentTime stops advancing after having moved, the clip is
-    // over.
-    await page.evaluate(`(() => {
-      const clip = document.getElementById('clip');
-      window.__clipLastTime = -1;
-      window.__clipStalledTicks = 0;
-      setInterval(() => {
-        if (clip.currentTime === window.__clipLastTime) {
-          window.__clipStalledTicks += 1;
-        } else {
-          window.__clipStalledTicks = 0;
-          window.__clipLastTime = clip.currentTime;
-        }
-      }, 200);
-      clip.play().catch(() => {});
-    })()`);
-    await poll(
-      "document.getElementById('clip').currentTime > 0",
-      'playback to start',
-      15_000
-    );
-    await poll(
-      "document.getElementById('clip').ended || window.__clipStalledTicks >= 5",
-      'playback to finish',
-      // Bounded by the schema's render cap, plus slack for decode stalls.
-      5 * 60_000
-    );
-    // Let the final frame land in the recording before tearing down.
-    await page.waitForTimeout(300);
-  } finally {
-    await context.close();
-    await browser.close();
   }
 
-  const recordedPath = await video?.path();
-  if (!recordedPath) throw new Error('Framing produced no recording');
-
-  return {
-    videoPath: recordedPath,
-    leadInSeconds: Math.max(0, (playbackStartedAt - startedAt) / 1000 - 0.1),
-  };
+  const lastLine = result.stdout.trim().split('\n').at(-1) ?? '';
+  let parsed: FramedResult;
+  try {
+    parsed = JSON.parse(lastLine) as FramedResult;
+  } catch {
+    throw new Error(
+      `Framing runner returned no result: ${result.stdout.slice(-500)}`
+    );
+  }
+  if (!parsed.videoPath || !fs.existsSync(parsed.videoPath)) {
+    throw new Error('Framing produced no recording');
+  }
+  return parsed;
 }
