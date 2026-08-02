@@ -293,6 +293,46 @@ refresh_web_container_if_needed() {
   remove_legacy_project_postgres
 }
 
+# A deploy that leaves the renderer secretly dead is worse than a red deploy:
+# jobs queue forever and nothing says why. The worker logs a "renderer started"
+# heartbeat only after its config validated and its database client
+# constructed, so waiting for that line — then confirming the container
+# survived its first poll of the queue — is what "the renderer works" actually
+# means. Anything less passed before while the worker crash-looped unseen.
+verify_renderer_if_present() {
+  if ! grep -q '^  renderer:' "$PREVIEW_DIR/docker-compose.yml"; then
+    echo "No renderer service in this compose."
+    return 0
+  fi
+
+  echo "Waiting for the marketing renderer worker to report started..."
+  local renderer_container="${COMPOSE_PROJECT}-renderer-1"
+  for _ in $(seq 1 100); do
+    if "${compose[@]}" logs renderer 2>/dev/null | grep -q '"message":"renderer started"'; then
+      # The first queue poll runs immediately and is where a broken database
+      # connection surfaces (its connect timeout is 15s) — give it time to fail.
+      sleep 20
+      local state
+      state="$(docker inspect --format '{{.State.Status}} restarts={{.RestartCount}}' "$renderer_container" 2>/dev/null || echo missing)"
+      if [[ "$state" == "running restarts=0" ]] \
+        && ! "${compose[@]}" logs renderer 2>/dev/null | grep -q '"message":"renderer crashed"'; then
+        echo "RENDERER_READY=1 ($state)"
+        "${compose[@]}" logs --tail=20 renderer 2>/dev/null || true
+        return 0
+      fi
+      echo "Marketing renderer started but did not stay healthy ($state)." >&2
+      break
+    fi
+    sleep 3
+  done
+
+  echo "Marketing renderer never became ready." >&2
+  "${compose[@]}" ps >&2 || true
+  docker inspect --format 'renderer container: {{.State.Status}} restarts={{.RestartCount}} oom={{.State.OOMKilled}} exit={{.State.ExitCode}}' "$renderer_container" >&2 || true
+  "${compose[@]}" logs --tail=200 renderer >&2 || true
+  return 1
+}
+
 ensure_shared_postgres
 ensure_preview_database
 run_tooling_if_needed
@@ -325,14 +365,13 @@ for attempt in $(seq 1 90); do
     PREVIEW_BASE_URL="$login_url" PREVIEW_DATA_MODE="$DATA_MODE" PREVIEW_BASIC_AUTH="$PREVIEW_BASIC_AUTH" PREVIEW_BASIC_AUTH_PASSWORD="$PREVIEW_BASIC_AUTH_PASSWORD" node "$SCRIPT_DIR/smoke-login.mjs"
     end_ms="$(date +%s%3N)"
     elapsed_ms="$((end_ms - start_ms))"
+    # The renderer boots in the background with no healthcheck of its own; a
+    # crash-looping worker is invisible from the outside unless the deploy
+    # itself refuses to pass without it.
+    verify_renderer_if_present
     echo "PREVIEW_URL=$URL"
     echo "PREVIEW_HOSTNAME=$HOSTNAME"
     echo "PREVIEW_ELAPSED_MS=$elapsed_ms"
-    # Surface the marketing renderer's state in the CI log. It boots in the
-    # background and has no healthcheck of its own; without this, a
-    # crash-looping renderer is invisible from the outside.
-    "${compose[@]}" ps || true
-    "${compose[@]}" logs --tail=80 renderer 2>/dev/null || echo "No renderer service in this compose."
     exit 0
   fi
   echo "Waiting for preview healthcheck ($attempt/90, anonymous=${gate_status:-direct}): $health_url"
