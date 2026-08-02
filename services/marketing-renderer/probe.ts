@@ -6,10 +6,10 @@
  * at from the outside; this prints what the browser at that network position
  * really sees.
  *
- *   docker exec <renderer> bash -lc "cd /app && bun run scripts/preview/renderer-probe.ts"
+ *   docker exec <renderer> bash -lc "cd /app/services/marketing-renderer && bun run probe.ts"
  */
 import { chromium } from 'playwright';
-import { parseSessionCookies } from '../../services/marketing-renderer/src/session';
+import { parseSessionCookies } from './src/session';
 
 const base = process.env.MARKETING_RENDER_TARGET_URL;
 if (!base) throw new Error('MARKETING_RENDER_TARGET_URL is not set');

@@ -328,10 +328,22 @@ export async function renderStoryboard(
   const warnings: string[] = [];
   let shotIndex = 0;
 
-  const browser = await chromium.launch({
-    headless: true,
-    executablePath: params.chromiumPath,
-  });
+  // Chromium intermittently dies at launch on the preview host (a general
+  // protection fault before the first page). One render attempt costs minutes
+  // of queue time; retrying the launch in-process costs seconds.
+  let browser!: Awaited<ReturnType<typeof chromium.launch>>;
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      browser = await chromium.launch({
+        headless: true,
+        executablePath: params.chromiumPath,
+      });
+      break;
+    } catch (err) {
+      if (attempt >= 3) throw err;
+      await new Promise((resolve) => setTimeout(resolve, 1_500 * attempt));
+    }
+  }
   const context = await browser.newContext({
     viewport: storyboard.viewport,
     recordVideo: wantsVideo
