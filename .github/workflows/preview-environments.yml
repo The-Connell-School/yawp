@@ -342,6 +342,12 @@ jobs:
           admin_id="$(psql -Atc "SELECT id FROM \"User\" WHERE email='dev.admin@yawp.local' LIMIT 1")"
           test -n "$admin_id" || { echo "No seeded dev.admin user in $db — is this a seeded preview?"; exit 1; }
 
+          echo "--- seed data sanity ---"
+          psql -c "SELECT (SELECT count(*) FROM \"Assignment\") AS assignments, (SELECT count(*) FROM \"ClassAssignment\") AS class_assignments, (SELECT count(*) FROM \"Class\") AS classes"
+
+          echo "--- renderer-eye view of /app/assignments ---"
+          docker exec "yawp-pr-${DEMO_PR}-renderer-1" bash -lc "cd /app && export MARKETING_RENDERER_CHROMIUM_PATH=\$(ls -d /ms-playwright/chromium-*/chrome-linux*/chrome 2>/dev/null | head -1) && bun run scripts/preview/renderer-probe.ts" || echo "renderer probe failed"
+
           job_id="demo-$(date +%s)"
           psql -v ON_ERROR_STOP=1 -c "INSERT INTO \"MarketingMediaJob\"
             (id, \"createdById\", kind, status, brief, \"subjectType\", \"targetUrl\", storyboard, attempts, \"updatedAt\")
