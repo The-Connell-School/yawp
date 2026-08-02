@@ -345,7 +345,10 @@ describe('PR preview deployment contract', () => {
     expect(deployScript).toContain('--connect-timeout 1 --max-time 2 "$health_url"');
     expect(deployScript).toContain('sleep 1');
     expect(deployScript).not.toContain('--max-time 5 "$health_url"');
-    expect(deployScript).not.toContain('sleep 2');
+    // Word-bounded for the same reason as the comment above: a bare substring
+    // match on "sleep 2" also owns "sleep 20" in the unrelated renderer
+    // verification, which is not this test's subject.
+    expect(deployScript).not.toMatch(/sleep 2(?![0-9])/);
   });
 
   test('preview deploy verifies login before reporting the preview URL', () => {

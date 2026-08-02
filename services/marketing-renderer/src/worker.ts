@@ -117,9 +117,10 @@ async function main() {
       connectionString: config.databaseUrl,
       connectionTimeoutMillis: 15_000,
       max: 2,
-      ...(process.env.DATABASE_SSL_REJECT_UNAUTHORIZED === 'false'
-        ? { ssl: { rejectUnauthorized: false } }
-        : {}),
+      // Spread rather than pass: pg attempts TLS whenever any ssl option is
+      // present, and a plain-TCP Postgres (every preview) refuses the
+      // handshake. config decides, mirroring the web app's db.server.ts.
+      ...(config.databaseSsl ? { ssl: config.databaseSsl } : {}),
     }),
   }) as unknown as JobStore & {
     $disconnect: () => Promise<void>;

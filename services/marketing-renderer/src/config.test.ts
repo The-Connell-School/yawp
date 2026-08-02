@@ -89,6 +89,40 @@ describe('loadConfig', () => {
     ).toThrow(/AWS_S3_BUCKET_FOR_VIDEOS/);
   });
 
+  // Any `ssl` option at all makes pg attempt a TLS handshake, and the preview's
+  // plain Dockerized Postgres refuses it — the worker crash-looped on its first
+  // queue poll while the web app, which gates ssl on the URL, connected fine.
+  // The decision must mirror db.server.ts exactly: TLS only when the URL or an
+  // explicit override demands it, and never merely because
+  // DATABASE_SSL_REJECT_UNAUTHORIZED is present.
+  test('plain database urls get no ssl option, even with the reject override set', () => {
+    const config = loadConfig({
+      ...BASE,
+      DATABASE_URL: 'postgresql://postgres:postgres@preview-postgres:5432/yawp_pr_240',
+      DATABASE_SSL_REJECT_UNAUTHORIZED: 'false',
+    });
+
+    expect(config.databaseSsl).toBeUndefined();
+  });
+
+  test('rds hosts, sslmode=require, and DATABASE_SSL_REQUIRE all demand lax tls', () => {
+    const rds = loadConfig({
+      ...BASE,
+      DATABASE_URL:
+        'postgresql://user:pass@yawp.cluster-abc.us-east-1.rds.amazonaws.com:5432/yawp',
+    });
+    expect(rds.databaseSsl).toEqual({ rejectUnauthorized: false });
+
+    const sslmode = loadConfig({
+      ...BASE,
+      DATABASE_URL: 'postgresql://localhost:5432/demo?sslmode=require',
+    });
+    expect(sslmode.databaseSsl).toEqual({ rejectUnauthorized: false });
+
+    const forced = loadConfig({ ...BASE, DATABASE_SSL_REQUIRE: 'true' });
+    expect(forced.databaseSsl).toEqual({ rejectUnauthorized: false });
+  });
+
   test('normalizes the target to an origin and fills defaults', () => {
     const config = loadConfig({
       ...BASE,

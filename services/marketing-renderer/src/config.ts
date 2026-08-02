@@ -15,6 +15,13 @@ export type RendererConfig = {
   /** 's3' uploads to the videos bucket; 'disk' copies onto a volume the web app serves. */
   storage: 's3' | 'disk';
   mediaDir: string | null;
+  /**
+   * The pg `ssl` option, or undefined for plain TCP. Undefined matters: any
+   * ssl object at all makes pg attempt a TLS handshake, which a plain
+   * Dockerized Postgres (every preview environment) refuses outright. Mirrors
+   * the web app's db.server.ts decision so the two connect identically.
+   */
+  databaseSsl: { rejectUnauthorized: false } | undefined;
   workerId: string;
   pollIntervalMs: number;
   chromiumPath?: string;
@@ -83,8 +90,17 @@ export function loadConfig(
     );
   }
 
+  const databaseUrl = requireEnv(env, 'DATABASE_URL');
+  const requiresTls =
+    env.DATABASE_SSL_REQUIRE === 'true' ||
+    /\.rds\.amazonaws\.com/i.test(databaseUrl) ||
+    /[?&]sslmode=require(?:&|$)/i.test(databaseUrl) ||
+    /[?&]sslmode=verify-ca(?:&|$)/i.test(databaseUrl) ||
+    /[?&]sslmode=verify-full(?:&|$)/i.test(databaseUrl);
+
   return {
-    databaseUrl: requireEnv(env, 'DATABASE_URL'),
+    databaseUrl,
+    databaseSsl: requiresTls ? { rejectUnauthorized: false } : undefined,
     targetUrl: target.origin,
     // Disk mode has no bucket to demand; s3 mode fails without one.
     bucket: storage === 's3' ? requireEnv(env, 'AWS_S3_BUCKET_FOR_VIDEOS') : '',
