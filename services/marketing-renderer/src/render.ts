@@ -118,7 +118,12 @@ async function glideTo(
   await locator
     .scrollIntoViewIfNeeded({ timeout: STEP_TIMEOUT_MS })
     .catch(() => {});
-  const box = await locator.boundingBox();
+  // A missing target must fail as the step's own click/hover timeout, not as
+  // an untimed boundingBox wait — the glide is presentation, so it declines
+  // to move rather than owning the failure.
+  const box = await locator
+    .boundingBox({ timeout: STEP_TIMEOUT_MS })
+    .catch(() => null);
   if (!box) return from;
   const to = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
   // Timed steps rather than mouse.move's own steps: those dispatch in one

@@ -67,6 +67,21 @@ describe('generateStoryboard', () => {
     expect(system).not.toContain('/app/admin');
   });
 
+  // The first preview render died clicking an element the model invented:
+  // nothing told it what is on the page, so it guessed. The prompt must carry
+  // the per-route guide of real, seeded targets and forbid clicking outside it.
+  test('grounds the model in what is actually on each page', async () => {
+    getLLMCompletion.mockResolvedValueOnce(JSON.stringify(VALID_STORYBOARD));
+
+    await generateStoryboard(brief());
+
+    const system = getLLMCompletion.mock.calls[0][0].system as string;
+    expect(system).toContain('Daily Pages - week 2');
+    expect(system).toContain('Prompt Library');
+    expect(system).toContain('English 10 - Period 3');
+    expect(system.toLowerCase()).toContain('never invent');
+  });
+
   test('passes the brief, audience, and subject to the model', async () => {
     getLLMCompletion.mockResolvedValueOnce(JSON.stringify(VALID_STORYBOARD));
 
