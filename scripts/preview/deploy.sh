@@ -328,6 +328,11 @@ for attempt in $(seq 1 90); do
     echo "PREVIEW_URL=$URL"
     echo "PREVIEW_HOSTNAME=$HOSTNAME"
     echo "PREVIEW_ELAPSED_MS=$elapsed_ms"
+    # Surface the marketing renderer's state in the CI log. It boots in the
+    # background and has no healthcheck of its own; without this, a
+    # crash-looping renderer is invisible from the outside.
+    "${compose[@]}" ps || true
+    "${compose[@]}" logs --tail=80 renderer 2>/dev/null || echo "No renderer service in this compose."
     exit 0
   fi
   echo "Waiting for preview healthcheck ($attempt/90, anonymous=${gate_status:-direct}): $health_url"

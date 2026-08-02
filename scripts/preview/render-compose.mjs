@@ -166,8 +166,8 @@ ${fastVolumes}
     command: >
       bash -lc "
       export PATH=\$$HOME/.bun/bin:\$$PATH;
-      command -v bun >/dev/null || (curl -fsSL https://bun.sh/install | bash);
-      command -v ffmpeg >/dev/null || (apt-get update -qq && apt-get install -y -qq ffmpeg);
+      command -v ffmpeg >/dev/null || (apt-get update -qq && apt-get install -y -qq ffmpeg) || echo 'renderer: ffmpeg install failed';
+      command -v bun >/dev/null || npm install -g bun || { echo 'renderer: bun install failed'; exit 1; };
       export MARKETING_RENDERER_CHROMIUM_PATH=\$$(ls -d /ms-playwright/chromium-*/chrome-linux/chrome | head -1);
       until curl -fsS -o /dev/null http://web:8080/api/healthcheck; do echo 'renderer: waiting for web'; sleep 3; done;
       bun run --cwd services/marketing-renderer start"
