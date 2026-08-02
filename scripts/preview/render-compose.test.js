@@ -132,6 +132,10 @@ describe('renderPreviewCompose', () => {
     expect(compose).toContain('MARKETING_MEDIA_DIR: "/media"');
     expect(compose).toContain('yawp-pr-142-media:/media');
     expect(compose).toContain('marketing-renderer start');
+    // Playwright 1.60 images ship the browser as chrome-linux64 where 1.49
+    // shipped chrome-linux; the narrow glob silently matched nothing and the
+    // renderer fell back to the headless shell, which segfaulted on the host.
+    expect(compose).toContain('chromium-*/chrome-linux*/chrome');
   });
 
   // The library resolves browsers and its recording ffmpeg by revision paths

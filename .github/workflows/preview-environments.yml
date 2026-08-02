@@ -287,7 +287,9 @@ jobs:
             docker compose -p \"\$project\" -f \"\$compose_file\" ps || true; \
             docker inspect --format 'renderer: {{.State.Status}} restarts={{.RestartCount}} oom={{.State.OOMKilled}} exit={{.State.ExitCode}} started={{.State.StartedAt}}' \"\${project}-renderer-1\" || true; \
             docker compose -p \"\$project\" -f \"\$compose_file\" logs --tail=400 renderer || true; \
-            docker compose -p \"\$project\" -f \"\$compose_file\" logs --tail=40 web || true"
+            docker compose -p \"\$project\" -f \"\$compose_file\" logs --tail=40 web || true; \
+            docker exec preview-postgres psql -U postgres -d 'yawp_pr_${DIAGNOSE_PR}' -c 'SELECT id, status, kind, attempts, error, \"createdAt\" FROM \"MarketingMediaJob\" ORDER BY \"createdAt\" DESC LIMIT 5' || true; \
+            docker exec preview-postgres psql -U postgres -d 'yawp_pr_${DIAGNOSE_PR}' -Atc 'SELECT storyboard FROM \"MarketingMediaJob\" ORDER BY \"createdAt\" DESC LIMIT 2' || true"
 
   preview-cleanup:
     if: >-

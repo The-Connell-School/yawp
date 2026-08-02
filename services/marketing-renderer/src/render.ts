@@ -47,9 +47,25 @@ export type RenderResult = {
 
 const NAVIGATION_TIMEOUT_MS = 45_000;
 const STEP_TIMEOUT_MS = 15_000;
+/**
+ * Dev-mode targets hydrate late — and when hydration mismatches, React throws
+ * the server DOM away and re-renders from scratch. A click dispatched into
+ * that window lands on a detached node and silently does nothing, so the
+ * step after it starves. Every navigation waits this long after networkidle
+ * before steps run; recordings trim lead-in, so held frames cost nothing.
+ */
+const HYDRATION_SETTLE_MS = 1_500;
 
 function resolveUrl(baseUrl: string, route: string): string {
   return new URL(route, baseUrl).toString();
+}
+
+async function gotoAndSettle(page: Page, url: string): Promise<void> {
+  await page.goto(url, {
+    waitUntil: 'networkidle',
+    timeout: NAVIGATION_TIMEOUT_MS,
+  });
+  await page.waitForTimeout(HYDRATION_SETTLE_MS);
 }
 
 /**
@@ -172,10 +188,7 @@ async function runStep(
 ): Promise<void> {
   switch (step.action) {
     case 'goto':
-      await page.goto(resolveUrl(ctx.baseUrl, step.path), {
-        waitUntil: 'networkidle',
-        timeout: NAVIGATION_TIMEOUT_MS,
-      });
+      await gotoAndSettle(page, resolveUrl(ctx.baseUrl, step.path));
       break;
     case 'click': {
       const target = locate(page, step);
@@ -244,10 +257,7 @@ async function runStep(
         step.persona,
         ctx.basicAuth
       );
-      await page.goto(resolveUrl(ctx.baseUrl, step.path), {
-        waitUntil: 'networkidle',
-        timeout: NAVIGATION_TIMEOUT_MS,
-      });
+      await gotoAndSettle(page, resolveUrl(ctx.baseUrl, step.path));
       break;
     default: {
       const exhaustive: never = step;
@@ -370,10 +380,7 @@ export async function renderStoryboard(
 
     for (const scene of storyboard.scenes as StoryboardScene[]) {
       if (scene.goto) {
-        await page.goto(resolveUrl(baseUrl, scene.goto), {
-          waitUntil: 'networkidle',
-          timeout: NAVIGATION_TIMEOUT_MS,
-        });
+        await gotoAndSettle(page, resolveUrl(baseUrl, scene.goto));
       }
       if (scene.waitFor) {
         await page
