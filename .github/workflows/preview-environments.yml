@@ -9,6 +9,10 @@ on:
         description: 'PR number — dump that preview''s renderer state and logs (read-only, touches nothing)'
         required: false
         default: ''
+      demo_render_pr:
+        description: 'PR number — queue a known-good demo clip on that preview and wait for its renderer to film it end-to-end'
+        required: false
+        default: ''
   schedule:
     - cron: '17 */6 * * *'
 
@@ -291,10 +295,82 @@ jobs:
             docker exec preview-postgres psql -U postgres -d 'yawp_pr_${DIAGNOSE_PR}' -c 'SELECT id, status, kind, attempts, error, \"createdAt\" FROM \"MarketingMediaJob\" ORDER BY \"createdAt\" DESC LIMIT 5' || true; \
             docker exec preview-postgres psql -U postgres -d 'yawp_pr_${DIAGNOSE_PR}' -Atc 'SELECT storyboard FROM \"MarketingMediaJob\" ORDER BY \"createdAt\" DESC LIMIT 2' || true"
 
+  # Proof-of-life for the whole studio pipeline, runnable without a human in
+  # the admin UI: inserts a QUEUED job with a known-good storyboard into the
+  # preview's database, then watches the preview's own renderer claim and film
+  # it. The job and its media stay behind for the admin to watch in the
+  # Marketing Studio. Fails if the render does not reach SUCCEEDED.
+  preview-demo-render:
+    if: >-
+      github.event_name == 'workflow_dispatch' && inputs.demo_render_pr != ''
+    runs-on: ubuntu-22.04
+    env:
+      DEMO_PR: ${{ inputs.demo_render_pr }}
+      PREVIEW_HOST: ${{ vars.PREVIEW_HOST }}
+      PREVIEW_DOMAIN: ${{ vars.PREVIEW_DOMAIN }}
+      PREVIEW_SSH_USER: ${{ vars.PREVIEW_SSH_USER || 'ec2-user' }}
+    steps:
+      - name: Check demo render configuration
+        env:
+          PREVIEW_SSH_PRIVATE_KEY: ${{ secrets.PREVIEW_SSH_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "$PREVIEW_HOST" || { echo "Missing repository variable PREVIEW_HOST"; exit 1; }
+          test -n "$PREVIEW_SSH_PRIVATE_KEY" || { echo "Missing repository secret PREVIEW_SSH_PRIVATE_KEY"; exit 1; }
+          [[ "$DEMO_PR" =~ ^[0-9]+$ ]] || { echo "demo_render_pr must be a PR number, got: $DEMO_PR"; exit 1; }
+
+      - name: Prepare SSH
+        env:
+          PREVIEW_SSH_PRIVATE_KEY: ${{ secrets.PREVIEW_SSH_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$PREVIEW_SSH_PRIVATE_KEY" > ~/.ssh/preview_key
+          chmod 600 ~/.ssh/preview_key
+          ssh-keyscan -H "$PREVIEW_HOST" >> ~/.ssh/known_hosts
+
+      - name: Queue a demo clip and watch the preview renderer film it
+        run: |
+          set -euo pipefail
+          ssh_target="${PREVIEW_SSH_USER}@${PREVIEW_HOST}"
+          ssh -i ~/.ssh/preview_key "$ssh_target" "DEMO_PR='$DEMO_PR' PREVIEW_DOMAIN='$PREVIEW_DOMAIN' bash -s" <<'REMOTE'
+          set -euo pipefail
+          db="yawp_pr_${DEMO_PR}"
+          psql() { docker exec preview-postgres psql -U postgres -d "$db" "$@"; }
+
+          admin_id="$(psql -Atc "SELECT id FROM \"User\" WHERE email='dev.admin@yawp.local' LIMIT 1")"
+          test -n "$admin_id" || { echo "No seeded dev.admin user in $db — is this a seeded preview?"; exit 1; }
+
+          job_id="demo-$(date +%s)"
+          psql -v ON_ERROR_STOP=1 -c "INSERT INTO \"MarketingMediaJob\"
+            (id, \"createdById\", kind, status, brief, \"subjectType\", \"targetUrl\", storyboard, attempts, \"updatedAt\")
+            VALUES ('$job_id', '$admin_id', 'CLIP', 'QUEUED',
+              'Automated proof render, queued by the preview-demo-render workflow.',
+              'FEATURE', 'https://pr-${DEMO_PR}.${PREVIEW_DOMAIN}',
+            \$sb\${\"slug\":\"daily-pages-prompt-library-proof\",\"title\":\"Daily Pages: Pick a Prompt, Create an Assignment\",\"audience\":\"Teachers\",\"goal\":\"Prove the studio renders end-to-end on this preview\",\"persona\":\"teacher\",\"viewport\":{\"width\":1280,\"height\":800},\"scenes\":[{\"id\":\"assignments-page\",\"goto\":\"/app/assignments\",\"waitFor\":\"table[aria-label='Assignments']\",\"settle\":0.8,\"hold\":0.5,\"screenshot\":false,\"steps\":[{\"action\":\"click\",\"role\":\"link\",\"name\":\"Daily Pages\"}]},{\"id\":\"prompt-library-open\",\"settle\":0.8,\"hold\":2,\"screenshot\":true,\"steps\":[{\"action\":\"waitFor\",\"role\":\"button\",\"name\":\"Prompt Library\"},{\"action\":\"click\",\"role\":\"button\",\"name\":\"Prompt Library\"},{\"action\":\"wait\",\"seconds\":0.6}]},{\"id\":\"select-prompt-new-assignment\",\"settle\":0.8,\"hold\":2.5,\"screenshot\":true,\"steps\":[{\"action\":\"waitFor\",\"role\":\"button\",\"name\":\"New Assignment\"},{\"action\":\"click\",\"role\":\"button\",\"name\":\"New Assignment\"},{\"action\":\"wait\",\"seconds\":0.5}]}]}\$sb\$::jsonb, 0, now())"
+
+          echo "Queued $job_id — waiting for the preview renderer to claim and film it..."
+          status="QUEUED"
+          for i in $(seq 1 60); do
+            status="$(psql -Atc "SELECT status FROM \"MarketingMediaJob\" WHERE id='$job_id'")"
+            echo "poll $i: $status"
+            case "$status" in SUCCEEDED|FAILED|CANCELLED) break;; esac
+            sleep 5
+          done
+
+          psql -c "SELECT status, attempts, error FROM \"MarketingMediaJob\" WHERE id='$job_id'"
+          psql -Atc "SELECT outputs FROM \"MarketingMediaJob\" WHERE id='$job_id'"
+          docker exec "yawp-pr-${DEMO_PR}-renderer-1" ls -la "/media/marketing-media/$job_id/" || true
+
+          test "$status" = "SUCCEEDED"
+          echo "DEMO_RENDER_PROOF: job $job_id rendered end-to-end on the preview and its media is stored."
+          REMOTE
+
   preview-cleanup:
     if: >-
       github.event_name == 'schedule' ||
-      (github.event_name == 'workflow_dispatch' && inputs.diagnose_pr == '')
+      (github.event_name == 'workflow_dispatch' && inputs.diagnose_pr == '' && inputs.demo_render_pr == '')
     runs-on: ubuntu-22.04
     env:
       PREVIEW_HOST: ${{ vars.PREVIEW_HOST }}
