@@ -246,6 +246,19 @@ export async function action({ request, params }: ActionFunctionArgs) {
         { status: 400 }
       );
     }
+    // A render already in progress owns this row: the worker claimed it,
+    // holds a browser open, and will call markSucceeded/markFailed on it
+    // when done. Resetting the row here doesn't stop that browser — it just
+    // makes an actively-filming job look freshly QUEUED with attempts wiped,
+    // which is what "stuck in the queue" turned out to mean in practice.
+    if (ACTIVE_STATUSES.includes(job.status as MarketingJobStatus)) {
+      return dataResponse(
+        {
+          error: `This job is still ${job.status.toLowerCase()}. Wait for it to finish before re-rendering.`,
+        },
+        { status: 400 }
+      );
+    }
     await prisma.marketingMediaJob.update({
       where: { id: job.id },
       data: {
@@ -322,7 +335,12 @@ export default function Route() {
         <div className="flex gap-2">
           <Form method="post">
             <input type="hidden" name="intent" value="retry" />
-            <Button type="submit" variant="outline" disabled={!storyboard}>
+            <Button
+              type="submit"
+              variant="outline"
+              disabled={!storyboard || active}
+              title={active ? 'Wait for the current render to finish.' : undefined}
+            >
               Re-render
             </Button>
           </Form>

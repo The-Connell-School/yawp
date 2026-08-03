@@ -258,6 +258,25 @@ describe('marketing media job page', () => {
     expect(prisma.marketingMediaJob.update).not.toHaveBeenCalled();
   });
 
+  // Reproduces the real failure: the renderer had already claimed this job
+  // in the database and was mid-flight filming it in a real browser when
+  // Re-render was clicked. The click doesn't touch that browser process — it
+  // only resets the DB row — so an unguarded retry makes a job that is
+  // actively being filmed look QUEUED again with attempts wiped to 0. When
+  // the renderer eventually finishes, its own markSucceeded/markFailed call
+  // fights the reset row. The fix is refusing the click in the first place.
+  test('refuses to re-render a job that is still active', async () => {
+    for (const status of ['GENERATING', 'QUEUED', 'RENDERING']) {
+      prisma.marketingMediaJob.update.mockClear();
+      prisma.marketingMediaJob.findUnique.mockResolvedValue(job({ status }));
+
+      const response = await action(args(request({ intent: 'retry' })));
+
+      expect(responseStatus(response)).toBe(400);
+      expect(prisma.marketingMediaJob.update).not.toHaveBeenCalled();
+    }
+  });
+
   test('rejects an unknown intent', async () => {
     prisma.marketingMediaJob.findUnique.mockResolvedValue(job());
 
