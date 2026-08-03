@@ -1,25 +1,21 @@
 import { type SubmissionLifecycleState } from './submission-lifecycle-state';
 
 /**
- * Resolves whether the teacher-grading branch of the submission page should
- * render the editable grading form (true) or the read-only summary (false).
- *
- * - needs_grading: always editable — there's nothing to view yet.
- * - graded: defaults to read-only; ?edit=1 explicitly enters edit mode.
- * - released: always locked to read-only, regardless of ?edit — the
- *   lifecycle is terminal and cannot be re-opened for editing.
+ * Resolves whether the teacher can interact with grading controls in the essay
+ * (e.g. remove grammar marks). Editing is limited to active grading sessions.
  */
 export function resolveSubmissionGradeMode({
   isGradingOther,
-  editParam,
   lifecycleState,
+  isEditingGrade,
 }: {
   isGradingOther: boolean;
-  editParam: string | null;
   lifecycleState: SubmissionLifecycleState;
+  isEditingGrade: boolean;
 }) {
   if (!isGradingOther) return false;
   if (lifecycleState === 'released') return false;
   if (lifecycleState === 'needs_grading') return true;
-  return editParam === '1';
+  if (lifecycleState === 'graded') return isEditingGrade;
+  return false;
 }

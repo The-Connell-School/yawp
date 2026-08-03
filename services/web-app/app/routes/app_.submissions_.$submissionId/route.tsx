@@ -39,6 +39,7 @@ import { GradingCommentsSidebar } from './teacher-grading/grading-comments-sideb
 import { SelectionToolbar } from './teacher-grading/selection-toolbar';
 import { GradeHighlightsOverlay } from './teacher-grading/grade-highlights-overlay';
 import { SubmissionLifecyclePanel } from './teacher-grading/submission-lifecycle-panel';
+import { GradeSummaryReleasedLabel } from './teacher-grading/grade-summary-released-label';
 import { ViewPanel } from './teacher-grading/view-panel';
 import { resolveSubmissionGradeMode } from './submission-grade-mode';
 import { resolveSubmissionLifecycleState } from './submission-lifecycle-state';
@@ -245,31 +246,20 @@ export default function SubmissionRoute() {
     isOwner,
     isTeacher,
   } = useLoaderData<typeof loader>();
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const location = useLocation();
   const revalidator = useRevalidator();
   const titleFetcher = useFetcher();
-  // Edit mode is driven by ?edit=1 so refreshes keep the same tab.
-  // URL param is the explicit override: ?edit=1 → grade, ?edit=0 → view.
-  const editParam = searchParams.get('edit');
   const isGradingOther = isTeacher && !isOwner;
-  const setEditParam = useCallback(
-    (value: '0' | '1') => {
-      const params = new URLSearchParams(searchParams);
-      params.set('edit', value);
-      setSearchParams(params, { replace: true });
-    },
-    [searchParams, setSearchParams]
-  );
-  const handleEdit = useCallback(() => setEditParam('1'), [setEditParam]);
-  const handleDoneEditing = useCallback(
-    () => setEditParam('0'),
-    [setEditParam]
-  );
 
   const [localGradedAt, setLocalGradedAt] = useState<string | null>(null);
   const [localReleasedAt, setLocalReleasedAt] = useState<string | null>(null);
+  const [isEditingGrade, setIsEditingGrade] = useState(
+    () =>
+      !submission.releasedAt &&
+      !(submission.gradedAt && submission.numericPercentage != null)
+  );
   const [teacherGradeUi, setTeacherGradeUi] = useState<{
     numericPercentage: number | null;
     letterGrade: string | null;
@@ -281,6 +271,10 @@ export default function SubmissionRoute() {
 
   useEffect(() => {
     setTeacherGradeUi(null);
+    setIsEditingGrade(
+      !submission.releasedAt &&
+        !(submission.gradedAt && submission.numericPercentage != null)
+    );
   }, [submission.id]);
 
   useEffect(() => {
@@ -293,14 +287,18 @@ export default function SubmissionRoute() {
   const effectiveReleasedAt = localReleasedAt ?? submission.releasedAt;
   const isGraded = !!effectiveGradedAt;
   const isReleased = !!effectiveReleasedAt;
+  const effectiveNumericPct =
+    teacherGradeUi?.numericPercentage ?? submission.numericPercentage ?? null;
+  const hasNumericGrade = effectiveNumericPct != null;
   const lifecycleState = resolveSubmissionLifecycleState({
     isGraded,
     isReleased,
+    hasNumericGrade,
   });
   const isGradeMode = resolveSubmissionGradeMode({
     isGradingOther,
-    editParam,
     lifecycleState,
+    isEditingGrade,
   });
   // Students viewing a submission whose grade hasn't been released yet
   const isPending = isOwner && !effectiveReleasedAt;
@@ -322,8 +320,6 @@ export default function SubmissionRoute() {
   }, []);
 
   // ── Grade display ──────────────────────────────────────────────────
-  const effectiveNumericPct =
-    teacherGradeUi?.numericPercentage ?? submission.numericPercentage ?? null;
   const effectiveLetterGrade =
     teacherGradeUi?.letterGrade ?? submission.letterGrade ?? null;
   const assignmentIsSubmittedForGrade =
@@ -347,22 +343,26 @@ export default function SubmissionRoute() {
       : submission.submittedAt
         ? 'Submitted'
         : 'Draft'
-    : effectiveGradedAt
-      ? 'Graded'
-      : submission.submittedAt
-        ? 'Submitted'
-        : 'Draft';
+    : effectiveReleasedAt
+      ? 'Released'
+      : lifecycleState === 'graded'
+        ? 'Graded'
+        : submission.submittedAt
+          ? 'Submitted'
+          : 'Draft';
   const statusVariant = isOwner
     ? effectiveReleasedAt
       ? ('success' as const)
       : submission.submittedAt
         ? ('info-outlined' as const)
         : ('secondary' as const)
-    : effectiveGradedAt
+    : effectiveReleasedAt
       ? ('success' as const)
-      : submission.submittedAt
-        ? ('info-outlined' as const)
-        : ('secondary' as const);
+      : lifecycleState === 'graded'
+        ? ('success' as const)
+        : submission.submittedAt
+          ? ('info-outlined' as const)
+          : ('secondary' as const);
 
   // ── Local comments state (optimistic, no revalidation) ─────────────
   const [comments, setComments] = useState(submission.comments);
@@ -561,15 +561,28 @@ export default function SubmissionRoute() {
       rubricConfig?: RubricDisplayConfig | null;
     }) => {
       setTeacherGradeUi(payload);
-      if (!submission.gradedAt) {
-        setLocalGradedAt(new Date().toISOString());
-        // Generating suggestions marks it graded server-side too, but the
-        // teacher is mid-review — keep the editable form open rather than
-        // snapping to the Graded state's default read-only summary.
-        setEditParam('1');
-      }
     },
-    [submission.gradedAt, setEditParam]
+    []
+  );
+
+  const handleGradeSaved = useCallback(
+    (snapshot: {
+      numericPercentage: number | null;
+      letterGrade: string | null;
+      score: string | null;
+      overallComment: string | null;
+      rubricScores: unknown;
+    }) => {
+      setTeacherGradeUi((prev) => ({
+        numericPercentage: snapshot.numericPercentage,
+        letterGrade: snapshot.letterGrade,
+        score: snapshot.score,
+        overallComment: snapshot.overallComment,
+        rubricScores: snapshot.rubricScores,
+        rubricConfig: prev?.rubricConfig ?? null,
+      }));
+    },
+    []
   );
 
   const teacherExistingGrade = useMemo(
@@ -662,21 +675,28 @@ export default function SubmissionRoute() {
   );
 
   // ── Lifecycle panel: edit mode, Save, Release ───────────────────────
-  const releaseFetcher = useFetcher<{ success?: boolean }>();
-  const [isSavingGrade, setIsSavingGrade] = useState(false);
-  const isReleasing = releaseFetcher.state !== 'idle';
+  const [isReleasing, setIsReleasing] = useState(false);
 
-  const lastHandledReleaseRef = useRef<unknown>(null);
-  useEffect(() => {
-    if (
-      releaseFetcher.data?.success &&
-      releaseFetcher.state === 'idle' &&
-      releaseFetcher.data !== lastHandledReleaseRef.current
-    ) {
-      lastHandledReleaseRef.current = releaseFetcher.data;
-      setLocalReleasedAt(new Date().toISOString());
+  const handleReleaseGrade = useCallback(async () => {
+    setIsReleasing(true);
+    try {
+      const formData = new FormData();
+      formData.append('submissionIds', submission.id);
+      const res = await fetch('/api/domain/release-grades', {
+        method: 'POST',
+        body: formData,
+      });
+      if (!res.ok) return;
+      const body = (await res.json()) as { success?: boolean };
+      if (body.success) {
+        setLocalReleasedAt(new Date().toISOString());
+      }
+    } finally {
+      setIsReleasing(false);
     }
-  }, [releaseFetcher.data, releaseFetcher.state]);
+  }, [submission.id]);
+
+  const [isSavingGrade, setIsSavingGrade] = useState(false);
 
   const handleMarkGraded = useCallback(async () => {
     setIsSavingGrade(true);
@@ -691,22 +711,11 @@ export default function SubmissionRoute() {
       });
       if (res.ok) {
         setLocalGradedAt(new Date().toISOString());
-        // Move to the Graded state's default read-only view.
-        setEditParam('0');
       }
     } finally {
       setIsSavingGrade(false);
     }
-  }, [submission.id, setEditParam]);
-
-  const handleReleaseGrade = useCallback(() => {
-    const formData = new FormData();
-    formData.append('submissionIds', submission.id);
-    releaseFetcher.submit(formData, {
-      method: 'POST',
-      action: '/api/domain/release-grades',
-    });
-  }, [submission.id, releaseFetcher]);
+  }, [submission.id]);
 
   // ── Paths ──────────────────────────────────────────────────────────
   const revisePath = `/app/documents/${submission.documentId}?revise=1`;
@@ -775,16 +784,9 @@ export default function SubmissionRoute() {
           )}
         </div>
 
-        <Badge variant={statusVariant} className="shrink-0">
-          {statusLabel}
-        </Badge>
-
-        {gradeDisplay && !isPending ? (
-          <Badge
-            variant="secondary"
-            className="shrink-0 border-purple-300 bg-purple-100 text-purple-800 dark:border-purple-800 dark:bg-purple-950/40 dark:text-purple-200"
-          >
-            {gradeDisplay}
+        {isOwner ? (
+          <Badge variant={statusVariant} className="shrink-0">
+            {statusLabel}
           </Badge>
         ) : null}
 
@@ -846,10 +848,10 @@ export default function SubmissionRoute() {
           {isGradingOther ? (
             <SubmissionLifecyclePanel
               lifecycleState={lifecycleState}
-              isEditing={isGradeMode}
-              onEdit={handleEdit}
-              onDoneEditing={handleDoneEditing}
+              isEditingGrade={isEditingGrade}
+              onEditingGradeChange={setIsEditingGrade}
               onMarkGraded={handleMarkGraded}
+              onGradeSaved={handleGradeSaved}
               isSavingGrade={isSavingGrade}
               onRelease={handleReleaseGrade}
               isReleasing={isReleasing}
@@ -873,8 +875,9 @@ export default function SubmissionRoute() {
             />
           ) : (
             <>
-              <div className="flex shrink-0 items-center border-b px-4 py-2.5">
+              <div className="flex shrink-0 items-center justify-between gap-2 border-b px-4 py-2.5">
                 <span className="text-sm font-semibold">Grade Summary</span>
+                {isReleased ? <GradeSummaryReleasedLabel /> : null}
               </div>
               <div className="no-scrollbar grow overflow-y-auto">
                 {isPending ? (
@@ -1043,4 +1046,3 @@ function PendingViewPanel() {
     </div>
   );
 }
-

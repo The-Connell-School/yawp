@@ -126,13 +126,13 @@ describe('TeacherGradingPanel', () => {
     );
 
     expect(document.body.textContent).toContain(
-      'Use a more supportive calibration for younger students, early-year work, or first attempts.'
+      'Adds 5 points to the overall grade percentage.'
     );
     expect(document.body.textContent).toContain(
-      'Use the normal course-level expectation for this assignment and rubric.'
+      'Keeps the overall grade percentage unchanged.'
     );
     expect(document.body.textContent).toContain(
-      'Use a stricter calibration for older students, upper-level classes, or raised standards.'
+      'Subtracts 5 points from the overall grade percentage.'
     );
     expect(beginner?.getAttribute('aria-pressed')).toBe('true');
 

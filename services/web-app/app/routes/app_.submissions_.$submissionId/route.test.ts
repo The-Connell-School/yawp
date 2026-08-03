@@ -7,82 +7,46 @@ describe('submission grade mode', () => {
     expect(
       resolveSubmissionGradeMode({
         isGradingOther: false,
-        editParam: '1',
         lifecycleState: 'graded',
+        isEditingGrade: true,
       })
     ).toBe(false);
   });
 
-  describe('needs_grading', () => {
-    test('is always edit mode, regardless of edit param', () => {
-      expect(
-        resolveSubmissionGradeMode({
-          isGradingOther: true,
-          editParam: null,
-          lifecycleState: 'needs_grading',
-        })
-      ).toBe(true);
-      expect(
-        resolveSubmissionGradeMode({
-          isGradingOther: true,
-          editParam: '0',
-          lifecycleState: 'needs_grading',
-        })
-      ).toBe(true);
-    });
+  test('is always edit mode while needs grading', () => {
+    expect(
+      resolveSubmissionGradeMode({
+        isGradingOther: true,
+        lifecycleState: 'needs_grading',
+        isEditingGrade: false,
+      })
+    ).toBe(true);
   });
 
-  describe('graded', () => {
-    test('defaults to view mode when no edit param is present', () => {
-      expect(
-        resolveSubmissionGradeMode({
-          isGradingOther: true,
-          editParam: null,
-          lifecycleState: 'graded',
-        })
-      ).toBe(false);
-    });
-
-    test('enters edit mode when edit=1 is explicitly set', () => {
-      expect(
-        resolveSubmissionGradeMode({
-          isGradingOther: true,
-          editParam: '1',
-          lifecycleState: 'graded',
-        })
-      ).toBe(true);
-    });
-
-    test('stays in view mode when edit=0 is explicitly set', () => {
-      expect(
-        resolveSubmissionGradeMode({
-          isGradingOther: true,
-          editParam: '0',
-          lifecycleState: 'graded',
-        })
-      ).toBe(false);
-    });
+  test('is edit mode for graded submissions only while editing', () => {
+    expect(
+      resolveSubmissionGradeMode({
+        isGradingOther: true,
+        lifecycleState: 'graded',
+        isEditingGrade: false,
+      })
+    ).toBe(false);
+    expect(
+      resolveSubmissionGradeMode({
+        isGradingOther: true,
+        lifecycleState: 'graded',
+        isEditingGrade: true,
+      })
+    ).toBe(true);
   });
 
-  describe('released', () => {
-    test('is always locked to view mode, even with edit=1', () => {
-      expect(
-        resolveSubmissionGradeMode({
-          isGradingOther: true,
-          editParam: '1',
-          lifecycleState: 'released',
-        })
-      ).toBe(false);
-    });
-
-    test('is locked to view mode with no edit param', () => {
-      expect(
-        resolveSubmissionGradeMode({
-          isGradingOther: true,
-          editParam: null,
-          lifecycleState: 'released',
-        })
-      ).toBe(false);
-    });
+  test('is locked read-only once released', () => {
+    expect(
+      resolveSubmissionGradeMode({
+        isGradingOther: true,
+        lifecycleState: 'released',
+        isEditingGrade: true,
+      })
+    ).toBe(false);
   });
 });

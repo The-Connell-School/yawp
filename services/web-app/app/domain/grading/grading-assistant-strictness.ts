@@ -10,8 +10,26 @@ export type GradingAssistantStrictnessLevel =
 export const DEFAULT_GRADING_ASSISTANT_STRICTNESS_LEVEL: GradingAssistantStrictnessLevel =
   'intermediate';
 
+const gradingAssistantStrictnessPercentageAdjustments: Record<
+  GradingAssistantStrictnessLevel,
+  number
+> = {
+  beginner: 5,
+  intermediate: 0,
+  advanced: -5,
+};
+
+const gradingAssistantStrictnessActCompositeAdjustments: Record<
+  GradingAssistantStrictnessLevel,
+  number
+> = {
+  beginner: 1,
+  intermediate: 0,
+  advanced: -1,
+};
+
 export const gradingAssistantStrictnessHelpText =
-  'Use beginner level for younger students or at the beginning of the year, and increase for older students or upper level classes or to increase standards as the year progresses. You can always change this during the act of grading.';
+  'Strictness only adjusts the overall grade number after Grading Assistant suggestions. Use beginner for a slightly higher grade, advanced for a slightly lower grade, and intermediate for no adjustment.';
 
 export const gradingAssistantStrictnessOptions: Array<{
   value: GradingAssistantStrictnessLevel;
@@ -21,20 +39,17 @@ export const gradingAssistantStrictnessOptions: Array<{
   {
     value: 'beginner',
     label: 'Beginner',
-    description:
-      'Use a more supportive calibration for younger students, early-year work, or first attempts.',
+    description: 'Adds 5 points to the overall grade percentage.',
   },
   {
     value: 'intermediate',
     label: 'Intermediate',
-    description:
-      'Use the normal course-level expectation for this assignment and rubric.',
+    description: 'Keeps the overall grade percentage unchanged.',
   },
   {
     value: 'advanced',
     label: 'Advanced',
-    description:
-      'Use a stricter calibration for older students, upper-level classes, or raised standards.',
+    description: 'Subtracts 5 points from the overall grade percentage.',
   },
 ];
 
@@ -61,16 +76,18 @@ export function getGradingAssistantStrictnessLabel(
   );
 }
 
-export function getGradingAssistantStrictnessInstructions(
+export function applyGradingAssistantStrictnessToPercentage(
+  percentage: number,
   level: GradingAssistantStrictnessLevel
 ) {
-  if (level === 'beginner') {
-    return 'Use beginner calibration. Apply the rubric supportively for a younger student, early-year assignment, or first attempt. Reward partial control of each rubric skill, avoid unnecessarily harsh penalties for developing work, and make the next step feel achievable.';
-  }
+  const adjustment = gradingAssistantStrictnessPercentageAdjustments[level];
+  return Math.max(0, Math.min(100, Math.round(percentage + adjustment)));
+}
 
-  if (level === 'advanced') {
-    return 'Use advanced calibration. Hold the student to an advanced standard for this rubric. Expect precise claims, controlled organization, specific evidence, mature voice, and clean conventions before awarding top scores.';
-  }
-
-  return 'Use intermediate calibration. Apply the rubric at the normal course-level expectation for this assignment.';
+export function applyGradingAssistantStrictnessToActComposite(
+  composite: number,
+  level: GradingAssistantStrictnessLevel
+) {
+  const adjustment = gradingAssistantStrictnessActCompositeAdjustments[level];
+  return Math.max(2, Math.min(12, composite + adjustment));
 }

@@ -57,7 +57,7 @@ test.describe.serial('Teacher submission lifecycle panel', () => {
     if (documentId) await deleteFixtureDocument(documentId);
   });
 
-  test('needs grading: no edit/view toggle, only Save + Grading Assistant Suggestions', async ({
+  test('needs grading: Save stays disabled until there is draft content', async ({
     page,
     e2eContext,
     signIn,
@@ -73,53 +73,32 @@ test.describe.serial('Teacher submission lifecycle panel', () => {
     const panel = page.getByTestId('submission-lifecycle-panel');
     await expect(panel).toBeVisible();
 
-    // No Edit/View toggle in the needs-grading state.
-    await expect(panel.getByTestId('submission-lifecycle-edit')).toHaveCount(
-      0
-    );
-    await expect(
-      panel.getByRole('button', { name: /^view$/i })
-    ).toHaveCount(0);
-
-    // Save is the header action, and the grading form is always shown.
-    await expect(
-      panel.getByTestId('submission-lifecycle-save')
-    ).toBeVisible();
+    await expect(panel.getByTestId('submission-lifecycle-edit')).toHaveCount(0);
     await expect(page.getByTestId('grading-assistant-generate')).toBeVisible();
 
-    // The top-right nav never has a Release Grade button — that action now
-    // lives exclusively in the lifecycle panel once graded.
-    const navReleaseButton = page
-      .locator('nav')
-      .getByRole('button', { name: /release grade/i });
-    await expect(navReleaseButton).toHaveCount(0);
+    const saveButton = panel.getByTestId('submission-lifecycle-save');
+    await expect(saveButton).toBeVisible();
+    await expect(saveButton).toBeDisabled();
 
     await page.getByTestId('grading-assistant-generate').click();
     await expect(
       page.getByTestId('grading-overall-comment')
     ).not.toHaveValue('', { timeout: 20000 });
 
-    await panel.getByTestId('submission-lifecycle-save').click();
+    await expect(saveButton).toBeEnabled();
+    await saveButton.click();
     await page.waitForLoadState('networkidle');
 
-    // After Save, the panel moves to the Graded state's default read-only view.
-    await expect(panel.getByTestId('submission-lifecycle-edit')).toBeVisible();
-    await expect(
-      panel.getByTestId('submission-lifecycle-save')
-    ).toHaveCount(0);
     await expect(
       panel.getByTestId('submission-lifecycle-release')
     ).toBeVisible();
-    await expect(
-      page.getByText(
-        'these legacy grading assistant suggestions still apply.'
-      )
-    ).toBeVisible();
-    // Release now lives in the panel, not the top-right nav.
-    await expect(navReleaseButton).toHaveCount(0);
+    await expect(panel.getByTestId('submission-lifecycle-edit')).toBeVisible();
+    await expect(page.getByTestId('grading-assistant-generate')).toHaveCount(0);
+    await expect(page.getByTestId('grading-overall-comment')).toHaveCount(0);
+    await expect(panel.getByText('Overall Grade')).toBeVisible();
   });
 
-  test('graded: Edit reveals the form and regenerating suggestions still works, then Release locks it', async ({
+  test('graded: ready-to-release view with edit flow and release', async ({
     page,
     e2eContext,
     signIn,
@@ -130,24 +109,14 @@ test.describe.serial('Teacher submission lifecycle panel', () => {
 
     const panel = page.getByTestId('submission-lifecycle-panel');
 
-    // Defaults to read-only view for an already-graded, unreleased submission.
-    await expect(panel.getByTestId('submission-lifecycle-edit')).toBeVisible();
-    await expect(
-      page.getByTestId('grading-overall-comment')
-    ).toHaveCount(0);
-    // Release is only ever offered from the lifecycle panel, not the nav.
-    await expect(
-      page.locator('nav').getByRole('button', { name: /release grade/i })
-    ).toHaveCount(0);
     await expect(panel.getByTestId('submission-lifecycle-release')).toBeVisible();
+    await expect(panel.getByTestId('submission-lifecycle-edit')).toBeVisible();
+    await expect(page.getByTestId('grading-assistant-generate')).toHaveCount(0);
 
     await panel.getByTestId('submission-lifecycle-edit').click();
+    await expect(page.getByTestId('grading-assistant-generate')).toBeVisible();
     await expect(page.getByTestId('grading-overall-comment')).toBeVisible();
-    await expect(
-      panel.getByTestId('submission-lifecycle-save')
-    ).toBeVisible();
 
-    // Regenerating suggestions replaces the existing draft (confirmation required).
     const generateButton = page.getByTestId('grading-assistant-generate');
     await generateButton.click();
     await page.getByRole('button', { name: /^replace$/i }).click();
@@ -155,41 +124,33 @@ test.describe.serial('Teacher submission lifecycle panel', () => {
       timeout: 20000,
     });
     await expect(
-      page.getByTestId('grading-overall-comment')
-    ).not.toHaveValue('');
+      panel.getByTestId('submission-lifecycle-cancel')
+    ).toHaveText('Cancel');
 
-    await panel.getByTestId('submission-lifecycle-save').click();
-    await expect(page.getByTestId('grading-overall-comment')).toHaveCount(0);
-    await expect(panel.getByTestId('submission-lifecycle-edit')).toBeVisible();
+    await panel.getByTestId('submission-lifecycle-cancel').click();
+    await expect(page.getByTestId('grading-assistant-generate')).toHaveCount(0);
+    await expect(panel.getByTestId('submission-lifecycle-release')).toBeVisible();
 
-    // Release the grade from the lifecycle panel (top-right button is gone).
+    await panel.getByTestId('submission-lifecycle-edit').click();
+    await expect(
+      panel.getByTestId('submission-lifecycle-cancel')
+    ).toHaveText('Done');
+    await panel.getByTestId('submission-lifecycle-cancel').click();
+    await expect(panel.getByTestId('submission-lifecycle-release')).toBeVisible();
+
     await panel.getByTestId('submission-lifecycle-release').click();
-    await expect(
-      page.getByRole('alertdialog', { name: /release grade/i })
-    ).toBeVisible();
-    await page.getByRole('button', { name: /^release$/i }).click();
-    await page.waitForLoadState('networkidle');
-
-    await expect(
-      panel.getByTestId('submission-lifecycle-edit')
-    ).toHaveCount(0);
-    await expect(
-      panel.getByTestId('submission-lifecycle-release')
-    ).toHaveCount(0);
-
-    // Locked even after reload, and ?edit=1 can no longer force edit mode.
-    await page.reload();
-    await page.waitForLoadState('networkidle');
-    await expect(
-      panel.getByTestId('submission-lifecycle-edit')
-    ).toHaveCount(0);
-    await expect(page.getByTestId('grading-overall-comment')).toHaveCount(0);
-
-    await page.goto(`/app/submissions/${submissionId}?edit=1`);
-    await page.waitForLoadState('networkidle');
-    await expect(page.getByTestId('grading-overall-comment')).toHaveCount(0);
-    await expect(
-      page.getByRole('button', { name: /release grade/i })
-    ).toHaveCount(0);
+    const releaseDialog = page.getByRole('alertdialog', {
+      name: /release grade/i,
+    });
+    await expect(releaseDialog).toBeVisible();
+    await releaseDialog.getByRole('button', { name: /^release$/i }).click();
+    await expect(panel.getByTestId('submission-lifecycle-release')).toHaveCount(0, {
+      timeout: 15000,
+    });
+    await expect(page.getByTestId('grading-assistant-generate')).toHaveCount(0);
+    await expect(panel.getByTestId('grade-summary-released-label')).toBeVisible();
+    await expect(panel.getByTestId('grade-summary-released-label')).toHaveText(
+      'Released'
+    );
   });
 });

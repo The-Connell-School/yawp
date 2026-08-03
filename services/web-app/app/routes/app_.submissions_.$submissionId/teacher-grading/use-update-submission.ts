@@ -20,6 +20,7 @@ export function useUpdateSubmission(submissionId: string) {
       timeoutRef.current = setTimeout(() => setStatus('idle'), 2000);
     } catch {
       setStatus('error');
+      throw new Error('Save failed');
     }
   }, [submissionId]);
 
