@@ -298,7 +298,7 @@ export function AssignmentEditForm({
               type="button"
               size="sm"
               variant="secondary"
-              aria-label="Extract prompt from PDF"
+              aria-label="Extract assignment text from PDF"
               className="absolute bottom-2 right-2 shadow-sm"
               onClick={() => extractFileInputRef.current?.click()}
               disabled={isExtracting || isSaving}

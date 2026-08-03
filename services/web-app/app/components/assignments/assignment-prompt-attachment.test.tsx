@@ -60,6 +60,9 @@ describe('AssignmentPromptAttachment', () => {
       (button) => button.textContent?.includes('Essay directions.pdf')
     )!;
     expect(trigger).toBeDefined();
+    expect(trigger.getAttribute('aria-label')).toBe(
+      'View prompt attachment: Essay directions.pdf'
+    );
 
     const frame = document.querySelector('iframe');
     expect(frame?.getAttribute('src')).toBe(

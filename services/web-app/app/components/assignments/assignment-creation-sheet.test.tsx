@@ -298,7 +298,7 @@ describe('AssignmentCreationSheetContent', () => {
   it('shows an extract-from-PDF button inside the prompt field', () => {
     root = renderSheet().root;
 
-    const extractButton = buttonByLabel('Extract prompt from PDF');
+    const extractButton = buttonByLabel('Extract assignment text from PDF');
     expect(extractButton.textContent).toContain('Extract from PDF');
   });
 

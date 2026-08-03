@@ -27,6 +27,7 @@ export function AssignmentPromptAttachment({
         type="button"
         variant="outline"
         size="sm"
+        aria-label={`View prompt attachment: ${fileName}`}
         onClick={() => setOpen(true)}
       >
         <FileText className="mr-2 h-4 w-4" aria-hidden />
