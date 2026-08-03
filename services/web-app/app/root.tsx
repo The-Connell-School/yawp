@@ -44,6 +44,12 @@ import {
   getEnvironmentBannerWarning,
   shouldEnableLocalDevQuickLogin,
 } from './utils/environment-banner.server.ts';
+import {
+  isPreviewAccessGateEnabled,
+  previewAccessMiddleware,
+} from './utils/preview-access.server.ts';
+
+export const middleware = [previewAccessMiddleware];
 
 export const links: LinksFunction = () => {
   return [
@@ -76,7 +82,11 @@ export const meta: MetaFunction<typeof loader> = ({ data }) => {
 export async function loader({ request }: LoaderFunctionArgs) {
   const timings = makeTimings('root loader');
   const url = new URL(request.url);
-  const publicLandingPage = url.pathname === '/' || url.pathname === '/info';
+  const publicLandingPage =
+    url.pathname === '/' ||
+    url.pathname === '/info' ||
+    url.pathname === '/auth/preview-access' ||
+    url.pathname === '/auth/preview-access.data';
   const cookieHeader = request.headers.get('Cookie');
   const contrastCookie =
     (await contrastPreferenceCookie.parse(cookieHeader)) || {};
@@ -99,6 +109,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
         ENV: getEnv(),
         bannerWarning: null,
         localDevQuickLogin: { enabled: false, options: [] },
+        previewAccessGateEnabled: isPreviewAccessGateEnabled(),
         impersonation: { isReadOnly: false, impersonatorUserId: null },
         studentPreview: { active: false, organizationId: null },
         toast: null,
@@ -200,6 +211,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
         enabled: localDevQuickLoginEnabled,
         options: localDevQuickLoginEnabled ? getLocalDevLoginOptions() : [],
       },
+      previewAccessGateEnabled: isPreviewAccessGateEnabled(),
       impersonation,
       studentPreview,
       toast,
@@ -343,6 +355,7 @@ export default function App({ loaderData: data }: Route.ComponentProps) {
         <LocalDevEnvironmentBar
           bannerWarning={data.bannerWarning}
           localDevQuickLogin={data.localDevQuickLogin}
+          previewAccessGateEnabled={data.previewAccessGateEnabled}
         />
       ) : null}
       <GlobalLoading />

@@ -5,11 +5,11 @@ import { isLocalDatabaseUrl } from '../../../../packages/prisma/scripts/local-de
  *
  * Two ways to earn it, and both fail closed:
  *
- * 1. A deployed environment behind the shared basic-auth gate. Traefik demands the
- *    global password before any request reaches the app — including /auth/dev-login and
- *    every API route — so anyone who can see the app has already authenticated once.
- *    PREVIEW_ACCESS_GATE is emitted by the same render-compose call that attaches that
- *    middleware, so the flag cannot be set without the gate being in front of it.
+ * 1. A deployed environment with the in-app preview access gate enabled. The root route
+ *    middleware reads PREVIEW_ACCESS_GATE itself and blocks every descendant loader,
+ *    action, and API/resource route before it runs (except /api/healthcheck and the gate
+ *    form). The flag is therefore the enforcement switch, not a claim about a separate
+ *    proxy, so it cannot enable role-swap without also putting the gate in front of it.
  * 2. A developer's own machine: NODE_ENV=development against a local database.
  *
  * Production-dump data is excluded either way. Real people's records are not a safe place
