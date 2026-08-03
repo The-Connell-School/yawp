@@ -7,6 +7,7 @@
     "services/*"
   ],
   "scripts": {
+    "typecheck": "bun web-app:typecheck",
     "export-env": "export $(grep -v '^#' .env | xargs) ",
     "dev": "bash scripts/worktree-local-setup.sh --no-dev && source .worktree-local/config.env && PORT=\"$DEV_PORT\" bun web-app:dev",
     "web-app:dev": "bun run --cwd services/web-app dev",

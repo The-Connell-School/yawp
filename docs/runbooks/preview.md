@@ -10,7 +10,7 @@ The target behavior is:
 - The shared template database restores the configured production database dump from S3 once; new PR databases clone that template, then apply newer Prisma migrations.
 - Deploys avoid ECR pushes and Terraform applies on the hot path.
 - The preview URL is `https://pr-<number>.$PREVIEW_DOMAIN` when TLS is enabled.
-- Traefik protects every preview route, API, and static asset with one shared HTTP Basic credential. Deploys fail closed if that credential is missing.
+- The React Router app protects every loader, action, and API route with a signed-cookie access gate. `/api/healthcheck` is the only operational exception. Deploys generate a memorable code and fail closed if no code reaches the app.
 - The default runtime is `PREVIEW_RUNTIME=fast`: source is bind-mounted, Bun dependencies live in Docker volumes, React Router runs in dev mode, and warm deploys skip dependency install, Prisma generate, and migration work when the tooling fingerprint has not changed. The web container is still recreated after each source sync so the dev server starts from a clean process. Set `PREVIEW_RUNTIME=production` to use the production Dockerfile build path.
 
 ## Host Setup
@@ -65,39 +65,29 @@ Required repository settings:
 - Variable `PREVIEW_DB_DUMP_S3_URI`
 - Secret `PREVIEW_SSH_PRIVATE_KEY`
 - Secret `PREVIEW_ANTHROPIC_API_KEY` or repository secret `ANTHROPIC_API_KEY`
-- Secret `PREVIEW_BASIC_AUTH`, containing one htpasswd entry such as `preview-admin:$apr1$...`
-- Secret `PREVIEW_BASIC_AUTH_PASSWORD`, containing the plaintext password for authenticated deploy smoke checks
 - Secret `PREVIEW_DB_PASSWORD` if the shared preview Postgres password is not the default
 - Secret `PREVIEW_LOGIN_EMAIL`
 - Secret `PREVIEW_LOGIN_PASSWORD`
 
-### Create or rotate the shared access credential
+### Retrieve or rotate the access code
 
-Generate the password and Apache MD5 htpasswd entry locally. The password never enters the Compose file; only its hash does.
+On the first deploy, `scripts/preview/deploy.sh` generates one memorable code from curated adjective and animal lists, such as `brave-otter-4193`. It retains that code per environment across redeploys and prints this line in the deploy job log:
 
-```bash
-read -rsp 'New preview password: ' PREVIEW_BASIC_AUTH_PASSWORD
-echo
-export PREVIEW_BASIC_AUTH_PASSWORD
-export PREVIEW_BASIC_AUTH="preview-admin:$(printf '%s' "$PREVIEW_BASIC_AUTH_PASSWORD" | openssl passwd -apr1 -stdin)"
+```text
+PREVIEW_ACCESS_CODE=brave-otter-4193
 ```
 
-In GitHub, open **Settings → Secrets and variables → Actions** and create or update both repository secrets:
+The same deploy creates and retains a random cookie-signing secret without printing it. The access session is a signed, `HttpOnly`, `SameSite=Lax` cookie with a 30-day lifetime.
 
-- `PREVIEW_BASIC_AUTH` with the complete `preview-admin:$apr1$...` value
-- `PREVIEW_BASIC_AUTH_PASSWORD` with the plaintext password used to generate it
+To rotate the code, remove the environment through the normal preview cleanup/destroy workflow and redeploy it. For an operator-controlled local run, set `PREVIEW_ACCESS_CODES` to one or more comma-separated `word-word-0000` codes before invoking deploy.
 
-Alternatively, set both through the repository helper:
+The access screen is the only public application page. Anonymous loaders redirect there, while anonymous actions and `/api/*` requests return `401`; `/api/healthcheck` remains open. The deploy smoke explicitly checks that anonymous `POST /auth/dev-login` is blocked before using the code.
+
+Older hosts may still have the retired Traefik entrypoint middleware on disk. Re-run the host bootstrap once after shipping this change to remove it:
 
 ```bash
-PREVIEW_HOST=<host-or-ip> \
-PREVIEW_DOMAIN=preview.yawp.school \
-PREVIEW_BASIC_AUTH="$PREVIEW_BASIC_AUTH" \
-PREVIEW_BASIC_AUTH_PASSWORD="$PREVIEW_BASIC_AUTH_PASSWORD" \
-./scripts/github-preview-config.sh
+PREVIEW_ROOT=/srv/yawp-preview bash scripts/preview/bootstrap-host.sh
 ```
-
-Always rotate the two secrets together, then rerun the preview workflow for every open PR so each generated Compose project receives the new hash. Give internal admins the username (`preview-admin` in this example) and the new password through the approved password manager.
 
 ## Local Smoke
 
@@ -108,10 +98,10 @@ PR_NUMBER=999 \
 PREVIEW_DOMAIN=localhost \
 PREVIEW_ROOT=/tmp/yawp-preview \
 PREVIEW_DIRECT_PORT=18080 \
-PREVIEW_BASIC_AUTH="$PREVIEW_BASIC_AUTH" \
-PREVIEW_BASIC_AUTH_PASSWORD="$PREVIEW_BASIC_AUTH_PASSWORD" \
 bash scripts/preview/deploy.sh
 ```
+
+The command prints `PREVIEW_ACCESS_CODE=...` after the health, access-gate, and login smoke checks pass. To use a fixed local code, add `PREVIEW_ACCESS_CODES=brave-otter-4193`.
 
 Destroy it with:
 
@@ -122,7 +112,7 @@ PREVIEW_ROOT=/tmp/yawp-preview \
 bash scripts/preview/destroy.sh
 ```
 
-Production-dump app-login smoke credentials come from `PREVIEW_LOGIN_EMAIL` and `PREVIEW_LOGIN_PASSWORD`. Seeded previews use the dev-login route, while all health and login smoke requests also send the shared Basic credential.
+Production-dump app-login smoke credentials come from `PREVIEW_LOGIN_EMAIL` and `PREVIEW_LOGIN_PASSWORD`. Seeded fast previews use the dev-login route only after the in-app access code has established the gate cookie. `PREVIEW_DATA_MODE=production-dump` continues to disable role-swap regardless of gate state.
 
 ## Performance Notes
 

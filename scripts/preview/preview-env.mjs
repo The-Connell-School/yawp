@@ -44,21 +44,31 @@ function requireDataMode(value) {
   return dataMode;
 }
 
-export function requirePreviewBasicAuth(value) {
-  const credential = String(value ?? '').trim();
-  if (!credential) {
+export function requirePreviewAccessCodes(value) {
+  const codes = String(value ?? '')
+    .split(/[;,\n]/)
+    .map((code) => code.trim().toLowerCase())
+    .filter(Boolean);
+  if (codes.length === 0) {
+    throw new Error('PREVIEW_ACCESS_CODES is required for preview deployments');
+  }
+  if (codes.some((code) => !/^[a-z]+-[a-z]+-[1-9][0-9]{3}$/.test(code))) {
     throw new Error(
-      'PREVIEW_BASIC_AUTH is required for preview deployments',
+      'PREVIEW_ACCESS_CODES must contain two-word, four-digit codes',
     );
   }
-  if (
-    !/^[A-Za-z0-9._-]+:\$apr1\$[^$\r\n]+\$[^$\r\n]+$/.test(credential)
-  ) {
-    throw new Error(
-      'PREVIEW_BASIC_AUTH must be a single htpasswd-format credential (user:$apr1$...)',
-    );
+  return codes.join(',');
+}
+
+export function requirePreviewSessionSecret(value) {
+  const secret = String(value ?? '').trim();
+  if (!secret) {
+    throw new Error('PREVIEW_SESSION_SECRET is required for preview deployments');
   }
-  return credential;
+  if (secret.length < 32) {
+    throw new Error('PREVIEW_SESSION_SECRET must be at least 32 characters');
+  }
+  return secret;
 }
 
 

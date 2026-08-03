@@ -48,10 +48,6 @@ jobs:
       PREVIEW_AI_MODEL: ${{ vars.DEMO_AI_MODEL || 'claude-sonnet-4-6' }}
       PREVIEW_ANTHROPIC_API_KEY: ${{ secrets.PREVIEW_ANTHROPIC_API_KEY || secrets.ANTHROPIC_API_KEY }}
       PREVIEW_DB_PASSWORD: ${{ secrets.PREVIEW_DB_PASSWORD }}
-      # The demo box shares the preview deploy path, so it inherits the same Traefik
-      # basicauth middleware. It needs the same two secrets or the render fails closed.
-      PREVIEW_BASIC_AUTH: ${{ secrets.PREVIEW_BASIC_AUTH }}
-      PREVIEW_BASIC_AUTH_PASSWORD: ${{ secrets.PREVIEW_BASIC_AUTH_PASSWORD }}
       PREVIEW_LOGIN_EMAIL: ${{ secrets.DEMO_LOGIN_EMAIL || secrets.PREVIEW_LOGIN_EMAIL }}
       PREVIEW_LOGIN_PASSWORD: ${{ secrets.DEMO_LOGIN_PASSWORD || secrets.PREVIEW_LOGIN_PASSWORD }}
       DEMO_RESET_DATA: ${{ inputs.reset_data }}
@@ -64,8 +60,6 @@ jobs:
           test -n "$PREVIEW_HOST" || { echo "Missing repository variable DEMO_HOST"; exit 1; }
           test -n "$DEMO_SSH_PRIVATE_KEY" || { echo "Missing repository secret DEMO_SSH_PRIVATE_KEY"; exit 1; }
           test -n "$PREVIEW_ANTHROPIC_API_KEY" || { echo "Missing an Anthropic API key secret"; exit 1; }
-          test -n "$PREVIEW_BASIC_AUTH" || { echo "Missing repository secret PREVIEW_BASIC_AUTH"; exit 1; }
-          test -n "$PREVIEW_BASIC_AUTH_PASSWORD" || { echo "Missing repository secret PREVIEW_BASIC_AUTH_PASSWORD"; exit 1; }
 
       - name: Checkout the requested ref
         uses: actions/checkout@v4
@@ -136,8 +130,6 @@ jobs:
             "PREVIEW_DB_PASSWORD=$(shell_quote "$PREVIEW_DB_PASSWORD")"
             "PREVIEW_LOGIN_EMAIL=$(shell_quote "$PREVIEW_LOGIN_EMAIL")"
             "PREVIEW_LOGIN_PASSWORD=$(shell_quote "$PREVIEW_LOGIN_PASSWORD")"
-            "PREVIEW_BASIC_AUTH=$(shell_quote "$PREVIEW_BASIC_AUTH")"
-            "PREVIEW_BASIC_AUTH_PASSWORD=$(shell_quote "$PREVIEW_BASIC_AUTH_PASSWORD")"
             "DEMO_RESET_DATA=$(shell_quote "$DEMO_RESET_DATA")"
             "SOURCE_DIR=$(shell_quote "$remote_source")"
           )
@@ -145,30 +137,48 @@ jobs:
             "cd $(shell_quote "$remote_source") && ${remote_env[*]} bash scripts/preview/deploy.sh" \
             | tee /tmp/demo-deploy.log
           url="$(awk -F= '/^PREVIEW_URL=/{print $2}' /tmp/demo-deploy.log | tail -1)"
+          access_code="$(awk -F= '/^PREVIEW_ACCESS_CODE=/{print $2}' /tmp/demo-deploy.log | tail -1)"
           test -n "$url" || { echo "Deploy did not print PREVIEW_URL"; exit 1; }
+          test -n "$access_code" || { echo "Deploy did not print PREVIEW_ACCESS_CODE"; exit 1; }
           echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "access_code=$access_code" >> "$GITHUB_OUTPUT"
 
       - name: Verify the demo actually serves
         run: |
           set -euo pipefail
           url="${{ steps.deploy.outputs.url }}"
-          user="${PREVIEW_BASIC_AUTH%%:*}"
+          access_code="${{ steps.deploy.outputs.access_code }}"
 
-          # The demo sits behind the same basic-auth gate as previews, so "serves"
-          # now means two things: strangers are turned away, and the password works.
-          # Checking only the second would let a wide-open box pass this step.
-          anon="$(curl -sk -o /dev/null -m 15 -w '%{http_code}' "$url" || true)"
-          if [ "$anon" != "401" ]; then
-            echo "Demo is not gated: anonymous request returned HTTP ${anon:-none}, expected 401" >&2
+          health="$(curl -sk -o /dev/null -m 15 -w '%{http_code}' "$url/api/healthcheck")"
+          test "$health" = "200" || { echo "Demo healthcheck returned HTTP $health"; exit 1; }
+
+          anonymous_page="$(curl -skL -m 15 "$url")"
+          grep -q 'data-preview-access-screen' <<<"$anonymous_page" || {
+            echo "Anonymous demo request did not render the access screen" >&2
             exit 1
-          fi
-          echo "Gate confirmed: anonymous request returns 401"
+          }
+
+          blocked="$(curl -sk -o /dev/null -m 15 -w '%{http_code}' \
+            -X POST --data-urlencode 'email=dev.admin@yawp.local' \
+            "$url/auth/dev-login")"
+          test "$blocked" = "401" || {
+            echo "Anonymous POST /auth/dev-login returned HTTP $blocked, expected 401" >&2
+            exit 1
+          }
+
+          cookie_jar="$(mktemp)"
+          entered="$(curl -sk -o /dev/null -m 15 -w '%{http_code}' -c "$cookie_jar" \
+            --data-urlencode "code=$access_code" "$url/auth/preview-access")"
+          case "$entered" in
+            302|303) ;;
+            *) echo "Demo access code returned HTTP $entered" >&2; exit 1 ;;
+          esac
 
           for attempt in $(seq 1 30); do
-            code="$(curl -sk -o /dev/null -m 15 -w '%{http_code}' \
-              --user "${user}:${PREVIEW_BASIC_AUTH_PASSWORD}" "$url" || true)"
+            code="$(curl -skL -o /dev/null -m 15 -w '%{http_code}' \
+              -b "$cookie_jar" "$url" || true)"
             if [ "$code" = "200" ] || [ "$code" = "302" ] || [ "$code" = "303" ]; then
-              echo "Demo healthy at $url (HTTP $code, authenticated)"
+              echo "Demo healthy at $url (HTTP $code, access code accepted)"
               exit 0
             fi
             echo "attempt $attempt: HTTP ${code:-none}"

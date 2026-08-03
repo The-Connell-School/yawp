@@ -2,14 +2,16 @@ import { describe, expect, test } from 'bun:test';
 import { renderPreviewCompose } from './render-compose.mjs';
 
 const deprecatedPreviewSlug = ['preview', String.fromCharCode(102, 111, 114, 103, 101)].join('-');
-const previewBasicAuth = 'preview-admin:$apr1$salt$hash';
+const previewAccessCodes = 'brave-otter-4193';
+const previewSessionSecret = 'test-preview-session-secret-32-bytes';
 
 function renderCompose(overrides = {}) {
   return renderPreviewCompose({
     prNumber: '142',
     domain: 'preview.yawp.school',
     sourceDir: '/srv/yawp-preview/sources/pr-142',
-    basicAuth: previewBasicAuth,
+    accessCodes: previewAccessCodes,
+    sessionSecret: previewSessionSecret,
     ...overrides,
   });
 }
@@ -61,49 +63,48 @@ describe('renderPreviewCompose', () => {
     expect(compose).not.toContain(deprecatedPreviewSlug);
   });
 
-  test('protects both Traefik routers with escaped shared basic auth', () => {
+  test('leaves Traefik routing open for the app-owned access gate', () => {
     const compose = renderCompose();
 
-    expect(compose).toContain(
-      'traefik.http.middlewares.yawp-pr-142-auth.basicauth.users=preview-admin:$$apr1$$salt$$hash',
-    );
-    expect(compose).toContain(
-      'traefik.http.routers.yawp-pr-142-http.middlewares=yawp-pr-142-auth',
-    );
-    expect(compose).toContain(
-      'traefik.http.routers.yawp-pr-142-https.middlewares=yawp-pr-142-auth',
-    );
-    expect(compose).not.toContain(
-      'basicauth.users=preview-admin:$apr1$salt$hash',
-    );
+    expect(compose).not.toContain('basicauth');
+    expect(compose).not.toContain('.middlewares=');
   });
 
-  // The app trusts PREVIEW_ACCESS_GATE to decide whether role-swap may be exposed, so
-  // the flag is only safe if it cannot be emitted without the middleware that justifies
-  // it. Both come from this one render, and this test is what keeps them together: if
-  // anyone ever makes the basicauth labels conditional, the flag must become conditional
-  // in the same edit or this fails.
-  test('the access-gate flag ships with the middleware that earns it', () => {
+  // PREVIEW_ACCESS_GATE is the same switch read by the root route middleware. Requiring
+  // codes and a signing secret in this render keeps role-swap coupled to an enforceable
+  // app gate instead of trusting a separate deployment claim.
+  test('the access-gate flag ships with codes and a signing secret', () => {
     const compose = renderCompose();
 
     expect(compose).toContain('PREVIEW_ACCESS_GATE: "on"');
-    expect(compose).toContain('basicauth.users=');
-
-    const gateIndex = compose.indexOf('PREVIEW_ACCESS_GATE');
-    const authIndex = compose.indexOf('basicauth.users=');
-    expect(gateIndex).toBeGreaterThan(-1);
-    expect(authIndex).toBeGreaterThan(-1);
+    expect(compose).toContain('PREVIEW_ACCESS_CODES: "brave-otter-4193"');
+    expect(compose).toContain(
+      'SESSION_SECRET: "test-preview-session-secret-32-bytes"',
+    );
   });
 
-  test('requires a basic-auth credential before rendering a preview', () => {
+  test('fails closed without access codes', () => {
     expect(() =>
       renderPreviewCompose({
         prNumber: '142',
         domain: 'preview.yawp.school',
         sourceDir: '/srv/yawp-preview/sources/pr-142',
-        basicAuth: '',
+        accessCodes: '',
+        sessionSecret: previewSessionSecret,
       }),
-    ).toThrow('PREVIEW_BASIC_AUTH is required');
+    ).toThrow('PREVIEW_ACCESS_CODES is required');
+  });
+
+  test('requires a non-default signing secret', () => {
+    expect(() =>
+      renderPreviewCompose({
+        prNumber: '142',
+        domain: 'preview.yawp.school',
+        sourceDir: '/srv/yawp-preview/sources/pr-142',
+        accessCodes: previewAccessCodes,
+        sessionSecret: '',
+      }),
+    ).toThrow('PREVIEW_SESSION_SECRET is required');
   });
 
   test('passes preview Anthropic credentials into app containers', () => {

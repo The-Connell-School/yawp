@@ -10,8 +10,8 @@
 # Set PREVIEW_DEV_LOGIN_EMAIL to choose the seeded dev persona used by smoke tests.
 # Set PREVIEW_AI_MODEL to choose the Anthropic model used by preview app containers.
 # Set PREVIEW_ANTHROPIC_API_KEY to update the preview Anthropic API secret.
-# Set PREVIEW_BASIC_AUTH and PREVIEW_BASIC_AUTH_PASSWORD together to update the
-# shared browser access gate and its authenticated smoke-check password.
+# Access codes and cookie signing secrets are generated and retained per environment by
+# the deploy script; they are not repository secrets.
 # Set PREVIEW_DB_PASSWORD when the shared preview Postgres password is not the default.
 # Set PREVIEW_LOGIN_EMAIL and PREVIEW_LOGIN_PASSWORD to update production-dump login smoke secrets.
 set -euo pipefail
@@ -64,13 +64,6 @@ fi
 
 if [[ -n "${PREVIEW_ANTHROPIC_API_KEY:-}" ]]; then
   gh_sec PREVIEW_ANTHROPIC_API_KEY "$PREVIEW_ANTHROPIC_API_KEY"
-fi
-
-if [[ -n "${PREVIEW_BASIC_AUTH:-}" || -n "${PREVIEW_BASIC_AUTH_PASSWORD:-}" ]]; then
-  test -n "${PREVIEW_BASIC_AUTH:-}" || { echo "Set PREVIEW_BASIC_AUTH together with PREVIEW_BASIC_AUTH_PASSWORD"; exit 1; }
-  test -n "${PREVIEW_BASIC_AUTH_PASSWORD:-}" || { echo "Set PREVIEW_BASIC_AUTH_PASSWORD together with PREVIEW_BASIC_AUTH"; exit 1; }
-  gh_sec PREVIEW_BASIC_AUTH "$PREVIEW_BASIC_AUTH"
-  gh_sec PREVIEW_BASIC_AUTH_PASSWORD "$PREVIEW_BASIC_AUTH_PASSWORD"
 fi
 
 if [[ -n "${PREVIEW_DB_PASSWORD:-}" ]]; then

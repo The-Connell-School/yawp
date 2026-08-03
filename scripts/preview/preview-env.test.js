@@ -3,7 +3,8 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import {
   buildPreviewEnv,
-  requirePreviewBasicAuth,
+  requirePreviewAccessCodes,
+  requirePreviewSessionSecret,
 } from './preview-env.mjs';
 
 describe('buildPreviewEnv', () => {
@@ -97,22 +98,34 @@ describe('buildPreviewEnv', () => {
     ).toThrow('PREVIEW_DATA_MODE must be seed or production-dump');
   });
 
-  test('accepts one htpasswd-format preview credential', () => {
+  test('accepts one or more memorable access codes', () => {
     expect(
-      requirePreviewBasicAuth('preview-admin:$apr1$salt$hash'),
-    ).toBe('preview-admin:$apr1$salt$hash');
+      requirePreviewAccessCodes('Brave-Otter-4193, calm-panda-8127'),
+    ).toBe('brave-otter-4193,calm-panda-8127');
   });
 
-  test('fails closed when the preview credential is missing or malformed', () => {
-    expect(() => requirePreviewBasicAuth('')).toThrow(
-      'PREVIEW_BASIC_AUTH is required',
+  test('fails closed when access codes are missing or malformed', () => {
+    expect(() => requirePreviewAccessCodes('')).toThrow(
+      'PREVIEW_ACCESS_CODES is required',
     );
-    expect(() => requirePreviewBasicAuth('preview-admin:plaintext')).toThrow(
-      'PREVIEW_BASIC_AUTH must be a single htpasswd-format credential',
+    expect(() => requirePreviewAccessCodes('shared password')).toThrow(
+      'PREVIEW_ACCESS_CODES must contain two-word, four-digit codes',
     );
   });
 
-  test('threads basic-auth secrets through the preview workflow and deploy', () => {
+  test('requires a strong cookie signing secret', () => {
+    expect(
+      requirePreviewSessionSecret('a-preview-session-secret-over-32-chars'),
+    ).toBe('a-preview-session-secret-over-32-chars');
+    expect(() => requirePreviewSessionSecret('')).toThrow(
+      'PREVIEW_SESSION_SECRET is required',
+    );
+    expect(() => requirePreviewSessionSecret('too-short')).toThrow(
+      'PREVIEW_SESSION_SECRET must be at least 32 characters',
+    );
+  });
+
+  test('generates and threads app access codes through workflow and deploy', () => {
     const workflow = readFileSync(
       new URL('../../.github/workflows/preview-environments.yml', import.meta.url),
       'utf8',
@@ -123,32 +136,15 @@ describe('buildPreviewEnv', () => {
       'utf8',
     );
 
-    expect(workflow).toContain(
-      'PREVIEW_BASIC_AUTH: ${{ secrets.PREVIEW_BASIC_AUTH }}',
-    );
-    expect(workflow).toContain(
-      'PREVIEW_BASIC_AUTH_PASSWORD: ${{ secrets.PREVIEW_BASIC_AUTH_PASSWORD }}',
-    );
-    expect(workflow).toContain(
-      '"PREVIEW_BASIC_AUTH=$(shell_quote "$PREVIEW_BASIC_AUTH")"',
-    );
-    expect(workflow).toContain(
-      '"PREVIEW_BASIC_AUTH_PASSWORD=$(shell_quote "$PREVIEW_BASIC_AUTH_PASSWORD")"',
-    );
-    expect(deploy).toContain('Missing PREVIEW_BASIC_AUTH');
-    expect(deploy).toContain('Missing PREVIEW_BASIC_AUTH_PASSWORD');
-    expect(deploy).toContain('gate_status');
-    expect(deploy).toContain('[[ "$gate_status" != "401" ]]');
-    expect(deploy).toContain(
-      "grep -qi '^www-authenticate:[[:space:]]*Basic'",
-    );
-    expect(deploy).toContain('if [[ -z "${DIRECT_PORT:-}" ]]');
-    expect(githubConfig).toContain(
-      'gh_sec PREVIEW_BASIC_AUTH "$PREVIEW_BASIC_AUTH"',
-    );
-    expect(githubConfig).toContain(
-      'gh_sec PREVIEW_BASIC_AUTH_PASSWORD "$PREVIEW_BASIC_AUTH_PASSWORD"',
-    );
+    expect(workflow).not.toContain('PREVIEW_BASIC_AUTH');
+    expect(workflow).toContain('PREVIEW_ACCESS_CODE=');
+    expect(deploy).toContain('access-code.mjs');
+    expect(deploy).toContain('PREVIEW_ACCESS_CODES');
+    expect(deploy).toContain('PREVIEW_SESSION_SECRET');
+    expect(deploy).toContain('PREVIEW_ACCESS_CODE=');
+    expect(deploy).not.toContain('PREVIEW_BASIC_AUTH');
+    expect(deploy).not.toContain('www-authenticate');
+    expect(githubConfig).not.toContain('PREVIEW_BASIC_AUTH');
   });
 });
 

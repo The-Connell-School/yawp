@@ -293,6 +293,25 @@ describe('PR preview deployment contract', () => {
     expect(compose).toContain('AWS_EC2_METADATA_DISABLED: "true"');
   });
 
+  test('the role-swap flag is structurally coupled to root request middleware', () => {
+    const rootRoute = readRepoFile('services/web-app/app/root.tsx');
+    const routerConfig = readRepoFile('services/web-app/react-router.config.ts');
+    const gate = readRepoFile(
+      'services/web-app/app/utils/preview-access.server.ts',
+    );
+    const compose = readRepoFile('scripts/preview/render-compose.mjs');
+
+    expect(routerConfig).toContain('v8_middleware: true');
+    expect(rootRoute).toContain(
+      'export const middleware = [previewAccessMiddleware]',
+    );
+    expect(gate).toContain("process.env.PREVIEW_ACCESS_GATE === 'on'");
+    expect(gate).toContain("'/api/healthcheck'");
+    expect(compose).toContain('PREVIEW_ACCESS_GATE: "on"');
+    expect(compose).toContain('requirePreviewAccessCodes(accessCodes)');
+    expect(compose).toContain('requirePreviewSessionSecret(sessionSecret)');
+  });
+
   test('preview cleanup removes closed PR resources and is scheduled', () => {
     const cleanupScript = readRepoFile('scripts/preview/cleanup.sh');
     const previewWorkflow = readRepoFile('.github/workflows/preview-environments.yml');
@@ -338,10 +357,8 @@ describe('PR preview deployment contract', () => {
   test('preview deploy polls health quickly once containers are starting', () => {
     const deployScript = readRepoFile('scripts/preview/deploy.sh');
 
-    // The subject here is poll SPEED, not the shape of the request. The health check now
-    // carries basic-auth credentials because the preview sits behind the shared gate, so
-    // the old exact-string match on an anonymous curl pinned a detail it never meant to
-    // own. Assert the timeouts and the cadence, which are what "quickly" means.
+    // The subject here is poll SPEED. /api/healthcheck intentionally stays outside the
+    // in-app gate so both container health and deploy readiness can poll it anonymously.
     expect(deployScript).toContain('--connect-timeout 1 --max-time 2 "$health_url"');
     expect(deployScript).toContain('sleep 1');
     expect(deployScript).not.toContain('--max-time 5 "$health_url"');
@@ -463,18 +480,17 @@ describe('PR preview deployment contract', () => {
     expect(previewWorkflow).toContain(
       '- **Data:** seeded local-dev data in an isolated PR database',
     );
-    expect(previewWorkflow).toContain('- **Smoke:** healthcheck + dev login');
+    expect(previewWorkflow).toContain(
+      '- **Smoke:** in-app access gate + dev login',
+    );
     expect(previewWorkflow).not.toContain('seed overlay');
   });
 });
 
 describe('demo environment deployment contract', () => {
-  // deploy.sh runs ON THE DEMO HOST over SSH, so a secret declared in the job's `env:`
-  // reaches the runner and stops there. Adding PREVIEW_BASIC_AUTH to the job block and
-  // the pre-flight check — but not to remote_env — passed every local check and then
-  // failed the real deploy with "Missing PREVIEW_BASIC_AUTH", because the script that
-  // needed it was running on a different machine. Declared and forwarded are two
-  // different things; this asserts they agree.
+  // deploy.sh runs ON THE DEMO HOST over SSH, so a value declared in the job's `env:`
+  // reaches the runner and stops there unless remote_env forwards it. Declared and
+  // forwarded are two different things; this asserts they agree.
   test('every PREVIEW_ variable the demo job declares is forwarded to the host', () => {
     const workflow = readRepoFile('.github/workflows/demo-environment.yml');
 
@@ -500,10 +516,14 @@ describe('demo environment deployment contract', () => {
     expect(missing).toEqual([]);
   });
 
-  test('the demo deploy proves the gate turns strangers away before trusting the password', () => {
+  test('the demo deploy proves the in-app gate blocks data before trusting a code', () => {
     const workflow = readRepoFile('.github/workflows/demo-environment.yml');
 
-    expect(workflow).toContain('expected 401');
-    expect(workflow).toContain('--user "${user}:${PREVIEW_BASIC_AUTH_PASSWORD}"');
+    expect(workflow).toContain('data-preview-access-screen');
+    expect(workflow).toContain(
+      'Anonymous POST /auth/dev-login returned HTTP $blocked, expected 401',
+    );
+    expect(workflow).toContain('--data-urlencode "code=$access_code"');
+    expect(workflow).not.toContain('PREVIEW_BASIC_AUTH');
   });
 });

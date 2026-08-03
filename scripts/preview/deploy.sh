@@ -7,9 +7,6 @@ export SOURCE_DIR
 
 source "$SCRIPT_DIR/tooling-artifacts.sh"
 
-: "${PREVIEW_BASIC_AUTH:?Missing PREVIEW_BASIC_AUTH (expected one htpasswd-format credential)}"
-: "${PREVIEW_BASIC_AUTH_PASSWORD:?Missing PREVIEW_BASIC_AUTH_PASSWORD for authenticated preview smoke checks}"
-
 export PREVIEW_DATA_MODE="${PREVIEW_DATA_MODE:-seed}"
 export PREVIEW_DEV_LOGIN_EMAIL="${PREVIEW_DEV_LOGIN_EMAIL:-dev.teacher@yawp.local}"
 eval "$(node "$SCRIPT_DIR/preview-env.mjs" --shell)"
@@ -31,6 +28,33 @@ TOOLING_CHANGED=1
 DATABASE_CREATED=0
 
 mkdir -p "$PREVIEW_DIR" "$DB_COMPOSE_DIR"
+ACCESS_CODE_FILE="$PREVIEW_DIR/access-code"
+SESSION_SECRET_FILE="$PREVIEW_DIR/session-secret"
+
+load_or_create_access_config() {
+  umask 077
+  if [[ -z "${PREVIEW_ACCESS_CODES:-}" ]]; then
+    if [[ -s "$ACCESS_CODE_FILE" ]]; then
+      PREVIEW_ACCESS_CODES="$(<"$ACCESS_CODE_FILE")"
+    else
+      PREVIEW_ACCESS_CODES="$(node "$SCRIPT_DIR/access-code.mjs")"
+      printf '%s\n' "$PREVIEW_ACCESS_CODES" > "$ACCESS_CODE_FILE"
+    fi
+  fi
+
+  if [[ -z "${PREVIEW_SESSION_SECRET:-}" ]]; then
+    if [[ -s "$SESSION_SECRET_FILE" ]]; then
+      PREVIEW_SESSION_SECRET="$(<"$SESSION_SECRET_FILE")"
+    else
+      PREVIEW_SESSION_SECRET="$(node -e "process.stdout.write(require('node:crypto').randomBytes(32).toString('base64url'))")"
+      printf '%s\n' "$PREVIEW_SESSION_SECRET" > "$SESSION_SECRET_FILE"
+    fi
+  fi
+
+  export PREVIEW_ACCESS_CODES PREVIEW_SESSION_SECRET
+}
+
+load_or_create_access_config
 node "$SCRIPT_DIR/render-compose.mjs" > "$PREVIEW_DIR/docker-compose.yml"
 
 docker network inspect preview >/dev/null 2>&1 || docker network create preview >/dev/null
@@ -297,34 +321,24 @@ start_or_refresh_web
 
 health_url="${PREVIEW_HEALTHCHECK_URL:-${URL}/api/healthcheck}"
 login_url="${PREVIEW_LOGIN_URL:-${URL}}"
-basic_auth_username="${PREVIEW_BASIC_AUTH%%:*}"
+smoke_access_code="${PREVIEW_ACCESS_CODES%%,*}"
 if [[ -n "${DIRECT_PORT:-}" ]]; then
   health_url="http://127.0.0.1:${DIRECT_PORT}/api/healthcheck"
   login_url="http://127.0.0.1:${DIRECT_PORT}"
 fi
 
 for attempt in $(seq 1 90); do
-  gate_status=""
-  gate_ready=1
-  if [[ -z "${DIRECT_PORT:-}" ]]; then
-    gate_response="$(curl -sS -D - -o /dev/null -w $'\n%{http_code}' --connect-timeout 1 --max-time 2 "$health_url" || true)"
-    gate_status="${gate_response##*$'\n'}"
-    gate_headers="${gate_response%$'\n'*}"
-    if [[ "$gate_status" != "401" ]] || ! grep -qi '^www-authenticate:[[:space:]]*Basic' <<<"$gate_headers"; then
-      gate_ready=0
-    fi
-  fi
-
-  if [[ "$gate_ready" == "1" ]] && curl -fsS --user "${basic_auth_username}:${PREVIEW_BASIC_AUTH_PASSWORD}" --connect-timeout 1 --max-time 2 "$health_url" >/dev/null; then
-    PREVIEW_BASE_URL="$login_url" PREVIEW_DATA_MODE="$DATA_MODE" PREVIEW_BASIC_AUTH="$PREVIEW_BASIC_AUTH" PREVIEW_BASIC_AUTH_PASSWORD="$PREVIEW_BASIC_AUTH_PASSWORD" node "$SCRIPT_DIR/smoke-login.mjs"
+  if curl -fsS --connect-timeout 1 --max-time 2 "$health_url" >/dev/null; then
+    PREVIEW_BASE_URL="$login_url" PREVIEW_DATA_MODE="$DATA_MODE" PREVIEW_ACCESS_CODE="$smoke_access_code" node "$SCRIPT_DIR/smoke-login.mjs"
     end_ms="$(date +%s%3N)"
     elapsed_ms="$((end_ms - start_ms))"
     echo "PREVIEW_URL=$URL"
     echo "PREVIEW_HOSTNAME=$HOSTNAME"
+    echo "PREVIEW_ACCESS_CODE=$smoke_access_code"
     echo "PREVIEW_ELAPSED_MS=$elapsed_ms"
     exit 0
   fi
-  echo "Waiting for preview healthcheck ($attempt/90, anonymous=${gate_status:-direct}): $health_url"
+  echo "Waiting for preview healthcheck ($attempt/90): $health_url"
   sleep 1
 done
 
