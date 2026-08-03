@@ -3,7 +3,6 @@ import { Form } from 'react-router';
 import {
   ArrowDown,
   ArrowUp,
-  ChevronRight,
   Copy,
   Pencil,
   Plus,
@@ -15,11 +14,11 @@ import {
   AssignmentEditForm,
   type AssignmentEditRecord,
 } from '~/components/assignments/assignment-edit-sheet';
-import { badgeVariants } from '~/components/ui/badge';
+import { AssignmentDocumentsPill } from './assignment-documents-pill';
 import { Button } from '~/components/ui/button';
 import { Checkbox } from '~/components/ui/checkbox';
 import { Input } from '~/components/ui/input';
-import { Sheet, SheetContent } from '~/components/ui/sheet';
+import { Sheet, SheetContent, SheetFooter, SHEET_SCROLL_BODY_CLASS_NAME, SHEET_STICKY_FOOTER_CLASS_NAME } from '~/components/ui/sheet';
 import {
   Table,
   TableBody,
@@ -382,25 +381,14 @@ export function ClassAssignmentsTab({
                       {assignment.gradedCount}
                     </TableCell>
                     <TableCell className="pr-4">
-                      <button
-                        type="button"
-                        className={cn(
-                          badgeVariants({ variant: 'secondary' }),
-                          'cursor-pointer gap-1 py-1 pl-2 pr-1'
-                        )}
+                      <AssignmentDocumentsPill
+                        documentCount={assignment.documentCount}
                         onClick={(event) => {
                           event.stopPropagation();
                           onViewDocuments(assignment.id);
                         }}
-                        aria-label={`View documents for ${title}`}
-                      >
-                        {assignment.documentCount}{' '}
-                        {assignment.documentCount === 1 ? 'doc' : 'docs'}
-                        <ChevronRight
-                          className="size-3 shrink-0"
-                          aria-hidden="true"
-                        />
-                      </button>
+                        ariaLabel={`View documents for ${title}`}
+                      />
                     </TableCell>
                   </TableRow>
                 );
@@ -440,17 +428,25 @@ export function ClassAssignmentsTab({
           <SheetContent className={ASSIGNMENT_SUMMARY_SHEET_CONTENT_CLASS_NAME}>
             {sheetMode === 'view' ? (
               <>
-                <AssignmentSummarySheetContent
-                  assignment={activeAssignment}
-                  classInsightsEnabled={classInsightsEnabled}
-                  onViewDocuments={() => {
-                    const assignmentId = activeAssignment.id;
-                    setActiveAssignmentId(null);
-                    onViewDocuments(assignmentId);
-                  }}
-                />
-                <div className="mt-6 flex items-center justify-between gap-2">
-                  {canEditActive ? (
+                <div className={cn(SHEET_SCROLL_BODY_CLASS_NAME, 'px-6 pt-6')}>
+                  <AssignmentSummarySheetContent
+                    assignment={activeAssignment}
+                    classInsightsEnabled={classInsightsEnabled}
+                    onViewDocuments={() => {
+                      const assignmentId = activeAssignment.id;
+                      setActiveAssignmentId(null);
+                      onViewDocuments(assignmentId);
+                    }}
+                  />
+                </div>
+                {canEditActive ? (
+                  <SheetFooter
+                    className={cn(
+                      SHEET_STICKY_FOOTER_CLASS_NAME,
+                      'flex-row items-center justify-between sm:justify-between'
+                    )}
+                    data-testid="assignment-sheet-footer"
+                  >
                     <Button
                       type="button"
                       variant="ghost"
@@ -459,10 +455,6 @@ export function ClassAssignmentsTab({
                       <Copy className="mr-2 h-4 w-4" />
                       Duplicate
                     </Button>
-                  ) : (
-                    <div />
-                  )}
-                  {canEditActive ? (
                     <Button
                       type="button"
                       variant="outline"
@@ -471,8 +463,8 @@ export function ClassAssignmentsTab({
                       <Pencil className="mr-2 h-4 w-4" />
                       Edit
                     </Button>
-                  ) : null}
-                </div>
+                  </SheetFooter>
+                ) : null}
               </>
             ) : (
               <AssignmentEditForm

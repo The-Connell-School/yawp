@@ -68,7 +68,13 @@ mock.module('~/components/ui/sheet', () => ({
   SheetHeader: ({ children }: any) => <div>{children}</div>,
   SheetTitle: ({ children }: any) => <h2>{children}</h2>,
   SheetDescription: ({ children }: any) => <p>{children}</p>,
-  SheetFooter: ({ children }: any) => <div>{children}</div>,
+  SheetFooter: ({ children, className, ...props }: any) => (
+    <div data-testid="assignment-sheet-footer" className={className} {...props}>
+      {children}
+    </div>
+  ),
+  SHEET_SCROLL_BODY_CLASS_NAME: 'sheet-scroll-body',
+  SHEET_STICKY_FOOTER_CLASS_NAME: 'border-t bg-background',
 }));
 
 const { MemoryRouter } = actualReactRouter;
@@ -199,6 +205,17 @@ describe('ClassAssignmentsTab', () => {
     // View mode identity content, from the real AssignmentSummarySheetContent.
     expect(el.textContent).toContain('The Gilded Age DBQ');
     expect(el.textContent).toContain('Class performance summary');
+  });
+
+  it('pins Duplicate and Edit in a bordered footer when viewing an assignment', () => {
+    const el = renderTab();
+    clickRow(el, 'assignment-open-assignment-1');
+
+    const footer = el.querySelector('[data-testid="assignment-sheet-footer"]');
+    expect(footer).toBeTruthy();
+    expect(footer?.className).toContain('border-t');
+    expect(footer?.textContent).toContain('Duplicate');
+    expect(footer?.textContent).toContain('Edit');
   });
 
   it('the Edit button transitions view mode to edit mode', () => {

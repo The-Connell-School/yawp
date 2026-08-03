@@ -5,7 +5,7 @@ const prisma = {
   classAssignmentInsight: { findUnique: mock() },
   class: { findFirst: mock() },
   document: { findMany: mock() },
-  submission: { findMany: mock() },
+  submission: { findMany: mock(), count: mock() },
 };
 
 const requireUserId = mock();
@@ -60,6 +60,7 @@ describe('assignment submissions loader', () => {
     prisma.submission.findMany.mockResolvedValue([
       { id: 'submission-1', title: 'Submitted essay' },
     ]);
+    prisma.submission.count.mockResolvedValue(0);
     prisma.document.findMany.mockResolvedValue([
       { id: 'draft-1', title: 'Draft essay' },
     ]);

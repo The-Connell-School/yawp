@@ -114,6 +114,16 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         }
       : null;
 
+  const gradedCount = await prisma.submission.count({
+    where: {
+      gradedAt: { not: null },
+      document: {
+        classAssignmentId: classAssignment.id,
+        deletedAt: null,
+      },
+    },
+  });
+
   const url = new URL(request.url);
   const rawStatus = url.searchParams.get('status');
   const status: StatusFilter = isValidStatus(rawStatus)
@@ -192,6 +202,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     classAssignmentId: classAssignment.id,
     insight,
     classInsightsEnabled,
+    gradedCount,
     status,
     isDocumentSubmissionEnabled,
     submissions,
@@ -212,6 +223,7 @@ export default function AssignmentSubmissionsRoute() {
     classAssignmentId,
     insight,
     classInsightsEnabled,
+    gradedCount,
     status,
     isDocumentSubmissionEnabled,
     submissions,
@@ -375,14 +387,15 @@ export default function AssignmentSubmissionsRoute() {
         </div>
 
         {/* Class-wide, assignment-level feedback for the teacher */}
-        {classInsightsEnabled ? (
-          <div className="mb-6">
+        <div className="mb-6">
+          {classInsightsEnabled ? (
             <ClassInsightsPanel
               classAssignmentId={classAssignmentId}
               initialInsight={insight}
+              gradedCount={gradedCount}
             />
-          </div>
-        ) : null}
+          ) : null}
+        </div>
 
         {/* Status tabs */}
         <div className="mb-4 flex gap-1 border-b">

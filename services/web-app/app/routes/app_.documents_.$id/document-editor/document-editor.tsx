@@ -2,6 +2,7 @@ import { ChevronDown, ChevronUp } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useLocalStorage } from 'usehooks-ts';
 import { Button } from '~/components/ui/button';
+import { AssignmentPromptAttachment } from '~/components/assignments/assignment-prompt-attachment';
 import { formatDateOnly } from '~/utils/date-only';
 import { documentStore } from '~/utils/document-store';
 import type { SyncStatus } from '~/utils/sync-service';
@@ -11,8 +12,10 @@ import type { EditorBridge } from './use-editor-sync';
 const PROMPT_EXPANDED_MAX_HEIGHT = 'calc(50vh - 28px)';
 
 type AssignmentPrompt = {
+  id: string;
   title: string | null;
   prompt: string | null;
+  promptAttachmentName?: string | null;
   dueDate?: string | Date | null;
 };
 
@@ -159,6 +162,14 @@ function AssignmentPromptBanner({
           >
             {assignment.prompt}
           </div>
+          {assignment.promptAttachmentName ? (
+            <div className="mt-2">
+              <AssignmentPromptAttachment
+                assignmentId={assignment.id}
+                fileName={assignment.promptAttachmentName}
+              />
+            </div>
+          ) : null}
         </div>
       ) : null}
     </div>

@@ -26,6 +26,12 @@ const createAssignmentDeployedToClasses = mock();
 const deleteClassAssignmentDeployment = mock();
 const getAvailableAssignmentTypesForScopes = mock();
 const isAssignmentTypeAvailableForEveryScope = mock();
+const uploadAssignmentPromptAttachment = mock();
+const deleteAssignmentPromptAttachment = mock();
+class AssignmentPromptAttachmentError extends Error {}
+const actualAssignmentPromptAttachment = await import(
+  '~/domain/assignments/assignment-prompt-attachment.server'
+);
 
 mock.module('~/utils/db.server.js', () => ({ prisma }));
 mock.module('~/utils/db.server', () => ({ prisma }));
@@ -48,6 +54,16 @@ mock.module('~/utils/assignment-deployment.server', () => ({
   createAssignmentDeployedToClasses,
   deleteClassAssignmentDeployment,
 }));
+mock.module(
+  '~/domain/assignments/assignment-prompt-attachment.server',
+  () => ({
+    ...actualAssignmentPromptAttachment,
+    AssignmentPromptAttachmentError,
+    assignmentPromptAttachmentRequestTooLarge: () => false,
+    deleteAssignmentPromptAttachment,
+    uploadAssignmentPromptAttachment,
+  })
+);
 
 const {
   action: routeAction,
@@ -71,6 +87,8 @@ describe('class detail loader document visibility', () => {
     deleteClassAssignmentDeployment.mockReset();
     getAvailableAssignmentTypesForScopes.mockReset();
     isAssignmentTypeAvailableForEveryScope.mockReset();
+    uploadAssignmentPromptAttachment.mockReset();
+    deleteAssignmentPromptAttachment.mockReset().mockResolvedValue(undefined);
 
     requireUserId.mockResolvedValue('user-1');
     requireMembership.mockResolvedValue({
@@ -112,6 +130,11 @@ describe('class detail loader document visibility', () => {
     deleteClassAssignmentDeployment.mockResolvedValue('ca-1');
     getSubmittedPapersFilter.mockResolvedValue('all');
     getAvailableAssignmentTypesForScopes.mockResolvedValue([]);
+    uploadAssignmentPromptAttachment.mockResolvedValue({
+      promptAttachmentKey: 'assignment-prompts/file-id/assignment.pdf',
+      promptAttachmentName: 'assignment.pdf',
+      promptAttachmentSize: 4,
+    });
   });
 
   test('includes legacy class documents preserved during assignment migration', async () => {
@@ -557,6 +580,54 @@ describe('class detail loader document visibility', () => {
         pointValue: 25,
         gradingAssistantStrictnessLevel: 'advanced',
       },
+      classIds: ['class-1'],
+    });
+  });
+
+  test('stores an attached assignment PDF without extracting it', async () => {
+    getAvailableAssignmentTypesForScopes.mockResolvedValue([
+      { id: 'at-1', systemKey: null },
+    ]);
+    prisma.assignmentType.findMany.mockResolvedValue([
+      {
+        id: 'at-1',
+        systemKey: null,
+        organizationAssignments: [{ organizationId: 'org-1' }],
+      },
+    ]);
+
+    const form = new FormData();
+    form.set('intent', 'create-assignment');
+    form.set('assignmentTypeId', 'at-1');
+    form.set('prompt', 'Reference the attached assignment.');
+    form.set('gradingAssistantStrictnessLevel', 'intermediate');
+    form.set(
+      'promptAttachment',
+      new File([new Uint8Array([0x25, 0x50, 0x44, 0x46])], 'assignment.pdf', {
+        type: 'application/pdf',
+      })
+    );
+
+    const response = await action({
+      request: new Request('https://example.test/app/my-classes/class-1', {
+        method: 'POST',
+        body: form,
+      }),
+      params: { classId: 'class-1' },
+      context: {} as never,
+    });
+
+    expect(response.data).toMatchObject({ success: true });
+    expect(uploadAssignmentPromptAttachment).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'assignment.pdf' })
+    );
+    expect(createAssignmentDeployedToClasses).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        prompt: 'Reference the attached assignment.',
+        promptAttachmentKey: 'assignment-prompts/file-id/assignment.pdf',
+        promptAttachmentName: 'assignment.pdf',
+        promptAttachmentSize: 4,
+      }),
       classIds: ['class-1'],
     });
   });

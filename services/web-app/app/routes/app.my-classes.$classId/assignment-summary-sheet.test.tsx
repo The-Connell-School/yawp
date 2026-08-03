@@ -12,9 +12,6 @@ import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
 import { act, type ReactElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 
-// The class-summary panel embedded in this sheet uses useFetcher for
-// generation and Link for its student-example drill-in — both need a data
-// router context. Mirrors class-insights-panel.test.tsx.
 const submit = mock();
 const load = mock();
 const fetcher: {
@@ -50,11 +47,17 @@ const ASSIGNMENT: AssignmentSummarySheetAssignment = {
   id: 'assignment-1',
   classAssignmentId: 'class-assignment-1',
   title: 'The Gilded Age DBQ',
+  prompt: 'Analyze the effects of industrialization on American society.',
+  promptAttachmentName: null,
+  submitForGrade: true,
+  pointValue: 100,
   assignmentType: { title: 'DBQ' },
   documentCount: 12,
   gradedCount: 5,
   insight: null,
 };
+
+const LONG_PROMPT = `${'A'.repeat(220)} industrialization.`;
 
 let root: Root | null = null;
 
@@ -82,7 +85,11 @@ afterEach(() => {
 });
 
 describe('AssignmentSummarySheetContent', () => {
-  it('uses an explicit dark surface and foreground for the portal sheet', () => {
+  it('uses a flex column layout so sheet footers can stay pinned', () => {
+    expect(ASSIGNMENT_SUMMARY_SHEET_CONTENT_CLASS_NAME).toContain('flex-col');
+    expect(ASSIGNMENT_SUMMARY_SHEET_CONTENT_CLASS_NAME).toContain(
+      'overflow-hidden'
+    );
     expect(ASSIGNMENT_SUMMARY_SHEET_CONTENT_CLASS_NAME).toContain(
       'dark:bg-card'
     );
@@ -91,7 +98,7 @@ describe('AssignmentSummarySheetContent', () => {
     );
   });
 
-  it('shows minimal identifying information about the assignment', () => {
+  it('shows metadata for type, documents, grading, and prompt', () => {
     const el = render(
       <AssignmentSummarySheetContent
         renderSheet={false}
@@ -101,12 +108,59 @@ describe('AssignmentSummarySheetContent', () => {
       />
     );
     expect(el.textContent).toContain('The Gilded Age DBQ');
+    expect(
+      el.querySelector('[data-testid="assignment-metadata-section"]')?.className
+    ).toContain('rounded-xl');
+    expect(
+      el.querySelector('[data-testid="assignment-metadata-section"] dl')?.className
+    ).toContain('divide-y');
+    expect(el.textContent).toContain('Type');
     expect(el.textContent).toContain('DBQ');
-    expect(el.textContent).toMatch(/12\s+documents/);
-    expect(el.textContent).toMatch(/5 graded/);
+    expect(el.textContent).toMatch(/12\s+docs/);
+    expect(el.textContent).toContain('Submit for grade');
+    expect(el.textContent).toContain('Point value');
+    expect(el.textContent).toContain('View only');
+    expect(el.textContent).toContain('Prompt');
+    expect(el.textContent).toContain('Analyze the effects of industrialization');
+    expect(el.textContent).not.toMatch(/5 graded/);
+    expect(el.textContent).not.toContain('Docs');
   });
 
-  it('routes the Docs pill through onViewDocuments so the caller can close the sheet and navigate', () => {
+  it('shows the attached PDF beside the text prompt', () => {
+    const el = render(
+      <AssignmentSummarySheetContent
+        renderSheet={false}
+        assignment={{
+          ...ASSIGNMENT,
+          promptAttachmentName: 'Essay directions.pdf',
+        }}
+        classInsightsEnabled={false}
+        onViewDocuments={() => {}}
+      />
+    );
+
+    expect(el.textContent).toContain('Essay directions.pdf');
+  });
+
+  it('shows view-only assignments without a point value row', () => {
+    const el = render(
+      <AssignmentSummarySheetContent
+        renderSheet={false}
+        assignment={{
+          ...ASSIGNMENT,
+          submitForGrade: false,
+          pointValue: null,
+        }}
+        classInsightsEnabled={false}
+        onViewDocuments={() => {}}
+      />
+    );
+    expect(el.textContent).toContain('Submit for grade');
+    expect(el.textContent).not.toContain('Point value');
+    expect(el.textContent).toMatch(/View only[\s\S]*Yes/);
+  });
+
+  it('routes the combined documents link through onViewDocuments', () => {
     const onViewDocuments = mock();
     const el = render(
       <AssignmentSummarySheetContent
@@ -116,17 +170,35 @@ describe('AssignmentSummarySheetContent', () => {
         onViewDocuments={onViewDocuments}
       />
     );
-    const pill = Array.from(el.querySelectorAll('button')).find((button) =>
-      button.textContent?.includes('Docs')
-    )!;
-    expect(pill).toBeDefined();
+    const link = el.querySelector(
+      '[data-testid="assignment-documents-link"]'
+    ) as HTMLButtonElement;
+    expect(link).toBeTruthy();
     act(() => {
-      pill.dispatchEvent(new Event('click', { bubbles: true }));
+      link.dispatchEvent(new Event('click', { bubbles: true }));
     });
     expect(onViewDocuments).toHaveBeenCalledTimes(1);
   });
 
-  it('hides the class-summary panel when classInsightsEnabled is off', () => {
+  it('offers expand/collapse for long prompts', () => {
+    const el = render(
+      <AssignmentSummarySheetContent
+        renderSheet={false}
+        assignment={{ ...ASSIGNMENT, prompt: LONG_PROMPT }}
+        classInsightsEnabled={false}
+        onViewDocuments={() => {}}
+      />
+    );
+    const toggle = el.querySelector(
+      '[data-testid="assignment-prompt-toggle"]'
+    ) as HTMLButtonElement;
+    expect(toggle).toBeTruthy();
+    expect(toggle.textContent).toContain('Show full prompt');
+    act(() => toggle.click());
+    expect(toggle.textContent).toContain('Show less');
+  });
+
+  it('hides the class performance section when insights are disabled', () => {
     const el = render(
       <AssignmentSummarySheetContent
         renderSheet={false}
@@ -135,7 +207,29 @@ describe('AssignmentSummarySheetContent', () => {
         onViewDocuments={() => {}}
       />
     );
+    expect(el.querySelector('[data-testid="class-summary-placeholder"]')).toBeFalsy();
+    expect(
+      el.querySelector('[data-testid="class-insight-generate-button"]')
+    ).toBeFalsy();
     expect(el.textContent).not.toContain('Class performance summary');
+    expect(el.textContent).not.toMatch(/aren't enabled for your organization/i);
+  });
+
+  it('explains when nothing has been graded yet', () => {
+    const el = render(
+      <AssignmentSummarySheetContent
+        renderSheet={false}
+        assignment={{ ...ASSIGNMENT, gradedCount: 0 }}
+        classInsightsEnabled={true}
+        onViewDocuments={() => {}}
+      />
+    );
+    expect(
+      el.querySelector('[data-testid="class-insight-generate-button"]')
+    ).toBeFalsy();
+    expect(el.textContent).toMatch(
+      /grade a few submissions first, then generate class insights/i
+    );
   });
 
   it('shows the class-summary generation entry point when classInsightsEnabled is on', () => {
@@ -147,6 +241,7 @@ describe('AssignmentSummarySheetContent', () => {
         onViewDocuments={() => {}}
       />
     );
+    expect(el.querySelector('[data-testid="class-summary-placeholder"]')).toBeFalsy();
     expect(el.textContent).toContain('Class performance summary');
     expect(el.textContent).toMatch(/summarize class performance/i);
   });
@@ -160,6 +255,6 @@ describe('AssignmentSummarySheetContent', () => {
         onViewDocuments={() => {}}
       />
     );
-    expect(el.querySelector('button')).toBeNull();
+    expect(el.querySelector('[data-testid="assignment-metadata-section"]')).toBeFalsy();
   });
 });

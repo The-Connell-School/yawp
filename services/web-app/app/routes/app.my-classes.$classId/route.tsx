@@ -22,6 +22,12 @@ import {
   deleteClassAssignmentDeployment,
 } from '~/utils/assignment-deployment.server';
 import {
+  AssignmentPromptAttachmentError,
+  assignmentPromptAttachmentRequestTooLarge,
+  deleteAssignmentPromptAttachment,
+  uploadAssignmentPromptAttachment,
+} from '~/domain/assignments/assignment-prompt-attachment.server';
+import {
   Sheet,
   SheetContent,
   SheetHeader,
@@ -221,6 +227,13 @@ export async function action({ request, params }: ActionFunctionArgs) {
       .map((type) => type.id)
   );
 
+  if (assignmentPromptAttachmentRequestTooLarge(request)) {
+    return dataResponse(
+      { success: false, message: 'PDF is too large. Maximum size is 10 MB.' },
+      { status: 413 }
+    );
+  }
+
   const formData = await request.formData();
   const intent = formData.get('intent')?.toString();
 
@@ -316,6 +329,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
     let existingAssignment: {
       id: string;
       assignmentTypeId: string;
+      promptAttachmentKey: string | null;
       assignmentType: { systemKey: string | null };
     } | null = null;
     if (intent === 'update-assignment') {
@@ -334,6 +348,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
         select: {
           id: true,
           assignmentTypeId: true,
+          promptAttachmentKey: true,
           assignmentType: { select: { systemKey: true } },
         },
       });
@@ -406,19 +421,59 @@ export async function action({ request, params }: ActionFunctionArgs) {
       );
     }
 
+    const promptAttachment = formData.get('promptAttachment');
+    let promptAttachmentData:
+      | {
+          promptAttachmentKey: string | null;
+          promptAttachmentName: string | null;
+          promptAttachmentSize: number | null;
+        }
+      | undefined =
+      formData.get('removePromptAttachment') === 'true'
+        ? {
+            promptAttachmentKey: null,
+            promptAttachmentName: null,
+            promptAttachmentSize: null,
+          }
+        : undefined;
+    if (promptAttachment instanceof File && promptAttachment.size > 0) {
+      try {
+        promptAttachmentData =
+          await uploadAssignmentPromptAttachment(promptAttachment);
+      } catch (error) {
+        if (error instanceof AssignmentPromptAttachmentError) {
+          return dataResponse(
+            { success: false, message: error.message },
+            { status: 400 }
+          );
+        }
+        throw error;
+      }
+    }
+
     if (intent === 'create-assignment') {
-      await createAssignmentDeployedToClasses({
-        data: {
-          assignmentTypeId,
-          title,
-          prompt,
-          submitForGrade: gradingIntent.data.submitForGrade,
-          pointValue: gradingIntent.data.pointValue,
-          gradingAssistantStrictnessLevel:
-            gradingAssistantStrictnessLevel!,
-        },
-        classIds: [classId],
-      });
+      try {
+        await createAssignmentDeployedToClasses({
+          data: {
+            assignmentTypeId,
+            title,
+            prompt,
+            submitForGrade: gradingIntent.data.submitForGrade,
+            pointValue: gradingIntent.data.pointValue,
+            gradingAssistantStrictnessLevel:
+              gradingAssistantStrictnessLevel!,
+            ...promptAttachmentData,
+          },
+          classIds: [classId],
+        });
+      } catch (error) {
+        if (promptAttachmentData?.promptAttachmentKey) {
+          await deleteAssignmentPromptAttachment(
+            promptAttachmentData.promptAttachmentKey
+          ).catch(() => {});
+        }
+        throw error;
+      }
 
       return dataResponse({
         success: true,
@@ -426,16 +481,40 @@ export async function action({ request, params }: ActionFunctionArgs) {
       });
     }
 
-    await prisma.assignment.update({
-      where: { id: existingAssignment!.id },
-      data: {
-        assignmentTypeId,
-        title,
-        prompt,
-        submitForGrade: gradingIntent.data.submitForGrade,
-        pointValue: gradingIntent.data.pointValue,
-      },
-    });
+    try {
+      await prisma.assignment.update({
+        where: { id: existingAssignment!.id },
+        data: {
+          assignmentTypeId,
+          title,
+          prompt,
+          submitForGrade: gradingIntent.data.submitForGrade,
+          pointValue: gradingIntent.data.pointValue,
+          ...promptAttachmentData,
+        },
+      });
+    } catch (error) {
+      if (
+        promptAttachmentData?.promptAttachmentKey &&
+        promptAttachmentData.promptAttachmentKey !==
+          existingAssignment!.promptAttachmentKey
+      ) {
+        await deleteAssignmentPromptAttachment(
+          promptAttachmentData.promptAttachmentKey
+        ).catch(() => {});
+      }
+      throw error;
+    }
+    if (
+      promptAttachmentData &&
+      existingAssignment!.promptAttachmentKey &&
+      existingAssignment!.promptAttachmentKey !==
+        promptAttachmentData.promptAttachmentKey
+    ) {
+      await deleteAssignmentPromptAttachment(
+        existingAssignment!.promptAttachmentKey
+      ).catch(() => {});
+    }
 
     return dataResponse({
       success: true,
@@ -802,6 +881,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
             id: true,
             title: true,
             prompt: true,
+            promptAttachmentName: true,
             submitForGrade: true,
             pointValue: true,
             assignmentTypeId: true,
@@ -877,6 +957,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     classAssignmentId: classAssignment.id,
     title: classAssignment.assignment.title,
     prompt: classAssignment.assignment.prompt,
+    promptAttachmentName: classAssignment.assignment.promptAttachmentName,
     submitForGrade: classAssignment.assignment.submitForGrade,
     pointValue: classAssignment.assignment.pointValue,
     assignmentTypeId: classAssignment.assignment.assignmentTypeId,
@@ -2112,7 +2193,9 @@ function ClassDetailPage() {
           key={activeHeaderTab}
           className="animate-in fade-in-0 slide-in-from-right-2 duration-300"
         >
-          {activeTab === 'documents' && selectedClassAssignment ? (
+          {activeTab === 'documents' &&
+          classInsightsEnabled &&
+          selectedClassAssignment ? (
             <div className="mb-4 flex items-center justify-between gap-3 rounded-lg border bg-muted/30 p-3">
               <p className="text-sm text-muted-foreground">
                 See how the whole class did on{' '}
