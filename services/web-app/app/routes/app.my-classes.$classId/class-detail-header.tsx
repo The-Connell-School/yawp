@@ -12,10 +12,10 @@ import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
 import { cn } from '~/utils/misc';
 
-export type ClassHeaderTab = 'students' | 'documents';
+export type ClassHeaderTab = 'students' | 'documents' | 'assignments';
 
 export function resolveClassHeaderTab(
-  tab: 'students' | 'documents'
+  tab: 'students' | 'documents' | 'assignments'
 ): ClassHeaderTab {
   return tab;
 }
@@ -34,6 +34,10 @@ export type ClassDetailHeaderProps = {
   };
   studentCount: number;
   documentCount: number;
+  /** Number of assignments in this class. */
+  assignmentCount?: number;
+  /** Gated on the organization's classInsightsEnabled flag. */
+  showAssignmentsTab?: boolean;
   activeTab: ClassHeaderTab;
   onTabChange: (tab: ClassHeaderTab) => void;
   onEdit: () => void;
@@ -140,7 +144,7 @@ function ClassHeaderTabBar({
       ref={listRef}
       role="tablist"
       aria-label="Class sections"
-      className="relative flex w-full max-w-md items-stretch"
+      className="relative flex w-full max-w-lg items-stretch"
     >
       <div
         className={cn(
@@ -189,15 +193,24 @@ export function ClassDetailHeader({
   onTabChange,
   studentCount,
   documentCount,
+  assignmentCount = 0,
+  showAssignmentsTab = false,
   ...props
 }: ClassDetailHeaderProps) {
-  const tabs = useMemo(
-    () => [
+  const tabs = useMemo(() => {
+    const base: HeaderTabConfig[] = [
       { id: 'students' as const, label: 'Students', value: studentCount },
       { id: 'documents' as const, label: 'Documents', value: documentCount },
-    ],
-    [studentCount, documentCount]
-  );
+    ];
+    if (showAssignmentsTab) {
+      base.push({
+        id: 'assignments' as const,
+        label: 'Assignments',
+        value: assignmentCount,
+      });
+    }
+    return base;
+  }, [studentCount, documentCount, assignmentCount, showAssignmentsTab]);
 
   return (
     <div

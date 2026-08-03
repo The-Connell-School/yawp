@@ -32,18 +32,12 @@ async function fillCodeInputWithRetry(page: Page, code: string) {
   throw lastError;
 }
 
-function parseShownGrammarCounts(text: string): {
-  shown: number;
-  total: number;
-} {
-  const match = text.match(/AI grammar issues shown:\s*(\d+)\s*\/\s*(\d+)/i);
+function parseGrammarIssueCount(text: string): number {
+  const match = text.match(/AI grammar issues:\s*(\d+)/i);
   if (!match) {
-    throw new Error(`Unable to parse grammar issue counts from: ${text}`);
+    throw new Error(`Unable to parse grammar issue count from: ${text}`);
   }
-  return {
-    shown: Number(match[1]),
-    total: Number(match[2]),
-  };
+  return Number(match[1]);
 }
 
 const RUBRIC_KEYS = [
@@ -237,7 +231,7 @@ test.describe.serial('Teacher onboarding and grading lifecycle', () => {
         { timeout: 120000 }
       );
 
-      await expect(page.getByText(/AI grammar issues shown:/i)).toBeVisible({
+      await expect(page.getByText(/AI grammar issues:/i)).toBeVisible({
         timeout: 30000,
       });
       await expect(
@@ -247,8 +241,8 @@ test.describe.serial('Teacher onboarding and grading lifecycle', () => {
         ''
       );
 
-      const grammarCounter = page.getByText(/AI grammar issues shown:/i);
-      const beforeRemove = parseShownGrammarCounts(
+      const grammarCounter = page.getByText(/AI grammar issues:/i);
+      const beforeRemove = parseGrammarIssueCount(
         (await grammarCounter.textContent()) ?? ''
       );
       await page
@@ -258,9 +252,9 @@ test.describe.serial('Teacher onboarding and grading lifecycle', () => {
       await expect
         .poll(async () => {
           const text = (await grammarCounter.textContent()) ?? '';
-          return parseShownGrammarCounts(text).total;
+          return parseGrammarIssueCount(text);
         })
-        .toBe(Math.max(0, beforeRemove.total - 1));
+        .toBe(Math.max(0, beforeRemove - 1));
       // Blur a field to trigger auto-save after grammar issue removal
       await page.getByTestId('grading-overall-comment').click();
       await page.getByTestId('grading-overall-percentage').click();
@@ -270,11 +264,11 @@ test.describe.serial('Teacher onboarding and grading lifecycle', () => {
       );
       await page.reload();
       await page.waitForLoadState('networkidle');
-      const afterReload = parseShownGrammarCounts(
-        ((await page.getByText(/AI grammar issues shown:/i).textContent()) ??
+      const afterReload = parseGrammarIssueCount(
+        ((await page.getByText(/AI grammar issues:/i).textContent()) ??
           '') as string
       );
-      expect(afterReload.total).toBe(Math.max(0, beforeRemove.total - 1));
+      expect(afterReload).toBe(Math.max(0, beforeRemove - 1));
 
       // Select text in the essay panel (static HTML, not ProseMirror)
       await page.evaluate(() => {

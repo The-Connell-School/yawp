@@ -146,8 +146,9 @@ test.describe.serial('Teacher class page redesign', () => {
     await expect(header.getByRole('tab', { name: /documents/i })).toHaveCount(
       1
     );
+    // The class now carries its own full-featured Assignments tab.
     await expect(page.getByRole('tab', { name: /assignments/i })).toHaveCount(
-      0
+      1
     );
 
     const studentsTab = header.getByRole('tab', { name: /students/i });
@@ -188,8 +189,12 @@ test.describe.serial('Teacher class page redesign', () => {
     expect(
       Math.abs(studentsTabBox!.width - documentsTabBox!.width)
     ).toBeLessThan(4);
+    // The class now carries its own full-featured Assignments tab, which
+    // sits last in the tab bar — it owns the closing right border, not
+    // Documents.
+    const assignmentsTab = header.getByRole('tab', { name: /assignments/i });
+    await expect(assignmentsTab).toHaveCSS('border-right-width', '1px');
     const documentsTab = header.getByRole('tab', { name: /documents/i });
-    await expect(documentsTab).toHaveCSS('border-right-width', '1px');
     await documentsTab.click();
     await expect(documentsTab).toHaveAttribute('data-state', 'active');
     const activeIndicator = tablist.locator('[aria-hidden="true"]').first();
@@ -219,17 +224,73 @@ test.describe.serial('Teacher class page redesign', () => {
     expect(gradientCount).toBe(0);
   });
 
-  test('tab=assignments redirects to the teacher Assignments page', async ({
+  test('tab=assignments shows the class-scoped Assignments tab in place', async ({
     page,
     e2eContext,
     signIn,
   }) => {
+    // The standalone /app/assignments page was retired — assignments now
+    // live entirely inside the class detail header's Assignments tab.
     await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
     await page.goto(`/app/my-classes/${e2eContext.classId}?tab=assignments`);
-    await page.waitForURL('**/app/assignments');
+    await page.waitForLoadState('networkidle');
+
+    const header = page.getByTestId('class-detail-header');
+    const assignmentsTab = header.getByRole('tab', { name: /assignments/i });
+    await expect(assignmentsTab).toHaveAttribute('data-state', 'active');
     await expect(
-      page.getByRole('heading', { name: 'Assignments' })
+      page.getByRole('button', { name: /new assignment/i })
     ).toBeVisible();
+  });
+
+  test('clicking an assignment row opens the class performance summary in view mode', async ({
+    page,
+    e2eContext,
+    signIn,
+  }) => {
+    // This is the capability that regressed unnoticed when the row's
+    // Summary button was removed and the row started opening straight into
+    // edit — clicking a row must land on a read/view mode that surfaces the
+    // class performance summary (and lets the teacher generate it), not the
+    // edit form.
+    const prisma = createE2EPrismaClient();
+    try {
+      await prisma.classAssignmentInsight.deleteMany({
+        where: { classAssignmentId: e2eContext.classAssignmentId },
+      });
+    } finally {
+      await prisma.$disconnect();
+    }
+
+    await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
+    await page.goto(`/app/my-classes/${e2eContext.classId}?tab=assignments`);
+    await page.waitForLoadState('networkidle');
+
+    await page.getByText('E2E Class Assignment', { exact: true }).click();
+
+    const sheet = page.getByRole('dialog');
+    await expect(
+      sheet.getByRole('heading', { name: /class performance summary/i })
+    ).toBeVisible();
+    // View mode, not edit — no prompt/title form fields.
+    await expect(sheet.getByLabel('Title (optional)')).toHaveCount(0);
+
+    const generateButton = sheet.getByRole('button', {
+      name: /summarize class performance|regenerate/i,
+    });
+    await expect(generateButton).toBeVisible();
+    await generateButton.click();
+    await expect(sheet.getByText(/how the class did/i)).toBeVisible({
+      timeout: 15000,
+    });
+    await expect(sheet.getByText(/suggested next steps/i)).toBeVisible();
+    await expect(
+      sheet.getByTestId('class-insight-generate-unavailable-reason')
+    ).toContainText(/regenerate in \d+ (hours|minutes)/i);
+
+    // Edit is reachable explicitly, and switches the same sheet to the form.
+    await sheet.getByRole('button', { name: /^edit$/i }).click();
+    await expect(sheet.getByLabel('Title (optional)')).toBeVisible();
   });
 
   test('documents tab rows open details by document state using the shared table', async ({

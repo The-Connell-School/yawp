@@ -39,13 +39,11 @@ test.describe.serial('Admin assignment type archive', () => {
 
       await page.context().clearCookies();
       await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
-      await page.goto('/app/assignments');
+      await page.goto(`/app/my-classes/${e2eContext.classId}?tab=assignments`);
       await expect(
-        page.getByRole('heading', { name: 'Assignments' })
-      ).toBeVisible();
-      // The archived type no longer appears as a browsable type...
-      await expect(page.getByRole('link', { name: 'E2E Course' })).toHaveCount(0);
-      // ...but existing assignments keep their archived type label.
+        page.getByRole('tab', { name: /assignments/i })
+      ).toHaveAttribute('data-state', 'active');
+      // Existing assignments keep their archived type label...
       await expect(page.getByText('E2E Class Assignment')).toBeVisible();
       await expect(page.getByText('E2E Course').first()).toBeVisible();
 
@@ -54,8 +52,11 @@ test.describe.serial('Admin assignment type archive', () => {
         .first()
         .click();
       await expect(page.getByRole('dialog')).toBeVisible();
+      // ...but the archived type no longer appears as a selectable option.
       await page.getByRole('dialog').locator('[role="combobox"]').first().click();
       await expect(page.getByRole('option', { name: 'E2E Course' })).toHaveCount(0);
+      await page.keyboard.press('Escape');
+      await page.getByRole('dialog').getByRole('button', { name: 'Cancel' }).click();
 
       await page.context().clearCookies();
       await signIn('admin.e2e@yawp.test', 'admin-e2e-password');
@@ -71,8 +72,14 @@ test.describe.serial('Admin assignment type archive', () => {
 
       await page.context().clearCookies();
       await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
-      await page.goto('/app/assignments');
-      await expect(page.getByRole('link', { name: 'E2E Course' })).toBeVisible();
+      await page.goto(`/app/my-classes/${e2eContext.classId}?tab=assignments`);
+      await page
+        .getByRole('button', { name: /New Assignment/ })
+        .first()
+        .click();
+      await expect(page.getByRole('dialog')).toBeVisible();
+      await page.getByRole('dialog').locator('[role="combobox"]').first().click();
+      await expect(page.getByRole('option', { name: 'E2E Course' })).toBeVisible();
     } finally {
       await prisma.assignmentType.update({
         where: { id: e2eContext.assignmentTypeId },

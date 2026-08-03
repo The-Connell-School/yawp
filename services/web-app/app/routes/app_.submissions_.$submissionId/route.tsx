@@ -20,22 +20,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
 import { Input } from '~/components/ui/input';
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from '~/components/ui/accordion';
-import { ConfirmationDialog } from '~/components/confirmation-dialog';
 import { requireUserId, requireMembership } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { redirectWithToast } from '~/utils/toast.server';
-import {
-  formatAssignmentGrade,
-  formatGrade,
-  formatPointGrade,
-  letterFromPercent,
-} from '~/domain/grading/gradeMath';
+import { formatAssignmentGrade } from '~/domain/grading/gradeMath';
 import { type RubricDisplayConfig } from '~/domain/grading/rubric-display';
 import {
   type GrammarIssue,
@@ -47,11 +35,14 @@ import {
   sanitizeExitTarget,
 } from '~/utils/document-exit';
 import { EssayPanel } from './essay-panel';
-import { TeacherGradingPanel } from './teacher-grading/teacher-grading-panel';
 import { GradingCommentsSidebar } from './teacher-grading/grading-comments-sidebar';
 import { SelectionToolbar } from './teacher-grading/selection-toolbar';
 import { GradeHighlightsOverlay } from './teacher-grading/grade-highlights-overlay';
+import { SubmissionLifecyclePanel } from './teacher-grading/submission-lifecycle-panel';
+import { GradeSummaryReleasedLabel } from './teacher-grading/grade-summary-released-label';
+import { ViewPanel } from './teacher-grading/view-panel';
 import { resolveSubmissionGradeMode } from './submission-grade-mode';
+import { resolveSubmissionLifecycleState } from './submission-lifecycle-state';
 import { resolveRubricConfigForSubmission } from './submission-rubric-config.server';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -209,12 +200,6 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     throw redirect(`${next.pathname}${next.search}${next.hash}`);
   }
 
-  // Grade mode: teacher/admin grading someone else's work; not yet released OR ?edit=1
-  const isGradeMode =
-    !isOwner &&
-    (isTeacher || isAdmin) &&
-    (!submission.releasedAt || editParam);
-
   const rubricConfig = await resolveRubricConfigForSubmission({
     assignmentTypeId: submission.document.assignmentTypeId,
     latestGradingRun: submission.gradingAssistantRuns[0] ?? null,
@@ -250,7 +235,6 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     },
     isOwner,
     isTeacher: isTeacher || isAdmin,
-    isGradeMode,
   };
 }
 
@@ -261,26 +245,21 @@ export default function SubmissionRoute() {
     submission,
     isOwner,
     isTeacher,
-    isGradeMode: loaderGradeMode,
   } = useLoaderData<typeof loader>();
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const location = useLocation();
   const revalidator = useRevalidator();
   const titleFetcher = useFetcher();
-  // Grade mode driven by ?edit=1 query param so refreshes keep the same tab
-  // URL param is the explicit override: ?edit=1 → grade, ?edit=0 → view.
-  // When no param, fall back to loader default (ungraded = grade mode).
-  const editParam = searchParams.get('edit');
   const isGradingOther = isTeacher && !isOwner;
-  const isGradeMode = resolveSubmissionGradeMode({
-    isGradingOther,
-    editParam,
-    loaderGradeMode,
-  });
 
   const [localGradedAt, setLocalGradedAt] = useState<string | null>(null);
   const [localReleasedAt, setLocalReleasedAt] = useState<string | null>(null);
+  const [isEditingGrade, setIsEditingGrade] = useState(
+    () =>
+      !submission.releasedAt &&
+      !(submission.gradedAt && submission.numericPercentage != null)
+  );
   const [teacherGradeUi, setTeacherGradeUi] = useState<{
     numericPercentage: number | null;
     letterGrade: string | null;
@@ -292,6 +271,10 @@ export default function SubmissionRoute() {
 
   useEffect(() => {
     setTeacherGradeUi(null);
+    setIsEditingGrade(
+      !submission.releasedAt &&
+        !(submission.gradedAt && submission.numericPercentage != null)
+    );
   }, [submission.id]);
 
   useEffect(() => {
@@ -302,6 +285,21 @@ export default function SubmissionRoute() {
 
   const effectiveGradedAt = localGradedAt ?? submission.gradedAt;
   const effectiveReleasedAt = localReleasedAt ?? submission.releasedAt;
+  const isGraded = !!effectiveGradedAt;
+  const isReleased = !!effectiveReleasedAt;
+  const effectiveNumericPct =
+    teacherGradeUi?.numericPercentage ?? submission.numericPercentage ?? null;
+  const hasNumericGrade = effectiveNumericPct != null;
+  const lifecycleState = resolveSubmissionLifecycleState({
+    isGraded,
+    isReleased,
+    hasNumericGrade,
+  });
+  const isGradeMode = resolveSubmissionGradeMode({
+    isGradingOther,
+    lifecycleState,
+    isEditingGrade,
+  });
   // Students viewing a submission whose grade hasn't been released yet
   const isPending = isOwner && !effectiveReleasedAt;
 
@@ -322,8 +320,6 @@ export default function SubmissionRoute() {
   }, []);
 
   // ── Grade display ──────────────────────────────────────────────────
-  const effectiveNumericPct =
-    teacherGradeUi?.numericPercentage ?? submission.numericPercentage ?? null;
   const effectiveLetterGrade =
     teacherGradeUi?.letterGrade ?? submission.letterGrade ?? null;
   const assignmentIsSubmittedForGrade =
@@ -347,22 +343,26 @@ export default function SubmissionRoute() {
       : submission.submittedAt
         ? 'Submitted'
         : 'Draft'
-    : effectiveGradedAt
-      ? 'Graded'
-      : submission.submittedAt
-        ? 'Submitted'
-        : 'Draft';
+    : effectiveReleasedAt
+      ? 'Released'
+      : lifecycleState === 'graded'
+        ? 'Graded'
+        : submission.submittedAt
+          ? 'Submitted'
+          : 'Draft';
   const statusVariant = isOwner
     ? effectiveReleasedAt
       ? ('success' as const)
       : submission.submittedAt
         ? ('info-outlined' as const)
         : ('secondary' as const)
-    : effectiveGradedAt
+    : effectiveReleasedAt
       ? ('success' as const)
-      : submission.submittedAt
-        ? ('info-outlined' as const)
-        : ('secondary' as const);
+      : lifecycleState === 'graded'
+        ? ('success' as const)
+        : submission.submittedAt
+          ? ('info-outlined' as const)
+          : ('secondary' as const);
 
   // ── Local comments state (optimistic, no revalidation) ─────────────
   const [comments, setComments] = useState(submission.comments);
@@ -421,6 +421,10 @@ export default function SubmissionRoute() {
   const [grammarIssues, setGrammarIssues] = useState<GrammarIssue[]>(
     persistedGrammarIssues
   );
+  const grammarIssuesRef = useRef(grammarIssues);
+  grammarIssuesRef.current = grammarIssues;
+  const grammarIssueSaveQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const grammarIssueSaveVersionRef = useRef(0);
   const [hiddenGrammarIssueIds, setHiddenGrammarIssueIds] = useState<string[]>(
     []
   );
@@ -432,6 +436,7 @@ export default function SubmissionRoute() {
   const lastPersistedRef = useRef(persistedGrammarIssues);
   if (lastPersistedRef.current !== persistedGrammarIssues) {
     lastPersistedRef.current = persistedGrammarIssues;
+    grammarIssuesRef.current = persistedGrammarIssues;
     setGrammarIssues(persistedGrammarIssues);
     setHiddenGrammarIssueIds([]);
   }
@@ -556,11 +561,28 @@ export default function SubmissionRoute() {
       rubricConfig?: RubricDisplayConfig | null;
     }) => {
       setTeacherGradeUi(payload);
-      if (!submission.gradedAt) {
-        setLocalGradedAt(new Date().toISOString());
-      }
     },
-    [submission.gradedAt]
+    []
+  );
+
+  const handleGradeSaved = useCallback(
+    (snapshot: {
+      numericPercentage: number | null;
+      letterGrade: string | null;
+      score: string | null;
+      overallComment: string | null;
+      rubricScores: unknown;
+    }) => {
+      setTeacherGradeUi((prev) => ({
+        numericPercentage: snapshot.numericPercentage,
+        letterGrade: snapshot.letterGrade,
+        score: snapshot.score,
+        overallComment: snapshot.overallComment,
+        rubricScores: snapshot.rubricScores,
+        rubricConfig: prev?.rubricConfig ?? null,
+      }));
+    },
+    []
   );
 
   const teacherExistingGrade = useMemo(
@@ -624,43 +646,59 @@ export default function SubmissionRoute() {
 
   const handleRemoveGrammarIssue = useCallback(
     async (id: string) => {
-      const nextIssues = grammarIssues.filter((issue) => issue.id !== id);
-      try {
-        await persistGrammarIssues(nextIssues);
-      } catch {
-        revalidator.revalidate();
-        return;
-      }
+      const nextIssues = grammarIssuesRef.current.filter(
+        (issue) => issue.id !== id
+      );
+      if (nextIssues.length === grammarIssuesRef.current.length) return;
+
+      grammarIssuesRef.current = nextIssues;
       setGrammarIssues(nextIssues);
       setHiddenGrammarIssueIds((prev) =>
         prev.filter((currentId) => currentId !== id)
       );
+
+      const saveVersion = ++grammarIssueSaveVersionRef.current;
+      const saveRequest = grammarIssueSaveQueueRef.current
+        .catch(() => undefined)
+        .then(() => persistGrammarIssues(nextIssues));
+      grammarIssueSaveQueueRef.current = saveRequest;
+
+      try {
+        await saveRequest;
+      } catch {
+        if (saveVersion === grammarIssueSaveVersionRef.current) {
+          revalidator.revalidate();
+        }
+      }
     },
-    [grammarIssues, persistGrammarIssues, revalidator]
+    [persistGrammarIssues, revalidator]
   );
 
-  // ── Save / Release grade ────────────────────────────────────────────
-  const releaseFetcher = useFetcher<{ success?: boolean }>();
-  const [isSavingGrade, setIsSavingGrade] = useState(false);
-  const isReleased = !!effectiveReleasedAt;
-  const isGraded = !!effectiveGradedAt;
-  const canSaveGrade = isGradingOther && isGradeMode && !isGraded;
-  const canRelease = isGradingOther && isGraded && !isReleased;
-  const isReleasing = releaseFetcher.state !== 'idle';
+  // ── Lifecycle panel: edit mode, Save, Release ───────────────────────
+  const [isReleasing, setIsReleasing] = useState(false);
 
-  const lastHandledReleaseRef = useRef<unknown>(null);
-  useEffect(() => {
-    if (
-      releaseFetcher.data?.success &&
-      releaseFetcher.state === 'idle' &&
-      releaseFetcher.data !== lastHandledReleaseRef.current
-    ) {
-      lastHandledReleaseRef.current = releaseFetcher.data;
-      setLocalReleasedAt(new Date().toISOString());
+  const handleReleaseGrade = useCallback(async () => {
+    setIsReleasing(true);
+    try {
+      const formData = new FormData();
+      formData.append('submissionIds', submission.id);
+      const res = await fetch('/api/domain/release-grades', {
+        method: 'POST',
+        body: formData,
+      });
+      if (!res.ok) return;
+      const body = (await res.json()) as { success?: boolean };
+      if (body.success) {
+        setLocalReleasedAt(new Date().toISOString());
+      }
+    } finally {
+      setIsReleasing(false);
     }
-  }, [releaseFetcher.data, releaseFetcher.state]);
+  }, [submission.id]);
 
-  const handleSaveGrade = useCallback(async () => {
+  const [isSavingGrade, setIsSavingGrade] = useState(false);
+
+  const handleMarkGraded = useCallback(async () => {
     setIsSavingGrade(true);
     try {
       const res = await fetch('/api/domain/update-submission', {
@@ -679,18 +717,8 @@ export default function SubmissionRoute() {
     }
   }, [submission.id]);
 
-  const handleReleaseGrade = useCallback(() => {
-    const formData = new FormData();
-    formData.append('submissionIds', submission.id);
-    releaseFetcher.submit(formData, {
-      method: 'POST',
-      action: '/api/domain/release-grades',
-    });
-  }, [submission.id, releaseFetcher]);
-
   // ── Paths ──────────────────────────────────────────────────────────
   const revisePath = `/app/documents/${submission.documentId}?revise=1`;
-  const editGradePath = `/app/submissions/${submission.id}?edit=1`;
   const viewDocumentHref = useMemo(() => {
     const returnUrl = `${location.pathname}${location.search}${location.hash}`;
     return `/app/documents/${submission.documentId}?exitTo=${encodeURIComponent(returnUrl)}`;
@@ -756,16 +784,9 @@ export default function SubmissionRoute() {
           )}
         </div>
 
-        <Badge variant={statusVariant} className="shrink-0">
-          {statusLabel}
-        </Badge>
-
-        {gradeDisplay && !isPending ? (
-          <Badge
-            variant="secondary"
-            className="shrink-0 border-purple-300 bg-purple-100 text-purple-800 dark:border-purple-800 dark:bg-purple-950/40 dark:text-purple-200"
-          >
-            {gradeDisplay}
+        {isOwner ? (
+          <Badge variant={statusVariant} className="shrink-0">
+            {statusLabel}
           </Badge>
         ) : null}
 
@@ -781,35 +802,6 @@ export default function SubmissionRoute() {
                 View document
               </Link>
             </Button>
-          ) : null}
-          {/* Teacher: Save Grade → Release Grade flow */}
-          {canSaveGrade ? (
-            <Button
-              size="sm"
-              variant="default"
-              disabled={isSavingGrade}
-              onClick={handleSaveGrade}
-            >
-              {isSavingGrade ? 'Saving...' : 'Save Grade'}
-            </Button>
-          ) : null}
-          {canRelease ? (
-            <ConfirmationDialog
-              title="Release Grade?"
-              description="This will make the grade and all feedback visible to the student. This action cannot be undone."
-              confirmText="Release"
-              cancelText="Cancel"
-              onConfirm={handleReleaseGrade}
-            >
-              <Button size="sm" variant="default" disabled={isReleasing}>
-                {isReleasing ? 'Releasing...' : 'Release Grade'}
-              </Button>
-            </ConfirmationDialog>
-          ) : null}
-          {isGradingOther && isReleased ? (
-            <Badge variant="success" className="shrink-0">
-              Released
-            </Badge>
           ) : null}
           {isOwner && !isPending && persistedGrammarIssues.length > 0 ? (
             <Button
@@ -854,65 +846,38 @@ export default function SubmissionRoute() {
           style={{ width: 380 }}
         >
           {isGradingOther ? (
-            <>
-              <div className="flex shrink-0 items-center justify-between border-b px-4 py-2.5">
-                <span className="text-sm font-semibold">Grade Summary</span>
-                <div className="flex items-center gap-0.5 rounded-full border bg-muted/50 p-0.5">
-                  <Button
-                      size="sm"
-                      variant={isGradeMode ? 'secondary' : 'ghost'}
-                      className="h-7 rounded-full px-3 text-xs"
-                      onClick={() => {
-                        const params = new URLSearchParams(searchParams);
-                        params.set('edit', '1');
-                        setSearchParams(params, { replace: true });
-                      }}
-                    >
-                      Edit
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant={!isGradeMode ? 'secondary' : 'ghost'}
-                      className="h-7 rounded-full px-3 text-xs"
-                      onClick={() => {
-                        const params = new URLSearchParams(searchParams);
-                        params.set('edit', '0');
-                        setSearchParams(params, { replace: true });
-                      }}
-                    >
-                      View
-                    </Button>
-                  </div>
-              </div>
-              <div className="no-scrollbar grow overflow-y-auto">
-                {isGradeMode ? (
-                  <TeacherGradingPanel
-                    documentId={submission.documentId}
-                    submissionId={submission.id}
-                    existingGrade={teacherExistingGrade}
-                    grammarIssues={grammarIssues}
-                    hiddenGrammarIssueIds={hiddenGrammarIssueIds}
-                    onToggleGrammarIssue={toggleGrammarIssueVisibility}
-                  onRemoveGrammarIssue={handleRemoveGrammarIssue}
-                  onGrammarIssuesChange={handleGrammarIssuesChange}
-                  onAiGradingComplete={handleAiGradingComplete}
-                  rubricConfig={
-                    teacherGradeUi?.rubricConfig ?? submission.rubricConfig
-                  }
-                  initialGradingAssistantStrictnessLevel={
-                    submission.document.assignment
-                      ?.gradingAssistantStrictnessLevel
-                  }
-                />
-                ) : (
-                  <ViewPanel submission={submissionForView} />
-                )}
-              </div>
-            </>
+            <SubmissionLifecyclePanel
+              lifecycleState={lifecycleState}
+              isEditingGrade={isEditingGrade}
+              onEditingGradeChange={setIsEditingGrade}
+              onMarkGraded={handleMarkGraded}
+              onGradeSaved={handleGradeSaved}
+              isSavingGrade={isSavingGrade}
+              onRelease={handleReleaseGrade}
+              isReleasing={isReleasing}
+              submissionForView={submissionForView}
+              documentId={submission.documentId}
+              submissionId={submission.id}
+              existingGrade={teacherExistingGrade}
+              grammarIssues={grammarIssues}
+              hiddenGrammarIssueIds={hiddenGrammarIssueIds}
+              onToggleGrammarIssue={toggleGrammarIssueVisibility}
+              onRemoveGrammarIssue={handleRemoveGrammarIssue}
+              onGrammarIssuesChange={handleGrammarIssuesChange}
+              onAiGradingComplete={handleAiGradingComplete}
+              rubricConfig={
+                teacherGradeUi?.rubricConfig ?? submission.rubricConfig
+              }
+              initialGradingAssistantStrictnessLevel={
+                submission.document.assignment
+                  ?.gradingAssistantStrictnessLevel
+              }
+            />
           ) : (
             <>
-              <div className="flex shrink-0 items-center border-b px-4 py-2.5">
+              <div className="flex shrink-0 items-center justify-between gap-2 border-b px-4 py-2.5">
                 <span className="text-sm font-semibold">Grade Summary</span>
+                {isReleased ? <GradeSummaryReleasedLabel /> : null}
               </div>
               <div className="no-scrollbar grow overflow-y-auto">
                 {isPending ? (
@@ -1078,135 +1043,6 @@ function PendingViewPanel() {
           Pending feedback
         </p>
       </div>
-    </div>
-  );
-}
-
-// ── View Panel (read-only grade fields for student / view mode) ───────
-
-function ViewPanel({
-  submission,
-}: {
-  submission: {
-    numericPercentage: number | null;
-    letterGrade: string | null;
-    overallComment: string | null;
-    rubricScores: unknown;
-    document?: {
-      assignment?: {
-        submitForGrade: boolean;
-        pointValue: number | null;
-      } | null;
-    };
-  };
-}) {
-  const rawRubric = (submission.rubricScores ?? {}) as Record<
-    string,
-    number | { score: number; comment?: string }
-  >;
-  const rubricEntries = Object.entries(rawRubric).map(([key, val]) => {
-    const score =
-      typeof val === 'object' && val !== null
-        ? (val as { score: number }).score
-        : (val as number);
-    const comment =
-      typeof val === 'object' && val !== null
-        ? (val as { comment?: string }).comment
-        : undefined;
-    return { key, score, comment };
-  });
-  const hasGrade =
-    submission.document?.assignment?.submitForGrade !== false &&
-    submission.numericPercentage != null;
-  const pointGrade =
-    submission.document?.assignment?.submitForGrade === false
-      ? null
-      : formatPointGrade(
-          submission.numericPercentage,
-          submission.document?.assignment?.pointValue ?? null
-        );
-
-  return (
-    <div className="p-4 space-y-4">
-      {hasGrade ? (
-        <>
-          <div>
-            <h3 className="text-sm font-medium text-muted-foreground">
-              Overall Grade
-            </h3>
-            <p className="text-2xl font-semibold">
-              {pointGrade ??
-                `${submission.numericPercentage}%${
-                  submission.letterGrade ? ` (${submission.letterGrade})` : ''
-                }`}
-            </p>
-            {pointGrade ? (
-              <p className="text-sm text-muted-foreground">
-                {submission.numericPercentage}%
-                {submission.letterGrade ? ` (${submission.letterGrade})` : ''}
-              </p>
-            ) : null}
-          </div>
-          {submission.overallComment ? (
-            <div>
-              <h3 className="text-sm font-medium text-muted-foreground">
-                Overall Feedback
-              </h3>
-              <p className="mt-1 text-sm whitespace-pre-wrap">
-                {submission.overallComment}
-              </p>
-            </div>
-          ) : null}
-          {rubricEntries.length > 0 ? (
-            <div>
-              <h3 className="text-sm font-medium text-muted-foreground">
-                Rubric
-              </h3>
-              <Accordion type="multiple" className="mt-2">
-                {rubricEntries.map(({ key, score, comment }) => (
-                  <AccordionItem
-                    key={key}
-                    value={key}
-                    className="border-b last:border-0"
-                  >
-                    <AccordionTrigger className="py-2 text-sm hover:no-underline">
-                      <div className="flex w-full items-center justify-between pr-2">
-                        <span className="font-medium">
-                          {key
-                            .replace(/_/g, ' ')
-                            .replace(/\b\w/g, (c) => c.toUpperCase())}
-                        </span>
-                        <span className="text-muted-foreground">{score}/5</span>
-                      </div>
-                    </AccordionTrigger>
-                    <AccordionContent>
-                      {comment ? (
-                        <p className="text-xs text-muted-foreground whitespace-pre-wrap">
-                          {comment}
-                        </p>
-                      ) : (
-                        <p className="text-xs text-muted-foreground italic">
-                          No feedback for this category
-                        </p>
-                      )}
-                    </AccordionContent>
-                  </AccordionItem>
-                ))}
-              </Accordion>
-            </div>
-          ) : null}
-        </>
-      ) : (
-        <div className="flex flex-col items-center gap-2 py-10 text-center">
-          <p className="text-sm font-medium text-muted-foreground">
-            Not yet graded
-          </p>
-          <p className="text-xs text-muted-foreground leading-relaxed max-w-[200px]">
-            Your grade will appear here once the teacher has reviewed your
-            submission.
-          </p>
-        </div>
-      )}
     </div>
   );
 }

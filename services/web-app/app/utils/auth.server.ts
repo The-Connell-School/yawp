@@ -20,7 +20,14 @@ const membershipSelect = {
   id: true,
   role: true,
   isOrgOwner: true,
-  organization: { select: { id: true, name: true } },
+  organization: {
+    select: {
+      id: true,
+      name: true,
+      reporterEnabled: true,
+      classInsightsEnabled: true,
+    },
+  },
 } as const;
 
 export type RequiredMembership = Prisma.OrgMembershipGetPayload<{

@@ -25,6 +25,12 @@ const requireUserId = mock();
 const requireMembership = mock();
 const createAssignmentDeployedToClasses = mock();
 const isAssignmentTypeAvailableForEveryScope = mock();
+const uploadAssignmentPromptAttachment = mock();
+const deleteAssignmentPromptAttachment = mock();
+class AssignmentPromptAttachmentError extends Error {}
+const actualAssignmentPromptAttachment = await import(
+  '~/domain/assignments/assignment-prompt-attachment.server'
+);
 
 mock.module('~/utils/db.server', () => ({ prisma }));
 mock.module('~/utils/auth.server', () => ({
@@ -37,6 +43,16 @@ mock.module('~/utils/assignment-deployment.server', () => ({
 mock.module('~/utils/assignment-type-access.server', () => ({
   isAssignmentTypeAvailableForEveryScope,
 }));
+mock.module(
+  '~/domain/assignments/assignment-prompt-attachment.server',
+  () => ({
+    ...actualAssignmentPromptAttachment,
+    AssignmentPromptAttachmentError,
+    assignmentPromptAttachmentRequestTooLarge: () => false,
+    deleteAssignmentPromptAttachment,
+    uploadAssignmentPromptAttachment,
+  })
+);
 
 const { action } = await import('./route');
 
@@ -80,6 +96,8 @@ describe('api.assignments.create', () => {
     prisma.apHistoryPromptLibraryEntry.findFirst.mockReset();
     createAssignmentDeployedToClasses.mockReset();
     isAssignmentTypeAvailableForEveryScope.mockReset();
+    uploadAssignmentPromptAttachment.mockReset();
+    deleteAssignmentPromptAttachment.mockReset().mockResolvedValue(undefined);
     requireUserId.mockReset();
     requireMembership.mockReset();
 
@@ -103,6 +121,11 @@ describe('api.assignments.create', () => {
     isAssignmentTypeAvailableForEveryScope.mockResolvedValue(true);
     prisma.apHistoryPromptLibraryEntry.findFirst.mockResolvedValue(null);
     createAssignmentDeployedToClasses.mockResolvedValue({ id: 'assignment-1' });
+    uploadAssignmentPromptAttachment.mockResolvedValue({
+      promptAttachmentKey: 'assignment-prompts/file-id/assignment.pdf',
+      promptAttachmentName: 'assignment.pdf',
+      promptAttachmentSize: 4,
+    });
   });
 
   test('creates one standardized assignment per selected teacher-owned class', async () => {
@@ -143,6 +166,42 @@ describe('api.assignments.create', () => {
         submitForGrade: true,
         pointValue: 100,
         gradingAssistantStrictnessLevel: 'intermediate',
+      }),
+      classIds: ['class-1', 'class-2'],
+    });
+  });
+
+  test('stores a PDF attachment for assignments created across classes', async () => {
+    const form = new FormData();
+    form.set('intent', 'create-assignment');
+    form.set('assignmentTypeId', 'at-1');
+    form.append('classIds', 'class-1');
+    form.append('classIds', 'class-2');
+    form.set('prompt', 'Reference the attached assignment.');
+    form.set(
+      'promptAttachment',
+      new File([new Uint8Array([0x25, 0x50, 0x44, 0x46])], 'assignment.pdf', {
+        type: 'application/pdf',
+      })
+    );
+
+    const response = await action({
+      request: new Request('https://example.com/api/assignments/create', {
+        method: 'POST',
+        body: form,
+      }),
+      params: {},
+    } as any);
+
+    expect((await readBody(response)).success).toBe(true);
+    expect(uploadAssignmentPromptAttachment).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'assignment.pdf' })
+    );
+    expect(createAssignmentDeployedToClasses).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        promptAttachmentKey: 'assignment-prompts/file-id/assignment.pdf',
+        promptAttachmentName: 'assignment.pdf',
+        promptAttachmentSize: 4,
       }),
       classIds: ['class-1', 'class-2'],
     });

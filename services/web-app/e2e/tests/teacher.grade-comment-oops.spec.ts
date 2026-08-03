@@ -69,10 +69,16 @@ test.describe('Teacher grade comment crash regression', () => {
       );
     });
     const uniqueContent = `Grade comment oops regression ${Date.now()}`;
-    await page
-      .locator('textarea[placeholder="Write your comment..."]')
-      .fill(uniqueContent);
-    await page.getByRole('button', { name: /^save$/i }).click();
+    const commentTextarea = page.locator(
+      'textarea[placeholder="Write your comment..."]'
+    );
+    await commentTextarea.fill(uniqueContent);
+    // Scope to the comment draft's own Save button — the lifecycle panel
+    // also has a "Save" button on this page.
+    const commentDraft = commentTextarea.locator(
+      'xpath=ancestor::div[contains(@class, "border-dashed")][1]'
+    );
+    await commentDraft.getByRole('button', { name: /^save$/i }).click();
 
     await expect(page.getByText(uniqueContent).first()).toBeVisible({
       timeout: 10000,
