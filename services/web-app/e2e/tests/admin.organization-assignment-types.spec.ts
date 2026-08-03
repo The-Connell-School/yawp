@@ -49,8 +49,14 @@ test.describe.serial('Admin organization assignment types', () => {
 
       await page.context().clearCookies();
       await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
-      await page.goto('/app/assignments');
-      await expect(page.getByRole('link', { name: title })).toBeVisible();
+      await page.goto(`/app/my-classes/${e2eContext.classId}?tab=assignments`);
+      await page
+        .getByRole('button', { name: /New Assignment/ })
+        .first()
+        .click();
+      await expect(page.getByRole('dialog')).toBeVisible();
+      await page.getByRole('dialog').locator('[role="combobox"]').first().click();
+      await expect(page.getByRole('option', { name: title })).toBeVisible();
     } finally {
       await prisma.organizationAssignmentType.deleteMany({
         where: { assignmentTypeId: assignmentType.id },

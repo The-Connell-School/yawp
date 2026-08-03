@@ -162,11 +162,12 @@ describe('api.domain.update-submission', () => {
     expect(updateCall.data.grammarIssues).toEqual(grammarIssues);
   });
 
-  test('sets gradedAt and gradedById on first grading edit', async () => {
+  test('sets gradedAt and gradedById on first grading edit with overall percentage', async () => {
     prisma.submission.findFirst.mockResolvedValue({
       id: 'sub-1',
       gradedAt: null,
       gradedByMembershipId: null,
+      numericPercentage: null,
       document: {
         membershipId: 'student-1',
         assignment: null,
@@ -179,6 +180,7 @@ describe('api.domain.update-submission', () => {
       request: makeRequest({
         submissionId: 'sub-1',
         score: '90% A',
+        numericPercentage: 90,
         markAsGraded: true,
       }),
     } as any);
@@ -186,6 +188,30 @@ describe('api.domain.update-submission', () => {
     const updateCall = prisma.submission.update.mock.calls[0]?.[0];
     expect(updateCall.data.gradedAt).toBeInstanceOf(Date);
     expect(updateCall.data.gradedByMembershipId).toBe('teacher-1');
+  });
+
+  test('rejects markAsGraded without an overall percentage', async () => {
+    prisma.submission.findFirst.mockResolvedValue({
+      id: 'sub-1',
+      gradedAt: null,
+      gradedByMembershipId: null,
+      numericPercentage: null,
+      document: {
+        membershipId: 'student-1',
+        assignment: null,
+        membership: { classesAsStudent: [] },
+      },
+    });
+
+    const response = (await action({
+      request: makeRequest({
+        submissionId: 'sub-1',
+        markAsGraded: true,
+      }),
+    } as any)) as Response;
+
+    expect(response.status).toBe(400);
+    expect(prisma.submission.update).not.toHaveBeenCalled();
   });
 
   test('does not overwrite gradedAt on subsequent edits', async () => {
@@ -209,6 +235,32 @@ describe('api.domain.update-submission', () => {
     const updateCall = prisma.submission.update.mock.calls[0]?.[0];
     expect(updateCall.data.gradedAt).toBeUndefined();
     expect(updateCall.data.gradedByMembershipId).toBeUndefined();
+  });
+
+  test('assigns gradedByMembershipId when marking an already graded submission', async () => {
+    prisma.submission.findFirst.mockResolvedValue({
+      id: 'sub-1',
+      gradedAt: new Date('2026-01-01'),
+      gradedByMembershipId: null,
+      numericPercentage: 85,
+      document: {
+        membershipId: 'student-1',
+        assignment: null,
+        membership: { classesAsStudent: [] },
+      },
+    });
+    prisma.submission.update.mockResolvedValue({ id: 'sub-1' });
+
+    await action({
+      request: makeRequest({
+        submissionId: 'sub-1',
+        markAsGraded: true,
+      }),
+    } as any);
+
+    const updateCall = prisma.submission.update.mock.calls[0]?.[0];
+    expect(updateCall.data.gradedAt).toBeUndefined();
+    expect(updateCall.data.gradedByMembershipId).toBe('teacher-1');
   });
 
   test('rejects non-teachers', async () => {

@@ -42,6 +42,7 @@ export async function action({ request }: ActionFunctionArgs) {
       id: true,
       gradedAt: true,
       gradedByMembershipId: true,
+      numericPercentage: true,
       document: {
         select: {
           membershipId: true,
@@ -126,8 +127,29 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 
   // Explicitly mark as graded when requested
-  if (fields.markAsGraded && !submission.gradedAt) {
-    data.gradedAt = new Date();
+  if (fields.markAsGraded) {
+    const incomingNumericPercentage =
+      typeof fields.numericPercentage === 'number' &&
+      Number.isFinite(fields.numericPercentage)
+        ? fields.numericPercentage
+        : undefined;
+    const hasNumericGrade =
+      incomingNumericPercentage !== undefined ||
+      submission.numericPercentage != null;
+
+    if (!hasNumericGrade) {
+      return Response.json(
+        {
+          success: false,
+          message: 'An overall percentage is required before marking as graded.',
+        },
+        { status: 400 }
+      );
+    }
+
+    if (!submission.gradedAt) {
+      data.gradedAt = new Date();
+    }
     data.gradedByMembershipId = actor.membershipId;
   }
 

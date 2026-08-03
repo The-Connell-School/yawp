@@ -12,7 +12,10 @@ async function expectStandardizedAssignmentForm(page: Page) {
   ).toBeVisible();
   await expect(dialog.getByText('Assign to', { exact: true })).toBeVisible();
   await expect(
-    dialog.getByText('Prompt Source', { exact: true })
+    dialog.getByText('Attachment (optional)', { exact: true })
+  ).toBeVisible();
+  await expect(
+    dialog.getByRole('button', { name: 'Extract assignment text from PDF' })
   ).toBeVisible();
   await expect(dialog.getByLabel(/tutor context/i)).toHaveCount(0);
   await expect(
@@ -262,7 +265,7 @@ test.describe.serial('Teacher dashboard workspace', () => {
 
       await page.getByLabel(CLASS_LABEL).check();
       await page.getByLabel('Title (optional)').fill(title);
-      await page.getByLabel('Prompt').fill(prompt);
+      await page.getByLabel('Prompt', { exact: true }).fill(prompt);
       await page.getByLabel(/point value/i).fill('25');
       await page.getByRole('button', { name: 'Create Assignment' }).click();
 
@@ -308,7 +311,7 @@ test.describe.serial('Teacher dashboard workspace', () => {
     );
   });
 
-  test('creates one assignment record for each selected class from the Assignments page', async ({
+  test('creates one assignment record for each selected class from the dashboard', async ({
     page,
     e2eContext,
     signIn,
@@ -321,19 +324,19 @@ test.describe.serial('Teacher dashboard workspace', () => {
 
     try {
       await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
-      await page.goto('/app/assignments');
+      await page.goto('/app');
       await page.waitForLoadState('networkidle');
 
       const prompt = `Multi-Class E2E prompt ${Date.now()}`;
       await page
+        .getByTestId('teacher-assignments-grid')
         .getByRole('button', { name: /new assignment/i })
-        .first()
         .click();
       await expectStandardizedAssignmentForm(page);
       await page.getByLabel(CLASS_LABEL).check();
       await page.getByLabel(secondClass.title!).check();
       await page.getByLabel('Title (optional)').fill(title);
-      await page.getByLabel('Prompt').fill(prompt);
+      await page.getByLabel('Prompt', { exact: true }).fill(prompt);
       await page.getByLabel(/point value/i).fill('35');
       await page.getByRole('button', { name: 'Create Assignment' }).click();
       await expect(page.getByRole('dialog')).toHaveCount(0);
@@ -371,7 +374,7 @@ test.describe.serial('Teacher dashboard workspace', () => {
     await expectStandardizedAssignmentForm(page);
     await page.getByLabel(CLASS_LABEL).check();
     await page.getByLabel('Title (optional)').fill(title);
-    await page.getByLabel('Prompt').fill(prompt);
+    await page.getByLabel('Prompt', { exact: true }).fill(prompt);
     await page.getByLabel(/point value/i).fill('40');
     await page.getByRole('button', { name: 'Create Assignment' }).click();
     await expect(page.getByRole('dialog')).toHaveCount(0);

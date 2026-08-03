@@ -354,7 +354,7 @@ export default function Route() {
       </nav>
       <div
         className={cn(
-          'min-w-full flex-1 transition-all duration-300 ease-in-out sm:min-w-0 sm:translate-x-0',
+          'flex min-w-full flex-1 flex-col transition-all duration-300 ease-in-out sm:min-w-0 sm:translate-x-0',
           {
             'translate-x-0': isMobileNavOpen,
             '-translate-x-[212px]': isNavExpanded,
@@ -415,10 +415,18 @@ export default function Route() {
             <ReloadIcon />
           </Button>
         </div>
+        {/*
+          min-h-0 lets the Outlet shrink to the space actually left after the
+          banners and mobile menu above, instead of the browser giving it
+          height:100% of this whole column (which double-counts that chrome
+          and pushes fixed-height app shells like the Reporter off-screen).
+        */}
         <NavExpandedContext.Provider
           value={{ isMobileNavOpen, setIsMobileNavOpen }}
         >
-          <Outlet key={location.pathname} />
+          <div className="min-h-0 flex-1">
+            <Outlet key={location.pathname} />
+          </div>
         </NavExpandedContext.Provider>
       </div>
       <UserSettingsDialog

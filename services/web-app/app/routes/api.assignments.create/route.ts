@@ -8,6 +8,12 @@ import {
   DEFAULT_GRADING_ASSISTANT_STRICTNESS_LEVEL,
   parseGradingAssistantStrictnessLevel,
 } from '~/domain/grading/grading-assistant-strictness';
+import {
+  AssignmentPromptAttachmentError,
+  assignmentPromptAttachmentRequestTooLarge,
+  deleteAssignmentPromptAttachment,
+  uploadAssignmentPromptAttachment,
+} from '~/domain/assignments/assignment-prompt-attachment.server';
 import { isAssignmentTypeAvailableForEveryScope } from '~/utils/assignment-type-access.server';
 import { createAssignmentDeployedToClasses } from '~/utils/assignment-deployment.server';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
@@ -22,6 +28,13 @@ export async function action({ request }: ActionFunctionArgs) {
     return dataResponse(
       { success: false, message: 'Only teachers can create assignments.' },
       { status: 403 }
+    );
+  }
+
+  if (assignmentPromptAttachmentRequestTooLarge(request)) {
+    return dataResponse(
+      { success: false, message: 'PDF is too large. Maximum size is 10 MB.' },
+      { status: 413 }
     );
   }
 
@@ -172,21 +185,50 @@ export async function action({ request }: ActionFunctionArgs) {
     );
   }
 
-  await createAssignmentDeployedToClasses({
-    data: {
-      assignmentTypeId: assignmentType.id,
-      title,
-      prompt,
-      gradingAssistantStrictnessLevel,
-      ...(gradingIntent?.success
-        ? {
-            submitForGrade: gradingIntent.data.submitForGrade,
-            pointValue: gradingIntent.data.pointValue,
-          }
-        : {}),
-    },
-    classIds: deployClassIds,
-  });
+  const promptAttachment = formData.get('promptAttachment');
+  let promptAttachmentData:
+    | Awaited<ReturnType<typeof uploadAssignmentPromptAttachment>>
+    | undefined;
+  if (promptAttachment instanceof File && promptAttachment.size > 0) {
+    try {
+      promptAttachmentData =
+        await uploadAssignmentPromptAttachment(promptAttachment);
+    } catch (error) {
+      if (error instanceof AssignmentPromptAttachmentError) {
+        return dataResponse(
+          { success: false, message: error.message },
+          { status: 400 }
+        );
+      }
+      throw error;
+    }
+  }
+
+  try {
+    await createAssignmentDeployedToClasses({
+      data: {
+        assignmentTypeId: assignmentType.id,
+        title,
+        prompt,
+        gradingAssistantStrictnessLevel,
+        ...promptAttachmentData,
+        ...(gradingIntent?.success
+          ? {
+              submitForGrade: gradingIntent.data.submitForGrade,
+              pointValue: gradingIntent.data.pointValue,
+            }
+          : {}),
+      },
+      classIds: deployClassIds,
+    });
+  } catch (error) {
+    if (promptAttachmentData?.promptAttachmentKey) {
+      await deleteAssignmentPromptAttachment(
+        promptAttachmentData.promptAttachmentKey
+      ).catch(() => {});
+    }
+    throw error;
+  }
 
   return dataResponse({
     success: true,

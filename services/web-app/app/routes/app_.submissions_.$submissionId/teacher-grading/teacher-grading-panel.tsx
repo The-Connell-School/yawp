@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useFetcher } from 'react-router';
 import { Button } from '~/components/ui/button';
 import { Badge } from '~/components/ui/badge';
@@ -49,10 +49,11 @@ import {
   parseGradingAssistantStrictnessLevel,
   type GradingAssistantStrictnessLevel,
 } from '~/domain/grading/grading-assistant-strictness';
-import { Check, Loader2, TrendingUp } from 'lucide-react';
+import { Loader2, TrendingUp } from 'lucide-react';
 import { cn } from '~/utils/misc';
 import { useUpdateSubmission } from './use-update-submission';
 import { hasGradingDraftToReplace } from './has-grading-draft-to-replace';
+import { buildGradingFormSnapshot } from './grading-form-snapshot';
 import {
   cloneFormDataWithFallbackRetry,
   isLlmRetryResponse,
@@ -69,18 +70,52 @@ function formatExcerpt(excerpt: string, maxChars = 90) {
   return `${text.slice(0, Math.max(0, maxChars - 1)).trimEnd()}...`;
 }
 
+export type SavedGradeSnapshot = {
+  numericPercentage: number | null;
+  letterGrade: string | null;
+  score: string | null;
+  overallComment: string | null;
+  rubricScores: unknown;
+};
+
+export type TeacherGradingPanelHeaderState = {
+  gradeDisplay: string;
+  gradeBadgeClassName: string;
+  hasUnsavedChanges: boolean;
+  hasDraftToReplace: boolean;
+  hasNumericPercentage: boolean;
+  isGenerating: boolean;
+  isAiRetrying: boolean;
+  isBusy: boolean;
+  isSavingDraft: boolean;
+  gradingAssistantStrictnessLevel: GradingAssistantStrictnessLevel;
+  gradingAssistantStrictnessLabel: string;
+  setGradingAssistantStrictnessLevel: (
+    level: GradingAssistantStrictnessLevel
+  ) => void;
+  generateAiSuggestions: () => void;
+  generateAiSuggestionsAtLevel: (
+    level: GradingAssistantStrictnessLevel
+  ) => void;
+  saveDraft: () => Promise<void>;
+  discardDraft: () => void;
+  getSavedGradeSnapshot: () => SavedGradeSnapshot;
+};
+
 export function TeacherGradingPanel({
   documentId,
   submissionId,
   existingGrade,
   grammarIssues,
-  hiddenGrammarIssueIds,
-  onToggleGrammarIssue,
+  hiddenGrammarIssueIds: _hiddenGrammarIssueIds,
+  onToggleGrammarIssue: _onToggleGrammarIssue,
   onRemoveGrammarIssue,
   onGrammarIssuesChange,
   onAiGradingComplete,
   rubricConfig,
   initialGradingAssistantStrictnessLevel,
+  hideHeader = false,
+  onHeaderStateChange,
 }: {
   documentId: string;
   submissionId: string | null;
@@ -112,6 +147,8 @@ export function TeacherGradingPanel({
   }) => void;
   rubricConfig?: RubricDisplayConfig | null;
   initialGradingAssistantStrictnessLevel?: string | null;
+  hideHeader?: boolean;
+  onHeaderStateChange?: (state: TeacherGradingPanelHeaderState) => void;
 }) {
   const aiFetcher = useFetcher();
   const targetSubmissionId = existingGrade?.id ?? submissionId;
@@ -131,26 +168,18 @@ export function TeacherGradingPanel({
   const [numericPercentage, setNumericPercentage] = useState('');
   const [hasManualPercentOverride, setHasManualPercentOverride] =
     useState(false);
-  const recalcCompleteTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
-    null
-  );
-  const recalcResetTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
-    null
-  );
   const pendingAiFormRef = useRef<FormData | null>(null);
   const hasRetriedAiFormRef = useRef(false);
   const lastInitializationKeyRef = useRef<string | null>(null);
   const lastStrictnessInitializationKeyRef = useRef<string | null>(null);
   const [isAiRetrying, setIsAiRetrying] = useState(false);
-  const [recalcUiState, setRecalcUiState] = useState<
-    'idle' | 'loading' | 'done'
-  >('idle');
   const [gradingAssistantStrictnessLevel, setGradingAssistantStrictnessLevel] =
     useState<GradingAssistantStrictnessLevel>(
       parseGradingAssistantStrictnessLevel(
         initialGradingAssistantStrictnessLevel
       ) ?? DEFAULT_GRADING_ASSISTANT_STRICTNESS_LEVEL
     );
+  const [savedSnapshot, setSavedSnapshot] = useState<string | null>(null);
   const scoreOptions = useMemo(
     () =>
       buildScoreOptions(
@@ -208,6 +237,20 @@ export function TeacherGradingPanel({
       ),
     [rubricScores, overallComment, numericPercentage, grammarIssues.length]
   );
+
+  const currentSnapshot = useMemo(
+    () =>
+      buildGradingFormSnapshot({
+        rubricScores,
+        overallComment,
+        numericPercentage,
+        grammarIssues,
+      }),
+    [grammarIssues, numericPercentage, overallComment, rubricScores]
+  );
+
+  const hasUnsavedChanges =
+    savedSnapshot !== null && currentSnapshot !== savedSnapshot;
 
   const onAiGradingCompleteRef = useRef(onAiGradingComplete);
   onAiGradingCompleteRef.current = onAiGradingComplete;
@@ -275,7 +318,15 @@ export function TeacherGradingPanel({
     setOverallComment(initialOverallComment);
     setNumericPercentage(initialNumericPercentage);
     setRubricScores(initialRubricScores);
-  }, [existingGrade, initializationKey, propRubricConfig]);
+    setSavedSnapshot(
+      buildGradingFormSnapshot({
+        rubricScores: initialRubricScores,
+        overallComment: initialOverallComment,
+        numericPercentage: initialNumericPercentage,
+        grammarIssues,
+      })
+    );
+  }, [existingGrade, grammarIssues, initializationKey, propRubricConfig]);
 
   useEffect(() => {
     if (
@@ -363,25 +414,31 @@ export function TeacherGradingPanel({
       rubricConfig: nextRubricConfig,
     });
 
+    setSavedSnapshot(
+      buildGradingFormSnapshot({
+        rubricScores: normalizeRubricScoresForCategories({
+          raw: d.rubricScores,
+          categories: nextRubricConfig.categories,
+          minScore: nextRubricConfig.minScore,
+          maxScore: nextRubricConfig.maxScore,
+        }),
+        overallComment:
+          typeof d.overallComment === 'string' ? d.overallComment : '',
+        numericPercentage:
+          typeof d.numericPercentage === 'number'
+            ? d.numericPercentage.toString()
+            : '',
+        grammarIssues: parseGrammarIssuesPayload(d.grammarIssues),
+      })
+    );
+
     pendingAiFormRef.current = null;
     hasRetriedAiFormRef.current = false;
     setIsAiRetrying(false);
   }, [aiFetcher.data, aiFetcher.state, onGrammarIssuesChange]);
 
-  useEffect(() => {
-    return () => {
-      if (recalcCompleteTimeoutRef.current) {
-        clearTimeout(recalcCompleteTimeoutRef.current);
-      }
-      if (recalcResetTimeoutRef.current) {
-        clearTimeout(recalcResetTimeoutRef.current);
-      }
-    };
-  }, []);
-
   /**
-   * Build the full grading payload from current state and auto-save it.
-   * Called on blur from form fields.
+   * Build the full grading payload from current state and persist it.
    */
   const saveAll = (
     overrideRubric?: Record<string, RubricScore>,
@@ -389,7 +446,7 @@ export function TeacherGradingPanel({
     overridePercent?: string,
     overrideGrammarIssues?: GrammarIssue[]
   ) => {
-    if (!targetSubmissionId) return;
+    if (!targetSubmissionId) return Promise.resolve();
 
     const effectiveRubric = overrideRubric ?? rubricScores;
     const effectiveComment = overrideComment ?? overallComment;
@@ -417,165 +474,262 @@ export function TeacherGradingPanel({
       payload.score = existingGrade.score;
     }
 
-    void autoSave(payload);
-  };
-
-  const handleRecalculate = () => {
-    if (computedNumericPercentage === null || recalcUiState !== 'idle') return;
-
-    setRecalcUiState('loading');
-
-    if (recalcCompleteTimeoutRef.current) {
-      clearTimeout(recalcCompleteTimeoutRef.current);
-    }
-    if (recalcResetTimeoutRef.current) {
-      clearTimeout(recalcResetTimeoutRef.current);
-    }
-
-    recalcCompleteTimeoutRef.current = setTimeout(() => {
-      const newPercent = computedNumericPercentage.toString();
-      setNumericPercentage(newPercent);
-      setHasManualPercentOverride(false);
-      setRecalcUiState('done');
-      saveAll(undefined, undefined, newPercent);
-
-      recalcResetTimeoutRef.current = setTimeout(() => {
-        setRecalcUiState('idle');
-      }, 1600);
-    }, 500);
-  };
-
-  const generateAiSuggestions = () => {
-    const aiForm = new FormData();
-    if (submissionId) {
-      aiForm.append('submissionId', submissionId);
-    } else {
-      aiForm.append('documentId', documentId);
-    }
-    aiForm.append(
-      'gradingAssistantStrictnessLevel',
-      gradingAssistantStrictnessLevel
-    );
-    pendingAiFormRef.current = aiForm;
-    hasRetriedAiFormRef.current = false;
-    setIsAiRetrying(false);
-    aiFetcher.submit(aiForm, {
-      method: 'POST',
-      action: '/api/domain/grade-essay-ai',
+    return autoSave(payload).then(() => {
+      setSavedSnapshot(
+        buildGradingFormSnapshot({
+          rubricScores: effectiveRubric,
+          overallComment: effectiveComment,
+          numericPercentage: effectivePercentStr,
+          grammarIssues: effectiveGrammarIssues,
+        })
+      );
     });
   };
 
-  const statusLabel =
+  const generateAiSuggestionsAtLevel = useCallback(
+    (level: GradingAssistantStrictnessLevel) => {
+      setGradingAssistantStrictnessLevel(level);
+      const aiForm = new FormData();
+      if (submissionId) {
+        aiForm.append('submissionId', submissionId);
+      } else {
+        aiForm.append('documentId', documentId);
+      }
+      aiForm.append('gradingAssistantStrictnessLevel', level);
+      pendingAiFormRef.current = aiForm;
+      hasRetriedAiFormRef.current = false;
+      setIsAiRetrying(false);
+      aiFetcher.submit(aiForm, {
+        method: 'POST',
+        action: '/api/domain/grade-essay-ai',
+      });
+    },
+    [aiFetcher, documentId, submissionId]
+  );
+
+  const generateAiSuggestions = useCallback(() => {
+    generateAiSuggestionsAtLevel(gradingAssistantStrictnessLevel);
+  }, [generateAiSuggestionsAtLevel, gradingAssistantStrictnessLevel]);
+
+  const saveDraft = () => saveAll();
+
+  const getSavedGradeSnapshot = useCallback((): SavedGradeSnapshot => {
+    const letter =
+      resolvedNumericPercentage === null
+        ? null
+        : letterFromPercent(resolvedNumericPercentage);
+    return {
+      numericPercentage: resolvedNumericPercentage,
+      letterGrade: letter,
+      score:
+        formatGrade(resolvedNumericPercentage, letter) ||
+        existingGrade?.score ||
+        '',
+      overallComment,
+      rubricScores,
+    };
+  }, [
+    existingGrade?.score,
+    overallComment,
+    resolvedNumericPercentage,
+    rubricScores,
+  ]);
+
+  const discardDraft = useCallback(() => {
+    if (!savedSnapshot) return;
+    try {
+      const parsed = JSON.parse(savedSnapshot) as {
+        rubricScores: Record<string, RubricScore>;
+        overallComment: string;
+        numericPercentage: string;
+        grammarIssues: GrammarIssue[];
+      };
+      setRubricScores(parsed.rubricScores);
+      setOverallComment(parsed.overallComment);
+      setNumericPercentage(parsed.numericPercentage);
+      setHasManualPercentOverride(parsed.numericPercentage.trim() !== '');
+      onGrammarIssuesChange(parsed.grammarIssues ?? []);
+    } catch {
+      // Ignore malformed snapshots.
+    }
+  }, [onGrammarIssuesChange, savedSnapshot]);
+
+  const onHeaderStateChangeRef = useRef(onHeaderStateChange);
+  onHeaderStateChangeRef.current = onHeaderStateChange;
+
+  const headerCallbacksRef = useRef({
+    setGradingAssistantStrictnessLevel,
+    generateAiSuggestions,
+    generateAiSuggestionsAtLevel,
+    saveDraft,
+    discardDraft,
+    getSavedGradeSnapshot,
+  });
+  headerCallbacksRef.current = {
+    setGradingAssistantStrictnessLevel,
+    generateAiSuggestions,
+    generateAiSuggestionsAtLevel,
+    saveDraft,
+    discardDraft,
+    getSavedGradeSnapshot,
+  };
+
+  const headerStateSnapshot = useMemo(
+    () => ({
+      gradeDisplay,
+      gradeBadgeClassName,
+      hasUnsavedChanges,
+      hasDraftToReplace,
+      hasNumericPercentage: resolvedNumericPercentage !== null,
+      isGenerating,
+      isAiRetrying,
+      isBusy,
+      isSavingDraft: autoSaveStatus === 'saving',
+      gradingAssistantStrictnessLevel,
+      gradingAssistantStrictnessLabel,
+    }),
+    [
+      autoSaveStatus,
+      gradeBadgeClassName,
+      gradeDisplay,
+      gradingAssistantStrictnessLabel,
+      gradingAssistantStrictnessLevel,
+      hasDraftToReplace,
+      hasUnsavedChanges,
+      isAiRetrying,
+      isBusy,
+      isGenerating,
+      resolvedNumericPercentage,
+    ]
+  );
+
+  useLayoutEffect(() => {
+    onHeaderStateChangeRef.current?.({
+      ...headerStateSnapshot,
+      ...headerCallbacksRef.current,
+    });
+  }, [headerStateSnapshot]);
+
+  const saveStatusLabel =
     autoSaveStatus === 'saving'
       ? 'Saving...'
-      : autoSaveStatus === 'saved'
-        ? 'Saved'
+      : hasUnsavedChanges
+        ? 'Unsaved'
         : autoSaveStatus === 'error'
           ? 'Error'
           : null;
 
   return (
     <div className="flex h-full w-full flex-col">
-      <div className="border-b p-3 space-y-2">
-        <div className="flex items-center justify-between gap-2">
-          <div className="text-sm font-semibold">Grading</div>
-          <div className="flex items-center gap-1.5">
-            <span
-              className={cn(
-                'inline-flex h-1.5 w-1.5 rounded-full',
-                autoSaveStatus === 'saving' &&
-                  'bg-muted-foreground animate-pulse',
-                autoSaveStatus === 'saved' && 'bg-green-500',
-                autoSaveStatus === 'error' && 'bg-red-500',
-                autoSaveStatus === 'idle' && 'bg-muted-foreground/30'
-              )}
-            />
-            <span
-              data-testid="grading-auto-save-status"
-              className={cn(
-                'text-xs',
-                autoSaveStatus === 'saving' && 'text-muted-foreground',
-                autoSaveStatus === 'saved' && 'text-green-600',
-                autoSaveStatus === 'error' && 'text-red-600',
-                autoSaveStatus === 'idle' && 'text-muted-foreground'
-              )}
-            >
-              {statusLabel ?? 'Autosave on'}
-            </span>
-          </div>
-        </div>
-        <div className="flex items-center justify-between gap-2">
-          <Badge variant="secondary" className={gradeBadgeClassName}>
-            {gradeDisplay}
-          </Badge>
-          <div className="flex items-center gap-2">
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button
-                  type="button"
-                  size="icon-sm"
-                  variant="outline"
-                  className="rounded-full"
-                  aria-label={`Grading assistant strictness: ${gradingAssistantStrictnessLabel}`}
-                  title={`Grading assistant strictness: ${gradingAssistantStrictnessLabel}`}
-                  data-testid="grading-assistant-strictness-menu"
-                  disabled={isGenerating}
-                >
-                  <TrendingUp className="h-4 w-4" />
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent align="end" className="w-96 rounded-md p-3">
-                <div className="grid gap-2 sm:grid-cols-3">
-                  {gradingAssistantStrictnessOptions.map((option) => {
-                    const selected =
-                      gradingAssistantStrictnessLevel === option.value;
-                    return (
-                      <button
-                        key={option.value}
-                        type="button"
-                        className={`rounded-md border px-3 py-2 text-left text-sm transition ${
-                          selected
-                            ? 'border-primary bg-primary text-primary-foreground'
-                            : 'border-border bg-background hover:bg-muted'
-                        }`}
-                        aria-pressed={selected}
-                        data-testid={`grading-assistant-strictness-${option.value}`}
-                        onClick={() =>
-                          setGradingAssistantStrictnessLevel(option.value)
-                        }
-                        disabled={isGenerating}
-                      >
-                        <span className="block font-medium">
-                          {option.label}
-                        </span>
-                        <span
-                          className={`mt-1 block text-xs ${
-                            selected
-                              ? 'text-primary-foreground/80'
-                              : 'text-muted-foreground'
-                          }`}
-                        >
-                          {option.description}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </PopoverContent>
-            </Popover>
-            {hasDraftToReplace ? (
-              <ConfirmationDialog
-                title="Replace Existing Grading Feedback?"
-                description="Grading Assistant suggestions will replace all current rubric comments, overall feedback, and grammar issue suggestions. Continue?"
-                confirmText="Replace"
-                cancelText="Go Back"
-                onConfirm={generateAiSuggestions}
+      {!hideHeader ? (
+        <div className="border-b p-3 space-y-2">
+          <div className="flex items-center justify-between gap-2">
+            <div className="text-sm font-semibold">Grading</div>
+            {saveStatusLabel ? (
+              <span
+                data-testid="grading-auto-save-status"
+                className={cn(
+                  'text-xs',
+                  autoSaveStatus === 'saving' && 'text-muted-foreground',
+                  hasUnsavedChanges && 'text-amber-600',
+                  autoSaveStatus === 'error' && 'text-red-600'
+                )}
               >
+                {saveStatusLabel}
+              </span>
+            ) : null}
+          </div>
+          <div className="flex items-center justify-between gap-2">
+            <Badge variant="secondary" className={gradeBadgeClassName}>
+              {gradeDisplay}
+            </Badge>
+            <div className="flex items-center gap-2">
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    type="button"
+                    size="icon-sm"
+                    variant="outline"
+                    className="rounded-full"
+                    aria-label={`Grading assistant strictness: ${gradingAssistantStrictnessLabel}`}
+                    title={`Grading assistant strictness: ${gradingAssistantStrictnessLabel}`}
+                    data-testid="grading-assistant-strictness-menu"
+                    disabled={isGenerating}
+                  >
+                    <TrendingUp className="h-4 w-4" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent align="end" className="w-96 rounded-md p-3">
+                  <p className="mb-2 text-sm font-semibold">Strictness</p>
+                  <div className="grid items-start gap-2 sm:grid-cols-3">
+                    {gradingAssistantStrictnessOptions.map((option) => {
+                      const selected =
+                        gradingAssistantStrictnessLevel === option.value;
+                      return (
+                        <button
+                          key={option.value}
+                          type="button"
+                          className={`flex h-full flex-col items-start justify-start rounded-md border px-3 py-2 text-left text-sm transition ${
+                            selected
+                              ? 'border-primary bg-primary text-primary-foreground'
+                              : 'border-border bg-background hover:bg-muted'
+                          }`}
+                          aria-pressed={selected}
+                          data-testid={`grading-assistant-strictness-${option.value}`}
+                          onClick={() =>
+                            setGradingAssistantStrictnessLevel(option.value)
+                          }
+                          disabled={isGenerating}
+                        >
+                          <span className="block font-medium">
+                            {option.label}
+                          </span>
+                          <span
+                            className={`mt-1 block text-xs ${
+                              selected
+                                ? 'text-primary-foreground/80'
+                                : 'text-muted-foreground'
+                            }`}
+                          >
+                            {option.description}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </PopoverContent>
+              </Popover>
+              {hasDraftToReplace ? (
+                <ConfirmationDialog
+                  title="Replace Existing Grading Feedback?"
+                  description="Grading Assistant suggestions will replace all current rubric comments, overall feedback, and grammar issue suggestions. Continue?"
+                  confirmText="Replace"
+                  cancelText="Go Back"
+                  onConfirm={generateAiSuggestions}
+                >
+                  <Button
+                    size="sm"
+                    variant="default"
+                    data-testid="grading-assistant-generate"
+                    disabled={isBusy}
+                  >
+                    {isGenerating ? (
+                      <span className="flex items-center gap-2">
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        {isAiRetrying ? 'Retrying...' : 'Grading...'}
+                      </span>
+                    ) : (
+                      'Grading Assistant Suggestions'
+                    )}
+                  </Button>
+                </ConfirmationDialog>
+              ) : (
                 <Button
                   size="sm"
                   variant="default"
                   data-testid="grading-assistant-generate"
                   disabled={isBusy}
+                  onClick={generateAiSuggestions}
                 >
                   {isGenerating ? (
                     <span className="flex items-center gap-2">
@@ -586,75 +740,35 @@ export function TeacherGradingPanel({
                     'Grading Assistant Suggestions'
                   )}
                 </Button>
-              </ConfirmationDialog>
-            ) : (
-              <Button
-                size="sm"
-                variant="default"
-                data-testid="grading-assistant-generate"
-                disabled={isBusy}
-                onClick={generateAiSuggestions}
-              >
-                {isGenerating ? (
-                  <span className="flex items-center gap-2">
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    {isAiRetrying ? 'Retrying...' : 'Grading...'}
-                  </span>
-                ) : (
-                  'Grading Assistant Suggestions'
-                )}
-              </Button>
-            )}
+              )}
+            </div>
           </div>
         </div>
-      </div>
+      ) : null}
 
       <div className="no-scrollbar flex-1 overflow-y-auto p-3 space-y-4">
-        <div className="rounded-lg border p-2 space-y-2">
+        <div className="space-y-2">
           <div className="flex items-center gap-2">
             <Label htmlFor="pct">Overall Percentage</Label>
           </div>
-          <div className="flex gap-2">
-            <Input
-              id="pct"
-              data-testid="grading-overall-percentage"
-              type="number"
-              min={0}
-              max={100}
-              value={numericPercentage}
-              disabled={isGenerating}
-              onChange={(e) => {
-                setNumericPercentage(e.target.value);
-                setHasManualPercentOverride(true);
-              }}
-              onBlur={(e) =>
-                saveAll(undefined, undefined, e.currentTarget.value)
+          <Input
+            id="pct"
+            data-testid="grading-overall-percentage"
+            type="number"
+            min={0}
+            max={100}
+            value={numericPercentage}
+            disabled={isGenerating}
+            onChange={(e) => {
+              setNumericPercentage(e.target.value);
+              setHasManualPercentOverride(true);
+            }}
+            onBlur={(e) => {
+              if (!hideHeader) {
+                void saveAll(undefined, undefined, e.currentTarget.value);
               }
-            />
-            <Button
-              type="button"
-              variant="outline"
-              onClick={handleRecalculate}
-              disabled={
-                computedNumericPercentage === null ||
-                recalcUiState !== 'idle' ||
-                isGenerating
-              }
-              className={cn(
-                'min-w-[120px] transition-all',
-                recalcUiState !== 'idle' &&
-                  'border-muted-foreground/30 bg-muted/50 text-muted-foreground'
-              )}
-            >
-              {recalcUiState === 'loading' ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : recalcUiState === 'done' ? (
-                <Check className="h-4 w-4 text-muted-foreground" />
-              ) : (
-                'Recalculate'
-              )}
-            </Button>
-          </div>
+            }}
+          />
         </div>
 
         <div className="space-y-2">
@@ -665,7 +779,11 @@ export function TeacherGradingPanel({
             value={overallComment}
             disabled={isGenerating}
             onChange={(e) => setOverallComment(e.target.value)}
-            onBlur={(e) => saveAll(undefined, e.currentTarget.value)}
+            onBlur={(e) => {
+              if (!hideHeader) {
+                void saveAll(undefined, e.currentTarget.value);
+              }
+            }}
             rows={4}
             placeholder="Write overall feedback..."
           />
@@ -689,8 +807,9 @@ export function TeacherGradingPanel({
                   },
                 };
                 setRubricScores(newRubric);
-                // Auto-save on select change (selects don't fire blur)
-                saveAll(newRubric);
+                if (!hideHeader) {
+                  void saveAll(newRubric);
+                }
               };
               const scoreLabel = current.score
                 ? `${current.score}/${activeRubricConfig.maxScore}`
@@ -698,9 +817,6 @@ export function TeacherGradingPanel({
               const isGrammarCategory =
                 item.key === 'grammar_and_mechanics' ||
                 item.key === 'language_use_and_conventions';
-              const shownGrammarCount = grammarIssues.filter(
-                (issue) => !hiddenGrammarIssueIds.includes(issue.id)
-              ).length;
 
               return (
                 <AccordionItem
@@ -763,46 +879,18 @@ export function TeacherGradingPanel({
                           },
                         };
                         setRubricScores(newRubric);
-                        saveAll(newRubric);
+                        if (!hideHeader) {
+                          void saveAll(newRubric);
+                        }
                       }}
                       placeholder="Enter category feedback..."
                       rows={4}
                     />
                     {isGrammarCategory ? (
                       <div className="space-y-2">
-                        <div className="flex items-center justify-between gap-2">
-                          <p className="text-xs text-muted-foreground">
-                            AI grammar issues shown: {shownGrammarCount}/
-                            {grammarIssues.length}
-                          </p>
-                          {grammarIssues.length > 0 ? (
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="ghost"
-                              className="h-7 px-2 text-xs"
-                              disabled={isGenerating}
-                              onClick={() => {
-                                const shouldShowAll =
-                                  shownGrammarCount !== grammarIssues.length;
-                                grammarIssues.forEach((issue) => {
-                                  const isHidden =
-                                    hiddenGrammarIssueIds.includes(issue.id);
-                                  if (shouldShowAll && isHidden) {
-                                    onToggleGrammarIssue(issue.id);
-                                  }
-                                  if (!shouldShowAll && !isHidden) {
-                                    onToggleGrammarIssue(issue.id);
-                                  }
-                                });
-                              }}
-                            >
-                              {shownGrammarCount === grammarIssues.length
-                                ? 'Hide all'
-                                : 'Show all'}
-                            </Button>
-                          ) : null}
-                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          AI grammar issues: {grammarIssues.length}
+                        </p>
                         {grammarIssues.length === 0 ? (
                           <p className="text-xs text-muted-foreground">
                             No grammar/syntax issues yet. Generate suggestions
@@ -810,61 +898,41 @@ export function TeacherGradingPanel({
                           </p>
                         ) : (
                           <div className="space-y-2">
-                            {grammarIssues.map((issue) => {
-                              const isHidden = hiddenGrammarIssueIds.includes(
-                                issue.id
-                              );
-
-                              return (
-                                <div
-                                  key={issue.id}
-                                  className="rounded-md border bg-white p-2"
-                                >
-                                  <div className="flex items-center justify-between gap-2">
-                                    <p className="text-xs font-medium text-muted-foreground">
-                                      {issue.kind === 'style'
-                                        ? 'Style'
-                                        : 'Grammar'}
-                                      {issue.ruleNumber
-                                        ? ` • Rule ${issue.ruleNumber}`
-                                        : ''}
-                                    </p>
-                                    <div className="flex items-center gap-2">
-                                      <Button
-                                        type="button"
-                                        size="sm"
-                                        variant="outline"
-                                        className="h-7 px-2 text-xs"
-                                        disabled={isGenerating}
-                                        onClick={() =>
-                                          onToggleGrammarIssue(issue.id)
-                                        }
-                                      >
-                                        {isHidden ? 'Show' : 'Hide'}
-                                      </Button>
-                                      <Button
-                                        type="button"
-                                        size="sm"
-                                        variant="outline"
-                                        className="h-7 px-2 text-xs"
-                                        disabled={isGenerating}
-                                        onClick={() =>
-                                          onRemoveGrammarIssue(issue.id)
-                                        }
-                                      >
-                                        Remove
-                                      </Button>
-                                    </div>
-                                  </div>
-                                  <p className="mt-1 text-sm italic">
-                                    "{formatExcerpt(issue.excerpt)}"
+                            {grammarIssues.map((issue) => (
+                              <div
+                                key={issue.id}
+                                className="rounded-md border bg-white p-2"
+                              >
+                                <div className="flex items-center justify-between gap-2">
+                                  <p className="text-xs font-medium text-muted-foreground">
+                                    {issue.kind === 'style'
+                                      ? 'Style'
+                                      : 'Grammar'}
+                                    {issue.ruleNumber
+                                      ? ` • Rule ${issue.ruleNumber}`
+                                      : ''}
                                   </p>
-                                  <p className="mt-1 text-xs text-muted-foreground">
-                                    {issue.message}
-                                  </p>
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-7 px-2 text-xs"
+                                    disabled={isGenerating}
+                                    onClick={() =>
+                                      onRemoveGrammarIssue(issue.id)
+                                    }
+                                  >
+                                    Remove
+                                  </Button>
                                 </div>
-                              );
-                            })}
+                                <p className="mt-1 text-sm italic">
+                                  "{formatExcerpt(issue.excerpt)}"
+                                </p>
+                                <p className="mt-1 text-xs text-muted-foreground">
+                                  {issue.message}
+                                </p>
+                              </div>
+                            ))}
                           </div>
                         )}
                       </div>

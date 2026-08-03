@@ -684,10 +684,7 @@ describe('api.domain.grade-essay-ai', () => {
     expect(prompt).toContain('ACT Writing');
     expect(prompt).toContain('Assignment type grading config: ACT Writing');
     expect(prompt).not.toContain('Grading assistant template:');
-    expect(prompt).toContain('Grading assistant strictness: Advanced');
-    expect(prompt).toContain(
-      'Hold the student to an advanced standard for this rubric'
-    );
+    expect(prompt).not.toContain('Grading assistant strictness:');
     expect(prompt).toContain('Ideas and Analysis (25%)');
     expect(prompt).not.toContain('Thesis/Content');
     expect(Object.keys(payload.rubricScores ?? {})).toEqual([
@@ -696,6 +693,8 @@ describe('api.domain.grade-essay-ai', () => {
       'organization',
       'language_use_and_conventions',
     ]);
+    expect(payload.overallScore).toBe(9);
+    expect(payload.score).toBe('9/12');
     expect(updateCall.data.aiMeta).toMatchObject({
       gradingConfigSource: 'assignment-type',
       assignmentTypeRubricSource: 'assignment-type',
@@ -750,23 +749,11 @@ describe('api.domain.grade-essay-ai', () => {
     });
   });
 
-  test('sends each grading assistant strictness level to the model and audit trail', async () => {
+  test('adjusts only the overall grade number for each strictness level', async () => {
     const cases = [
-      {
-        level: 'beginner',
-        label: 'Beginner',
-        promptText: 'Use beginner calibration.',
-      },
-      {
-        level: 'intermediate',
-        label: 'Intermediate',
-        promptText: 'Use intermediate calibration.',
-      },
-      {
-        level: 'advanced',
-        label: 'Advanced',
-        promptText: 'Use advanced calibration.',
-      },
+      { level: 'beginner', expectedPercentage: 84 },
+      { level: 'intermediate', expectedPercentage: 79 },
+      { level: 'advanced', expectedPercentage: 74 },
     ] as const;
 
     for (const strictnessCase of cases) {
@@ -827,10 +814,11 @@ describe('api.domain.grade-essay-ai', () => {
         prisma.submissionGradingAssistantRun.create.mock.calls[0]?.[0];
 
       expect(payload.success).toBe(true);
-      expect(prompt).toContain(
-        `Grading assistant strictness: ${strictnessCase.label}`
+      expect(prompt).not.toContain('Grading assistant strictness:');
+      expect(payload.numericPercentage).toBe(strictnessCase.expectedPercentage);
+      expect(updateCall.data.numericPercentage).toBe(
+        strictnessCase.expectedPercentage
       );
-      expect(prompt).toContain(strictnessCase.promptText);
       expect(updateCall.data.aiMeta).toMatchObject({
         gradingAssistantStrictnessLevel: strictnessCase.level,
       });

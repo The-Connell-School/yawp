@@ -204,6 +204,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           id: true,
           title: true,
           prompt: true,
+          promptAttachmentName: true,
           apHistorySnapshot: true,
         },
       },

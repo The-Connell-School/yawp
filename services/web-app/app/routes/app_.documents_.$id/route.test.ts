@@ -253,6 +253,7 @@ describe('app_.documents_.$id loader', () => {
           assignment: expect.objectContaining({
             select: expect.objectContaining({
               apHistorySnapshot: true,
+              promptAttachmentName: true,
             }),
           }),
         }),

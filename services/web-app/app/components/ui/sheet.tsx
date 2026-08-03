@@ -107,6 +107,13 @@ const SheetFooter = ({
 );
 SheetFooter.displayName = 'SheetFooter';
 
+/** Scrollable sheet body — pair with `SHEET_STICKY_FOOTER_CLASS_NAME` on SheetFooter. */
+const SHEET_SCROLL_BODY_CLASS_NAME = 'min-h-0 flex-1 overflow-y-auto';
+
+/** Sticky footer separated from scrollable content; stays visible when the body overflows. */
+const SHEET_STICKY_FOOTER_CLASS_NAME =
+  'mt-auto shrink-0 border-t bg-background px-6 py-4';
+
 const SheetTitle = React.forwardRef<
   React.ElementRef<typeof SheetPrimitive.Title>,
   React.ComponentPropsWithoutRef<typeof SheetPrimitive.Title>
@@ -142,4 +149,6 @@ export {
   SheetFooter,
   SheetTitle,
   SheetDescription,
+  SHEET_SCROLL_BODY_CLASS_NAME,
+  SHEET_STICKY_FOOTER_CLASS_NAME,
 };

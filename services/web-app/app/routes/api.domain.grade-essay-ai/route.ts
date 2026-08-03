@@ -16,10 +16,11 @@ import { parseGrammarIssuesPayload } from '~/domain/grading/grammarIssues';
 import { resolveAssignmentTypeGradingConfig } from '~/domain/assignment-types/assignment-type-grading-config.server';
 import type { RubricCategory as GradingRubricCategory } from '~/domain/assignment-types/assignment-type-rubric.shared';
 import {
+  applyGradingAssistantStrictnessToActComposite,
+  applyGradingAssistantStrictnessToPercentage,
   DEFAULT_GRADING_ASSISTANT_STRICTNESS_LEVEL,
-  getGradingAssistantStrictnessInstructions,
-  getGradingAssistantStrictnessLabel,
   parseGradingAssistantStrictnessLevel,
+  type GradingAssistantStrictnessLevel,
 } from '~/domain/grading/grading-assistant-strictness';
 import { redirectWithToast } from '~/utils/toast.server';
 import {
@@ -370,6 +371,51 @@ function buildDynamicGradeFields({
   });
 }
 
+function applyStrictnessToGradeFields({
+  overallScore,
+  numericPercentage,
+  letterGrade,
+  score,
+  scoringType,
+  gradingAssistantStrictnessLevel,
+}: {
+  overallScore: number;
+  numericPercentage: number | null;
+  letterGrade: string | null;
+  score: string | null;
+  scoringType: string;
+  gradingAssistantStrictnessLevel: GradingAssistantStrictnessLevel;
+}) {
+  if (scoringType === 'act_writing_2_12') {
+    const adjustedComposite = applyGradingAssistantStrictnessToActComposite(
+      overallScore,
+      gradingAssistantStrictnessLevel
+    );
+    return {
+      overallScore: adjustedComposite,
+      numericPercentage,
+      letterGrade,
+      score: `${adjustedComposite}/12`,
+    };
+  }
+
+  if (numericPercentage === null) {
+    return { overallScore, numericPercentage, letterGrade, score };
+  }
+
+  const adjustedPercentage = applyGradingAssistantStrictnessToPercentage(
+    numericPercentage,
+    gradingAssistantStrictnessLevel
+  );
+  const adjustedLetterGrade = letterFromPercent(adjustedPercentage);
+  return {
+    overallScore,
+    numericPercentage: adjustedPercentage,
+    letterGrade: adjustedLetterGrade,
+    score: formatGrade(adjustedPercentage, adjustedLetterGrade) ?? score,
+  };
+}
+
 export async function action({ request }: ActionFunctionArgs) {
   const gradingDeadlineSignal = createGradingRequestDeadlineSignal();
   const gradingDeadlineResponse = () =>
@@ -546,11 +592,6 @@ export async function action({ request }: ActionFunctionArgs) {
     requestedStrictnessLevel ??
     assignmentStrictnessLevel ??
     DEFAULT_GRADING_ASSISTANT_STRICTNESS_LEVEL;
-  const gradingAssistantStrictnessLabel = getGradingAssistantStrictnessLabel(
-    gradingAssistantStrictnessLevel
-  );
-  const gradingAssistantStrictnessInstructions =
-    getGradingAssistantStrictnessInstructions(gradingAssistantStrictnessLevel);
   const rubricCategories = resolvedGradingConfig.rubricCategories;
   const rubricKeys = rubricCategories.map((category) => category.key);
   const { minScore, maxScore, scoringType } = resolvedGradingConfig;
@@ -693,10 +734,24 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
       earnedPoints,
       points,
     } satisfies Prisma.InputJsonObject;
-    const numericPercentage = Math.round((earnedPoints / totalPoints) * 100);
-    const letterGrade = letterFromPercent(numericPercentage);
-    const score = formatGrade(numericPercentage, letterGrade);
-    const overallScore = earnedPoints;
+    const {
+      numericPercentage,
+      letterGrade,
+      score,
+      overallScore,
+    } = applyStrictnessToGradeFields({
+      overallScore: earnedPoints,
+      numericPercentage: Math.round((earnedPoints / totalPoints) * 100),
+      letterGrade: letterFromPercent(
+        Math.round((earnedPoints / totalPoints) * 100)
+      ),
+      score: formatGrade(
+        Math.round((earnedPoints / totalPoints) * 100),
+        letterFromPercent(Math.round((earnedPoints / totalPoints) * 100))
+      ) ?? '',
+      scoringType: 'percentage',
+      gradingAssistantStrictnessLevel,
+    });
     const overallComment =
       typeof parsedJson.overallComment === 'string' &&
       parsedJson.overallComment.trim()
@@ -746,14 +801,13 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
   }
 
   const gradingSystemBase = `You are a grading assistant. Return ONLY valid JSON with the schema:\n{\n  \"categories\": [{\"key\": string, \"score\": ${minScore}-${maxScore}, \"comment\": string}],\n  \"overallComment\": string\n}\nScores must be integers ${minScore}-${maxScore}.\nReturn exactly one category for each rubric key provided.\nProvide concise, actionable comments.\nIn overallComment, start with \"${studentFirstName},\" and continue with cohesive feedback in a warm but professional tone.\nAfter the name, continue naturally (for example: \"${studentFirstName}, you ...\").\nDo not use fixed lead-ins like \"Overall grade,\" or \"${studentFirstName}, this is your overall feedback.\"`;
-  const strictnessBlock = `Grading assistant strictness: ${gradingAssistantStrictnessLabel}\n${gradingAssistantStrictnessInstructions}\n\n`;
 
   let system = gradingSystemBase;
   let userPrompt = '';
 
   if (templateInstructions.mode === 'unified') {
     system = `${gradingSystemBase}\nFollow the grading instructions in the user prompt exactly.`;
-    userPrompt = `Student first name: ${studentFirstName}\n\nAssignment type grading config: ${resolvedGradingConfig.label}\n\n${strictnessBlock}Rubric category keys (use these exact keys in categories[].key):\n${rubricText}\n\nGrading instructions:\n${templateInstructions.gradingInstructions}\n\nEssay:\n${submission.text}`;
+    userPrompt = `Student first name: ${studentFirstName}\n\nAssignment type grading config: ${resolvedGradingConfig.label}\n\nRubric category keys (use these exact keys in categories[].key):\n${rubricText}\n\nGrading instructions:\n${templateInstructions.gradingInstructions}\n\nEssay:\n${submission.text}`;
   } else {
     const rubricInstructions =
       templateInstructions.mode === 'legacy-split' ||
@@ -773,7 +827,7 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
       ? `${systemInstructions}\n\n`
       : '';
     system = `${templateSystemInstructions}${gradingSystemBase}\nUse the rubric language, proficiency bands, and category weights from the user prompt exactly.\n${scoreInstructions}`;
-    userPrompt = `Student first name: ${studentFirstName}\n\nAssignment type grading config: ${resolvedGradingConfig.label}\n\n${strictnessBlock}Rubric category keys (use these exact keys in categories[].key):\n${rubricText}\n\nRubric Instructions:\n${rubricInstructions}\n\nEssay:\n${submission.text}`;
+    userPrompt = `Student first name: ${studentFirstName}\n\nAssignment type grading config: ${resolvedGradingConfig.label}\n\nRubric category keys (use these exact keys in categories[].key):\n${rubricText}\n\nRubric Instructions:\n${rubricInstructions}\n\nEssay:\n${submission.text}`;
   }
 
   let responseText = '';
@@ -931,12 +985,17 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
   }, {});
 
   const overallComment = parsed.overallComment;
+  const baseGradeFields = buildDynamicGradeFields({
+    categories: parsed.categories,
+    rubricScores,
+    scoringType,
+    rubricCategories,
+  });
   const { overallScore, numericPercentage, letterGrade, score } =
-    buildDynamicGradeFields({
-      categories: parsed.categories,
-      rubricScores,
+    applyStrictnessToGradeFields({
+      ...baseGradeFields,
       scoringType,
-      rubricCategories,
+      gradingAssistantStrictnessLevel,
     });
 
   const grammarAndMechanicsScore =

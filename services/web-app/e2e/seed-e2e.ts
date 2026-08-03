@@ -123,7 +123,11 @@ export async function seedE2E(): Promise<E2EContext> {
 
   // Minimal org
   const org = await prisma.organization.create({
-    data: { id: 'the-connell-school', name: 'The Connell School' },
+    data: {
+      id: 'the-connell-school',
+      name: 'The Connell School',
+      classInsightsEnabled: true,
+    },
   });
 
   // Seed a school and class for student signup flow

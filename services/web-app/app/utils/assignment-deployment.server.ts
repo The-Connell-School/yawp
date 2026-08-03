@@ -1,4 +1,5 @@
 import type { Prisma } from '@app/prisma';
+import { deleteAssignmentPromptAttachment } from '~/domain/assignments/assignment-prompt-attachment.server';
 import { prisma } from '~/utils/db.server';
 
 export async function createAssignmentDeployedToClasses(params: {
@@ -34,7 +35,10 @@ export async function deleteClassAssignmentDeployment(params: {
       assignmentId: params.assignmentId,
       classId: params.classId,
     },
-    select: { id: true },
+    select: {
+      id: true,
+      assignment: { select: { promptAttachmentKey: true } },
+    },
   });
 
   if (!deployment) {
@@ -49,6 +53,11 @@ export async function deleteClassAssignmentDeployment(params: {
 
   if (remaining === 0) {
     await prisma.assignment.delete({ where: { id: params.assignmentId } });
+    if (deployment.assignment.promptAttachmentKey) {
+      await deleteAssignmentPromptAttachment(
+        deployment.assignment.promptAttachmentKey
+      ).catch(() => {});
+    }
   }
 
   return deployment.id;

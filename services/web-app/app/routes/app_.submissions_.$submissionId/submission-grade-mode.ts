@@ -1,12 +1,21 @@
+import { type SubmissionLifecycleState } from './submission-lifecycle-state';
+
+/**
+ * Resolves whether the teacher can interact with grading controls in the essay
+ * (e.g. remove grammar marks). Editing is limited to active grading sessions.
+ */
 export function resolveSubmissionGradeMode({
   isGradingOther,
-  editParam,
-  loaderGradeMode,
+  lifecycleState,
+  isEditingGrade,
 }: {
   isGradingOther: boolean;
-  editParam: string | null;
-  loaderGradeMode: boolean;
+  lifecycleState: SubmissionLifecycleState;
+  isEditingGrade: boolean;
 }) {
   if (!isGradingOther) return false;
-  return editParam !== null ? editParam === '1' : loaderGradeMode;
+  if (lifecycleState === 'released') return false;
+  if (lifecycleState === 'needs_grading') return true;
+  if (lifecycleState === 'graded') return isEditingGrade;
+  return false;
 }
