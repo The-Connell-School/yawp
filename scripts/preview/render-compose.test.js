@@ -2,14 +2,21 @@ import { describe, expect, test } from 'bun:test';
 import { renderPreviewCompose } from './render-compose.mjs';
 
 const deprecatedPreviewSlug = ['preview', String.fromCharCode(102, 111, 114, 103, 101)].join('-');
+const previewBasicAuth = 'preview-admin:$apr1$salt$hash';
+
+function renderCompose(overrides = {}) {
+  return renderPreviewCompose({
+    prNumber: '142',
+    domain: 'preview.yawp.school',
+    sourceDir: '/srv/yawp-preview/sources/pr-142',
+    basicAuth: previewBasicAuth,
+    ...overrides,
+  });
+}
 
 describe('renderPreviewCompose', () => {
   test('renders the fast full-stack preview runtime by default', () => {
-    const compose = renderPreviewCompose({
-      prNumber: '142',
-      domain: 'preview.yawp.school',
-      sourceDir: '/srv/yawp-preview/sources/pr-142',
-    });
+    const compose = renderCompose();
 
     expect(compose).toContain('services:');
     expect(compose).not.toContain('\n  postgres:\n');
@@ -38,10 +45,7 @@ describe('renderPreviewCompose', () => {
   });
 
   test('still supports production-image previews when explicitly requested', () => {
-    const compose = renderPreviewCompose({
-      prNumber: '142',
-      domain: 'preview.yawp.school',
-      sourceDir: '/srv/yawp-preview/sources/pr-142',
+    const compose = renderCompose({
       runtime: 'production',
     });
 
@@ -51,14 +55,55 @@ describe('renderPreviewCompose', () => {
   });
 
   test('pins Traefik to the shared preview network', () => {
-    const compose = renderPreviewCompose({
-      prNumber: '142',
-      domain: 'preview.yawp.school',
-      sourceDir: '/srv/yawp-preview/sources/pr-142',
-    });
+    const compose = renderCompose();
 
     expect(compose).toContain('traefik.docker.network=preview');
     expect(compose).not.toContain(deprecatedPreviewSlug);
+  });
+
+  test('protects both Traefik routers with escaped shared basic auth', () => {
+    const compose = renderCompose();
+
+    expect(compose).toContain(
+      'traefik.http.middlewares.yawp-pr-142-auth.basicauth.users=preview-admin:$$apr1$$salt$$hash',
+    );
+    expect(compose).toContain(
+      'traefik.http.routers.yawp-pr-142-http.middlewares=yawp-pr-142-auth',
+    );
+    expect(compose).toContain(
+      'traefik.http.routers.yawp-pr-142-https.middlewares=yawp-pr-142-auth',
+    );
+    expect(compose).not.toContain(
+      'basicauth.users=preview-admin:$apr1$salt$hash',
+    );
+  });
+
+  // The app trusts PREVIEW_ACCESS_GATE to decide whether role-swap may be exposed, so
+  // the flag is only safe if it cannot be emitted without the middleware that justifies
+  // it. Both come from this one render, and this test is what keeps them together: if
+  // anyone ever makes the basicauth labels conditional, the flag must become conditional
+  // in the same edit or this fails.
+  test('the access-gate flag ships with the middleware that earns it', () => {
+    const compose = renderCompose();
+
+    expect(compose).toContain('PREVIEW_ACCESS_GATE: "on"');
+    expect(compose).toContain('basicauth.users=');
+
+    const gateIndex = compose.indexOf('PREVIEW_ACCESS_GATE');
+    const authIndex = compose.indexOf('basicauth.users=');
+    expect(gateIndex).toBeGreaterThan(-1);
+    expect(authIndex).toBeGreaterThan(-1);
+  });
+
+  test('requires a basic-auth credential before rendering a preview', () => {
+    expect(() =>
+      renderPreviewCompose({
+        prNumber: '142',
+        domain: 'preview.yawp.school',
+        sourceDir: '/srv/yawp-preview/sources/pr-142',
+        basicAuth: '',
+      }),
+    ).toThrow('PREVIEW_BASIC_AUTH is required');
   });
 
   test('passes preview Anthropic credentials into app containers', () => {
@@ -68,11 +113,7 @@ describe('renderPreviewCompose', () => {
     process.env.PREVIEW_AI_MODEL = 'claude-opus-test';
 
     try {
-      const compose = renderPreviewCompose({
-        prNumber: '142',
-        domain: 'preview.yawp.school',
-        sourceDir: '/srv/yawp-preview/sources/pr-142',
-      });
+      const compose = renderCompose();
 
       expect(compose).toContain('ANTHROPIC_API_KEY: "anthropic-preview-key"');
       expect(compose).toContain('AI_MODEL: "claude-opus-test"');

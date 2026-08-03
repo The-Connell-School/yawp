@@ -262,7 +262,13 @@ describe('PR preview deployment contract', () => {
     expect(deployScript).toContain('yawp-preview-db');
     expect(deployScript).toContain('preview-postgres');
     expect(deployScript).toContain('Restoring production dump into template database');
-    expect(deployScript).toContain('DATABASE_NAME="yawp_pr_${PR_NUMBER}"');
+    // Was: toContain('DATABASE_NAME="yawp_pr_${PR_NUMBER}"'). This test cares that the
+    // production-dump path still clones per-environment databases, and used that line as a
+    // marker for "DATABASE_NAME is set" — but the line itself was the bug: it rebuilt a
+    // pr-prefixed name and so ignored the slug override that named environments (the demo
+    // box) depend on. The invariant is that DATABASE_NAME comes from preview-env.mjs.
+    expect(deployScript).toContain('${DATABASE_NAME:?');
+    expect(deployScript).not.toContain('DATABASE_NAME="yawp_pr_${PR_NUMBER}"');
     expect(deployScript).toContain('Preview database $DATABASE_NAME already exists; skipping clone.');
     expect(deployScript).toContain('production-dump)');
     expect(deployScript).toContain('createdb -U postgres -T "$TEMPLATE_DB" "$DATABASE_NAME"');
@@ -332,7 +338,11 @@ describe('PR preview deployment contract', () => {
   test('preview deploy polls health quickly once containers are starting', () => {
     const deployScript = readRepoFile('scripts/preview/deploy.sh');
 
-    expect(deployScript).toContain('curl -fsS --connect-timeout 1 --max-time 2 "$health_url"');
+    // The subject here is poll SPEED, not the shape of the request. The health check now
+    // carries basic-auth credentials because the preview sits behind the shared gate, so
+    // the old exact-string match on an anonymous curl pinned a detail it never meant to
+    // own. Assert the timeouts and the cadence, which are what "quickly" means.
+    expect(deployScript).toContain('--connect-timeout 1 --max-time 2 "$health_url"');
     expect(deployScript).toContain('sleep 1');
     expect(deployScript).not.toContain('--max-time 5 "$health_url"');
     expect(deployScript).not.toContain('sleep 2');
@@ -455,5 +465,45 @@ describe('PR preview deployment contract', () => {
     );
     expect(previewWorkflow).toContain('- **Smoke:** healthcheck + dev login');
     expect(previewWorkflow).not.toContain('seed overlay');
+  });
+});
+
+describe('demo environment deployment contract', () => {
+  // deploy.sh runs ON THE DEMO HOST over SSH, so a secret declared in the job's `env:`
+  // reaches the runner and stops there. Adding PREVIEW_BASIC_AUTH to the job block and
+  // the pre-flight check — but not to remote_env — passed every local check and then
+  // failed the real deploy with "Missing PREVIEW_BASIC_AUTH", because the script that
+  // needed it was running on a different machine. Declared and forwarded are two
+  // different things; this asserts they agree.
+  test('every PREVIEW_ variable the demo job declares is forwarded to the host', () => {
+    const workflow = readRepoFile('.github/workflows/demo-environment.yml');
+
+    const declared = [...workflow.matchAll(/^ {6}(PREVIEW_[A-Z0-9_]+):/gm)].map((m) => m[1]);
+    expect(declared.length).toBeGreaterThan(5);
+
+    // Stop at the line that closes the array, not the first ')' — that one belongs to
+    // $(shell_quote ...) on the very first entry.
+    const remoteEnvStart = workflow.indexOf('remote_env=(');
+    const remoteEnvBlock = workflow.slice(
+      remoteEnvStart,
+      workflow.indexOf('\n          )', remoteEnvStart),
+    );
+    expect(remoteEnvBlock).toContain('SOURCE_DIR=');
+
+    // PREVIEW_HOST/SSH_USER address the machine itself; they are used to build the SSH
+    // connection, not consumed by the script on the far end.
+    const connectionOnly = new Set(['PREVIEW_HOST', 'PREVIEW_SSH_USER']);
+    const missing = declared
+      .filter((name) => !connectionOnly.has(name))
+      .filter((name) => !remoteEnvBlock.includes(`${name}=`));
+
+    expect(missing).toEqual([]);
+  });
+
+  test('the demo deploy proves the gate turns strangers away before trusting the password', () => {
+    const workflow = readRepoFile('.github/workflows/demo-environment.yml');
+
+    expect(workflow).toContain('expected 401');
+    expect(workflow).toContain('--user "${user}:${PREVIEW_BASIC_AUTH_PASSWORD}"');
   });
 });

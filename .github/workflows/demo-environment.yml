@@ -1,0 +1,197 @@
+name: Demo environment
+
+# The demo box at demo.yawp.school. Brian demos from this, so it is the one environment
+# that must not surprise anyone:
+#
+#   - It ships ONLY when someone asks. No push trigger, no schedule. A merge to main does
+#     not change what a client sees mid-demo.
+#   - It runs the PRODUCTION build path, not the fast dev-server path previews use. Slower
+#     to deploy, but what Brian shows is what production does.
+#   - It lives on its own host, so a preview host wedging cannot take the demo down with it.
+#   - Its data persists between deploys. Redeploying ships code, not a fresh database.
+#
+# Rolling back is the same operation as shipping: dispatch again with an older ref.
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Branch, tag, or SHA to put on the demo box'
+        required: true
+        default: 'main'
+      reset_data:
+        description: 'Reseed the demo database from scratch (destroys demo content)'
+        type: boolean
+        required: false
+        default: false
+
+concurrency:
+  group: demo-environment
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  demo-deploy:
+    runs-on: ubuntu-22.04
+    environment: demo
+    env:
+      PREVIEW_SLUG: demo
+      PREVIEW_DOMAIN: ${{ vars.DEMO_DOMAIN || 'yawp.school' }}
+      PREVIEW_HOST: ${{ vars.DEMO_HOST }}
+      PREVIEW_ROOT: ${{ vars.DEMO_ROOT || '/srv/yawp-demo' }}
+      PREVIEW_SSH_USER: ${{ vars.DEMO_SSH_USER || 'ec2-user' }}
+      PREVIEW_TLS: 'true'
+      PREVIEW_RUNTIME: production
+      PREVIEW_DATA_MODE: ${{ vars.DEMO_DATA_MODE || 'seed' }}
+      PREVIEW_AI_MODEL: ${{ vars.DEMO_AI_MODEL || 'claude-sonnet-4-6' }}
+      PREVIEW_ANTHROPIC_API_KEY: ${{ secrets.PREVIEW_ANTHROPIC_API_KEY || secrets.ANTHROPIC_API_KEY }}
+      PREVIEW_DB_PASSWORD: ${{ secrets.PREVIEW_DB_PASSWORD }}
+      # The demo box shares the preview deploy path, so it inherits the same Traefik
+      # basicauth middleware. It needs the same two secrets or the render fails closed.
+      PREVIEW_BASIC_AUTH: ${{ secrets.PREVIEW_BASIC_AUTH }}
+      PREVIEW_BASIC_AUTH_PASSWORD: ${{ secrets.PREVIEW_BASIC_AUTH_PASSWORD }}
+      PREVIEW_LOGIN_EMAIL: ${{ secrets.DEMO_LOGIN_EMAIL || secrets.PREVIEW_LOGIN_EMAIL }}
+      PREVIEW_LOGIN_PASSWORD: ${{ secrets.DEMO_LOGIN_PASSWORD || secrets.PREVIEW_LOGIN_PASSWORD }}
+      DEMO_RESET_DATA: ${{ inputs.reset_data }}
+    steps:
+      - name: Check demo configuration
+        env:
+          DEMO_SSH_PRIVATE_KEY: ${{ secrets.DEMO_SSH_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "$PREVIEW_HOST" || { echo "Missing repository variable DEMO_HOST"; exit 1; }
+          test -n "$DEMO_SSH_PRIVATE_KEY" || { echo "Missing repository secret DEMO_SSH_PRIVATE_KEY"; exit 1; }
+          test -n "$PREVIEW_ANTHROPIC_API_KEY" || { echo "Missing an Anthropic API key secret"; exit 1; }
+          test -n "$PREVIEW_BASIC_AUTH" || { echo "Missing repository secret PREVIEW_BASIC_AUTH"; exit 1; }
+          test -n "$PREVIEW_BASIC_AUTH_PASSWORD" || { echo "Missing repository secret PREVIEW_BASIC_AUTH_PASSWORD"; exit 1; }
+
+      - name: Checkout the requested ref
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+
+      - name: Record what is being shipped
+        id: shipping
+        run: |
+          set -euo pipefail
+          echo "sha=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+          echo "subject=$(git log -1 --pretty=%s)" >> "$GITHUB_OUTPUT"
+
+      - name: Prepare SSH
+        env:
+          DEMO_SSH_PRIVATE_KEY: ${{ secrets.DEMO_SSH_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$DEMO_SSH_PRIVATE_KEY" > ~/.ssh/demo_key
+          chmod 600 ~/.ssh/demo_key
+          ssh-keyscan -H "$PREVIEW_HOST" >> ~/.ssh/known_hosts
+
+      - name: Capture the currently deployed version
+        id: previous
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          prev="$(ssh -i ~/.ssh/demo_key "${PREVIEW_SSH_USER}@${PREVIEW_HOST}" \
+            "cat ${PREVIEW_ROOT}/DEPLOYED_SHA 2>/dev/null || true")"
+          echo "sha=${prev:-none}" >> "$GITHUB_OUTPUT"
+          echo "Demo currently runs: ${prev:-nothing recorded}"
+
+      - name: Sync source to demo host
+        run: |
+          set -euo pipefail
+          remote_source="${PREVIEW_ROOT}/sources/demo"
+          ssh_target="${PREVIEW_SSH_USER}@${PREVIEW_HOST}"
+          ssh -i ~/.ssh/demo_key "$ssh_target" "mkdir -p '$remote_source'"
+          rsync -az --delete \
+            --exclude '.git' \
+            --exclude 'node_modules' \
+            --exclude 'services/web-app/node_modules' \
+            --exclude 'services/web-app/.react-router' \
+            --exclude 'services/web-app/.vite' \
+            --exclude 'packages/prisma/generated' \
+            --exclude '.worktrees' \
+            -e "ssh -i ~/.ssh/demo_key" \
+            ./ "$ssh_target:$remote_source/"
+
+      - name: Deploy demo
+        id: deploy
+        run: |
+          set -euo pipefail
+          shell_quote() { printf '%q' "$1"; }
+          ssh_target="${PREVIEW_SSH_USER}@${PREVIEW_HOST}"
+          remote_source="${PREVIEW_ROOT}/sources/demo"
+          remote_env=(
+            "PREVIEW_SLUG=$(shell_quote "$PREVIEW_SLUG")"
+            "PREVIEW_DOMAIN=$(shell_quote "$PREVIEW_DOMAIN")"
+            "PREVIEW_ROOT=$(shell_quote "$PREVIEW_ROOT")"
+            "PREVIEW_TLS=true"
+            "PREVIEW_RUNTIME=production"
+            "PREVIEW_DATA_MODE=$(shell_quote "$PREVIEW_DATA_MODE")"
+            "PREVIEW_AI_MODEL=$(shell_quote "$PREVIEW_AI_MODEL")"
+            "PREVIEW_ANTHROPIC_API_KEY=$(shell_quote "$PREVIEW_ANTHROPIC_API_KEY")"
+            "PREVIEW_DB_PASSWORD=$(shell_quote "$PREVIEW_DB_PASSWORD")"
+            "PREVIEW_LOGIN_EMAIL=$(shell_quote "$PREVIEW_LOGIN_EMAIL")"
+            "PREVIEW_LOGIN_PASSWORD=$(shell_quote "$PREVIEW_LOGIN_PASSWORD")"
+            "PREVIEW_BASIC_AUTH=$(shell_quote "$PREVIEW_BASIC_AUTH")"
+            "PREVIEW_BASIC_AUTH_PASSWORD=$(shell_quote "$PREVIEW_BASIC_AUTH_PASSWORD")"
+            "DEMO_RESET_DATA=$(shell_quote "$DEMO_RESET_DATA")"
+            "SOURCE_DIR=$(shell_quote "$remote_source")"
+          )
+          ssh -i ~/.ssh/demo_key "$ssh_target" \
+            "cd $(shell_quote "$remote_source") && ${remote_env[*]} bash scripts/preview/deploy.sh" \
+            | tee /tmp/demo-deploy.log
+          url="$(awk -F= '/^PREVIEW_URL=/{print $2}' /tmp/demo-deploy.log | tail -1)"
+          test -n "$url" || { echo "Deploy did not print PREVIEW_URL"; exit 1; }
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+
+      - name: Verify the demo actually serves
+        run: |
+          set -euo pipefail
+          url="${{ steps.deploy.outputs.url }}"
+          user="${PREVIEW_BASIC_AUTH%%:*}"
+
+          # The demo sits behind the same basic-auth gate as previews, so "serves"
+          # now means two things: strangers are turned away, and the password works.
+          # Checking only the second would let a wide-open box pass this step.
+          anon="$(curl -sk -o /dev/null -m 15 -w '%{http_code}' "$url" || true)"
+          if [ "$anon" != "401" ]; then
+            echo "Demo is not gated: anonymous request returned HTTP ${anon:-none}, expected 401" >&2
+            exit 1
+          fi
+          echo "Gate confirmed: anonymous request returns 401"
+
+          for attempt in $(seq 1 30); do
+            code="$(curl -sk -o /dev/null -m 15 -w '%{http_code}' \
+              --user "${user}:${PREVIEW_BASIC_AUTH_PASSWORD}" "$url" || true)"
+            if [ "$code" = "200" ] || [ "$code" = "302" ] || [ "$code" = "303" ]; then
+              echo "Demo healthy at $url (HTTP $code, authenticated)"
+              exit 0
+            fi
+            echo "attempt $attempt: HTTP ${code:-none}"
+            sleep 10
+          done
+          echo "::error::Demo did not become healthy at $url. Previous version was ${{ steps.previous.outputs.sha }} — redeploy that ref to roll back."
+          exit 1
+
+      - name: Record the deployed version
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/demo_key "${PREVIEW_SSH_USER}@${PREVIEW_HOST}" \
+            "printf '%s\n' '${{ steps.shipping.outputs.sha }}' > ${PREVIEW_ROOT}/DEPLOYED_SHA"
+
+      - name: Summary
+        run: |
+          {
+            echo "### Demo environment updated"
+            echo
+            echo "- **URL:** ${{ steps.deploy.outputs.url }}"
+            echo "- **Now running:** \`${{ steps.shipping.outputs.sha }}\` — ${{ steps.shipping.outputs.subject }}"
+            echo "- **Was running:** \`${{ steps.previous.outputs.sha }}\`"
+            echo "- **Build:** production"
+            echo
+            echo "To roll back, dispatch this workflow again with ref \`${{ steps.previous.outputs.sha }}\`."
+          } >> "$GITHUB_STEP_SUMMARY"
