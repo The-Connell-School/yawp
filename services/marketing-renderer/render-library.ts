@@ -6,7 +6,13 @@ let failures = 0;
 
 import fs from 'node:fs';
 
+// Optional slug filter: `bun run render-library.ts <slug>` renders one entry,
+// so a driver can put a hard per-entry timeout around a process that calls
+// renderStoryboard directly (which has no worker-level attempt deadline).
+const only = process.argv[2];
+
 for (const entry of MARKETING_LIBRARY) {
+  if (only && entry.slug !== only) continue;
   const done = `${outRoot}/${entry.slug}/.done`;
   if (fs.existsSync(done)) {
     console.log(entry.slug, 'SKIP (already rendered)');
