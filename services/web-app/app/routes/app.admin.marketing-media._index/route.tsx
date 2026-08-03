@@ -38,6 +38,7 @@ import {
 } from '~/services/marketing-storyboard.server';
 import {
   MARKETING_JOB_KINDS,
+  MARKETING_LIBRARY,
   describeStoryboardError,
   safeParseStoryboard,
   type MarketingJobKind,
@@ -90,6 +91,12 @@ export async function loader({ request }: LoaderFunctionArgs) {
   return dataResponse({
     renderTarget: getMarketingRenderTarget(),
     assignmentTypes,
+    library: MARKETING_LIBRARY.map((entry) => ({
+      slug: entry.slug,
+      title: entry.title,
+      description: entry.description,
+      kind: entry.kind,
+    })),
     jobs: jobs.map((job) => ({
       ...job,
       createdAt: job.createdAt.toISOString(),
@@ -105,6 +112,37 @@ export async function action({ request }: ActionFunctionArgs) {
   await requireMutableRequest(request);
 
   const formData = await request.formData();
+
+  // The library path: a hand-verified storyboard rendered as-is, with no
+  // model in the loop. This is the reliable one-click route to media.
+  if (formData.get('intent') === 'render-library') {
+    const slug = String(formData.get('librarySlug') ?? '');
+    const entry = MARKETING_LIBRARY.find((item) => item.slug === slug);
+    if (!entry) {
+      return dataResponse(
+        { error: 'That library entry does not exist.' },
+        { status: 400 }
+      );
+    }
+    const job = await prisma.marketingMediaJob.create({
+      data: {
+        createdById: admin.id,
+        kind: entry.kind,
+        status: 'QUEUED',
+        brief: entry.description,
+        audience: null,
+        subjectType: 'FEATURE',
+        subjectId: null,
+        subjectLabel: entry.title,
+        storyboard: entry.storyboard as object,
+        model: null,
+        targetUrl: getMarketingRenderTarget(),
+      },
+      select: { id: true },
+    });
+    return redirect(`/app/admin/marketing-media/${job.id}`);
+  }
+
   const parsed = CreateJobSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) {
     return dataResponse(
@@ -221,7 +259,7 @@ export async function action({ request }: ActionFunctionArgs) {
 }
 
 export default function Route() {
-  const { jobs, assignmentTypes, renderTarget } =
+  const { jobs, assignmentTypes, renderTarget, library } =
     useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const navigation = useNavigation();
@@ -343,6 +381,49 @@ export default function Route() {
               </Button>
             </div>
           </Form>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Library</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="mb-3 text-sm text-muted-foreground">
+            Hand-verified storyboards of the moments schools ask about —
+            frequent low-stakes writing, criterion-referenced feedback, the
+            grading pipeline, built-in teacher development. One click renders
+            fresh media; no AI writing step, so these come out right every
+            time.
+          </p>
+          <div className="grid gap-3 md:grid-cols-2">
+            {library.map((entry) => (
+              <div
+                key={entry.slug}
+                data-testid="marketing-library-entry"
+                className="flex flex-col justify-between gap-2 rounded border p-3"
+              >
+                <div>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-medium">{entry.title}</span>
+                    <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
+                      {entry.kind === 'CLIP' ? 'Clip' : 'Stills'}
+                    </span>
+                  </div>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {entry.description}
+                  </p>
+                </div>
+                <Form method="post">
+                  <input type="hidden" name="intent" value="render-library" />
+                  <input type="hidden" name="librarySlug" value={entry.slug} />
+                  <Button type="submit" size="sm" variant="outline" disabled={busy}>
+                    Render
+                  </Button>
+                </Form>
+              </div>
+            ))}
+          </div>
         </CardContent>
       </Card>
 

@@ -104,6 +104,37 @@ describe('marketing media job creation', () => {
     expect(prisma.marketingMediaJob.create).not.toHaveBeenCalled();
   });
 
+  // The library is the no-guessing path: hand-verified storyboards an admin
+  // renders with one click, no model in the loop.
+  test('queues a library entry directly with its curated storyboard', async () => {
+    const { MARKETING_LIBRARY } = await import(
+      '../../../../../packages/marketing-media'
+    );
+    const entry = MARKETING_LIBRARY[0];
+
+    const response = await runAction({
+      intent: 'render-library',
+      librarySlug: entry.slug,
+    });
+
+    const created = prisma.marketingMediaJob.create.mock.calls[0][0].data;
+    expect(created.status).toBe('QUEUED');
+    expect(created.kind).toBe(entry.kind);
+    expect(created.model).toBeNull();
+    expect(created.storyboard).toMatchObject({ slug: entry.slug });
+    expect(response instanceof Response && response.status).toBe(302);
+  });
+
+  test('rejects an unknown library slug', async () => {
+    const response = await runAction({
+      intent: 'render-library',
+      librarySlug: 'not-a-real-entry',
+    });
+
+    expect(responseStatus(response)).toBe(400);
+    expect(prisma.marketingMediaJob.create).not.toHaveBeenCalled();
+  });
+
   test('queues a pasted storyboard without calling the model', async () => {
     const response = await runAction({
       brief: 'Show the teacher grading loop end to end.',
