@@ -81,6 +81,9 @@ model Assignment {
   assignmentType                  AssignmentType    @relation(fields: [assignmentTypeId], references: [id], onDelete: Cascade)
   title                           String?
   prompt                          String
+  promptAttachmentKey             String?
+  promptAttachmentName            String?
+  promptAttachmentSize            Int?
   submitForGrade                  Boolean           @default(true)
   pointValue                      Int?              @default(100)
   gradingAssistantStrictnessLevel String            @default("intermediate")
