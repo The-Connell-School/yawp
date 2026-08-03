@@ -120,6 +120,11 @@ write_env_files() {
 DATABASE_URL="${DATABASE_URL}"
 EOF
 
+  local mock_mode_line="CLASS_INSIGHT_MOCK_MODE=fixture"
+  if [[ -n "${anthropic_line}" ]]; then
+    mock_mode_line="CLASS_INSIGHT_MOCK_MODE=live"
+  fi
+
   cat >"$ROOT/services/web-app/.env" <<EOF
 NODE_ENV=development
 DATABASE_URL="${DATABASE_URL}"
@@ -130,6 +135,7 @@ HONEYPOT_SECRET="${SLUG}-worktree-honeypot"
 INTERNAL_COMMAND_TOKEN="${SLUG}-worktree-internal-token"
 AWS_S3_BUCKET_FOR_VIDEOS="${SLUG}-local-dev-bucket"
 AWS_S3_REGION_FOR_VIDEOS="us-east-1"
+${mock_mode_line}
 ${ai_model_line:-AI_MODEL="claude-sonnet-4-5"}
 ${anthropic_line:-ANTHROPIC_API_KEY=""}
 EOF
@@ -166,6 +172,26 @@ migrate_and_seed() {
     bun run --cwd packages/prisma prisma migrate deploy
     bun run --cwd packages/prisma backfill-class-art-key
     bun db:seed-local-dev
+    bun run --cwd packages/prisma ensure-class-insights-local
+  )
+}
+
+ensure_class_insights_local() {
+  local runtime_env="$ROOT/../.ws/runtime.env"
+  (
+    cd "$ROOT/packages/prisma"
+    if [[ -f "$runtime_env" ]]; then
+      set -a
+      # shellcheck disable=SC1091
+      source "$runtime_env"
+      set +a
+    elif [[ -f .env ]]; then
+      set -a
+      # shellcheck disable=SC1091
+      source .env
+      set +a
+    fi
+    bun run ensure-class-insights-local
   )
 }
 
@@ -208,6 +234,10 @@ Commands:
   bash scripts/worktree-local-setup.sh          # ensure db + env
   bash scripts/worktree-local-setup.sh --fresh  # reset + re-seed
   bun dev                                       # start app
+
+Class insights mock mode (services/web-app/.env):
+  CLASS_INSIGHT_MOCK_MODE=fixture   # fake summaries, no Anthropic calls
+  CLASS_INSIGHT_MOCK_MODE=live      # real Anthropic when API key is set
 EOF
 }
 
@@ -237,7 +267,9 @@ else
   (
     cd "$ROOT"
     bun prisma:generate >/dev/null
+    bun run --cwd packages/prisma prisma migrate deploy
   )
+  ensure_class_insights_local
 fi
 
 if [[ "$START_DEV" -eq 1 ]]; then

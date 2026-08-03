@@ -1,8 +1,6 @@
 import { getLLMCompletion } from '~/utils/getLLMCompletion/getLLMCompletion';
-import type {
-  CategoryAggregate,
-  ClassRubricAggregate,
-} from './aggregate-rubric-performance';
+import type { ClassRubricAggregate } from './aggregate-rubric-performance';
+import { resolveClassInsightMockMode } from './class-insight-mock-mode';
 import {
   buildInsightPrompt,
   parseInsightResponse,
@@ -15,23 +13,16 @@ const INSIGHT_MAX_TOKENS = 1200;
 const INSIGHT_TEMPERATURE = 0.4;
 const INSIGHT_REQUEST_DEADLINE_MS = 30_000;
 
-/** Deterministic, no-network path so e2e never calls a real model. */
-function shouldUseE2EInsightFixture() {
-  return (
-    process.env.E2E === 'true' &&
-    process.env.E2E_ASSIGNMENT_INSIGHTS_FIXTURE === 'true' &&
-    !process.env.ANTHROPIC_API_KEY
-  );
-}
-
-function fixtureStatus(category: CategoryAggregate): CategoryInsightStatus {
+function fixtureStatus(category: {
+  averageScore: number | null;
+}): CategoryInsightStatus {
   if (category.averageScore === null) return 'mixed';
   if (category.averageScore >= 4) return 'strength';
   if (category.averageScore <= 2.5) return 'gap';
   return 'mixed';
 }
 
-function buildE2EInsightSummary(
+function buildFixtureInsightSummary(
   aggregate: ClassRubricAggregate
 ): ClassInsightSummary {
   const scored = aggregate.categories.filter((c) => c.scoredCount > 0);
@@ -77,10 +68,10 @@ export async function generateClassInsight({
   model?: string;
   metadata?: Record<string, unknown>;
 }): Promise<GenerateClassInsightResult> {
-  if (shouldUseE2EInsightFixture()) {
+  if (resolveClassInsightMockMode().usesFixture) {
     return {
-      summary: buildE2EInsightSummary(aggregate),
-      model: 'e2e-fixture',
+      summary: buildFixtureInsightSummary(aggregate),
+      model: 'class-insight-fixture',
       raw: '',
     };
   }
