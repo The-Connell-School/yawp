@@ -1,7 +1,19 @@
 import { test, expect } from '../test-setup';
+import { createE2EPrismaClient } from '../prisma-client';
 
 const TEACHER_EMAIL = 'teacher.e2e@yawp.test';
 const TEACHER_PASSWORD = 'teacher-e2e-password';
+
+async function clearCachedInsight(classAssignmentId: string) {
+  const prisma = createE2EPrismaClient();
+  try {
+    await prisma.classAssignmentInsight.deleteMany({
+      where: { classAssignmentId },
+    });
+  } finally {
+    await prisma.$disconnect();
+  }
+}
 
 test.describe('teacher assignment-level class insights', () => {
   test('generates a class performance summary on demand', async ({
@@ -9,6 +21,7 @@ test.describe('teacher assignment-level class insights', () => {
     signIn,
     e2eContext,
   }) => {
+    await clearCachedInsight(e2eContext.classAssignmentId);
     await signIn(TEACHER_EMAIL, TEACHER_PASSWORD);
 
     // Reach the per-assignment page the way a teacher would: from the class
@@ -43,10 +56,14 @@ test.describe('teacher assignment-level class insights', () => {
     await expect(page.getByText(/suggested next steps/i)).toBeVisible();
     await expect(page.getByText(/based on \d+ submissions/i)).toBeVisible();
 
-    // Once generated, the action becomes a regenerate affordance.
+    // A fresh summary starts the regeneration cooldown, so the action is
+    // replaced with the reason it cannot run yet.
     await expect(
-      page.getByRole('button', { name: /regenerate/i })
-    ).toBeVisible();
+      page.getByTestId('class-insight-generate-unavailable-reason')
+    ).toContainText(/regenerate in \d+ (hours|minutes)/i);
+    await expect(page.getByRole('button', { name: /regenerate/i })).toHaveCount(
+      0
+    );
   });
 
   test('cached summary is shown on reload', async ({
@@ -54,6 +71,7 @@ test.describe('teacher assignment-level class insights', () => {
     signIn,
     e2eContext,
   }) => {
+    await clearCachedInsight(e2eContext.classAssignmentId);
     await signIn(TEACHER_EMAIL, TEACHER_PASSWORD);
 
     const assignmentUrl = `/app/my-classes/${e2eContext.classId}/assignments/${e2eContext.assignmentId}`;
@@ -71,5 +89,8 @@ test.describe('teacher assignment-level class insights', () => {
     await page.goto(assignmentUrl);
     await expect(page.getByText(/how the class did/i)).toBeVisible();
     await expect(page.getByText(/suggested next steps/i)).toBeVisible();
+    await expect(
+      page.getByTestId('class-insight-generate-unavailable-reason')
+    ).toContainText(/regenerate in \d+ (hours|minutes)/i);
   });
 });

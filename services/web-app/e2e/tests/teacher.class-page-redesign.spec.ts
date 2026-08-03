@@ -253,6 +253,15 @@ test.describe.serial('Teacher class page redesign', () => {
     // edit — clicking a row must land on a read/view mode that surfaces the
     // class performance summary (and lets the teacher generate it), not the
     // edit form.
+    const prisma = createE2EPrismaClient();
+    try {
+      await prisma.classAssignmentInsight.deleteMany({
+        where: { classAssignmentId: e2eContext.classAssignmentId },
+      });
+    } finally {
+      await prisma.$disconnect();
+    }
+
     await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
     await page.goto(`/app/my-classes/${e2eContext.classId}?tab=assignments`);
     await page.waitForLoadState('networkidle');
@@ -275,6 +284,9 @@ test.describe.serial('Teacher class page redesign', () => {
       timeout: 15000,
     });
     await expect(sheet.getByText(/suggested next steps/i)).toBeVisible();
+    await expect(
+      sheet.getByTestId('class-insight-generate-unavailable-reason')
+    ).toContainText(/regenerate in \d+ (hours|minutes)/i);
 
     // Edit is reachable explicitly, and switches the same sheet to the form.
     await sheet.getByRole('button', { name: /^edit$/i }).click();

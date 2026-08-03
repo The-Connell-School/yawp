@@ -15,7 +15,7 @@ async function expectStandardizedAssignmentForm(page: Page) {
     dialog.getByText('Attachment (optional)', { exact: true })
   ).toBeVisible();
   await expect(
-    dialog.getByRole('button', { name: 'Extract prompt from PDF' })
+    dialog.getByRole('button', { name: 'Extract assignment text from PDF' })
   ).toBeVisible();
   await expect(dialog.getByLabel(/tutor context/i)).toHaveCount(0);
   await expect(
@@ -265,7 +265,7 @@ test.describe.serial('Teacher dashboard workspace', () => {
 
       await page.getByLabel(CLASS_LABEL).check();
       await page.getByLabel('Title (optional)').fill(title);
-      await page.getByLabel('Prompt').fill(prompt);
+      await page.getByLabel('Prompt', { exact: true }).fill(prompt);
       await page.getByLabel(/point value/i).fill('25');
       await page.getByRole('button', { name: 'Create Assignment' }).click();
 
@@ -336,7 +336,7 @@ test.describe.serial('Teacher dashboard workspace', () => {
       await page.getByLabel(CLASS_LABEL).check();
       await page.getByLabel(secondClass.title!).check();
       await page.getByLabel('Title (optional)').fill(title);
-      await page.getByLabel('Prompt').fill(prompt);
+      await page.getByLabel('Prompt', { exact: true }).fill(prompt);
       await page.getByLabel(/point value/i).fill('35');
       await page.getByRole('button', { name: 'Create Assignment' }).click();
       await expect(page.getByRole('dialog')).toHaveCount(0);
@@ -374,7 +374,7 @@ test.describe.serial('Teacher dashboard workspace', () => {
     await expectStandardizedAssignmentForm(page);
     await page.getByLabel(CLASS_LABEL).check();
     await page.getByLabel('Title (optional)').fill(title);
-    await page.getByLabel('Prompt').fill(prompt);
+    await page.getByLabel('Prompt', { exact: true }).fill(prompt);
     await page.getByLabel(/point value/i).fill('40');
     await page.getByRole('button', { name: 'Create Assignment' }).click();
     await expect(page.getByRole('dialog')).toHaveCount(0);
