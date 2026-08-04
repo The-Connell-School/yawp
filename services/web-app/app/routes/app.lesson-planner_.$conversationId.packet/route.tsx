@@ -383,7 +383,7 @@ function SectionContent({
       ) : null}
       {deckOutcome.kind === 'unreadable' ? (
         <p className={cn('text-sm text-muted-foreground', body && 'mt-3')}>
-          That deck didn’t come through cleanly — ask the planner to rebuild it.
+          This deck didn’t build. Ask the planner to rebuild it, shorter.
         </p>
       ) : null}
     </div>

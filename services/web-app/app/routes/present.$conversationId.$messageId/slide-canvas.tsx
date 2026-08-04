@@ -14,6 +14,8 @@ const TITLE_TYPE = 'clamp(1.75rem, 4.6cqw, 4.5rem)';
 const BODY_TYPE = 'clamp(1.1rem, 2.9cqw, 2.75rem)';
 const LIST_TYPE = 'clamp(1rem, 2.5cqw, 2.25rem)';
 const LABEL_TYPE = 'clamp(0.7rem, 1.3cqw, 1.1rem)';
+/** For a slide holding real student writing rather than a phrase. */
+const PASSAGE_TYPE = 'clamp(0.85rem, 1.9cqw, 1.7rem)';
 
 export function SlideCanvas({ slide }: { slide: Slide }) {
   return (
@@ -115,7 +117,16 @@ function SlideBody({ slide }: { slide: Slide }) {
         </div>
       );
 
-    case 'compare':
+    case 'compare': {
+      // A compare slide is as often two paragraphs — a weak conclusion beside a
+      // strong one — as it is two phrases. Step the type down for the long case
+      // so the columns still fit the slide instead of running off the bottom.
+      const longest = Math.max(
+        slide.left?.text.length ?? 0,
+        slide.right?.text.length ?? 0
+      );
+      const columnType =
+        longest > 220 ? PASSAGE_TYPE : longest > 110 ? BODY_TYPE : LIST_TYPE;
       return (
         <div className="flex flex-col gap-[0.7em]">
           <SlideTitle>{slide.title}</SlideTitle>
@@ -133,8 +144,8 @@ function SlideBody({ slide }: { slide: Slide }) {
                     {column.label}
                   </p>
                   <p
-                    className="leading-[1.3] text-slate-900"
-                    style={{ fontSize: LIST_TYPE }}
+                    className="leading-[1.35] text-slate-900"
+                    style={{ fontSize: columnType }}
                   >
                     {column.text}
                   </p>
@@ -144,6 +155,7 @@ function SlideBody({ slide }: { slide: Slide }) {
           </div>
         </div>
       );
+    }
 
     case 'steps':
       return (

@@ -232,4 +232,22 @@ describe('buildLessonPlannerSystemPrompt — slide decks', () => {
   test('tells it to use compare for two versions side by side', () => {
     expect(prompt.toLowerCase()).toContain('two versions of the same sentence');
   });
+
+  test('gives the limits as numbers, not as "about"', () => {
+    // "Keep bullets under about fifteen words" is not a rule the model can
+    // check itself against; the validator counts characters.
+    expect(prompt).toContain('200 characters');
+    expect(prompt).toContain('320 characters');
+    expect(prompt).toContain('90 characters');
+    expect(prompt).toContain('7 bullets');
+  });
+
+  test('forbids claiming a deck rendered, because it cannot see the screen', () => {
+    const lower = prompt.toLowerCase();
+    // What actually happened: the deck failed validation, and the planner told
+    // the teacher to scroll down and look for it.
+    expect(lower).toContain('you cannot see the teacher');
+    expect(lower).toContain('never tell them to scroll');
+    expect(lower).toContain('build the deck again');
+  });
 });

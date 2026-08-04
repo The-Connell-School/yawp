@@ -623,8 +623,8 @@ function MessageBubble({
               className={cn('text-sm text-muted-foreground', body && 'mt-3')}
               data-testid="deck-unreadable"
             >
-              That deck didn’t come through cleanly — ask for it again and it
-              should build.
+              This deck didn’t build. Ask for it again — say “rebuild the slide
+              deck, shorter” and it usually comes through.
             </p>
           ) : null}
         </div>
