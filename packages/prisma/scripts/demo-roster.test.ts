@@ -4,7 +4,9 @@ import { join } from 'node:path';
 import {
   buildDemoRoster,
   DEMO_ROSTER_ASSIGNMENTS,
+  DEMO_ROSTER_CLASSES,
   DEMO_ROSTER_STUDENTS,
+  type DemoClassKey,
   type DemoRosterPlan,
   type DemoWorkPlan,
 } from './local-dev/demo-roster';
@@ -35,16 +37,40 @@ function workByStudent(plan: DemoRosterPlan, studentKey: string) {
 }
 
 describe('demo roster students', () => {
-  test('fills both demo classes with a full-size roster', () => {
-    const primary = DEMO_ROSTER_STUDENTS.filter(
-      (student) => student.classKey === 'primary'
-    );
-    const secondary = DEMO_ROSTER_STUDENTS.filter(
-      (student) => student.classKey === 'secondary'
+  test('gives the demo teacher a real course load', () => {
+    // A high school English teacher carries four or five sections, including
+    // more than one section of the same course.
+    expect(DEMO_ROSTER_CLASSES.length).toBeGreaterThanOrEqual(4);
+
+    const periods = new Set(DEMO_ROSTER_CLASSES.map((klass) => klass.period));
+    expect(periods.size).toBe(DEMO_ROSTER_CLASSES.length);
+
+    const codes = new Set(DEMO_ROSTER_CLASSES.map((klass) => klass.code));
+    expect(codes.size).toBe(DEMO_ROSTER_CLASSES.length);
+
+    const grades = DEMO_ROSTER_CLASSES.map((klass) => klass.grade);
+    expect(new Set(grades).size).toBeGreaterThanOrEqual(3);
+  });
+
+  test('fills every section with a full-size roster', () => {
+    for (const klass of DEMO_ROSTER_CLASSES) {
+      const roster = DEMO_ROSTER_STUDENTS.filter(
+        (student) => student.classKey === klass.key
+      );
+      expect(roster.length).toBeGreaterThanOrEqual(14);
+    }
+
+    expect(DEMO_ROSTER_STUDENTS.length).toBeGreaterThanOrEqual(85);
+  });
+
+  test('shares a course’s assignments across its sections', () => {
+    const shared = DEMO_ROSTER_ASSIGNMENTS.filter(
+      (assignment) => assignment.classKeys.length > 1
     );
 
-    expect(primary.length).toBeGreaterThanOrEqual(20);
-    expect(secondary.length).toBeGreaterThanOrEqual(15);
+    // Two sections of English 10 write the same essays, which is both what a
+    // real teacher does and what the app's cross-class assignment path needs.
+    expect(shared.length).toBeGreaterThanOrEqual(4);
   });
 
   test('gives every roster student a unique key, name, and dev email', () => {
@@ -77,23 +103,20 @@ describe('demo roster students', () => {
 
 describe('demo roster assignments', () => {
   test('gives each class a semester of assignments', () => {
-    const primary = DEMO_ROSTER_ASSIGNMENTS.filter(
-      (assignment) => assignment.classKey === 'primary'
-    );
-    const secondary = DEMO_ROSTER_ASSIGNMENTS.filter(
-      (assignment) => assignment.classKey === 'secondary'
-    );
-
-    expect(primary.length).toBeGreaterThanOrEqual(5);
-    expect(secondary.length).toBeGreaterThanOrEqual(4);
+    for (const klass of DEMO_ROSTER_CLASSES) {
+      const assignments = DEMO_ROSTER_ASSIGNMENTS.filter((assignment) =>
+        assignment.classKeys.includes(klass.key)
+      );
+      expect(assignments.length).toBeGreaterThanOrEqual(5);
+    }
   });
 
   test('dates assignments in the past, oldest first, within the school year', () => {
     const plan = build();
 
-    for (const classKey of ['primary', 'secondary'] as const) {
-      const assignments = plan.assignments.filter(
-        (assignment) => assignment.classKey === classKey
+    for (const klass of DEMO_ROSTER_CLASSES) {
+      const assignments = plan.assignments.filter((assignment) =>
+        assignment.classKeys.includes(klass.key)
       );
       const timestamps = assignments.map((assignment) =>
         assignment.assignedAt.getTime()
@@ -108,9 +131,9 @@ describe('demo roster assignments', () => {
   });
 
   test('leaves each class a live grading queue and an unreleased batch', () => {
-    for (const classKey of ['primary', 'secondary'] as const) {
-      const assignments = DEMO_ROSTER_ASSIGNMENTS.filter(
-        (assignment) => assignment.classKey === classKey
+    for (const klass of DEMO_ROSTER_CLASSES) {
+      const assignments = DEMO_ROSTER_ASSIGNMENTS.filter((assignment) =>
+        assignment.classKeys.includes(klass.key)
       );
 
       expect(
@@ -134,9 +157,9 @@ describe('demo roster assignments', () => {
   test('newest assignment in a class is the one still being graded', () => {
     const plan = build();
 
-    for (const classKey of ['primary', 'secondary'] as const) {
-      const assignments = plan.assignments.filter(
-        (assignment) => assignment.classKey === classKey
+    for (const klass of DEMO_ROSTER_CLASSES) {
+      const assignments = plan.assignments.filter((assignment) =>
+        assignment.classKeys.includes(klass.key)
       );
       const newest = assignments[assignments.length - 1];
 
@@ -155,19 +178,22 @@ describe('buildDemoRoster', () => {
     const studentClass = new Map(
       plan.students.map((student) => [student.key, student.classKey])
     );
-    const assignmentClass = new Map(
+    const assignmentClasses = new Map(
       plan.assignments.map((assignment) => [
         assignment.key,
-        assignment.classKey,
+        assignment.classKeys,
       ])
     );
 
     for (const entry of plan.work) {
       expect(studentClass.has(entry.studentKey)).toBe(true);
-      expect(assignmentClass.has(entry.assignmentKey)).toBe(true);
-      expect(studentClass.get(entry.studentKey)).toBe(
-        assignmentClass.get(entry.assignmentKey)!
-      );
+      expect(assignmentClasses.has(entry.assignmentKey)).toBe(true);
+      // The work's class has to be the student's class, and that class has to
+      // be one the assignment was actually handed to.
+      expect(entry.classKey).toBe(studentClass.get(entry.studentKey)!);
+      expect(
+        assignmentClasses.get(entry.assignmentKey)!.includes(entry.classKey)
+      ).toBe(true);
     }
   });
 
@@ -248,15 +274,21 @@ describe('buildDemoRoster', () => {
       plan.students.filter((student) => student.classKey === classKey).length;
 
     for (const assignment of plan.assignments) {
-      const papers = plan.work.filter(
-        (entry) => entry.assignmentKey === assignment.key
-      );
-      const submitted = papers.filter((entry) => entry.state !== 'in-progress');
+      for (const classKey of assignment.classKeys) {
+        const papers = plan.work.filter(
+          (entry) =>
+            entry.assignmentKey === assignment.key &&
+            entry.classKey === classKey
+        );
+        const submitted = papers.filter(
+          (entry) => entry.state !== 'in-progress'
+        );
 
-      // An assignment nobody wrote for is a hole in the demo: the class page
-      // shows a row with nothing behind it. Ungraded is fine; empty is not.
-      expect(papers.length).toBeGreaterThan(classSize(assignment.classKey) / 2);
-      expect(submitted.length).toBeGreaterThan(0);
+        // An assignment nobody wrote for is a hole in the demo: the class page
+        // shows a row with nothing behind it. Ungraded is fine; empty is not.
+        expect(papers.length).toBeGreaterThan(classSize(classKey) / 2);
+        expect(submitted.length).toBeGreaterThan(0);
+      }
     }
   });
 
@@ -320,18 +352,30 @@ describe('buildDemoRoster', () => {
     const plan = build();
     const byAssignment = new Map<string, DemoWorkPlan[]>();
     for (const entry of releasedWork(plan)) {
-      const bucket = byAssignment.get(entry.assignmentKey) ?? [];
+      const key = `${entry.assignmentKey}::${entry.classKey}`;
+      const bucket = byAssignment.get(key) ?? [];
       bucket.push(entry);
-      byAssignment.set(entry.assignmentKey, bucket);
+      byAssignment.set(key, bucket);
     }
 
     for (const [, entries] of byAssignment) {
       const scores = entries.flatMap((entry) =>
         rubricKeys.map((key) => entry.rubricScores![key].score)
       );
-      expect(Math.min(...scores)).toBeLessThanOrEqual(2);
-      expect(Math.max(...scores)).toBeGreaterThanOrEqual(4);
+      // Class Summary can only build focus groups when a single assignment
+      // separates students. An AP section has no level-1 writers, so assert the
+      // spread rather than a fixed floor.
+      expect(Math.max(...scores) - Math.min(...scores)).toBeGreaterThanOrEqual(
+        2
+      );
     }
+
+    // Somewhere in the load there are students who genuinely need support.
+    const allScores = releasedWork(plan).flatMap((entry) =>
+      rubricKeys.map((key) => entry.rubricScores![key].score)
+    );
+    expect(Math.min(...allScores)).toBeLessThanOrEqual(2);
+    expect(Math.max(...allScores)).toBe(5);
   });
 
   test('gives each class its own weakest and strongest writing skill', () => {
@@ -340,7 +384,7 @@ describe('buildDemoRoster', () => {
       plan.students.map((student) => [student.key, student.classKey])
     );
 
-    const averages = (classKey: string) => {
+    const averages = (classKey: DemoClassKey) => {
       const totals = new Map<string, number[]>();
       for (const entry of releasedWork(plan)) {
         if (studentClass.get(entry.studentKey) !== classKey) continue;
@@ -421,10 +465,22 @@ describe('buildDemoRoster', () => {
     }
   });
 
+  test('keeps released work inside the reporter’s scope limit', () => {
+    const plan = build();
+    const released = plan.work.filter((entry) => entry.state === 'released');
+
+    // reporter-tools.server.ts caps a teacher-scoped query at 500 rows and sets
+    // sourceTruncated past that, which makes the reporter caveat every answer
+    // as partial. A demo that trips the cap reads as broken.
+    expect(released.length).toBeLessThan(450);
+  });
+
   test('proposes growth plans for students the reports flag', () => {
     const plan = build();
 
-    expect(plan.growthPlans.length).toBeGreaterThanOrEqual(2);
+    // One flagged student per section, so every class has a plan to report
+    // progress against.
+    expect(plan.growthPlans.length).toBeGreaterThanOrEqual(4);
 
     const studentKeys = new Set(plan.students.map((student) => student.key));
     for (const growthPlan of plan.growthPlans) {

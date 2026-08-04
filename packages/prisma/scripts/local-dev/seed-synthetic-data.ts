@@ -64,7 +64,12 @@ async function upsertPersona(
 }
 
 function pickAssignmentTypeId(
-  rows: Array<{ id: string; title: string; kind: string | null; systemKey: string | null }>,
+  rows: Array<{
+    id: string;
+    title: string;
+    kind: string | null;
+    systemKey: string | null;
+  }>,
   matcher: (row: (typeof rows)[number]) => boolean
 ) {
   return rows.find(matcher)?.id ?? null;
@@ -96,14 +101,15 @@ export async function seedSyntheticLocalDevData(
   ];
 
   const schools = await Promise.all(
-    ['North Ridge High', 'Riverview Academy', 'Summit Prep'].map(async (name, index) =>
-      prisma.school.create({
-        data: {
-          name,
-          code: `DEV-SCH-${index + 1}`,
-          organizationId: LOCAL_DEV_ORG_ID,
-        },
-      })
+    ['North Ridge High', 'Riverview Academy', 'Summit Prep'].map(
+      async (name, index) =>
+        prisma.school.create({
+          data: {
+            name,
+            code: `DEV-SCH-${index + 1}`,
+            organizationId: LOCAL_DEV_ORG_ID,
+          },
+        })
     )
   );
 
@@ -251,7 +257,8 @@ export async function seedSyntheticLocalDevData(
       data: {
         assignmentTypeId: dailyPagesAssignmentTypeId,
         title: 'Daily Pages - week 2',
-        prompt: 'Write freely for ten minutes about something that surprised you this week.',
+        prompt:
+          'Write freely for ten minutes about something that surprised you this week.',
       },
     });
     const dailyClassAssignment = await prisma.classAssignment.create({
@@ -458,22 +465,12 @@ export async function seedSyntheticLocalDevData(
   // students with a semester of graded work behind them.
   const demoRoster = await seedDemoRoster(prisma, {
     organizationId: LOCAL_DEV_ORG_ID,
-    classes: {
-      primary: {
-        id: primaryClass.id,
-        grade: primaryClass.grade,
-        period: primaryClass.period,
-      },
-      secondary: {
-        id: secondaryClass.id,
-        grade: secondaryClass.grade,
-        period: secondaryClass.period,
-      },
+    existingClasses: {
+      primary: primaryClass.id,
+      secondary: secondaryClass.id,
     },
-    schoolNames: {
-      primary: schools[0].name,
-      secondary: schools[1].name,
-    },
+    schools: schools.map((school) => ({ id: school.id, name: school.name })),
+    teacherMembershipIds,
     assignmentTypeIds: {
       thesis: thesisAssignmentTypeId,
       fiveParagraph: fiveParagraphAssignmentTypeId,

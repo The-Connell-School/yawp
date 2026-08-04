@@ -23,6 +23,7 @@ import {
 import {
   CATEGORY_COMMENTS,
   DEMO_ROSTER_ASSIGNMENTS,
+  DEMO_ROSTER_CLASSES,
   DEMO_ROSTER_STUDENTS,
   ESSAY_POOLS,
   FREE_WRITE_POOLS,
@@ -31,12 +32,14 @@ import {
   type DemoArc,
   type DemoAssignmentSpec,
   type DemoClassKey,
+  type DemoClassSpec,
   type DemoStudentSpec,
   type DemoTopic,
 } from './demo-roster-content';
 
 export {
   DEMO_ROSTER_ASSIGNMENTS,
+  DEMO_ROSTER_CLASSES,
   DEMO_ROSTER_STUDENTS,
 } from './demo-roster-content';
 export type {
@@ -44,6 +47,8 @@ export type {
   DemoAssignmentSpec,
   DemoAssignmentState,
   DemoClassKey,
+  DemoClassSpec,
+  DemoExistingAssignmentKey,
   DemoStudentSpec,
 } from './demo-roster-content';
 
@@ -66,6 +71,7 @@ export type DemoInlineComment = {
 export type DemoWorkPlan = {
   studentKey: string;
   assignmentKey: string;
+  classKey: DemoClassKey;
   documentTitle: string;
   text: string;
   html: string;
@@ -180,22 +186,9 @@ function clampLevel(value: number): number {
   return Math.max(1, Math.min(5, Math.round(value)));
 }
 
-/**
- * The class-wide skill profile each class is graded against. English 10 leans on
- * voice and struggles to use evidence; English 11 writes well-sourced papers
- * that wander structurally. Distinct profiles mean the two classes read
- * differently in Class Summary and in a Reporter class report.
- */
-const CLASS_SKILL_PROFILES: Record<
-  DemoClassKey,
-  { strong: RubricKey; weak: RubricKey }
-> = {
-  primary: { strong: 'voice_and_style', weak: 'evidence_and_support' },
-  secondary: {
-    strong: 'evidence_and_support',
-    weak: 'organization_and_structure',
-  },
-};
+const CLASS_BY_KEY = new Map<DemoClassKey, DemoClassSpec>(
+  DEMO_ROSTER_CLASSES.map((klass) => [klass.key, klass])
+);
 
 function categoryOffset(student: DemoStudentSpec, category: RubricKey): number {
   let offset = 0;
@@ -206,7 +199,7 @@ function categoryOffset(student: DemoStudentSpec, category: RubricKey): number {
   // every rubric skill averaging the same 3.2 — so "which skill is my class
   // weakest in?" has no answer. A per-class tilt gives each class a real gap to
   // teach into, and a different one from the other class.
-  const profile = CLASS_SKILL_PROFILES[student.classKey];
+  const profile = CLASS_BY_KEY.get(student.classKey)!.skillProfile;
   if (category === profile.strong) offset += 0.35;
   if (category === profile.weak) offset -= 0.55;
 
@@ -434,11 +427,16 @@ function buildAssignments(now: Date): DemoAssignmentPlan[] {
   }).sort((a, b) => a.assignedAt.getTime() - b.assignedAt.getTime());
 }
 
+/** A growth report needs at least this many released papers to say anything. */
+const MIN_RELEASED_PER_STUDENT = 3;
+
 /**
- * At most one released paper is missing per student, so every student still
- * clears the three graded papers a growth report needs. Anchors — the highest
- * and lowest writer in each class — never miss, which keeps the full rubric
- * spread present on every single assignment for Class Summary.
+ * Real rosters have gaps, so some students miss a paper — but never so many
+ * that a growth report runs out of points. A missing paper is only ever taken
+ * from released work when the class has one to spare; otherwise it comes from
+ * the unreleased batch. Anchors — the strongest and weakest writer in each
+ * class — never miss, which keeps the full rubric spread on every assignment
+ * for Class Summary.
  */
 function missingAssignmentKeys(
   student: DemoStudentSpec,
@@ -446,14 +444,24 @@ function missingAssignmentKeys(
 ): Set<string> {
   if (student.anchor) return new Set();
   const missing = new Set<string>();
+  if (!chance(`${student.key}:missing`, 0.22)) return missing;
 
-  if (chance(`${student.key}:missing`, 0.22)) {
-    const index = Math.floor(
-      createRandom(`${student.key}:missing-index`)() * gradedAssignments.length
-    );
-    const target = gradedAssignments[index];
-    if (target) missing.add(target.key);
-  }
+  const releasedCount = gradedAssignments.filter(
+    (assignment) => assignment.state === 'released'
+  ).length;
+  const droppable =
+    releasedCount > MIN_RELEASED_PER_STUDENT
+      ? gradedAssignments
+      : gradedAssignments.filter(
+          (assignment) => assignment.state !== 'released'
+        );
+  if (droppable.length === 0) return missing;
+
+  const index = Math.floor(
+    createRandom(`${student.key}:missing-index`)() * droppable.length
+  );
+  const target = droppable[index];
+  if (target) missing.add(target.key);
 
   return missing;
 }
@@ -487,6 +495,7 @@ function gradedWorkPlan({
   return {
     studentKey: student.key,
     assignmentKey: assignment.key,
+    classKey: student.classKey,
     documentTitle: assignment.title,
     text: essay.text,
     html: essay.html,
@@ -534,6 +543,7 @@ function ungradedWorkPlan({
   return {
     studentKey: student.key,
     assignmentKey: assignment.key,
+    classKey: student.classKey,
     documentTitle: assignment.title,
     text: essay.text,
     html: essay.html,
@@ -627,9 +637,10 @@ export function buildDemoRoster({ now }: { now: Date }): DemoRosterPlan {
   const assignments = buildAssignments(now);
   const work: DemoWorkPlan[] = [];
 
-  for (const classKey of ['primary', 'secondary'] as const) {
-    const classAssignments = assignments.filter(
-      (assignment) => assignment.classKey === classKey
+  for (const klass of DEMO_ROSTER_CLASSES) {
+    const classKey = klass.key;
+    const classAssignments = assignments.filter((assignment) =>
+      assignment.classKeys.includes(classKey)
     );
     const gradedAssignments = classAssignments.filter(
       (assignment) => assignment.state !== 'awaiting-grading'
@@ -673,10 +684,10 @@ export function buildDemoRoster({ now }: { now: Date }): DemoRosterPlan {
   // Growth plans go to the students a teacher would actually flag: the sharpest
   // decline in each class, so Reporter has a plan to report progress against.
   const growthPlans: DemoGrowthPlan[] = [];
-  for (const classKey of ['primary', 'secondary'] as const) {
+  for (const klass of DEMO_ROSTER_CLASSES) {
     const candidates = DEMO_ROSTER_STUDENTS.filter(
       (student) =>
-        student.classKey === classKey &&
+        student.classKey === klass.key &&
         (student.arc === 'slipping' || student.arc === 'struggling')
     );
 

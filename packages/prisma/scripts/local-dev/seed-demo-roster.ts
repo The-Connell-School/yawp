@@ -11,10 +11,12 @@ import bcrypt from 'bcryptjs';
 import type { PrismaClient, Prisma } from '../../generated/prisma';
 import {
   buildDemoRoster,
+  DEMO_ROSTER_CLASSES,
   type DemoClassKey,
   type DemoExistingAssignmentKey,
 } from './demo-roster';
 import { LOCAL_DEV_PASSWORD } from './dev-personas';
+import { getClassArtByIndex } from '../../../../services/web-app/app/utils/class-art.ts';
 
 /**
  * An assignment the persona seed already created. The roster supplies papers
@@ -28,9 +30,15 @@ export type ExistingAssignmentRef = {
 
 export type DemoRosterSeedInput = {
   organizationId: string;
-  /** Class rows the roster attaches to, already created by the synthetic seed. */
-  classes: Record<DemoClassKey, { id: string; grade: string; period: string }>;
-  schoolNames: Record<DemoClassKey, string>;
+  /**
+   * Ids of the classes the persona seed already created. Every other class in
+   * the teacher's load is created here.
+   */
+  existingClasses: Partial<Record<DemoClassKey, string>>;
+  /** Schools the classes hang off, in the order the synthetic seed created them. */
+  schools: Array<{ id: string; name: string }>;
+  /** Every teacher membership that should see the roster classes. */
+  teacherMembershipIds: string[];
   assignmentTypeIds: {
     thesis: string;
     /** Falls back to the thesis type when the 5-paragraph type is absent. */
@@ -61,7 +69,9 @@ export type DemoRosterSeedResult = {
 const userId = (key: string) => `demo-user-${key}`;
 const membershipId = (key: string) => `demo-membership-${key}`;
 const assignmentId = (key: string) => `demo-assignment-${key}`;
-const classAssignmentId = (key: string) => `demo-class-assignment-${key}`;
+const classId = (key: DemoClassKey) => `demo-class-${key}`;
+const classAssignmentId = (assignmentKey: string, classKey: DemoClassKey) =>
+  `demo-class-assignment-${assignmentKey}--${classKey}`;
 const documentId = (studentKey: string, assignmentKey: string) =>
   `demo-document-${studentKey}--${assignmentKey}`;
 const submissionId = (studentKey: string, assignmentKey: string) =>
@@ -75,8 +85,47 @@ export async function seedDemoRoster(
   const plan = buildDemoRoster({ now });
 
   // One hash for the whole roster: every demo student shares the dev password,
-  // and bcrypt on forty users is otherwise the slowest part of the seed.
+  // and bcrypt on a hundred users is otherwise the slowest part of the seed.
   const passwordHash = bcrypt.hashSync(LOCAL_DEV_PASSWORD, 10);
+
+  // The persona seed owns two of the teacher's five sections; create the rest.
+  const newClasses = DEMO_ROSTER_CLASSES.filter((klass) => !klass.existing);
+  for (const klass of newClasses) {
+    const school = input.schools[klass.schoolIndex] ?? input.schools[0];
+    await prisma.class.create({
+      data: {
+        id: classId(klass.key),
+        code: klass.code,
+        schoolYear: '2025-2026',
+        title: klass.title,
+        grade: klass.grade,
+        period: klass.period,
+        classArtKey: getClassArtByIndex(klass.classArtIndex).key,
+        schoolId: school.id,
+        teachers: {
+          connect: input.teacherMembershipIds.map((id) => ({ id })),
+        },
+      },
+    });
+  }
+
+  const classIdByKey = new Map<DemoClassKey, string>(
+    DEMO_ROSTER_CLASSES.map((klass) => [
+      klass.key,
+      klass.existing
+        ? (input.existingClasses[klass.key] ?? classId(klass.key))
+        : classId(klass.key),
+    ])
+  );
+  const schoolNameByClass = new Map<DemoClassKey, string>(
+    DEMO_ROSTER_CLASSES.map((klass) => [
+      klass.key,
+      (input.schools[klass.schoolIndex] ?? input.schools[0])?.name ?? '',
+    ])
+  );
+  const classByKey = new Map(
+    DEMO_ROSTER_CLASSES.map((klass) => [klass.key, klass])
+  );
 
   await prisma.user.createMany({
     data: plan.students.map((student) => ({
@@ -99,20 +148,20 @@ export async function seedDemoRoster(
       userId: userId(student.key),
       organizationId: input.organizationId,
       role: 'STUDENT' as const,
-      school: input.schoolNames[student.classKey],
-      grade: input.classes[student.classKey].grade,
-      period: input.classes[student.classKey].period,
+      school: schoolNameByClass.get(student.classKey)!,
+      grade: classByKey.get(student.classKey)!.grade,
+      period: classByKey.get(student.classKey)!.period,
       schoolTeacher: input.teacher.name,
     })),
   });
 
-  for (const classKey of ['primary', 'secondary'] as const) {
+  for (const klass of DEMO_ROSTER_CLASSES) {
     const students = plan.students.filter(
-      (student) => student.classKey === classKey
+      (student) => student.classKey === klass.key
     );
     if (students.length === 0) continue;
     await prisma.class.update({
-      where: { id: input.classes[classKey].id },
+      where: { id: classIdByKey.get(klass.key)! },
       data: {
         students: {
           connect: students.map((student) => ({
@@ -159,14 +208,19 @@ export async function seedDemoRoster(
     })),
   });
 
+  // One ClassAssignment per section the assignment was handed to: both English
+  // 10 sections write the same essays off a single Assignment row, which is what
+  // the app's "also assigned to another class" badge is for.
   await prisma.classAssignment.createMany({
-    data: ownedAssignments.map((assignment) => ({
-      id: classAssignmentId(assignment.key),
-      assignmentId: assignmentId(assignment.key),
-      classId: input.classes[assignment.classKey].id,
-      createdAt: assignment.assignedAt,
-      updatedAt: assignment.assignedAt,
-    })),
+    data: ownedAssignments.flatMap((assignment) =>
+      assignment.classKeys.map((classKey) => ({
+        id: classAssignmentId(assignment.key, classKey),
+        assignmentId: assignmentId(assignment.key),
+        classId: classIdByKey.get(classKey)!,
+        createdAt: assignment.assignedAt,
+        updatedAt: assignment.assignedAt,
+      }))
+    ),
   });
 
   const assignmentTypeByKey = new Map(
@@ -181,13 +235,18 @@ export async function seedDemoRoster(
       existingRef(assignment)?.assignmentId ?? assignmentId(assignment.key),
     ])
   );
-  const classAssignmentIdByKey = new Map(
-    plannedAssignments.map((assignment) => [
-      assignment.key,
+  const classAssignmentIdFor = (
+    assignmentKey: string,
+    classKey: DemoClassKey
+  ) => {
+    const assignment = plannedAssignments.find(
+      (candidate) => candidate.key === assignmentKey
+    )!;
+    return (
       existingRef(assignment)?.classAssignmentId ??
-        classAssignmentId(assignment.key),
-    ])
-  );
+      classAssignmentId(assignmentKey, classKey)
+    );
+  };
 
   const work = plan.work.filter((entry) =>
     assignmentIdByKey.has(entry.assignmentKey)
@@ -205,7 +264,10 @@ export async function seedDemoRoster(
       membershipId: membershipId(entry.studentKey),
       assignmentTypeId: assignmentTypeByKey.get(entry.assignmentKey)!,
       assignmentId: assignmentIdByKey.get(entry.assignmentKey)!,
-      classAssignmentId: classAssignmentIdByKey.get(entry.assignmentKey)!,
+      classAssignmentId: classAssignmentIdFor(
+        entry.assignmentKey,
+        entry.classKey
+      ),
       createdAt: entry.createdAt,
       updatedAt: entry.submittedAt ?? entry.createdAt,
     })),

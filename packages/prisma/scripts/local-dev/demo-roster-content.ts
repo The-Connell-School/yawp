@@ -9,7 +9,103 @@
  */
 import type { RubricKey } from '../../../../services/web-app/app/domain/grading/rubric.ts';
 
-export type DemoClassKey = 'primary' | 'secondary';
+/**
+ * The teacher's course load. `primary` and `secondary` are the two classes the
+ * persona seed already creates; the rest belong to the roster, so the demo
+ * teacher carries five sections the way a real English teacher does.
+ */
+export type DemoClassKey =
+  | 'primary'
+  | 'secondary'
+  | 'english10-p2'
+  | 'english9-p1'
+  | 'ap-lit-p7';
+
+export type DemoClassSpec = {
+  key: DemoClassKey;
+  title: string;
+  code: string;
+  grade: string;
+  period: string;
+  /** Index into the schools the synthetic seed creates. */
+  schoolIndex: number;
+  classArtIndex: number;
+  /** Set when the persona seed already created this class row. */
+  existing?: boolean;
+  /**
+   * The skill this class is collectively good and bad at. Without it, individual
+   * strengths cancel out and every rubric category averages the same, leaving
+   * "what is my class weakest at?" with no answer.
+   */
+  skillProfile: { strong: RubricKey; weak: RubricKey };
+};
+
+export const DEMO_ROSTER_CLASSES: DemoClassSpec[] = [
+  {
+    key: 'primary',
+    title: 'English 10 - Period 3',
+    code: 'DEV-CLASS-101',
+    grade: '10',
+    period: '3',
+    schoolIndex: 0,
+    classArtIndex: 2,
+    existing: true,
+    skillProfile: { strong: 'voice_and_style', weak: 'evidence_and_support' },
+  },
+  {
+    key: 'secondary',
+    title: 'English 11 - Period 5',
+    code: 'DEV-CLASS-202',
+    grade: '11',
+    period: '5',
+    schoolIndex: 1,
+    classArtIndex: 5,
+    existing: true,
+    skillProfile: {
+      strong: 'evidence_and_support',
+      weak: 'organization_and_structure',
+    },
+  },
+  {
+    key: 'english10-p2',
+    title: 'English 10 - Period 2',
+    code: 'DEV-CLASS-102',
+    grade: '10',
+    period: '2',
+    schoolIndex: 0,
+    classArtIndex: 7,
+    skillProfile: {
+      strong: 'organization_and_structure',
+      weak: 'voice_and_style',
+    },
+  },
+  {
+    key: 'english9-p1',
+    title: 'English 9 - Period 1',
+    code: 'DEV-CLASS-091',
+    grade: '9',
+    period: '1',
+    schoolIndex: 0,
+    classArtIndex: 1,
+    skillProfile: {
+      strong: 'thesis_and_content',
+      weak: 'grammar_and_mechanics',
+    },
+  },
+  {
+    key: 'ap-lit-p7',
+    title: 'AP English Literature - Period 7',
+    code: 'DEV-CLASS-AP7',
+    grade: '12',
+    period: '7',
+    schoolIndex: 0,
+    classArtIndex: 9,
+    skillProfile: {
+      strong: 'thesis_and_content',
+      weak: 'voice_and_style',
+    },
+  },
+];
 
 /**
  * How a student's rubric levels move across the semester. Reporter growth
@@ -76,7 +172,8 @@ export type DemoExistingAssignmentKey = 'civic-responsibility' | 'daily-pages';
 
 export type DemoAssignmentSpec = {
   key: string;
-  classKey: DemoClassKey;
+  /** Every class this assignment is handed to. Two sections of one course share a row. */
+  classKeys: DemoClassKey[];
   /** Which imported assignment type this maps onto. */
   assignmentTypeKey: 'thesis' | 'five-paragraph' | 'daily-pages';
   title: string;
@@ -475,12 +572,528 @@ export const DEMO_ROSTER_STUDENTS: DemoStudentSpec[] = [
     weakness: 'organization_and_structure',
     voice: 'a bookstore that closed the year I found it',
   }),
+
+  // --- English 10, Period 2 -------------------------------------------------
+  student({
+    name: 'Rosa Villanueva',
+    classKey: 'english10-p2',
+    arc: 'struggling',
+    baseline: 2.1,
+    strength: 'thesis_and_content',
+    weakness: 'grammar_and_mechanics',
+    voice: 'a laundromat with one working dryer',
+    anchor: true,
+  }),
+  student({
+    name: 'Henrik Aaltonen',
+    classKey: 'english10-p2',
+    arc: 'steady-high',
+    baseline: 4.5,
+    strength: 'evidence_and_support',
+    weakness: 'voice_and_style',
+    voice: 'a weather station nobody checks',
+    anchor: true,
+  }),
+  student({
+    name: 'Talia Mensah',
+    classKey: 'english10-p2',
+    arc: 'rising',
+    baseline: 3.2,
+    strength: 'organization_and_structure',
+    weakness: 'evidence_and_support',
+    voice: 'a stairwell that echoes on purpose',
+  }),
+  student({
+    name: 'Desmond Pryor',
+    classKey: 'english10-p2',
+    arc: 'slipping',
+    baseline: 3.8,
+    strength: 'thesis_and_content',
+    weakness: 'grammar_and_mechanics',
+    voice: 'a barbershop where everyone argues',
+  }),
+  student({
+    name: 'Sunniva Berg',
+    classKey: 'english10-p2',
+    arc: 'steady-mid',
+    baseline: 3.3,
+    strength: 'grammar_and_mechanics',
+    weakness: 'thesis_and_content',
+    voice: 'a ski lift running in the off season',
+  }),
+  student({
+    name: 'Arjun Deshpande',
+    classKey: 'english10-p2',
+    arc: 'volatile',
+    baseline: 3.4,
+    strength: 'thesis_and_content',
+    weakness: 'organization_and_structure',
+    voice: 'a spice cabinet organized by nobody',
+  }),
+  student({
+    name: 'Marisol Quintanilla',
+    classKey: 'english10-p2',
+    arc: 'rising',
+    baseline: 3,
+    strength: 'voice_and_style',
+    weakness: 'evidence_and_support',
+    voice: 'a quinceañera photo I am not in',
+  }),
+  student({
+    name: 'Gideon Farrow',
+    classKey: 'english10-p2',
+    arc: 'struggling',
+    baseline: 2.3,
+    strength: 'organization_and_structure',
+    weakness: 'thesis_and_content',
+    voice: 'a hardware store aisle I know by heart',
+  }),
+  student({
+    name: 'Neve Callaghan',
+    classKey: 'english10-p2',
+    arc: 'steady-high',
+    baseline: 4.2,
+    strength: 'thesis_and_content',
+    weakness: 'grammar_and_mechanics',
+    voice: 'a rowing shell before anyone is awake',
+  }),
+  student({
+    name: 'Idris Bakare',
+    classKey: 'english10-p2',
+    arc: 'late-bloomer',
+    baseline: 2.9,
+    strength: 'evidence_and_support',
+    weakness: 'voice_and_style',
+    voice: 'a generator humming through a blackout',
+  }),
+  student({
+    name: 'Colette Baptiste',
+    classKey: 'english10-p2',
+    arc: 'steady-mid',
+    baseline: 3.1,
+    strength: 'voice_and_style',
+    weakness: 'organization_and_structure',
+    voice: 'a second language I only speak at home',
+  }),
+  student({
+    name: 'Peter Mwangi',
+    classKey: 'english10-p2',
+    arc: 'rising',
+    baseline: 3.3,
+    strength: 'evidence_and_support',
+    weakness: 'grammar_and_mechanics',
+    voice: 'a bus route that takes an hour longer',
+  }),
+  student({
+    name: 'Annika Sorensen',
+    classKey: 'english10-p2',
+    arc: 'slipping',
+    baseline: 3.7,
+    strength: 'organization_and_structure',
+    weakness: 'voice_and_style',
+    voice: 'a swim cap with my sister’s name in it',
+  }),
+  student({
+    name: 'Emilio Vasquez',
+    classKey: 'english10-p2',
+    arc: 'volatile',
+    baseline: 3.2,
+    strength: 'voice_and_style',
+    weakness: 'thesis_and_content',
+    voice: 'a taquería that closes when it feels like it',
+  }),
+  student({
+    name: 'Phoebe Lindenbaum',
+    classKey: 'english10-p2',
+    arc: 'steady-mid',
+    baseline: 3.5,
+    strength: 'thesis_and_content',
+    weakness: 'evidence_and_support',
+    voice: 'a piano with two dead keys',
+  }),
+  student({
+    name: 'Kai Tanaka-Reyes',
+    classKey: 'english10-p2',
+    arc: 'rising',
+    baseline: 2.8,
+    strength: 'grammar_and_mechanics',
+    weakness: 'thesis_and_content',
+    voice: 'a skate park after it rains',
+  }),
+  student({
+    name: 'Miriam Blanchard',
+    classKey: 'english10-p2',
+    arc: 'late-bloomer',
+    baseline: 3,
+    strength: 'thesis_and_content',
+    weakness: 'grammar_and_mechanics',
+    voice: 'a greenhouse my mother refuses to sell',
+  }),
+  student({
+    name: 'Osric Nwachukwu',
+    classKey: 'english10-p2',
+    arc: 'struggling',
+    baseline: 2.5,
+    strength: 'voice_and_style',
+    weakness: 'evidence_and_support',
+    voice: 'a phone with a cracked screen I keep anyway',
+  }),
+  student({
+    name: 'Linnea Halvorsen',
+    classKey: 'english10-p2',
+    arc: 'steady-mid',
+    baseline: 3.4,
+    strength: 'organization_and_structure',
+    weakness: 'thesis_and_content',
+    voice: 'a knitting pattern I did not follow',
+  }),
+  student({
+    name: 'Zaid Al-Amin',
+    classKey: 'english10-p2',
+    arc: 'volatile',
+    baseline: 3.6,
+    strength: 'evidence_and_support',
+    weakness: 'organization_and_structure',
+    voice: 'a mosque parking lot at sunset',
+  }),
+
+  // --- English 9, Period 1 --------------------------------------------------
+  student({
+    name: 'June Ashworth',
+    classKey: 'english9-p1',
+    arc: 'struggling',
+    baseline: 2,
+    strength: 'voice_and_style',
+    weakness: 'organization_and_structure',
+    voice: 'a locker I still cannot open',
+    anchor: true,
+  }),
+  student({
+    name: 'Malik Osei',
+    classKey: 'english9-p1',
+    arc: 'steady-high',
+    baseline: 4.3,
+    strength: 'thesis_and_content',
+    weakness: 'grammar_and_mechanics',
+    voice: 'a bassline I heard through a wall',
+    anchor: true,
+  }),
+  student({
+    name: 'Clementine Ruiz',
+    classKey: 'english9-p1',
+    arc: 'rising',
+    baseline: 2.9,
+    strength: 'voice_and_style',
+    weakness: 'evidence_and_support',
+    voice: 'a hallway that smells like paint',
+  }),
+  student({
+    name: 'Bode Kristiansen',
+    classKey: 'english9-p1',
+    arc: 'steady-mid',
+    baseline: 3,
+    strength: 'organization_and_structure',
+    weakness: 'grammar_and_mechanics',
+    voice: 'a tent that leaks on one side',
+  }),
+  student({
+    name: 'Aditi Venkatesan',
+    classKey: 'english9-p1',
+    arc: 'rising',
+    baseline: 3.4,
+    strength: 'thesis_and_content',
+    weakness: 'voice_and_style',
+    voice: 'a math competition I lost on purpose',
+  }),
+  student({
+    name: 'Rafferty Doyle',
+    classKey: 'english9-p1',
+    arc: 'struggling',
+    baseline: 2.2,
+    strength: 'evidence_and_support',
+    weakness: 'grammar_and_mechanics',
+    voice: 'a dog that only listens to my brother',
+  }),
+  student({
+    name: 'Nour Zaidan',
+    classKey: 'english9-p1',
+    arc: 'volatile',
+    baseline: 3.2,
+    strength: 'voice_and_style',
+    weakness: 'organization_and_structure',
+    voice: 'a grandmother’s recipe with no measurements',
+  }),
+  student({
+    name: 'Teddy Kowalczyk',
+    classKey: 'english9-p1',
+    arc: 'slipping',
+    baseline: 3.5,
+    strength: 'grammar_and_mechanics',
+    weakness: 'thesis_and_content',
+    voice: 'a science fair volcano that worked too well',
+  }),
+  student({
+    name: 'Ifeoma Adeyemi',
+    classKey: 'english9-p1',
+    arc: 'steady-high',
+    baseline: 4,
+    strength: 'evidence_and_support',
+    weakness: 'voice_and_style',
+    voice: 'a braid that took three hours',
+  }),
+  student({
+    name: 'Sawyer Pike',
+    classKey: 'english9-p1',
+    arc: 'late-bloomer',
+    baseline: 2.7,
+    strength: 'thesis_and_content',
+    weakness: 'organization_and_structure',
+    voice: 'a creek behind the baseball field',
+  }),
+  student({
+    name: 'Valentina Costa',
+    classKey: 'english9-p1',
+    arc: 'rising',
+    baseline: 3.1,
+    strength: 'organization_and_structure',
+    weakness: 'grammar_and_mechanics',
+    voice: 'a soccer jersey two sizes too big',
+  }),
+  student({
+    name: 'Emmett Braddock',
+    classKey: 'english9-p1',
+    arc: 'steady-mid',
+    baseline: 2.9,
+    strength: 'grammar_and_mechanics',
+    weakness: 'evidence_and_support',
+    voice: 'a tractor that starts on the third try',
+  }),
+  student({
+    name: 'Zuri Chikwe',
+    classKey: 'english9-p1',
+    arc: 'volatile',
+    baseline: 3.3,
+    strength: 'thesis_and_content',
+    weakness: 'voice_and_style',
+    voice: 'a double-dutch rope hitting pavement',
+  }),
+  student({
+    name: 'Lars Petterson',
+    classKey: 'english9-p1',
+    arc: 'struggling',
+    baseline: 2.4,
+    strength: 'organization_and_structure',
+    weakness: 'thesis_and_content',
+    voice: 'an ice rink at six in the morning',
+  }),
+  student({
+    name: 'Amelie Duchamp',
+    classKey: 'english9-p1',
+    arc: 'steady-mid',
+    baseline: 3.2,
+    strength: 'voice_and_style',
+    weakness: 'evidence_and_support',
+    voice: 'a bakery window I walk past twice',
+  }),
+  student({
+    name: 'Rashad Toure',
+    classKey: 'english9-p1',
+    arc: 'rising',
+    baseline: 2.8,
+    strength: 'evidence_and_support',
+    weakness: 'grammar_and_mechanics',
+    voice: 'a barber who talks about history',
+  }),
+  student({
+    name: 'Winona Blackfeather',
+    classKey: 'english9-p1',
+    arc: 'steady-high',
+    baseline: 3.9,
+    strength: 'voice_and_style',
+    weakness: 'grammar_and_mechanics',
+    voice: 'a drum I am not old enough to play',
+  }),
+  student({
+    name: 'Grigor Petrov',
+    classKey: 'english9-p1',
+    arc: 'late-bloomer',
+    baseline: 2.6,
+    strength: 'thesis_and_content',
+    weakness: 'voice_and_style',
+    voice: 'a chess set missing a bishop',
+  }),
+  student({
+    name: 'Saoirse Mullen',
+    classKey: 'english9-p1',
+    arc: 'slipping',
+    baseline: 3.6,
+    strength: 'voice_and_style',
+    weakness: 'evidence_and_support',
+    voice: 'a fiddle case older than my mother',
+  }),
+  student({
+    name: 'Hugo Bellamy',
+    classKey: 'english9-p1',
+    arc: 'steady-mid',
+    baseline: 3,
+    strength: 'evidence_and_support',
+    weakness: 'organization_and_structure',
+    voice: 'a comic I have redrawn four times',
+  }),
+  student({
+    name: 'Priyanka Sethi',
+    classKey: 'english9-p1',
+    arc: 'rising',
+    baseline: 3.3,
+    strength: 'organization_and_structure',
+    weakness: 'voice_and_style',
+    voice: 'a debate flowchart nobody else can read',
+  }),
+  student({
+    name: 'Cormac Delaney',
+    classKey: 'english9-p1',
+    arc: 'volatile',
+    baseline: 2.9,
+    strength: 'grammar_and_mechanics',
+    weakness: 'thesis_and_content',
+    voice: 'a fishing pier at low tide',
+  }),
+
+  // --- AP English Literature, Period 7 --------------------------------------
+  student({
+    name: 'Genevieve Okonjo',
+    classKey: 'ap-lit-p7',
+    arc: 'steady-high',
+    baseline: 4.8,
+    strength: 'thesis_and_content',
+    weakness: 'grammar_and_mechanics',
+    voice: 'a margin note I wrote two years ago',
+    anchor: true,
+  }),
+  student({
+    name: 'Byron Halloway',
+    classKey: 'ap-lit-p7',
+    arc: 'struggling',
+    baseline: 3.1,
+    strength: 'voice_and_style',
+    weakness: 'evidence_and_support',
+    voice: 'a college essay draft I keep deleting',
+    anchor: true,
+  }),
+  student({
+    name: 'Sunita Raval',
+    classKey: 'ap-lit-p7',
+    arc: 'rising',
+    baseline: 3.9,
+    strength: 'evidence_and_support',
+    weakness: 'voice_and_style',
+    voice: 'a library carrel I consider mine',
+  }),
+  student({
+    name: 'Theodore Mbeki',
+    classKey: 'ap-lit-p7',
+    arc: 'steady-high',
+    baseline: 4.4,
+    strength: 'organization_and_structure',
+    weakness: 'voice_and_style',
+    voice: 'a debate trophy I never unpacked',
+  }),
+  student({
+    name: 'Odette Lavigne',
+    classKey: 'ap-lit-p7',
+    arc: 'slipping',
+    baseline: 4.1,
+    strength: 'voice_and_style',
+    weakness: 'organization_and_structure',
+    voice: 'a ballet shoe I refuse to throw out',
+  }),
+  student({
+    name: 'Ignacio Serrano',
+    classKey: 'ap-lit-p7',
+    arc: 'steady-mid',
+    baseline: 3.6,
+    strength: 'thesis_and_content',
+    weakness: 'grammar_and_mechanics',
+    voice: 'a night shift that pays for the application fees',
+  }),
+  student({
+    name: 'Harriet Ozawa',
+    classKey: 'ap-lit-p7',
+    arc: 'volatile',
+    baseline: 3.8,
+    strength: 'evidence_and_support',
+    weakness: 'voice_and_style',
+    voice: 'a darkroom timer I still hear at night',
+  }),
+  student({
+    name: 'Cassius Bright',
+    classKey: 'ap-lit-p7',
+    arc: 'rising',
+    baseline: 3.5,
+    strength: 'voice_and_style',
+    weakness: 'thesis_and_content',
+    voice: 'an open mic where I read once',
+  }),
+  student({
+    name: 'Yusra Rahimi',
+    classKey: 'ap-lit-p7',
+    arc: 'steady-high',
+    baseline: 4.5,
+    strength: 'thesis_and_content',
+    weakness: 'voice_and_style',
+    voice: 'a dictionary my father annotated',
+  }),
+  student({
+    name: 'Beckett Lorne',
+    classKey: 'ap-lit-p7',
+    arc: 'slipping',
+    baseline: 4,
+    strength: 'organization_and_structure',
+    weakness: 'evidence_and_support',
+    voice: 'a senior year I am already leaving',
+  }),
+  student({
+    name: 'Tomiko Arai',
+    classKey: 'ap-lit-p7',
+    arc: 'steady-mid',
+    baseline: 3.7,
+    strength: 'grammar_and_mechanics',
+    weakness: 'voice_and_style',
+    voice: 'a tea ceremony I only half remember',
+  }),
+  student({
+    name: 'Ezekiel Vance',
+    classKey: 'ap-lit-p7',
+    arc: 'late-bloomer',
+    baseline: 3.4,
+    strength: 'evidence_and_support',
+    weakness: 'organization_and_structure',
+    voice: 'a pulpit I grew up underneath',
+  }),
+  student({
+    name: 'Lucienne Marchand',
+    classKey: 'ap-lit-p7',
+    arc: 'rising',
+    baseline: 3.8,
+    strength: 'organization_and_structure',
+    weakness: 'grammar_and_mechanics',
+    voice: 'a translation I argued with for a week',
+  }),
+  student({
+    name: 'Anwar Haddadi',
+    classKey: 'ap-lit-p7',
+    arc: 'volatile',
+    baseline: 3.9,
+    strength: 'thesis_and_content',
+    weakness: 'organization_and_structure',
+    voice: 'a chessboard set up for nobody',
+  }),
 ];
 
 export const DEMO_ROSTER_ASSIGNMENTS: DemoAssignmentSpec[] = [
   {
     key: 'p1-turning-point',
-    classKey: 'primary',
+    classKeys: ['primary', 'english10-p2'],
     assignmentTypeKey: 'five-paragraph',
     title: 'Personal Narrative: The Turn',
     prompt:
@@ -501,7 +1114,7 @@ export const DEMO_ROSTER_ASSIGNMENTS: DemoAssignmentSpec[] = [
   },
   {
     key: 'p2-cost-of-convenience',
-    classKey: 'primary',
+    classKeys: ['primary', 'english10-p2'],
     assignmentTypeKey: 'thesis',
     title: 'Thesis Essay: The Cost of Convenience',
     prompt:
@@ -522,7 +1135,7 @@ export const DEMO_ROSTER_ASSIGNMENTS: DemoAssignmentSpec[] = [
   },
   {
     key: 'p3-who-speaks',
-    classKey: 'primary',
+    classKeys: ['primary', 'english10-p2'],
     assignmentTypeKey: 'thesis',
     title: 'Literary Analysis: Who Speaks in Night?',
     prompt:
@@ -544,7 +1157,7 @@ export const DEMO_ROSTER_ASSIGNMENTS: DemoAssignmentSpec[] = [
   },
   {
     key: 'p4-rules-worth-breaking',
-    classKey: 'primary',
+    classKeys: ['primary', 'english10-p2'],
     assignmentTypeKey: 'thesis',
     title: 'Argument Essay: Rules Worth Breaking',
     prompt:
@@ -566,7 +1179,7 @@ export const DEMO_ROSTER_ASSIGNMENTS: DemoAssignmentSpec[] = [
   },
   {
     key: 'p5-attention-for-sale',
-    classKey: 'primary',
+    classKeys: ['primary', 'english10-p2'],
     assignmentTypeKey: 'thesis',
     title: 'Synthesis Essay: Attention for Sale',
     prompt:
@@ -588,7 +1201,7 @@ export const DEMO_ROSTER_ASSIGNMENTS: DemoAssignmentSpec[] = [
   },
   {
     key: 'p6-later-start',
-    classKey: 'primary',
+    classKeys: ['primary', 'english10-p2'],
     assignmentTypeKey: 'thesis',
     title: 'Persuasive Essay: A Later Start',
     prompt:
@@ -611,7 +1224,7 @@ export const DEMO_ROSTER_ASSIGNMENTS: DemoAssignmentSpec[] = [
 
   {
     key: 's1-speech-that-moved',
-    classKey: 'secondary',
+    classKeys: ['secondary'],
     assignmentTypeKey: 'thesis',
     title: 'Rhetorical Analysis: The Speech That Moved a Country',
     prompt:
@@ -633,7 +1246,7 @@ export const DEMO_ROSTER_ASSIGNMENTS: DemoAssignmentSpec[] = [
   },
   {
     key: 's2-progress-and-price',
-    classKey: 'secondary',
+    classKeys: ['secondary'],
     assignmentTypeKey: 'thesis',
     title: 'Thesis Essay: Progress and Its Price',
     prompt:
@@ -655,7 +1268,7 @@ export const DEMO_ROSTER_ASSIGNMENTS: DemoAssignmentSpec[] = [
   },
   {
     key: 's3-unreliable-narrator',
-    classKey: 'secondary',
+    classKeys: ['secondary'],
     assignmentTypeKey: 'thesis',
     title: 'Literary Analysis: The Unreliable Narrator',
     prompt:
@@ -677,7 +1290,7 @@ export const DEMO_ROSTER_ASSIGNMENTS: DemoAssignmentSpec[] = [
   },
   {
     key: 's4-what-we-owe',
-    classKey: 'secondary',
+    classKeys: ['secondary'],
     assignmentTypeKey: 'thesis',
     title: 'Synthesis Essay: What We Owe the Future',
     prompt:
@@ -699,7 +1312,7 @@ export const DEMO_ROSTER_ASSIGNMENTS: DemoAssignmentSpec[] = [
   },
   {
     key: 's5-against-certainty',
-    classKey: 'secondary',
+    classKeys: ['secondary'],
     assignmentTypeKey: 'thesis',
     title: 'Argument Essay: The Case Against Certainty',
     prompt:
@@ -720,13 +1333,236 @@ export const DEMO_ROSTER_ASSIGNMENTS: DemoAssignmentSpec[] = [
     },
   },
 
+  // --- English 9, Period 1 --------------------------------------------------
+  {
+    key: 'n1-first-time',
+    classKeys: ['english9-p1'],
+    assignmentTypeKey: 'five-paragraph',
+    title: 'Personal Narrative: The First Time',
+    prompt:
+      'Write about the first time you did something that scared you. Use specific detail — put the reader in the room.',
+    pointValue: 100,
+    weeksAgo: 29,
+    state: 'released',
+    topic: {
+      subject: 'the first time I did something that scared me',
+      claimHigh:
+        'I did not stop being afraid that day; I only learned that being afraid and going anyway are allowed to happen at the same time.',
+      claimMid:
+        'That day taught me that being scared does not have to stop you.',
+      claimLow: 'That day I was scared but I did it anyway.',
+      source: 'what I remember',
+      quote: 'you can go now',
+      counter: 'one moment does not really change anybody',
+    },
+  },
+  {
+    key: 'n2-museum',
+    classKeys: ['english9-p1'],
+    assignmentTypeKey: 'thesis',
+    title: 'Argument Essay: What Belongs in a Museum',
+    prompt:
+      'Argue what a museum owes the people an object came from. Use at least two sources and answer the other side.',
+    pointValue: 100,
+    weeksAgo: 22,
+    state: 'released',
+    topic: {
+      subject: 'who an object in a glass case actually belongs to',
+      claimHigh:
+        'A museum does not preserve an object so much as it preserves a decision about who was allowed to keep it.',
+      claimMid:
+        'Museums protect objects, but they also decide who gets to see them and who does not.',
+      claimLow: 'Museums should give some things back to were they came from.',
+      source: 'the museum’s own catalog',
+      quote: 'acquired during the expedition of 1889',
+      counter: 'the objects are safer and better cared for where they are',
+    },
+  },
+  {
+    key: 'n3-who-belongs',
+    classKeys: ['english9-p1'],
+    assignmentTypeKey: 'thesis',
+    title: 'Literary Analysis: Who Gets to Belong',
+    prompt:
+      'Analyze how a character is kept outside the group in the novel. Quote the text and explain what the quote shows.',
+    pointValue: 100,
+    weeksAgo: 15,
+    state: 'released',
+    topic: {
+      subject: 'how a group decides who is outside it',
+      claimHigh:
+        'Nobody in the novel ever votes him out; he is excluded by a hundred small courtesies that never quite include him.',
+      claimMid:
+        'The other characters never say he does not belong, but they treat him like he does not.',
+      claimLow: 'He doesnt belong and the other characters make that clear.',
+      source: 'the novel',
+      quote: 'they made room, but not for him',
+      counter: 'he keeps himself apart as much as they keep him out',
+    },
+  },
+  {
+    key: 'n4-rumor',
+    classKeys: ['english9-p1'],
+    assignmentTypeKey: 'thesis',
+    title: 'Informative Essay: How a Rumor Works',
+    prompt:
+      'Explain how a rumor spreads and why it changes as it travels. Ground your explanation in evidence, not opinion.',
+    pointValue: 100,
+    weeksAgo: 8,
+    state: 'released',
+    topic: {
+      subject: 'why a story changes every time it is retold',
+      claimHigh:
+        'A rumor does not survive because it is believable; it survives because each teller improves it slightly in their own favor.',
+      claimMid:
+        'A rumor changes because everyone who repeats it adds a little of themselves.',
+      claimLow: 'Rumors change alot because people add stuff to them.',
+      source: 'the study we read in class',
+      quote: 'each retelling shortened the story and sharpened the blame',
+      counter: 'people mostly repeat what they hear without changing it',
+    },
+  },
+  {
+    key: 'n5-phones',
+    classKeys: ['english9-p1'],
+    assignmentTypeKey: 'thesis',
+    title: 'Argument Essay: Phones in the Building',
+    prompt:
+      'Take a position on the phone policy. Make the strongest version of the opposing argument before you answer it.',
+    pointValue: 100,
+    weeksAgo: 2,
+    state: 'awaiting-grading',
+    topic: {
+      subject: 'what a phone policy is actually trying to fix',
+      claimHigh:
+        'The policy is written as though attention were a discipline problem, which is why it keeps failing to solve one.',
+      claimMid: 'The phone rule treats a hard problem like it is a simple one.',
+      claimLow: 'The phone rule is not fair and it doesnt even work.',
+      source: 'the policy memo',
+      quote: 'devices shall remain stowed during instructional time',
+      counter: 'without a firm rule nobody would put anything away at all',
+    },
+  },
+
+  // --- AP English Literature, Period 7 --------------------------------------
+  {
+    key: 'a1-sonnet-turn',
+    classKeys: ['ap-lit-p7'],
+    assignmentTypeKey: 'thesis',
+    title: 'Close Reading: The Turn in a Sonnet',
+    prompt:
+      'Close-read a single sonnet. Build your argument from the volta outward, and do not summarize.',
+    pointValue: 100,
+    weeksAgo: 27,
+    state: 'released',
+    topic: {
+      subject: 'what a sonnet concedes at the moment it turns',
+      claimHigh:
+        'The volta is not a change of mind but a confession: the octave was an argument the speaker was making to himself, and it did not hold.',
+      claimMid:
+        'The turn shows the speaker was not as sure as the first eight lines pretended.',
+      claimLow: 'The turn is were the poem changes its mind.',
+      source: 'the sonnet',
+      quote: 'and yet I do not think it so',
+      counter: 'the turn is a convention of the form, not a real reversal',
+    },
+  },
+  {
+    key: 'a2-domestic-power',
+    classKeys: ['ap-lit-p7'],
+    assignmentTypeKey: 'thesis',
+    title: 'Critical Lens: Power in the Domestic Novel',
+    prompt:
+      'Apply a critical lens to the novel’s treatment of household authority. The lens should sharpen the reading, not replace it.',
+    pointValue: 100,
+    weeksAgo: 20,
+    state: 'released',
+    topic: {
+      subject: 'where authority actually sits in a household novel',
+      claimHigh:
+        'The novel locates power not in whoever gives the orders but in whoever is permitted to leave the room.',
+      claimMid:
+        'The person with real power in the house is not the one who speaks the most.',
+      claimLow: 'The men have the power but the women control things anyway.',
+      source: 'the novel',
+      quote: 'she rose, and no one asked her where she was going',
+      counter: 'reading domestic scenes as political flattens them',
+    },
+  },
+  {
+    key: 'a3-two-elegies',
+    classKeys: ['ap-lit-p7'],
+    assignmentTypeKey: 'thesis',
+    title: 'Comparative Analysis: Two Elegies',
+    prompt:
+      'Compare how two elegies handle the thing they cannot say. Structure the comparison around an argument, not a list.',
+    pointValue: 100,
+    weeksAgo: 13,
+    state: 'released',
+    topic: {
+      subject: 'what an elegy refuses to say out loud',
+      claimHigh:
+        'Both poems mourn by describing furniture, because the grief itself is the one subject neither speaker can approach directly.',
+      claimMid:
+        'Both poems talk about small ordinary things instead of the loss itself.',
+      claimLow: 'Both poems are sad but they show it in diffrent ways.',
+      source: 'the second elegy',
+      quote: 'the chair is where the chair has always been',
+      counter: 'the indirection is just decorum, not meaning',
+    },
+  },
+  {
+    key: 'a4-unfinished-ending',
+    classKeys: ['ap-lit-p7'],
+    assignmentTypeKey: 'thesis',
+    title: 'Literary Argument: The Unfinished Ending',
+    prompt:
+      'Argue what the novel’s refusal to resolve accomplishes. Anticipate the reader who calls it a failure of nerve.',
+    pointValue: 100,
+    weeksAgo: 6,
+    state: 'released',
+    topic: {
+      subject: 'what a novel gains by refusing to end',
+      claimHigh:
+        'The unresolved ending is the novel’s last argument: it withholds the closure the reader wants in order to prove the reader wanted it too badly.',
+      claimMid:
+        'By not resolving, the novel makes the reader sit with the same uncertainty the characters do.',
+      claimLow: 'The ending is unfinished which makes the reader think.',
+      source: 'the final chapter',
+      quote: 'there was, of course, more to say',
+      counter: 'an unresolved ending is usually a writer running out of road',
+    },
+  },
+  {
+    key: 'a5-timed-prose',
+    classKeys: ['ap-lit-p7'],
+    assignmentTypeKey: 'thesis',
+    title: 'Timed Essay: Prose Passage Analysis',
+    prompt:
+      'Forty minutes, one passage. Make a defensible claim about how the prose works and support it with the passage itself.',
+    pointValue: 100,
+    weeksAgo: 1,
+    state: 'awaiting-grading',
+    topic: {
+      subject: 'how a passage controls the reader’s sympathy',
+      claimHigh:
+        'The passage earns sympathy for a character it never defends, by letting the narrator notice what the character cannot afford to.',
+      claimMid:
+        'The narration makes the reader feel for a character the story never argues for.',
+      claimLow: 'The passage makes you feel bad for him even tho he is wrong.',
+      source: 'the passage',
+      quote: 'he did not look at the window again',
+      counter: 'the sympathy comes from the plot, not the prose',
+    },
+  },
+
   // --- Rows the persona seed already created --------------------------------
   // These exist before the roster runs and would otherwise sit empty, showing
   // an assignment with no papers behind it on the class page.
   {
     key: 'legacy-civic-responsibility',
     existingKey: 'civic-responsibility',
-    classKey: 'primary',
+    classKeys: ['primary'],
     assignmentTypeKey: 'thesis',
     title: 'Thesis essay: civic responsibility',
     prompt:
@@ -749,7 +1585,7 @@ export const DEMO_ROSTER_ASSIGNMENTS: DemoAssignmentSpec[] = [
   {
     key: 'legacy-daily-pages',
     existingKey: 'daily-pages',
-    classKey: 'primary',
+    classKeys: ['primary'],
     assignmentTypeKey: 'daily-pages',
     title: 'Daily Pages - week 2',
     prompt:
