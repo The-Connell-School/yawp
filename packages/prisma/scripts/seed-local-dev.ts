@@ -55,6 +55,7 @@ try {
         organizationId: context.organizationId,
         primaryClassId: context.primaryClassId,
         thesisAssignmentTypeId: context.thesisAssignmentTypeId,
+        demoRoster: context.demoRoster,
         personas: LOCAL_DEV_PERSONAS.map((persona) => ({
           label: persona.label,
           email: persona.email,

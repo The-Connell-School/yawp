@@ -8,6 +8,7 @@ import {
   LOCAL_DEV_PERSONAS,
   type LocalDevPersona,
 } from './dev-personas';
+import { seedDemoRoster, type DemoRosterSeedResult } from './seed-demo-roster';
 
 type PersonaRecord = {
   persona: LocalDevPersona;
@@ -24,6 +25,8 @@ export type LocalDevSeedContext = {
   dailyPagesAssignmentTypeId: string | null;
   actWritingAssignmentTypeId: string | null;
   personas: Record<LocalDevPersona['key'], PersonaRecord>;
+  /** Counts from the demo roster layered on top of the persona fixtures. */
+  demoRoster: DemoRosterSeedResult;
 };
 
 async function upsertPersona(
@@ -207,7 +210,12 @@ export async function seedSyntheticLocalDevData(
   );
   const actWritingAssignmentTypeId = pickAssignmentTypeId(
     assignmentTypes,
-    (row) => row.title === 'ACT Writing Section'
+    // Trimmed: the imported fixture title carries a trailing space.
+    (row) => row.title.trim() === 'ACT Writing Section'
+  );
+  const fiveParagraphAssignmentTypeId = pickAssignmentTypeId(
+    assignmentTypes,
+    (row) => row.title.trim() === 'The 5-Paragraph Essay'
   );
 
   const thesisModules = await prisma.assignmentModule.findMany({
@@ -434,6 +442,38 @@ export async function seedSyntheticLocalDevData(
     },
   });
 
+  // The personas above stay exactly as they were — they back the dev quick-login
+  // menu and the hand-checked draft/submitted/graded/unreleased states. The demo
+  // roster is layered on top so Class Summary and Reporter have a full class of
+  // students with a semester of graded work behind them.
+  const demoRoster = await seedDemoRoster(prisma, {
+    organizationId: LOCAL_DEV_ORG_ID,
+    classes: {
+      primary: {
+        id: primaryClass.id,
+        grade: primaryClass.grade,
+        period: primaryClass.period,
+      },
+      secondary: {
+        id: secondaryClass.id,
+        grade: secondaryClass.grade,
+        period: secondaryClass.period,
+      },
+    },
+    schoolNames: {
+      primary: schools[0].name,
+      secondary: schools[1].name,
+    },
+    assignmentTypeIds: {
+      thesis: thesisAssignmentTypeId,
+      fiveParagraph: fiveParagraphAssignmentTypeId,
+    },
+    teacher: {
+      membershipId: primaryTeacher.membershipId,
+      name: primaryTeacher.persona.name,
+    },
+  });
+
   return {
     organizationId: LOCAL_DEV_ORG_ID,
     schoolIds: schools.map((school) => school.id),
@@ -443,5 +483,6 @@ export async function seedSyntheticLocalDevData(
     dailyPagesAssignmentTypeId,
     actWritingAssignmentTypeId,
     personas: personaRecords,
+    demoRoster,
   };
 }

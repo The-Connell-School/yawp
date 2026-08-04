@@ -217,6 +217,9 @@ compute_tooling_fingerprint() {
         packages/prisma/scripts/seed-local-dev.ts \
         packages/prisma/scripts/local-dev/dev-personas.ts \
         packages/prisma/scripts/local-dev/seed-synthetic-data.ts \
+        packages/prisma/scripts/local-dev/demo-roster.ts \
+        packages/prisma/scripts/local-dev/demo-roster-content.ts \
+        packages/prisma/scripts/local-dev/seed-demo-roster.ts \
         scripts/preview/deploy.sh
       do
         if [[ -f "$file" ]]; then
