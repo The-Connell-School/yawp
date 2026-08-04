@@ -77,167 +77,175 @@ export default function LessonPacketRoute() {
   });
 
   return (
-    <section className="mx-auto w-full max-w-4xl px-4 py-6 print:max-w-none print:px-0 print:py-0">
-      {/* Controls — never printed. */}
-      <div className="mb-6 flex flex-wrap items-center gap-2 print:hidden">
-        <Button variant="outline" size="sm" asChild>
-          <Link to={`/app/lesson-planner?c=${conversationId}`}>
-            <ChevronLeft size={16} className="mr-1" />
-            Back to planning
-          </Link>
-        </Button>
-        <Button variant="ghost" size="sm" asChild>
-          <Link to="/app/lesson-planner/library">Lesson library</Link>
-        </Button>
-        <div className="ml-auto flex items-center gap-2">
-          <div className="flex rounded-lg border p-0.5">
-            <button
-              type="button"
-              onClick={() => setView('full')}
-              aria-pressed={view === 'full'}
-              className={cn(
-                'inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-sm font-medium text-muted-foreground',
-                { 'bg-primary/10 text-primary': view === 'full' }
-              )}
-            >
-              <Rows size={14} />
-              Full plan
-            </button>
-            <button
-              type="button"
-              onClick={() => setView('outline')}
-              aria-pressed={view === 'outline'}
-              className={cn(
-                'inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-sm font-medium text-muted-foreground',
-                { 'bg-primary/10 text-primary': view === 'outline' }
-              )}
-            >
-              <ListTree size={14} />
-              Outline
-            </button>
-          </div>
-          <Button
-            type="button"
-            size="sm"
-            onClick={() => window.print()}
-            disabled={packet.sections.length === 0}
-          >
-            <Printer size={15} className="mr-1.5" />
-            Print / Save as PDF
+    // The app shell is a fixed-height, overflow-hidden frame, so every route
+    // owns its own scrolling. The scrollbar is left visible here on purpose: a
+    // long packet should look scrollable. Print resets both so the document
+    // paginates instead of being clipped to one viewport.
+    <section className="h-full w-full overflow-y-auto print:h-auto print:overflow-visible">
+      <div className="mx-auto w-full max-w-4xl px-4 py-6 print:max-w-none print:px-0 print:py-0">
+        {/* Controls — never printed. */}
+        <div className="mb-6 flex flex-wrap items-center gap-2 print:hidden">
+          <Button variant="outline" size="sm" asChild>
+            <Link to={`/app/lesson-planner?c=${conversationId}`}>
+              <ChevronLeft size={16} className="mr-1" />
+              Back to planning
+            </Link>
           </Button>
-        </div>
-      </div>
-
-      <div className="mb-4 print:hidden">
-        <label
-          htmlFor="packet-title"
-          className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted-foreground"
-        >
-          Lesson name
-        </label>
-        <input
-          id="packet-title"
-          name="packetTitle"
-          defaultValue={packetTitleValue}
-          placeholder={packet.title}
-          maxLength={120}
-          className="w-full rounded-lg border bg-background px-3 py-2 text-base font-medium"
-          onBlur={(event) =>
-            fetcher.submit(
-              {
-                intent: 'rename',
-                conversationId,
-                packetTitle: event.target.value,
-              },
-              { method: 'post', action: '/api/domain/lesson-planner/packet' }
-            )
-          }
-        />
-      </div>
-
-      {/* The document. */}
-      <article className="rounded-2xl border bg-card p-8 print:rounded-none print:border-0 print:bg-transparent print:p-0">
-        <header className="mb-6 border-b-2 border-primary pb-3">
-          <div className="flex items-baseline gap-2">
-            <Lightbulb size={18} className="shrink-0 text-primary" />
-            <h1 className="text-xl font-semibold leading-tight">
-              {packet.title}
-            </h1>
-          </div>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {[
-              packet.className,
-              packet.totalMinutes > 0 ? `${packet.totalMinutes} min` : null,
-              printedOn,
-            ]
-              .filter(Boolean)
-              .join(' · ')}
-          </p>
-        </header>
-
-        {packet.sections.length === 0 ? (
-          <p className="text-sm text-muted-foreground print:hidden">
-            Nothing kept yet. Back in the planner, use{' '}
-            <strong>Keep for the lesson</strong> on the parts you want, and they
-            will assemble here.
-          </p>
-        ) : view === 'outline' ? (
-          <ol
-            className="flex flex-col gap-3"
-            data-testid="packet-outline"
-            data-print-mode="outline"
-          >
-            {packet.outline.map((entry, index) => (
-              <li key={index} className="flex gap-3">
-                <span className="w-14 shrink-0 pt-0.5 text-sm tabular-nums text-muted-foreground">
-                  {entry.minutes !== null ? `${entry.minutes} min` : '—'}
-                </span>
-                <div className="min-w-0">
-                  <p className="font-medium">{entry.title}</p>
-                  {entry.steps.length > 0 ? (
-                    <ul className="mt-1 list-disc pl-5 text-sm text-muted-foreground">
-                      {entry.steps.map((step) => (
-                        <li key={step}>{step}</li>
-                      ))}
-                    </ul>
-                  ) : null}
-                </div>
-              </li>
-            ))}
-          </ol>
-        ) : (
-          <div className="flex flex-col gap-8">
-            {packet.sections.map((section) => (
-              <section
-                key={section.id}
-                data-testid={`packet-section-${section.audience}`}
+          <Button variant="ghost" size="sm" asChild>
+            <Link to="/app/lesson-planner/library">Lesson library</Link>
+          </Button>
+          <div className="ml-auto flex items-center gap-2">
+            <div className="flex rounded-lg border p-0.5">
+              <button
+                type="button"
+                onClick={() => setView('full')}
+                aria-pressed={view === 'full'}
                 className={cn(
-                  section.audience === 'student' &&
-                    'rounded-xl border border-dashed p-5 print:break-before-page print:rounded-none print:border-0 print:p-0'
+                  'inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-sm font-medium text-muted-foreground',
+                  { 'bg-primary/10 text-primary': view === 'full' }
                 )}
               >
-                {section.audience === 'student' ? (
-                  <div className="mb-4 flex items-end justify-between gap-6 border-b pb-2 text-sm text-muted-foreground">
-                    <span className="flex-1">Name ______________________</span>
-                    <span>Date ____________</span>
+                <Rows size={14} />
+                Full plan
+              </button>
+              <button
+                type="button"
+                onClick={() => setView('outline')}
+                aria-pressed={view === 'outline'}
+                className={cn(
+                  'inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-sm font-medium text-muted-foreground',
+                  { 'bg-primary/10 text-primary': view === 'outline' }
+                )}
+              >
+                <ListTree size={14} />
+                Outline
+              </button>
+            </div>
+            <Button
+              type="button"
+              size="sm"
+              onClick={() => window.print()}
+              disabled={packet.sections.length === 0}
+            >
+              <Printer size={15} className="mr-1.5" />
+              Print / Save as PDF
+            </Button>
+          </div>
+        </div>
+
+        <div className="mb-4 print:hidden">
+          <label
+            htmlFor="packet-title"
+            className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+          >
+            Lesson name
+          </label>
+          <input
+            id="packet-title"
+            name="packetTitle"
+            defaultValue={packetTitleValue}
+            placeholder={packet.title}
+            maxLength={120}
+            className="w-full rounded-lg border bg-background px-3 py-2 text-base font-medium"
+            onBlur={(event) =>
+              fetcher.submit(
+                {
+                  intent: 'rename',
+                  conversationId,
+                  packetTitle: event.target.value,
+                },
+                { method: 'post', action: '/api/domain/lesson-planner/packet' }
+              )
+            }
+          />
+        </div>
+
+        {/* The document. */}
+        <article className="rounded-2xl border bg-card p-8 print:rounded-none print:border-0 print:bg-transparent print:p-0">
+          <header className="mb-6 border-b-2 border-primary pb-3">
+            <div className="flex items-baseline gap-2">
+              <Lightbulb size={18} className="shrink-0 text-primary" />
+              <h1 className="text-xl font-semibold leading-tight">
+                {packet.title}
+              </h1>
+            </div>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {[
+                packet.className,
+                packet.totalMinutes > 0 ? `${packet.totalMinutes} min` : null,
+                printedOn,
+              ]
+                .filter(Boolean)
+                .join(' · ')}
+            </p>
+          </header>
+
+          {packet.sections.length === 0 ? (
+            <p className="text-sm text-muted-foreground print:hidden">
+              Nothing kept yet. Back in the planner, use{' '}
+              <strong>Keep for the lesson</strong> on the parts you want, and
+              they will assemble here.
+            </p>
+          ) : view === 'outline' ? (
+            <ol
+              className="flex flex-col gap-3"
+              data-testid="packet-outline"
+              data-print-mode="outline"
+            >
+              {packet.outline.map((entry, index) => (
+                <li key={index} className="flex gap-3">
+                  <span className="w-14 shrink-0 pt-0.5 text-sm tabular-nums text-muted-foreground">
+                    {entry.minutes !== null ? `${entry.minutes} min` : '—'}
+                  </span>
+                  <div className="min-w-0">
+                    <p className="font-medium">{entry.title}</p>
+                    {entry.steps.length > 0 ? (
+                      <ul className="mt-1 list-disc pl-5 text-sm text-muted-foreground">
+                        {entry.steps.map((step) => (
+                          <li key={step}>{step}</li>
+                        ))}
+                      </ul>
+                    ) : null}
                   </div>
-                ) : null}
-                <h2 className="mb-2 text-base font-semibold">
-                  {section.title}
-                </h2>
-                <div
+                </li>
+              ))}
+            </ol>
+          ) : (
+            <div className="flex flex-col gap-8">
+              {packet.sections.map((section) => (
+                <section
+                  key={section.id}
+                  data-testid={`packet-section-${section.audience}`}
                   className={cn(
                     section.audience === 'student' &&
-                      'leading-9 print:leading-[2.6]'
+                      'rounded-xl border border-dashed p-5 print:break-before-page print:rounded-none print:border-0 print:p-0'
                   )}
                 >
-                  <MarkdownContent content={section.content} />
-                </div>
-              </section>
-            ))}
-          </div>
-        )}
-      </article>
+                  {section.audience === 'student' ? (
+                    <div className="mb-4 flex items-end justify-between gap-6 border-b pb-2 text-sm text-muted-foreground">
+                      <span className="flex-1">
+                        Name ______________________
+                      </span>
+                      <span>Date ____________</span>
+                    </div>
+                  ) : null}
+                  <h2 className="mb-2 text-base font-semibold">
+                    {section.title}
+                  </h2>
+                  <div
+                    className={cn(
+                      section.audience === 'student' &&
+                        'leading-9 print:leading-[2.6]'
+                    )}
+                  >
+                    <MarkdownContent content={section.content} />
+                  </div>
+                </section>
+              ))}
+            </div>
+          )}
+        </article>
+      </div>
     </section>
   );
 }

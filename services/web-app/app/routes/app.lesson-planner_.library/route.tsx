@@ -50,79 +50,84 @@ export default function LessonLibraryRoute() {
   const { lessons } = useLoaderData<typeof loader>();
 
   return (
-    <section className="mx-auto w-full max-w-4xl px-4 py-6">
-      <div className="mb-6 flex flex-wrap items-center gap-3">
-        <Button variant="outline" size="sm" asChild>
-          <Link to="/app/lesson-planner">
-            <ChevronLeft size={16} className="mr-1" />
-            Back to planning
-          </Link>
-        </Button>
-        <div className="min-w-0">
-          <h1 className="text-xl font-semibold leading-none">Lesson library</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Every lesson you have built and kept.
-          </p>
-        </div>
-      </div>
-
-      {lessons.length === 0 ? (
-        <div className="rounded-2xl border border-dashed p-10 text-center">
-          <div className="mx-auto mb-3 w-fit rounded-2xl bg-primary/10 p-3 text-primary">
-            <Lightbulb size={24} />
+    // Own the scroll: the app shell is a fixed-height, overflow-hidden frame.
+    <section className="h-full w-full overflow-y-auto">
+      <div className="mx-auto w-full max-w-4xl px-4 py-6">
+        <div className="mb-6 flex flex-wrap items-center gap-3">
+          <Button variant="outline" size="sm" asChild>
+            <Link to="/app/lesson-planner">
+              <ChevronLeft size={16} className="mr-1" />
+              Back to planning
+            </Link>
+          </Button>
+          <div className="min-w-0">
+            <h1 className="text-xl font-semibold leading-none">
+              Lesson library
+            </h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Every lesson you have built and kept.
+            </p>
           </div>
-          <h2 className="text-base font-semibold">No lessons kept yet</h2>
-          <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
-            Plan a lesson, then use <strong>Keep for the lesson</strong> on the
-            parts worth holding onto. Anything you keep gets assembled into a
-            printable packet and shows up here.
-          </p>
         </div>
-      ) : (
-        <ul className="flex flex-col gap-2">
-          {lessons.map((lesson) => (
-            <li key={lesson.id}>
-              <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border bg-card p-4">
-                <div className="min-w-0 flex-1">
-                  <Link
-                    to={`/app/lesson-planner/${lesson.id}/packet`}
-                    className="font-medium hover:text-primary hover:underline"
-                  >
-                    {lesson.title}
-                  </Link>
-                  <p className="mt-0.5 text-sm text-muted-foreground">
-                    {[
-                      lesson.className,
-                      lesson.assignmentTitle,
-                      `Updated ${timeAgo(new Date(lesson.updatedAt))}`,
-                    ]
-                      .filter(Boolean)
-                      .join(' · ')}
-                  </p>
-                </div>
-                <div className="flex shrink-0 items-center gap-2">
-                  <Badge variant="outline" size="sm">
-                    <FileText size={12} className="mr-1" />
-                    {lesson.sectionCount}{' '}
-                    {lesson.sectionCount === 1 ? 'section' : 'sections'}
-                  </Badge>
-                  {lesson.handoutCount > 0 ? (
-                    <Badge variant="outline" size="sm">
-                      {lesson.handoutCount}{' '}
-                      {lesson.handoutCount === 1 ? 'handout' : 'handouts'}
-                    </Badge>
-                  ) : null}
-                  <Button variant="outline" size="sm" asChild>
-                    <Link to={`/app/lesson-planner?c=${lesson.id}`}>
-                      Keep planning
+
+        {lessons.length === 0 ? (
+          <div className="rounded-2xl border border-dashed p-10 text-center">
+            <div className="mx-auto mb-3 w-fit rounded-2xl bg-primary/10 p-3 text-primary">
+              <Lightbulb size={24} />
+            </div>
+            <h2 className="text-base font-semibold">No lessons kept yet</h2>
+            <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
+              Plan a lesson, then use <strong>Keep for the lesson</strong> on
+              the parts worth holding onto. Anything you keep gets assembled
+              into a printable packet and shows up here.
+            </p>
+          </div>
+        ) : (
+          <ul className="flex flex-col gap-2">
+            {lessons.map((lesson) => (
+              <li key={lesson.id}>
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border bg-card p-4">
+                  <div className="min-w-0 flex-1">
+                    <Link
+                      to={`/app/lesson-planner/${lesson.id}/packet`}
+                      className="font-medium hover:text-primary hover:underline"
+                    >
+                      {lesson.title}
                     </Link>
-                  </Button>
+                    <p className="mt-0.5 text-sm text-muted-foreground">
+                      {[
+                        lesson.className,
+                        lesson.assignmentTitle,
+                        `Updated ${timeAgo(new Date(lesson.updatedAt))}`,
+                      ]
+                        .filter(Boolean)
+                        .join(' · ')}
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <Badge variant="outline" size="sm">
+                      <FileText size={12} className="mr-1" />
+                      {lesson.sectionCount}{' '}
+                      {lesson.sectionCount === 1 ? 'section' : 'sections'}
+                    </Badge>
+                    {lesson.handoutCount > 0 ? (
+                      <Badge variant="outline" size="sm">
+                        {lesson.handoutCount}{' '}
+                        {lesson.handoutCount === 1 ? 'handout' : 'handouts'}
+                      </Badge>
+                    ) : null}
+                    <Button variant="outline" size="sm" asChild>
+                      <Link to={`/app/lesson-planner?c=${lesson.id}`}>
+                        Keep planning
+                      </Link>
+                    </Button>
+                  </div>
                 </div>
-              </div>
-            </li>
-          ))}
-        </ul>
-      )}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
     </section>
   );
 }

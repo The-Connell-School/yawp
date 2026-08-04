@@ -81,7 +81,10 @@ async function clearClassInsight(classAssignmentId: string) {
  */
 async function seedLessonPlan(
   e2eContext: { teacherMembershipId: string; organizationId: string },
-  { keepFirst = false }: { keepFirst?: boolean } = {}
+  {
+    keepFirst = false,
+    keepLongHandout = false,
+  }: { keepFirst?: boolean; keepLongHandout?: boolean } = {}
 ) {
   const prisma = createE2EPrismaClient();
   try {
@@ -111,9 +114,20 @@ async function seedLessonPlan(
             },
             {
               role: 'assistant',
-              content:
-                '## Conclusion practice handout\n\nRewrite each conclusion so it answers "so what?".',
+              content: keepLongHandout
+                ? `## Conclusion practice handout\n\n${Array.from(
+                    { length: 40 },
+                    (_unused, index) =>
+                      `${index + 1}. Rewrite this conclusion so it answers "so what?".`
+                  ).join('\n\n')}`
+                : '## Conclusion practice handout\n\nRewrite each conclusion so it answers "so what?".',
               createdAt: new Date('2026-08-04T10:00:02.000Z'),
+              ...(keepLongHandout
+                ? {
+                    keptAt: new Date('2026-08-04T10:05:01.000Z'),
+                    keptAudience: 'student',
+                  }
+                : {}),
             },
           ],
         },
@@ -421,5 +435,30 @@ test.describe('YAWP! Lesson Planner', () => {
     await expect(page).toHaveURL(
       new RegExp(`/app/lesson-planner/${kept.conversationId}/packet`)
     );
+  });
+
+  test('scrolls the whole packet when a handout runs past the viewport', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    await setLessonPlannerEnabled(e2eContext.organizationId, true);
+    const { conversationId } = await seedLessonPlan(e2eContext, {
+      keepFirst: true,
+      keepLongHandout: true,
+    });
+    await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+
+    // A handout prints with open leading, so it runs long on screen too. The
+    // app shell is a fixed-height frame, so the packet has to own its scroll —
+    // without it the end of the document is simply unreachable.
+    await page.setViewportSize({ width: 1280, height: 600 });
+    await page.goto(`/app/lesson-planner/${conversationId}/packet`);
+
+    const lastLine = page.getByText(
+      '40. Rewrite this conclusion so it answers "so what?".'
+    );
+    await lastLine.scrollIntoViewIfNeeded();
+    await expect(lastLine).toBeInViewport();
   });
 });
