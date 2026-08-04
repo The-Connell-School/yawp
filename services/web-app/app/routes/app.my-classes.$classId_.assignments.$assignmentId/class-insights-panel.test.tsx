@@ -41,7 +41,8 @@ const READY_INSIGHT: ClassInsight = {
   submissionCount: 24,
   generatedAt: '2026-07-08T00:00:00.000Z',
   summary: {
-    overview: 'The class writes strong theses but struggles to analyze evidence.',
+    overview:
+      'The class writes strong theses but struggles to analyze evidence.',
     categories: [
       {
         key: 'thesis_and_content',
@@ -282,7 +283,9 @@ describe('ClassInsightsPanel', () => {
       />
     );
     expect(
-      el.querySelector('[data-testid="class-insight-generate-unavailable-reason"]')
+      el.querySelector(
+        '[data-testid="class-insight-generate-unavailable-reason"]'
+      )
     ).not.toBeNull();
     expect(el.textContent).toMatch(/regenerate in 23 hours/i);
     expect(
@@ -401,5 +404,38 @@ describe('ClassInsightsPanel', () => {
     expect(url).toContain('category=evidence_and_support');
     expect(url).toContain('status=gap');
     expect(categoryButton.getAttribute('aria-expanded')).toBe('true');
+  });
+
+  it('offers a planner hand-off on each next step when the planner is enabled', () => {
+    const el = render(
+      <ClassInsightsPanel
+        classAssignmentId="ca-1"
+        initialInsight={READY_INSIGHT}
+        gradedCount={30}
+        lessonPlannerEnabled
+      />
+    );
+
+    const planLink = Array.from(el.querySelectorAll('a')).find((anchor) =>
+      anchor.textContent?.match(/plan this lesson/i)
+    )!;
+    expect(planLink).toBeTruthy();
+    // Ids only: the planner rebuilds the prompt from the stored insight.
+    expect(planLink.getAttribute('href')).toBe(
+      '/app/lesson-planner?from=ca-1&step=0'
+    );
+  });
+
+  it('hides the planner hand-off when the org gate is off', () => {
+    const el = render(
+      <ClassInsightsPanel
+        classAssignmentId="ca-1"
+        initialInsight={READY_INSIGHT}
+        gradedCount={30}
+      />
+    );
+
+    expect(el.textContent).toContain('Model quote analysis');
+    expect(el.textContent).not.toMatch(/plan this lesson/i);
   });
 });
