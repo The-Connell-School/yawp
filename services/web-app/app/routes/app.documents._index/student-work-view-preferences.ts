@@ -34,7 +34,12 @@ export type StudentWorkViewPreferences = {
 
 export const STUDENT_WORK_VIEW_STORAGE_KEY = 'yawp.student-work-view';
 
-const DOCUMENT_GROUP_MODES = ['class', 'student', 'assignment', 'status'] as const;
+const DOCUMENT_GROUP_MODES = [
+  'class',
+  'student',
+  'assignment',
+  'status',
+] as const;
 
 function parseIdListPreference(
   parsed: Record<string, unknown>,
@@ -283,7 +288,10 @@ export function mergeStoredStudentWorkSearchParams(params: {
     }
   }
 
-  if (!next.has('assignment') && params.storedPreferences.assignmentIds?.length) {
+  if (
+    !next.has('assignment') &&
+    params.storedPreferences.assignmentIds?.length
+  ) {
     const serialized = serializeDocumentWorkFilterIds(
       params.storedPreferences.assignmentIds
     );

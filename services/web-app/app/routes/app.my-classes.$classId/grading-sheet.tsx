@@ -158,9 +158,7 @@ export function GradingSheet({
   const isGenerating = isAiRequestInFlight || isAiRetrying;
 
   const isMultiple = documents.length > 1;
-  const existingGrade = !isMultiple
-    ? documents[0]?.latestSubmission
-    : null;
+  const existingGrade = !isMultiple ? documents[0]?.latestSubmission : null;
   const isEditing = !isMultiple && !!existingGrade;
 
   // Initialize form with existing grade data when editing
@@ -272,7 +270,8 @@ export function GradingSheet({
       rubricScores,
     };
     if (normalizedScore) payload.score = normalizedScore;
-    if (normalizedPercent !== null) payload.numericPercentage = normalizedPercent;
+    if (normalizedPercent !== null)
+      payload.numericPercentage = normalizedPercent;
     if (normalizedLetter) payload.letterGrade = normalizedLetter;
     if (!isEditing && releaseImmediately) {
       payload.releasedAt = new Date().toISOString();
@@ -344,10 +343,13 @@ export function GradingSheet({
     ) {
       hasRetriedAiFormRef.current = true;
       setIsAiRetrying(true);
-      aiFetcher.submit(cloneFormDataWithFallbackRetry(pendingAiFormRef.current), {
-        method: 'POST',
-        action: '/api/domain/grade-essay-ai',
-      });
+      aiFetcher.submit(
+        cloneFormDataWithFallbackRetry(pendingAiFormRef.current),
+        {
+          method: 'POST',
+          action: '/api/domain/grade-essay-ai',
+        }
+      );
       return;
     }
 

@@ -21,6 +21,7 @@ import { MarkdownContent } from '~/components/ai-chat/assistant-markdown';
 import { SlideDeckCard } from '~/components/ai-chat/slide-deck-card';
 import { readSlideDeck } from '~/domain/lesson-planner/slide-deck';
 import { buildLessonPacket } from '~/domain/lesson-planner/lesson-packet';
+import { packetKindForMaterial } from '~/domain/lesson-planner/lesson-material';
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   const access = await getLessonPlannerAccess(request);
@@ -47,9 +48,22 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
         select: {
           id: true,
+          createdAt: true,
           content: true,
           keptAudience: true,
           keptTitle: true,
+        },
+      },
+      materials: {
+        orderBy: [{ sourceCreatedAt: 'asc' }, { blockKey: 'asc' }],
+        select: {
+          id: true,
+          sourceCreatedAt: true,
+          blockKey: true,
+          kind: true,
+          title: true,
+          audience: true,
+          content: true,
         },
       },
     },
@@ -64,12 +78,43 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         : (klass.grade ?? null)))
     : null;
 
+  // Kept replies and individually saved materials are one document, ordered by
+  // the reply each came from so the packet reads in lesson order rather than in
+  // the order the teacher happened to click.
+  const sections = [
+    ...conversation.messages.map((message) => ({
+      at: message.createdAt.getTime(),
+      order: 0,
+      section: {
+        id: message.id,
+        content: message.content,
+        keptAudience: message.keptAudience,
+        keptTitle: message.keptTitle,
+      },
+    })),
+    ...conversation.materials.map((material) => ({
+      at: material.sourceCreatedAt.getTime(),
+      // A material sits after the reply that produced it.
+      order: 1,
+      section: {
+        id: material.id,
+        content: material.content,
+        keptAudience: material.audience,
+        keptTitle: material.title,
+        kind: packetKindForMaterial(material.kind),
+        origin: 'material' as const,
+      },
+    })),
+  ]
+    .sort((a, b) => a.at - b.at || a.order - b.order)
+    .map((entry) => entry.section);
+
   return {
     conversationId: conversation.id,
     packet: buildLessonPacket({
       title: conversation.packetTitle ?? conversation.title,
       className,
-      sections: conversation.messages,
+      sections,
     }),
     // Kept separate from the packet title so a blank field falls back rather
     // than saving the conversation title as an explicit name.
@@ -105,14 +150,24 @@ export default function LessonPacketRoute() {
     });
   }
 
-  function renameSection(messageId: string, sectionTitle: string) {
+  function renameSection(
+    section: { id: string; origin: 'reply' | 'material' },
+    sectionTitle: string
+  ) {
     fetcher.submit(
-      {
-        intent: 'rename-section',
-        conversationId,
-        messageId,
-        sectionTitle,
-      },
+      section.origin === 'material'
+        ? {
+            intent: 'rename-material',
+            conversationId,
+            materialId: section.id,
+            sectionTitle,
+          }
+        : {
+            intent: 'rename-section',
+            conversationId,
+            messageId: section.id,
+            sectionTitle,
+          },
       { method: 'post', action: '/api/domain/lesson-planner/packet' }
     );
   }
@@ -323,7 +378,7 @@ export default function LessonPacketRoute() {
                           defaultValue={section.title}
                           maxLength={120}
                           onBlur={(event) =>
-                            renameSection(section.id, event.target.value)
+                            renameSection(section, event.target.value)
                           }
                           className="w-full rounded border border-transparent bg-transparent px-1 py-0.5 font-semibold hover:border-border focus:border-border focus:outline-none print:border-0 print:px-0"
                         />

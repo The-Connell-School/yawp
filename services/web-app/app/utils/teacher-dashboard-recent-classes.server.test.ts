@@ -166,9 +166,7 @@ describe('getTeacherRecentActiveClassIds', () => {
       'class-4',
       'class-3',
     ]);
-    expect(recentClassIds).toHaveLength(
-      TEACHER_DASHBOARD_RECENT_CLASS_LIMIT
-    );
+    expect(recentClassIds).toHaveLength(TEACHER_DASHBOARD_RECENT_CLASS_LIMIT);
   });
 
   test('scopes document lookup to the teacher classes and student document progress', async () => {
@@ -188,7 +186,9 @@ describe('getTeacherRecentActiveClassIds', () => {
               classAssignmentId: null,
               assignmentId: null,
               membership: {
-                classesAsStudent: { some: { id: { in: ['class-a', 'class-b'] } } },
+                classesAsStudent: {
+                  some: { id: { in: ['class-a', 'class-b'] } },
+                },
               },
             },
           ]),

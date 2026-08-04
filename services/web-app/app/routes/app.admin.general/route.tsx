@@ -5,10 +5,7 @@ import {
 } from 'react-router';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { requireAdmin } from '~/utils/auth.server';
-import {
-  CLASS_ART_LIBRARY,
-  formatClassArtCredit,
-} from '~/utils/class-art';
+import { CLASS_ART_LIBRARY, formatClassArtCredit } from '~/utils/class-art';
 
 export async function loader({ request }: LoaderFunctionArgs) {
   await requireAdmin(request);

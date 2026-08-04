@@ -521,6 +521,7 @@ model LessonPlanConversation {
   originClassAssignmentId String?
   originClassAssignment   ClassAssignment?    @relation(fields: [originClassAssignmentId], references: [id], onDelete: SetNull)
   messages                LessonPlanMessage[]
+  materials               LessonPlanMaterial[]
 
   @@index([membershipId, updatedAt(sort: Desc)])
   @@index([organizationId])
@@ -548,6 +549,33 @@ model LessonPlanMessage {
 
   @@index([conversationId, createdAt])
   @@index([conversationId, keptAt])
+}
+
+/// One piece of teaching material the teacher pulled out of a planner reply and
+/// into their lesson packet — a handout, a sample piece of writing, an exit
+/// ticket, an answer key. Kept separately from the reply it came out of so a
+/// teacher can take the handout without taking the whole lesson plan around it.
+/// `blockKey` identifies which material block in that reply this is, so adding
+/// the same one twice is one add. `content` is a copy of the Markdown rather
+/// than a pointer into the message, so the saved material survives any later
+/// change to how replies are parsed, and can be renamed on its own.
+model LessonPlanMaterial {
+  id              String                 @id @default(cuid())
+  createdAt       DateTime               @default(now()) @db.Timestamptz(6)
+  conversationId  String
+  conversation    LessonPlanConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sourceMessageId String
+  /// The message's own createdAt, copied so the packet reads in lesson order
+  /// rather than in the order the teacher happened to click.
+  sourceCreatedAt DateTime               @db.Timestamptz(6)
+  blockKey        String
+  kind            String
+  title           String
+  audience        String
+  content         String
+
+  @@unique([conversationId, sourceMessageId, blockKey])
+  @@index([conversationId, sourceCreatedAt])
 }
 
 /// A saved, forward-looking writing growth plan for one student, produced by

@@ -36,7 +36,8 @@ export async function pickClassArtIndexForOrganization(
   organizationId: string,
   random: () => number = Math.random
 ): Promise<number> {
-  const { getClassArtByKey, CLASS_ART_POOL } = await import('~/utils/class-art');
+  const { getClassArtByKey, CLASS_ART_POOL } =
+    await import('~/utils/class-art');
   const key = await pickClassArtKeyForOrganization(organizationId, random);
   const index = CLASS_ART_POOL.findIndex((entry) => entry.key === key);
   if (index >= 0) return index;

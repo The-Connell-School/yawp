@@ -81,12 +81,14 @@ export function parseApHistorySnapshot(value: unknown): ApHistorySnapshot {
   return ApHistorySnapshotSchema.parse(value);
 }
 
-export function isApHistorySnapshot(value: unknown): value is ApHistorySnapshot {
+export function isApHistorySnapshot(
+  value: unknown
+): value is ApHistorySnapshot {
   return ApHistorySnapshotSchema.safeParse(value).success;
 }
 
 export function buildApHistorySnapshot(
-  entry: LibraryEntryForSnapshot,
+  entry: LibraryEntryForSnapshot
 ): ApHistorySnapshot {
   const course = CourseSchema.parse(entry.course);
   const essayType = EssayTypeSchema.parse(entry.essayType);

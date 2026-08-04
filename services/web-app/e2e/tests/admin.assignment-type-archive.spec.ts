@@ -18,13 +18,19 @@ test.describe.serial('Admin assignment type archive', () => {
       });
 
       await signIn('admin.e2e@yawp.test', 'admin-e2e-password');
-      await page.goto(`/app/admin/assignment-types/${e2eContext.assignmentTypeId}`);
+      await page.goto(
+        `/app/admin/assignment-types/${e2eContext.assignmentTypeId}`
+      );
       await expect(
         page.getByRole('heading', { name: 'Edit assignment type' })
       ).toBeVisible();
 
-      await page.getByRole('button', { name: 'Archive assignment type' }).click();
-      await page.getByRole('button', { name: 'Archive Assignment Type' }).click();
+      await page
+        .getByRole('button', { name: 'Archive assignment type' })
+        .click();
+      await page
+        .getByRole('button', { name: 'Archive Assignment Type' })
+        .click();
       await page.waitForURL('**/app/admin/assignments');
 
       const archived = await prisma.assignmentType.findUnique({
@@ -34,7 +40,9 @@ test.describe.serial('Admin assignment type archive', () => {
       expect(archived?.id).toBe(e2eContext.assignmentTypeId);
       expect(archived?.archivedAt).toBeInstanceOf(Date);
 
-      await page.goto(`/app/admin/assignment-types/${e2eContext.assignmentTypeId}`);
+      await page.goto(
+        `/app/admin/assignment-types/${e2eContext.assignmentTypeId}`
+      );
       await expect(page.getByRole('button', { name: 'Restore' })).toBeVisible();
 
       await page.context().clearCookies();
@@ -53,16 +61,29 @@ test.describe.serial('Admin assignment type archive', () => {
         .click();
       await expect(page.getByRole('dialog')).toBeVisible();
       // ...but the archived type no longer appears as a selectable option.
-      await page.getByRole('dialog').locator('[role="combobox"]').first().click();
-      await expect(page.getByRole('option', { name: 'E2E Course' })).toHaveCount(0);
+      await page
+        .getByRole('dialog')
+        .locator('[role="combobox"]')
+        .first()
+        .click();
+      await expect(
+        page.getByRole('option', { name: 'E2E Course' })
+      ).toHaveCount(0);
       await page.keyboard.press('Escape');
-      await page.getByRole('dialog').getByRole('button', { name: 'Cancel' }).click();
+      await page
+        .getByRole('dialog')
+        .getByRole('button', { name: 'Cancel' })
+        .click();
 
       await page.context().clearCookies();
       await signIn('admin.e2e@yawp.test', 'admin-e2e-password');
-      await page.goto(`/app/admin/assignment-types/${e2eContext.assignmentTypeId}`);
+      await page.goto(
+        `/app/admin/assignment-types/${e2eContext.assignmentTypeId}`
+      );
       await page.getByRole('button', { name: 'Restore' }).click();
-      await expect(page.getByRole('button', { name: 'Restore' })).toHaveCount(0);
+      await expect(page.getByRole('button', { name: 'Restore' })).toHaveCount(
+        0
+      );
 
       const restored = await prisma.assignmentType.findUnique({
         where: { id: e2eContext.assignmentTypeId },
@@ -78,8 +99,14 @@ test.describe.serial('Admin assignment type archive', () => {
         .first()
         .click();
       await expect(page.getByRole('dialog')).toBeVisible();
-      await page.getByRole('dialog').locator('[role="combobox"]').first().click();
-      await expect(page.getByRole('option', { name: 'E2E Course' })).toBeVisible();
+      await page
+        .getByRole('dialog')
+        .locator('[role="combobox"]')
+        .first()
+        .click();
+      await expect(
+        page.getByRole('option', { name: 'E2E Course' })
+      ).toBeVisible();
     } finally {
       await prisma.assignmentType.update({
         where: { id: e2eContext.assignmentTypeId },

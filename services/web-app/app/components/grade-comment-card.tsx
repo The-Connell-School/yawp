@@ -154,9 +154,7 @@ export function GradeCommentCard({
         <div className="mt-2 space-y-1 border-t pt-2">
           {comment.responses.map((r) => (
             <div key={r.id} className="whitespace-pre-line text-sm">
-              <span className="font-medium">
-                {getCommentAuthorLabel(r)}:
-              </span>{' '}
+              <span className="font-medium">{getCommentAuthorLabel(r)}:</span>{' '}
               {r.content}
             </div>
           ))}

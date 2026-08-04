@@ -95,7 +95,10 @@ export function getQuickWritingLessonBySlug(
 }
 
 export function getQuickWritingLessonGroups() {
-  const groups = new Map<QuickWritingLesson['category'], QuickWritingLesson[]>();
+  const groups = new Map<
+    QuickWritingLesson['category'],
+    QuickWritingLesson[]
+  >();
 
   for (const lesson of getQuickWritingLessons()) {
     const existing = groups.get(lesson.category) ?? [];
@@ -148,7 +151,9 @@ function parsePracticePrompts(
   for (const match of lesson.content.matchAll(PRACTICE_EXERCISE_PATTERN)) {
     const position = Number(match[1]);
     const block = match[2].trim();
-    const [exerciseRaw, instructionRaw] = block.split(/\n\n\*\*Your turn:\*\*\s*/);
+    const [exerciseRaw, instructionRaw] = block.split(
+      /\n\n\*\*Your turn:\*\*\s*/
+    );
     const exercise = cleanPracticeText(exerciseRaw);
     const instruction = cleanPracticeText(instructionRaw ?? '');
 

@@ -10,7 +10,10 @@ const requireUserId = mock();
 const requireMembership = mock();
 
 mock.module('~/utils/db.server', () => ({ prisma }));
-mock.module('~/utils/auth.server', () => ({ requireUserId, requireMembership }));
+mock.module('~/utils/auth.server', () => ({
+  requireUserId,
+  requireMembership,
+}));
 
 const { action } = await import('./route');
 
@@ -50,7 +53,10 @@ describe('api.model.submission-comment', () => {
       }),
     } as any);
 
-    const payload = (response as { data: Record<string, unknown>; init?: { status?: number } });
+    const payload = response as {
+      data: Record<string, unknown>;
+      init?: { status?: number };
+    };
     expect(payload.init?.status).toBe(201);
     expect(payload.data.success).toBe(true);
     expect((payload.data.comment as any).id).toBe('comment-1');
@@ -72,7 +78,10 @@ describe('api.model.submission-comment', () => {
       }),
     } as any);
 
-    const payload = (response as { data: Record<string, unknown>; init?: { status?: number } });
+    const payload = response as {
+      data: Record<string, unknown>;
+      init?: { status?: number };
+    };
     expect(payload.init?.status).toBe(403);
   });
 });

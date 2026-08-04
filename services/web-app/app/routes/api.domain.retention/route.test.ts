@@ -55,8 +55,8 @@ describe('api.domain.retention', () => {
     expect(prisma.documentWriteJournal.deleteMany).toHaveBeenCalledTimes(1);
 
     const journalCutoff =
-      prisma.documentWriteJournal.deleteMany.mock.calls[0]?.[0]?.where?.createdAt
-        ?.lt;
+      prisma.documentWriteJournal.deleteMany.mock.calls[0]?.[0]?.where
+        ?.createdAt?.lt;
     const revisionCutoff =
       prisma.documentRevision.deleteMany.mock.calls[0]?.[0]?.where?.createdAt
         ?.lt;

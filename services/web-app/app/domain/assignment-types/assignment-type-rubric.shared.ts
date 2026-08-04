@@ -35,7 +35,9 @@ export const DEFAULT_SCORING_SCALE: ScoringScaleData = {
 
 export const DEFAULT_RUBRIC: RubricData = { categories: [] };
 
-export const DEFAULT_PROMPT_CONFIG: PromptConfigData = { gradingInstructions: '' };
+export const DEFAULT_PROMPT_CONFIG: PromptConfigData = {
+  gradingInstructions: '',
+};
 
 export function parseScoringScale(raw: unknown): ScoringScaleData {
   const d = raw as Partial<ScoringScaleData> | null;
@@ -70,7 +72,10 @@ export function parsePromptConfig(raw: unknown): PromptConfigData {
       })
     | null;
 
-  if (typeof d?.gradingInstructions === 'string' && d.gradingInstructions.trim()) {
+  if (
+    typeof d?.gradingInstructions === 'string' &&
+    d.gradingInstructions.trim()
+  ) {
     return {
       gradingInstructions: d.gradingInstructions,
       instructionsPreset: d?.instructionsPreset ?? '',

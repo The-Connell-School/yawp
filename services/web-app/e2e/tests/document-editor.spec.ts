@@ -1,12 +1,11 @@
 import { test, expect } from '../test-setup';
 import { EDITOR_SELECTOR } from '../test-helpers';
 import { createE2EPrismaClient } from '../prisma-client';
-import {
-  invalidateUserSessions,
-} from '../db-helpers';
+import { invalidateUserSessions } from '../db-helpers';
 
 const PASTE_SHORTCUT = process.platform === 'darwin' ? 'Meta+V' : 'Control+V';
-const SELECT_ALL_SHORTCUT = process.platform === 'darwin' ? 'Meta+A' : 'Control+A';
+const SELECT_ALL_SHORTCUT =
+  process.platform === 'darwin' ? 'Meta+A' : 'Control+A';
 const COPY_SHORTCUT = process.platform === 'darwin' ? 'Meta+C' : 'Control+C';
 
 async function expectExitControlVisible(page: import('@playwright/test').Page) {
@@ -16,9 +15,11 @@ async function expectExitControlVisible(page: import('@playwright/test').Page) {
     return;
   }
 
-  await expect(page.getByRole('link', { name: /^exit$/i }).first()).toBeVisible({
-    timeout: 10000,
-  });
+  await expect(page.getByRole('link', { name: /^exit$/i }).first()).toBeVisible(
+    {
+      timeout: 10000,
+    }
+  );
 }
 
 test.describe.serial('Document Editor E2E Tests', () => {
@@ -82,7 +83,9 @@ test.describe.serial('Document Editor E2E Tests', () => {
     await signIn('jdoe@brock.software', 'johndoe');
     await helpers.openDocument(e2eContext.editedDocumentId, { retry: true });
     // Left padding of scroll pane (inside p-5), not on ProseMirror text
-    await page.getByTestId('document-editor-scroll').click({ position: { x: 6, y: 320 } });
+    await page
+      .getByTestId('document-editor-scroll')
+      .click({ position: { x: 6, y: 320 } });
     const editor = helpers.getEditor();
     await expect(editor).toBeFocused();
     await editor.pressSequentially('z', { delay: 30 });
@@ -196,7 +199,8 @@ test.describe.serial('Document Editor E2E Tests', () => {
     await helpers.openDocument(e2eContext.editedDocumentId, { retry: true });
     const editor = helpers.getEditor();
 
-    let firstSaveRoute: Parameters<Parameters<typeof page.route>[1]>[0] | null = null;
+    let firstSaveRoute: Parameters<Parameters<typeof page.route>[1]>[0] | null =
+      null;
     let firstSaveReleased = false;
     let seenSaveCount = 0;
 
@@ -279,9 +283,15 @@ test.describe.serial('Document Editor E2E Tests', () => {
       // The auth heartbeat checks /api/auth/check on focus/visibility events.
       // Simulate a visibility change to trigger the re-check after session invalidation.
       await page.evaluate(() => {
-        Object.defineProperty(document, 'visibilityState', { value: 'hidden', writable: true });
+        Object.defineProperty(document, 'visibilityState', {
+          value: 'hidden',
+          writable: true,
+        });
         document.dispatchEvent(new Event('visibilitychange'));
-        Object.defineProperty(document, 'visibilityState', { value: 'visible', writable: true });
+        Object.defineProperty(document, 'visibilityState', {
+          value: 'visible',
+          writable: true,
+        });
         document.dispatchEvent(new Event('visibilitychange'));
       });
       await expect(
@@ -289,7 +299,11 @@ test.describe.serial('Document Editor E2E Tests', () => {
       ).toBeVisible({ timeout: 10000 });
       await expect
         .poll(
-          async () => page.locator(EDITOR_SELECTOR).first().getAttribute('contenteditable'),
+          async () =>
+            page
+              .locator(EDITOR_SELECTOR)
+              .first()
+              .getAttribute('contenteditable'),
           { timeout: 5000 }
         )
         .toBe('false');
@@ -325,7 +339,11 @@ test.describe.serial('Document Editor E2E Tests', () => {
       ).toBeVisible({ timeout: 10000 });
       await expect
         .poll(
-          async () => page.locator(EDITOR_SELECTOR).first().getAttribute('contenteditable'),
+          async () =>
+            page
+              .locator(EDITOR_SELECTOR)
+              .first()
+              .getAttribute('contenteditable'),
           { timeout: 5000 }
         )
         .toBe('false');
@@ -379,14 +397,18 @@ test.describe.serial('Document Editor E2E Tests', () => {
     const prisma = createE2EPrismaClient();
     try {
       await signIn('jdoe@brock.software', 'johndoe');
-      await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
+      await page
+        .context()
+        .grantPermissions(['clipboard-read', 'clipboard-write']);
 
       await helpers.openDocument(e2eContext.editedDocumentId, { retry: true });
       const editor = helpers.getEditor();
       const longText = 'x'.repeat(201);
 
       // Clear any prior paste alerts for this document
-      await prisma.pasteAlert.deleteMany({ where: { documentId: e2eContext.editedDocumentId } });
+      await prisma.pasteAlert.deleteMany({
+        where: { documentId: e2eContext.editedDocumentId },
+      });
 
       await page.evaluate(async (text) => {
         await navigator.clipboard.writeText(text);
@@ -396,7 +418,9 @@ test.describe.serial('Document Editor E2E Tests', () => {
 
       // Wait for the paste-alert POST to complete
       const pasteAlertResponse = page.waitForResponse(
-        (res) => res.url().includes('/api/paste-alert') && res.request().method() === 'POST',
+        (res) =>
+          res.url().includes('/api/paste-alert') &&
+          res.request().method() === 'POST',
         { timeout: 15000 }
       );
 
@@ -422,7 +446,9 @@ test.describe.serial('Document Editor E2E Tests', () => {
     helpers,
   }) => {
     await signIn('jdoe@brock.software', 'johndoe');
-    await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
+    await page
+      .context()
+      .grantPermissions(['clipboard-read', 'clipboard-write']);
 
     await helpers.openDocument(e2eContext.editedDocumentId, { retry: true });
     const editor = helpers.getEditor();
@@ -464,7 +490,9 @@ test.describe.serial('Document Editor E2E Tests', () => {
 
     await page.waitForResponse(
       (r) =>
-        r.url().includes(`/api/model/document/${e2eContext.editedDocumentId}`) &&
+        r
+          .url()
+          .includes(`/api/model/document/${e2eContext.editedDocumentId}`) &&
         r.request().method() === 'POST',
       { timeout: 15000 }
     );

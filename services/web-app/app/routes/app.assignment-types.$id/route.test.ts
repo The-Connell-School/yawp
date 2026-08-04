@@ -31,9 +31,8 @@ const createDocumentForAssignmentType = mock();
 const redirectWithToast = mock();
 const getAvailableAssignmentTypesForScopes = mock();
 
-const assignmentTypeAccessActual = await import(
-  '~/utils/assignment-type-access.server'
-);
+const assignmentTypeAccessActual =
+  await import('~/utils/assignment-type-access.server');
 
 mock.module('~/utils/db.server', () => ({ prisma }));
 mock.module('~/utils/auth.server', () => ({
@@ -88,9 +87,7 @@ function mockActionAssignmentTypeAvailable({
   systemKey = null as string | null,
 } = {}) {
   prisma.assignmentType.findFirst.mockImplementation(async (args: any) =>
-    args.select?.systemKey !== undefined
-      ? { id, systemKey }
-      : { id }
+    args.select?.systemKey !== undefined ? { id, systemKey } : { id }
   );
 }
 

@@ -25,7 +25,9 @@ export async function createDeployedAssignment(params: {
       ...(params.submitForGrade !== undefined
         ? { submitForGrade: params.submitForGrade }
         : {}),
-      ...(params.pointValue !== undefined ? { pointValue: params.pointValue } : {}),
+      ...(params.pointValue !== undefined
+        ? { pointValue: params.pointValue }
+        : {}),
     },
   });
   const classAssignment = await params.prisma.classAssignment.create({

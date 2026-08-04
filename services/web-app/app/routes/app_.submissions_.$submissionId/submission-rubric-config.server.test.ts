@@ -1,9 +1,8 @@
 import { afterAll, beforeEach, describe, expect, spyOn, test } from 'bun:test';
 import type { ResolvedAssignmentTypeGradingConfig } from '~/domain/assignment-types/assignment-type-grading-config.server';
 
-const assignmentTypeGradingConfig = await import(
-  '~/domain/assignment-types/assignment-type-grading-config.server'
-);
+const assignmentTypeGradingConfig =
+  await import('~/domain/assignment-types/assignment-type-grading-config.server');
 const resolveAssignmentTypeGradingConfig = spyOn(
   assignmentTypeGradingConfig,
   'resolveAssignmentTypeGradingConfig'
@@ -38,9 +37,8 @@ function resolvedGradingConfig(
   };
 }
 
-const { resolveRubricConfigForSubmission } = await import(
-  './submission-rubric-config.server'
-);
+const { resolveRubricConfigForSubmission } =
+  await import('./submission-rubric-config.server');
 
 afterAll(() => {
   resolveAssignmentTypeGradingConfig.mockRestore();
@@ -63,7 +61,8 @@ describe('resolveRubricConfigForSubmission', () => {
             {
               key: 'ideas_and_analysis',
               label: 'Ideas and Analysis',
-              description: 'Generate productive ideas and analyze perspectives.',
+              description:
+                'Generate productive ideas and analyze perspectives.',
               weight: 0.25,
             },
           ],
@@ -115,7 +114,9 @@ describe('resolveRubricConfigForSubmission', () => {
       },
     });
 
-    expect(config.categories.map((category) => category.key)).toEqual(['claim']);
+    expect(config.categories.map((category) => category.key)).toEqual([
+      'claim',
+    ]);
     expect(resolveAssignmentTypeGradingConfig).toHaveBeenCalledWith({
       assignmentTypeId: 'assignment-type-custom',
     });

@@ -102,7 +102,10 @@ const books = [
 ];
 
 const testimonials = [
-  ['"I\'ve never felt more proud of an essay in my life."', 'Haley M., 11th grader'],
+  [
+    '"I\'ve never felt more proud of an essay in my life."',
+    'Haley M., 11th grader',
+  ],
   [
     '"YAWP! is a game-changer. My students and I actually look forward to the writing process now."',
     'Mr. Scott, History Teacher',
@@ -221,7 +224,9 @@ export default function IndexRoute() {
 
       <section className="yawp-section yawp-beige-section">
         <div className="yawp-section-inner yawp-solution-inner">
-          <h2>The YAWP! Solution: Real Teachers, an AI Tutor, Amazing Essays</h2>
+          <h2>
+            The YAWP! Solution: Real Teachers, an AI Tutor, Amazing Essays
+          </h2>
           <div className="yawp-solution-stack">
             {solutionBlocks.map((block, index) => (
               <article

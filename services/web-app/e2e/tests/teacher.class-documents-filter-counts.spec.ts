@@ -163,7 +163,10 @@ test.describe('Teacher class documents practice visibility', () => {
       });
       ericMembershipId = eric.memberships[0]!.id;
 
-      for (const title of [ericDocTitle, `Bored in the USA follow-up ${suffix}`]) {
+      for (const title of [
+        ericDocTitle,
+        `Bored in the USA follow-up ${suffix}`,
+      ]) {
         const body = `${title} body`;
         const doc = await prisma.document.create({
           data: {
@@ -210,7 +213,9 @@ test.describe('Teacher class documents practice visibility', () => {
       );
       await page.waitForLoadState('networkidle');
 
-      const filteredTable = page.getByRole('table', { name: /class documents/i });
+      const filteredTable = page.getByRole('table', {
+        name: /class documents/i,
+      });
       await expect(filteredTable.getByText(ericDocTitle)).toBeVisible();
       await expect(await parseAllStatusCount(page)).toBe(2);
     } finally {

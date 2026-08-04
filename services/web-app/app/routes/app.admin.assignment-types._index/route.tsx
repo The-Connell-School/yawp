@@ -122,7 +122,9 @@ export default function AssignmentTypesRoute() {
                   className="w-full"
                   disabled={fetcher.state !== 'idle'}
                 >
-                  {fetcher.state === 'idle' ? 'Create Assignment Type' : 'Creating...'}
+                  {fetcher.state === 'idle'
+                    ? 'Create Assignment Type'
+                    : 'Creating...'}
                 </Button>
               </fetcher.Form>
             </SheetContent>
@@ -139,7 +141,9 @@ export default function AssignmentTypesRoute() {
             </div>
           ) : courses.length === 0 ? (
             <div className="flex h-full flex-col items-center justify-center border border-dashed bg-muted">
-              <span className="text-lg font-bold">No assignment types found</span>
+              <span className="text-lg font-bold">
+                No assignment types found
+              </span>
               <span className="text-sm text-muted-foreground">
                 Create your first assignment type to get started
               </span>

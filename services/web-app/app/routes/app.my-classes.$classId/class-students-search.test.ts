@@ -21,8 +21,6 @@ describe('filterClassStudentsByQuery', () => {
   });
 
   test('matches student emails when names are missing', () => {
-    expect(filterClassStudentsByQuery(students, 'zoe@')).toEqual([
-      students[2],
-    ]);
+    expect(filterClassStudentsByQuery(students, 'zoe@')).toEqual([students[2]]);
   });
 });

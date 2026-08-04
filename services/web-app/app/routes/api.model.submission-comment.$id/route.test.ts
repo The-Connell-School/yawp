@@ -9,7 +9,10 @@ const requireUserId = mock();
 const requireMembership = mock();
 
 mock.module('~/utils/db.server', () => ({ prisma }));
-mock.module('~/utils/auth.server', () => ({ requireUserId, requireMembership }));
+mock.module('~/utils/auth.server', () => ({
+  requireUserId,
+  requireMembership,
+}));
 
 const { action } = await import('./route');
 
@@ -38,7 +41,7 @@ describe('api.model.submission-comment.$id', () => {
       params: { id: 'comment-1' },
     } as any);
 
-    const payload = (response as { data: Record<string, unknown> });
+    const payload = response as { data: Record<string, unknown> };
     expect(payload.data.success).toBe(true);
     expect(prisma.submissionComment.delete).toHaveBeenCalledWith({
       where: { id: 'comment-1' },
@@ -56,7 +59,10 @@ describe('api.model.submission-comment.$id', () => {
       params: { id: 'nonexistent' },
     } as any);
 
-    const payload = (response as { data: Record<string, unknown>; init?: { status?: number } });
+    const payload = response as {
+      data: Record<string, unknown>;
+      init?: { status?: number };
+    };
     expect(payload.init?.status).toBe(404);
   });
 });

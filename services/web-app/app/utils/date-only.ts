@@ -13,7 +13,9 @@ export function formatDateOnly(
   }).format(date);
 }
 
-export function toDateInputValue(value: Date | string | null | undefined): string {
+export function toDateInputValue(
+  value: Date | string | null | undefined
+): string {
   if (!value) return '';
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return '';

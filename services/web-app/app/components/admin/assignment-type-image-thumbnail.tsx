@@ -54,8 +54,7 @@ export function AssignmentTypeImageThumbnail({
 }: AssignmentTypeImageThumbnailProps) {
   const hasSavedImage = Boolean(imageId && !hasRemovedImage);
   const hasImage = Boolean(previewUrl || hasSavedImage);
-  const src =
-    previewUrl ?? (imageId ? `/api/image/course/${imageId}` : null);
+  const src = previewUrl ?? (imageId ? `/api/image/course/${imageId}` : null);
 
   function pickImage() {
     if (disabled) return;

@@ -101,11 +101,11 @@ export function ScoringScaleEditor({
 }) {
   const [internalScale, setInternalScale] = useState<ScoringScaleData>(initial);
   const scale = value ?? internalScale;
-  const setScale = (next: ScoringScaleData | ((current: ScoringScaleData) => ScoringScaleData)) => {
+  const setScale = (
+    next: ScoringScaleData | ((current: ScoringScaleData) => ScoringScaleData)
+  ) => {
     const resolved =
-      typeof next === 'function'
-        ? next(value ?? internalScale)
-        : next;
+      typeof next === 'function' ? next(value ?? internalScale) : next;
     if (onChange) {
       onChange(resolved);
     } else {
@@ -237,12 +237,12 @@ function RubricImportPanel({
   const isLoadingSources = sourcesFetcher.state !== 'idle';
   const extractError =
     extractFetcher.data && !extractFetcher.data.success
-      ? extractFetcher.data.message ?? 'Failed to extract rubric.'
+      ? (extractFetcher.data.message ?? 'Failed to extract rubric.')
       : null;
   const copySources = sourcesFetcher.data?.sources ?? [];
   const copyLoadError =
     sourcesFetcher.data?.success === false
-      ? sourcesFetcher.data.message ?? 'Could not load assignment types.'
+      ? (sourcesFetcher.data.message ?? 'Could not load assignment types.')
       : null;
   const selectedSource =
     copySources.find((source) => source.id === selectedSourceId) ?? null;
@@ -425,11 +425,15 @@ function RubricImportPanel({
                 id="rubric-import-pdf"
                 type="file"
                 accept="application/pdf,.pdf"
-                onChange={(event) => setPdfFile(event.target.files?.[0] ?? null)}
+                onChange={(event) =>
+                  setPdfFile(event.target.files?.[0] ?? null)
+                }
                 disabled={isExtracting}
               />
               {pdfFile ? (
-                <p className="truncate text-sm text-muted-foreground">{pdfFile.name}</p>
+                <p className="truncate text-sm text-muted-foreground">
+                  {pdfFile.name}
+                </p>
               ) : null}
             </div>
             <div className="space-y-2">
@@ -505,7 +509,9 @@ function RubricImportPanel({
                 {selectedSource ? (
                   <p className="text-sm text-muted-foreground">
                     Copies {selectedSource.categoryCount}{' '}
-                    {selectedSource.categoryCount === 1 ? 'category' : 'categories'}{' '}
+                    {selectedSource.categoryCount === 1
+                      ? 'category'
+                      : 'categories'}{' '}
                     and the scoring scale from {selectedSource.title}.
                   </p>
                 ) : null}
@@ -734,10 +740,13 @@ export function RubricEditor({
       setInternalCats(resolved);
     }
   };
-  const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
+  const [editingCategoryId, setEditingCategoryId] = useState<string | null>(
+    null
+  );
   const totalWeight = cats.reduce((sum, cat) => sum + (cat.weight || 0), 0);
   const weightOk = Math.abs(totalWeight - 1) < 0.001;
-  const editingCategory = cats.find((cat) => cat.id === editingCategoryId) ?? null;
+  const editingCategory =
+    cats.find((cat) => cat.id === editingCategoryId) ?? null;
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -987,8 +996,8 @@ export function PromptConfigEditor({
     <div className="space-y-3">
       {usesBuiltInPreset && (
         <p className="text-sm text-muted-foreground text-pretty">
-          This grading assistant uses built-in instructions. Add custom instructions
-          below to override them.
+          This grading assistant uses built-in instructions. Add custom
+          instructions below to override them.
         </p>
       )}
       <div className="space-y-1.5">

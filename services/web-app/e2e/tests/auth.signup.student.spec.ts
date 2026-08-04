@@ -107,7 +107,7 @@ test.describe('Authentication - student sign up', () => {
                 target_type: { target: studentEmail, type: 'onboard-student' },
               },
             }),
-          { timeout: 5000, message: 'Invitation not created in time' },
+          { timeout: 5000, message: 'Invitation not created in time' }
         )
         .not.toBeNull();
 

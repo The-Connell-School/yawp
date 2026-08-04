@@ -84,7 +84,7 @@ describe('AP History snapshot schema', () => {
 
     dbqEntry.sources[0].body = 'Library row changed after assignment creation.';
     expect(snapshot.sources[0].body).toBe(
-      'The only thing we have to fear is fear itself.',
+      'The only thing we have to fear is fear itself.'
     );
   });
 
@@ -111,7 +111,7 @@ describe('AP History snapshot schema', () => {
       parseApHistorySnapshot({
         ...snapshot,
         rubric: { rubricId: 'ap-history-leq-2026', totalPoints: 6 },
-      }),
+      })
     ).toThrow();
   });
 
@@ -128,7 +128,7 @@ describe('AP History snapshot schema', () => {
       parseApHistorySnapshot({
         ...snapshot,
         rubric: { rubricId: 'ap-history-dbq-2026', totalPoints: 7 },
-      }),
+      })
     ).toThrow();
   });
 
@@ -137,7 +137,7 @@ describe('AP History snapshot schema', () => {
       buildApHistorySnapshot({
         ...dbqEntry,
         course: 'ap-world',
-      }),
+      })
     ).toThrow();
   });
 
@@ -151,7 +151,7 @@ describe('AP History snapshot schema', () => {
             mediaType: 'video',
           },
         ],
-      }),
+      })
     ).toThrow();
   });
 });

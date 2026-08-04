@@ -54,9 +54,9 @@ test.describe.serial('Teacher class cards with procedural art', () => {
       .locator(`a[href="/app/my-classes/${e2eContext.classId}"]`)
       .first();
     await expect(card).toBeVisible();
-    const dashboardArt = await card.getByTestId('class-art').evaluate((node) =>
-      getComputedStyle(node).backgroundImage
-    );
+    const dashboardArt = await card
+      .getByTestId('class-art')
+      .evaluate((node) => getComputedStyle(node).backgroundImage);
 
     await card.click();
     await page.waitForURL(`**/app/my-classes/${e2eContext.classId}`);

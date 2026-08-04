@@ -62,7 +62,9 @@ async function collectTabStops(
           .trim()
           .slice(0, 120),
         href:
-          element instanceof HTMLAnchorElement ? element.getAttribute('href') : null,
+          element instanceof HTMLAnchorElement
+            ? element.getAttribute('href')
+            : null,
         visible:
           rect.width > 0 &&
           rect.height > 0 &&
@@ -252,7 +254,9 @@ test.describe.serial('UA manual accessibility evidence automation', () => {
       page.getByTestId('teacher-training-media-accessibility')
     ).toBeVisible();
     await expect(page.getByRole('link', { name: /^captions$/i })).toBeVisible();
-    await expect(page.getByRole('link', { name: /^transcript$/i })).toBeVisible();
+    await expect(
+      page.getByRole('link', { name: /^transcript$/i })
+    ).toBeVisible();
     await collectTabStops(page, testInfo, 'teacher-lounge-module', 8);
 
     await page.context().clearCookies();
@@ -276,7 +280,9 @@ test.describe.serial('UA manual accessibility evidence automation', () => {
     ).toBeVisible();
     await collectTabStops(page, testInfo, 'admin-organization', 6);
 
-    await page.goto(`/app/admin/assignment-types/${e2eContext.assignmentTypeId}`);
+    await page.goto(
+      `/app/admin/assignment-types/${e2eContext.assignmentTypeId}`
+    );
     await expect(
       page.getByRole('heading', { name: 'Assignment Type Details' })
     ).toBeVisible();

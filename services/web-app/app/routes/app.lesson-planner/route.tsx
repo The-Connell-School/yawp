@@ -31,6 +31,8 @@ import {
 } from '~/components/ai-chat/assistant-markdown';
 import { SlideDeckCard } from '~/components/ai-chat/slide-deck-card';
 import { readSlideDeck } from '~/domain/lesson-planner/slide-deck';
+import { readLessonMaterials } from '~/domain/lesson-planner/lesson-material';
+import { MaterialCard } from '~/components/ai-chat/material-card';
 import {
   mentionsRoomPersonality,
   withStandardSuggestions,
@@ -87,6 +89,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
                 keptAudience: true,
               },
             },
+            materials: {
+              select: { sourceMessageId: true, blockKey: true },
+            },
           },
         })
       : null;
@@ -112,6 +117,11 @@ export async function loader({ request }: LoaderFunctionArgs) {
           id: selected.id,
           title: selected.title,
           messages: selected.messages as ChatMessage[],
+          // "<messageId>:<blockKey>" for every material already in the packet,
+          // so each card knows whether it has been added.
+          addedMaterials: selected.materials.map(
+            (material) => `${material.sourceMessageId}:${material.blockKey}`
+          ),
         }
       : null,
     recommendedPrompts: RECOMMENDED_LESSON_PLANNER_PROMPTS,
@@ -150,6 +160,9 @@ export default function LessonPlannerRoute() {
     message: string;
     conversationKey: string;
   } | null>(null);
+  const [addedMaterials, setAddedMaterials] = useState<Set<string>>(
+    () => new Set(selectedConversation?.addedMaterials ?? [])
+  );
   const conversationId = selectedConversation?.id ?? pendingConversationId;
   const conversationKey = conversationId ?? 'new';
   const transcriptRef = useRef<HTMLDivElement>(null);
@@ -172,6 +185,7 @@ export default function LessonPlannerRoute() {
         ? [...persisted, { role: 'user', content: pendingSubmission.message }]
         : persisted
     );
+    setAddedMaterials(new Set(selectedConversation?.addedMaterials ?? []));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedConversation?.id]);
 
@@ -260,6 +274,32 @@ export default function LessonPlannerRoute() {
         conversationId,
         messageId,
         ...(audience ? { audience } : {}),
+      },
+      { method: 'post', action: '/api/domain/lesson-planner/packet' }
+    );
+  }
+
+  // A material goes into the packet on its own — the teacher wanted the
+  // handout, not the whole lesson plan wrapped around it.
+  function setMaterialAdded(
+    messageId: string,
+    materialKey: string,
+    added: boolean
+  ) {
+    if (!conversationId) return;
+    const token = `${messageId}:${materialKey}`;
+    setAddedMaterials((prev) => {
+      const next = new Set(prev);
+      if (added) next.add(token);
+      else next.delete(token);
+      return next;
+    });
+    packetFetcher.submit(
+      {
+        intent: added ? 'add-material' : 'remove-material',
+        conversationId,
+        messageId,
+        materialKey,
       },
       { method: 'post', action: '/api/domain/lesson-planner/packet' }
     );
@@ -429,6 +469,8 @@ export default function LessonPlannerRoute() {
                   isLast={index === messages.length - 1}
                   isOpeningReply={index === firstAssistantIndex}
                   teacherRaisedRoomPersonality={teacherRaisedRoomPersonality}
+                  addedMaterials={addedMaterials}
+                  onMaterial={setMaterialAdded}
                   conversationId={conversationId}
                   onSuggestion={send}
                   onKeep={setKept}
@@ -572,6 +614,8 @@ function MessageBubble({
   isLast,
   isOpeningReply,
   teacherRaisedRoomPersonality,
+  addedMaterials,
+  onMaterial,
   conversationId,
   onSuggestion,
   onKeep,
@@ -582,6 +626,9 @@ function MessageBubble({
   /** The planner's first reply in this lesson. */
   isOpeningReply: boolean;
   teacherRaisedRoomPersonality: boolean;
+  /** "<messageId>:<blockKey>" for every material already in the packet. */
+  addedMaterials: Set<string>;
+  onMaterial: (messageId: string, materialKey: string, added: boolean) => void;
   conversationId: string | null;
   onSuggestion: (text: string) => void;
   onKeep: (messageId: string, audience: PacketAudience | null) => void;
@@ -608,7 +655,11 @@ function MessageBubble({
   // A deck is rendered as a deck. A deck that failed to build still gets its
   // JSON stripped — a teacher should never be shown the machinery.
   const deckOutcome = readSlideDeck(withDeck);
-  const body = deckOutcome.kind === 'none' ? withDeck : deckOutcome.body;
+  const withMaterials =
+    deckOutcome.kind === 'none' ? withDeck : deckOutcome.body;
+  // Every handout, sample, and exit ticket becomes its own card with its own
+  // way into the packet, rather than something to select and copy out.
+  const { materials, body } = readLessonMaterials(withMaterials);
   // Only offer print/PDF on substantial replies (a lesson), not one-liners.
   const isArtifact = /(^|\n)#{1,3}\s/.test(body) || /\n\|.*\|/.test(body);
 
@@ -630,6 +681,26 @@ function MessageBubble({
                     : null
                 }
               />
+            </div>
+          ) : null}
+          {materials.length ? (
+            <div className={cn('flex flex-col gap-2', body && 'mt-3')}>
+              {materials.map((material) => (
+                <MaterialCard
+                  key={material.key}
+                  material={material}
+                  added={
+                    !!message.id &&
+                    addedMaterials.has(`${message.id}:${material.key}`)
+                  }
+                  onToggle={
+                    message.id
+                      ? (added) => onMaterial(message.id!, material.key, added)
+                      : null
+                  }
+                  disabled={disabled}
+                />
+              ))}
             </div>
           ) : null}
           {deckOutcome.kind === 'unreadable' ? (

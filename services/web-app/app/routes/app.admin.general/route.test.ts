@@ -22,12 +22,18 @@ describe('admin general loader', () => {
     } as any);
 
     expect(requireAdmin).toHaveBeenCalledTimes(1);
-    const data = (response as { data: { artworks: Array<{ src: string; label: string }> } }).data;
+    const data = (
+      response as { data: { artworks: Array<{ src: string; label: string }> } }
+    ).data;
     expect(data.artworks).toHaveLength(CLASS_ART_LIBRARY.length);
     expect(data.artworks[0]).toEqual({
       src: CLASS_ART_LIBRARY[0].src,
       label: expect.stringContaining('—'),
     });
-    expect(data.artworks.every((artwork: { label: string }) => !artwork.label.includes('public domain'))).toBe(true);
+    expect(
+      data.artworks.every(
+        (artwork: { label: string }) => !artwork.label.includes('public domain')
+      )
+    ).toBe(true);
   });
 });

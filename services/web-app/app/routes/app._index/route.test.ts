@@ -39,9 +39,10 @@ mock.module('~/utils/student-preview.server', () => ({
   getStudentPreviewState,
   studentPreviewModeKey: 'studentPreviewMode',
   studentPreviewOrgIdKey: 'studentPreviewOrgId',
-  shouldUseStudentExperience: (
-    args: { membershipRole: string; previewActive: boolean }
-  ) => args.membershipRole === 'STUDENT' || args.previewActive,
+  shouldUseStudentExperience: (args: {
+    membershipRole: string;
+    previewActive: boolean;
+  }) => args.membershipRole === 'STUDENT' || args.previewActive,
 }));
 const { loader } = await import('./route');
 
@@ -62,7 +63,10 @@ describe('app index loader assignments', () => {
     getTeacherRecentActiveClassIds.mockReset();
     getAvailableAssignmentTypesForScopes.mockReset();
     getStudentPreviewState.mockReset();
-    getStudentPreviewState.mockResolvedValue({ active: false, organizationId: null });
+    getStudentPreviewState.mockResolvedValue({
+      active: false,
+      organizationId: null,
+    });
     getAvailableAssignmentTypesForScopes.mockResolvedValue([]);
     getTeacherClassCardStats.mockResolvedValue({
       ungradedCount: 0,
@@ -332,7 +336,10 @@ describe('app index loader assignments', () => {
           id: 'class-active-2',
           school: { id: 'school-1', organizationId: 'org-1' },
         },
-        { id: 'class-quiet', school: { id: 'school-1', organizationId: 'org-1' } },
+        {
+          id: 'class-quiet',
+          school: { id: 'school-1', organizationId: 'org-1' },
+        },
       ];
     });
 
@@ -344,9 +351,9 @@ describe('app index loader assignments', () => {
     const data = (response as { data: any }).data;
 
     expect(data.totalTeacherClassCount).toBe(3);
-    expect(data.teacherClassCards.map((klass: { id: string }) => klass.id)).toEqual(
-      ['class-active-1', 'class-active-2', 'class-quiet']
-    );
+    expect(
+      data.teacherClassCards.map((klass: { id: string }) => klass.id)
+    ).toEqual(['class-active-1', 'class-active-2', 'class-quiet']);
     expect(data.teacherWorkspaceClassStats).toHaveLength(3);
   });
 
@@ -377,7 +384,10 @@ describe('app index loader assignments', () => {
 
       return classRows.map((klass) => ({
         id: klass.id,
-        school: { id: klass.school.id, organizationId: klass.school.organizationId },
+        school: {
+          id: klass.school.id,
+          organizationId: klass.school.organizationId,
+        },
       }));
     });
 
@@ -420,7 +430,10 @@ describe('app index loader assignments', () => {
       }
 
       return [
-        { id: 'class-quiet', school: { id: 'school-1', organizationId: 'org-1' } },
+        {
+          id: 'class-quiet',
+          school: { id: 'school-1', organizationId: 'org-1' },
+        },
       ];
     });
 
@@ -567,5 +580,4 @@ describe('app index loader assignments', () => {
       { id: 'type-1', title: 'Daily Pages' },
     ]);
   });
-
 });

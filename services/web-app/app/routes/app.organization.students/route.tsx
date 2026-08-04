@@ -617,7 +617,9 @@ export default function OrganizationStudentsRoute() {
                 {table.skip > 0 && (
                   <div className="flex flex-col items-center gap-3">
                     <p className="text-sm text-muted-foreground">
-                      You're viewing page {Math.floor(table.skip / table.take) + 1}. Results may be on other pages.
+                      You're viewing page{' '}
+                      {Math.floor(table.skip / table.take) + 1}. Results may be
+                      on other pages.
                     </p>
                     <Button
                       variant="default"

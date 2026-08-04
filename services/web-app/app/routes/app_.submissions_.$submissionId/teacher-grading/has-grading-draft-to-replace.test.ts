@@ -13,21 +13,15 @@ const emptyRubric = () =>
 
 describe('hasGradingDraftToReplace', () => {
   test('is false when everything is empty', () => {
-    expect(
-      hasGradingDraftToReplace(emptyRubric(), '', '', 0)
-    ).toBe(false);
+    expect(hasGradingDraftToReplace(emptyRubric(), '', '', 0)).toBe(false);
   });
 
   test('is true when overall comment has text', () => {
-    expect(
-      hasGradingDraftToReplace(emptyRubric(), 'hi', '', 0)
-    ).toBe(true);
+    expect(hasGradingDraftToReplace(emptyRubric(), 'hi', '', 0)).toBe(true);
   });
 
   test('is true when percentage is set', () => {
-    expect(
-      hasGradingDraftToReplace(emptyRubric(), '', '42', 0)
-    ).toBe(true);
+    expect(hasGradingDraftToReplace(emptyRubric(), '', '42', 0)).toBe(true);
   });
 
   test('is true when a rubric score is set', () => {

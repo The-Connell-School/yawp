@@ -12,10 +12,17 @@ describe('SyncService', () => {
     store._clear();
     mockFetch = mock(() =>
       Promise.resolve(
-        new Response(JSON.stringify({ ok: true, revision: 2, savedAt: new Date().toISOString() }), {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' },
-        })
+        new Response(
+          JSON.stringify({
+            ok: true,
+            revision: 2,
+            savedAt: new Date().toISOString(),
+          }),
+          {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          }
+        )
       )
     );
     service = new SyncService(store, mockFetch as unknown as typeof fetch);

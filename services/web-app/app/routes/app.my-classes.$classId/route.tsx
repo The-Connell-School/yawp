@@ -400,10 +400,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
         { status: 400 }
       );
     }
-    if (
-      intent === 'create-assignment' &&
-      !gradingAssistantStrictnessLevel
-    ) {
+    if (intent === 'create-assignment' && !gradingAssistantStrictnessLevel) {
       return dataResponse(
         {
           success: false,
@@ -460,8 +457,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
             prompt,
             submitForGrade: gradingIntent.data.submitForGrade,
             pointValue: gradingIntent.data.pointValue,
-            gradingAssistantStrictnessLevel:
-              gradingAssistantStrictnessLevel!,
+            gradingAssistantStrictnessLevel: gradingAssistantStrictnessLevel!,
             ...promptAttachmentData,
           },
           classIds: [classId],
@@ -772,7 +768,6 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       ? { membershipId: enrolledStudent.id }
       : { enrolledMembershipIds: klass.students.map((student) => student.id) }
   );
-
 
   // Get all submissions for this class
   const submissions = await prisma.submission.findMany({

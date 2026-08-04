@@ -70,7 +70,9 @@ export function MultiSelect({
           {variant === 'chip' ? label : null}
           {variant === 'field' ? (
             <>
-              <span className="min-w-0 truncate text-left">{selectionSummary}</span>
+              <span className="min-w-0 truncate text-left">
+                {selectionSummary}
+              </span>
               <ChevronDown className="size-4 shrink-0 text-muted-foreground" />
             </>
           ) : null}

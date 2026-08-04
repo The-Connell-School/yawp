@@ -99,8 +99,7 @@ const CLASS_ART_LIBRARY_RAW: readonly ClassArtLibraryEntry[] = [
   },
   {
     src: '/img/class-art/hokusai-chrysanthemums.jpg',
-    credit:
-      'Katsushika Hokusai — Sparrows and Chrysanthemums, public domain',
+    credit: 'Katsushika Hokusai — Sparrows and Chrysanthemums, public domain',
     positions: ['center 0%', 'center 50%', 'center 100%'],
   },
   {
@@ -238,7 +237,11 @@ export function artworkKeyFromSrc(src: string): string {
 }
 
 export function slugifyClassArtCropPosition(position: string): string {
-  return position.trim().toLowerCase().replace(/\s+/g, '-').replace(/%/g, 'pct');
+  return position
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, '-')
+    .replace(/%/g, 'pct');
 }
 
 export function buildClassArtKey(
@@ -298,8 +301,7 @@ export function buildClassArtPoolIndex(
     ((artworkIndex % CLASS_ARTWORK_COUNT) + CLASS_ARTWORK_COUNT) %
     CLASS_ARTWORK_COUNT;
   const positions = CLASS_ART_LIBRARY[normalizedArtwork].positions.length;
-  const normalizedCrop =
-    ((cropIndex % positions) + positions) % positions;
+  const normalizedCrop = ((cropIndex % positions) + positions) % positions;
   return poolOffsetForArtwork(normalizedArtwork) + normalizedCrop;
 }
 

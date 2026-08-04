@@ -119,12 +119,22 @@ export function deriveSectionKind(
   return audience === 'student' ? 'handout' : 'plan';
 }
 
+/**
+ * Where a section came from. A kept `reply` is a whole turn of the plan, which
+ * the teacher can rename; a `material` is one handout or sample the teacher
+ * lifted out of a reply, and it arrives already named.
+ */
+export type PacketSectionOrigin = 'reply' | 'material';
+
 export type PacketSectionInput = {
   id: string;
   content: string;
   keptAudience?: string | null;
   /** Teacher-supplied name; blank or absent falls back to the derived title. */
   keptTitle?: string | null;
+  /** Known for a material; derived from the text for a kept reply. */
+  kind?: PacketSectionKind;
+  origin?: PacketSectionOrigin;
 };
 
 export type PacketSection = {
@@ -133,6 +143,7 @@ export type PacketSection = {
   content: string;
   audience: PacketAudience;
   kind: PacketSectionKind;
+  origin: PacketSectionOrigin;
   /** Stable id for jump links from the contents index. */
   anchor: string;
 };
@@ -176,7 +187,8 @@ export function buildLessonPacket({
       derivedTitle,
       content: stripDuplicateTitleHeading(body.trim(), derivedTitle),
       audience,
-      kind: deriveSectionKind(body, audience),
+      kind: section.kind ?? deriveSectionKind(body, audience),
+      origin: section.origin ?? 'reply',
       anchor: `resource-${section.id}`,
     };
   });

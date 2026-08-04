@@ -13,7 +13,10 @@ export class TestHelpers {
       await this.page.goto(`/app/documents/${documentId}`);
       await this.page.waitForLoadState('networkidle');
       try {
-        await this.page.waitForSelector(EDITOR_SELECTOR, { state: 'visible', timeout: 15000 });
+        await this.page.waitForSelector(EDITOR_SELECTOR, {
+          state: 'visible',
+          timeout: 15000,
+        });
         // Wait for ProseMirror's view to be fully wired into the DOM AND
         // useEditorSync's update handler to be registered. Without this,
         // typing can outrace PM's input handlers or the sync handler.
@@ -24,20 +27,26 @@ export class TestHelpers {
             return el?.pmViewDesc && el?.dataset?.syncReady === 'true';
           },
           EDITOR_SELECTOR,
-          { timeout: 10000 },
+          { timeout: 10000 }
         );
         // Brief settle for ProseMirror's internal DOM event handler attachment
         await this.page.waitForTimeout(500);
         return;
       } catch {
-        if (attempt === maxAttempts) throw new Error(`Editor did not appear after ${maxAttempts} attempts`);
+        if (attempt === maxAttempts)
+          throw new Error(
+            `Editor did not appear after ${maxAttempts} attempts`
+          );
       }
     }
   }
 
   /** Wait for the editor to be loaded and ready */
   async waitForEditorReady() {
-    await this.page.waitForSelector(EDITOR_SELECTOR, { state: 'visible', timeout: 15000 });
+    await this.page.waitForSelector(EDITOR_SELECTOR, {
+      state: 'visible',
+      timeout: 15000,
+    });
   }
 
   /** Get the editor locator */
@@ -74,10 +83,12 @@ export class TestHelpers {
     await this.page.waitForFunction(
       (selector) => {
         const el = document.querySelector(selector);
-        return el && parseInt(el.getAttribute('data-save-count') ?? '0', 10) > 0;
+        return (
+          el && parseInt(el.getAttribute('data-save-count') ?? '0', 10) > 0
+        );
       },
       EDITOR_SELECTOR,
-      { timeout },
+      { timeout }
     );
   }
 

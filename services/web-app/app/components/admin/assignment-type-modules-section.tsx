@@ -191,7 +191,8 @@ export function AssignmentTypeModulesSection({
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-muted-foreground">
-          Configure module instructions and rubric relationships for tutor guidance.
+          Configure module instructions and rubric relationships for tutor
+          guidance.
         </p>
         <Sheet open={isModuleSheetOpen} onOpenChange={setIsModuleSheetOpen}>
           <SheetTrigger asChild>
@@ -212,11 +213,7 @@ export function AssignmentTypeModulesSection({
               </div>
               <div className="space-y-2">
                 <Label htmlFor="moduleDescription">Description</Label>
-                <Textarea
-                  id="moduleDescription"
-                  name="description"
-                  rows={3}
-                />
+                <Textarea id="moduleDescription" name="description" rows={3} />
               </div>
               <div className="flex items-center space-x-2">
                 <input

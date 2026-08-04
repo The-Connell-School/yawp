@@ -4,10 +4,8 @@ const putSmallObject = mock();
 const actualS3 = await import('~/services/s3.server');
 mock.module('~/services/s3.server', () => ({ ...actualS3, putSmallObject }));
 
-const {
-  AssignmentPromptAttachmentError,
-  uploadAssignmentPromptAttachment,
-} = await import('./assignment-prompt-attachment.server');
+const { AssignmentPromptAttachmentError, uploadAssignmentPromptAttachment } =
+  await import('./assignment-prompt-attachment.server');
 
 describe('uploadAssignmentPromptAttachment', () => {
   beforeEach(() => {

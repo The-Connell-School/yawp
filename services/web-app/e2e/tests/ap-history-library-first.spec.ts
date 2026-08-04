@@ -18,9 +18,11 @@ test.describe.serial('AP History library-first assignment flow', () => {
   }) => {
     const prisma = createE2EPrismaClient();
     const title = `E2E AP History DBQ ${Date.now()}`;
-    let firstSource:
-      | { externalKey: string; title: string; body: string }
-      | null = null;
+    let firstSource: {
+      externalKey: string;
+      title: string;
+      body: string;
+    } | null = null;
     const mutatedPrompt = `${dbqEntry.prompt} MUTATED LIVE LIBRARY ROW`;
     const mutatedSourceTitle = 'Mutated live library source';
     const mutatedSourceBody = 'This mutated source should not appear.';
@@ -173,7 +175,9 @@ test.describe.serial('AP History library-first assignment flow', () => {
         },
         select: { id: true },
       });
-      const assignmentIds = createdAssignments.map((assignment) => assignment.id);
+      const assignmentIds = createdAssignments.map(
+        (assignment) => assignment.id
+      );
       if (assignmentIds.length > 0) {
         await prisma.document.deleteMany({
           where: { assignmentId: { in: assignmentIds } },

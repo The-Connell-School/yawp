@@ -44,7 +44,9 @@ describe('auth.login', () => {
     captureException.mockReset();
     prisma.session.create.mockReset();
 
-    getSessionExpirationDate.mockReturnValue(new Date('2026-01-01T00:00:00.000Z'));
+    getSessionExpirationDate.mockReturnValue(
+      new Date('2026-01-01T00:00:00.000Z')
+    );
     verifyUserPassword.mockResolvedValue({
       id: 'user-1',
       email: 'student@example.com',
@@ -67,13 +69,18 @@ describe('auth.login', () => {
     form.append('redirectTo', '/app/documents/doc-1?tab=editor');
 
     const response = (await action({
-      request: new Request('https://example.com/auth/login?redirectTo=%2Fapp%2Fdocuments%2Fdoc-1', {
-        method: 'POST',
-        body: form,
-      }),
+      request: new Request(
+        'https://example.com/auth/login?redirectTo=%2Fapp%2Fdocuments%2Fdoc-1',
+        {
+          method: 'POST',
+          body: form,
+        }
+      ),
     } as any)) as Response;
 
     expect(response.status).toBe(302);
-    expect(response.headers.get('location')).toBe('/app/documents/doc-1?tab=editor');
+    expect(response.headers.get('location')).toBe(
+      '/app/documents/doc-1?tab=editor'
+    );
   });
 });

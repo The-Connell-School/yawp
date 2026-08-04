@@ -49,7 +49,10 @@ export async function action({ request }: ActionFunctionArgs) {
       isAdmin: user.isAdmin,
     })
   ) {
-    return Response.json({ error: 'Student preview not allowed' }, { status: 403 });
+    return Response.json(
+      { error: 'Student preview not allowed' },
+      { status: 403 }
+    );
   }
 
   return redirect(redirectTo, {

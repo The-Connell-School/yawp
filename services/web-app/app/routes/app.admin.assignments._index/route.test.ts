@@ -39,7 +39,11 @@ describe('AssignmentTypes loader', () => {
   test('returns assignment types with rubric info', async () => {
     prisma.assignmentType.findMany.mockResolvedValue([mockAssignmentType]);
 
-    const response = await loader({ request: mockRequest, params: {}, context: {} } as any);
+    const response = await loader({
+      request: mockRequest,
+      params: {},
+      context: {},
+    } as any);
     const data = (response as { data: any }).data;
 
     expect(data.assignmentTypes).toHaveLength(1);
@@ -50,7 +54,11 @@ describe('AssignmentTypes loader', () => {
   test('returns empty list when no assignment types exist', async () => {
     prisma.assignmentType.findMany.mockResolvedValue([]);
 
-    const response = await loader({ request: mockRequest, params: {}, context: {} } as any);
+    const response = await loader({
+      request: mockRequest,
+      params: {},
+      context: {},
+    } as any);
     const data = (response as { data: any }).data;
 
     expect(data.assignmentTypes).toHaveLength(0);

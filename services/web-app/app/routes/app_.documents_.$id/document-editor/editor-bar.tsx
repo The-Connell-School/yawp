@@ -27,7 +27,12 @@ export type BarProps = {
   onCommentCreated?: (comment: unknown) => void;
 };
 
-export const Bar = ({ editor, documentId, isEditable = true, onCommentCreated }: BarProps) => {
+export const Bar = ({
+  editor,
+  documentId,
+  isEditable = true,
+  onCommentCreated,
+}: BarProps) => {
   const [visibleCommands, setVisibleCommands] = useState(commands);
   const [hiddenCommands, setHiddenCommands] = useState<Command[]>([]);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -68,12 +73,24 @@ export const Bar = ({ editor, documentId, isEditable = true, onCommentCreated }:
     >
       {isEditable
         ? visibleCommands.map(
-            ({ icon, label, command, params, activeId, isActive, override }) => {
+            ({
+              icon,
+              label,
+              command,
+              params,
+              activeId,
+              isActive,
+              override,
+            }) => {
               if (override) return override(editor);
               if (!command) return null;
 
               return (
-                <Tooltip text={label} delayDuration={300} key={label ?? command}>
+                <Tooltip
+                  text={label}
+                  delayDuration={300}
+                  key={label ?? command}
+                >
                   <div
                     onClick={() => {
                       const chain = editor.chain().focus() as any;
@@ -82,7 +99,10 @@ export const Bar = ({ editor, documentId, isEditable = true, onCommentCreated }:
                     className={cn(COMMAND_STYLE, {
                       'bg-foreground/20 hover:bg-foreground/20': isActive
                         ? isActive(editor)
-                        : editor.isActive(activeId ?? camelCase(label ?? ''), params),
+                        : editor.isActive(
+                            activeId ?? camelCase(label ?? ''),
+                            params
+                          ),
                     })}
                   >
                     {icon ?? label}
@@ -109,7 +129,10 @@ export const Bar = ({ editor, documentId, isEditable = true, onCommentCreated }:
                 formData.append('id', id);
                 formData.append('content', content);
                 formData.append('documentId', documentId);
-                fetch('/api/model/document-comment', { method: 'POST', body: formData })
+                fetch('/api/model/document-comment', {
+                  method: 'POST',
+                  body: formData,
+                })
                   .then((res) => res.json())
                   .then((data) => {
                     if (data?.id && onCommentCreated) {
@@ -122,7 +145,8 @@ export const Bar = ({ editor, documentId, isEditable = true, onCommentCreated }:
               }
             }}
             className={cn(COMMAND_STYLE, {
-              'bg-foreground/20 hover:bg-foreground/20': editor.isActive('comment'),
+              'bg-foreground/20 hover:bg-foreground/20':
+                editor.isActive('comment'),
             })}
           >
             <MessageCirclePlusIcon className="h-5 w-5" />
@@ -156,7 +180,10 @@ export const Bar = ({ editor, documentId, isEditable = true, onCommentCreated }:
                   className={cn(COMMAND_STYLE, 'flex items-center gap-3', {
                     'bg-foreground/20 hover:bg-foreground/20': isActive
                       ? isActive(editor)
-                      : editor.isActive(activeId ?? camelCase(label ?? ''), params),
+                      : editor.isActive(
+                          activeId ?? camelCase(label ?? ''),
+                          params
+                        ),
                   })}
                 >
                   <span>{icon ?? label}</span>

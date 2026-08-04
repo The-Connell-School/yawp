@@ -11,18 +11,17 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
   const profile = await requireMembership(request, userId);
 
-  const access =
-    profile.isOrgOwner
-      ? {
-          classAssignments: {
-            some: {
-              class: {
-                school: { organizationId: profile.organization.id },
-              },
+  const access = profile.isOrgOwner
+    ? {
+        classAssignments: {
+          some: {
+            class: {
+              school: { organizationId: profile.organization.id },
             },
           },
-        }
-      : profile.role === 'STUDENT'
+        },
+      }
+    : profile.role === 'STUDENT'
       ? {
           documents: {
             some: { membershipId: profile.id, deletedAt: null },

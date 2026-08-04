@@ -23,7 +23,8 @@ export const textarea = cva(
 );
 
 export interface TextareaProps
-  extends React.TextareaHTMLAttributes<HTMLTextAreaElement>,
+  extends
+    React.TextareaHTMLAttributes<HTMLTextAreaElement>,
     VariantProps<typeof textarea> {}
 
 const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(

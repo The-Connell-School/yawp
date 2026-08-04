@@ -41,7 +41,9 @@ describe('getTeacherTrainingMediaAccessibilityResources', () => {
       },
     ];
 
-    expect(getTeacherTrainingMediaAccessibilityResources(genericResources)).toEqual({
+    expect(
+      getTeacherTrainingMediaAccessibilityResources(genericResources)
+    ).toEqual({
       captionResource: genericResources[0],
       transcriptResource: genericResources[1],
     });

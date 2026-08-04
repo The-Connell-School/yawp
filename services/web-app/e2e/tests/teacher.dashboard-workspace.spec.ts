@@ -180,9 +180,7 @@ test.describe.serial('Teacher dashboard workspace', () => {
     await expect(
       gradingGrid.getByRole('heading', { name: 'Grading' })
     ).toBeVisible();
-    await expect(
-      page.getByTestId('teacher-workspace-cards')
-    ).toHaveAttribute(
+    await expect(page.getByTestId('teacher-workspace-cards')).toHaveAttribute(
       'href',
       '/app/documents?status=needs-grading&group=student'
     );

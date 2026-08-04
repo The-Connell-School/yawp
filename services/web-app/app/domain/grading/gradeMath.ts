@@ -74,10 +74,7 @@ type RubricScoreValue = {
 export function computeWeightedPercentage(
   rubricScores: Record<string, unknown> | null | undefined
 ) {
-  return computeWeightedPercentageForCategories(
-    rubricScores,
-    rubricCategories
-  );
+  return computeWeightedPercentageForCategories(rubricScores, rubricCategories);
 }
 
 export function computeWeightedPercentageForCategories(
@@ -86,13 +83,10 @@ export function computeWeightedPercentageForCategories(
 ) {
   if (!rubricScores || typeof rubricScores !== 'object') return null;
 
-  const weights = categories.reduce<Record<string, number>>(
-    (acc, cat) => {
-      acc[cat.key] = cat.weight;
-      return acc;
-    },
-    {}
-  );
+  const weights = categories.reduce<Record<string, number>>((acc, cat) => {
+    acc[cat.key] = cat.weight;
+    return acc;
+  }, {});
 
   let totalWeight = 0;
   let weightedSum = 0;

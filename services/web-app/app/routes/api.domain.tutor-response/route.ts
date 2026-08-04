@@ -129,7 +129,9 @@ export async function action({ request }: ActionFunctionArgs) {
         moduleRubric.categories.length > 0 ? 'assignment-type' : 'missing',
       assignmentTypeGradingVersion:
         cms.assignmentModule.assignmentType?.gradingAssistantVersion ?? null,
-      rubricCategoryKeys: moduleRubric.categories.map((category) => category.key),
+      rubricCategoryKeys: moduleRubric.categories.map(
+        (category) => category.key
+      ),
     });
 
     const currentMessages = cms.messages.map((m) => ({

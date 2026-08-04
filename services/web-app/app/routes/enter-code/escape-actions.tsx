@@ -17,7 +17,11 @@ export function EnterCodeEscapeActions({
       <Form method="POST" action="/api/student-preview">
         <input type="hidden" name="intent" value="end" />
         <input type="hidden" name="redirectTo" value="/app" />
-        <Button type="submit" variant="link" className="h-auto px-0 py-0 text-sm">
+        <Button
+          type="submit"
+          variant="link"
+          className="h-auto px-0 py-0 text-sm"
+        >
           Back to teacher view
         </Button>
       </Form>

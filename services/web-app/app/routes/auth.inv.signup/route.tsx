@@ -35,7 +35,10 @@ export async function action({ request }: ActionFunctionArgs) {
   const normalizedEmail = normalizeEmail(data.email);
 
   const classes = await prisma.class.findMany({
-    where: { code: { equals: data.code, mode: 'insensitive' }, isArchived: false },
+    where: {
+      code: { equals: data.code, mode: 'insensitive' },
+      isArchived: false,
+    },
     select: { id: true },
     take: 20,
   });

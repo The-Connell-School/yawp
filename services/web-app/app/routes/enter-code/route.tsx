@@ -66,11 +66,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
         },
       },
     },
-    orderBy: [
-      { schoolYear: 'desc' },
-      { grade: 'asc' },
-      { period: 'asc' },
-    ],
+    orderBy: [{ schoolYear: 'desc' }, { grade: 'asc' }, { period: 'asc' }],
   });
 
   return data({
@@ -236,7 +232,9 @@ export default function Route() {
             Join Class
           </Button>
         </Form>
-        <EnterCodeEscapeActions studentPreviewActive={data.studentPreviewActive} />
+        <EnterCodeEscapeActions
+          studentPreviewActive={data.studentPreviewActive}
+        />
       </div>
     </div>
   );

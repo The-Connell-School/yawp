@@ -73,7 +73,9 @@ test.describe.serial('Teacher surfaces under stress volume', () => {
       );
       await page.waitForLoadState('networkidle');
       const classTable = page.getByRole('table', { name: /class documents/i });
-      await expect(classTable.getByText(/^Needs Releasing/).first()).toBeVisible();
+      await expect(
+        classTable.getByText(/^Needs Releasing/).first()
+      ).toBeVisible();
       await expect(classTable.getByText(/^Released/)).toHaveCount(0);
 
       // Student Work grouped by student shows the volume in one group.

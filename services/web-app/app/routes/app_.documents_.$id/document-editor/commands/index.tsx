@@ -172,13 +172,21 @@ export const commands: Command[] = [
   {
     override: (editor) => {
       const alignments = [
-        { value: 'left', label: 'Left', icon: <AlignLeft className="h-4 w-4" /> },
+        {
+          value: 'left',
+          label: 'Left',
+          icon: <AlignLeft className="h-4 w-4" />,
+        },
         {
           value: 'center',
           label: 'Center',
           icon: <AlignCenter className="h-4 w-4" />,
         },
-        { value: 'right', label: 'Right', icon: <AlignRight className="h-4 w-4" /> },
+        {
+          value: 'right',
+          label: 'Right',
+          icon: <AlignRight className="h-4 w-4" />,
+        },
       ] as const;
       const isLeft =
         !editor.isActive({ textAlign: 'center' }) &&

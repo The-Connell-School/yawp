@@ -30,7 +30,8 @@ export function ModuleRubricAlignmentEditor({
   if (categories.length === 0) {
     return (
       <p className="rounded-[8px] border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
-        Add rubric categories to this assignment type before mapping module relationships.
+        Add rubric categories to this assignment type before mapping module
+        relationships.
       </p>
     );
   }
@@ -58,7 +59,8 @@ export function ModuleRubricAlignmentEditor({
               onChange={(event) =>
                 setAlignment((current) => ({
                   ...current,
-                  [category.key]: event.target.value as ModuleRubricRelationship,
+                  [category.key]: event.target
+                    .value as ModuleRubricRelationship,
                 }))
               }
             >

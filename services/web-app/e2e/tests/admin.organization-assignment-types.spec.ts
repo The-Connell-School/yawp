@@ -30,7 +30,9 @@ test.describe.serial('Admin organization assignment types', () => {
       const manager = page.getByTestId('organization-assignment-types-manager');
       await expect(manager).toBeVisible();
       await manager
-        .locator(`input[name="assignmentTypeIds"][value="${assignmentType.id}"]`)
+        .locator(
+          `input[name="assignmentTypeIds"][value="${assignmentType.id}"]`
+        )
         .setChecked(true, { force: true });
       await page.getByRole('button', { name: 'Save Changes' }).click();
       await expect(
@@ -55,7 +57,11 @@ test.describe.serial('Admin organization assignment types', () => {
         .first()
         .click();
       await expect(page.getByRole('dialog')).toBeVisible();
-      await page.getByRole('dialog').locator('[role="combobox"]').first().click();
+      await page
+        .getByRole('dialog')
+        .locator('[role="combobox"]')
+        .first()
+        .click();
       await expect(page.getByRole('option', { name: title })).toBeVisible();
     } finally {
       await prisma.organizationAssignmentType.deleteMany({

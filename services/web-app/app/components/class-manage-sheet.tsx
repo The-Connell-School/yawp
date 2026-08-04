@@ -104,7 +104,9 @@ export function ClassManageSheet({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent>
         <SheetHeader>
-          <SheetTitle>{editingClass ? 'Edit Class' : 'Create Class'}</SheetTitle>
+          <SheetTitle>
+            {editingClass ? 'Edit Class' : 'Create Class'}
+          </SheetTitle>
           <SheetDescription>
             {editingClass
               ? 'Update class details for your roster.'
@@ -164,13 +166,25 @@ export function ClassManageSheet({
                   <SelectValue placeholder="Grade" />
                 </SelectTrigger>
                 <SelectContent>
-                  {['K', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12'].map(
-                    (value) => (
-                      <SelectItem key={value} value={value}>
-                        {value}
-                      </SelectItem>
-                    )
-                  )}
+                  {[
+                    'K',
+                    '1',
+                    '2',
+                    '3',
+                    '4',
+                    '5',
+                    '6',
+                    '7',
+                    '8',
+                    '9',
+                    '10',
+                    '11',
+                    '12',
+                  ].map((value) => (
+                    <SelectItem key={value} value={value}>
+                      {value}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -208,7 +222,11 @@ export function ClassManageSheet({
                   ? 'Update Class'
                   : 'Create Class'}
             </Button>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+            >
               Cancel
             </Button>
           </div>

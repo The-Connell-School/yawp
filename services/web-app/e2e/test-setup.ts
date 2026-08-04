@@ -47,7 +47,8 @@ export const test = base.extend<TestFixtures>({
       await passwordInput.fill(password);
       await submitButton.click();
       await page.waitForURL(
-        (url) => url.pathname.startsWith('/app') || url.pathname === '/enter-code',
+        (url) =>
+          url.pathname.startsWith('/app') || url.pathname === '/enter-code',
         { timeout: 15000 }
       );
       if (new URL(page.url()).pathname === '/enter-code') {

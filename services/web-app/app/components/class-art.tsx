@@ -1,5 +1,8 @@
 import { useMemo } from 'react';
-import { resolveClassArtSelection, formatClassArtCredit } from '~/utils/class-art';
+import {
+  resolveClassArtSelection,
+  formatClassArtCredit,
+} from '~/utils/class-art';
 import { cn } from '~/utils/misc';
 
 export function ClassArt({

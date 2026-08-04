@@ -7,8 +7,6 @@ export function filterClassStudentsByQuery<
   return students.filter((student) => {
     const name = student.user.name?.toLowerCase() ?? '';
     const email = student.user.email.toLowerCase();
-    return (
-      name.includes(normalizedQuery) || email.includes(normalizedQuery)
-    );
+    return name.includes(normalizedQuery) || email.includes(normalizedQuery);
   });
 }

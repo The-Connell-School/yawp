@@ -6,7 +6,9 @@ import {
   buildApHistorySnapshot,
 } from './schema';
 
-export async function findApHistoryAssignmentTypeForOrg(organizationId: string) {
+export async function findApHistoryAssignmentTypeForOrg(
+  organizationId: string
+) {
   return prisma.assignmentType.findFirst({
     where: {
       systemKey: AP_HISTORY_ASSIGNMENT_TYPE_KEY,

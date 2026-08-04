@@ -34,7 +34,9 @@ export function isClassCardGradientKey(
   );
 }
 
-export function generateClassCardGradientKey(seed: string): ClassCardGradientKey {
+export function generateClassCardGradientKey(
+  seed: string
+): ClassCardGradientKey {
   let hash = 0;
   for (let i = 0; i < seed.length; i++) {
     hash =

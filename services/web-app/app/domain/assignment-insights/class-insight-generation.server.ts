@@ -187,8 +187,8 @@ export async function generateClassAssignmentInsight(input: {
   });
   const hasReadyInsight = Boolean(
     existingInsight?.status === 'ready' &&
-      existingInsight.summaryJson &&
-      existingInsight.generatedAt
+    existingInsight.summaryJson &&
+    existingInsight.generatedAt
   );
   if (hasReadyInsight) {
     const cooldown = getClassInsightRegenerationCooldown(

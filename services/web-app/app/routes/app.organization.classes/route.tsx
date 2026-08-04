@@ -335,14 +335,19 @@ export async function action({ request }: ActionFunctionArgs) {
     } catch (error: any) {
       if (error.code === 'P2002') {
         const target = error.meta?.target;
-        const targetText = Array.isArray(target) ? target.join(',') : String(target ?? '');
+        const targetText = Array.isArray(target)
+          ? target.join(',')
+          : String(target ?? '');
         if (targetText.includes('code')) {
           return dataResponse(
             { error: 'Class code already in use. Choose a different code.' },
             { status: 400 }
           );
         }
-        return dataResponse({ error: 'Class could not be created.' }, { status: 400 });
+        return dataResponse(
+          { error: 'Class could not be created.' },
+          { status: 400 }
+        );
       }
       throw error;
     }
@@ -428,14 +433,19 @@ export async function action({ request }: ActionFunctionArgs) {
     } catch (error: any) {
       if (error.code === 'P2002') {
         const target = error.meta?.target;
-        const targetText = Array.isArray(target) ? target.join(',') : String(target ?? '');
+        const targetText = Array.isArray(target)
+          ? target.join(',')
+          : String(target ?? '');
         if (targetText.includes('code')) {
           return dataResponse(
             { error: 'Class code already in use. Choose a different code.' },
             { status: 400 }
           );
         }
-        return dataResponse({ error: 'Class could not be updated.' }, { status: 400 });
+        return dataResponse(
+          { error: 'Class could not be updated.' },
+          { status: 400 }
+        );
       }
       throw error;
     }
@@ -807,13 +817,17 @@ export default function OrganizationClassesRoute() {
                 <div className="flex flex-col items-center gap-2">
                   <span className="text-lg font-bold">No classes found</span>
                   <span className="text-sm text-muted-foreground">
-                    {q ? 'Try adjusting your search' : 'Create your first class to get started'}
+                    {q
+                      ? 'Try adjusting your search'
+                      : 'Create your first class to get started'}
                   </span>
                 </div>
                 {table.skip > 0 && (
                   <div className="flex flex-col items-center gap-3">
                     <p className="text-sm text-muted-foreground">
-                      You're viewing page {Math.floor(table.skip / table.take) + 1}. Results may be on other pages.
+                      You're viewing page{' '}
+                      {Math.floor(table.skip / table.take) + 1}. Results may be
+                      on other pages.
                     </p>
                     <Button
                       variant="default"
@@ -1325,13 +1339,7 @@ function BulkEditClassSheet({
       onOpenChange(false);
       onApplied();
     }
-  }, [
-    fetcher.state,
-    fetcher.data,
-    pendingSubmit,
-    onOpenChange,
-    onApplied,
-  ]);
+  }, [fetcher.state, fetcher.data, pendingSubmit, onOpenChange, onApplied]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();

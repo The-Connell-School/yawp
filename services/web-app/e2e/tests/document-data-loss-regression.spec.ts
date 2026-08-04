@@ -26,13 +26,13 @@ test.describe.serial('Data Loss Regression Tests', () => {
     // Attempt tutor interaction immediately (before save settles).
     // The tutor UI requires specific course module state, so be defensive.
     const tutorButton = page.getByTestId('tutor-chat-open');
-    if (await tutorButton.count() > 0) {
+    if ((await tutorButton.count()) > 0) {
       const tutorDisabled = await tutorButton.isDisabled();
       if (!tutorDisabled) {
         await tutorButton.click();
 
         const tutorInput = page.getByTestId('tutor-chat-input');
-        if (await tutorInput.count() > 0) {
+        if ((await tutorInput.count()) > 0) {
           // Route tutor requests to track them but allow them through
           let tutorRequests = 0;
           await page.route('**/api/domain/tutor-response', async (route) => {
@@ -49,7 +49,9 @@ test.describe.serial('Data Loss Regression Tests', () => {
             .toBeGreaterThanOrEqual(1);
 
           // Wait for tutor message to appear
-          await expect(page.locator('[data-tutor-message="true"]').last()).toBeVisible({
+          await expect(
+            page.locator('[data-tutor-message="true"]').last()
+          ).toBeVisible({
             timeout: 30000,
           });
         }
@@ -83,7 +85,7 @@ test.describe.serial('Data Loss Regression Tests', () => {
     // Set up save listener BEFORE triggering visibility change
     const savePromise = page.waitForResponse(
       (res) => /\/api\/document\/.*\/save/.test(res.url()),
-      { timeout: 15000 },
+      { timeout: 15000 }
     );
 
     // Dispatch visibilitychange event to simulate tab going hidden.
@@ -144,12 +146,12 @@ test.describe.serial('Data Loss Regression Tests', () => {
 
     // If a submit button exists, click it to test the pre-submission flush
     const submitBtn = page.getByTestId('document-submit-button');
-    if (await submitBtn.count() > 0) {
+    if ((await submitBtn.count()) > 0) {
       await submitBtn.click();
 
       // Handle confirmation dialog if present
       const finalizeButton = page.getByTestId('document-finalize-submit');
-      if (await finalizeButton.count() > 0) {
+      if ((await finalizeButton.count()) > 0) {
         await finalizeButton.click();
       }
 

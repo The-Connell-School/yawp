@@ -27,16 +27,16 @@ export function serializeDocumentWorkFilterIds(ids: string[]): string | null {
 export function dedupeFilterOptionsById<T extends { id: string }>(
   options: T[]
 ): T[] {
-  return Array.from(new Map(options.map((option) => [option.id, option])).values());
+  return Array.from(
+    new Map(options.map((option) => [option.id, option])).values()
+  );
 }
 
 function studentFilterLabel(membership: {
   user: { name: string | null; email: string };
 }) {
   return (
-    membership.user.name?.trim() ||
-    membership.user.email ||
-    'Unknown student'
+    membership.user.name?.trim() || membership.user.email || 'Unknown student'
   );
 }
 

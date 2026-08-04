@@ -7,10 +7,9 @@ import {
 describe('environment banner detection', () => {
   test('treats configured preview containers as preview environments', () => {
     expect(
-      getEnvironmentBannerWarning(
-        'https://pr-182.preview.yawp.school/app',
-        { YAWP_ENVIRONMENT: 'preview' }
-      )
+      getEnvironmentBannerWarning('https://pr-182.preview.yawp.school/app', {
+        YAWP_ENVIRONMENT: 'preview',
+      })
     ).toBe('preview');
   });
 

@@ -28,7 +28,9 @@ describe('class-insight-regeneration-cooldown', () => {
     const cooldown = getClassInsightRegenerationCooldown(generatedAt, now);
 
     expect(cooldown.inCooldown).toBe(false);
-    expect(classInsightRegenerationCooldownMessage(cooldown.remainingMs)).toBeNull();
+    expect(
+      classInsightRegenerationCooldownMessage(cooldown.remainingMs)
+    ).toBeNull();
   });
 
   it('formats sub-hour waits in minutes only', () => {

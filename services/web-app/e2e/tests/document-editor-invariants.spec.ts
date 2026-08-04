@@ -27,7 +27,9 @@ test.describe('Document editor invariants', () => {
     // The tripwire's real value is in catching programmatic mutations from
     // application code, which it does at runtime.
     const assertInvariant = async (label: string) => {
-      await expect(editor, `editor content after ${label}`).toContainText(marker);
+      await expect(editor, `editor content after ${label}`).toContainText(
+        marker
+      );
     };
 
     await assertInvariant('initial-type');
@@ -67,13 +69,13 @@ test.describe('Document editor invariants', () => {
 
     // 4. Tutor interaction (if available and enabled)
     const tutorButton = page.getByTestId('tutor-chat-open');
-    if (await tutorButton.count() > 0) {
+    if ((await tutorButton.count()) > 0) {
       const tutorDisabled = await tutorButton.isDisabled();
       if (!tutorDisabled) {
         await tutorButton.click();
 
         const tutorInput = page.getByTestId('tutor-chat-input');
-        if (await tutorInput.count() > 0) {
+        if ((await tutorInput.count()) > 0) {
           await tutorInput.fill('Quick invariant check');
           // Don't wait for full AI response — just firing the interaction is enough
           await page.getByTestId('tutor-chat-send').click();
@@ -82,7 +84,7 @@ test.describe('Document editor invariants', () => {
 
         // Close tutor panel if possible
         const closeTutor = page.getByTestId('tutor-chat-close');
-        if (await closeTutor.count() > 0) {
+        if ((await closeTutor.count()) > 0) {
           await closeTutor.click();
         }
       }
@@ -96,9 +98,15 @@ test.describe('Document editor invariants', () => {
     await helpers.waitForEditorReady();
 
     const editorAfterNav = page.locator(EDITOR_SELECTOR).first();
-    await expect(editorAfterNav, 'editor visible after back-forward').toBeVisible({
+    await expect(
+      editorAfterNav,
+      'editor visible after back-forward'
+    ).toBeVisible({
       timeout: 10000,
     });
-    await expect(editorAfterNav, 'editor content after back-forward').toContainText(marker);
+    await expect(
+      editorAfterNav,
+      'editor content after back-forward'
+    ).toContainText(marker);
   });
 });

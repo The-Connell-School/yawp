@@ -51,7 +51,8 @@ export async function action({ request }: ActionFunctionArgs) {
     }
 
     const isPdf =
-      file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+      file.type === 'application/pdf' ||
+      file.name.toLowerCase().endsWith('.pdf');
     if (!isPdf) {
       return dataResponse(
         { success: false, message: 'Only PDF files are supported.' },
@@ -129,7 +130,9 @@ export async function action({ request }: ActionFunctionArgs) {
       .join('\n')
       .trim();
 
-    const parsed = ExtractedRubricSchema.parse(parseFirstJsonValue(responseText));
+    const parsed = ExtractedRubricSchema.parse(
+      parseFirstJsonValue(responseText)
+    );
     const normalized = normalizeExtractedRubric(parsed);
 
     await prisma.llmLog.create({

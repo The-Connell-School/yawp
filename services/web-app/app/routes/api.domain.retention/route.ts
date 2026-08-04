@@ -22,16 +22,16 @@ export async function loader({ request }: ActionFunctionArgs) {
   const now = new Date();
   const oneDay = 24 * 60 * 60 * 1000;
   const cutoff = new Date(
-    now.getTime() -
-      DOCUMENT_REVISION_AND_WRITE_JOURNAL_RETENTION_DAYS * oneDay
+    now.getTime() - DOCUMENT_REVISION_AND_WRITE_JOURNAL_RETENTION_DAYS * oneDay
   );
 
   const versionsResult = await prisma.documentRevision.deleteMany({
     where: { createdAt: { lt: cutoff } },
   });
-  const documentWriteJournalsResult = await prisma.documentWriteJournal.deleteMany({
-    where: { createdAt: { lt: cutoff } },
-  });
+  const documentWriteJournalsResult =
+    await prisma.documentWriteJournal.deleteMany({
+      where: { createdAt: { lt: cutoff } },
+    });
 
   return dataResponse({
     deletedVersions: versionsResult.count,

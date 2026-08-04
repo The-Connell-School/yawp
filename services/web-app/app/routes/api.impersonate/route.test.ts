@@ -87,12 +87,16 @@ describe('api.impersonate', () => {
       expirationDate: new Date('2030-01-01T00:00:00.000Z'),
       userId: 'target-user',
     });
-    prisma.orgMembership.findFirst.mockResolvedValue({ id: 'target-membership' });
+    prisma.orgMembership.findFirst.mockResolvedValue({
+      id: 'target-membership',
+    });
     getSession.mockResolvedValue(
       authSession({ sessionId: 'operator-session' })
     );
     commitSession.mockResolvedValue('en_session=target-session; Path=/');
-    setMembershipId.mockResolvedValue('membership-id=target-membership; Path=/');
+    setMembershipId.mockResolvedValue(
+      'membership-id=target-membership; Path=/'
+    );
   });
 
   test('rejects a valid token when the request is not authenticated', async () => {

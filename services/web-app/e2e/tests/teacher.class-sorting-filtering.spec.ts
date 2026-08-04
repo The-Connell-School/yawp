@@ -101,7 +101,9 @@ test.describe.serial('Teacher class sorting and filtering', () => {
         'Zoe Carter'
       );
 
-      await page.getByRole('searchbox', { name: /search students/i }).fill('Brian');
+      await page
+        .getByRole('searchbox', { name: /search students/i })
+        .fill('Brian');
       await expect(studentsTable.locator('tbody tr')).toHaveCount(1);
       await expect(studentsTable.locator('tbody tr').first()).toContainText(
         'Brian Adams'
@@ -135,7 +137,9 @@ test.describe.serial('Teacher class sorting and filtering', () => {
         name: 'Assignments',
       });
       await expect(assignmentsTable.locator('tbody tr')).toHaveCount(3);
-      await expect(assignmentsTable.getByText('Alpha Daily Pages')).toBeVisible();
+      await expect(
+        assignmentsTable.getByText('Alpha Daily Pages')
+      ).toBeVisible();
       await expect(assignmentsTable.getByText('Beta Essay')).toBeVisible();
       await expect(assignmentsTable.getByText('Zeta Essay')).toBeVisible();
 

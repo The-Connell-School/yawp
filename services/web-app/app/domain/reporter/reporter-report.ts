@@ -179,8 +179,7 @@ export function summarizeClassRubrics(
   for (const category of orderRubricCategories(byCategory.keys())) {
     const values = byCategory.get(category);
     if (!values || values.length === 0) continue;
-    const mean =
-      values.reduce((sum, value) => sum + value, 0) / values.length;
+    const mean = values.reduce((sum, value) => sum + value, 0) / values.length;
     summaries.push({
       category,
       label: humanizeRubricCategory(category),
@@ -434,7 +433,11 @@ export function findStudentsNeedingAttention(
     let severity = 0;
 
     if (average != null && average < threshold) {
-      flags.push({ type: 'below_average', averagePercentage: average, threshold });
+      flags.push({
+        type: 'below_average',
+        averagePercentage: average,
+        threshold,
+      });
       severity += (threshold - average) * 1.5;
     }
 

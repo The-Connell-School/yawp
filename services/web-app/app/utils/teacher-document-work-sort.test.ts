@@ -15,7 +15,8 @@ const collator = new Intl.Collator(undefined, {
 });
 
 function row(
-  overrides: Partial<TeacherDocumentWorkRow> & Pick<TeacherDocumentWorkRow, 'id'>
+  overrides: Partial<TeacherDocumentWorkRow> &
+    Pick<TeacherDocumentWorkRow, 'id'>
 ): TeacherDocumentWorkRow {
   return {
     title: null,
@@ -40,24 +41,25 @@ function row(
 
 describe('parseDocumentWorkSort', () => {
   test('parses valid sort preferences', () => {
-    expect(parseDocumentWorkSort({ field: 'student', direction: 'asc' })).toEqual(
-      { field: 'student', direction: 'asc' }
-    );
+    expect(
+      parseDocumentWorkSort({ field: 'student', direction: 'asc' })
+    ).toEqual({ field: 'student', direction: 'asc' });
   });
 
   test('rejects invalid sort preferences', () => {
-    expect(parseDocumentWorkSort({ field: 'title', direction: 'asc' })).toBeUndefined();
-    expect(parseDocumentWorkSort({ field: 'student', direction: 'up' })).toBeUndefined();
+    expect(
+      parseDocumentWorkSort({ field: 'title', direction: 'asc' })
+    ).toBeUndefined();
+    expect(
+      parseDocumentWorkSort({ field: 'student', direction: 'up' })
+    ).toBeUndefined();
   });
 });
 
 describe('toggleDocumentWorkSort', () => {
   test('flips direction when clicking the active column', () => {
     expect(
-      toggleDocumentWorkSort(
-        { field: 'student', direction: 'asc' },
-        'student'
-      )
+      toggleDocumentWorkSort({ field: 'student', direction: 'asc' }, 'student')
     ).toEqual({ field: 'student', direction: 'desc' });
   });
 

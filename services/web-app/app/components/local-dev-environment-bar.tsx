@@ -41,7 +41,11 @@ function roleMeta(role: string) {
     return { badge: 'Owner', icon: Shield, tone: 'secondary' as const };
   }
   if (role.startsWith('student')) {
-    return { badge: 'Student', icon: GraduationCap, tone: 'secondary' as const };
+    return {
+      badge: 'Student',
+      icon: GraduationCap,
+      tone: 'secondary' as const,
+    };
   }
   return { badge: 'Teacher', icon: UserRound, tone: 'secondary' as const };
 }
@@ -97,7 +101,10 @@ function LoginOptionRow({
         title={option.description}
         className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-accent focus-visible:bg-accent focus-visible:outline-none disabled:opacity-60"
       >
-        <Icon className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+        <Icon
+          className="size-4 shrink-0 text-muted-foreground"
+          aria-hidden="true"
+        />
         <span className="min-w-0 flex-1">
           <span className="block truncate font-medium">{option.label}</span>
           <span className="block truncate text-xs text-muted-foreground">

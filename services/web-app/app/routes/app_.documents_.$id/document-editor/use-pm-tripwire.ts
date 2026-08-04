@@ -39,7 +39,7 @@ export function installPmTripwire(
   editor: Editor,
   options: { dev?: boolean } = {}
 ): () => void {
-  const isDev = options.dev ?? (process.env.NODE_ENV !== 'production');
+  const isDev = options.dev ?? process.env.NODE_ENV !== 'production';
 
   const handler = ({ transaction }: { transaction: any }) => {
     const violation = checkPmTransaction(transaction);
@@ -50,7 +50,8 @@ export function installPmTripwire(
     // persistence pipeline (update event never fires → IDB never written →
     // sync service never saves). The E2E invariants test checks the counter.
     console.error(violation);
-    window.__yawpUnauthorizedPmWrites = (window.__yawpUnauthorizedPmWrites ?? 0) + 1;
+    window.__yawpUnauthorizedPmWrites =
+      (window.__yawpUnauthorizedPmWrites ?? 0) + 1;
   };
 
   editor.on('transaction', handler);

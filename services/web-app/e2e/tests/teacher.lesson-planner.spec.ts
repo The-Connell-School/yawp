@@ -268,6 +268,62 @@ async function seedUnreadableDeck(e2eContext: {
   }
 }
 
+/** A reply carrying a handout and a sample, neither of them kept yet. */
+async function seedLessonWithMaterials(e2eContext: {
+  teacherMembershipId: string;
+  organizationId: string;
+}) {
+  const prisma = createE2EPrismaClient();
+  const content = [
+    '## Lesson Sequence',
+    '',
+    'Project the two drafts below, then hand out the practice set.',
+    '',
+    '```yawp-material',
+    'kind: sample',
+    'title: Two conclusions, side by side',
+    '---',
+    '**Draft A.** In conclusion, this essay has shown many things.',
+    '',
+    '**Draft B.** The door slams because she is finished asking.',
+    '```',
+    '',
+    '```yawp-material',
+    'kind: handout',
+    'title: Diagnose & Repair',
+    '---',
+    'Read each excerpt. Underline the sentence that explains the quote.',
+    '```',
+  ].join('\n');
+  try {
+    const conversation = await prisma.lessonPlanConversation.create({
+      data: {
+        membershipId: e2eContext.teacherMembershipId,
+        organizationId: e2eContext.organizationId,
+        title: 'Evidence lesson',
+        messages: {
+          create: [
+            {
+              role: 'user',
+              content: 'Plan a lesson on explaining evidence.',
+              createdAt: new Date('2026-08-05T10:00:00.000Z'),
+            },
+            {
+              role: 'assistant',
+              content,
+              createdAt: new Date('2026-08-05T10:00:01.000Z'),
+            },
+          ],
+        },
+      },
+      select: { id: true },
+    });
+    return { conversationId: conversation.id };
+  } finally {
+    await prisma.$disconnect();
+  }
+}
+
 test.describe('YAWP! Lesson Planner', () => {
   test.afterEach(async ({ e2eContext }) => {
     // Leave the org in its default (disabled) state for other specs.
@@ -774,6 +830,95 @@ test.describe('YAWP! Lesson Planner', () => {
 
     const response = await page.goto(`/present/${conversationId}/${messageId}`);
     expect(response?.status()).toBe(404);
+  });
+
+  test('hands over a handout as a thing, not as text to copy out', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    await setLessonPlannerEnabled(e2eContext.organizationId, true);
+    const { conversationId } = await seedLessonWithMaterials(e2eContext);
+    await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+    await page.goto(`/app/lesson-planner?c=${conversationId}`);
+
+    const cards = page.getByTestId('material-card');
+    await expect(cards).toHaveCount(2);
+    await expect(cards.first()).toContainText('Two conclusions, side by side');
+    await expect(cards.nth(1)).toContainText('Diagnose & Repair');
+    // The plan around them still reads as a plan.
+    await expect(page.locator('main')).toContainText('Lesson Sequence');
+    // The machinery never surfaces.
+    await expect(page.locator('main')).not.toContainText('yawp-material');
+    await expect(page.locator('main')).not.toContainText('kind: handout');
+
+    // The material itself is one click away, not pasted into the plan.
+    await expect(page.locator('main')).not.toContainText('Underline the');
+    await cards.nth(1).getByText('Diagnose & Repair').click();
+    await expect(cards.nth(1)).toContainText('Underline the sentence');
+  });
+
+  test('puts one material in the packet without keeping the whole plan', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    await setLessonPlannerEnabled(e2eContext.organizationId, true);
+    const { conversationId } = await seedLessonWithMaterials(e2eContext);
+    await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+    await page.goto(`/app/lesson-planner?c=${conversationId}`);
+
+    const handout = page.getByTestId('material-card').nth(1);
+    const save = page.waitForResponse(
+      (response) =>
+        response.url().includes('/api/domain/lesson-planner/packet') &&
+        response.request().method() === 'POST'
+    );
+    await handout.getByTestId('material-toggle').click();
+    await save;
+    await expect(handout.getByTestId('material-toggle')).toContainText(
+      'In the packet'
+    );
+
+    await page.goto(`/app/lesson-planner/${conversationId}/packet`);
+    // The handout is there, printable, with a name-and-date line…
+    await expect(page.locator('main')).toContainText('Diagnose & Repair');
+    await expect(page.locator('main')).toContainText('Underline the sentence');
+    await expect(page.locator('main')).toContainText('Name ___');
+    // …and the lesson plan the teacher did not keep is not.
+    await expect(page.locator('main')).not.toContainText('Lesson Sequence');
+  });
+
+  test('remembers which materials are already in the packet', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    await setLessonPlannerEnabled(e2eContext.organizationId, true);
+    const { conversationId } = await seedLessonWithMaterials(e2eContext);
+    await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+    await page.goto(`/app/lesson-planner?c=${conversationId}`);
+
+    const toggle = page
+      .getByTestId('material-card')
+      .first()
+      .getByTestId('material-toggle');
+    const save = page.waitForResponse(
+      (response) =>
+        response.url().includes('/api/domain/lesson-planner/packet') &&
+        response.request().method() === 'POST'
+    );
+    await toggle.click();
+    await save;
+
+    await page.reload();
+    await expect(
+      page.getByTestId('material-card').first().getByTestId('material-toggle')
+    ).toContainText('In the packet');
+    // The one beside it is untouched.
+    await expect(
+      page.getByTestId('material-card').nth(1).getByTestId('material-toggle')
+    ).toContainText('Add to packet');
   });
 
   test('refuses to present a reply that has no deck in it', async ({

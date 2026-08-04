@@ -74,11 +74,13 @@ export function buildModuleRubricGuidance({
 
   if (applicableCategories.length === 0) return null;
 
-  const categoryLines = applicableCategories.map(({ category, relationship }) => {
-    const percent = Math.round(category.weight * 100);
-    const relationshipLabel = relationshipCopy[relationship];
-    return `- ${relationshipLabel} ${category.label} (${percent}%) - ${category.description}`;
-  });
+  const categoryLines = applicableCategories.map(
+    ({ category, relationship }) => {
+      const percent = Math.round(category.weight * 100);
+      const relationshipLabel = relationshipCopy[relationship];
+      return `- ${relationshipLabel} ${category.label} (${percent}%) - ${category.description}`;
+    }
+  );
 
   return [
     'Module rubric guidance:',

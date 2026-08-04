@@ -45,7 +45,9 @@ async function requireInvitation(request: Request) {
   const schoolId = invitation.get('schoolId') as string | undefined;
 
   const classIds = Array.from(
-    new Set([klassId, ...(Array.isArray(klassIds) ? klassIds : [])].filter(Boolean))
+    new Set(
+      [klassId, ...(Array.isArray(klassIds) ? klassIds : [])].filter(Boolean)
+    )
   ) as string[];
 
   if (!email || (classIds.length === 0 && !schoolId)) {
@@ -90,11 +92,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
         select: { user: { select: { name: true } } },
       },
     },
-    orderBy: [
-      { schoolYear: 'desc' },
-      { grade: 'asc' },
-      { period: 'asc' },
-    ],
+    orderBy: [{ schoolYear: 'desc' }, { grade: 'asc' }, { period: 'asc' }],
   });
 
   if (classes.length === 0) {
@@ -210,8 +208,17 @@ export default function Route() {
       </div>
 
       <div className="mx-auto mt-10 w-full max-w-md px-8">
-        <Form method="POST" className="flex flex-col gap-4" {...form.getFormProps()}>
-          <FormInput scope={form.scope('name')} type="text" label="Name" autoFocus />
+        <Form
+          method="POST"
+          className="flex flex-col gap-4"
+          {...form.getFormProps()}
+        >
+          <FormInput
+            scope={form.scope('name')}
+            type="text"
+            label="Name"
+            autoFocus
+          />
           {showClassSelect ? (
             <FormSelect
               scope={form.scope('classId')}

@@ -9,12 +9,8 @@ import { Link, useLoaderData, useSearchParams } from 'react-router';
 import { useState } from 'react';
 import { Tabs, TabsList, TabsTrigger } from '~/components/ui/tabs';
 import { Button } from '~/components/ui/button';
-import {
-  ClassManageSheet,
-} from '~/components/class-manage-sheet';
-import {
-  TeacherClassCard,
-} from '~/components/teacher-class-card';
+import { ClassManageSheet } from '~/components/class-manage-sheet';
+import { TeacherClassCard } from '~/components/teacher-class-card';
 import { requireMembership, requireUserId } from '~/utils/auth.server.js';
 import { prisma } from '~/utils/db.server.js';
 import { generateClassCode } from '~/utils/class';
@@ -34,7 +30,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
   const profile = await requireMembership(request, userId);
 
-  if (profile.role !== "TEACHER") {
+  if (profile.role !== 'TEACHER') {
     return redirect('/app');
   }
 
@@ -115,8 +111,11 @@ export async function action({ request }: ActionFunctionArgs) {
   const userId = await requireUserId(request);
   const profile = await requireMembership(request, userId);
 
-  if (profile.role !== "TEACHER") {
-    return dataResponse({ error: 'Only teachers can manage classes.' }, { status: 403 });
+  if (profile.role !== 'TEACHER') {
+    return dataResponse(
+      { error: 'Only teachers can manage classes.' },
+      { status: 403 }
+    );
   }
 
   const formData = await request.formData();
@@ -132,15 +131,24 @@ export async function action({ request }: ActionFunctionArgs) {
     let code = (formData.get('code') as string)?.trim().toUpperCase() || '';
 
     if (!schoolId || !schoolYear || !grade || !period) {
-      return dataResponse({ error: 'All required fields must be filled.' }, { status: 400 });
+      return dataResponse(
+        { error: 'All required fields must be filled.' },
+        { status: 400 }
+      );
     }
 
     if (!allowedSchoolIds.has(schoolId)) {
-      return dataResponse({ error: 'Invalid school for your account.' }, { status: 400 });
+      return dataResponse(
+        { error: 'Invalid school for your account.' },
+        { status: 400 }
+      );
     }
 
     if (!/^\d{4}-\d{4}$/.test(schoolYear)) {
-      return dataResponse({ error: 'School year must be YYYY-YYYY.' }, { status: 400 });
+      return dataResponse(
+        { error: 'School year must be YYYY-YYYY.' },
+        { status: 400 }
+      );
     }
 
     if (!code) code = generateClassCode();
@@ -190,15 +198,24 @@ export async function action({ request }: ActionFunctionArgs) {
     const code = (formData.get('code') as string)?.trim().toUpperCase() || '';
 
     if (!classId || !schoolId || !schoolYear || !grade || !period || !code) {
-      return dataResponse({ error: 'All required fields must be filled.' }, { status: 400 });
+      return dataResponse(
+        { error: 'All required fields must be filled.' },
+        { status: 400 }
+      );
     }
 
     if (!allowedSchoolIds.has(schoolId)) {
-      return dataResponse({ error: 'Invalid school for your account.' }, { status: 400 });
+      return dataResponse(
+        { error: 'Invalid school for your account.' },
+        { status: 400 }
+      );
     }
 
     if (!/^\d{4}-\d{4}$/.test(schoolYear)) {
-      return dataResponse({ error: 'School year must be YYYY-YYYY.' }, { status: 400 });
+      return dataResponse(
+        { error: 'School year must be YYYY-YYYY.' },
+        { status: 400 }
+      );
     }
 
     if (!/^[A-Z0-9]{3,10}$/.test(code)) {

@@ -13,7 +13,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
   const profile = await requireMembership(request, userId);
 
-  if (profile.role !== "TEACHER") {
+  if (profile.role !== 'TEACHER') {
     throw new Response('Teacher profile required', { status: 403 });
   }
 

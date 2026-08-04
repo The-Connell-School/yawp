@@ -51,7 +51,8 @@ export function usePasteAlert(editor: Editor | null, docId: string) {
       const pastedText = event.clipboardData?.getData('text/plain') || '';
       const textLength = pastedText.length;
 
-      const copiedFromSameDoc = sessionStorage.getItem(sameDocCopyKey) === 'true';
+      const copiedFromSameDoc =
+        sessionStorage.getItem(sameDocCopyKey) === 'true';
       if (copiedFromSameDoc) {
         sessionStorage.removeItem(sameDocCopyKey);
       }
@@ -60,7 +61,11 @@ export function usePasteAlert(editor: Editor | null, docId: string) {
         fetch('/api/paste-alert', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ documentId: docId, textLength, content: pastedText }),
+          body: JSON.stringify({
+            documentId: docId,
+            textLength,
+            content: pastedText,
+          }),
         }).catch(() => {});
       }
     };

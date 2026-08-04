@@ -117,7 +117,9 @@ describe('student work view preferences', () => {
       mergeStudentWorkViewPreferences(new URLSearchParams('status=graded'));
 
       expect(
-        parseStudentWorkViewPreferences(storage.get(STUDENT_WORK_VIEW_STORAGE_KEY))
+        parseStudentWorkViewPreferences(
+          storage.get(STUDENT_WORK_VIEW_STORAGE_KEY)
+        )
       ).toEqual({
         status: 'graded',
       });
@@ -125,7 +127,9 @@ describe('student work view preferences', () => {
       mergeStudentWorkViewPreferences(new URLSearchParams());
 
       expect(
-        parseStudentWorkViewPreferences(storage.get(STUDENT_WORK_VIEW_STORAGE_KEY))
+        parseStudentWorkViewPreferences(
+          storage.get(STUDENT_WORK_VIEW_STORAGE_KEY)
+        )
       ).toEqual({});
     } finally {
       Object.defineProperty(globalThis, 'window', {
@@ -161,7 +165,9 @@ describe('student work view preferences', () => {
       );
 
       expect(
-        parseStudentWorkViewPreferences(storage.get(STUDENT_WORK_VIEW_STORAGE_KEY))
+        parseStudentWorkViewPreferences(
+          storage.get(STUDENT_WORK_VIEW_STORAGE_KEY)
+        )
       ).toEqual({
         documentGroup: 'status',
         status: 'needs-grading',
@@ -192,21 +198,20 @@ describe('student work view preferences', () => {
     });
 
     try {
-      mergeStudentWorkViewPreferences(
-        new URLSearchParams('group=status'),
-        {
-          collapsedGroups: {
-            status: ['graded'],
-          },
-        }
-      );
+      mergeStudentWorkViewPreferences(new URLSearchParams('group=status'), {
+        collapsedGroups: {
+          status: ['graded'],
+        },
+      });
 
       mergeStudentWorkViewPreferences(
         new URLSearchParams('group=status&status=needs-grading')
       );
 
       expect(
-        parseStudentWorkViewPreferences(storage.get(STUDENT_WORK_VIEW_STORAGE_KEY))
+        parseStudentWorkViewPreferences(
+          storage.get(STUDENT_WORK_VIEW_STORAGE_KEY)
+        )
       ).toEqual({
         documentGroup: 'status',
         status: 'needs-grading',

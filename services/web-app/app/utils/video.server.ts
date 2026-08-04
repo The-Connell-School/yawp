@@ -17,18 +17,18 @@ export function getVideoDurationFromFile(file: File): Promise<number> {
   return new Promise((resolve, reject) => {
     const video = document.createElement('video');
     video.preload = 'metadata';
-    
-    video.onloadedmetadata = function() {
+
+    video.onloadedmetadata = function () {
       // Clean up object URL
       URL.revokeObjectURL(video.src);
       resolve(video.duration);
     };
-    
-    video.onerror = function() {
+
+    video.onerror = function () {
       URL.revokeObjectURL(video.src);
       reject(new Error('Error loading video metadata'));
     };
-    
+
     video.src = URL.createObjectURL(file);
   });
 }
@@ -37,20 +37,22 @@ export function getVideoDurationFromFile(file: File): Promise<number> {
  * Extract video duration from a video buffer/blob on the server side
  * Note: This is a simplified approach. For production, consider using ffprobe or similar
  */
-export async function getVideoDurationFromBuffer(buffer: Buffer): Promise<number | null> {
+export async function getVideoDurationFromBuffer(
+  buffer: Buffer
+): Promise<number | null> {
   try {
     // For server-side video duration extraction, we would typically use:
     // 1. ffprobe (requires ffmpeg installation)
     // 2. node-ffmpeg package
     // 3. Other video processing libraries
-    
+
     // Since adding external dependencies requires careful consideration,
     // we'll return null for now and handle duration detection on the client side
     // during file upload, then pass it to the server
-    
+
     console.log('Server-side video duration extraction not implemented yet');
     console.log('Buffer size:', buffer.length);
-    
+
     return null;
   } catch (error) {
     console.error('Error extracting video duration:', error);
@@ -63,7 +65,7 @@ export async function getVideoDurationFromBuffer(buffer: Buffer): Promise<number
  */
 export function formatDuration(seconds: number): string {
   if (!seconds || seconds <= 0) return '0:00';
-  
+
   const hours = Math.floor(seconds / 3600);
   const minutes = Math.floor((seconds % 3600) / 60);
   const remainingSeconds = Math.floor(seconds % 60);
@@ -78,7 +80,7 @@ export function formatDuration(seconds: number): string {
 /**
  * Client-side helper to get video duration during file input change
  * Usage in admin forms:
- * 
+ *
  * const handleVideoFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
  *   const file = event.target.files?.[0];
  *   if (file) {

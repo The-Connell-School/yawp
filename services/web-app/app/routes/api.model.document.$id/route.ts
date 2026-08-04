@@ -122,21 +122,14 @@ const actionImpl = async ({ request, params }: ActionFunctionArgs) => {
     },
   });
 
-  if (
-    data.editorSessionId &&
-    data.clientSeq !== undefined &&
-    hasBodyMutation
-  ) {
+  if (data.editorSessionId && data.clientSeq !== undefined && hasBodyMutation) {
     const lastAccepted = await prisma.documentWriteJournal.findFirst({
       where: {
         documentId: document.id,
         editorSessionId: data.editorSessionId,
         status: 'accepted',
       },
-      orderBy: [
-        { clientSeq: 'desc' },
-        { createdAt: 'desc' },
-      ],
+      orderBy: [{ clientSeq: 'desc' }, { createdAt: 'desc' }],
       select: { clientSeq: true },
     });
 
@@ -307,7 +300,11 @@ const actionImpl = async ({ request, params }: ActionFunctionArgs) => {
       data: documentUpdateData,
     });
   } catch (error) {
-    if (hasBodyMutation && data.baseRevision !== undefined && isRecordNotFoundError(error)) {
+    if (
+      hasBodyMutation &&
+      data.baseRevision !== undefined &&
+      isRecordNotFoundError(error)
+    ) {
       await prisma.documentWriteJournal.update({
         where: { id: journal.id },
         data: {

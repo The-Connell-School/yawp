@@ -50,7 +50,9 @@ mock.module('~/components/assignments/assignment-creation-sheet', () => ({
 mock.module('~/components/assignments/assignment-edit-sheet', () => ({
   AssignmentEditForm: (props: any) => {
     editFormProps = props;
-    return <div data-testid="edit-form">Editing {props.editingAssignment.id}</div>;
+    return (
+      <div data-testid="edit-form">Editing {props.editingAssignment.id}</div>
+    );
   },
 }));
 
@@ -78,10 +80,8 @@ mock.module('~/components/ui/sheet', () => ({
 }));
 
 const { MemoryRouter } = actualReactRouter;
-const {
-  ClassAssignmentsTab,
-  clampAssignmentPaginationSkip,
-} = await import('./class-assignments-tab');
+const { ClassAssignmentsTab, clampAssignmentPaginationSkip } =
+  await import('./class-assignments-tab');
 type ClassAssignmentsTabAssignment =
   import('./class-assignments-tab').ClassAssignmentsTabAssignment;
 
@@ -190,9 +190,7 @@ describe('ClassAssignmentsTab', () => {
     expect(creationProps).toMatchObject({
       entryPoint: 'class',
       fixedClassId: 'class-1',
-      teacherClasses: [
-        { id: 'class-1', name: 'Grade 9 • Period 2 — History' },
-      ],
+      teacherClasses: [{ id: 'class-1', name: 'Grade 9 • Period 2 — History' }],
     });
   });
 

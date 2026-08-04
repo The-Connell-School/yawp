@@ -47,7 +47,9 @@ export async function action({ request }: ActionFunctionArgs) {
         where: {
           id: { in: requestedSubmissionIds },
           document: { is: { membershipId: { not: actor.membershipId } } },
-          ...(actor.isAdmin ? {} : { gradedByMembershipId: actor.membershipId }),
+          ...(actor.isAdmin
+            ? {}
+            : { gradedByMembershipId: actor.membershipId }),
           releasedAt: null,
         },
         select: {

@@ -143,7 +143,9 @@ function AssignmentPromptBanner({
           size="icon-sm"
           className="min-w-8"
           aria-label={
-            isCollapsed ? 'Expand assignment prompt' : 'Collapse assignment prompt'
+            isCollapsed
+              ? 'Expand assignment prompt'
+              : 'Collapse assignment prompt'
           }
           onClick={() => setIsCollapsed((value) => !value)}
         >

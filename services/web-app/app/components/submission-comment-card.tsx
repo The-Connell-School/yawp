@@ -152,12 +152,17 @@ export function SubmissionCommentCard({
           autoFocus
         />
       ) : (
-        <p className="mt-1 whitespace-pre-line text-sm leading-relaxed">{comment.content}</p>
+        <p className="mt-1 whitespace-pre-line text-sm leading-relaxed">
+          {comment.content}
+        </p>
       )}
       {comment.responses?.length && !isEditing ? (
         <div className="mt-2 space-y-1.5 border-t pt-2">
           {comment.responses.map((r) => (
-            <div key={r.id} className="whitespace-pre-line text-xs text-muted-foreground">
+            <div
+              key={r.id}
+              className="whitespace-pre-line text-xs text-muted-foreground"
+            >
               <span className="font-semibold text-foreground/80">
                 {getCommentAuthorLabel(r)}:
               </span>{' '}

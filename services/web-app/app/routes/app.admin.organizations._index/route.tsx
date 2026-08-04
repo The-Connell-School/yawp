@@ -419,7 +419,8 @@ export default function OrganizationsRoute() {
                       {
                         organization.memberships.filter(
                           (membership) =>
-                            membership.role === 'STUDENT' && !membership.isOrgOwner
+                            membership.role === 'STUDENT' &&
+                            !membership.isOrgOwner
                         ).length
                       }{' '}
                       / {organization.numOfStudentSeats}

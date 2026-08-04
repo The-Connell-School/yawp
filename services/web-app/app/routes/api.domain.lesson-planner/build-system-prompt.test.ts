@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { rubricCategories } from '~/domain/grading/rubric';
 import { SLIDE_LAYOUTS } from '~/domain/lesson-planner/slide-deck';
+import { MATERIAL_KINDS } from '~/domain/lesson-planner/lesson-material';
 import {
   buildLessonPlannerSystemPrompt,
   RECOMMENDED_LESSON_PLANNER_PROMPTS,
@@ -277,5 +278,47 @@ describe('buildLessonPlannerSystemPrompt — slide decks', () => {
     expect(lower).toContain('you cannot see the teacher');
     expect(lower).toContain('never tell them to scroll');
     expect(lower).toContain('build the deck again');
+  });
+});
+
+describe('buildLessonPlannerSystemPrompt — handing over real material', () => {
+  const prompt = buildLessonPlannerSystemPrompt({
+    teacherName: null,
+    organizationName: 'Connell School',
+  });
+
+  test('asks for material as its own block, not as text to copy out', () => {
+    expect(prompt).toContain('```yawp-material');
+    for (const kind of MATERIAL_KINDS) {
+      expect(prompt).toContain(kind);
+    }
+  });
+
+  test('says the material is Markdown, not JSON', () => {
+    // Escaping a whole handout into a JSON string is the shape that cost
+    // teachers their slide decks.
+    expect(prompt).toContain('ordinary Markdown (NOT JSON');
+  });
+
+  test('forbids telling a teacher to supply an example it did not write', () => {
+    const lower = prompt.toLowerCase();
+    // "Model with two versions of the same paragraph" — written by whom?
+    expect(lower).toContain(
+      'never tell a teacher to supply an example you did not write'
+    );
+    expect(lower).toContain('is homework you handed the teacher');
+  });
+
+  test('stops burying handouts in a collapsible', () => {
+    expect(prompt).not.toContain('<details><summary>');
+    expect(prompt.toLowerCase()).toContain('not in a collapsible');
+  });
+
+  test('will not invent a warm-up before it has really searched', () => {
+    const lower = prompt.toLowerCase();
+    expect(lower).toContain(
+      'never write your own warm-up prompt without searching'
+    );
+    expect(lower).toContain('never search once and give up');
   });
 });

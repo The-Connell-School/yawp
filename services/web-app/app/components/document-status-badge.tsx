@@ -47,4 +47,3 @@ export function DocumentStatusBadge({ submittedAt, grade }: Props) {
     </Badge>
   );
 }
-

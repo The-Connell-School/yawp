@@ -48,7 +48,10 @@ export default function IndexRoute() {
         </div>
 
         <div className="yawp-entry-actions" aria-label="Account actions">
-          <a className="yawp-entry-button yawp-entry-button-primary" href={loginUrl}>
+          <a
+            className="yawp-entry-button yawp-entry-button-primary"
+            href={loginUrl}
+          >
             Log In
           </a>
           <a

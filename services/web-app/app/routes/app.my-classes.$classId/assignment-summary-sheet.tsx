@@ -68,7 +68,9 @@ function MetadataRow({
   return (
     <div className="flex items-center justify-between gap-3 px-4 py-3">
       <dt className="text-muted-foreground">{label}</dt>
-      <dd className="min-w-0 text-right font-medium text-foreground">{children}</dd>
+      <dd className="min-w-0 text-right font-medium text-foreground">
+        {children}
+      </dd>
     </div>
   );
 }
@@ -91,7 +93,9 @@ function AssignmentMetadataSection({
     >
       <dl className="divide-y">
         {assignment.assignmentType ? (
-          <MetadataRow label="Type">{assignment.assignmentType.title}</MetadataRow>
+          <MetadataRow label="Type">
+            {assignment.assignmentType.title}
+          </MetadataRow>
         ) : null}
         <MetadataRow label="Documents">
           <AssignmentDocumentsPill
@@ -105,7 +109,9 @@ function AssignmentMetadataSection({
           {metadataYesNo(assignment.submitForGrade)}
         </MetadataRow>
         {assignment.submitForGrade ? (
-          <MetadataRow label="Point value">{assignment.pointValue ?? 100}</MetadataRow>
+          <MetadataRow label="Point value">
+            {assignment.pointValue ?? 100}
+          </MetadataRow>
         ) : null}
         <MetadataRow label="View only">{metadataYesNo(isViewOnly)}</MetadataRow>
         <MetadataRow label="Prompt" stacked>

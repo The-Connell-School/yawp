@@ -39,9 +39,8 @@ mock.module('~/utils/toast.server', () => ({
   redirectWithToast,
 }));
 
-const { LlmFallbackRetrySignal } = await import(
-  '~/utils/getLLMCompletion/llm-provider-errors.server'
-);
+const { LlmFallbackRetrySignal } =
+  await import('~/utils/getLLMCompletion/llm-provider-errors.server');
 const { action } = await import('./route');
 
 function buildRubricResponseJson(
@@ -261,7 +260,9 @@ describe('api.domain.grade-essay-ai', () => {
         where: { id: 'assignment-type-legacy' },
       })
     );
-    expect(prisma.submission.update.mock.calls[0]?.[0].data.aiMeta).toMatchObject({
+    expect(
+      prisma.submission.update.mock.calls[0]?.[0].data.aiMeta
+    ).toMatchObject({
       gradingConfigSource: 'thesis-default',
       assignmentTypeRubricSource: 'thesis-default',
       assignmentTypeGradingVersion: 1,
@@ -597,7 +598,11 @@ describe('api.domain.grade-essay-ai', () => {
         id: 'assignment-type-act',
         title: 'ACT Writing',
         kind: 'act_writing',
-        scoringScaleJson: { type: 'act_writing_2_12', minScore: 1, maxScore: 6 },
+        scoringScaleJson: {
+          type: 'act_writing_2_12',
+          minScore: 1,
+          maxScore: 6,
+        },
         rubricJson: {
           categories: [
             {
@@ -722,7 +727,9 @@ describe('api.domain.grade-essay-ai', () => {
         scoreInstructions: 'Scores must be integers 1-6 for each ACT domain.',
       },
     });
-    expect(runCall.data.assignmentTypeRubricSnapshot.categories).toHaveLength(4);
+    expect(runCall.data.assignmentTypeRubricSnapshot.categories).toHaveLength(
+      4
+    );
     expect(runCall.data.metadata).toMatchObject({
       assignmentTypeGradingLabel: 'ACT Writing',
       assignmentTypeRubricSource: 'assignment-type',
@@ -885,15 +892,18 @@ describe('api.domain.grade-essay-ai', () => {
           },
           contextualization: {
             earned: true,
-            comment: 'The essay places Reconstruction in the Civil War context.',
+            comment:
+              'The essay places Reconstruction in the Civil War context.',
           },
           document_use_describes: {
             earned: true,
-            comment: 'The essay accurately describes evidence from the documents.',
+            comment:
+              'The essay accurately describes evidence from the documents.',
           },
           document_use_supports_argument: {
             earned: false,
-            comment: 'The documents are not yet tied consistently to the argument.',
+            comment:
+              'The documents are not yet tied consistently to the argument.',
           },
           outside_evidence: {
             earned: true,
@@ -901,7 +911,8 @@ describe('api.domain.grade-essay-ai', () => {
           },
           sourcing: {
             earned: false,
-            comment: 'The essay needs clearer sourcing of document perspective.',
+            comment:
+              'The essay needs clearer sourcing of document perspective.',
           },
           complexity: {
             earned: false,
@@ -1026,11 +1037,13 @@ describe('api.domain.grade-essay-ai', () => {
         },
         document_use_describes: {
           earned: true,
-          comment: 'The essay accurately describes evidence from the documents.',
+          comment:
+            'The essay accurately describes evidence from the documents.',
         },
         document_use_supports_argument: {
           earned: false,
-          comment: 'The documents are not yet tied consistently to the argument.',
+          comment:
+            'The documents are not yet tied consistently to the argument.',
         },
         outside_evidence: {
           earned: true,
@@ -1083,7 +1096,8 @@ describe('api.domain.grade-essay-ai', () => {
           },
           evidence: {
             earned: true,
-            comment: 'The essay uses specific evidence about canals and factories.',
+            comment:
+              'The essay uses specific evidence about canals and factories.',
           },
           analysis_reasoning: {
             earned: true,
@@ -1155,7 +1169,8 @@ describe('api.domain.grade-essay-ai', () => {
         },
         evidence: {
           earned: true,
-          comment: 'The essay uses specific evidence about canals and factories.',
+          comment:
+            'The essay uses specific evidence about canals and factories.',
         },
         analysis_reasoning: {
           earned: true,
@@ -1235,13 +1250,22 @@ describe('api.domain.grade-essay-ai', () => {
         rubricVersion: 'ap-history-dbq-2026',
         points: {
           thesis: { earned: true, comment: 'Defensible thesis.' },
-          contextualization: { earned: false, comment: 'Needs broader context.' },
-          document_use_describes: { earned: false, comment: 'Needs documents.' },
+          contextualization: {
+            earned: false,
+            comment: 'Needs broader context.',
+          },
+          document_use_describes: {
+            earned: false,
+            comment: 'Needs documents.',
+          },
           document_use_supports_argument: {
             earned: false,
             comment: 'Needs argument support.',
           },
-          outside_evidence: { earned: false, comment: 'Needs outside evidence.' },
+          outside_evidence: {
+            earned: false,
+            comment: 'Needs outside evidence.',
+          },
           sourcing: { earned: false, comment: 'Needs sourcing.' },
           complexity: { earned: false, comment: 'Needs complexity.' },
         },

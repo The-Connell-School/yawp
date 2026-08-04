@@ -20,7 +20,10 @@ export class SyncService {
   private _lastSyncedHash: string | null = null;
   private _stopped = false;
 
-  constructor(store: DocumentStore, fetchFn: typeof fetch = globalThis.fetch.bind(globalThis)) {
+  constructor(
+    store: DocumentStore,
+    fetchFn: typeof fetch = globalThis.fetch.bind(globalThis)
+  ) {
     this._store = store;
     this._fetch = fetchFn;
   }
@@ -107,7 +110,10 @@ export class SyncService {
     const entry = await this._store.get(docId);
     if (!entry || this._stopped || this._docId !== docId) return;
 
-    if (entry.contentHash === this._lastSyncedHash && entry.syncStatus === 'synced') {
+    if (
+      entry.contentHash === this._lastSyncedHash &&
+      entry.syncStatus === 'synced'
+    ) {
       return;
     }
 
@@ -146,7 +152,11 @@ export class SyncService {
           if (typeof body.currentRevision === 'number') {
             this._emitRevision(body.currentRevision);
           }
-          await this._store.markFailed(docId, 'stale_base_revision', body.currentRevision);
+          await this._store.markFailed(
+            docId,
+            'stale_base_revision',
+            body.currentRevision
+          );
           this._setStatus('error');
           this._scheduleRetry();
           return;

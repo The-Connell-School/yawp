@@ -45,7 +45,9 @@ describe('admin assignment type detail action', () => {
     requireMembership.mockReset();
 
     requireAdmin.mockResolvedValue(undefined);
-    prisma.$transaction.mockImplementation(async (callback) => callback(prisma));
+    prisma.$transaction.mockImplementation(async (callback) =>
+      callback(prisma)
+    );
     prisma.assignmentType.findUnique.mockResolvedValue({ id: 'at-1' });
     prisma.orgMembership.findMany.mockResolvedValue([]);
     prisma.orgMembership.findUnique.mockResolvedValue({ id: 'teacher-1' });

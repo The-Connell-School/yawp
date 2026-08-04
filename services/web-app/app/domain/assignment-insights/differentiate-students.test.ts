@@ -105,7 +105,9 @@ describe('buildDifferentiation', () => {
       }),
     ]);
 
-    expect(result?.individuals.filter((f) => f.kind === 'support') ?? []).toHaveLength(0);
+    expect(
+      result?.individuals.filter((f) => f.kind === 'support') ?? []
+    ).toHaveLength(0);
   });
 
   test('flags a student strong in every scored category for extension', () => {
@@ -122,9 +124,7 @@ describe('buildDifferentiation', () => {
       }),
     ]);
 
-    const extension = result!.individuals.filter(
-      (f) => f.kind === 'extension'
-    );
+    const extension = result!.individuals.filter((f) => f.kind === 'extension');
     expect(extension).toHaveLength(1);
     expect(extension[0].student.name).toBe('Ana');
     expect(extension[0].categoryLabels).toContain('Voice/Style');
@@ -142,11 +142,7 @@ describe('buildDifferentiation', () => {
       student(name, { thesis_and_content: 3, evidence_and_support: 3 })
     );
 
-    const result = buildDifferentiation([
-      ...struggling,
-      ...soaring,
-      ...middle,
-    ]);
+    const result = buildDifferentiation([...struggling, ...soaring, ...middle]);
 
     expect(result!.individuals).toHaveLength(4);
     expect(result!.individuals.map((f) => f.kind)).toEqual([

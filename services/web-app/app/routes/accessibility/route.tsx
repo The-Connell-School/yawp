@@ -89,9 +89,9 @@ export default function AccessibilityRoute() {
           </h1>
           <p className="mt-5 text-lg leading-8 text-muted-foreground">
             YAWP! is a classroom writing platform for middle school, high
-            school, and college use. The YAWP! product is designed and
-            evaluated for WCAG 2.1 Level AA support across the product flows
-            schools use to teach, write, review, and grade.
+            school, and college use. The YAWP! product is designed and evaluated
+            for WCAG 2.1 Level AA support across the product flows schools use
+            to teach, write, review, and grade.
           </p>
         </div>
 
@@ -136,9 +136,9 @@ export default function AccessibilityRoute() {
         <Section title="Known limitations">
           <ul className="list-disc space-y-2 pl-6">
             <li>
-              Screen reader testing is still limited to a representative
-              macOS VoiceOver smoke pass; full coverage of dynamic workflows
-              and additional assistive technologies is not yet complete.
+              Screen reader testing is still limited to a representative macOS
+              VoiceOver smoke pass; full coverage of dynamic workflows and
+              additional assistive technologies is not yet complete.
             </li>
             <li>
               Keyboard-smoke testing has passed on representative institutional

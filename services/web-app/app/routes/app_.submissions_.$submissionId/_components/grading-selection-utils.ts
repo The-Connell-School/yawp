@@ -5,8 +5,21 @@ function isTextNode(node: Node): node is Text {
 }
 
 const BLOCK_TAGS = new Set([
-  'P', 'DIV', 'LI', 'OL', 'UL', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6',
-  'BLOCKQUOTE', 'PRE', 'SECTION', 'ARTICLE',
+  'P',
+  'DIV',
+  'LI',
+  'OL',
+  'UL',
+  'H1',
+  'H2',
+  'H3',
+  'H4',
+  'H5',
+  'H6',
+  'BLOCKQUOTE',
+  'PRE',
+  'SECTION',
+  'ARTICLE',
 ]);
 
 function getClosestBlockParent(node: Node): Element | null {

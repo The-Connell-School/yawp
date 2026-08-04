@@ -44,10 +44,7 @@ export async function action({ request }: ActionFunctionArgs) {
       position: count,
       scoringScaleJson: parseJsonFormField(formData, 'scoringScale'),
       rubricJson: parseJsonFormField(formData, 'rubricJson'),
-      gradingPromptConfigJson: parseJsonFormField(
-        formData,
-        'promptConfigJson'
-      ),
+      gradingPromptConfigJson: parseJsonFormField(formData, 'promptConfigJson'),
       gradingOutputSchemaJson:
         parseJsonFormField(formData, 'outputSchemaJson') ??
         DEFAULT_OUTPUT_SCHEMA_JSON,

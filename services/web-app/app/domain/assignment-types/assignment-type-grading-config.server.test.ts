@@ -8,9 +8,8 @@ const prisma = {
 
 mock.module('~/utils/db.server', () => ({ prisma }));
 
-const { resolveAssignmentTypeGradingConfig } = await import(
-  './assignment-type-grading-config.server'
-);
+const { resolveAssignmentTypeGradingConfig } =
+  await import('./assignment-type-grading-config.server');
 
 describe('resolveAssignmentTypeGradingConfig', () => {
   beforeEach(() => {

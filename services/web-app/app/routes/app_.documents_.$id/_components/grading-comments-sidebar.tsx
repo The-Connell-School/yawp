@@ -33,7 +33,9 @@ type Props = {
   sourceText: string;
   activeGradeCommentId?: string | null;
   onSelectGradeComment?: (id: string) => void;
-  onDraftHighlightChange?: (highlight: { excerpt: string; occurrence: number } | null) => void;
+  onDraftHighlightChange?: (
+    highlight: { excerpt: string; occurrence: number } | null
+  ) => void;
 };
 
 function sortByDocumentLocation<T extends { createdAt: Date | string }>(
@@ -112,19 +114,17 @@ export function GradingCommentsSidebar({
 
   useEffect(() => {
     if (draftComment?.excerpt) {
-      onDraftHighlightChange?.({ excerpt: draftComment.excerpt, occurrence: draftComment.occurrence });
+      onDraftHighlightChange?.({
+        excerpt: draftComment.excerpt,
+        occurrence: draftComment.occurrence,
+      });
     } else {
       onDraftHighlightChange?.(null);
     }
   }, [draftComment?.excerpt, draftComment?.occurrence, onDraftHighlightChange]);
 
   const submitDraftComment = () => {
-    if (
-      !draftContent.trim() ||
-      !submissionId ||
-      !draftComment?.excerpt
-    )
-      return;
+    if (!draftContent.trim() || !submissionId || !draftComment?.excerpt) return;
 
     const form = new FormData();
     form.append('submissionId', submissionId);
@@ -203,7 +203,10 @@ export function GradingCommentsSidebar({
 
   useEffect(() => {
     if (activeGradeCommentId === 'draft' && draftComment) {
-      draftTextareaRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      draftTextareaRef.current?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'center',
+      });
     }
   }, [activeGradeCommentId, draftComment]);
 
@@ -235,51 +238,54 @@ export function GradingCommentsSidebar({
               {combinedItems.map((c) => {
                 if (isDraftComment(c)) {
                   return (
-                  <div
-                    key="draft"
-                    data-grade-comment-card="draft"
-                    ref={(el) => {
-                      commentRefs.current['draft'] = el;
-                    }}
-                    onClick={() => onSelectGradeComment?.('draft')}
-                    className="w-full rounded-lg border-2 border-dashed border-yellow-400 bg-yellow-50/50 p-3 dark:border-yellow-600 dark:bg-yellow-950/20"
-                  >
-                    <Textarea
-                      ref={draftTextareaRef}
-                      value={draftContent}
-                      onChange={(e) => setDraftContent(e.target.value)}
-                      onFocus={() => onSelectGradeComment?.('draft')}
-                      placeholder="Write your comment..."
-                      rows={3}
-                      className="mt-2 resize-none"
-                      onClick={(e) => e.stopPropagation()}
-                    />
-                    <div className="mt-2 flex gap-2">
-                      <Button
-                        size="sm"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          submitDraftComment();
-                        }}
-                        disabled={
-                          !draftContent.trim() || createFetcher.state !== 'idle'
-                        }
-                      >
-                        {createFetcher.state !== 'idle' ? 'Saving...' : 'Save'}
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          cancelDraft();
-                        }}
-                        disabled={createFetcher.state !== 'idle'}
-                      >
-                        Cancel
-                      </Button>
+                    <div
+                      key="draft"
+                      data-grade-comment-card="draft"
+                      ref={(el) => {
+                        commentRefs.current['draft'] = el;
+                      }}
+                      onClick={() => onSelectGradeComment?.('draft')}
+                      className="w-full rounded-lg border-2 border-dashed border-yellow-400 bg-yellow-50/50 p-3 dark:border-yellow-600 dark:bg-yellow-950/20"
+                    >
+                      <Textarea
+                        ref={draftTextareaRef}
+                        value={draftContent}
+                        onChange={(e) => setDraftContent(e.target.value)}
+                        onFocus={() => onSelectGradeComment?.('draft')}
+                        placeholder="Write your comment..."
+                        rows={3}
+                        className="mt-2 resize-none"
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                      <div className="mt-2 flex gap-2">
+                        <Button
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            submitDraftComment();
+                          }}
+                          disabled={
+                            !draftContent.trim() ||
+                            createFetcher.state !== 'idle'
+                          }
+                        >
+                          {createFetcher.state !== 'idle'
+                            ? 'Saving...'
+                            : 'Save'}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            cancelDraft();
+                          }}
+                          disabled={createFetcher.state !== 'idle'}
+                        >
+                          Cancel
+                        </Button>
+                      </div>
                     </div>
-                  </div>
                   );
                 }
                 return (

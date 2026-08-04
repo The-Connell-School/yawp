@@ -71,9 +71,7 @@ describe('Reporter sidebar gating', () => {
 describe('retired assignment management navigation', () => {
   test('does not link teachers to the removed standalone assignments page', () => {
     expect(
-      allDestinations(
-        userWith({ role: 'TEACHER', reporterEnabled: true })
-      )
+      allDestinations(userWith({ role: 'TEACHER', reporterEnabled: true }))
     ).not.toContain('/app/assignments');
   });
 });

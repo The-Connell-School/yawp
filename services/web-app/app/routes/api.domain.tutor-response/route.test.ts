@@ -11,7 +11,10 @@ const prisma = {
   },
 };
 
-mock.module('~/utils/auth.server', () => ({ requireMutableRequest, requireAdmin }));
+mock.module('~/utils/auth.server', () => ({
+  requireMutableRequest,
+  requireAdmin,
+}));
 mock.module('~/utils/db.server', () => ({ prisma }));
 mock.module('~/utils/getLLMCompletion', () => ({
   AgentType: {
@@ -21,9 +24,8 @@ mock.module('~/utils/getLLMCompletion', () => ({
   getLLMCompletion,
 }));
 
-const { LlmFallbackRetrySignal } = await import(
-  '~/utils/getLLMCompletion/llm-provider-errors.server'
-);
+const { LlmFallbackRetrySignal } =
+  await import('~/utils/getLLMCompletion/llm-provider-errors.server');
 const { action } = await import('./route');
 
 describe('api.domain.tutor-response read-only impersonation', () => {
@@ -168,10 +170,7 @@ describe('api.domain.tutor-response read-only impersonation', () => {
         assignmentTypeId: 'assignment-type-1',
         assignmentTypeRubricSource: 'assignment-type',
         assignmentTypeGradingVersion: 7,
-        rubricCategoryKeys: [
-          'thesis_and_content',
-          'grammar_and_mechanics',
-        ],
+        rubricCategoryKeys: ['thesis_and_content', 'grammar_and_mechanics'],
         moduleRubricRelationships: {
           thesis_and_content: 'primary',
           grammar_and_mechanics: 'not-applicable',

@@ -99,10 +99,13 @@ describe('api.model.document.$id', () => {
     form.append('baseRevision', '4');
 
     const response = (await action({
-      request: new Request('https://example.com/api/model/document/doc-1?from=editor', {
-        method: 'PUT',
-        body: form,
-      }),
+      request: new Request(
+        'https://example.com/api/model/document/doc-1?from=editor',
+        {
+          method: 'PUT',
+          body: form,
+        }
+      ),
       params: { id: 'doc-1' },
     } as any)) as Response;
 
@@ -110,13 +113,15 @@ describe('api.model.document.$id', () => {
     expect(prisma.document.update).not.toHaveBeenCalled();
     expect(prisma.documentWriteJournal.create).toHaveBeenCalledTimes(1);
     expect(prisma.documentWriteJournal.update).toHaveBeenCalledTimes(1);
-    expect(prisma.documentWriteJournal.update.mock.calls[0]?.[0]).toMatchObject({
-      where: { id: 'journal-1' },
-      data: {
-        status: 'rejected',
-        failureReason: 'stale_client_sequence',
-      },
-    });
+    expect(prisma.documentWriteJournal.update.mock.calls[0]?.[0]).toMatchObject(
+      {
+        where: { id: 'journal-1' },
+        data: {
+          status: 'rejected',
+          failureReason: 'stale_client_sequence',
+        },
+      }
+    );
   });
 
   test('accepts ordered editor saves, increments revision, and returns the new revision', async () => {
@@ -139,10 +144,13 @@ describe('api.model.document.$id', () => {
     form.append('baseRevision', '4');
 
     const response = (await action({
-      request: new Request('https://example.com/api/model/document/doc-1?from=editor', {
-        method: 'PUT',
-        body: form,
-      }),
+      request: new Request(
+        'https://example.com/api/model/document/doc-1?from=editor',
+        {
+          method: 'PUT',
+          body: form,
+        }
+      ),
       params: { id: 'doc-1' },
     } as any)) as Response;
 
@@ -167,13 +175,15 @@ describe('api.model.document.$id', () => {
       ok: true,
       revision: 5,
     });
-    expect(prisma.documentWriteJournal.update.mock.calls[0]?.[0]).toMatchObject({
-      where: { id: 'journal-1' },
-      data: {
-        status: 'accepted',
-        resultingRevision: 5,
-      },
-    });
+    expect(prisma.documentWriteJournal.update.mock.calls[0]?.[0]).toMatchObject(
+      {
+        where: { id: 'journal-1' },
+        data: {
+          status: 'accepted',
+          resultingRevision: 5,
+        },
+      }
+    );
   });
 
   test('returns a stale revision conflict when the guarded update loses the race', async () => {
@@ -197,15 +207,20 @@ describe('api.model.document.$id', () => {
     form.append('baseRevision', '4');
 
     const response = (await action({
-      request: new Request('https://example.com/api/model/document/doc-1?from=editor', {
-        method: 'PUT',
-        body: form,
-      }),
+      request: new Request(
+        'https://example.com/api/model/document/doc-1?from=editor',
+        {
+          method: 'PUT',
+          body: form,
+        }
+      ),
       params: { id: 'doc-1' },
     } as any)) as Response;
 
     expect(response.status).toBe(409);
-    expect(prisma.documentWriteJournal.update.mock.calls.at(-1)?.[0]).toMatchObject({
+    expect(
+      prisma.documentWriteJournal.update.mock.calls.at(-1)?.[0]
+    ).toMatchObject({
       where: { id: 'journal-1' },
       data: {
         status: 'rejected',

@@ -44,9 +44,7 @@ describe('generateClassArt', () => {
   });
 
   test('always selects a src/credit/position combination from the library', () => {
-    const bySrc = new Map(
-      CLASS_ART_LIBRARY.map((entry) => [entry.src, entry])
-    );
+    const bySrc = new Map(CLASS_ART_LIBRARY.map((entry) => [entry.src, entry]));
     for (const seed of ['a', 'period-1', 'grade-9', 'zz-top', 'cls-42']) {
       const art = generateClassArt(seed);
       const entry = bySrc.get(art.src);
@@ -87,9 +85,7 @@ describe('CLASS_ART_POOL', () => {
   });
 
   test('every pool entry matches a library entry crop', () => {
-    const bySrc = new Map(
-      CLASS_ART_LIBRARY.map((entry) => [entry.src, entry])
-    );
+    const bySrc = new Map(CLASS_ART_LIBRARY.map((entry) => [entry.src, entry]));
     for (const selection of CLASS_ART_POOL) {
       const entry = bySrc.get(selection.src);
       expect(entry).toBeDefined();
@@ -156,22 +152,26 @@ describe('class art keys', () => {
 
 describe('pickNextClassArtKeyForOrganization', () => {
   test('returns stable keys while preserving crop rotation', () => {
-    const assigned = Array.from({ length: CLASS_ARTWORK_COUNT - 1 }, (_, artwork) =>
-      getClassArtByIndex(buildClassArtPoolIndex(artwork, 0)).key
+    const assigned = Array.from(
+      { length: CLASS_ARTWORK_COUNT - 1 },
+      (_, artwork) => getClassArtByIndex(buildClassArtPoolIndex(artwork, 0)).key
     );
 
     const next = pickNextClassArtKeyForOrganization(assigned, () => 0);
 
-    expect(getCropIndexFromPoolIndex(
-      CLASS_ART_POOL.findIndex((entry) => entry.key === next)
-    )).toBe(0);
+    expect(
+      getCropIndexFromPoolIndex(
+        CLASS_ART_POOL.findIndex((entry) => entry.key === next)
+      )
+    ).toBe(0);
   });
 });
 
 describe('pickNextClassArtIndexForOrganization', () => {
   test('uses crop 0 for every artwork before any artwork gets crop 1', () => {
-    const assigned = Array.from({ length: CLASS_ARTWORK_COUNT - 1 }, (_, artwork) =>
-      buildClassArtPoolIndex(artwork, 0)
+    const assigned = Array.from(
+      { length: CLASS_ARTWORK_COUNT - 1 },
+      (_, artwork) => buildClassArtPoolIndex(artwork, 0)
     );
 
     const next = pickNextClassArtIndexForOrganization(assigned, () => 0);

@@ -63,7 +63,10 @@ export const DocumentHistory = ({ documentId, open, onOpenChange }: Props) => {
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const fetcher = useFetcher<{ entries: HistoryEntry[]; nextCursor: string | null }>({
+  const fetcher = useFetcher<{
+    entries: HistoryEntry[];
+    nextCursor: string | null;
+  }>({
     key: 'document-history',
   });
 
@@ -161,13 +164,21 @@ export const DocumentHistory = ({ documentId, open, onOpenChange }: Props) => {
                       )}
                     >
                       <div className="min-w-0">
-                        <p className="text-sm font-medium truncate">{entry.label}</p>
-                        <p className="text-xs text-muted-foreground" title={formatFullDate(entry.createdAt)}>
+                        <p className="text-sm font-medium truncate">
+                          {entry.label}
+                        </p>
+                        <p
+                          className="text-xs text-muted-foreground"
+                          title={formatFullDate(entry.createdAt)}
+                        >
                           {formatRelativeDate(entry.createdAt)}
                         </p>
                       </div>
                       {entry.label === 'Submitted' && (
-                        <Badge variant="info-outlined" className="shrink-0 text-[10px]">
+                        <Badge
+                          variant="info-outlined"
+                          className="shrink-0 text-[10px]"
+                        >
                           Submitted
                         </Badge>
                       )}

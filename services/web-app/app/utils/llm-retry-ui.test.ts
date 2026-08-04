@@ -6,10 +6,9 @@ import {
 } from './llm-retry-ui';
 
 function formEntries(formData: FormData) {
-  return Object.fromEntries([...formData.entries()].map(([key, value]) => [
-    key,
-    String(value),
-  ]));
+  return Object.fromEntries(
+    [...formData.entries()].map(([key, value]) => [key, String(value)])
+  );
 }
 
 describe('LLM retry UI helpers', () => {

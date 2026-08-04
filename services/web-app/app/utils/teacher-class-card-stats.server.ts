@@ -24,13 +24,11 @@ export async function getTeacherClassCardStats(classId: string) {
   });
 
   const ungradedCount = submissions.filter(
-    (submission) =>
-      !hasMeaningfulGrade(submission) && !submission.releasedAt
+    (submission) => !hasMeaningfulGrade(submission) && !submission.releasedAt
   ).length;
 
   const gradedUnreleasedCount = submissions.filter(
-    (submission) =>
-      hasMeaningfulGrade(submission) && !submission.releasedAt
+    (submission) => hasMeaningfulGrade(submission) && !submission.releasedAt
   ).length;
 
   return { ungradedCount, gradedUnreleasedCount };

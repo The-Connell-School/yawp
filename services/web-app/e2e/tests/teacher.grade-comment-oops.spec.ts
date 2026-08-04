@@ -83,17 +83,17 @@ test.describe('Teacher grade comment crash regression', () => {
     await expect(page.getByText(uniqueContent).first()).toBeVisible({
       timeout: 10000,
     });
-    await expect(page.getByText(/Oops! Something didn't work quite right/i)).toHaveCount(
-      0
-    );
+    await expect(
+      page.getByText(/Oops! Something didn't work quite right/i)
+    ).toHaveCount(0);
 
     await page.reload();
     await page.waitForLoadState('networkidle');
     await expect(page.getByText(uniqueContent).first()).toBeVisible({
       timeout: 10000,
     });
-    await expect(page.getByText(/Oops! Something didn't work quite right/i)).toHaveCount(
-      0
-    );
+    await expect(
+      page.getByText(/Oops! Something didn't work quite right/i)
+    ).toHaveCount(0);
   });
 });

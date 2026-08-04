@@ -35,7 +35,9 @@ type Props = {
   readOnly?: boolean;
   activeGradeCommentId?: string | null;
   onSelectGradeComment?: (id: string) => void;
-  onDraftHighlightChange?: (highlight: { excerpt: string; occurrence: number } | null) => void;
+  onDraftHighlightChange?: (
+    highlight: { excerpt: string; occurrence: number } | null
+  ) => void;
   onCommentCreated?: (comment: SubmissionComment) => void;
   onCommentDeleted?: (commentId: string) => void;
   onCommentUpdated?: (commentId: string, content: string) => void;
@@ -96,7 +98,11 @@ export function GradingCommentsSidebar({
     const handler = (e: Event) => {
       const ev = e as CustomEvent;
       const { excerpt, occurrence } = ev.detail ?? {};
-      if (!readOnly && typeof excerpt === 'string' && typeof occurrence === 'number') {
+      if (
+        !readOnly &&
+        typeof excerpt === 'string' &&
+        typeof occurrence === 'number'
+      ) {
         setDraftComment({
           id: 'draft',
           excerpt,
@@ -121,19 +127,17 @@ export function GradingCommentsSidebar({
 
   useEffect(() => {
     if (draftComment?.excerpt) {
-      onDraftHighlightChange?.({ excerpt: draftComment.excerpt, occurrence: draftComment.occurrence });
+      onDraftHighlightChange?.({
+        excerpt: draftComment.excerpt,
+        occurrence: draftComment.occurrence,
+      });
     } else {
       onDraftHighlightChange?.(null);
     }
   }, [draftComment?.excerpt, draftComment?.occurrence, onDraftHighlightChange]);
 
   const submitDraftComment = () => {
-    if (
-      !draftContent.trim() ||
-      !submissionId ||
-      !draftComment?.excerpt
-    )
-      return;
+    if (!draftContent.trim() || !submissionId || !draftComment?.excerpt) return;
 
     const form = new FormData();
     form.append('submissionId', submissionId);
@@ -226,7 +230,13 @@ export function GradingCommentsSidebar({
       setEditingCommentId(null);
       setEditCommentContent('');
     }
-  }, [updateFetcher.data, updateFetcher.state, editingCommentId, editCommentContent, onCommentUpdated]);
+  }, [
+    updateFetcher.data,
+    updateFetcher.state,
+    editingCommentId,
+    editCommentContent,
+    onCommentUpdated,
+  ]);
 
   useEffect(() => {
     if (!activeGradeCommentId || activeGradeCommentId === 'draft') return;
@@ -238,12 +248,17 @@ export function GradingCommentsSidebar({
 
   useEffect(() => {
     if (activeGradeCommentId === 'draft' && draftComment) {
-      draftTextareaRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      draftTextareaRef.current?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'center',
+      });
     }
   }, [activeGradeCommentId, draftComment]);
 
   const combinedItems = sortByDocumentLocation(
-    draftComment ? [...submissionComments, draftComment] : [...submissionComments],
+    draftComment
+      ? [...submissionComments, draftComment]
+      : [...submissionComments],
     sourceText,
     (c) => ('excerpt' in c ? c.excerpt : null),
     (c) => ('occurrence' in c ? c.occurrence : 1)
@@ -258,11 +273,17 @@ export function GradingCommentsSidebar({
         <div className="flex-1 overflow-y-auto p-2">
           {combinedItems.length === 0 ? (
             <div className="flex h-full min-h-40 flex-col items-center justify-center gap-2 px-4 py-8 text-center">
-              <MessageSquarePlus className="h-8 w-8 text-muted-foreground/40" strokeWidth={1.5} />
-              <p className="text-sm font-medium text-muted-foreground">No feedback yet</p>
+              <MessageSquarePlus
+                className="h-8 w-8 text-muted-foreground/40"
+                strokeWidth={1.5}
+              />
+              <p className="text-sm font-medium text-muted-foreground">
+                No feedback yet
+              </p>
               {!readOnly ? (
                 <p className="text-xs leading-relaxed text-muted-foreground">
-                  Select text in the essay, then click the Comment button to add your first note.
+                  Select text in the essay, then click the Comment button to add
+                  your first note.
                 </p>
               ) : null}
             </div>
@@ -271,51 +292,54 @@ export function GradingCommentsSidebar({
               {combinedItems.map((c) => {
                 if (isDraftComment(c)) {
                   return (
-                  <div
-                    key="draft"
-                    data-grade-comment-card="draft"
-                    ref={(el) => {
-                      commentRefs.current['draft'] = el;
-                    }}
-                    onClick={() => onSelectGradeComment?.('draft')}
-                    className="w-full rounded-lg border-2 border-dashed border-yellow-400 bg-yellow-50/50 p-3 dark:border-yellow-600 dark:bg-yellow-950/20"
-                  >
-                    <Textarea
-                      ref={draftTextareaRef}
-                      value={draftContent}
-                      onChange={(e) => setDraftContent(e.target.value)}
-                      onFocus={() => onSelectGradeComment?.('draft')}
-                      placeholder="Write your comment..."
-                      rows={3}
-                      className="mt-2 resize-none"
-                      onClick={(e) => e.stopPropagation()}
-                    />
-                    <div className="mt-2 flex gap-2">
-                      <Button
-                        size="sm"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          submitDraftComment();
-                        }}
-                        disabled={
-                          !draftContent.trim() || createFetcher.state !== 'idle'
-                        }
-                      >
-                        {createFetcher.state !== 'idle' ? 'Saving...' : 'Save'}
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          cancelDraft();
-                        }}
-                        disabled={createFetcher.state !== 'idle'}
-                      >
-                        Cancel
-                      </Button>
+                    <div
+                      key="draft"
+                      data-grade-comment-card="draft"
+                      ref={(el) => {
+                        commentRefs.current['draft'] = el;
+                      }}
+                      onClick={() => onSelectGradeComment?.('draft')}
+                      className="w-full rounded-lg border-2 border-dashed border-yellow-400 bg-yellow-50/50 p-3 dark:border-yellow-600 dark:bg-yellow-950/20"
+                    >
+                      <Textarea
+                        ref={draftTextareaRef}
+                        value={draftContent}
+                        onChange={(e) => setDraftContent(e.target.value)}
+                        onFocus={() => onSelectGradeComment?.('draft')}
+                        placeholder="Write your comment..."
+                        rows={3}
+                        className="mt-2 resize-none"
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                      <div className="mt-2 flex gap-2">
+                        <Button
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            submitDraftComment();
+                          }}
+                          disabled={
+                            !draftContent.trim() ||
+                            createFetcher.state !== 'idle'
+                          }
+                        >
+                          {createFetcher.state !== 'idle'
+                            ? 'Saving...'
+                            : 'Save'}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            cancelDraft();
+                          }}
+                          disabled={createFetcher.state !== 'idle'}
+                        >
+                          Cancel
+                        </Button>
+                      </div>
                     </div>
-                  </div>
                   );
                 }
                 return (

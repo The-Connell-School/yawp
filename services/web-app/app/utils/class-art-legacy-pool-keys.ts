@@ -128,7 +128,6 @@ export const LEGACY_CLASS_ART_KEY_BY_POOL_INDEX = [
 export function classArtKeyFromLegacyPoolIndex(index: number): string | null {
   if (!Number.isInteger(index) || index < 0) return null;
   const poolSize: number = LEGACY_CLASS_ART_KEY_BY_POOL_INDEX.length;
-  const normalized =
-    ((index % poolSize) + poolSize) % poolSize;
+  const normalized = ((index % poolSize) + poolSize) % poolSize;
   return LEGACY_CLASS_ART_KEY_BY_POOL_INDEX[normalized] ?? null;
 }

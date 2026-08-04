@@ -61,8 +61,10 @@ export function normalizeExtractedRubric(payload: ExtractedRubricPayload): {
     type: payload.scoringScale?.type ?? parsedScale.type,
     minScore: payload.scoringScale?.minScore ?? parsedScale.minScore,
     maxScore: payload.scoringScale?.maxScore ?? parsedScale.maxScore,
-    compositeMin: payload.scoringScale?.compositeMin ?? parsedScale.compositeMin,
-    compositeMax: payload.scoringScale?.compositeMax ?? parsedScale.compositeMax,
+    compositeMin:
+      payload.scoringScale?.compositeMin ?? parsedScale.compositeMin,
+    compositeMax:
+      payload.scoringScale?.compositeMax ?? parsedScale.compositeMax,
   };
 
   const categories = payload.rubric.categories.map((category) => {

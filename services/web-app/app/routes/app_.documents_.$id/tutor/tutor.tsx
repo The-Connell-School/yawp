@@ -177,7 +177,7 @@ export const Tutor = ({
           await postTutorResponseWithFallbackRetry({
             formData,
             onRetry: () => setIsTutorRetrying(true),
-        });
+          });
         if (!res.ok || json.error) {
           setTutorError(json.error ?? 'An error occurred.');
           setOptimisticMessage(null);
@@ -331,7 +331,11 @@ export const Tutor = ({
                 variant="ghost"
                 size="icon-sm"
                 className="min-w-8"
-                aria-label={messagesExpanded ? 'Hide tutor messages' : 'Show tutor messages'}
+                aria-label={
+                  messagesExpanded
+                    ? 'Hide tutor messages'
+                    : 'Show tutor messages'
+                }
                 disabled={isSessionLocked}
                 onClick={() => setMessagesExpanded(!messagesExpanded)}
               >

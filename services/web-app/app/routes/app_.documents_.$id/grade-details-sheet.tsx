@@ -124,16 +124,15 @@ export function GradeDetailsSheet({
           {/* Released Date */}
           <div className="text-xs text-muted-foreground text-center pt-4 border-t">
             {grade.releasedAt
-              ? `Grade released on ${new Date(grade.releasedAt).toLocaleDateString(
-                  'en-US',
-                  {
-                    year: 'numeric',
-                    month: 'long',
-                    day: 'numeric',
-                    hour: '2-digit',
-                    minute: '2-digit',
-                  }
-                )}`
+              ? `Grade released on ${new Date(
+                  grade.releasedAt
+                ).toLocaleDateString('en-US', {
+                  year: 'numeric',
+                  month: 'long',
+                  day: 'numeric',
+                  hour: '2-digit',
+                  minute: '2-digit',
+                })}`
               : `Grade saved on ${new Date(grade.createdAt).toLocaleDateString(
                   'en-US',
                   {

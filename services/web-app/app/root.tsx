@@ -173,9 +173,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
     user?.memberships.find((m) => m.id === membershipId) ??
     user?.memberships[0];
   const impersonation = await getImpersonationState(request);
-  const { getStudentPreviewState } = await import(
-    './utils/student-preview.server.ts'
-  );
+  const { getStudentPreviewState } =
+    await import('./utils/student-preview.server.ts');
   const studentPreview = await getStudentPreviewState(request);
   const bannerWarning = getEnvironmentBannerWarning(request.url);
   const localDevQuickLoginEnabled = shouldEnableLocalDevQuickLogin({

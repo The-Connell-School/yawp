@@ -377,7 +377,6 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           (cm) => cm.position === currentCms.assignmentModule.position + 1
         )?.id;
 
-
   const sortedComments = sortDocumentCommentsByMarkupOrder(
     doc.comments,
     doc.html
@@ -469,7 +468,8 @@ export default function Route() {
       : fallbackCmsIdx;
   const explicitExitTarget = sanitizeExitTarget(searchParams.get('exitTo'));
   const tab = searchParams.get('tab') ?? 'tutor';
-  const isViewingAsTeacher = data.doc && user.id !== data.doc?.membership.userId;
+  const isViewingAsTeacher =
+    data.doc && user.id !== data.doc?.membership.userId;
   // Owner or class teacher (loader); api.model.document allows both to persist edits.
   const isDocumentEditable = true;
   const assignment = data.doc.assignment;
@@ -572,7 +572,8 @@ export default function Route() {
       ? allComments
       : activeComments
     : activeComments;
-  const studentName = data.doc.membership.user.name?.trim() || 'Unknown student';
+  const studentName =
+    data.doc.membership.user.name?.trim() || 'Unknown student';
   const cannotSubmitEmpty = !editorSubmittable;
   const isSubmitting = submit.isSubmitting;
   const submitActionDisabled = isSubmitting || cannotSubmitEmpty;
@@ -991,125 +992,125 @@ export default function Route() {
         open={isFinalizeDialogOpen}
         onOpenChange={setIsFinalizeDialogOpen}
       >
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <AlertCircle className="h-5 w-5 text-yellow-600" />
-                Submit Version {versionNumber}
-              </DialogTitle>
-              <DialogDescription asChild>
-                <div className="space-y-4 pt-2">
-                  <div className="space-y-2">
-                    <label
-                      htmlFor="submission-title"
-                      className="text-sm font-medium text-foreground"
-                    >
-                      Submission Title
-                    </label>
-                    <Input
-                      id="submission-title"
-                      value={submissionTitle}
-                      onChange={(e) => setSubmissionTitle(e.target.value)}
-                      placeholder="Enter a title for this submission"
-                    />
-                  </div>
-                  <ul className="list-disc space-y-1.5 pl-5 text-sm">
-                    <li>
-                      Submitting creates a snapshot of your essay for your
-                      teacher to grade.
-                    </li>
-                    <li>You can keep editing and submit again after this.</li>
-                  </ul>
-                  {activeSubmissions.length > 0 && (
-                    <div className="space-y-2">
-                      <p className="text-sm font-medium text-foreground">
-                        Previous submissions
-                      </p>
-                      <div className="max-h-32 overflow-y-auto rounded-md border">
-                        {activeSubmissions.map((s) => {
-                          const v = versionLabelForActiveSubmission(
-                            activeSubmissions,
-                            s.id
-                          );
-                          const isGraded = s.releasedAt != null;
-                          const label = displaySubmissionTitle(
-                            s.title,
-                            v,
-                            'Untitled submission'
-                          );
-                          return (
-                            <a
-                              key={s.id}
-                              href={`/app/submissions/${s.id}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="flex items-center justify-between gap-2 border-b px-3 py-2 text-sm hover:bg-muted/50 last:border-0"
-                            >
-                              <div className="flex min-w-0 items-center gap-2">
-                                <span className="truncate">{label}</span>
-                                <ExternalLink className="h-3 w-3 shrink-0 text-muted-foreground" />
-                              </div>
-                              <Badge
-                                variant={isGraded ? 'success' : 'secondary'}
-                                className="shrink-0 text-[10px]"
-                              >
-                                {isGraded ? 'Graded' : 'Submitted'}
-                              </Badge>
-                            </a>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </DialogDescription>
-            </DialogHeader>
-            <DialogFooter>
-              <Button
-                variant="outline"
-                onClick={() => setIsFinalizeDialogOpen(false)}
-                disabled={isSubmitting}
-              >
-                Cancel
-              </Button>
-              {cannotSubmitEmpty && !isSubmitting ? (
-                <Tooltip text={SUBMIT_EMPTY_TOOLTIP} delayDuration={0}>
-                  <span
-                    className="inline-flex"
-                    data-testid="document-finalize-submit-empty-trigger"
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertCircle className="h-5 w-5 text-yellow-600" />
+              Submit Version {versionNumber}
+            </DialogTitle>
+            <DialogDescription asChild>
+              <div className="space-y-4 pt-2">
+                <div className="space-y-2">
+                  <label
+                    htmlFor="submission-title"
+                    className="text-sm font-medium text-foreground"
                   >
-                    <Button
-                      variant="default"
-                      data-testid="document-finalize-submit"
-                      disabled
-                    >
-                      {`Submit Version ${versionNumber}`}
-                    </Button>
-                  </span>
-                </Tooltip>
-              ) : (
-                <Button
-                  variant="default"
-                  data-testid="document-finalize-submit"
-                  onClick={() => {
-                    const resolved =
-                      submissionTitle.trim() || getLiveDocumentTitle().trim();
-                    void submit.submitNow(resolved);
-                  }}
-                  disabled={submitActionDisabled}
+                    Submission Title
+                  </label>
+                  <Input
+                    id="submission-title"
+                    value={submissionTitle}
+                    onChange={(e) => setSubmissionTitle(e.target.value)}
+                    placeholder="Enter a title for this submission"
+                  />
+                </div>
+                <ul className="list-disc space-y-1.5 pl-5 text-sm">
+                  <li>
+                    Submitting creates a snapshot of your essay for your teacher
+                    to grade.
+                  </li>
+                  <li>You can keep editing and submit again after this.</li>
+                </ul>
+                {activeSubmissions.length > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-sm font-medium text-foreground">
+                      Previous submissions
+                    </p>
+                    <div className="max-h-32 overflow-y-auto rounded-md border">
+                      {activeSubmissions.map((s) => {
+                        const v = versionLabelForActiveSubmission(
+                          activeSubmissions,
+                          s.id
+                        );
+                        const isGraded = s.releasedAt != null;
+                        const label = displaySubmissionTitle(
+                          s.title,
+                          v,
+                          'Untitled submission'
+                        );
+                        return (
+                          <a
+                            key={s.id}
+                            href={`/app/submissions/${s.id}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center justify-between gap-2 border-b px-3 py-2 text-sm hover:bg-muted/50 last:border-0"
+                          >
+                            <div className="flex min-w-0 items-center gap-2">
+                              <span className="truncate">{label}</span>
+                              <ExternalLink className="h-3 w-3 shrink-0 text-muted-foreground" />
+                            </div>
+                            <Badge
+                              variant={isGraded ? 'success' : 'secondary'}
+                              className="shrink-0 text-[10px]"
+                            >
+                              {isGraded ? 'Graded' : 'Submitted'}
+                            </Badge>
+                          </a>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setIsFinalizeDialogOpen(false)}
+              disabled={isSubmitting}
+            >
+              Cancel
+            </Button>
+            {cannotSubmitEmpty && !isSubmitting ? (
+              <Tooltip text={SUBMIT_EMPTY_TOOLTIP} delayDuration={0}>
+                <span
+                  className="inline-flex"
+                  data-testid="document-finalize-submit-empty-trigger"
                 >
-                  {isSubmitting ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Submitting...
-                    </>
-                  ) : (
-                    `Submit Version ${versionNumber}`
-                  )}
-                </Button>
-              )}
-            </DialogFooter>
-          </DialogContent>
+                  <Button
+                    variant="default"
+                    data-testid="document-finalize-submit"
+                    disabled
+                  >
+                    {`Submit Version ${versionNumber}`}
+                  </Button>
+                </span>
+              </Tooltip>
+            ) : (
+              <Button
+                variant="default"
+                data-testid="document-finalize-submit"
+                onClick={() => {
+                  const resolved =
+                    submissionTitle.trim() || getLiveDocumentTitle().trim();
+                  void submit.submitNow(resolved);
+                }}
+                disabled={submitActionDisabled}
+              >
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Submitting...
+                  </>
+                ) : (
+                  `Submit Version ${versionNumber}`
+                )}
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
       </Dialog>
       <Dialog open={archiveDialogOpen} onOpenChange={setArchiveDialogOpen}>
         <DialogContent className="sm:max-w-md">

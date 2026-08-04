@@ -84,9 +84,7 @@ export function AssignmentsAtAGlance({
                 <Tooltip text={`New ${assignmentType.title} assignment`}>
                   <button
                     type="button"
-                    onClick={() =>
-                      onCreateAssignmentForType(assignmentType.id)
-                    }
+                    onClick={() => onCreateAssignmentForType(assignmentType.id)}
                     aria-label={`New ${assignmentType.title} assignment`}
                     className="absolute right-2 top-2 inline-flex size-7 items-center justify-center rounded-full bg-background text-foreground shadow-sm ring-1 ring-black/10 transition-colors hover:bg-muted"
                   >

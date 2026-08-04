@@ -109,10 +109,12 @@ export function RubricSourceBanner({ rubric }: { rubric: RubricData }) {
         <div className="flex items-start gap-3">
           <Info className="mt-0.5 size-5 shrink-0 text-blue-600" />
           <div>
-            <p className="text-sm font-medium">Using the default thesis rubric</p>
+            <p className="text-sm font-medium">
+              Using the default thesis rubric
+            </p>
             <p className="mt-0.5 text-sm text-muted-foreground text-pretty">
-              Grading and tutor guidance fall back to it until you add a complete
-              category below.
+              Grading and tutor guidance fall back to it until you add a
+              complete category below.
             </p>
           </div>
         </div>

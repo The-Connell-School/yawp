@@ -33,7 +33,10 @@ const extensions = [
     addAttributes() {
       return {
         id: { default: null, renderHTML: ({ id }: any) => ({ id }) },
-        class: { default: null, renderHTML: ({ class: cn }: any) => ({ class: cn }) },
+        class: {
+          default: null,
+          renderHTML: ({ class: cn }: any) => ({ class: cn }),
+        },
       };
     },
   }),
@@ -86,7 +89,9 @@ export function Editor({
   // Expose editor for E2E test helpers (flush domObserver after typing)
   useEffect(() => {
     if (editor) (window as any).__yawpEditor = editor;
-    return () => { delete (window as any).__yawpEditor; };
+    return () => {
+      delete (window as any).__yawpEditor;
+    };
   }, [editor]);
 
   // Install the runtime tripwire (catches unauthorized PM mutations)
@@ -158,7 +163,7 @@ export function Editor({
       e.preventDefault();
       editor.chain().focus('end').run();
     },
-    [editor, isEditable],
+    [editor, isEditable]
   );
 
   // Bolden styles for the active/hovered comment marks. Rendered as a

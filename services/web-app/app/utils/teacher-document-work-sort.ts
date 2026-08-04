@@ -166,8 +166,7 @@ export function compareTeacherDocumentWorkRows(
     case 'submittedAt':
       result = compareNullableDates(
         toDate(
-          left.latestSubmission?.submittedAt ??
-            left.latestSubmission?.createdAt
+          left.latestSubmission?.submittedAt ?? left.latestSubmission?.createdAt
         ),
         toDate(
           right.latestSubmission?.submittedAt ??

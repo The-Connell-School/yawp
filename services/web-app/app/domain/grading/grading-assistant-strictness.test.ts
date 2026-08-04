@@ -6,17 +6,21 @@ import {
 
 describe('applyGradingAssistantStrictnessToPercentage', () => {
   test('leaves intermediate grades unchanged', () => {
-    expect(applyGradingAssistantStrictnessToPercentage(77, 'intermediate')).toBe(
-      77
-    );
+    expect(
+      applyGradingAssistantStrictnessToPercentage(77, 'intermediate')
+    ).toBe(77);
   });
 
   test('raises beginner grades by five points', () => {
-    expect(applyGradingAssistantStrictnessToPercentage(77, 'beginner')).toBe(82);
+    expect(applyGradingAssistantStrictnessToPercentage(77, 'beginner')).toBe(
+      82
+    );
   });
 
   test('lowers advanced grades by five points', () => {
-    expect(applyGradingAssistantStrictnessToPercentage(77, 'advanced')).toBe(72);
+    expect(applyGradingAssistantStrictnessToPercentage(77, 'advanced')).toBe(
+      72
+    );
   });
 
   test('clamps adjusted grades to 0-100', () => {
@@ -29,9 +33,9 @@ describe('applyGradingAssistantStrictnessToPercentage', () => {
 
 describe('applyGradingAssistantStrictnessToActComposite', () => {
   test('leaves intermediate ACT composites unchanged', () => {
-    expect(applyGradingAssistantStrictnessToActComposite(10, 'intermediate')).toBe(
-      10
-    );
+    expect(
+      applyGradingAssistantStrictnessToActComposite(10, 'intermediate')
+    ).toBe(10);
   });
 
   test('raises beginner ACT composites by one point', () => {
@@ -50,6 +54,8 @@ describe('applyGradingAssistantStrictnessToActComposite', () => {
     expect(applyGradingAssistantStrictnessToActComposite(12, 'beginner')).toBe(
       12
     );
-    expect(applyGradingAssistantStrictnessToActComposite(2, 'advanced')).toBe(2);
+    expect(applyGradingAssistantStrictnessToActComposite(2, 'advanced')).toBe(
+      2
+    );
   });
 });

@@ -93,13 +93,15 @@ test.describe('Admin assignment type creator', () => {
       await page.getByLabel('Title').fill(title);
       await page.getByTestId('rubric-add-category').click();
       await page.getByTestId('rubric-category-row-0').click();
-      const categoryDialog = page.getByRole('dialog', { name: 'Edit category' });
+      const categoryDialog = page.getByRole('dialog', {
+        name: 'Edit category',
+      });
       await expect(categoryDialog).toBeVisible();
       await categoryDialog.getByLabel('Label', { exact: true }).fill('Thesis');
       await categoryDialog.getByLabel('Weight %').fill('100');
-      await categoryDialog.getByLabel('Description', { exact: true }).fill(
-        'A clear, defensible thesis.'
-      );
+      await categoryDialog
+        .getByLabel('Description', { exact: true })
+        .fill('A clear, defensible thesis.');
       await categoryDialog.getByRole('button', { name: 'Done' }).click();
       await expect(page.getByTestId('rubric-source-default')).toHaveCount(0);
       await expect(categoryDialog).toHaveCount(0);
@@ -119,7 +121,9 @@ test.describe('Admin assignment type creator', () => {
       await expect(
         page.getByRole('heading', { name: 'Edit assignment type' })
       ).toBeVisible();
-      await expect(page.getByTestId('rubric-category-row-0')).toContainText('Thesis');
+      await expect(page.getByTestId('rubric-category-row-0')).toContainText(
+        'Thesis'
+      );
     } finally {
       if (assignmentTypeId) {
         await prisma.assignmentModule.deleteMany({
@@ -175,7 +179,9 @@ test.describe('Admin assignment type creator', () => {
       const updateResponse = page.waitForResponse(
         (response) =>
           response.request().method() === 'POST' &&
-          response.url().includes(`/app/admin/assignment-types/${assignmentTypeId}.data`)
+          response
+            .url()
+            .includes(`/app/admin/assignment-types/${assignmentTypeId}.data`)
       );
       await page.getByRole('button', { name: 'Update' }).click();
       expect((await updateResponse).ok()).toBe(true);
@@ -190,7 +196,9 @@ test.describe('Admin assignment type creator', () => {
         .toBe(`${title} Updated`);
 
       await expect(page.getByText(OOPS)).toHaveCount(0);
-      await expect(page.locator('input[name="title"]')).toHaveValue(`${title} Updated`);
+      await expect(page.locator('input[name="title"]')).toHaveValue(
+        `${title} Updated`
+      );
     } finally {
       if (assignmentTypeId) {
         await prisma.assignmentModule.deleteMany({
@@ -221,7 +229,9 @@ test.describe('Admin assignment type creator', () => {
       await page.getByLabel('Title').fill(title);
       await page.getByTestId('rubric-add-category').click();
       await page.getByTestId('rubric-category-row-0').click();
-      await expect(page.getByRole('heading', { name: 'Edit category' })).toBeVisible();
+      await expect(
+        page.getByRole('heading', { name: 'Edit category' })
+      ).toBeVisible();
 
       await Promise.all([
         page.waitForURL(

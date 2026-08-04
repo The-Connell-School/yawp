@@ -51,22 +51,24 @@ describe('api.domain.assignment-pdf-extract', () => {
   test('extracts only title and student prompt from assignment PDFs', async () => {
     let capturedArgs: any;
     let capturedOptions: any;
-    anthropic.messages.create.mockImplementation(async (args: any, options: any) => {
-      capturedArgs = args;
-      capturedOptions = options;
-      return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify({
-              title: 'Extracted Assignment',
-              prompt: 'Write a literary analysis essay.',
-            }),
-          },
-        ],
-        usage: { input_tokens: 12, output_tokens: 8 },
-      };
-    });
+    anthropic.messages.create.mockImplementation(
+      async (args: any, options: any) => {
+        capturedArgs = args;
+        capturedOptions = options;
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                title: 'Extracted Assignment',
+                prompt: 'Write a literary analysis essay.',
+              }),
+            },
+          ],
+          usage: { input_tokens: 12, output_tokens: 8 },
+        };
+      }
+    );
 
     const form = new FormData();
     form.set('classId', 'class-1');
@@ -78,10 +80,13 @@ describe('api.domain.assignment-pdf-extract', () => {
     );
 
     const response = await action({
-      request: new Request('https://example.test/api/domain/assignment-pdf-extract', {
-        method: 'POST',
-        body: form,
-      }),
+      request: new Request(
+        'https://example.test/api/domain/assignment-pdf-extract',
+        {
+          method: 'POST',
+          body: form,
+        }
+      ),
       params: {},
     } as any);
 
@@ -121,10 +126,13 @@ describe('api.domain.assignment-pdf-extract', () => {
     );
 
     const response = await action({
-      request: new Request('https://example.test/api/domain/assignment-pdf-extract', {
-        method: 'POST',
-        body: form,
-      }),
+      request: new Request(
+        'https://example.test/api/domain/assignment-pdf-extract',
+        {
+          method: 'POST',
+          body: form,
+        }
+      ),
       params: {},
     } as any);
 
@@ -155,10 +163,13 @@ describe('api.domain.assignment-pdf-extract', () => {
     );
 
     const response = await action({
-      request: new Request('https://example.test/api/domain/assignment-pdf-extract', {
-        method: 'POST',
-        body: form,
-      }),
+      request: new Request(
+        'https://example.test/api/domain/assignment-pdf-extract',
+        {
+          method: 'POST',
+          body: form,
+        }
+      ),
       params: {},
     } as any);
 

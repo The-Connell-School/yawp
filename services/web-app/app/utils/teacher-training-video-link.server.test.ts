@@ -8,7 +8,10 @@ describe('getTeacherTrainingPlaybackUrl', () => {
 
   it('returns the signed playback URL', async () => {
     await expect(
-      getTeacherTrainingPlaybackUrl('videos/module.mp4', async () => 'signed-url')
+      getTeacherTrainingPlaybackUrl(
+        'videos/module.mp4',
+        async () => 'signed-url'
+      )
     ).resolves.toBe('signed-url');
   });
 

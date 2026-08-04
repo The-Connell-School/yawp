@@ -7,6 +7,8 @@ describe('legacy admin teacher courses route', () => {
     const response = await loader();
 
     expect(response.status).toBe(302);
-    expect(response.headers.get('Location')).toBe('/app/admin/teacher-trainings');
+    expect(response.headers.get('Location')).toBe(
+      '/app/admin/teacher-trainings'
+    );
   });
 });

@@ -190,7 +190,9 @@ function buildApHistoryPrompt({
     snapshot.essayType === 'dbq'
       ? snapshot.sources
           .map((source) => {
-            const caption = source.caption ? `\nCaption: ${source.caption}` : '';
+            const caption = source.caption
+              ? `\nCaption: ${source.caption}`
+              : '';
             return `Document ${source.position}: ${source.title}\nAttribution: ${source.attribution}${caption}\nBody: ${source.body}`;
           })
           .join('\n\n')
@@ -543,10 +545,7 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 
   if (
-    isGradingOwnDocument(
-      actor.membershipId,
-      submission.document.membershipId
-    )
+    isGradingOwnDocument(actor.membershipId, submission.document.membershipId)
   ) {
     return dataResponse(
       {
@@ -569,10 +568,10 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 
   const resolvedGradingConfig = await resolveAssignmentTypeGradingConfig({
-      assignmentTypeId: submission.document.assignmentTypeId,
-      assignmentTypeKind: submission.document.assignmentType?.kind ?? null,
-      assignmentTypeTitle: submission.document.assignmentType?.title ?? null,
-    });
+    assignmentTypeId: submission.document.assignmentTypeId,
+    assignmentTypeKind: submission.document.assignmentType?.kind ?? null,
+    assignmentTypeTitle: submission.document.assignmentType?.title ?? null,
+  });
   const requestedStrictnessLevel = data.gradingAssistantStrictnessLevel
     ? parseGradingAssistantStrictnessLevel(data.gradingAssistantStrictnessLevel)
     : null;
@@ -624,8 +623,7 @@ export async function action({ request }: ActionFunctionArgs) {
     forceFallback,
     signalFallbackRetry: !forceFallback,
   };
-  const retryResponse = () =>
-    dataResponse({ retrying: true }, { status: 202 });
+  const retryResponse = () => dataResponse({ retrying: true }, { status: 202 });
   const getGradingLlmCompletion = (
     params: Parameters<typeof getLLMCompletion>[0]
   ) =>
@@ -734,24 +732,21 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
       earnedPoints,
       points,
     } satisfies Prisma.InputJsonObject;
-    const {
-      numericPercentage,
-      letterGrade,
-      score,
-      overallScore,
-    } = applyStrictnessToGradeFields({
-      overallScore: earnedPoints,
-      numericPercentage: Math.round((earnedPoints / totalPoints) * 100),
-      letterGrade: letterFromPercent(
-        Math.round((earnedPoints / totalPoints) * 100)
-      ),
-      score: formatGrade(
-        Math.round((earnedPoints / totalPoints) * 100),
-        letterFromPercent(Math.round((earnedPoints / totalPoints) * 100))
-      ) ?? '',
-      scoringType: 'percentage',
-      gradingAssistantStrictnessLevel,
-    });
+    const { numericPercentage, letterGrade, score, overallScore } =
+      applyStrictnessToGradeFields({
+        overallScore: earnedPoints,
+        numericPercentage: Math.round((earnedPoints / totalPoints) * 100),
+        letterGrade: letterFromPercent(
+          Math.round((earnedPoints / totalPoints) * 100)
+        ),
+        score:
+          formatGrade(
+            Math.round((earnedPoints / totalPoints) * 100),
+            letterFromPercent(Math.round((earnedPoints / totalPoints) * 100))
+          ) ?? '',
+        scoringType: 'percentage',
+        gradingAssistantStrictnessLevel,
+      });
     const overallComment =
       typeof parsedJson.overallComment === 'string' &&
       parsedJson.overallComment.trim()
@@ -852,7 +847,8 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
           gradingConfigSource: resolvedGradingConfig.source,
           ...gradingAiContextMetadata,
           assignmentTypeGradingLabel: resolvedGradingConfig.label,
-          assignmentTypeSourceTemplateId: resolvedGradingConfig.sourceTemplateId,
+          assignmentTypeSourceTemplateId:
+            resolvedGradingConfig.sourceTemplateId,
           assignmentTypeSourceTemplateSlug:
             resolvedGradingConfig.sourceTemplateSlug,
           gradingAssistantStrictnessLevel,
@@ -1138,7 +1134,8 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
         assignmentTypeGradingVersion: resolvedGradingConfig.version,
         assignmentTypeGradingLabel: resolvedGradingConfig.label,
         assignmentTypeSourceTemplateId: resolvedGradingConfig.sourceTemplateId,
-        assignmentTypeSourceTemplateSlug: resolvedGradingConfig.sourceTemplateSlug,
+        assignmentTypeSourceTemplateSlug:
+          resolvedGradingConfig.sourceTemplateSlug,
         gradingAssistantStrictnessLevel,
         assignmentTypeId: submission.document.assignmentTypeId,
         assignmentId: submission.document.assignment?.id ?? null,

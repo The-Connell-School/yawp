@@ -231,7 +231,9 @@ describe('summarizeClassRubrics', () => {
       'thesis_and_content',
       'evidence_and_support',
     ]);
-    const evidence = rubrics.find((r) => r.category === 'evidence_and_support')!;
+    const evidence = rubrics.find(
+      (r) => r.category === 'evidence_and_support'
+    )!;
     // (2 + 3 + 2) / 3 = 2.33 → 2.3
     expect(evidence.averageLevel).toBe(2.3);
     expect(evidence.scoredCount).toBe(3);
@@ -321,7 +323,9 @@ describe('findStudentsNeedingAttention', () => {
       }),
     ];
 
-    const flagged = findStudentsNeedingAttention(rows, { averageThreshold: 80 });
+    const flagged = findStudentsNeedingAttention(rows, {
+      averageThreshold: 80,
+    });
     // Both are below 80, but the 40 is far more severe and sorts first.
     expect(flagged.map((s) => s.studentName)).toEqual([
       'Severe Case',
@@ -373,7 +377,10 @@ describe('buildPlanProgress', () => {
       row({
         submittedAt: new Date('2026-04-01T00:00:00.000Z'),
         numericPercentage: 78,
-        rubricScores: { evidence_and_support: 3, organization_and_structure: 3 },
+        rubricScores: {
+          evidence_and_support: 3,
+          organization_and_structure: 3,
+        },
       }),
     ];
 
@@ -403,9 +410,11 @@ describe('buildPlanProgress', () => {
   });
 
   test('reports null deltas when the current data lacks a targeted skill', () => {
-    const progress = buildPlanProgress(baseline, ['evidence_and_support'], [
-      row({ numericPercentage: null, rubricScores: null }),
-    ]);
+    const progress = buildPlanProgress(
+      baseline,
+      ['evidence_and_support'],
+      [row({ numericPercentage: null, rubricScores: null })]
+    );
     const evidence = progress.skills[0];
     expect(evidence.baselineLevel).toBe(2);
     expect(evidence.currentLevel).toBeNull();

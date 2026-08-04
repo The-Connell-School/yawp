@@ -39,7 +39,9 @@ describe('AssignmentPromptPreview', () => {
     const el = render(
       <AssignmentPromptPreview prompt="Write a short paragraph about trade." />
     );
-    expect(el.querySelector('[data-testid="assignment-prompt-toggle"]')).toBeFalsy();
+    expect(
+      el.querySelector('[data-testid="assignment-prompt-toggle"]')
+    ).toBeFalsy();
     expect(el.textContent).toContain('Write a short paragraph about trade.');
   });
 

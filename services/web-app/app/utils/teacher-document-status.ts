@@ -21,16 +21,16 @@ export type TeacherStatusSubmission = GradeSignals & {
 export function hasMeaningfulGrade(submission: GradeSignals): boolean {
   return Boolean(
     submission.gradedAt ||
-      submission.score ||
-      submission.feedback ||
-      submission.overallComment ||
-      submission.letterGrade ||
-      (submission.numericPercentage !== null &&
-        submission.numericPercentage !== undefined) ||
-      (submission.rubricScores &&
-        typeof submission.rubricScores === 'object' &&
-        Object.keys(submission.rubricScores as Record<string, unknown>)
-          .length > 0)
+    submission.score ||
+    submission.feedback ||
+    submission.overallComment ||
+    submission.letterGrade ||
+    (submission.numericPercentage !== null &&
+      submission.numericPercentage !== undefined) ||
+    (submission.rubricScores &&
+      typeof submission.rubricScores === 'object' &&
+      Object.keys(submission.rubricScores as Record<string, unknown>).length >
+        0)
   );
 }
 

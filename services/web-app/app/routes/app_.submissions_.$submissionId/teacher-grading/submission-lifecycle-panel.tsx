@@ -45,8 +45,7 @@ function GradingAssistantSplitButton({
   onStart: () => void;
   onAbortStart: () => void;
 }) {
-  const isGenerating =
-    isPendingStart || headerState?.isGenerating === true;
+  const isGenerating = isPendingStart || headerState?.isGenerating === true;
   const isAiRetrying = headerState?.isAiRetrying === true;
   const isBusy = isGenerating || headerState?.isBusy === true;
   const hasDraftToReplace = headerState?.hasDraftToReplace === true;
@@ -113,7 +112,10 @@ function GradingAssistantSplitButton({
           {buttonLabel}
         </Button>
 
-        <DropdownMenu open={strictnessMenuOpen} onOpenChange={setStrictnessMenuOpen}>
+        <DropdownMenu
+          open={strictnessMenuOpen}
+          onOpenChange={setStrictnessMenuOpen}
+        >
           <DropdownMenuTrigger asChild>
             <Button
               type="button"
@@ -182,7 +184,9 @@ function GradingAssistantSplitButton({
       <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Replace Existing Grading Feedback?</AlertDialogTitle>
+            <AlertDialogTitle>
+              Replace Existing Grading Feedback?
+            </AlertDialogTitle>
             <AlertDialogDescription>
               Grading Assistant suggestions will replace all current rubric
               comments, overall feedback, and grammar issue suggestions.
@@ -190,8 +194,12 @@ function GradingAssistantSplitButton({
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={onAbortStart}>Go Back</AlertDialogCancel>
-            <AlertDialogAction onClick={handleConfirm}>Replace</AlertDialogAction>
+            <AlertDialogCancel onClick={onAbortStart}>
+              Go Back
+            </AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirm}>
+              Replace
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -244,9 +252,9 @@ export function SubmissionLifecyclePanel({
   isReleasing: boolean;
   submissionForView: ViewPanelSubmission;
 } & ComponentProps<typeof TeacherGradingPanel>) {
-  const label = lifecycleState === 'needs_grading' ? 'Grading' : 'Grade Summary';
-  const isReadyToRelease =
-    lifecycleState === 'graded' && !isEditingGrade;
+  const label =
+    lifecycleState === 'needs_grading' ? 'Grading' : 'Grade Summary';
+  const isReadyToRelease = lifecycleState === 'graded' && !isEditingGrade;
   const showEditingForm =
     lifecycleState === 'needs_grading' ||
     (lifecycleState === 'graded' && isEditingGrade);
@@ -317,9 +325,7 @@ export function SubmissionLifecyclePanel({
       <div className="shrink-0 border-b px-4 py-2.5">
         <div className="flex items-center justify-between gap-2">
           <span className="text-sm font-semibold">{label}</span>
-          {lifecycleState === 'released' ? (
-            <GradeSummaryReleasedLabel />
-          ) : null}
+          {lifecycleState === 'released' ? <GradeSummaryReleasedLabel /> : null}
           {isReadyToRelease ? (
             <div className="flex flex-wrap items-center justify-end gap-2">
               <ConfirmationDialog

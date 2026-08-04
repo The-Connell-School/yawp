@@ -354,35 +354,35 @@ export function AssignmentCreationSheetContent({
         <div className="space-y-2">
           <Label>Assign to</Label>
           <div className="space-y-2.5 rounded-md border p-3">
-              {teacherClasses.length === 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  {emptyClassesMessage}
-                </p>
-              ) : (
-                teacherClasses.map((klass) => {
-                  const checked = hasFixedClass
-                    ? klass.id === fixedClassId
-                    : selectedClassIds.includes(klass.id);
+            {teacherClasses.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                {emptyClassesMessage}
+              </p>
+            ) : (
+              teacherClasses.map((klass) => {
+                const checked = hasFixedClass
+                  ? klass.id === fixedClassId
+                  : selectedClassIds.includes(klass.id);
 
-                  return (
-                    <div key={klass.id} className="flex items-center gap-2.5">
-                      <Checkbox
-                        id={`assignment-create-class-${klass.id}`}
-                        checked={checked}
-                        onCheckedChange={() => toggleClass(klass.id)}
-                        disabled={isSaving || hasFixedClass}
-                      />
-                      <Label
-                        htmlFor={`assignment-create-class-${klass.id}`}
-                        className="cursor-pointer font-normal"
-                      >
-                        {assignmentCreationClassLabel(klass)}
-                      </Label>
-                    </div>
-                  );
-                })
-              )}
-            </div>
+                return (
+                  <div key={klass.id} className="flex items-center gap-2.5">
+                    <Checkbox
+                      id={`assignment-create-class-${klass.id}`}
+                      checked={checked}
+                      onCheckedChange={() => toggleClass(klass.id)}
+                      disabled={isSaving || hasFixedClass}
+                    />
+                    <Label
+                      htmlFor={`assignment-create-class-${klass.id}`}
+                      className="cursor-pointer font-normal"
+                    >
+                      {assignmentCreationClassLabel(klass)}
+                    </Label>
+                  </div>
+                );
+              })
+            )}
+          </div>
         </div>
 
         <div className="space-y-2">
@@ -403,8 +403,8 @@ export function AssignmentCreationSheetContent({
           </Label>
           <p className="text-sm text-muted-foreground">
             Any documents uploaded here will be attached to the prompt and
-            available to be viewed by students as they&apos;re working on
-            their document.
+            available to be viewed by students as they&apos;re working on their
+            document.
           </p>
           <Input
             id="assignment-create-attachment"
@@ -507,9 +507,7 @@ export function AssignmentCreationSheetContent({
               name="submitForGrade"
               value="true"
               checked={submitForGrade}
-              onCheckedChange={(checked) =>
-                setSubmitForGrade(checked === true)
-              }
+              onCheckedChange={(checked) => setSubmitForGrade(checked === true)}
               disabled={isSaving}
               className="size-4 shrink-0"
             />
@@ -619,7 +617,9 @@ export function AssignmentCreationSheetContent({
           ) : null}
         </div>
 
-        {!submitForGrade ? <input type="hidden" name="pointValue" value="" /> : null}
+        {!submitForGrade ? (
+          <input type="hidden" name="pointValue" value="" />
+        ) : null}
 
         {formError ? (
           <p className="text-sm text-destructive">{formError}</p>

@@ -27,7 +27,12 @@ export type ClassDocumentsViewPreferences = {
   documentSort?: DocumentWorkSort;
 };
 
-const DOCUMENT_GROUP_MODES = ['class', 'student', 'assignment', 'status'] as const;
+const DOCUMENT_GROUP_MODES = [
+  'class',
+  'student',
+  'assignment',
+  'status',
+] as const;
 
 function parseIdListPreference(
   parsed: Record<string, unknown>,
@@ -214,7 +219,9 @@ function applyClassDocumentsSearchParamsToPreferences(
     delete next.status;
   }
 
-  const documentGroup = parseDocumentGroupMode(searchParams.get('documentGroup'));
+  const documentGroup = parseDocumentGroupMode(
+    searchParams.get('documentGroup')
+  );
   if (documentGroup !== 'none') {
     next.documentGroup = documentGroup;
   } else {
@@ -250,7 +257,9 @@ export function preferencesFromSearchParams(
     searchParams.get('assignmentId')
   );
   const status = searchParams.get('status');
-  const documentGroup = parseDocumentGroupMode(searchParams.get('documentGroup'));
+  const documentGroup = parseDocumentGroupMode(
+    searchParams.get('documentGroup')
+  );
 
   if (studentIds.length > 0) preferences.studentIds = studentIds;
   if (assignmentIds.length > 0) preferences.assignmentIds = assignmentIds;
@@ -284,7 +293,10 @@ export function mergeStoredClassDocumentsSearchParams(params: {
     }
   }
 
-  if (!next.has('assignmentId') && params.storedPreferences.assignmentIds?.length) {
+  if (
+    !next.has('assignmentId') &&
+    params.storedPreferences.assignmentIds?.length
+  ) {
     const serialized = serializeDocumentWorkFilterIds(
       params.storedPreferences.assignmentIds
     );

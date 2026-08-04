@@ -16,7 +16,10 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
 
   const url = new URL(request.url);
   const before = url.searchParams.get('before'); // ISO timestamp cursor
-  const limit = Math.min(50, Math.max(1, Number(url.searchParams.get('limit') ?? '10')));
+  const limit = Math.min(
+    50,
+    Math.max(1, Number(url.searchParams.get('limit') ?? '10'))
+  );
   const beforeDate = before ? new Date(before) : undefined;
 
   const dateFilter = beforeDate ? { lt: beforeDate } : undefined;
@@ -78,7 +81,10 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
     seen.add(hash);
     all.push({
       id: rev.id,
-      createdAt: rev.createdAt instanceof Date ? rev.createdAt.toISOString() : String(rev.createdAt),
+      createdAt:
+        rev.createdAt instanceof Date
+          ? rev.createdAt.toISOString()
+          : String(rev.createdAt),
       label: rev.trigger === 'submit' ? 'Submitted' : 'Auto-saved',
       html: rev.html,
       text: rev.text,
@@ -92,13 +98,19 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
     if (seen.has(hash)) continue;
     seen.add(hash);
     const label =
-      j.eventType === 'document.submit' ? 'Submitted' :
-      j.source === 'tutor-pre-respond' ? 'Before tutor response' :
-      j.source === 'pre-submit-flush' ? 'Before submit' :
-      'Saved';
+      j.eventType === 'document.submit'
+        ? 'Submitted'
+        : j.source === 'tutor-pre-respond'
+          ? 'Before tutor response'
+          : j.source === 'pre-submit-flush'
+            ? 'Before submit'
+            : 'Saved';
     all.push({
       id: j.id,
-      createdAt: j.createdAt instanceof Date ? j.createdAt.toISOString() : String(j.createdAt),
+      createdAt:
+        j.createdAt instanceof Date
+          ? j.createdAt.toISOString()
+          : String(j.createdAt),
       label,
       html: j.html,
       text: j.text,
@@ -107,9 +119,12 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
   }
 
   // Sort by date descending, take `limit`
-  all.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  all.sort(
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+  );
   const page = all.slice(0, limit);
-  const nextCursor = page.length === limit ? page[page.length - 1].createdAt : null;
+  const nextCursor =
+    page.length === limit ? page[page.length - 1].createdAt : null;
 
   return dataResponse({ entries: page, nextCursor });
 };

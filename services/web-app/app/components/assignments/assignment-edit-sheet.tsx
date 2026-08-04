@@ -1,7 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useFetcher } from 'react-router';
 import { FileUp, Loader2 } from 'lucide-react';
-import { SheetDescription, SheetFooter, SheetHeader, SheetTitle, SHEET_SCROLL_BODY_CLASS_NAME, SHEET_STICKY_FOOTER_CLASS_NAME } from '~/components/ui/sheet';
+import {
+  SheetDescription,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+  SHEET_SCROLL_BODY_CLASS_NAME,
+  SHEET_STICKY_FOOTER_CLASS_NAME,
+} from '~/components/ui/sheet';
 import { cn } from '~/utils/misc';
 import { Button } from '~/components/ui/button';
 import { Checkbox } from '~/components/ui/checkbox';
@@ -201,15 +208,19 @@ export function AssignmentEditForm({
               ))}
             </SelectContent>
           </Select>
-          <input type="hidden" name="assignmentTypeId" value={assignmentTypeId} />
+          <input
+            type="hidden"
+            name="assignmentTypeId"
+            value={assignmentTypeId}
+          />
         </div>
 
         <div className="space-y-2">
           <Label htmlFor="assignment-attachment">Attachment (optional)</Label>
           <p className="text-sm text-muted-foreground">
             Any documents uploaded here will be attached to the prompt and
-            available to be viewed by students as they&apos;re working on
-            their document.
+            available to be viewed by students as they&apos;re working on their
+            document.
           </p>
 
           {editingAssignment.promptAttachmentName && !attachmentRemoved ? (
@@ -371,9 +382,13 @@ export function AssignmentEditForm({
           ) : null}
         </div>
 
-        {!submitForGrade ? <input type="hidden" name="pointValue" value="" /> : null}
+        {!submitForGrade ? (
+          <input type="hidden" name="pointValue" value="" />
+        ) : null}
 
-        {formError ? <p className="text-sm text-destructive">{formError}</p> : null}
+        {formError ? (
+          <p className="text-sm text-destructive">{formError}</p>
+        ) : null}
       </div>
 
       <SheetFooter

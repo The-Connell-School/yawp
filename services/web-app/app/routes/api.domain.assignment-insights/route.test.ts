@@ -26,18 +26,20 @@ const GENERATION_CLASS_ASSIGNMENT = {
 };
 
 function mockClassAssignmentAccess(
-  generationResult: typeof GENERATION_CLASS_ASSIGNMENT | null = GENERATION_CLASS_ASSIGNMENT
+  generationResult:
+    | typeof GENERATION_CLASS_ASSIGNMENT
+    | null = GENERATION_CLASS_ASSIGNMENT
 ) {
-  prisma.classAssignment.findFirst.mockImplementation(async (args: {
-    select?: Record<string, boolean>;
-  }) => {
-    const isAuthCheck =
-      args.select?.id === true && Object.keys(args.select).length === 1;
-    if (isAuthCheck) {
-      return generationResult ? { id: 'ca-1' } : null;
+  prisma.classAssignment.findFirst.mockImplementation(
+    async (args: { select?: Record<string, boolean> }) => {
+      const isAuthCheck =
+        args.select?.id === true && Object.keys(args.select).length === 1;
+      if (isAuthCheck) {
+        return generationResult ? { id: 'ca-1' } : null;
+      }
+      return generationResult;
     }
-    return generationResult;
-  });
+  );
 }
 
 const getGradingActor = mock();
@@ -111,7 +113,9 @@ describe('api.domain.assignment-insights', () => {
     process.env.CLASS_INSIGHT_MOCK_MODE = 'live';
     prisma.classAssignment.findFirst.mockReset();
     prisma.document.findMany.mockReset();
-    prisma.classAssignmentInsight.findUnique.mockReset().mockResolvedValue(null);
+    prisma.classAssignmentInsight.findUnique
+      .mockReset()
+      .mockResolvedValue(null);
     prisma.classAssignmentInsight.upsert.mockReset();
     prisma.classAssignmentInsight.updateMany.mockReset().mockResolvedValue({
       count: 0,

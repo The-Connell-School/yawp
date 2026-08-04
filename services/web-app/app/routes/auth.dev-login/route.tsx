@@ -1,8 +1,5 @@
 import { redirect, type ActionFunctionArgs } from 'react-router';
-import {
-  getSessionExpirationDate,
-  sessionKey,
-} from '~/utils/auth.server';
+import { getSessionExpirationDate, sessionKey } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { authSessionStorage } from '~/cookie-session-storages/authentication.server';
 import { setMembershipId } from '~/cookies/membership-id.server';
@@ -27,7 +24,9 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 
   const formData = await request.formData();
-  const email = String(formData.get('email') ?? '').trim().toLowerCase();
+  const email = String(formData.get('email') ?? '')
+    .trim()
+    .toLowerCase();
 
   if (!LOCAL_DEV_PERSONA_EMAILS.includes(email)) {
     return Response.json({ error: 'Unknown dev persona.' }, { status: 404 });
@@ -77,13 +76,16 @@ export async function action({ request }: ActionFunctionArgs) {
   authSession.unset(studentPreviewOrgIdKey);
 
   return redirect('/app', {
-    headers: combineHeaders({
-      'set-cookie': await authSessionStorage.commitSession(authSession, {
-        expires: session.expirationDate,
-      }),
-    }, {
-      'set-cookie': await setMembershipId(membershipId),
-    }),
+    headers: combineHeaders(
+      {
+        'set-cookie': await authSessionStorage.commitSession(authSession, {
+          expires: session.expirationDate,
+        }),
+      },
+      {
+        'set-cookie': await setMembershipId(membershipId),
+      }
+    ),
   });
 }
 

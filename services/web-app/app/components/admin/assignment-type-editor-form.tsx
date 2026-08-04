@@ -1,4 +1,11 @@
-import { useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from 'react';
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type ReactNode,
+} from 'react';
 import { Form, Link, useFetcher } from 'react-router';
 import { ArchiveIcon, ArrowLeft, RotateCcwIcon } from 'lucide-react';
 import { Button } from '~/components/ui/button';
@@ -141,7 +148,13 @@ export function AssignmentTypeEditorForm({
         rubric,
         promptConfig,
       }),
-    [titleDefaultValue, descriptionDefaultValue, scoringScale, rubric, promptConfig]
+    [
+      titleDefaultValue,
+      descriptionDefaultValue,
+      scoringScale,
+      rubric,
+      promptConfig,
+    ]
   );
 
   useEffect(() => {
@@ -239,7 +252,9 @@ export function AssignmentTypeEditorForm({
     fetcher.submit({ intent: 'unarchiveCourse' }, { method: 'post' });
   }
 
-  const formId = isEdit ? 'assignment-type-edit-form' : 'assignment-type-create-form';
+  const formId = isEdit
+    ? 'assignment-type-edit-form'
+    : 'assignment-type-create-form';
 
   return (
     <>
@@ -249,11 +264,19 @@ export function AssignmentTypeEditorForm({
         encType={isEdit ? 'multipart/form-data' : undefined}
         className="mx-auto max-w-5xl px-3 py-5 pb-28 md:px-6"
       >
-        {isEdit ? <input type="hidden" name="intent" value="updateCourse" /> : null}
+        {isEdit ? (
+          <input type="hidden" name="intent" value="updateCourse" />
+        ) : null}
 
         <header className="flex justify-between gap-4 pb-6">
           <div className="flex min-w-0 flex-1 flex-col gap-5">
-            <Button type="button" variant="outline" size="sm" className="w-fit" asChild>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="w-fit"
+              asChild
+            >
               <Link to="/app/admin/assignments">
                 <ArrowLeft className="mr-2 size-4 shrink-0" />
                 Back

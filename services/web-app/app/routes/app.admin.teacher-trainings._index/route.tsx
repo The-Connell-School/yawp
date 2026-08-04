@@ -201,7 +201,9 @@ export default function TeacherTrainingsRoute() {
                       {course.description || 'No description'}
                     </p>
                     <div className="mt-4 flex items-center justify-between text-sm text-muted-foreground">
-                      <span>{course.teacherTrainingModules.length} modules</span>
+                      <span>
+                        {course.teacherTrainingModules.length} modules
+                      </span>
                       <span>{course.resources.length} resources</span>
                     </div>
                   </CardContent>

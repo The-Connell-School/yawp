@@ -29,9 +29,8 @@ const isAssignmentTypeAvailableForEveryScope = mock();
 const uploadAssignmentPromptAttachment = mock();
 const deleteAssignmentPromptAttachment = mock();
 class AssignmentPromptAttachmentError extends Error {}
-const actualAssignmentPromptAttachment = await import(
-  '~/domain/assignments/assignment-prompt-attachment.server'
-);
+const actualAssignmentPromptAttachment =
+  await import('~/domain/assignments/assignment-prompt-attachment.server');
 
 mock.module('~/utils/db.server.js', () => ({ prisma }));
 mock.module('~/utils/db.server', () => ({ prisma }));
@@ -54,16 +53,13 @@ mock.module('~/utils/assignment-deployment.server', () => ({
   createAssignmentDeployedToClasses,
   deleteClassAssignmentDeployment,
 }));
-mock.module(
-  '~/domain/assignments/assignment-prompt-attachment.server',
-  () => ({
-    ...actualAssignmentPromptAttachment,
-    AssignmentPromptAttachmentError,
-    assignmentPromptAttachmentRequestTooLarge: () => false,
-    deleteAssignmentPromptAttachment,
-    uploadAssignmentPromptAttachment,
-  })
-);
+mock.module('~/domain/assignments/assignment-prompt-attachment.server', () => ({
+  ...actualAssignmentPromptAttachment,
+  AssignmentPromptAttachmentError,
+  assignmentPromptAttachmentRequestTooLarge: () => false,
+  deleteAssignmentPromptAttachment,
+  uploadAssignmentPromptAttachment,
+}));
 
 const {
   action: routeAction,
@@ -214,7 +210,10 @@ describe('class detail loader document visibility', () => {
         organization: { classInsightsEnabled: true, reporterEnabled: true },
       },
       students: [
-        { id: 'student-1', user: { name: 'Ada Lovelace', email: 'ada@x.test' } },
+        {
+          id: 'student-1',
+          user: { name: 'Ada Lovelace', email: 'ada@x.test' },
+        },
       ],
     });
     prisma.reporterGrowthPlan.findMany.mockResolvedValue([
@@ -689,7 +688,8 @@ describe('class detail loader document visibility', () => {
 
     expect(response.data).toMatchObject({
       success: false,
-      message: 'Point value must be a positive whole number no greater than 1000.',
+      message:
+        'Point value must be a positive whole number no greater than 1000.',
     });
     expect(response.init).toMatchObject({ status: 400 });
     expect(createAssignmentDeployedToClasses).not.toHaveBeenCalled();

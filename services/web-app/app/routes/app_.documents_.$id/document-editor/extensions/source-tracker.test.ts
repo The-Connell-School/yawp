@@ -31,7 +31,9 @@ describe('SourceTracker extension', () => {
 
     // Simulate a user keydown by triggering it on the editor view dom
     const dom = editor.view.dom as HTMLElement;
-    dom.dispatchEvent(new KeyboardEvent('keydown', { key: 'a', bubbles: true }));
+    dom.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'a', bubbles: true })
+    );
     // Simulate the resulting input by dispatching a transaction
     editor.commands.insertContent('a');
 

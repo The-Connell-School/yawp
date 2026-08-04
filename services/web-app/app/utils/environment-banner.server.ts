@@ -1,4 +1,8 @@
-export type EnvironmentBannerWarning = 'staging' | 'localhost' | 'preview' | null;
+export type EnvironmentBannerWarning =
+  | 'staging'
+  | 'localhost'
+  | 'preview'
+  | null;
 
 export function getEnvironmentBannerWarning(
   requestUrl: string,

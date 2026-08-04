@@ -169,7 +169,8 @@ export async function action({ request, params }: ActionFunctionArgs) {
 }
 
 export default function TeacherTrainingModuleRoute() {
-  const { teacherTrainingModule, teacherTraining } = useLoaderData<typeof loader>();
+  const { teacherTrainingModule, teacherTraining } =
+    useLoaderData<typeof loader>();
   const fetcher = useFetcher();
   const [isModuleSheetOpen, setIsModuleSheetOpen] = React.useState(false);
   const [isResourceSheetOpen, setIsResourceSheetOpen] = React.useState(false);

@@ -163,8 +163,7 @@ export const Comment = ({
             ? comment.content.slice(0, 90) + '...'
             : comment.content}
         </p>
-        {!readOnly &&
-        comment.membershipId === user.selectedMembership?.id ? (
+        {!readOnly && comment.membershipId === user.selectedMembership?.id ? (
           <Button
             {...dc.getButtonProps({
               onClick: (event) => {

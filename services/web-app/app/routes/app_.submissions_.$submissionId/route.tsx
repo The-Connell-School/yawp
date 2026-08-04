@@ -241,11 +241,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 // ── Component ────────────────────────────────────────────────────────
 
 export default function SubmissionRoute() {
-  const {
-    submission,
-    isOwner,
-    isTeacher,
-  } = useLoaderData<typeof loader>();
+  const { submission, isOwner, isTeacher } = useLoaderData<typeof loader>();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const location = useLocation();
@@ -869,8 +865,7 @@ export default function SubmissionRoute() {
                 teacherGradeUi?.rubricConfig ?? submission.rubricConfig
               }
               initialGradingAssistantStrictnessLevel={
-                submission.document.assignment
-                  ?.gradingAssistantStrictnessLevel
+                submission.document.assignment?.gradingAssistantStrictnessLevel
               }
             />
           ) : (

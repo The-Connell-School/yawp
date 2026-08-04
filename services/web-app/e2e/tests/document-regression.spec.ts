@@ -139,7 +139,10 @@ test.describe.serial('Document Regression Suite', () => {
     // Session timeline renders — the edited doc has 2 seeded revisions
     // so we should see at least one session entry with a time pattern
     await expect(
-      sheet.locator('button').filter({ hasText: /ago|Just now/i }).first()
+      sheet
+        .locator('button')
+        .filter({ hasText: /ago|Just now/i })
+        .first()
     ).toBeVisible({ timeout: 5000 });
   });
 
@@ -163,8 +166,11 @@ test.describe.serial('Document Regression Suite', () => {
     await expect(sheet).toBeVisible({ timeout: 5000 });
 
     // Click a session entry to expand it
-    const sessionButton = sheet.locator('button').filter({ hasText: /ago|Just now/i }).first();
-    if (await sessionButton.count() > 0) {
+    const sessionButton = sheet
+      .locator('button')
+      .filter({ hasText: /ago|Just now/i })
+      .first();
+    if ((await sessionButton.count()) > 0) {
       await sessionButton.click();
       // Preview panel should show content
       const previewPanel = sheet.locator('.font-times').first();
@@ -210,7 +216,9 @@ test.describe.serial('Document Regression Suite', () => {
     await helpers.openDocument(e2eContext.editedDocumentId);
 
     // Initially should show "Saved" text (default state before any edits)
-    await expect(page.getByText(/^Saved$/).first()).toBeVisible({ timeout: 5000 });
+    await expect(page.getByText(/^Saved$/).first()).toBeVisible({
+      timeout: 5000,
+    });
 
     // Type to trigger saving
     await helpers.typeInEditor(uniqueText('indicator'));

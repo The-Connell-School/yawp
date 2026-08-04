@@ -23,9 +23,7 @@ export function canSaveGradingDraft({
   hasNumericPercentage: boolean;
 }) {
   if (lifecycleState === 'needs_grading') {
-    return (
-      (hasDraftToReplace || hasUnsavedChanges) && hasNumericPercentage
-    );
+    return (hasDraftToReplace || hasUnsavedChanges) && hasNumericPercentage;
   }
   if (lifecycleState === 'graded') {
     return hasUnsavedChanges;

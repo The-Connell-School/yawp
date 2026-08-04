@@ -106,9 +106,9 @@ test.describe.serial('ACT Writing Ready advancement', () => {
       await expect(tutorMessages.filter({ hasText: firstPrompt })).toHaveCount(
         1
       );
-      await expect(tutorMessages.filter({ hasText: writingPrompt })).toHaveCount(
-        0
-      );
+      await expect(
+        tutorMessages.filter({ hasText: writingPrompt })
+      ).toHaveCount(0);
 
       await prisma.assignment.delete({ where: { id: assignment.id } });
     } finally {

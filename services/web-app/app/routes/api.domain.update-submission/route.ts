@@ -89,10 +89,7 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 
   if (
-    isGradingOwnDocument(
-      actor.membershipId,
-      submission.document.membershipId
-    )
+    isGradingOwnDocument(actor.membershipId, submission.document.membershipId)
   ) {
     return Response.json(
       { success: false, message: 'You cannot grade your own submission.' },
@@ -141,7 +138,8 @@ export async function action({ request }: ActionFunctionArgs) {
       return Response.json(
         {
           success: false,
-          message: 'An overall percentage is required before marking as graded.',
+          message:
+            'An overall percentage is required before marking as graded.',
         },
         { status: 400 }
       );

@@ -1,91 +1,91 @@
-import { type ReactNode, useEffect, useId, useState } from 'react'
-import { v4 } from 'uuid'
-import { cn } from '~/utils/misc'
-import { InfoCircledIcon } from '../icons'
+import { type ReactNode, useEffect, useId, useState } from 'react';
+import { v4 } from 'uuid';
+import { cn } from '~/utils/misc';
+import { InfoCircledIcon } from '../icons';
 import {
-	RadioGroup,
-	RadioGroupItem,
-	type RadioGroupProps,
-} from '../ui/radio-group'
-import { Tooltip } from '../ui/tooltip'
-import { ErrorList, type ListOfErrors } from './error-list'
+  RadioGroup,
+  RadioGroupItem,
+  type RadioGroupProps,
+} from '../ui/radio-group';
+import { Tooltip } from '../ui/tooltip';
+import { ErrorList, type ListOfErrors } from './error-list';
 
 export function FormRadioGroup({
-	labelProps,
-	radioGroupProps: { options, onValueChange, ...radioGroupProps },
-	errors,
-	className,
-	index,
+  labelProps,
+  radioGroupProps: { options, onValueChange, ...radioGroupProps },
+  errors,
+  className,
+  index,
 }: {
-	labelProps?: Omit<React.LabelHTMLAttributes<HTMLLabelElement>, 'color'> & {
-		info?: string
-	}
-	radioGroupProps: RadioGroupProps & {
-		options: { value: string; label: ReactNode; info?: string }[]
-		form?: string
-		onValueChange?: (value: string) => void
-	}
-	errors?: ListOfErrors
-	className?: string
-	index?: number
+  labelProps?: Omit<React.LabelHTMLAttributes<HTMLLabelElement>, 'color'> & {
+    info?: string;
+  };
+  radioGroupProps: RadioGroupProps & {
+    options: { value: string; label: ReactNode; info?: string }[];
+    form?: string;
+    onValueChange?: (value: string) => void;
+  };
+  errors?: ListOfErrors;
+  className?: string;
+  index?: number;
 }) {
-	const fallbackId = useId()
-	const id = radioGroupProps.id ?? fallbackId
-	const errorId = errors?.length ? `${id}-error` : undefined
-	const [value, setValue] = useState(radioGroupProps.defaultValue)
+  const fallbackId = useId();
+  const id = radioGroupProps.id ?? fallbackId;
+  const errorId = errors?.length ? `${id}-error` : undefined;
+  const [value, setValue] = useState(radioGroupProps.defaultValue);
 
-	useEffect(() => {
-		if (value) {
-			onValueChange?.(value)
-		}
-	}, [onValueChange, radioGroupProps.defaultValue, value])
+  useEffect(() => {
+    if (value) {
+      onValueChange?.(value);
+    }
+  }, [onValueChange, radioGroupProps.defaultValue, value]);
 
-	return (
-		<>
-			<input
-				{...radioGroupProps}
-				{...(index !== undefined ? { 'data-index': index } : {})}
-				type="hidden"
-				value={value}
-				defaultValue={undefined}
-			/>
-			<div className={cn('flex flex-col gap-1', className)}>
-				{labelProps?.info ? (
-					<label htmlFor={id} {...labelProps}>
-						<span className="flex items-center gap-2">
-							{labelProps?.children}{' '}
-							<Tooltip
-								text={<p className="max-w-[300px]">{labelProps?.info}</p>}
-							>
-								<InfoCircledIcon />
-							</Tooltip>
-						</span>
-					</label>
-				) : (
-					<label htmlFor={id} {...labelProps} />
-				)}
-				<RadioGroup {...radioGroupProps} onValueChange={setValue}>
-					{options.map(option => (
-						<div key={v4()} className="flex items-center space-x-2">
-							<RadioGroupItem value={option.value} id={option.value} />
-							<label
-								htmlFor={option.value}
-								className="flex w-full items-center gap-2"
-							>
-								{option.label}
-								{option.info ? (
-									<Tooltip
-										text={<p className="max-w-[300px]">{option.info}</p>}
-									>
-										<InfoCircledIcon />
-									</Tooltip>
-								) : null}
-							</label>
-						</div>
-					))}
-				</RadioGroup>
-				{errorId ? <ErrorList id={errorId} errors={errors} /> : null}
-			</div>
-		</>
-	)
+  return (
+    <>
+      <input
+        {...radioGroupProps}
+        {...(index !== undefined ? { 'data-index': index } : {})}
+        type="hidden"
+        value={value}
+        defaultValue={undefined}
+      />
+      <div className={cn('flex flex-col gap-1', className)}>
+        {labelProps?.info ? (
+          <label htmlFor={id} {...labelProps}>
+            <span className="flex items-center gap-2">
+              {labelProps?.children}{' '}
+              <Tooltip
+                text={<p className="max-w-[300px]">{labelProps?.info}</p>}
+              >
+                <InfoCircledIcon />
+              </Tooltip>
+            </span>
+          </label>
+        ) : (
+          <label htmlFor={id} {...labelProps} />
+        )}
+        <RadioGroup {...radioGroupProps} onValueChange={setValue}>
+          {options.map((option) => (
+            <div key={v4()} className="flex items-center space-x-2">
+              <RadioGroupItem value={option.value} id={option.value} />
+              <label
+                htmlFor={option.value}
+                className="flex w-full items-center gap-2"
+              >
+                {option.label}
+                {option.info ? (
+                  <Tooltip
+                    text={<p className="max-w-[300px]">{option.info}</p>}
+                  >
+                    <InfoCircledIcon />
+                  </Tooltip>
+                ) : null}
+              </label>
+            </div>
+          ))}
+        </RadioGroup>
+        {errorId ? <ErrorList id={errorId} errors={errors} /> : null}
+      </div>
+    </>
+  );
 }

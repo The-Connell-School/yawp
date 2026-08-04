@@ -10,7 +10,9 @@ mock.module('~/utils/auth.server', () => ({
 
 const { loader } = await import('./route');
 
-const mockRequest = new Request('http://localhost/app/admin/assignments-grading');
+const mockRequest = new Request(
+  'http://localhost/app/admin/assignments-grading'
+);
 
 describe('AssignmentsGrading loader', () => {
   beforeEach(() => {

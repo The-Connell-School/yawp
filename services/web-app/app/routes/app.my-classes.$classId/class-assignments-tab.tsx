@@ -18,7 +18,13 @@ import { AssignmentDocumentsPill } from './assignment-documents-pill';
 import { Button } from '~/components/ui/button';
 import { Checkbox } from '~/components/ui/checkbox';
 import { Input } from '~/components/ui/input';
-import { Sheet, SheetContent, SheetFooter, SHEET_SCROLL_BODY_CLASS_NAME, SHEET_STICKY_FOOTER_CLASS_NAME } from '~/components/ui/sheet';
+import {
+  Sheet,
+  SheetContent,
+  SheetFooter,
+  SHEET_SCROLL_BODY_CLASS_NAME,
+  SHEET_STICKY_FOOTER_CLASS_NAME,
+} from '~/components/ui/sheet';
 import {
   Table,
   TableBody,
@@ -157,7 +163,8 @@ export function ClassAssignmentsTab({
   );
   const canEditActive =
     activeAssignment != null &&
-    activeAssignment.assignmentType.systemKey !== AP_HISTORY_ASSIGNMENT_TYPE_KEY;
+    activeAssignment.assignmentType.systemKey !==
+      AP_HISTORY_ASSIGNMENT_TYPE_KEY;
   const hasSelection = selectedAssignmentIds.length > 0;
   const handleCreateSheetOpenChange = useCallback((open: boolean) => {
     setIsCreateSheetOpen(open);
@@ -244,12 +251,7 @@ export function ClassAssignmentsTab({
             >
               <input type="hidden" name="intent" value="delete-assignments" />
               {selectedAssignmentIds.map((id) => (
-                <input
-                  key={id}
-                  type="hidden"
-                  name="assignmentIds"
-                  value={id}
-                />
+                <input key={id} type="hidden" name="assignmentIds" value={id} />
               ))}
               <Tooltip
                 text={`Delete ${selectedAssignmentIds.length} assignment(s)`}

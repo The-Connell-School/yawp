@@ -2,10 +2,9 @@ import { describe, expect, mock, test } from 'bun:test';
 import { postTutorResponseWithFallbackRetry } from './tutor-response-retry';
 
 function formEntries(formData: FormData) {
-  return Object.fromEntries([...formData.entries()].map(([key, value]) => [
-    key,
-    String(value),
-  ]));
+  return Object.fromEntries(
+    [...formData.entries()].map(([key, value]) => [key, String(value)])
+  );
 }
 
 describe('postTutorResponseWithFallbackRetry', () => {

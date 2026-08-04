@@ -7,9 +7,8 @@ const prisma = {
 mock.module('~/utils/db.server.js', () => ({ prisma }));
 mock.module('~/utils/db.server', () => ({ prisma }));
 
-const { pickClassArtKeyForOrganization } = await import(
-  './class-art-assignment.server'
-);
+const { pickClassArtKeyForOrganization } =
+  await import('./class-art-assignment.server');
 const {
   CLASS_ART_POOL,
   CLASS_ARTWORK_COUNT,

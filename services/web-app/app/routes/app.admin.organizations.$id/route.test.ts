@@ -113,7 +113,9 @@ describe('admin organization detail route', () => {
 
   test('does not load writing practice state for the organization edit sheet', async () => {
     const response = await loader({
-      request: new Request('https://example.test/app/admin/organizations/org-1'),
+      request: new Request(
+        'https://example.test/app/admin/organizations/org-1'
+      ),
       params: { id: 'org-1' },
       context: {} as never,
     });

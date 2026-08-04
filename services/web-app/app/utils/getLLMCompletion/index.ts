@@ -1,1 +1,1 @@
-export * from './getLLMCompletion'
+export * from './getLLMCompletion';

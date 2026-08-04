@@ -13,7 +13,13 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
   const profile = await requireMembership(request, userId);
 
   const body = await request.json();
-  const { html, text, contentHash: clientContentHash, trigger, baseRevision } = body as {
+  const {
+    html,
+    text,
+    contentHash: clientContentHash,
+    trigger,
+    baseRevision,
+  } = body as {
     html: string;
     text: string;
     contentHash: string;
@@ -175,7 +181,10 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
     shouldCreateRevision = true; // first revision always
   } else if (EXPLICIT_TRIGGERS.has(resolvedTrigger ?? '')) {
     // Hash dedup: skip creating an identical revision back-to-back
-    const previousHash = await computeContentHash(lastRevision.html, lastRevision.text);
+    const previousHash = await computeContentHash(
+      lastRevision.html,
+      lastRevision.text
+    );
     const currentHash = await computeContentHash(html, text);
     shouldCreateRevision = previousHash !== currentHash;
   } else {

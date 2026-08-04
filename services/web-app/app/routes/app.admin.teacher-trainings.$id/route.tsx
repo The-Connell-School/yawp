@@ -87,15 +87,17 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   // Transform resources to include byteLength instead of blob
   const transformedCourse = {
     ...teacherTraining,
-    teacherTrainingModules: teacherTraining.teacherTrainingModules.map((module) => ({
-      ...module,
-      resources: module.resources.map((resource) => ({
-        id: resource.id,
-        name: resource.name,
-        contentType: resource.contentType,
-        byteLength: resource.blob?.byteLength || 0,
-      })),
-    })),
+    teacherTrainingModules: teacherTraining.teacherTrainingModules.map(
+      (module) => ({
+        ...module,
+        resources: module.resources.map((resource) => ({
+          id: resource.id,
+          name: resource.name,
+          contentType: resource.contentType,
+          byteLength: resource.blob?.byteLength || 0,
+        })),
+      })
+    ),
   };
 
   return dataResponse({ teacherTraining: transformedCourse });
@@ -502,7 +504,8 @@ export default function TeacherTrainingRoute() {
                 <div className="space-y-2">
                   <Label>Course Image</Label>
                   <div className="flex flex-col items-center gap-4">
-                    {previewUrl || (teacherTraining.image && !hasRemovedImage) ? (
+                    {previewUrl ||
+                    (teacherTraining.image && !hasRemovedImage) ? (
                       <div className="relative w-full">
                         <img
                           src={

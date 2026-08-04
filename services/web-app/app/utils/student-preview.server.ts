@@ -8,7 +8,10 @@ export const studentPreviewModeKey = 'studentPreviewMode';
 export const studentPreviewOrgIdKey = 'studentPreviewOrgId';
 export const readOnlyStudentPreviewMode = 'read-only';
 
-export function canEnterStudentPreview(args: { role: string; isAdmin: boolean }) {
+export function canEnterStudentPreview(args: {
+  role: string;
+  isAdmin: boolean;
+}) {
   return args.role === 'TEACHER' || args.isAdmin;
 }
 

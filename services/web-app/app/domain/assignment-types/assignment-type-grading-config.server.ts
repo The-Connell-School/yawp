@@ -165,7 +165,9 @@ function buildResolvedConfig({
     assignmentTypeTitle: row?.title ?? assignmentTypeTitle,
     label:
       parsedConfig.source === 'assignment-type'
-        ? (row?.title ?? assignmentTypeTitle ?? 'Assignment type grading config')
+        ? (row?.title ??
+          assignmentTypeTitle ??
+          'Assignment type grading config')
         : 'Thesis-driven essay grading assistant',
     version:
       parsedConfig.source === 'assignment-type'
@@ -176,7 +178,12 @@ function buildResolvedConfig({
     maxScore,
     rubricCategories,
     instructions: getAssignmentTypeGradingInstructions(promptConfigSnapshot),
-    rubricSnapshot: { categories: rubricCategories, minScore, maxScore, scoringType },
+    rubricSnapshot: {
+      categories: rubricCategories,
+      minScore,
+      maxScore,
+      scoringType,
+    },
     promptConfigSnapshot,
     outputSchemaSnapshot: parsedConfig.outputSchema,
     calibrationNotes: parsedConfig.calibrationNotes,

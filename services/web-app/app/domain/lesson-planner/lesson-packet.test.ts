@@ -285,3 +285,44 @@ describe('buildLessonPacket', () => {
     expect(ranged.outline[0]!.minutes).toBe(15);
   });
 });
+
+describe('buildLessonPacket — materials kept on their own', () => {
+  const packet = buildLessonPacket({
+    title: 'Evidence lesson',
+    className: 'English 10 · Period 3',
+    sections: [
+      {
+        id: 'msg-1',
+        content: '## Lesson Sequence\n\nWarm-up, mini-lesson, practice.',
+        keptAudience: 'teacher',
+      },
+      {
+        id: 'material-1',
+        content: '## Diagnose & Repair\n\nRead each excerpt.',
+        keptAudience: 'student',
+        // A material knows what it is; nothing has to be guessed from the text.
+        kind: 'handout',
+        origin: 'material',
+      },
+    ],
+  });
+
+  test('prints a kept handout beside the plan it came from', () => {
+    expect(packet.sections.map((section) => section.title)).toEqual([
+      'Lesson Sequence',
+      'Diagnose & Repair',
+    ]);
+    expect(packet.sections[1]!.audience).toBe('student');
+  });
+
+  test('takes the material at its word about what it is', () => {
+    expect(packet.sections[1]!.kind).toBe('handout');
+    expect(packet.outline[1]!.kind).toBe('handout');
+  });
+
+  test('says which sections came from a reply and which are materials', () => {
+    // The page offers rename on a kept reply; a material carries its own name.
+    expect(packet.sections[0]!.origin).toBe('reply');
+    expect(packet.sections[1]!.origin).toBe('material');
+  });
+});

@@ -46,7 +46,7 @@ export async function action({ request }: ActionFunctionArgs) {
   const userId = await requireUserId(request);
   const profile = await requireMembership(request, userId);
 
-  if (profile.role !== "TEACHER") {
+  if (profile.role !== 'TEACHER') {
     return dataResponse(
       {
         success: false,

@@ -23,8 +23,7 @@ function ensureDatabaseUrlIncludesSchemaQueryParam(): void {
 }
 
 function requireDatabaseUrl(): string {
-  const base =
-    process.env.E2E_DATABASE_URL || process.env.DATABASE_URL;
+  const base = process.env.E2E_DATABASE_URL || process.env.DATABASE_URL;
   if (!base) {
     throw new Error('DATABASE_URL environment variable is not set');
   }
@@ -81,10 +80,7 @@ export const prisma = remember('prisma', () => {
         connectionString,
         ssl: false,
       })
-    : new PrismaPg(
-        pgPoolConfig() as never,
-        schema ? { schema } : undefined
-      );
+    : new PrismaPg(pgPoolConfig() as never, schema ? { schema } : undefined);
 
   const client = new PrismaClient({
     adapter,

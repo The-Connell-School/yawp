@@ -226,10 +226,13 @@ export function TeacherGradingPanel({
     ) {
       hasRetriedAiFormRef.current = true;
       setIsAiRetrying(true);
-      aiFetcher.submit(cloneFormDataWithFallbackRetry(pendingAiFormRef.current), {
-        method: 'POST',
-        action: '/api/domain/grade-essay-ai',
-      });
+      aiFetcher.submit(
+        cloneFormDataWithFallbackRetry(pendingAiFormRef.current),
+        {
+          method: 'POST',
+          action: '/api/domain/grade-essay-ai',
+        }
+      );
       return;
     }
 

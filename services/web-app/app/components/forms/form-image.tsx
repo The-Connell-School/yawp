@@ -1,8 +1,10 @@
 import { useId } from 'react';
 import { useControlField } from '@rvf/react-router';
 
-interface Props
-  extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'children'> {
+interface Props extends Omit<
+  React.InputHTMLAttributes<HTMLInputElement>,
+  'children'
+> {
   name: string;
   imageName?: string;
   children: (props: {

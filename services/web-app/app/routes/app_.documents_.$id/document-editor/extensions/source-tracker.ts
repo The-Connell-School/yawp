@@ -20,7 +20,14 @@ export const SourceTracker = Extension.create({
     const view = this.editor.view;
     const dom = view.dom as HTMLElement;
 
-    const userEvents = ['keydown', 'paste', 'drop', 'input', 'compositionend', 'cut'];
+    const userEvents = [
+      'keydown',
+      'paste',
+      'drop',
+      'input',
+      'compositionend',
+      'cut',
+    ];
     const handlers: Array<[string, EventListener]> = [];
 
     const wrap = (eventName: string) => {
@@ -28,7 +35,9 @@ export const SourceTracker = Extension.create({
         userEventActive = true;
         // Reset on next tick — the resulting PM transaction will fire
         // before this microtask drains.
-        queueMicrotask(() => { userEventActive = false; });
+        queueMicrotask(() => {
+          userEventActive = false;
+        });
       };
       dom.addEventListener(eventName, handler, { capture: true });
       handlers.push([eventName, handler]);

@@ -52,10 +52,13 @@ describe('admin assignment type new action', () => {
     );
 
     const response = await action({
-      request: new Request('https://example.test/app/admin/assignment-types/new', {
-        method: 'POST',
-        body: form,
-      }),
+      request: new Request(
+        'https://example.test/app/admin/assignment-types/new',
+        {
+          method: 'POST',
+          body: form,
+        }
+      ),
       params: {},
       context: {} as never,
     } as never);

@@ -35,7 +35,11 @@ describe('buildClassDocumentGroups', () => {
       documents: [
         row({
           id: 'doc-released',
-          latestSubmission: { id: 'sub-1', releasedAt: new Date(), gradedAt: new Date() },
+          latestSubmission: {
+            id: 'sub-1',
+            releasedAt: new Date(),
+            gradedAt: new Date(),
+          },
         }),
         row({
           id: 'doc-in-progress',

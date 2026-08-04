@@ -10,6 +10,8 @@ export function filterClassAssignmentsByQuery<
   return assignments.filter((assignment) => {
     const title = assignment.title?.toLowerCase() ?? '';
     const typeTitle = assignment.assignmentType?.title.toLowerCase() ?? '';
-    return title.includes(normalizedQuery) || typeTitle.includes(normalizedQuery);
+    return (
+      title.includes(normalizedQuery) || typeTitle.includes(normalizedQuery)
+    );
   });
 }

@@ -198,7 +198,8 @@ export async function sendStudentClassInvite({
   if (existingUser) {
     return {
       status: 'error',
-      error: 'This student already has an account. Add them to the class instead.',
+      error:
+        'This student already has an account. Add them to the class instead.',
     };
   }
 

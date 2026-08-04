@@ -82,11 +82,14 @@ describe('app.organization.classes action', () => {
     body.append('teacherIds', 'teacher-1');
     body.append('teacherIds', 'teacher-2');
 
-    const request = new Request('https://example.com/app/organization/classes', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body,
-    });
+    const request = new Request(
+      'https://example.com/app/organization/classes',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body,
+      }
+    );
 
     const result = (await action({ request } as any)) as {
       data: { success: boolean };
@@ -113,11 +116,14 @@ describe('app.organization.classes action', () => {
     body.set('code', 'ABC123');
     body.append('teacherIds', 'teacher-1');
 
-    const request = new Request('https://example.com/app/organization/classes', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body,
-    });
+    const request = new Request(
+      'https://example.com/app/organization/classes',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body,
+      }
+    );
 
     const result = (await action({ request } as any)) as {
       data: { success: boolean };
@@ -134,11 +140,14 @@ describe('app.organization.classes action', () => {
     body.set('intent', 'bulk-edit-classes');
     body.set('schoolYear', '2025-2026');
 
-    const request = new Request('https://example.com/app/organization/classes', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body,
-    });
+    const request = new Request(
+      'https://example.com/app/organization/classes',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body,
+      }
+    );
 
     const result = (await action({ request } as any)) as {
       data: { error: string };
@@ -153,11 +162,14 @@ describe('app.organization.classes action', () => {
     body.set('intent', 'bulk-edit-classes');
     body.append('classIds', 'c1');
 
-    const request = new Request('https://example.com/app/organization/classes', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body,
-    });
+    const request = new Request(
+      'https://example.com/app/organization/classes',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body,
+      }
+    );
 
     const result = (await action({ request } as any)) as {
       data: { error: string };
@@ -174,11 +186,14 @@ describe('app.organization.classes action', () => {
     body.append('classIds', 'c2');
     body.set('schoolYear', '2025-2026');
 
-    const request = new Request('https://example.com/app/organization/classes', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body,
-    });
+    const request = new Request(
+      'https://example.com/app/organization/classes',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body,
+      }
+    );
 
     const result = (await action({ request } as any)) as {
       data: { success: boolean };
@@ -209,11 +224,14 @@ describe('app.organization.classes action', () => {
     body.append('teacherIds', 'teacher-1');
     body.append('teacherIds', 'teacher-2');
 
-    const request = new Request('https://example.com/app/organization/classes', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body,
-    });
+    const request = new Request(
+      'https://example.com/app/organization/classes',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body,
+      }
+    );
 
     const result = (await action({ request } as any)) as {
       data: { success: boolean };

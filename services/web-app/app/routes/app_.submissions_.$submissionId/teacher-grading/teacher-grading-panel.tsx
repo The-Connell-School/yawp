@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { useFetcher } from 'react-router';
 import { Button } from '~/components/ui/button';
 import { Badge } from '~/components/ui/badge';
@@ -358,10 +365,13 @@ export function TeacherGradingPanel({
     ) {
       hasRetriedAiFormRef.current = true;
       setIsAiRetrying(true);
-      aiFetcher.submit(cloneFormDataWithFallbackRetry(pendingAiFormRef.current), {
-        method: 'POST',
-        action: '/api/domain/grade-essay-ai',
-      });
+      aiFetcher.submit(
+        cloneFormDataWithFallbackRetry(pendingAiFormRef.current),
+        {
+          method: 'POST',
+          action: '/api/domain/grade-essay-ai',
+        }
+      );
       return;
     }
 

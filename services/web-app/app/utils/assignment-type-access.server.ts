@@ -155,9 +155,7 @@ function getEffectiveAssignmentTypeIds({
     return new Set(school.assignmentTypeIds);
   }
 
-  return new Set(
-    configuration.orgDefaultsByOrgId.get(organizationId) ?? []
-  );
+  return new Set(configuration.orgDefaultsByOrgId.get(organizationId) ?? []);
 }
 
 function isAssignmentTypeVisibleForScope({
@@ -192,9 +190,7 @@ export async function getAvailableAssignmentTypesForScopes<
   const configuration = await loadScopeConfiguration(normalizedScopes);
   const effectiveTypeIds = distinctStrings(
     normalizedScopes.flatMap((scope) =>
-      Array.from(
-        getEffectiveAssignmentTypeIds({ scope, configuration })
-      )
+      Array.from(getEffectiveAssignmentTypeIds({ scope, configuration }))
     )
   );
 
@@ -212,7 +208,9 @@ export async function getAvailableAssignmentTypesForScopes<
     orderBy,
   } as never);
 
-  return (candidates as unknown as Array<{ id: string } & Record<string, unknown>>)
+  return (
+    candidates as unknown as Array<{ id: string } & Record<string, unknown>>
+  )
     .filter((assignmentType) =>
       normalizedScopes.some((scope) =>
         isAssignmentTypeVisibleForScope({

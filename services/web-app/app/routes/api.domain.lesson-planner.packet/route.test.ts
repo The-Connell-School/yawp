@@ -5,7 +5,12 @@ const requireLessonPlannerAccess = mock();
 
 const prisma = {
   lessonPlanConversation: { findFirst: mock(), update: mock() },
-  lessonPlanMessage: { updateMany: mock() },
+  lessonPlanMessage: { updateMany: mock(), findFirst: mock() },
+  lessonPlanMaterial: {
+    upsert: mock(),
+    deleteMany: mock(),
+    updateMany: mock(),
+  },
 };
 
 mock.module('~/utils/auth.server', () => ({
@@ -47,6 +52,140 @@ beforeEach(() => {
   prisma.lessonPlanMessage.updateMany
     .mockReset()
     .mockResolvedValue({ count: 1 });
+  prisma.lessonPlanMessage.findFirst.mockReset().mockResolvedValue({
+    id: 'msg-1',
+    createdAt: new Date('2026-08-05T10:00:00.000Z'),
+    content:
+      'Here is the lesson.\n\n```yawp-material\nkind: handout\ntitle: Diagnose & Repair\n---\nRead each excerpt.\n```',
+  });
+  prisma.lessonPlanMaterial.upsert.mockReset().mockResolvedValue({
+    id: 'material-1',
+  });
+  prisma.lessonPlanMaterial.deleteMany.mockReset().mockResolvedValue({
+    count: 1,
+  });
+  prisma.lessonPlanMaterial.updateMany.mockReset().mockResolvedValue({
+    count: 1,
+  });
+});
+
+describe('lesson packet action — one material at a time', () => {
+  test('adds a single handout out of a reply, without the plan around it', async () => {
+    const response = await action({
+      request: formRequest({
+        intent: 'add-material',
+        conversationId: 'plan-1',
+        messageId: 'msg-1',
+        materialKey: '0',
+      }),
+    } as any);
+
+    const upsert = prisma.lessonPlanMaterial.upsert.mock.calls[0][0];
+    expect(upsert.create).toMatchObject({
+      conversationId: 'plan-1',
+      sourceMessageId: 'msg-1',
+      blockKey: '0',
+      kind: 'handout',
+      title: 'Diagnose & Repair',
+      audience: 'student',
+    });
+    expect(upsert.create.content).toContain('Read each excerpt.');
+    // Ordered by the reply it came from, not by when the teacher clicked.
+    expect(upsert.create.sourceCreatedAt).toEqual(
+      new Date('2026-08-05T10:00:00.000Z')
+    );
+    // The whole reply is not kept — that is the point.
+    expect(prisma.lessonPlanMessage.updateMany).not.toHaveBeenCalled();
+    expect((response.data as any).added).toBe(true);
+  });
+
+  test('adding the same material twice is the same add', async () => {
+    await action({
+      request: formRequest({
+        intent: 'add-material',
+        conversationId: 'plan-1',
+        messageId: 'msg-1',
+        materialKey: '0',
+      }),
+    } as any);
+
+    expect(prisma.lessonPlanMaterial.upsert.mock.calls[0][0].where).toEqual({
+      conversationId_sourceMessageId_blockKey: {
+        conversationId: 'plan-1',
+        sourceMessageId: 'msg-1',
+        blockKey: '0',
+      },
+    });
+  });
+
+  test('takes it back out again', async () => {
+    const response = await action({
+      request: formRequest({
+        intent: 'remove-material',
+        conversationId: 'plan-1',
+        messageId: 'msg-1',
+        materialKey: '0',
+      }),
+    } as any);
+
+    expect(prisma.lessonPlanMaterial.deleteMany.mock.calls[0][0].where).toEqual(
+      {
+        conversationId: 'plan-1',
+        sourceMessageId: 'msg-1',
+        blockKey: '0',
+      }
+    );
+    expect((response.data as any).added).toBe(false);
+  });
+
+  test('404s on a material that is not in that reply', async () => {
+    const response = await action({
+      request: formRequest({
+        intent: 'add-material',
+        conversationId: 'plan-1',
+        messageId: 'msg-1',
+        materialKey: '7',
+      }),
+    } as any);
+
+    expect(response.init?.status).toBe(404);
+    expect(prisma.lessonPlanMaterial.upsert).not.toHaveBeenCalled();
+  });
+
+  test('renames a saved material without touching the reply it came from', async () => {
+    await action({
+      request: formRequest({
+        intent: 'rename-material',
+        conversationId: 'plan-1',
+        materialId: 'material-1',
+        sectionTitle: 'Quote sandwich practice',
+      }),
+    } as any);
+
+    expect(prisma.lessonPlanMaterial.updateMany.mock.calls[0][0]).toMatchObject(
+      {
+        where: { id: 'material-1', conversationId: 'plan-1' },
+        data: { title: 'Quote sandwich practice' },
+      }
+    );
+    expect(prisma.lessonPlanMessage.updateMany).not.toHaveBeenCalled();
+  });
+
+  test('404s when the reply is not in this teacher’s lesson', async () => {
+    prisma.lessonPlanMessage.findFirst.mockResolvedValue(null);
+
+    const response = await action({
+      request: formRequest({
+        intent: 'add-material',
+        conversationId: 'plan-1',
+        messageId: 'not-mine',
+        materialKey: '0',
+      }),
+    } as any);
+
+    expect(response.init?.status).toBe(404);
+    expect(prisma.lessonPlanMaterial.upsert).not.toHaveBeenCalled();
+  });
 });
 
 describe('lesson packet action', () => {

@@ -14,5 +14,9 @@ export function isTeacherTrainingModuleComplete(
   videoTimestamp: number | null | undefined,
   videoDuration: number | null | undefined
 ) {
-  return !!videoDuration && videoDuration > 0 && (videoTimestamp ?? 0) >= videoDuration;
+  return (
+    !!videoDuration &&
+    videoDuration > 0 &&
+    (videoTimestamp ?? 0) >= videoDuration
+  );
 }

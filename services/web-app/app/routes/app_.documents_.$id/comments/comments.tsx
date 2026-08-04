@@ -65,7 +65,8 @@ export const Comments = ({
   const optimisticComment: CommentType | [] =
     !readOnly && fetcher?.formData
       ? {
-          membership: user.selectedMembership as unknown as CommentType['membership'],
+          membership:
+            user.selectedMembership as unknown as CommentType['membership'],
           membershipId: user.selectedMembership!.id,
           id: 'optimistic-document-comment',
           createdAt: new Date(),
@@ -80,10 +81,7 @@ export const Comments = ({
 
   return (
     <div
-      className={cn(
-        'no-scrollbar h-full w-full overflow-y-scroll',
-        className
-      )}
+      className={cn('no-scrollbar h-full w-full overflow-y-scroll', className)}
     >
       {showCollapsibleHeader ? (
         <Button

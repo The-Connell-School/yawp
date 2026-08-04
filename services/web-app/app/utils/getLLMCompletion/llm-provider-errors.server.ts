@@ -27,7 +27,10 @@ export function getAnthropicRetryableStatus(error: unknown): number | null {
 }
 
 export function isRetryableAnthropicOutageError(error: unknown): boolean {
-  return getAnthropicRetryableStatus(error) !== null || containsOverloadedError(error);
+  return (
+    getAnthropicRetryableStatus(error) !== null ||
+    containsOverloadedError(error)
+  );
 }
 
 export class LlmFallbackRetrySignal extends Error {

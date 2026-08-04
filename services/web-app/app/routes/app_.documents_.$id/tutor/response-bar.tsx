@@ -45,7 +45,10 @@ export const ResponseBar = ({
 
   return isAskingQuestion ? (
     <div
-      className={cn('flex w-full items-center justify-center gap-2 px-3', className)}
+      className={cn(
+        'flex w-full items-center justify-center gap-2 px-3',
+        className
+      )}
     >
       <Button
         size="lg"

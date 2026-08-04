@@ -7,7 +7,9 @@ test.describe.serial('Daily Pages prompt library', () => {
     signIn,
   }) => {
     await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
-    await page.goto(`/app/assignment-types/${e2eContext.dailyPagesAssignmentTypeId}`);
+    await page.goto(
+      `/app/assignment-types/${e2eContext.dailyPagesAssignmentTypeId}`
+    );
 
     await expect(
       page.getByRole('heading', { name: 'Daily Pages', level: 1 })
@@ -49,7 +51,9 @@ test.describe.serial('Daily Pages prompt library', () => {
     signIn,
   }) => {
     await signIn(e2eContext.userEmail, 'johndoe');
-    await page.goto(`/app/assignment-types/${e2eContext.dailyPagesAssignmentTypeId}`);
+    await page.goto(
+      `/app/assignment-types/${e2eContext.dailyPagesAssignmentTypeId}`
+    );
 
     await expect(
       page.getByRole('heading', { name: 'Daily Pages', level: 1 })

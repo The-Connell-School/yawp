@@ -18,11 +18,13 @@ import {
 
 describe('checkPmTransaction (pure predicate)', () => {
   // Build minimal synthetic transactions
-  const fakeTx = (docChanged: boolean, source: string | null) => ({
-    docChanged,
-    steps: [{ type: 'replace' }],
-    getMeta: (key: string) => (key === USER_SOURCE_META && source ? source : undefined),
-  } as any);
+  const fakeTx = (docChanged: boolean, source: string | null) =>
+    ({
+      docChanged,
+      steps: [{ type: 'replace' }],
+      getMeta: (key: string) =>
+        key === USER_SOURCE_META && source ? source : undefined,
+    }) as any;
 
   it('returns null when transaction does not change content (no violation)', () => {
     expect(checkPmTransaction(fakeTx(false, null))).toBeNull();
@@ -106,7 +108,9 @@ describe('installPmTripwire (with real Editor)', () => {
 
     // Simulate a real user event before the mutation — SourceTracker tags it
     const dom = editor.view.dom as HTMLElement;
-    dom.dispatchEvent(new KeyboardEvent('keydown', { key: 'a', bubbles: true }));
+    dom.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'a', bubbles: true })
+    );
     expect(() => {
       editor.commands.insertContent('a');
     }).not.toThrow();

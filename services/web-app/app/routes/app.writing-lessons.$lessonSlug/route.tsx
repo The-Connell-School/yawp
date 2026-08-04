@@ -10,12 +10,7 @@ import {
 import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { Button } from '~/components/ui/button';
 import { Badge } from '~/components/ui/badge';
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from '~/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
 import { Textarea } from '~/components/ui/textarea';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import {
@@ -242,9 +237,10 @@ function getPrototypeScore(response: string) {
   const wordCount = trimmed.split(/\s+/).filter(Boolean).length;
   const hasEndingPunctuation = /[.!?]$/.test(trimmed);
   const isConcise = wordCount <= 14;
-  const hasRevisionShape = !/\b(at this point in time|has the ability to|in order to)\b/i.test(
-    trimmed
-  );
+  const hasRevisionShape =
+    !/\b(at this point in time|has the ability to|in order to)\b/i.test(
+      trimmed
+    );
 
   return Math.min(
     100,

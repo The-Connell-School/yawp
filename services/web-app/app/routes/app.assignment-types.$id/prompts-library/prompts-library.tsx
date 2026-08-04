@@ -95,16 +95,12 @@ export function PromptsLibrary({
   }, [searchParams]);
 
   function readSelected(key: string): Set<string> {
-    return new Set(
-      searchParams.get(key)?.split(',').filter(Boolean) ?? []
-    );
+    return new Set(searchParams.get(key)?.split(',').filter(Boolean) ?? []);
   }
 
   function toggleFacet(key: string, value: string) {
     const next = new URLSearchParams(searchParams);
-    const current = new Set(
-      next.get(key)?.split(',').filter(Boolean) ?? []
-    );
+    const current = new Set(next.get(key)?.split(',').filter(Boolean) ?? []);
     if (current.has(value)) current.delete(value);
     else current.add(value);
     if (current.size === 0) next.delete(key);

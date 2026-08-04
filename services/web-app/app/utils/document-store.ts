@@ -39,15 +39,17 @@ export class DocumentStore {
           if (oldVersion < 2) {
             // Migration: backfill localVersion on existing records
             const store = transaction.objectStore(STORE_NAME);
-            store.openCursor().then(function migrate(cursor): Promise<void> | void {
-              if (!cursor) return;
-              const value = cursor.value;
-              if (value.localVersion === undefined) {
-                value.localVersion = 0;
-                cursor.update(value);
-              }
-              return cursor.continue().then(migrate);
-            });
+            store
+              .openCursor()
+              .then(function migrate(cursor): Promise<void> | void {
+                if (!cursor) return;
+                const value = cursor.value;
+                if (value.localVersion === undefined) {
+                  value.localVersion = 0;
+                  cursor.update(value);
+                }
+                return cursor.continue().then(migrate);
+              });
           }
         },
       });
@@ -128,7 +130,11 @@ export class DocumentStore {
     });
   }
 
-  async markFailed(docId: string, error: string, serverRevision?: number): Promise<void> {
+  async markFailed(
+    docId: string,
+    error: string,
+    serverRevision?: number
+  ): Promise<void> {
     const entry = await this.get(docId);
     if (!entry) return;
     await this._rawPut({

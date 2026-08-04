@@ -25,8 +25,21 @@ function getTextNodes(root: HTMLElement) {
 }
 
 const BLOCK_TAGS = new Set([
-  'P', 'DIV', 'LI', 'OL', 'UL', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6',
-  'BLOCKQUOTE', 'PRE', 'SECTION', 'ARTICLE',
+  'P',
+  'DIV',
+  'LI',
+  'OL',
+  'UL',
+  'H1',
+  'H2',
+  'H3',
+  'H4',
+  'H5',
+  'H6',
+  'BLOCKQUOTE',
+  'PRE',
+  'SECTION',
+  'ARTICLE',
 ]);
 
 function getClosestBlockParent(node: Node): Element | null {
@@ -93,7 +106,9 @@ function applyReviewHighlights(
     const currentNodes = getTextNodes(root);
 
     // Block-aware boundary resolution on CURRENT DOM state
-    const resolveInCurrent = (offset: number): { node: Text; offset: number } | null => {
+    const resolveInCurrent = (
+      offset: number
+    ): { node: Text; offset: number } | null => {
       if (currentNodes.length === 0) return null;
       const target = Math.max(0, offset);
       let cursor = 0;
@@ -138,7 +153,8 @@ function applyReviewHighlights(
       const node = currentNodes[nodeIndex];
       const nodeLength = node.textContent?.length ?? 0;
       const segmentStart = nodeIndex === startIndex ? startBoundary.offset : 0;
-      const segmentEnd = nodeIndex === endIndex ? endBoundary.offset : nodeLength;
+      const segmentEnd =
+        nodeIndex === endIndex ? endBoundary.offset : nodeLength;
       if (segmentEnd <= segmentStart) continue;
 
       const segmentRange = document.createRange();

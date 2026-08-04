@@ -32,7 +32,9 @@ test.describe.serial('Local-first persistence (Phase 1)', () => {
 
     // Wait for IDB write + sync attempt + abort. The SyncService debounces
     // by 2s, then the aborted fetch triggers 'offline' status → "Saved locally".
-    await expect(page.getByText('Saved locally')).toBeVisible({ timeout: 15000 });
+    await expect(page.getByText('Saved locally')).toBeVisible({
+      timeout: 15000,
+    });
 
     // Reload the page — server doesn't have this content, only IDB does
     await page.unroute(/\/api\/document\/.*\/save/);
@@ -55,7 +57,9 @@ test.describe.serial('Local-first persistence (Phase 1)', () => {
     await helpers.openDocument(e2eContext.editedDocumentId);
 
     // Before typing — should show "Saved" (synced from last save)
-    await expect(page.getByText(/^Saved$/).first()).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText(/^Saved$/).first()).toBeVisible({
+      timeout: 10000,
+    });
 
     const marker = uniqueText('status-indicator');
 
@@ -64,7 +68,9 @@ test.describe.serial('Local-first persistence (Phase 1)', () => {
 
     // Should eventually show "Saved" after the server sync completes
     // (the SyncService debounces by 2s, then POSTs, then marks synced)
-    await expect(page.getByText(/^Saved$/).first()).toBeVisible({ timeout: 15000 });
+    await expect(page.getByText(/^Saved$/).first()).toBeVisible({
+      timeout: 15000,
+    });
   });
 
   test('document history shows revision entries after typing', async ({
@@ -81,8 +87,11 @@ test.describe.serial('Local-first persistence (Phase 1)', () => {
 
     // Wait for server save to complete
     await page.waitForResponse(
-      (res) => res.url().includes('/api/document/') && res.url().includes('/save') && res.status() === 200,
-      { timeout: 15000 },
+      (res) =>
+        res.url().includes('/api/document/') &&
+        res.url().includes('/save') &&
+        res.status() === 200,
+      { timeout: 15000 }
     );
 
     // Open the history panel via the document actions menu
@@ -94,7 +103,10 @@ test.describe.serial('Local-first persistence (Phase 1)', () => {
 
     // Should see at least one session entry with a time range
     await expect(
-      sheet.locator('button').filter({ hasText: /ago|Just now/i }).first()
+      sheet
+        .locator('button')
+        .filter({ hasText: /ago|Just now/i })
+        .first()
     ).toBeVisible({ timeout: 5000 });
   });
 });

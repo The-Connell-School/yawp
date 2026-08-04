@@ -3,7 +3,10 @@ import {
   parseAssignmentTypeRubricConfig,
   type AssignmentTypeRubricConfigInput,
 } from './assignment-type-rubric-config';
-import type { RubricData, ScoringScaleData } from './assignment-type-rubric.shared';
+import type {
+  RubricData,
+  ScoringScaleData,
+} from './assignment-type-rubric.shared';
 
 export type RubricCopySource = {
   id: string;

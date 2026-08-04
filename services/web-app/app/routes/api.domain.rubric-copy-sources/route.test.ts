@@ -32,7 +32,12 @@ describe('api.domain.rubric-copy-sources', () => {
         scoringScaleJson: { type: 'weighted_1_5', minScore: 1, maxScore: 5 },
         rubricJson: {
           categories: [
-            { key: 'thesis', label: 'Thesis', weight: 1, description: 'Strong claim.' },
+            {
+              key: 'thesis',
+              label: 'Thesis',
+              weight: 1,
+              description: 'Strong claim.',
+            },
           ],
         },
       },

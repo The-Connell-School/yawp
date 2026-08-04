@@ -2,10 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import fs from 'node:fs';
 import path from 'node:path';
 
-const panelPath = path.join(
-  import.meta.dir,
-  'teacher-grading-panel.tsx'
-);
+const panelPath = path.join(import.meta.dir, 'teacher-grading-panel.tsx');
 
 describe('submission teacher grading panel LLM retry UI', () => {
   test('uses the shared retry helper and shows retrying copy during fallback', () => {

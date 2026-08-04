@@ -11,7 +11,10 @@ const requireUserId = mock();
 const requireMembership = mock();
 
 mock.module('~/utils/db.server', () => ({ prisma }));
-mock.module('~/utils/auth.server', () => ({ requireUserId, requireMembership }));
+mock.module('~/utils/auth.server', () => ({
+  requireUserId,
+  requireMembership,
+}));
 
 const { action } = await import('./route');
 

@@ -52,7 +52,9 @@ describe('admin assignment module loader', () => {
       ),
       params: { id: 'at-1', moduleId: 'mod-1' },
       context: {} as never,
-    } as never)) as { data: { course: { id: string }; module: { id: string } } };
+    } as never)) as {
+      data: { course: { id: string }; module: { id: string } };
+    };
 
     expect(prisma.assignmentType.findUnique).toHaveBeenCalledWith({
       where: { id: 'at-1' },

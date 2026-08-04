@@ -25,11 +25,7 @@ export function formatTeacherClassLabel(klass: {
   return klass.title ? `${base} — ${klass.title}` : base;
 }
 
-export function TeacherClassCard({
-  klass,
-}: {
-  klass: TeacherClassCardData;
-}) {
+export function TeacherClassCard({ klass }: { klass: TeacherClassCardData }) {
   return (
     <div className="flex min-h-full flex-col overflow-hidden rounded-lg bg-popover shadow-sm ring-1 ring-black/5 transition-shadow hover:shadow-md">
       <Link

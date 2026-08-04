@@ -58,51 +58,51 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   const [schools, teachers, assignmentTypes, orgAssignmentTypeIds] =
     await Promise.all([
-    prisma.school.findMany({
-      where,
-      include: {
-        teachers: {
-          include: {
-            user: true,
+      prisma.school.findMany({
+        where,
+        include: {
+          teachers: {
+            include: {
+              user: true,
+            },
+          },
+          assignmentTypeAssignments: {
+            select: { assignmentTypeId: true },
+          },
+          _count: {
+            select: {
+              classes: true,
+              teachers: true,
+            },
           },
         },
-        assignmentTypeAssignments: {
-          select: { assignmentTypeId: true },
+        orderBy: { name: 'asc' },
+      }),
+      prisma.orgMembership.findMany({
+        where: {
+          organizationId: profile.organization.id,
+          role: 'TEACHER',
+          isActive: true,
         },
-        _count: {
-          select: {
-            classes: true,
-            teachers: true,
+        include: {
+          user: true,
+        },
+        orderBy: {
+          user: {
+            name: 'asc',
           },
         },
-      },
-      orderBy: { name: 'asc' },
-    }),
-    prisma.orgMembership.findMany({
-      where: {
-        organizationId: profile.organization.id,
-        role: 'TEACHER',
-        isActive: true,
-      },
-      include: {
-        user: true,
-      },
-      orderBy: {
-        user: {
-          name: 'asc',
-        },
-      },
-    }),
-    prisma.assignmentType.findMany({
-      where: { archivedAt: null },
-      select: { id: true, title: true },
-      orderBy: { position: 'asc' },
-    }),
-    prisma.organizationAssignmentType.findMany({
-      where: { organizationId: profile.organization.id },
-      select: { assignmentTypeId: true },
-    }),
-  ]);
+      }),
+      prisma.assignmentType.findMany({
+        where: { archivedAt: null },
+        select: { id: true, title: true },
+        orderBy: { position: 'asc' },
+      }),
+      prisma.organizationAssignmentType.findMany({
+        where: { organizationId: profile.organization.id },
+        select: { assignmentTypeId: true },
+      }),
+    ]);
 
   return dataResponse({
     schools,
@@ -678,17 +678,25 @@ function SchoolSheet({
             </p>
           </div>
 
-          <div className="space-y-2" data-testid="school-assignment-types-manager">
+          <div
+            className="space-y-2"
+            data-testid="school-assignment-types-manager"
+          >
             <Label>Assignment Types</Label>
             <RadioGroup
               value={assignmentTypesMode}
               onValueChange={(value) =>
-                handleAssignmentTypesModeChange(value as 'inherit' | 'customize')
+                handleAssignmentTypesModeChange(
+                  value as 'inherit' | 'customize'
+                )
               }
               className="grid gap-2"
             >
               <div className="flex items-center space-x-2">
-                <RadioGroupItem value="inherit" id="school-assignment-inherit" />
+                <RadioGroupItem
+                  value="inherit"
+                  id="school-assignment-inherit"
+                />
                 <Label
                   htmlFor="school-assignment-inherit"
                   className="text-sm font-normal cursor-pointer"

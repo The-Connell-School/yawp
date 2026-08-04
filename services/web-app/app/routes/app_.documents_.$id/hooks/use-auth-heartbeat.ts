@@ -18,7 +18,11 @@ type Options = {
  * The route uses `isLocked` to disable the editor and the tutor.
  * On documentId change, the lock state is reset.
  */
-export function useAuthHeartbeat({ documentId, isEditable, onLockTriggered }: Options) {
+export function useAuthHeartbeat({
+  documentId,
+  isEditable,
+  onLockTriggered,
+}: Options) {
   const [isLocked, setIsLocked] = useState(false);
   const [isInitialCheckComplete, setIsInitialCheckComplete] = useState(false);
 

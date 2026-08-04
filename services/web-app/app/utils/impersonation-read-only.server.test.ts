@@ -85,7 +85,9 @@ describe('read-only impersonation auth contract', () => {
   });
 
   test('allows membership cookie changes during read-only impersonation', async () => {
-    const userId = await auth.requireUserId(request('POST', '/api/membership-id'));
+    const userId = await auth.requireUserId(
+      request('POST', '/api/membership-id')
+    );
 
     expect(userId).toBe('target-user');
   });

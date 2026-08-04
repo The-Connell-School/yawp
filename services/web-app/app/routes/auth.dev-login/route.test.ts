@@ -30,9 +30,18 @@ mock.module('~/utils/db.server.js', () => ({ prisma }));
 mock.module('~/utils/auth.server', authServerMock);
 mock.module('~/utils/auth.server.ts', authServerMock);
 mock.module('~/utils/auth.server.js', authServerMock);
-mock.module('~/cookie-session-storages/authentication.server', authSessionStorageMock);
-mock.module('~/cookie-session-storages/authentication.server.ts', authSessionStorageMock);
-mock.module('~/cookie-session-storages/authentication.server.js', authSessionStorageMock);
+mock.module(
+  '~/cookie-session-storages/authentication.server',
+  authSessionStorageMock
+);
+mock.module(
+  '~/cookie-session-storages/authentication.server.ts',
+  authSessionStorageMock
+);
+mock.module(
+  '~/cookie-session-storages/authentication.server.js',
+  authSessionStorageMock
+);
 mock.module('~/cookies/membership-id.server', () => ({ setMembershipId }));
 mock.module('~/cookies/membership-id.server.ts', () => ({ setMembershipId }));
 mock.module('~/cookies/membership-id.server.js', () => ({ setMembershipId }));
@@ -75,7 +84,9 @@ describe('auth.dev-login action', () => {
     isLocalDevAuthEnabled.mockReset();
 
     isLocalDevAuthEnabled.mockReturnValue(true);
-    getSessionExpirationDate.mockReturnValue(new Date('2030-01-01T00:00:00.000Z'));
+    getSessionExpirationDate.mockReturnValue(
+      new Date('2030-01-01T00:00:00.000Z')
+    );
     authSessionStorage.getSession.mockResolvedValue({
       get: () => 'old-session-id',
       set: mock(),

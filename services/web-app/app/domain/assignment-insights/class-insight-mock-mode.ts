@@ -1,6 +1,8 @@
 export type ClassInsightMockMode = 'fixture' | 'live';
 
-export function resolveClassInsightMockMode(env: NodeJS.ProcessEnv = process.env): {
+export function resolveClassInsightMockMode(
+  env: NodeJS.ProcessEnv = process.env
+): {
   mode: ClassInsightMockMode;
   usesFixture: boolean;
 } {

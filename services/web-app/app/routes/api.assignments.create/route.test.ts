@@ -28,9 +28,8 @@ const isAssignmentTypeAvailableForEveryScope = mock();
 const uploadAssignmentPromptAttachment = mock();
 const deleteAssignmentPromptAttachment = mock();
 class AssignmentPromptAttachmentError extends Error {}
-const actualAssignmentPromptAttachment = await import(
-  '~/domain/assignments/assignment-prompt-attachment.server'
-);
+const actualAssignmentPromptAttachment =
+  await import('~/domain/assignments/assignment-prompt-attachment.server');
 
 mock.module('~/utils/db.server', () => ({ prisma }));
 mock.module('~/utils/auth.server', () => ({
@@ -43,16 +42,13 @@ mock.module('~/utils/assignment-deployment.server', () => ({
 mock.module('~/utils/assignment-type-access.server', () => ({
   isAssignmentTypeAvailableForEveryScope,
 }));
-mock.module(
-  '~/domain/assignments/assignment-prompt-attachment.server',
-  () => ({
-    ...actualAssignmentPromptAttachment,
-    AssignmentPromptAttachmentError,
-    assignmentPromptAttachmentRequestTooLarge: () => false,
-    deleteAssignmentPromptAttachment,
-    uploadAssignmentPromptAttachment,
-  })
-);
+mock.module('~/domain/assignments/assignment-prompt-attachment.server', () => ({
+  ...actualAssignmentPromptAttachment,
+  AssignmentPromptAttachmentError,
+  assignmentPromptAttachmentRequestTooLarge: () => false,
+  deleteAssignmentPromptAttachment,
+  uploadAssignmentPromptAttachment,
+}));
 
 const { action } = await import('./route');
 

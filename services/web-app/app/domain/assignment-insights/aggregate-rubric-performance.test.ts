@@ -119,7 +119,9 @@ describe('aggregateRubricPerformance', () => {
     expect(evidence.sampleComments.length).toBeGreaterThan(0);
     expect(evidence.sampleComments.length).toBeLessThanOrEqual(5);
     // only non-empty comments are collected
-    expect(evidence.sampleComments.every((c) => c.trim().length > 0)).toBe(true);
+    expect(evidence.sampleComments.every((c) => c.trim().length > 0)).toBe(
+      true
+    );
   });
 
   test('handles the legacy flat-number rubricScores shape', () => {

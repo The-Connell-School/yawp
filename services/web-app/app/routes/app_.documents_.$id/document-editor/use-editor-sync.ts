@@ -75,7 +75,9 @@ export function useEditorSync(
   const versionRef = useRef(0);
   const currentRevisionRef = useRef(initialRevision);
   const syncServiceRef = useRef<SyncService | null>(null);
-  const schedulerRef = useRef<ReturnType<typeof createRevisionScheduler> | null>(null);
+  const schedulerRef = useRef<ReturnType<
+    typeof createRevisionScheduler
+  > | null>(null);
 
   const getSnapshot = useCallback(() => {
     if (!editor) return { html: '', text: '' };
@@ -101,7 +103,9 @@ export function useEditorSync(
     });
 
     // Subscribe to status changes
-    const unsubStatus = onSyncStatusChange ? sync.onStatusChange(onSyncStatusChange) : undefined;
+    const unsubStatus = onSyncStatusChange
+      ? sync.onStatusChange(onSyncStatusChange)
+      : undefined;
 
     // Keep currentRevisionRef in sync when the server advances the revision
     // (e.g. on 409 stale_base_revision recovery)
@@ -233,7 +237,9 @@ export function useEditorSync(
           lastSyncError: null,
           contentHash: hash,
         });
-        await syncServiceRef.current?.forceSave({ trigger: options?.source ?? 'manual' });
+        await syncServiceRef.current?.forceSave({
+          trigger: options?.source ?? 'manual',
+        });
       },
     };
 

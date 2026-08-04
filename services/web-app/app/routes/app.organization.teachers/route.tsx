@@ -118,56 +118,56 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   const [teachers, teacherTrainings, assignmentTypes, orgAssignments, schools] =
     await Promise.all([
-    prisma.orgMembership.findMany({
-      where,
-      include: {
-        user: true,
-        schools: {
-          select: { id: true },
-        },
-        assignmentTypeAssignments: {
-          select: { assignmentTypeId: true },
-        },
-        assignedTeacherTrainings: {
-          select: { id: true },
-        },
-        _count: {
-          select: {
-            classesAsTeacher: true,
-            assignedTeacherTrainings: true,
+      prisma.orgMembership.findMany({
+        where,
+        include: {
+          user: true,
+          schools: {
+            select: { id: true },
+          },
+          assignmentTypeAssignments: {
+            select: { assignmentTypeId: true },
+          },
+          assignedTeacherTrainings: {
+            select: { id: true },
+          },
+          _count: {
+            select: {
+              classesAsTeacher: true,
+              assignedTeacherTrainings: true,
+            },
           },
         },
-      },
-      orderBy: {
-        user: {
-          name: 'asc',
+        orderBy: {
+          user: {
+            name: 'asc',
+          },
         },
-      },
-    }),
-    prisma.teacherTraining.findMany({
-      select: { id: true, title: true },
-      orderBy: { position: 'asc' },
-    }),
-    prisma.assignmentType.findMany({
-      where: { archivedAt: null },
-      select: { id: true, title: true },
-      orderBy: { position: 'asc' },
-    }),
-    prisma.organizationAssignmentType.findMany({
-      where: { organizationId: profile.organization.id },
-      select: { assignmentTypeId: true },
-    }),
-    prisma.school.findMany({
-      where: { organizationId: profile.organization.id },
-      select: {
-        id: true,
-        assignmentTypesCustomized: true,
-        assignmentTypeAssignments: {
-          select: { assignmentTypeId: true },
+      }),
+      prisma.teacherTraining.findMany({
+        select: { id: true, title: true },
+        orderBy: { position: 'asc' },
+      }),
+      prisma.assignmentType.findMany({
+        where: { archivedAt: null },
+        select: { id: true, title: true },
+        orderBy: { position: 'asc' },
+      }),
+      prisma.organizationAssignmentType.findMany({
+        where: { organizationId: profile.organization.id },
+        select: { assignmentTypeId: true },
+      }),
+      prisma.school.findMany({
+        where: { organizationId: profile.organization.id },
+        select: {
+          id: true,
+          assignmentTypesCustomized: true,
+          assignmentTypeAssignments: {
+            select: { assignmentTypeId: true },
+          },
         },
-      },
-    }),
-  ]);
+      }),
+    ]);
 
   const orgAssignmentTypeIds = orgAssignments.map(
     (assignment) => assignment.assignmentTypeId
@@ -449,8 +449,13 @@ function OrganizationInviteEmail({
 }
 
 export default function OrganizationTeachersRoute() {
-  const { teachers, teacherTrainings, assignmentTypes, orgAssignmentTypeIds, q } =
-    useLoaderData<typeof loader>();
+  const {
+    teachers,
+    teacherTrainings,
+    assignmentTypes,
+    orgAssignmentTypeIds,
+    q,
+  } = useLoaderData<typeof loader>();
   const fetcher = useFetcher();
   const inviteFetcher = useFetcher();
   const [searchParams] = useSearchParams();
@@ -563,10 +568,10 @@ export default function OrganizationTeachersRoute() {
                           {teacher.user.name || 'Not set'}
                         </TableCell>
                         <TableCell>{teacher.user.email}</TableCell>
+                        <TableCell>{teacher._count.classesAsTeacher}</TableCell>
                         <TableCell>
-                          {teacher._count.classesAsTeacher}
+                          {teacher._count.assignedTeacherTrainings}
                         </TableCell>
-                        <TableCell>{teacher._count.assignedTeacherTrainings}</TableCell>
                         <TableCell className="pr-4">
                           <Button
                             size="sm"
@@ -815,12 +820,17 @@ function TeacherSheet({
             </p>
           </div>
 
-          <div className="space-y-2" data-testid="teacher-assignment-types-manager">
+          <div
+            className="space-y-2"
+            data-testid="teacher-assignment-types-manager"
+          >
             <Label>Assignment Types</Label>
             <RadioGroup
               value={assignmentTypesMode}
               onValueChange={(value) =>
-                handleAssignmentTypesModeChange(value as 'inherit' | 'customize')
+                handleAssignmentTypesModeChange(
+                  value as 'inherit' | 'customize'
+                )
               }
               className="grid gap-2"
             >

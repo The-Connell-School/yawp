@@ -27,7 +27,9 @@ function normalizeWhitespace(source: string): NormalizedText {
   }
 
   const start = normalized[0] === ' ' ? 1 : 0;
-  const end = normalized.endsWith(' ') ? normalized.length - 1 : normalized.length;
+  const end = normalized.endsWith(' ')
+    ? normalized.length - 1
+    : normalized.length;
 
   return {
     normalized: normalized.slice(start, end),

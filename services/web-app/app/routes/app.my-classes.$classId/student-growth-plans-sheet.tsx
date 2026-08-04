@@ -51,7 +51,12 @@ function GrowthPlanCard({ plan }: { plan: StudentGrowthPlan }) {
       {plan.targetSkills.length > 0 ? (
         <div className="mt-2 flex flex-wrap gap-1.5">
           {plan.targetSkills.map((skill) => (
-            <Badge key={skill} variant="info-soft" size="sm" className="capitalize">
+            <Badge
+              key={skill}
+              variant="info-soft"
+              size="sm"
+              className="capitalize"
+            >
               {skill.replace(/_/g, ' ')}
             </Badge>
           ))}
@@ -133,7 +138,9 @@ export function StudentGrowthPlansSheetContent({
             </p>
           </div>
         ) : (
-          growthPlans.map((plan) => <GrowthPlanCard key={plan.id} plan={plan} />)
+          growthPlans.map((plan) => (
+            <GrowthPlanCard key={plan.id} plan={plan} />
+          ))
         )}
       </div>
     </>

@@ -11,7 +11,7 @@ describe('shouldUseSecureCookies', () => {
       shouldUseSecureCookies({
         NODE_ENV: 'production',
         COOKIE_SECURE: 'false',
-      }),
+      })
     ).toBe(false);
   });
 
@@ -20,7 +20,7 @@ describe('shouldUseSecureCookies', () => {
       shouldUseSecureCookies({
         NODE_ENV: 'development',
         COOKIE_SECURE: 'true',
-      }),
+      })
     ).toBe(true);
   });
 });

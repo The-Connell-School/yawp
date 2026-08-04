@@ -3,7 +3,13 @@ import {
   data as dataResponse,
   redirect,
 } from 'react-router';
-import { Form, Link, useLoaderData, useRouteLoaderData, useSearchParams } from 'react-router';
+import {
+  Form,
+  Link,
+  useLoaderData,
+  useRouteLoaderData,
+  useSearchParams,
+} from 'react-router';
 import { useState } from 'react';
 import type { Route as RootRoute } from '../../+types/root';
 import { AssignmentCreationSheet } from '~/components/assignments/assignment-creation-sheet';
@@ -55,7 +61,9 @@ function formatClassLabel(klass: {
 }
 
 function orderDocumentTileModuleSessions<
-  T extends { assignmentModuleSessions: AssignmentModuleSessionResumeCandidate[] },
+  T extends {
+    assignmentModuleSessions: AssignmentModuleSessionResumeCandidate[];
+  },
 >(documents: T[]) {
   return documents.map((document) => ({
     ...document,
@@ -74,20 +82,17 @@ export async function loader({ request }: LoaderFunctionArgs) {
     previewActive: preview.active,
   });
 
-  const studentClassCount =
-    useStudentExperience
-      ? ((
-          await prisma.orgMembership.findUnique({
-            where: { id: profile.id },
-            select: { _count: { select: { classesAsStudent: true } } },
-          })
-        )?._count.classesAsStudent ?? 0)
-      : 0;
+  const studentClassCount = useStudentExperience
+    ? ((
+        await prisma.orgMembership.findUnique({
+          where: { id: profile.id },
+          select: { _count: { select: { classesAsStudent: true } } },
+        })
+      )?._count.classesAsStudent ?? 0)
+    : 0;
 
   const isStudentOnlyWithNoClasses =
-    useStudentExperience &&
-    !profile.isOrgOwner &&
-    studentClassCount === 0;
+    useStudentExperience && !profile.isOrgOwner && studentClassCount === 0;
 
   if (isStudentOnlyWithNoClasses) {
     return redirect('/enter-code');
@@ -126,140 +131,145 @@ export async function loader({ request }: LoaderFunctionArgs) {
           }))
         )
     : [];
-  const assignmentsEnabled =
-    useStudentExperience
-      ? studentAssignmentClassIds.length > 0
-      : teacherAssignmentClassScopes.length > 0;
+  const assignmentsEnabled = useStudentExperience
+    ? studentAssignmentClassIds.length > 0
+    : teacherAssignmentClassScopes.length > 0;
 
   const [courses, documents, archivedDocuments, teacherClasses, assignments] =
     await Promise.all([
-    !useStudentExperience
-      ? ([] as AssignmentTypeRow[])
-      : prisma.assignmentType.findMany({
-          where: {
-            archivedAt: null,
-            organizationAssignments: {
-              some: { organizationId: profile.organization.id },
-            },
-          },
-          select: {
-            image: { select: { id: true } },
-            id: true,
-            title: true,
-            systemKey: true,
-          },
-          orderBy: { position: 'asc' },
-        }),
-    prisma.document.findMany({
-      orderBy: { createdAt: 'desc' },
-      where: { membershipId: profile.id, deletedAt: null, archivedAt: null },
-      include: {
-        assignmentModuleSessions: {
-          include: {
-            assignmentModule: {
-              include: {
-                instructions: { select: { id: true } },
+      !useStudentExperience
+        ? ([] as AssignmentTypeRow[])
+        : prisma.assignmentType.findMany({
+            where: {
+              archivedAt: null,
+              organizationAssignments: {
+                some: { organizationId: profile.organization.id },
               },
             },
-          },
-          orderBy: { assignmentModule: { position: 'desc' } },
-        },
-        submissions: {
-          where: { archivedAt: null },
-          orderBy: { submittedAt: 'desc' },
-          select: {
-            id: true,
-            title: true,
-            releasedAt: true,
-            submittedAt: true,
-          },
-        },
-      },
-    }),
-    prisma.document.findMany({
-      orderBy: { archivedAt: 'desc' },
-      where: {
-        membershipId: profile.id,
-        deletedAt: null,
-        archivedAt: { not: null },
-      },
-      include: {
-        assignmentModuleSessions: {
-          include: {
-            assignmentModule: {
-              include: {
-                instructions: { select: { id: true } },
-              },
+            select: {
+              image: { select: { id: true } },
+              id: true,
+              title: true,
+              systemKey: true,
             },
-          },
-          orderBy: { assignmentModule: { position: 'desc' } },
-        },
-        submissions: {
-          where: { archivedAt: null },
-          orderBy: { submittedAt: 'desc' },
-          select: {
-            id: true,
-            title: true,
-            releasedAt: true,
-            submittedAt: true,
-          },
-        },
-      },
-    }),
-    // Teacher classes and recent ordering
-    !useStudentExperience
-      ? prisma.class.findMany({
-          where: {
-            teachers: { some: { id: profile.id } },
-            isArchived: false,
-          },
-          select: {
-            id: true,
-            grade: true,
-            period: true,
-            title: true,
-            classArtIndex: true,
-            classArtKey: true,
-            school: { select: { id: true, name: true, organizationId: true } },
-            _count: {
-              select: { students: true, teachers: true, classAssignments: true },
-            },
-          },
-        })
-      : [],
-    useStudentExperience && assignmentsEnabled
-      ? prisma.classAssignment.findMany({
-          where: {
-            classId: { in: studentAssignmentClassIds },
-          },
-          select: {
-            id: true,
-            assignment: {
-              select: {
-                id: true,
-                title: true,
-                prompt: true,
-                assignmentType: {
-                  select: {
-                    id: true,
-                    title: true,
-                  },
+            orderBy: { position: 'asc' },
+          }),
+      prisma.document.findMany({
+        orderBy: { createdAt: 'desc' },
+        where: { membershipId: profile.id, deletedAt: null, archivedAt: null },
+        include: {
+          assignmentModuleSessions: {
+            include: {
+              assignmentModule: {
+                include: {
+                  instructions: { select: { id: true } },
                 },
               },
             },
-            class: {
-              select: {
-                id: true,
-                grade: true,
-                period: true,
-                title: true,
-              },
+            orderBy: { assignmentModule: { position: 'desc' } },
+          },
+          submissions: {
+            where: { archivedAt: null },
+            orderBy: { submittedAt: 'desc' },
+            select: {
+              id: true,
+              title: true,
+              releasedAt: true,
+              submittedAt: true,
             },
           },
-          orderBy: [{ createdAt: 'desc' }],
-        })
-      : [],
-  ]);
+        },
+      }),
+      prisma.document.findMany({
+        orderBy: { archivedAt: 'desc' },
+        where: {
+          membershipId: profile.id,
+          deletedAt: null,
+          archivedAt: { not: null },
+        },
+        include: {
+          assignmentModuleSessions: {
+            include: {
+              assignmentModule: {
+                include: {
+                  instructions: { select: { id: true } },
+                },
+              },
+            },
+            orderBy: { assignmentModule: { position: 'desc' } },
+          },
+          submissions: {
+            where: { archivedAt: null },
+            orderBy: { submittedAt: 'desc' },
+            select: {
+              id: true,
+              title: true,
+              releasedAt: true,
+              submittedAt: true,
+            },
+          },
+        },
+      }),
+      // Teacher classes and recent ordering
+      !useStudentExperience
+        ? prisma.class.findMany({
+            where: {
+              teachers: { some: { id: profile.id } },
+              isArchived: false,
+            },
+            select: {
+              id: true,
+              grade: true,
+              period: true,
+              title: true,
+              classArtIndex: true,
+              classArtKey: true,
+              school: {
+                select: { id: true, name: true, organizationId: true },
+              },
+              _count: {
+                select: {
+                  students: true,
+                  teachers: true,
+                  classAssignments: true,
+                },
+              },
+            },
+          })
+        : [],
+      useStudentExperience && assignmentsEnabled
+        ? prisma.classAssignment.findMany({
+            where: {
+              classId: { in: studentAssignmentClassIds },
+            },
+            select: {
+              id: true,
+              assignment: {
+                select: {
+                  id: true,
+                  title: true,
+                  prompt: true,
+                  assignmentType: {
+                    select: {
+                      id: true,
+                      title: true,
+                    },
+                  },
+                },
+              },
+              class: {
+                select: {
+                  id: true,
+                  grade: true,
+                  period: true,
+                  title: true,
+                },
+              },
+            },
+            orderBy: [{ createdAt: 'desc' }],
+          })
+        : [],
+    ]);
 
   // Sort teacher classes with recent activity first.
   let teacherClassesOrdered: typeof teacherClasses = teacherClasses;
@@ -296,13 +306,16 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const teacherClassStatsById = !useStudentExperience
     ? new Map(
         await Promise.all(
-          teacherClasses.map(async (klass) => [
-            klass.id,
-            {
-              stats: await getTeacherClassCardStats(klass.id),
-              assignments: klass._count.classAssignments,
-            },
-          ] as const)
+          teacherClasses.map(
+            async (klass) =>
+              [
+                klass.id,
+                {
+                  stats: await getTeacherClassCardStats(klass.id),
+                  assignments: klass._count.classAssignments,
+                },
+              ] as const
+          )
         )
       )
     : new Map<

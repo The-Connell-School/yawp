@@ -10,7 +10,10 @@ describe('SubmissionCommentCard', () => {
           id: 'comment-1',
           content: 'Great thesis.',
           membership: {
-            user: { name: 'Brian Connell', email: 'brian@theconnellschool.com' },
+            user: {
+              name: 'Brian Connell',
+              email: 'brian@theconnellschool.com',
+            },
           },
         }}
       />

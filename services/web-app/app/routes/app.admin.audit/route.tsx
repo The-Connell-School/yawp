@@ -117,9 +117,7 @@ function metadataFilter(
   key: string,
   value: string | null
 ): Prisma.LlmLogWhereInput | null {
-  return value
-    ? { metadata: { path: [key], equals: value } }
-    : null;
+  return value ? { metadata: { path: [key], equals: value } } : null;
 }
 
 export async function loader({ request }: LoaderFunctionArgs) {
@@ -191,7 +189,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
         OR: [
           { userId: userOrEmail },
           { membershipId: userOrEmail },
-          ...(matchedUserIds.length ? [{ userId: { in: matchedUserIds } }] : []),
+          ...(matchedUserIds.length
+            ? [{ userId: { in: matchedUserIds } }]
+            : []),
           ...(matchedMembershipIds.length
             ? [{ membershipId: { in: matchedMembershipIds } }]
             : []),
@@ -515,9 +515,7 @@ function AuditItem({ item }: { item: TimelineEntry }) {
           {item.editorSessionId ? (
             <DetailRow label="Editor session" value={item.editorSessionId} />
           ) : null}
-          {item.userId ? (
-            <DetailRow label="User" value={item.userId} />
-          ) : null}
+          {item.userId ? <DetailRow label="User" value={item.userId} /> : null}
           {item.membershipId ? (
             <DetailRow label="Membership" value={item.membershipId} />
           ) : null}
@@ -531,11 +529,12 @@ function AuditItem({ item }: { item: TimelineEntry }) {
             <DetailRow label="Base revision" value={item.baseRevision} />
           ) : null}
           {item.resultingRevision !== null ? (
-            <DetailRow label="Resulting revision" value={item.resultingRevision} />
+            <DetailRow
+              label="Resulting revision"
+              value={item.resultingRevision}
+            />
           ) : null}
-          {item.title ? (
-            <DetailRow label="Title" value={item.title} />
-          ) : null}
+          {item.title ? <DetailRow label="Title" value={item.title} /> : null}
           {item.failureReason ? (
             <DetailRow label="Failure reason" value={item.failureReason} />
           ) : null}

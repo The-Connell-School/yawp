@@ -13,7 +13,11 @@
  * whole handout escaped into a JSON string is exactly the fragile shape that
  * cost teachers their slide decks.
  */
-import { parsePacketAudience, type PacketAudience } from './lesson-packet';
+import {
+  parsePacketAudience,
+  type PacketAudience,
+  type PacketSectionKind,
+} from './lesson-packet';
 
 export const MATERIAL_FENCE = 'yawp-material';
 
@@ -172,6 +176,16 @@ export function readLessonMaterials(content: string): {
   // its own spacing.
   if (body === content) return { materials, body: content };
   return { materials, body: body.replace(/\n{3,}/g, '\n\n').trim() };
+}
+
+/**
+ * Which pile a material lands in when the packet is browsed: the things you
+ * hand out, or the things you read while teaching.
+ */
+export function packetKindForMaterial(kind: string): PacketSectionKind {
+  return kind === 'handout' || kind === 'sample' || kind === 'exit-ticket'
+    ? 'handout'
+    : 'plan';
 }
 
 export function hasLessonMaterials(content: string): boolean {

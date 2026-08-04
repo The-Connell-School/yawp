@@ -32,7 +32,8 @@ async function fillCodeInputWithRetry(page: Page, code: string) {
   throw lastError;
 }
 
-test.describe.serial('Student onboarding, document, tutor, comments, and submission', () => {
+test.describe
+  .serial('Student onboarding, document, tutor, comments, and submission', () => {
   test('completes end-to-end student flow with one live tutor call', async ({
     page,
     e2eContext,
@@ -107,7 +108,10 @@ test.describe.serial('Student onboarding, document, tutor, comments, and submiss
       await page.waitForURL('**/app**', { timeout: 15000 });
       await expect(page.getByTestId('app._index')).toBeVisible();
 
-      await page.getByRole('link', { name: /e2e course/i }).first().click();
+      await page
+        .getByRole('link', { name: /e2e course/i })
+        .first()
+        .click();
       await page.waitForURL('**/app/assignment-types/**', { timeout: 15000 });
       await page.getByRole('button', { name: /^new/i }).click();
       await page.waitForURL('**/app/documents/**', { timeout: 15000 });
@@ -115,7 +119,8 @@ test.describe.serial('Student onboarding, document, tutor, comments, and submiss
 
       const pathParts = new URL(page.url()).pathname.split('/');
       const documentId = pathParts[pathParts.length - 1];
-      if (!documentId) throw new Error('Failed to resolve created document id.');
+      if (!documentId)
+        throw new Error('Failed to resolve created document id.');
 
       const editor = page.locator(EDITOR_SELECTOR).first();
       await expect(editor).toBeVisible({ timeout: 10000 });
@@ -137,21 +142,21 @@ test.describe.serial('Student onboarding, document, tutor, comments, and submiss
         .getByTestId('tutor-chat-input')
         .fill('Ask me one revision question about this draft.');
       await page.getByTestId('tutor-chat-send').click();
-      await expect
-        .poll(() => tutorRequests, { timeout: 60000 })
-        .toBe(1);
-      await expect(page.locator('[data-tutor-message="true"]').last()).toBeVisible(
-        {
-          timeout: 60000,
-        }
-      );
+      await expect.poll(() => tutorRequests, { timeout: 60000 }).toBe(1);
+      await expect(
+        page.locator('[data-tutor-message="true"]').last()
+      ).toBeVisible({
+        timeout: 60000,
+      });
 
       await editor.click();
       await page.keyboard.press('Control+A');
       await page.getByTestId('editor-add-comment').click();
       const commentCard = page.locator('[id^="comment-"]').first();
       await expect(commentCard).toBeVisible({ timeout: 10000 });
-      const replyInput = commentCard.locator('textarea[placeholder="Reply..."]');
+      const replyInput = commentCard.locator(
+        'textarea[placeholder="Reply..."]'
+      );
       await replyInput.fill('Replying to my own comment for E2E.');
       await replyInput.press('Control+Enter');
       await expect(

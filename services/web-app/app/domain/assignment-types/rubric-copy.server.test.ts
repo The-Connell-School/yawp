@@ -8,7 +8,9 @@ describe('rubric-copy.server', () => {
   test('isCopyableRubric is true when at least one category has a label', () => {
     expect(
       isCopyableRubric({
-        categories: [{ key: 'thesis', label: 'Thesis', weight: 1, description: '' }],
+        categories: [
+          { key: 'thesis', label: 'Thesis', weight: 1, description: '' },
+        ],
       })
     ).toBe(true);
   });
@@ -25,26 +27,35 @@ describe('rubric-copy.server', () => {
   test('listCopyableRubricSources excludes archived and current assignment types', async () => {
     const prisma = {
       assignmentType: {
-        findMany: async ({
-          where,
-        }: {
-          where?: { id?: { not?: string } };
-        }) => {
+        findMany: async ({ where }: { where?: { id?: { not?: string } } }) => {
           const rows = [
             {
               id: 'at-current',
               title: 'Current',
-              scoringScaleJson: { type: 'weighted_1_5', minScore: 1, maxScore: 5 },
+              scoringScaleJson: {
+                type: 'weighted_1_5',
+                minScore: 1,
+                maxScore: 5,
+              },
               rubricJson: {
                 categories: [
-                  { key: 'thesis', label: 'Thesis', weight: 1, description: '' },
+                  {
+                    key: 'thesis',
+                    label: 'Thesis',
+                    weight: 1,
+                    description: '',
+                  },
                 ],
               },
             },
             {
               id: 'at-source',
               title: 'AP History',
-              scoringScaleJson: { type: 'weighted_1_5', minScore: 1, maxScore: 5 },
+              scoringScaleJson: {
+                type: 'weighted_1_5',
+                minScore: 1,
+                maxScore: 5,
+              },
               rubricJson: {
                 categories: [
                   {

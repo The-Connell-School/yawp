@@ -10,9 +10,7 @@ describe('filterClassAssignmentsByQuery', () => {
   ];
 
   test('returns all assignments when the query is empty', () => {
-    expect(filterClassAssignmentsByQuery(assignments, '')).toEqual(
-      assignments
-    );
+    expect(filterClassAssignmentsByQuery(assignments, '')).toEqual(assignments);
     expect(filterClassAssignmentsByQuery(assignments, '   ')).toEqual(
       assignments
     );
