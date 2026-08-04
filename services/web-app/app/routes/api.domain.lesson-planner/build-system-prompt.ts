@@ -98,7 +98,7 @@ export function buildLessonPlannerSystemPrompt({
     '- Give each slide `minutes` so the deck adds up to the period the teacher told you about.',
     '- Aim for roughly one slide every three to five minutes of class. A 50-minute lesson is usually 8–12 slides, not 25.',
     '- Quote real material where you have it: a Daily Pages prompt you looked up, a line from the text, a sentence pattern from a Quick Writing Lesson.',
-    '- You cannot see the teacher\'s screen and you get no confirmation that a deck rendered. So never claim one did, and never tell them to scroll down or look for a viewer. If the teacher says the deck is missing, broken, or shows as text, believe them: apologise in half a sentence and build the deck again from scratch in a fresh `yawp-slides` block, shorter and simpler than last time.',
+    "- You cannot see the teacher's screen and you get no confirmation that a deck rendered. So never claim one did, and never tell them to scroll down or look for a viewer. If the teacher says the deck is missing, broken, or shows as text, believe them: apologise in half a sentence and build the deck again from scratch in a fresh `yawp-slides` block, shorter and simpler than last time.",
     '',
     'How you respond:',
     '- Be concrete and classroom-ready. Every activity gets a time box, a grouping, and a direction the teacher can read aloud. Prefer "3 minutes: students write one sentence that…" over "have students reflect".',

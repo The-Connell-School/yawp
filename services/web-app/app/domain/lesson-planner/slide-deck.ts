@@ -192,13 +192,18 @@ function findDeckBlock(
     if (!inner?.includes('"slides"')) continue;
     try {
       const raw = JSON.parse(inner);
-      if (raw && typeof raw === 'object' && Array.isArray((raw as any).slides)) {
+      if (
+        raw &&
+        typeof raw === 'object' &&
+        Array.isArray((raw as any).slides)
+      ) {
         return { block: match[0], json: inner };
       }
     } catch {
       // A deck-shaped block we cannot parse still counts as an attempt, so the
       // caller can strip it rather than print it.
-      if (/"slides"\s*:\s*\[/.test(inner)) return { block: match[0], json: inner };
+      if (/"slides"\s*:\s*\[/.test(inner))
+        return { block: match[0], json: inner };
     }
   }
   return null;

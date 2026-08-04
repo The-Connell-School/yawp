@@ -222,6 +222,52 @@ async function seedSlideDeck(e2eContext: {
   }
 }
 
+/**
+ * A kept reply whose deck the schema rejects — the state a teacher lands in
+ * when even the repair pass could not save it. What must never happen is the
+ * JSON showing up on screen.
+ */
+async function seedUnreadableDeck(e2eContext: {
+  teacherMembershipId: string;
+  organizationId: string;
+}) {
+  const prisma = createE2EPrismaClient();
+  const broken = {
+    title: 'Conclusions that land',
+    // No speakerNotes, and a bullets slide with no bullets.
+    slides: [{ layout: 'bullets', title: 'What a conclusion does' }],
+  };
+  try {
+    const conversation = await prisma.lessonPlanConversation.create({
+      data: {
+        membershipId: e2eContext.teacherMembershipId,
+        organizationId: e2eContext.organizationId,
+        title: 'Broken deck lesson',
+        messages: {
+          create: [
+            {
+              role: 'assistant',
+              content: `## Conclusions that land\n\nHere is the deck.\n\n\`\`\`yawp-slides\n${JSON.stringify(
+                broken
+              )}\n\`\`\``,
+              createdAt: new Date('2026-08-04T10:00:01.000Z'),
+              keptAt: new Date('2026-08-04T10:05:00.000Z'),
+              keptAudience: 'teacher',
+            },
+          ],
+        },
+      },
+      select: { id: true, messages: { select: { id: true } } },
+    });
+    return {
+      conversationId: conversation.id,
+      messageId: conversation.messages[0]!.id,
+    };
+  } finally {
+    await prisma.$disconnect();
+  }
+}
+
 test.describe('YAWP! Lesson Planner', () => {
   test.afterEach(async ({ e2eContext }) => {
     // Leave the org in its default (disabled) state for other specs.
@@ -701,6 +747,33 @@ test.describe('YAWP! Lesson Planner', () => {
     const notes = page.getByTestId('speaker-notes');
     await expect(notes).toContainText('Collect on the way out.');
     await expect(stage).not.toContainText('Collect on the way out.');
+  });
+
+  test('shows the lesson and a way forward when a deck will not build', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    await setLessonPlannerEnabled(e2eContext.organizationId, true);
+    const { conversationId, messageId } = await seedUnreadableDeck(e2eContext);
+    await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+
+    await page.goto(`/app/lesson-planner/${conversationId}/packet`);
+
+    // The lesson itself still arrives.
+    await expect(page.locator('main')).toContainText('Conclusions that land');
+    await expect(page.locator('main')).toContainText('Here is the deck.');
+    // The machinery does not.
+    await expect(page.locator('body')).not.toContainText('speakerNotes');
+    await expect(page.locator('body')).not.toContainText('yawp-slides');
+    await expect(page.locator('body')).not.toContainText('"layout"');
+    // And the teacher is told what to do instead of being left guessing.
+    await expect(page.locator('main')).toContainText('rebuild it, shorter');
+    // Nothing pretends to be presentable.
+    await expect(page.getByTestId('slide-deck-card')).toHaveCount(0);
+
+    const response = await page.goto(`/present/${conversationId}/${messageId}`);
+    expect(response?.status()).toBe(404);
   });
 
   test('refuses to present a reply that has no deck in it', async ({

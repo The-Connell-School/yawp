@@ -80,10 +80,7 @@ export async function repairSlideDeck({
    * `reason` comes along so the caller can log why the deck failed. It is
    * schema vocabulary — field paths and rules — never the teacher's words.
    */
-  repair: (attempt: {
-    instruction: string;
-    reason: string;
-  }) => Promise<string>;
+  repair: (attempt: { instruction: string; reason: string }) => Promise<string>;
 }): Promise<DeckRepair> {
   const outcome = readSlideDeck(reply);
   if (outcome.kind !== 'unreadable') return { reply, outcome: 'none' };
