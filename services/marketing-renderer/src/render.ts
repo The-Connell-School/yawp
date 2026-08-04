@@ -69,6 +69,43 @@ async function gotoAndSettle(page: Page, url: string): Promise<void> {
 }
 
 /**
+ * The preview's dev server (Vite HMR) occasionally loses the hydration race:
+ * React finds a script in <head> it didn't render server-side, bails out of
+ * hydrating, and that sometimes escalates to the app's root error boundary
+ * instead of recovering client-side. That boundary has no target element at
+ * all, so the first wait after a nav legitimately times out — not flakily,
+ * the element never arrives. A reload gets a fresh, warm SSR response and
+ * almost always hydrates clean the second time, so one retry is cheap
+ * insurance against failing a whole render over a dev-server-only quirk.
+ */
+async function waitVisibleWithHydrationRecovery(
+  page: Page,
+  selector: string,
+  timeoutMs: number
+): Promise<void> {
+  try {
+    await page.locator(selector).first().waitFor({
+      state: 'visible',
+      timeout: timeoutMs,
+    });
+  } catch (err) {
+    await page.reload({
+      waitUntil: 'networkidle',
+      timeout: NAVIGATION_TIMEOUT_MS,
+    });
+    await page.waitForTimeout(HYDRATION_SETTLE_MS);
+    try {
+      await page.locator(selector).first().waitFor({
+        state: 'visible',
+        timeout: timeoutMs,
+      });
+    } catch {
+      throw err;
+    }
+  }
+}
+
+/**
  * Sign in as a seeded demo persona.
  *
  * Dev login answers with a redirect and the session cookie; only the cookie
@@ -404,10 +441,7 @@ export async function renderStoryboard(
         await gotoAndSettle(page, resolveUrl(baseUrl, scene.goto));
       }
       if (scene.waitFor) {
-        await page
-          .locator(scene.waitFor)
-          .first()
-          .waitFor({ state: 'visible', timeout: 20_000 });
+        await waitVisibleWithHydrationRecovery(page, scene.waitFor, 20_000);
       }
       if (scene.settle > 0)
         await page.waitForTimeout(Math.round(scene.settle * 1000));
