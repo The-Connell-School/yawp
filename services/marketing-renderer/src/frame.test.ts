@@ -52,6 +52,28 @@ describe('buildFramingPage overlays', () => {
     expect(html).toContain('<video id="clip"');
   });
 
+  // A 1280px viewport scaled into a feed leaves product UI unreadable, so a
+  // scene can push in on the element it is demonstrating. The capture is
+  // never scaled — that would reflow the page under the steps — so the move
+  // has to happen here, against the clip's own playback position.
+  test('emits a timed push-in positioned on the measured element', () => {
+    const html = buildFramingPage({
+      ...base,
+      zooms: [{ startMs: 1200, endMs: 4200, x: 0.25, y: 0.6, scale: 1.8 }],
+    });
+
+    expect(html).toContain('"scale":1.8');
+    expect(html).toContain('"x":0.25');
+    expect(html).toContain('transformOrigin');
+    expect(html).toContain('transition: transform');
+  });
+
+  test('leaves the picture alone when no scene asked to push in', () => {
+    const html = buildFramingPage(base);
+
+    expect(html).toContain('window.__zooms = []');
+  });
+
   // The overlay sits inside the canvas, so it has to be measured from the
   // same geometry the window chrome uses.
   test('sizes the copy against the rendered canvas', () => {

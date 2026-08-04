@@ -32,12 +32,23 @@ export type FrameOptions = {
    * by a filter chain.
    */
   overlays?: OverlayMark[];
+  /** Timed push-ins, positioned in normalised capture coordinates. */
+  zooms?: ZoomMark[];
 };
 
 export type OverlayMark = {
   text: string;
   startMs: number;
   endMs: number;
+};
+
+export type ZoomMark = {
+  startMs: number;
+  endMs: number;
+  /** 0..1 across the captured viewport. */
+  x: number;
+  y: number;
+  scale: number;
 };
 
 /**
@@ -77,6 +88,7 @@ export function buildFramingPage(options: {
   addressText: string;
   videoSrc: string;
   overlays?: OverlayMark[];
+  zooms?: ZoomMark[];
 }): string {
   const { canvasWidth, canvasHeight, windowWidth, barHeight } = frameGeometry(
     options.width,
@@ -123,7 +135,14 @@ export function buildFramingPage(options: {
     text-align: center;
     overflow: hidden;
   }
-  video { display: block; width: 100%; }
+  video {
+    display: block;
+    width: 100%;
+    /* Slow enough to read as a camera move rather than a jump cut. */
+    transition: transform 700ms cubic-bezier(0.4, 0, 0.2, 1);
+    transform-origin: 50% 50%;
+    will-change: transform;
+  }
   .overlay {
     position: absolute;
     left: 50%;
@@ -164,25 +183,49 @@ export function buildFramingPage(options: {
         endMs: mark.endMs,
       }))
     )};
+    window.__zooms = ${JSON.stringify(options.zooms ?? [])};
     (() => {
       const clip = document.getElementById('clip');
       const box = document.getElementById('overlay');
       const marks = window.__overlays || [];
-      if (!marks.length) return;
+      const zooms = window.__zooms || [];
+      if (!marks.length && !zooms.length) return;
       let shown = null;
+      let zoomed = null;
       setInterval(() => {
         const ms = clip.currentTime * 1000;
+
         const hit = marks.find((m) => ms >= m.startMs && ms < m.endMs);
         const next = hit ? hit.text : null;
-        if (next === shown) return;
-        shown = next;
-        if (next) {
-          box.innerHTML = next;
-          box.classList.add('on');
-        } else {
-          box.classList.remove('on');
+        if (next !== shown) {
+          shown = next;
+          if (next) {
+            box.innerHTML = next;
+            box.classList.add('on');
+          } else {
+            box.classList.remove('on');
+          }
+        }
+
+        const zoom = zooms.find((z) => ms >= z.startMs && ms < z.endMs);
+        const key = zoom ? z_key(zoom) : null;
+        if (key !== zoomed) {
+          zoomed = key;
+          if (zoom) {
+            // Origin as a percentage of the element, so the point of interest
+            // stays put while everything else grows away from it.
+            clip.style.transformOrigin =
+              (zoom.x * 100).toFixed(2) + '% ' + (zoom.y * 100).toFixed(2) + '%';
+            clip.style.transform = 'scale(' + zoom.scale + ')';
+          } else {
+            clip.style.transform = 'scale(1)';
+          }
         }
       }, 100);
+
+      function z_key(z) {
+        return z.startMs + ':' + z.scale + ':' + z.x + ':' + z.y;
+      }
     })();
   </script>
 </body>
@@ -206,6 +249,7 @@ export async function frameClip(options: FrameOptions): Promise<FramedResult> {
     addressText: options.addressText ?? 'app.yawp.school',
     videoSrc: 'clip.webm',
     overlays: options.overlays,
+    zooms: options.zooms,
   });
 
   // The framing stage runs under Node rather than the worker's own runtime:

@@ -262,6 +262,32 @@ async function glideTo(
   return to;
 }
 
+export type FocusRequest = {
+  selector?: string;
+  role?: string;
+  name?: string;
+  text?: string;
+  scale?: number;
+};
+
+function clamp01(value: number): number {
+  if (!Number.isFinite(value)) return 0.5;
+  return Math.min(1, Math.max(0, value));
+}
+
+/** Same targeting rules as a step, so a focus aims the way a click does. */
+function locateFocus(page: Page, focus: FocusRequest) {
+  if (focus.role) {
+    return page
+      .getByRole(focus.role as Parameters<Page['getByRole']>[0], {
+        name: focus.name ? new RegExp(focus.name, 'i') : undefined,
+      })
+      .first();
+  }
+  if (focus.text) return page.getByText(focus.text).first();
+  return page.locator(focus.selector as string).first();
+}
+
 function locate(
   page: Page,
   step: Extract<StoryboardStep, { action: 'click' }>
@@ -490,6 +516,15 @@ export async function renderStoryboard(
   // the recording so it lines up with the raw clip's own currentTime when the
   // framing stage replays it.
   const overlayMarks: { text: string; startMs: number; endMs: number }[] = [];
+  // Where the framing stage should push in, in coordinates normalised against
+  // the capture viewport so the framing canvas can scale independently.
+  const zoomMarks: {
+    startMs: number;
+    endMs: number;
+    x: number;
+    y: number;
+    scale: number;
+  }[] = [];
   // Tracked pointer position so glides start where the last one ended rather
   // than teleporting from the origin.
   const mouse = {
@@ -566,9 +601,45 @@ export async function renderStoryboard(
         }
       }
 
+      // Measured after the steps, because the thing worth showing often does
+      // not exist until they have run — a menu that opened, a panel that
+      // expanded. Zooming for the hold also reads better than zooming through
+      // the interaction: the action plays at full width, then it pushes in on
+      // the result.
+      const focus = (scene as { focus?: FocusRequest }).focus;
+      const zoomStartedAt = Date.now();
+      if (wantsVideo && focus) {
+        const box = await locateFocus(page, focus)
+          .boundingBox({ timeout: STEP_TIMEOUT_MS })
+          .catch(() => null);
+        if (box) {
+          zoomMarks.push({
+            startMs: zoomStartedAt - startedAt,
+            // Filled in once the scene is over; a zoom lasts to the end of it.
+            endMs: 0,
+            x: clamp01(
+              (box.x + box.width / 2) / storyboard.viewport.width
+            ),
+            y: clamp01(
+              (box.y + box.height / 2) / storyboard.viewport.height
+            ),
+            scale: focus.scale ?? 1.5,
+          });
+        } else {
+          const warning = `Scene "${scene.id}": focus target not found, filmed without the push-in`;
+          warnings.push(warning);
+          params.onWarning?.(warning);
+        }
+      }
+
       if (scene.hold > 0)
         await page.waitForTimeout(Math.round(scene.hold * 1000));
       if (scene.screenshot) await shoot(scene.id, scene.fullPage);
+
+      const pendingZoom = zoomMarks.at(-1);
+      if (pendingZoom && pendingZoom.endMs === 0) {
+        pendingZoom.endMs = Date.now() - startedAt;
+      }
 
       const overlay = (scene as { overlay?: string }).overlay;
       if (overlay) {
@@ -620,6 +691,7 @@ export async function renderStoryboard(
           height: storyboard.viewport.height,
           chromiumPath: params.chromiumPath,
           overlays: overlayMarks,
+          zooms: zoomMarks.filter((mark) => mark.endMs > mark.startMs),
         });
       } catch (err) {
         const warning = `Framing failed, delivering the unframed capture: ${

@@ -160,6 +160,41 @@ describe('step allowlist', () => {
     expect(parsed.scenes[0].steps).toHaveLength(3);
   });
 
+  test('accepts a scene that pushes in on one element', () => {
+    const parsed = parseStoryboard(
+      storyboard({
+        scenes: [
+          scene({ focus: { text: 'Overall Feedback', scale: 1.8 } }),
+        ],
+      })
+    );
+
+    expect(parsed.scenes[0].focus).toMatchObject({
+      text: 'Overall Feedback',
+      scale: 1.8,
+    });
+  });
+
+  test('rejects a push-in with nothing to aim at', () => {
+    const result = safeParseStoryboard(
+      storyboard({ scenes: [scene({ focus: { scale: 1.5 } })] })
+    );
+
+    expect(result.success).toBe(false);
+  });
+
+  // Past roughly 2x the surrounding context is gone and the clip stops
+  // reading as the product.
+  test('rejects a push-in past what still shows the product', () => {
+    const result = safeParseStoryboard(
+      storyboard({
+        scenes: [scene({ focus: { text: 'Overall Feedback', scale: 6 } })],
+      })
+    );
+
+    expect(result.success).toBe(false);
+  });
+
   // Dropdown menus portal their items to the end of the document, so a text
   // match resolves to page copy higher up and the click times out on
   // something inert. Without this role a storyboard cannot name a menu entry

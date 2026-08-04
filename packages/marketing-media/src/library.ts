@@ -50,6 +50,7 @@ export const MARKETING_LIBRARY: MarketingLibraryEntry[] = [
         {
           id: 'prompt-library-open',
           overlay: 'A prompt library ready to assign',
+          focus: { role: 'button', name: 'Prompt Library', scale: 1.5 },
           settle: 0.8,
           hold: 2,
           screenshot: true,
@@ -104,6 +105,7 @@ export const MARKETING_LIBRARY: MarketingLibraryEntry[] = [
         {
           id: 'graded-submission',
           overlay: 'Feedback students actually read',
+          focus: { text: 'Overall Feedback', scale: 1.6 },
           settle: 1,
           hold: 2,
           screenshot: true,
@@ -143,6 +145,7 @@ export const MARKETING_LIBRARY: MarketingLibraryEntry[] = [
         {
           id: 'drafting',
           overlay: 'A calm place to think and write',
+          focus: { selector: '.ProseMirror', scale: 1.4 },
           settle: 1,
           hold: 2,
           screenshot: true,

@@ -250,6 +250,29 @@ export const StoryboardSceneSchema = z
      * unreadable at a glance in a feed anyway.
      */
     overlay: z.string().max(60).optional(),
+    /**
+     * Push in on one element once the scene's steps are done. Product UI is
+     * illegible when a 1280px viewport is scaled into a feed, and the whole
+     * point of a feature clip is that a viewer can read the thing being
+     * demonstrated.
+     *
+     * Measured during capture and animated during framing, so the capture
+     * itself is never scaled — zooming the live page would reflow it and
+     * move the targets the steps are aiming at.
+     */
+    focus: z
+      .object({
+        selector: selector.optional(),
+        role: targetFields.role,
+        name: humanText.optional(),
+        text: humanText.optional(),
+        /** 1 is untouched; much past 2 and the surrounding context is gone. */
+        scale: z.number().min(1).max(2.5).default(1.5),
+      })
+      .refine((value) => hasTarget(value), {
+        message: 'focus needs a selector, a role, or text to aim at',
+      })
+      .optional(),
   })
   .superRefine((scene, ctx) => {
     scene.steps.forEach((step, index) => {
