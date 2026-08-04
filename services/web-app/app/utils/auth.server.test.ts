@@ -36,6 +36,7 @@ const {
   resetUserPassword,
   verifyUserPassword,
   requireMembership,
+  requireAdmin,
   requireOwner,
   isTeacherMembership,
   isStudentMembership,
@@ -162,6 +163,37 @@ describe('membership auth helpers', () => {
       id: 'user-1',
       memberships: [{ id: 'membership-1', isOrgOwner: true }],
     });
+  });
+
+  // Caught live on a preview: a non-admin hitting an admin-gated loader
+  // crashed with an uncaught ReferenceError instead of a clean 403, because
+  // the rejection message interpolated a bare `name` that was never in
+  // scope. A denied request must produce a Response, not throw past one.
+  test('requireAdmin rejects a non-admin with a 403, not a crash', async () => {
+    getSession.mockResolvedValue({
+      get: (key: string) => (key === 'sessionId' ? 'session-1' : undefined),
+    });
+    prisma.session.findUnique.mockResolvedValue({
+      user: { id: 'user-1' },
+    });
+    prisma.user.findFirst.mockResolvedValue(null);
+
+    let thrown: unknown;
+    try {
+      await requireAdmin(
+        new Request('https://example.com/app/admin', {
+          method: 'GET',
+          headers: { cookie: 'en_session=signed-cookie' },
+        })
+      );
+    } catch (err) {
+      thrown = err;
+    }
+
+    const rejection = thrown as { data: Record<string, unknown>; init?: { status?: number } };
+    expect(rejection.init?.status).toBe(403);
+    expect(rejection.data.requiredRole).toBe('isAdmin');
+    expect(rejection.data.message).toContain('isAdmin');
   });
 });
 

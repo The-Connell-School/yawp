@@ -27,8 +27,12 @@ mock.module('~/utils/marketing-studio.server', () => ({
   getMarketingMediaDir: () => null,
   isMarketingStudioEnabled: () => true,
 }));
+// Exports the union of what any route imports from this module — module
+// mocks are process-global in bun and an incomplete one poisons other suites
+// sharing the test process (the $jobId route also mocks this module).
 mock.module('~/services/marketing-storyboard.server', () => ({
   generateStoryboard,
+  reviseStoryboard: mock(),
   StoryboardGenerationError,
 }));
 

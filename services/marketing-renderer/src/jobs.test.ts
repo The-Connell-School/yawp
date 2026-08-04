@@ -58,6 +58,25 @@ describe('claimNextJob', () => {
     expect(update.data.attempts.increment).toBe(1);
   });
 
+  // markFailed keeps a retryable job's error message on the row so an admin
+  // can see what went wrong — but that row goes back to QUEUED, and the next
+  // claim must not leave that stale message sitting under a fresh RENDERING
+  // badge. Reproduces the job page showing "This render failed" next to a
+  // job actively filming attempt 2.
+  test('clears the previous attempt error when claiming a retry', async () => {
+    prisma.marketingMediaJob.findFirst.mockResolvedValue({
+      ...QUEUED_JOB,
+      attempts: 1,
+      error: 'waitFor: Timeout 20000ms exceeded.',
+    });
+    prisma.marketingMediaJob.updateMany.mockResolvedValue({ count: 1 });
+
+    await claimNextJob({ prisma: db(), workerId: 'w1' });
+
+    const update = prisma.marketingMediaJob.updateMany.mock.calls[0][0];
+    expect(update.data.error).toBeNull();
+  });
+
   test('returns null when another worker won the race', async () => {
     prisma.marketingMediaJob.findFirst.mockResolvedValue(QUEUED_JOB);
     prisma.marketingMediaJob.updateMany.mockResolvedValue({ count: 0 });

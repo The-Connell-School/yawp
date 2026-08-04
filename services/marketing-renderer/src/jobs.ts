@@ -69,6 +69,11 @@ export async function claimNextJob(params: {
     where: { id: candidate.id, status: candidate.status },
     data: {
       status: 'RENDERING',
+      // A retried job carries its previous attempt's error so an admin can
+      // see why it was requeued — but once a fresh attempt is actually
+      // filming, that message is stale and must not sit under a RENDERING
+      // badge reading like a live failure.
+      error: null,
       lockedAt: now,
       lockedBy: params.workerId,
       startedAt: now,
