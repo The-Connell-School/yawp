@@ -45,6 +45,7 @@ jobs:
       PREVIEW_TLS: 'true'
       PREVIEW_RUNTIME: production
       PREVIEW_DATA_MODE: ${{ vars.DEMO_DATA_MODE || 'seed' }}
+      PREVIEW_SEAT_COUNT: ${{ vars.DEMO_SEAT_COUNT || '6' }}
       PREVIEW_AI_MODEL: ${{ vars.DEMO_AI_MODEL || 'claude-sonnet-4-6' }}
       PREVIEW_ANTHROPIC_API_KEY: ${{ secrets.PREVIEW_ANTHROPIC_API_KEY || secrets.ANTHROPIC_API_KEY }}
       PREVIEW_DB_PASSWORD: ${{ secrets.PREVIEW_DB_PASSWORD }}
@@ -125,6 +126,7 @@ jobs:
             "PREVIEW_TLS=true"
             "PREVIEW_RUNTIME=production"
             "PREVIEW_DATA_MODE=$(shell_quote "$PREVIEW_DATA_MODE")"
+            "PREVIEW_SEAT_COUNT=$(shell_quote "$PREVIEW_SEAT_COUNT")"
             "PREVIEW_AI_MODEL=$(shell_quote "$PREVIEW_AI_MODEL")"
             "PREVIEW_ANTHROPIC_API_KEY=$(shell_quote "$PREVIEW_ANTHROPIC_API_KEY")"
             "PREVIEW_DB_PASSWORD=$(shell_quote "$PREVIEW_DB_PASSWORD")"

@@ -5,7 +5,8 @@ const { createPreviewAccessAction } = await import('./route');
 const action = createPreviewAccessAction(logout as never);
 
 const originalCodes = process.env.PREVIEW_ACCESS_CODES;
-const originalSecret = process.env.SESSION_SECRET;
+const originalSeats = process.env.PREVIEW_ACCESS_SEATS;
+const originalSecret = process.env.PREVIEW_ACCESS_SECRET;
 
 function makeRequest(fields: Record<string, string>) {
   const body = new FormData();
@@ -28,32 +29,60 @@ function actionArgs(request: Request) {
 
 describe('preview access action', () => {
   beforeEach(() => {
-    process.env.PREVIEW_ACCESS_CODES = 'brave-otter-4193';
-    process.env.SESSION_SECRET = 'test-preview-session-secret';
+    process.env.PREVIEW_ACCESS_SEATS = JSON.stringify([
+      {
+        code: 'brave-otter-4193',
+        organizationId: 'local-dev-org',
+        label: 'Brian Connell',
+      },
+      {
+        code: 'calm-panda-8127',
+        organizationId: 'preview-seat-2',
+        label: 'Bryant Brock',
+      },
+    ]);
+    process.env.PREVIEW_ACCESS_SECRET = 'test-preview-access-secret';
     logout.mockReset();
+    logout.mockImplementation((_options, responseInit) => {
+      throw new Response(null, { status: 302, ...responseInit });
+    });
   });
 
   afterEach(() => {
     if (originalCodes === undefined)
       Reflect.deleteProperty(process.env, 'PREVIEW_ACCESS_CODES');
     else process.env.PREVIEW_ACCESS_CODES = originalCodes;
+    if (originalSeats === undefined)
+      Reflect.deleteProperty(process.env, 'PREVIEW_ACCESS_SEATS');
+    else process.env.PREVIEW_ACCESS_SEATS = originalSeats;
     if (originalSecret === undefined)
-      Reflect.deleteProperty(process.env, 'SESSION_SECRET');
-    else process.env.SESSION_SECRET = originalSecret;
+      Reflect.deleteProperty(process.env, 'PREVIEW_ACCESS_SECRET');
+    else process.env.PREVIEW_ACCESS_SECRET = originalSecret;
   });
 
   test('accepts a configured code and returns to the requested app page', async () => {
-    const response = await action(
-      actionArgs(
-        makeRequest({
-          code: 'Brave-Otter-4193',
-          returnTo: '/app/classes?tab=active',
-        }),
-      ),
-    );
+    let response: Response | undefined;
+    try {
+      await action(
+        actionArgs(
+          makeRequest({
+            code: 'Brave-Otter-4193',
+            returnTo: '/app/classes?tab=active',
+          }),
+        ),
+      );
+    } catch (error) {
+      response = error as Response;
+    }
 
-    expect(response.status).toBe(302);
-    expect(response.headers.get('location')).toBe('/app/classes?tab=active');
+    expect(response?.status).toBe(302);
+    expect(logout).toHaveBeenCalledTimes(1);
+    expect(logout.mock.calls[0]?.[0].redirectTo).toBe(
+      '/app/classes?tab=active',
+    );
+    expect(logout.mock.calls[0]?.[1]?.headers['set-cookie']).toContain(
+      '__yawp_preview_access=',
+    );
   });
 
   test('rejects an invalid code without setting a cookie', async () => {
@@ -69,6 +98,7 @@ describe('preview access action', () => {
   });
 
   test('fails closed when no codes are configured', async () => {
+    delete process.env.PREVIEW_ACCESS_SEATS;
     delete process.env.PREVIEW_ACCESS_CODES;
 
     const response = await action(

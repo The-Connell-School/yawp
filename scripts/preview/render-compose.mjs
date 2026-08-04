@@ -1,7 +1,8 @@
 import { fileURLToPath } from 'node:url';
 import {
   buildPreviewEnv,
-  requirePreviewAccessCodes,
+  requirePreviewAccessSecret,
+  requirePreviewAccessSeats,
   requirePreviewSessionSecret,
 } from './preview-env.mjs';
 
@@ -22,10 +23,12 @@ export function renderPreviewCompose({
   enableTls = process.env.PREVIEW_TLS !== 'false',
   runtime = process.env.PREVIEW_RUNTIME || 'fast',
   dataMode = process.env.PREVIEW_DATA_MODE || 'seed',
-  accessCodes = process.env.PREVIEW_ACCESS_CODES,
+  accessSeats = process.env.PREVIEW_ACCESS_SEATS,
+  accessSecret = process.env.PREVIEW_ACCESS_SECRET,
   sessionSecret = process.env.PREVIEW_SESSION_SECRET,
 } = {}) {
-  const previewAccessCodes = requirePreviewAccessCodes(accessCodes);
+  const previewAccessSeats = requirePreviewAccessSeats(accessSeats);
+  const previewAccessSecret = requirePreviewAccessSecret(accessSecret);
   const previewSessionSecret = requirePreviewSessionSecret(sessionSecret);
   const env = buildPreviewEnv({
     prNumber,
@@ -46,7 +49,7 @@ export function renderPreviewCompose({
     : '';
   const cookieSecure = enableTls ? '"true"' : '"false"';
   // PREVIEW_ACCESS_GATE is consumed by the root route middleware itself. This render
-  // cannot emit that enforcement switch without validated codes and a signing secret,
+  // cannot emit that enforcement switch without validated seats and its own signing secret,
   // so enabling role-swap necessarily enables the request-boundary gate too.
   const commonEnvironment = `      DATABASE_URL: ${q(env.databaseUrl)}
       DATABASE_SSL_REJECT_UNAUTHORIZED: "false"
@@ -54,7 +57,9 @@ export function renderPreviewCompose({
       YAWP_ENVIRONMENT: "preview"
       PREVIEW_DATA_MODE: ${q(env.dataMode)}
       PREVIEW_ACCESS_GATE: "on"
-      PREVIEW_ACCESS_CODES: ${q(previewAccessCodes)}
+      PREVIEW_ACCESS_SEATS: ${q(previewAccessSeats)}
+      PREVIEW_ACCESS_SECRET: ${q(previewAccessSecret)}
+      PREVIEW_SEAT_COUNT: ${q(optionalEnv('PREVIEW_SEAT_COUNT', '6'))}
       PORT: "8080"
       COOKIE_SECURE: ${cookieSecure}
       AWS_EC2_METADATA_DISABLED: "true"

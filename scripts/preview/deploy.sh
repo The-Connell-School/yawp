@@ -29,16 +29,46 @@ DATABASE_CREATED=0
 
 mkdir -p "$PREVIEW_DIR" "$DB_COMPOSE_DIR"
 ACCESS_CODE_FILE="$PREVIEW_DIR/access-code"
+ACCESS_SEATS_FILE="$PREVIEW_DIR/access-seats.json"
+ACCESS_SECRET_FILE="$PREVIEW_DIR/access-secret"
 SESSION_SECRET_FILE="$PREVIEW_DIR/session-secret"
+export PREVIEW_SEAT_COUNT="${PREVIEW_SEAT_COUNT:-6}"
 
 load_or_create_access_config() {
   umask 077
-  if [[ -z "${PREVIEW_ACCESS_CODES:-}" ]]; then
-    if [[ -s "$ACCESS_CODE_FILE" ]]; then
-      PREVIEW_ACCESS_CODES="$(<"$ACCESS_CODE_FILE")"
+  if [[ -z "${PREVIEW_ACCESS_SEATS:-}" ]]; then
+    local existing_seats="[]"
+    local legacy_codes="${PREVIEW_ACCESS_CODES:-}"
+    if [[ -s "$ACCESS_SEATS_FILE" ]]; then
+      existing_seats="$(<"$ACCESS_SEATS_FILE")"
+    elif [[ -z "$legacy_codes" && -s "$ACCESS_CODE_FILE" ]]; then
+      legacy_codes="$(<"$ACCESS_CODE_FILE")"
+    fi
+    PREVIEW_ACCESS_SEATS="$(
+      PREVIEW_EXISTING_ACCESS_SEATS="$existing_seats" \
+      PREVIEW_ACCESS_CODES="$legacy_codes" \
+      node "$SCRIPT_DIR/access-code.mjs" --seats
+    )"
+    printf '%s\n' "$PREVIEW_ACCESS_SEATS" > "$ACCESS_SEATS_FILE"
+  fi
+
+  PREVIEW_ACCESS_CODES="$(
+    PREVIEW_ACCESS_SEATS="$PREVIEW_ACCESS_SEATS" node -e \
+      "process.stdout.write(JSON.parse(process.env.PREVIEW_ACCESS_SEATS).map((seat) => seat.code).join(','))"
+  )"
+  # A retained seat map may be larger than a subsequently lowered count. Never
+  # orphan one of those worlds on a reset; seed through the full retained map.
+  PREVIEW_SEAT_COUNT="$(
+    PREVIEW_ACCESS_SEATS="$PREVIEW_ACCESS_SEATS" node -e \
+      "process.stdout.write(String(JSON.parse(process.env.PREVIEW_ACCESS_SEATS).length))"
+  )"
+
+  if [[ -z "${PREVIEW_ACCESS_SECRET:-}" ]]; then
+    if [[ -s "$ACCESS_SECRET_FILE" ]]; then
+      PREVIEW_ACCESS_SECRET="$(<"$ACCESS_SECRET_FILE")"
     else
-      PREVIEW_ACCESS_CODES="$(node "$SCRIPT_DIR/access-code.mjs")"
-      printf '%s\n' "$PREVIEW_ACCESS_CODES" > "$ACCESS_CODE_FILE"
+      PREVIEW_ACCESS_SECRET="$(node -e "process.stdout.write(require('node:crypto').randomBytes(32).toString('base64url'))")"
+      printf '%s\n' "$PREVIEW_ACCESS_SECRET" > "$ACCESS_SECRET_FILE"
     fi
   fi
 
@@ -51,7 +81,7 @@ load_or_create_access_config() {
     fi
   fi
 
-  export PREVIEW_ACCESS_CODES PREVIEW_SESSION_SECRET
+  export PREVIEW_ACCESS_CODES PREVIEW_ACCESS_SEATS PREVIEW_ACCESS_SECRET PREVIEW_SESSION_SECRET PREVIEW_SEAT_COUNT
 }
 
 load_or_create_access_config
@@ -192,10 +222,23 @@ reset_seed_preview_database() {
   DATABASE_CREATED=1
 }
 
+create_seed_preview_database() {
+  validate_database_name "$DATABASE_NAME"
+  echo "Creating preview database $DATABASE_NAME for seeded local-dev data..."
+  docker exec "$POSTGRES_CONTAINER" createdb -U postgres "$DATABASE_NAME"
+  DATABASE_CREATED=1
+}
+
 ensure_preview_database() {
   case "$DATA_MODE" in
     seed)
-      reset_seed_preview_database
+      if [[ "${DEMO_RESET_DATA:-false}" == "true" ]]; then
+        reset_seed_preview_database
+      elif database_exists "$DATABASE_NAME"; then
+        echo "Preview database $DATABASE_NAME already exists; preserving seat data."
+      else
+        create_seed_preview_database
+      fi
       ;;
     production-dump)
       ensure_template_database
@@ -239,6 +282,9 @@ compute_tooling_fingerprint() {
         packages/prisma/scripts/assignment-type-release-gate.ts \
         packages/prisma/scripts/backfill-class-art-key.ts \
         packages/prisma/scripts/seed-local-dev.ts \
+        packages/prisma/scripts/preview-seats.ts \
+        packages/prisma/scripts/seed-preview-seats.ts \
+        packages/prisma/scripts/local-dev/class-insights.ts \
         packages/prisma/scripts/local-dev/dev-personas.ts \
         packages/prisma/scripts/local-dev/seed-synthetic-data.ts \
         scripts/preview/deploy.sh
@@ -290,7 +336,11 @@ run_tooling_if_needed() {
   local tooling_command
   case "$DATA_MODE" in
     seed)
-      tooling_command='bun install --ignore-scripts && bun prisma generate && cd packages/prisma && bun prisma migrate deploy && bun run scripts/backfill-class-art-key.ts && bun run seed-local-dev && bun run scripts/assignment-type-release-gate.ts --require-data'
+      tooling_command='bun install --ignore-scripts && bun prisma generate && cd packages/prisma && bun prisma migrate deploy && bun run scripts/backfill-class-art-key.ts'
+      if [[ "$DATABASE_CREATED" == "1" ]]; then
+        tooling_command+=' && bun run seed-local-dev'
+      fi
+      tooling_command+=' && bun run scripts/assignment-type-release-gate.ts --require-data'
       ;;
     production-dump)
       tooling_command='bun install --ignore-scripts && bun prisma generate && cd packages/prisma && bun prisma migrate deploy && bun run scripts/backfill-class-art-key.ts && bun run scripts/assignment-type-release-gate.ts --require-data'
@@ -299,6 +349,14 @@ run_tooling_if_needed() {
 
   "${compose[@]}" run --rm toolbox bash -lc "$tooling_command"
   printf '%s\n' "$fingerprint" > "$TOOLING_FINGERPRINT_FILE"
+}
+
+ensure_preview_seats() {
+  if [[ "$DATA_MODE" != "seed" ]]; then
+    return 0
+  fi
+  "${compose[@]}" run --rm toolbox bash -lc \
+    'cd packages/prisma && bun run seed-preview-seats'
 }
 
 remove_legacy_project_postgres() {
@@ -314,6 +372,7 @@ refresh_web_container_if_needed() {
 ensure_shared_postgres
 ensure_preview_database
 run_tooling_if_needed
+ensure_preview_seats
 start_or_refresh_web() {
   refresh_web_container_if_needed
 }
@@ -321,7 +380,10 @@ start_or_refresh_web
 
 health_url="${PREVIEW_HEALTHCHECK_URL:-${URL}/api/healthcheck}"
 login_url="${PREVIEW_LOGIN_URL:-${URL}}"
-smoke_access_code="${PREVIEW_ACCESS_CODES%%,*}"
+smoke_access_code="$(
+  PREVIEW_ACCESS_SEATS="$PREVIEW_ACCESS_SEATS" node -e \
+    "process.stdout.write(JSON.parse(process.env.PREVIEW_ACCESS_SEATS)[0].code)"
+)"
 if [[ -n "${DIRECT_PORT:-}" ]]; then
   health_url="http://127.0.0.1:${DIRECT_PORT}/api/healthcheck"
   login_url="http://127.0.0.1:${DIRECT_PORT}"
@@ -335,6 +397,12 @@ for attempt in $(seq 1 90); do
     echo "PREVIEW_URL=$URL"
     echo "PREVIEW_HOSTNAME=$HOSTNAME"
     echo "PREVIEW_ACCESS_CODE=$smoke_access_code"
+    PREVIEW_ACCESS_SEATS="$PREVIEW_ACCESS_SEATS" node -e '
+      for (const [index, seat] of JSON.parse(process.env.PREVIEW_ACCESS_SEATS).entries()) {
+        console.log(`PREVIEW_SEAT_CODE_${index + 1}=${seat.code}`)
+        console.log(`Preview seat ${index + 1} (${seat.label}): ${seat.code}`)
+      }
+    '
     echo "PREVIEW_ELAPSED_MS=$elapsed_ms"
     exit 0
   fi

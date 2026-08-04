@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
 
 const prisma = {
-  user: { findUnique: mock() },
+  user: { findFirst: mock(), findMany: mock(), findUnique: mock() },
   session: { create: mock(), deleteMany: mock() },
 };
 
@@ -12,35 +12,26 @@ const authSessionStorage = {
 };
 const setMembershipId = mock();
 const isLocalDevAuthEnabled = mock();
+const isPreviewAccessGateEnabled = mock();
+const getPreviewAccessSeat = mock();
+const redirectResponse = mock((headers: Headers) =>
+  new Response(null, { status: 302, headers: { Location: '/app' } }),
+);
 
-const authServerMock = () => ({
-  getSessionExpirationDate,
+const { createDevLoginAction, getLocalDevLoginOptions } = await import(
+  './dev-login.server'
+);
+const action = createDevLoginAction({
+  prismaClient: prisma as never,
+  getExpirationDate: getSessionExpirationDate as never,
   sessionKey: 'sessionId',
+  sessionStorage: authSessionStorage as never,
+  membershipCookie: setMembershipId as never,
+  localDevAuthEnabled: isLocalDevAuthEnabled as never,
+  previewGateEnabled: isPreviewAccessGateEnabled as never,
+  previewSeatForRequest: getPreviewAccessSeat as never,
+  redirectResponse,
 });
-const authSessionStorageMock = () => ({
-  authSessionStorage,
-});
-const localDevAuthMock = () => ({
-  isLocalDevAuthEnabled,
-});
-
-mock.module('~/utils/db.server', () => ({ prisma }));
-mock.module('~/utils/db.server.ts', () => ({ prisma }));
-mock.module('~/utils/db.server.js', () => ({ prisma }));
-mock.module('~/utils/auth.server', authServerMock);
-mock.module('~/utils/auth.server.ts', authServerMock);
-mock.module('~/utils/auth.server.js', authServerMock);
-mock.module('~/cookie-session-storages/authentication.server', authSessionStorageMock);
-mock.module('~/cookie-session-storages/authentication.server.ts', authSessionStorageMock);
-mock.module('~/cookie-session-storages/authentication.server.js', authSessionStorageMock);
-mock.module('~/cookies/membership-id.server', () => ({ setMembershipId }));
-mock.module('~/cookies/membership-id.server.ts', () => ({ setMembershipId }));
-mock.module('~/cookies/membership-id.server.js', () => ({ setMembershipId }));
-mock.module('~/utils/local-dev-auth.server', localDevAuthMock);
-mock.module('~/utils/local-dev-auth.server.ts', localDevAuthMock);
-mock.module('~/utils/local-dev-auth.server.js', localDevAuthMock);
-
-const { action } = await import('./route');
 
 function makeRequest(email: string, cookie?: string) {
   const body = new FormData();
@@ -66,6 +57,8 @@ function actionArgs(request: Request) {
 describe('auth.dev-login action', () => {
   beforeEach(() => {
     prisma.user.findUnique.mockReset();
+    prisma.user.findFirst.mockReset();
+    prisma.user.findMany.mockReset();
     prisma.session.create.mockReset();
     prisma.session.deleteMany.mockReset();
     getSessionExpirationDate.mockReset();
@@ -73,8 +66,13 @@ describe('auth.dev-login action', () => {
     authSessionStorage.commitSession.mockReset();
     setMembershipId.mockReset();
     isLocalDevAuthEnabled.mockReset();
+    isPreviewAccessGateEnabled.mockReset();
+    getPreviewAccessSeat.mockReset();
+    redirectResponse.mockClear();
 
     isLocalDevAuthEnabled.mockReturnValue(true);
+    isPreviewAccessGateEnabled.mockReturnValue(false);
+    getPreviewAccessSeat.mockResolvedValue(null);
     getSessionExpirationDate.mockReturnValue(new Date('2030-01-01T00:00:00.000Z'));
     authSessionStorage.getSession.mockResolvedValue({
       get: () => 'old-session-id',
@@ -104,10 +102,9 @@ describe('auth.dev-login action', () => {
 
     expect(response.status).toBe(302);
     expect(response.headers.get('location')).toBe('/app');
-    expect(response.headers.getSetCookie()).toEqual([
-      'en_session=new-session; Path=/; HttpOnly',
-      'membership-id=mem-1; Path=/; HttpOnly',
-    ]);
+    const setCookie = redirectResponse.mock.calls[0]?.[0].get('set-cookie');
+    expect(setCookie).toContain('en_session=new-session; Path=/; HttpOnly');
+    expect(setCookie).toContain('membership-id=mem-1; Path=/; HttpOnly');
     expect(prisma.session.deleteMany).toHaveBeenCalledWith({
       where: { id: 'old-session-id' },
     });
@@ -119,5 +116,104 @@ describe('auth.dev-login action', () => {
     );
 
     expect(response.status).toBe(404);
+  });
+
+  test('binds preview dev-login to the organization in the access cookie', async () => {
+    isPreviewAccessGateEnabled.mockReturnValue(true);
+    getPreviewAccessSeat.mockResolvedValue({
+      organizationId: 'preview-seat-2',
+      label: 'Bryant Brock',
+    });
+    prisma.user.findFirst.mockResolvedValue({
+      id: 'seat-2-user',
+      memberships: [{ id: 'seat-2-membership', role: 'STUDENT' }],
+    });
+
+    const response = await action(
+      actionArgs(makeRequest('student@seat-two.example', 'preview=seat-2')),
+    );
+
+    expect(response.status).toBe(302);
+    expect(prisma.user.findFirst).toHaveBeenCalledWith({
+      where: {
+        email: 'student@seat-two.example',
+        memberships: { some: { organizationId: 'preview-seat-2' } },
+      },
+      select: {
+        id: true,
+        memberships: {
+          where: { organizationId: 'preview-seat-2' },
+          select: { id: true, role: true },
+          orderBy: { createdAt: 'asc' },
+          take: 1,
+        },
+      },
+    });
+    expect(prisma.user.findUnique).not.toHaveBeenCalled();
+  });
+
+  test('rejects a valid user from a different preview seat', async () => {
+    isPreviewAccessGateEnabled.mockReturnValue(true);
+    getPreviewAccessSeat.mockResolvedValue({
+      organizationId: 'preview-seat-2',
+      label: 'Bryant Brock',
+    });
+    prisma.user.findFirst.mockResolvedValue(null);
+
+    const response = await action(
+      actionArgs(makeRequest('dev.student@yawp.local', 'preview=seat-2')),
+    );
+
+    expect(response.status).toBe(404);
+    expect(prisma.session.create).not.toHaveBeenCalled();
+  });
+
+  test('lists only users belonging to the current preview seat', async () => {
+    prisma.user.findMany.mockResolvedValue([
+      {
+        email: 'teacher@seat-two.example',
+        name: 'Seat Two Teacher',
+        isAdmin: false,
+        memberships: [
+          { role: 'TEACHER', isOrgOwner: false },
+        ],
+      },
+      {
+        email: 'student@seat-two.example',
+        name: 'Seat Two Student',
+        isAdmin: false,
+        memberships: [
+          { role: 'STUDENT', isOrgOwner: false },
+        ],
+      },
+    ]);
+
+    const options = await getLocalDevLoginOptions(
+      'preview-seat-2',
+      prisma as never,
+    );
+
+    expect(prisma.user.findMany).toHaveBeenCalledWith({
+      where: { memberships: { some: { organizationId: 'preview-seat-2' } } },
+      select: {
+        email: true,
+        name: true,
+        isAdmin: true,
+        memberships: {
+          where: { organizationId: 'preview-seat-2' },
+          select: { role: true, isOrgOwner: true },
+          take: 1,
+        },
+      },
+      orderBy: [{ name: 'asc' }, { email: 'asc' }],
+    });
+    expect(options.map((option) => option.email)).toEqual([
+      'teacher@seat-two.example',
+      'student@seat-two.example',
+    ]);
+    expect(options.map((option) => option.role)).toEqual([
+      'teacher',
+      'student',
+    ]);
   });
 });

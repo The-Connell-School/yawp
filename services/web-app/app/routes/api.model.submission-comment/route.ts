@@ -3,6 +3,7 @@ import { parseFormData, validationError } from '@rvf/react-router';
 import { z } from 'zod';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
+import { hasEffectivePlatformAdmin } from '~/utils/preview-access.server';
 
 const POST = z
   .object({
@@ -47,7 +48,7 @@ export async function action({ request }: ActionFunctionArgs) {
     where: { id: userId },
     select: { isAdmin: true },
   });
-  const isAdmin = !!user?.isAdmin;
+  const isAdmin = hasEffectivePlatformAdmin(user?.isAdmin);
 
   const { error, data } = await parseFormData(request, POST);
   if (error) return validationError(error);

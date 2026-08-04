@@ -220,7 +220,7 @@ describe('PR preview deployment contract', () => {
     expect(previewWorkflow).not.toMatch(/(^|\s)\/preview(\s|$)/);
   });
 
-  test('preview deploy resets per-PR databases and seeds local dev data by default', () => {
+  test('preview deploy preserves existing seed databases unless reset is explicit', () => {
     const deployScript = readRepoFile('scripts/preview/deploy.sh');
     const resetIndex = deployScript.indexOf('reset_seed_preview_database');
     const dropIndex = deployScript.indexOf('dropdb -U postgres --force --if-exists "$DATABASE_NAME"');
@@ -233,10 +233,13 @@ describe('PR preview deployment contract', () => {
 
     expect(deployScript).toContain('PREVIEW_DATA_MODE');
     expect(deployScript).toContain('DATA_MODE');
-    expect(deployScript).toContain('reset_seed_preview_database');
+    expect(deployScript).toContain('DEMO_RESET_DATA');
+    expect(deployScript).toContain('database_exists "$DATABASE_NAME"');
+    expect(deployScript).toContain('if [[ "${DEMO_RESET_DATA:-false}" == "true" ]]');
     expect(deployScript).toContain('dropdb -U postgres --force --if-exists "$DATABASE_NAME"');
     expect(deployScript).toContain('createdb -U postgres "$DATABASE_NAME"');
     expect(deployScript).toContain('bun run seed-local-dev');
+    expect(deployScript).toContain('bun run seed-preview-seats');
     expect(deployScript).toContain('PREVIEW_DEV_LOGIN_EMAIL');
     expect(deployScript).toContain('backfill-class-art-key.ts');
     expect(deployScript).toContain('assignment-type-release-gate.ts --require-data');
@@ -308,7 +311,8 @@ describe('PR preview deployment contract', () => {
     expect(gate).toContain("process.env.PREVIEW_ACCESS_GATE === 'on'");
     expect(gate).toContain("'/api/healthcheck'");
     expect(compose).toContain('PREVIEW_ACCESS_GATE: "on"');
-    expect(compose).toContain('requirePreviewAccessCodes(accessCodes)');
+    expect(compose).toContain('requirePreviewAccessSeats(accessSeats)');
+    expect(compose).toContain('requirePreviewAccessSecret(accessSecret)');
     expect(compose).toContain('requirePreviewSessionSecret(sessionSecret)');
   });
 

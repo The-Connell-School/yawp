@@ -36,6 +36,7 @@ const {
   resetUserPassword,
   verifyUserPassword,
   requireMembership,
+  requireAdmin,
   requireOwner,
   isTeacherMembership,
   isStudentMembership,
@@ -162,6 +163,27 @@ describe('membership auth helpers', () => {
       id: 'user-1',
       memberships: [{ id: 'membership-1', isOrgOwner: true }],
     });
+  });
+
+  test('platform-admin privilege is disabled inside isolated preview seats', async () => {
+    process.env.PREVIEW_ACCESS_GATE = 'on';
+    process.env.PREVIEW_DATA_MODE = 'seed';
+    getSession.mockResolvedValue({
+      get: (key: string) => (key === 'sessionId' ? 'session-1' : undefined),
+    });
+    prisma.session.findUnique.mockResolvedValue({ user: { id: 'user-1' } });
+
+    try {
+      await requireAdmin(new Request('https://example.com/app/admin'));
+      throw new Error('Expected requireAdmin to reject');
+    } catch (error) {
+      expect((error as { init?: { status?: number } }).init?.status).toBe(403);
+    } finally {
+      delete process.env.PREVIEW_ACCESS_GATE;
+      delete process.env.PREVIEW_DATA_MODE;
+    }
+
+    expect(prisma.user.findFirst).not.toHaveBeenCalled();
   });
 });
 

@@ -20,7 +20,6 @@ import {
   TableRow,
 } from '~/components/ui/table';
 import { ArrowDown, ArrowUp, ArrowUpDown, Plus } from 'lucide-react';
-import { requireUserId } from '~/utils/auth.server';
 import {
   getOrganizationTableCookie,
   getOrganizationTableCookieValue,
@@ -84,18 +83,9 @@ const COLUMNS: CookieColumns = {
 };
 
 export async function loader({ request }: LoaderFunctionArgs) {
-  const userId = await requireUserId(request);
+  await requireAdmin(request);
   const { sort, direction, skip, take } =
     await getOrganizationTableCookie(request);
-
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { isAdmin: true },
-  });
-
-  if (!user?.isAdmin) {
-    throw new Response('Unauthorized', { status: 401 });
-  }
 
   const [organizations, totalCount, stats] = await Promise.all([
     prisma.organization.findMany({

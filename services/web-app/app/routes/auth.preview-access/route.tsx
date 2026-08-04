@@ -1,6 +1,5 @@
 import {
   Form,
-  redirect,
   useActionData,
   type ActionFunctionArgs,
   type LoaderFunctionArgs,
@@ -10,9 +9,9 @@ import { safeRedirect } from 'remix-utils/safe-redirect';
 import {
   PREVIEW_ACCESS_PATH,
   clearPreviewAccessCookie,
+  findPreviewAccessSeatByCode,
   grantPreviewAccessCookie,
   isPreviewAccessConfigured,
-  validatePreviewAccessCode,
 } from '~/utils/preview-access.server';
 import type { Route } from './+types/route';
 
@@ -56,7 +55,8 @@ export function createPreviewAccessAction(logoutFunction?: LogoutFunction) {
     }
 
     const code = String(formData.get('code') ?? '');
-    if (!validatePreviewAccessCode(code)) {
+    const seat = findPreviewAccessSeatByCode(code);
+    if (!seat) {
       return Response.json(
         { error: 'That access code was not recognized.' },
         { status: 400, headers: { 'Cache-Control': 'no-store' } },
@@ -67,12 +67,19 @@ export function createPreviewAccessAction(logoutFunction?: LogoutFunction) {
       String(formData.get('returnTo') ?? ''),
       '/',
     );
-    return redirect(returnTo, {
-      headers: {
-        'Cache-Control': 'no-store',
-        'set-cookie': await grantPreviewAccessCookie(),
+    // A code switch must not leave an application login from the previous seat alive.
+    // Reuse logout so both cookies are changed atomically in the redirect response.
+    const signOut = logoutFunction ?? (await import('~/utils/auth.server')).logout;
+    await signOut(
+      { request, redirectTo: returnTo },
+      {
+        headers: {
+          'Cache-Control': 'no-store',
+          'set-cookie': await grantPreviewAccessCookie(seat),
+        },
       },
-    });
+    );
+    throw new Error('Preview access entry did not redirect.');
   };
 }
 

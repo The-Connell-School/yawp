@@ -61,6 +61,7 @@ Required repository settings:
 - Variable `PREVIEW_SSH_USER`
 - Variable `PREVIEW_TLS`
 - Variable `PREVIEW_RUNTIME`
+- Variable `PREVIEW_SEAT_COUNT` (optional; defaults to `6`)
 - Variable `PREVIEW_AI_MODEL`
 - Variable `PREVIEW_DB_DUMP_S3_URI`
 - Secret `PREVIEW_SSH_PRIVATE_KEY`
@@ -69,17 +70,25 @@ Required repository settings:
 - Secret `PREVIEW_LOGIN_EMAIL`
 - Secret `PREVIEW_LOGIN_PASSWORD`
 
-### Retrieve or rotate the access code
+### Retrieve or add seat access codes
 
-On the first deploy, `scripts/preview/deploy.sh` generates one memorable code from curated adjective and animal lists, such as `brave-otter-4193`. It retains that code per environment across redeploys and prints this line in the deploy job log:
+On the first deploy, `scripts/preview/deploy.sh` creates six isolated seats and generates one memorable code per seat from curated adjective and animal lists. Seat 1 is Brian Connell's adopted `local-dev-org`; seat 2 is Bryant Brock's; seats 3–6 are generic. The deploy retains the code-to-organization map across redeploys and prints every code in the job log:
 
 ```text
 PREVIEW_ACCESS_CODE=brave-otter-4193
+PREVIEW_SEAT_CODE_1=brave-otter-4193
+Preview seat 1 (Brian Connell): brave-otter-4193
+PREVIEW_SEAT_CODE_2=calm-panda-8127
+Preview seat 2 (Bryant Brock): calm-panda-8127
 ```
 
-The same deploy creates and retains a random cookie-signing secret without printing it. The access session is a signed, `HttpOnly`, `SameSite=Lax` cookie with a 30-day lifetime.
+`PREVIEW_ACCESS_CODE` remains the seat-1 value used by smoke verification. Entering any seat code both authenticates the visitor and binds the signed cookie to that seat's organization. The access session is an `HttpOnly`, `SameSite=Lax` cookie with a 30-day lifetime.
 
-To rotate the code, remove the environment through the normal preview cleanup/destroy workflow and redeploy it. For an operator-controlled local run, set `PREVIEW_ACCESS_CODES` to one or more comma-separated `word-word-0000` codes before invoking deploy.
+The deploy stores independent random secrets for the application session and preview gate. The app receives them as `SESSION_SECRET` and `PREVIEW_ACCESS_SECRET`; the gate fails closed if its dedicated secret or seat map is absent. Neither secret is printed. Do not reuse the session secret for the gate.
+
+Set the repository variable `PREVIEW_SEAT_COUNT` (default `6`) to add seat N+1 in PR preview environments. For the persistent demo environment, set the environment variable `DEMO_SEAT_COUNT` instead. The retained map is only topped up and a lower configured count never removes a seat, so codes and databases for seats 1…N remain unchanged. To supply an operator-controlled map, set `PREVIEW_ACCESS_SEATS` to a JSON array of `{ "code", "organizationId", "label" }` objects. `PREVIEW_ACCESS_CODES` remains a Phase 1 migration input: a retained single code is adopted as seat 1 when the seat map is first created.
+
+Seat seeding is create-only. An existing organization ID is a strict no-op: no rename, upsert, fixture repair, or missing-row top-up occurs. A new seat is created with its complete template inside one transaction and class insights are enabled for that newly created organization. Normal demo and preview redeploys preserve the database; only the demo workflow's explicit `reset_data=true` input drops and reseeds it.
 
 The access screen is the only public application page. Anonymous loaders redirect there, while anonymous actions and `/api/*` requests return `401`; `/api/healthcheck` remains open. The deploy smoke explicitly checks that anonymous `POST /auth/dev-login` is blocked before using the code.
 
@@ -101,7 +110,7 @@ PREVIEW_DIRECT_PORT=18080 \
 bash scripts/preview/deploy.sh
 ```
 
-The command prints `PREVIEW_ACCESS_CODE=...` after the health, access-gate, and login smoke checks pass. To use a fixed local code, add `PREVIEW_ACCESS_CODES=brave-otter-4193`.
+The command prints `PREVIEW_ACCESS_CODE=...` plus every seat-labelled code after the health, access-gate, and login smoke checks pass. To use fixed local codes, provide `PREVIEW_ACCESS_SEATS` as described above.
 
 Destroy it with:
 

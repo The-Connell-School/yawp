@@ -45,6 +45,8 @@ import {
   shouldEnableLocalDevQuickLogin,
 } from './utils/environment-banner.server.ts';
 import {
+  getPreviewAccessSeat,
+  isIsolatedPreviewSeatMode,
   isPreviewAccessGateEnabled,
   previewAccessMiddleware,
 } from './utils/preview-access.server.ts';
@@ -110,6 +112,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
         bannerWarning: null,
         localDevQuickLogin: { enabled: false, options: [] },
         previewAccessGateEnabled: isPreviewAccessGateEnabled(),
+        previewAccessSeat: null,
         impersonation: { isReadOnly: false, impersonatorUserId: null },
         studentPreview: { active: false, organizationId: null },
         toast: null,
@@ -131,6 +134,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
     desc: 'getUserId in root',
   });
   const { prisma } = await import('./utils/db.server.ts');
+  const previewAccessSeat = isPreviewAccessGateEnabled()
+    ? await getPreviewAccessSeat(request)
+    : null;
 
   const user = userId
     ? await time(
@@ -142,6 +148,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
               email: true,
               isAdmin: true,
               memberships: {
+                ...(previewAccessSeat && isIsolatedPreviewSeatMode()
+                  ? { where: { organizationId: previewAccessSeat.organizationId } }
+                  : {}),
                 orderBy: { createdAt: 'asc' },
                 select: {
                   id: true,
@@ -195,7 +204,11 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   return data(
     {
-      user: { ...user, selectedMembership: membership },
+      user: {
+        ...user,
+        isAdmin: Boolean(user?.isAdmin) && !isIsolatedPreviewSeatMode(),
+        selectedMembership: membership,
+      },
       requestInfo: {
         hints: getHints(request),
         origin: getDomainUrl(request),
@@ -209,9 +222,14 @@ export async function loader({ request }: LoaderFunctionArgs) {
       bannerWarning,
       localDevQuickLogin: {
         enabled: localDevQuickLoginEnabled,
-        options: localDevQuickLoginEnabled ? getLocalDevLoginOptions() : [],
+        options: localDevQuickLoginEnabled
+          ? await getLocalDevLoginOptions(
+              previewAccessSeat?.organizationId,
+            )
+          : [],
       },
       previewAccessGateEnabled: isPreviewAccessGateEnabled(),
+      previewAccessSeat,
       impersonation,
       studentPreview,
       toast,
@@ -356,6 +374,7 @@ export default function App({ loaderData: data }: Route.ComponentProps) {
           bannerWarning={data.bannerWarning}
           localDevQuickLogin={data.localDevQuickLogin}
           previewAccessGateEnabled={data.previewAccessGateEnabled}
+          previewAccessSeatLabel={data.previewAccessSeat?.label ?? null}
         />
       ) : null}
       <GlobalLoading />

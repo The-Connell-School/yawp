@@ -5,6 +5,7 @@ import { parseFormData, validationError } from '@rvf/react-router';
 import { z } from 'zod';
 import { requireMembership, requireUserId } from '~/utils/auth.server.js';
 import { prisma } from '~/utils/db.server.js';
+import { hasEffectivePlatformAdmin } from '~/utils/preview-access.server';
 
 const PUT = z.object({
   text: z.string().optional(),
@@ -196,7 +197,7 @@ const actionImpl = async ({ request, params }: ActionFunctionArgs) => {
       where: {
         id: snapshotId,
         documentId: document.id,
-        ...(user.isAdmin
+        ...(hasEffectivePlatformAdmin(user.isAdmin)
           ? {}
           : {
               document: {
@@ -286,7 +287,7 @@ const actionImpl = async ({ request, params }: ActionFunctionArgs) => {
     update = await prisma.document.update({
       where: {
         id: document.id,
-        ...(user.isAdmin
+        ...(hasEffectivePlatformAdmin(user.isAdmin)
           ? {}
           : {
               OR: [

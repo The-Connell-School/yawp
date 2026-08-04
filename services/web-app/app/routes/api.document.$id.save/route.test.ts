@@ -32,6 +32,8 @@ describe('api.document.$id.save', () => {
     }
     requireUserId.mockReset();
     requireMembership.mockReset();
+    delete process.env.PREVIEW_ACCESS_GATE;
+    delete process.env.PREVIEW_DATA_MODE;
 
     requireUserId.mockResolvedValue('user-1');
     requireMembership.mockResolvedValue({ id: 'profile-1' });
@@ -71,6 +73,29 @@ describe('api.document.$id.save', () => {
     expect(body.revision).toBe(4);
     expect(body.savedAt).toBeDefined();
     expect(prisma.document.update).toHaveBeenCalledTimes(1);
+  });
+
+  test('does not let a stored platform admin bypass seat document access', async () => {
+    process.env.PREVIEW_ACCESS_GATE = 'on';
+    process.env.PREVIEW_DATA_MODE = 'seed';
+    prisma.user.findUniqueOrThrow.mockResolvedValue({ isAdmin: true });
+    prisma.document.findFirst.mockResolvedValue(null);
+
+    const response = (await action({
+      request: makeRequest('other-seat-doc', {
+        html: '<p>changed</p>',
+        text: 'changed',
+        contentHash: 'abc123',
+      }),
+      params: { id: 'other-seat-doc' },
+    } as any)) as Response;
+
+    expect(response.status).toBe(403);
+    expect(prisma.document.findFirst.mock.calls[0]?.[0]?.where).toMatchObject({
+      id: 'other-seat-doc',
+      OR: expect.any(Array),
+    });
+    expect(prisma.documentWriteJournal.create).not.toHaveBeenCalled();
   });
 
   test('creates a revision when none exists (session-start)', async () => {

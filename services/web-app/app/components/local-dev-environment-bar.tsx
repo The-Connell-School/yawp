@@ -31,6 +31,7 @@ type LocalDevEnvironmentBarProps = {
     options: LocalDevLoginOption[];
   };
   previewAccessGateEnabled?: boolean;
+  previewAccessSeatLabel?: string | null;
 };
 
 const STAFF_ROLES = new Set(['admin', 'owner', 'teacher', 'teacher-multi']);
@@ -158,9 +159,11 @@ function LoginOptionGroup({
 function LocalDevQuickLoginPanel({
   options,
   previewAccessGateEnabled,
+  previewAccessSeatLabel,
 }: {
   options: LocalDevLoginOption[];
   previewAccessGateEnabled: boolean;
+  previewAccessSeatLabel: string | null;
 }) {
   const fetcher = useFetcher();
   const isSubmitting = fetcher.state !== 'idle';
@@ -196,6 +199,9 @@ function LocalDevQuickLoginPanel({
           {options.length > 0 ? (
             <div className="my-1.5 h-px bg-border/60" aria-hidden="true" />
           ) : null}
+          {previewAccessSeatLabel ? (
+            <PreviewSeatIdentity label={previewAccessSeatLabel} />
+          ) : null}
           <Form method="post" action="/auth/preview-access">
             <input type="hidden" name="intent" value="sign-out" />
             <button
@@ -212,10 +218,19 @@ function LocalDevQuickLoginPanel({
   );
 }
 
+export function PreviewSeatIdentity({ label }: { label: string }) {
+  return (
+    <p className="px-2 pb-1 pt-1.5 text-xs text-muted-foreground">
+      Current seat: <span className="font-semibold text-foreground">{label}</span>
+    </p>
+  );
+}
+
 export function LocalDevEnvironmentBar({
   bannerWarning,
   localDevQuickLogin,
   previewAccessGateEnabled = false,
+  previewAccessSeatLabel = null,
 }: LocalDevEnvironmentBarProps) {
   if (!bannerWarning) {
     return null;
@@ -271,6 +286,7 @@ export function LocalDevEnvironmentBar({
           <LocalDevQuickLoginPanel
             options={options}
             previewAccessGateEnabled={previewAccessGateEnabled}
+            previewAccessSeatLabel={previewAccessSeatLabel}
           />
         </PopoverContent>
       </Popover>

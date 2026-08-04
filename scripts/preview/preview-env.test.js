@@ -3,6 +3,8 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import {
   buildPreviewEnv,
+  requirePreviewAccessSecret,
+  requirePreviewAccessSeats,
   requirePreviewAccessCodes,
   requirePreviewSessionSecret,
 } from './preview-env.mjs';
@@ -125,6 +127,67 @@ describe('buildPreviewEnv', () => {
     );
   });
 
+  test('validates a one-code-per-seat map', () => {
+    const configured = requirePreviewAccessSeats(
+      JSON.stringify([
+        {
+          code: 'Brave-Otter-4193',
+          organizationId: 'local-dev-org',
+          label: 'Brian Connell',
+        },
+        {
+          code: 'calm-panda-8127',
+          organizationId: 'preview-seat-2',
+          label: 'Bryant Brock',
+        },
+      ]),
+    );
+
+    expect(JSON.parse(configured)).toEqual([
+      {
+        code: 'brave-otter-4193',
+        organizationId: 'local-dev-org',
+        label: 'Brian Connell',
+      },
+      {
+        code: 'calm-panda-8127',
+        organizationId: 'preview-seat-2',
+        label: 'Bryant Brock',
+      },
+    ]);
+    expect(() => requirePreviewAccessSeats('[]')).toThrow(
+      'PREVIEW_ACCESS_SEATS is required',
+    );
+    expect(() =>
+      requirePreviewAccessSeats(
+        JSON.stringify([
+          {
+            code: 'brave-otter-4193',
+            organizationId: 'local-dev-org',
+            label: 'Brian Connell',
+          },
+          {
+            code: 'brave-otter-4193',
+            organizationId: 'preview-seat-2',
+            label: 'Bryant Brock',
+          },
+        ]),
+      ),
+    ).toThrow('unique code and organization');
+  });
+
+  test('requires an independent strong access-cookie secret', () => {
+    expect(
+      requirePreviewAccessSecret('a-preview-access-secret-over-32-chars'),
+    ).toBe('a-preview-access-secret-over-32-chars');
+    expect(() => requirePreviewAccessSecret('')).toThrow(
+      'PREVIEW_ACCESS_SECRET is required',
+    );
+    expect(() => requirePreviewAccessSecret('too-short')).toThrow(
+      'PREVIEW_ACCESS_SECRET must be at least 32 characters',
+    );
+  });
+
   test('generates and threads app access codes through workflow and deploy', () => {
     const workflow = readFileSync(
       new URL('../../.github/workflows/preview-environments.yml', import.meta.url),
@@ -140,6 +203,8 @@ describe('buildPreviewEnv', () => {
     expect(workflow).toContain('PREVIEW_ACCESS_CODE=');
     expect(deploy).toContain('access-code.mjs');
     expect(deploy).toContain('PREVIEW_ACCESS_CODES');
+    expect(deploy).toContain('PREVIEW_ACCESS_SEATS');
+    expect(deploy).toContain('PREVIEW_ACCESS_SECRET');
     expect(deploy).toContain('PREVIEW_SESSION_SECRET');
     expect(deploy).toContain('PREVIEW_ACCESS_CODE=');
     expect(deploy).not.toContain('PREVIEW_BASIC_AUTH');

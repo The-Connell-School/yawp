@@ -35,6 +35,7 @@ jobs:
       PREVIEW_RUNTIME: ${{ vars.PREVIEW_RUNTIME || 'fast' }}
       PREVIEW_MAX_ENVS: ${{ vars.PREVIEW_MAX_ENVS || '30' }}
       PREVIEW_DATA_MODE: ${{ vars.PREVIEW_DATA_MODE || 'seed' }}
+      PREVIEW_SEAT_COUNT: ${{ vars.PREVIEW_SEAT_COUNT || '6' }}
       PREVIEW_AI_MODEL: ${{ vars.PREVIEW_AI_MODEL || 'claude-sonnet-4-6' }}
       PREVIEW_ANTHROPIC_API_KEY: ${{ secrets.PREVIEW_ANTHROPIC_API_KEY || secrets.ANTHROPIC_API_KEY }}
       PREVIEW_DB_DUMP_S3_URI: ${{ vars.PREVIEW_DB_DUMP_S3_URI || 's3://yawp-preview-videos/production.dump' }}
@@ -148,6 +149,7 @@ jobs:
             "PREVIEW_TLS=$(shell_quote "$PREVIEW_TLS")"
             "PREVIEW_RUNTIME=$(shell_quote "$PREVIEW_RUNTIME")"
             "PREVIEW_DATA_MODE=$(shell_quote "$PREVIEW_DATA_MODE")"
+            "PREVIEW_SEAT_COUNT=$(shell_quote "$PREVIEW_SEAT_COUNT")"
             "PREVIEW_AI_MODEL=$(shell_quote "$PREVIEW_AI_MODEL")"
             "PREVIEW_ANTHROPIC_API_KEY=$(shell_quote "$PREVIEW_ANTHROPIC_API_KEY")"
             "PREVIEW_DB_DUMP_S3_URI=$(shell_quote "$PREVIEW_DB_DUMP_S3_URI")"

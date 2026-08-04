@@ -2,16 +2,24 @@ import { describe, expect, test } from 'bun:test';
 import { renderPreviewCompose } from './render-compose.mjs';
 
 const deprecatedPreviewSlug = ['preview', String.fromCharCode(102, 111, 114, 103, 101)].join('-');
-const previewAccessCodes = 'brave-otter-4193';
+const previewAccessSeats = JSON.stringify([
+  {
+    code: 'brave-otter-4193',
+    organizationId: 'local-dev-org',
+    label: 'Brian Connell',
+  },
+]);
 const previewSessionSecret = 'test-preview-session-secret-32-bytes';
+const previewAccessSecret = 'test-preview-access-secret-32-bytes';
 
 function renderCompose(overrides = {}) {
   return renderPreviewCompose({
     prNumber: '142',
     domain: 'preview.yawp.school',
     sourceDir: '/srv/yawp-preview/sources/pr-142',
-    accessCodes: previewAccessCodes,
+    accessSeats: previewAccessSeats,
     sessionSecret: previewSessionSecret,
+    accessSecret: previewAccessSecret,
     ...overrides,
   });
 }
@@ -77,7 +85,8 @@ describe('renderPreviewCompose', () => {
     const compose = renderCompose();
 
     expect(compose).toContain('PREVIEW_ACCESS_GATE: "on"');
-    expect(compose).toContain('PREVIEW_ACCESS_CODES: "brave-otter-4193"');
+    expect(compose).toContain('PREVIEW_ACCESS_SEATS:');
+    expect(compose).toContain('PREVIEW_ACCESS_SECRET: "test-preview-access-secret-32-bytes"');
     expect(compose).toContain(
       'SESSION_SECRET: "test-preview-session-secret-32-bytes"',
     );
@@ -89,10 +98,11 @@ describe('renderPreviewCompose', () => {
         prNumber: '142',
         domain: 'preview.yawp.school',
         sourceDir: '/srv/yawp-preview/sources/pr-142',
-        accessCodes: '',
+        accessSeats: '',
         sessionSecret: previewSessionSecret,
+        accessSecret: previewAccessSecret,
       }),
-    ).toThrow('PREVIEW_ACCESS_CODES is required');
+    ).toThrow('PREVIEW_ACCESS_SEATS is required');
   });
 
   test('requires a non-default signing secret', () => {
@@ -101,10 +111,24 @@ describe('renderPreviewCompose', () => {
         prNumber: '142',
         domain: 'preview.yawp.school',
         sourceDir: '/srv/yawp-preview/sources/pr-142',
-        accessCodes: previewAccessCodes,
+        accessSeats: previewAccessSeats,
         sessionSecret: '',
+        accessSecret: previewAccessSecret,
       }),
     ).toThrow('PREVIEW_SESSION_SECRET is required');
+  });
+
+  test('requires a dedicated preview access secret', () => {
+    expect(() =>
+      renderPreviewCompose({
+        prNumber: '142',
+        domain: 'preview.yawp.school',
+        sourceDir: '/srv/yawp-preview/sources/pr-142',
+        accessSeats: previewAccessSeats,
+        sessionSecret: previewSessionSecret,
+        accessSecret: '',
+      }),
+    ).toThrow('PREVIEW_ACCESS_SECRET is required');
   });
 
   test('passes preview Anthropic credentials into app containers', () => {
