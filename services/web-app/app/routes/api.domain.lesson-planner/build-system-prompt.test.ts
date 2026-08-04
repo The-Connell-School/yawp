@@ -242,6 +242,13 @@ describe('buildLessonPlannerSystemPrompt — slide decks', () => {
     expect(prompt).toContain('7 bullets');
   });
 
+  test('warns off the two things that break a hand-written deck', () => {
+    const lower = prompt.toLowerCase();
+    // An unescaped quote in a speaker note, and a time box written as a range.
+    expect(lower).toContain('never type a double quote inside a json string');
+    expect(lower).toContain('must be a plain number');
+  });
+
   test('forbids claiming a deck rendered, because it cannot see the screen', () => {
     const lower = prompt.toLowerCase();
     // What actually happened: the deck failed validation, and the planner told

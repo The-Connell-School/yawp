@@ -135,9 +135,111 @@ const COLUMN_ALIASES: Record<string, string> = {
   value: 'text',
 };
 
+/**
+ * Names a model reaches for when it means one of ours. A slide labelled
+ * "question" is a prompt slide; refusing it costs the teacher the whole deck
+ * over a synonym.
+ */
+const LAYOUT_ALIASES: Record<string, SlideLayout> = {
+  bullet: 'bullets',
+  list: 'bullets',
+  points: 'bullets',
+  takeaways: 'bullets',
+  comparison: 'compare',
+  contrast: 'compare',
+  versus: 'compare',
+  'side-by-side': 'compare',
+  question: 'prompt',
+  writing: 'prompt',
+  'writing-prompt': 'prompt',
+  warmup: 'prompt',
+  'warm-up': 'prompt',
+  step: 'steps',
+  instructions: 'steps',
+  directions: 'steps',
+  process: 'steps',
+  claim: 'statement',
+  big_idea: 'statement',
+  'big-idea': 'statement',
+  objective: 'statement',
+  passage: 'quote',
+  excerpt: 'quote',
+  cover: 'title',
+  opening: 'title',
+  section: 'title',
+  closing_slide: 'closing',
+  'exit-ticket': 'closing',
+  exit_ticket: 'closing',
+  'exit ticket': 'closing',
+  conclusion: 'closing',
+  wrapup: 'closing',
+  'wrap-up': 'closing',
+};
+
+const LAYOUT_SET = new Set<string>(SLIDE_LAYOUTS);
+
 // "1. Introduce the quote" — the steps layout numbers its own lines, so typed
 // numbering would show up twice.
 const TYPED_ENUMERATION = /^\s*(?:\d{1,2}[.)]|[-*•])\s+/;
+
+/**
+ * "5-7", "3 min", "about 10 minutes" — a planner that time-boxes every activity
+ * writes its slide timings the same way. Coercion turns those into NaN, so pull
+ * the first whole number out and drop the field when there isn't one, rather
+ * than failing a slide over a label.
+ */
+function normalizeMinutes(raw: unknown): unknown {
+  if (typeof raw === 'number' || raw === undefined || raw === null) return raw;
+  if (typeof raw !== 'string') return raw;
+  const first = raw.match(/\d+/);
+  return first ? Number(first[0]) : undefined;
+}
+
+/** A bullet the model wrote as `{ text: … }`, or a whole list as one string. */
+function normalizeBullets(raw: unknown): unknown {
+  const items = Array.isArray(raw)
+    ? raw
+    : typeof raw === 'string'
+      ? raw.split('\n')
+      : null;
+  if (!items) return raw;
+
+  const flattened = items.map((item) => {
+    if (typeof item === 'string') return item;
+    if (item && typeof item === 'object' && !Array.isArray(item)) {
+      const record = item as Record<string, unknown>;
+      for (const key of ['text', 'label', 'title', 'content', 'point']) {
+        if (typeof record[key] === 'string') return record[key];
+      }
+    }
+    return item;
+  });
+
+  return flattened
+    .map((item) =>
+      typeof item === 'string'
+        ? item.replace(TYPED_ENUMERATION, '').trim()
+        : item
+    )
+    .filter((item) => typeof item !== 'string' || item.length > 0);
+}
+
+/** The layout the slide is, whatever the model called it — or none. */
+function normalizeLayout(slide: Record<string, unknown>): unknown {
+  const raw = slide.layout;
+  if (typeof raw === 'string') {
+    const key = raw.trim().toLowerCase();
+    if (LAYOUT_SET.has(key)) return key;
+    // An unrecognised name is left alone so the schema rejects it by name,
+    // rather than being silently turned into some other kind of slide.
+    return LAYOUT_ALIASES[key] ?? raw;
+  }
+  // No layout at all: read it off the slide's own contents.
+  if (Array.isArray(slide.bullets) && slide.bullets.length) return 'bullets';
+  if (slide.left && slide.right) return 'compare';
+  if (slide.body !== undefined) return 'statement';
+  return 'title';
+}
 
 function applyAliases(
   raw: Record<string, unknown>,
@@ -164,14 +266,16 @@ function normalizeSlide(raw: unknown): unknown {
 
   if (slide.left !== undefined) slide.left = normalizeColumn(slide.left);
   if (slide.right !== undefined) slide.right = normalizeColumn(slide.right);
-
-  if (Array.isArray(slide.bullets)) {
-    slide.bullets = slide.bullets.map((bullet) =>
-      typeof bullet === 'string'
-        ? bullet.replace(TYPED_ENUMERATION, '')
-        : bullet
-    );
+  if (slide.bullets !== undefined) {
+    slide.bullets = normalizeBullets(slide.bullets);
   }
+  if (Array.isArray(slide.speakerNotes)) {
+    slide.speakerNotes = slide.speakerNotes.filter(Boolean).join('\n');
+  }
+  if (slide.minutes !== undefined) {
+    slide.minutes = normalizeMinutes(slide.minutes);
+  }
+  slide.layout = normalizeLayout(slide);
 
   return slide;
 }
@@ -230,10 +334,60 @@ function describeIssues(error: z.ZodError): string {
   return described.join('; ');
 }
 
-function describeBadJson(json: string): string {
-  return /[}\]]\s*$/.test(json.trim())
-    ? 'The deck block is not valid JSON.'
-    : 'The deck JSON was cut off before it finished.';
+/**
+ * Where the JSON went wrong, in enough detail to fix.
+ *
+ * A deck written by hand at the end of a long lesson breaks in ordinary ways —
+ * an unescaped quote inside a speaker note that quotes the text, a trailing
+ * comma, a run that stopped mid-object. "Not valid JSON" is not something
+ * anyone can act on; the position and the text around it is.
+ */
+/**
+ * The first quote mark that closes a string somewhere impossible — which is
+ * what an unescaped `"` inside a speaker note looks like, and speaker notes
+ * quote the text constantly. Runtimes disagree about whether their parse error
+ * carries a position, so find it rather than depend on one.
+ */
+function findJsonBreak(json: string): number | null {
+  let inString = false;
+  for (let index = 0; index < json.length; index += 1) {
+    const character = json[index];
+    if (!inString) {
+      if (character === '"') inString = true;
+      continue;
+    }
+    if (character === '\\') {
+      index += 1;
+      continue;
+    }
+    if (character !== '"') continue;
+    let next = index + 1;
+    while (next < json.length && /\s/.test(json[next]!)) next += 1;
+    if (next < json.length && !',:}]'.includes(json[next]!)) return index;
+    inString = false;
+  }
+  return null;
+}
+
+function describeBadJson(json: string, error: unknown): string {
+  if (!/[}\]]\s*$/.test(json.trim())) {
+    return 'The deck JSON was cut off before it finished — it stops mid-object. Write a shorter deck so it completes.';
+  }
+  const message = error instanceof Error ? error.message : 'invalid JSON';
+  const reported = message.match(/position (\d+)/);
+  const position = reported ? Number(reported[1]) : findJsonBreak(json);
+  if (position === null)
+    return `The deck block is not valid JSON (${message}).`;
+  const near = json.slice(Math.max(0, position - 80), position + 80);
+  return `The deck block is not valid JSON (${message}). Check the quoting near: …${near}…`;
+}
+
+/**
+ * A trailing comma is the one JSON slip worth forgiving in place: it is
+ * unambiguous, and the alternative is spending a model round on a comma.
+ */
+function withoutTrailingCommas(json: string): string {
+  return json.replace(/,(\s*[}\]])/g, '$1');
 }
 
 export type SlideDeckValidation =
@@ -245,8 +399,12 @@ export function validateSlideDeck(json: string): SlideDeckValidation {
   let raw: unknown;
   try {
     raw = JSON.parse(json);
-  } catch {
-    return { ok: false, reason: describeBadJson(json) };
+  } catch (error) {
+    try {
+      raw = JSON.parse(withoutTrailingCommas(json));
+    } catch {
+      return { ok: false, reason: describeBadJson(json, error) };
+    }
   }
   const parsed = deckSchema.safeParse(normalizeDeck(raw));
   if (!parsed.success) {
@@ -318,6 +476,23 @@ export function parseSlideDeck(content: string): ParsedSlideDeck | null {
   return outcome.kind === 'deck'
     ? { deck: outcome.deck, body: outcome.body }
     : null;
+}
+
+/**
+ * What the model should see when its own deck did not render.
+ *
+ * Replayed history is the only account the model has of what it produced. Left
+ * as raw JSON, a deck that failed reads to it as a deck that shipped — which is
+ * how a teacher got told to scroll down and look for a viewer that was never
+ * on the page.
+ */
+export const FAILED_DECK_NOTE =
+  '[The slide deck you wrote here failed validation. Yawp never rendered it and the teacher never saw it. If they ask about the deck, believe them, apologise briefly, and build it again from scratch — shorter and simpler. Do not refer back to this one as if it exists.]';
+
+export function markFailedDecks(content: string): string {
+  const outcome = readSlideDeck(content);
+  if (outcome.kind !== 'unreadable') return content;
+  return content.replace(outcome.block, () => FAILED_DECK_NOTE);
 }
 
 export function hasSlideDeck(content: string): boolean {

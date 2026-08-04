@@ -369,6 +369,33 @@ describe('api.domain.lesson-planner action', () => {
     expect(getLLMCompletion).not.toHaveBeenCalled();
   });
 
+  test('tells the model which of its past decks never rendered', async () => {
+    const stale = `Here's the deck.\n\n\`\`\`yawp-slides\n${JSON.stringify({
+      title: 'Deck',
+      slides: [{ layout: 'bullets', title: 'Nothing' }],
+    })}\n\`\`\``;
+    prisma.lessonPlanConversation.findFirst.mockResolvedValue({
+      id: 'plan-9',
+      messages: [{ role: 'assistant', content: stale }],
+    });
+    getLLMCompletion.mockResolvedValue('Rebuilding it now.');
+    prisma.lessonPlanConversation.update.mockResolvedValue({});
+
+    await action({
+      request: formRequest({
+        message: 'the slides are not working',
+        conversationId: 'plan-9',
+      }),
+    } as any);
+
+    const [replayed] = getLLMCompletion.mock.calls[0][0].messages;
+    // Otherwise it reads its own JSON, decides the deck shipped, and tells the
+    // teacher to scroll down and look for it.
+    expect(replayed.content).not.toContain('"slides"');
+    expect(replayed.content).toContain('failed validation');
+    expect(replayed.content).toContain("Here's the deck.");
+  });
+
   test('gives a rejected slide deck one repair pass before storing it', async () => {
     const broken = {
       title: 'Conclusions',

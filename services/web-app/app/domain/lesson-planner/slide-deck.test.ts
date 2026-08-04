@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import {
   deckDurationMinutes,
   fenceSlideDeck,
+  markFailedDecks,
   parseSlideDeck,
   readSlideDeck,
   slideSearchText,
@@ -301,6 +302,31 @@ describe('readSlideDeck — says why a deck failed', () => {
   });
 });
 
+describe('markFailedDecks', () => {
+  test('replaces a deck that never rendered with a note saying so', () => {
+    const content = `Here's the deck.\n\n\`\`\`${SLIDE_DECK_FENCE}\n${JSON.stringify(
+      { title: 'Deck', slides: [{ layout: 'bullets', title: 'Nothing' }] }
+    )}\n\`\`\``;
+
+    const marked = markFailedDecks(content);
+    expect(marked).toContain("Here's the deck.");
+    expect(marked).not.toContain('"slides"');
+    // Without this the model reads its own JSON in the history, concludes the
+    // deck exists, and tells the teacher to scroll down and find it.
+    expect(marked.toLowerCase()).toContain('failed');
+    expect(marked.toLowerCase()).toContain('build it again');
+  });
+
+  test('leaves a deck that worked in the history, so it can be edited', () => {
+    const content = fenced(validDeck);
+    expect(markFailedDecks(content)).toBe(content);
+  });
+
+  test('leaves a reply with no deck untouched', () => {
+    expect(markFailedDecks('Just a plan.')).toBe('Just a plan.');
+  });
+});
+
 describe('validateSlideDeck', () => {
   test('accepts good JSON and returns the parsed deck', () => {
     const result = validateSlideDeck(JSON.stringify(validDeck));
@@ -315,6 +341,23 @@ describe('validateSlideDeck', () => {
     if (result.ok) throw new Error('expected failure');
     expect(result.reason.toLowerCase()).toContain('cut off');
   });
+
+  test('shows the text around a syntax error, not just that there was one', () => {
+    // The realistic break: a speaker note quoting the text, with the quote
+    // marks left unescaped.
+    const broken = `{"title":"Deck","slides":[{"layout":"statement","title":"A","body":"B","speakerNotes":"Close with "every quote is a promise" and stop."}]}`;
+    const result = validateSlideDeck(broken);
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error('expected failure');
+    expect(result.reason).toContain('every quote is a promise');
+  });
+
+  test('forgives a trailing comma rather than spending a round on it', () => {
+    const result = validateSlideDeck(
+      '{"title":"Deck","slides":[{"layout":"statement","title":"A","body":"B","speakerNotes":"C",},]}'
+    );
+    expect(result.ok).toBe(true);
+  });
 });
 
 describe('fenceSlideDeck', () => {
@@ -323,6 +366,147 @@ describe('fenceSlideDeck', () => {
     const outcome = readSlideDeck(`Here it is.\n\n${fenceSlideDeck(deck)}`);
     expect(outcome.kind).toBe('deck');
     expect(fenceSlideDeck(deck)).toContain(`\`\`\`${SLIDE_DECK_FENCE}`);
+  });
+});
+
+describe('parseSlideDeck — the shapes a model actually writes', () => {
+  function oneSlide(slide: Record<string, unknown>) {
+    return parseSlideDeck(fenced({ title: 'Deck', slides: [slide] }))?.deck
+      .slides[0];
+  }
+
+  test('takes a time box written the way a lesson plan writes it', () => {
+    // A planner that time-boxes everything writes "5-7" and "3 min" as readily
+    // as 5. z.coerce turns those into NaN, which used to kill the whole deck.
+    expect(
+      oneSlide({
+        layout: 'statement',
+        title: 'A',
+        body: 'B',
+        speakerNotes: 'C',
+        minutes: '5-7',
+      })?.minutes
+    ).toBe(5);
+    expect(
+      oneSlide({
+        layout: 'statement',
+        title: 'A',
+        body: 'B',
+        speakerNotes: 'C',
+        minutes: '3 min',
+      })?.minutes
+    ).toBe(3);
+  });
+
+  test('drops a time box it cannot read rather than losing the slide', () => {
+    const slide = oneSlide({
+      layout: 'statement',
+      title: 'A',
+      body: 'B',
+      speakerNotes: 'C',
+      minutes: 'a few',
+    });
+    expect(slide).toBeTruthy();
+    expect(slide?.minutes).toBeUndefined();
+  });
+
+  test('reads bullets written as objects', () => {
+    expect(
+      oneSlide({
+        layout: 'bullets',
+        title: 'Points',
+        bullets: [
+          { text: 'The verb does the work' },
+          { text: 'Keep it short' },
+        ],
+        speakerNotes: 'Say it.',
+      })?.bullets
+    ).toEqual(['The verb does the work', 'Keep it short']);
+  });
+
+  test('reads bullets written as one block of lines', () => {
+    expect(
+      oneSlide({
+        layout: 'bullets',
+        title: 'Points',
+        bullets: '- The verb does the work\n- Keep it short',
+        speakerNotes: 'Say it.',
+      })?.bullets
+    ).toEqual(['The verb does the work', 'Keep it short']);
+  });
+
+  test('joins speaker notes written as a list of lines', () => {
+    expect(
+      oneSlide({
+        layout: 'statement',
+        title: 'A',
+        body: 'B',
+        speakerNotes: ['Ask first.', 'Then show the model.'],
+      })?.speakerNotes
+    ).toBe('Ask first.\nThen show the model.');
+  });
+
+  test('understands the names a model picks for a layout', () => {
+    expect(
+      oneSlide({
+        layout: 'bullet',
+        title: 'A',
+        bullets: ['One'],
+        speakerNotes: 'B',
+      })?.layout
+    ).toBe('bullets');
+    expect(
+      oneSlide({
+        layout: 'question',
+        title: 'A',
+        body: 'B',
+        speakerNotes: 'C',
+      })?.layout
+    ).toBe('prompt');
+    expect(
+      oneSlide({
+        layout: 'exit-ticket',
+        title: 'A',
+        body: 'B',
+        speakerNotes: 'C',
+      })?.layout
+    ).toBe('closing');
+    expect(
+      oneSlide({
+        layout: 'instructions',
+        title: 'A',
+        bullets: ['One'],
+        speakerNotes: 'B',
+      })?.layout
+    ).toBe('steps');
+  });
+
+  test('infers the layout from the slide when none was given', () => {
+    expect(
+      oneSlide({ title: 'A', bullets: ['One'], speakerNotes: 'B' })?.layout
+    ).toBe('bullets');
+    expect(
+      oneSlide({
+        title: 'A',
+        left: { label: 'A', text: 'One' },
+        right: { label: 'B', text: 'Two' },
+        speakerNotes: 'C',
+      })?.layout
+    ).toBe('compare');
+    expect(oneSlide({ title: 'A', body: 'B', speakerNotes: 'C' })?.layout).toBe(
+      'statement'
+    );
+    expect(oneSlide({ title: 'A', speakerNotes: 'B' })?.layout).toBe('title');
+  });
+
+  test('still refuses a layout that means nothing', () => {
+    expect(
+      oneSlide({
+        layout: 'interpretive-dance',
+        title: 'A',
+        speakerNotes: 'B',
+      })
+    ).toBeUndefined();
   });
 });
 

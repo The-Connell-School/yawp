@@ -10,6 +10,7 @@ import {
   LESSON_PLANNER_TOOLS,
 } from '~/domain/lesson-planner/lesson-planner-tools.server';
 import { repairSlideDeck } from '~/domain/lesson-planner/repair-slide-deck.server';
+import { markFailedDecks } from '~/domain/lesson-planner/slide-deck';
 import { buildLessonPlannerSystemPrompt } from './build-system-prompt';
 import {
   AiRateLimitError,
@@ -164,7 +165,10 @@ export async function action({ request }: ActionFunctionArgs) {
   const messages: { role: AgentType; content: string; name?: string }[] = [
     ...priorMessages.map((message) => ({
       role: message.role as AgentType,
-      content: message.content,
+      // Replayed history is the model's only account of what it produced. A
+      // deck that failed has to read as failed, or it will insist to the
+      // teacher that the deck is there.
+      content: markFailedDecks(message.content),
     })),
     { role: AgentType.User, content: data.message },
   ];
