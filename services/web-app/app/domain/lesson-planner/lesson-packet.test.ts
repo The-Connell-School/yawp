@@ -61,6 +61,17 @@ describe('deriveSectionKind', () => {
     expect(deriveSectionKind(deck, 'student')).toBe('slides');
   });
 
+  test('recognizes a structured deck, which is the real signal', () => {
+    const deck = JSON.stringify({
+      title: 'A deck',
+      slides: [
+        { layout: 'statement', title: 'One', body: 'Two', speakerNotes: 'Go.' },
+      ],
+    });
+    const content = `Here it is.\n\n\`\`\`yawp-slides\n${deck}\n\`\`\``;
+    expect(deriveSectionKind(content, 'teacher')).toBe('slides');
+  });
+
   test('treats everything else as part of the plan', () => {
     expect(deriveSectionKind('## Warm-up (5 min)\n\nDo this.', 'teacher')).toBe(
       'plan'

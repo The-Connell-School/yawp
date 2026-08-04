@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { rubricCategories } from '~/domain/grading/rubric';
+import { SLIDE_LAYOUTS } from '~/domain/lesson-planner/slide-deck';
 import {
   buildLessonPlannerSystemPrompt,
   RECOMMENDED_LESSON_PLANNER_PROMPTS,
@@ -164,5 +165,41 @@ describe('buildLessonPlannerSystemPrompt — teaching out of Yawp', () => {
 
   test('prefers existing Yawp material over inventing an activity', () => {
     expect(prompt.toLowerCase()).toContain('before you invent');
+  });
+});
+
+describe('buildLessonPlannerSystemPrompt — slide decks', () => {
+  const prompt = buildLessonPlannerSystemPrompt({
+    teacherName: null,
+    organizationName: 'Connell School',
+  });
+
+  test('asks for a structured deck, not a description of one', () => {
+    expect(prompt).toContain('```yawp-slides');
+    expect(prompt.toLowerCase()).toContain('json');
+  });
+
+  test('documents every layout the renderer can draw', () => {
+    for (const layout of SLIDE_LAYOUTS) {
+      expect(prompt).toContain(layout);
+    }
+  });
+
+  test('requires speaker notes on every slide', () => {
+    expect(prompt.toLowerCase()).toContain('every slide needs speakernotes');
+  });
+
+  test('keeps the talking off the wall and in the notes', () => {
+    const lower = prompt.toLowerCase();
+    expect(lower).toContain('the notes carry the talking');
+    expect(lower).toContain('one idea per slide');
+  });
+
+  test('warns that an oversized slide is rejected outright', () => {
+    expect(prompt.toLowerCase()).toContain('will not render');
+  });
+
+  test('tells it to use compare for two versions side by side', () => {
+    expect(prompt.toLowerCase()).toContain('two versions of the same sentence');
   });
 });

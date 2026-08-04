@@ -8,6 +8,7 @@
  * with room to write.
  */
 import { parseAssistantMessage } from '~/components/ai-chat/parse-assistant-message';
+import { hasSlideDeck } from './slide-deck';
 
 export const PACKET_AUDIENCES = ['teacher', 'student'] as const;
 
@@ -105,15 +106,16 @@ export const PACKET_SECTION_KINDS = ['plan', 'handout', 'slides'] as const;
  */
 export type PacketSectionKind = (typeof PACKET_SECTION_KINDS)[number];
 
-// The prompt asks for decks as "## Slide N — title", so a deck announces
-// itself in its headings. Prose that merely mentions slides does not.
+// A structured deck is unambiguous. The heading pattern is a fallback for a
+// reply that describes slides in prose — still slide material to a teacher
+// browsing their resources, even though it cannot be projected.
 const SLIDE_HEADING = /^\s{0,3}#{1,6}\s+slide\s*\d/im;
 
 export function deriveSectionKind(
   content: string,
   audience: PacketAudience
 ): PacketSectionKind {
-  if (SLIDE_HEADING.test(content)) return 'slides';
+  if (hasSlideDeck(content) || SLIDE_HEADING.test(content)) return 'slides';
   return audience === 'student' ? 'handout' : 'plan';
 }
 

@@ -151,6 +151,77 @@ async function clearLessonPlans(membershipId: string) {
   }
 }
 
+/**
+ * A conversation whose kept reply carries a real structured deck, so the
+ * presenter can be exercised without calling a model.
+ */
+async function seedSlideDeck(e2eContext: {
+  teacherMembershipId: string;
+  organizationId: string;
+}) {
+  const prisma = createE2EPrismaClient();
+  const deck = {
+    title: 'Evidence that earns its place',
+    subtitle: 'English 10 · Period 3',
+    slides: [
+      {
+        layout: 'title',
+        title: 'Evidence that earns its place',
+        subtitle: 'Why some quotes land',
+        speakerNotes: 'Set the stakes before naming the skill.',
+        minutes: 1,
+      },
+      {
+        layout: 'compare',
+        title: 'Which one makes you cringe?',
+        left: { label: 'Version A', text: 'The author says the door slammed.' },
+        right: {
+          label: 'Version B',
+          text: 'When the door slams, she is done talking.',
+        },
+        speakerNotes: 'Three silent minutes of writing before anyone speaks.',
+        minutes: 5,
+      },
+      {
+        layout: 'closing',
+        title: 'Exit ticket',
+        body: 'Rewrite one sentence from your draft.',
+        speakerNotes: 'Collect on the way out.',
+        minutes: 3,
+      },
+    ],
+  };
+  try {
+    const conversation = await prisma.lessonPlanConversation.create({
+      data: {
+        membershipId: e2eContext.teacherMembershipId,
+        organizationId: e2eContext.organizationId,
+        title: 'Deck lesson',
+        messages: {
+          create: [
+            {
+              role: 'assistant',
+              content: `Here is your deck.\n\n\`\`\`yawp-slides\n${JSON.stringify(
+                deck
+              )}\n\`\`\``,
+              createdAt: new Date('2026-08-04T10:00:01.000Z'),
+              keptAt: new Date('2026-08-04T10:05:00.000Z'),
+              keptAudience: 'teacher',
+            },
+          ],
+        },
+      },
+      select: { id: true, messages: { select: { id: true } } },
+    });
+    return {
+      conversationId: conversation.id,
+      messageId: conversation.messages[0]!.id,
+    };
+  } finally {
+    await prisma.$disconnect();
+  }
+}
+
 test.describe('YAWP! Lesson Planner', () => {
   test.afterEach(async ({ e2eContext }) => {
     // Leave the org in its default (disabled) state for other specs.
@@ -573,5 +644,79 @@ test.describe('YAWP! Lesson Planner', () => {
     await expect(
       page.getByRole('link', { name: 'Conclusions, period 3' })
     ).toBeVisible();
+  });
+
+  test('shows a deck as a deck, never as raw JSON', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    await setLessonPlannerEnabled(e2eContext.organizationId, true);
+    const { conversationId } = await seedSlideDeck(e2eContext);
+    await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+
+    await page.goto(`/app/lesson-planner/${conversationId}/packet`);
+
+    const card = page.getByTestId('slide-deck-card');
+    await expect(card).toContainText('Evidence that earns its place');
+    await expect(card).toContainText('3 slides');
+    await expect(card).toContainText('9 min');
+    // The machinery must never surface to a teacher.
+    await expect(page.locator('body')).not.toContainText('speakerNotes');
+    await expect(page.locator('body')).not.toContainText('yawp-slides');
+  });
+
+  test('presents the deck with keyboard control and speaker notes', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    await setLessonPlannerEnabled(e2eContext.organizationId, true);
+    const { conversationId, messageId } = await seedSlideDeck(e2eContext);
+    await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+
+    await page.goto(`/present/${conversationId}/${messageId}`);
+
+    const stage = page.getByTestId('slide-stage');
+    const counter = page.getByTestId('slide-counter');
+    await expect(stage).toContainText('Evidence that earns its place');
+    await expect(counter).toHaveText('1 / 3');
+
+    // Arrow keys and space are what a presenter remote sends.
+    await page.keyboard.press('ArrowRight');
+    await expect(counter).toHaveText('2 / 3');
+    await expect(stage).toContainText('Which one makes you cringe?');
+    // The compare layout puts the two versions side by side, not in a list.
+    await expect(stage).toContainText('Version A');
+    await expect(stage).toContainText('Version B');
+
+    await page.keyboard.press('ArrowLeft');
+    await expect(counter).toHaveText('1 / 3');
+    await page.keyboard.press('End');
+    await expect(counter).toHaveText('3 / 3');
+
+    // Notes are for the teacher's screen and never on the slide itself.
+    await expect(page.getByTestId('speaker-notes')).toHaveCount(0);
+    await page.keyboard.press('n');
+    const notes = page.getByTestId('speaker-notes');
+    await expect(notes).toContainText('Collect on the way out.');
+    await expect(stage).not.toContainText('Collect on the way out.');
+  });
+
+  test('refuses to present a reply that has no deck in it', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    await setLessonPlannerEnabled(e2eContext.organizationId, true);
+    const { conversationId } = await seedLessonPlan(e2eContext, {
+      keepFirst: true,
+    });
+    await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+
+    const response = await page.goto(
+      `/present/${conversationId}/not-a-deck-message`
+    );
+    expect(response?.status()).toBe(404);
   });
 });

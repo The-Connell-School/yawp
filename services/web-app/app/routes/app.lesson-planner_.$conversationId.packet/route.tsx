@@ -18,6 +18,8 @@ import { cn } from '~/utils/misc';
 import { prisma } from '~/utils/db.server';
 import { getLessonPlannerAccess } from '~/utils/lesson-planner/lesson-planner-access.server';
 import { MarkdownContent } from '~/components/ai-chat/assistant-markdown';
+import { SlideDeckCard } from '~/components/ai-chat/slide-deck-card';
+import { parseSlideDeck } from '~/domain/lesson-planner/slide-deck';
 import { buildLessonPacket } from '~/domain/lesson-planner/lesson-packet';
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
@@ -335,14 +337,10 @@ export default function LessonPacketRoute() {
                         Print this
                       </button>
                     </div>
-                    <div
-                      className={cn(
-                        section.audience === 'student' &&
-                          'leading-9 print:leading-[2.6]'
-                      )}
-                    >
-                      <MarkdownContent content={section.content} />
-                    </div>
+                    <SectionContent
+                      section={section}
+                      conversationId={conversationId}
+                    />
                   </section>
                 ))}
               </div>
@@ -351,5 +349,38 @@ export default function LessonPacketRoute() {
         </div>
       </div>
     </section>
+  );
+}
+
+/**
+ * A saved resource's body. A deck renders as a deck with a way to present it;
+ * everything else is Markdown, with handouts spaced for writing.
+ */
+function SectionContent({
+  section,
+  conversationId,
+}: {
+  section: { id: string; content: string; audience: 'teacher' | 'student' };
+  conversationId: string;
+}) {
+  const parsedDeck = parseSlideDeck(section.content);
+  const body = parsedDeck?.body ?? section.content;
+
+  return (
+    <div
+      className={cn(
+        section.audience === 'student' && 'leading-9 print:leading-[2.6]'
+      )}
+    >
+      {body ? <MarkdownContent content={body} /> : null}
+      {parsedDeck ? (
+        <div className={cn(body && 'mt-3')}>
+          <SlideDeckCard
+            deck={parsedDeck.deck}
+            presentHref={`/present/${conversationId}/${section.id}`}
+          />
+        </div>
+      ) : null}
+    </div>
   );
 }

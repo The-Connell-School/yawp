@@ -29,6 +29,8 @@ import {
   MarkdownContent,
   printAssistantMessage,
 } from '~/components/ai-chat/assistant-markdown';
+import { SlideDeckCard } from '~/components/ai-chat/slide-deck-card';
+import { parseSlideDeck } from '~/domain/lesson-planner/slide-deck';
 import { loadLessonSeed } from '~/domain/lesson-planner/lesson-seed.server';
 
 type PacketAudience = 'teacher' | 'student';
@@ -411,6 +413,7 @@ export default function LessonPlannerRoute() {
                   key={message.id ?? index}
                   message={message}
                   isLast={index === messages.length - 1}
+                  conversationId={conversationId}
                   onSuggestion={send}
                   onKeep={setKept}
                   disabled={isSending}
@@ -551,12 +554,14 @@ function LessonPlannerEmptyState({
 function MessageBubble({
   message,
   isLast,
+  conversationId,
   onSuggestion,
   onKeep,
   disabled,
 }: {
   message: ChatMessage;
   isLast: boolean;
+  conversationId: string | null;
   onSuggestion: (text: string) => void;
   onKeep: (messageId: string, audience: PacketAudience | null) => void;
   disabled: boolean;
@@ -571,7 +576,12 @@ function MessageBubble({
     );
   }
 
-  const { body, suggestions } = parseAssistantMessage(message.content);
+  const { body: withDeck, suggestions } = parseAssistantMessage(
+    message.content
+  );
+  // A deck is rendered as a deck; only its surrounding prose stays Markdown.
+  const parsedDeck = parseSlideDeck(withDeck);
+  const body = parsedDeck?.body ?? withDeck;
   // Only offer print/PDF on substantial replies (a lesson), not one-liners.
   const isArtifact = /(^|\n)#{1,3}\s/.test(body) || /\n\|.*\|/.test(body);
 
@@ -582,7 +592,19 @@ function MessageBubble({
       </div>
       <div className="min-w-0 flex-1">
         <div className="rounded-2xl rounded-tl-sm border border-border/60 bg-card px-4 py-3 text-foreground shadow-sm">
-          <MarkdownContent content={body} />
+          {body ? <MarkdownContent content={body} /> : null}
+          {parsedDeck ? (
+            <div className={cn(body && 'mt-3')}>
+              <SlideDeckCard
+                deck={parsedDeck.deck}
+                presentHref={
+                  message.id && conversationId
+                    ? `/present/${conversationId}/${message.id}`
+                    : null
+                }
+              />
+            </div>
+          ) : null}
         </div>
         <div className="mt-1.5 flex flex-wrap items-center gap-1">
           {message.id ? (
