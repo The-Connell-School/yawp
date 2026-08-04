@@ -187,8 +187,9 @@ export async function action({ request }: ActionFunctionArgs) {
   // leave the question/answer order ambiguous on replay.
   const askedAt = new Date();
   const answeredAt = new Date(askedAt.getTime() + 1);
+  let assistantMessageId: string;
   try {
-    conversation = await prisma.$transaction(async (transaction) => {
+    const written = await prisma.$transaction(async (transaction) => {
       const persistedConversation =
         conversation ??
         (await transaction.lessonPlanConversation.create({
@@ -201,34 +202,43 @@ export async function action({ request }: ActionFunctionArgs) {
           include: { messages: true },
         }));
 
-      await transaction.lessonPlanConversation.update({
-        where: { id: persistedConversation.id },
+      await transaction.lessonPlanMessage.create({
         data: {
-          updatedAt: new Date(),
-          messages: {
-            create: [
-              {
-                role: AgentType.User,
-                content: data.message,
-                createdAt: askedAt,
-              },
-              {
-                role: AgentType.Assistant,
-                content: reply,
-                createdAt: answeredAt,
-              },
-            ],
-          },
+          conversationId: persistedConversation.id,
+          role: AgentType.User,
+          content: data.message,
+          createdAt: askedAt,
         },
       });
-      return persistedConversation;
+      // Created on its own rather than as a nested write so its id can go back
+      // to the client: the teacher needs it to keep this reply in the packet
+      // without waiting for a reload.
+      const assistantMessage = await transaction.lessonPlanMessage.create({
+        data: {
+          conversationId: persistedConversation.id,
+          role: AgentType.Assistant,
+          content: reply,
+          createdAt: answeredAt,
+        },
+        select: { id: true },
+      });
+
+      await transaction.lessonPlanConversation.update({
+        where: { id: persistedConversation.id },
+        data: { updatedAt: new Date() },
+      });
+
+      return { conversation: persistedConversation, assistantMessage };
     });
+    conversation = written.conversation;
+    assistantMessageId = written.assistantMessage.id;
   } catch {
     return dataResponse({ error: PLANNER_FAILED }, { status: 500 });
   }
 
   return dataResponse({
     conversationId: conversation.id,
+    messageId: assistantMessageId,
     reply,
     isNewConversation,
   });

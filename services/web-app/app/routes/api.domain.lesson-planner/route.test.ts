@@ -17,6 +17,9 @@ const prisma = {
     create: mock(),
     update: mock(),
   },
+  lessonPlanMessage: {
+    create: mock(),
+  },
   classAssignment: {
     findFirst: mock(),
   },
@@ -84,6 +87,9 @@ beforeEach(() => {
   prisma.lessonPlanConversation.findFirst.mockReset();
   prisma.lessonPlanConversation.create.mockReset();
   prisma.lessonPlanConversation.update.mockReset();
+  prisma.lessonPlanMessage.create
+    .mockReset()
+    .mockResolvedValue({ id: 'msg-assistant' });
   prisma.classAssignment.findFirst.mockReset().mockResolvedValue(null);
   prisma.$transaction.mockReset();
   prisma.$transaction.mockImplementation(
@@ -115,8 +121,9 @@ describe('api.domain.lesson-planner action', () => {
     expect(createArg.organizationId).toBe('org-1');
     expect(createArg.title).toBe('Lesson on conclusion paragraphs');
 
-    const updateArg = prisma.lessonPlanConversation.update.mock.calls[0][0];
-    const created = updateArg.data.messages.create;
+    const created = prisma.lessonPlanMessage.create.mock.calls.map(
+      (call: any) => call[0].data
+    );
     expect(created).toHaveLength(2);
     expect(created[0]).toMatchObject({
       role: 'user',
@@ -126,12 +133,26 @@ describe('api.domain.lesson-planner action', () => {
       role: 'assistant',
       content: 'Here is your lesson.',
     });
-    // Explicit, strictly-increasing timestamps: both rows are written in one
-    // nested create, so the DB default would tie them and leave replay order
-    // ambiguous.
+    // Explicit, strictly-increasing timestamps: the DB default would tie two
+    // rows written in the same transaction and leave replay order ambiguous.
     expect(created[1].createdAt.getTime()).toBeGreaterThan(
       created[0].createdAt.getTime()
     );
+  });
+
+  test('returns the reply id so it can be kept without a reload', async () => {
+    getLLMCompletion.mockResolvedValue('Here is your lesson.');
+    prisma.lessonPlanConversation.create.mockResolvedValue({
+      id: 'plan-1',
+      messages: [],
+    });
+    prisma.lessonPlanConversation.update.mockResolvedValue({});
+
+    const response = await action({
+      request: formRequest({ message: 'hi' }),
+    } as any);
+
+    expect((response.data as any).messageId).toBe('msg-assistant');
   });
 
   test('passes the planner tool allowlist and a teacher-scoped context to the LLM', async () => {

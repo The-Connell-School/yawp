@@ -59,10 +59,7 @@ import {
   writeLastNonDocumentRoute,
 } from '~/utils/document-exit';
 import type { Route as RootRoute } from '../../+types/root';
-import {
-  FLAT_SIDEBAR_SECTIONS,
-  SidebarNavLinks,
-} from './sidebar-nav';
+import { FLAT_SIDEBAR_SECTIONS, SidebarNavLinks } from './sidebar-nav';
 
 export const NavExpandedContext = createContext({
   isMobileNavOpen: false,
@@ -89,10 +86,7 @@ function isAppNavLinkActive(linkTo: string, pathname: string) {
     return normalized === '/app';
   }
 
-  return (
-    normalized === linkTo ||
-    normalized.startsWith(`${linkTo}/`)
-  );
+  return normalized === linkTo || normalized.startsWith(`${linkTo}/`);
 }
 
 export default function Route() {
@@ -100,8 +94,7 @@ export default function Route() {
   const user = useUser();
   const rootData =
     useRouteLoaderData<RootRoute.ComponentProps['loaderData']>('root');
-  const isReadOnlyImpersonation =
-    rootData?.impersonation?.isReadOnly ?? false;
+  const isReadOnlyImpersonation = rootData?.impersonation?.isReadOnly ?? false;
   const studentPreviewActive = rootData?.studentPreview?.active ?? false;
   const canToggleStudentPreview =
     user.selectedMembership?.role === 'TEACHER' || user.isAdmin;
@@ -175,6 +168,7 @@ export default function Route() {
     >
       {/* Left navigation panel */}
       <nav
+        data-app-nav
         className={cn(
           'z-20 flex h-full w-[212px] min-w-[212px] -translate-x-full transform flex-col border-r bg-background transition-all duration-300 ease-in-out sm:translate-x-0',
           {
@@ -277,7 +271,11 @@ export default function Route() {
                       ? user.selectedMembership?.id === m.id
                       : user.memberships?.[0]?.id === m.id;
                     return (
-                      <Form method="POST" action="/api/membership-id" key={m.id}>
+                      <Form
+                        method="POST"
+                        action="/api/membership-id"
+                        key={m.id}
+                      >
                         <input
                           type="hidden"
                           name="intent"
@@ -534,7 +532,11 @@ function UserSettingsDialog({
           </div>
         </div>
         <DialogFooter className="mt-2">
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+          >
             Close
           </Button>
         </DialogFooter>

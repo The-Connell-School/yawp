@@ -1263,3 +1263,37 @@ body:has(.yawp-entry) > [data-state='closed'].fixed.bottom-4.right-4 {
     padding-top: 24px;
   }
 }
+
+/*
+ * Printing an app page (today: the Lesson Planner packet).
+ *
+ * The app shell is a fixed-height flex frame with its own scroll containers,
+ * which is right on screen and wrong on paper — it clips the document to one
+ * viewport-sized page. These rules only apply to print: they drop the chrome
+ * and let the document flow across pages.
+ */
+@media print {
+  [data-app-nav],
+  [data-print-hidden] {
+    display: none !important;
+  }
+
+  /* Release the shell's h-screen / overflow-hidden so content paginates. */
+  main,
+  main > div,
+  main > div > div {
+    display: block !important;
+    height: auto !important;
+    max-height: none !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+  }
+
+  body {
+    background: #fff;
+  }
+
+  @page {
+    margin: 1.6cm;
+  }
+}

@@ -8,9 +8,9 @@ import {
 
 describe('deriveSectionTitle', () => {
   test('uses the first Markdown heading', () => {
-    expect(
-      deriveSectionTitle('## Warm-up (5 min)\n\nDo the thing.', 0)
-    ).toBe('Warm-up (5 min)');
+    expect(deriveSectionTitle('## Warm-up (5 min)\n\nDo the thing.', 0)).toBe(
+      'Warm-up (5 min)'
+    );
   });
 
   test('prefers the first heading at any level', () => {
@@ -141,7 +141,11 @@ describe('buildLessonPacket', () => {
       title: 'Lesson',
       className: null,
       sections: [
-        { id: 'm1', content: '## Discussion (10-15 minutes)', keptAudience: null },
+        {
+          id: 'm1',
+          content: '## Discussion (10-15 minutes)',
+          keptAudience: null,
+        },
       ],
     });
     expect(ranged.outline[0]!.minutes).toBe(15);

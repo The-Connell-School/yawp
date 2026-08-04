@@ -1,0 +1,243 @@
+import { useState } from 'react';
+import {
+  Link,
+  redirect,
+  useFetcher,
+  useLoaderData,
+  type LoaderFunctionArgs,
+} from 'react-router';
+import { ChevronLeft, Lightbulb, ListTree, Printer, Rows } from 'lucide-react';
+import { Button } from '~/components/ui/button';
+import { cn } from '~/utils/misc';
+import { prisma } from '~/utils/db.server';
+import { getLessonPlannerAccess } from '~/utils/lesson-planner/lesson-planner-access.server';
+import { MarkdownContent } from '~/components/ai-chat/assistant-markdown';
+import { buildLessonPacket } from '~/domain/lesson-planner/lesson-packet';
+
+export async function loader({ request, params }: LoaderFunctionArgs) {
+  const access = await getLessonPlannerAccess(request);
+  if (!access.allowed) throw redirect('/app');
+
+  const conversation = await prisma.lessonPlanConversation.findFirst({
+    where: {
+      id: params.conversationId,
+      membershipId: access.membership.id,
+      deletedAt: null,
+    },
+    select: {
+      id: true,
+      title: true,
+      packetTitle: true,
+      originClassAssignment: {
+        select: {
+          class: { select: { title: true, grade: true, period: true } },
+          assignment: { select: { title: true } },
+        },
+      },
+      messages: {
+        where: { keptAt: { not: null }, role: 'assistant' },
+        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+        select: { id: true, content: true, keptAudience: true },
+      },
+    },
+  });
+  if (!conversation) throw new Response('Not Found', { status: 404 });
+
+  const klass = conversation.originClassAssignment?.class;
+  const className = klass
+    ? (klass.title ??
+      (klass.grade && klass.period
+        ? `${klass.grade} · Period ${klass.period}`
+        : (klass.grade ?? null)))
+    : null;
+
+  return {
+    conversationId: conversation.id,
+    packet: buildLessonPacket({
+      title: conversation.packetTitle ?? conversation.title,
+      className,
+      sections: conversation.messages,
+    }),
+    // Kept separate from the packet title so a blank field falls back rather
+    // than saving the conversation title as an explicit name.
+    packetTitleValue: conversation.packetTitle ?? '',
+  };
+}
+
+export default function LessonPacketRoute() {
+  const { conversationId, packet, packetTitleValue } =
+    useLoaderData<typeof loader>();
+  const fetcher = useFetcher();
+  const [view, setView] = useState<'full' | 'outline'>('full');
+
+  const printedOn = new Date().toLocaleDateString(undefined, {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  });
+
+  return (
+    <section className="mx-auto w-full max-w-4xl px-4 py-6 print:max-w-none print:px-0 print:py-0">
+      {/* Controls — never printed. */}
+      <div className="mb-6 flex flex-wrap items-center gap-2 print:hidden">
+        <Button variant="outline" size="sm" asChild>
+          <Link to={`/app/lesson-planner?c=${conversationId}`}>
+            <ChevronLeft size={16} className="mr-1" />
+            Back to planning
+          </Link>
+        </Button>
+        <Button variant="ghost" size="sm" asChild>
+          <Link to="/app/lesson-planner/library">Lesson library</Link>
+        </Button>
+        <div className="ml-auto flex items-center gap-2">
+          <div className="flex rounded-lg border p-0.5">
+            <button
+              type="button"
+              onClick={() => setView('full')}
+              aria-pressed={view === 'full'}
+              className={cn(
+                'inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-sm font-medium text-muted-foreground',
+                { 'bg-primary/10 text-primary': view === 'full' }
+              )}
+            >
+              <Rows size={14} />
+              Full plan
+            </button>
+            <button
+              type="button"
+              onClick={() => setView('outline')}
+              aria-pressed={view === 'outline'}
+              className={cn(
+                'inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-sm font-medium text-muted-foreground',
+                { 'bg-primary/10 text-primary': view === 'outline' }
+              )}
+            >
+              <ListTree size={14} />
+              Outline
+            </button>
+          </div>
+          <Button
+            type="button"
+            size="sm"
+            onClick={() => window.print()}
+            disabled={packet.sections.length === 0}
+          >
+            <Printer size={15} className="mr-1.5" />
+            Print / Save as PDF
+          </Button>
+        </div>
+      </div>
+
+      <div className="mb-4 print:hidden">
+        <label
+          htmlFor="packet-title"
+          className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+        >
+          Lesson name
+        </label>
+        <input
+          id="packet-title"
+          name="packetTitle"
+          defaultValue={packetTitleValue}
+          placeholder={packet.title}
+          maxLength={120}
+          className="w-full rounded-lg border bg-background px-3 py-2 text-base font-medium"
+          onBlur={(event) =>
+            fetcher.submit(
+              {
+                intent: 'rename',
+                conversationId,
+                packetTitle: event.target.value,
+              },
+              { method: 'post', action: '/api/domain/lesson-planner/packet' }
+            )
+          }
+        />
+      </div>
+
+      {/* The document. */}
+      <article className="rounded-2xl border bg-card p-8 print:rounded-none print:border-0 print:bg-transparent print:p-0">
+        <header className="mb-6 border-b-2 border-primary pb-3">
+          <div className="flex items-baseline gap-2">
+            <Lightbulb size={18} className="shrink-0 text-primary" />
+            <h1 className="text-xl font-semibold leading-tight">
+              {packet.title}
+            </h1>
+          </div>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {[
+              packet.className,
+              packet.totalMinutes > 0 ? `${packet.totalMinutes} min` : null,
+              printedOn,
+            ]
+              .filter(Boolean)
+              .join(' · ')}
+          </p>
+        </header>
+
+        {packet.sections.length === 0 ? (
+          <p className="text-sm text-muted-foreground print:hidden">
+            Nothing kept yet. Back in the planner, use{' '}
+            <strong>Keep for the lesson</strong> on the parts you want, and they
+            will assemble here.
+          </p>
+        ) : view === 'outline' ? (
+          <ol
+            className="flex flex-col gap-3"
+            data-testid="packet-outline"
+            data-print-mode="outline"
+          >
+            {packet.outline.map((entry, index) => (
+              <li key={index} className="flex gap-3">
+                <span className="w-14 shrink-0 pt-0.5 text-sm tabular-nums text-muted-foreground">
+                  {entry.minutes !== null ? `${entry.minutes} min` : '—'}
+                </span>
+                <div className="min-w-0">
+                  <p className="font-medium">{entry.title}</p>
+                  {entry.steps.length > 0 ? (
+                    <ul className="mt-1 list-disc pl-5 text-sm text-muted-foreground">
+                      {entry.steps.map((step) => (
+                        <li key={step}>{step}</li>
+                      ))}
+                    </ul>
+                  ) : null}
+                </div>
+              </li>
+            ))}
+          </ol>
+        ) : (
+          <div className="flex flex-col gap-8">
+            {packet.sections.map((section) => (
+              <section
+                key={section.id}
+                data-testid={`packet-section-${section.audience}`}
+                className={cn(
+                  section.audience === 'student' &&
+                    'rounded-xl border border-dashed p-5 print:break-before-page print:rounded-none print:border-0 print:p-0'
+                )}
+              >
+                {section.audience === 'student' ? (
+                  <div className="mb-4 flex items-end justify-between gap-6 border-b pb-2 text-sm text-muted-foreground">
+                    <span className="flex-1">Name ______________________</span>
+                    <span>Date ____________</span>
+                  </div>
+                ) : null}
+                <h2 className="mb-2 text-base font-semibold">
+                  {section.title}
+                </h2>
+                <div
+                  className={cn(
+                    section.audience === 'student' &&
+                      'leading-9 print:leading-[2.6]'
+                  )}
+                >
+                  <MarkdownContent content={section.content} />
+                </div>
+              </section>
+            ))}
+          </div>
+        )}
+      </article>
+    </section>
+  );
+}

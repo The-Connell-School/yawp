@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import {
+  Link,
   redirect,
   useFetcher,
   useLoaderData,
@@ -7,7 +8,10 @@ import {
   type LoaderFunctionArgs,
 } from 'react-router';
 import {
+  BookmarkCheck,
+  BookmarkPlus,
   CornerDownRight,
+  FileText,
   Lightbulb,
   Loader2,
   Plus,
@@ -27,7 +31,16 @@ import {
 } from '~/components/ai-chat/assistant-markdown';
 import { loadLessonSeed } from '~/domain/lesson-planner/lesson-seed.server';
 
-type ChatMessage = { role: 'user' | 'assistant'; content: string };
+type PacketAudience = 'teacher' | 'student';
+
+type ChatMessage = {
+  /** Absent only for an optimistic user turn that has not been written yet. */
+  id?: string;
+  role: 'user' | 'assistant';
+  content: string;
+  /** Set when this reply is kept in the printable packet. */
+  keptAudience?: PacketAudience | null;
+};
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const access = await getLessonPlannerAccess(request);
@@ -59,7 +72,12 @@ export async function loader({ request }: LoaderFunctionArgs) {
             title: true,
             messages: {
               orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
-              select: { role: true, content: true },
+              select: {
+                id: true,
+                role: true,
+                content: true,
+                keptAudience: true,
+              },
             },
           },
         })
@@ -95,6 +113,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
 type LessonPlannerActionData = {
   conversationId?: string;
+  messageId?: string;
   reply?: string;
   isNewConversation?: boolean;
   error?: string;
@@ -173,7 +192,11 @@ export default function LessonPlannerRoute() {
       if (!submittedHere) return;
       setMessages((prev) => [
         ...prev,
-        { role: 'assistant', content: fetcher.data!.reply! },
+        {
+          id: fetcher.data!.messageId,
+          role: 'assistant',
+          content: fetcher.data!.reply!,
+        },
       ]);
       if (fetcher.data.conversationId && !conversationId) {
         setPendingConversationId(fetcher.data.conversationId);
@@ -210,6 +233,32 @@ export default function LessonPlannerRoute() {
     setSearchParams(next);
   }
 
+  // Packet edits get their own fetcher so keeping a section never blocks — or
+  // is blocked by — a chat turn in flight.
+  const packetFetcher = useFetcher();
+
+  function setKept(messageId: string, audience: PacketAudience | null) {
+    if (!conversationId) return;
+    setMessages((prev) =>
+      prev.map((message) =>
+        message.id === messageId
+          ? { ...message, keptAudience: audience }
+          : message
+      )
+    );
+    packetFetcher.submit(
+      {
+        intent: audience ? 'keep' : 'drop',
+        conversationId,
+        messageId,
+        ...(audience ? { audience } : {}),
+      },
+      { method: 'post', action: '/api/domain/lesson-planner/packet' }
+    );
+  }
+
+  const keptCount = messages.filter((message) => message.keptAudience).length;
+
   function send(message: string) {
     const trimmed = message.trim();
     if (!trimmed || isSending) return;
@@ -243,6 +292,15 @@ export default function LessonPlannerRoute() {
           >
             <Plus size={16} /> New lesson
           </Button>
+        </div>
+        <div className="px-3 pb-2">
+          <Link
+            to="/app/lesson-planner/library"
+            className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-primary"
+          >
+            <FileText size={14} />
+            Lesson library
+          </Link>
         </div>
         <div className="no-scrollbar flex-1 overflow-y-auto px-2 pb-3">
           {conversations.length === 0 ? (
@@ -348,10 +406,11 @@ export default function LessonPlannerRoute() {
             ) : (
               messages.map((message, index) => (
                 <MessageBubble
-                  key={index}
+                  key={message.id ?? index}
                   message={message}
                   isLast={index === messages.length - 1}
                   onSuggestion={send}
+                  onKeep={setKept}
                   disabled={isSending}
                 />
               ))
@@ -369,6 +428,29 @@ export default function LessonPlannerRoute() {
             ) : null}
           </div>
         </div>
+
+        {keptCount > 0 && conversationId ? (
+          <div
+            className="border-t bg-primary/5 px-4 py-2"
+            data-testid="lesson-packet-bar"
+          >
+            <div className="mx-auto flex w-full max-w-3xl flex-wrap items-center gap-x-3 gap-y-1">
+              <FileText size={16} className="shrink-0 text-primary" />
+              <p className="text-sm">
+                <strong>
+                  {keptCount} {keptCount === 1 ? 'section' : 'sections'}
+                </strong>{' '}
+                in this lesson
+              </p>
+              <Link
+                to={`/app/lesson-planner/${conversationId}/packet`}
+                className="ml-auto text-sm font-medium text-primary hover:underline"
+              >
+                Open lesson packet
+              </Link>
+            </div>
+          </div>
+        ) : null}
 
         <div className="border-t bg-background px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3">
           <form
@@ -468,11 +550,13 @@ function MessageBubble({
   message,
   isLast,
   onSuggestion,
+  onKeep,
   disabled,
 }: {
   message: ChatMessage;
   isLast: boolean;
   onSuggestion: (text: string) => void;
+  onKeep: (messageId: string, audience: PacketAudience | null) => void;
   disabled: boolean;
 }) {
   if (message.role === 'user') {
@@ -498,20 +582,57 @@ function MessageBubble({
         <div className="rounded-2xl rounded-tl-sm border border-border/60 bg-card px-4 py-3 text-foreground shadow-sm">
           <MarkdownContent content={body} />
         </div>
-        {isArtifact ? (
-          <div className="mt-1.5 flex justify-end">
+        <div className="mt-1.5 flex flex-wrap items-center gap-1">
+          {message.id ? (
+            message.keptAudience ? (
+              <>
+                <span className="inline-flex items-center gap-1.5 rounded-md bg-primary/10 px-2 py-1 text-xs font-medium text-primary">
+                  <BookmarkCheck size={13} />
+                  {message.keptAudience === 'student'
+                    ? 'Kept as a handout'
+                    : 'Kept in the lesson'}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => onKeep(message.id!, null)}
+                  className="rounded-md px-2 py-1 text-xs font-medium text-muted-foreground transition hover:bg-foreground/5 hover:text-foreground"
+                >
+                  Remove
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={() => onKeep(message.id!, 'teacher')}
+                  className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-muted-foreground transition hover:bg-foreground/5 hover:text-foreground"
+                >
+                  <BookmarkPlus size={13} />
+                  Keep for the lesson
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onKeep(message.id!, 'student')}
+                  className="rounded-md px-2 py-1 text-xs font-medium text-muted-foreground transition hover:bg-foreground/5 hover:text-foreground"
+                >
+                  Keep as a handout
+                </button>
+              </>
+            )
+          ) : null}
+          {isArtifact ? (
             <button
               type="button"
               onClick={() =>
                 printAssistantMessage(body, 'YAWP! Lesson Planner')
               }
-              className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-muted-foreground transition hover:bg-foreground/5 hover:text-foreground"
+              className="ml-auto inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-muted-foreground transition hover:bg-foreground/5 hover:text-foreground"
             >
               <Printer size={13} />
-              Print / Save as PDF
+              Print this reply
             </button>
-          </div>
-        ) : null}
+          ) : null}
+        </div>
         {suggestions.length > 0 && isLast ? (
           <div className="mt-2 flex flex-wrap gap-2">
             {suggestions.map((suggestion) => (

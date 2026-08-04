@@ -44,7 +44,9 @@ beforeEach(() => {
     .mockReset()
     .mockResolvedValue({ id: 'plan-1' });
   prisma.lessonPlanConversation.update.mockReset().mockResolvedValue({});
-  prisma.lessonPlanMessage.updateMany.mockReset().mockResolvedValue({ count: 1 });
+  prisma.lessonPlanMessage.updateMany
+    .mockReset()
+    .mockResolvedValue({ count: 1 });
 });
 
 describe('lesson packet action', () => {
@@ -202,7 +204,9 @@ describe('lesson packet action', () => {
   });
 
   test('requires a mutable request before touching anything', async () => {
-    requireMutableRequest.mockRejectedValue(new Response(null, { status: 403 }));
+    requireMutableRequest.mockRejectedValue(
+      new Response(null, { status: 403 })
+    );
 
     await action({
       request: formRequest({

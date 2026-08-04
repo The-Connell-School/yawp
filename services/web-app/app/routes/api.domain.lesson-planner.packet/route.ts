@@ -26,7 +26,10 @@ const POST = z
   })
   .strict()
   .superRefine((value, context) => {
-    if ((value.intent === 'keep' || value.intent === 'drop') && !value.messageId) {
+    if (
+      (value.intent === 'keep' || value.intent === 'drop') &&
+      !value.messageId
+    ) {
       context.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['messageId'],

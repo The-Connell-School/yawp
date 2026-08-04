@@ -75,6 +75,57 @@ async function clearClassInsight(classAssignmentId: string) {
   }
 }
 
+/**
+ * Write a planning conversation with two assistant replies straight to the DB,
+ * so the packet tests exercise the packet rather than the model.
+ */
+async function seedLessonPlan(
+  e2eContext: { teacherMembershipId: string; organizationId: string },
+  { keepFirst = false }: { keepFirst?: boolean } = {}
+) {
+  const prisma = createE2EPrismaClient();
+  try {
+    const conversation = await prisma.lessonPlanConversation.create({
+      data: {
+        membershipId: e2eContext.teacherMembershipId,
+        organizationId: e2eContext.organizationId,
+        title: 'Conclusions lesson',
+        messages: {
+          create: [
+            {
+              role: 'user',
+              content: 'Plan a lesson on conclusions.',
+              createdAt: new Date('2026-08-04T10:00:00.000Z'),
+            },
+            {
+              role: 'assistant',
+              content:
+                '## Warm-up (5 min)\n\nDaily Pages prompt FW-001.\n\n### Teacher moves\n\nCircle the room.',
+              createdAt: new Date('2026-08-04T10:00:01.000Z'),
+              ...(keepFirst
+                ? {
+                    keptAt: new Date('2026-08-04T10:05:00.000Z'),
+                    keptAudience: 'teacher',
+                  }
+                : {}),
+            },
+            {
+              role: 'assistant',
+              content:
+                '## Conclusion practice handout\n\nRewrite each conclusion so it answers "so what?".',
+              createdAt: new Date('2026-08-04T10:00:02.000Z'),
+            },
+          ],
+        },
+      },
+      select: { id: true },
+    });
+    return { conversationId: conversation.id };
+  } finally {
+    await prisma.$disconnect();
+  }
+}
+
 test.describe('YAWP! Lesson Planner', () => {
   test.afterEach(async ({ e2eContext }) => {
     // Leave the org in its default (disabled) state for other specs.
@@ -235,5 +286,114 @@ test.describe('YAWP! Lesson Planner', () => {
 
     expect(consoleErrors).toEqual([]);
     expect(pageErrors).toEqual([]);
+  });
+
+  test('keeps replies and turns them into a printable lesson packet', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    await setLessonPlannerEnabled(e2eContext.organizationId, true);
+    const { conversationId } = await seedLessonPlan(e2eContext);
+    await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+
+    await page.goto(`/app/lesson-planner?c=${conversationId}`);
+
+    // Nothing is in the packet until the teacher keeps something.
+    await expect(page.getByTestId('lesson-packet-bar')).toHaveCount(0);
+
+    await page
+      .getByRole('button', { name: /keep for the lesson/i })
+      .first()
+      .click();
+
+    const bar = page.getByTestId('lesson-packet-bar');
+    await expect(bar).toContainText(/1 section/i);
+
+    // The second reply is a handout, so it is kept for students.
+    await page
+      .getByRole('button', { name: /keep as a handout/i })
+      .first()
+      .click();
+    await expect(bar).toContainText(/2 sections/i);
+
+    await bar.getByRole('link', { name: /open lesson packet/i }).click();
+    await expect(page).toHaveURL(
+      new RegExp(`/app/lesson-planner/${conversationId}/packet`)
+    );
+
+    // The document names itself and carries both kept sections, in order.
+    await expect(
+      page.getByRole('heading', { name: /warm-up/i, level: 2 })
+    ).toBeVisible();
+    await expect(
+      page.getByRole('heading', { name: /conclusion practice/i, level: 2 })
+    ).toBeVisible();
+    await expect(page.getByText(/5 min/i).first()).toBeVisible();
+
+    // The handout is marked as student-facing and gets a name/date line.
+    const handout = page.getByTestId('packet-section-student').first();
+    await expect(handout).toBeVisible();
+    await expect(handout).toContainText(/name/i);
+
+    // The outline view collapses the packet to what fits beside a laptop.
+    await page.getByRole('button', { name: /outline/i }).click();
+    await expect(page.getByTestId('packet-outline')).toContainText('Warm-up');
+    await expect(page.getByTestId('packet-outline')).not.toContainText(
+      'Daily Pages prompt FW-001'
+    );
+  });
+
+  test('names the packet and keeps the name', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    await setLessonPlannerEnabled(e2eContext.organizationId, true);
+    const { conversationId } = await seedLessonPlan(e2eContext, {
+      keepFirst: true,
+    });
+    await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+
+    await page.goto(`/app/lesson-planner/${conversationId}/packet`);
+
+    const nameField = page.getByLabel('Lesson name');
+    await nameField.fill('Conclusions, period 3');
+    await nameField.blur();
+
+    await page.reload();
+    await expect(page.getByLabel('Lesson name')).toHaveValue(
+      'Conclusions, period 3'
+    );
+  });
+
+  test('collects kept lessons in the lesson library', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    await setLessonPlannerEnabled(e2eContext.organizationId, true);
+    const kept = await seedLessonPlan(e2eContext, { keepFirst: true });
+    const draft = await seedLessonPlan(e2eContext);
+    await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+
+    await page.goto('/app/lesson-planner');
+    await page.getByRole('link', { name: /lesson library/i }).click();
+    await expect(page).toHaveURL(/\/app\/lesson-planner\/library/);
+
+    // The lesson with something kept is a document; the untouched draft is not
+    // yet a lesson and stays out of the library.
+    const rows = page.getByRole('listitem');
+    await expect(rows).toHaveCount(1);
+    await expect(rows.first()).toContainText(/1 section/i);
+
+    await rows
+      .first()
+      .getByRole('link', { name: /conclusions/i })
+      .click();
+    await expect(page).toHaveURL(
+      new RegExp(`/app/lesson-planner/${kept.conversationId}/packet`)
+    );
+    expect(draft.conversationId).not.toBe(kept.conversationId);
   });
 });
