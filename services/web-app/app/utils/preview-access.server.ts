@@ -29,55 +29,51 @@ export type PreviewAccessSeat = {
 
 type ConfiguredPreviewAccessSeat = PreviewAccessSeat & { code: string };
 
-function legacyConfiguredSeats(): ConfiguredPreviewAccessSeat[] {
-  return String(process.env.PREVIEW_ACCESS_CODES ?? '')
+const MASTER_ORGANIZATION_ID = 'local-dev-org';
+const MASTER_SEAT_LABEL = 'Master';
+
+function legacyConfiguredMasterSeat(): ConfiguredPreviewAccessSeat | null {
+  const code = String(process.env.PREVIEW_ACCESS_CODES ?? '')
     .split(/[;,\n]/)
     .map(normalizeCode)
-    .filter((code) => ACCESS_CODE_PATTERN.test(code))
-    .map((code) => ({
-      code,
-      organizationId: 'local-dev-org',
-      label: 'Brian Connell',
-    }));
+    .find(Boolean);
+  return code && ACCESS_CODE_PATTERN.test(code)
+    ? {
+        code,
+        organizationId: MASTER_ORGANIZATION_ID,
+        label: MASTER_SEAT_LABEL,
+      }
+    : null;
 }
 
-function configuredSeats(): ConfiguredPreviewAccessSeat[] {
+function configuredMasterSeat(): ConfiguredPreviewAccessSeat | null {
   const raw = String(process.env.PREVIEW_ACCESS_SEATS ?? '').trim();
-  if (!raw) return legacyConfiguredSeats();
+  if (!raw) return legacyConfiguredMasterSeat();
 
   try {
     const parsed = JSON.parse(raw) as unknown;
-    if (!Array.isArray(parsed) || parsed.length === 0) return [];
-
-    const seats = parsed.map((value): ConfiguredPreviewAccessSeat | null => {
-      if (!value || typeof value !== 'object') return null;
-      const record = value as Record<string, unknown>;
-      const code = normalizeCode(String(record.code ?? ''));
-      const organizationId = String(record.organizationId ?? '').trim();
-      const label = String(record.label ?? '').trim();
-      if (
-        !ACCESS_CODE_PATTERN.test(code) ||
-        !/^[a-z0-9][a-z0-9-]{0,127}$/.test(organizationId) ||
-        !label ||
-        label.length > 100
-      ) {
-        return null;
-      }
-      return { code, organizationId, label };
-    });
-    if (seats.some((seat) => seat === null)) return [];
-
-    const validSeats = seats as ConfiguredPreviewAccessSeat[];
-    if (
-      new Set(validSeats.map(({ code }) => code)).size !== validSeats.length ||
-      new Set(validSeats.map(({ organizationId }) => organizationId)).size !==
-        validSeats.length
-    ) {
-      return [];
-    }
-    return validSeats;
+    if (!Array.isArray(parsed)) return null;
+    const master = parsed.find(
+      (value) =>
+        value &&
+        typeof value === 'object' &&
+        String(
+          (value as Record<string, unknown>).organizationId ?? ''
+        ).trim() === MASTER_ORGANIZATION_ID
+    );
+    if (!master || typeof master !== 'object') return null;
+    const code = normalizeCode(
+      String((master as Record<string, unknown>).code ?? '')
+    );
+    return ACCESS_CODE_PATTERN.test(code)
+      ? {
+          code,
+          organizationId: MASTER_ORGANIZATION_ID,
+          label: MASTER_SEAT_LABEL,
+        }
+      : null;
   } catch {
-    return [];
+    return null;
   }
 }
 
@@ -107,39 +103,75 @@ export function isIsolatedPreviewSeatMode() {
  * not a security boundary between them, so parity with production wins here.
  */
 export function hasEffectivePlatformAdmin(
-  storedIsAdmin: boolean | null | undefined,
+  storedIsAdmin: boolean | null | undefined
 ) {
   return Boolean(storedIsAdmin);
 }
 
 export function isPreviewAccessConfigured() {
-  return configuredSeats().length > 0 && accessSecrets().length > 0;
+  return configuredMasterSeat() !== null && accessSecrets().length > 0;
 }
 
 function digestCode(value: string) {
   return createHash('sha256').update(value).digest();
 }
 
-export function findPreviewAccessSeatByCode(
+export type PreviewAccessSeatRepository = {
+  findByCode(code: string): Promise<{ id: string; name: string } | null>;
+  findById(id: string): Promise<{
+    id: string;
+    name: string;
+    previewSeatCode: string | null;
+  } | null>;
+};
+
+const databasePreviewSeatRepository: PreviewAccessSeatRepository = {
+  async findByCode(code) {
+    const { prisma } = await import('./db.server.ts');
+    return prisma.organization.findUnique({
+      where: { previewSeatCode: code },
+      select: { id: true, name: true },
+    });
+  },
+  async findById(id) {
+    const { prisma } = await import('./db.server.ts');
+    return prisma.organization.findUnique({
+      where: { id },
+      select: { id: true, name: true, previewSeatCode: true },
+    });
+  },
+};
+
+export function getPreviewMasterAccessCode() {
+  return configuredMasterSeat()?.code ?? null;
+}
+
+export async function findPreviewAccessSeatByCode(
   value: string,
-): PreviewAccessSeat | null {
+  repository: PreviewAccessSeatRepository = databasePreviewSeatRepository
+): Promise<PreviewAccessSeat | null> {
   if (!isPreviewAccessConfigured()) return null;
   const candidate = normalizeCode(value);
   if (!ACCESS_CODE_PATTERN.test(candidate)) return null;
 
+  const master = configuredMasterSeat();
+  if (!master) return null;
   const candidateDigest = digestCode(candidate);
-  let match: ConfiguredPreviewAccessSeat | null = null;
-  for (const configured of configuredSeats()) {
-    const matches = timingSafeEqual(candidateDigest, digestCode(configured.code));
-    if (matches) match = configured;
+  if (timingSafeEqual(candidateDigest, digestCode(master.code))) {
+    return { organizationId: master.organizationId, label: master.label };
   }
-  return match
-    ? { organizationId: match.organizationId, label: match.label }
+
+  const runtimeSeat = await repository.findByCode(candidate);
+  return runtimeSeat
+    ? { organizationId: runtimeSeat.id, label: runtimeSeat.name }
     : null;
 }
 
-export function validatePreviewAccessCode(value: string) {
-  return findPreviewAccessSeatByCode(value) !== null;
+export async function validatePreviewAccessCode(
+  value: string,
+  repository?: PreviewAccessSeatRepository
+) {
+  return (await findPreviewAccessSeatByCode(value, repository)) !== null;
 }
 
 export function createPreviewAccessCookie() {
@@ -158,16 +190,11 @@ export async function grantPreviewAccessCookie(seat: PreviewAccessSeat) {
   if (!isPreviewAccessConfigured()) {
     throw new Error('Preview access gate is not configured.');
   }
-  const configured = configuredSeats().find(
-    (candidate) =>
-      candidate.organizationId === seat.organizationId &&
-      candidate.label === seat.label,
-  );
-  if (!configured) {
-    throw new Error('Preview access seat is not configured.');
+  if (!/^[a-z0-9][a-z0-9-]{0,127}$/.test(seat.organizationId)) {
+    throw new Error('Preview access seat has an invalid organization.');
   }
   return createPreviewAccessCookie().serialize(
-    `${ACCESS_SEAT_VALUE_PREFIX}${configured.organizationId}`,
+    `${ACCESS_SEAT_VALUE_PREFIX}${seat.organizationId}`
   );
 }
 
@@ -177,20 +204,25 @@ export async function clearPreviewAccessCookie() {
 
 export async function getPreviewAccessSeat(
   request: Request,
+  repository: PreviewAccessSeatRepository = databasePreviewSeatRepository
 ): Promise<PreviewAccessSeat | null> {
   if (!isPreviewAccessConfigured()) return null;
   const value = await createPreviewAccessCookie().parse(
-    request.headers.get('cookie'),
+    request.headers.get('cookie')
   );
-  if (typeof value !== 'string' || !value.startsWith(ACCESS_SEAT_VALUE_PREFIX)) {
+  if (
+    typeof value !== 'string' ||
+    !value.startsWith(ACCESS_SEAT_VALUE_PREFIX)
+  ) {
     return null;
   }
   const organizationId = value.slice(ACCESS_SEAT_VALUE_PREFIX.length);
-  const seat = configuredSeats().find(
-    (candidate) => candidate.organizationId === organizationId,
-  );
-  return seat
-    ? { organizationId: seat.organizationId, label: seat.label }
+  if (organizationId === MASTER_ORGANIZATION_ID) {
+    return { organizationId, label: MASTER_SEAT_LABEL };
+  }
+  const seat = await repository.findById(organizationId);
+  return seat?.previewSeatCode !== null && seat?.previewSeatCode !== undefined
+    ? { organizationId: seat.id, label: seat.name }
     : null;
 }
 
@@ -208,7 +240,7 @@ function blockedResponse(request: Request) {
       {
         status: 401,
         headers: { 'Cache-Control': 'no-store' },
-      },
+      }
     );
   }
 
@@ -230,13 +262,14 @@ function blockedResponse(request: Request) {
  */
 export function createPreviewAccessMiddleware(
   sessionGuard: PreviewSeatSessionGuard = enforcePreviewSeatSession,
+  repository: PreviewAccessSeatRepository = databasePreviewSeatRepository
 ): MiddlewareFunction<Response> {
   return async ({ request }, next) => {
     if (!isPreviewAccessGateEnabled()) return next();
 
     const pathname = new URL(request.url).pathname;
     if (OPEN_PATHS.has(pathname)) return next();
-    const seat = await getPreviewAccessSeat(request);
+    const seat = await getPreviewAccessSeat(request, repository);
     if (!seat) return blockedResponse(request);
 
     if (isIsolatedPreviewSeatMode()) {

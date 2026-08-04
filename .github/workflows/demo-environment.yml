@@ -45,12 +45,10 @@ jobs:
       PREVIEW_TLS: 'true'
       PREVIEW_RUNTIME: production
       PREVIEW_DATA_MODE: ${{ vars.DEMO_DATA_MODE || 'seed' }}
-      PREVIEW_SEAT_COUNT: ${{ vars.DEMO_SEAT_COUNT || '6' }}
+      PREVIEW_SEAT_COUNT: ${{ vars.DEMO_SEAT_COUNT || '1' }}
       PREVIEW_AI_MODEL: ${{ vars.DEMO_AI_MODEL || 'claude-sonnet-4-6' }}
       PREVIEW_ANTHROPIC_API_KEY: ${{ secrets.PREVIEW_ANTHROPIC_API_KEY || secrets.ANTHROPIC_API_KEY }}
       PREVIEW_DB_PASSWORD: ${{ secrets.PREVIEW_DB_PASSWORD }}
-      PREVIEW_BASIC_AUTH: ${{ secrets.PREVIEW_BASIC_AUTH }}
-      PREVIEW_BASIC_AUTH_PASSWORD: ${{ secrets.PREVIEW_BASIC_AUTH_PASSWORD }}
       PREVIEW_LOGIN_EMAIL: ${{ secrets.DEMO_LOGIN_EMAIL || secrets.PREVIEW_LOGIN_EMAIL }}
       PREVIEW_LOGIN_PASSWORD: ${{ secrets.DEMO_LOGIN_PASSWORD || secrets.PREVIEW_LOGIN_PASSWORD }}
       DEMO_RESET_DATA: ${{ inputs.reset_data }}
@@ -132,8 +130,6 @@ jobs:
             "PREVIEW_AI_MODEL=$(shell_quote "$PREVIEW_AI_MODEL")"
             "PREVIEW_ANTHROPIC_API_KEY=$(shell_quote "$PREVIEW_ANTHROPIC_API_KEY")"
             "PREVIEW_DB_PASSWORD=$(shell_quote "$PREVIEW_DB_PASSWORD")"
-            "PREVIEW_BASIC_AUTH=$(shell_quote "$PREVIEW_BASIC_AUTH")"
-            "PREVIEW_BASIC_AUTH_PASSWORD=$(shell_quote "$PREVIEW_BASIC_AUTH_PASSWORD")"
             "PREVIEW_LOGIN_EMAIL=$(shell_quote "$PREVIEW_LOGIN_EMAIL")"
             "PREVIEW_LOGIN_PASSWORD=$(shell_quote "$PREVIEW_LOGIN_PASSWORD")"
             "DEMO_RESET_DATA=$(shell_quote "$DEMO_RESET_DATA")"
@@ -154,25 +150,16 @@ jobs:
           set -euo pipefail
           url="${{ steps.deploy.outputs.url }}"
           access_code="${{ steps.deploy.outputs.access_code }}"
-          transport_curl() {
-            if [[ -n "${PREVIEW_BASIC_AUTH:-}" && -n "${PREVIEW_BASIC_AUTH_PASSWORD:-}" ]]; then
-              local basic_auth_username="${PREVIEW_BASIC_AUTH%%:*}"
-              curl --user "${basic_auth_username}:${PREVIEW_BASIC_AUTH_PASSWORD}" "$@"
-            else
-              curl "$@"
-            fi
-          }
-
-          health="$(transport_curl -sk -o /dev/null -m 15 -w '%{http_code}' "$url/api/healthcheck")"
+          health="$(curl -sk -o /dev/null -m 15 -w '%{http_code}' "$url/api/healthcheck")"
           test "$health" = "200" || { echo "Demo healthcheck returned HTTP $health"; exit 1; }
 
-          gated_page="$(transport_curl -skL -m 15 "$url")"
+          gated_page="$(curl -skL -m 15 "$url")"
           grep -q 'data-preview-access-screen' <<<"$gated_page" || {
             echo "Demo request without a preview access cookie did not render the access screen" >&2
             exit 1
           }
 
-          blocked="$(transport_curl -sk -o /dev/null -m 15 -w '%{http_code}' \
+          blocked="$(curl -sk -o /dev/null -m 15 -w '%{http_code}' \
             -X POST --data-urlencode 'email=dev.admin@yawp.local' \
             "$url/auth/dev-login")"
           test "$blocked" = "401" || {
@@ -181,7 +168,7 @@ jobs:
           }
 
           cookie_jar="$(mktemp)"
-          entered="$(transport_curl -sk -o /dev/null -m 15 -w '%{http_code}' -c "$cookie_jar" \
+          entered="$(curl -sk -o /dev/null -m 15 -w '%{http_code}' -c "$cookie_jar" \
             --data-urlencode "code=$access_code" "$url/auth/preview-access")"
           case "$entered" in
             302|303) ;;
@@ -189,7 +176,7 @@ jobs:
           esac
 
           for attempt in $(seq 1 30); do
-            code="$(transport_curl -skL -o /dev/null -m 15 -w '%{http_code}' \
+            code="$(curl -skL -o /dev/null -m 15 -w '%{http_code}' \
               -b "$cookie_jar" "$url" || true)"
             if [ "$code" = "200" ] || [ "$code" = "302" ] || [ "$code" = "303" ]; then
               echo "Demo healthy at $url (HTTP $code, access code accepted)"

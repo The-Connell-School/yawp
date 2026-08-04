@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 
 const logout = mock();
+const findSeat = mock();
 const { createPreviewAccessAction } = await import('./action.server');
-const action = createPreviewAccessAction(logout as never);
+const action = createPreviewAccessAction(logout as never, findSeat as never);
 
 const originalCodes = process.env.PREVIEW_ACCESS_CODES;
 const originalSeats = process.env.PREVIEW_ACCESS_SEATS;
@@ -33,7 +34,7 @@ describe('preview access action', () => {
       {
         code: 'brave-otter-4193',
         organizationId: 'local-dev-org',
-        label: 'Brian Connell',
+        label: 'Master',
       },
       {
         code: 'calm-panda-8127',
@@ -43,6 +44,12 @@ describe('preview access action', () => {
     ]);
     process.env.PREVIEW_ACCESS_SECRET = 'test-preview-access-secret';
     logout.mockReset();
+    findSeat.mockReset();
+    findSeat.mockImplementation(async (code: string) =>
+      code.trim().toLowerCase() === 'brave-otter-4193'
+        ? { organizationId: 'local-dev-org', label: 'Master' }
+        : null
+    );
     logout.mockImplementation((_options, responseInit) => {
       throw new Response(null, { status: 302, ...responseInit });
     });
@@ -68,8 +75,8 @@ describe('preview access action', () => {
           makeRequest({
             code: 'Brave-Otter-4193',
             returnTo: '/app/classes?tab=active',
-          }),
-        ),
+          })
+        )
       );
     } catch (error) {
       response = error as Response;
@@ -78,16 +85,16 @@ describe('preview access action', () => {
     expect(response?.status).toBe(302);
     expect(logout).toHaveBeenCalledTimes(1);
     expect(logout.mock.calls[0]?.[0].redirectTo).toBe(
-      '/app/classes?tab=active',
+      '/app/classes?tab=active'
     );
     expect(logout.mock.calls[0]?.[1]?.headers['set-cookie']).toContain(
-      '__yawp_preview_access=',
+      '__yawp_preview_access='
     );
   });
 
   test('rejects an invalid code without setting a cookie', async () => {
     const response = await action(
-      actionArgs(makeRequest({ code: 'wrong-otter-4193' })),
+      actionArgs(makeRequest({ code: 'wrong-otter-4193' }))
     );
 
     expect(response.status).toBe(400);
@@ -97,12 +104,39 @@ describe('preview access action', () => {
     });
   });
 
+  test('awaits runtime DB seat resolution before setting the cookie', async () => {
+    findSeat.mockResolvedValue({
+      organizationId: 'preview-seat-2',
+      label: 'Yawp Preview - Seat 2',
+    });
+
+    let response: Response | undefined;
+    try {
+      await action(
+        actionArgs(
+          makeRequest({
+            code: 'calm-panda-8127',
+            returnTo: '/app',
+          })
+        )
+      );
+    } catch (error) {
+      response = error as Response;
+    }
+
+    expect(findSeat).toHaveBeenCalledWith('calm-panda-8127');
+    expect(response?.status).toBe(302);
+    expect(logout.mock.calls[0]?.[1]?.headers['set-cookie']).toContain(
+      '__yawp_preview_access='
+    );
+  });
+
   test('fails closed when no codes are configured', async () => {
     delete process.env.PREVIEW_ACCESS_SEATS;
     delete process.env.PREVIEW_ACCESS_CODES;
 
     const response = await action(
-      actionArgs(makeRequest({ code: 'brave-otter-4193' })),
+      actionArgs(makeRequest({ code: 'brave-otter-4193' }))
     );
 
     expect(response.status).toBe(503);

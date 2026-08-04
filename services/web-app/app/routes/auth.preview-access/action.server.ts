@@ -17,8 +17,12 @@ import {
  * browser build and Vite refused it with "Server-only module referenced by client".
  */
 type LogoutFunction = typeof import('~/utils/auth.server').logout;
+type FindSeatFunction = typeof findPreviewAccessSeatByCode;
 
-export function createPreviewAccessAction(logoutFunction?: LogoutFunction) {
+export function createPreviewAccessAction(
+  logoutFunction?: LogoutFunction,
+  findSeat: FindSeatFunction = findPreviewAccessSeatByCode
+) {
   return async ({ request }: ActionFunctionArgs): Promise<Response> => {
     const formData = await request.formData();
     const intent = String(formData.get('intent') ?? 'enter');
@@ -32,7 +36,7 @@ export function createPreviewAccessAction(logoutFunction?: LogoutFunction) {
           headers: {
             'set-cookie': await clearPreviewAccessCookie(),
           },
-        },
+        }
       );
       throw new Error('Preview access sign-out did not redirect.');
     }
@@ -43,16 +47,16 @@ export function createPreviewAccessAction(logoutFunction?: LogoutFunction) {
           error:
             'Preview access is not configured. Contact the deployment owner.',
         },
-        { status: 503, headers: { 'Cache-Control': 'no-store' } },
+        { status: 503, headers: { 'Cache-Control': 'no-store' } }
       );
     }
 
     const code = String(formData.get('code') ?? '');
-    const seat = findPreviewAccessSeatByCode(code);
+    const seat = await findSeat(code);
     if (!seat) {
       return Response.json(
         { error: 'That access code was not recognized.' },
-        { status: 400, headers: { 'Cache-Control': 'no-store' } },
+        { status: 400, headers: { 'Cache-Control': 'no-store' } }
       );
     }
 
@@ -68,7 +72,7 @@ export function createPreviewAccessAction(logoutFunction?: LogoutFunction) {
           'Cache-Control': 'no-store',
           'set-cookie': await grantPreviewAccessCookie(seat),
         },
-      },
+      }
     );
     throw new Error('Preview access entry did not redirect.');
   };

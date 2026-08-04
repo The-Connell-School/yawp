@@ -63,10 +63,33 @@ own classes, assignments, and submissions. Isolation must be at the **org** leve
 separate user accounts inside one shared org still collide, because both testers are
 grading the same submissions and editing the same assignments.
 
-Seed N seats (6 is enough). Generic and pre-seeded (`Seat 1`…`Seat 6`), not named per
-person, so onboarding somebody requires no configuration — they just take an open code.
-
 Note: the class-insights enablement script is per-org, so it must run for every seat.
+
+#### One master seat by default; more on demand
+
+Pre-seeding six seats was the wrong default. Most previews are looked at by one person,
+or by several people who *want* to see the same thing, and six orgs is six times the seed
+cost and five unused codes to explain.
+
+So: every gated environment has exactly one **master seat**, a fixture in the codebase on
+the existing `local-dev-org` — the seed data that is already there. Its code is supplied
+per environment. A fresh preview has only this seat. Everyone who types the master code
+shares one world, and sharing is a legitimate outcome, not a failure to isolate.
+
+When somebody does want their own data, they create a seat from the admin UI: a control
+beside "Create Organization", visible only when seat mode is on, which seeds a new org
+from the same template and generates its access code. The code stays readable in the
+organizations table afterwards so it can be shared later.
+
+This is why the code can no longer live only in the environment: a seat created after
+deploy has nowhere to be written. Seat codes therefore persist on the organization
+(`previewSeatCode`), and resolution is master-from-environment plus
+runtime-seats-from-database. Environments that already run pre-seeded seats have their
+existing codes backfilled onto those rows, so no live code stops working.
+
+Every seat gets the same personas the master seat has, platform admin included.
+Withholding admin from later seats would remove the Admin surfaces — including the
+control that creates seats — the moment a tester switched to one.
 
 #### Every seat starts identical, then diverges permanently
 
@@ -123,7 +146,7 @@ Removing Traefik basic auth touches deploy tooling that currently asserts it:
   rewritten to assert the new behavior (anonymous request gets the access screen and no
   app data; a code-bearing request gets the app)
 - `docs/runbooks/preview.md`
-- Secrets `PREVIEW_BASIC_AUTH` / `PREVIEW_BASIC_AUTH_PASSWORD` become unused
+- The transitional transport-gate secrets become unused
 
 ## Phasing
 

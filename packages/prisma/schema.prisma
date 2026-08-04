@@ -388,6 +388,7 @@ model Organization {
   numOfTeacherSeats          Int                          @default(10)
   reporterEnabled            Boolean                      @default(false)
   classInsightsEnabled       Boolean                      @default(false)
+  previewSeatCode            String?                      @unique
   memberships                OrgMembership[]
   invitations                Invitation[]
   schools                    School[]

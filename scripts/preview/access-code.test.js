@@ -22,7 +22,7 @@ describe('preview access-code generator', () => {
     expect(ACCESS_CODE_ADJECTIVES.length).toBeGreaterThanOrEqual(20);
     expect(ACCESS_CODE_ANIMALS.length).toBeGreaterThanOrEqual(20);
     expect(new Set(ACCESS_CODE_ADJECTIVES).size).toBe(
-      ACCESS_CODE_ADJECTIVES.length,
+      ACCESS_CODE_ADJECTIVES.length
     );
     expect(new Set(ACCESS_CODE_ANIMALS).size).toBe(ACCESS_CODE_ANIMALS.length);
   });
@@ -37,11 +37,11 @@ describe('preview access-code generator', () => {
     expect(seats[0]).toEqual({
       code: 'brave-otter-4193',
       organizationId: 'local-dev-org',
-      label: 'Brian Connell',
+      label: 'Master',
     });
     expect(seats[1]).toMatchObject({
       organizationId: 'preview-seat-2',
-      label: 'Bryant Brock',
+      label: 'Seat 2',
     });
     expect(seats.slice(2).map((seat) => seat.label)).toEqual([
       'Seat 3',

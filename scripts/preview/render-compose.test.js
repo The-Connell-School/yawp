@@ -1,12 +1,16 @@
 import { describe, expect, test } from 'bun:test';
+import { readFileSync } from 'node:fs';
 import { renderPreviewCompose } from './render-compose.mjs';
 
-const deprecatedPreviewSlug = ['preview', String.fromCharCode(102, 111, 114, 103, 101)].join('-');
+const deprecatedPreviewSlug = [
+  'preview',
+  String.fromCharCode(102, 111, 114, 103, 101),
+].join('-');
 const previewAccessSeats = JSON.stringify([
   {
     code: 'brave-otter-4193',
     organizationId: 'local-dev-org',
-    label: 'Brian Connell',
+    label: 'Master',
   },
 ]);
 const previewSessionSecret = 'test-preview-session-secret-32-bytes';
@@ -34,14 +38,20 @@ describe('renderPreviewCompose', () => {
     expect(compose).toContain('toolbox:');
     expect(compose).toContain('image: oven/bun:1.3.1');
     expect(compose).toContain('yawp-pr-142-node-modules');
-    expect(compose).not.toContain('rm -rf services/web-app/.react-router services/web-app/.vite');
-    expect(compose).toContain('cd services/web-app && bun run dev -- --host 0.0.0.0 --port 8080');
+    expect(compose).not.toContain(
+      'rm -rf services/web-app/.react-router services/web-app/.vite'
+    );
+    expect(compose).toContain(
+      'cd services/web-app && bun run dev -- --host 0.0.0.0 --port 8080'
+    );
     expect(compose).not.toContain('bun install --ignore-scripts');
     expect(compose).not.toContain('bun prisma generate');
     expect(compose).not.toContain('bun run --cwd services/web-app dev');
     expect(compose).toContain('web:');
     expect(compose).toContain('PORT: "8080"');
-    expect(compose).toContain('DATABASE_URL: "postgresql://postgres:postgres@preview-postgres:5432/yawp_pr_142"');
+    expect(compose).toContain(
+      'DATABASE_URL: "postgresql://postgres:postgres@preview-postgres:5432/yawp_pr_142"'
+    );
     expect(compose).toContain('AWS_EC2_METADATA_DISABLED: "true"');
     expect(compose).toContain('YAWP_ENVIRONMENT: "preview"');
     expect(compose).toContain('AI_MODEL: "claude-sonnet-4-6"');
@@ -78,31 +88,17 @@ describe('renderPreviewCompose', () => {
     expect(compose).not.toContain('.middlewares=');
   });
 
-  test('does not render per-deploy basic auth when transport credentials are present', () => {
-    const previousCredential = process.env.PREVIEW_BASIC_AUTH;
-    const previousPassword = process.env.PREVIEW_BASIC_AUTH_PASSWORD;
-    process.env.PREVIEW_BASIC_AUTH = 'preview-admin:$apr1$hash';
-    process.env.PREVIEW_BASIC_AUTH_PASSWORD = 'shared-pass';
+  test('contains no transitional transport auth references', () => {
+    const source = readFileSync(
+      new URL('./render-compose.mjs', import.meta.url),
+      'utf8'
+    );
+    const deprecatedTransportAuth = ['PREVIEW', 'BASIC', 'AUTH'].join('_');
+    const compose = renderCompose();
 
-    try {
-      const compose = renderCompose();
-
-      expect(compose).not.toContain('basicauth');
-      expect(compose).not.toContain('.middlewares=');
-      expect(compose).not.toContain('preview-admin');
-      expect(compose).not.toContain('shared-pass');
-    } finally {
-      if (previousCredential === undefined) {
-        delete process.env.PREVIEW_BASIC_AUTH;
-      } else {
-        process.env.PREVIEW_BASIC_AUTH = previousCredential;
-      }
-      if (previousPassword === undefined) {
-        delete process.env.PREVIEW_BASIC_AUTH_PASSWORD;
-      } else {
-        process.env.PREVIEW_BASIC_AUTH_PASSWORD = previousPassword;
-      }
-    }
+    expect(source).not.toContain(deprecatedTransportAuth);
+    expect(compose).not.toContain('basicauth');
+    expect(compose).not.toContain('.middlewares=');
   });
 
   // PREVIEW_ACCESS_GATE is the same switch read by the root route middleware. Requiring
@@ -113,9 +109,12 @@ describe('renderPreviewCompose', () => {
 
     expect(compose).toContain('PREVIEW_ACCESS_GATE: "on"');
     expect(compose).toContain('PREVIEW_ACCESS_SEATS:');
-    expect(compose).toContain('PREVIEW_ACCESS_SECRET: "test-preview-access-secret-32-bytes"');
     expect(compose).toContain(
-      'SESSION_SECRET: "test-preview-session-secret-32-bytes"',
+      'PREVIEW_ACCESS_SECRET: "test-preview-access-secret-32-bytes"'
+    );
+    expect(compose).toContain('PREVIEW_SEAT_COUNT: "1"');
+    expect(compose).toContain(
+      'SESSION_SECRET: "test-preview-session-secret-32-bytes"'
     );
   });
 
@@ -128,7 +127,7 @@ describe('renderPreviewCompose', () => {
         accessSeats: '',
         sessionSecret: previewSessionSecret,
         accessSecret: previewAccessSecret,
-      }),
+      })
     ).toThrow('PREVIEW_ACCESS_SEATS is required');
   });
 
@@ -141,7 +140,7 @@ describe('renderPreviewCompose', () => {
         accessSeats: previewAccessSeats,
         sessionSecret: '',
         accessSecret: previewAccessSecret,
-      }),
+      })
     ).toThrow('PREVIEW_SESSION_SECRET is required');
   });
 
@@ -154,7 +153,7 @@ describe('renderPreviewCompose', () => {
         accessSeats: previewAccessSeats,
         sessionSecret: previewSessionSecret,
         accessSecret: '',
-      }),
+      })
     ).toThrow('PREVIEW_ACCESS_SECRET is required');
   });
 

@@ -8,6 +8,7 @@ import {
   grantPreviewAccessCookie,
   isPreviewAccessConfigured,
   previewAccessMiddleware,
+  type PreviewAccessSeatRepository,
   validatePreviewAccessCode,
 } from './preview-access.server';
 
@@ -41,6 +42,22 @@ function middlewareArgs(value: Request) {
   } as Parameters<typeof previewAccessMiddleware>[0];
 }
 
+function repository({
+  byCode = {},
+  byId = {},
+}: {
+  byCode?: Record<string, { id: string; name: string } | null>;
+  byId?: Record<
+    string,
+    { id: string; name: string; previewSeatCode: string | null } | null
+  >;
+} = {}): PreviewAccessSeatRepository {
+  return {
+    findByCode: mock(async (code: string) => byCode[code] ?? null),
+    findById: mock(async (id: string) => byId[id] ?? null),
+  };
+}
+
 describe('preview access gate', () => {
   beforeEach(() => {
     process.env.NODE_ENV = 'production';
@@ -50,7 +67,7 @@ describe('preview access gate', () => {
       {
         code: 'brave-otter-4193',
         organizationId: 'local-dev-org',
-        label: 'Brian Connell',
+        label: 'Master',
       },
       {
         code: 'calm-panda-8127',
@@ -77,25 +94,25 @@ describe('preview access gate', () => {
 
     const response = await previewAccessMiddleware(
       middlewareArgs(request('/app/classes')),
-      next,
+      next
     );
 
     expect(response).toBeInstanceOf(Response);
     expect((response as Response).status).toBe(302);
     expect((response as Response).headers.get('location')).toBe(
-      '/auth/preview-access?returnTo=%2Fapp%2Fclasses',
+      '/auth/preview-access?returnTo=%2Fapp%2Fclasses'
     );
     expect(next).not.toHaveBeenCalled();
   });
 
   test('blocks unauthenticated actions, above all POST /auth/dev-login', async () => {
-    const next = mock(async () =>
-      new Response('passwordless admin session', { status: 302 }),
+    const next = mock(
+      async () => new Response('passwordless admin session', { status: 302 })
     );
 
     const response = await previewAccessMiddleware(
       middlewareArgs(request('/auth/dev-login', { method: 'POST' })),
-      next,
+      next
     );
 
     expect(response).toBeInstanceOf(Response);
@@ -108,7 +125,7 @@ describe('preview access gate', () => {
 
     const response = await previewAccessMiddleware(
       middlewareArgs(request('/api/model/assignments')),
-      next,
+      next
     );
 
     expect(response).toBeInstanceOf(Response);
@@ -129,7 +146,7 @@ describe('preview access gate', () => {
     ]) {
       const response = await previewAccessMiddleware(
         middlewareArgs(request(path)),
-        next,
+        next
       );
       expect(await response?.text()).toBe('ok');
     }
@@ -142,10 +159,10 @@ describe('preview access gate', () => {
     delete process.env.PREVIEW_ACCESS_CODES;
     const next = mock(async () => new Response('private'));
 
-    expect(validatePreviewAccessCode('brave-otter-4193')).toBe(false);
+    expect(await validatePreviewAccessCode('brave-otter-4193')).toBe(false);
     const response = await previewAccessMiddleware(
       middlewareArgs(request('/app')),
-      next,
+      next
     );
 
     expect((response as Response).status).toBe(302);
@@ -153,10 +170,10 @@ describe('preview access gate', () => {
   });
 
   test('accepts a valid signed cookie and rejects a tampered cookie', async () => {
-    const seat = findPreviewAccessSeatByCode('brave-otter-4193');
+    const seat = await findPreviewAccessSeatByCode('brave-otter-4193');
     expect(seat).toEqual({
       organizationId: 'local-dev-org',
-      label: 'Brian Connell',
+      label: 'Master',
     });
     const serialized = await grantPreviewAccessCookie(seat!);
     const next = mock(async () => new Response('private'));
@@ -171,32 +188,56 @@ describe('preview access gate', () => {
 
     const authenticated = await middleware(
       middlewareArgs(request('/app', { headers: { cookie: cookiePair } })),
-      next,
+      next
     );
     expect(await authenticated?.text()).toBe('private');
 
     const tampered = `${cookiePair.slice(0, -1)}x`;
     const rejected = await middleware(
       middlewareArgs(request('/app', { headers: { cookie: tampered } })),
-      next,
+      next
     );
     expect((rejected as Response).status).toBe(302);
     expect(next).toHaveBeenCalledTimes(1);
 
     const parsedSeat = await getPreviewAccessSeat(
-      request('/app', { headers: { cookie: cookiePair } }),
+      request('/app', { headers: { cookie: cookiePair } })
     );
     expect(parsedSeat).toEqual(seat);
   });
 
   test('rejects an authenticated session that is bound outside the signed seat', async () => {
-    const seat = findPreviewAccessSeatByCode('calm-panda-8127')!;
+    const runtimeRepository = repository({
+      byCode: {
+        'calm-panda-8127': {
+          id: 'preview-seat-2',
+          name: 'Yawp Preview - Seat 2',
+        },
+      },
+      byId: {
+        'preview-seat-2': {
+          id: 'preview-seat-2',
+          name: 'Yawp Preview - Seat 2',
+          previewSeatCode: 'calm-panda-8127',
+        },
+      },
+    });
+    const seat = (await findPreviewAccessSeatByCode(
+      'calm-panda-8127',
+      runtimeRepository
+    ))!;
     const cookie = (await grantPreviewAccessCookie(seat)).split(';', 1)[0];
     const next = mock(async () => new Response('private'));
     const sessionGuard = mock(async () =>
-      Response.json({ error: 'Session belongs to another seat.' }, { status: 401 }),
+      Response.json(
+        { error: 'Session belongs to another seat.' },
+        { status: 401 }
+      )
     );
-    const middleware = createPreviewAccessMiddleware(sessionGuard);
+    const middleware = createPreviewAccessMiddleware(
+      sessionGuard,
+      runtimeRepository
+    );
     const value = request('/api/model/assignments', {
       headers: { cookie },
     });
@@ -210,17 +251,17 @@ describe('preview access gate', () => {
 
   test('keeps production-dump previews gated without imposing seeded seat IDs', async () => {
     process.env.PREVIEW_DATA_MODE = 'production-dump';
-    const seat = findPreviewAccessSeatByCode('brave-otter-4193')!;
+    const seat = (await findPreviewAccessSeatByCode('brave-otter-4193'))!;
     const cookie = (await grantPreviewAccessCookie(seat)).split(';', 1)[0];
     const sessionGuard = mock(async () =>
-      Response.json({ error: 'seed-only guard ran' }, { status: 500 }),
+      Response.json({ error: 'seed-only guard ran' }, { status: 500 })
     );
     const next = mock(async () => new Response('production data'));
     const middleware = createPreviewAccessMiddleware(sessionGuard);
 
     const response = await middleware(
       middlewareArgs(request('/app', { headers: { cookie } })),
-      next,
+      next
     );
 
     expect(await response?.text()).toBe('production data');
@@ -241,7 +282,7 @@ describe('preview access gate', () => {
 
     const response = await previewAccessMiddleware(
       middlewareArgs(request('/app')),
-      next,
+      next
     );
 
     expect(await response?.text()).toBe('local');
@@ -256,25 +297,31 @@ describe('preview access codes', () => {
     restore('SESSION_SECRET');
   });
 
-  test('validates configured codes case-insensitively and rejects malformed codes', () => {
+  test('resolves the master code case-insensitively and rejects malformed codes', async () => {
     delete process.env.PREVIEW_ACCESS_SEATS;
     process.env.PREVIEW_ACCESS_SECRET = 'test-preview-access-secret';
     process.env.PREVIEW_ACCESS_CODES =
       'brave-otter-4193,calm-panda-8127,not a code';
 
-    expect(validatePreviewAccessCode(' Brave-Otter-4193 ')).toBe(true);
-    expect(validatePreviewAccessCode('calm-panda-8127')).toBe(true);
-    expect(validatePreviewAccessCode('not a code')).toBe(false);
-    expect(validatePreviewAccessCode('brave-otter-4194')).toBe(false);
+    const runtimeRepository = repository();
+    expect(
+      await validatePreviewAccessCode(' Brave-Otter-4193 ', runtimeRepository)
+    ).toBe(true);
+    expect(
+      await validatePreviewAccessCode('not a code', runtimeRepository)
+    ).toBe(false);
+    expect(
+      await validatePreviewAccessCode('brave-otter-4194', runtimeRepository)
+    ).toBe(false);
   });
 
-  test('maps each timing-safe code match to exactly one seat', () => {
+  test('resolves the env master without a DB query', async () => {
     process.env.PREVIEW_ACCESS_SECRET = 'test-preview-access-secret';
     process.env.PREVIEW_ACCESS_SEATS = JSON.stringify([
       {
         code: 'brave-otter-4193',
         organizationId: 'local-dev-org',
-        label: 'Brian Connell',
+        label: 'Master',
       },
       {
         code: 'calm-panda-8127',
@@ -283,40 +330,104 @@ describe('preview access codes', () => {
       },
     ]);
 
-    expect(findPreviewAccessSeatByCode(' CALM-PANDA-8127 ')).toEqual({
-      organizationId: 'preview-seat-2',
-      label: 'Bryant Brock',
+    const runtimeRepository = repository();
+    expect(
+      await findPreviewAccessSeatByCode(' BRAVE-OTTER-4193 ', runtimeRepository)
+    ).toEqual({
+      organizationId: 'local-dev-org',
+      label: 'Master',
     });
-    expect(findPreviewAccessSeatByCode('wrong-panda-8127')).toBeNull();
+    expect(runtimeRepository.findByCode).not.toHaveBeenCalled();
   });
 
-  test('fails closed for malformed or duplicate seat maps', () => {
+  test('resolves runtime seats by their unique DB code and rejects unknown codes', async () => {
     process.env.PREVIEW_ACCESS_SECRET = 'test-preview-access-secret';
     process.env.PREVIEW_ACCESS_SEATS = JSON.stringify([
       {
         code: 'brave-otter-4193',
         organizationId: 'local-dev-org',
-        label: 'Brian Connell',
-      },
-      {
-        code: 'brave-otter-4193',
-        organizationId: 'preview-seat-2',
-        label: 'Bryant Brock',
+        label: 'Master',
       },
     ]);
+    const runtimeRepository = repository({
+      byCode: {
+        'calm-panda-8127': {
+          id: 'preview-seat-2',
+          name: 'Yawp Preview - Seat 2',
+        },
+      },
+    });
 
-    expect(isPreviewAccessConfigured()).toBe(false);
-    expect(findPreviewAccessSeatByCode('brave-otter-4193')).toBeNull();
+    expect(
+      await findPreviewAccessSeatByCode(' CALM-PANDA-8127 ', runtimeRepository)
+    ).toEqual({
+      organizationId: 'preview-seat-2',
+      label: 'Yawp Preview - Seat 2',
+    });
+    expect(
+      await findPreviewAccessSeatByCode('wrong-panda-8127', runtimeRepository)
+    ).toBeNull();
+    expect(runtimeRepository.findByCode).toHaveBeenCalledWith(
+      'calm-panda-8127'
+    );
   });
 
-  test('requires a dedicated gate secret and does not fall back to SESSION_SECRET', () => {
+  test('requires a dedicated gate secret and does not fall back to SESSION_SECRET', async () => {
     delete process.env.PREVIEW_ACCESS_SEATS;
     process.env.PREVIEW_ACCESS_CODES = 'brave-otter-4193';
     process.env.SESSION_SECRET = 'app-session-secret-is-not-a-gate-secret';
     delete process.env.PREVIEW_ACCESS_SECRET;
 
     expect(isPreviewAccessConfigured()).toBe(false);
-    expect(validatePreviewAccessCode('brave-otter-4193')).toBe(false);
+    expect(await validatePreviewAccessCode('brave-otter-4193')).toBe(false);
+  });
+
+  test('accepts runtime-seat cookies only while the organization remains a seat', async () => {
+    process.env.PREVIEW_ACCESS_SECRET = 'preview-access-secret-one';
+    process.env.PREVIEW_ACCESS_SEATS = JSON.stringify([
+      {
+        code: 'brave-otter-4193',
+        organizationId: 'local-dev-org',
+        label: 'Master',
+      },
+    ]);
+    const runtimeSeat = {
+      organizationId: 'preview-seat-2',
+      label: 'Yawp Preview - Seat 2',
+    };
+    const cookie = (await grantPreviewAccessCookie(runtimeSeat)).split(
+      ';',
+      1
+    )[0];
+
+    expect(
+      await getPreviewAccessSeat(
+        request('/app', { headers: { cookie } }),
+        repository({
+          byId: {
+            'preview-seat-2': {
+              id: 'preview-seat-2',
+              name: 'Yawp Preview - Seat 2',
+              previewSeatCode: 'calm-panda-8127',
+            },
+          },
+        })
+      )
+    ).toEqual(runtimeSeat);
+    expect(
+      await getPreviewAccessSeat(
+        request('/app', { headers: { cookie } }),
+        repository({
+          byId: {
+            'preview-seat-2': {
+              id: 'preview-seat-2',
+              name: 'Yawp Preview - Seat 2',
+              previewSeatCode: null,
+            },
+          },
+        })
+      )
+    ).toBeNull();
   });
 
   test('gate cookies survive app-session rotation but not gate-secret rotation', async () => {
@@ -326,21 +437,21 @@ describe('preview access codes', () => {
       {
         code: 'brave-otter-4193',
         organizationId: 'local-dev-org',
-        label: 'Brian Connell',
+        label: 'Master',
       },
     ]);
-    const seat = findPreviewAccessSeatByCode('brave-otter-4193')!;
+    const seat = (await findPreviewAccessSeatByCode('brave-otter-4193'))!;
     const serialized = await grantPreviewAccessCookie(seat);
     const cookie = serialized.split(';', 1)[0];
 
     process.env.SESSION_SECRET = 'app-session-secret-two';
     expect(
-      await getPreviewAccessSeat(request('/app', { headers: { cookie } })),
+      await getPreviewAccessSeat(request('/app', { headers: { cookie } }))
     ).toEqual(seat);
 
     process.env.PREVIEW_ACCESS_SECRET = 'preview-access-secret-two';
     expect(
-      await getPreviewAccessSeat(request('/app', { headers: { cookie } })),
+      await getPreviewAccessSeat(request('/app', { headers: { cookie } }))
     ).toBeNull();
   });
 });

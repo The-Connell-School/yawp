@@ -10,7 +10,7 @@ The target behavior is:
 - The shared template database restores the configured production database dump from S3 once; new PR databases clone that template, then apply newer Prisma migrations.
 - Deploys avoid ECR pushes and Terraform applies on the hot path.
 - The preview URL is `https://pr-<number>.$PREVIEW_DOMAIN` when TLS is enabled.
-- The React Router app protects every loader, action, and API route with a signed-cookie access gate. `/api/healthcheck` is the only in-app exception. During the transition described below, the shared host's Traefik entrypoint Basic gate also protects every request, including the healthcheck. Deploys generate a memorable code and fail closed if no code reaches the app.
+- The React Router app protects every loader, action, and API route with a signed-cookie access gate. `/api/healthcheck` is the only exception. Deploys generate a memorable code and fail closed if no code reaches the app.
 - The default runtime is `PREVIEW_RUNTIME=fast`: source is bind-mounted, Bun dependencies live in Docker volumes, React Router runs in dev mode, and warm deploys skip dependency install, Prisma generate, and migration work when the tooling fingerprint has not changed. The web container is still recreated after each source sync so the dev server starts from a clean process. Set `PREVIEW_RUNTIME=production` to use the production Dockerfile build path.
 
 ## Host Setup
@@ -67,8 +67,6 @@ Required repository settings:
 - Secret `PREVIEW_SSH_PRIVATE_KEY`
 - Secret `PREVIEW_ANTHROPIC_API_KEY` or repository secret `ANTHROPIC_API_KEY`
 - Secret `PREVIEW_DB_PASSWORD` if the shared preview Postgres password is not the default
-- Secret `PREVIEW_BASIC_AUTH` during the transitional double-gate period (one htpasswd-format credential)
-- Secret `PREVIEW_BASIC_AUTH_PASSWORD` during the transitional double-gate period
 - Secret `PREVIEW_LOGIN_EMAIL`
 - Secret `PREVIEW_LOGIN_PASSWORD`
 
@@ -94,22 +92,9 @@ Seat seeding is create-only. An existing organization ID is a strict no-op: no r
 
 The access screen is the only application page reachable without an in-app access cookie. Loaders without that cookie redirect there, while actions and `/api/*` requests without it return `401`; `/api/healthcheck` remains outside the in-app gate. The deploy smoke explicitly checks that `POST /auth/dev-login` is blocked before using the code.
 
-### Transitional double gate
+### In-app access gate
 
-The shared preview host currently has two gates, in this order:
-
-1. Traefik's HTTP Basic middleware runs at the shared `web` and `websecure` entrypoints.
-2. The app's signed-cookie access gate runs only after Traefik accepts the transport credentials.
-
-This double gate is intentional during rollout. `scripts/preview/deploy.sh`, the login smoke, and the preview/demo workflow self-verification attach HTTP Basic transport credentials when both `PREVIEW_BASIC_AUTH` and `PREVIEW_BASIC_AUTH_PASSWORD` are set. They still make their in-app assertions without an access cookie: the access screen must render, `POST /auth/dev-login` must return `401`, and a valid access code must establish the signed access cookie. If either Basic-auth value is absent, the same requests are made anonymously; missing values do not fail the deploy script by configuration alone.
-
-Do not remove the Traefik entrypoint gate or re-bootstrap the shared preview host yet. Remove the host gate only in this order:
-
-1. Merge the in-app gate to `main`.
-2. Redeploy every live preview onto a revision that contains the in-app gate and verify the gate smoke passes for each one.
-3. Only then remove the Traefik entrypoint middleware and unset the two Basic-auth secrets.
-
-The ordering is a security requirement. Removing the host gate before every live preview carries the in-app gate exposes previews still running older code, including their passwordless `POST /auth/dev-login` route, to the public internet. Once the entrypoint gate is safely removed, unsetting the secrets automatically switches deploy healthchecks and smoke requests to anonymous transport; no deploy-script change is needed.
+The signed-cookie access gate in the app is the preview and demo host's only access gate. Deploy tooling and workflow self-verification make anonymous requests to prove the access screen renders and that `POST /auth/dev-login` returns `401` without a code. They then submit a valid access code and verify it establishes the signed access cookie before continuing with login checks.
 
 ## Local Smoke
 
@@ -123,7 +108,7 @@ PREVIEW_DIRECT_PORT=18080 \
 bash scripts/preview/deploy.sh
 ```
 
-The command prints `PREVIEW_ACCESS_CODE=...` plus every seat-labelled code after the health, access-gate, and login smoke checks pass. To use fixed local codes, provide `PREVIEW_ACCESS_SEATS` as described above. Direct-port local smoke is anonymous unless both transitional Basic-auth variables are supplied.
+The command prints `PREVIEW_ACCESS_CODE=...` plus every seat-labelled code after the health, access-gate, and login smoke checks pass. To use fixed local codes, provide `PREVIEW_ACCESS_SEATS` as described above. Direct-port local smoke uses the same anonymous transport as deployed self-verification.
 
 Destroy it with:
 

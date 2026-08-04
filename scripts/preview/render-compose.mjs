@@ -59,7 +59,7 @@ export function renderPreviewCompose({
       PREVIEW_ACCESS_GATE: "on"
       PREVIEW_ACCESS_SEATS: ${q(previewAccessSeats)}
       PREVIEW_ACCESS_SECRET: ${q(previewAccessSecret)}
-      PREVIEW_SEAT_COUNT: ${q(optionalEnv('PREVIEW_SEAT_COUNT', '6'))}
+      PREVIEW_SEAT_COUNT: ${q(optionalEnv('PREVIEW_SEAT_COUNT', '1'))}
       PORT: "8080"
       COOKIE_SECURE: ${cookieSecure}
       AWS_EC2_METADATA_DISABLED: "true"

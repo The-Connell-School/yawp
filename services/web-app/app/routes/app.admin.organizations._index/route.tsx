@@ -1,5 +1,4 @@
 import {
-  data as dataResponse,
   useFetcher,
   type LoaderFunctionArgs,
   useLoaderData,
@@ -10,7 +9,6 @@ import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { GrowthChart } from '~/components/growth-chart';
 import { Button } from '~/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
-import { prisma } from '~/utils/db.server';
 import {
   Table,
   TableBody,
@@ -20,12 +18,6 @@ import {
   TableRow,
 } from '~/components/ui/table';
 import { ArrowDown, ArrowUp, ArrowUpDown, Plus } from 'lucide-react';
-import {
-  getOrganizationTableCookie,
-  getOrganizationTableCookieValue,
-  OrganizationTableCookie,
-  setOrganizationTableCookie,
-} from '~/utils/cookies.server';
 import { Pagination } from '~/components/table/pagination';
 import { CookieColumns, useTable } from '~/hooks/useTable';
 import { cn } from '~/utils/misc';
@@ -36,29 +28,10 @@ import {
   SheetTitle,
   SheetTrigger,
 } from '~/components/ui/sheet';
-import { useState } from 'react';
-import { requireAdmin } from '~/utils/auth.server';
-import { z } from 'zod';
-import { parseFormData, useForm, validationError } from '@rvf/react-router';
+import { useEffect, useRef, useState } from 'react';
+import { useForm } from '@rvf/react-router';
 import { FormInput } from '~/components/forms/form-input-2';
-
-type Stats = {
-  total_organizations: number;
-  active_organizations: number;
-  total_students: number;
-  total_teachers: number;
-};
-
-const CreateOrganizationSchema = z.object({
-  name: z.string(),
-  numOfStudentSeats: z.string().refine((value) => !isNaN(Number(value)), {
-    message: 'Number of student seats must be a number',
-  }),
-  numOfTeacherSeats: z.string().refine((value) => !isNaN(Number(value)), {
-    message: 'Number of teacher seats must be a number',
-  }),
-  accessExpiresAt: z.string().optional(),
-});
+import { CreateOrganizationSchema } from './schema';
 
 const COLUMNS: CookieColumns = {
   name: {
@@ -82,115 +55,49 @@ const COLUMNS: CookieColumns = {
   },
 };
 
-export async function loader({ request }: LoaderFunctionArgs) {
-  await requireAdmin(request);
-  const { sort, direction, skip, take } =
-    await getOrganizationTableCookie(request);
-
-  const [organizations, totalCount, stats] = await Promise.all([
-    prisma.organization.findMany({
-      skip,
-      take,
-      include: {
-        memberships: {
-          include: {
-            user: { select: { id: true } },
-          },
-        },
-      },
-      orderBy: {
-        [sort ?? 'createdAt']: direction === 'asc' ? 'asc' : 'desc',
-      },
-    }),
-    prisma.organization.count(),
-    prisma.$queryRaw<Stats[]>`
-      SELECT
-        (SELECT COUNT(*) FROM "Organization")::int as total_organizations,
-        (SELECT COUNT(*) FROM "Organization" WHERE "createdAt" > NOW() - INTERVAL '30 days')::int as active_organizations,
-        (SELECT COUNT(*) FROM "OrgMembership" WHERE role = 'STUDENT')::int as total_students,
-        (SELECT COUNT(*) FROM "OrgMembership" WHERE role = 'TEACHER')::int as total_teachers
-    `,
-  ]);
-
-  const growthData = await prisma.organization.groupBy({
-    by: ['createdAt'],
-    _count: true,
-    orderBy: { createdAt: 'asc' },
-  });
-
-  return dataResponse({
-    organizations,
-    stats: stats[0],
-    growthData,
-    totalCount,
-    table: { sort, direction, skip, take },
-  });
+export async function loader(args: LoaderFunctionArgs) {
+  const { organizationsLoader } = await import('./route.server');
+  return organizationsLoader(args);
 }
 
-export async function action({ request }: ActionFunctionArgs) {
-  await requireAdmin(request);
-  const formData = await request.formData();
-
-  if (formData.get('intent') === 'create') {
-    const { error, data } = await parseFormData(
-      formData,
-      CreateOrganizationSchema
-    );
-    if (error) return validationError(error);
-
-    await prisma.organization.create({
-      data: {
-        name: data.name,
-        numOfStudentSeats: Number(data.numOfStudentSeats),
-        numOfTeacherSeats: Number(data.numOfTeacherSeats),
-        accessExpiresAt: data.accessExpiresAt
-          ? new Date(data.accessExpiresAt)
-          : null,
-      },
-    });
-
-    return dataResponse({ success: true });
-  }
-
-  if (formData.get('intent') === 'updateFilters') {
-    let filters = await getOrganizationTableCookie(request);
-    const key = formData.get('key') as
-      | keyof OrganizationTableCookie
-      | 'skip-take'
-      | 'reset';
-    const value = formData.get('value') as string;
-
-    if (key === 'sort') {
-      const [field, direction] = value.split('-');
-      filters.sort = field as 'name' | 'createdAt';
-      filters.direction = direction as 'asc' | 'desc';
-    } else if (key === 'skip-take') {
-      const [skip, take] = value.split('-');
-      filters.skip = Number(skip);
-      filters.take = Number(take);
-    } else if (key === 'reset') {
-      filters = JSON.parse(value) as OrganizationTableCookie;
-    } else {
-      filters[key] = getOrganizationTableCookieValue(key, value) as never;
-    }
-
-    const cookie = await setOrganizationTableCookie(request, filters);
-    return dataResponse(
-      { success: true },
-      { headers: { 'Set-Cookie': cookie } }
-    );
-  }
-
-  return new Response('Method not allowed', { status: 405 });
+export async function action(args: ActionFunctionArgs) {
+  const { organizationsAction } = await import('./route.server');
+  return organizationsAction(args);
 }
 
 export default function OrganizationsRoute() {
-  const { organizations, stats, growthData, totalCount, table } =
-    useLoaderData<typeof loader>();
-  const fetcher = useFetcher();
+  const {
+    organizations,
+    stats,
+    growthData,
+    totalCount,
+    table,
+    previewSeatMode,
+  } = useLoaderData<typeof loader>();
+  const organizationFetcher = useFetcher();
+  const seatFetcher = useFetcher<typeof action>();
   const navigate = useNavigate();
   const [isSheetOpen, setIsSheetOpen] = useState(false);
+  const [isSeatSheetOpen, setIsSeatSheetOpen] = useState(false);
+  const [copiedSeatCode, setCopiedSeatCode] = useState(false);
+  const seatResultRef = useRef<HTMLDivElement>(null);
   const { handleSort } = useTable({ rows: organizations });
+  const seatActionData = seatFetcher.data as
+    | {
+        error?: string;
+        previewSeat?: {
+          organizationName: string;
+          previewSeatCode: string;
+        };
+      }
+    | undefined;
+  const createdSeat = seatActionData?.previewSeat;
+
+  useEffect(() => {
+    if (!createdSeat) return;
+    setCopiedSeatCode(false);
+    seatResultRef.current?.focus();
+  }, [createdSeat]);
 
   const form = useForm({
     schema: CreateOrganizationSchema,
@@ -264,7 +171,82 @@ export default function OrganizationsRoute() {
       </div>
 
       <div className="flex flex-1 flex-col mt-4">
-        <div className="flex justify-end mb-4">
+        <div className="mb-4 flex justify-end gap-2">
+          {previewSeatMode ? (
+            <Sheet open={isSeatSheetOpen} onOpenChange={setIsSeatSheetOpen}>
+              <SheetTrigger asChild>
+                <Button variant="outline">
+                  <Plus className="mr-2 h-4 w-4" />
+                  Create Preview Seat
+                </Button>
+              </SheetTrigger>
+              <SheetContent>
+                <SheetHeader>
+                  <SheetTitle>Create Preview Seat</SheetTitle>
+                </SheetHeader>
+                <p className="mt-4 text-sm text-muted-foreground">
+                  This creates a new isolated organization with the same
+                  starting demo data as the Master seat. Existing seats are left
+                  unchanged.
+                </p>
+                <seatFetcher.Form method="post" className="mt-6">
+                  <input
+                    type="hidden"
+                    name="intent"
+                    value="createPreviewSeat"
+                  />
+                  <Button
+                    type="submit"
+                    className="w-full"
+                    disabled={seatFetcher.state !== 'idle'}
+                  >
+                    {seatFetcher.state === 'idle'
+                      ? 'Create and Seed Seat'
+                      : 'Creating Seat...'}
+                  </Button>
+                </seatFetcher.Form>
+                {createdSeat ? (
+                  <div
+                    ref={seatResultRef}
+                    className="mt-6 rounded-lg border bg-muted p-4 outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    role="status"
+                    aria-live="polite"
+                    tabIndex={-1}
+                  >
+                    <p className="text-sm font-medium">Access code</p>
+                    <code
+                      className="mt-2 block select-all text-lg font-semibold"
+                      data-preview-seat-code
+                    >
+                      {createdSeat.previewSeatCode}
+                    </code>
+                    <p className="mt-2 text-sm text-muted-foreground">
+                      {createdSeat.organizationName}
+                    </p>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="mt-4 w-full"
+                      onClick={() => {
+                        void navigator.clipboard
+                          .writeText(createdSeat.previewSeatCode)
+                          .then(() => setCopiedSeatCode(true));
+                      }}
+                    >
+                      {copiedSeatCode ? 'Copied' : 'Copy Access Code'}
+                    </Button>
+                  </div>
+                ) : seatActionData?.error ? (
+                  <p
+                    className="mt-6 rounded-lg bg-destructive/10 p-3 text-sm text-destructive"
+                    role="alert"
+                  >
+                    {seatActionData.error}
+                  </p>
+                ) : null}
+              </SheetContent>
+            </Sheet>
+          ) : null}
           <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
             <SheetTrigger asChild>
               <Button>
@@ -276,7 +258,10 @@ export default function OrganizationsRoute() {
               <SheetHeader>
                 <SheetTitle>Create Organization</SheetTitle>
               </SheetHeader>
-              <fetcher.Form className="mt-4 space-y-4" {...form.getFormProps()}>
+              <organizationFetcher.Form
+                className="mt-4 space-y-4"
+                {...form.getFormProps()}
+              >
                 <input type="hidden" name="intent" value="create" />
                 <FormInput scope={form.scope('name')} label="Name" />
                 <FormInput
@@ -297,19 +282,19 @@ export default function OrganizationsRoute() {
                 <Button
                   type="submit"
                   className="w-full"
-                  disabled={fetcher.state !== 'idle'}
+                  disabled={organizationFetcher.state !== 'idle'}
                 >
-                  {fetcher.state === 'idle'
+                  {organizationFetcher.state === 'idle'
                     ? 'Create Organization'
                     : 'Creating...'}
                 </Button>
-              </fetcher.Form>
+              </organizationFetcher.Form>
             </SheetContent>
           </Sheet>
         </div>
 
         <div className="flex-1 overflow-y-auto">
-          {fetcher.state !== 'idle' ? (
+          {organizationFetcher.state !== 'idle' ? (
             <div className="flex h-full flex-col items-center justify-center border border-dashed bg-muted">
               <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
               <span className="mt-2 text-sm text-muted-foreground">
@@ -334,7 +319,7 @@ export default function OrganizationsRoute() {
                   <Button
                     variant="default"
                     onClick={() => {
-                      fetcher.submit(
+                      organizationFetcher.submit(
                         {
                           intent: 'updateFilters',
                           key: 'skip-take',
@@ -389,6 +374,7 @@ export default function OrganizationsRoute() {
                       </Button>
                     </TableHead>
                   ))}
+                  {previewSeatMode ? <TableHead>Access Code</TableHead> : null}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -409,7 +395,8 @@ export default function OrganizationsRoute() {
                       {
                         organization.memberships.filter(
                           (membership) =>
-                            membership.role === 'STUDENT' && !membership.isOrgOwner
+                            membership.role === 'STUDENT' &&
+                            !membership.isOrgOwner
                         ).length
                       }{' '}
                       / {organization.numOfStudentSeats}
@@ -422,6 +409,17 @@ export default function OrganizationsRoute() {
                       }{' '}
                       / {organization.numOfTeacherSeats}
                     </TableCell>
+                    {previewSeatMode ? (
+                      <TableCell onClick={(event) => event.stopPropagation()}>
+                        {organization.previewAccessCode ? (
+                          <code className="select-all font-medium">
+                            {organization.previewAccessCode}
+                          </code>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
+                    ) : null}
                   </TableRow>
                 ))}
               </TableBody>
@@ -434,7 +432,7 @@ export default function OrganizationsRoute() {
             skip={table.skip}
             take={table.take}
             onChange={(skip, take) => {
-              fetcher.submit(
+              organizationFetcher.submit(
                 {
                   intent: 'updateFilters',
                   key: 'skip-take',

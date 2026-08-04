@@ -8,6 +8,14 @@
       "types": "./generated/prisma/index.d.ts",
       "import": "index.ts",
       "require": "./generated/prisma/index.js"
+    },
+    "./preview-access-code": {
+      "types": "./preview-access-code.ts",
+      "import": "./preview-access-code.ts"
+    },
+    "./preview-seats": {
+      "types": "./scripts/preview-seats.ts",
+      "import": "./scripts/preview-seats.ts"
     }
   },
   "scripts": {

@@ -32,7 +32,7 @@ ACCESS_CODE_FILE="$PREVIEW_DIR/access-code"
 ACCESS_SEATS_FILE="$PREVIEW_DIR/access-seats.json"
 ACCESS_SECRET_FILE="$PREVIEW_DIR/access-secret"
 SESSION_SECRET_FILE="$PREVIEW_DIR/session-secret"
-export PREVIEW_SEAT_COUNT="${PREVIEW_SEAT_COUNT:-6}"
+export PREVIEW_SEAT_COUNT="${PREVIEW_SEAT_COUNT:-1}"
 
 load_or_create_access_config() {
   umask 077
@@ -45,9 +45,14 @@ load_or_create_access_config() {
       legacy_codes="$(<"$ACCESS_CODE_FILE")"
     fi
     PREVIEW_ACCESS_SEATS="$(
-      PREVIEW_EXISTING_ACCESS_SEATS="$existing_seats" \
-      PREVIEW_ACCESS_CODES="$legacy_codes" \
-      node "$SCRIPT_DIR/access-code.mjs" --seats
+      docker run --rm \
+        -e PREVIEW_SEAT_COUNT="$PREVIEW_SEAT_COUNT" \
+        -e PREVIEW_EXISTING_ACCESS_SEATS="$existing_seats" \
+        -e PREVIEW_ACCESS_CODES="$legacy_codes" \
+        -v "$SOURCE_DIR:/app:ro" \
+        -w /app \
+        oven/bun:1.3.1 \
+        bun scripts/preview/access-code.mjs --seats
     )"
     printf '%s\n' "$PREVIEW_ACCESS_SEATS" > "$ACCESS_SEATS_FILE"
   fi
@@ -384,26 +389,16 @@ smoke_access_code="$(
   PREVIEW_ACCESS_SEATS="$PREVIEW_ACCESS_SEATS" node -e \
     "process.stdout.write(JSON.parse(process.env.PREVIEW_ACCESS_SEATS)[0].code)"
 )"
-transport_curl() {
-  if [[ -n "${PREVIEW_BASIC_AUTH:-}" && -n "${PREVIEW_BASIC_AUTH_PASSWORD:-}" ]]; then
-    local basic_auth_username="${PREVIEW_BASIC_AUTH%%:*}"
-    curl --user "${basic_auth_username}:${PREVIEW_BASIC_AUTH_PASSWORD}" "$@"
-  else
-    curl "$@"
-  fi
-}
 if [[ -n "${DIRECT_PORT:-}" ]]; then
   health_url="http://127.0.0.1:${DIRECT_PORT}/api/healthcheck"
   login_url="http://127.0.0.1:${DIRECT_PORT}"
 fi
 
 for attempt in $(seq 1 90); do
-  if transport_curl -fsS --connect-timeout 1 --max-time 2 "$health_url" >/dev/null; then
+  if curl -fsS --connect-timeout 1 --max-time 2 "$health_url" >/dev/null; then
     PREVIEW_BASE_URL="$login_url" \
       PREVIEW_DATA_MODE="$DATA_MODE" \
       PREVIEW_ACCESS_CODE="$smoke_access_code" \
-      PREVIEW_BASIC_AUTH="${PREVIEW_BASIC_AUTH:-}" \
-      PREVIEW_BASIC_AUTH_PASSWORD="${PREVIEW_BASIC_AUTH_PASSWORD:-}" \
       node "$SCRIPT_DIR/smoke-login.mjs"
     end_ms="$(date +%s%3N)"
     elapsed_ms="$((end_ms - start_ms))"

@@ -121,7 +121,7 @@ test.describe('in-app preview access gate', () => {
         name: 'Local development environment. Open dev login menu.',
       })
       .click();
-    await expect(page.getByText('Current seat: Brian Connell')).toBeVisible();
+    await expect(page.getByText('Current seat: Master')).toBeVisible();
     await page.getByRole('button', { name: 'Re-enter access code' }).click();
 
     await expect(page).toHaveURL('/auth/preview-access');
