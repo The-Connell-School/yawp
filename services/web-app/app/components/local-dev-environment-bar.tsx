@@ -210,7 +210,7 @@ export function LocalDevEnvironmentBar({
 
   if (!showQuickLogin) {
     return (
-      <div className="fixed bottom-4 right-4 z-30">
+      <div data-environment-bar className="fixed bottom-4 right-4 z-30">
         <Tooltip
           text={
             bannerWarning === 'staging'
@@ -228,7 +228,7 @@ export function LocalDevEnvironmentBar({
   }
 
   return (
-    <div className="fixed bottom-4 right-4 z-30">
+    <div data-environment-bar className="fixed bottom-4 right-4 z-30">
       <Popover>
         <PopoverTrigger asChild>
           <button

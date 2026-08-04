@@ -52,6 +52,30 @@ export type RenderResult = {
   warnings: string[];
 };
 
+/**
+ * Preview and local targets render an environment badge fixed to the corner
+ * of every page. It is correct for humans and wrong for marketing: it sat in
+ * the frame of every clip and every screenshot, labelling footage meant for
+ * an audience as a preview environment. Hidden for capture only — the app
+ * still shows it to anyone actually using that environment.
+ */
+const HIDE_CAPTURE_CHROME_SCRIPT = `
+(() => {
+  const hide = () => {
+    if (document.getElementById('__marketing_capture_chrome')) return;
+    const style = document.createElement('style');
+    style.id = '__marketing_capture_chrome';
+    style.textContent = '[data-environment-bar]{display:none !important}';
+    document.head?.appendChild(style);
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', hide);
+  } else {
+    hide();
+  }
+})();
+`;
+
 const NAVIGATION_TIMEOUT_MS = 45_000;
 const STEP_TIMEOUT_MS = 15_000;
 /**
@@ -447,6 +471,9 @@ export async function renderStoryboard(
     // Lets page navigations through a basic-auth gate (preview environments).
     httpCredentials: params.basicAuth,
   });
+  // Applies to stills as well as clips — a screenshot carries the badge into
+  // a deck just as readily as a video carries it into a feed.
+  await context.addInitScript(HIDE_CAPTURE_CHROME_SCRIPT);
   // Headless captures show no cursor; clips get an enlarged one that follows
   // real mouse events, because "click the thing" is the entire content of a
   // short feature clip.
