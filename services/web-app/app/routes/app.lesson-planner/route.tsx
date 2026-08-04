@@ -31,7 +31,10 @@ import {
 } from '~/components/ai-chat/assistant-markdown';
 import { SlideDeckCard } from '~/components/ai-chat/slide-deck-card';
 import { readSlideDeck } from '~/domain/lesson-planner/slide-deck';
-import { withStandardSuggestions } from '~/domain/lesson-planner/suggestions';
+import {
+  mentionsRoomPersonality,
+  withStandardSuggestions,
+} from '~/domain/lesson-planner/suggestions';
 import { loadLessonSeed } from '~/domain/lesson-planner/lesson-seed.server';
 
 type PacketAudience = 'teacher' | 'student';
@@ -284,6 +287,13 @@ export default function LessonPlannerRoute() {
   }
 
   const hasMessages = messages.length > 0;
+  // Whether the room's temperament is on the table at all is the teacher's
+  // call, not the planner's. Until they raise it, it stays out of the options.
+  const teacherRaisedRoomPersonality = mentionsRoomPersonality(
+    messages
+      .filter((message) => message.role === 'user')
+      .map((message) => message.content)
+  );
   const firstAssistantIndex = messages.findIndex(
     (message) => message.role === 'assistant'
   );
@@ -418,6 +428,7 @@ export default function LessonPlannerRoute() {
                   message={message}
                   isLast={index === messages.length - 1}
                   isOpeningReply={index === firstAssistantIndex}
+                  teacherRaisedRoomPersonality={teacherRaisedRoomPersonality}
                   conversationId={conversationId}
                   onSuggestion={send}
                   onKeep={setKept}
@@ -560,6 +571,7 @@ function MessageBubble({
   message,
   isLast,
   isOpeningReply,
+  teacherRaisedRoomPersonality,
   conversationId,
   onSuggestion,
   onKeep,
@@ -569,6 +581,7 @@ function MessageBubble({
   isLast: boolean;
   /** The planner's first reply in this lesson. */
   isOpeningReply: boolean;
+  teacherRaisedRoomPersonality: boolean;
   conversationId: string | null;
   onSuggestion: (text: string) => void;
   onKeep: (messageId: string, audience: PacketAudience | null) => void;
@@ -590,6 +603,7 @@ function MessageBubble({
   // rather than whatever the model happened to think of this run.
   const suggestions = withStandardSuggestions(modelSuggestions, {
     isOpeningReply,
+    teacherRaisedRoomPersonality,
   });
   // A deck is rendered as a deck. A deck that failed to build still gets its
   // JSON stripped — a teacher should never be shown the machinery.

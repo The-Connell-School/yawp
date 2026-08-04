@@ -1,14 +1,15 @@
 /**
  * Suggestion chips for the planner's opening turn.
  *
- * The planner asks what to plan and what the room is like, and the single most
- * useful answer is "you tell me — look at the data". That option should be
- * there every time, in the same words, in the same place. Leaving it to the
- * model means it appears in a different form each run, or not at all, which is
- * exactly what a teacher who reaches for it every day does not want.
+ * The planner opens by asking what to plan, and the single most useful answer
+ * is "you tell me — look at the data". That option should be there every time,
+ * in the same words, in the same place. Leaving it to the model means it
+ * appears in a different form each run, or not at all, which is exactly what a
+ * teacher who reaches for it every day does not want.
  *
- * So the app pins it. The model still adds the specifics only it can know —
- * real class names, plausible descriptions of the room — and those follow.
+ * So the app pins it, and the model's own options follow. The app also keeps
+ * the model off one subject it will not stop volunteering — how talkative the
+ * class is — until the teacher brings it up themselves.
  */
 
 /**
@@ -51,6 +52,86 @@ function meansTheSameThing(suggestion: string): boolean {
 }
 
 /**
+ * How chatty the room is, as a topic.
+ *
+ * Talkative-versus-quiet is a real axis to differentiate on, but it is one of
+ * many, and the planner had made it *the* axis: every option came back as a
+ * skill crossed with the room's temperament, for teachers who had never
+ * mentioned it. These terms are how that shows up in an option.
+ */
+const ROOM_TERMS =
+  /\b(talkative|chatty|introvert(?:ed|s)?|extrovert(?:ed|s)?|outgoing|shy|timid|rowdy|reluctant|unresponsive|participation|they talk|won'?t talk|pulling teeth)\b/i;
+
+/** Words that only describe the room when they sit next to the room. */
+const ROOM_MOOD_SOURCE =
+  '\\b(quiet(?:er)?|loud(?:er)?|energetic|talky|engaged|disengaged)\\b';
+const ROOM_MOOD = new RegExp(ROOM_MOOD_SOURCE, 'gi');
+const ROOM_MOOD_ONCE = new RegExp(ROOM_MOOD_SOURCE, 'i');
+const ROOM_NOUN =
+  /\b(room|group|class(?:es)?|section|kids|students|bunch|crowd)\b/gi;
+const NEARBY_CHARS = 25;
+/** "…, 45 min, quiet" — a clause this short is describing the class. */
+const TERSE_CLAUSE_WORDS = 3;
+
+function indicesOf(text: string, pattern: RegExp): number[] {
+  return [...text.matchAll(pattern)].map((match) => match.index ?? 0);
+}
+
+function describesTheRoom(text: string): boolean {
+  if (ROOM_TERMS.test(text)) return true;
+  if (!ROOM_MOOD_ONCE.test(text)) return false;
+  // A bare "quiet" tacked onto an option is the room; "10 minutes of quiet
+  // writing" is the lesson.
+  const words = text.trim().split(/\s+/).filter(Boolean);
+  if (words.length <= TERSE_CLAUSE_WORDS) return true;
+  // Otherwise it counts only when it sits next to the class itself.
+  const moods = indicesOf(text, ROOM_MOOD);
+  const nouns = indicesOf(text, ROOM_NOUN);
+  return moods.some((mood) =>
+    nouns.some((noun) => Math.abs(mood - noun) <= NEARBY_CHARS)
+  );
+}
+
+/** Has the teacher themselves brought up what the room is like? */
+export function mentionsRoomPersonality(teacherMessages: string[]): boolean {
+  return teacherMessages.some(describesTheRoom);
+}
+
+// Clause boundaries a one-line option is actually written with.
+const CLAUSES = /(\s*[—–]\s*|\s*,\s*|\s*;\s*|\s+-\s+)/;
+
+/**
+ * Take the room back out of an option the teacher never asked about.
+ *
+ * An option built on the room ("They talk freely — I need structure") goes
+ * entirely; one that merely tacks it on ("Evidence/Support — 50-minute period,
+ * talkative room") keeps the part the teacher actually wanted. Two options that
+ * differed only by temperament then collapse into one.
+ */
+function withoutRoomTalk(suggestion: string): string {
+  const parts = suggestion.split(CLAUSES);
+  const clauses: Array<{ separator: string; text: string }> = [];
+  for (let index = 0; index < parts.length; index += 2) {
+    clauses.push({
+      separator: index === 0 ? '' : (parts[index - 1] ?? ''),
+      text: parts[index] ?? '',
+    });
+  }
+
+  // The lead clause is what the option is about. If that is the room, the whole
+  // option is about the room.
+  if (!clauses.length || describesTheRoom(clauses[0]!.text)) return '';
+
+  const kept = clauses.filter((clause) => !describesTheRoom(clause.text));
+  return kept
+    .map((clause, index) =>
+      index === 0 ? clause.text : clause.separator + clause.text
+    )
+    .join('')
+    .trim();
+}
+
+/**
  * Merge the model's suggestions with the pinned opening option.
  *
  * Only the opening reply gets the pin — later turns are about the lesson in
@@ -58,11 +139,20 @@ function meansTheSameThing(suggestion: string): boolean {
  */
 export function withStandardSuggestions(
   suggestions: string[],
-  { isOpeningReply }: { isOpeningReply: boolean }
+  {
+    isOpeningReply,
+    // Default true: a caller that cannot tell should not have its options
+    // rewritten out from under it.
+    teacherRaisedRoomPersonality = true,
+  }: { isOpeningReply: boolean; teacherRaisedRoomPersonality?: boolean }
 ): string[] {
+  const offered = teacherRaisedRoomPersonality
+    ? suggestions
+    : suggestions.map(withoutRoomTalk);
+
   const deduped: string[] = [];
   const seen = new Set<string>();
-  for (const suggestion of suggestions) {
+  for (const suggestion of offered) {
     const key = normalize(suggestion);
     if (!key || seen.has(key)) continue;
     seen.add(key);

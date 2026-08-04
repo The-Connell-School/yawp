@@ -843,5 +843,61 @@ test.describe('YAWP! Lesson Planner', () => {
       })
     ).toBeVisible();
     await expect(chips.first()).toContainText(/look at my classes/i);
+
+    // The teacher never said a word about the room, so the app does not offer
+    // "talkative" and "quiet" versions of the same question.
+    await expect(
+      page.getByRole('button', { name: /10th grade, 50 min$/ })
+    ).toBeVisible();
+    await expect(
+      page.getByRole('button', { name: /11th grade, 45 min$/ })
+    ).toBeVisible();
+    await expect(page.locator('main')).not.toContainText('talkative');
+  });
+
+  test('keeps the room in the options once the teacher raises it', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    await setLessonPlannerEnabled(e2eContext.organizationId, true);
+    const prisma = createE2EPrismaClient();
+    let conversationId: string;
+    try {
+      const conversation = await prisma.lessonPlanConversation.create({
+        data: {
+          membershipId: e2eContext.teacherMembershipId,
+          organizationId: e2eContext.organizationId,
+          title: 'Room raised',
+          messages: {
+            create: [
+              {
+                role: 'user',
+                content:
+                  'My second period is really talkative but third is like pulling teeth.',
+                createdAt: new Date('2026-08-04T10:00:00.000Z'),
+              },
+              {
+                role: 'assistant',
+                content:
+                  'Got it.\n\n```suggestions\n10th grade, 50 min, talkative\n11th grade, 45 min, quiet\n```',
+                createdAt: new Date('2026-08-04T10:00:01.000Z'),
+              },
+            ],
+          },
+        },
+        select: { id: true },
+      });
+      conversationId = conversation.id;
+    } finally {
+      await prisma.$disconnect();
+    }
+
+    await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+    await page.goto(`/app/lesson-planner?c=${conversationId}`);
+
+    await expect(
+      page.getByRole('button', { name: /10th grade, 50 min, talkative/ })
+    ).toBeVisible();
   });
 });

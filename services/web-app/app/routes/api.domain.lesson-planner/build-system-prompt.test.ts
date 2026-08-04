@@ -155,6 +155,27 @@ describe('buildLessonPlannerSystemPrompt — teaching out of Yawp', () => {
     expect(lower).toContain('vary what the options are for');
   });
 
+  test('does not treat the room’s temperament as missing information', () => {
+    const lower = prompt.toLowerCase();
+    // It was asking every teacher how chatty the class is, then offering
+    // "talkative" and "quiet" versions of the same choice.
+    expect(lower).toContain(
+      'do not ask how talkative, quiet, shy, or outgoing the class is'
+    );
+    expect(lower).toContain(
+      'silence on the subject is not missing information'
+    );
+    expect(lower).toContain(
+      'personality is one of those axes, not the default'
+    );
+  });
+
+  test('does not model a room-personality option in its own example', () => {
+    // The model copies the shape of the example, so the example must not be
+    // the thing being discouraged.
+    expect(prompt).not.toContain('They talk freely');
+  });
+
   test('tells the model the standard option is pinned by the app', () => {
     expect(prompt).toContain(
       'Look at my classes and tell me what they need work on'
