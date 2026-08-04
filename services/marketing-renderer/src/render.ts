@@ -494,17 +494,33 @@ export async function renderStoryboard(
     let outputWidth = storyboard.viewport.width;
     let outputHeight = storyboard.viewport.height;
 
+    // Framing is presentation, not content. A capture that succeeded must not
+    // be thrown away because the decorative re-shoot stalled or crashed —
+    // shipping the unframed clip beats failing the render and retrying the
+    // whole thing.
+    let framed: Awaited<ReturnType<typeof frameClip>> | null = null;
     if (frameStyle === 'window') {
+      try {
+        framed = await frameClip({
+          rawVideoPath: recorded,
+          outDir,
+          width: storyboard.viewport.width,
+          height: storyboard.viewport.height,
+          chromiumPath: params.chromiumPath,
+        });
+      } catch (err) {
+        const warning = `Framing failed, delivering the unframed capture: ${
+          err instanceof Error ? err.message.split('\n')[0] : String(err)
+        }`;
+        warnings.push(warning);
+        params.onWarning?.(warning);
+      }
+    }
+
+    if (framed) {
       // The framed recording plays the raw capture from its very start, so the
       // raw lead-in and the framing page's own setup are consecutive dead
       // footage; one trim removes both.
-      const framed = await frameClip({
-        rawVideoPath: recorded,
-        outDir,
-        width: storyboard.viewport.width,
-        height: storyboard.viewport.height,
-        chromiumPath: params.chromiumPath,
-      });
       await transcode(
         params.ffmpegPath ?? 'ffmpeg',
         framed.videoPath,

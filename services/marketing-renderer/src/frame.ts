@@ -23,7 +23,15 @@ export type FrameOptions = {
   /** Text shown in the window's address pill. */
   addressText?: string;
   chromiumPath?: string;
+  /** Hard ceiling on the whole framing stage; it must fit inside one attempt. */
+  timeoutMs?: number;
 };
+
+/**
+ * Framing re-plays the capture in real time, so it needs the clip's own
+ * length plus decode slack — not the worker's entire attempt budget.
+ */
+export const FRAMING_TIMEOUT_MS = 150_000;
 
 export type FramedResult = {
   videoPath: string;
@@ -133,6 +141,7 @@ export async function frameClip(options: FrameOptions): Promise<FramedResult> {
     path.dirname(fileURLToPath(import.meta.url)),
     'frame-runner.mjs'
   );
+  const timeoutMs = options.timeoutMs ?? FRAMING_TIMEOUT_MS;
   const config = JSON.stringify({
     rawVideoPath: options.rawVideoPath,
     framedDir,
@@ -140,6 +149,9 @@ export async function frameClip(options: FrameOptions): Promise<FramedResult> {
     canvasWidth: geometry.canvasWidth,
     canvasHeight: geometry.canvasHeight,
     chromiumPath: options.chromiumPath ?? null,
+    // Leave the outer kill below as the backstop, not the first line of
+    // defence: the runner should give up on its own and exit cleanly.
+    playbackTimeoutMs: Math.max(30_000, timeoutMs - 30_000),
   });
 
   const result = await new Promise<{
@@ -152,14 +164,26 @@ export async function frameClip(options: FrameOptions): Promise<FramedResult> {
     });
     let stdout = '';
     let stderr = '';
+    // A framing browser that wedges must not hold the worker past its attempt
+    // deadline; kill it and let the caller fall back to the raw capture.
+    const killTimer = setTimeout(() => {
+      stderr += `\nFraming exceeded ${Math.round(timeoutMs / 1000)}s and was killed.`;
+      child.kill('SIGKILL');
+    }, timeoutMs);
     child.stdout.on('data', (chunk) => {
       stdout += String(chunk);
     });
     child.stderr.on('data', (chunk) => {
       stderr += String(chunk);
     });
-    child.on('error', reject);
-    child.on('close', (code) => resolve({ stdout, stderr, code }));
+    child.on('error', (err) => {
+      clearTimeout(killTimer);
+      reject(err);
+    });
+    child.on('close', (code) => {
+      clearTimeout(killTimer);
+      resolve({ stdout, stderr, code });
+    });
   });
 
   if (result.code !== 0) {

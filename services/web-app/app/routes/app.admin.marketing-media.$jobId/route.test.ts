@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
+import { RENDER_LOCK_TIMEOUT_MS } from '../../../../../packages/marketing-media';
 
 const requireAdmin = mock();
 const requireMutableRequest = mock();
@@ -6,7 +7,13 @@ const requireMarketingStudioEnabled = mock();
 const getSignedGetUrl = mock();
 
 const prisma = {
-  marketingMediaJob: { findUnique: mock(), update: mock(), create: mock() },
+  marketingMediaJob: {
+    findUnique: mock(),
+    findFirst: mock(),
+    count: mock(),
+    update: mock(),
+    create: mock(),
+  },
 };
 const reviseStoryboard = mock();
 
@@ -93,9 +100,14 @@ describe('marketing media job page', () => {
     requireMarketingStudioEnabled.mockReset();
     getSignedGetUrl.mockReset();
     prisma.marketingMediaJob.findUnique.mockReset();
+    prisma.marketingMediaJob.findFirst.mockReset();
+    prisma.marketingMediaJob.count.mockReset();
     prisma.marketingMediaJob.update.mockReset();
     prisma.marketingMediaJob.create.mockReset();
     reviseStoryboard.mockReset();
+    // Default: nothing else is filming and nothing is ahead in the queue.
+    prisma.marketingMediaJob.findFirst.mockResolvedValue(null);
+    prisma.marketingMediaJob.count.mockResolvedValue(0);
 
     requireAdmin.mockResolvedValue({ id: 'admin-1' });
     requireMutableRequest.mockResolvedValue(undefined);
@@ -175,6 +187,43 @@ describe('marketing media job page', () => {
 
     expect(result.data.queueStalled).toBe(true);
     expect(result.data.queuedMinutes).toBe(10);
+  });
+
+  // The worker is single-threaded and takes jobs oldest-first, so a job can
+  // sit QUEUED for many minutes purely because a renderer is busy with an
+  // earlier one — especially a failing job burning its retry budget. Telling
+  // an admin "no renderer is attached" then is simply false, and sends them
+  // off to start a second renderer that is not the problem.
+  test('blames the queue, not a missing renderer, while one is filming', async () => {
+    prisma.marketingMediaJob.findUnique.mockResolvedValue(
+      job({ status: 'QUEUED', updatedAt: new Date(Date.now() - 10 * 60_000) })
+    );
+    prisma.marketingMediaJob.findFirst.mockResolvedValue({ id: 'job-ahead' });
+    prisma.marketingMediaJob.count.mockResolvedValue(2);
+
+    const result = await loader(args(new Request('http://localhost/x')));
+
+    expect(result.data.queueStalled).toBe(false);
+    expect(result.data.waitingForTurn).toBe(true);
+    expect(result.data.queueAhead).toBe(2);
+  });
+
+  // A worker that died mid-render leaves its lock behind. That lock must not
+  // read as a live renderer, or a genuinely unattended queue looks busy
+  // forever.
+  test('ignores a dead worker stale lock when looking for a live renderer', async () => {
+    prisma.marketingMediaJob.findUnique.mockResolvedValue(
+      job({ status: 'QUEUED', updatedAt: new Date(Date.now() - 10 * 60_000) })
+    );
+
+    await loader(args(new Request('http://localhost/x')));
+
+    const where = prisma.marketingMediaJob.findFirst.mock.calls[0][0].where;
+    expect(where.status).toBe('RENDERING');
+    expect(where.lockedAt.gte).toBeInstanceOf(Date);
+    expect(Date.now() - where.lockedAt.gte.getTime()).toBe(
+      RENDER_LOCK_TIMEOUT_MS
+    );
   });
 
   test('does not cry stalled while a renderer could still claim the job', async () => {

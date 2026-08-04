@@ -75,8 +75,11 @@ try {
   await page.waitForFunction(
     "document.getElementById('clip').ended || window.__clipStalledTicks >= 5",
     undefined,
-    // Bounded by the schema's render cap, plus slack for decode stalls.
-    { timeout: 5 * 60_000 }
+    // Playback is real-time, so this only needs to cover the clip itself plus
+    // decode slack. It used to allow five minutes, which on its own could
+    // outlast the worker's whole attempt deadline — the render was abandoned
+    // and retried while a finished capture sat here waiting on decoration.
+    { timeout: Number(config.playbackTimeoutMs) || 120_000 }
   );
   // Let the final frame land in the recording before tearing down.
   await page.waitForTimeout(300);

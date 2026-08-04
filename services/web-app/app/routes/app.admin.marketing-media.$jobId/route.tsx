@@ -26,6 +26,8 @@ import {
   requireMarketingStudioEnabled,
 } from '~/utils/marketing-studio.server';
 import {
+  MAX_RENDER_ATTEMPTS,
+  RENDER_LOCK_TIMEOUT_MS,
   TERMINAL_JOB_STATUSES,
   estimateRenderSeconds,
   safeParseStoryboard,
@@ -98,11 +100,40 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     ? safeParseStoryboard(job.storyboard)
     : null;
 
-  // A healthy renderer claims a queued job within seconds. A job still QUEUED
-  // after this long means no renderer is attached to this environment, and the
-  // page should say that instead of looking hung.
+  // A healthy renderer claims a queued job within seconds — but the worker is
+  // single-threaded and takes jobs oldest-first, so a long wait usually means
+  // it is busy, not absent. Waiting alone is not evidence that nobody is
+  // home: ask whether a worker holds a live claim before telling an admin to
+  // go start a renderer that is already running.
   const queuedMs =
     job.status === 'QUEUED' ? Date.now() - job.updatedAt.getTime() : 0;
+
+  const [activeRender, queueAhead] =
+    job.status === 'QUEUED'
+      ? await Promise.all([
+          prisma.marketingMediaJob.findFirst({
+            where: {
+              status: 'RENDERING',
+              // A dead worker's abandoned lock is not a live renderer.
+              lockedAt: {
+                gte: new Date(Date.now() - RENDER_LOCK_TIMEOUT_MS),
+              },
+            },
+            select: { id: true },
+          }),
+          // Same eligibility and ordering the worker claims by, so the count
+          // is really "ahead of this one", not just "also waiting".
+          prisma.marketingMediaJob.count({
+            where: {
+              status: 'QUEUED',
+              createdAt: { lt: job.createdAt },
+              attempts: { lt: MAX_RENDER_ATTEMPTS },
+            },
+          }),
+        ])
+      : [null, 0];
+
+  const rendererBusy = Boolean(activeRender);
 
   return dataResponse({
     job: {
@@ -121,7 +152,9 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     estimatedSeconds: parsedStoryboard?.success
       ? estimateRenderSeconds(parsedStoryboard.data)
       : null,
-    queueStalled: queuedMs > STALLED_QUEUE_MS,
+    queueStalled: queuedMs > STALLED_QUEUE_MS && !rendererBusy,
+    waitingForTurn: job.status === 'QUEUED' && rendererBusy,
+    queueAhead,
     queuedMinutes: Math.floor(queuedMs / 60_000),
   });
 }
@@ -284,6 +317,8 @@ export default function Route() {
     storyboard,
     estimatedSeconds,
     queueStalled,
+    waitingForTurn,
+    queueAhead,
     queuedMinutes,
   } = useLoaderData<typeof loader>();
   const revalidator = useRevalidator();
@@ -352,6 +387,29 @@ export default function Route() {
           </Form>
         </div>
       </div>
+
+      {waitingForTurn ? (
+        <Card className="border-sky-300">
+          <CardHeader>
+            <CardTitle className="text-sky-800">Waiting its turn</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p
+              data-testid="marketing-job-waiting-turn"
+              className="text-sm text-sky-800"
+            >
+              A renderer is attached and filming another job right now — it
+              takes one job at a time, oldest first.{' '}
+              {queueAhead > 0
+                ? `There ${queueAhead === 1 ? 'is' : 'are'} ${queueAhead} job${
+                    queueAhead === 1 ? '' : 's'
+                  } ahead of this one.`
+                : 'This one is next up.'}{' '}
+              It starts on its own; nothing needs restarting.
+            </p>
+          </CardContent>
+        </Card>
+      ) : null}
 
       {queueStalled ? (
         <Card className="border-amber-300">

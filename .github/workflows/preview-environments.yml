@@ -358,7 +358,10 @@ jobs:
 
           echo "Queued $job_id — waiting for the preview renderer to claim and film it..."
           status="QUEUED"
-          for i in $(seq 1 96); do
+          # Must outlast the worker's per-attempt deadline times its retry
+          # budget, or a job that needs a second attempt can never be seen
+          # finishing — the poll window used to equal exactly one attempt.
+          for i in $(seq 1 240); do
             status="$(psql -Atc "SELECT status FROM \"MarketingMediaJob\" WHERE id='$job_id'")"
             echo "poll $i: $status"
             case "$status" in SUCCEEDED|FAILED|CANCELLED) break;; esac
