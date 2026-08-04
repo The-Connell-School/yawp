@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import {
   deckDurationMinutes,
   parseSlideDeck,
+  readSlideDeck,
   slideSearchText,
   SLIDE_DECK_FENCE,
   SLIDE_LAYOUTS,
@@ -198,5 +199,158 @@ describe('slideSearchText', () => {
     expect(text).toContain('the door slammed');
     // Speaker notes are not on screen.
     expect(text).not.toContain('three minutes');
+  });
+});
+
+describe('readSlideDeck — never show a teacher raw JSON', () => {
+  test('strips a deck-shaped block that fails validation and says so', () => {
+    // What actually happened: the model wrote "prompt" where the schema wants
+    // "body", so the deck failed and the JSON rendered as a code block.
+    const broken = `Here's the deck:\n\n\`\`\`${SLIDE_DECK_FENCE}\n${JSON.stringify(
+      { title: 'Deck', slides: [{ layout: 'bullets', title: 'No bullets' }] }
+    )}\n\`\`\``;
+
+    const outcome = readSlideDeck(broken);
+    expect(outcome.kind).toBe('unreadable');
+    if (outcome.kind !== 'none') {
+      expect(outcome.body).toContain("Here's the deck:");
+      expect(outcome.body).not.toContain('layout');
+      expect(outcome.body).not.toContain('{');
+    }
+  });
+
+  test('finds a deck fenced as json rather than by its tag', () => {
+    const deck = {
+      title: 'Deck',
+      slides: [
+        { layout: 'statement', title: 'A', body: 'B', speakerNotes: 'C' },
+      ],
+    };
+    const outcome = readSlideDeck(
+      `Here it is.\n\n\`\`\`json\n${JSON.stringify(deck)}\n\`\`\``
+    );
+    expect(outcome.kind).toBe('deck');
+  });
+
+  test('finds a deck in an untagged fence', () => {
+    const deck = {
+      title: 'Deck',
+      slides: [
+        { layout: 'statement', title: 'A', body: 'B', speakerNotes: 'C' },
+      ],
+    };
+    const outcome = readSlideDeck(
+      `Here it is.\n\n\`\`\`\n${JSON.stringify(deck)}\n\`\`\``
+    );
+    expect(outcome.kind).toBe('deck');
+  });
+
+  test('leaves an ordinary code block alone', () => {
+    const outcome = readSlideDeck('Try this:\n\n```\nconst x = 1;\n```');
+    expect(outcome.kind).toBe('none');
+  });
+
+  test('reports no deck when the reply has none', () => {
+    expect(readSlideDeck('Just a plan.').kind).toBe('none');
+  });
+});
+
+describe('parseSlideDeck — forgiving about how the model writes it', () => {
+  test('accepts prompt on a prompt slide, which is the obvious mistake', () => {
+    const parsed = parseSlideDeck(
+      fenced({
+        title: 'Deck',
+        slides: [
+          {
+            layout: 'prompt',
+            title: 'Warm-Up (3 min)',
+            prompt: 'Think of a time you tried to convince someone.',
+            speakerNotes: 'Three full minutes of quiet writing.',
+            minutes: 5,
+          },
+        ],
+      })
+    );
+    expect(parsed?.deck.slides[0]!.body).toBe(
+      'Think of a time you tried to convince someone.'
+    );
+  });
+
+  test('accepts other near-miss field names', () => {
+    const parsed = parseSlideDeck(
+      fenced({
+        title: 'Deck',
+        slides: [
+          {
+            layout: 'bullets',
+            title: 'Points',
+            items: ['One', 'Two'],
+            notes: 'Say it.',
+          },
+        ],
+      })
+    );
+    expect(parsed?.deck.slides[0]!.bullets).toEqual(['One', 'Two']);
+    expect(parsed?.deck.slides[0]!.speakerNotes).toBe('Say it.');
+  });
+
+  test('ignores a stray field instead of losing the whole deck', () => {
+    const parsed = parseSlideDeck(
+      fenced({
+        title: 'Deck',
+        slides: [
+          {
+            layout: 'statement',
+            title: 'A claim',
+            body: 'The body.',
+            speakerNotes: 'Say it.',
+            transition: 'fade',
+          },
+        ],
+      })
+    );
+    expect(parsed?.deck.slides).toHaveLength(1);
+  });
+
+  test('strips numbering the model typed into bullets itself', () => {
+    const parsed = parseSlideDeck(
+      fenced({
+        title: 'Deck',
+        slides: [
+          {
+            layout: 'steps',
+            title: 'The Three Jobs',
+            bullets: [
+              '1. Introduce — signal phrase before the quote',
+              '2. Integrate — quote sits inside your sentence',
+            ],
+            speakerNotes: 'Walk them through it.',
+          },
+        ],
+      })
+    );
+    // The steps layout numbers them; typed numbers would double up.
+    expect(parsed?.deck.slides[0]!.bullets).toEqual([
+      'Introduce — signal phrase before the quote',
+      'Integrate — quote sits inside your sentence',
+    ]);
+  });
+
+  test('takes minutes written as a string', () => {
+    const parsed = parseSlideDeck(
+      fenced({
+        title: 'Deck',
+        slides: [
+          {
+            layout: 'statement',
+            title: 'A',
+            body: 'B',
+            speakerNotes: 'C',
+            minutes: '5',
+          },
+        ],
+      })
+    );
+    expect(parsed?.deck.slides[0]!.minutes).toBe(5);
   });
 });

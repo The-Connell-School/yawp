@@ -198,6 +198,23 @@ describe('buildLessonPlannerSystemPrompt — slide decks', () => {
     }
   });
 
+  test('spells out the fields each layout takes', () => {
+    // The failure that shipped: the model guessed "prompt" for a prompt slide
+    // because only three layouts were shown in the example.
+    expect(prompt).toContain('NOT a field called "prompt"');
+    expect(prompt).toContain('`left` and `right`');
+    expect(prompt).toContain('Needs `bullets`');
+    expect(prompt).toContain('optional `attribution`');
+  });
+
+  test('tells it not to number steps by hand', () => {
+    expect(prompt.toLowerCase()).toContain('do not write "1."');
+  });
+
+  test('names the exact fence tag', () => {
+    expect(prompt).toContain('tagged exactly `yawp-slides`');
+  });
+
   test('requires speaker notes on every slide', () => {
     expect(prompt.toLowerCase()).toContain('every slide needs speakernotes');
   });

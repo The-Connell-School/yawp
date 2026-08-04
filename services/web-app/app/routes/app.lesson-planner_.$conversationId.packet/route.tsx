@@ -19,7 +19,7 @@ import { prisma } from '~/utils/db.server';
 import { getLessonPlannerAccess } from '~/utils/lesson-planner/lesson-planner-access.server';
 import { MarkdownContent } from '~/components/ai-chat/assistant-markdown';
 import { SlideDeckCard } from '~/components/ai-chat/slide-deck-card';
-import { parseSlideDeck } from '~/domain/lesson-planner/slide-deck';
+import { readSlideDeck } from '~/domain/lesson-planner/slide-deck';
 import { buildLessonPacket } from '~/domain/lesson-planner/lesson-packet';
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
@@ -363,8 +363,8 @@ function SectionContent({
   section: { id: string; content: string; audience: 'teacher' | 'student' };
   conversationId: string;
 }) {
-  const parsedDeck = parseSlideDeck(section.content);
-  const body = parsedDeck?.body ?? section.content;
+  const deckOutcome = readSlideDeck(section.content);
+  const body = deckOutcome.kind === 'none' ? section.content : deckOutcome.body;
 
   return (
     <div
@@ -373,13 +373,18 @@ function SectionContent({
       )}
     >
       {body ? <MarkdownContent content={body} /> : null}
-      {parsedDeck ? (
+      {deckOutcome.kind === 'deck' ? (
         <div className={cn(body && 'mt-3')}>
           <SlideDeckCard
-            deck={parsedDeck.deck}
+            deck={deckOutcome.deck}
             presentHref={`/present/${conversationId}/${section.id}`}
           />
         </div>
+      ) : null}
+      {deckOutcome.kind === 'unreadable' ? (
+        <p className={cn('text-sm text-muted-foreground', body && 'mt-3')}>
+          That deck didn’t come through cleanly — ask the planner to rebuild it.
+        </p>
       ) : null}
     </div>
   );
