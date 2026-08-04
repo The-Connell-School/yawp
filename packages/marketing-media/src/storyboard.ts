@@ -241,6 +241,15 @@ export const StoryboardSceneSchema = z
     fullPage: z.boolean().default(false),
     /** Shown next to the still in the admin gallery, not rendered on the page. */
     caption: z.string().max(200).optional(),
+    /**
+     * Burned into the clip while this scene plays. Deliberately separate from
+     * `caption`: a caption describes the action for an admin reading the job
+     * page ("Teacher clicks the Daily Pages card"), which reads like a test
+     * log on screen. An overlay is the line an audience should read — short,
+     * benefit-led, present tense. The cap enforces that; long copy is
+     * unreadable at a glance in a feed anyway.
+     */
+    overlay: z.string().max(60).optional(),
   })
   .superRefine((scene, ctx) => {
     scene.steps.forEach((step, index) => {

@@ -25,6 +25,19 @@ export type FrameOptions = {
   chromiumPath?: string;
   /** Hard ceiling on the whole framing stage; it must fit inside one attempt. */
   timeoutMs?: number;
+  /**
+   * On-screen copy, timed against the raw clip's own playback position. The
+   * framing stage is the only place this can happen: it replays the capture
+   * in a browser, so the overlay is composited by CSS rather than burned in
+   * by a filter chain.
+   */
+  overlays?: OverlayMark[];
+};
+
+export type OverlayMark = {
+  text: string;
+  startMs: number;
+  endMs: number;
 };
 
 /**
@@ -49,11 +62,21 @@ export function frameGeometry(width: number, height: number) {
   return { canvasWidth, canvasHeight, windowWidth, videoHeight, barHeight };
 }
 
+/** Keeps storyboard copy from closing the framing page's own markup. */
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
 export function buildFramingPage(options: {
   width: number;
   height: number;
   addressText: string;
   videoSrc: string;
+  overlays?: OverlayMark[];
 }): string {
   const { canvasWidth, canvasHeight, windowWidth, barHeight } = frameGeometry(
     options.width,
@@ -67,6 +90,7 @@ export function buildFramingPage(options: {
   * { margin: 0; padding: 0; box-sizing: border-box; }
   html, body { width: ${canvasWidth}px; height: ${canvasHeight}px; overflow: hidden; }
   body {
+    position: relative;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -100,6 +124,23 @@ export function buildFramingPage(options: {
     overflow: hidden;
   }
   video { display: block; width: 100%; }
+  .overlay {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    bottom: ${Math.round(canvasHeight * 0.045)}px;
+    max-width: ${Math.round(canvasWidth * 0.8)}px;
+    padding: 14px 26px;
+    border-radius: 999px;
+    background: rgba(17, 12, 28, 0.82);
+    color: #fff;
+    font: 600 ${Math.round(canvasWidth * 0.022)}px/1.3 -apple-system, 'Segoe UI', sans-serif;
+    text-align: center;
+    letter-spacing: -0.01em;
+    opacity: 0;
+    transition: opacity 220ms ease;
+  }
+  .overlay.on { opacity: 1; }
 </style>
 </head>
 <body>
@@ -112,6 +153,38 @@ export function buildFramingPage(options: {
     </div>
     <video id="clip" src="${options.videoSrc}" muted playsinline preload="auto"></video>
   </div>
+  <div class="overlay" id="overlay"></div>
+  <script>
+    // Keyed off the clip's own playback position rather than wall-clock, so a
+    // decode stall slides the copy with the picture instead of desyncing it.
+    window.__overlays = ${JSON.stringify(
+      (options.overlays ?? []).map((mark) => ({
+        text: escapeHtml(mark.text),
+        startMs: mark.startMs,
+        endMs: mark.endMs,
+      }))
+    )};
+    (() => {
+      const clip = document.getElementById('clip');
+      const box = document.getElementById('overlay');
+      const marks = window.__overlays || [];
+      if (!marks.length) return;
+      let shown = null;
+      setInterval(() => {
+        const ms = clip.currentTime * 1000;
+        const hit = marks.find((m) => ms >= m.startMs && ms < m.endMs);
+        const next = hit ? hit.text : null;
+        if (next === shown) return;
+        shown = next;
+        if (next) {
+          box.innerHTML = next;
+          box.classList.add('on');
+        } else {
+          box.classList.remove('on');
+        }
+      }, 100);
+    })();
+  </script>
 </body>
 </html>`;
 }
@@ -132,6 +205,7 @@ export async function frameClip(options: FrameOptions): Promise<FramedResult> {
     height: options.height,
     addressText: options.addressText ?? 'app.yawp.school',
     videoSrc: 'clip.webm',
+    overlays: options.overlays,
   });
 
   // The framing stage runs under Node rather than the worker's own runtime:

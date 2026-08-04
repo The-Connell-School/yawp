@@ -39,6 +39,7 @@ export const MARKETING_LIBRARY: MarketingLibraryEntry[] = [
       scenes: [
         {
           id: 'dashboard',
+          overlay: 'Every course, one tap away',
           goto: '/app',
           waitFor: 'main',
           settle: 0.8,
@@ -48,6 +49,7 @@ export const MARKETING_LIBRARY: MarketingLibraryEntry[] = [
         },
         {
           id: 'prompt-library-open',
+          overlay: 'A prompt library ready to assign',
           settle: 0.8,
           hold: 2,
           screenshot: true,
@@ -59,6 +61,7 @@ export const MARKETING_LIBRARY: MarketingLibraryEntry[] = [
         },
         {
           id: 'new-assignment',
+          overlay: 'Assign daily writing in seconds',
           settle: 0.8,
           hold: 2.5,
           screenshot: true,
@@ -90,6 +93,7 @@ export const MARKETING_LIBRARY: MarketingLibraryEntry[] = [
       scenes: [
         {
           id: 'student-dashboard',
+          overlay: 'Students see exactly what is due',
           goto: '/app',
           waitFor: 'main',
           settle: 1,
@@ -99,6 +103,7 @@ export const MARKETING_LIBRARY: MarketingLibraryEntry[] = [
         },
         {
           id: 'graded-submission',
+          overlay: 'Feedback students actually read',
           settle: 1,
           hold: 2,
           screenshot: true,
@@ -137,6 +142,7 @@ export const MARKETING_LIBRARY: MarketingLibraryEntry[] = [
         },
         {
           id: 'drafting',
+          overlay: 'A calm place to think and write',
           settle: 1,
           hold: 2,
           screenshot: true,
@@ -246,6 +252,7 @@ export const MARKETING_LIBRARY: MarketingLibraryEntry[] = [
       scenes: [
         {
           id: 'my-classes',
+          overlay: 'Know every class at a glance',
           goto: '/app/my-classes',
           waitFor: 'main',
           settle: 1,
@@ -257,6 +264,7 @@ export const MARKETING_LIBRARY: MarketingLibraryEntry[] = [
         },
         {
           id: 'class-detail',
+          overlay: 'Every student, every draft, one click',
           settle: 1,
           hold: 2.5,
           screenshot: true,

@@ -486,6 +486,10 @@ export async function renderStoryboard(
   // first paint — is dead footage in a short-form clip, so the transcode cuts
   // it. A small margin keeps the scene's own settle in the take.
   let firstSceneReadyAt: number | null = null;
+  // When each scene's overlay should be on screen, measured from the start of
+  // the recording so it lines up with the raw clip's own currentTime when the
+  // framing stage replays it.
+  const overlayMarks: { text: string; startMs: number; endMs: number }[] = [];
   // Tracked pointer position so glides start where the last one ended rather
   // than teleporting from the origin.
   const mouse = {
@@ -533,6 +537,7 @@ export async function renderStoryboard(
       if (scene.settle > 0)
         await page.waitForTimeout(Math.round(scene.settle * 1000));
       if (firstSceneReadyAt === null) firstSceneReadyAt = Date.now();
+      const sceneStartedAt = Date.now();
 
       for (const step of scene.steps) {
         try {
@@ -564,6 +569,15 @@ export async function renderStoryboard(
       if (scene.hold > 0)
         await page.waitForTimeout(Math.round(scene.hold * 1000));
       if (scene.screenshot) await shoot(scene.id, scene.fullPage);
+
+      const overlay = (scene as { overlay?: string }).overlay;
+      if (overlay) {
+        overlayMarks.push({
+          text: overlay,
+          startMs: sceneStartedAt - startedAt,
+          endMs: Date.now() - startedAt,
+        });
+      }
     }
   } finally {
     // Closing the context is what finalizes the recording, and it can wedge on
@@ -605,6 +619,7 @@ export async function renderStoryboard(
           width: storyboard.viewport.width,
           height: storyboard.viewport.height,
           chromiumPath: params.chromiumPath,
+          overlays: overlayMarks,
         });
       } catch (err) {
         const warning = `Framing failed, delivering the unframed capture: ${

@@ -41,6 +41,28 @@ describe('MARKETING_LIBRARY', () => {
     }
   });
 
+  // These clips are silent. Without burned-in copy a viewer sees a cursor
+  // moving around an unfamiliar UI and has to infer the feature, so every
+  // clip needs at least one line, and it has to be short enough to read at a
+  // glance rather than a description of what the mouse is doing.
+  test('every clip carries on-screen copy a viewer can read', () => {
+    for (const entry of MARKETING_LIBRARY) {
+      if (entry.kind !== 'CLIP') continue;
+      const parsed = safeParseStoryboard(entry.storyboard);
+      expect(parsed.success).toBe(true);
+      if (!parsed.success) continue;
+
+      const overlays = parsed.data.scenes
+        .map((scene) => scene.overlay)
+        .filter((text): text is string => Boolean(text));
+
+      expect(overlays.length).toBeGreaterThan(0);
+      for (const text of overlays) {
+        expect(text.length).toBeLessThanOrEqual(60);
+      }
+    }
+  });
+
   test('covers the feedback loop, daily writing, and teacher views', () => {
     const slugs = MARKETING_LIBRARY.map((entry) => entry.slug).join(' ');
     expect(slugs).toContain('feedback');
