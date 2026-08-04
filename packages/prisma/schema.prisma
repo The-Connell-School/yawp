@@ -541,6 +541,8 @@ model LessonPlanMessage {
   toolCalls      Json?
   keptAt         DateTime?              @db.Timestamptz(6)
   keptAudience   String?
+  /// Teacher-supplied name for this resource; falls back to a derived title.
+  keptTitle      String?
   conversationId String
   conversation   LessonPlanConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 

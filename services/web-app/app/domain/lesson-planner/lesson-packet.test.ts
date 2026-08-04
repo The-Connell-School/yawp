@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import {
   buildLessonPacket,
+  deriveSectionKind,
   deriveSectionTitle,
   parsePacketAudience,
   PACKET_AUDIENCES,
@@ -42,6 +43,34 @@ describe('deriveSectionTitle', () => {
     expect(deriveSectionTitle('## **Warm-up** for _everyone_', 0)).toBe(
       'Warm-up for everyone'
     );
+  });
+});
+
+describe('deriveSectionKind', () => {
+  test('calls a student-facing section a handout', () => {
+    expect(deriveSectionKind('Rewrite each conclusion.', 'student')).toBe(
+      'handout'
+    );
+  });
+
+  test('recognizes a slide deck by the shape the prompt asks for', () => {
+    const deck =
+      '## Slide 1 — Why conclusions matter\n\nSpeaker notes: open here.';
+    expect(deriveSectionKind(deck, 'teacher')).toBe('slides');
+    // A deck is a deck even when it is meant for the class to see.
+    expect(deriveSectionKind(deck, 'student')).toBe('slides');
+  });
+
+  test('treats everything else as part of the plan', () => {
+    expect(deriveSectionKind('## Warm-up (5 min)\n\nDo this.', 'teacher')).toBe(
+      'plan'
+    );
+  });
+
+  test('does not mistake prose about slides for a deck', () => {
+    expect(
+      deriveSectionKind('Project the slide while they write.', 'teacher')
+    ).toBe('plan');
   });
 });
 
@@ -146,6 +175,71 @@ describe('buildLessonPacket', () => {
 
   test('still finds the outline steps after the title is removed', () => {
     expect(packet.outline[0]!.steps).toEqual(['Teacher moves']);
+  });
+
+  test('gives every section a stable anchor for jump links', () => {
+    expect(packet.sections[0]!.anchor).toBe('resource-m1');
+    expect(packet.sections[1]!.anchor).toBe('resource-m2');
+    expect(packet.outline[0]!.anchor).toBe('resource-m1');
+  });
+
+  test('labels each section with its kind', () => {
+    expect(packet.sections.map((section) => section.kind)).toEqual([
+      'plan',
+      'handout',
+    ]);
+  });
+
+  test('prefers a teacher-supplied resource name over the derived one', () => {
+    const [section] = buildLessonPacket({
+      title: 'Lesson',
+      className: null,
+      sections: [
+        {
+          id: 'm1',
+          content: '## Warm-up (5 min)\n\nDo this.',
+          keptAudience: 'teacher',
+          keptTitle: '  Bell-ringer  ',
+        },
+      ],
+    }).sections;
+    expect(section!.title).toBe('Bell-ringer');
+    // The heading it replaced is still removed from the body.
+    expect(section!.content).not.toContain('# Warm-up');
+  });
+
+  test('ignores a blank teacher name and falls back to the derived title', () => {
+    const [section] = buildLessonPacket({
+      title: 'Lesson',
+      className: null,
+      sections: [
+        {
+          id: 'm1',
+          content: '## Warm-up (5 min)\n\nDo this.',
+          keptAudience: 'teacher',
+          keptTitle: '   ',
+        },
+      ],
+    }).sections;
+    expect(section!.title).toBe('Warm-up (5 min)');
+  });
+
+  test('still reads minutes from the derived title when renamed', () => {
+    const renamed = buildLessonPacket({
+      title: 'Lesson',
+      className: null,
+      sections: [
+        {
+          id: 'm1',
+          content: '## Warm-up (5 min)\n\nDo this.',
+          keptAudience: 'teacher',
+          keptTitle: 'Bell-ringer',
+        },
+      ],
+    });
+    // The timing belongs to the lesson, not to whatever the teacher called it.
+    expect(renamed.outline[0]!.minutes).toBe(5);
+    expect(renamed.totalMinutes).toBe(5);
   });
 
   test('falls back to the conversation title when the packet is unnamed', () => {

@@ -15,19 +15,23 @@ import { requireLessonPlannerAccess } from '~/utils/lesson-planner/lesson-planne
 import { PACKET_AUDIENCES } from '~/domain/lesson-planner/lesson-packet';
 
 const MAX_PACKET_TITLE_CHARS = 120;
+const MAX_SECTION_TITLE_CHARS = 120;
 
 const POST = z
   .object({
-    intent: z.enum(['keep', 'drop', 'rename']),
+    intent: z.enum(['keep', 'drop', 'rename', 'rename-section']),
     conversationId: z.string().min(1),
     messageId: z.string().min(1).optional(),
     audience: z.enum(PACKET_AUDIENCES).optional(),
     packetTitle: z.string().max(MAX_PACKET_TITLE_CHARS).optional(),
+    sectionTitle: z.string().max(MAX_SECTION_TITLE_CHARS).optional(),
   })
   .strict()
   .superRefine((value, context) => {
     if (
-      (value.intent === 'keep' || value.intent === 'drop') &&
+      (value.intent === 'keep' ||
+        value.intent === 'drop' ||
+        value.intent === 'rename-section') &&
       !value.messageId
     ) {
       context.addIssue({
@@ -66,6 +70,25 @@ export async function action({ request }: ActionFunctionArgs) {
       data: { packetTitle },
     });
     return dataResponse({ packetTitle });
+  }
+
+  if (data.intent === 'rename-section') {
+    const sectionTitle = data.sectionTitle?.trim() || null;
+    const { count } = await prisma.lessonPlanMessage.updateMany({
+      where: {
+        id: data.messageId,
+        conversationId: conversation.id,
+        role: 'assistant',
+      },
+      data: { keptTitle: sectionTitle },
+    });
+    if (count === 0) {
+      return dataResponse(
+        { error: 'That section is not part of this lesson.' },
+        { status: 404 }
+      );
+    }
+    return dataResponse({ messageId: data.messageId, sectionTitle });
   }
 
   const keeping = data.intent === 'keep';

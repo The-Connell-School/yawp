@@ -54,7 +54,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   const conversations = await prisma.lessonPlanConversation.findMany({
     where: { membershipId: access.membership.id, deletedAt: null },
-    select: { id: true, title: true, updatedAt: true },
+    // packetTitle when the teacher named the lesson: naming it on the packet
+    // should rename it everywhere, not just on that page.
+    select: { id: true, title: true, packetTitle: true, updatedAt: true },
     orderBy: { updatedAt: 'desc' },
     take: 30,
   });
@@ -97,7 +99,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   return {
     conversations: conversations.map((conversation) => ({
       id: conversation.id,
-      title: conversation.title,
+      title: conversation.packetTitle?.trim() || conversation.title,
     })),
     selectedConversation: selected
       ? {

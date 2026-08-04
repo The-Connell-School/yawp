@@ -145,6 +145,69 @@ describe('lesson packet action', () => {
     ).toBeNull();
   });
 
+  test('renames a saved resource', async () => {
+    const response = await action({
+      request: formRequest({
+        intent: 'rename-section',
+        conversationId: 'plan-1',
+        messageId: 'msg-1',
+        sectionTitle: '  Fix-It sentences  ',
+      }),
+    } as any);
+
+    expect(response.data).toMatchObject({ sectionTitle: 'Fix-It sentences' });
+    const update = prisma.lessonPlanMessage.updateMany.mock.calls[0][0];
+    expect(update.where).toMatchObject({
+      id: 'msg-1',
+      conversationId: 'plan-1',
+      role: 'assistant',
+    });
+    expect(update.data).toEqual({ keptTitle: 'Fix-It sentences' });
+  });
+
+  test('clears a blank resource name back to the derived title', async () => {
+    await action({
+      request: formRequest({
+        intent: 'rename-section',
+        conversationId: 'plan-1',
+        messageId: 'msg-1',
+        sectionTitle: '   ',
+      }),
+    } as any);
+
+    expect(
+      prisma.lessonPlanMessage.updateMany.mock.calls[0][0].data.keptTitle
+    ).toBeNull();
+  });
+
+  test('will not rename a section outside the conversation', async () => {
+    prisma.lessonPlanMessage.updateMany.mockResolvedValue({ count: 0 });
+
+    const response = await action({
+      request: formRequest({
+        intent: 'rename-section',
+        conversationId: 'plan-1',
+        messageId: 'not-in-here',
+        sectionTitle: 'Anything',
+      }),
+    } as any);
+
+    expect(response.init?.status).toBe(404);
+  });
+
+  test('requires a message to rename a section', async () => {
+    const response = await action({
+      request: formRequest({
+        intent: 'rename-section',
+        conversationId: 'plan-1',
+        sectionTitle: 'Orphan',
+      }),
+    } as any);
+
+    expect(response.init?.status).toBe(422);
+    expect(prisma.lessonPlanMessage.updateMany).not.toHaveBeenCalled();
+  });
+
   test('refuses a conversation that is not the teacher’s', async () => {
     prisma.lessonPlanConversation.findFirst.mockResolvedValue(null);
 

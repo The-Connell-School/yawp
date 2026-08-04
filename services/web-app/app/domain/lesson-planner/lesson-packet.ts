@@ -97,10 +97,32 @@ function stripDuplicateTitleHeading(content: string, title: string): string {
     .trim();
 }
 
+export const PACKET_SECTION_KINDS = ['plan', 'handout', 'slides'] as const;
+
+/**
+ * What a saved resource is, so the packet can be browsed rather than only
+ * read: `slides` to project, `handout` to give out, `plan` for the teacher.
+ */
+export type PacketSectionKind = (typeof PACKET_SECTION_KINDS)[number];
+
+// The prompt asks for decks as "## Slide N — title", so a deck announces
+// itself in its headings. Prose that merely mentions slides does not.
+const SLIDE_HEADING = /^\s{0,3}#{1,6}\s+slide\s*\d/im;
+
+export function deriveSectionKind(
+  content: string,
+  audience: PacketAudience
+): PacketSectionKind {
+  if (SLIDE_HEADING.test(content)) return 'slides';
+  return audience === 'student' ? 'handout' : 'plan';
+}
+
 export type PacketSectionInput = {
   id: string;
   content: string;
   keptAudience?: string | null;
+  /** Teacher-supplied name; blank or absent falls back to the derived title. */
+  keptTitle?: string | null;
 };
 
 export type PacketSection = {
@@ -108,12 +130,17 @@ export type PacketSection = {
   title: string;
   content: string;
   audience: PacketAudience;
+  kind: PacketSectionKind;
+  /** Stable id for jump links from the contents index. */
+  anchor: string;
 };
 
 export type PacketOutlineEntry = {
   title: string;
   minutes: number | null;
   steps: string[];
+  kind: PacketSectionKind;
+  anchor: string;
 };
 
 export type LessonPacket = {
@@ -137,25 +164,33 @@ export function buildLessonPacket({
   const built = sections.map((section, index) => {
     // The suggestions block drives chat chips; it is not part of the lesson.
     const { body } = parseAssistantMessage(section.content);
-    const title = deriveSectionTitle(body, index);
+    const derivedTitle = deriveSectionTitle(body, index);
+    const audience = parsePacketAudience(section.keptAudience);
     return {
       id: section.id,
-      title,
-      content: stripDuplicateTitleHeading(body.trim(), title),
-      audience: parsePacketAudience(section.keptAudience),
+      title: section.keptTitle?.trim() || derivedTitle,
+      // Timing lives in the lesson's own heading, so a rename must not lose
+      // it — the outline reads minutes from the derived title.
+      derivedTitle,
+      content: stripDuplicateTitleHeading(body.trim(), derivedTitle),
+      audience,
+      kind: deriveSectionKind(body, audience),
+      anchor: `resource-${section.id}`,
     };
   });
 
   const outline = built.map((section) => ({
     title: section.title,
-    minutes: readMinutes(section.title),
-    steps: readSteps(section.content, section.title),
+    minutes: readMinutes(section.derivedTitle),
+    steps: readSteps(section.content, section.derivedTitle),
+    kind: section.kind,
+    anchor: section.anchor,
   }));
 
   return {
     title: title.trim() || 'Lesson plan',
     className,
-    sections: built,
+    sections: built.map(({ derivedTitle: _derived, ...section }) => section),
     outline,
     totalMinutes: outline.reduce(
       (total, entry) => total + (entry.minutes ?? 0),

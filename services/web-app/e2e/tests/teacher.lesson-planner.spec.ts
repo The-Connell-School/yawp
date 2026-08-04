@@ -477,4 +477,101 @@ test.describe('YAWP! Lesson Planner', () => {
       await expect(lastLine).toBeInViewport({ timeout: 1000 });
     }).toPass({ timeout: 10_000 });
   });
+
+  test('browses saved resources from the lesson index', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    await setLessonPlannerEnabled(e2eContext.organizationId, true);
+    const { conversationId } = await seedLessonPlan(e2eContext, {
+      keepFirst: true,
+      keepLongHandout: true,
+    });
+    await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+
+    await page.setViewportSize({ width: 1440, height: 700 });
+    await page.goto(`/app/lesson-planner/${conversationId}/packet`);
+
+    // Every saved resource is listed, so nothing has to be scrolled for.
+    const index = page.getByTestId('resource-index');
+    await expect(index).toContainText('Warm-up');
+    await expect(index).toContainText('Conclusion practice handout');
+
+    // Jumping goes to the resource rather than the top of the document.
+    await index.getByRole('button', { name: /conclusion practice/i }).click();
+    await expect(
+      page.getByTestId('packet-section-student').first()
+    ).toBeInViewport();
+
+    // Filtering narrows the document to one kind of material.
+    await index.getByRole('button', { name: 'Handout', exact: true }).click();
+    await expect(page.getByTestId('packet-section-student')).toHaveCount(1);
+    await expect(page.getByTestId('packet-section-teacher')).toHaveCount(0);
+  });
+
+  test('renames a saved resource and keeps the name', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    await setLessonPlannerEnabled(e2eContext.organizationId, true);
+    const { conversationId } = await seedLessonPlan(e2eContext, {
+      keepFirst: true,
+    });
+    await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+    await page.goto(`/app/lesson-planner/${conversationId}/packet`);
+
+    const nameField = page.getByLabel('Name for Warm-up (5 min)');
+    await nameField.fill('Bell-ringer');
+    const saved = page.waitForResponse(
+      (response) =>
+        response.url().includes('/api/domain/lesson-planner/packet') &&
+        response.request().method() === 'POST'
+    );
+    await nameField.blur();
+    await saved;
+
+    await page.reload();
+    // The index and the document both use the teacher's name for it.
+    await expect(page.getByTestId('resource-index')).toContainText(
+      'Bell-ringer'
+    );
+    // The timing still comes from the lesson, not from the new label.
+    await expect(page.getByTestId('resource-index')).toContainText('5m');
+  });
+
+  test('names the lesson once, everywhere', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    await setLessonPlannerEnabled(e2eContext.organizationId, true);
+    const { conversationId } = await seedLessonPlan(e2eContext, {
+      keepFirst: true,
+    });
+    await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+    await page.goto(`/app/lesson-planner/${conversationId}/packet`);
+
+    const nameField = page.getByLabel('Lesson name');
+    await nameField.fill('Conclusions, period 3');
+    const saved = page.waitForResponse(
+      (response) =>
+        response.url().includes('/api/domain/lesson-planner/packet') &&
+        response.request().method() === 'POST'
+    );
+    await nameField.blur();
+    await saved;
+
+    // The planner rail and the library both follow the packet's name.
+    await page.goto(`/app/lesson-planner?c=${conversationId}`);
+    await expect(
+      page.getByRole('button', { name: 'Conclusions, period 3' })
+    ).toBeVisible();
+
+    await page.goto('/app/lesson-planner/library');
+    await expect(
+      page.getByRole('link', { name: 'Conclusions, period 3' })
+    ).toBeVisible();
+  });
 });
