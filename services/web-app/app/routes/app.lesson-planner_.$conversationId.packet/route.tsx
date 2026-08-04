@@ -21,7 +21,11 @@ import { MarkdownContent } from '~/components/ai-chat/assistant-markdown';
 import { SlideDeckCard } from '~/components/ai-chat/slide-deck-card';
 import { readSlideDeck } from '~/domain/lesson-planner/slide-deck';
 import { buildLessonPacket } from '~/domain/lesson-planner/lesson-packet';
-import { packetKindForMaterial } from '~/domain/lesson-planner/lesson-material';
+import {
+  MATERIAL_KIND_LABELS,
+  packetKindForMaterial,
+  type LessonMaterial,
+} from '~/domain/lesson-planner/lesson-material';
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   const access = await getLessonPlannerAccess(request);
@@ -415,7 +419,12 @@ function SectionContent({
   section,
   conversationId,
 }: {
-  section: { id: string; content: string; audience: 'teacher' | 'student' };
+  section: {
+    id: string;
+    content: string;
+    audience: 'teacher' | 'student';
+    materials: LessonMaterial[];
+  };
   conversationId: string;
 }) {
   const deckOutcome = readSlideDeck(section.content);
@@ -441,6 +450,33 @@ function SectionContent({
           This deck didn’t build. Ask the planner to rebuild it, shorter.
         </p>
       ) : null}
+      {/* Material the teacher kept as part of the whole reply rather than
+          filing on its own. It prints here, as material — each on its own page
+          so it can still be handed out. */}
+      {section.materials.map((material) => (
+        <div
+          key={material.key}
+          className="mt-6 border-t pt-4 print:break-before-page print:border-t-0 print:pt-0"
+        >
+          <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+            {MATERIAL_KIND_LABELS[material.kind]}
+          </p>
+          <h3 className="mb-2 text-base font-semibold">{material.title}</h3>
+          {material.audience === 'student' ? (
+            <div className="mb-4 flex items-end justify-between gap-6 border-b pb-2 text-sm text-muted-foreground">
+              <span className="flex-1">Name ______________________</span>
+              <span>Date ____________</span>
+            </div>
+          ) : null}
+          <div
+            className={cn(
+              material.audience === 'student' && 'leading-9 print:leading-[2.6]'
+            )}
+          >
+            <MarkdownContent content={material.content} />
+          </div>
+        </div>
+      ))}
     </div>
   );
 }

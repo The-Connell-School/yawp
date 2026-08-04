@@ -510,14 +510,14 @@ test.describe('YAWP! Lesson Planner', () => {
       .click();
 
     const bar = page.getByTestId('lesson-packet-bar');
-    await expect(bar).toContainText(/1 section/i);
+    await expect(bar).toContainText(/1 resource/i);
 
     // The second reply is a handout, so it is kept for students.
     await replies
       .nth(1)
       .getByRole('button', { name: /keep as a handout/i })
       .click();
-    await expect(bar).toContainText(/2 sections/i);
+    await expect(bar).toContainText(/2 resources/i);
 
     await bar.getByRole('link', { name: /open lesson packet/i }).click();
     await expect(page).toHaveURL(
@@ -856,6 +856,77 @@ test.describe('YAWP! Lesson Planner', () => {
     await expect(page.locator('main')).not.toContainText('Underline the');
     await cards.nth(1).getByText('Diagnose & Repair').click();
     await expect(cards.nth(1)).toContainText('Underline the sentence');
+  });
+
+  test('opens the packet from a material alone, with no reply kept', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    await setLessonPlannerEnabled(e2eContext.organizationId, true);
+    const { conversationId } = await seedLessonWithMaterials(e2eContext);
+    await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+    await page.goto(`/app/lesson-planner?c=${conversationId}`);
+
+    await expect(page.getByTestId('lesson-packet-bar')).toHaveCount(0);
+
+    const save = page.waitForResponse(
+      (response) =>
+        response.url().includes('/api/domain/lesson-planner/packet') &&
+        response.request().method() === 'POST'
+    );
+    await page
+      .getByTestId('material-card')
+      .first()
+      .getByTestId('material-toggle')
+      .click();
+    await save;
+
+    // Filing a handout puts something in the packet, so there has to be a way
+    // to get to it — without keeping the whole lesson plan first.
+    const bar = page.getByTestId('lesson-packet-bar');
+    await expect(bar).toContainText(/1 resource/i);
+    await bar.getByRole('link', { name: /open lesson packet/i }).click();
+    await expect(page).toHaveURL(
+      new RegExp(`/app/lesson-planner/${conversationId}/packet`)
+    );
+  });
+
+  test('prints material inside a kept reply as material, not as a code block', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    await setLessonPlannerEnabled(e2eContext.organizationId, true);
+    const { conversationId } = await seedLessonWithMaterials(e2eContext);
+    await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+    await page.goto(`/app/lesson-planner?c=${conversationId}`);
+
+    const keep = page.waitForResponse(
+      (response) =>
+        response.url().includes('/api/domain/lesson-planner/packet') &&
+        response.request().method() === 'POST'
+    );
+    await page
+      .locator('[data-role="assistant"]')
+      .first()
+      .getByRole('button', { name: /keep for the lesson/i })
+      .click();
+    await keep;
+
+    await page.goto(`/app/lesson-planner/${conversationId}/packet`);
+
+    // The header and fence must never reach the page.
+    await expect(page.locator('main')).not.toContainText('kind: sample');
+    await expect(page.locator('main')).not.toContainText('yawp-material');
+    // The material still prints, as material.
+    await expect(page.locator('main')).toContainText(
+      'Two conclusions, side by side'
+    );
+    await expect(page.locator('main')).toContainText('The door slams');
+    // And its headings are not mistaken for stages of the lesson.
+    await page.getByRole('button', { name: /outline/i }).click();
+    await expect(page.locator('main')).not.toContainText('Draft A');
   });
 
   test('puts one material in the packet without keeping the whole plan', async ({

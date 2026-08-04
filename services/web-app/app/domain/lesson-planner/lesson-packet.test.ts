@@ -326,3 +326,45 @@ describe('buildLessonPacket — materials kept on their own', () => {
     expect(packet.sections[1]!.origin).toBe('material');
   });
 });
+
+describe('buildLessonPacket — a kept reply that carries materials', () => {
+  const reply = [
+    '## Lesson Sequence',
+    '',
+    'Project the drafts, then hand out the practice set.',
+    '',
+    '```yawp-material',
+    'kind: sample',
+    'title: Two Drafts',
+    '---',
+    '## Two Drafts',
+    '',
+    '### Draft A',
+    'In conclusion, this essay has shown many things.',
+    '```',
+  ].join('\n');
+
+  const packet = buildLessonPacket({
+    title: 'Evidence lesson',
+    className: null,
+    sections: [{ id: 'msg-1', content: reply, keptAudience: 'teacher' }],
+  });
+
+  test('never prints the block as raw text', () => {
+    // What shipped: the header and body rendered as a code block in the packet.
+    expect(packet.sections[0]!.content).not.toContain('yawp-material');
+    expect(packet.sections[0]!.content).not.toContain('kind: sample');
+    expect(packet.sections[0]!.content).toContain('Project the drafts');
+  });
+
+  test('keeps the material with the section so nothing is lost', () => {
+    const [material] = packet.sections[0]!.materials;
+    expect(material!.title).toBe('Two Drafts');
+    expect(material!.content).toContain('Draft A');
+  });
+
+  test('does not read the material’s headings as steps of the lesson', () => {
+    // "Two Drafts" and "Draft A" are inside a handout, not stages of the class.
+    expect(packet.outline[0]!.steps).toEqual([]);
+  });
+});

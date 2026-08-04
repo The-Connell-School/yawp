@@ -9,6 +9,7 @@
  */
 import { parseAssistantMessage } from '~/components/ai-chat/parse-assistant-message';
 import { hasSlideDeck } from './slide-deck';
+import { readLessonMaterials, type LessonMaterial } from './lesson-material';
 
 export const PACKET_AUDIENCES = ['teacher', 'student'] as const;
 
@@ -144,6 +145,12 @@ export type PacketSection = {
   audience: PacketAudience;
   kind: PacketSectionKind;
   origin: PacketSectionOrigin;
+  /**
+   * Material still sitting inside a kept reply, because the teacher kept the
+   * whole plan rather than filing the handout on its own. It prints with the
+   * section instead of being dropped or shown as a fence.
+   */
+  materials: LessonMaterial[];
   /** Stable id for jump links from the contents index. */
   anchor: string;
 };
@@ -176,7 +183,12 @@ export function buildLessonPacket({
 }): LessonPacket {
   const built = sections.map((section, index) => {
     // The suggestions block drives chat chips; it is not part of the lesson.
-    const { body } = parseAssistantMessage(section.content);
+    const { body: withMaterials } = parseAssistantMessage(section.content);
+    // A kept reply still carries its material blocks. They are rendered as
+    // material, never as the raw fence — and their headings are parts of a
+    // handout, not stages of the class, so they must come out before the
+    // outline reads steps.
+    const { materials, body } = readLessonMaterials(withMaterials);
     const derivedTitle = deriveSectionTitle(body, index);
     const audience = parsePacketAudience(section.keptAudience);
     return {
@@ -189,6 +201,7 @@ export function buildLessonPacket({
       audience,
       kind: section.kind ?? deriveSectionKind(body, audience),
       origin: section.origin ?? 'reply',
+      materials,
       anchor: `resource-${section.id}`,
     };
   });

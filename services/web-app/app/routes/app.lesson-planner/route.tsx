@@ -305,7 +305,11 @@ export default function LessonPlannerRoute() {
     );
   }
 
-  const keptCount = messages.filter((message) => message.keptAudience).length;
+  // Everything in the packet, however it got there. Counting only kept replies
+  // left a teacher who filed a handout with no way to reach their own packet.
+  const keptCount =
+    messages.filter((message) => message.keptAudience).length +
+    addedMaterials.size;
 
   function send(message: string) {
     const trimmed = message.trim();
@@ -501,7 +505,7 @@ export default function LessonPlannerRoute() {
               <FileText size={16} className="shrink-0 text-primary" />
               <p className="text-sm">
                 <strong>
-                  {keptCount} {keptCount === 1 ? 'section' : 'sections'}
+                  {keptCount} {keptCount === 1 ? 'resource' : 'resources'}
                 </strong>{' '}
                 in this lesson
               </p>
