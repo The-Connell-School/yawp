@@ -160,6 +160,24 @@ describe('step allowlist', () => {
     expect(parsed.scenes[0].steps).toHaveLength(3);
   });
 
+  // Detail pages are reachable only by clicking, so a clip that wants to open
+  // on one has to film the walk there. Marking the opening scene keeps that
+  // navigation out of the delivered clip without letting a storyboard address
+  // a record by id.
+  test('lets a scene declare where the delivered clip opens', () => {
+    const parsed = parseStoryboard(
+      storyboard({
+        scenes: [
+          scene({ id: 'walk-there' }),
+          scene({ id: 'the-shot', startsClip: true }),
+        ],
+      })
+    );
+
+    expect(parsed.scenes[0].startsClip).toBe(false);
+    expect(parsed.scenes[1].startsClip).toBe(true);
+  });
+
   test('accepts a scene that pushes in on one element', () => {
     const parsed = parseStoryboard(
       storyboard({

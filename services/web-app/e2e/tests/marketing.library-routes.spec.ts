@@ -1,5 +1,8 @@
 import { test, expect } from '../test-setup';
-import { MARKETING_LIBRARY } from '../../../../packages/marketing-media';
+import {
+  ALLOWED_ROUTES,
+  MARKETING_LIBRARY,
+} from '../../../../packages/marketing-media';
 
 /**
  * The curated marketing library names real routes and films them unattended,
@@ -22,9 +25,14 @@ import { MARKETING_LIBRARY } from '../../../../packages/marketing-media';
 
 const APP_ERROR_BOUNDARY = /Oops! Something didn't work quite right/i;
 
-/** Every distinct route the curated library navigates to. */
-function libraryRoutes(): string[] {
-  const routes = new Set<string>();
+/**
+ * Every route a storyboard may navigate to, plus every route the curated
+ * library actually films. The allowlist matters as much as the library: a
+ * generated storyboard can send the renderer to any of those, so a dead one
+ * is a render failure waiting to be discovered on a preview instead of here.
+ */
+function filmableRoutes(): string[] {
+  const routes = new Set<string>(ALLOWED_ROUTES);
   for (const entry of MARKETING_LIBRARY) {
     const storyboard = entry.storyboard as {
       scenes?: { goto?: string }[];
@@ -39,12 +47,12 @@ function libraryRoutes(): string[] {
 test.describe.serial('Marketing library routes still exist', () => {
   test.setTimeout(120_000);
 
-  test('every route the curated library films still renders', async ({
+  test('every route a storyboard may film still renders', async ({
     page,
     signIn,
     e2eContext,
   }) => {
-    const routes = libraryRoutes();
+    const routes = filmableRoutes();
     expect(routes.length).toBeGreaterThan(0);
 
     await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
@@ -69,7 +77,7 @@ test.describe.serial('Marketing library routes still exist', () => {
 
     expect(
       broken,
-      `These routes are referenced by packages/marketing-media/src/library.ts but no longer render. Update the library storyboards and ROUTE_GUIDE to match the current app:\n${broken.join(
+      `These routes are filmable by the marketing studio (ALLOWED_ROUTES or a curated library storyboard) but no longer render. Update packages/marketing-media (storyboard.ts, library.ts, route-guide.ts) to match the current app:\n${broken.join(
         '\n'
       )}`
     ).toEqual([]);

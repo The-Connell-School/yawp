@@ -104,6 +104,7 @@ export const MARKETING_LIBRARY: MarketingLibraryEntry[] = [
         },
         {
           id: 'graded-submission',
+          startsClip: true,
           overlay: 'Feedback students actually read',
           focus: { text: 'Overall Feedback', scale: 1.6 },
           settle: 1,

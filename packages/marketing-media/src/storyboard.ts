@@ -251,6 +251,16 @@ export const StoryboardSceneSchema = z
      */
     overlay: z.string().max(60).optional(),
     /**
+     * Start the delivered clip at this scene. Everything before it is still
+     * filmed — that is how the renderer reaches a detail page at all, by
+     * clicking through from a list rather than addressing a record by id —
+     * but the viewer never sees the walk there.
+     *
+     * This is what lets a clip open on a graded submission without letting a
+     * generated storyboard navigate straight to one.
+     */
+    startsClip: z.boolean().default(false),
+    /**
      * Push in on one element once the scene's steps are done. Product UI is
      * illegible when a 1280px viewport is scaled into a feed, and the whole
      * point of a feature clip is that a viewer can read the thing being

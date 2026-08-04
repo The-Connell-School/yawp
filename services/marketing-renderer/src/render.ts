@@ -512,6 +512,9 @@ export async function renderStoryboard(
   // first paint — is dead footage in a short-form clip, so the transcode cuts
   // it. A small margin keeps the scene's own settle in the take.
   let firstSceneReadyAt: number | null = null;
+  // Set by a scene marked startsClip: the navigation before it is filmed but
+  // trimmed away, so the clip opens on the screen worth showing.
+  let clipOpensAt: number | null = null;
   // When each scene's overlay should be on screen, measured from the start of
   // the recording so it lines up with the raw clip's own currentTime when the
   // framing stage replays it.
@@ -573,6 +576,9 @@ export async function renderStoryboard(
         await page.waitForTimeout(Math.round(scene.settle * 1000));
       if (firstSceneReadyAt === null) firstSceneReadyAt = Date.now();
       const sceneStartedAt = Date.now();
+      if ((scene as { startsClip?: boolean }).startsClip && !clipOpensAt) {
+        clipOpensAt = sceneStartedAt;
+      }
 
       for (const step of scene.steps) {
         try {
@@ -668,9 +674,14 @@ export async function renderStoryboard(
     params.onStage?.('saving the recording');
     const recorded = await video.path();
     const mp4Path = path.join(videoDir, `${storyboard.slug}.mp4`);
-    const rawTrimSeconds = firstSceneReadyAt
-      ? Math.max(0, (firstSceneReadyAt - startedAt) / 1000 - 0.4)
-      : 0;
+    // A scene that declared itself the opening shot wins over the default of
+    // "first scene ready"; no margin there, because the point is to land on
+    // that screen rather than catch the navigation that reached it.
+    const rawTrimSeconds = clipOpensAt
+      ? Math.max(0, (clipOpensAt - startedAt) / 1000)
+      : firstSceneReadyAt
+        ? Math.max(0, (firstSceneReadyAt - startedAt) / 1000 - 0.4)
+        : 0;
 
     const frameStyle = params.frameStyle ?? 'window';
     let outputWidth = storyboard.viewport.width;
