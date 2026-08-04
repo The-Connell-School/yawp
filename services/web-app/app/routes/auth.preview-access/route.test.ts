@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 
 const logout = mock();
-const { createPreviewAccessAction } = await import('./route');
+const { createPreviewAccessAction } = await import('./action.server');
 const action = createPreviewAccessAction(logout as never);
 
 const originalCodes = process.env.PREVIEW_ACCESS_CODES;

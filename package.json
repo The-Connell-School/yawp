@@ -13,6 +13,7 @@
     "web-app:dev": "bun run --cwd services/web-app dev",
     "web-app:test:e2e": "bun run --cwd services/web-app test:e2e",
     "web-app:test:e2e:prepare": "bun run --cwd services/web-app test:e2e:prepare",
+    "web-app:test:e2e:preview-access": "bun run --cwd services/web-app test:e2e:preview-access",
     "web-app:test:e2e:smoke": "bun run --cwd services/web-app test:e2e:smoke",
     "web-app:test:e2e:full": "bun run --cwd services/web-app test:e2e:full",
     "web-app:build": "bun run --cwd services/web-app build",

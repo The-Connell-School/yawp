@@ -194,3 +194,10 @@ jobs:
           CI: true
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yop_e2e
         run: bun run test:e2e:smoke
+
+      - name: 🔐 Run preview access gate tests
+        working-directory: services/web-app
+        env:
+          CI: true
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yop_e2e
+        run: bun run test:e2e:preview-access

@@ -1,18 +1,12 @@
 import {
   Form,
   useActionData,
-  type ActionFunctionArgs,
   type LoaderFunctionArgs,
 } from 'react-router';
 import { KeyRound } from 'lucide-react';
 import { safeRedirect } from 'remix-utils/safe-redirect';
-import {
-  PREVIEW_ACCESS_PATH,
-  clearPreviewAccessCookie,
-  findPreviewAccessSeatByCode,
-  grantPreviewAccessCookie,
-  isPreviewAccessConfigured,
-} from '~/utils/preview-access.server';
+import { isPreviewAccessConfigured } from '~/utils/preview-access.server';
+import { createPreviewAccessAction } from './action.server';
 import type { Route } from './+types/route';
 
 export function loader({ request }: LoaderFunctionArgs) {
@@ -20,66 +14,6 @@ export function loader({ request }: LoaderFunctionArgs) {
   return {
     configured: isPreviewAccessConfigured(),
     returnTo: safeRedirect(returnTo, '/'),
-  };
-}
-
-type LogoutFunction = typeof import('~/utils/auth.server').logout;
-
-export function createPreviewAccessAction(logoutFunction?: LogoutFunction) {
-  return async ({ request }: ActionFunctionArgs): Promise<Response> => {
-    const formData = await request.formData();
-    const intent = String(formData.get('intent') ?? 'enter');
-
-    if (intent === 'sign-out') {
-      const signOut =
-        logoutFunction ?? (await import('~/utils/auth.server')).logout;
-      await signOut(
-        { request, redirectTo: PREVIEW_ACCESS_PATH },
-        {
-          headers: {
-            'set-cookie': await clearPreviewAccessCookie(),
-          },
-        },
-      );
-      throw new Error('Preview access sign-out did not redirect.');
-    }
-
-    if (!isPreviewAccessConfigured()) {
-      return Response.json(
-        {
-          error:
-            'Preview access is not configured. Contact the deployment owner.',
-        },
-        { status: 503, headers: { 'Cache-Control': 'no-store' } },
-      );
-    }
-
-    const code = String(formData.get('code') ?? '');
-    const seat = findPreviewAccessSeatByCode(code);
-    if (!seat) {
-      return Response.json(
-        { error: 'That access code was not recognized.' },
-        { status: 400, headers: { 'Cache-Control': 'no-store' } },
-      );
-    }
-
-    const returnTo = safeRedirect(
-      String(formData.get('returnTo') ?? ''),
-      '/',
-    );
-    // A code switch must not leave an application login from the previous seat alive.
-    // Reuse logout so both cookies are changed atomically in the redirect response.
-    const signOut = logoutFunction ?? (await import('~/utils/auth.server')).logout;
-    await signOut(
-      { request, redirectTo: returnTo },
-      {
-        headers: {
-          'Cache-Control': 'no-store',
-          'set-cookie': await grantPreviewAccessCookie(seat),
-        },
-      },
-    );
-    throw new Error('Preview access entry did not redirect.');
   };
 }
 
