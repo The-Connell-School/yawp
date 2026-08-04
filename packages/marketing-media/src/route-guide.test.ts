@@ -30,4 +30,13 @@ describe('ROUTE_GUIDE', () => {
     expect(text).toContain('English 10 - Period 3');
     expect(text).toContain('.ProseMirror');
   });
+
+  // The generator reached for {"text": "Assignment"} to pick a dropdown entry
+  // and clicked inert page copy instead, because the menu is portaled to the
+  // end of the document. The guide has to name the role and say why.
+  test('steers menu clicks at the role rather than the text', () => {
+    const text = describeRoutesForPrompt();
+    expect(text).toContain('menuitem');
+    expect(text).toMatch(/portal/i);
+  });
 });

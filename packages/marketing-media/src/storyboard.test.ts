@@ -160,6 +160,31 @@ describe('step allowlist', () => {
     expect(parsed.scenes[0].steps).toHaveLength(3);
   });
 
+  // Dropdown menus portal their items to the end of the document, so a text
+  // match resolves to page copy higher up and the click times out on
+  // something inert. Without this role a storyboard cannot name a menu entry
+  // at all — which is exactly how a generated "open New, pick Assignment"
+  // clip burned its whole retry budget.
+  test('accepts a menu item target so portaled menus are filmable', () => {
+    const parsed = parseStoryboard(
+      storyboard({
+        scenes: [
+          scene({
+            steps: [
+              { action: 'click', role: 'button', name: 'New' },
+              { action: 'click', role: 'menuitem', name: 'Assignment' },
+            ],
+          }),
+        ],
+      })
+    );
+
+    expect(parsed.scenes[0].steps[1]).toMatchObject({
+      role: 'menuitem',
+      name: 'Assignment',
+    });
+  });
+
   test('rejects a selector carrying script content', () => {
     const result = safeParseStoryboard(
       storyboard({

@@ -131,6 +131,11 @@ const targetFields = {
       'checkbox',
       'listitem',
       'row',
+      // Dropdown menus render their items in a portal at the end of the
+      // document, so matching them by text finds page copy first and the
+      // click lands on something inert. Without this role a storyboard has
+      // no way to name a menu item at all.
+      'menuitem',
     ])
     .optional(),
   name: humanText.optional(),

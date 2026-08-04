@@ -63,13 +63,11 @@ export const MARKETING_LIBRARY: MarketingLibraryEntry[] = [
           hold: 2.5,
           screenshot: true,
           steps: [
-            { action: 'click', role: 'button', name: 'New', optional: true },
-            {
-              action: 'waitFor',
-              text: 'Assignment',
-              optional: true,
-            },
-            { action: 'click', text: 'Assignment', optional: true },
+            { action: 'click', role: 'button', name: 'New' },
+            // The menu is portaled to the end of the document; only the role
+            // finds it. Matching by text lands on page copy higher up.
+            { action: 'waitFor', role: 'menuitem', name: 'Assignment' },
+            { action: 'click', role: 'menuitem', name: 'Assignment' },
             { action: 'wait', seconds: 0.5 },
           ],
         },
