@@ -31,15 +31,20 @@ export type SlideLayout = (typeof SLIDE_LAYOUTS)[number];
 
 /** Room-legibility limits. Anything longer belongs in the notes. */
 const MAX_TITLE_CHARS = 90;
-const MAX_LINE_CHARS = 160;
+const MAX_LINE_CHARS = 200;
 const MAX_BODY_CHARS = 320;
+// Wider than a bullet on purpose: "here is a weak conclusion next to a strong
+// one" is two paragraphs, and that is a slide worth projecting.
+const MAX_COLUMN_CHARS = 320;
 const MAX_BULLETS = 7;
 const MAX_SLIDES = 40;
 
 const line = z.string().trim().min(1).max(MAX_LINE_CHARS);
-const column = z
-  .object({ label: z.string().trim().min(1).max(40), text: line })
-  .strict();
+// Not .strict(): a stray key in one column should not cost the whole deck.
+const column = z.object({
+  label: z.string().trim().min(1).max(40),
+  text: z.string().trim().min(1).max(MAX_COLUMN_CHARS),
+});
 
 const slideSchema = z
   .object({
@@ -120,22 +125,45 @@ const FIELD_ALIASES: Record<string, string> = {
   duration: 'minutes',
 };
 
+/** The same forgiveness, one level down, for a compare slide's two columns. */
+const COLUMN_ALIASES: Record<string, string> = {
+  heading: 'label',
+  name: 'label',
+  title: 'label',
+  body: 'text',
+  content: 'text',
+  value: 'text',
+};
+
 // "1. Introduce the quote" — the steps layout numbers its own lines, so typed
 // numbering would show up twice.
 const TYPED_ENUMERATION = /^\s*(?:\d{1,2}[.)]|[-*•])\s+/;
 
+function applyAliases(
+  raw: Record<string, unknown>,
+  aliases: Record<string, string>
+): Record<string, unknown> {
+  const out = { ...raw };
+  for (const [alias, canonical] of Object.entries(aliases)) {
+    if (out[alias] !== undefined && out[canonical] === undefined) {
+      out[canonical] = out[alias];
+    }
+    delete out[alias];
+  }
+  return out;
+}
+
+function normalizeColumn(raw: unknown): unknown {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return raw;
+  return applyAliases(raw as Record<string, unknown>, COLUMN_ALIASES);
+}
+
 function normalizeSlide(raw: unknown): unknown {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return raw;
-  const slide: Record<string, unknown> = {
-    ...(raw as Record<string, unknown>),
-  };
+  const slide = applyAliases(raw as Record<string, unknown>, FIELD_ALIASES);
 
-  for (const [alias, canonical] of Object.entries(FIELD_ALIASES)) {
-    if (slide[alias] !== undefined && slide[canonical] === undefined) {
-      slide[canonical] = slide[alias];
-    }
-    delete slide[alias];
-  }
+  if (slide.left !== undefined) slide.left = normalizeColumn(slide.left);
+  if (slide.right !== undefined) slide.right = normalizeColumn(slide.right);
 
   if (Array.isArray(slide.bullets)) {
     slide.bullets = slide.bullets.map((bullet) =>
@@ -158,27 +186,73 @@ function normalizeDeck(raw: unknown): unknown {
 /** A fenced block whose JSON is shaped like a deck, whatever its fence says. */
 function findDeckBlock(
   content: string
-): { block: string; raw: unknown } | null {
+): { block: string; json: string } | null {
   for (const match of content.matchAll(ANY_FENCE)) {
     const inner = match[1];
     if (!inner?.includes('"slides"')) continue;
     try {
       const raw = JSON.parse(inner);
-      if (
-        raw &&
-        typeof raw === 'object' &&
-        Array.isArray((raw as any).slides)
-      ) {
-        return { block: match[0], raw };
+      if (raw && typeof raw === 'object' && Array.isArray((raw as any).slides)) {
+        return { block: match[0], json: inner };
       }
     } catch {
       // A deck-shaped block we cannot parse still counts as an attempt, so the
       // caller can strip it rather than print it.
-      if (/"slides"\s*:\s*\[/.test(inner))
-        return { block: match[0], raw: null };
+      if (/"slides"\s*:\s*\[/.test(inner)) return { block: match[0], json: inner };
     }
   }
   return null;
+}
+
+const MAX_REPORTED_ISSUES = 6;
+
+/**
+ * Why a deck was rejected, in the model's own vocabulary.
+ *
+ * This is not decoration. Without it the only signal anyone gets — teacher,
+ * log, or the model itself — is that the deck "didn't come through", which is
+ * how the same bug shipped twice.
+ */
+function describeIssues(error: z.ZodError): string {
+  const described = error.issues
+    .slice(0, MAX_REPORTED_ISSUES)
+    .map(
+      (issue) =>
+        `${issue.path.length ? issue.path.join('.') : 'deck'}: ${issue.message}`
+    );
+  const hidden = error.issues.length - described.length;
+  if (hidden > 0) described.push(`and ${hidden} more`);
+  return described.join('; ');
+}
+
+function describeBadJson(json: string): string {
+  return /[}\]]\s*$/.test(json.trim())
+    ? 'The deck block is not valid JSON.'
+    : 'The deck JSON was cut off before it finished.';
+}
+
+export type SlideDeckValidation =
+  | { ok: true; deck: SlideDeck }
+  | { ok: false; reason: string };
+
+/** Validate deck JSON on its own, without a fence around it. */
+export function validateSlideDeck(json: string): SlideDeckValidation {
+  let raw: unknown;
+  try {
+    raw = JSON.parse(json);
+  } catch {
+    return { ok: false, reason: describeBadJson(json) };
+  }
+  const parsed = deckSchema.safeParse(normalizeDeck(raw));
+  if (!parsed.success) {
+    return { ok: false, reason: describeIssues(parsed.error) };
+  }
+  return { ok: true, deck: parsed.data };
+}
+
+/** A validated deck written back out as the block the renderer reads. */
+export function fenceSlideDeck(deck: SlideDeck): string {
+  return `\`\`\`${SLIDE_DECK_FENCE}\n${JSON.stringify(deck, null, 2)}\n\`\`\``;
 }
 
 function withoutBlock(content: string, block: string): string {
@@ -204,19 +278,33 @@ export type ParsedSlideDeck = {
 export type SlideDeckOutcome =
   | { kind: 'none' }
   | { kind: 'deck'; deck: SlideDeck; body: string }
-  | { kind: 'unreadable'; body: string };
+  | {
+      kind: 'unreadable';
+      body: string;
+      /** The whole fenced block, so a caller can swap a fixed one in place. */
+      block: string;
+      /** Just the JSON inside it, to hand back to whoever wrote it. */
+      json: string;
+      reason: string;
+    };
 
 export function readSlideDeck(content: string): SlideDeckOutcome {
   const found = findDeckBlock(content);
   if (!found) return { kind: 'none' };
 
   const body = withoutBlock(content, found.block);
-  if (found.raw === null) return { kind: 'unreadable', body };
+  const validated = validateSlideDeck(found.json);
+  if (!validated.ok) {
+    return {
+      kind: 'unreadable',
+      body,
+      block: found.block,
+      json: found.json,
+      reason: validated.reason,
+    };
+  }
 
-  const parsed = deckSchema.safeParse(normalizeDeck(found.raw));
-  if (!parsed.success) return { kind: 'unreadable', body };
-
-  return { kind: 'deck', deck: parsed.data, body };
+  return { kind: 'deck', deck: validated.deck, body };
 }
 
 /** Convenience wrapper for callers that only care about a usable deck. */

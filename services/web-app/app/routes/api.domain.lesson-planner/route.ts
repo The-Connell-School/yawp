@@ -9,6 +9,7 @@ import {
   handleLessonPlannerToolCall,
   LESSON_PLANNER_TOOLS,
 } from '~/domain/lesson-planner/lesson-planner-tools.server';
+import { repairSlideDeck } from '~/domain/lesson-planner/repair-slide-deck.server';
 import { buildLessonPlannerSystemPrompt } from './build-system-prompt';
 import {
   AiRateLimitError,
@@ -26,12 +27,20 @@ const MAX_HISTORY_CHARS = 24_000;
 // of a Quick Writing Lesson run well past a report. A tight ceiling truncates
 // mid-artifact, which a teacher reads as bad material rather than as a cut-off.
 const PLANNER_REQUEST_DEADLINE_MS = 120_000;
-const PLANNER_MAX_TOKENS = 8_000;
+// A full lesson plan plus a ten-slide deck with speaker notes runs well past
+// 8k. Hitting the ceiling cuts the deck's JSON mid-object, and a cut-off deck
+// cannot be rendered at all — the teacher just loses it.
+const PLANNER_MAX_TOKENS = 16_000;
+// The repair pass rewrites one deck and nothing else.
+const DECK_REPAIR_MAX_TOKENS = 8_000;
+const DECK_REPAIR_DEADLINE_MS = 60_000;
 // Enough rounds to walk the catalog: class report, Daily Pages search, writing
 // lesson list plus lookup, the Lounge, and the assignable types.
 const PLANNER_MAX_TOOL_ROUNDS = 8;
 const PLANNER_REQUESTS_PER_MINUTE = 6;
 const PLANNER_REQUESTS_PER_HOUR_PER_ORG = 60;
+const DECK_REPAIR_SYSTEM =
+  'You fix malformed slide-deck JSON. You output a single JSON object and nothing else — no prose, no code fence, no apology.';
 const PLANNER_ADMISSION_POLICY = {
   membershipLimit: PLANNER_REQUESTS_PER_MINUTE,
   membershipWindowMs: 60_000,
@@ -181,6 +190,27 @@ export async function action({ request }: ActionFunctionArgs) {
   } catch {
     return dataResponse({ error: PLANNER_FAILED }, { status: 500 });
   }
+
+  // The model writes its deck blind — nothing in the reply tells it whether the
+  // JSON validated. Give a rejected deck the errors and one more pass before
+  // the teacher ever sees the reply; a failed repair changes nothing.
+  const repaired = await repairSlideDeck({
+    reply,
+    repair: ({ instruction, reason }) =>
+      getLLMCompletion({
+        model: (process.env.AI_MODEL as any) ?? 'claude-sonnet-4-6',
+        system: DECK_REPAIR_SYSTEM,
+        messages: [{ role: AgentType.User, content: instruction }],
+        maxTokens: DECK_REPAIR_MAX_TOKENS,
+        allowFallbackProvider: false,
+        signal: AbortSignal.timeout(DECK_REPAIR_DEADLINE_MS),
+        logPayload: 'metadata-only',
+        // Schema vocabulary only — field paths and rules, never the teacher's
+        // words — so it survives redaction and makes the failure observable.
+        metadata: { feature: 'lesson-planner', deckFailure: reason },
+      }),
+  });
+  reply = repaired.reply;
 
   // Stamp explicit, strictly-increasing timestamps: both rows land in one
   // nested create, so the DB default would give them the same createdAt and

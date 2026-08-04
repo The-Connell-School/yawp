@@ -1,9 +1,11 @@
 import { describe, expect, test } from 'bun:test';
 import {
   deckDurationMinutes,
+  fenceSlideDeck,
   parseSlideDeck,
   readSlideDeck,
   slideSearchText,
+  validateSlideDeck,
   SLIDE_DECK_FENCE,
   SLIDE_LAYOUTS,
 } from './slide-deck';
@@ -252,6 +254,118 @@ describe('readSlideDeck — never show a teacher raw JSON', () => {
 
   test('reports no deck when the reply has none', () => {
     expect(readSlideDeck('Just a plan.').kind).toBe('none');
+  });
+});
+
+describe('readSlideDeck — says why a deck failed', () => {
+  test('names the field and the rule a slide broke', () => {
+    const outcome = readSlideDeck(
+      fenced({
+        title: 'Deck',
+        slides: [
+          { layout: 'statement', title: 'A claim', body: 'Something' },
+          {
+            layout: 'bullets',
+            title: 'No bullets here',
+            speakerNotes: 'Hm.',
+          },
+        ],
+      })
+    );
+    expect(outcome.kind).toBe('unreadable');
+    if (outcome.kind !== 'unreadable') throw new Error('expected unreadable');
+    // Which slide, which field, and what was wrong with it — enough for the
+    // model to fix it on a second pass instead of guessing.
+    expect(outcome.reason).toContain('slides.0.speakerNotes');
+    expect(outcome.reason).toContain('slides.1.bullets');
+  });
+
+  test('says the deck was cut off when the JSON never finished', () => {
+    const truncated = `Here you go.\n\n\`\`\`${SLIDE_DECK_FENCE}\n{ "title": "Deck", "slides": [ { "layout": "title",\n\`\`\``;
+    const outcome = readSlideDeck(truncated);
+    expect(outcome.kind).toBe('unreadable');
+    if (outcome.kind !== 'unreadable') throw new Error('expected unreadable');
+    expect(outcome.reason.toLowerCase()).toContain('cut off');
+  });
+
+  test('hands back the exact block and JSON so it can be repaired in place', () => {
+    const content = fenced({
+      title: 'Deck',
+      slides: [{ layout: 'bullets', title: 'Nothing' }],
+    });
+    const outcome = readSlideDeck(content);
+    if (outcome.kind !== 'unreadable') throw new Error('expected unreadable');
+    expect(content).toContain(outcome.block);
+    expect(outcome.json).toContain('"slides"');
+    expect(outcome.json).not.toContain('```');
+  });
+});
+
+describe('validateSlideDeck', () => {
+  test('accepts good JSON and returns the parsed deck', () => {
+    const result = validateSlideDeck(JSON.stringify(validDeck));
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error('expected ok');
+    expect(result.deck.slides).toHaveLength(3);
+  });
+
+  test('reports the reason instead of throwing on bad JSON', () => {
+    const result = validateSlideDeck('{ "slides": [ ');
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error('expected failure');
+    expect(result.reason.toLowerCase()).toContain('cut off');
+  });
+});
+
+describe('fenceSlideDeck', () => {
+  test('round-trips a deck back into a block readSlideDeck can read', () => {
+    const deck = parseSlideDeck(fenced(validDeck))!.deck;
+    const outcome = readSlideDeck(`Here it is.\n\n${fenceSlideDeck(deck)}`);
+    expect(outcome.kind).toBe('deck');
+    expect(fenceSlideDeck(deck)).toContain(`\`\`\`${SLIDE_DECK_FENCE}`);
+  });
+});
+
+describe('parseSlideDeck — room for real classroom writing', () => {
+  test('lets a compare slide hold two versions of a paragraph', () => {
+    // The failure a teacher actually hit: "show them a weak conclusion next to
+    // a strong one" is two paragraphs, not two phrases.
+    const paragraph =
+      'In conclusion, this essay has shown that the author uses many literary devices to make his point, and these devices are important to the meaning of the story overall.';
+    const parsed = parseSlideDeck(
+      fenced({
+        title: 'Deck',
+        slides: [
+          {
+            layout: 'compare',
+            title: 'Which one earns the ending?',
+            left: { label: 'Before', text: paragraph },
+            right: { label: 'After', text: paragraph },
+            speakerNotes: 'Read both aloud before anyone votes.',
+          },
+        ],
+      })
+    );
+    expect(parsed?.deck.slides[0]!.left?.text).toBe(paragraph);
+  });
+
+  test('keeps a compare column that carries an extra key', () => {
+    const parsed = parseSlideDeck(
+      fenced({
+        title: 'Deck',
+        slides: [
+          {
+            layout: 'compare',
+            title: 'Two drafts',
+            left: { heading: 'Draft one', text: 'Weak.', note: 'ignore me' },
+            right: { label: 'Draft two', text: 'Strong.' },
+            speakerNotes: 'Compare.',
+          },
+        ],
+      })
+    );
+    expect(parsed?.deck.slides[0]!.left?.label).toBe('Draft one');
+    expect(parsed?.deck.slides[0]!.right?.label).toBe('Draft two');
   });
 });
 

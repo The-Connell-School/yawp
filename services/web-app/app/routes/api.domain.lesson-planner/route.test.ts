@@ -369,6 +369,96 @@ describe('api.domain.lesson-planner action', () => {
     expect(getLLMCompletion).not.toHaveBeenCalled();
   });
 
+  test('gives a rejected slide deck one repair pass before storing it', async () => {
+    const broken = {
+      title: 'Conclusions',
+      slides: [{ layout: 'bullets', title: 'What a conclusion does' }],
+    };
+    const fixed = {
+      title: 'Conclusions',
+      slides: [
+        {
+          layout: 'bullets',
+          title: 'What a conclusion does',
+          bullets: ['Answers "so what?"'],
+          speakerNotes: 'Ask for their last sentences first.',
+        },
+      ],
+    };
+    getLLMCompletion
+      .mockResolvedValueOnce(
+        `Here's the lesson.\n\n\`\`\`yawp-slides\n${JSON.stringify(
+          broken
+        )}\n\`\`\``
+      )
+      .mockResolvedValueOnce(JSON.stringify(fixed));
+    prisma.lessonPlanConversation.create.mockResolvedValue({
+      id: 'plan-1',
+      messages: [],
+    });
+    prisma.lessonPlanConversation.update.mockResolvedValue({});
+
+    const response = await action({
+      request: formRequest({ message: 'make me a deck' }),
+    } as any);
+    const body = (await response.data) as any;
+
+    expect(getLLMCompletion).toHaveBeenCalledTimes(2);
+    // The repair pass is a plain completion — no tools, no catalog rounds.
+    const repairArgs = getLLMCompletion.mock.calls[1][0];
+    expect(repairArgs.tools).toBeUndefined();
+    expect(repairArgs.messages[0].content).toContain('speakerNotes');
+    // The reason is schema vocabulary, so it is safe to keep in the log even
+    // though planner payloads are redacted.
+    expect(repairArgs.metadata.deckFailure).toContain('slides.0.speakerNotes');
+
+    expect(body.reply).toContain('Ask for their last sentences first.');
+    const stored = prisma.lessonPlanMessage.create.mock.calls[1][0].data;
+    expect(stored.content).toContain('Ask for their last sentences first.');
+  });
+
+  test('does not spend a repair pass on a deck that already validates', async () => {
+    getLLMCompletion.mockResolvedValue(
+      `Deck below.\n\n\`\`\`yawp-slides\n${JSON.stringify({
+        title: 'Deck',
+        slides: [
+          { layout: 'statement', title: 'A', body: 'B', speakerNotes: 'C' },
+        ],
+      })}\n\`\`\``
+    );
+    prisma.lessonPlanConversation.create.mockResolvedValue({
+      id: 'plan-1',
+      messages: [],
+    });
+    prisma.lessonPlanConversation.update.mockResolvedValue({});
+
+    await action({ request: formRequest({ message: 'deck please' }) } as any);
+
+    expect(getLLMCompletion).toHaveBeenCalledTimes(1);
+  });
+
+  test('still delivers the lesson when the repair pass fails', async () => {
+    const reply = `Here's the lesson.\n\n\`\`\`yawp-slides\n${JSON.stringify({
+      title: 'Deck',
+      slides: [{ layout: 'bullets', title: 'Nothing' }],
+    })}\n\`\`\``;
+    getLLMCompletion
+      .mockResolvedValueOnce(reply)
+      .mockRejectedValueOnce(new Error('provider-secret timeout'));
+    prisma.lessonPlanConversation.create.mockResolvedValue({
+      id: 'plan-1',
+      messages: [],
+    });
+    prisma.lessonPlanConversation.update.mockResolvedValue({});
+
+    const response = await action({
+      request: formRequest({ message: 'deck please' }),
+    } as any);
+
+    expect(response.init?.status).toBeUndefined();
+    expect((response.data as any).reply).toBe(reply);
+  });
+
   test('returns 404 when a conversationId does not belong to the teacher', async () => {
     prisma.lessonPlanConversation.findFirst.mockResolvedValue(null);
 
