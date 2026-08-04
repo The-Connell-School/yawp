@@ -284,6 +284,49 @@ describe('buildDemoRoster', () => {
     }
   });
 
+  test('gives each class its own weakest and strongest writing skill', () => {
+    const plan = build();
+    const studentClass = new Map(
+      plan.students.map((student) => [student.key, student.classKey])
+    );
+
+    const averages = (classKey: string) => {
+      const totals = new Map<string, number[]>();
+      for (const entry of releasedWork(plan)) {
+        if (studentClass.get(entry.studentKey) !== classKey) continue;
+        for (const key of rubricKeys) {
+          const bucket = totals.get(key) ?? [];
+          bucket.push(entry.rubricScores![key].score);
+          totals.set(key, bucket);
+        }
+      }
+      return [...totals.entries()]
+        .map(([key, scores]) => ({
+          key,
+          average:
+            scores.reduce((sum, value) => sum + value, 0) / scores.length,
+        }))
+        .sort((a, b) => a.average - b.average);
+    };
+
+    const primary = averages('primary');
+    const secondary = averages('secondary');
+
+    // A class-wide gap the teacher can actually act on: the weakest skill has
+    // to sit clearly below the strongest, or "what is my class worst at?" has
+    // no answer.
+    expect(
+      primary[primary.length - 1].average - primary[0].average
+    ).toBeGreaterThan(0.3);
+    expect(
+      secondary[secondary.length - 1].average - secondary[0].average
+    ).toBeGreaterThan(0.3);
+
+    // And the two classes need different profiles, so switching classes in the
+    // Reporter or Class Summary tells a different story.
+    expect(primary[0].key).not.toBe(secondary[0].key);
+  });
+
   test('writes distinct, substantial essays for every piece of work', () => {
     const plan = build();
     const bodies = new Set<string>();

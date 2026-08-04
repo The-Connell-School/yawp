@@ -179,10 +179,37 @@ function clampLevel(value: number): number {
   return Math.max(1, Math.min(5, Math.round(value)));
 }
 
+/**
+ * The class-wide skill profile each class is graded against. English 10 leans on
+ * voice and struggles to use evidence; English 11 writes well-sourced papers
+ * that wander structurally. Distinct profiles mean the two classes read
+ * differently in Class Summary and in a Reporter class report.
+ */
+const CLASS_SKILL_PROFILES: Record<
+  DemoClassKey,
+  { strong: RubricKey; weak: RubricKey }
+> = {
+  primary: { strong: 'voice_and_style', weak: 'evidence_and_support' },
+  secondary: {
+    strong: 'evidence_and_support',
+    weak: 'organization_and_structure',
+  },
+};
+
 function categoryOffset(student: DemoStudentSpec, category: RubricKey): number {
-  if (category === student.strength) return 0.7;
-  if (category === student.weakness) return -0.9;
-  return 0;
+  let offset = 0;
+  if (category === student.strength) offset += 0.7;
+  if (category === student.weakness) offset -= 0.9;
+
+  // Individual strengths and weaknesses cancel out across a class, which leaves
+  // every rubric skill averaging the same 3.2 — so "which skill is my class
+  // weakest in?" has no answer. A per-class tilt gives each class a real gap to
+  // teach into, and a different one from the other class.
+  const profile = CLASS_SKILL_PROFILES[student.classKey];
+  if (category === profile.strong) offset += 0.35;
+  if (category === profile.weak) offset -= 0.55;
+
+  return offset;
 }
 
 function buildRubricScores(
