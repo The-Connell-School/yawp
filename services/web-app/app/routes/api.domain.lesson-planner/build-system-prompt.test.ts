@@ -73,6 +73,27 @@ describe('buildLessonPlannerSystemPrompt', () => {
     expect(prompt).toContain('```suggestions');
   });
 
+  test('requires suggestion chips on the turn that asks for class context', () => {
+    const lower = prompt.toLowerCase();
+    // The intake turn is where one-tap answers save the most typing, and the
+    // planner opens with it almost every time.
+    expect(lower).toContain('always end with one when you ask for class');
+  });
+
+  test('asks for whole ready-to-send answers, not fragments', () => {
+    const lower = prompt.toLowerCase();
+    expect(lower).toContain('send verbatim');
+    expect(lower).toContain('a whole reply the teacher could have typed');
+  });
+
+  test('does not tell the planner to omit chips whenever it is not offering a menu', () => {
+    // The old rule suppressed chips on open questions — which is exactly the
+    // intake turn, where they are most useful.
+    expect(prompt.toLowerCase()).not.toContain(
+      'omit the block entirely when you are not asking the teacher to choose'
+    );
+  });
+
   test('drops the teacher name gracefully when it is unknown', () => {
     const anonymous = buildLessonPlannerSystemPrompt({
       teacherName: null,
