@@ -78,6 +78,33 @@ describe('renderPreviewCompose', () => {
     expect(compose).not.toContain('.middlewares=');
   });
 
+  test('does not render per-deploy basic auth when transport credentials are present', () => {
+    const previousCredential = process.env.PREVIEW_BASIC_AUTH;
+    const previousPassword = process.env.PREVIEW_BASIC_AUTH_PASSWORD;
+    process.env.PREVIEW_BASIC_AUTH = 'preview-admin:$apr1$hash';
+    process.env.PREVIEW_BASIC_AUTH_PASSWORD = 'shared-pass';
+
+    try {
+      const compose = renderCompose();
+
+      expect(compose).not.toContain('basicauth');
+      expect(compose).not.toContain('.middlewares=');
+      expect(compose).not.toContain('preview-admin');
+      expect(compose).not.toContain('shared-pass');
+    } finally {
+      if (previousCredential === undefined) {
+        delete process.env.PREVIEW_BASIC_AUTH;
+      } else {
+        process.env.PREVIEW_BASIC_AUTH = previousCredential;
+      }
+      if (previousPassword === undefined) {
+        delete process.env.PREVIEW_BASIC_AUTH_PASSWORD;
+      } else {
+        process.env.PREVIEW_BASIC_AUTH_PASSWORD = previousPassword;
+      }
+    }
+  });
+
   // PREVIEW_ACCESS_GATE is the same switch read by the root route middleware. Requiring
   // codes and a signing secret in this render keeps role-swap coupled to an enforceable
   // app gate instead of trusting a separate deployment claim.

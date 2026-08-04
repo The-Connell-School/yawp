@@ -188,7 +188,7 @@ describe('buildPreviewEnv', () => {
     );
   });
 
-  test('generates and threads app access codes through workflow and deploy', () => {
+  test('threads app access codes and optional transport auth through workflow and deploy', () => {
     const workflow = readFileSync(
       new URL('../../.github/workflows/preview-environments.yml', import.meta.url),
       'utf8',
@@ -199,7 +199,12 @@ describe('buildPreviewEnv', () => {
       'utf8',
     );
 
-    expect(workflow).not.toContain('PREVIEW_BASIC_AUTH');
+    expect(workflow).toContain(
+      'PREVIEW_BASIC_AUTH: ${{ secrets.PREVIEW_BASIC_AUTH }}',
+    );
+    expect(workflow).toContain(
+      'PREVIEW_BASIC_AUTH_PASSWORD: ${{ secrets.PREVIEW_BASIC_AUTH_PASSWORD }}',
+    );
     expect(workflow).toContain('PREVIEW_ACCESS_CODE=');
     expect(deploy).toContain('access-code.mjs');
     expect(deploy).toContain('PREVIEW_ACCESS_CODES');
@@ -207,7 +212,11 @@ describe('buildPreviewEnv', () => {
     expect(deploy).toContain('PREVIEW_ACCESS_SECRET');
     expect(deploy).toContain('PREVIEW_SESSION_SECRET');
     expect(deploy).toContain('PREVIEW_ACCESS_CODE=');
-    expect(deploy).not.toContain('PREVIEW_BASIC_AUTH');
+    expect(deploy).toContain(
+      'if [[ -n "${PREVIEW_BASIC_AUTH:-}" && -n "${PREVIEW_BASIC_AUTH_PASSWORD:-}" ]]',
+    );
+    expect(deploy).toContain('transport_curl()');
+    expect(deploy).not.toContain('${transport_auth[@]}');
     expect(deploy).not.toContain('www-authenticate');
     expect(githubConfig).not.toContain('PREVIEW_BASIC_AUTH');
   });

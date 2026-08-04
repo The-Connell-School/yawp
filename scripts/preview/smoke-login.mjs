@@ -54,15 +54,28 @@ function resolveRedirect(baseUrl, location) {
   return new URL(location, baseUrl).toString();
 }
 
+function getBasicAuthHeader(basicAuth) {
+  if (!basicAuth) return {};
+  if (!basicAuth.username || !basicAuth.password) {
+    throw new Error('basic auth username and password are required');
+  }
+  return {
+    authorization: `Basic ${Buffer.from(
+      `${basicAuth.username}:${basicAuth.password}`,
+    ).toString('base64')}`,
+  };
+}
+
 async function getWithRedirects(
   url,
-  { cookie, maxRedirects = 3, requestFn = request } = {},
+  { cookie, basicAuth, maxRedirects = 3, requestFn = request } = {},
 ) {
   let currentUrl = url;
   const allowedOrigin = new URL(url).origin;
   for (let attempt = 0; attempt <= maxRedirects; attempt += 1) {
     const response = await requestFn(currentUrl, {
       headers: {
+        ...getBasicAuthHeader(basicAuth),
         ...(cookie ? { cookie } : {}),
       },
     });
@@ -86,12 +99,16 @@ async function getWithRedirects(
 export async function enterPreviewAccess({
   baseUrl,
   accessCode,
+  basicAuth,
   requestFn = request,
 } = {}) {
   if (!baseUrl) throw new Error('baseUrl is required');
   if (!accessCode) throw new Error('accessCode is required');
 
-  const anonymousPage = await requestFn(baseUrl);
+  const transportHeaders = getBasicAuthHeader(basicAuth);
+  const anonymousPage = await requestFn(baseUrl, {
+    headers: transportHeaders,
+  });
   if (
     anonymousPage.status < 300 ||
     anonymousPage.status >= 400 ||
@@ -112,7 +129,10 @@ export async function enterPreviewAccess({
     {
       method: 'POST',
       body: devLoginProbeBody,
-      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      headers: {
+        ...transportHeaders,
+        'content-type': 'application/x-www-form-urlencoded',
+      },
     },
   );
   if (blockedDevLogin.status !== 401) {
@@ -127,7 +147,10 @@ export async function enterPreviewAccess({
     {
       method: 'POST',
       body: form,
-      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      headers: {
+        ...transportHeaders,
+        'content-type': 'application/x-www-form-urlencoded',
+      },
     },
   );
   if (access.status < 300 || access.status >= 400) {
@@ -146,6 +169,7 @@ export async function runLoginSmoke({
   email,
   password,
   accessCode,
+  basicAuth,
   requestFn = request,
 } = {}) {
   if (!baseUrl) throw new Error('baseUrl is required');
@@ -153,6 +177,7 @@ export async function runLoginSmoke({
   const accessCookie = await enterPreviewAccess({
     baseUrl,
     accessCode,
+    basicAuth,
     requestFn,
   });
 
@@ -166,6 +191,7 @@ export async function runLoginSmoke({
     method: 'POST',
     body: form,
     headers: {
+      ...getBasicAuthHeader(basicAuth),
       cookie: accessCookie,
       'content-type': 'application/x-www-form-urlencoded',
     },
@@ -182,6 +208,7 @@ export async function runLoginSmoke({
   const cookies = `${accessCookie}; ${authCookies}`;
 
   const app = await getWithRedirects(appendPath(baseUrl, '/app'), {
+    basicAuth,
     cookie: cookies,
     requestFn,
   });
@@ -197,6 +224,7 @@ export async function runDevLoginSmoke({
   baseUrl,
   email = 'dev.teacher@yawp.local',
   accessCode,
+  basicAuth,
   requestFn = request,
 } = {}) {
   if (!baseUrl) throw new Error('baseUrl is required');
@@ -204,6 +232,7 @@ export async function runDevLoginSmoke({
   const accessCookie = await enterPreviewAccess({
     baseUrl,
     accessCode,
+    basicAuth,
     requestFn,
   });
 
@@ -216,6 +245,7 @@ export async function runDevLoginSmoke({
     method: 'POST',
     body: form,
     headers: {
+      ...getBasicAuthHeader(basicAuth),
       cookie: accessCookie,
       'content-type': 'application/x-www-form-urlencoded',
     },
@@ -232,6 +262,7 @@ export async function runDevLoginSmoke({
   const cookies = `${accessCookie}; ${authCookies}`;
 
   const app = await getWithRedirects(appendPath(baseUrl, '/app'), {
+    basicAuth,
     cookie: cookies,
     requestFn,
   });
@@ -256,6 +287,19 @@ async function main() {
   const baseUrl = (process.env.PREVIEW_BASE_URL || '').replace(/\/$/, '');
   const dataMode = process.env.PREVIEW_DATA_MODE || 'seed';
   const accessCode = process.env.PREVIEW_ACCESS_CODE || '';
+  const htpasswdCredential = process.env.PREVIEW_BASIC_AUTH || '';
+  const basicAuthPassword = process.env.PREVIEW_BASIC_AUTH_PASSWORD || '';
+  const usernameSeparator = htpasswdCredential.indexOf(':');
+  const basicAuth =
+    htpasswdCredential && basicAuthPassword
+      ? {
+          username:
+            usernameSeparator === -1
+              ? htpasswdCredential
+              : htpasswdCredential.slice(0, usernameSeparator),
+          password: basicAuthPassword,
+        }
+      : undefined;
 
   const runtime = process.env.PREVIEW_RUNTIME || 'fast';
 
@@ -274,12 +318,18 @@ async function main() {
     if (canUseDevLogin) {
       const email =
         process.env.PREVIEW_DEV_LOGIN_EMAIL || 'dev.teacher@yawp.local';
-      await runDevLoginSmoke({ baseUrl, email, accessCode });
+      await runDevLoginSmoke({ baseUrl, email, accessCode, basicAuth });
       console.log(`OK preview dev login smoke: ${email} -> /app`);
     } else {
       const email = process.env.PREVIEW_LOGIN_EMAIL;
       const password = process.env.PREVIEW_LOGIN_PASSWORD;
-      await runLoginSmoke({ baseUrl, email, password, accessCode });
+      await runLoginSmoke({
+        baseUrl,
+        email,
+        password,
+        accessCode,
+        basicAuth,
+      });
       console.log(`OK preview login smoke: ${email} -> /app`);
     }
   } catch (error) {

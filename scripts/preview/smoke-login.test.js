@@ -8,10 +8,21 @@ import {
 } from './smoke-login.mjs';
 
 const accessCode = 'brave-otter-4193';
+const basicAuth = {
+  username: 'preview-admin',
+  password: 'shared-pass',
+};
+const basicAuthorization =
+  'Basic cHJldmlldy1hZG1pbjpzaGFyZWQtcGFzcw==';
 
-function gateAwareRequest(handler) {
+function gateAwareRequest(
+  handler,
+  { expectedAuthorization, onRequest = () => {} } = {},
+) {
   return async (url, options = {}) => {
+    expect(options.headers?.authorization).toBe(expectedAuthorization);
     const pathname = new URL(url).pathname;
+    onRequest(pathname);
     const hasAccess = options.headers?.cookie?.includes(
       '__yawp_preview_access=',
     );
@@ -48,6 +59,35 @@ function gateAwareRequest(handler) {
 }
 
 describe('enterPreviewAccess', () => {
+  test('uses basic auth as transport while still proving the in-app gate', async () => {
+    const seenPaths = [];
+    const requestFn = gateAwareRequest(
+      async (url) => {
+        seenPaths.push(new URL(url).pathname);
+        return { status: 404, headers: {}, body: '' };
+      },
+      {
+        expectedAuthorization: basicAuthorization,
+        onRequest: (pathname) => seenPaths.push(pathname),
+      },
+    );
+
+    await expect(
+      enterPreviewAccess({
+        baseUrl: 'https://pr-142.preview.yawp.school',
+        accessCode,
+        basicAuth,
+        requestFn,
+      }),
+    ).resolves.toContain('__yawp_preview_access=');
+
+    expect(seenPaths).toEqual([
+      '/',
+      '/auth/dev-login',
+      '/auth/preview-access',
+    ]);
+  });
+
   test('fails if POST /auth/dev-login reaches the app without a gate cookie', async () => {
     const requestFn = async (url, options = {}) => {
       const pathname = new URL(url).pathname;
@@ -85,27 +125,30 @@ describe('runLoginSmoke', () => {
     ).rejects.toThrow('email and password are required');
   });
 
-  test('passes the preview access and app session cookies', async () => {
+  test('passes transport auth plus preview access and app session cookies', async () => {
     const seen = { login: null, app: null };
-    const requestFn = gateAwareRequest(async (url, options = {}) => {
-      const pathname = new URL(url).pathname;
-      if (pathname === '/auth/login' && options.method === 'POST') {
-        seen.login = options;
-        return {
-          status: 302,
-          headers: {
-            location: '/app',
-            'set-cookie': 'auth_session=preview-ok; Path=/; HttpOnly',
-          },
-          body: '',
-        };
-      }
-      if (pathname === '/app') {
-        seen.app = options;
-        return { status: 200, headers: {}, body: 'app' };
-      }
-      return { status: 404, headers: {}, body: '' };
-    });
+    const requestFn = gateAwareRequest(
+      async (url, options = {}) => {
+        const pathname = new URL(url).pathname;
+        if (pathname === '/auth/login' && options.method === 'POST') {
+          seen.login = options;
+          return {
+            status: 302,
+            headers: {
+              location: '/app',
+              'set-cookie': 'auth_session=preview-ok; Path=/; HttpOnly',
+            },
+            body: '',
+          };
+        }
+        if (pathname === '/app') {
+          seen.app = options;
+          return { status: 200, headers: {}, body: 'app' };
+        }
+        return { status: 404, headers: {}, body: '' };
+      },
+      { expectedAuthorization: basicAuthorization },
+    );
 
     await expect(
       runLoginSmoke({
@@ -113,10 +156,12 @@ describe('runLoginSmoke', () => {
         email: 'teacher.e2e@yawp.test',
         password: 'teacher-e2e-password',
         accessCode,
+        basicAuth,
         requestFn,
       }),
     ).resolves.toMatchObject({ ok: true });
 
+    expect(seen.login.headers.authorization).toBe(basicAuthorization);
     expect(seen.login.headers.cookie).toContain('__yawp_preview_access=');
     expect(decodeURIComponent(seen.login.body)).toContain(
       'email=teacher.e2e@yawp.test',
@@ -124,6 +169,7 @@ describe('runLoginSmoke', () => {
     expect(decodeURIComponent(seen.login.body)).toContain(
       'password=teacher-e2e-password',
     );
+    expect(seen.app.headers.authorization).toBe(basicAuthorization);
     expect(seen.app.headers.cookie).toContain('__yawp_preview_access=');
     expect(seen.app.headers.cookie).toContain('auth_session=preview-ok');
   });
@@ -159,31 +205,34 @@ describe('runLoginSmoke', () => {
 
   test('follows the dev-server /app redirect with both auth layers', async () => {
     const seen = { redirectedHeaders: null };
-    const requestFn = gateAwareRequest(async (url, options = {}) => {
-      const pathname = new URL(url).pathname;
-      if (pathname === '/auth/login' && options.method === 'POST') {
-        return {
-          status: 302,
-          headers: {
-            location: '/app',
-            'set-cookie': 'auth_session=preview-ok; Path=/; HttpOnly',
-          },
-          body: '',
-        };
-      }
-      if (pathname === '/app') {
-        return {
-          status: 308,
-          headers: { location: '/app/' },
-          body: '',
-        };
-      }
-      if (pathname === '/app/') {
-        seen.redirectedHeaders = options.headers;
-        return { status: 200, headers: {}, body: 'app' };
-      }
-      return { status: 404, headers: {}, body: '' };
-    });
+    const requestFn = gateAwareRequest(
+      async (url, options = {}) => {
+        const pathname = new URL(url).pathname;
+        if (pathname === '/auth/login' && options.method === 'POST') {
+          return {
+            status: 302,
+            headers: {
+              location: '/app',
+              'set-cookie': 'auth_session=preview-ok; Path=/; HttpOnly',
+            },
+            body: '',
+          };
+        }
+        if (pathname === '/app') {
+          return {
+            status: 308,
+            headers: { location: '/app/' },
+            body: '',
+          };
+        }
+        if (pathname === '/app/') {
+          seen.redirectedHeaders = options.headers;
+          return { status: 200, headers: {}, body: 'app' };
+        }
+        return { status: 404, headers: {}, body: '' };
+      },
+      { expectedAuthorization: basicAuthorization },
+    );
 
     await expect(
       runLoginSmoke({
@@ -191,10 +240,12 @@ describe('runLoginSmoke', () => {
         email: 'teacher.e2e@yawp.test',
         password: 'teacher-e2e-password',
         accessCode,
+        basicAuth,
         requestFn,
       }),
     ).resolves.toMatchObject({ ok: true });
 
+    expect(seen.redirectedHeaders.authorization).toBe(basicAuthorization);
     expect(seen.redirectedHeaders.cookie).toContain(
       '__yawp_preview_access=',
     );
@@ -241,7 +292,48 @@ describe('runLoginSmoke', () => {
 });
 
 describe('runDevLoginSmoke', () => {
-  test('passes preview access while checking a seeded dev persona', async () => {
+  test('passes transport auth through dev login and the app request', async () => {
+    const seen = { login: null, app: null };
+    const requestFn = gateAwareRequest(
+      async (url, options = {}) => {
+        const pathname = new URL(url).pathname;
+        if (pathname === '/auth/dev-login' && options.method === 'POST') {
+          seen.login = options;
+          return {
+            status: 302,
+            headers: {
+              location: '/app',
+              'set-cookie': 'auth_session=preview-dev-ok; Path=/; HttpOnly',
+            },
+            body: '',
+          };
+        }
+        if (pathname === '/app') {
+          seen.app = options;
+          return { status: 200, headers: {}, body: 'app' };
+        }
+        return { status: 404, headers: {}, body: '' };
+      },
+      { expectedAuthorization: basicAuthorization },
+    );
+
+    await expect(
+      runDevLoginSmoke({
+        baseUrl: 'https://pr-142.preview.yawp.school',
+        email: 'dev.teacher@yawp.local',
+        accessCode,
+        basicAuth,
+        requestFn,
+      }),
+    ).resolves.toMatchObject({ ok: true });
+
+    expect(seen.login.headers.authorization).toBe(basicAuthorization);
+    expect(seen.login.headers.cookie).toContain('__yawp_preview_access=');
+    expect(seen.app.headers.authorization).toBe(basicAuthorization);
+    expect(seen.app.headers.cookie).toContain('auth_session=preview-dev-ok');
+  });
+
+  test('works anonymously at the transport while checking a seeded dev persona', async () => {
     const seen = { login: null, app: null };
     const requestFn = gateAwareRequest(async (url, options = {}) => {
       const pathname = new URL(url).pathname;
@@ -273,11 +365,13 @@ describe('runDevLoginSmoke', () => {
     ).resolves.toMatchObject({ ok: true });
 
     expect(seen.login.headers.cookie).toContain('__yawp_preview_access=');
+    expect(seen.login.headers.authorization).toBeUndefined();
     expect(decodeURIComponent(seen.login.body)).toContain(
       'email=dev.teacher@yawp.local',
     );
     expect(seen.login.body).not.toContain('password=');
     expect(seen.app.headers.cookie).toContain('__yawp_preview_access=');
+    expect(seen.app.headers.authorization).toBeUndefined();
     expect(seen.app.headers.cookie).toContain(
       'auth_session=preview-dev-ok',
     );

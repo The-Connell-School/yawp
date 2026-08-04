@@ -337,6 +337,8 @@ describe('PR preview deployment contract', () => {
     expect(previewWorkflow).toContain('PREVIEW_ANTHROPIC_API_KEY: ${{ secrets.PREVIEW_ANTHROPIC_API_KEY || secrets.ANTHROPIC_API_KEY }}');
     expect(previewWorkflow).toContain('PREVIEW_DB_DUMP_S3_URI');
     expect(previewWorkflow).toContain('PREVIEW_DB_PASSWORD: ${{ secrets.PREVIEW_DB_PASSWORD }}');
+    expect(previewWorkflow).toContain('PREVIEW_BASIC_AUTH: ${{ secrets.PREVIEW_BASIC_AUTH }}');
+    expect(previewWorkflow).toContain('PREVIEW_BASIC_AUTH_PASSWORD: ${{ secrets.PREVIEW_BASIC_AUTH_PASSWORD }}');
     expect(previewWorkflow).toContain('shell_quote()');
     expect(previewWorkflow).toContain('PREVIEW_DATA_MODE=$(shell_quote "$PREVIEW_DATA_MODE")');
     expect(previewWorkflow).toContain('PREVIEW_DEV_LOGIN_EMAIL=$(shell_quote "$PREVIEW_DEV_LOGIN_EMAIL")');
@@ -344,6 +346,8 @@ describe('PR preview deployment contract', () => {
     expect(previewWorkflow).toContain('PREVIEW_ANTHROPIC_API_KEY=$(shell_quote "$PREVIEW_ANTHROPIC_API_KEY")');
     expect(previewWorkflow).toContain('PREVIEW_DB_DUMP_S3_URI=$(shell_quote "$PREVIEW_DB_DUMP_S3_URI")');
     expect(previewWorkflow).toContain('PREVIEW_DB_PASSWORD=$(shell_quote "$PREVIEW_DB_PASSWORD")');
+    expect(previewWorkflow).toContain('PREVIEW_BASIC_AUTH=$(shell_quote "$PREVIEW_BASIC_AUTH")');
+    expect(previewWorkflow).toContain('PREVIEW_BASIC_AUTH_PASSWORD=$(shell_quote "$PREVIEW_BASIC_AUTH_PASSWORD")');
     expect(previewWorkflow).toContain('test -n "$PREVIEW_ANTHROPIC_API_KEY"');
     expect(previewWorkflow).not.toContain('test -n "$PREVIEW_LOGIN_EMAIL"');
     expect(previewWorkflow).not.toContain('test -n "$PREVIEW_LOGIN_PASSWORD"');
@@ -361,12 +365,50 @@ describe('PR preview deployment contract', () => {
   test('preview deploy polls health quickly once containers are starting', () => {
     const deployScript = readRepoFile('scripts/preview/deploy.sh');
 
-    // The subject here is poll SPEED. /api/healthcheck intentionally stays outside the
-    // in-app gate so both container health and deploy readiness can poll it anonymously.
+    // The subject here is poll SPEED. /api/healthcheck stays outside the in-app gate,
+    // while the transitional host gate may still require transport credentials.
     expect(deployScript).toContain('--connect-timeout 1 --max-time 2 "$health_url"');
+    expect(deployScript).toContain('transport_curl()');
+    expect(deployScript).toContain(
+      'if [[ -n "${PREVIEW_BASIC_AUTH:-}" && -n "${PREVIEW_BASIC_AUTH_PASSWORD:-}" ]]',
+    );
+    expect(deployScript).toContain('curl --user');
+    expect(deployScript).not.toContain('${transport_auth[@]}');
+    expect(deployScript).not.toContain('${PREVIEW_BASIC_AUTH:?');
+    expect(deployScript).not.toContain('${PREVIEW_BASIC_AUTH_PASSWORD:?');
     expect(deployScript).toContain('sleep 1');
     expect(deployScript).not.toContain('--max-time 5 "$health_url"');
     expect(deployScript).not.toContain('sleep 2');
+  });
+
+  test('preview transport curl works with nounset whether credentials exist or not', () => {
+    const deployScript = readRepoFile('scripts/preview/deploy.sh');
+    const transportCurl = deployScript.match(
+      /transport_curl\(\) \{[\s\S]*?\n\}/,
+    )?.[0];
+    expect(transportCurl).toBeTruthy();
+
+    const probe = (credential?: string, password?: string) =>
+      execFileSync(
+        '/bin/bash',
+        [
+          '-uc',
+          `curl() { printf '%s\\n' "$@"; }\n${transportCurl}\ntransport_curl -fsS https://preview.example/api/healthcheck`,
+        ],
+        {
+          encoding: 'utf8',
+          env: {
+            ...process.env,
+            PREVIEW_BASIC_AUTH: credential ?? '',
+            PREVIEW_BASIC_AUTH_PASSWORD: password ?? '',
+          },
+        },
+      );
+
+    expect(probe()).toBe('-fsS\nhttps://preview.example/api/healthcheck\n');
+    expect(probe('preview-admin:$apr1$hash', 'shared-pass')).toBe(
+      '--user\npreview-admin:shared-pass\n-fsS\nhttps://preview.example/api/healthcheck\n',
+    );
   });
 
   test('preview deploy verifies login before reporting the preview URL', () => {
@@ -485,7 +527,7 @@ describe('PR preview deployment contract', () => {
       '- **Data:** seeded local-dev data in an isolated PR database',
     );
     expect(previewWorkflow).toContain(
-      '- **Smoke:** in-app access gate + dev login',
+      '- **Smoke:** transitional transport gate + in-app access gate + dev login',
     );
     expect(previewWorkflow).not.toContain('seed overlay');
   });
@@ -525,9 +567,29 @@ describe('demo environment deployment contract', () => {
 
     expect(workflow).toContain('data-preview-access-screen');
     expect(workflow).toContain(
-      'Anonymous POST /auth/dev-login returned HTTP $blocked, expected 401',
+      'POST /auth/dev-login without an access cookie returned HTTP $blocked, expected 401',
     );
     expect(workflow).toContain('--data-urlencode "code=$access_code"');
-    expect(workflow).not.toContain('PREVIEW_BASIC_AUTH');
+    expect(workflow).toContain('PREVIEW_BASIC_AUTH: ${{ secrets.PREVIEW_BASIC_AUTH }}');
+    expect(workflow).toContain('PREVIEW_BASIC_AUTH_PASSWORD: ${{ secrets.PREVIEW_BASIC_AUTH_PASSWORD }}');
+    expect(workflow).toContain('transport_curl()');
+    expect(workflow).toContain('curl --user');
+  });
+
+  test('workflow transport auth is optional and never bypasses in-app gate assertions', () => {
+    for (const path of [
+      '.github/workflows/preview-environments.yml',
+      '.github/workflows/demo-environment.yml',
+    ]) {
+      const workflow = readRepoFile(path);
+
+      expect(workflow).toContain('transport_curl()');
+      expect(workflow).toContain('if [[ -n "${PREVIEW_BASIC_AUTH:-}" && -n "${PREVIEW_BASIC_AUTH_PASSWORD:-}" ]]');
+      expect(workflow).not.toContain('${transport_auth[@]}');
+      expect(workflow).toContain('data-preview-access-screen');
+      expect(workflow).toContain('POST /auth/dev-login without an access cookie returned HTTP $blocked, expected 401');
+      expect(workflow).not.toContain('test -n "$PREVIEW_BASIC_AUTH"');
+      expect(workflow).not.toContain('test -n "$PREVIEW_BASIC_AUTH_PASSWORD"');
+    }
   });
 });

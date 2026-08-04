@@ -40,6 +40,8 @@ jobs:
       PREVIEW_ANTHROPIC_API_KEY: ${{ secrets.PREVIEW_ANTHROPIC_API_KEY || secrets.ANTHROPIC_API_KEY }}
       PREVIEW_DB_DUMP_S3_URI: ${{ vars.PREVIEW_DB_DUMP_S3_URI || 's3://yawp-preview-videos/production.dump' }}
       PREVIEW_DB_PASSWORD: ${{ secrets.PREVIEW_DB_PASSWORD }}
+      PREVIEW_BASIC_AUTH: ${{ secrets.PREVIEW_BASIC_AUTH }}
+      PREVIEW_BASIC_AUTH_PASSWORD: ${{ secrets.PREVIEW_BASIC_AUTH_PASSWORD }}
       PREVIEW_DEV_LOGIN_EMAIL: ${{ vars.PREVIEW_DEV_LOGIN_EMAIL || 'dev.teacher@yawp.local' }}
       PREVIEW_LOGIN_EMAIL: ${{ secrets.PREVIEW_LOGIN_EMAIL }}
       PREVIEW_LOGIN_PASSWORD: ${{ secrets.PREVIEW_LOGIN_PASSWORD }}
@@ -154,6 +156,8 @@ jobs:
             "PREVIEW_ANTHROPIC_API_KEY=$(shell_quote "$PREVIEW_ANTHROPIC_API_KEY")"
             "PREVIEW_DB_DUMP_S3_URI=$(shell_quote "$PREVIEW_DB_DUMP_S3_URI")"
             "PREVIEW_DB_PASSWORD=$(shell_quote "$PREVIEW_DB_PASSWORD")"
+            "PREVIEW_BASIC_AUTH=$(shell_quote "$PREVIEW_BASIC_AUTH")"
+            "PREVIEW_BASIC_AUTH_PASSWORD=$(shell_quote "$PREVIEW_BASIC_AUTH_PASSWORD")"
             "PREVIEW_DEV_LOGIN_EMAIL=$(shell_quote "$PREVIEW_DEV_LOGIN_EMAIL")"
             "PREVIEW_LOGIN_EMAIL=$(shell_quote "$PREVIEW_LOGIN_EMAIL")"
             "PREVIEW_LOGIN_PASSWORD=$(shell_quote "$PREVIEW_LOGIN_PASSWORD")"
@@ -176,34 +180,42 @@ jobs:
           set -euo pipefail
           url="${{ steps.deploy.outputs.url }}"
           access_code="${{ steps.deploy.outputs.access_code }}"
+          transport_curl() {
+            if [[ -n "${PREVIEW_BASIC_AUTH:-}" && -n "${PREVIEW_BASIC_AUTH_PASSWORD:-}" ]]; then
+              local basic_auth_username="${PREVIEW_BASIC_AUTH%%:*}"
+              curl --user "${basic_auth_username}:${PREVIEW_BASIC_AUTH_PASSWORD}" "$@"
+            else
+              curl "$@"
+            fi
+          }
 
-          health="$(curl -sk -o /dev/null -m 15 -w '%{http_code}' "$url/api/healthcheck")"
+          health="$(transport_curl -sk -o /dev/null -m 15 -w '%{http_code}' "$url/api/healthcheck")"
           test "$health" = "200" || { echo "Healthcheck returned HTTP $health"; exit 1; }
 
-          anonymous_page="$(curl -skL -m 15 "$url")"
-          grep -q 'data-preview-access-screen' <<<"$anonymous_page" || {
-            echo "Anonymous request did not render the preview access screen" >&2
+          gated_page="$(transport_curl -skL -m 15 "$url")"
+          grep -q 'data-preview-access-screen' <<<"$gated_page" || {
+            echo "Request without a preview access cookie did not render the access screen" >&2
             exit 1
           }
 
-          blocked="$(curl -sk -o /dev/null -m 15 -w '%{http_code}' \
+          blocked="$(transport_curl -sk -o /dev/null -m 15 -w '%{http_code}' \
             -X POST --data-urlencode 'email=dev.admin@yawp.local' \
             "$url/auth/dev-login")"
           test "$blocked" = "401" || {
-            echo "Anonymous POST /auth/dev-login returned HTTP $blocked, expected 401" >&2
+            echo "POST /auth/dev-login without an access cookie returned HTTP $blocked, expected 401" >&2
             exit 1
           }
 
           cookie_jar="$(mktemp)"
-          entered="$(curl -sk -o /dev/null -m 15 -w '%{http_code}' -c "$cookie_jar" \
+          entered="$(transport_curl -sk -o /dev/null -m 15 -w '%{http_code}' -c "$cookie_jar" \
             --data-urlencode "code=$access_code" "$url/auth/preview-access")"
           case "$entered" in
             302|303) ;;
             *) echo "Access code returned HTTP $entered" >&2; exit 1 ;;
           esac
-          app="$(curl -skL -o /dev/null -m 15 -w '%{http_code}' -b "$cookie_jar" "$url")"
+          app="$(transport_curl -skL -o /dev/null -m 15 -w '%{http_code}' -b "$cookie_jar" "$url")"
           test "$app" = "200" || { echo "Code-bearing request returned HTTP $app"; exit 1; }
-          echo "In-app gate confirmed: health 200, anonymous screen, dev-login 401, code-bearing app 200"
+          echo "Double gate confirmed: health 200, no-cookie access screen, dev-login 401, code-bearing app 200"
 
       - name: Comment preview URL on PR
         uses: marocchino/sticky-pull-request-comment@v2
@@ -217,7 +229,7 @@ jobs:
             - **Runtime:** Docker Compose on the preview environment host
             - **Data:** seeded local-dev data in an isolated PR database
             - **Deploy elapsed:** `${{ steps.deploy.outputs.elapsed_ms }}ms`
-            - **Smoke:** in-app access gate + dev login
+            - **Smoke:** transitional transport gate + in-app access gate + dev login
 
   preview-destroy:
     if: >-
