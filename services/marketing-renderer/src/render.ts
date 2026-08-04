@@ -515,6 +515,9 @@ export async function renderStoryboard(
   // Set by a scene marked startsClip: the navigation before it is filmed but
   // trimmed away, so the clip opens on the screen worth showing.
   let clipOpensAt: number | null = null;
+  // When filming stopped, so the delivered clip's length can be reported as
+  // its actual length rather than as how long the render took.
+  let capturedUntil: number | null = null;
   // When each scene's overlay should be on screen, measured from the start of
   // the recording so it lines up with the raw clip's own currentTime when the
   // framing stage replays it.
@@ -656,6 +659,8 @@ export async function renderStoryboard(
         });
       }
     }
+
+    capturedUntil = Date.now();
   } finally {
     // Closing the context is what finalizes the recording, and it can wedge on
     // a browser that is already unhealthy. Bound it, and close the browser
@@ -745,7 +750,17 @@ export async function renderStoryboard(
       contentType: 'video/mp4',
       width: outputWidth,
       height: outputHeight,
-      durationMs: Date.now() - startedAt,
+      // The length of the clip a viewer receives: what was filmed, less the
+      // lead-in the transcode trims off the front. This used to report
+      // `Date.now() - startedAt`, which is how long the render took — a
+      // number that never moved when the trim changed, and read as a clip
+      // duration everywhere it was shown.
+      durationMs: Math.max(
+        0,
+        (capturedUntil ?? Date.now()) -
+          startedAt -
+          Math.round(rawTrimSeconds * 1000)
+      ),
     });
   }
 
