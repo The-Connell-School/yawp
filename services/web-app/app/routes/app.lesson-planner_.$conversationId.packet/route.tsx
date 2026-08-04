@@ -81,7 +81,10 @@ export default function LessonPacketRoute() {
     // owns its own scrolling. The scrollbar is left visible here on purpose: a
     // long packet should look scrollable. Print resets both so the document
     // paginates instead of being clipped to one viewport.
-    <section className="h-full w-full overflow-y-auto print:h-auto print:overflow-visible">
+    <section
+      data-testid="packet-scroll"
+      className="h-full w-full overflow-y-auto print:h-auto print:overflow-visible"
+    >
       <div className="mx-auto w-full max-w-4xl px-4 py-6 print:max-w-none print:px-0 print:py-0">
         {/* Controls — never printed. */}
         <div className="mb-6 flex flex-wrap items-center gap-2 print:hidden">

@@ -114,11 +114,13 @@ async function seedLessonPlan(
             },
             {
               role: 'assistant',
+              // Paragraphs, not a numbered list: Markdown turns "1." into a
+              // list marker, so the number never appears in the DOM text.
               content: keepLongHandout
                 ? `## Conclusion practice handout\n\n${Array.from(
                     { length: 40 },
                     (_unused, index) =>
-                      `${index + 1}. Rewrite this conclusion so it answers "so what?".`
+                      `Practice item ${index + 1}: rewrite this conclusion so it answers "so what?".`
                   ).join('\n\n')}`
                 : '## Conclusion practice handout\n\nRewrite each conclusion so it answers "so what?".',
               createdAt: new Date('2026-08-04T10:00:02.000Z'),
@@ -455,10 +457,24 @@ test.describe('YAWP! Lesson Planner', () => {
     await page.setViewportSize({ width: 1280, height: 600 });
     await page.goto(`/app/lesson-planner/${conversationId}/packet`);
 
-    const lastLine = page.getByText(
-      '40. Rewrite this conclusion so it answers "so what?".'
+    // The packet must be the scroll container itself. `overflow: hidden` is
+    // still scrollable programmatically, so scrollIntoView would pass even
+    // when the bug is present — this checks what a teacher can actually do.
+    const scroller = page.getByTestId('packet-scroll');
+    const overflows = await scroller.evaluate(
+      (node) => node.scrollHeight > node.clientHeight
     );
-    await lastLine.scrollIntoViewIfNeeded();
-    await expect(lastLine).toBeInViewport();
+    expect(overflows).toBe(true);
+
+    const lastLine = page.getByText('Practice item 40:');
+    await expect(lastLine).toHaveCount(1);
+    await expect(lastLine).not.toBeInViewport();
+
+    // A real wheel gesture, which a clipped container would not answer.
+    await page.mouse.move(640, 400);
+    await expect(async () => {
+      await page.mouse.wheel(0, 4000);
+      await expect(lastLine).toBeInViewport({ timeout: 1000 });
+    }).toPass({ timeout: 10_000 });
   });
 });
