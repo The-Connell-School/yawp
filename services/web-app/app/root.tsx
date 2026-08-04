@@ -38,7 +38,7 @@ import omit from 'lodash/omit';
 import { getMembershipId } from './cookies/membership-id.server.ts';
 import { LocalDevEnvironmentBar } from './components/local-dev-environment-bar.tsx';
 import { isLocalDevAuthEnabled } from './utils/local-dev-auth.server.ts';
-import { getLocalDevLoginOptions } from './routes/auth.dev-login/route.tsx';
+import { getLocalDevLoginOptions } from './routes/auth.dev-login/bound.server';
 import { useContrastPreference } from './routes/api.preferences.contrast/route.tsx';
 import {
   getEnvironmentBannerWarning,

@@ -50,6 +50,16 @@ function personasForSeat(number: number) {
   }));
 }
 
+/**
+ * Which organization seat 1 adopts. Defaults to the local-dev org, which is what both
+ * preview and demo hold today. Overridable so a database seeded under a different org id
+ * (the E2E fixture, for one) can still exercise adoption rather than skipping it — the
+ * adopt path must never synthesize an org, so it has to be pointed at a real one.
+ */
+function adoptedOrganizationId() {
+  return process.env.PREVIEW_SEAT_ADOPT_ORGANIZATION_ID || LOCAL_DEV_ORG_ID;
+}
+
 export function buildPreviewSeatDefinitions(
   count = DEFAULT_PREVIEW_SEAT_COUNT,
 ): PreviewSeatDefinition[] {
@@ -61,7 +71,7 @@ export function buildPreviewSeatDefinitions(
     const number = index + 1;
     const label = seatLabel(number);
     const organizationId =
-      number === 1 ? LOCAL_DEV_ORG_ID : `preview-seat-${number}`;
+      number === 1 ? adoptedOrganizationId() : `preview-seat-${number}`;
     return {
       number,
       label,
