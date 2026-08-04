@@ -9,8 +9,22 @@
  */
 import bcrypt from 'bcryptjs';
 import type { PrismaClient, Prisma } from '../../generated/prisma';
-import { buildDemoRoster, type DemoClassKey } from './demo-roster';
+import {
+  buildDemoRoster,
+  type DemoClassKey,
+  type DemoExistingAssignmentKey,
+} from './demo-roster';
 import { LOCAL_DEV_PASSWORD } from './dev-personas';
+
+/**
+ * An assignment the persona seed already created. The roster supplies papers
+ * for it instead of creating a second, near-identical assignment row.
+ */
+export type ExistingAssignmentRef = {
+  assignmentId: string;
+  classAssignmentId: string;
+  assignmentTypeId: string;
+};
 
 export type DemoRosterSeedInput = {
   organizationId: string;
@@ -22,6 +36,14 @@ export type DemoRosterSeedInput = {
     /** Falls back to the thesis type when the 5-paragraph type is absent. */
     fiveParagraph: string | null;
   };
+  /**
+   * Rows the persona seed made. A null entry means that assignment type was not
+   * imported, so the roster simply skips it rather than inventing a stand-in.
+   */
+  existingAssignments: Record<
+    DemoExistingAssignmentKey,
+    ExistingAssignmentRef | null
+  >;
   teacher: { membershipId: string; name: string };
   now?: Date;
 };
@@ -101,14 +123,31 @@ export async function seedDemoRoster(
     });
   }
 
-  const assignmentTypeFor = (spec: (typeof plan.assignments)[number]) =>
-    spec.assignmentTypeKey === 'five-paragraph'
+  const existingRef = (assignment: (typeof plan.assignments)[number]) =>
+    assignment.existingKey
+      ? input.existingAssignments[assignment.existingKey]
+      : null;
+
+  // An assignment whose row the persona seed owns but did not create (a missing
+  // assignment type) has nowhere to hang papers, so drop it entirely.
+  const plannedAssignments = plan.assignments.filter(
+    (assignment) => !assignment.existingKey || existingRef(assignment)
+  );
+  const ownedAssignments = plannedAssignments.filter(
+    (assignment) => !assignment.existingKey
+  );
+
+  const assignmentTypeFor = (spec: (typeof plan.assignments)[number]) => {
+    const existing = existingRef(spec);
+    if (existing) return existing.assignmentTypeId;
+    return spec.assignmentTypeKey === 'five-paragraph'
       ? (input.assignmentTypeIds.fiveParagraph ??
-        input.assignmentTypeIds.thesis)
+          input.assignmentTypeIds.thesis)
       : input.assignmentTypeIds.thesis;
+  };
 
   await prisma.assignment.createMany({
-    data: plan.assignments.map((assignment) => ({
+    data: ownedAssignments.map((assignment) => ({
       id: assignmentId(assignment.key),
       assignmentTypeId: assignmentTypeFor(assignment),
       title: assignment.title,
@@ -121,7 +160,7 @@ export async function seedDemoRoster(
   });
 
   await prisma.classAssignment.createMany({
-    data: plan.assignments.map((assignment) => ({
+    data: ownedAssignments.map((assignment) => ({
       id: classAssignmentId(assignment.key),
       assignmentId: assignmentId(assignment.key),
       classId: input.classes[assignment.classKey].id,
@@ -131,14 +170,31 @@ export async function seedDemoRoster(
   });
 
   const assignmentTypeByKey = new Map(
-    plan.assignments.map((assignment) => [
+    plannedAssignments.map((assignment) => [
       assignment.key,
       assignmentTypeFor(assignment),
     ])
   );
+  const assignmentIdByKey = new Map(
+    plannedAssignments.map((assignment) => [
+      assignment.key,
+      existingRef(assignment)?.assignmentId ?? assignmentId(assignment.key),
+    ])
+  );
+  const classAssignmentIdByKey = new Map(
+    plannedAssignments.map((assignment) => [
+      assignment.key,
+      existingRef(assignment)?.classAssignmentId ??
+        classAssignmentId(assignment.key),
+    ])
+  );
+
+  const work = plan.work.filter((entry) =>
+    assignmentIdByKey.has(entry.assignmentKey)
+  );
 
   await prisma.document.createMany({
-    data: plan.work.map((entry) => ({
+    data: work.map((entry) => ({
       id: documentId(entry.studentKey, entry.assignmentKey),
       title: entry.documentTitle,
       text: entry.text,
@@ -148,16 +204,14 @@ export async function seedDemoRoster(
       revision: entry.state === 'in-progress' ? 2 : 6,
       membershipId: membershipId(entry.studentKey),
       assignmentTypeId: assignmentTypeByKey.get(entry.assignmentKey)!,
-      assignmentId: assignmentId(entry.assignmentKey),
-      classAssignmentId: classAssignmentId(entry.assignmentKey),
+      assignmentId: assignmentIdByKey.get(entry.assignmentKey)!,
+      classAssignmentId: classAssignmentIdByKey.get(entry.assignmentKey)!,
       createdAt: entry.createdAt,
       updatedAt: entry.submittedAt ?? entry.createdAt,
     })),
   });
 
-  const submittedWork = plan.work.filter(
-    (entry) => entry.state !== 'in-progress'
-  );
+  const submittedWork = work.filter((entry) => entry.state !== 'in-progress');
 
   await prisma.submission.createMany({
     data: submittedWork.map((entry) => ({
@@ -216,15 +270,13 @@ export async function seedDemoRoster(
 
   return {
     studentCount: plan.students.length,
-    assignmentCount: plan.assignments.length,
-    documentCount: plan.work.length,
+    assignmentCount: plannedAssignments.length,
+    documentCount: work.length,
     submissionCount: submittedWork.length,
-    releasedSubmissionCount: plan.work.filter(
-      (entry) => entry.state === 'released'
-    ).length,
-    ungradedSubmissionCount: plan.work.filter(
-      (entry) => entry.state === 'submitted'
-    ).length,
+    releasedSubmissionCount: work.filter((entry) => entry.state === 'released')
+      .length,
+    ungradedSubmissionCount: work.filter((entry) => entry.state === 'submitted')
+      .length,
     growthPlanCount: plan.growthPlans.length,
   };
 }

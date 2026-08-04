@@ -241,6 +241,11 @@ export async function seedSyntheticLocalDevData(
     },
   });
 
+  let dailyPagesRefs: {
+    assignmentId: string;
+    classAssignmentId: string;
+    assignmentTypeId: string;
+  } | null = null;
   if (dailyPagesAssignmentTypeId) {
     const dailyAssignment = await prisma.assignment.create({
       data: {
@@ -249,12 +254,17 @@ export async function seedSyntheticLocalDevData(
         prompt: 'Write freely for ten minutes about something that surprised you this week.',
       },
     });
-    await prisma.classAssignment.create({
+    const dailyClassAssignment = await prisma.classAssignment.create({
       data: {
         assignmentId: dailyAssignment.id,
         classId: primaryClass.id,
       },
     });
+    dailyPagesRefs = {
+      assignmentId: dailyAssignment.id,
+      classAssignmentId: dailyClassAssignment.id,
+      assignmentTypeId: dailyPagesAssignmentTypeId,
+    };
   }
 
   const teacherTrainings = await prisma.teacherTraining.findMany({
@@ -467,6 +477,14 @@ export async function seedSyntheticLocalDevData(
     assignmentTypeIds: {
       thesis: thesisAssignmentTypeId,
       fiveParagraph: fiveParagraphAssignmentTypeId,
+    },
+    existingAssignments: {
+      'civic-responsibility': {
+        assignmentId: thesisAssignment.id,
+        classAssignmentId: thesisClassAssignment.id,
+        assignmentTypeId: thesisAssignmentTypeId,
+      },
+      'daily-pages': dailyPagesRefs,
     },
     teacher: {
       membershipId: primaryTeacher.membershipId,

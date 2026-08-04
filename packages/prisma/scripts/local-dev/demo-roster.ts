@@ -25,6 +25,7 @@ import {
   DEMO_ROSTER_ASSIGNMENTS,
   DEMO_ROSTER_STUDENTS,
   ESSAY_POOLS,
+  FREE_WRITE_POOLS,
   INLINE_COMMENTS,
   OVERALL_COMMENTS,
   type DemoArc,
@@ -297,11 +298,43 @@ type Essay = {
   closingSentence: string;
 };
 
+/** A ten-minute free write: no thesis, no sources, and never graded. */
+function buildFreeWrite(
+  student: DemoStudentSpec,
+  assignment: DemoAssignmentSpec,
+  band: EssayBand
+): Essay {
+  const pools = FREE_WRITE_POOLS[band];
+  const topic = assignment.topic;
+  const seed = `${student.key}:${assignment.key}`;
+
+  const opener = pick(pools.openers, `${seed}:fw-opener`)(topic);
+  const middle = pick(pools.middles, `${seed}:fw-middle`)(topic);
+  const closing = pick(pools.closers, `${seed}:fw-closer`)(topic);
+  const voice = voiceSentence(student, band);
+
+  const paragraphs = [[opener, middle].join(' '), [voice, closing].join(' ')];
+
+  return {
+    text: paragraphs.join('\n\n'),
+    html: paragraphs
+      .map((paragraph) => `<p>${escapeHtml(paragraph)}</p>`)
+      .join(''),
+    thesisSentence: opener,
+    evidenceSentence: middle,
+    closingSentence: closing,
+  };
+}
+
 function buildEssay(
   student: DemoStudentSpec,
   assignment: DemoAssignmentSpec,
   band: EssayBand
 ): Essay {
+  if (assignment.form === 'free-write') {
+    return buildFreeWrite(student, assignment, band);
+  }
+
   const pools = ESSAY_POOLS[band];
   const topic = assignment.topic;
   const seed = `${student.key}:${assignment.key}`;

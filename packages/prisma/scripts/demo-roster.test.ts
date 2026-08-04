@@ -242,6 +242,56 @@ describe('buildDemoRoster', () => {
     }
   });
 
+  test('never leaves an assignment without papers from most of the class', () => {
+    const plan = build();
+    const classSize = (classKey: string) =>
+      plan.students.filter((student) => student.classKey === classKey).length;
+
+    for (const assignment of plan.assignments) {
+      const papers = plan.work.filter(
+        (entry) => entry.assignmentKey === assignment.key
+      );
+      const submitted = papers.filter((entry) => entry.state !== 'in-progress');
+
+      // An assignment nobody wrote for is a hole in the demo: the class page
+      // shows a row with nothing behind it. Ungraded is fine; empty is not.
+      expect(papers.length).toBeGreaterThan(classSize(assignment.classKey) / 2);
+      expect(submitted.length).toBeGreaterThan(0);
+    }
+  });
+
+  test('fills the assignments the persona seed already created', () => {
+    const plan = build();
+    const existing = plan.assignments.filter(
+      (assignment) => assignment.existingKey
+    );
+
+    expect(existing.map((assignment) => assignment.existingKey).sort()).toEqual(
+      ['civic-responsibility', 'daily-pages']
+    );
+
+    for (const assignment of existing) {
+      const papers = plan.work.filter(
+        (entry) => entry.assignmentKey === assignment.key
+      );
+      expect(papers.length).toBeGreaterThan(10);
+    }
+  });
+
+  test('leaves daily pages submitted but ungraded', () => {
+    const plan = build();
+    const daily = plan.assignments.find(
+      (assignment) => assignment.existingKey === 'daily-pages'
+    )!;
+    const papers = plan.work.filter(
+      (entry) => entry.assignmentKey === daily.key
+    );
+
+    expect(daily.form).toBe('free-write');
+    expect(papers.some((entry) => entry.state === 'submitted')).toBe(true);
+    expect(papers.every((entry) => entry.gradedAt === null)).toBe(true);
+  });
+
   test('leaves a real grading queue of ungraded submissions', () => {
     const plan = build();
     const submitted = plan.work.filter((entry) => entry.state === 'submitted');
@@ -329,11 +379,18 @@ describe('buildDemoRoster', () => {
 
   test('writes distinct, substantial essays for every piece of work', () => {
     const plan = build();
+    const formByAssignment = new Map(
+      plan.assignments.map((assignment) => [assignment.key, assignment.form])
+    );
     const bodies = new Set<string>();
 
     for (const entry of plan.work) {
       if (entry.state === 'in-progress') continue;
-      expect(entry.text.length).toBeGreaterThanOrEqual(400);
+      // Free writes are ten-minute warmups, not essays — they are short on
+      // purpose, but still have to be real prose.
+      const minimum =
+        formByAssignment.get(entry.assignmentKey) === 'free-write' ? 200 : 400;
+      expect(entry.text.length).toBeGreaterThanOrEqual(minimum);
       expect(entry.html.startsWith('<p>')).toBe(true);
       bodies.add(entry.text);
     }

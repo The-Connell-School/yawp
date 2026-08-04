@@ -61,17 +61,33 @@ export type DemoTopic = {
   counter: string;
 };
 
+/**
+ * What the students hand in. Essays get the full argument structure; free
+ * writes are short reflective warmups that are never graded.
+ */
+export type DemoAssignmentForm = 'essay' | 'free-write';
+
+/**
+ * Assignments the persona seed already created. The roster fills these rather
+ * than creating its own copy, so no assignment in the demo classes is left
+ * standing empty.
+ */
+export type DemoExistingAssignmentKey = 'civic-responsibility' | 'daily-pages';
+
 export type DemoAssignmentSpec = {
   key: string;
   classKey: DemoClassKey;
   /** Which imported assignment type this maps onto. */
-  assignmentTypeKey: 'thesis' | 'five-paragraph';
+  assignmentTypeKey: 'thesis' | 'five-paragraph' | 'daily-pages';
   title: string;
   prompt: string;
   pointValue: number;
   /** How long ago the assignment went out, in weeks. */
   weeksAgo: number;
   state: DemoAssignmentState;
+  form?: DemoAssignmentForm;
+  /** Set when the row already exists and the roster only supplies the papers. */
+  existingKey?: DemoExistingAssignmentKey;
   topic: DemoTopic;
 };
 
@@ -703,6 +719,56 @@ export const DEMO_ROSTER_ASSIGNMENTS: DemoAssignmentSpec[] = [
       counter: 'decisions cannot wait forever for perfect information',
     },
   },
+
+  // --- Rows the persona seed already created --------------------------------
+  // These exist before the roster runs and would otherwise sit empty, showing
+  // an assignment with no papers behind it on the class page.
+  {
+    key: 'legacy-civic-responsibility',
+    existingKey: 'civic-responsibility',
+    classKey: 'primary',
+    assignmentTypeKey: 'thesis',
+    title: 'Thesis essay: civic responsibility',
+    prompt:
+      'Write a thesis-driven essay about how schools can prepare students for civic responsibility.',
+    pointValue: 100,
+    weeksAgo: 3,
+    state: 'released',
+    topic: {
+      subject: 'what a school owes the citizens it graduates',
+      claimHigh:
+        'A school teaches civic responsibility in how it settles an argument, not in the semester it spends naming the branches of government.',
+      claimMid:
+        'Schools teach citizenship best by how they handle disagreement, not just by what they cover in class.',
+      claimLow: 'Schools should teach us more about being a citizen.',
+      source: 'the student handbook',
+      quote: 'students are expected to participate constructively',
+      counter: 'civics is a family responsibility, not a school one',
+    },
+  },
+  {
+    key: 'legacy-daily-pages',
+    existingKey: 'daily-pages',
+    classKey: 'primary',
+    assignmentTypeKey: 'daily-pages',
+    title: 'Daily Pages - week 2',
+    prompt:
+      'Write freely for ten minutes about something that surprised you this week.',
+    pointValue: 0,
+    weeksAgo: 2,
+    state: 'awaiting-grading',
+    form: 'free-write',
+    topic: {
+      subject: 'something that surprised me this week',
+      claimHigh:
+        'What surprised me was not the thing itself but how long I had been walking past it.',
+      claimMid: 'Something small this week caught me off guard.',
+      claimLow: 'This week something suprised me alot.',
+      source: 'nothing in particular',
+      quote: 'ten minutes, no stopping',
+      counter: 'nothing much happened this week',
+    },
+  },
 ];
 
 type Sentence = (topic: DemoTopic) => string;
@@ -872,6 +938,93 @@ export const ESSAY_POOLS: Record<
 function capitalize(value: string) {
   return value.charAt(0).toUpperCase() + value.slice(1);
 }
+
+/**
+ * Free writes are a different animal from the essays: ten minutes, no thesis,
+ * no sources. Separate pools keep a Daily Pages entry from reading like an
+ * argument essay that lost its citations.
+ */
+export const FREE_WRITE_POOLS: Record<
+  'high' | 'mid' | 'low',
+  { openers: Sentence[]; middles: Sentence[]; closers: Sentence[] }
+> = {
+  high: {
+    openers: [
+      (t) =>
+        `Ten minutes is not long enough to be careful, so here is ${t.subject}, unedited.`,
+      () =>
+        `I did not plan to write about this and I am already three sentences in, which probably means something.`,
+      () =>
+        `The prompt says write freely, so I am going to start in the middle and see where it lands.`,
+      () =>
+        `I keep circling the same small thing this week, so I might as well put it down.`,
+    ],
+    middles: [
+      () =>
+        `It was not dramatic. It was the kind of thing you notice once and then cannot stop noticing, which is worse, because now it follows me around.`,
+      () =>
+        `What gets me is the ordinariness of it. Nobody announced anything. It had been true for a while and I had simply been too busy to look directly at it.`,
+      () =>
+        `I have been trying to decide whether this is a real observation or just something I want to be true because it makes a better story.`,
+      () =>
+        `The strange part is how quickly it stopped being strange. Two days later it was just the way things are, and I had to work to remember being surprised at all.`,
+    ],
+    closers: [
+      () =>
+        `I do not have an ending for this yet. That is probably the honest place to stop.`,
+      () =>
+        `If I wrote this again tomorrow it would come out differently, and I think that is the point of doing it every day.`,
+      () =>
+        `Ten minutes is up and I am somewhere I did not expect to be, which counts as a good session.`,
+    ],
+  },
+  mid: {
+    openers: [
+      (t) => `This week I want to write about ${t.subject}.`,
+      () => `I am not totally sure what to write, so I will just start.`,
+      () => `Something happened this week that I keep thinking about.`,
+      () => `Free writing is hard for me, but here goes.`,
+    ],
+    middles: [
+      () =>
+        `It was not a big deal at the time. Looking back, it stuck with me more than I expected it to, and I am still not sure why.`,
+      () =>
+        `I noticed it in the middle of doing something else, which is usually when I notice anything at all.`,
+      () =>
+        `At first I thought it was just me being tired. Then it happened again and I started paying attention.`,
+      () =>
+        `I told one person about it and they did not think it was interesting, which made me think about it even more.`,
+    ],
+    closers: [
+      () => `Anyway, that is what has been on my mind this week.`,
+      () => `I am still figuring out what I think about it.`,
+      () => `That is all I have for ten minutes.`,
+    ],
+  },
+  low: {
+    openers: [
+      (t) => `Today I am writing about ${t.subject}.`,
+      () => `I dont really know what to write about so I will just write.`,
+      () => `This week was pretty normal but one thing happened.`,
+      () => `Free write time. Here we go.`,
+    ],
+    middles: [
+      () =>
+        `It wasnt a big thing but it stuck with me. I kept thinking about it later when I was supposed to be doing other stuff.`,
+      () =>
+        `I noticed it and then I forgot about it, then I remembered it again which is weird.`,
+      () =>
+        `My friend didnt think it was a big deal, but it was to me for some reason.`,
+      () =>
+        `I dont have alot to say about it but it was different then normal.`,
+    ],
+    closers: [
+      () => `Thats pretty much it for today.`,
+      () => `I ran out of things to say but the timer isnt done.`,
+      () => `Anyway thats what I was thinking about.`,
+    ],
+  },
+};
 
 export const OVERALL_COMMENTS: Record<'high' | 'mid' | 'low', string[]> = {
   high: [
