@@ -34,9 +34,10 @@ export const LESSON_PLANNER_TOOL_NAMES = [
 const allowed = new Set<string>(LESSON_PLANNER_TOOL_NAMES);
 
 /** Allowlist order is preserved so the model always sees list_classes first. */
-export const LESSON_PLANNER_TOOLS: ReporterTool[] = LESSON_PLANNER_TOOL_NAMES.map(
-  (name) => REPORTER_TOOLS.find((tool) => tool.name === name)
-).filter((tool): tool is ReporterTool => Boolean(tool));
+export const LESSON_PLANNER_TOOLS: ReporterTool[] =
+  LESSON_PLANNER_TOOL_NAMES.map((name) =>
+    REPORTER_TOOLS.find((tool) => tool.name === name)
+  ).filter((tool): tool is ReporterTool => Boolean(tool));
 
 export async function handleLessonPlannerToolCall(
   name: string,

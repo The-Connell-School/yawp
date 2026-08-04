@@ -23,7 +23,13 @@ const prisma = {
   $transaction: mock(),
 };
 
-mock.module('~/utils/auth.server', () => ({ requireMutableRequest }));
+// Process-wide module mock: keep the other auth.server exports the sibling
+// lesson-planner tests rely on, whichever file happens to load first.
+mock.module('~/utils/auth.server', () => ({
+  requireMutableRequest,
+  requireUserId: mock(),
+  requireMembership: mock(),
+}));
 mock.module('~/utils/db.server', () => ({ prisma }));
 mock.module('~/utils/lesson-planner/lesson-planner-access.server', () => ({
   requireLessonPlannerAccess,
@@ -103,7 +109,8 @@ describe('api.domain.lesson-planner action', () => {
     expect(body.reply).toBe('Here is your lesson.');
     expect(body.isNewConversation).toBe(true);
 
-    const createArg = prisma.lessonPlanConversation.create.mock.calls[0][0].data;
+    const createArg =
+      prisma.lessonPlanConversation.create.mock.calls[0][0].data;
     expect(createArg.membershipId).toBe('teacher-1');
     expect(createArg.organizationId).toBe('org-1');
     expect(createArg.title).toBe('Lesson on conclusion paragraphs');
@@ -257,12 +264,12 @@ describe('api.domain.lesson-planner action', () => {
 
     // The origin is only trusted after it is re-checked against the teacher's
     // own classes.
-    expect(prisma.classAssignment.findFirst.mock.calls[0][0].where).toMatchObject(
-      {
-        id: 'ca-1',
-        class: { teachers: { some: { id: 'teacher-1' } } },
-      }
-    );
+    expect(
+      prisma.classAssignment.findFirst.mock.calls[0][0].where
+    ).toMatchObject({
+      id: 'ca-1',
+      class: { teachers: { some: { id: 'teacher-1' } } },
+    });
     expect(
       prisma.lessonPlanConversation.create.mock.calls[0][0].data
         .originClassAssignmentId

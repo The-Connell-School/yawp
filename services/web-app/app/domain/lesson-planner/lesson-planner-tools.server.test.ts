@@ -64,10 +64,14 @@ describe('handleLessonPlannerToolCall', () => {
     );
 
     expect(result).toBe('{"ok":true}');
-    expect(handleReporterToolCall).toHaveBeenCalledWith('list_classes', {}, {
-      membershipId: 'member-1',
-      organizationId: 'org-1',
-    });
+    expect(handleReporterToolCall).toHaveBeenCalledWith(
+      'list_classes',
+      {},
+      {
+        membershipId: 'member-1',
+        organizationId: 'org-1',
+      }
+    );
   });
 
   test('refuses a tool outside the allowlist without calling through', async () => {
@@ -82,18 +86,26 @@ describe('handleLessonPlannerToolCall', () => {
   });
 
   test('refuses an unknown tool name', async () => {
-    const result = await handleLessonPlannerToolCall('drop_tables', {}, {
-      ...ctx,
-    });
+    const result = await handleLessonPlannerToolCall(
+      'drop_tables',
+      {},
+      {
+        ...ctx,
+      }
+    );
 
     expect(JSON.parse(result).error).toContain('drop_tables');
     expect(handleReporterToolCall).not.toHaveBeenCalled();
   });
 
   test('never forwards a growth-plan write buffer to the reporter layer', async () => {
-    await handleLessonPlannerToolCall('get_class_grade_report', { classId: 'c' }, {
-      ...ctx,
-    });
+    await handleLessonPlannerToolCall(
+      'get_class_grade_report',
+      { classId: 'c' },
+      {
+        ...ctx,
+      }
+    );
 
     const forwarded = handleReporterToolCall.mock.calls[0]![2] as Record<
       string,

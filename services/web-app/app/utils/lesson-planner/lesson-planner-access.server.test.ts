@@ -4,12 +4,18 @@ const requireUserId = mock();
 const requireMembership = mock();
 const prisma = { organization: { findUnique: mock() } };
 
-mock.module('~/utils/auth.server', () => ({ requireUserId, requireMembership }));
+// The whole surface other modules import from auth.server: bun's module mocks
+// are process-wide, so a partial mock here would break a sibling test file that
+// loads a route needing one of the other exports.
+mock.module('~/utils/auth.server', () => ({
+  requireUserId,
+  requireMembership,
+  requireMutableRequest: mock(),
+}));
 mock.module('~/utils/db.server', () => ({ prisma }));
 
-const { getLessonPlannerAccess, requireLessonPlannerAccess } = await import(
-  './lesson-planner-access.server'
-);
+const { getLessonPlannerAccess, requireLessonPlannerAccess } =
+  await import('./lesson-planner-access.server');
 
 afterAll(() => {
   mock.restore();

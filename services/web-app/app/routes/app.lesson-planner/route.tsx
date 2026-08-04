@@ -8,28 +8,29 @@ import {
 } from 'react-router';
 import {
   CornerDownRight,
+  Lightbulb,
   Loader2,
   Plus,
   Printer,
-  Search,
   Send,
 } from 'lucide-react';
 import { Button } from '~/components/ui/button';
 import { Textarea } from '~/components/ui/textarea';
 import { cn } from '~/utils/misc';
 import { prisma } from '~/utils/db.server';
-import { getReporterAccess } from '~/utils/reporter/reporter-access.server';
-import { RECOMMENDED_REPORTER_PROMPTS } from '~/routes/api.domain.reporter/build-system-prompt';
+import { getLessonPlannerAccess } from '~/utils/lesson-planner/lesson-planner-access.server';
+import { RECOMMENDED_LESSON_PLANNER_PROMPTS } from '~/routes/api.domain.lesson-planner/build-system-prompt';
 import { parseAssistantMessage } from '~/components/ai-chat/parse-assistant-message';
 import {
   MarkdownContent,
   printAssistantMessage,
 } from '~/components/ai-chat/assistant-markdown';
+import { loadLessonSeed } from '~/domain/lesson-planner/lesson-seed.server';
 
 type ChatMessage = { role: 'user' | 'assistant'; content: string };
 
 export async function loader({ request }: LoaderFunctionArgs) {
-  const access = await getReporterAccess(request);
+  const access = await getLessonPlannerAccess(request);
   if (!access.allowed) {
     // Keep the feature invisible for orgs without it / non-teachers.
     throw redirect('/app');
@@ -38,7 +39,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const url = new URL(request.url);
   const selectedId = url.searchParams.get('c');
 
-  const conversations = await prisma.reporterConversation.findMany({
+  const conversations = await prisma.lessonPlanConversation.findMany({
     where: { membershipId: access.membership.id, deletedAt: null },
     select: { id: true, title: true, updatedAt: true },
     orderBy: { updatedAt: 'desc' },
@@ -47,7 +48,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   const selected =
     selectedId != null
-      ? await prisma.reporterConversation.findFirst({
+      ? await prisma.lessonPlanConversation.findFirst({
           where: {
             id: selectedId,
             membershipId: access.membership.id,
@@ -56,9 +57,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
           select: {
             id: true,
             title: true,
-            // id tiebreak: legacy rows share one createdAt per turn (they were
-            // written in a single nested create), and their cuids are
-            // sequential — this keeps question-before-answer order for them.
             messages: {
               orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
               select: { role: true, content: true },
@@ -66,6 +64,17 @@ export async function loader({ request }: LoaderFunctionArgs) {
           },
         })
       : null;
+
+  // Opened from a Class Summary next step: rebuild the opening ask on the
+  // server from the stored insight, so the URL carries ids rather than text a
+  // client could rewrite.
+  const seed = selected
+    ? null
+    : await loadLessonSeed({
+        membershipId: access.membership.id,
+        classAssignmentId: url.searchParams.get('from'),
+        stepIndex: url.searchParams.get('step'),
+      });
 
   return {
     conversations: conversations.map((conversation) => ({
@@ -79,42 +88,30 @@ export async function loader({ request }: LoaderFunctionArgs) {
           messages: selected.messages as ChatMessage[],
         }
       : null,
-    recommendedPrompts: RECOMMENDED_REPORTER_PROMPTS,
+    recommendedPrompts: RECOMMENDED_LESSON_PLANNER_PROMPTS,
+    seed,
   };
 }
 
-type ReporterActionData = {
+type LessonPlannerActionData = {
   conversationId?: string;
   reply?: string;
   isNewConversation?: boolean;
   error?: string;
-  growthPlanProposals?: GrowthPlanProposal[];
-  growthPlanSaved?: boolean;
-  studentName?: string;
 };
 
-type GrowthPlanProposal = {
-  student: string;
-  studentName: string;
-  focus: string;
-  targetSkills: string[];
-  body: string;
-  checkInInDays?: number;
-};
-
-export default function ReporterRoute() {
-  const { conversations, selectedConversation, recommendedPrompts } =
+export default function LessonPlannerRoute() {
+  const { conversations, selectedConversation, recommendedPrompts, seed } =
     useLoaderData<typeof loader>();
   const [searchParams, setSearchParams] = useSearchParams();
-  const fetcher = useFetcher<ReporterActionData>();
+  const fetcher = useFetcher<LessonPlannerActionData>();
 
   const [messages, setMessages] = useState<ChatMessage[]>(
     selectedConversation?.messages ?? []
   );
-  const [input, setInput] = useState('');
-  const [growthPlanProposals, setGrowthPlanProposals] = useState<
-    GrowthPlanProposal[]
-  >([]);
+  // A Class Summary hand-off pre-fills the composer instead of auto-sending, so
+  // the teacher can add their class's context before spending a turn.
+  const [input, setInput] = useState(seed?.prompt ?? '');
   // The conversation created by the last send, until the URL/loader catch up.
   // Without it, a quick follow-up message would start a second conversation.
   const [pendingConversationId, setPendingConversationId] = useState<
@@ -131,7 +128,7 @@ export default function ReporterRoute() {
   const transcriptRef = useRef<HTMLDivElement>(null);
   // Track the last fetcher result we merged so switching conversations (which
   // re-runs this effect with the same stale data) can't re-append a reply.
-  const processedData = useRef<ReporterActionData | null>(null);
+  const processedData = useRef<LessonPlannerActionData | null>(null);
 
   const isSending = fetcher.state !== 'idle';
 
@@ -157,19 +154,6 @@ export default function ReporterRoute() {
     if (processedData.current === fetcher.data) return;
     processedData.current = fetcher.data;
     const submission = pendingSubmission;
-
-    if (fetcher.data.growthPlanSaved) {
-      setGrowthPlanProposals([]);
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: 'assistant',
-          content: `Growth plan saved for ${fetcher.data!.studentName ?? 'the student'}.`,
-        },
-      ]);
-      return;
-    }
-
     const submittedHere = submission?.conversationKey === conversationKey;
     setPendingSubmission(null);
 
@@ -185,17 +169,20 @@ export default function ReporterRoute() {
     if (fetcher.data.reply) {
       // If the teacher switched conversations while this turn was in flight,
       // don't append the reply here — the turn is persisted and will be there
-      // when they reopen that report.
+      // when they reopen that lesson.
       if (!submittedHere) return;
       setMessages((prev) => [
         ...prev,
         { role: 'assistant', content: fetcher.data!.reply! },
       ]);
-      setGrowthPlanProposals(fetcher.data.growthPlanProposals ?? []);
       if (fetcher.data.conversationId && !conversationId) {
         setPendingConversationId(fetcher.data.conversationId);
         const next = new URLSearchParams(searchParams);
         next.set('c', fetcher.data.conversationId);
+        // The seed has been consumed by the first turn; drop it from the URL so
+        // a refresh doesn't re-prefill the composer.
+        next.delete('from');
+        next.delete('step');
         // Replace so the browser back button doesn't bounce between states.
         setSearchParams(next, { replace: true });
       }
@@ -210,6 +197,19 @@ export default function ReporterRoute() {
     });
   }, [messages.length, isSending]);
 
+  function startNewLesson() {
+    // Clear immediately: the loader refresh only resets the transcript when the
+    // selected conversation actually changes.
+    setPendingConversationId(null);
+    setMessages([]);
+    setInput('');
+    const next = new URLSearchParams(searchParams);
+    next.delete('c');
+    next.delete('from');
+    next.delete('step');
+    setSearchParams(next);
+  }
+
   function send(message: string) {
     const trimmed = message.trim();
     if (!trimmed || isSending) return;
@@ -221,20 +221,11 @@ export default function ReporterRoute() {
         intent: 'chat',
         message: trimmed,
         ...(conversationId ? { conversationId } : {}),
+        ...(!conversationId && seed
+          ? { originClassAssignmentId: seed.classAssignmentId }
+          : {}),
       },
-      { method: 'post', action: '/api/domain/reporter' }
-    );
-  }
-
-  function confirmGrowthPlan(proposal: GrowthPlanProposal) {
-    if (isSending) return;
-    fetcher.submit(
-      {
-        intent: 'confirm-growth-plan',
-        growthPlanProposal: JSON.stringify(proposal),
-        ...(conversationId ? { conversationId } : {}),
-      },
-      { method: 'post', action: '/api/domain/reporter' }
+      { method: 'post', action: '/api/domain/lesson-planner' }
     );
   }
 
@@ -242,29 +233,21 @@ export default function ReporterRoute() {
 
   return (
     <section className="flex h-full w-full">
-      {/* Conversation history */}
+      {/* Lesson history */}
       <aside className="hidden w-64 shrink-0 flex-col border-r bg-secondary/40 md:flex">
         <div className="p-3">
           <Button
             variant="outline"
             className="w-full justify-start gap-2"
-            onClick={() => {
-              // Clear immediately: the loader refresh only resets the
-              // transcript when the selected conversation actually changes.
-              setPendingConversationId(null);
-              setMessages([]);
-              const next = new URLSearchParams(searchParams);
-              next.delete('c');
-              setSearchParams(next);
-            }}
+            onClick={startNewLesson}
           >
-            <Plus size={16} /> New report
+            <Plus size={16} /> New lesson
           </Button>
         </div>
         <div className="no-scrollbar flex-1 overflow-y-auto px-2 pb-3">
           {conversations.length === 0 ? (
             <p className="px-2 py-4 text-sm text-muted-foreground">
-              Your past reports will show up here.
+              Your saved lessons will show up here.
             </p>
           ) : (
             <ul className="flex flex-col gap-1">
@@ -275,6 +258,8 @@ export default function ReporterRoute() {
                     onClick={() => {
                       const next = new URLSearchParams(searchParams);
                       next.set('c', conversation.id);
+                      next.delete('from');
+                      next.delete('step');
                       setSearchParams(next);
                     }}
                     className={cn(
@@ -298,32 +283,37 @@ export default function ReporterRoute() {
       <div className="flex h-full min-w-0 flex-1 flex-col">
         <div className="border-b bg-secondary px-4 py-3">
           <div className="mx-auto flex w-full max-w-3xl items-center gap-2">
-            <Search size={20} className="shrink-0 text-primary" />
+            <Lightbulb size={20} className="shrink-0 text-primary" />
             <div className="min-w-0 flex-1">
               <h2 className="text-lg font-semibold leading-none">
-                Yawp Reporter
+                YAWP! Lesson Planner
               </h2>
               <p className="hidden text-sm text-muted-foreground sm:block">
-                Ask about your classes and students in plain language.
+                Talk through a lesson for your actual students.
               </p>
             </div>
             <div className="flex shrink-0 items-center gap-2 md:hidden">
-              <label className="sr-only" htmlFor="reporter-mobile-history">
-                Past reports
+              <label
+                className="sr-only"
+                htmlFor="lesson-planner-mobile-history"
+              >
+                Saved lessons
               </label>
               <select
-                id="reporter-mobile-history"
-                aria-label="Past reports"
+                id="lesson-planner-mobile-history"
+                aria-label="Saved lessons"
                 value={selectedConversation?.id ?? ''}
                 onChange={(event) => {
                   if (!event.target.value) return;
                   const next = new URLSearchParams(searchParams);
                   next.set('c', event.target.value);
+                  next.delete('from');
+                  next.delete('step');
                   setSearchParams(next);
                 }}
                 className="h-9 max-w-32 rounded-md border bg-background px-2 text-sm"
               >
-                <option value="">Past reports</option>
+                <option value="">Saved lessons</option>
                 {conversations.map((conversation) => (
                   <option key={conversation.id} value={conversation.id}>
                     {conversation.title}
@@ -334,14 +324,8 @@ export default function ReporterRoute() {
                 type="button"
                 size="icon"
                 variant="outline"
-                aria-label="New report"
-                onClick={() => {
-                  setPendingConversationId(null);
-                  setMessages([]);
-                  const next = new URLSearchParams(searchParams);
-                  next.delete('c');
-                  setSearchParams(next);
-                }}
+                aria-label="New lesson"
+                onClick={startNewLesson}
               >
                 <Plus size={16} />
               </Button>
@@ -355,8 +339,9 @@ export default function ReporterRoute() {
         >
           <div className="mx-auto flex w-full max-w-3xl flex-col gap-4">
             {!hasMessages ? (
-              <ReporterEmptyState
+              <LessonPlannerEmptyState
                 prompts={recommendedPrompts}
+                seedContext={seed?.context ?? null}
                 onPick={send}
                 disabled={isSending}
               />
@@ -379,32 +364,9 @@ export default function ReporterRoute() {
                 aria-live="polite"
               >
                 <Loader2 size={16} className="animate-spin" />
-                Pulling the numbers…
+                Planning the lesson…
               </div>
             ) : null}
-            {growthPlanProposals.map((proposal) => (
-              <div
-                key={proposal.student}
-                className="rounded-xl border border-primary/30 bg-primary/5 p-4"
-                role="status"
-              >
-                <p className="text-sm font-medium">
-                  Save this growth plan for {proposal.studentName}?
-                </p>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Nothing is persisted until you confirm this exact proposal.
-                </p>
-                <Button
-                  type="button"
-                  size="sm"
-                  className="mt-3"
-                  disabled={isSending}
-                  onClick={() => confirmGrowthPlan(proposal)}
-                >
-                  Save growth plan
-                </Button>
-              </div>
-            ))}
           </div>
         </div>
 
@@ -426,8 +388,8 @@ export default function ReporterRoute() {
                 }
               }}
               rows={1}
-              placeholder="Ask Yawp Reporter…"
-              aria-label="Message Yawp Reporter"
+              placeholder="Describe the lesson and your class…"
+              aria-label="Message the Lesson Planner"
               className="max-h-40 min-h-[44px] flex-1 resize-none max-sm:text-base"
               disabled={isSending}
             />
@@ -446,12 +408,14 @@ export default function ReporterRoute() {
   );
 }
 
-function ReporterEmptyState({
+function LessonPlannerEmptyState({
   prompts,
+  seedContext,
   onPick,
   disabled,
 }: {
   prompts: Array<{ id: string; label: string; prompt: string }>;
+  seedContext: string | null;
   onPick: (prompt: string) => void;
   disabled: boolean;
 }) {
@@ -459,14 +423,30 @@ function ReporterEmptyState({
     <div className="flex flex-col items-center gap-6 py-10 text-center">
       <div className="flex flex-col items-center gap-2">
         <div className="rounded-2xl bg-primary/10 p-3 text-primary">
-          <Search size={28} />
+          <Lightbulb size={28} />
         </div>
-        <h3 className="text-xl font-semibold">What would you like to know?</h3>
+        <h3 className="text-xl font-semibold">What are we teaching?</h3>
         <p className="max-w-md text-sm text-muted-foreground">
-          Yawp Reporter reads your classes, assignments, and released grades to
-          answer questions and build reports. Try one of these, or just ask.
+          Tell the planner the skill, the class, and what your students are
+          like. It builds the lesson — slides, activities, handouts, exit
+          tickets — around the room you actually teach.
         </p>
       </div>
+      {seedContext ? (
+        <div
+          className="w-full max-w-xl rounded-xl border border-primary/30 bg-primary/5 p-4 text-left"
+          data-testid="lesson-planner-seed"
+        >
+          <p className="text-xs font-semibold uppercase tracking-wide text-primary">
+            From your class summary
+          </p>
+          <p className="mt-1 text-sm text-muted-foreground">{seedContext}</p>
+          <p className="mt-2 text-sm text-muted-foreground">
+            We started the message for you below — add anything about this class
+            before you send it.
+          </p>
+        </div>
+      ) : null}
       <div className="grid w-full max-w-xl grid-cols-1 gap-2 sm:grid-cols-2">
         {prompts.map((prompt) => (
           <button
@@ -506,23 +486,25 @@ function MessageBubble({
   }
 
   const { body, suggestions } = parseAssistantMessage(message.content);
-  // Only offer print/PDF on substantial replies (a report), not one-liners.
-  const isReport = /(^|\n)#{1,3}\s/.test(body) || /\n\|.*\|/.test(body);
+  // Only offer print/PDF on substantial replies (a lesson), not one-liners.
+  const isArtifact = /(^|\n)#{1,3}\s/.test(body) || /\n\|.*\|/.test(body);
 
   return (
     <div className="flex gap-3" data-role="assistant">
       <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary ring-1 ring-primary/15">
-        <Search size={16} />
+        <Lightbulb size={16} />
       </div>
       <div className="min-w-0 flex-1">
         <div className="rounded-2xl rounded-tl-sm border border-border/60 bg-card px-4 py-3 text-foreground shadow-sm">
           <MarkdownContent content={body} />
         </div>
-        {isReport ? (
+        {isArtifact ? (
           <div className="mt-1.5 flex justify-end">
             <button
               type="button"
-              onClick={() => printAssistantMessage(body, 'Yawp Reporter')}
+              onClick={() =>
+                printAssistantMessage(body, 'YAWP! Lesson Planner')
+              }
               className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-muted-foreground transition hover:bg-foreground/5 hover:text-foreground"
             >
               <Printer size={13} />
