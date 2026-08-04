@@ -206,7 +206,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     {
       user: {
         ...user,
-        isAdmin: Boolean(user?.isAdmin) && !isIsolatedPreviewSeatMode(),
+        isAdmin: Boolean(user?.isAdmin),
         selectedMembership: membership,
       },
       requestInfo: {

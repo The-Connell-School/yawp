@@ -98,10 +98,18 @@ export function isIsolatedPreviewSeatMode() {
   );
 }
 
+/**
+ * Platform admin is deliberately preserved inside preview seats.
+ *
+ * Suppressing it kept one seat's admin out of another seat's data, but it also removed
+ * the Admin surfaces from preview entirely — you could no longer test them at all, which
+ * previews exist to allow. Seat isolation is about testers not colliding by accident,
+ * not a security boundary between them, so parity with production wins here.
+ */
 export function hasEffectivePlatformAdmin(
   storedIsAdmin: boolean | null | undefined,
 ) {
-  return Boolean(storedIsAdmin) && !isIsolatedPreviewSeatMode();
+  return Boolean(storedIsAdmin);
 }
 
 export function isPreviewAccessConfigured() {

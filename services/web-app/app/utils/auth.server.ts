@@ -15,7 +15,6 @@ import {
   setMembershipId,
 } from '~/cookies/membership-id.server';
 import { normalizeEmail } from './normalize-email';
-import { isIsolatedPreviewSeatMode } from './preview-access.server';
 
 const membershipSelect = {
   id: true,
@@ -192,16 +191,6 @@ export async function requireMembership(
 
 export async function requireAdmin(request: Request) {
   const userId = await requireUserId(request);
-  if (isIsolatedPreviewSeatMode()) {
-    throw data(
-      {
-        error: 'Unauthorized',
-        requiredRole: 'isAdmin',
-        message: 'Platform administration is disabled in isolated preview seats.',
-      },
-      { status: 403 },
-    );
-  }
   const user = await prisma.user.findFirst({
     select: { id: true },
     where: { id: userId, isAdmin: true },

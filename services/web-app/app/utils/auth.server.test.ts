@@ -165,25 +165,28 @@ describe('membership auth helpers', () => {
     });
   });
 
-  test('platform-admin privilege is disabled inside isolated preview seats', async () => {
+  // Preview seats keep platform admin. Suppressing it removed the Admin surfaces from
+  // preview altogether, so they could not be tested there at all -- see
+  // hasEffectivePlatformAdmin in preview-access.server.ts.
+  test('platform-admin privilege still resolves inside isolated preview seats', async () => {
     process.env.PREVIEW_ACCESS_GATE = 'on';
     process.env.PREVIEW_DATA_MODE = 'seed';
     getSession.mockResolvedValue({
       get: (key: string) => (key === 'sessionId' ? 'session-1' : undefined),
     });
     prisma.session.findUnique.mockResolvedValue({ user: { id: 'user-1' } });
+    prisma.user.findFirst.mockResolvedValue({ id: 'user-1' });
 
     try {
-      await requireAdmin(new Request('https://example.com/app/admin'));
-      throw new Error('Expected requireAdmin to reject');
-    } catch (error) {
-      expect((error as { init?: { status?: number } }).init?.status).toBe(403);
+      await expect(
+        requireAdmin(new Request('https://example.com/app/admin')),
+      ).resolves.toBeDefined();
     } finally {
       delete process.env.PREVIEW_ACCESS_GATE;
       delete process.env.PREVIEW_DATA_MODE;
     }
 
-    expect(prisma.user.findFirst).not.toHaveBeenCalled();
+    expect(prisma.user.findFirst).toHaveBeenCalled();
   });
 });
 
