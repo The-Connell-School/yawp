@@ -25,7 +25,6 @@ export const ALLOWED_ROUTES = [
   '/accessibility',
   '/app',
   '/app/my-classes',
-  '/app/assignments',
   '/app/student-work',
   '/app/teacher-trainings',
 ] as const;

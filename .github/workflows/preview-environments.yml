@@ -345,7 +345,7 @@ jobs:
           echo "--- seed data sanity ---"
           psql -c "SELECT (SELECT count(*) FROM \"Assignment\") AS assignments, (SELECT count(*) FROM \"ClassAssignment\") AS class_assignments, (SELECT count(*) FROM \"Class\") AS classes"
 
-          echo "--- renderer-eye view of /app/assignments ---"
+          echo "--- renderer-eye view of /app ---"
           docker exec "yawp-pr-${DEMO_PR}-renderer-1" bash -lc "cd /app/services/marketing-renderer && export MARKETING_RENDERER_CHROMIUM_PATH=\$(ls -d /ms-playwright/chromium-*/chrome-linux*/chrome 2>/dev/null | head -1) && bun run probe.ts" || echo "renderer probe failed"
 
           job_id="demo-$(date +%s)"
@@ -354,7 +354,7 @@ jobs:
             VALUES ('$job_id', '$admin_id', 'CLIP', 'QUEUED',
               'Automated proof render, queued by the preview-demo-render workflow.',
               'FEATURE', 'https://pr-${DEMO_PR}.${PREVIEW_DOMAIN}',
-            \$sb\${\"slug\":\"daily-pages-prompt-library-proof\",\"title\":\"Daily Pages: Pick a Prompt, Create an Assignment\",\"audience\":\"Teachers\",\"goal\":\"Prove the studio renders end-to-end on this preview\",\"persona\":\"teacher\",\"viewport\":{\"width\":1280,\"height\":800},\"scenes\":[{\"id\":\"assignments-page\",\"goto\":\"/app/assignments\",\"waitFor\":\"table[aria-label='Assignments']\",\"settle\":0.8,\"hold\":0.5,\"screenshot\":false,\"steps\":[{\"action\":\"click\",\"role\":\"link\",\"name\":\"Daily Pages\"}]},{\"id\":\"prompt-library-open\",\"settle\":0.8,\"hold\":2,\"screenshot\":true,\"steps\":[{\"action\":\"waitFor\",\"role\":\"button\",\"name\":\"Prompt Library\"},{\"action\":\"click\",\"role\":\"button\",\"name\":\"Prompt Library\"},{\"action\":\"wait\",\"seconds\":0.6}]},{\"id\":\"select-prompt-new-assignment\",\"goto\":\"/app/assignments\",\"settle\":0.8,\"hold\":2.5,\"screenshot\":true,\"steps\":[{\"action\":\"waitFor\",\"role\":\"button\",\"name\":\"New Assignment\"},{\"action\":\"click\",\"role\":\"button\",\"name\":\"New Assignment\"},{\"action\":\"wait\",\"seconds\":0.5}]}]}\$sb\$::jsonb, 0, now())"
+            \$sb\${\"slug\":\"daily-pages-prompt-library-proof\",\"title\":\"Daily Pages: Pick a Prompt, Create an Assignment\",\"audience\":\"Teachers\",\"goal\":\"Prove the studio renders end-to-end on this preview\",\"persona\":\"teacher\",\"viewport\":{\"width\":1280,\"height\":800},\"scenes\":[{\"id\":\"dashboard\",\"goto\":\"/app\",\"waitFor\":\"main\",\"settle\":0.8,\"hold\":0.5,\"screenshot\":false,\"steps\":[{\"action\":\"click\",\"role\":\"link\",\"name\":\"Daily Pages\"}]},{\"id\":\"prompt-library-open\",\"settle\":0.8,\"hold\":2,\"screenshot\":true,\"steps\":[{\"action\":\"waitFor\",\"role\":\"button\",\"name\":\"Prompt Library\"},{\"action\":\"click\",\"role\":\"button\",\"name\":\"Prompt Library\"},{\"action\":\"wait\",\"seconds\":0.6}]},{\"id\":\"new-assignment\",\"settle\":0.8,\"hold\":2.5,\"screenshot\":true,\"steps\":[{\"action\":\"click\",\"role\":\"button\",\"name\":\"New\",\"optional\":true},{\"action\":\"waitFor\",\"text\":\"Assignment\",\"optional\":true},{\"action\":\"click\",\"text\":\"Assignment\",\"optional\":true},{\"action\":\"wait\",\"seconds\":0.5}]}]}\$sb\$::jsonb, 0, now())"
 
           echo "Queued $job_id — waiting for the preview renderer to claim and film it..."
           status="QUEUED"

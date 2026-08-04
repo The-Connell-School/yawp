@@ -38,9 +38,9 @@ export const MARKETING_LIBRARY: MarketingLibraryEntry[] = [
       viewport: { width: 1280, height: 800 },
       scenes: [
         {
-          id: 'assignments-page',
-          goto: '/app/assignments',
-          waitFor: "table[aria-label='Assignments']",
+          id: 'dashboard',
+          goto: '/app',
+          waitFor: 'main',
           settle: 0.8,
           hold: 0.5,
           screenshot: false,
@@ -59,13 +59,17 @@ export const MARKETING_LIBRARY: MarketingLibraryEntry[] = [
         },
         {
           id: 'new-assignment',
-          goto: '/app/assignments',
           settle: 0.8,
           hold: 2.5,
           screenshot: true,
           steps: [
-            { action: 'waitFor', role: 'button', name: 'New Assignment' },
-            { action: 'click', role: 'button', name: 'New Assignment' },
+            { action: 'click', role: 'button', name: 'New', optional: true },
+            {
+              action: 'waitFor',
+              text: 'Assignment',
+              optional: true,
+            },
+            { action: 'click', text: 'Assignment', optional: true },
             { action: 'wait', seconds: 0.5 },
           ],
         },
@@ -210,9 +214,16 @@ export const MARKETING_LIBRARY: MarketingLibraryEntry[] = [
           steps: [],
         },
         {
-          id: 'assignments',
-          goto: '/app/assignments',
-          waitFor: "table[aria-label='Assignments']",
+          id: 'assignments-entry',
+          goto: '/app',
+          waitFor: 'main',
+          settle: 1,
+          hold: 0,
+          screenshot: false,
+          steps: [{ action: 'click', role: 'link', name: 'Daily Pages' }],
+        },
+        {
+          id: 'assignments-detail',
           settle: 1.2,
           hold: 1,
           screenshot: true,
