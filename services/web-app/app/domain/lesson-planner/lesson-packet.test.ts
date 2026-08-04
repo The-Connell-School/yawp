@@ -119,6 +119,35 @@ describe('buildLessonPacket', () => {
     expect(packet.outline[1]!.steps).toEqual([]);
   });
 
+  test('does not repeat the section title inside the body', () => {
+    // The title is derived from the reply's own leading heading, so rendering
+    // both would print "Warm-up (5 min)" twice on paper.
+    expect(packet.sections[0]!.title).toBe('Warm-up (5 min)');
+    expect(packet.sections[0]!.content).not.toContain('# Warm-up (5 min)');
+    expect(packet.sections[0]!.content).toContain('Daily Pages prompt FW-001');
+    // Inner headings survive — only the duplicated title is removed.
+    expect(packet.sections[0]!.content).toContain('### Teacher moves');
+  });
+
+  test('keeps a heading that is not the section title', () => {
+    const [section] = buildLessonPacket({
+      title: 'Lesson',
+      className: null,
+      sections: [
+        {
+          id: 'm1',
+          content: 'Some framing prose.\n\n## Actually a heading',
+          keptAudience: null,
+        },
+      ],
+    }).sections;
+    expect(section!.content).toContain('## Actually a heading');
+  });
+
+  test('still finds the outline steps after the title is removed', () => {
+    expect(packet.outline[0]!.steps).toEqual(['Teacher moves']);
+  });
+
   test('falls back to the conversation title when the packet is unnamed', () => {
     expect(
       buildLessonPacket({ title: '', className: null, sections: [] }).title

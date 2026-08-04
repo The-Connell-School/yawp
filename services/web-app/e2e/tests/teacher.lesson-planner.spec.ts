@@ -126,10 +126,22 @@ async function seedLessonPlan(
   }
 }
 
+async function clearLessonPlans(membershipId: string) {
+  const prisma = createE2EPrismaClient();
+  try {
+    await prisma.lessonPlanConversation.deleteMany({ where: { membershipId } });
+  } finally {
+    await prisma.$disconnect();
+  }
+}
+
 test.describe('YAWP! Lesson Planner', () => {
   test.afterEach(async ({ e2eContext }) => {
     // Leave the org in its default (disabled) state for other specs.
     await setLessonPlannerEnabled(e2eContext.organizationId, false);
+    // Seeded lessons would otherwise pile up across tests and retries, and the
+    // library legitimately shows every one of them.
+    await clearLessonPlans(e2eContext.teacherMembershipId);
   });
 
   test('is hidden and unreachable when the org flag is off', async ({
@@ -302,18 +314,19 @@ test.describe('YAWP! Lesson Planner', () => {
     // Nothing is in the packet until the teacher keeps something.
     await expect(page.getByTestId('lesson-packet-bar')).toHaveCount(0);
 
-    await page
+    const replies = page.locator('[data-role="assistant"]');
+    await replies
+      .nth(0)
       .getByRole('button', { name: /keep for the lesson/i })
-      .first()
       .click();
 
     const bar = page.getByTestId('lesson-packet-bar');
     await expect(bar).toContainText(/1 section/i);
 
     // The second reply is a handout, so it is kept for students.
-    await page
+    await replies
+      .nth(1)
       .getByRole('button', { name: /keep as a handout/i })
-      .first()
       .click();
     await expect(bar).toContainText(/2 sections/i);
 
@@ -359,7 +372,14 @@ test.describe('YAWP! Lesson Planner', () => {
 
     const nameField = page.getByLabel('Lesson name');
     await nameField.fill('Conclusions, period 3');
+    // The name saves on blur; reloading before that request lands would race it.
+    const saved = page.waitForResponse(
+      (response) =>
+        response.url().includes('/api/domain/lesson-planner/packet') &&
+        response.request().method() === 'POST'
+    );
     await nameField.blur();
+    await saved;
 
     await page.reload();
     await expect(page.getByLabel('Lesson name')).toHaveValue(
@@ -382,18 +402,24 @@ test.describe('YAWP! Lesson Planner', () => {
     await expect(page).toHaveURL(/\/app\/lesson-planner\/library/);
 
     // The lesson with something kept is a document; the untouched draft is not
-    // yet a lesson and stays out of the library.
-    const rows = page.getByRole('listitem');
-    await expect(rows).toHaveCount(1);
-    await expect(rows.first()).toContainText(/1 section/i);
+    // yet a lesson and stays out of the library. Assert on the two specific
+    // lessons rather than a row count — the library shows every kept lesson,
+    // and the app shell contributes list items of its own.
+    const keptLink = page.locator(
+      `a[href="/app/lesson-planner/${kept.conversationId}/packet"]`
+    );
+    const draftLink = page.locator(
+      `a[href="/app/lesson-planner/${draft.conversationId}/packet"]`
+    );
+    await expect(keptLink).toHaveCount(1);
+    await expect(draftLink).toHaveCount(0);
+    await expect(
+      page.getByRole('listitem').filter({ has: keptLink })
+    ).toContainText(/1 section/i);
 
-    await rows
-      .first()
-      .getByRole('link', { name: /conclusions/i })
-      .click();
+    await keptLink.click();
     await expect(page).toHaveURL(
       new RegExp(`/app/lesson-planner/${kept.conversationId}/packet`)
     );
-    expect(draft.conversationId).not.toBe(kept.conversationId);
   });
 });

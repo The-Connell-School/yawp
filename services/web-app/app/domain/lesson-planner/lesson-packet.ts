@@ -78,6 +78,25 @@ function readSteps(content: string, sectionTitle: string): string[] {
     .filter((step) => step !== sectionTitle);
 }
 
+/**
+ * Drop the reply's opening heading when it became the section title. The packet
+ * renders the title itself, so leaving it in the body prints it twice — once as
+ * the section heading and again as the first line of the section.
+ */
+function stripDuplicateTitleHeading(content: string, title: string): string {
+  const lines = content.split('\n');
+  const firstIndex = lines.findIndex((line) => line.trim().length > 0);
+  if (firstIndex === -1) return content;
+
+  const heading = lines[firstIndex]!.match(/^\s{0,3}#{1,6}\s+(.+)$/);
+  if (!heading || stripInlineMarkdown(heading[1]!) !== title) return content;
+
+  return lines
+    .slice(firstIndex + 1)
+    .join('\n')
+    .trim();
+}
+
 export type PacketSectionInput = {
   id: string;
   content: string;
@@ -118,10 +137,11 @@ export function buildLessonPacket({
   const built = sections.map((section, index) => {
     // The suggestions block drives chat chips; it is not part of the lesson.
     const { body } = parseAssistantMessage(section.content);
+    const title = deriveSectionTitle(body, index);
     return {
       id: section.id,
-      title: deriveSectionTitle(body, index),
-      content: body.trim(),
+      title,
+      content: stripDuplicateTitleHeading(body.trim(), title),
       audience: parsePacketAudience(section.keptAudience),
     };
   });
