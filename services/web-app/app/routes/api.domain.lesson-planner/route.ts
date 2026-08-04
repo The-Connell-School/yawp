@@ -22,9 +22,14 @@ const PLANNER_FAILED =
 const MAX_PLANNER_MESSAGE_CHARS = 6_000;
 const MAX_HISTORY_MESSAGES = 20;
 const MAX_HISTORY_CHARS = 24_000;
-// Lessons are long: a deck with speaker notes runs well past a report.
-const PLANNER_REQUEST_DEADLINE_MS = 90_000;
-const PLANNER_MAX_TOKENS = 4_000;
+// Lessons are long: a deck with speaker notes, a handout, and the quoted text
+// of a Quick Writing Lesson run well past a report. A tight ceiling truncates
+// mid-artifact, which a teacher reads as bad material rather than as a cut-off.
+const PLANNER_REQUEST_DEADLINE_MS = 120_000;
+const PLANNER_MAX_TOKENS = 8_000;
+// Enough rounds to walk the catalog: class report, Daily Pages search, writing
+// lesson list plus lookup, the Lounge, and the assignable types.
+const PLANNER_MAX_TOOL_ROUNDS = 8;
 const PLANNER_REQUESTS_PER_MINUTE = 6;
 const PLANNER_REQUESTS_PER_HOUR_PER_ORG = 60;
 const PLANNER_ADMISSION_POLICY = {
@@ -162,7 +167,7 @@ export async function action({ request }: ActionFunctionArgs) {
       system,
       messages,
       maxTokens: PLANNER_MAX_TOKENS,
-      maxToolRounds: 4,
+      maxToolRounds: PLANNER_MAX_TOOL_ROUNDS,
       tools: LESSON_PLANNER_TOOLS,
       handleToolCall: (name, input) =>
         handleLessonPlannerToolCall(name, input, ctx),

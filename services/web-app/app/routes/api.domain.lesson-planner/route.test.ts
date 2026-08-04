@@ -150,6 +150,12 @@ describe('api.domain.lesson-planner action', () => {
     expect(llmArgs.logPayload).toBe('metadata-only');
     expect(llmArgs.allowFallbackProvider).toBe(false);
     expect(llmArgs.signal).toBeInstanceOf(AbortSignal);
+    // Room to walk the catalog: class report, a Daily Pages search, a writing
+    // lesson lookup, and the Lounge can all be needed for one plan.
+    expect(llmArgs.maxToolRounds).toBeGreaterThanOrEqual(8);
+    // Lessons now quote real lesson text and speaker notes; a tight ceiling
+    // truncates mid-handout, which reads to a teacher as bad material.
+    expect(llmArgs.maxTokens).toBeGreaterThanOrEqual(8_000);
 
     llmArgs.handleToolCall('list_classes', { a: 1 });
     expect(handleLessonPlannerToolCall).toHaveBeenCalledWith(

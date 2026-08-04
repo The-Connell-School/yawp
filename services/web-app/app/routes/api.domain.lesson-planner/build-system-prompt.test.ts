@@ -96,3 +96,52 @@ describe('RECOMMENDED_LESSON_PLANNER_PROMPTS', () => {
     expect(ids.size).toBe(RECOMMENDED_LESSON_PLANNER_PROMPTS.length);
   });
 });
+
+describe('buildLessonPlannerSystemPrompt — teaching out of Yawp', () => {
+  const prompt = buildLessonPlannerSystemPrompt({
+    teacherName: null,
+    organizationName: 'Connell School',
+  });
+
+  test('tells the planner to build lessons out of Yawp itself', () => {
+    const lower = prompt.toLowerCase();
+    for (const surface of [
+      'daily pages',
+      'quick writing lesson',
+      "teacher's lounge",
+      'assignment',
+    ]) {
+      expect(lower).toContain(surface);
+    }
+  });
+
+  test('names the catalog tools it should call before improvising', () => {
+    for (const tool of [
+      'search_daily_pages_prompts',
+      'list_writing_lessons',
+      'get_writing_lesson',
+      'list_lounge_materials',
+      'list_assignment_types',
+    ]) {
+      expect(prompt).toContain(tool);
+    }
+  });
+
+  test('requires real ids and links for anything it cites from the catalog', () => {
+    const lower = prompt.toLowerCase();
+    expect(lower).toContain('prompt id');
+    expect(lower).toContain('link');
+  });
+
+  test('forbids naming Yawp material that did not come back from a tool', () => {
+    const lower = prompt.toLowerCase();
+    // The old blanket ban on naming Yawp material is gone — it must now cite
+    // real catalog items and only those.
+    expect(lower).toContain('never name a daily pages prompt');
+    expect(lower).toContain('did not come back from a tool');
+  });
+
+  test('prefers existing Yawp material over inventing an activity', () => {
+    expect(prompt.toLowerCase()).toContain('before you invent');
+  });
+});
