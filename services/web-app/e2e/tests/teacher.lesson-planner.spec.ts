@@ -719,4 +719,56 @@ test.describe('YAWP! Lesson Planner', () => {
     );
     expect(response?.status()).toBe(404);
   });
+
+  test('always offers the data-driven option on the opening reply', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    await setLessonPlannerEnabled(e2eContext.organizationId, true);
+    const prisma = createE2EPrismaClient();
+    let conversationId: string;
+    try {
+      const conversation = await prisma.lessonPlanConversation.create({
+        data: {
+          membershipId: e2eContext.teacherMembershipId,
+          organizationId: e2eContext.organizationId,
+          title: 'Opening turn',
+          messages: {
+            create: [
+              {
+                role: 'user',
+                content: 'Help me plan a lesson.',
+                createdAt: new Date('2026-08-04T10:00:00.000Z'),
+              },
+              {
+                // The model offered only room-personality options, and none of
+                // them hands the choice back to the data.
+                role: 'assistant',
+                content:
+                  'Which class, and what is the room like?\n\n```suggestions\n10th grade, 50 min, talkative\n11th grade, 45 min, quiet\n```',
+                createdAt: new Date('2026-08-04T10:00:01.000Z'),
+              },
+            ],
+          },
+        },
+        select: { id: true },
+      });
+      conversationId = conversation.id;
+    } finally {
+      await prisma.$disconnect();
+    }
+
+    await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+    await page.goto(`/app/lesson-planner?c=${conversationId}`);
+
+    // Pinned by the app, first, whatever the model happened to suggest.
+    const chips = page.getByRole('button', { name: /^↳?\s*(10th|11th|Look)/ });
+    await expect(
+      page.getByRole('button', {
+        name: /look at my classes and tell me what they need work on/i,
+      })
+    ).toBeVisible();
+    await expect(chips.first()).toContainText(/look at my classes/i);
+  });
 });

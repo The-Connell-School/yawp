@@ -149,6 +149,19 @@ describe('buildLessonPlannerSystemPrompt — teaching out of Yawp', () => {
     }
   });
 
+  test('stops making every opening option about the room’s personality', () => {
+    const lower = prompt.toLowerCase();
+    expect(lower).toContain("do not make every option about the room's");
+    expect(lower).toContain('vary what the options are for');
+  });
+
+  test('tells the model the standard option is pinned by the app', () => {
+    expect(prompt).toContain(
+      'Look at my classes and tell me what they need work on'
+    );
+    expect(prompt.toLowerCase()).toContain('do not write your own version');
+  });
+
   test('requires real ids and links for anything it cites from the catalog', () => {
     const lower = prompt.toLowerCase();
     expect(lower).toContain('prompt id');

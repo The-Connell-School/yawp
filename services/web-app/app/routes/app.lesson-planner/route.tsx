@@ -31,6 +31,7 @@ import {
 } from '~/components/ai-chat/assistant-markdown';
 import { SlideDeckCard } from '~/components/ai-chat/slide-deck-card';
 import { parseSlideDeck } from '~/domain/lesson-planner/slide-deck';
+import { withStandardSuggestions } from '~/domain/lesson-planner/suggestions';
 import { loadLessonSeed } from '~/domain/lesson-planner/lesson-seed.server';
 
 type PacketAudience = 'teacher' | 'student';
@@ -283,6 +284,9 @@ export default function LessonPlannerRoute() {
   }
 
   const hasMessages = messages.length > 0;
+  const firstAssistantIndex = messages.findIndex(
+    (message) => message.role === 'assistant'
+  );
 
   return (
     <section className="flex h-full w-full">
@@ -413,6 +417,7 @@ export default function LessonPlannerRoute() {
                   key={message.id ?? index}
                   message={message}
                   isLast={index === messages.length - 1}
+                  isOpeningReply={index === firstAssistantIndex}
                   conversationId={conversationId}
                   onSuggestion={send}
                   onKeep={setKept}
@@ -554,6 +559,7 @@ function LessonPlannerEmptyState({
 function MessageBubble({
   message,
   isLast,
+  isOpeningReply,
   conversationId,
   onSuggestion,
   onKeep,
@@ -561,6 +567,8 @@ function MessageBubble({
 }: {
   message: ChatMessage;
   isLast: boolean;
+  /** The planner's first reply in this lesson. */
+  isOpeningReply: boolean;
   conversationId: string | null;
   onSuggestion: (text: string) => void;
   onKeep: (messageId: string, audience: PacketAudience | null) => void;
@@ -576,9 +584,13 @@ function MessageBubble({
     );
   }
 
-  const { body: withDeck, suggestions } = parseAssistantMessage(
-    message.content
-  );
+  const { body: withDeck, suggestions: modelSuggestions } =
+    parseAssistantMessage(message.content);
+  // The opening turn always offers the data-driven route, in the same words,
+  // rather than whatever the model happened to think of this run.
+  const suggestions = withStandardSuggestions(modelSuggestions, {
+    isOpeningReply,
+  });
   // A deck is rendered as a deck; only its surrounding prose stays Markdown.
   const parsedDeck = parseSlideDeck(withDeck);
   const body = parsedDeck?.body ?? withDeck;
