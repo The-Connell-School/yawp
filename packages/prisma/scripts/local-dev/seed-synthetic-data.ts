@@ -1,7 +1,6 @@
 /* eslint-disable no-console */
 import type { PrismaClient } from '../../generated/prisma';
 import { createPassword } from '../utils';
-import { getClassArtByIndex } from '../../../../services/web-app/app/utils/class-art.ts';
 import {
   LOCAL_DEV_ORG_ID,
   LOCAL_DEV_ORG_NAME,
@@ -9,6 +8,17 @@ import {
   type LocalDevPersona,
 } from './dev-personas';
 import { seedDemoRoster, type DemoRosterSeedResult } from './seed-demo-roster';
+import { classArtKeyForClass, DEMO_ROSTER_CLASSES } from './demo-roster';
+
+/**
+ * Class art comes from the demo roster's class specs so both seeds pick from
+ * one list — otherwise two classes drift onto the same painting.
+ */
+function demoClassArtKey(key: 'primary' | 'secondary') {
+  const klass = DEMO_ROSTER_CLASSES.find((candidate) => candidate.key === key);
+  if (!klass) throw new Error(`Missing demo class spec for ${key}.`);
+  return classArtKeyForClass(klass);
+}
 
 type PersonaRecord = {
   persona: LocalDevPersona;
@@ -137,7 +147,7 @@ export async function seedSyntheticLocalDevData(
       period: '3',
       grade: '10',
       title: 'English 10 - Period 3',
-      classArtKey: getClassArtByIndex(2).key,
+      classArtKey: demoClassArtKey('primary'),
       schoolId: schools[0].id,
       teachers: {
         connect: [
@@ -160,7 +170,7 @@ export async function seedSyntheticLocalDevData(
       period: '5',
       grade: '11',
       title: 'English 11 - Period 5',
-      classArtKey: getClassArtByIndex(5).key,
+      classArtKey: demoClassArtKey('secondary'),
       schoolId: schools[1].id,
       teachers: {
         connect: [

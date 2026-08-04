@@ -21,6 +21,10 @@ import {
   letterFromPercent,
 } from '../../../../services/web-app/app/domain/grading/gradeMath.ts';
 import {
+  CLASS_ART_LIBRARY,
+  CLASS_ART_POOL,
+} from '../../../../services/web-app/app/utils/class-art.ts';
+import {
   CATEGORY_COMMENTS,
   DEMO_ROSTER_ASSIGNMENTS,
   DEMO_ROSTER_CLASSES,
@@ -54,6 +58,33 @@ export type {
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const WEEK_MS = 7 * DAY_MS;
+
+/**
+ * Resolve a class's stored art key from its artwork and crop.
+ *
+ * Selecting by pool index instead would silently let two classes show the same
+ * painting: the pool is one entry per (artwork, crop) pair, so indices 1 and 2
+ * are the same painting cropped differently — which is exactly how English 9
+ * and English 10 ended up both showing Red Fuji.
+ */
+export function classArtKeyForClass(klass: DemoClassSpec): string {
+  const artwork = CLASS_ART_LIBRARY[klass.artworkIndex];
+  if (!artwork) {
+    throw new Error(
+      `Demo class ${klass.key} points at artwork ${klass.artworkIndex}, which is outside the class art library.`
+    );
+  }
+
+  const crops = CLASS_ART_POOL.filter(
+    (entry) => entry.artworkKey === artwork.key
+  );
+  const crop = crops[klass.cropIndex] ?? crops[0];
+  if (!crop) {
+    throw new Error(`Class art ${artwork.key} has no crops.`);
+  }
+
+  return crop.key;
+}
 
 export type DemoWorkState = 'in-progress' | 'submitted' | 'graded' | 'released';
 

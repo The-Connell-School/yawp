@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
   buildDemoRoster,
+  classArtKeyForClass,
   DEMO_ROSTER_ASSIGNMENTS,
   DEMO_ROSTER_CLASSES,
   DEMO_ROSTER_STUDENTS,
@@ -11,6 +12,7 @@ import {
   type DemoWorkPlan,
 } from './local-dev/demo-roster';
 import { rubricKeys } from '../../../services/web-app/app/domain/grading/rubric.ts';
+import { getClassArtByKey } from '../../../services/web-app/app/utils/class-art.ts';
 import {
   computeWeightedPercentage,
   letterFromPercent,
@@ -50,6 +52,22 @@ describe('demo roster students', () => {
 
     const grades = DEMO_ROSTER_CLASSES.map((klass) => klass.grade);
     expect(new Set(grades).size).toBeGreaterThanOrEqual(3);
+  });
+
+  test('gives every class its own artwork', () => {
+    const artworks = DEMO_ROSTER_CLASSES.map((klass) => klass.artworkIndex);
+
+    // The art pool is (artwork x crop) pairs, so two classes can draw different
+    // pool entries and still show the same painting. Distinctness has to be
+    // asserted on the artwork, not the crop.
+    expect(new Set(artworks).size).toBe(DEMO_ROSTER_CLASSES.length);
+
+    const keys = DEMO_ROSTER_CLASSES.map((klass) => classArtKeyForClass(klass));
+    expect(new Set(keys).size).toBe(DEMO_ROSTER_CLASSES.length);
+    expect(keys.every((key) => getClassArtByKey(key) !== null)).toBe(true);
+
+    const artworkKeys = keys.map((key) => getClassArtByKey(key)!.artworkKey);
+    expect(new Set(artworkKeys).size).toBe(DEMO_ROSTER_CLASSES.length);
   });
 
   test('fills every section with a full-size roster', () => {

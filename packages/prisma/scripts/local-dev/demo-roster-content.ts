@@ -29,7 +29,14 @@ export type DemoClassSpec = {
   period: string;
   /** Index into the schools the synthetic seed creates. */
   schoolIndex: number;
-  classArtIndex: number;
+  /**
+   * Index into CLASS_ART_LIBRARY — the painting, not the pool slot. The art
+   * pool is (artwork x crop) pairs, so picking pool indices directly lets two
+   * classes land on the same painting at different crops.
+   */
+  artworkIndex: number;
+  /** Which crop of that painting to use. */
+  cropIndex: number;
   /** Set when the persona seed already created this class row. */
   existing?: boolean;
   /**
@@ -48,7 +55,8 @@ export const DEMO_ROSTER_CLASSES: DemoClassSpec[] = [
     grade: '10',
     period: '3',
     schoolIndex: 0,
-    classArtIndex: 2,
+    artworkIndex: 0,
+    cropIndex: 2,
     existing: true,
     skillProfile: { strong: 'voice_and_style', weak: 'evidence_and_support' },
   },
@@ -59,7 +67,8 @@ export const DEMO_ROSTER_CLASSES: DemoClassSpec[] = [
     grade: '11',
     period: '5',
     schoolIndex: 1,
-    classArtIndex: 5,
+    artworkIndex: 1,
+    cropIndex: 2,
     existing: true,
     skillProfile: {
       strong: 'evidence_and_support',
@@ -73,7 +82,8 @@ export const DEMO_ROSTER_CLASSES: DemoClassSpec[] = [
     grade: '10',
     period: '2',
     schoolIndex: 0,
-    classArtIndex: 7,
+    artworkIndex: 2,
+    cropIndex: 1,
     skillProfile: {
       strong: 'organization_and_structure',
       weak: 'voice_and_style',
@@ -86,7 +96,8 @@ export const DEMO_ROSTER_CLASSES: DemoClassSpec[] = [
     grade: '9',
     period: '1',
     schoolIndex: 0,
-    classArtIndex: 1,
+    artworkIndex: 4,
+    cropIndex: 1,
     skillProfile: {
       strong: 'thesis_and_content',
       weak: 'grammar_and_mechanics',
@@ -99,7 +110,8 @@ export const DEMO_ROSTER_CLASSES: DemoClassSpec[] = [
     grade: '12',
     period: '7',
     schoolIndex: 0,
-    classArtIndex: 9,
+    artworkIndex: 3,
+    cropIndex: 0,
     skillProfile: {
       strong: 'thesis_and_content',
       weak: 'voice_and_style',

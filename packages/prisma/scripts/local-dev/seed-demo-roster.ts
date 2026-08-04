@@ -11,12 +11,12 @@ import bcrypt from 'bcryptjs';
 import type { PrismaClient, Prisma } from '../../generated/prisma';
 import {
   buildDemoRoster,
+  classArtKeyForClass,
   DEMO_ROSTER_CLASSES,
   type DemoClassKey,
   type DemoExistingAssignmentKey,
 } from './demo-roster';
 import { LOCAL_DEV_PASSWORD } from './dev-personas';
-import { getClassArtByIndex } from '../../../../services/web-app/app/utils/class-art.ts';
 
 /**
  * An assignment the persona seed already created. The roster supplies papers
@@ -100,7 +100,7 @@ export async function seedDemoRoster(
         title: klass.title,
         grade: klass.grade,
         period: klass.period,
-        classArtKey: getClassArtByIndex(klass.classArtIndex).key,
+        classArtKey: classArtKeyForClass(klass),
         schoolId: school.id,
         teachers: {
           connect: input.teacherMembershipIds.map((id) => ({ id })),
