@@ -38,6 +38,13 @@ export type RenderParams = {
   frameStyle?: 'window' | 'none';
   /** Scenes whose optional steps failed, reported back for the job record. */
   onWarning?: (message: string) => void;
+  /**
+   * Called as the render moves between stages. The worker keeps the last one
+   * so an abandoned attempt can say where it stopped instead of only that it
+   * ran out of time — the difference between a diagnosable failure and a
+   * guess.
+   */
+  onStage?: (stage: string) => void;
 };
 
 export type RenderResult = {
@@ -47,6 +54,39 @@ export type RenderResult = {
 
 const NAVIGATION_TIMEOUT_MS = 45_000;
 const STEP_TIMEOUT_MS = 15_000;
+/**
+ * Every await in a render must be bounded. Page-level steps carry Playwright
+ * timeouts, but the work around them — signing in, launching the browser,
+ * encoding, tearing down — historically did not, so a single hung call could
+ * silently eat the worker's entire attempt budget and be abandoned with no
+ * indication of where it stopped. These bound the rest.
+ */
+const LOGIN_TIMEOUT_MS = 30_000;
+const LAUNCH_TIMEOUT_MS = 60_000;
+const TRANSCODE_TIMEOUT_MS = 120_000;
+const TEARDOWN_TIMEOUT_MS = 60_000;
+
+/** Reject if `work` outlives `ms`, naming the stage so a stall is diagnosable. */
+async function bounded<T>(
+  stage: string,
+  ms: number,
+  work: Promise<T>
+): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      work,
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(
+          () => reject(new Error(`${stage} exceeded ${Math.round(ms / 1000)}s`)),
+          ms
+        );
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
 /**
  * Dev-mode targets hydrate late — and when hydration mismatches, React throws
  * the server DOM away and re-renders from scratch. A click dispatched into
@@ -136,6 +176,9 @@ async function login(
     headers,
     body: new URLSearchParams({ email }).toString(),
     redirect: 'manual',
+    // A dev-server target that accepts the connection and never answers would
+    // otherwise hang this call — and the whole attempt — indefinitely.
+    signal: AbortSignal.timeout(LOGIN_TIMEOUT_MS),
   });
 
   if (response.status >= 400) {
@@ -326,11 +369,21 @@ async function transcode(
       }
     );
     let stderr = '';
+    // ffmpeg on a truncated or malformed recording can sit forever rather than
+    // exiting; kill it instead of letting it consume the attempt.
+    const killTimer = setTimeout(() => {
+      stderr += `\nffmpeg exceeded ${Math.round(TRANSCODE_TIMEOUT_MS / 1000)}s and was killed.`;
+      child.kill('SIGKILL');
+    }, TRANSCODE_TIMEOUT_MS);
     child.stderr?.on('data', (chunk) => {
       stderr += String(chunk);
     });
-    child.on('error', reject);
+    child.on('error', (err) => {
+      clearTimeout(killTimer);
+      reject(err);
+    });
     child.on('close', (code) => {
+      clearTimeout(killTimer);
       if (code === 0) return resolve();
       reject(new Error(`ffmpeg exited ${code}: ${stderr.slice(-2000)}`));
     });
@@ -368,13 +421,18 @@ export async function renderStoryboard(
   // Chromium intermittently dies at launch on the preview host (a general
   // protection fault before the first page). One render attempt costs minutes
   // of queue time; retrying the launch in-process costs seconds.
+  params.onStage?.('launching browser');
   let browser!: Awaited<ReturnType<typeof chromium.launch>>;
   for (let attempt = 1; ; attempt += 1) {
     try {
-      browser = await chromium.launch({
-        headless: true,
-        executablePath: params.chromiumPath,
-      });
+      browser = await bounded(
+        'Browser launch',
+        LAUNCH_TIMEOUT_MS,
+        chromium.launch({
+          headless: true,
+          executablePath: params.chromiumPath,
+        })
+      );
       break;
     } catch (err) {
       if (attempt >= 3) throw err;
@@ -428,6 +486,7 @@ export async function renderStoryboard(
   };
 
   try {
+    params.onStage?.(`signing in as ${storyboard.persona}`);
     await login(
       context,
       baseUrl,
@@ -437,6 +496,7 @@ export async function renderStoryboard(
     );
 
     for (const scene of storyboard.scenes as StoryboardScene[]) {
+      params.onStage?.(`scene "${scene.id}"`);
       if (scene.goto) {
         await gotoAndSettle(page, resolveUrl(baseUrl, scene.goto));
       }
@@ -479,11 +539,21 @@ export async function renderStoryboard(
       if (scene.screenshot) await shoot(scene.id, scene.fullPage);
     }
   } finally {
-    await context.close();
-    await browser.close();
+    // Closing the context is what finalizes the recording, and it can wedge on
+    // a browser that is already unhealthy. Bound it, and close the browser
+    // either way so the attempt does not die holding a chromium process.
+    await bounded(
+      'Recording teardown',
+      TEARDOWN_TIMEOUT_MS,
+      context.close()
+    ).catch(() => {});
+    await bounded('Browser close', TEARDOWN_TIMEOUT_MS, browser.close()).catch(
+      () => {}
+    );
   }
 
   if (wantsVideo && video) {
+    params.onStage?.('saving the recording');
     const recorded = await video.path();
     const mp4Path = path.join(videoDir, `${storyboard.slug}.mp4`);
     const rawTrimSeconds = firstSceneReadyAt
@@ -500,6 +570,7 @@ export async function renderStoryboard(
     // whole thing.
     let framed: Awaited<ReturnType<typeof frameClip>> | null = null;
     if (frameStyle === 'window') {
+      params.onStage?.('framing the clip');
       try {
         framed = await frameClip({
           rawVideoPath: recorded,

@@ -51,6 +51,10 @@ export async function processNextJob(params: {
     // way any render error does. The leaked browser process, if any, is
     // orphaned rather than awaited — acceptable on a preview-scale host.
     const attemptTimeoutMs = params.config.attemptTimeoutMs ?? 8 * 60 * 1000;
+    // An abandoned attempt that only reports "ran out of time" tells an admin
+    // nothing about where it stopped. Tracking the current stage turns that
+    // into an actionable message.
+    let stage = 'starting up';
     const { files, warnings } = await Promise.race([
       renderStoryboard({
         storyboard: job.storyboard,
@@ -61,13 +65,17 @@ export async function processNextJob(params: {
         chromiumPath: params.config.chromiumPath,
         ffmpegPath: params.config.ffmpegPath,
         basicAuth: params.config.basicAuth,
+        onStage: (next) => {
+          stage = next;
+          log('stage', { jobId: job.id, stage: next });
+        },
       }),
       new Promise<never>((_, reject) =>
         setTimeout(
           () =>
             reject(
               new Error(
-                `The render attempt exceeded ${Math.round(attemptTimeoutMs / 1000)}s and was abandoned.`
+                `The render attempt exceeded ${Math.round(attemptTimeoutMs / 1000)}s and was abandoned while ${stage}.`
               )
             ),
           attemptTimeoutMs
