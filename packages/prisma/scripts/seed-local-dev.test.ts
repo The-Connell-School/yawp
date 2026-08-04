@@ -138,6 +138,7 @@ describe('local dev seed fixtures', () => {
 
     expect(seedSource).toContain('reporterEnabled: true');
     expect(seedSource).toContain('classInsightsEnabled: true');
+    expect(seedSource).toContain('lessonPlannerEnabled: true');
   });
 
   test('treats localhost database urls as local seed targets', () => {

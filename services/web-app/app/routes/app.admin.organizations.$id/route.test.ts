@@ -63,6 +63,7 @@ function organizationFixture() {
     numOfTeacherSeats: 10,
     reporterEnabled: false,
     classInsightsEnabled: false,
+    lessonPlannerEnabled: false,
     accessExpiresAt: null,
     memberships: [],
     assignmentTypeAssignments: [],
@@ -142,7 +143,7 @@ describe('admin organization detail route', () => {
     ]);
   });
 
-  test('updates Reporter and Class Summary rollout gates independently', async () => {
+  test('updates Reporter, Class Summary, and Lesson Planner rollout gates independently', async () => {
     const form = new URLSearchParams();
     form.set('intent', 'update');
     form.set('name', 'Test Org');
@@ -150,6 +151,7 @@ describe('admin organization detail route', () => {
     form.set('numOfTeacherSeats', '10');
     form.set('reporterEnabled', 'true');
     form.set('classInsightsEnabled', 'true');
+    form.set('lessonPlannerEnabled', 'true');
 
     await action({
       request: updateRequest(form),
@@ -160,10 +162,11 @@ describe('admin organization detail route', () => {
     expect(prisma.organization.update.mock.calls[0][0].data).toMatchObject({
       reporterEnabled: true,
       classInsightsEnabled: true,
+      lessonPlannerEnabled: true,
     });
   });
 
-  test('disables both rollout gates when their toggles are absent', async () => {
+  test('disables every rollout gate when its toggle is absent', async () => {
     const form = new URLSearchParams();
     form.set('intent', 'update');
     form.set('name', 'Test Org');
@@ -179,6 +182,7 @@ describe('admin organization detail route', () => {
     expect(prisma.organization.update.mock.calls[0][0].data).toMatchObject({
       reporterEnabled: false,
       classInsightsEnabled: false,
+      lessonPlannerEnabled: false,
     });
   });
 });

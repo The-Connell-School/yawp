@@ -34,6 +34,7 @@ try {
       numOfStudentSeats: 200,
       numOfTeacherSeats: 40,
       reporterEnabled: true,
+      lessonPlannerEnabled: true,
       classInsightsEnabled: true,
     },
   });

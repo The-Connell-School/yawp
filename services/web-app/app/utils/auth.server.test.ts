@@ -50,6 +50,7 @@ const membershipFixture = {
     name: 'Yawp Org',
     reporterEnabled: false,
     classInsightsEnabled: false,
+    lessonPlannerEnabled: false,
   },
 };
 
@@ -93,6 +94,7 @@ describe('membership auth helpers', () => {
             name: true,
             reporterEnabled: true,
             classInsightsEnabled: true,
+            lessonPlannerEnabled: true,
           },
         },
       },
@@ -122,6 +124,7 @@ describe('membership auth helpers', () => {
             name: true,
             reporterEnabled: true,
             classInsightsEnabled: true,
+            lessonPlannerEnabled: true,
           },
         },
       },

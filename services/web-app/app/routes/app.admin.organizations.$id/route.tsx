@@ -162,6 +162,8 @@ export async function action({ request, params }: ActionFunctionArgs) {
     const reporterEnabled = formData.get('reporterEnabled') === 'true';
     const classInsightsEnabled =
       formData.get('classInsightsEnabled') === 'true';
+    const lessonPlannerEnabled =
+      formData.get('lessonPlannerEnabled') === 'true';
     const assignmentTypeIds = Array.from(
       new Set(
         formData
@@ -194,6 +196,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
           accessExpiresAt: accessExpiresAt ? new Date(accessExpiresAt) : null,
           reporterEnabled,
           classInsightsEnabled,
+          lessonPlannerEnabled,
         },
       }),
       prisma.organizationAssignmentType.deleteMany({
@@ -495,6 +498,24 @@ export default function OrganizationRoute() {
                         </span>
                         <span className="block text-xs text-muted-foreground">
                           Adds Reporter to the teacher sidebar.
+                        </span>
+                      </span>
+                    </label>
+                    <label className="flex min-h-12 items-start gap-3 rounded-md border bg-background px-3 py-2 text-sm">
+                      <input
+                        type="checkbox"
+                        name="lessonPlannerEnabled"
+                        value="true"
+                        defaultChecked={organization.lessonPlannerEnabled}
+                        className="mt-1 h-4 w-4"
+                      />
+                      <span className="min-w-0">
+                        <span className="block font-medium">
+                          Lesson Planner
+                        </span>
+                        <span className="block text-xs text-muted-foreground">
+                          Adds the Lesson Planner to the teacher sidebar and to
+                          Class Summary next steps.
                         </span>
                       </span>
                     </label>
