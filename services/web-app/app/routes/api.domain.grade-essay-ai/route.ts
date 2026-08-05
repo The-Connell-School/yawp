@@ -623,6 +623,11 @@ export async function action({ request }: ActionFunctionArgs) {
   const llmRetryOptions = {
     forceFallback,
     signalFallbackRetry: !forceFallback,
+    // Grading prompts carry student first names and raw essay text; never
+    // let an Anthropic outage silently route them to OpenAI, and never
+    // persist the cleartext payload to LlmLog.
+    allowFallbackProvider: false,
+    logPayload: 'metadata-only' as const,
   };
   const retryResponse = () =>
     dataResponse({ retrying: true }, { status: 202 });

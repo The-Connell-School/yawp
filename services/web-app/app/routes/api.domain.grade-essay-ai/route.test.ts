@@ -437,6 +437,28 @@ describe('api.domain.grade-essay-ai', () => {
     }
   });
 
+  test('never allows cross-provider fallback and never logs cleartext prompts for grading calls', async () => {
+    prisma.submission.findFirst.mockResolvedValue(
+      mockSubmission({ id: 'sub-privacy' })
+    );
+
+    const form = new FormData();
+    form.append('submissionId', 'sub-privacy');
+
+    await action({
+      request: new Request('https://example.com/api/domain/grade-essay-ai', {
+        method: 'POST',
+        body: form,
+      }),
+    } as any);
+
+    expect(getLLMCompletion).toHaveBeenCalled();
+    for (const call of getLLMCompletion.mock.calls) {
+      expect(call[0].allowFallbackProvider).toBe(false);
+      expect(call[0].logPayload).toBe('metadata-only');
+    }
+  });
+
   test('uses one abort signal for every grading model call', async () => {
     prisma.submission.findFirst.mockResolvedValue(
       mockSubmission({ id: 'sub-deadline-signal' })

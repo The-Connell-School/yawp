@@ -173,6 +173,11 @@ export async function action({ request }: ActionFunctionArgs) {
         maxTokens: 500,
         forceFallback,
         signalFallbackRetry: !forceFallback,
+        // Tutor prompts carry raw student document text; never let an
+        // Anthropic outage silently route it to OpenAI, and never persist
+        // the cleartext payload to LlmLog.
+        allowFallbackProvider: false,
+        logPayload: 'metadata-only',
         metadata: {
           feature: 'tutor',
           kind: 'assignment-module-tutor',

@@ -191,6 +191,35 @@ describe('api.domain.tutor-response read-only impersonation', () => {
     );
   });
 
+  test('never allows cross-provider fallback and never logs cleartext prompts for tutor calls', async () => {
+    getLLMCompletion.mockResolvedValue('Draft a clearer thesis.');
+    mockCms();
+    prisma.assignmentModuleSession.findUnique.mockResolvedValueOnce({
+      id: 'cms-1',
+      messages: [],
+      assignmentModule: {
+        instructions: [],
+        assignmentType: { assignmentModules: [] },
+      },
+    });
+
+    const body = new FormData();
+    body.set('response', 'Can you review this?');
+    body.set('cmsId', 'cms-1');
+    body.set('content', 'Current draft');
+
+    await action({
+      request: new Request('https://example.com/api/domain/tutor-response', {
+        method: 'POST',
+        body,
+      }),
+    } as any);
+
+    const completionArgs = getLLMCompletion.mock.calls[0]?.[0] as any;
+    expect(completionArgs.allowFallbackProvider).toBe(false);
+    expect(completionArgs.logPayload).toBe('metadata-only');
+  });
+
   test('returns a retry signal without writing messages when fallback retry is requested', async () => {
     mockCms();
     getLLMCompletion.mockImplementationOnce(() => {
