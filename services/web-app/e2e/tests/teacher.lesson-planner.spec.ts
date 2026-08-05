@@ -275,6 +275,10 @@ async function seedLessonWithMaterials(e2eContext: {
 }) {
   const prisma = createE2EPrismaClient();
   const content = [
+    '## Objective',
+    '',
+    'Explain what a piece of evidence proves, not just what it says.',
+    '',
     '## Lesson Sequence',
     '',
     'Project the two drafts below, then hand out the practice set.',
