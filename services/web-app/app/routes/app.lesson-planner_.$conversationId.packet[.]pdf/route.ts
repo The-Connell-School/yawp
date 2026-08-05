@@ -25,6 +25,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
   const url = new URL(request.url);
   const wantsHandout = url.searchParams.get('view') === 'handout';
+  const onlySection = url.searchParams.get('section');
   // The teacher's exclusions live in the page's state, so they travel in the
   // link — the downloaded handout has to match the one on screen.
   const excluded = (url.searchParams.get('exclude') ?? '')
@@ -33,13 +34,24 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     .filter(Boolean)
     .slice(0, MAX_EXCLUSIONS);
 
+  // One resource on its own: a teacher wants the handout, or just the warm-up,
+  // far more often than they want the whole packet.
+  const single = onlySection
+    ? packet.sections.find((section) => section.id === onlySection)
+    : undefined;
+  if (onlySection && !single) {
+    throw new Response('Not Found', { status: 404 });
+  }
+
   const pdf = wantsHandout
     ? await renderHandoutPdf({ packet, excluded })
-    : await renderPacketPdf(packet);
+    : await renderPacketPdf(
+        single ? { ...packet, sections: [single] } : packet
+      );
 
   const filename = pdfFilename(
     packet.title,
-    wantsHandout ? 'Student handout' : undefined
+    wantsHandout ? 'Student handout' : single?.title
   );
 
   return new Response(pdf as unknown as BodyInit, {

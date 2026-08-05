@@ -27,6 +27,8 @@ const PAGE_MARGIN = 54; // 0.75in
 const BODY_SIZE = 10.5;
 const LINE_GAP = 2.5;
 const INDENT_STEP = 16;
+/** Room for the quote's rule plus a breath of space. */
+const QUOTE_INDENT = 14;
 
 type Font = 'body' | 'bold' | 'italic' | 'boldItalic' | 'mono' | 'monoBold';
 
@@ -62,21 +64,25 @@ function writeRuns(
   {
     size,
     color = INK,
-    indent = 0,
+    x,
     width,
-  }: { size: number; color?: string; indent?: number; width?: number }
+  }: { size: number; color?: string; x?: number; width?: number }
 ): void {
   if (!runs.length) {
     doc.moveDown(0.4);
     return;
   }
 
-  const usable =
-    width ??
-    doc.page.width - doc.page.margins.left - doc.page.margins.right - indent;
+  // The left edge is set by moving the cursor, not by pdfkit's `indent` — that
+  // option shifts the first line only, so an indented paragraph's second line
+  // fell back to the margin and ran underneath the quote bar beside it.
+  const left = x ?? doc.page.margins.left;
+  const usable = width ?? doc.page.width - doc.page.margins.right - left;
 
   runs.forEach((run, index) => {
     const last = index === runs.length - 1;
+    // Only the first write positions the block; the rest continue the line.
+    if (index === 0) doc.x = left;
     doc
       .font(fontFor(run))
       .fontSize(size)
@@ -84,7 +90,6 @@ function writeRuns(
       .text(run.text, {
         continued: !last,
         width: usable,
-        indent: index === 0 ? indent : 0,
         lineGap: LINE_GAP,
         underline: Boolean(run.href),
         ...(run.href ? { link: run.href } : {}),
@@ -92,6 +97,7 @@ function writeRuns(
   });
 
   doc.fillColor(INK);
+  doc.x = doc.page.margins.left;
 }
 
 const HEADING_SIZE: Record<1 | 2 | 3, number> = { 1: 15, 2: 12.5, 3: 10.5 };
@@ -102,7 +108,30 @@ function ensureRoom(doc: Doc, needed: number): void {
   if (doc.y + needed > bottom) doc.addPage();
 }
 
-function drawBlock(doc: Doc, block: Block): void {
+/**
+ * How short a table row is allowed to be.
+ *
+ * Teachers build tables with empty cells for students to write in. Sized to
+ * their content those rows collapse to a single line of nothing, and the
+ * handout arrives with no room to answer in.
+ */
+const MIN_WRITABLE_ROW = 26;
+
+/**
+ * Where a table row's bottom edge goes: below its text, or far enough down to
+ * leave a line worth writing on, whichever is lower. Header rows hug their
+ * text — nobody writes in a header.
+ */
+export function tableRowBottom(
+  top: number,
+  contentBottom: number,
+  header: boolean
+): number {
+  if (header) return contentBottom;
+  return Math.max(contentBottom, top + MIN_WRITABLE_ROW);
+}
+
+function drawBlock(doc: Doc, block: Block, previous?: Block): void {
   const left = doc.page.margins.left;
   const contentWidth =
     doc.page.width - doc.page.margins.left - doc.page.margins.right;
@@ -127,13 +156,13 @@ function drawBlock(doc: Doc, block: Block): void {
       break;
 
     case 'quote': {
-      doc.moveDown(0.4);
+      doc.moveDown(0.5);
       const top = doc.y;
       writeRuns(doc, block.runs, {
         size: BODY_SIZE,
         color: '#4b5563',
-        indent: 12,
-        width: contentWidth - 12,
+        x: left + QUOTE_INDENT,
+        width: contentWidth - QUOTE_INDENT,
       });
       // The rule is drawn after the text so it can match its real height, and
       // only when the quote did not spill onto a new page.
@@ -147,26 +176,32 @@ function drawBlock(doc: Doc, block: Block): void {
           .stroke()
           .restore();
       }
+      doc.moveDown(0.35);
       break;
     }
 
     case 'listItem': {
       const indent = INDENT_STEP * block.depth;
-      doc.moveDown(0.2);
+      // A list that starts straight after a paragraph needs the same breathing
+      // room any other block would get; between its own items, less.
+      doc.moveDown(previous?.kind === 'listItem' ? 0.2 : 0.45);
       const top = doc.y;
       doc
         .font(FONTS.body)
         .fontSize(BODY_SIZE)
         .fillColor(MUTED)
-        .text(block.marker, left + indent, top, { width: INDENT_STEP - 4 });
+        .text(block.marker, left + indent, top, {
+          width: INDENT_STEP - 4,
+          lineBreak: false,
+        });
+      // Back to the marker's line so the text sits beside it, and hanging —
+      // a wrapped item lines up under its own text, not under the marker.
       doc.y = top;
-      doc.x = left;
       writeRuns(doc, block.runs, {
         size: BODY_SIZE,
-        indent: indent + INDENT_STEP,
+        x: left + indent + INDENT_STEP,
         width: contentWidth - indent - INDENT_STEP,
       });
-      doc.x = left;
       break;
     }
 
@@ -194,20 +229,21 @@ function drawBlock(doc: Doc, block: Block): void {
 
       block.cells.forEach((cell, index) => {
         doc.y = top;
-        doc.x = left + cellWidth * index;
         const runs = block.header
           ? cell.map((run) => ({ ...run, bold: true }))
           : cell;
         writeRuns(doc, runs.length ? runs : [{ text: ' ' }], {
           size: BODY_SIZE - 0.5,
           color: block.header ? MUTED : INK,
+          x: left + cellWidth * index,
           width: cellWidth - 8,
         });
         tallest = Math.max(tallest, doc.y);
       });
 
       doc.x = left;
-      doc.y = tallest;
+      // Body rows keep a writable height even when their cells are empty.
+      doc.y = tableRowBottom(top, tallest, block.header);
       doc
         .save()
         .lineWidth(0.5)
@@ -223,7 +259,8 @@ function drawBlock(doc: Doc, block: Block): void {
 }
 
 function drawMarkdown(doc: Doc, markdown: string): void {
-  for (const block of markdownBlocks(markdown)) drawBlock(doc, block);
+  const blocks = markdownBlocks(markdown);
+  blocks.forEach((block, index) => drawBlock(doc, block, blocks[index - 1]));
 }
 
 function drawTitle(

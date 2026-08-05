@@ -1,5 +1,10 @@
 import { describe, expect, test } from 'bun:test';
-import { blockText, inlineRuns, markdownBlocks } from './markdown-blocks';
+import {
+  blockText,
+  decodeEntities,
+  inlineRuns,
+  markdownBlocks,
+} from './markdown-blocks';
 
 describe('markdownBlocks — the shape of a lesson', () => {
   test('reads headings at the level they were written', () => {
@@ -129,5 +134,39 @@ describe('inlineRuns — emphasis survives the trip', () => {
         { type: 'text', text: 'real' },
       ])
     ).toEqual([{ text: 'real' }]);
+  });
+});
+
+describe('decodeEntities — machinery never reaches the page', () => {
+  test('puts quotation marks back', () => {
+    // marked escapes on its way to HTML, which is invisible in a browser and
+    // glaring once it is typeset into a PDF.
+    const [block] = markdownBlocks('Answer "so what?" in their own words.');
+    expect(blockText(block!)).toBe('Answer "so what?" in their own words.');
+  });
+
+  test('decodes the entities marked actually emits', () => {
+    expect(decodeEntities('&quot;a&quot; &amp; &lt;b&gt; &#39;c&#39;')).toBe(
+      '"a" & <b> \'c\''
+    );
+  });
+
+  test('handles numeric and hex references', () => {
+    expect(decodeEntities('&#8212;&#x2014;')).toBe('——');
+  });
+
+  test('leaves something that only looks like an entity alone', () => {
+    expect(decodeEntities('Grade 9 & 10 cost $5&plusmn;')).toBe(
+      'Grade 9 & 10 cost $5&plusmn;'
+    );
+  });
+
+  test('does not throw on an out-of-range code point', () => {
+    expect(decodeEntities('&#99999999;')).toBe('&#99999999;');
+  });
+
+  test('decodes inside emphasis too', () => {
+    const [block] = markdownBlocks('**"Evidence"** matters.');
+    expect((block as any).runs[0]).toEqual({ text: '"Evidence"', bold: true });
   });
 });

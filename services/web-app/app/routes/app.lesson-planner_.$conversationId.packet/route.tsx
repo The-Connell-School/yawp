@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import {
   Link,
   useFetcher,
@@ -11,7 +11,6 @@ import {
   FileText,
   Lightbulb,
   ListTree,
-  Printer,
   Rows,
 } from 'lucide-react';
 import {
@@ -48,27 +47,21 @@ export default function LessonPacketRoute() {
   // deleted — the handout is a reading of the packet, so it stays current.
   const [excluded, setExcluded] = useState<string[]>([]);
   const [filter, setFilter] = useState<ResourceFilter>('all');
-  // When set, only this resource prints — a teacher wants the handout on its
-  // own far more often than they want the whole packet.
-  const [printOnly, setPrintOnly] = useState<string | null>(null);
   const scrollerRef = useRef<HTMLElement>(null);
 
-  // Print after the render that hides the other resources, and restore only
-  // once the dialog is done with the page — clearing immediately raced the
-  // print in browsers where print() does not block.
-  useEffect(() => {
-    if (!printOnly) return;
-    const restore = () => setPrintOnly(null);
-    window.addEventListener('afterprint', restore, { once: true });
-    window.print();
-    return () => window.removeEventListener('afterprint', restore);
-  }, [printOnly]);
-
-  // The download mirrors what is on screen: on the handout view it is the
-  // handout, carrying the pieces the teacher has left out of it.
-  const pdfHref = (() => {
+  /**
+   * The file behind every print control on this page.
+   *
+   * It mirrors what is on screen: on the handout view it is the handout,
+   * carrying the pieces the teacher has left out of it, and a single resource
+   * asks for itself. Printing the page itself gave the teacher a screenshot of
+   * a web app — margins, chrome, and all — so both controls hand over the
+   * typeset document instead and let the PDF reader do the printing.
+   */
+  function pdfHref(sectionId?: string) {
     const params = new URLSearchParams();
-    if (view === 'handout') {
+    if (sectionId) params.set('section', sectionId);
+    else if (view === 'handout') {
       params.set('view', 'handout');
       if (excluded.length) params.set('exclude', excluded.join(','));
     }
@@ -76,13 +69,6 @@ export default function LessonPacketRoute() {
     return `/app/lesson-planner/${conversationId}/packet.pdf${
       query ? `?${query}` : ''
     }`;
-  })();
-
-  /** Paper. The browser's dialog is the right tool for that and only that. */
-  function printPacket() {
-    setFilter('all');
-    setPrintOnly(null);
-    requestAnimationFrame(() => window.print());
   }
 
   function jumpTo(anchor: string) {
@@ -194,38 +180,17 @@ export default function LessonPacketRoute() {
                 Student handout
               </button>
             </div>
-            <div className="flex items-center gap-2">
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                data-testid="packet-print"
-                onClick={printPacket}
-                disabled={packet.sections.length === 0}
+            <Button type="button" size="sm" asChild>
+              <a
+                data-testid="packet-save-pdf"
+                href={pdfHref()}
+                download
+                aria-disabled={packet.sections.length === 0}
               >
-                <Printer size={15} className="mr-1.5" />
-                Print
-              </Button>
-              {/* A real file, built on the server. `download` and the route's
-                  own Content-Disposition both name it after the lesson, and
-                  the handout view downloads the handout rather than the plan. */}
-              <Button
-                type="button"
-                size="sm"
-                asChild
-                disabled={packet.sections.length === 0}
-              >
-                <a
-                  data-testid="packet-save-pdf"
-                  href={pdfHref}
-                  download
-                  aria-disabled={packet.sections.length === 0}
-                >
-                  <FileDown size={15} className="mr-1.5" />
-                  Save as PDF
-                </a>
-              </Button>
-            </div>
+                <FileDown size={15} className="mr-1.5" />
+                Print / Save as PDF
+              </a>
+            </Button>
           </div>
         </div>
 
@@ -396,9 +361,8 @@ export default function LessonPacketRoute() {
                     className={cn(
                       'scroll-mt-6',
                       section.audience === 'student' &&
-                        'rounded-xl border border-dashed p-5 print:break-before-page print:rounded-none print:border-0 print:p-0',
+                        'rounded-xl border border-dashed p-5 print:break-before-page print:rounded-none print:border-0 print:p-0'
                       // Printing one resource hides the rest.
-                      printOnly && printOnly !== section.id && 'print:hidden'
                     )}
                   >
                     {section.audience === 'student' ? (
@@ -425,14 +389,15 @@ export default function LessonPacketRoute() {
                           className="w-full rounded border border-transparent bg-transparent px-1 py-0.5 font-semibold hover:border-border focus:border-border focus:outline-none print:border-0 print:px-0"
                         />
                       </h2>
-                      <button
-                        type="button"
-                        onClick={() => setPrintOnly(section.id)}
+                      <a
+                        href={pdfHref(section.id)}
+                        download
+                        data-testid="section-save-pdf"
                         className="inline-flex shrink-0 items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-muted-foreground transition hover:bg-foreground/5 hover:text-foreground print:hidden"
                       >
-                        <Printer size={13} />
-                        Print this
-                      </button>
+                        <FileDown size={13} />
+                        Save this as PDF
+                      </a>
                     </div>
                     <SectionContent
                       section={section}

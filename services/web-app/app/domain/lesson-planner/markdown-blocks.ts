@@ -43,6 +43,53 @@ type InlineToken = {
 const BULLETS = ['•', '–', '·'];
 
 /**
+ * Undo the HTML escaping marked does on its way to being HTML.
+ *
+ * The lexer hands back text ready to be dropped into a page, so a teacher's
+ * `"so what?"` arrives as `&quot;so what?&quot;`. On a web page that is
+ * invisible; typeset into a PDF it is exactly what it looks like — machinery
+ * printed on a lesson plan.
+ */
+const NAMED_ENTITIES: Record<string, string> = {
+  amp: '&',
+  lt: '<',
+  gt: '>',
+  quot: '"',
+  apos: "'",
+  nbsp: ' ',
+  hellip: '…',
+  mdash: '—',
+  ndash: '–',
+  lsquo: '‘',
+  rsquo: '’',
+  ldquo: '“',
+  rdquo: '”',
+};
+
+export function decodeEntities(text: string): string {
+  return text.replace(
+    /&(#x?[0-9a-fA-F]+|[a-zA-Z]+);/g,
+    (whole, body: string) => {
+      if (body[0] === '#') {
+        const code =
+          body[1] === 'x' || body[1] === 'X'
+            ? Number.parseInt(body.slice(2), 16)
+            : Number.parseInt(body.slice(1), 10);
+        // A code point out of range would throw; leaving the text alone is the
+        // safer failure.
+        if (!Number.isFinite(code) || code < 0 || code > 0x10ffff) return whole;
+        try {
+          return String.fromCodePoint(code);
+        } catch {
+          return whole;
+        }
+      }
+      return NAMED_ENTITIES[body.toLowerCase()] ?? whole;
+    }
+  );
+}
+
+/**
  * Flatten marked's inline tokens into styled runs.
  *
  * Emphasis nests — `**bold with *italic* inside**` — so the style travels down
@@ -63,7 +110,11 @@ export function inlineRuns(
         runs.push(...inlineRuns(token.tokens, { ...inherited, italic: true }));
         break;
       case 'codespan':
-        runs.push({ ...inherited, mono: true, text: token.text ?? '' });
+        runs.push({
+          ...inherited,
+          mono: true,
+          text: decodeEntities(token.text ?? ''),
+        });
         break;
       case 'link':
         runs.push(
@@ -80,7 +131,7 @@ export function inlineRuns(
         if (token.tokens?.length) {
           runs.push(...inlineRuns(token.tokens, inherited));
         } else {
-          runs.push({ ...inherited, text: token.text ?? '' });
+          runs.push({ ...inherited, text: decodeEntities(token.text ?? '') });
         }
         break;
       default:
@@ -89,7 +140,10 @@ export function inlineRuns(
         if (token.tokens?.length) {
           runs.push(...inlineRuns(token.tokens, inherited));
         } else if (token.text ?? token.raw) {
-          runs.push({ ...inherited, text: token.text ?? token.raw ?? '' });
+          runs.push({
+            ...inherited,
+            text: decodeEntities(token.text ?? token.raw ?? ''),
+          });
         }
     }
   }
@@ -218,7 +272,7 @@ function blocksFromTokens(tokens: any[]): Block[] {
         // Rare in a lesson, but printing it as a paragraph beats dropping it.
         blocks.push({
           kind: 'paragraph',
-          runs: [{ text: token.text ?? '', mono: true }],
+          runs: [{ text: decodeEntities(token.text ?? ''), mono: true }],
         });
         break;
       case 'space':
@@ -227,7 +281,10 @@ function blocksFromTokens(tokens: any[]): Block[] {
         if (token.tokens?.length)
           blocks.push(...blocksFromTokens(token.tokens));
         else if (token.text) {
-          blocks.push({ kind: 'paragraph', runs: [{ text: token.text }] });
+          blocks.push({
+            kind: 'paragraph',
+            runs: [{ text: decodeEntities(token.text) }],
+          });
         }
     }
   }

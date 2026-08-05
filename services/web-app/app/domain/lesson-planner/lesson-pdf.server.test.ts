@@ -3,6 +3,7 @@ import { inflateSync } from 'node:zlib';
 import { buildLessonPacket } from './lesson-packet';
 import {
   pdfFilename,
+  tableRowBottom,
   renderHandoutPdf,
   renderPacketPdf,
 } from './lesson-pdf.server';
@@ -243,5 +244,40 @@ describe('pdfFilename', () => {
 
   test('keeps the name short enough to save', () => {
     expect(pdfFilename('x'.repeat(300)).length).toBeLessThanOrEqual(84);
+  });
+});
+
+describe('renderPacketPdf — what reaches the page', () => {
+  test('typesets quotation marks rather than their HTML escapes', async () => {
+    const bytes = await renderPacketPdf(
+      packetWith([{ id: 's1', content: 'Answer "so what?" in one sentence.' }])
+    );
+    const text = pdfText(bytes);
+    expect(text).toContain('so what?');
+    expect(text).not.toContain('&quot;');
+    expect(text).not.toContain('&#39;');
+  });
+
+  test('keeps an apostrophe an apostrophe', async () => {
+    const bytes = await renderPacketPdf(
+      packetWith([{ id: 's1', content: "Read the author's claim." }])
+    );
+    expect(pdfText(bytes)).not.toContain('&');
+  });
+});
+
+describe('tableRowBottom — a worksheet needs somewhere to write', () => {
+  test('opens an empty row up to a writable height', () => {
+    // A table of blank cells is a teacher building a worksheet. Sized to its
+    // content it collapses to a line of nothing.
+    expect(tableRowBottom(100, 112, false)).toBe(126);
+  });
+
+  test('lets a full row keep its own height', () => {
+    expect(tableRowBottom(100, 180, false)).toBe(180);
+  });
+
+  test('leaves the header hugging its text', () => {
+    expect(tableRowBottom(100, 112, true)).toBe(112);
   });
 });

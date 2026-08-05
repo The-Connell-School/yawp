@@ -1252,23 +1252,17 @@ test.describe('YAWP! Lesson Planner', () => {
     await expect(page.getByTestId('handout-part')).toBeVisible();
     await expect(page.locator('main')).toContainText('Underline the sentence');
     // The controls and the include/exclude list are not part of the handout.
-    await expect(page.getByTestId('packet-print')).toBeHidden();
     await expect(page.getByTestId('packet-save-pdf')).toBeHidden();
     await expect(page.getByText('What goes in this handout')).toBeHidden();
     await page.emulateMedia({ media: 'screen' });
   });
 
-  test('prints one resource on its own when asked to', async ({
+  test('saves one resource on its own when asked to', async ({
     page,
     signIn,
     e2eContext,
   }) => {
     await setLessonPlannerEnabled(e2eContext.organizationId, true);
-    // window.print() is a no-op in headless Chromium, so stub it to keep the
-    // page in its printing state and assert what would have gone to paper.
-    await page.addInitScript(() => {
-      window.print = () => undefined;
-    });
     const { conversationId } = await seedLessonPlan(e2eContext, {
       keepFirst: true,
       keepLongHandout: true,
@@ -1279,16 +1273,14 @@ test.describe('YAWP! Lesson Planner', () => {
     const sections = page.locator('[data-testid="packet-section"]');
     await expect(sections).toHaveCount(2);
 
-    await sections
-      .nth(1)
-      .getByRole('button', { name: /print this/i })
-      .click();
+    const download = page.waitForEvent('download');
+    await sections.nth(1).getByTestId('section-save-pdf').click();
+    const file = await download;
 
-    await page.emulateMedia({ media: 'print' });
-    // Only the resource the teacher asked for goes to paper.
-    await expect(sections.nth(0)).toBeHidden();
-    await expect(sections.nth(1)).toBeVisible();
-    await page.emulateMedia({ media: 'screen' });
+    // Named after the resource, so it is not just another copy of the lesson.
+    expect(file.suggestedFilename()).toContain('handout');
+    const bytes = await readFile(await file.path());
+    expect(bytes.subarray(0, 5).toString()).toBe('%PDF-');
   });
 
   test('downloads the lesson as a real PDF in one click', async ({
@@ -1346,30 +1338,6 @@ test.describe('YAWP! Lesson Planner', () => {
     expect(file.suggestedFilename().endsWith('.pdf')).toBe(true);
     const bytes = await readFile(await file.path());
     expect(bytes.subarray(0, 5).toString()).toBe('%PDF-');
-  });
-
-  test('still offers a plain Print for paper', async ({
-    page,
-    signIn,
-    e2eContext,
-  }) => {
-    await setLessonPlannerEnabled(e2eContext.organizationId, true);
-    await page.addInitScript(() => {
-      (window as any).__printed = 0;
-      window.print = () => {
-        (window as any).__printed += 1;
-      };
-    });
-    const { conversationId } = await seedLessonPlan(e2eContext, {
-      keepFirst: true,
-    });
-    await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
-    await page.goto(`/app/lesson-planner/${conversationId}/packet`);
-
-    await page.getByTestId('packet-print').click();
-    await expect
-      .poll(() => page.evaluate(() => (window as any).__printed))
-      .toBe(1);
   });
 
   test('offers the deck and the handout the moment a plan lands', async ({
