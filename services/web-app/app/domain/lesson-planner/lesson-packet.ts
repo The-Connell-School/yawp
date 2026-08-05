@@ -12,6 +12,7 @@ import { hasSlideDeck } from './slide-deck';
 import { readLessonMaterials, type LessonMaterial } from './lesson-material';
 import { readLessonAsks } from './lesson-ask';
 import { inlineDailyPagesExercises } from './daily-pages-block';
+import { inlineLessonResources } from './lesson-resource';
 
 export const PACKET_AUDIENCES = ['teacher', 'student'] as const;
 
@@ -197,7 +198,7 @@ export function buildLessonPacket({
     // A warm-up the planner wrote is lesson content, not machinery: the packet
     // has no button to offer, so the prompt comes back as the blockquote it
     // would have been rather than as a fence printed on the page.
-    const body = inlineDailyPagesExercises(withWarmUps);
+    const body = inlineLessonResources(inlineDailyPagesExercises(withWarmUps));
     const derivedTitle = deriveSectionTitle(body, index);
     const audience = parsePacketAudience(section.keptAudience);
     return {

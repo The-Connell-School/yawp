@@ -224,6 +224,21 @@ describe('buildLessonPlannerSystemPrompt — a warm-up it wrote', () => {
     expect(prompt.toLowerCase()).toContain('daily pages assignment');
   });
 
+  test('requires the block for a library prompt too, not only a written one', () => {
+    const lower = prompt.toLowerCase();
+    // A step reading "Warm-up — Daily Pages (7 min)" with no text left the
+    // teacher taking it on faith that a suitable prompt existed.
+    expect(lower).toContain('every daily pages warm-up');
+    expect(lower).toContain(
+      'never name, cite, or allude to a prompt whose words you have not shown'
+    );
+  });
+
+  test('shows how a library prompt carries its id', () => {
+    expect(prompt).toContain('id: FW-001');
+    expect(prompt.toLowerCase()).toContain('never invent one');
+  });
+
   test('bans the "not from the library" disclaimer the teacher never wanted', () => {
     const lower = prompt.toLowerCase();
     expect(lower).toContain('not from the library');
@@ -427,5 +442,54 @@ describe('buildLessonPlannerSystemPrompt — asking with controls', () => {
     const lower = prompt.toLowerCase();
     expect(lower).toContain('do not list the activities yourself');
     expect(lower).toContain('never mention the block');
+  });
+});
+
+describe('buildLessonPlannerSystemPrompt — the plan comes first', () => {
+  const prompt = buildLessonPlannerSystemPrompt({
+    teacherName: null,
+    organizationName: 'Connell School',
+  });
+
+  test('forbids a preamble in front of the lesson', () => {
+    const lower = prompt.toLowerCase();
+    expect(lower).toContain('open with the lesson');
+    expect(lower).toContain('first line is the lesson');
+  });
+
+  test('forbids narrating its own process', () => {
+    const lower = prompt.toLowerCase();
+    expect(lower).toContain('never narrate your own process');
+    expect(lower).toContain('i searched for');
+  });
+
+  test('no longer asks it to explain why it built its own deck', () => {
+    // That instruction was producing the preamble it is now told not to write.
+    expect(prompt).not.toContain('and say that is why');
+  });
+});
+
+describe('buildLessonPlannerSystemPrompt — bringing material in', () => {
+  const prompt = buildLessonPlannerSystemPrompt({
+    teacherName: null,
+    organizationName: 'Connell School',
+  });
+
+  test('names the fence the chat renders as an openable card', () => {
+    expect(prompt).toContain('```yawp-resource');
+    expect(prompt).toContain('href:');
+    expect(prompt).toContain('kind: slides');
+  });
+
+  test('forbids sending the teacher off to find it themselves', () => {
+    const lower = prompt.toLowerCase();
+    expect(lower).toContain('never send a teacher looking');
+    expect(lower).toContain('that is a set of directions');
+  });
+
+  test('warns that an invented address costs them the material', () => {
+    expect(prompt.toLowerCase()).toContain(
+      'yawp deletes any block whose address did not come back from a tool'
+    );
   });
 });

@@ -15,6 +15,7 @@ import {
   collectToolLinks,
   verifyLessonLinks,
 } from '~/domain/lesson-planner/lesson-links';
+import { verifyLessonResources } from '~/domain/lesson-planner/lesson-resource';
 import { shouldRenameLesson } from '~/domain/lesson-planner/lesson-name';
 import { buildLessonPlannerSystemPrompt } from './build-system-prompt';
 import {
@@ -240,6 +241,9 @@ export async function action({ request }: ActionFunctionArgs) {
   // reply is stored, so the dead link never enters the conversation's history
   // either.
   reply = verifyLessonLinks(reply, toolLinks).reply;
+  // A card promising material is a louder claim than a sentence, so the same
+  // rule applies harder: no block survives whose address a tool never returned.
+  reply = verifyLessonResources(reply, toolLinks).reply;
 
   // A lesson is named after the plan it turned out to be, not after the
   // sentence that started it — otherwise every lesson opened from the pinned

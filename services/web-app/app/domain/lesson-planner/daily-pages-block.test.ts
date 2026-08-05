@@ -17,7 +17,10 @@ describe('readDailyPagesExercises', () => {
     );
 
     expect(exercises).toEqual([
-      { prompt: 'Think of the last time you convinced someone of something.' },
+      {
+        prompt: 'Think of the last time you convinced someone of something.',
+        promptId: null,
+      },
     ]);
     expect(body).toBe(
       '## Warm-up (7 min)\n\n' +
@@ -102,5 +105,36 @@ describe('dailyPagesCreateHref', () => {
     expect(dailyPagesCreateHref('type-1', 'What made it land?')).toBe(
       '/app/assignment-types/type-1?newPrompt=What%20made%20it%20land%3F'
     );
+  });
+});
+
+describe('a warm-up the planner found in the library', () => {
+  test('carries the prompt id alongside the prompt itself', () => {
+    // The teacher should be able to check the reference, and should never have
+    // to guess what their students will actually be asked.
+    const { exercises } = readDailyPagesExercises(
+      '```yawp-daily-pages\nid: FW-001\nWhat made it land?\n```'
+    );
+    expect(exercises).toEqual([
+      { prompt: 'What made it land?', promptId: 'FW-001' },
+    ]);
+  });
+
+  test('does not mistake a prompt that merely starts with a word for an id', () => {
+    const { exercises } = readDailyPagesExercises(
+      '```yawp-daily-pages\nIdentify the strongest sentence.\n```'
+    );
+    expect(exercises[0]).toEqual({
+      prompt: 'Identify the strongest sentence.',
+      promptId: null,
+    });
+  });
+
+  test('keeps the id out of the printed packet', () => {
+    expect(
+      inlineDailyPagesExercises(
+        '```yawp-daily-pages\nid: FW-001\nWhat made it land?\n```'
+      )
+    ).toBe('> What made it land?');
   });
 });

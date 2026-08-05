@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import {
   ASK_FENCE,
+  asksWorthShowing,
   composeAskReply,
   LESSON_ACTIVITIES,
   LESSON_MINUTES_MAX,
@@ -8,6 +9,7 @@ import {
   LESSON_MINUTES_STEP,
   PLANNER_PICKS_ACTIVITIES,
   readLessonAsks,
+  type LessonAsk,
 } from './lesson-ask';
 
 function fenced(body: string): string {
@@ -179,9 +181,7 @@ describe('composeAskReply — one send carries the whole answer', () => {
         minutes: 45,
         activityIds: ['jigsaw'],
       })
-    ).toBe(
-      'Focus on integrating quotes. 45 minutes. I want to use: Jigsaw.'
-    );
+    ).toBe('Focus on integrating quotes. 45 minutes. I want to use: Jigsaw.');
   });
 
   test('does not double up punctuation the chip already has', () => {
@@ -204,5 +204,40 @@ describe('composeAskReply — one send carries the whole answer', () => {
     expect(composeAskReply({ minutes: 50, activityIds: [] })).toBe(
       '50 minutes.'
     );
+  });
+});
+
+describe('asksWorthShowing — the clock waits for the subject', () => {
+  const both: LessonAsk[] = [
+    { kind: 'minutes', defaultMinutes: 50 },
+    { kind: 'activities' },
+  ];
+
+  test('holds the length back while the topic is still open', () => {
+    // Straight from a real turn: the teacher tapped "Look at my classes and
+    // tell me what they need work on" and sent "…what they need work on.
+    // 50 minutes." — a period length bolted onto a request to read the data.
+    expect(asksWorthShowing(both, { topicSettled: false })).toEqual([
+      { kind: 'activities' },
+    ]);
+  });
+
+  test('asks for the length once the subject is settled', () => {
+    expect(asksWorthShowing(both, { topicSettled: true })).toEqual(both);
+  });
+
+  test('leaves a turn that only wanted activities alone', () => {
+    const activities: LessonAsk[] = [{ kind: 'activities' }];
+    expect(asksWorthShowing(activities, { topicSettled: false })).toEqual(
+      activities
+    );
+  });
+
+  test('can empty the card entirely rather than ask too early', () => {
+    expect(
+      asksWorthShowing([{ kind: 'minutes', defaultMinutes: 50 }], {
+        topicSettled: false,
+      })
+    ).toEqual([]);
   });
 });

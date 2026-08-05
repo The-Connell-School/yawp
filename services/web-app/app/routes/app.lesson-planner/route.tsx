@@ -38,8 +38,13 @@ import {
 } from '~/domain/lesson-planner/lesson-material';
 import { MaterialCard } from '~/components/ai-chat/material-card';
 import { LessonAskCard } from '~/components/ai-chat/lesson-ask-card';
-import { readLessonAsks } from '~/domain/lesson-planner/lesson-ask';
+import {
+  asksWorthShowing,
+  readLessonAsks,
+} from '~/domain/lesson-planner/lesson-ask';
 import { readDailyPagesExercises } from '~/domain/lesson-planner/daily-pages-block';
+import { readLessonResources } from '~/domain/lesson-planner/lesson-resource';
+import { LessonResourceCard } from '~/components/ai-chat/lesson-resource-card';
 import { DailyPagesCard } from '~/components/ai-chat/daily-pages-card';
 import { findDailyPagesTypeId } from '~/domain/lesson-planner/yawp-catalog.server';
 import {
@@ -731,19 +736,30 @@ function MessageBubble({
   const { materials, body: withAsks } = readLessonMaterials(withMaterials);
   // A period length and a set of activities are a slider and a checklist, not a
   // sentence the teacher has to type between classes.
-  const { asks, body: withWarmUps } = readLessonAsks(withAsks);
+  const { asks: requestedAsks, body: withWarmUps } = readLessonAsks(withAsks);
   // A warm-up the planner wrote is one button away from being a real Daily
   // Pages assignment, rather than something to retype.
-  const { exercises, body } = readDailyPagesExercises(withWarmUps);
+  const { exercises, body: withResources } =
+    readDailyPagesExercises(withWarmUps);
+  // Yawp material the lesson leans on, brought in as something to open rather
+  // than as directions to go and find it.
+  const { resources, body } = readLessonResources(withResources);
   // Only offer print/PDF on substantial replies (a lesson), not one-liners.
   const isArtifact = /(^|\n)#{1,3}\s/.test(body) || /\n\|.*\|/.test(body);
   // The opening turn always offers the data-driven route, and a delivered plan
   // always offers the two artifacts that come next — in the app's own words,
   // rather than whatever the model happened to think of this run.
+  const deliveredPlan = looksLikeLessonPlan(body);
+  // While the app is still pinning "look at my classes and tell me what they
+  // need work on", the teacher has not said what they want to teach — so this
+  // is not the turn to ask how long it runs.
+  const asks = asksWorthShowing(requestedAsks, {
+    topicSettled: deliveredPlan || !isOpeningReply,
+  });
   const suggestions = withStandardSuggestions(modelSuggestions, {
     isOpeningReply,
     teacherRaisedRoomPersonality,
-    deliveredPlan: looksLikeLessonPlan(body),
+    deliveredPlan,
     produced: {
       deck: deckOutcome.kind !== 'none',
       handout: materials.some((material) => material.audience === 'student'),
@@ -782,6 +798,12 @@ function MessageBubble({
               />
             </div>
           ) : null}
+          {resources.map((resource, index) => (
+            <LessonResourceCard
+              key={`${message.id ?? 'pending'}:resource:${index}`}
+              resource={resource}
+            />
+          ))}
           {exercises.map((exercise, index) => (
             <DailyPagesCard
               key={`${message.id ?? 'pending'}:daily-pages:${index}`}

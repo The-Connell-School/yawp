@@ -142,6 +142,27 @@ export function hasLessonAsks(content: string): boolean {
   return readLessonAsks(content).asks.length > 0;
 }
 
+/**
+ * Drop the length question from a turn that has not settled the subject yet.
+ *
+ * The planner is told to ask what the lesson is about before it asks how long
+ * the period is. It asks anyway, and the result is a teacher tapping
+ * "Look at my classes and tell me what they need work on" and sending
+ * "…what they need work on. 50 minutes." — a period length bolted onto a
+ * request to go read the gradebook, and a commitment to fifty minutes made
+ * before they had said one word about what they wanted to teach.
+ *
+ * The activities question survives: "what kinds of activities do you want?"
+ * still makes sense while the topic is open. Only the clock has to wait.
+ */
+export function asksWorthShowing(
+  asks: LessonAsk[],
+  { topicSettled }: { topicSettled: boolean }
+): LessonAsk[] {
+  if (topicSettled) return asks;
+  return asks.filter((ask) => ask.kind !== 'minutes');
+}
+
 /** Already ends in something that finishes a sentence. */
 function isFinished(text: string): boolean {
   return /[.!?…:]$/.test(text);
