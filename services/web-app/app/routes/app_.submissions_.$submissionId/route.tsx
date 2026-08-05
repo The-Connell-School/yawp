@@ -22,6 +22,7 @@ import { Button } from '~/components/ui/button';
 import { Input } from '~/components/ui/input';
 import { requireUserId, requireMembership } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
+import { hasEffectivePlatformAdmin } from '~/utils/preview-access.server';
 import { redirectWithToast } from '~/utils/toast.server';
 import { formatAssignmentGrade } from '~/domain/grading/gradeMath';
 import { type RubricDisplayConfig } from '~/domain/grading/rubric-display';
@@ -87,7 +88,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
                 },
               },
             },
-            ...(user?.isAdmin ? [{}] : []),
+            ...(hasEffectivePlatformAdmin(user?.isAdmin) ? [{}] : []),
           ],
         },
       },
@@ -192,7 +193,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         klass.teachers.some((teacher) => teacher.id === profile.id)
       ));
 
-  const isAdmin = user?.isAdmin ?? false;
+  const isAdmin = hasEffectivePlatformAdmin(user?.isAdmin);
 
   if (isOwner && editParam) {
     const next = new URL(request.url);

@@ -5,6 +5,7 @@ import {
   requireUserId,
 } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
+import { hasEffectivePlatformAdmin } from '~/utils/preview-access.server';
 
 export type GradingActor = {
   membershipId: string;
@@ -29,7 +30,7 @@ export async function getGradingActor(request: Request): Promise<GradingActor> {
     organizationId: membership.organization.id,
     teacherProfileId: isTeacherMembership(membership) ? membership.id : null,
     isTeacher: isTeacherMembership(membership),
-    isAdmin: Boolean(user?.isAdmin),
+    isAdmin: hasEffectivePlatformAdmin(user?.isAdmin),
   };
 }
 

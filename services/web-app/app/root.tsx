@@ -38,12 +38,20 @@ import omit from 'lodash/omit';
 import { getMembershipId } from './cookies/membership-id.server.ts';
 import { LocalDevEnvironmentBar } from './components/local-dev-environment-bar.tsx';
 import { isLocalDevAuthEnabled } from './utils/local-dev-auth.server.ts';
-import { getLocalDevLoginOptions } from './routes/auth.dev-login/route.tsx';
+import { getLocalDevLoginOptions } from './routes/auth.dev-login/bound.server';
 import { useContrastPreference } from './routes/api.preferences.contrast/route.tsx';
 import {
   getEnvironmentBannerWarning,
   shouldEnableLocalDevQuickLogin,
 } from './utils/environment-banner.server.ts';
+import {
+  getPreviewAccessSeat,
+  isIsolatedPreviewSeatMode,
+  isPreviewAccessGateEnabled,
+  previewAccessMiddleware,
+} from './utils/preview-access.server.ts';
+
+export const middleware = [previewAccessMiddleware];
 
 export const links: LinksFunction = () => {
   return [
@@ -76,7 +84,11 @@ export const meta: MetaFunction<typeof loader> = ({ data }) => {
 export async function loader({ request }: LoaderFunctionArgs) {
   const timings = makeTimings('root loader');
   const url = new URL(request.url);
-  const publicLandingPage = url.pathname === '/' || url.pathname === '/info';
+  const publicLandingPage =
+    url.pathname === '/' ||
+    url.pathname === '/info' ||
+    url.pathname === '/auth/preview-access' ||
+    url.pathname === '/auth/preview-access.data';
   const cookieHeader = request.headers.get('Cookie');
   const contrastCookie =
     (await contrastPreferenceCookie.parse(cookieHeader)) || {};
@@ -99,6 +111,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
         ENV: getEnv(),
         bannerWarning: null,
         localDevQuickLogin: { enabled: false, options: [] },
+        previewAccessGateEnabled: isPreviewAccessGateEnabled(),
+        previewAccessSeat: null,
         impersonation: { isReadOnly: false, impersonatorUserId: null },
         studentPreview: { active: false, organizationId: null },
         toast: null,
@@ -120,6 +134,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
     desc: 'getUserId in root',
   });
   const { prisma } = await import('./utils/db.server.ts');
+  const previewAccessSeat = isPreviewAccessGateEnabled()
+    ? await getPreviewAccessSeat(request)
+    : null;
 
   const user = userId
     ? await time(
@@ -131,6 +148,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
               email: true,
               isAdmin: true,
               memberships: {
+                ...(previewAccessSeat && isIsolatedPreviewSeatMode()
+                  ? { where: { organizationId: previewAccessSeat.organizationId } }
+                  : {}),
                 orderBy: { createdAt: 'asc' },
                 select: {
                   id: true,
@@ -184,7 +204,11 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   return data(
     {
-      user: { ...user, selectedMembership: membership },
+      user: {
+        ...user,
+        isAdmin: Boolean(user?.isAdmin),
+        selectedMembership: membership,
+      },
       requestInfo: {
         hints: getHints(request),
         origin: getDomainUrl(request),
@@ -198,8 +222,14 @@ export async function loader({ request }: LoaderFunctionArgs) {
       bannerWarning,
       localDevQuickLogin: {
         enabled: localDevQuickLoginEnabled,
-        options: localDevQuickLoginEnabled ? getLocalDevLoginOptions() : [],
+        options: localDevQuickLoginEnabled
+          ? await getLocalDevLoginOptions(
+              previewAccessSeat?.organizationId,
+            )
+          : [],
       },
+      previewAccessGateEnabled: isPreviewAccessGateEnabled(),
+      previewAccessSeat,
       impersonation,
       studentPreview,
       toast,
@@ -343,6 +373,8 @@ export default function App({ loaderData: data }: Route.ComponentProps) {
         <LocalDevEnvironmentBar
           bannerWarning={data.bannerWarning}
           localDevQuickLogin={data.localDevQuickLogin}
+          previewAccessGateEnabled={data.previewAccessGateEnabled}
+          previewAccessSeatLabel={data.previewAccessSeat?.label ?? null}
         />
       ) : null}
       <GlobalLoading />

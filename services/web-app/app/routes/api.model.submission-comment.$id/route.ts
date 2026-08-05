@@ -2,6 +2,7 @@ import { invariant } from '@epic-web/invariant';
 import { data as dataResponse, type ActionFunctionArgs } from 'react-router';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
+import { hasEffectivePlatformAdmin } from '~/utils/preview-access.server';
 
 function teacherDocumentAccessWhere(membershipId: string) {
   return {
@@ -30,7 +31,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
     where: { id: userId },
     select: { isAdmin: true },
   });
-  const isAdmin = !!user?.isAdmin;
+  const isAdmin = hasEffectivePlatformAdmin(user?.isAdmin);
 
   const comment = await prisma.submissionComment.findFirst({
     where: {

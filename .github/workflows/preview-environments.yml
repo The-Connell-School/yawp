@@ -35,10 +35,9 @@ jobs:
       PREVIEW_RUNTIME: ${{ vars.PREVIEW_RUNTIME || 'fast' }}
       PREVIEW_MAX_ENVS: ${{ vars.PREVIEW_MAX_ENVS || '30' }}
       PREVIEW_DATA_MODE: ${{ vars.PREVIEW_DATA_MODE || 'seed' }}
+      PREVIEW_SEAT_COUNT: ${{ vars.PREVIEW_SEAT_COUNT || '1' }}
       PREVIEW_AI_MODEL: ${{ vars.PREVIEW_AI_MODEL || 'claude-sonnet-4-6' }}
       PREVIEW_ANTHROPIC_API_KEY: ${{ secrets.PREVIEW_ANTHROPIC_API_KEY || secrets.ANTHROPIC_API_KEY }}
-      PREVIEW_BASIC_AUTH: ${{ secrets.PREVIEW_BASIC_AUTH }}
-      PREVIEW_BASIC_AUTH_PASSWORD: ${{ secrets.PREVIEW_BASIC_AUTH_PASSWORD }}
       PREVIEW_DB_DUMP_S3_URI: ${{ vars.PREVIEW_DB_DUMP_S3_URI || 's3://yawp-preview-videos/production.dump' }}
       PREVIEW_DB_PASSWORD: ${{ secrets.PREVIEW_DB_PASSWORD }}
       PREVIEW_DEV_LOGIN_EMAIL: ${{ vars.PREVIEW_DEV_LOGIN_EMAIL || 'dev.teacher@yawp.local' }}
@@ -54,8 +53,6 @@ jobs:
           test -n "$PREVIEW_DOMAIN" || { echo "Missing repository variable PREVIEW_DOMAIN"; exit 1; }
           test -n "$PREVIEW_SSH_PRIVATE_KEY" || { echo "Missing repository secret PREVIEW_SSH_PRIVATE_KEY"; exit 1; }
           test -n "$PREVIEW_ANTHROPIC_API_KEY" || { echo "Missing repository secret PREVIEW_ANTHROPIC_API_KEY or ANTHROPIC_API_KEY"; exit 1; }
-          test -n "$PREVIEW_BASIC_AUTH" || { echo "Missing repository secret PREVIEW_BASIC_AUTH"; exit 1; }
-          test -n "$PREVIEW_BASIC_AUTH_PASSWORD" || { echo "Missing repository secret PREVIEW_BASIC_AUTH_PASSWORD"; exit 1; }
           case "$PREVIEW_DATA_MODE" in
             seed) ;;
             production-dump)
@@ -152,10 +149,9 @@ jobs:
             "PREVIEW_TLS=$(shell_quote "$PREVIEW_TLS")"
             "PREVIEW_RUNTIME=$(shell_quote "$PREVIEW_RUNTIME")"
             "PREVIEW_DATA_MODE=$(shell_quote "$PREVIEW_DATA_MODE")"
+            "PREVIEW_SEAT_COUNT=$(shell_quote "$PREVIEW_SEAT_COUNT")"
             "PREVIEW_AI_MODEL=$(shell_quote "$PREVIEW_AI_MODEL")"
             "PREVIEW_ANTHROPIC_API_KEY=$(shell_quote "$PREVIEW_ANTHROPIC_API_KEY")"
-            "PREVIEW_BASIC_AUTH=$(shell_quote "$PREVIEW_BASIC_AUTH")"
-            "PREVIEW_BASIC_AUTH_PASSWORD=$(shell_quote "$PREVIEW_BASIC_AUTH_PASSWORD")"
             "PREVIEW_DB_DUMP_S3_URI=$(shell_quote "$PREVIEW_DB_DUMP_S3_URI")"
             "PREVIEW_DB_PASSWORD=$(shell_quote "$PREVIEW_DB_PASSWORD")"
             "PREVIEW_DEV_LOGIN_EMAIL=$(shell_quote "$PREVIEW_DEV_LOGIN_EMAIL")"
@@ -167,10 +163,46 @@ jobs:
             "cd $(shell_quote "$remote_source") && ${remote_env[*]} bash scripts/preview/deploy.sh" \
             | tee /tmp/preview-deploy.log
           preview_url="$(awk -F= '/^PREVIEW_URL=/{print $2}' /tmp/preview-deploy.log | tail -1)"
+          access_code="$(awk -F= '/^PREVIEW_ACCESS_CODE=/{print $2}' /tmp/preview-deploy.log | tail -1)"
           elapsed_ms="$(awk -F= '/^PREVIEW_ELAPSED_MS=/{print $2}' /tmp/preview-deploy.log | tail -1)"
           test -n "$preview_url" || { echo "Deploy script did not print PREVIEW_URL"; exit 1; }
+          test -n "$access_code" || { echo "Deploy script did not print PREVIEW_ACCESS_CODE"; exit 1; }
           echo "url=$preview_url" >> "$GITHUB_OUTPUT"
+          echo "access_code=$access_code" >> "$GITHUB_OUTPUT"
           echo "elapsed_ms=${elapsed_ms:-unknown}" >> "$GITHUB_OUTPUT"
+
+      - name: Verify preview access gate
+        run: |
+          set -euo pipefail
+          url="${{ steps.deploy.outputs.url }}"
+          access_code="${{ steps.deploy.outputs.access_code }}"
+          health="$(curl -sk -o /dev/null -m 15 -w '%{http_code}' "$url/api/healthcheck")"
+          test "$health" = "200" || { echo "Healthcheck returned HTTP $health"; exit 1; }
+
+          gated_page="$(curl -skL -m 15 "$url")"
+          grep -q 'data-preview-access-screen' <<<"$gated_page" || {
+            echo "Request without a preview access cookie did not render the access screen" >&2
+            exit 1
+          }
+
+          blocked="$(curl -sk -o /dev/null -m 15 -w '%{http_code}' \
+            -X POST --data-urlencode 'email=dev.admin@yawp.local' \
+            "$url/auth/dev-login")"
+          test "$blocked" = "401" || {
+            echo "POST /auth/dev-login without an access cookie returned HTTP $blocked, expected 401" >&2
+            exit 1
+          }
+
+          cookie_jar="$(mktemp)"
+          entered="$(curl -sk -o /dev/null -m 15 -w '%{http_code}' -c "$cookie_jar" \
+            --data-urlencode "code=$access_code" "$url/auth/preview-access")"
+          case "$entered" in
+            302|303) ;;
+            *) echo "Access code returned HTTP $entered" >&2; exit 1 ;;
+          esac
+          app="$(curl -skL -o /dev/null -m 15 -w '%{http_code}' -b "$cookie_jar" "$url")"
+          test "$app" = "200" || { echo "Code-bearing request returned HTTP $app"; exit 1; }
+          echo "Access gate confirmed: health 200, no-cookie access screen, dev-login 401, code-bearing app 200"
 
       - name: Comment preview URL on PR
         uses: marocchino/sticky-pull-request-comment@v2
@@ -184,7 +216,7 @@ jobs:
             - **Runtime:** Docker Compose on the preview environment host
             - **Data:** seeded local-dev data in an isolated PR database
             - **Deploy elapsed:** `${{ steps.deploy.outputs.elapsed_ms }}ms`
-            - **Smoke:** healthcheck + dev login
+            - **Smoke:** in-app access gate + dev login
 
   preview-destroy:
     if: >-

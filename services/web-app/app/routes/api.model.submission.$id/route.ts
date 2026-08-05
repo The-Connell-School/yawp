@@ -3,6 +3,7 @@ import { type ActionFunctionArgs } from 'react-router';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { findSubmissionForTitleEdit } from '~/utils/submission-access.server';
+import { hasEffectivePlatformAdmin } from '~/utils/preview-access.server';
 
 const MAX_TITLE_LEN = 500;
 
@@ -42,7 +43,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
     const submission = await findSubmissionForTitleEdit({
       submissionId: params.id,
       membershipId: profile.id,
-      isAdmin: Boolean(user?.isAdmin),
+      isAdmin: hasEffectivePlatformAdmin(user?.isAdmin),
     });
 
     if (!submission) {

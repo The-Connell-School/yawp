@@ -8,6 +8,7 @@ import {
 } from '~/utils/student-preview.server';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
+import { hasEffectivePlatformAdmin } from '~/utils/preview-access.server';
 
 const PreviewIntentSchema = z.object({
   intent: z.enum(['start', 'end']),
@@ -46,7 +47,7 @@ export async function action({ request }: ActionFunctionArgs) {
   if (
     !canEnterStudentPreview({
       role: membership.role,
-      isAdmin: user.isAdmin,
+      isAdmin: hasEffectivePlatformAdmin(user.isAdmin),
     })
   ) {
     return Response.json(

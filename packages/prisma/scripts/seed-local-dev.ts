@@ -9,6 +9,7 @@ import {
 } from './local-dev/import-prod-fidelity-fixtures';
 import { seedSyntheticLocalDevData } from './local-dev/seed-synthetic-data';
 import { truncateAllPublicTables } from './local-dev/truncate-all';
+import { enableClassInsightsForOrganizations } from './local-dev/class-insights';
 import {
   LOCAL_DEV_ORG_ID,
   LOCAL_DEV_ORG_NAME,
@@ -35,9 +36,12 @@ try {
       numOfTeacherSeats: 40,
       reporterEnabled: true,
       lessonPlannerEnabled: true,
-      classInsightsEnabled: true,
+      // Left off here on purpose: enableClassInsightsForOrganizations below is
+      // the single place that turns it on, for local dev and preview seats.
+      classInsightsEnabled: false,
     },
   });
+  await enableClassInsightsForOrganizations(prisma, [LOCAL_DEV_ORG_ID]);
   console.timeEnd('organization');
 
   console.time('prod-fidelity');

@@ -4,17 +4,17 @@ import {
   createPrismaClient,
 } from './connection';
 import { LOCAL_DEV_ORG_ID } from './dev-personas';
+import { enableClassInsightsForOrganizations } from './class-insights';
 
 assertLocalSeedTarget();
 
 const prisma = createPrismaClient();
 
-const updated = await prisma.organization.updateMany({
-  where: { id: LOCAL_DEV_ORG_ID },
-  data: { classInsightsEnabled: true },
-});
+const [result] = await enableClassInsightsForOrganizations(prisma, [
+  LOCAL_DEV_ORG_ID,
+]);
 
-if (updated.count === 0) {
+if (!result?.enabled) {
   console.warn(
     `No local dev organization (${LOCAL_DEV_ORG_ID}) found; skipping class insights enablement.`
   );

@@ -10,7 +10,7 @@ import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { Button } from '~/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
 import { prisma } from '~/utils/db.server';
-import { requireMembership, requireUserId } from '~/utils/auth.server';
+import { requireMembership } from '~/utils/auth.server';
 import {
   Table,
   TableBody,
@@ -96,19 +96,11 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 }
 
 export async function action({ request, params }: ActionFunctionArgs) {
-  const userId = await requireUserId(request);
+  const currentAdmin = await requireAdmin(request);
+  const userId = currentAdmin.id;
   const formData = await request.formData();
   const intent = formData.get('intent');
   const profile = await requireMembership(request, userId);
-
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { isAdmin: true },
-  });
-
-  if (!user?.isAdmin) {
-    throw new Response('Unauthorized', { status: 401 });
-  }
 
   if (intent === 'deleteOrganization') {
     // Get current user and organization count to validate deletion

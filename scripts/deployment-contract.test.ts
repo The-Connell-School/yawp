@@ -4,12 +4,32 @@ import { readdirSync, readFileSync, statSync } from 'fs';
 import { join } from 'path';
 
 const repoRoot = join(import.meta.dir, '..');
-const deprecatedPreviewBrand = ['Preview', String.fromCharCode(70, 111, 114, 103, 101)].join(' ');
-const deprecatedPreviewSlug = ['preview', String.fromCharCode(102, 111, 114, 103, 101)].join('-');
-const deprecatedPreviewEnvPrefix = ['PREVIEW', String.fromCharCode(70, 79, 82, 71, 69)].join('_');
-const deprecatedPreviewRoot = ['yawp', 'preview', String.fromCharCode(102, 111, 114, 103, 101)].join('-');
-const deprecatedPreviewFunction = ['buildPreview', String.fromCharCode(70, 111, 114, 103, 101)].join('');
-const deprecatedPreviewSnake = ['preview', String.fromCharCode(102, 111, 114, 103, 101)].join('_');
+const deprecatedPreviewBrand = [
+  'Preview',
+  String.fromCharCode(70, 111, 114, 103, 101),
+].join(' ');
+const deprecatedPreviewSlug = [
+  'preview',
+  String.fromCharCode(102, 111, 114, 103, 101),
+].join('-');
+const deprecatedPreviewEnvPrefix = [
+  'PREVIEW',
+  String.fromCharCode(70, 79, 82, 71, 69),
+].join('_');
+const deprecatedPreviewRoot = [
+  'yawp',
+  'preview',
+  String.fromCharCode(102, 111, 114, 103, 101),
+].join('-');
+const deprecatedPreviewFunction = [
+  'buildPreview',
+  String.fromCharCode(70, 111, 114, 103, 101),
+].join('');
+const deprecatedPreviewSnake = [
+  'preview',
+  String.fromCharCode(102, 111, 114, 103, 101),
+].join('_');
+const deprecatedPreviewBasicAuth = ['PREVIEW', 'BASIC', 'AUTH'].join('_');
 
 function readRepoFile(path: string) {
   return readFileSync(join(repoRoot, path), 'utf8');
@@ -26,7 +46,10 @@ function listTrackedRepoFiles(): string[] {
   return execFileSync('git', ['ls-files'], {
     cwd: repoRoot,
     encoding: 'utf8',
-  }).trim().split('\n').filter(Boolean);
+  })
+    .trim()
+    .split('\n')
+    .filter(Boolean);
 }
 
 describe('production deployment contract', () => {
@@ -45,8 +68,12 @@ describe('production deployment contract', () => {
     const releaseGateIndex = ciWorkflow.indexOf('assignment-type-release-gate');
 
     expect(ciWorkflow).toContain('validate-prisma-migrations');
-    expect(ciWorkflow).toContain('bun test ./scripts/deployment-contract.test.ts');
-    expect(ciWorkflow).toContain('teacher-training-assignment-migration.test.ts');
+    expect(ciWorkflow).toContain(
+      'bun test ./scripts/deployment-contract.test.ts'
+    );
+    expect(ciWorkflow).toContain(
+      'teacher-training-assignment-migration.test.ts'
+    );
     expect(ciWorkflow).toContain('bun prisma generate');
     expect(ciWorkflow).toContain('bun prisma migrate deploy');
     expect(ciWorkflow).toContain('backfill-class-art-key');
@@ -60,7 +87,9 @@ describe('production deployment contract', () => {
   });
 
   test('Prisma package keeps both migration release gates available', () => {
-    const prismaPackage = JSON.parse(readRepoFile('packages/prisma/package.json'));
+    const prismaPackage = JSON.parse(
+      readRepoFile('packages/prisma/package.json')
+    );
 
     expect(prismaPackage.scripts['assignment-type-release-gate']).toBe(
       'bun run scripts/assignment-type-release-gate.ts'
@@ -87,7 +116,7 @@ describe('production deployment contract', () => {
     const dockerfile = readRepoFile('services/web-app/Dockerfile');
 
     expect(dockerfile).toContain(
-      'COPY --from=build /app/services/web-app/node_modules ./services/web-app/node_modules',
+      'COPY --from=build /app/services/web-app/node_modules ./services/web-app/node_modules'
     );
   });
 
@@ -95,7 +124,7 @@ describe('production deployment contract', () => {
     const dockerfile = readRepoFile('services/web-app/Dockerfile');
 
     expect(dockerfile).toContain(
-      'COPY --from=build /app/services/web-app/build/client ./build/client',
+      'COPY --from=build /app/services/web-app/build/client ./build/client'
     );
   });
 
@@ -103,7 +132,9 @@ describe('production deployment contract', () => {
     const startScript = readRepoFile('services/web-app/start.sh');
 
     expect(startScript).toContain('cd "$(dirname "$0")"');
-    expect(startScript).toContain('exec bun node_modules/@react-router/serve/bin.js');
+    expect(startScript).toContain(
+      'exec bun node_modules/@react-router/serve/bin.js'
+    );
     expect(startScript).not.toContain('bun run web-app:start');
   });
 
@@ -117,30 +148,50 @@ describe('production deployment contract', () => {
   });
 
   test('React Router dev pre-optimizes route dependencies before first login', () => {
-    const reactRouterConfig = readRepoFile('services/web-app/react-router.config.ts');
+    const reactRouterConfig = readRepoFile(
+      'services/web-app/react-router.config.ts'
+    );
 
     expect(reactRouterConfig).toContain('unstable_optimizeDeps: true');
   });
 
   test('main deploy runs production Prisma migrations before publishing the image', () => {
     const deployWorkflow = readRepoFile('.github/workflows/deploy.yml');
-    const migrateRemoteScript = readRepoFile('packages/prisma/scripts/migrate-remote.ts');
+    const migrateRemoteScript = readRepoFile(
+      'packages/prisma/scripts/migrate-remote.ts'
+    );
     const deployGenerateIndex = deployWorkflow.indexOf('bun prisma generate');
-    const deployValidateMigrateIndex = deployWorkflow.indexOf('bun prisma migrate deploy');
+    const deployValidateMigrateIndex = deployWorkflow.indexOf(
+      'bun prisma migrate deploy'
+    );
     const deployTrainingMigrationTestIndex = deployWorkflow.indexOf(
       'teacher-training-assignment-migration.test.ts'
     );
-    const deployValidateBackfillIndex = deployWorkflow.indexOf('backfill-class-art-key');
-    const migrateIndex = deployWorkflow.indexOf('bun prisma:migrate-remote production');
-    const pushIndex = deployWorkflow.indexOf('bun web-app:docker:production:push');
-    const remoteMigrateIndex = migrateRemoteScript.indexOf("['prisma', 'migrate', 'deploy']");
-    const remoteBackfillIndex = migrateRemoteScript.indexOf('backfill-class-art-key.ts');
-    const remoteReleaseGateIndex = migrateRemoteScript.indexOf('assignment-type-release-gate.ts');
+    const deployValidateBackfillIndex = deployWorkflow.indexOf(
+      'backfill-class-art-key'
+    );
+    const migrateIndex = deployWorkflow.indexOf(
+      'bun prisma:migrate-remote production'
+    );
+    const pushIndex = deployWorkflow.indexOf(
+      'bun web-app:docker:production:push'
+    );
+    const remoteMigrateIndex = migrateRemoteScript.indexOf(
+      "['prisma', 'migrate', 'deploy']"
+    );
+    const remoteBackfillIndex = migrateRemoteScript.indexOf(
+      'backfill-class-art-key.ts'
+    );
+    const remoteReleaseGateIndex = migrateRemoteScript.indexOf(
+      'assignment-type-release-gate.ts'
+    );
 
     expect(deployWorkflow).toContain('validate-prisma-migrations');
     expect(deployWorkflow).toContain('needs: [validate-prisma-migrations]');
     expect(deployWorkflow).toContain('bun prisma generate');
-    expect(deployWorkflow).toContain('teacher-training-assignment-migration.test.ts');
+    expect(deployWorkflow).toContain(
+      'teacher-training-assignment-migration.test.ts'
+    );
     expect(deployWorkflow).toContain('backfill-class-art-key');
     expect(deployWorkflow).toContain('PROD_SSH_PRIVATE_KEY');
     expect(deployWorkflow).toContain('PROD_SSH_KEY_PATH');
@@ -151,14 +202,22 @@ describe('production deployment contract', () => {
     expect(deployGenerateIndex).toBeGreaterThan(-1);
     expect(deployValidateMigrateIndex).toBeGreaterThan(deployGenerateIndex);
     expect(deployTrainingMigrationTestIndex).toBeGreaterThan(-1);
-    expect(deployTrainingMigrationTestIndex).toBeLessThan(deployValidateMigrateIndex);
-    expect(deployValidateBackfillIndex).toBeGreaterThan(deployValidateMigrateIndex);
+    expect(deployTrainingMigrationTestIndex).toBeLessThan(
+      deployValidateMigrateIndex
+    );
+    expect(deployValidateBackfillIndex).toBeGreaterThan(
+      deployValidateMigrateIndex
+    );
     expect(migrateIndex).toBeGreaterThan(-1);
     expect(pushIndex).toBeGreaterThan(-1);
     expect(migrateIndex).toBeLessThan(pushIndex);
     expect(migrateRemoteScript).toContain('--require-data');
-    expect(migrateRemoteScript).toContain('20260703195500_realign_teacher_training_assignments');
-    expect(migrateRemoteScript).toContain("['prisma', 'migrate', 'resolve', '--rolled-back'");
+    expect(migrateRemoteScript).toContain(
+      '20260703195500_realign_teacher_training_assignments'
+    );
+    expect(migrateRemoteScript).toContain(
+      "['prisma', 'migrate', 'resolve', '--rolled-back'"
+    );
     expect(migrateRemoteScript).toContain('rejectUnauthorized: false');
     expect(migrateRemoteScript).toContain("REMOTE_MIGRATE_TUNNEL: '1'");
     expect(remoteMigrateIndex).toBeGreaterThan(-1);
@@ -171,8 +230,12 @@ describe('worktree local setup contract', () => {
   test('root dev command loads the isolated worktree app port before starting React Router', () => {
     const rootPackage = JSON.parse(readRepoFile('package.json'));
 
-    expect(rootPackage.scripts.dev).toContain('scripts/worktree-local-setup.sh --no-dev');
-    expect(rootPackage.scripts.dev).toContain('source .worktree-local/config.env');
+    expect(rootPackage.scripts.dev).toContain(
+      'scripts/worktree-local-setup.sh --no-dev'
+    );
+    expect(rootPackage.scripts.dev).toContain(
+      'source .worktree-local/config.env'
+    );
     expect(rootPackage.scripts.dev).toContain('PORT="$DEV_PORT"');
   });
 
@@ -197,12 +260,18 @@ describe('worktree local setup contract', () => {
 
 describe('PR preview deployment contract', () => {
   test('preview workflow deploys every same-repo pull request through preview environments', () => {
-    const previewWorkflow = readRepoFile('.github/workflows/preview-environments.yml');
+    const previewWorkflow = readRepoFile(
+      '.github/workflows/preview-environments.yml'
+    );
 
     expect(previewWorkflow).toContain('name: PR preview');
     expect(previewWorkflow).toContain('pull_request');
-    expect(previewWorkflow).toContain('types: [opened, synchronize, reopened, closed]');
-    expect(previewWorkflow).toContain("github.event.pull_request.head.repo.full_name == github.repository");
+    expect(previewWorkflow).toContain(
+      'types: [opened, synchronize, reopened, closed]'
+    );
+    expect(previewWorkflow).toContain(
+      'github.event.pull_request.head.repo.full_name == github.repository'
+    );
     expect(previewWorkflow).toContain('scripts/preview/deploy.sh');
     expect(previewWorkflow).toContain('scripts/preview/destroy.sh');
     expect(previewWorkflow).not.toContain(deprecatedPreviewBrand);
@@ -211,7 +280,9 @@ describe('PR preview deployment contract', () => {
   });
 
   test('preview workflow no longer uses App Runner, Terraform, ECR pushes, or slash-command previews', () => {
-    const previewWorkflow = readRepoFile('.github/workflows/preview-environments.yml').toLowerCase();
+    const previewWorkflow = readRepoFile(
+      '.github/workflows/preview-environments.yml'
+    ).toLowerCase();
 
     expect(previewWorkflow).not.toContain('apprunner');
     expect(previewWorkflow).not.toContain('infra-pr');
@@ -220,26 +291,48 @@ describe('PR preview deployment contract', () => {
     expect(previewWorkflow).not.toMatch(/(^|\s)\/preview(\s|$)/);
   });
 
-  test('preview deploy resets per-PR databases and seeds local dev data by default', () => {
+  test('preview deploy preserves existing seed databases unless reset is explicit', () => {
     const deployScript = readRepoFile('scripts/preview/deploy.sh');
     const resetIndex = deployScript.indexOf('reset_seed_preview_database');
-    const dropIndex = deployScript.indexOf('dropdb -U postgres --force --if-exists "$DATABASE_NAME"');
+    const dropIndex = deployScript.indexOf(
+      'dropdb -U postgres --force --if-exists "$DATABASE_NAME"'
+    );
     const generateIndex = deployScript.indexOf('bun prisma generate');
     const migrateIndex = deployScript.indexOf('bun prisma migrate deploy');
-    const backfillIndex = deployScript.indexOf('bun run scripts/backfill-class-art-key.ts');
+    const backfillIndex = deployScript.indexOf(
+      'bun run scripts/backfill-class-art-key.ts'
+    );
     const seedIndex = deployScript.indexOf('bun run seed-local-dev');
-    const releaseGateIndex = deployScript.indexOf('bun run scripts/assignment-type-release-gate.ts --require-data');
+    const releaseGateIndex = deployScript.indexOf(
+      'bun run scripts/assignment-type-release-gate.ts --require-data'
+    );
     const webStartIndex = deployScript.indexOf('start_or_refresh_web');
 
     expect(deployScript).toContain('PREVIEW_DATA_MODE');
     expect(deployScript).toContain('DATA_MODE');
-    expect(deployScript).toContain('reset_seed_preview_database');
-    expect(deployScript).toContain('dropdb -U postgres --force --if-exists "$DATABASE_NAME"');
+    expect(deployScript).toContain('DEMO_RESET_DATA');
+    expect(deployScript).toContain('database_exists "$DATABASE_NAME"');
+    expect(deployScript).toContain(
+      'if [[ "${DEMO_RESET_DATA:-false}" == "true" ]]'
+    );
+    expect(deployScript).toContain(
+      'dropdb -U postgres --force --if-exists "$DATABASE_NAME"'
+    );
     expect(deployScript).toContain('createdb -U postgres "$DATABASE_NAME"');
     expect(deployScript).toContain('bun run seed-local-dev');
+    expect(deployScript).toContain('bun run seed-preview-seats');
+    expect(deployScript).toContain('oven/bun:1.3.1');
+    expect(deployScript).toContain(
+      'bun scripts/preview/access-code.mjs --seats'
+    );
     expect(deployScript).toContain('PREVIEW_DEV_LOGIN_EMAIL');
+    expect(deployScript).toContain(
+      'PREVIEW_SEAT_COUNT="${PREVIEW_SEAT_COUNT:-1}"'
+    );
     expect(deployScript).toContain('backfill-class-art-key.ts');
-    expect(deployScript).toContain('assignment-type-release-gate.ts --require-data');
+    expect(deployScript).toContain(
+      'assignment-type-release-gate.ts --require-data'
+    );
     expect(deployScript).not.toContain('seed-overlay.ts');
     expect(resetIndex).toBeGreaterThan(-1);
     expect(dropIndex).toBeGreaterThan(resetIndex);
@@ -261,7 +354,9 @@ describe('PR preview deployment contract', () => {
     expect(deployScript).toContain('PREVIEW_DB_TEMPLATE_DB');
     expect(deployScript).toContain('yawp-preview-db');
     expect(deployScript).toContain('preview-postgres');
-    expect(deployScript).toContain('Restoring production dump into template database');
+    expect(deployScript).toContain(
+      'Restoring production dump into template database'
+    );
     // Was: toContain('DATABASE_NAME="yawp_pr_${PR_NUMBER}"'). This test cares that the
     // production-dump path still clones per-environment databases, and used that line as a
     // marker for "DATABASE_NAME is set" — but the line itself was the bug: it rebuilt a
@@ -269,22 +364,38 @@ describe('PR preview deployment contract', () => {
     // box) depend on. The invariant is that DATABASE_NAME comes from preview-env.mjs.
     expect(deployScript).toContain('${DATABASE_NAME:?');
     expect(deployScript).not.toContain('DATABASE_NAME="yawp_pr_${PR_NUMBER}"');
-    expect(deployScript).toContain('Preview database $DATABASE_NAME already exists; skipping clone.');
+    expect(deployScript).toContain(
+      'Preview database $DATABASE_NAME already exists; skipping clone.'
+    );
     expect(deployScript).toContain('production-dump)');
-    expect(deployScript).toContain('createdb -U postgres -T "$TEMPLATE_DB" "$DATABASE_NAME"');
+    expect(deployScript).toContain(
+      'createdb -U postgres -T "$TEMPLATE_DB" "$DATABASE_NAME"'
+    );
   });
 
   test('preview deploy caches tooling work but still refreshes web containers', () => {
     const deployScript = readRepoFile('scripts/preview/deploy.sh');
 
     expect(deployScript).toContain('compute_tooling_fingerprint()');
-    expect(deployScript).toContain('TOOLING_FINGERPRINT_FILE="$PREVIEW_DIR/tooling.sha256"');
-    expect(deployScript).toContain('packages/prisma/scripts/assignment-type-release-gate.ts');
-    expect(deployScript).toContain('packages/prisma/scripts/backfill-class-art-key.ts');
+    expect(deployScript).toContain(
+      'TOOLING_FINGERPRINT_FILE="$PREVIEW_DIR/tooling.sha256"'
+    );
+    expect(deployScript).toContain(
+      'packages/prisma/scripts/assignment-type-release-gate.ts'
+    );
+    expect(deployScript).toContain(
+      'packages/prisma/scripts/backfill-class-art-key.ts'
+    );
     expect(deployScript).toContain('scripts/preview/deploy.sh');
-    expect(deployScript).toContain('Tooling fingerprint unchanged and database already existed; skipping install/generate/migrate.');
-    expect(deployScript).toContain('"${compose[@]}" up -d --force-recreate web');
-    expect(deployScript).not.toContain('Web container already running; relying on bind-mounted source update.');
+    expect(deployScript).toContain(
+      'Tooling fingerprint unchanged and database already existed; skipping install/generate/migrate.'
+    );
+    expect(deployScript).toContain(
+      '"${compose[@]}" up -d --force-recreate web'
+    );
+    expect(deployScript).not.toContain(
+      'Web container already running; relying on bind-mounted source update.'
+    );
   });
 
   test('preview containers cannot use EC2 metadata credentials', () => {
@@ -293,43 +404,103 @@ describe('PR preview deployment contract', () => {
     expect(compose).toContain('AWS_EC2_METADATA_DISABLED: "true"');
   });
 
+  test('the role-swap flag is structurally coupled to root request middleware', () => {
+    const rootRoute = readRepoFile('services/web-app/app/root.tsx');
+    const routerConfig = readRepoFile(
+      'services/web-app/react-router.config.ts'
+    );
+    const gate = readRepoFile(
+      'services/web-app/app/utils/preview-access.server.ts'
+    );
+    const compose = readRepoFile('scripts/preview/render-compose.mjs');
+
+    expect(routerConfig).toContain('v8_middleware: true');
+    expect(rootRoute).toContain(
+      'export const middleware = [previewAccessMiddleware]'
+    );
+    expect(gate).toContain("process.env.PREVIEW_ACCESS_GATE === 'on'");
+    expect(gate).toContain("'/api/healthcheck'");
+    expect(compose).toContain('PREVIEW_ACCESS_GATE: "on"');
+    expect(compose).toContain('requirePreviewAccessSeats(accessSeats)');
+    expect(compose).toContain('requirePreviewAccessSecret(accessSecret)');
+    expect(compose).toContain('requirePreviewSessionSecret(sessionSecret)');
+  });
+
   test('preview cleanup removes closed PR resources and is scheduled', () => {
     const cleanupScript = readRepoFile('scripts/preview/cleanup.sh');
-    const previewWorkflow = readRepoFile('.github/workflows/preview-environments.yml');
+    const previewWorkflow = readRepoFile(
+      '.github/workflows/preview-environments.yml'
+    );
 
     expect(cleanupScript).toContain('OPEN_PR_NUMBERS');
     expect(cleanupScript).toContain('PREVIEW_TTL_HOURS');
-    expect(cleanupScript).toContain('dropdb -U postgres --if-exists "$database_name"');
-    expect(cleanupScript).toContain('docker volume rm "${project}_${project}-postgres-data"');
+    expect(cleanupScript).toContain(
+      'dropdb -U postgres --if-exists "$database_name"'
+    );
+    expect(cleanupScript).toContain(
+      'docker volume rm "${project}_${project}-postgres-data"'
+    );
     expect(previewWorkflow).toContain('schedule:');
     expect(previewWorkflow).toContain('bash -s < scripts/preview/cleanup.sh');
   });
 
   test('preview workflow passes seeded preview mode to remote deploy', () => {
-    const previewWorkflow = readRepoFile('.github/workflows/preview-environments.yml');
+    const previewWorkflow = readRepoFile(
+      '.github/workflows/preview-environments.yml'
+    );
 
-    expect(previewWorkflow).toContain("PREVIEW_DATA_MODE: ${{ vars.PREVIEW_DATA_MODE || 'seed' }}");
-    expect(previewWorkflow).toContain("PREVIEW_DEV_LOGIN_EMAIL: ${{ vars.PREVIEW_DEV_LOGIN_EMAIL || 'dev.teacher@yawp.local' }}");
-    expect(previewWorkflow).toContain("PREVIEW_AI_MODEL: ${{ vars.PREVIEW_AI_MODEL || 'claude-sonnet-4-6' }}");
-    expect(previewWorkflow).toContain('PREVIEW_ANTHROPIC_API_KEY: ${{ secrets.PREVIEW_ANTHROPIC_API_KEY || secrets.ANTHROPIC_API_KEY }}');
+    expect(previewWorkflow).toContain(
+      "PREVIEW_DATA_MODE: ${{ vars.PREVIEW_DATA_MODE || 'seed' }}"
+    );
+    expect(previewWorkflow).toContain(
+      "PREVIEW_SEAT_COUNT: ${{ vars.PREVIEW_SEAT_COUNT || '1' }}"
+    );
+    expect(previewWorkflow).toContain(
+      "PREVIEW_DEV_LOGIN_EMAIL: ${{ vars.PREVIEW_DEV_LOGIN_EMAIL || 'dev.teacher@yawp.local' }}"
+    );
+    expect(previewWorkflow).toContain(
+      "PREVIEW_AI_MODEL: ${{ vars.PREVIEW_AI_MODEL || 'claude-sonnet-4-6' }}"
+    );
+    expect(previewWorkflow).toContain(
+      'PREVIEW_ANTHROPIC_API_KEY: ${{ secrets.PREVIEW_ANTHROPIC_API_KEY || secrets.ANTHROPIC_API_KEY }}'
+    );
     expect(previewWorkflow).toContain('PREVIEW_DB_DUMP_S3_URI');
-    expect(previewWorkflow).toContain('PREVIEW_DB_PASSWORD: ${{ secrets.PREVIEW_DB_PASSWORD }}');
+    expect(previewWorkflow).toContain(
+      'PREVIEW_DB_PASSWORD: ${{ secrets.PREVIEW_DB_PASSWORD }}'
+    );
     expect(previewWorkflow).toContain('shell_quote()');
-    expect(previewWorkflow).toContain('PREVIEW_DATA_MODE=$(shell_quote "$PREVIEW_DATA_MODE")');
-    expect(previewWorkflow).toContain('PREVIEW_DEV_LOGIN_EMAIL=$(shell_quote "$PREVIEW_DEV_LOGIN_EMAIL")');
-    expect(previewWorkflow).toContain('PREVIEW_AI_MODEL=$(shell_quote "$PREVIEW_AI_MODEL")');
-    expect(previewWorkflow).toContain('PREVIEW_ANTHROPIC_API_KEY=$(shell_quote "$PREVIEW_ANTHROPIC_API_KEY")');
-    expect(previewWorkflow).toContain('PREVIEW_DB_DUMP_S3_URI=$(shell_quote "$PREVIEW_DB_DUMP_S3_URI")');
-    expect(previewWorkflow).toContain('PREVIEW_DB_PASSWORD=$(shell_quote "$PREVIEW_DB_PASSWORD")');
+    expect(previewWorkflow).toContain(
+      'PREVIEW_DATA_MODE=$(shell_quote "$PREVIEW_DATA_MODE")'
+    );
+    expect(previewWorkflow).toContain(
+      'PREVIEW_DEV_LOGIN_EMAIL=$(shell_quote "$PREVIEW_DEV_LOGIN_EMAIL")'
+    );
+    expect(previewWorkflow).toContain(
+      'PREVIEW_AI_MODEL=$(shell_quote "$PREVIEW_AI_MODEL")'
+    );
+    expect(previewWorkflow).toContain(
+      'PREVIEW_ANTHROPIC_API_KEY=$(shell_quote "$PREVIEW_ANTHROPIC_API_KEY")'
+    );
+    expect(previewWorkflow).toContain(
+      'PREVIEW_DB_DUMP_S3_URI=$(shell_quote "$PREVIEW_DB_DUMP_S3_URI")'
+    );
+    expect(previewWorkflow).toContain(
+      'PREVIEW_DB_PASSWORD=$(shell_quote "$PREVIEW_DB_PASSWORD")'
+    );
+    expect(previewWorkflow).not.toContain(deprecatedPreviewBasicAuth);
     expect(previewWorkflow).toContain('test -n "$PREVIEW_ANTHROPIC_API_KEY"');
     expect(previewWorkflow).not.toContain('test -n "$PREVIEW_LOGIN_EMAIL"');
     expect(previewWorkflow).not.toContain('test -n "$PREVIEW_LOGIN_PASSWORD"');
   });
 
   test('preview workflow does not require runner AWS credentials for dump restores', () => {
-    const previewWorkflow = readRepoFile('.github/workflows/preview-environments.yml');
+    const previewWorkflow = readRepoFile(
+      '.github/workflows/preview-environments.yml'
+    );
 
-    expect(previewWorkflow).not.toContain('aws-actions/configure-aws-credentials');
+    expect(previewWorkflow).not.toContain(
+      'aws-actions/configure-aws-credentials'
+    );
     expect(previewWorkflow).not.toContain('secrets.AWS_ACCESS_KEY_ID');
     expect(previewWorkflow).not.toContain('secrets.AWS_SECRET_ACCESS_KEY');
     expect(previewWorkflow).not.toContain('aws s3 presign');
@@ -338,14 +509,29 @@ describe('PR preview deployment contract', () => {
   test('preview deploy polls health quickly once containers are starting', () => {
     const deployScript = readRepoFile('scripts/preview/deploy.sh');
 
-    // The subject here is poll SPEED, not the shape of the request. The health check now
-    // carries basic-auth credentials because the preview sits behind the shared gate, so
-    // the old exact-string match on an anonymous curl pinned a detail it never meant to
-    // own. Assert the timeouts and the cadence, which are what "quickly" means.
-    expect(deployScript).toContain('--connect-timeout 1 --max-time 2 "$health_url"');
+    // The subject here is poll SPEED. /api/healthcheck stays outside the in-app gate.
+    expect(deployScript).toContain(
+      '--connect-timeout 1 --max-time 2 "$health_url"'
+    );
+    expect(deployScript).toContain(
+      'curl -fsS --connect-timeout 1 --max-time 2 "$health_url"'
+    );
+    expect(deployScript).not.toContain(deprecatedPreviewBasicAuth);
     expect(deployScript).toContain('sleep 1');
     expect(deployScript).not.toContain('--max-time 5 "$health_url"');
     expect(deployScript).not.toContain('sleep 2');
+  });
+
+  test('preview deploy tooling contains no transitional transport auth references', () => {
+    for (const path of [
+      'scripts/preview/deploy.sh',
+      'scripts/preview/smoke-login.mjs',
+      'scripts/github-preview-config.sh',
+      '.github/workflows/preview-environments.yml',
+      '.github/workflows/demo-environment.yml',
+    ]) {
+      expect(readRepoFile(path)).not.toContain(deprecatedPreviewBasicAuth);
+    }
   });
 
   test('preview deploy verifies login before reporting the preview URL', () => {
@@ -366,13 +552,19 @@ describe('PR preview deployment contract', () => {
     expect(toolboxIndex).toBeGreaterThan(-1);
     expect(webStartIndex).toBeGreaterThan(-1);
     expect(toolboxIndex).toBeLessThan(webStartIndex);
-    expect(deployScript).toContain('"${compose[@]}" up -d --force-recreate web');
+    expect(deployScript).toContain(
+      '"${compose[@]}" up -d --force-recreate web'
+    );
   });
 
   test('preview source sync excludes generated container output', () => {
-    const previewWorkflow = readRepoFile('.github/workflows/preview-environments.yml');
+    const previewWorkflow = readRepoFile(
+      '.github/workflows/preview-environments.yml'
+    );
 
-    expect(previewWorkflow).toContain("--exclude 'services/web-app/.react-router'");
+    expect(previewWorkflow).toContain(
+      "--exclude 'services/web-app/.react-router'"
+    );
     expect(previewWorkflow).toContain("--exclude 'services/web-app/.vite'");
   });
 
@@ -394,19 +586,33 @@ describe('PR preview deployment contract', () => {
     const bootstrapScript = readRepoFile('scripts/preview/bootstrap-host.sh');
     const deployScript = readRepoFile('scripts/preview/deploy.sh');
 
-    expect(bootstrapScript).toContain('POSTGRES_PROJECT="${PREVIEW_POSTGRES_PROJECT:-yawp-preview-db}"');
-    expect(deployScript).toContain('POSTGRES_PROJECT="${PREVIEW_POSTGRES_PROJECT:-yawp-preview-db}"');
-    expect(bootstrapScript).toContain('docker compose -p "$POSTGRES_PROJECT" -f "$ROOT/postgres/docker-compose.yml" up -d');
+    expect(bootstrapScript).toContain(
+      'POSTGRES_PROJECT="${PREVIEW_POSTGRES_PROJECT:-yawp-preview-db}"'
+    );
+    expect(deployScript).toContain(
+      'POSTGRES_PROJECT="${PREVIEW_POSTGRES_PROJECT:-yawp-preview-db}"'
+    );
+    expect(bootstrapScript).toContain(
+      'docker compose -p "$POSTGRES_PROJECT" -f "$ROOT/postgres/docker-compose.yml" up -d'
+    );
   });
 
   test('preview host migration keeps shared services attached to the preview network', () => {
     const bootstrapScript = readRepoFile('scripts/preview/bootstrap-host.sh');
     const deployScript = readRepoFile('scripts/preview/deploy.sh');
 
-    expect(deployScript).toContain('docker network connect preview "$POSTGRES_CONTAINER"');
-    expect(bootstrapScript).toContain('docker network connect preview "$container"');
-    expect(bootstrapScript).toContain('connect_container_to_preview_network preview-postgres');
-    expect(bootstrapScript).toContain('connect_container_to_preview_network traefik-traefik-1');
+    expect(deployScript).toContain(
+      'docker network connect preview "$POSTGRES_CONTAINER"'
+    );
+    expect(bootstrapScript).toContain(
+      'docker network connect preview "$container"'
+    );
+    expect(bootstrapScript).toContain(
+      'connect_container_to_preview_network preview-postgres'
+    );
+    expect(bootstrapScript).toContain(
+      'connect_container_to_preview_network traefik-traefik-1'
+    );
   });
 
   test('preview GitHub config can publish dump location and login smoke secrets', () => {
@@ -458,27 +664,34 @@ describe('PR preview deployment contract', () => {
   });
 
   test('preview comment describes seeded data and dev-login smoke', () => {
-    const previewWorkflow = readRepoFile('.github/workflows/preview-environments.yml');
+    const previewWorkflow = readRepoFile(
+      '.github/workflows/preview-environments.yml'
+    );
 
     expect(previewWorkflow).toContain(
-      '- **Data:** seeded local-dev data in an isolated PR database',
+      '- **Data:** seeded local-dev data in an isolated PR database'
     );
-    expect(previewWorkflow).toContain('- **Smoke:** healthcheck + dev login');
+    expect(previewWorkflow).toContain(
+      '- **Smoke:** in-app access gate + dev login'
+    );
     expect(previewWorkflow).not.toContain('seed overlay');
   });
 });
 
 describe('demo environment deployment contract', () => {
-  // deploy.sh runs ON THE DEMO HOST over SSH, so a secret declared in the job's `env:`
-  // reaches the runner and stops there. Adding PREVIEW_BASIC_AUTH to the job block and
-  // the pre-flight check — but not to remote_env — passed every local check and then
-  // failed the real deploy with "Missing PREVIEW_BASIC_AUTH", because the script that
-  // needed it was running on a different machine. Declared and forwarded are two
-  // different things; this asserts they agree.
+  // deploy.sh runs ON THE DEMO HOST over SSH, so a value declared in the job's `env:`
+  // reaches the runner and stops there unless remote_env forwards it. Declared and
+  // forwarded are two different things; this asserts they agree.
   test('every PREVIEW_ variable the demo job declares is forwarded to the host', () => {
     const workflow = readRepoFile('.github/workflows/demo-environment.yml');
 
-    const declared = [...workflow.matchAll(/^ {6}(PREVIEW_[A-Z0-9_]+):/gm)].map((m) => m[1]);
+    expect(workflow).toContain(
+      "PREVIEW_SEAT_COUNT: ${{ vars.DEMO_SEAT_COUNT || '1' }}"
+    );
+
+    const declared = [...workflow.matchAll(/^ {6}(PREVIEW_[A-Z0-9_]+):/gm)].map(
+      (m) => m[1]
+    );
     expect(declared.length).toBeGreaterThan(5);
 
     // Stop at the line that closes the array, not the first ')' — that one belongs to
@@ -486,7 +699,7 @@ describe('demo environment deployment contract', () => {
     const remoteEnvStart = workflow.indexOf('remote_env=(');
     const remoteEnvBlock = workflow.slice(
       remoteEnvStart,
-      workflow.indexOf('\n          )', remoteEnvStart),
+      workflow.indexOf('\n          )', remoteEnvStart)
     );
     expect(remoteEnvBlock).toContain('SOURCE_DIR=');
 
@@ -500,10 +713,31 @@ describe('demo environment deployment contract', () => {
     expect(missing).toEqual([]);
   });
 
-  test('the demo deploy proves the gate turns strangers away before trusting the password', () => {
+  test('the demo deploy proves the in-app gate blocks data before trusting a code', () => {
     const workflow = readRepoFile('.github/workflows/demo-environment.yml');
 
-    expect(workflow).toContain('expected 401');
-    expect(workflow).toContain('--user "${user}:${PREVIEW_BASIC_AUTH_PASSWORD}"');
+    expect(workflow).toContain('data-preview-access-screen');
+    expect(workflow).toContain(
+      'POST /auth/dev-login without an access cookie returned HTTP $blocked, expected 401'
+    );
+    expect(workflow).toContain('--data-urlencode "code=$access_code"');
+    expect(workflow).not.toContain(deprecatedPreviewBasicAuth);
+    expect(workflow).not.toContain('curl --user');
+  });
+
+  test('workflow verification is anonymous and retains in-app gate assertions', () => {
+    for (const path of [
+      '.github/workflows/preview-environments.yml',
+      '.github/workflows/demo-environment.yml',
+    ]) {
+      const workflow = readRepoFile(path);
+
+      expect(workflow).not.toContain(deprecatedPreviewBasicAuth);
+      expect(workflow).not.toContain('curl --user');
+      expect(workflow).toContain('data-preview-access-screen');
+      expect(workflow).toContain(
+        'POST /auth/dev-login without an access cookie returned HTTP $blocked, expected 401'
+      );
+    }
   });
 });
