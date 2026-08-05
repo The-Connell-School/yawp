@@ -359,6 +359,58 @@ function normalizeRubricScores(value: unknown): Record<string, number> | null {
   return Object.keys(out).length > 0 ? out : null;
 }
 
+/**
+ * Every student name that could plausibly appear in this teacher's Reporter
+ * conversation - not just students currently enrolled in one of their
+ * classes, but anyone with a graded submission tied to an assignment in a
+ * class this teacher teaches. A student who changed classes or was later
+ * unenrolled still has grade history a tool can surface, and an earlier
+ * conversation turn may already reference them by name. Call this BEFORE
+ * the first provider call of a turn and seed the redaction session with
+ * the result, so every name already sitting in persisted conversation
+ * history is covered - not just names a tool happens to surface this turn.
+ *
+ * Deterministic order (`orderBy: { id: 'asc' }`) matters: the redaction
+ * session assigns pseudonyms in registration order, and collision
+ * resolution depends on what's already taken. Querying in the same order
+ * every turn keeps a given student's pseudonym stable turn to turn, as
+ * long as they were already in a prior turn's roster - which they always
+ * are for names that already exist in persisted history.
+ */
+export async function listReporterRedactableStudentNames(ctx: {
+  membershipId: string;
+  organizationId: string;
+}): Promise<string[]> {
+  const memberships = await prisma.orgMembership.findMany({
+    where: {
+      organizationId: ctx.organizationId,
+      role: 'STUDENT',
+      OR: [
+        {
+          classesAsStudent: {
+            some: { teachers: { some: { id: ctx.membershipId } } },
+          },
+        },
+        {
+          documents: {
+            some: {
+              classAssignment: {
+                class: { teachers: { some: { id: ctx.membershipId } } },
+              },
+            },
+          },
+        },
+      ],
+    },
+    select: { user: { select: { name: true } } },
+    orderBy: { id: 'asc' },
+  });
+
+  return memberships
+    .map((membership) => membership.user.name)
+    .filter((name): name is string => Boolean(name && name.trim()));
+}
+
 async function listClasses(ctx: ReporterToolContext) {
   const classes = await prisma.class.findMany({
     where: {

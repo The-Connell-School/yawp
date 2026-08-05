@@ -7,6 +7,7 @@ import { requireMutableRequest } from '~/utils/auth.server';
 import { requireReporterAccess } from '~/utils/reporter/reporter-access.server';
 import {
   handleReporterToolCall,
+  listReporterRedactableStudentNames,
   REPORTER_TOOLS,
 } from '~/domain/reporter/reporter-tools.server';
 import { buildReporterSystemPrompt } from './build-system-prompt';
@@ -17,6 +18,7 @@ import {
 import {
   createRedactionSession,
   ORG_PSEUDONYM_NAME_POOL,
+  redact,
   rehydrate,
 } from '~/utils/ai-redaction';
 
@@ -202,6 +204,23 @@ export async function action({ request }: ActionFunctionArgs) {
   );
   const isNewConversation = !conversation;
 
+  // Seed the redaction mapping from the full set of names that could
+  // possibly appear in this conversation - the class roster PLUS anyone
+  // with grade history in one of the teacher's classes - before the first
+  // provider call. Seeding up front (rather than growing the mapping only
+  // as tool results surface names, as earlier turns did) is what lets us
+  // safely redact prior conversation turns and the teacher's own message
+  // below: a name is only catchable by `redact()` if it was already
+  // registered, and tool results alone don't cover names that only ever
+  // appeared in typed text.
+  const redactableStudentNames = await listReporterRedactableStudentNames({
+    membershipId: ctx.membershipId,
+    organizationId: ctx.organizationId,
+  });
+  for (const name of redactableStudentNames) {
+    nameRedaction.pseudonymFor(name);
+  }
+
   const system = buildReporterSystemPrompt({
     teacherName: null,
     organizationName: orgRedaction.pseudonymFor(
@@ -209,12 +228,22 @@ export async function action({ request }: ActionFunctionArgs) {
     ),
   });
 
+  // Prior turns are persisted with real names (correct - that's what the
+  // teacher's UI replays on reload) and the teacher's own new message
+  // routinely contains a student's name too. Redact both before they go
+  // into the prompt. A name that isn't in the roster above (e.g. a student
+  // fully removed from the org with no remaining grade history) can't be
+  // caught here and will pass through unredacted - see
+  // listReporterRedactableStudentNames for what is and isn't covered.
   const messages: { role: AgentType; content: string; name?: string }[] = [
     ...priorMessages.map((message) => ({
       role: message.role as AgentType,
-      content: message.content,
+      content: redact(message.content, nameRedaction.mapping),
     })),
-    { role: AgentType.User, content: data.message! },
+    {
+      role: AgentType.User,
+      content: redact(data.message!, nameRedaction.mapping),
+    },
   ];
 
   let reply: string;
