@@ -188,4 +188,17 @@ What this suggests is that the "incentive to work" argument assumes people work 
 
 None of this proves UBI is costless or simple to implement. It does mean the strongest objection to it rests on an assumption about human motivation that our best available evidence does not confirm.`,
   },
+  {
+    id: 'E15-mid-common-word-name-will',
+    band: 'mid',
+    studentFullName: 'Will Hartigan',
+    note: 'Student whose first name is an ordinary English word, used heavily in the essay as a common noun and auxiliary verb. Guards prose-mode redaction against mangling the essay - see common-word-names.server.ts.',
+    essayText: `Philosophers have argued about free will for centuries, and I will not pretend to settle the question here. What I will do is argue that the debate matters less than we think, because how we treat each other should not depend on how it resolves.
+
+If determinism is true, then every choice I make will have been fixed long before I made it, and the sense that I could have done otherwise will be an illusion. That is unsettling. But notice what does not change: a person who harms others will still be dangerous, a person who helps others will still be worth encouraging, and the practice of praising and blaming will still shape what people do next. Blame will function as a lever even if it does not function as cosmic justice.
+
+If libertarian free will is true instead, then we are authors of our actions in the fullest sense, and responsibility means what we always thought it meant. But even here, most of us will admit that circumstance narrows the field of what a person can realistically choose. A child raised without stability will face a harder set of options than one raised with it, and pretending otherwise will not make us more just.
+
+So my claim is this: whichever way the metaphysics falls, the practical conclusion will look similar. We should hold people accountable, because accountability changes behavior, and we should temper that accountability with humility about what we would have done in their position. Free will may be the wrong thing to argue about. What we will actually do with each other is the better question.`,
+  },
 ];

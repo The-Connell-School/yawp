@@ -54,6 +54,7 @@ import { corpus, type CorpusCase } from './corpus';
 import { runGrading, AI_MODEL, type GradingRunResult } from './llm';
 import { judgePair, type JudgeVerdict } from './judge';
 import { containsWholeWordName, scanTextsForName } from './leak-scan';
+import { isCommonWordFirstName } from '../../services/web-app/app/utils/ai-redaction/common-word-names.server';
 import {
   computeCategoryDeltas,
   summarizeDistribution,
@@ -139,13 +140,18 @@ async function runCase(testCase: CorpusCase, index: number, total: number): Prom
     `${testCase.id} control`
   );
 
-  // TREATMENT: this branch's behavior -- pseudonym in the prompt, then
-  // rehydrate() the response back to the real name before use.
+  // TREATMENT: this branch's behavior -- pseudonym in the prompt AND the
+  // essay body redacted in prose mode (students sign their work and write
+  // about themselves by name), then rehydrate() the response back to the
+  // real name before use.
+  const redactedEssayText = redact(testCase.essayText, mapping, {
+    mode: 'prose',
+  });
   const treatmentRun: GradingRunResult = await withRetry(
     () =>
       runGrading({
         firstNameForPrompt: pseudonymFirstName,
-        essayText: testCase.essayText,
+        essayText: redactedEssayText,
       }),
     `${testCase.id} treatment`
   );
@@ -175,16 +181,23 @@ async function runCase(testCase: CorpusCase, index: number, total: number): Prom
   );
 
   // --- Leak scans -----------------------------------------------------
+  // A name that is also an ordinary English word is scanned capitalized-only,
+  // because prose redaction deliberately leaves the lowercase common word
+  // alone. This narrowing is reported per-case so it can't pass silently.
+  const commonWordName = isCommonWordFirstName(studentFirstName);
+  const leakScanOptions = { capitalizedOnly: commonWordName };
   const realNameInTreatmentOutboundPrompt = scanTextsForName(
     {
       system: treatmentRun.outboundSystem,
       userPrompt: treatmentRun.outboundUserPrompt,
     },
-    studentFirstName
+    studentFirstName,
+    leakScanOptions
   );
   const realNameInTreatmentRawResponse = containsWholeWordName(
     treatmentRun.rawResponseText,
-    studentFirstName
+    studentFirstName,
+    leakScanOptions
   );
   const pseudonymStrayInTreatmentFinalOutput = scanTextsForName(
     {
@@ -230,6 +243,7 @@ async function runCase(testCase: CorpusCase, index: number, total: number): Prom
     studentFullName: testCase.studentFullName,
     studentFirstName,
     pseudonymFirstName,
+    commonWordName,
     control: {
       categories: controlRun.categories,
       overallComment: controlRun.overallComment,
@@ -247,6 +261,7 @@ async function runCase(testCase: CorpusCase, index: number, total: number): Prom
     categoryDeltas,
     totalDelta: Math.round((treatmentTotalPercent - controlTotalPercent) * 100) / 100,
     leaks: {
+      leakScanNarrowedToCapitalized: commonWordName,
       realNameInTreatmentOutboundPrompt,
       realNameInTreatmentRawResponse,
       pseudonymStrayInTreatmentFinalOutput,
@@ -310,8 +325,13 @@ function buildReport(results: CaseResult[], errors: { id: string; error: string 
   lines.push('For each essay, the real grading prompt/response flow from `api.domain.grade-essay-ai/route.ts` (thesis-default rubric path) was run twice against the live Anthropic API with identical essay text and rubric:');
   lines.push('');
   lines.push('- **Control** — redaction disabled: the real first name is sent straight into the prompt (current production behavior).');
-  lines.push('- **Treatment** — redaction enabled: the real `buildRedactionMapping`/`redact` replace the first name with a pseudonym before the prompt is built, then the real `rehydrate` restores the real name in every returned comment (this branch\'s behavior).');
+  lines.push('- **Treatment** — redaction enabled: the real `buildRedactionMapping`/`redact` replace the first name with a pseudonym before the prompt is built AND redact it out of the essay body in prose mode, then the real `rehydrate` restores the real name in every returned comment (this branch\'s behavior).');
   lines.push('');
+  const narrowed = results.filter((r) => r.commonWordName);
+  if (narrowed.length > 0) {
+    lines.push(`**Stated limitation.** ${narrowed.length} case(s) use a first name that is also an ordinary English word (${narrowed.map((r) => r.studentFirstName).join(', ')}). Prose redaction leaves the lowercase common word in place on purpose — redacting every "will" out of a philosophy essay would destroy the text we are asking the model to grade. For those cases the leak scan therefore counts only capitalized occurrences. A lowercase occurrence of such a name does remain in the outbound payload.`);
+    lines.push('');
+  }
   lines.push('## Score delta distribution (treatment − control, weighted total %)');
   lines.push('');
   lines.push('| mean | median | stdev | min | max | n |');

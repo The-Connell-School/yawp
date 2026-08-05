@@ -1,4 +1,5 @@
 import type { RedactionMapping } from './mapping.server';
+import { isCommonWordFirstName } from './common-word-names.server';
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -49,35 +50,90 @@ function matchCase(sample: string, target: string): string {
  * for rehydrate). Possessive forms ('s / ’s) are captured separately
  * so only the name portion has its case rewritten.
  */
-function buildWholeWordAlternationRegex(names: Iterable<string>): RegExp | null {
+function buildWholeWordAlternationRegex(
+  names: Iterable<string>,
+  { caseInsensitive = true }: { caseInsensitive?: boolean } = {}
+): RegExp | null {
   const escaped = Array.from(names, escapeRegExp).filter(Boolean);
   if (escaped.length === 0) return null;
   // Longest first so a name that is a prefix of another doesn't shadow it.
   escaped.sort((a, b) => b.length - a.length);
-  return new RegExp(`\\b(${escaped.join('|')})(['’]s)?\\b`, 'gi');
+  return new RegExp(
+    `\\b(${escaped.join('|')})(['’]s)?\\b`,
+    caseInsensitive ? 'gi' : 'g'
+  );
 }
 
 /**
- * Replaces every real name in `text` with its request-scoped pseudonym,
- * before the text is sent to a third-party AI provider. Case-insensitive
- * and possessive-aware (Maya / MAYA / maya's / Maya’s all match), and
- * mirrors the matched occurrence's letter case onto the pseudonym so the
- * outbound prompt still reads naturally.
+ * `field` (the default) redacts case-insensitively, which is right for the
+ * short structured values we control: "Student first name: will" and
+ * "Will" are both the student.
+ *
+ * `prose` is for text the student wrote. It behaves identically except for
+ * names that are also ordinary English words, which must appear
+ * capitalized to be redacted - see common-word-names.server.ts for why.
  */
-export function redact(text: string, mapping: RedactionMapping): string {
-  if (!text) return text;
-  const realNames = Array.from(
-    mapping.realToPseudonym.values(),
-    (entry) => entry.realName
-  );
-  const regex = buildWholeWordAlternationRegex(realNames);
-  if (!regex) return text;
+export type RedactionMode = 'field' | 'prose';
 
+function replaceNames(
+  text: string,
+  regex: RegExp | null,
+  mapping: RedactionMapping
+): string {
+  if (!regex) return text;
   return text.replace(regex, (fullMatch, namePart: string, suffix = '') => {
     const entry = mapping.realToPseudonym.get(namePart.toLowerCase());
     if (!entry) return fullMatch;
     return matchCase(namePart, entry.pseudonym) + suffix;
   });
+}
+
+/**
+ * Replaces every real name in `text` with its request-scoped pseudonym,
+ * before the text is sent to a third-party AI provider. Possessive-aware
+ * (Maya / MAYA / maya's / Maya’s all match), and mirrors the matched
+ * occurrence's letter case onto the pseudonym so the outbound prompt still
+ * reads naturally.
+ *
+ * Pass `{ mode: 'prose' }` for student-authored text such as essay bodies.
+ */
+export function redact(
+  text: string,
+  mapping: RedactionMapping,
+  { mode = 'field' }: { mode?: RedactionMode } = {}
+): string {
+  if (!text) return text;
+  const realNames = Array.from(
+    mapping.realToPseudonym.values(),
+    (entry) => entry.realName
+  );
+
+  if (mode === 'field') {
+    return replaceNames(text, buildWholeWordAlternationRegex(realNames), mapping);
+  }
+
+  // Prose: common-word names only match capitalized, everything else stays
+  // case-insensitive. Two passes because the two groups need different flags.
+  const ordinary: string[] = [];
+  const commonWord: string[] = [];
+  for (const name of realNames) {
+    (isCommonWordFirstName(name) ? commonWord : ordinary).push(name);
+  }
+
+  let result = replaceNames(
+    text,
+    buildWholeWordAlternationRegex(ordinary),
+    mapping
+  );
+  result = replaceNames(
+    result,
+    buildWholeWordAlternationRegex(
+      commonWord.map(capitalizeWord),
+      { caseInsensitive: false }
+    ),
+    mapping
+  );
+  return result;
 }
 
 /**

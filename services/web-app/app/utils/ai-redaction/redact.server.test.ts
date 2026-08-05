@@ -102,3 +102,55 @@ describe('rehydrate', () => {
     expect(rehydrate('No names here.', mapping)).toBe('No names here.');
   });
 });
+
+describe('redact prose mode', () => {
+  test('redacts the student name written inside their own essay', () => {
+    const mapping = buildRedactionMapping(['Sophia']);
+    const pseudonym = mapping.realToPseudonym.get('sophia')!.pseudonym;
+
+    const essay =
+      'My grandmother never spoke of it. Sophia, she wrote, you must not be late.';
+    const out = redact(essay, mapping, { mode: 'prose' });
+
+    expect(out).not.toContain('Sophia');
+    expect(out).toContain(pseudonym);
+  });
+
+  test('does not mangle a common word that happens to be the student name', () => {
+    const mapping = buildRedactionMapping(['Will']);
+    const pseudonym = mapping.realToPseudonym.get('will')!.pseudonym;
+
+    const essay =
+      'I will argue that free will is an illusion, and that we will never settle it.';
+    const out = redact(essay, mapping, { mode: 'prose' });
+
+    expect(out).toBe(essay);
+    expect(out).not.toContain(pseudonym);
+  });
+
+  test('still redacts a common-word name when it is capitalized as a name', () => {
+    const mapping = buildRedactionMapping(['Grace']);
+    const pseudonym = mapping.realToPseudonym.get('grace')!.pseudonym;
+
+    const essay = 'Grace wrote this essay about grace under pressure.';
+    const out = redact(essay, mapping, { mode: 'prose' });
+
+    expect(out).toBe(`${pseudonym} wrote this essay about grace under pressure.`);
+  });
+
+  test('field mode stays case-insensitive for common-word names', () => {
+    const mapping = buildRedactionMapping(['Will']);
+    const pseudonym = mapping.realToPseudonym.get('will')!.pseudonym;
+
+    expect(redact('will', mapping)).toBe(pseudonym.toLowerCase());
+  });
+
+  test('prose redaction round-trips through rehydrate', () => {
+    const mapping = buildRedactionMapping(['Sophia']);
+    const essay = 'Sophia argued that Sophia’s silence was inherited.';
+
+    const redacted = redact(essay, mapping, { mode: 'prose' });
+    expect(redacted).not.toContain('Sophia');
+    expect(rehydrate(redacted, mapping)).toBe(essay);
+  });
+});

@@ -629,6 +629,14 @@ export async function action({ request }: ActionFunctionArgs) {
   // persisted.
   const gradingNameMapping = buildRedactionMapping([studentFirstName]);
   const pseudonymFirstName = redact(studentFirstName, gradingNameMapping);
+  // Students sign their work and write about themselves by name, so the
+  // essay body carries the real name just as surely as the name field does.
+  // Every prompt below sends `redactedEssayText`, never `submission.text`.
+  // Prose mode so a student named Will doesn't get every "will" in their
+  // own essay rewritten - see common-word-names.server.ts.
+  const redactedEssayText = redact(submission.text, gradingNameMapping, {
+    mode: 'prose',
+  });
   const model = process.env.AI_MODEL ?? 'claude-sonnet-4-6';
   // Grading prompts carry student first names and raw essay text; never let
   // an Anthropic outage silently route them to OpenAI, and never persist
@@ -681,7 +689,7 @@ In overallComment, start with "${pseudonymFirstName}," and continue with concise
 
     const apUserPrompt = buildApHistoryPrompt({
       snapshot: apHistorySnapshot,
-      essayText: submission.text,
+      essayText: redactedEssayText,
       studentFirstName: pseudonymFirstName,
     });
 
@@ -819,7 +827,7 @@ In overallComment, start with "${pseudonymFirstName}," and continue with concise
 
   if (templateInstructions.mode === 'unified') {
     system = `${gradingSystemBase}\nFollow the grading instructions in the user prompt exactly.`;
-    userPrompt = `Student first name: ${pseudonymFirstName}\n\nAssignment type grading config: ${resolvedGradingConfig.label}\n\nRubric category keys (use these exact keys in categories[].key):\n${rubricText}\n\nGrading instructions:\n${templateInstructions.gradingInstructions}\n\nEssay:\n${submission.text}`;
+    userPrompt = `Student first name: ${pseudonymFirstName}\n\nAssignment type grading config: ${resolvedGradingConfig.label}\n\nRubric category keys (use these exact keys in categories[].key):\n${rubricText}\n\nGrading instructions:\n${templateInstructions.gradingInstructions}\n\nEssay:\n${redactedEssayText}`;
   } else {
     const rubricInstructions =
       templateInstructions.mode === 'legacy-split' ||
@@ -839,7 +847,7 @@ In overallComment, start with "${pseudonymFirstName}," and continue with concise
       ? `${systemInstructions}\n\n`
       : '';
     system = `${templateSystemInstructions}${gradingSystemBase}\nUse the rubric language, proficiency bands, and category weights from the user prompt exactly.\n${scoreInstructions}`;
-    userPrompt = `Student first name: ${pseudonymFirstName}\n\nAssignment type grading config: ${resolvedGradingConfig.label}\n\nRubric category keys (use these exact keys in categories[].key):\n${rubricText}\n\nRubric Instructions:\n${rubricInstructions}\n\nEssay:\n${submission.text}`;
+    userPrompt = `Student first name: ${pseudonymFirstName}\n\nAssignment type grading config: ${resolvedGradingConfig.label}\n\nRubric category keys (use these exact keys in categories[].key):\n${rubricText}\n\nRubric Instructions:\n${rubricInstructions}\n\nEssay:\n${redactedEssayText}`;
   }
 
   let responseText = '';
@@ -888,7 +896,7 @@ In overallComment, start with "${pseudonymFirstName}," and continue with concise
       messages: [
         {
           role: 'user',
-          content: `Student first name: ${pseudonymFirstName}\n\nEssay:\n${submission.text}\n\nRubric category feedback:\n${JSON.stringify(categories)}`,
+          content: `Student first name: ${pseudonymFirstName}\n\nEssay:\n${redactedEssayText}\n\nRubric category feedback:\n${JSON.stringify(categories)}`,
         },
       ],
       maxTokens: 300,
@@ -1019,7 +1027,13 @@ In overallComment, start with "${pseudonymFirstName}," and continue with concise
     )?.score ?? null;
 
   let grammarIssues: Prisma.InputJsonValue | null = null;
-  const parseGrammarIssuesFromResponseText = (responseText: string) => {
+  const parseGrammarIssuesFromResponseText = (rawResponseText: string) => {
+    // The checker read the redacted essay, so any excerpt quoting the
+    // student's name comes back carrying the pseudonym. Rehydrate before
+    // parsing: excerpts are anchored by matching them against the real
+    // `submission.text`, and a pseudonym would simply fail to match and
+    // silently drop the issue.
+    const responseText = rehydrate(rawResponseText, gradingNameMapping);
     try {
       const parsedGrammarJson = parseFirstJsonValue(responseText);
       const parsedFromJson = parseGrammarIssuesPayload(parsedGrammarJson, {
@@ -1073,7 +1087,7 @@ In overallComment, start with "${pseudonymFirstName}," and continue with concise
     try {
       const grammarSystem = `You are the Grammar/Usage Checker.\nReturn ONLY valid JSON with the schema:\n{\n  \"issues\": [{\n    \"excerpt\": string,\n    \"occurrence\"?: number,\n    \"kind\": \"error\"|\"style\",\n    \"ruleNumber\"?: number,\n    \"rule\"?: string,\n    \"message\": string\n  }]\n}\nRules:\n- Highlight the smallest exact excerpt that demonstrates the issue (max 120 characters).\n- If the excerpt appears multiple times, set occurrence to the 1-based match index.\n- Keep message brief (1-2 sentences). State the rule plainly; do not offer to fix it for the student.\n- Focus on essentials: usage, composition, comma/semicolon rules, and omit needless words.\n\nComma rules:\n(1) In a series of three or more terms with a single conjunction, use a comma after each term except the last.\n(2) Enclose parenthetic expressions between commas.\n(3) Do not join independent clauses with a comma (comma splice); use a semicolon, conjunction, or separate sentences.\nSemicolon rule:\nUse a semicolon to join closely related independent clauses.\n\nStyle:\n(10) Omit needless words.`;
 
-      const grammarUserPrompt = `Essay:\n${submission.text}\n\nReturn up to 15 issues.`;
+      const grammarUserPrompt = `Essay:\n${redactedEssayText}\n\nReturn up to 15 issues.`;
 
       let grammarResponseText = await getGradingLlmCompletion({
         model,
@@ -1101,7 +1115,7 @@ In overallComment, start with "${pseudonymFirstName}," and continue with concise
           messages: [
             {
               role: 'user',
-              content: `Essay:\n${submission.text}\n\nReturn 8-12 issues using the exact schema. Do not include markdown.`,
+              content: `Essay:\n${redactedEssayText}\n\nReturn 8-12 issues using the exact schema. Do not include markdown.`,
             },
           ],
           maxTokens: 1600,

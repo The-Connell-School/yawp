@@ -20,10 +20,24 @@ function escapeRegExp(value: string): string {
  * prompt (treatment) and to confirm a pseudonym did not survive
  * rehydration into a final response.
  */
-export function containsWholeWordName(text: string, name: string): boolean {
+export function containsWholeWordName(
+  text: string,
+  name: string,
+  { capitalizedOnly = false }: { capitalizedOnly?: boolean } = {}
+): boolean {
   const trimmed = name.trim();
   if (!trimmed || !text) return false;
-  const regex = new RegExp(`\\b${escapeRegExp(trimmed)}(['’]s)?\\b`, 'i');
+  // For names that are also ordinary English words (Will, Grace, Rose), a
+  // lowercase occurrence in an essay is the common word, not a disclosure
+  // of who the student is, and prose redaction deliberately leaves it
+  // alone. Scanning case-insensitively there would report a leak on every
+  // "will" in a philosophy essay. The report states this narrowing
+  // explicitly rather than hiding it behind a green check.
+  const capitalized =
+    trimmed.charAt(0).toUpperCase() + trimmed.slice(1).toLowerCase();
+  const regex = capitalizedOnly
+    ? new RegExp(`\\b${escapeRegExp(capitalized)}(['’]s)?\\b`)
+    : new RegExp(`\\b${escapeRegExp(trimmed)}(['’]s)?\\b`, 'i');
   return regex.test(text);
 }
 
@@ -34,10 +48,11 @@ export interface LeakScanResult {
 
 export function scanTextsForName(
   texts: Record<string, string>,
-  name: string
+  name: string,
+  options: { capitalizedOnly?: boolean } = {}
 ): LeakScanResult {
   const matches = Object.entries(texts)
-    .filter(([, text]) => containsWholeWordName(text, name))
+    .filter(([, text]) => containsWholeWordName(text, name, options))
     .map(([label]) => label);
   return { found: matches.length > 0, matches };
 }
