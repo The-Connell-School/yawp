@@ -12,6 +12,11 @@ import {
   scoreToPercent,
 } from '~/domain/grading/gradeMath';
 import { firstNameFromFullName } from '~/domain/grading/personalize';
+import {
+  buildRedactionMapping,
+  redact,
+  rehydrate,
+} from '~/utils/ai-redaction';
 import { parseGrammarIssuesPayload } from '~/domain/grading/grammarIssues';
 import { resolveAssignmentTypeGradingConfig } from '~/domain/assignment-types/assignment-type-grading-config.server';
 import type { RubricCategory as GradingRubricCategory } from '~/domain/assignment-types/assignment-type-rubric.shared';
@@ -618,6 +623,14 @@ export async function action({ request }: ActionFunctionArgs) {
   const studentFirstName = firstNameFromFullName(
     submission.document.membership?.user?.name
   );
+  // The student's real first name never leaves our servers: every prompt
+  // sent to the AI provider below uses `pseudonymFirstName`, and every
+  // piece of model-authored feedback is rehydrated back to the real name
+  // before it is persisted or returned to the caller. This mapping is
+  // in-memory only for the life of this request - it is never logged or
+  // persisted.
+  const gradingNameMapping = buildRedactionMapping([studentFirstName]);
+  const pseudonymFirstName = redact(studentFirstName, gradingNameMapping);
   const model = process.env.AI_MODEL ?? 'claude-sonnet-4-6';
   const forceFallback = data.llmRetry === 'fallback';
   const llmRetryOptions = {
@@ -669,12 +682,12 @@ Grade the APUSH ${apHistorySnapshot.essayType.toUpperCase()} using the supplied 
 Use only evidence from the essay and snapshot.
 For DBQ, score these point keys: ${apHistoryDbqPointKeys.join(', ')}.
 For LEQ, score these point keys: ${apHistoryLeqPointKeys.join(', ')}.
-In overallComment, start with "${studentFirstName}," and continue with concise, actionable AP History feedback.`;
+In overallComment, start with "${pseudonymFirstName}," and continue with concise, actionable AP History feedback.`;
 
     const apUserPrompt = buildApHistoryPrompt({
       snapshot: apHistorySnapshot,
       essayText: submission.text,
-      studentFirstName,
+      studentFirstName: pseudonymFirstName,
     });
 
     let parsedJson: Record<string, unknown>;
@@ -760,7 +773,7 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
     const overallComment =
       typeof parsedJson.overallComment === 'string' &&
       parsedJson.overallComment.trim()
-        ? parsedJson.overallComment
+        ? rehydrate(parsedJson.overallComment, gradingNameMapping)
         : `${studentFirstName}, your AP History response has been scored with the ${apHistorySnapshot.rubric.rubricId} rubric.`;
     const grammarIssues = null;
     const now = new Date();
@@ -805,14 +818,14 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
     });
   }
 
-  const gradingSystemBase = `You are a grading assistant. Return ONLY valid JSON with the schema:\n{\n  \"categories\": [{\"key\": string, \"score\": ${minScore}-${maxScore}, \"comment\": string}],\n  \"overallComment\": string\n}\nScores must be integers ${minScore}-${maxScore}.\nReturn exactly one category for each rubric key provided.\nProvide concise, actionable comments.\nIn overallComment, start with \"${studentFirstName},\" and continue with cohesive feedback in a warm but professional tone.\nAfter the name, continue naturally (for example: \"${studentFirstName}, you ...\").\nDo not use fixed lead-ins like \"Overall grade,\" or \"${studentFirstName}, this is your overall feedback.\"`;
+  const gradingSystemBase = `You are a grading assistant. Return ONLY valid JSON with the schema:\n{\n  \"categories\": [{\"key\": string, \"score\": ${minScore}-${maxScore}, \"comment\": string}],\n  \"overallComment\": string\n}\nScores must be integers ${minScore}-${maxScore}.\nReturn exactly one category for each rubric key provided.\nProvide concise, actionable comments.\nIn overallComment, start with \"${pseudonymFirstName},\" and continue with cohesive feedback in a warm but professional tone.\nAfter the name, continue naturally (for example: \"${pseudonymFirstName}, you ...\").\nDo not use fixed lead-ins like \"Overall grade,\" or \"${pseudonymFirstName}, this is your overall feedback.\"`;
 
   let system = gradingSystemBase;
   let userPrompt = '';
 
   if (templateInstructions.mode === 'unified') {
     system = `${gradingSystemBase}\nFollow the grading instructions in the user prompt exactly.`;
-    userPrompt = `Student first name: ${studentFirstName}\n\nAssignment type grading config: ${resolvedGradingConfig.label}\n\nRubric category keys (use these exact keys in categories[].key):\n${rubricText}\n\nGrading instructions:\n${templateInstructions.gradingInstructions}\n\nEssay:\n${submission.text}`;
+    userPrompt = `Student first name: ${pseudonymFirstName}\n\nAssignment type grading config: ${resolvedGradingConfig.label}\n\nRubric category keys (use these exact keys in categories[].key):\n${rubricText}\n\nGrading instructions:\n${templateInstructions.gradingInstructions}\n\nEssay:\n${submission.text}`;
   } else {
     const rubricInstructions =
       templateInstructions.mode === 'legacy-split' ||
@@ -832,7 +845,7 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
       ? `${systemInstructions}\n\n`
       : '';
     system = `${templateSystemInstructions}${gradingSystemBase}\nUse the rubric language, proficiency bands, and category weights from the user prompt exactly.\n${scoreInstructions}`;
-    userPrompt = `Student first name: ${studentFirstName}\n\nAssignment type grading config: ${resolvedGradingConfig.label}\n\nRubric category keys (use these exact keys in categories[].key):\n${rubricText}\n\nRubric Instructions:\n${rubricInstructions}\n\nEssay:\n${submission.text}`;
+    userPrompt = `Student first name: ${pseudonymFirstName}\n\nAssignment type grading config: ${resolvedGradingConfig.label}\n\nRubric category keys (use these exact keys in categories[].key):\n${rubricText}\n\nRubric Instructions:\n${rubricInstructions}\n\nEssay:\n${submission.text}`;
   }
 
   let responseText = '';
@@ -878,11 +891,11 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
   ) => {
     const overallCommentResponseText = await getGradingLlmCompletion({
       model,
-      system: `You write the overall feedback sentence for a grading assistant. Return ONLY valid JSON with the schema:\n{\n  "overallComment": string\n}\nRules:\n- overallComment must start with "${studentFirstName},".\n- Keep it warm, professional, and cohesive.\n- Do not include markdown or explanation.`,
+      system: `You write the overall feedback sentence for a grading assistant. Return ONLY valid JSON with the schema:\n{\n  "overallComment": string\n}\nRules:\n- overallComment must start with "${pseudonymFirstName},".\n- Keep it warm, professional, and cohesive.\n- Do not include markdown or explanation.`,
       messages: [
         {
           role: 'user',
-          content: `Student first name: ${studentFirstName}\n\nEssay:\n${submission.text}\n\nRubric category feedback:\n${JSON.stringify(categories)}`,
+          content: `Student first name: ${pseudonymFirstName}\n\nEssay:\n${submission.text}\n\nRubric category feedback:\n${JSON.stringify(categories)}`,
         },
       ],
       maxTokens: 300,
@@ -935,7 +948,7 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
 
     const repairedResponseText = await getGradingLlmCompletion({
       model,
-      system: `You repair grading assistant JSON. Return ONLY valid JSON with the schema:\n{\n  "categories": [{"key": string, "score": ${minScore}-${maxScore}, "comment": string}],\n  "overallComment": string\n}\nRules:\n- Preserve valid category scores/comments from the original output when possible.\n- Scores must be integers ${minScore}-${maxScore}.\n- Return exactly one category for each rubric key.\n- Use only these rubric keys: ${rubricKeys.join(', ')}.\n- overallComment must start with "${studentFirstName},".\n- Do not include markdown or explanation.`,
+      system: `You repair grading assistant JSON. Return ONLY valid JSON with the schema:\n{\n  "categories": [{"key": string, "score": ${minScore}-${maxScore}, "comment": string}],\n  "overallComment": string\n}\nRules:\n- Preserve valid category scores/comments from the original output when possible.\n- Scores must be integers ${minScore}-${maxScore}.\n- Return exactly one category for each rubric key.\n- Use only these rubric keys: ${rubricKeys.join(', ')}.\n- overallComment must start with "${pseudonymFirstName},".\n- Do not include markdown or explanation.`,
       messages: [
         {
           role: 'user',
@@ -983,13 +996,16 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
   >((acc, item) => {
     acc[item.key] = {
       score: item.score,
-      comment: item.comment,
+      // Defensive: the model isn't instructed to use the student's name in
+      // per-category comments, but rehydrate here too in case it echoes
+      // the pseudonym from the essay/rubric context anyway.
+      comment: rehydrate(item.comment, gradingNameMapping),
       isAi: true,
     };
     return acc;
   }, {});
 
-  const overallComment = parsed.overallComment;
+  const overallComment = rehydrate(parsed.overallComment, gradingNameMapping);
   const baseGradeFields = buildDynamicGradeFields({
     categories: parsed.categories,
     rubricScores,

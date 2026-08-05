@@ -337,6 +337,58 @@ describe('api.domain.grade-essay-ai', () => {
     });
   });
 
+  test('redacts the student first name from every outbound prompt and rehydrates it in the persisted/returned feedback', async () => {
+    const { buildRedactionMapping, redact } = await import(
+      '~/utils/ai-redaction'
+    );
+    const mapping = buildRedactionMapping(['Jordan']);
+    const pseudonym = redact('Jordan', mapping);
+
+    getLLMCompletion.mockReset();
+    getLLMCompletion
+      .mockResolvedValueOnce(
+        JSON.stringify({
+          categories: rubricKeys.map((key) => ({
+            key,
+            score: 3,
+            comment: `Comment for ${key}`,
+          })),
+          overallComment: `${pseudonym}, this draft has clear progress and focus.`,
+        })
+      )
+      .mockResolvedValueOnce(JSON.stringify({ issues: [] }));
+
+    prisma.submission.findFirst.mockResolvedValue(
+      mockSubmission({ id: 'sub-redact' })
+    );
+
+    const form = new FormData();
+    form.append('submissionId', 'sub-redact');
+
+    const response = await action({
+      request: new Request('https://example.com/api/domain/grade-essay-ai', {
+        method: 'POST',
+        body: form,
+      }),
+    } as any);
+    const payload = (response as { data: Record<string, unknown> }).data;
+
+    // The model only ever saw the pseudonym.
+    for (const call of getLLMCompletion.mock.calls) {
+      const args = call[0];
+      expect(args.system ?? '').not.toContain('Jordan');
+      expect(JSON.stringify(args.messages)).not.toContain('Jordan');
+    }
+
+    // The teacher/student-facing output has the real name back.
+    expect(payload.overallComment).toBe(
+      'Jordan, this draft has clear progress and focus.'
+    );
+    expect(
+      (prisma.submission.update.mock.calls[0]?.[0].data as any).overallComment
+    ).toBe('Jordan, this draft has clear progress and focus.');
+  });
+
   test('starts the grading deadline before request preflight work', async () => {
     const originalTimeout = AbortSignal.timeout;
     const timeout = mock((milliseconds: number) =>
