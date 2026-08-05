@@ -255,3 +255,30 @@ describe('looksLikeLessonPlan', () => {
     expect(looksLikeLessonPlan('Which class is this for?')).toBe(false);
   });
 });
+
+describe('withStandardSuggestions — a plan on the very first reply', () => {
+  test('offers the artifacts rather than the intake option', () => {
+    // A teacher who gave full context up front gets a plan immediately. Pinning
+    // "look at my classes and tell me what they need work on" after a finished
+    // plan is nonsense; the deck and the handout are what comes next.
+    const merged = withStandardSuggestions([], {
+      isOpeningReply: true,
+      deliveredPlan: true,
+    });
+
+    expect(merged).not.toContain(STANDARD_OPENING_SUGGESTION);
+    expect(merged.slice(0, 2)).toEqual([
+      FOLLOW_ON_SUGGESTIONS.deck,
+      FOLLOW_ON_SUGGESTIONS.handout,
+    ]);
+  });
+
+  test('still pins the intake option when the opening reply is a question', () => {
+    expect(
+      withStandardSuggestions(['English 10 · Period 3'], {
+        isOpeningReply: true,
+        deliveredPlan: false,
+      })[0]
+    ).toBe(STANDARD_OPENING_SUGGESTION);
+  });
+});

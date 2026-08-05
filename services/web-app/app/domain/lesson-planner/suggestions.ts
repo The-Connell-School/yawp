@@ -197,7 +197,11 @@ export function withStandardSuggestions(
     deduped.push(suggestion);
   }
 
-  if (isOpeningReply) {
+  // A teacher who gave full context up front gets a plan on the very first
+  // reply. Pinning "look at my classes and tell me what they need work on"
+  // after a finished plan reads as though nothing was just handed over — what
+  // they want next is the deck and the handout.
+  if (isOpeningReply && !deliveredPlan) {
     return [
       STANDARD_OPENING_SUGGESTION,
       ...deduped.filter(
