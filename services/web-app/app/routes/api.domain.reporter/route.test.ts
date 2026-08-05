@@ -164,6 +164,36 @@ describe('api.domain.reporter action', () => {
     );
   });
 
+  test('never sends the real organization name to the LLM, and rehydrates a pseudonym in the reply', async () => {
+    const { createRedactionSession, ORG_PSEUDONYM_NAME_POOL } = await import(
+      '~/utils/ai-redaction'
+    );
+    // The org pseudonym is deterministic, so compute the same value the
+    // route will compute to make the model "echo" it back in its reply.
+    const orgPseudonym = createRedactionSession(
+      ORG_PSEUDONYM_NAME_POOL
+    ).pseudonymFor('Test Org');
+
+    getLLMCompletion.mockResolvedValue(`Sure - things at ${orgPseudonym} look solid.`);
+    prisma.reporterConversation.create.mockResolvedValue({
+      id: 'conv-org',
+      messages: [],
+    });
+    prisma.reporterConversation.update.mockResolvedValue({});
+
+    const response = await action({
+      request: formRequest({ message: 'How are things?' }),
+    } as any);
+    const body = (await response.data) as any;
+
+    const llmArgs = getLLMCompletion.mock.calls[0][0];
+    expect(llmArgs.system).not.toContain('Test Org');
+    expect(llmArgs.system).toContain(orgPseudonym);
+
+    // The teacher never sees the pseudonym - the real org name is restored.
+    expect(body.reply).toBe('Sure - things at Test Org look solid.');
+  });
+
   test('continues an existing conversation with prior messages', async () => {
     prisma.reporterConversation.findFirst.mockResolvedValue({
       id: 'conv-9',
@@ -440,10 +470,13 @@ describe('api.domain.reporter action', () => {
     expect(handleReporterToolCall).toHaveBeenCalledWith(
       'save_growth_plan',
       proposal,
-      {
+      expect.objectContaining({
         membershipId: 'teacher-1',
         organizationId: 'org-1',
-      }
+        nameRedaction: expect.objectContaining({
+          pseudonymFor: expect.any(Function),
+        }),
+      })
     );
     expect(reserveAiRequest).not.toHaveBeenCalled();
     expect(getLLMCompletion).not.toHaveBeenCalled();

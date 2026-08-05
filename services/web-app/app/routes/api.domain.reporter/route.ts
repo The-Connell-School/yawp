@@ -14,6 +14,11 @@ import {
   AiRateLimitError,
   reserveAiRequest,
 } from '~/utils/ai-admission.server';
+import {
+  createRedactionSession,
+  ORG_PSEUDONYM_NAME_POOL,
+  rehydrate,
+} from '~/utils/ai-redaction';
 
 const REPORTER_FAILED =
   'The reporter could not put that together. Please try again.';
@@ -98,10 +103,17 @@ export async function action({ request }: ActionFunctionArgs) {
   const { error, data } = await parseFormData(request, POST);
   if (error) return validationError(error);
 
+  // Request-scoped, in-memory only - never persisted or logged. Grows as
+  // tool calls surface new student names; the org-name session is separate
+  // so a school name never gets mistaken for a student pseudonym.
+  const nameRedaction = createRedactionSession();
+  const orgRedaction = createRedactionSession(ORG_PSEUDONYM_NAME_POOL);
+
   const ctx = {
     membershipId: access.membership.id,
     organizationId: access.membership.organization.id,
     pendingGrowthPlanSaves: new Map(),
+    nameRedaction,
   };
 
   // Load an existing conversation (scoped to this teacher) or start a new one.
@@ -144,6 +156,10 @@ export async function action({ request }: ActionFunctionArgs) {
       await handleReporterToolCall('save_growth_plan', proposal, {
         membershipId: ctx.membershipId,
         organizationId: ctx.organizationId,
+        // This confirmation never touches the LLM - the teacher is
+        // confirming a plan already shown to them with real names - so an
+        // empty, unused redaction session is correct here.
+        nameRedaction: ctx.nameRedaction,
       })
     ) as { error?: string; saved?: boolean };
     if (result.error || !result.saved) {
@@ -188,7 +204,9 @@ export async function action({ request }: ActionFunctionArgs) {
 
   const system = buildReporterSystemPrompt({
     teacherName: null,
-    organizationName: access.membership.organization.name,
+    organizationName: orgRedaction.pseudonymFor(
+      access.membership.organization.name
+    ),
   });
 
   const messages: { role: AgentType; content: string; name?: string }[] = [
@@ -219,6 +237,12 @@ export async function action({ request }: ActionFunctionArgs) {
   } catch (err) {
     return dataResponse({ error: REPORTER_FAILED }, { status: 500 });
   }
+
+  // The model only ever saw pseudonyms for student names and the
+  // organization name; restore the real ones before the teacher's UI or
+  // the database sees this text.
+  reply = rehydrate(reply, nameRedaction.mapping);
+  reply = rehydrate(reply, orgRedaction.mapping);
 
   // Stamp explicit, strictly-increasing timestamps: both rows land in one
   // nested create, so the DB default would give them the same createdAt and
