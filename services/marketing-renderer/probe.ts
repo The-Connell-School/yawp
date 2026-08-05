@@ -9,28 +9,30 @@
  *   docker exec <renderer> bash -lc "cd /app/services/marketing-renderer && bun run probe.ts"
  */
 import { chromium } from 'playwright';
-import { parseSessionCookies } from './src/session';
+import {
+  fetchPreviewAccessCookies,
+  parseSessionCookies,
+} from './src/session';
 
 const base = process.env.MARKETING_RENDER_TARGET_URL;
 if (!base) throw new Error('MARKETING_RENDER_TARGET_URL is not set');
 
-// Same credential handling as the worker: a gated preview target needs the
-// shared basic-auth credential on the login fetch and in the browser.
-const rawBasicAuth = process.env.MARKETING_RENDERER_BASIC_AUTH?.trim();
-const basicAuth = rawBasicAuth
-  ? {
-      username: rawBasicAuth.slice(0, rawBasicAuth.indexOf(':')),
-      password: rawBasicAuth.slice(rawBasicAuth.indexOf(':') + 1),
-    }
-  : undefined;
+// Same gate handling as the worker: clear the access gate first, because even
+// the dev-login POST is refused without the access cookie.
+const accessCode = process.env.MARKETING_RENDERER_ACCESS_CODE?.trim();
+let accessCookies: { name: string; value: string; url: string }[] = [];
+if (accessCode) {
+  accessCookies = await fetchPreviewAccessCookies(base, accessCode);
+  console.log('preview access: cleared with a seat code');
+}
 
 const loginHeaders: Record<string, string> = {
   'content-type': 'application/x-www-form-urlencoded',
 };
-if (basicAuth) {
-  loginHeaders.authorization = `Basic ${Buffer.from(
-    `${basicAuth.username}:${basicAuth.password}`
-  ).toString('base64')}`;
+if (accessCookies.length > 0) {
+  loginHeaders.cookie = accessCookies
+    .map((cookie) => `${cookie.name}=${cookie.value}`)
+    .join('; ');
 }
 const login = await fetch(new URL('/auth/dev-login', base), {
   method: 'POST',
@@ -50,9 +52,11 @@ const chromiumPath =
 const browser = await chromium.launch({ headless: true, executablePath: chromiumPath });
 const context = await browser.newContext({
   viewport: { width: 1280, height: 800 },
-  httpCredentials: basicAuth,
 });
-await context.addCookies(parseSessionCookies(setCookies, base));
+await context.addCookies([
+  ...accessCookies,
+  ...parseSessionCookies(setCookies, base),
+]);
 const page = await context.newPage();
 
 await page.goto(new URL('/app', base).toString(), {

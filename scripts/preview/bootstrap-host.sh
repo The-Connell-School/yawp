@@ -79,43 +79,10 @@ YAML
 docker compose -p "$POSTGRES_PROJECT" -f "$ROOT/postgres/docker-compose.yml" up -d
 connect_container_to_preview_network preview-postgres
 
-# Host-level access gate.
-#
-# Each preview's own compose also attaches a basicauth middleware to its routers, but
-# those labels come from whatever revision of render-compose.mjs that PR's branch happens
-# to carry. Eighteen previews deployed before the gate existed stayed wide open, and no
-# redeploy would have fixed them, because a redeploy re-runs the PR branch's own scripts.
-# Applying the middleware at the entrypoint covers every router on the host regardless of
-# which revision deployed it, and a stale branch cannot opt itself out.
-#
-# websecure only, deliberately: the ACME HTTP-01 challenge is answered on the `web`
-# entrypoint, and an entrypoint middleware there could block certificate renewal — a
-# failure that would not surface for weeks, on a host reachable only through CI.
-# HTTP is handled by redirecting to HTTPS instead, which leaves the challenge path alone.
-# removeHeader must stay FALSE here. Previews deployed since the gate existed attach
-# their own per-router basicauth middleware with the same credential; if the entrypoint
-# gate strips the Authorization header after validating it, that second middleware sees
-# an anonymous request and 401s every authenticated call — the healthcheck can never
-# pass and no new preview can deploy. The router-level middleware still sets
-# removeheader=true, so the credential is stripped before reaching the app on every
-# preview that carries those labels; only the legacy label-less previews forward it.
-mkdir -p "$ROOT/traefik/dynamic"
-if [[ -n "${PREVIEW_BASIC_AUTH:-}" ]]; then
-  cat > "$ROOT/traefik/dynamic/access-gate.yml" <<YAML
-http:
-  middlewares:
-    preview-gate:
-      basicAuth:
-        users:
-          - "${PREVIEW_BASIC_AUTH}"
-        removeHeader: false
-YAML
-  gate_entrypoint_args='      - --entrypoints.websecure.http.middlewares=preview-gate@file'
-else
-  rm -f "$ROOT/traefik/dynamic/access-gate.yml"
-  gate_entrypoint_args=''
-  echo "WARNING: PREVIEW_BASIC_AUTH not set - host-level preview gate is NOT applied." >&2
-fi
+# Remove the legacy entrypoint-wide Basic auth configuration. Access control now belongs
+# to each React Router app so it can render the branded gate while still protecting its
+# loaders, actions, and APIs.
+rm -f "$ROOT/traefik/dynamic/access-gate.yml"
 
 cat > "$ROOT/traefik/docker-compose.yml" <<YAML
 services:
@@ -125,13 +92,10 @@ services:
     command:
       - --providers.docker=true
       - --providers.docker.exposedbydefault=false
-      - --providers.file.directory=/dynamic
-      - --providers.file.watch=true
       - --entrypoints.web.address=:80
       - --entrypoints.web.http.redirections.entrypoint.to=websecure
       - --entrypoints.web.http.redirections.entrypoint.scheme=https
       - --entrypoints.websecure.address=:443
-${gate_entrypoint_args}
       - --certificatesresolvers.letsencrypt.acme.httpchallenge=true
       - --certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web
       - --certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json
@@ -142,7 +106,6 @@ ${gate_entrypoint_args}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - ./letsencrypt:/letsencrypt
-      - ./dynamic:/dynamic:ro
     networks:
       - preview
 

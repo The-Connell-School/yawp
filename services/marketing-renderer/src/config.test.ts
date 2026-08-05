@@ -39,28 +39,21 @@ describe('loadConfig', () => {
     ).toThrow(ConfigError);
   });
 
-  test('parses a basic-auth credential for gated targets', () => {
+  // Previews sit behind an access-code gate; the renderer holds a seat code and
+  // trades it for the access cookie before filming.
+  test('carries a seat code for gated targets', () => {
     const config = loadConfig({
       ...BASE,
-      MARKETING_RENDERER_BASIC_AUTH: 'preview-admin:s3cret:with:colons',
+      MARKETING_RENDERER_ACCESS_CODE: 'brave-otter-4193',
     });
 
-    expect(config.basicAuth).toEqual({
-      username: 'preview-admin',
-      password: 's3cret:with:colons',
-    });
+    expect(config.accessCode).toBe('brave-otter-4193');
   });
 
-  test('omits the credential when none is configured', () => {
-    expect(loadConfig({ ...BASE }).basicAuth).toBeUndefined();
-  });
-
-  test('rejects a credential that is not user:password', () => {
-    for (const value of ['no-colon', ':leading', 'trailing:']) {
-      expect(() =>
-        loadConfig({ ...BASE, MARKETING_RENDERER_BASIC_AUTH: value })
-      ).toThrow(ConfigError);
-    }
+  // Local dev and the long-lived demo box have no gate, and a render there
+  // must not require a code it has no way to obtain.
+  test('omits the seat code when no gate is configured', () => {
+    expect(loadConfig({ ...BASE }).accessCode).toBeUndefined();
   });
 
   test('disk storage requires a media dir and drops the bucket requirement', () => {

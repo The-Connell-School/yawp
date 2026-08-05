@@ -44,21 +44,86 @@ function requireDataMode(value) {
   return dataMode;
 }
 
-export function requirePreviewBasicAuth(value) {
-  const credential = String(value ?? '').trim();
-  if (!credential) {
+export function requirePreviewAccessCodes(value) {
+  const codes = String(value ?? '')
+    .split(/[;,\n]/)
+    .map((code) => code.trim().toLowerCase())
+    .filter(Boolean);
+  if (codes.length === 0) {
+    throw new Error('PREVIEW_ACCESS_CODES is required for preview deployments');
+  }
+  if (codes.some((code) => !/^[a-z]+-[a-z]+-[1-9][0-9]{3}$/.test(code))) {
     throw new Error(
-      'PREVIEW_BASIC_AUTH is required for preview deployments',
+      'PREVIEW_ACCESS_CODES must contain two-word, four-digit codes',
     );
   }
+  return codes.join(',');
+}
+
+export function requirePreviewAccessSeats(value) {
+  const raw = String(value ?? '').trim();
+  if (!raw) {
+    throw new Error('PREVIEW_ACCESS_SEATS is required for preview deployments');
+  }
+
+  let parsed;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    throw new Error('PREVIEW_ACCESS_SEATS must be valid JSON');
+  }
+  if (!Array.isArray(parsed) || parsed.length === 0) {
+    throw new Error('PREVIEW_ACCESS_SEATS is required for preview deployments');
+  }
+
+  const seats = parsed.map((seat) => {
+    const code = String(seat?.code ?? '').trim().toLowerCase();
+    const organizationId = String(seat?.organizationId ?? '').trim();
+    const label = String(seat?.label ?? '').trim();
+    if (
+      !/^[a-z]+-[a-z]+-[1-9][0-9]{3}$/.test(code) ||
+      !/^[a-z0-9][a-z0-9-]{0,127}$/.test(organizationId) ||
+      !label ||
+      label.length > 100
+    ) {
+      throw new Error(
+        'PREVIEW_ACCESS_SEATS must contain valid code, organizationId, and label values',
+      );
+    }
+    return { code, organizationId, label };
+  });
   if (
-    !/^[A-Za-z0-9._-]+:\$apr1\$[^$\r\n]+\$[^$\r\n]+$/.test(credential)
+    new Set(seats.map(({ code }) => code)).size !== seats.length ||
+    new Set(seats.map(({ organizationId }) => organizationId)).size !==
+      seats.length
   ) {
     throw new Error(
-      'PREVIEW_BASIC_AUTH must be a single htpasswd-format credential (user:$apr1$...)',
+      'PREVIEW_ACCESS_SEATS must use a unique code and organization for every seat',
     );
   }
-  return credential;
+  return JSON.stringify(seats);
+}
+
+export function requirePreviewSessionSecret(value) {
+  const secret = String(value ?? '').trim();
+  if (!secret) {
+    throw new Error('PREVIEW_SESSION_SECRET is required for preview deployments');
+  }
+  if (secret.length < 32) {
+    throw new Error('PREVIEW_SESSION_SECRET must be at least 32 characters');
+  }
+  return secret;
+}
+
+export function requirePreviewAccessSecret(value) {
+  const secret = String(value ?? '').trim();
+  if (!secret) {
+    throw new Error('PREVIEW_ACCESS_SECRET is required for preview deployments');
+  }
+  if (secret.length < 32) {
+    throw new Error('PREVIEW_ACCESS_SECRET must be at least 32 characters');
+  }
+  return secret;
 }
 
 

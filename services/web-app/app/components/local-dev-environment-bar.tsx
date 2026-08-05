@@ -2,11 +2,12 @@ import {
   AlertTriangle,
   FlaskConical,
   GraduationCap,
+  KeyRound,
   Loader2,
   Shield,
   UserRound,
 } from 'lucide-react';
-import { useFetcher } from 'react-router';
+import { Form, useFetcher } from 'react-router';
 import { Badge } from '~/components/ui/badge';
 import {
   Popover,
@@ -29,6 +30,8 @@ type LocalDevEnvironmentBarProps = {
     enabled: boolean;
     options: LocalDevLoginOption[];
   };
+  previewAccessGateEnabled?: boolean;
+  previewAccessSeatLabel?: string | null;
 };
 
 const STAFF_ROLES = new Set(['admin', 'owner', 'teacher', 'teacher-multi']);
@@ -155,8 +158,12 @@ function LoginOptionGroup({
 
 function LocalDevQuickLoginPanel({
   options,
+  previewAccessGateEnabled,
+  previewAccessSeatLabel,
 }: {
   options: LocalDevLoginOption[];
+  previewAccessGateEnabled: boolean;
+  previewAccessSeatLabel: string | null;
 }) {
   const fetcher = useFetcher();
   const isSubmitting = fetcher.state !== 'idle';
@@ -187,13 +194,43 @@ function LocalDevQuickLoginPanel({
         isSubmitting={isSubmitting}
         submittingEmail={submittingEmail}
       />
+      {previewAccessGateEnabled ? (
+        <>
+          {options.length > 0 ? (
+            <div className="my-1.5 h-px bg-border/60" aria-hidden="true" />
+          ) : null}
+          {previewAccessSeatLabel ? (
+            <PreviewSeatIdentity label={previewAccessSeatLabel} />
+          ) : null}
+          <Form method="post" action="/auth/preview-access">
+            <input type="hidden" name="intent" value="sign-out" />
+            <button
+              type="submit"
+              className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:bg-accent focus-visible:outline-none"
+            >
+              <KeyRound className="size-4" aria-hidden="true" />
+              Re-enter access code
+            </button>
+          </Form>
+        </>
+      ) : null}
     </div>
+  );
+}
+
+export function PreviewSeatIdentity({ label }: { label: string }) {
+  return (
+    <p className="px-2 pb-1 pt-1.5 text-xs text-muted-foreground">
+      Current seat: <span className="font-semibold text-foreground">{label}</span>
+    </p>
   );
 }
 
 export function LocalDevEnvironmentBar({
   bannerWarning,
   localDevQuickLogin,
+  previewAccessGateEnabled = false,
+  previewAccessSeatLabel = null,
 }: LocalDevEnvironmentBarProps) {
   if (!bannerWarning) {
     return null;
@@ -208,7 +245,7 @@ export function LocalDevEnvironmentBar({
         ? 'Preview environment'
         : 'Local development environment';
 
-  if (!showQuickLogin) {
+  if (!showQuickLogin && !previewAccessGateEnabled) {
     return (
       <div data-environment-bar className="fixed bottom-4 right-4 z-30">
         <Tooltip
@@ -246,7 +283,11 @@ export function LocalDevEnvironmentBar({
           sideOffset={12}
           className="w-80 p-0"
         >
-          <LocalDevQuickLoginPanel options={options} />
+          <LocalDevQuickLoginPanel
+            options={options}
+            previewAccessGateEnabled={previewAccessGateEnabled}
+            previewAccessSeatLabel={previewAccessSeatLabel}
+          />
         </PopoverContent>
       </Popover>
     </div>

@@ -56,6 +56,7 @@ import useBreakpoint from '~/hooks/useBreakpoint';
 import { useUser } from '~/hooks/useUser';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
+import { hasEffectivePlatformAdmin } from '~/utils/preview-access.server';
 import { redirectWithToast } from '~/utils/toast.server';
 import { Comments } from './comments';
 import { CommentsSelectionProvider } from './comments/selection-context';
@@ -164,7 +165,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const doc = await prisma.document.findFirst({
     where: {
       id: params.id,
-      ...(user?.isAdmin
+      ...(hasEffectivePlatformAdmin(user?.isAdmin)
         ? {}
         : {
             OR: [
@@ -308,7 +309,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     isOwner &&
     profile.role === 'STUDENT' &&
     !wantsDraftEditor &&
-    !user?.isAdmin
+    !hasEffectivePlatformAdmin(user?.isAdmin)
   ) {
     const latestReleasedSubmission = pickLatestReleasedSubmission(submissions);
     if (latestReleasedSubmission) {

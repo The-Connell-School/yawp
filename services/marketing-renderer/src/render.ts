@@ -12,7 +12,11 @@ import {
 import { CURSOR_INIT_SCRIPT, setCursorVisibilityScript } from './cursor';
 import { frameClip, frameGeometry } from './frame';
 import { buildTranscodeArgs, shotFileName } from './jobs';
-import { parseSessionCookies, personaEmail } from './session';
+import {
+  fetchPreviewAccessCookies,
+  parseSessionCookies,
+  personaEmail,
+} from './session';
 
 export type RenderedFile = {
   path: string;
@@ -32,8 +36,8 @@ export type RenderParams = {
   loginPath?: string;
   chromiumPath?: string;
   ffmpegPath?: string;
-  /** Credential for a target behind a basic-auth gate, e.g. a preview environment. */
-  basicAuth?: { username: string; password: string };
+  /** Seat code for a target behind the preview access gate. */
+  accessCode?: string;
   /** Clip presentation. 'window' (default) re-shoots the capture inside a gradient + browser-chrome scene. */
   frameStyle?: 'window' | 'none';
   /** Scenes whose optional steps failed, reported back for the job record. */
@@ -182,18 +186,19 @@ async function login(
   baseUrl: string,
   loginPath: string,
   persona: MarketingPersona,
-  basicAuth?: { username: string; password: string }
+  accessCookies: { name: string; value: string; url: string }[] = []
 ): Promise<void> {
   const email = personaEmail(persona);
   const headers: Record<string, string> = {
     'content-type': 'application/x-www-form-urlencoded',
   };
-  // The browser context sends its own httpCredentials, but this fetch bypasses
-  // the browser, so a gated target needs the header here too.
-  if (basicAuth) {
-    headers.authorization = `Basic ${Buffer.from(
-      `${basicAuth.username}:${basicAuth.password}`
-    ).toString('base64')}`;
+  // The browser carries the access cookie itself, but this fetch bypasses the
+  // browser — and dev-login is behind the gate, so without the cookie here the
+  // login is refused before it ever reaches the app.
+  if (accessCookies.length > 0) {
+    headers.cookie = accessCookies
+      .map((cookie) => `${cookie.name}=${cookie.value}`)
+      .join('; ');
   }
   const response = await fetch(resolveUrl(baseUrl, loginPath), {
     method: 'POST',
@@ -217,9 +222,11 @@ async function login(
   }
 
   // Replace rather than merge, so switching personas mid-storyboard cannot
-  // leave the previous session's cookies attached.
+  // leave the previous session's cookies attached — but the access cookie is
+  // not part of the session and has to survive, or the next navigation lands
+  // on the gate instead of the app.
   await context.clearCookies();
-  await context.addCookies(cookies);
+  await context.addCookies([...accessCookies, ...cookies]);
 }
 
 /**
@@ -310,7 +317,7 @@ async function runStep(
     baseUrl: string;
     context: BrowserContext;
     loginPath: string;
-    basicAuth?: { username: string; password: string };
+    accessCookies: { name: string; value: string; url: string }[];
     cinematic: boolean;
     mouse: { x: number; y: number };
     persona: { current: MarketingPersona };
@@ -392,7 +399,7 @@ async function runStep(
         ctx.baseUrl,
         ctx.loginPath,
         step.persona,
-        ctx.basicAuth
+        ctx.accessCookies
       );
       ctx.persona.current = step.persona;
       await gotoAndSettle(page, resolveUrl(ctx.baseUrl, step.path));
@@ -495,7 +502,6 @@ export async function renderStoryboard(
       ? { dir: videoDir, size: storyboard.viewport }
       : undefined,
     // Lets page navigations through a basic-auth gate (preview environments).
-    httpCredentials: params.basicAuth,
   });
   // Applies to stills as well as clips — a screenshot carries the badge into
   // a deck just as readily as a video carries it into a feed.
@@ -558,13 +564,26 @@ export async function renderStoryboard(
   };
 
   try {
+    // Ahead of anything else: the gate refuses even the dev-login POST, so
+    // without this the render fails at its first step on any gated target.
+    let accessCookies: { name: string; value: string; url: string }[] = [];
+    if (params.accessCode) {
+      params.onStage?.('clearing the preview access gate');
+      accessCookies = await bounded(
+        'Preview access',
+        LOGIN_TIMEOUT_MS,
+        fetchPreviewAccessCookies(baseUrl, params.accessCode)
+      );
+      await context.addCookies(accessCookies);
+    }
+
     params.onStage?.(`signing in as ${storyboard.persona}`);
     await login(
       context,
       baseUrl,
       loginPath,
       storyboard.persona,
-      params.basicAuth
+      accessCookies
     );
 
     for (const scene of storyboard.scenes as StoryboardScene[]) {
@@ -589,7 +608,7 @@ export async function renderStoryboard(
             baseUrl,
             context,
             loginPath,
-            basicAuth: params.basicAuth,
+            accessCookies,
             cinematic: wantsVideo,
             mouse,
             persona,

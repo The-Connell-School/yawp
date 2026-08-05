@@ -1,5 +1,10 @@
 import { fileURLToPath } from 'node:url';
-import { buildPreviewEnv, requirePreviewBasicAuth } from './preview-env.mjs';
+import {
+  buildPreviewEnv,
+  requirePreviewAccessSecret,
+  requirePreviewAccessSeats,
+  requirePreviewSessionSecret,
+} from './preview-env.mjs';
 
 function q(value) {
   return JSON.stringify(String(value));
@@ -7,10 +12,6 @@ function q(value) {
 
 function optionalEnv(name, fallback = '') {
   return process.env[name] || fallback;
-}
-
-function escapeComposeInterpolation(value) {
-  return value.replace(/\$/g, () => '$$');
 }
 
 export function renderPreviewCompose({
@@ -22,9 +23,13 @@ export function renderPreviewCompose({
   enableTls = process.env.PREVIEW_TLS !== 'false',
   runtime = process.env.PREVIEW_RUNTIME || 'fast',
   dataMode = process.env.PREVIEW_DATA_MODE || 'seed',
-  basicAuth = process.env.PREVIEW_BASIC_AUTH,
+  accessSeats = process.env.PREVIEW_ACCESS_SEATS,
+  accessSecret = process.env.PREVIEW_ACCESS_SECRET,
+  sessionSecret = process.env.PREVIEW_SESSION_SECRET,
 } = {}) {
-  const previewBasicAuth = requirePreviewBasicAuth(basicAuth);
+  const previewAccessSeats = requirePreviewAccessSeats(accessSeats);
+  const previewAccessSecret = requirePreviewAccessSecret(accessSecret);
+  const previewSessionSecret = requirePreviewSessionSecret(sessionSecret);
   const env = buildPreviewEnv({
     prNumber,
     domain,
@@ -36,13 +41,11 @@ export function renderPreviewCompose({
     dataMode,
   });
   const routerBase = env.composeProject;
-  const authMiddleware = `${routerBase}-auth`;
-  const escapedBasicAuth = escapeComposeInterpolation(previewBasicAuth);
   const directPortBlock = env.directPort
     ? `\n    ports:\n      - ${q(`127.0.0.1:${env.directPort}:8080`)}`
     : '';
   const tlsLabels = enableTls
-    ? `\n      - ${q(`traefik.http.routers.${routerBase}-https.rule=Host(\`${env.hostname}\`)`)}\n      - ${q(`traefik.http.routers.${routerBase}-https.entrypoints=websecure`)}\n      - ${q(`traefik.http.routers.${routerBase}-https.tls.certresolver=letsencrypt`)}\n      - ${q(`traefik.http.routers.${routerBase}-https.service=${routerBase}`)}\n      - ${q(`traefik.http.routers.${routerBase}-https.middlewares=${authMiddleware}`)}`
+    ? `\n      - ${q(`traefik.http.routers.${routerBase}-https.rule=Host(\`${env.hostname}\`)`)}\n      - ${q(`traefik.http.routers.${routerBase}-https.entrypoints=websecure`)}\n      - ${q(`traefik.http.routers.${routerBase}-https.tls.certresolver=letsencrypt`)}\n      - ${q(`traefik.http.routers.${routerBase}-https.service=${routerBase}`)}`
     : '';
   const cookieSecure = enableTls ? '"true"' : '"false"';
   // The Marketing Studio films whatever these variables point at and publishes the
@@ -69,21 +72,22 @@ export function renderPreviewCompose({
           : ''
       }`
       : '';
-  // PREVIEW_ACCESS_GATE below is emitted by the same render that attaches the basicauth
-  // middleware to the router, and is only reachable because requirePreviewBasicAuth()
-  // already accepted a credential above — so the flag and the gate cannot drift apart.
-  // The app reads it to decide whether role-swap may be exposed; absent, it falls back
-  // to the local-only rule, so a compose file rendered without a gate never enables it.
+  // PREVIEW_ACCESS_GATE is consumed by the root route middleware itself. This render
+  // cannot emit that enforcement switch without validated seats and its own signing secret,
+  // so enabling role-swap necessarily enables the request-boundary gate too.
   const commonEnvironment = `      DATABASE_URL: ${q(env.databaseUrl)}
       DATABASE_SSL_REJECT_UNAUTHORIZED: "false"
       NODE_ENV: ${env.runtime === 'fast' ? 'development' : 'production'}
       YAWP_ENVIRONMENT: "preview"
       PREVIEW_DATA_MODE: ${q(env.dataMode)}
       PREVIEW_ACCESS_GATE: "on"
+      PREVIEW_ACCESS_SEATS: ${q(previewAccessSeats)}
+      PREVIEW_ACCESS_SECRET: ${q(previewAccessSecret)}
+      PREVIEW_SEAT_COUNT: ${q(optionalEnv('PREVIEW_SEAT_COUNT', '1'))}
       PORT: "8080"
       COOKIE_SECURE: ${cookieSecure}
       AWS_EC2_METADATA_DISABLED: "true"
-      SESSION_SECRET: ${q(optionalEnv('PREVIEW_SESSION_SECRET', 'preview-session-secret'))}
+      SESSION_SECRET: ${q(previewSessionSecret)}
       INTERNAL_COMMAND_TOKEN: ${q(optionalEnv('PREVIEW_INTERNAL_COMMAND_TOKEN', 'preview-internal-token'))}
       HONEYPOT_SECRET: ${q(optionalEnv('PREVIEW_HONEYPOT_SECRET', 'preview-honeypot-secret'))}
       AWS_S3_BUCKET_FOR_VIDEOS: ${q(optionalEnv('PREVIEW_AWS_S3_BUCKET_FOR_VIDEOS', 'preview-videos'))}
@@ -150,11 +154,14 @@ ${commonEnvironment}
   // https hostname — newer chromium refuses the session cookie over the plain
   // internal http route, and every page it filmed there was the logged-out
   // landing page. host-gateway points the hostname at this host's Traefik, and
-  // the worker carries the shared gate credential the way a reviewer's browser
-  // would.
-  const rendererBasicAuth = `${previewBasicAuth.split(':')[0]}:${optionalEnv(
-    'PREVIEW_BASIC_AUTH_PASSWORD'
-  )}`;
+  // the worker clears the access gate the way a reviewer does, by presenting a
+  // seat code.
+  //
+  // It reuses the first configured seat rather than getting one of its own: a
+  // seat is bound to a unique organization, so a renderer-only seat would need
+  // an organization the seed data never creates, and seat validation would
+  // reject it at request time.
+  const rendererAccessCode = JSON.parse(previewAccessSeats)[0].code;
   const rendererService = rendererEnabled
     ? `  renderer:
     image: mcr.microsoft.com/playwright:v1.60.0-jammy
@@ -168,7 +175,7 @@ ${fastVolumes}
       DATABASE_URL: ${q(env.databaseUrl)}
       DATABASE_SSL_REJECT_UNAUTHORIZED: "false"
       MARKETING_RENDER_TARGET_URL: ${q(`${enableTls ? 'https' : 'http'}://${env.hostname}`)}
-      MARKETING_RENDERER_BASIC_AUTH: ${q(escapeComposeInterpolation(rendererBasicAuth))}
+      MARKETING_RENDERER_ACCESS_CODE: ${q(rendererAccessCode)}
       MARKETING_RENDER_TARGET_IS_DEMO: "confirmed"
       MARKETING_MEDIA_STORAGE: "disk"
       MARKETING_MEDIA_DIR: "/media"
@@ -197,9 +204,7 @@ ${rendererService}${webService}    labels:
       - ${q(`traefik.http.routers.${routerBase}-http.rule=Host(\`${env.hostname}\`)`)}
       - ${q(`traefik.http.routers.${routerBase}-http.entrypoints=web`)}
       - ${q(`traefik.http.routers.${routerBase}-http.service=${routerBase}`)}
-      - ${q(`traefik.http.routers.${routerBase}-http.middlewares=${authMiddleware}`)}${tlsLabels}
-      - ${q(`traefik.http.middlewares.${authMiddleware}.basicauth.users=${escapedBasicAuth}`)}
-      - ${q(`traefik.http.middlewares.${authMiddleware}.basicauth.removeheader=true`)}
+${tlsLabels}
       - ${q(`traefik.http.services.${routerBase}.loadbalancer.server.port=8080`)}
     networks:
       - default

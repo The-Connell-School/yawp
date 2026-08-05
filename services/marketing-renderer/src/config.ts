@@ -35,8 +35,8 @@ export type RendererConfig = {
   chromiumPath?: string;
   ffmpegPath: string;
   loginPath: string;
-  /** Credential for a render target behind a basic-auth gate, e.g. a preview environment. */
-  basicAuth?: { username: string; password: string };
+  /** Seat code for a render target behind the preview access gate. */
+  accessCode?: string;
 };
 
 export class ConfigError extends Error {}
@@ -69,25 +69,11 @@ export function loadConfig(
     throw new ConfigError('MARKETING_RENDER_TARGET_URL must be http or https');
   }
 
-  // Preview environments sit behind a shared basic-auth gate; the renderer needs
-  // that credential to reach them. "user:password", same shape the preview
-  // healthcheck uses. Malformed is an error rather than a silent no-credential,
-  // because the failure it would cause — every request 401ing — looks like a
-  // broken target, not a broken credential.
-  let basicAuth: RendererConfig['basicAuth'];
-  const rawBasicAuth = env.MARKETING_RENDERER_BASIC_AUTH?.trim();
-  if (rawBasicAuth) {
-    const separator = rawBasicAuth.indexOf(':');
-    if (separator <= 0 || separator === rawBasicAuth.length - 1) {
-      throw new ConfigError(
-        'MARKETING_RENDERER_BASIC_AUTH must look like "user:password"'
-      );
-    }
-    basicAuth = {
-      username: rawBasicAuth.slice(0, separator),
-      password: rawBasicAuth.slice(separator + 1),
-    };
-  }
+  // Preview environments sit behind an access-code gate, so the renderer holds
+  // a seat code and trades it for the access cookie before filming — the same
+  // exchange a reviewer performs. Absent on targets that have no gate (local
+  // dev, the long-lived demo box), where every request is already reachable.
+  const accessCode = env.MARKETING_RENDERER_ACCESS_CODE?.trim() || undefined;
 
   const storage =
     env.MARKETING_MEDIA_STORAGE?.trim() === 'disk' ? 'disk' : 's3';
@@ -125,6 +111,6 @@ export function loadConfig(
     chromiumPath: env.MARKETING_RENDERER_CHROMIUM_PATH?.trim() || undefined,
     ffmpegPath: env.FFMPEG_PATH?.trim() || 'ffmpeg',
     loginPath: env.MARKETING_RENDERER_LOGIN_PATH?.trim() || '/auth/dev-login',
-    basicAuth,
+    accessCode,
   };
 }

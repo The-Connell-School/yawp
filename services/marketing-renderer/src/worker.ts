@@ -64,7 +64,7 @@ export async function processNextJob(params: {
         loginPath: params.config.loginPath,
         chromiumPath: params.config.chromiumPath,
         ffmpegPath: params.config.ffmpegPath,
-        basicAuth: params.config.basicAuth,
+        accessCode: params.config.accessCode,
         onStage: (next) => {
           stage = next;
           log('stage', { jobId: job.id, stage: next });

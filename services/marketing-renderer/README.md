@@ -39,7 +39,7 @@ export MARKETING_RENDER_TARGET_IS_DEMO=confirmed
 export AWS_S3_BUCKET_FOR_VIDEOS=yawp-...-videos
 export AWS_S3_REGION_FOR_VIDEOS=us-east-1
 # for a preview environment target, also:
-# export MARKETING_RENDERER_BASIC_AUTH=preview-admin:...
+# export MARKETING_RENDERER_ACCESS_CODE=brave-otter-4193
 
 bun run --cwd services/marketing-renderer start        # poll forever
 bun run --cwd services/marketing-renderer render-once  # drain one job and exit
@@ -52,7 +52,7 @@ bun run --cwd services/marketing-renderer render-once  # drain one job and exit
 | `MARKETING_RENDERER_CHROMIUM_PATH` | Chromium binary, when the image already has one. |
 | `MARKETING_RENDERER_LOGIN_PATH` | Dev login endpoint. Defaults to `/auth/dev-login`. |
 | `FFMPEG_PATH` | ffmpeg binary. Defaults to `ffmpeg` on PATH. |
-| `MARKETING_RENDERER_BASIC_AUTH` | `user:password` for a target behind a basic-auth gate, e.g. a preview environment. |
+| `MARKETING_RENDERER_ACCESS_CODE` | Seat code for a target behind the preview access gate. Traded for the access cookie before filming; unset for ungated targets. |
 | `MARKETING_MEDIA_STORAGE` | `s3` (default) or `disk`. Disk mode copies outputs to `MARKETING_MEDIA_DIR`, a volume the web app serves itself — used by preview environments, which have no AWS credentials. |
 | `MARKETING_MEDIA_DIR` | Output directory for disk mode; the web app must mount the same path. |
 
