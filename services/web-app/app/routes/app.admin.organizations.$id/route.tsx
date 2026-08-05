@@ -40,6 +40,8 @@ import { generateTOTP } from '~/utils/totp.server';
 import { getDomainUrl } from '~/utils/misc';
 import { Prisma } from '@app/prisma';
 import { normalizeEmail } from '~/utils/normalize-email';
+import { isIsolatedPreviewSeatMode } from '~/utils/preview-access.server';
+import { SeedGeneratorPanel } from './seed-generator-panel';
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   const currentUser = await requireAdmin(request);
@@ -97,6 +99,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     invitations,
     assignmentTypes,
     canDelete: !isUserAssignedToOrg && !isOnlyOrganization,
+    previewSeatMode: isIsolatedPreviewSeatMode(),
   });
 }
 
@@ -344,6 +347,7 @@ export default function OrganizationRoute() {
     invitations,
     assignmentTypes,
     canDelete,
+    previewSeatMode,
   } =
     useLoaderData<typeof loader>();
   const fetcher = useFetcher();
@@ -632,6 +636,10 @@ export default function OrganizationRoute() {
           </inviteFetcher.Form>
         </SheetContent>
       </Sheet>
+
+      {previewSeatMode ? (
+        <SeedGeneratorPanel organizationId={organization.id} />
+      ) : null}
 
       <div className="grid gap-4 md:grid-cols-3">
         <Card className="bg-muted">
