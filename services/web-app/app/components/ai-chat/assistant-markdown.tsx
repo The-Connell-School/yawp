@@ -27,7 +27,13 @@ export const MARKDOWN_CLASS = cn(
   '[&_blockquote]:my-2 [&_blockquote]:border-l-2 [&_blockquote]:border-primary/40 [&_blockquote]:pl-3 [&_blockquote]:text-muted-foreground',
   '[&_code]:rounded [&_code]:bg-foreground/[0.06] [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-xs',
   // Tables: rounded, bordered card with a soft header and row dividers.
-  '[&_table]:my-3 [&_table]:block [&_table]:w-full [&_table]:overflow-hidden [&_table]:overflow-x-auto [&_table]:rounded-xl [&_table]:border [&_table]:border-border [&_table]:text-[13px]',
+  //
+  // The frame and the scrolling live on a wrapper, not on the table. Putting
+  // `display: block` on a <table> to make it scrollable turns its rows into an
+  // anonymous table box that shrinks to fit, so the border drew full width
+  // while the columns stopped short — the table looked chopped off.
+  '[&_.md-table]:my-3 [&_.md-table]:w-full [&_.md-table]:overflow-x-auto [&_.md-table]:rounded-xl [&_.md-table]:border [&_.md-table]:border-border',
+  '[&_table]:w-full [&_table]:border-collapse [&_table]:text-[13px]',
   '[&_thead]:bg-foreground/[0.035]',
   '[&_th]:whitespace-nowrap [&_th]:px-3 [&_th]:py-2 [&_th]:text-left [&_th]:text-[11px] [&_th]:font-semibold [&_th]:uppercase [&_th]:tracking-wide [&_th]:text-muted-foreground',
   '[&_tbody_tr]:border-t [&_tbody_tr]:border-border/70',
@@ -54,6 +60,13 @@ export const MARKDOWN_CLASS = cn(
  */
 function newTabRenderer(): InstanceType<typeof marked.Renderer> {
   const renderer = new marked.Renderer();
+
+  // A wide table scrolls inside its own frame rather than pushing the reply
+  // sideways, and the table itself stays a real table so its columns fill it.
+  const renderTable = renderer.table.bind(renderer);
+  renderer.table = (header, body) =>
+    `<div class="md-table">${renderTable(header, body)}</div>`;
+
   const renderLink = renderer.link.bind(renderer);
   renderer.link = (href, title, text) => {
     const html = renderLink(href, title, text);
