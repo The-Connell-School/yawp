@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import {
+  deckAsMaterial,
   MATERIAL_FENCE,
   readLessonMaterials,
   hasLessonMaterials,
@@ -118,5 +119,70 @@ describe('hasLessonMaterials', () => {
   test('is true only when the reply actually carries one', () => {
     expect(hasLessonMaterials(fenced(handout))).toBe(true);
     expect(hasLessonMaterials('Just a plan.')).toBe(false);
+  });
+});
+
+describe('readLessonMaterials — what a material IS', () => {
+  test('names a slot from what the material is, not where it came from', () => {
+    const { materials } = readLessonMaterials(
+      fenced('kind: handout\ntitle: Diagnose & Repair\n---\nRead each excerpt.')
+    );
+    expect(materials[0]!.slot).toBe('handout:diagnose-repair');
+  });
+
+  test('takes the slot the planner names, so a revision replaces the original', () => {
+    const { materials } = readLessonMaterials(
+      fenced(
+        'kind: handout\nslot: handout:diagnose-repair\ntitle: Diagnose & Repair (v2)\n---\nShorter.'
+      )
+    );
+    // A rewrite with a new title still lands in the same place.
+    expect(materials[0]!.slot).toBe('handout:diagnose-repair');
+  });
+
+  test('keeps two different materials in two different slots', () => {
+    const { materials } = readLessonMaterials(
+      `${fenced('kind: handout\ntitle: Practice set\n---\nOne.')}\n\n${fenced(
+        'kind: exit-ticket\ntitle: Practice set\n---\nTwo.'
+      )}`
+    );
+    expect(materials[0]!.slot).not.toBe(materials[1]!.slot);
+  });
+
+  test('still gives an unnamed material somewhere to live', () => {
+    const { materials } = readLessonMaterials(
+      fenced('kind: exit-ticket\n---\nWrite one sentence.')
+    );
+    expect(materials[0]!.slot).toBe('exit-ticket:exit-ticket');
+  });
+});
+
+describe('deckAsMaterial', () => {
+  const reply = `Here it is.\n\n\`\`\`yawp-slides\n${JSON.stringify({
+    title: 'Evidence that earns its place',
+    slides: [{ layout: 'statement', title: 'A', body: 'B', speakerNotes: 'C' }],
+  })}\n\`\`\``;
+
+  test('files a deck the same way as any other artifact', () => {
+    const material = deckAsMaterial(reply)!;
+    expect(material.kind).toBe('slides');
+    expect(material.title).toBe('Evidence that earns its place');
+    // One deck per lesson: a revision replaces it rather than adding a second.
+    expect(material.slot).toBe('deck');
+    expect(material.audience).toBe('teacher');
+  });
+
+  test('keeps the deck block itself, so the packet can still present it', () => {
+    expect(deckAsMaterial(reply)!.content).toContain('yawp-slides');
+  });
+
+  test('is nothing when the reply has no deck', () => {
+    expect(deckAsMaterial('Just a plan.')).toBeNull();
+  });
+
+  test('is nothing when the deck did not build', () => {
+    expect(
+      deckAsMaterial('```yawp-slides\n{"slides":[{"layout":"bullets"}]}\n```')
+    ).toBeNull();
   });
 });

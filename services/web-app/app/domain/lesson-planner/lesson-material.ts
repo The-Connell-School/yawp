@@ -18,6 +18,7 @@ import {
   type PacketAudience,
   type PacketSectionKind,
 } from './lesson-packet';
+import { fenceSlideDeck, readSlideDeck } from './slide-deck';
 
 export const MATERIAL_FENCE = 'yawp-material';
 
@@ -32,14 +33,25 @@ export const MATERIAL_KINDS = [
 
 export type MaterialKind = (typeof MATERIAL_KINDS)[number];
 
+/** A lesson has one deck, so every version of it claims the same slot. */
+export const DECK_SLOT = 'deck';
+export const DECK_KIND = 'slides';
+
+/**
+ * Everything the packet can hold. A deck is not a material a teacher hands
+ * out, but it is filed, replaced, and printed exactly like one.
+ */
+export type ArtifactKind = MaterialKind | typeof DECK_KIND;
+
 /** What each kind is called on its card and in the packet's contents. */
-export const MATERIAL_KIND_LABELS: Record<MaterialKind, string> = {
+export const MATERIAL_KIND_LABELS: Record<ArtifactKind, string> = {
   handout: 'Handout',
   sample: 'Sample writing',
   'exit-ticket': 'Exit ticket',
   'answer-key': 'Answer key',
   rubric: 'Rubric',
   notes: 'Notes',
+  slides: 'Slides',
 };
 
 /**
@@ -78,7 +90,13 @@ const KIND_ALIASES: Record<string, MaterialKind> = {
 export type LessonMaterial = {
   /** Stable within its reply, so adding the same material twice is one add. */
   key: string;
-  kind: MaterialKind;
+  /**
+   * What this material IS, across the whole lesson — "handout:diagnose-repair".
+   * A revision that claims the same slot takes the original's place in the
+   * packet rather than piling up beside it.
+   */
+  slot: string;
+  kind: ArtifactKind;
   title: string;
   audience: PacketAudience;
   /** Markdown, ready to render or print. */
@@ -142,6 +160,36 @@ function readTitle(
   return MATERIAL_KIND_LABELS[kind];
 }
 
+const MAX_SLOT_CHARS = 80;
+
+function slugify(text: string): string {
+  return (
+    text
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, MAX_SLOT_CHARS) || 'untitled'
+  );
+}
+
+/**
+ * Where this material lives in the lesson.
+ *
+ * Derived from what it is, so a rebuild under the same name lands in the same
+ * place. The planner can name the slot itself when it is revising something
+ * whose title also changed — that is the only way a rename can still be a
+ * replacement rather than a second copy.
+ */
+function readSlot(
+  header: Record<string, string>,
+  kind: MaterialKind,
+  title: string
+): string {
+  const given = (header.slot ?? header.replaces)?.trim();
+  if (given) return given.toLowerCase().slice(0, MAX_SLOT_CHARS);
+  return `${kind}:${slugify(title)}`;
+}
+
 /**
  * Split a reply into its prose and the materials it carries.
  *
@@ -161,10 +209,12 @@ export function readLessonMaterials(content: string): {
     if (!materialBody) continue;
 
     const kind = readKind(header.kind);
+    const title = readTitle(header, materialBody, kind);
     materials.push({
       key: String(materials.length),
+      slot: readSlot(header, kind, title),
       kind,
-      title: readTitle(header, materialBody, kind),
+      title,
       audience: header.audience
         ? parsePacketAudience(header.audience)
         : KIND_AUDIENCE[kind],
@@ -180,12 +230,35 @@ export function readLessonMaterials(content: string): {
 
 /**
  * Which pile a material lands in when the packet is browsed: the things you
- * hand out, or the things you read while teaching.
+ * project, the things you hand out, or the things you read while teaching.
  */
 export function packetKindForMaterial(kind: string): PacketSectionKind {
+  if (kind === DECK_KIND) return 'slides';
   return kind === 'handout' || kind === 'sample' || kind === 'exit-ticket'
     ? 'handout'
     : 'plan';
+}
+
+/**
+ * A deck, filed like everything else.
+ *
+ * Decks used to reach the packet only by keeping the whole reply, which meant a
+ * revised deck sat beside the original with nothing to say which one to
+ * project. Treating it as an artifact in the `deck` slot gives a lesson one
+ * current deck. The stored content is the block itself, so the packet still
+ * renders and presents it.
+ */
+export function deckAsMaterial(reply: string): LessonMaterial | null {
+  const outcome = readSlideDeck(reply);
+  if (outcome.kind !== 'deck') return null;
+  return {
+    key: DECK_SLOT,
+    slot: DECK_SLOT,
+    kind: DECK_KIND,
+    title: outcome.deck.title,
+    audience: 'teacher',
+    content: fenceSlideDeck(outcome.deck),
+  };
 }
 
 export function hasLessonMaterials(content: string): boolean {

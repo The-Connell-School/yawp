@@ -13,7 +13,11 @@ import { prisma } from '~/utils/db.server';
 import { requireMutableRequest } from '~/utils/auth.server';
 import { requireLessonPlannerAccess } from '~/utils/lesson-planner/lesson-planner-access.server';
 import { PACKET_AUDIENCES } from '~/domain/lesson-planner/lesson-packet';
-import { readLessonMaterials } from '~/domain/lesson-planner/lesson-material';
+import {
+  deckAsMaterial,
+  DECK_SLOT,
+  readLessonMaterials,
+} from '~/domain/lesson-planner/lesson-material';
 
 const MAX_PACKET_TITLE_CHARS = 120;
 const MAX_SECTION_TITLE_CHARS = 120;
@@ -181,7 +185,10 @@ export async function action({ request }: ActionFunctionArgs) {
     // Re-read the material from the reply rather than trusting the client with
     // its content: the body is what gets printed and handed to students.
     const { materials } = readLessonMaterials(message.content);
-    const material = materials.find((item) => item.key === data.materialKey);
+    const material =
+      data.materialKey === DECK_SLOT
+        ? deckAsMaterial(message.content)
+        : materials.find((item) => item.key === data.materialKey);
     if (!material) {
       return dataResponse(
         { error: 'That material is not part of this lesson.' },
@@ -195,19 +202,30 @@ export async function action({ request }: ActionFunctionArgs) {
       audience: data.audience ?? material.audience,
       content: material.content,
       sourceCreatedAt: message.createdAt,
+      sourceMessageId: message.id,
+      blockKey: material.key,
     };
+    // Keyed by what the artifact IS, so filing a revision takes the original's
+    // place. A teacher who asks for a shorter handout wants one handout.
+    const replaced = await prisma.lessonPlanMaterial.findUnique({
+      where: {
+        conversationId_slot: {
+          conversationId: conversation.id,
+          slot: material.slot,
+        },
+      },
+      select: { sourceMessageId: true, blockKey: true },
+    });
     await prisma.lessonPlanMaterial.upsert({
       where: {
-        conversationId_sourceMessageId_blockKey: {
+        conversationId_slot: {
           conversationId: conversation.id,
-          sourceMessageId: message.id,
-          blockKey: material.key,
+          slot: material.slot,
         },
       },
       create: {
         conversationId: conversation.id,
-        sourceMessageId: message.id,
-        blockKey: material.key,
+        slot: material.slot,
         ...saved,
       },
       update: saved,
@@ -218,6 +236,11 @@ export async function action({ request }: ActionFunctionArgs) {
       messageId: message.id,
       materialKey: material.key,
       title: material.title,
+      // So the card for the version this replaced stops claiming to be filed.
+      replaced:
+        replaced && replaced.sourceMessageId !== message.id
+          ? `${replaced.sourceMessageId}:${replaced.blockKey}`
+          : null,
     });
   }
 

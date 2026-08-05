@@ -324,6 +324,57 @@ async function seedLessonWithMaterials(e2eContext: {
   }
 }
 
+/** The same handout twice: the original, then a rewrite claiming its slot. */
+async function seedRevisedHandout(e2eContext: {
+  teacherMembershipId: string;
+  organizationId: string;
+}) {
+  const prisma = createE2EPrismaClient();
+  const block = (slot: string, body: string) =>
+    [
+      '```yawp-material',
+      'kind: handout',
+      `slot: ${slot}`,
+      'title: Diagnose & Repair',
+      '---',
+      body,
+      '```',
+    ].join('\n');
+  try {
+    const conversation = await prisma.lessonPlanConversation.create({
+      data: {
+        membershipId: e2eContext.teacherMembershipId,
+        organizationId: e2eContext.organizationId,
+        title: 'Revision lesson',
+        messages: {
+          create: [
+            {
+              role: 'assistant',
+              content: `## Lesson\n\nHere it is.\n\n${block(
+                'handout:diagnose-repair',
+                'The long version.'
+              )}`,
+              createdAt: new Date('2026-08-05T10:00:00.000Z'),
+            },
+            {
+              role: 'assistant',
+              content: `## Shorter\n\nTightened it.\n\n${block(
+                'handout:diagnose-repair',
+                'The shorter version.'
+              )}`,
+              createdAt: new Date('2026-08-05T10:01:00.000Z'),
+            },
+          ],
+        },
+      },
+      select: { id: true },
+    });
+    return { conversationId: conversation.id };
+  } finally {
+    await prisma.$disconnect();
+  }
+}
+
 test.describe('YAWP! Lesson Planner', () => {
   test.afterEach(async ({ e2eContext }) => {
     // Leave the org in its default (disabled) state for other specs.
@@ -1114,6 +1165,96 @@ test.describe('YAWP! Lesson Planner', () => {
     await expect(sections.nth(0)).toBeHidden();
     await expect(sections.nth(1)).toBeVisible();
     await page.emulateMedia({ media: 'screen' });
+  });
+
+  test('offers the deck and the handout the moment a plan lands', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    await setLessonPlannerEnabled(e2eContext.organizationId, true);
+    const { conversationId } = await seedLessonWithMaterials(e2eContext);
+    await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+    await page.goto(`/app/lesson-planner?c=${conversationId}`);
+
+    // The seeded reply is a plan, so the two follow-ons are pinned by the app
+    // rather than left to whatever the model happened to suggest.
+    await expect(
+      page.getByRole('button', {
+        name: /build the slide deck for this lesson/i,
+      })
+    ).toBeVisible();
+    await expect(
+      page.getByRole('button', {
+        name: /build the student handout for this lesson/i,
+      })
+    ).toBeVisible();
+  });
+
+  test('a revised handout takes the place of the one in the packet', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    await setLessonPlannerEnabled(e2eContext.organizationId, true);
+    const { conversationId } = await seedRevisedHandout(e2eContext);
+    await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+    await page.goto(`/app/lesson-planner?c=${conversationId}`);
+
+    const cards = page.getByTestId('material-card');
+    await expect(cards).toHaveCount(2);
+
+    // File the first version, then the rewrite that claims the same slot.
+    for (const index of [0, 1]) {
+      const save = page.waitForResponse(
+        (response) =>
+          response.url().includes('/api/domain/lesson-planner/packet') &&
+          response.request().method() === 'POST'
+      );
+      await cards.nth(index).getByTestId('material-toggle').click();
+      await save;
+    }
+
+    // The original stops claiming to be filed — there is one handout, not two.
+    await expect(cards.nth(0).getByTestId('material-toggle')).toContainText(
+      'Add to packet'
+    );
+    await expect(cards.nth(1).getByTestId('material-toggle')).toContainText(
+      'In the packet'
+    );
+
+    await page.goto(`/app/lesson-planner/${conversationId}/packet`);
+    await expect(page.locator('main')).toContainText('The shorter version.');
+    await expect(page.locator('main')).not.toContainText('The long version.');
+  });
+
+  test('files a deck on its own and presents it from the packet', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    await setLessonPlannerEnabled(e2eContext.organizationId, true);
+    const { conversationId } = await seedSlideDeck(e2eContext);
+    await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+    await page.goto(`/app/lesson-planner?c=${conversationId}`);
+
+    const save = page.waitForResponse(
+      (response) =>
+        response.url().includes('/api/domain/lesson-planner/packet') &&
+        response.request().method() === 'POST'
+    );
+    await page.getByTestId('deck-toggle').click();
+    await save;
+    await expect(page.getByTestId('deck-toggle')).toContainText(
+      'In the packet'
+    );
+
+    await page.goto(`/app/lesson-planner/${conversationId}/packet`);
+    // The seeded reply is kept too, so the filed deck is the later card.
+    const card = page.getByTestId('slide-deck-card').last();
+    await expect(card).toContainText('Evidence that earns its place');
+    await card.getByRole('link', { name: /present/i }).click();
+    await expect(page.getByTestId('slide-counter')).toHaveText('1 / 3');
   });
 
   test('refuses to present a reply that has no deck in it', async ({

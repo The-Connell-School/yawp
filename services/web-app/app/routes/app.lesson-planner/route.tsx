@@ -31,9 +31,13 @@ import {
 } from '~/components/ai-chat/assistant-markdown';
 import { SlideDeckCard } from '~/components/ai-chat/slide-deck-card';
 import { readSlideDeck } from '~/domain/lesson-planner/slide-deck';
-import { readLessonMaterials } from '~/domain/lesson-planner/lesson-material';
+import {
+  DECK_SLOT,
+  readLessonMaterials,
+} from '~/domain/lesson-planner/lesson-material';
 import { MaterialCard } from '~/components/ai-chat/material-card';
 import {
+  looksLikeLessonPlan,
   mentionsRoomPersonality,
   withStandardSuggestions,
 } from '~/domain/lesson-planner/suggestions';
@@ -90,7 +94,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
               },
             },
             materials: {
-              select: { sourceMessageId: true, blockKey: true },
+              select: { sourceMessageId: true, blockKey: true, kind: true },
             },
           },
         })
@@ -122,6 +126,16 @@ export async function loader({ request }: LoaderFunctionArgs) {
           addedMaterials: selected.materials.map(
             (material) => `${material.sourceMessageId}:${material.blockKey}`
           ),
+          // What the lesson already holds, so the planner is not offered to
+          // build something it has.
+          lessonHas: {
+            deck: selected.materials.some(
+              (material) => material.kind === 'slides'
+            ),
+            handout: selected.materials.some((material) =>
+              ['handout', 'sample', 'exit-ticket'].includes(material.kind)
+            ),
+          },
         }
       : null,
     recommendedPrompts: RECOMMENDED_LESSON_PLANNER_PROMPTS,
@@ -278,6 +292,20 @@ export default function LessonPlannerRoute() {
       { method: 'post', action: '/api/domain/lesson-planner/packet' }
     );
   }
+
+  // Filing a revision replaces the version it supersedes, so the card for the
+  // older one has to stop claiming to be in the packet.
+  useEffect(() => {
+    const replaced = (packetFetcher.data as { replaced?: string } | undefined)
+      ?.replaced;
+    if (!replaced) return;
+    setAddedMaterials((prev) => {
+      if (!prev.has(replaced)) return prev;
+      const next = new Set(prev);
+      next.delete(replaced);
+      return next;
+    });
+  }, [packetFetcher.data]);
 
   // A material goes into the packet on its own — the teacher wanted the
   // handout, not the whole lesson plan wrapped around it.
@@ -475,6 +503,7 @@ export default function LessonPlannerRoute() {
                   teacherRaisedRoomPersonality={teacherRaisedRoomPersonality}
                   addedMaterials={addedMaterials}
                   onMaterial={setMaterialAdded}
+                  lessonHas={selectedConversation?.lessonHas ?? {}}
                   conversationId={conversationId}
                   onSuggestion={send}
                   onKeep={setKept}
@@ -620,6 +649,7 @@ function MessageBubble({
   teacherRaisedRoomPersonality,
   addedMaterials,
   onMaterial,
+  lessonHas,
   conversationId,
   onSuggestion,
   onKeep,
@@ -633,6 +663,8 @@ function MessageBubble({
   /** "<messageId>:<blockKey>" for every material already in the packet. */
   addedMaterials: Set<string>;
   onMaterial: (messageId: string, materialKey: string, added: boolean) => void;
+  /** What the lesson's packet already holds, so it is not offered again. */
+  lessonHas: { deck?: boolean; handout?: boolean };
   conversationId: string | null;
   onSuggestion: (text: string) => void;
   onKeep: (messageId: string, audience: PacketAudience | null) => void;
@@ -650,12 +682,6 @@ function MessageBubble({
 
   const { body: withDeck, suggestions: modelSuggestions } =
     parseAssistantMessage(message.content);
-  // The opening turn always offers the data-driven route, in the same words,
-  // rather than whatever the model happened to think of this run.
-  const suggestions = withStandardSuggestions(modelSuggestions, {
-    isOpeningReply,
-    teacherRaisedRoomPersonality,
-  });
   // A deck is rendered as a deck. A deck that failed to build still gets its
   // JSON stripped — a teacher should never be shown the machinery.
   const deckOutcome = readSlideDeck(withDeck);
@@ -666,6 +692,19 @@ function MessageBubble({
   const { materials, body } = readLessonMaterials(withMaterials);
   // Only offer print/PDF on substantial replies (a lesson), not one-liners.
   const isArtifact = /(^|\n)#{1,3}\s/.test(body) || /\n\|.*\|/.test(body);
+  // The opening turn always offers the data-driven route, and a delivered plan
+  // always offers the two artifacts that come next — in the app's own words,
+  // rather than whatever the model happened to think of this run.
+  const suggestions = withStandardSuggestions(modelSuggestions, {
+    isOpeningReply,
+    teacherRaisedRoomPersonality,
+    deliveredPlan: looksLikeLessonPlan(body),
+    produced: {
+      deck: deckOutcome.kind !== 'none',
+      handout: materials.some((material) => material.audience === 'student'),
+    },
+    inPacket: lessonHas,
+  });
 
   return (
     <div className="flex gap-3" data-role="assistant">
@@ -679,6 +718,16 @@ function MessageBubble({
             <div className={cn(body && 'mt-3')}>
               <SlideDeckCard
                 deck={deckOutcome.deck}
+                added={
+                  !!message.id &&
+                  addedMaterials.has(`${message.id}:${DECK_SLOT}`)
+                }
+                onToggle={
+                  message.id
+                    ? (added) => onMaterial(message.id!, DECK_SLOT, added)
+                    : null
+                }
+                disabled={disabled}
                 presentHref={
                   message.id && conversationId
                     ? `/present/${conversationId}/${message.id}`

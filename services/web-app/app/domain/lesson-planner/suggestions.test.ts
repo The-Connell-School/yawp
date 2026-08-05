@@ -1,5 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import {
+  FOLLOW_ON_SUGGESTIONS,
+  looksLikeLessonPlan,
   mentionsRoomPersonality,
   STANDARD_OPENING_SUGGESTION,
   withStandardSuggestions,
@@ -182,5 +184,74 @@ describe('mentionsRoomPersonality', () => {
         'Make it a 50-minute period with quiet writing time',
       ])
     ).toBe(false);
+  });
+});
+
+describe('withStandardSuggestions — what comes after a plan', () => {
+  test('always offers the deck and the handout, in the same words', () => {
+    const merged = withStandardSuggestions(['Something the model thought of'], {
+      isOpeningReply: false,
+      deliveredPlan: true,
+    });
+    expect(merged.slice(0, 2)).toEqual([
+      FOLLOW_ON_SUGGESTIONS.deck,
+      FOLLOW_ON_SUGGESTIONS.handout,
+    ]);
+    expect(merged).toContain('Something the model thought of');
+  });
+
+  test('does not offer to build what the reply just built', () => {
+    const merged = withStandardSuggestions([], {
+      isOpeningReply: false,
+      deliveredPlan: true,
+      produced: { deck: true, handout: false },
+    });
+    expect(merged).not.toContain(FOLLOW_ON_SUGGESTIONS.deck);
+    expect(merged).toContain(FOLLOW_ON_SUGGESTIONS.handout);
+  });
+
+  test('does not offer to rebuild what is already in the packet', () => {
+    const merged = withStandardSuggestions([], {
+      isOpeningReply: false,
+      deliveredPlan: true,
+      inPacket: { deck: true, handout: true },
+    });
+    expect(merged).not.toContain(FOLLOW_ON_SUGGESTIONS.deck);
+    expect(merged).not.toContain(FOLLOW_ON_SUGGESTIONS.handout);
+  });
+
+  test('drops the model’s own version of the same offer', () => {
+    const merged = withStandardSuggestions(
+      ['Build a slide deck for this lesson', 'Make it shorter'],
+      { isOpeningReply: false, deliveredPlan: true }
+    );
+    expect(merged.filter((option) => /slide deck/i.test(option))).toHaveLength(
+      1
+    );
+  });
+
+  test('leaves an ordinary turn alone', () => {
+    const merged = withStandardSuggestions(['Sure, go ahead'], {
+      isOpeningReply: false,
+      deliveredPlan: false,
+    });
+    expect(merged).toEqual(['Sure, go ahead']);
+  });
+});
+
+describe('looksLikeLessonPlan', () => {
+  test('recognises a reply built out of sections', () => {
+    expect(
+      looksLikeLessonPlan(
+        '## Objective\n\nExplain evidence.\n\n## Lesson Sequence\n\n1. Warm-up'
+      )
+    ).toBe(true);
+  });
+
+  test('is not fooled by a one-heading answer or a chat turn', () => {
+    expect(looksLikeLessonPlan('## Two options\n\nWhich do you want?')).toBe(
+      false
+    );
+    expect(looksLikeLessonPlan('Which class is this for?')).toBe(false);
   });
 });

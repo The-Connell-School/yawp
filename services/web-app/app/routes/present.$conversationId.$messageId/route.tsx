@@ -27,26 +27,29 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const access = await getLessonPlannerAccess(request);
   if (!access.allowed) throw redirect('/app');
 
-  const message = await prisma.lessonPlanMessage.findFirst({
-    where: {
-      id: params.messageId,
-      role: 'assistant',
-      conversation: {
-        id: params.conversationId,
-        membershipId: access.membership.id,
-        deletedAt: null,
-      },
-    },
-    select: {
-      id: true,
-      content: true,
-      conversation: {
-        select: { id: true, title: true, packetTitle: true },
-      },
-    },
-  });
-  if (!message) throw new Response('Not Found', { status: 404 });
+  const owned = {
+    id: params.conversationId,
+    membershipId: access.membership.id,
+    deletedAt: null,
+  };
+  const conversationSelect = {
+    select: { id: true, title: true, packetTitle: true },
+  };
 
+  // The id is a reply for a deck still in the transcript, or a filed artifact
+  // for the one in the teacher's packet — both are decks they can project.
+  const source =
+    (await prisma.lessonPlanMessage.findFirst({
+      where: { id: params.messageId, role: 'assistant', conversation: owned },
+      select: { content: true, conversation: conversationSelect },
+    })) ??
+    (await prisma.lessonPlanMaterial.findFirst({
+      where: { id: params.messageId, conversation: owned },
+      select: { content: true, conversation: conversationSelect },
+    }));
+  if (!source) throw new Response('Not Found', { status: 404 });
+
+  const message = source;
   const parsed = parseSlideDeck(message.content);
   if (!parsed) throw new Response('Not Found', { status: 404 });
 

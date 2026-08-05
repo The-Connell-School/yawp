@@ -9,12 +9,41 @@ import { rubricCategories } from '~/domain/grading/rubric';
  * still read class-level reports (through the reporter's read-only tools) so a
  * lesson can be anchored to how the class actually performed.
  */
+export type LessonInventoryEntry = {
+  slot: string;
+  kind: string;
+  title: string;
+};
+
+/**
+ * What the teacher has actually filed in this lesson.
+ *
+ * Without it the planner is blind to its own output: it rebuilds a handout that
+ * already exists, and it has no idea that changing the plan just left the deck
+ * describing a lesson that is no longer the lesson.
+ */
+function buildInventorySection(entries: LessonInventoryEntry[]): string[] {
+  if (!entries.length) return [];
+  return [
+    '',
+    'What this lesson already contains (the teacher has filed these in their packet):',
+    ...entries.map(
+      (entry) => `- ${entry.kind} · "${entry.title}" · slot \`${entry.slot}\``
+    ),
+    "- These are live artifacts, not history. When the teacher asks to change one, revise THAT one: do not build a second copy alongside it. Emit the revision with the same `slot:` in its header (or the same `yawp-slides` block for the deck) so it takes the original's place. Reuse its slot even if you also change the title.",
+    '- When a change to the plan makes one of them wrong — different activity, different timing, different text — say plainly which are now out of date and offer to update them, in the same reply. Never quietly leave a deck describing a lesson that changed.',
+    '- Do not list these back to the teacher unprompted. They can see their own packet.',
+  ];
+}
+
 export function buildLessonPlannerSystemPrompt({
   teacherName,
   organizationName,
+  lessonInventory = [],
 }: {
   teacherName: string | null;
   organizationName: string;
+  lessonInventory?: LessonInventoryEntry[];
 }): string {
   const who = teacherName ? `${teacherName}, a teacher` : 'a teacher';
   // The actual grading rubric, verbatim, so a lesson targets Yawp's own skill
@@ -148,7 +177,8 @@ export function buildLessonPlannerSystemPrompt({
     '- Offer them for real choices too — which format to build, which of two versions to expand, what to make next.',
     '- Every line must be something the teacher could send verbatim: no questions, no placeholders to fill in, and short enough to read on a button (roughly 100 characters).',
     '- Skip the block only when there is genuinely nothing to predict.',
-    '- After delivering a lesson, offer 1–3 natural next artifacts the teacher might want (a deck, a handout, a version for another class).',
+    '- After delivering a lesson plan, the app itself pins "Build the slide deck for this lesson" and "Build the student handout for this lesson" as the first options, so do not write your own version of either. Spend your options on what only you know — a version for another class, a differentiation layer, a shorter period.',
+    ...buildInventorySection(lessonInventory),
   ].join('\n');
 }
 

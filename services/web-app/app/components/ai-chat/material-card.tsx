@@ -17,22 +17,25 @@ import {
   Plus,
   Check,
   PenLine,
+  Presentation,
 } from 'lucide-react';
 import { MarkdownContent } from './assistant-markdown';
 import {
   MATERIAL_KIND_LABELS,
+  type ArtifactKind,
   type LessonMaterial,
-  type MaterialKind,
 } from '~/domain/lesson-planner/lesson-material';
 import { cn } from '~/utils/misc';
 
-const KIND_ICON: Record<MaterialKind, typeof FileText> = {
+const KIND_ICON: Record<ArtifactKind, typeof FileText> = {
   handout: FileText,
   sample: PenLine,
   'exit-ticket': ClipboardCheck,
   'answer-key': Key,
   rubric: ListChecks,
   notes: NotebookPen,
+  // A deck is drawn by the deck card, never here; present for completeness.
+  slides: Presentation,
 };
 
 export function MaterialCard({

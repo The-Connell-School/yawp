@@ -10,6 +10,7 @@ const prisma = {
     upsert: mock(),
     deleteMany: mock(),
     updateMany: mock(),
+    findUnique: mock(),
   },
 };
 
@@ -67,6 +68,7 @@ beforeEach(() => {
   prisma.lessonPlanMaterial.updateMany.mockReset().mockResolvedValue({
     count: 1,
   });
+  prisma.lessonPlanMaterial.findUnique.mockReset().mockResolvedValue(null);
 });
 
 describe('lesson packet action — one material at a time', () => {
@@ -110,12 +112,33 @@ describe('lesson packet action — one material at a time', () => {
     } as any);
 
     expect(prisma.lessonPlanMaterial.upsert.mock.calls[0][0].where).toEqual({
-      conversationId_sourceMessageId_blockKey: {
+      conversationId_slot: {
         conversationId: 'plan-1',
-        sourceMessageId: 'msg-1',
-        blockKey: '0',
+        slot: 'handout:diagnose-repair',
       },
     });
+  });
+
+  test('a revision takes the place of the version it replaces', async () => {
+    // Same slot, written in a later reply — one handout, not two.
+    prisma.lessonPlanMaterial.findUnique.mockResolvedValue({
+      sourceMessageId: 'msg-old',
+      blockKey: '0',
+    });
+
+    const response = await action({
+      request: formRequest({
+        intent: 'add-material',
+        conversationId: 'plan-1',
+        messageId: 'msg-1',
+        materialKey: '0',
+      }),
+    } as any);
+
+    const upsert = prisma.lessonPlanMaterial.upsert.mock.calls[0][0];
+    expect(upsert.update).toMatchObject({ sourceMessageId: 'msg-1' });
+    // The older card has to stop claiming to be in the packet.
+    expect((response.data as any).replaced).toBe('msg-old:0');
   });
 
   test('takes it back out again', async () => {

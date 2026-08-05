@@ -92,7 +92,7 @@ export async function action({ request }: ActionFunctionArgs) {
   };
 
   // Load an existing conversation (scoped to this teacher) or start a new one.
-  let conversation = data.conversationId
+  const conversation = data.conversationId
     ? await prisma.lessonPlanConversation.findFirst({
         where: {
           id: data.conversationId,
@@ -106,6 +106,12 @@ export async function action({ request }: ActionFunctionArgs) {
           messages: {
             orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
             take: MAX_HISTORY_MESSAGES,
+          },
+          // What the teacher has filed, so the planner revises what exists
+          // instead of building a second copy of it.
+          materials: {
+            orderBy: [{ sourceCreatedAt: 'asc' }, { blockKey: 'asc' }],
+            select: { slot: true, kind: true, title: true },
           },
         },
       })
@@ -160,6 +166,7 @@ export async function action({ request }: ActionFunctionArgs) {
   const system = buildLessonPlannerSystemPrompt({
     teacherName: null,
     organizationName: access.membership.organization.name,
+    lessonInventory: conversation?.materials ?? [],
   });
 
   const messages: { role: AgentType; content: string; name?: string }[] = [
@@ -222,6 +229,7 @@ export async function action({ request }: ActionFunctionArgs) {
   const askedAt = new Date();
   const answeredAt = new Date(askedAt.getTime() + 1);
   let assistantMessageId: string;
+  let conversationId: string;
   try {
     const written = await prisma.$transaction(async (transaction) => {
       const persistedConversation =
@@ -233,7 +241,7 @@ export async function action({ request }: ActionFunctionArgs) {
             title: deriveTitle(data.message),
             originClassAssignmentId,
           },
-          include: { messages: true },
+          select: { id: true },
         }));
 
       await transaction.lessonPlanMessage.create({
@@ -264,14 +272,14 @@ export async function action({ request }: ActionFunctionArgs) {
 
       return { conversation: persistedConversation, assistantMessage };
     });
-    conversation = written.conversation;
+    conversationId = written.conversation.id;
     assistantMessageId = written.assistantMessage.id;
   } catch {
     return dataResponse({ error: PLANNER_FAILED }, { status: 500 });
   }
 
   return dataResponse({
-    conversationId: conversation.id,
+    conversationId,
     messageId: assistantMessageId,
     reply,
     isNewConversation,

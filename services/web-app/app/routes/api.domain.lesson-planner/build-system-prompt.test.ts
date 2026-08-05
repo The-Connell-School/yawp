@@ -322,3 +322,45 @@ describe('buildLessonPlannerSystemPrompt — handing over real material', () => 
     expect(lower).toContain('never search once and give up');
   });
 });
+
+describe('buildLessonPlannerSystemPrompt — what the lesson already has', () => {
+  const prompt = buildLessonPlannerSystemPrompt({
+    teacherName: null,
+    organizationName: 'Connell School',
+    lessonInventory: [
+      { slot: 'deck', kind: 'slides', title: 'Evidence that earns its place' },
+      {
+        slot: 'handout:diagnose-repair',
+        kind: 'handout',
+        title: 'Diagnose & Repair',
+      },
+    ],
+  });
+
+  test('lists what the teacher has already filed, with its slot', () => {
+    expect(prompt).toContain('Evidence that earns its place');
+    expect(prompt).toContain('handout:diagnose-repair');
+    expect(prompt).toContain('Diagnose & Repair');
+  });
+
+  test('tells it to revise what exists instead of building a second one', () => {
+    const lower = prompt.toLowerCase();
+    expect(lower).toContain('do not build a second');
+    expect(lower).toContain('reuse its slot');
+  });
+
+  test('makes it say what a change leaves out of date', () => {
+    const lower = prompt.toLowerCase();
+    // Changing the plan quietly invalidates the deck built from it.
+    expect(lower).toContain('now out of date');
+    expect(lower).toContain('offer to update');
+  });
+
+  test('says nothing at all when the lesson is empty', () => {
+    const empty = buildLessonPlannerSystemPrompt({
+      teacherName: null,
+      organizationName: 'Connell School',
+    });
+    expect(empty).not.toContain('What this lesson already contains');
+  });
+});

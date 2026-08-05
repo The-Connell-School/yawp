@@ -569,12 +569,17 @@ model LessonPlanMaterial {
   /// rather than in the order the teacher happened to click.
   sourceCreatedAt DateTime               @db.Timestamptz(6)
   blockKey        String
+  /// What this artifact IS, rather than where it came from — "handout:diagnose
+  /// -repair", "deck". One slot holds one current version, so a revision the
+  /// teacher files takes the old one's place instead of piling up beside it.
+  slot            String
   kind            String
   title           String
   audience        String
   content         String
 
-  @@unique([conversationId, sourceMessageId, blockKey])
+  @@unique([conversationId, slot])
+  @@index([conversationId, sourceMessageId, blockKey])
   @@index([conversationId, sourceCreatedAt])
 }
 

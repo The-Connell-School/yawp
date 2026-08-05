@@ -5,7 +5,8 @@
  * thing on the card.
  */
 import { Link } from 'react-router';
-import { Play, Presentation } from 'lucide-react';
+import { Check, Play, Plus, Presentation } from 'lucide-react';
+import { cn } from '~/utils/misc';
 import {
   deckDurationMinutes,
   type SlideDeck,
@@ -14,10 +15,18 @@ import {
 export function SlideDeckCard({
   deck,
   presentHref,
+  added,
+  onToggle,
+  disabled,
 }: {
   deck: SlideDeck;
   /** Absent while the reply is still unsaved and has no id to present by. */
   presentHref: string | null;
+  /** Whether this deck is the one currently filed in the lesson packet. */
+  added?: boolean;
+  /** Absent in the packet itself, where the deck is already filed. */
+  onToggle?: ((added: boolean) => void) | null;
+  disabled?: boolean;
 }) {
   const minutes = deckDurationMinutes(deck);
   const preview = deck.slides.slice(0, 4);
@@ -43,6 +52,23 @@ export function SlideDeckCard({
               .join(' · ')}
           </p>
         </div>
+        {onToggle ? (
+          <button
+            type="button"
+            disabled={disabled}
+            onClick={() => onToggle(!added)}
+            data-testid="deck-toggle"
+            className={cn(
+              'inline-flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition disabled:opacity-50',
+              added
+                ? 'bg-primary/10 text-primary hover:bg-primary/15'
+                : 'border border-primary/40 text-primary hover:bg-primary/5'
+            )}
+          >
+            {added ? <Check size={14} /> : <Plus size={14} />}
+            {added ? 'In the packet' : 'Add to packet'}
+          </button>
+        ) : null}
         {presentHref ? (
           <Link
             to={presentHref}

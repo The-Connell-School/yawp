@@ -19,6 +19,19 @@
 export const STANDARD_OPENING_SUGGESTION =
   'Look at my classes and tell me what they need work on';
 
+/**
+ * What always comes next once a plan exists.
+ *
+ * A teacher who has just approved a lesson wants one of two things, and the
+ * planner should not have to think of them. Pinned like the opening option, in
+ * the same words every time, so the move is muscle memory rather than a lucky
+ * suggestion.
+ */
+export const FOLLOW_ON_SUGGESTIONS = {
+  deck: 'Build the slide deck for this lesson',
+  handout: 'Build the student handout for this lesson',
+} as const;
+
 const MAX_SUGGESTIONS = 5;
 
 function normalize(suggestion: string): string {
@@ -137,6 +150,19 @@ function withoutRoomTalk(suggestion: string): string {
  * Only the opening reply gets the pin — later turns are about the lesson in
  * progress, where the model's own suggestions are the useful ones.
  */
+/**
+ * A reply built out of sections, rather than a question or a single answer —
+ * which is when "now build the deck" becomes the useful next thing to offer.
+ */
+export function looksLikeLessonPlan(body: string): boolean {
+  return [...body.matchAll(/^\s{0,3}#{1,3}\s+\S/gm)].length >= 2;
+}
+
+const DECK_INTENT = /\b(slide|deck|slides)\b/i;
+const HANDOUT_INTENT = /\b(handout|worksheet|packet for students)\b/i;
+
+type ArtifactFlags = { deck?: boolean; handout?: boolean };
+
 export function withStandardSuggestions(
   suggestions: string[],
   {
@@ -144,7 +170,19 @@ export function withStandardSuggestions(
     // Default true: a caller that cannot tell should not have its options
     // rewritten out from under it.
     teacherRaisedRoomPersonality = true,
-  }: { isOpeningReply: boolean; teacherRaisedRoomPersonality?: boolean }
+    /** This reply handed over a lesson plan, so the artifacts are next. */
+    deliveredPlan = false,
+    /** What this reply already built, so it is not offered again. */
+    produced = {},
+    /** What the lesson's packet already holds. */
+    inPacket = {},
+  }: {
+    isOpeningReply: boolean;
+    teacherRaisedRoomPersonality?: boolean;
+    deliveredPlan?: boolean;
+    produced?: ArtifactFlags;
+    inPacket?: ArtifactFlags;
+  }
 ): string[] {
   const offered = teacherRaisedRoomPersonality
     ? suggestions
@@ -159,14 +197,39 @@ export function withStandardSuggestions(
     deduped.push(suggestion);
   }
 
-  if (!isOpeningReply) return deduped.slice(0, MAX_SUGGESTIONS);
+  if (isOpeningReply) {
+    return [
+      STANDARD_OPENING_SUGGESTION,
+      ...deduped.filter(
+        (suggestion) =>
+          normalize(suggestion) !== normalize(STANDARD_OPENING_SUGGESTION) &&
+          !meansTheSameThing(suggestion)
+      ),
+    ].slice(0, MAX_SUGGESTIONS);
+  }
+
+  if (!deliveredPlan) return deduped.slice(0, MAX_SUGGESTIONS);
+
+  const pinned: string[] = [];
+  if (!produced.deck && !inPacket.deck) pinned.push(FOLLOW_ON_SUGGESTIONS.deck);
+  if (!produced.handout && !inPacket.handout) {
+    pinned.push(FOLLOW_ON_SUGGESTIONS.handout);
+  }
+  if (!pinned.length) return deduped.slice(0, MAX_SUGGESTIONS);
 
   return [
-    STANDARD_OPENING_SUGGESTION,
+    ...pinned,
+    // The model's own "build a slide deck…" would sit right beside ours.
     ...deduped.filter(
       (suggestion) =>
-        normalize(suggestion) !== normalize(STANDARD_OPENING_SUGGESTION) &&
-        !meansTheSameThing(suggestion)
+        !(
+          pinned.includes(FOLLOW_ON_SUGGESTIONS.deck) &&
+          DECK_INTENT.test(suggestion)
+        ) &&
+        !(
+          pinned.includes(FOLLOW_ON_SUGGESTIONS.handout) &&
+          HANDOUT_INTENT.test(suggestion)
+        )
     ),
   ].slice(0, MAX_SUGGESTIONS);
 }
