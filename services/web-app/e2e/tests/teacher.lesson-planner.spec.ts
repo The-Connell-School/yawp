@@ -534,7 +534,9 @@ test.describe('YAWP! Lesson Planner', () => {
     await expect(page.getByText(/5 min/i).first()).toBeVisible();
 
     // The handout is marked as student-facing and gets a name/date line.
-    const handout = page.getByTestId('packet-section-student').first();
+    const handout = page
+      .locator('[data-testid="packet-section"][data-audience="student"]')
+      .first();
     await expect(handout).toBeVisible();
     await expect(handout).toContainText(/name/i);
 
@@ -674,13 +676,19 @@ test.describe('YAWP! Lesson Planner', () => {
     // Jumping goes to the resource rather than the top of the document.
     await index.getByRole('button', { name: /conclusion practice/i }).click();
     await expect(
-      page.getByTestId('packet-section-student').first()
+      page
+        .locator('[data-testid="packet-section"][data-audience="student"]')
+        .first()
     ).toBeInViewport();
 
     // Filtering narrows the document to one kind of material.
     await index.getByRole('button', { name: 'Handout', exact: true }).click();
-    await expect(page.getByTestId('packet-section-student')).toHaveCount(1);
-    await expect(page.getByTestId('packet-section-teacher')).toHaveCount(0);
+    await expect(
+      page.locator('[data-testid="packet-section"][data-audience="student"]')
+    ).toHaveCount(1);
+    await expect(
+      page.locator('[data-testid="packet-section"][data-audience="teacher"]')
+    ).toHaveCount(0);
   });
 
   test('renames a saved resource and keeps the name', async ({
@@ -990,6 +998,122 @@ test.describe('YAWP! Lesson Planner', () => {
     await expect(
       page.getByTestId('material-card').nth(1).getByTestId('material-toggle')
     ).toContainText('Add to packet');
+  });
+
+  test('combines the student pieces into one handout to lead a class through', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    await setLessonPlannerEnabled(e2eContext.organizationId, true);
+    const { conversationId } = await seedLessonWithMaterials(e2eContext);
+    await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+    await page.goto(`/app/lesson-planner?c=${conversationId}`);
+
+    // File both pieces, then go and combine them.
+    for (const index of [0, 1]) {
+      const save = page.waitForResponse(
+        (response) =>
+          response.url().includes('/api/domain/lesson-planner/packet') &&
+          response.request().method() === 'POST'
+      );
+      await page
+        .getByTestId('material-card')
+        .nth(index)
+        .getByTestId('material-toggle')
+        .click();
+      await save;
+    }
+
+    await page.goto(`/app/lesson-planner/${conversationId}/packet`);
+    await page.getByRole('button', { name: /student handout/i }).click();
+
+    const parts = page.getByTestId('handout-part');
+    await expect(parts).toHaveCount(2);
+    await expect(parts.first()).toContainText('Part 1.');
+    await expect(parts.first()).toContainText('Two conclusions, side by side');
+    await expect(parts.nth(1)).toContainText('Part 2.');
+    await expect(parts.nth(1)).toContainText('Diagnose & Repair');
+    // One name/date line for the packet, not one per piece.
+    await expect(page.getByText(/^Name _+$/)).toHaveCount(1);
+
+    // The teacher can leave a piece out, and the numbering follows.
+    await page
+      .getByRole('checkbox', { name: 'Two conclusions, side by side' })
+      .uncheck();
+    await expect(parts).toHaveCount(1);
+    await expect(parts.first()).toContainText('Part 1.');
+    await expect(parts.first()).toContainText('Diagnose & Repair');
+  });
+
+  test('prints the student handout without the teacher’s plan', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    await setLessonPlannerEnabled(e2eContext.organizationId, true);
+    const { conversationId } = await seedLessonWithMaterials(e2eContext);
+    await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+    await page.goto(`/app/lesson-planner?c=${conversationId}`);
+
+    const save = page.waitForResponse(
+      (response) =>
+        response.url().includes('/api/domain/lesson-planner/packet') &&
+        response.request().method() === 'POST'
+    );
+    await page
+      .getByTestId('material-card')
+      .nth(1)
+      .getByTestId('material-toggle')
+      .click();
+    await save;
+
+    await page.goto(`/app/lesson-planner/${conversationId}/packet`);
+    await page.getByRole('button', { name: /student handout/i }).click();
+
+    // What actually reaches paper, rather than what the screen shows.
+    await page.emulateMedia({ media: 'print' });
+    await expect(page.getByTestId('handout-part')).toBeVisible();
+    await expect(page.locator('main')).toContainText('Underline the sentence');
+    // The controls and the include/exclude list are not part of the handout.
+    await expect(
+      page.getByRole('button', { name: /print \/ save as pdf/i })
+    ).toBeHidden();
+    await expect(page.getByText('What goes in this handout')).toBeHidden();
+    await page.emulateMedia({ media: 'screen' });
+  });
+
+  test('prints one resource on its own when asked to', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    await setLessonPlannerEnabled(e2eContext.organizationId, true);
+    // window.print() is a no-op in headless Chromium, so stub it to keep the
+    // page in its printing state and assert what would have gone to paper.
+    await page.addInitScript(() => {
+      window.print = () => undefined;
+    });
+    const { conversationId } = await seedLessonPlan(e2eContext, {
+      keepFirst: true,
+      keepLongHandout: true,
+    });
+    await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+    await page.goto(`/app/lesson-planner/${conversationId}/packet`);
+
+    const sections = page.locator('[data-testid="packet-section"]');
+    await expect(sections).toHaveCount(2);
+
+    await sections
+      .nth(1)
+      .getByRole('button', { name: /print this/i })
+      .click();
+
+    await page.emulateMedia({ media: 'print' });
+    // Only the resource the teacher asked for goes to paper.
+    await expect(sections.nth(0)).toBeHidden();
+    await expect(sections.nth(1)).toBeVisible();
+    await page.emulateMedia({ media: 'screen' });
   });
 
   test('refuses to present a reply that has no deck in it', async ({

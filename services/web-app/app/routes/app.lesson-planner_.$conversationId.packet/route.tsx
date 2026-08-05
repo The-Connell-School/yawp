@@ -6,7 +6,14 @@ import {
   useLoaderData,
   type LoaderFunctionArgs,
 } from 'react-router';
-import { ChevronLeft, Lightbulb, ListTree, Printer, Rows } from 'lucide-react';
+import {
+  ChevronLeft,
+  FileText,
+  Lightbulb,
+  ListTree,
+  Printer,
+  Rows,
+} from 'lucide-react';
 import {
   KIND_LABEL,
   KindIcon,
@@ -21,6 +28,7 @@ import { MarkdownContent } from '~/components/ai-chat/assistant-markdown';
 import { SlideDeckCard } from '~/components/ai-chat/slide-deck-card';
 import { readSlideDeck } from '~/domain/lesson-planner/slide-deck';
 import { buildLessonPacket } from '~/domain/lesson-planner/lesson-packet';
+import { buildStudentHandout } from '~/domain/lesson-planner/student-handout';
 import {
   MATERIAL_KIND_LABELS,
   packetKindForMaterial,
@@ -130,18 +138,25 @@ export default function LessonPacketRoute() {
   const { conversationId, packet, packetTitleValue } =
     useLoaderData<typeof loader>();
   const fetcher = useFetcher();
-  const [view, setView] = useState<'full' | 'outline'>('full');
+  const [view, setView] = useState<'full' | 'outline' | 'handout'>('full');
+  // Pieces the teacher does not want in students' hands this time. Nothing is
+  // deleted — the handout is a reading of the packet, so it stays current.
+  const [excluded, setExcluded] = useState<string[]>([]);
   const [filter, setFilter] = useState<ResourceFilter>('all');
   // When set, only this resource prints — a teacher wants the handout on its
   // own far more often than they want the whole packet.
   const [printOnly, setPrintOnly] = useState<string | null>(null);
   const scrollerRef = useRef<HTMLElement>(null);
 
-  // Print after the render that hides the other resources, then restore.
+  // Print after the render that hides the other resources, and restore only
+  // once the dialog is done with the page — clearing immediately raced the
+  // print in browsers where print() does not block.
   useEffect(() => {
     if (!printOnly) return;
+    const restore = () => setPrintOnly(null);
+    window.addEventListener('afterprint', restore, { once: true });
     window.print();
-    setPrintOnly(null);
+    return () => window.removeEventListener('afterprint', restore);
   }, [printOnly]);
 
   function jumpTo(anchor: string) {
@@ -180,6 +195,10 @@ export default function LessonPacketRoute() {
     filter === 'all'
       ? packet.sections
       : packet.sections.filter((section) => section.kind === filter);
+
+  // Every student-facing piece, and the subset actually going in the handout.
+  const allHandoutParts = buildStudentHandout({ packet }).parts;
+  const handout = buildStudentHandout({ packet, excluded });
 
   const printedOn = new Date().toLocaleDateString(undefined, {
     year: 'numeric',
@@ -234,6 +253,19 @@ export default function LessonPacketRoute() {
               >
                 <ListTree size={14} />
                 Outline
+              </button>
+              <button
+                type="button"
+                onClick={() => setView('handout')}
+                aria-pressed={view === 'handout'}
+                disabled={allHandoutParts.length === 0}
+                className={cn(
+                  'inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-sm font-medium text-muted-foreground disabled:opacity-40',
+                  { 'bg-primary/10 text-primary': view === 'handout' }
+                )}
+              >
+                <FileText size={14} />
+                Student handout
               </button>
             </div>
             <Button
@@ -317,6 +349,66 @@ export default function LessonPacketRoute() {
                 <strong>Keep for the lesson</strong> on the parts you want, and
                 they will assemble here.
               </p>
+            ) : view === 'handout' ? (
+              <div data-testid="student-handout">
+                {/* One name/date line for the whole packet, not one per page. */}
+                <div className="mb-6 flex items-end justify-between gap-6 border-b pb-2 text-sm text-muted-foreground">
+                  <span className="flex-1">Name ______________________</span>
+                  <span>Date ____________</span>
+                </div>
+                {handout.parts.length === 0 ? (
+                  <p className="text-sm text-muted-foreground print:hidden">
+                    Every piece is switched off. Turn one back on below.
+                  </p>
+                ) : null}
+                {handout.parts.map((part) => (
+                  <section
+                    key={part.id}
+                    data-testid="handout-part"
+                    className="mb-8 leading-9 last:mb-0 print:break-inside-avoid print:leading-[2.6]"
+                  >
+                    <h2 className="mb-3 text-base font-semibold leading-normal">
+                      <span className="mr-2 text-muted-foreground">
+                        Part {part.number}.
+                      </span>
+                      {part.title}
+                    </h2>
+                    <MarkdownContent content={part.content} />
+                  </section>
+                ))}
+
+                {/* Which pieces go in — never printed. */}
+                <div className="mt-8 border-t pt-4 print:hidden">
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    What goes in this handout
+                  </p>
+                  <div className="flex flex-col gap-1.5">
+                    {allHandoutParts.map((part) => {
+                      const isIn = !excluded.includes(part.id);
+                      return (
+                        <label
+                          key={part.id}
+                          className="flex cursor-pointer items-center gap-2 text-sm"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isIn}
+                            onChange={() =>
+                              setExcluded((prev) =>
+                                isIn
+                                  ? [...prev, part.id]
+                                  : prev.filter((id) => id !== part.id)
+                              )
+                            }
+                            className="h-4 w-4 rounded border-border"
+                          />
+                          {part.title}
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
             ) : view === 'outline' ? (
               <ol
                 className="flex flex-col gap-3"
@@ -353,7 +445,8 @@ export default function LessonPacketRoute() {
                   <section
                     key={section.id}
                     id={section.anchor}
-                    data-testid={`packet-section-${section.audience}`}
+                    data-testid="packet-section"
+                    data-audience={section.audience}
                     data-kind={section.kind}
                     className={cn(
                       'scroll-mt-6',

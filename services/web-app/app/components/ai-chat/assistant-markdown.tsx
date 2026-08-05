@@ -7,6 +7,7 @@
 import { useEffect, useState } from 'react';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
+import { toast } from 'sonner';
 import { cn } from '~/utils/misc';
 
 // Scoped styling for rendered Markdown (no typography plugin in this app).
@@ -112,7 +113,14 @@ export function printAssistantMessage(markdown: string, brand: string) {
   if (typeof window === 'undefined') return;
   const inner = markdownToSafeHtml(markdown);
   const win = window.open('', '_blank', 'width=880,height=1100');
-  if (!win) return; // popup blocked
+  if (!win) {
+    // Failing silently here reads as "the print button is broken", which is
+    // exactly how it was reported.
+    toast.error('Your browser blocked the print window.', {
+      description: 'Allow pop-ups for Yawp, then try Print again.',
+    });
+    return;
+  }
   const stamp = new Date().toLocaleDateString(undefined, {
     year: 'numeric',
     month: 'short',
