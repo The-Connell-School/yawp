@@ -7,7 +7,7 @@
  * this control exists.
  */
 import { useState } from 'react';
-import { Clock, Send, Shapes } from 'lucide-react';
+import { Clock, CornerDownRight, Send, Shapes } from 'lucide-react';
 import {
   composeAskReply,
   LESSON_ACTIVITIES,
@@ -31,16 +31,25 @@ const ACTIVITY_GROUPS = ['whole class', 'small group', 'independent'] as const;
 
 export function LessonAskCard({
   asks,
+  suggestions = [],
   onSend,
   disabled,
 }: {
   asks: LessonAsk[];
+  /**
+   * The reply's own options. They live inside the card rather than beside it:
+   * a teacher answering "what should this be about?" and "how long is your
+   * period?" is answering one question, and two separate send buttons meant
+   * whichever they touched first threw the other answer away.
+   */
+  suggestions?: string[];
   onSend: (message: string) => void;
   disabled?: boolean;
 }) {
   const minutesAsk = asks.find((ask) => ask.kind === 'minutes');
   const wantsActivities = asks.some((ask) => ask.kind === 'activities');
 
+  const [note, setNote] = useState<string | null>(null);
   const [minutes, setMinutes] = useState(
     minutesAsk?.kind === 'minutes' ? minutesAsk.defaultMinutes : null
   );
@@ -58,7 +67,11 @@ export function LessonAskCard({
     });
   }
 
-  const message = composeAskReply({ minutes, activityIds });
+  const message = composeAskReply({
+    note: note ?? undefined,
+    minutes,
+    activityIds,
+  });
   const plannerPicks = activityIds.includes(PLANNER_PICKS_ACTIVITIES);
 
   return (
@@ -66,6 +79,41 @@ export function LessonAskCard({
       data-testid="lesson-ask-card"
       className="mt-3 overflow-hidden rounded-xl border border-primary/25 bg-primary/[0.03]"
     >
+      {suggestions.length > 0 ? (
+        <div className="border-b border-primary/15 px-4 py-3.5">
+          <div className="mb-2.5 flex items-center gap-2">
+            <CornerDownRight size={15} className="shrink-0 text-primary" />
+            <span className="text-sm font-medium">
+              What should this lesson be about?
+            </span>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {suggestions.map((suggestion) => {
+              const chosen = note === suggestion;
+              return (
+                <button
+                  key={suggestion}
+                  type="button"
+                  aria-pressed={chosen}
+                  disabled={disabled}
+                  // Tapping the chosen one again clears it, so a teacher who
+                  // picked the wrong option is not stuck with it.
+                  onClick={() => setNote(chosen ? null : suggestion)}
+                  className={cn(
+                    'rounded-full border px-3 py-1.5 text-left text-sm transition disabled:opacity-50',
+                    chosen
+                      ? 'border-primary bg-primary/10 font-medium text-primary'
+                      : 'border-border hover:bg-foreground/[0.03]'
+                  )}
+                >
+                  {suggestion}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ) : null}
+
       {minutes !== null ? (
         <div className="border-b border-primary/15 px-4 py-3.5">
           <div className="mb-3 flex items-center gap-2">
@@ -181,7 +229,7 @@ export function LessonAskCard({
 
       <div className="flex items-center gap-3 border-t border-primary/15 bg-primary/[0.04] px-4 py-2.5">
         <p className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
-          {message || 'Set the length or pick some activities.'}
+          {message || 'Pick an option, set the length, choose some activities.'}
         </p>
         <button
           type="button"

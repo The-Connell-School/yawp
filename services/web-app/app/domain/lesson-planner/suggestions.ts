@@ -145,6 +145,45 @@ function withoutRoomTalk(suggestion: string): string {
 }
 
 /**
+ * A clause that is nothing but how long the period runs.
+ *
+ * "50 minutes", "80-minute block", "45 min period" — the answer the slider
+ * exists to give.
+ */
+const PERIOD_LENGTH =
+  /^\s*(?:about\s+|roughly\s+|~\s*)?\d{1,3}\s*(?:-|\s)?\s*(?:min(?:ute)?s?|hr|hour)\b[^,;—–]*$/i;
+
+/**
+ * Take the period length out of an option offered beside the minutes slider.
+ *
+ * Asking for the length with a control and then offering "50 minutes" as
+ * something to tap is the same question asked twice, and the two answers
+ * disagree the moment the teacher drags the slider. The rest of the option is
+ * still worth keeping: "English 10 · Period 3, 50 minutes" becomes
+ * "English 10 · Period 3".
+ */
+export function withoutPeriodLength(suggestion: string): string {
+  const parts = suggestion.split(CLAUSES);
+  const clauses: Array<{ separator: string; text: string }> = [];
+  for (let index = 0; index < parts.length; index += 2) {
+    clauses.push({
+      separator: index === 0 ? '' : (parts[index - 1] ?? ''),
+      text: parts[index] ?? '',
+    });
+  }
+
+  const kept = clauses.filter((clause) => !PERIOD_LENGTH.test(clause.text));
+  // An option that was only ever the length has nothing left to offer.
+  if (!kept.length) return '';
+  return kept
+    .map((clause, index) =>
+      index === 0 ? clause.text : clause.separator + clause.text
+    )
+    .join('')
+    .trim();
+}
+
+/**
  * Merge the model's suggestions with the pinned opening option.
  *
  * Only the opening reply gets the pin — later turns are about the lesson in
@@ -176,17 +215,23 @@ export function withStandardSuggestions(
     produced = {},
     /** What the lesson's packet already holds. */
     inPacket = {},
+    /** This reply drew the minutes slider, so it owns the question of length. */
+    asksForMinutes = false,
   }: {
     isOpeningReply: boolean;
     teacherRaisedRoomPersonality?: boolean;
     deliveredPlan?: boolean;
     produced?: ArtifactFlags;
     inPacket?: ArtifactFlags;
+    asksForMinutes?: boolean;
   }
 ): string[] {
-  const offered = teacherRaisedRoomPersonality
+  const withoutRoom = teacherRaisedRoomPersonality
     ? suggestions
     : suggestions.map(withoutRoomTalk);
+  const offered = asksForMinutes
+    ? withoutRoom.map(withoutPeriodLength)
+    : withoutRoom;
 
   const deduped: string[] = [];
   const seen = new Set<string>();

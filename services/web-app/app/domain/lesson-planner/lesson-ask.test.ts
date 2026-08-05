@@ -158,3 +158,51 @@ describe('the spectrum itself', () => {
     expect(LESSON_MINUTES_STEP).toBe(5);
   });
 });
+
+describe('composeAskReply — one send carries the whole answer', () => {
+  test('leads with what the teacher chose, then the length', () => {
+    // The reported bug: answering the length threw away the chance to say what
+    // the lesson should be about. One message now carries both.
+    expect(
+      composeAskReply({
+        note: 'Build it around Evidence/Support',
+        minutes: 50,
+        activityIds: [],
+      })
+    ).toBe('Build it around Evidence/Support. 50 minutes.');
+  });
+
+  test('carries the choice, the length and the activities together', () => {
+    expect(
+      composeAskReply({
+        note: 'Focus on integrating quotes',
+        minutes: 45,
+        activityIds: ['jigsaw'],
+      })
+    ).toBe(
+      'Focus on integrating quotes. 45 minutes. I want to use: Jigsaw.'
+    );
+  });
+
+  test('does not double up punctuation the chip already has', () => {
+    expect(
+      composeAskReply({
+        note: 'Which class? English 10.',
+        minutes: null,
+        activityIds: [],
+      })
+    ).toBe('Which class? English 10.');
+  });
+
+  test('sends the chip on its own when nothing else was set', () => {
+    expect(
+      composeAskReply({ note: 'Go ahead', minutes: null, activityIds: [] })
+    ).toBe('Go ahead.');
+  });
+
+  test('still works with no chip at all', () => {
+    expect(composeAskReply({ minutes: 50, activityIds: [] })).toBe(
+      '50 minutes.'
+    );
+  });
+});

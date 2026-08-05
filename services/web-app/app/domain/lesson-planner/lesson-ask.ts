@@ -142,19 +142,35 @@ export function hasLessonAsks(content: string): boolean {
   return readLessonAsks(content).asks.length > 0;
 }
 
+/** Already ends in something that finishes a sentence. */
+function isFinished(text: string): boolean {
+  return /[.!?…:]$/.test(text);
+}
+
 /**
  * The sentence the teacher would have typed, built from what they set.
  *
  * Written in their voice, because it is sent as their message.
+ *
+ * The `note` is whatever they chose from the options offered alongside the
+ * controls, and it leads: a teacher answering "what should this be about?" and
+ * "how long is your period?" is answering one question, not two, and the
+ * subject comes before its length.
  */
 export function composeAskReply({
+  note,
   minutes,
   activityIds,
 }: {
+  note?: string;
   minutes: number | null;
   activityIds: string[];
 }): string {
   const parts: string[] = [];
+
+  const chosen = note?.trim();
+  if (chosen) parts.push(isFinished(chosen) ? chosen : `${chosen}.`);
+
   if (minutes !== null) parts.push(`${minutes} minutes.`);
 
   if (activityIds.includes(PLANNER_PICKS_ACTIVITIES)) {

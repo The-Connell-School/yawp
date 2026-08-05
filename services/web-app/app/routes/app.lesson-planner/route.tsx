@@ -709,6 +709,7 @@ function MessageBubble({
       handout: materials.some((material) => material.audience === 'student'),
     },
     inPacket: lessonHas,
+    asksForMinutes: asks.some((ask) => ask.kind === 'minutes'),
   });
 
   return (
@@ -825,11 +826,14 @@ function MessageBubble({
         {asks.length > 0 && isLast ? (
           <LessonAskCard
             asks={asks}
+            suggestions={suggestions}
             onSend={onSuggestion}
             disabled={disabled}
           />
         ) : null}
-        {suggestions.length > 0 && isLast ? (
+        {/* The chips move inside the card when there is one, so a turn never
+            has two send buttons racing to consume it. */}
+        {suggestions.length > 0 && isLast && asks.length === 0 ? (
           <div className="mt-2 flex flex-wrap gap-2">
             {suggestions.map((suggestion) => (
               <button

@@ -239,6 +239,43 @@ describe('withStandardSuggestions — what comes after a plan', () => {
   });
 });
 
+describe('withStandardSuggestions — the slider owns the question of length', () => {
+  test('drops an option that is nothing but the period length', () => {
+    expect(
+      withStandardSuggestions(['50 minutes', 'English 10 · Period 3'], {
+        isOpeningReply: false,
+        asksForMinutes: true,
+      })
+    ).toEqual(['English 10 · Period 3']);
+  });
+
+  test('keeps the rest of an option that merely tacks the length on', () => {
+    expect(
+      withStandardSuggestions(
+        ['English 10 · Period 3, 50 minutes, about 25 students'],
+        { isOpeningReply: false, asksForMinutes: true }
+      )
+    ).toEqual(['English 10 · Period 3, about 25 students']);
+  });
+
+  test('leaves the length alone when no slider was drawn', () => {
+    const options = ['50 minutes, about 25 students'];
+    expect(withStandardSuggestions(options, { isOpeningReply: false })).toEqual(
+      options
+    );
+  });
+
+  test('does not mistake a timed activity for the period length', () => {
+    const options = ['Give them 10 minutes to write, then share'];
+    expect(
+      withStandardSuggestions(options, {
+        isOpeningReply: false,
+        asksForMinutes: true,
+      })
+    ).toEqual(options);
+  });
+});
+
 describe('looksLikeLessonPlan', () => {
   test('recognises a reply built out of sections', () => {
     expect(
