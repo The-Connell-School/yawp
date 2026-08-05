@@ -228,7 +228,8 @@ function LocalDevQuickLoginPanel({
 export function PreviewSeatIdentity({ label }: { label: string }) {
   return (
     <p className="px-2 pb-1 pt-1.5 text-xs text-muted-foreground">
-      Current seat: <span className="font-semibold text-foreground">{label}</span>
+      Current seat:{' '}
+      <span className="font-semibold text-foreground">{label}</span>
     </p>
   );
 }

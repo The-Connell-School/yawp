@@ -10,6 +10,7 @@
 import { parseAssistantMessage } from '~/components/ai-chat/parse-assistant-message';
 import { hasSlideDeck } from './slide-deck';
 import { readLessonMaterials, type LessonMaterial } from './lesson-material';
+import { readLessonAsks } from './lesson-ask';
 
 export const PACKET_AUDIENCES = ['teacher', 'student'] as const;
 
@@ -188,7 +189,10 @@ export function buildLessonPacket({
     // material, never as the raw fence — and their headings are parts of a
     // handout, not stages of the class, so they must come out before the
     // outline reads steps.
-    const { materials, body } = readLessonMaterials(withMaterials);
+    const { materials, body: withAsks } = readLessonMaterials(withMaterials);
+    // A kept intake turn still carries its control request. It is machinery, so
+    // it is stripped rather than printed — the same reason the deck's JSON is.
+    const { body } = readLessonAsks(withAsks);
     const derivedTitle = deriveSectionTitle(body, index);
     const audience = parsePacketAudience(section.keptAudience);
     return {

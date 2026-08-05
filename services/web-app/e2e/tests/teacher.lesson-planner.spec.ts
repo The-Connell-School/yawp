@@ -379,6 +379,41 @@ async function seedRevisedHandout(e2eContext: {
   }
 }
 
+/** An intake turn that asks with controls rather than in prose. */
+async function seedAskTurn(
+  e2eContext: { teacherMembershipId: string; organizationId: string },
+  block: string
+) {
+  const prisma = createE2EPrismaClient();
+  try {
+    const conversation = await prisma.lessonPlanConversation.create({
+      data: {
+        membershipId: e2eContext.teacherMembershipId,
+        organizationId: e2eContext.organizationId,
+        title: 'Intake lesson',
+        messages: {
+          create: [
+            {
+              role: 'user',
+              content: 'Plan a lesson on explaining evidence.',
+              createdAt: new Date('2026-08-05T10:00:00.000Z'),
+            },
+            {
+              role: 'assistant',
+              content: `Before I plan, two quick things.\n\n\`\`\`yawp-ask\n${block}\n\`\`\``,
+              createdAt: new Date('2026-08-05T10:00:01.000Z'),
+            },
+          ],
+        },
+      },
+      select: { id: true },
+    });
+    return { conversationId: conversation.id };
+  } finally {
+    await prisma.$disconnect();
+  }
+}
+
 test.describe('YAWP! Lesson Planner', () => {
   test.afterEach(async ({ e2eContext }) => {
     // Leave the org in its default (disabled) state for other specs.
@@ -1259,6 +1294,102 @@ test.describe('YAWP! Lesson Planner', () => {
     await expect(card).toContainText('Evidence that earns its place');
     await card.getByRole('link', { name: /present/i }).click();
     await expect(page.getByTestId('slide-counter')).toHaveText('1 / 3');
+  });
+
+  test('asks for the lesson length on a spectrum instead of in prose', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    await setLessonPlannerEnabled(e2eContext.organizationId, true);
+    const { conversationId } = await seedAskTurn(e2eContext, 'minutes: 50');
+    await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+    await page.goto(`/app/lesson-planner?c=${conversationId}`);
+
+    // The request itself is machinery and never reaches the teacher as text.
+    await expect(page.locator('main')).not.toContainText('yawp-ask');
+    await expect(page.locator('main')).toContainText('Before I plan');
+
+    const card = page.getByTestId('lesson-ask-card');
+    await expect(card).toBeVisible();
+    // It opens on the planner's own guess, so agreeing costs one tap.
+    await expect(page.getByTestId('lesson-minutes-value')).toHaveText('50 min');
+
+    const slider = page.getByRole('slider', {
+      name: /lesson length in minutes/i,
+    });
+    await slider.fill('90');
+    await expect(page.getByTestId('lesson-minutes-value')).toHaveText(
+      '1 hr 30 min'
+    );
+    await slider.fill('5');
+    await expect(page.getByTestId('lesson-minutes-value')).toHaveText('5 min');
+  });
+
+  test('sends the activities a teacher checks as their own message', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    await setLessonPlannerEnabled(e2eContext.organizationId, true);
+    const { conversationId } = await seedAskTurn(
+      e2eContext,
+      'minutes: 45\nactivities'
+    );
+    await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+    await page.goto(`/app/lesson-planner?c=${conversationId}`);
+
+    await page.getByRole('checkbox', { name: 'Jigsaw' }).check();
+    await page.getByRole('checkbox', { name: 'Gallery walk' }).check();
+
+    const sent = page.waitForRequest(
+      (request) =>
+        request.url().includes('/api/domain/lesson-planner') &&
+        request.method() === 'POST'
+    );
+    await page.getByTestId('lesson-ask-send').click();
+    const request = await sent;
+
+    // It leaves as a sentence the teacher could have typed themselves.
+    expect(request.postData()).toContain('45+minutes.');
+    expect(request.postData()).toContain('Jigsaw');
+    expect(request.postData()).toContain('Gallery+walk');
+  });
+
+  test('always offers to let the planner pick the activities', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    await setLessonPlannerEnabled(e2eContext.organizationId, true);
+    const { conversationId } = await seedAskTurn(e2eContext, 'activities');
+    await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+    await page.goto(`/app/lesson-planner?c=${conversationId}`);
+
+    // No length was asked for, so no slider is drawn.
+    await expect(
+      page.getByRole('slider', { name: /lesson length in minutes/i })
+    ).toHaveCount(0);
+
+    const handBack = page.getByRole('checkbox', {
+      name: /you pick the ones that fit/i,
+    });
+    await expect(handBack).toBeVisible();
+    await page.getByRole('checkbox', { name: 'Jigsaw' }).check();
+    await handBack.check();
+    // Handing the choice back clears what was picked — the two contradict.
+    await expect(
+      page.getByRole('checkbox', { name: 'Jigsaw' })
+    ).not.toBeChecked();
+
+    const sent = page.waitForRequest(
+      (request) =>
+        request.url().includes('/api/domain/lesson-planner') &&
+        request.method() === 'POST'
+    );
+    await page.getByTestId('lesson-ask-send').click();
+    const request = await sent;
+    expect(request.postData()).toContain('You+pick+the+activities');
   });
 
   test('refuses to present a reply that has no deck in it', async ({

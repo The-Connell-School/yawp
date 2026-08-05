@@ -6,11 +6,11 @@ import {
 
 function dependencies(
   memberships: Array<{ id: string; organizationId: string }>,
-  selectedMembershipId: string | null,
+  selectedMembershipId: string | null
 ) {
   const destroyAuthSession = mock(async () => 'auth=; Max-Age=0; Path=/');
   const clearSelectedMembership = mock(
-    async () => 'membership-id=; Max-Age=0; Path=/',
+    async () => 'membership-id=; Max-Age=0; Path=/'
   );
   const deleteSession = mock(async () => undefined);
   const deps: PreviewSeatSessionDependencies = {
@@ -30,11 +30,13 @@ describe('preview seat session boundary', () => {
   test('allows a session whose effective membership belongs to the signed seat', async () => {
     const { deps, deleteSession } = dependencies(
       [{ id: 'membership-2', organizationId: 'preview-seat-2' }],
-      'membership-2',
+      'membership-2'
     );
     const guard = createPreviewSeatSessionGuard(deps);
 
-    expect(await guard(new Request('https://preview.test/app'), seat)).toBeNull();
+    expect(
+      await guard(new Request('https://preview.test/app'), seat)
+    ).toBeNull();
     expect(deleteSession).not.toHaveBeenCalled();
   });
 
@@ -42,18 +44,18 @@ describe('preview seat session boundary', () => {
     const { deps, destroyAuthSession, clearSelectedMembership, deleteSession } =
       dependencies(
         [{ id: 'membership-3', organizationId: 'preview-seat-3' }],
-        'membership-3',
+        'membership-3'
       );
     const guard = createPreviewSeatSessionGuard(deps);
 
     const response = await guard(
       new Request('https://preview.test/app/classes'),
-      seat,
+      seat
     );
 
     expect(response?.status).toBe(302);
     expect(response?.headers.get('location')).toBe(
-      '/auth/login?redirectTo=%2Fapp%2Fclasses',
+      '/auth/login?redirectTo=%2Fapp%2Fclasses'
     );
     expect(destroyAuthSession).toHaveBeenCalledTimes(1);
     expect(clearSelectedMembership).toHaveBeenCalledTimes(1);
@@ -66,13 +68,13 @@ describe('preview seat session boundary', () => {
         { id: 'membership-2', organizationId: 'preview-seat-2' },
         { id: 'membership-3', organizationId: 'preview-seat-3' },
       ],
-      'membership-3',
+      'membership-3'
     );
     const guard = createPreviewSeatSessionGuard(deps);
 
     const response = await guard(
       new Request('https://preview.test/api/membership-id', { method: 'POST' }),
-      seat,
+      seat
     );
 
     expect(response?.status).toBe(401);
@@ -87,12 +89,12 @@ describe('preview seat session boundary', () => {
         { id: 'membership-2', organizationId: 'preview-seat-2' },
         { id: 'membership-3', organizationId: 'preview-seat-3' },
       ],
-      null,
+      null
     );
     const guard = createPreviewSeatSessionGuard(deps);
 
     expect(
-      (await guard(new Request('https://preview.test/app'), seat))?.status,
+      (await guard(new Request('https://preview.test/app'), seat))?.status
     ).toBe(302);
   });
 
@@ -101,7 +103,9 @@ describe('preview seat session boundary', () => {
     deps.getAuthSession = mock(async () => ({ get: () => null }));
     const guard = createPreviewSeatSessionGuard(deps);
 
-    expect(await guard(new Request('https://preview.test/app'), seat)).toBeNull();
+    expect(
+      await guard(new Request('https://preview.test/app'), seat)
+    ).toBeNull();
     expect(deleteSession).not.toHaveBeenCalled();
   });
 });

@@ -149,7 +149,11 @@ export async function loader({ request }: LoaderFunctionArgs) {
               isAdmin: true,
               memberships: {
                 ...(previewAccessSeat && isIsolatedPreviewSeatMode()
-                  ? { where: { organizationId: previewAccessSeat.organizationId } }
+                  ? {
+                      where: {
+                        organizationId: previewAccessSeat.organizationId,
+                      },
+                    }
                   : {}),
                 orderBy: { createdAt: 'asc' },
                 select: {
@@ -223,9 +227,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       localDevQuickLogin: {
         enabled: localDevQuickLoginEnabled,
         options: localDevQuickLoginEnabled
-          ? await getLocalDevLoginOptions(
-              previewAccessSeat?.organizationId,
-            )
+          ? await getLocalDevLoginOptions(previewAccessSeat?.organizationId)
           : [],
       },
       previewAccessGateEnabled: isPreviewAccessGateEnabled(),

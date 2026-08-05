@@ -21,7 +21,7 @@ export type PreviewSeatSessionDependencies = {
 
 export type PreviewSeatSessionGuard = (
   request: Request,
-  seat: PreviewAccessSeat,
+  seat: PreviewAccessSeat
 ) => Promise<Response | null>;
 
 function mismatchedSessionResponse(request: Request, cookies: string[]) {
@@ -35,24 +35,24 @@ function mismatchedSessionResponse(request: Request, cookies: string[]) {
       {
         error: 'Authenticated session does not belong to this preview seat.',
       },
-      { status: 401, headers },
+      { status: 401, headers }
     );
   }
 
   const returnTo = `${url.pathname}${url.search}`;
   headers.set(
     'Location',
-    `/auth/login?${new URLSearchParams({ redirectTo: returnTo })}`,
+    `/auth/login?${new URLSearchParams({ redirectTo: returnTo })}`
   );
   return new Response(null, { status: 302, headers });
 }
 
 export function createPreviewSeatSessionGuard(
-  dependencies: PreviewSeatSessionDependencies,
+  dependencies: PreviewSeatSessionDependencies
 ): PreviewSeatSessionGuard {
   return async (request, seat) => {
     const authSession = await dependencies.getAuthSession(
-      request.headers.get('cookie'),
+      request.headers.get('cookie')
     );
     const rawSessionId = authSession.get('sessionId');
     if (typeof rawSessionId !== 'string' || !rawSessionId) return null;
@@ -63,7 +63,7 @@ export function createPreviewSeatSessionGuard(
     ]);
     const memberships = session?.user.memberships ?? [];
     const seatMembership = memberships.find(
-      ({ organizationId }) => organizationId === seat.organizationId,
+      ({ organizationId }) => organizationId === seat.organizationId
     );
     const effectiveMembershipBelongsToSeat = selectedMembershipId
       ? selectedMembershipId === seatMembership?.id
@@ -82,17 +82,21 @@ export function createPreviewSeatSessionGuard(
 
 export const enforcePreviewSeatSession: PreviewSeatSessionGuard = async (
   request,
-  seat,
+  seat
 ) => {
-  const [{ authSessionStorage }, { getMembershipId, setMembershipId }, { prisma }] =
-    await Promise.all([
-      import('../cookie-session-storages/authentication.server.ts'),
-      import('../cookies/membership-id.server.ts'),
-      import('./db.server.ts'),
-    ]);
+  const [
+    { authSessionStorage },
+    { getMembershipId, setMembershipId },
+    { prisma },
+  ] = await Promise.all([
+    import('../cookie-session-storages/authentication.server.ts'),
+    import('../cookies/membership-id.server.ts'),
+    import('./db.server.ts'),
+  ]);
 
   return createPreviewSeatSessionGuard({
-    getAuthSession: (cookieHeader) => authSessionStorage.getSession(cookieHeader),
+    getAuthSession: (cookieHeader) =>
+      authSessionStorage.getSession(cookieHeader),
     destroyAuthSession: (session) =>
       authSessionStorage.destroySession(session as never),
     getSelectedMembershipId: getMembershipId,

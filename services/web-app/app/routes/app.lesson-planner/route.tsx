@@ -36,6 +36,8 @@ import {
   readLessonMaterials,
 } from '~/domain/lesson-planner/lesson-material';
 import { MaterialCard } from '~/components/ai-chat/material-card';
+import { LessonAskCard } from '~/components/ai-chat/lesson-ask-card';
+import { readLessonAsks } from '~/domain/lesson-planner/lesson-ask';
 import {
   looksLikeLessonPlan,
   mentionsRoomPersonality,
@@ -689,7 +691,10 @@ function MessageBubble({
     deckOutcome.kind === 'none' ? withDeck : deckOutcome.body;
   // Every handout, sample, and exit ticket becomes its own card with its own
   // way into the packet, rather than something to select and copy out.
-  const { materials, body } = readLessonMaterials(withMaterials);
+  const { materials, body: withAsks } = readLessonMaterials(withMaterials);
+  // A period length and a set of activities are a slider and a checklist, not a
+  // sentence the teacher has to type between classes.
+  const { asks, body } = readLessonAsks(withAsks);
   // Only offer print/PDF on substantial replies (a lesson), not one-liners.
   const isArtifact = /(^|\n)#{1,3}\s/.test(body) || /\n\|.*\|/.test(body);
   // The opening turn always offers the data-driven route, and a delivered plan
@@ -817,6 +822,13 @@ function MessageBubble({
             </button>
           ) : null}
         </div>
+        {asks.length > 0 && isLast ? (
+          <LessonAskCard
+            asks={asks}
+            onSend={onSuggestion}
+            disabled={disabled}
+          />
+        ) : null}
         {suggestions.length > 0 && isLast ? (
           <div className="mt-2 flex flex-wrap gap-2">
             {suggestions.map((suggestion) => (

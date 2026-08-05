@@ -5,7 +5,7 @@ import { PreviewSeatIdentity } from './local-dev-environment-bar';
 describe('preview seat identity', () => {
   test('shows the bound seat beside the access-code switch control', () => {
     const html = renderToStaticMarkup(
-      <PreviewSeatIdentity label="Bryant Brock" />,
+      <PreviewSeatIdentity label="Bryant Brock" />
     );
 
     expect(html).toContain('Current seat:');

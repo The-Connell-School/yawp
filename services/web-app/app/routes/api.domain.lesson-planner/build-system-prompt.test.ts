@@ -364,3 +364,34 @@ describe('buildLessonPlannerSystemPrompt — what the lesson already has', () =>
     expect(empty).not.toContain('What this lesson already contains');
   });
 });
+
+describe('buildLessonPlannerSystemPrompt — asking with controls', () => {
+  const prompt = buildLessonPlannerSystemPrompt({
+    teacherName: null,
+    organizationName: 'Connell School',
+  });
+
+  test('names the block the chat renders into controls', () => {
+    expect(prompt).toContain('```yawp-ask');
+    expect(prompt).toContain('minutes: 50');
+    expect(prompt).toContain('activities');
+  });
+
+  test('asks for the length with the slider rather than in words', () => {
+    const lower = prompt.toLowerCase();
+    expect(lower).toContain('5 to 90 minutes');
+    expect(lower).toContain('never ask for the length in words');
+  });
+
+  test('says when the activity list is worth asking for and when it is not', () => {
+    const lower = prompt.toLowerCase();
+    expect(lower).toContain('could genuinely be built more than one way');
+    expect(lower).toContain('do not ask for it when');
+  });
+
+  test('keeps the machinery off the teacher’s screen', () => {
+    const lower = prompt.toLowerCase();
+    expect(lower).toContain('do not list the activities yourself');
+    expect(lower).toContain('never mention the block');
+  });
+});

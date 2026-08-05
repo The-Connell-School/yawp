@@ -1,8 +1,4 @@
-import {
-  Form,
-  useActionData,
-  type LoaderFunctionArgs,
-} from 'react-router';
+import { Form, useActionData, type LoaderFunctionArgs } from 'react-router';
 import { KeyRound } from 'lucide-react';
 import { safeRedirect } from 'remix-utils/safe-redirect';
 import { isPreviewAccessConfigured } from '~/utils/preview-access.server';
@@ -27,7 +23,9 @@ export const meta: Route.MetaFunction = () => [
   },
 ];
 
-export default function PreviewAccessRoute({ loaderData }: Route.ComponentProps) {
+export default function PreviewAccessRoute({
+  loaderData,
+}: Route.ComponentProps) {
   const actionData = useActionData<{ error: string }>();
   const error = actionData?.error ?? null;
 

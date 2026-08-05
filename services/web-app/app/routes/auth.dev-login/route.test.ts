@@ -14,13 +14,13 @@ const setMembershipId = mock();
 const isLocalDevAuthEnabled = mock();
 const isPreviewAccessGateEnabled = mock();
 const getPreviewAccessSeat = mock();
-const redirectResponse = mock((headers: Headers) =>
-  new Response(null, { status: 302, headers: { Location: '/app' } }),
+const redirectResponse = mock(
+  (headers: Headers) =>
+    new Response(null, { status: 302, headers: { Location: '/app' } })
 );
 
-const { createDevLoginAction, getLocalDevLoginOptions } = await import(
-  './dev-login.server'
-);
+const { createDevLoginAction, getLocalDevLoginOptions } =
+  await import('./dev-login.server');
 const action = createDevLoginAction({
   prismaClient: prisma as never,
   getExpirationDate: getSessionExpirationDate as never,
@@ -73,7 +73,9 @@ describe('auth.dev-login action', () => {
     isLocalDevAuthEnabled.mockReturnValue(true);
     isPreviewAccessGateEnabled.mockReturnValue(false);
     getPreviewAccessSeat.mockResolvedValue(null);
-    getSessionExpirationDate.mockReturnValue(new Date('2030-01-01T00:00:00.000Z'));
+    getSessionExpirationDate.mockReturnValue(
+      new Date('2030-01-01T00:00:00.000Z')
+    );
     authSessionStorage.getSession.mockResolvedValue({
       get: () => 'old-session-id',
       set: mock(),
@@ -130,7 +132,7 @@ describe('auth.dev-login action', () => {
     });
 
     const response = await action(
-      actionArgs(makeRequest('student@seat-two.example', 'preview=seat-2')),
+      actionArgs(makeRequest('student@seat-two.example', 'preview=seat-2'))
     );
 
     expect(response.status).toBe(302);
@@ -161,7 +163,7 @@ describe('auth.dev-login action', () => {
     prisma.user.findFirst.mockResolvedValue(null);
 
     const response = await action(
-      actionArgs(makeRequest('dev.student@yawp.local', 'preview=seat-2')),
+      actionArgs(makeRequest('dev.student@yawp.local', 'preview=seat-2'))
     );
 
     expect(response.status).toBe(404);
@@ -174,23 +176,19 @@ describe('auth.dev-login action', () => {
         email: 'teacher@seat-two.example',
         name: 'Seat Two Teacher',
         isAdmin: false,
-        memberships: [
-          { role: 'TEACHER', isOrgOwner: false },
-        ],
+        memberships: [{ role: 'TEACHER', isOrgOwner: false }],
       },
       {
         email: 'student@seat-two.example',
         name: 'Seat Two Student',
         isAdmin: false,
-        memberships: [
-          { role: 'STUDENT', isOrgOwner: false },
-        ],
+        memberships: [{ role: 'STUDENT', isOrgOwner: false }],
       },
     ]);
 
     const options = await getLocalDevLoginOptions(
       'preview-seat-2',
-      prisma as never,
+      prisma as never
     );
 
     expect(prisma.user.findMany).toHaveBeenCalledWith({

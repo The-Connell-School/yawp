@@ -368,3 +368,24 @@ describe('buildLessonPacket — a kept reply that carries materials', () => {
     expect(packet.outline[0]!.steps).toEqual([]);
   });
 });
+
+describe('buildLessonPacket — a kept reply that asked with controls', () => {
+  test('never prints the control request as text', () => {
+    const packet = buildLessonPacket({
+      title: 'Lesson',
+      className: null,
+      sections: [
+        {
+          id: 'msg-1',
+          content:
+            '## Before I plan\n\nWhich class is this for?\n\n```yawp-ask\nminutes: 50\nactivities\n```',
+          keptAudience: 'teacher',
+        },
+      ],
+    });
+
+    expect(packet.sections[0]!.content).not.toContain('yawp-ask');
+    expect(packet.sections[0]!.content).not.toContain('minutes: 50');
+    expect(packet.sections[0]!.content).toContain('Which class is this for?');
+  });
+});

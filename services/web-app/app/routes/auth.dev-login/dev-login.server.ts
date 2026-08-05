@@ -45,7 +45,9 @@ export function createDevLoginAction({
     if (!localDevAuthEnabled()) return forbidden();
 
     const formData = await request.formData();
-    const email = String(formData.get('email') ?? '').trim().toLowerCase();
+    const email = String(formData.get('email') ?? '')
+      .trim()
+      .toLowerCase();
     const gateEnabled = previewGateEnabled();
     const previewSeat = gateEnabled
       ? await previewSeatForRequest(request)
@@ -54,7 +56,7 @@ export function createDevLoginAction({
     if (gateEnabled && !previewSeat) {
       return Response.json(
         { error: 'Preview access code required.' },
-        { status: 401 },
+        { status: 401 }
       );
     }
     if (!gateEnabled && !LOCAL_DEV_PERSONA_EMAILS.includes(email)) {
@@ -98,7 +100,7 @@ export function createDevLoginAction({
             ? 'No user with that email belongs to this preview seat.'
             : 'Dev persona missing. Run `bun db:seed-local-dev` first.',
         },
-        { status: 404 },
+        { status: 404 }
       );
     }
 
@@ -112,7 +114,7 @@ export function createDevLoginAction({
 
     const membershipId = user.memberships[0]?.id ?? '';
     const authSession = await sessionStorage.getSession(
-      request.headers.get('cookie'),
+      request.headers.get('cookie')
     );
     const previousSessionId = authSession.get(sessionKey);
     if (previousSessionId) {
@@ -134,15 +136,15 @@ export function createDevLoginAction({
             expires: session.expirationDate,
           }),
         },
-        { 'set-cookie': await membershipCookie(membershipId) },
-      ),
+        { 'set-cookie': await membershipCookie(membershipId) }
+      )
     );
   };
 }
 
 export async function getLocalDevLoginOptions(
   organizationId: string | undefined,
-  prismaClient: any,
+  prismaClient: any
 ): Promise<DevLoginOption[]> {
   if (!organizationId) {
     return LOCAL_DEV_PERSONAS.map((persona) => ({

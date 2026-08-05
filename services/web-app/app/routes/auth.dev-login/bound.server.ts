@@ -1,7 +1,4 @@
-import {
-  getSessionExpirationDate,
-  sessionKey,
-} from '~/utils/auth.server';
+import { getSessionExpirationDate, sessionKey } from '~/utils/auth.server';
 import { authSessionStorage } from '~/cookie-session-storages/authentication.server';
 import { setMembershipId } from '~/cookies/membership-id.server';
 import { prisma } from '~/utils/db.server';

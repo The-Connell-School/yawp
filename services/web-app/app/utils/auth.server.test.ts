@@ -182,7 +182,7 @@ describe('membership auth helpers', () => {
 
     try {
       await expect(
-        requireAdmin(new Request('https://example.com/app/admin')),
+        requireAdmin(new Request('https://example.com/app/admin'))
       ).resolves.toBeDefined();
     } finally {
       delete process.env.PREVIEW_ACCESS_GATE;

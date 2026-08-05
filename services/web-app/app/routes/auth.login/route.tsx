@@ -73,7 +73,7 @@ const actionImpl = async ({ request }: ActionFunctionArgs) => {
       if (!seatMembership) {
         return validationError(
           { fieldErrors: { email: 'Invalid email or password' } },
-          data,
+          data
         );
       }
       previewMembershipId = seatMembership.id;
@@ -100,7 +100,7 @@ const actionImpl = async ({ request }: ActionFunctionArgs) => {
         },
         previewMembershipId
           ? { 'set-cookie': await setMembershipId(previewMembershipId) }
-          : null,
+          : null
       ),
     });
   } catch (error) {
