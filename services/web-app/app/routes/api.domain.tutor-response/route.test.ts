@@ -220,7 +220,13 @@ describe('api.domain.tutor-response read-only impersonation', () => {
     expect(completionArgs.logPayload).toBe('metadata-only');
   });
 
-  test('returns a retry signal without writing messages when fallback retry is requested', async () => {
+  test('an Anthropic outage is a plain failure, not a fallback-retry signal', async () => {
+    // Cross-provider fallback is disabled for tutor (allowFallbackProvider:
+    // false), so getLLMCompletion can never actually throw
+    // LlmFallbackRetrySignal for this call site in production. This proves
+    // the route no longer special-cases it into a 202 "retrying" response
+    // even if it somehow received one - it's handled like any other failed
+    // call, via the generic error response.
     mockCms();
     getLLMCompletion.mockImplementationOnce(() => {
       throw new LlmFallbackRetrySignal({
@@ -242,16 +248,17 @@ describe('api.domain.tutor-response read-only impersonation', () => {
       }),
     } as any);
     const payload = response as {
-      data: { retrying?: boolean };
+      data: { retrying?: boolean; error?: string };
       init?: { status?: number };
     };
 
-    expect(payload.init?.status).toBe(202);
-    expect(payload.data.retrying).toBe(true);
+    expect(payload.init?.status).toBe(500);
+    expect(payload.data.retrying).toBeUndefined();
+    expect(payload.data.error).toContain('Failed to get a response');
     expect(prisma.assignmentModuleSession.update).not.toHaveBeenCalled();
   });
 
-  test('forces fallback model on retry and persists one user and one tutor message', async () => {
+  test('no longer accepts an llmRetry field - there is nothing to retry onto', async () => {
     getLLMCompletion.mockResolvedValue('Draft a clearer thesis.');
     mockCms();
     prisma.assignmentModuleSession.findUnique.mockResolvedValueOnce({
@@ -276,10 +283,10 @@ describe('api.domain.tutor-response read-only impersonation', () => {
       }),
     } as any);
 
-    expect(getLLMCompletion.mock.calls[0]?.[0]).toMatchObject({
-      forceFallback: true,
-      signalFallbackRetry: false,
-    });
+    expect(getLLMCompletion.mock.calls[0]?.[0].forceFallback).toBeUndefined();
+    expect(
+      getLLMCompletion.mock.calls[0]?.[0].signalFallbackRetry
+    ).toBeUndefined();
     const createPayload =
       prisma.assignmentModuleSession.update.mock.calls[0]?.[0].data.messages
         .create;

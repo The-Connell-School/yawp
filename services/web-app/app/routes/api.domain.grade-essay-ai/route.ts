@@ -5,7 +5,6 @@ import { z } from 'zod';
 import crypto from 'node:crypto';
 import { prisma } from '~/utils/db.server';
 import { getLLMCompletion } from '~/utils/getLLMCompletion';
-import { isLlmFallbackRetrySignal } from '~/utils/getLLMCompletion/llm-provider-errors.server';
 import {
   formatGrade,
   letterFromPercent,
@@ -57,7 +56,6 @@ const POST = z.object({
   documentId: z.string().optional(),
   submissionId: z.string().optional(),
   gradingAssistantStrictnessLevel: z.string().optional(),
-  llmRetry: z.enum(['fallback']).optional(),
 });
 
 function buildAiSchemas({
@@ -632,23 +630,20 @@ export async function action({ request }: ActionFunctionArgs) {
   const gradingNameMapping = buildRedactionMapping([studentFirstName]);
   const pseudonymFirstName = redact(studentFirstName, gradingNameMapping);
   const model = process.env.AI_MODEL ?? 'claude-sonnet-4-6';
-  const forceFallback = data.llmRetry === 'fallback';
-  const llmRetryOptions = {
-    forceFallback,
-    signalFallbackRetry: !forceFallback,
-    // Grading prompts carry student first names and raw essay text; never
-    // let an Anthropic outage silently route them to OpenAI, and never
-    // persist the cleartext payload to LlmLog.
+  // Grading prompts carry student first names and raw essay text; never let
+  // an Anthropic outage silently route them to OpenAI, and never persist
+  // the cleartext payload to LlmLog. With cross-provider fallback disabled
+  // there is no other provider to retry onto, so an Anthropic outage is
+  // just a failure - it no longer signals a client-side retry.
+  const gradingPrivacyOptions = {
     allowFallbackProvider: false,
     logPayload: 'metadata-only' as const,
   };
-  const retryResponse = () =>
-    dataResponse({ retrying: true }, { status: 202 });
   const getGradingLlmCompletion = (
     params: Parameters<typeof getLLMCompletion>[0]
   ) =>
     runWithGradingRequestDeadline(gradingDeadlineSignal, (signal) =>
-      getLLMCompletion({ ...params, ...llmRetryOptions, signal })
+      getLLMCompletion({ ...params, ...gradingPrivacyOptions, signal })
     );
   const useE2EFixture = shouldUseE2EGradingFixture();
   const documentContext = buildAiTextContextAudit({
@@ -732,7 +727,6 @@ In overallComment, start with "${pseudonymFirstName}," and continue with concise
       if (isGradingRequestDeadlineError(error)) {
         return gradingDeadlineResponse();
       }
-      if (isLlmFallbackRetrySignal(error)) return retryResponse();
       return dataResponse(
         {
           success: false,
@@ -881,7 +875,6 @@ In overallComment, start with "${pseudonymFirstName}," and continue with concise
       if (isGradingRequestDeadlineError(error)) {
         return gradingDeadlineResponse();
       }
-      if (isLlmFallbackRetrySignal(error)) return retryResponse();
       throw error;
     }
   }
@@ -981,7 +974,6 @@ In overallComment, start with "${pseudonymFirstName}," and continue with concise
     if (isGradingRequestDeadlineError(error)) {
       return gradingDeadlineResponse();
     }
-    if (isLlmFallbackRetrySignal(error)) return retryResponse();
     return dataResponse(
       {
         success: false,
@@ -1130,7 +1122,6 @@ In overallComment, start with "${pseudonymFirstName}," and continue with concise
       if (isGradingRequestDeadlineError(error)) {
         return gradingDeadlineResponse();
       }
-      if (isLlmFallbackRetrySignal(error)) return retryResponse();
       grammarIssues = null;
     }
   }

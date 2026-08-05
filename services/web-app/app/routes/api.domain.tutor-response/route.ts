@@ -3,7 +3,6 @@ import { parseFormData, validationError } from '@rvf/react-router';
 import { z } from 'zod';
 import { prisma } from '~/utils/db.server';
 import { AgentType, getLLMCompletion } from '~/utils/getLLMCompletion';
-import { isLlmFallbackRetrySignal } from '~/utils/getLLMCompletion/llm-provider-errors.server';
 import { requireMutableRequest } from '~/utils/auth.server';
 import {
   buildModuleRubricGuidance,
@@ -22,7 +21,6 @@ const POST = z.object({
   response: z.string().min(1),
   cmsId: z.string().min(1),
   content: z.string().optional(),
-  llmRetry: z.enum(['fallback']).optional(),
 });
 
 const errorResponse = (error: { message: string }) => {
@@ -164,18 +162,17 @@ export async function action({ request }: ActionFunctionArgs) {
       ]);
 
     let completion: string;
-    const forceFallback = data.llmRetry === 'fallback';
     try {
       completion = await getLLMCompletion({
         model: (process.env.AI_MODEL as any) ?? 'claude-sonnet-4-6',
         messages,
         system,
         maxTokens: 500,
-        forceFallback,
-        signalFallbackRetry: !forceFallback,
         // Tutor prompts carry raw student document text; never let an
         // Anthropic outage silently route it to OpenAI, and never persist
-        // the cleartext payload to LlmLog.
+        // the cleartext payload to LlmLog. With cross-provider fallback
+        // disabled there is no other provider to retry onto, so an
+        // Anthropic outage is just a failure.
         allowFallbackProvider: false,
         logPayload: 'metadata-only',
         metadata: {
@@ -189,9 +186,6 @@ export async function action({ request }: ActionFunctionArgs) {
         },
       });
     } catch (error) {
-      if (isLlmFallbackRetrySignal(error)) {
-        return dataResponse({ retrying: true }, { status: 202 });
-      }
       return errorResponse(error as any);
     }
 

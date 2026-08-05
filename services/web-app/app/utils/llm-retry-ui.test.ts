@@ -1,68 +1,52 @@
 import { describe, expect, mock, test } from 'bun:test';
-import {
-  cloneFormDataWithFallbackRetry,
-  isLlmRetryResponse,
-  postFormWithFallbackRetry,
-} from './llm-retry-ui';
+import { postJsonForm } from './llm-retry-ui';
 
-function formEntries(formData: FormData) {
-  return Object.fromEntries([...formData.entries()].map(([key, value]) => [
-    key,
-    String(value),
-  ]));
-}
-
-describe('LLM retry UI helpers', () => {
-  test('recognizes retry payloads', () => {
-    expect(isLlmRetryResponse({ retrying: true })).toBe(true);
-    expect(isLlmRetryResponse({ retrying: false })).toBe(false);
-    expect(isLlmRetryResponse({ success: true })).toBe(false);
-  });
-
-  test('clones form data and sets llmRetry=fallback', () => {
+describe('postJsonForm', () => {
+  test('posts the form data once and returns the parsed JSON response', async () => {
+    const fetcher = mock().mockResolvedValueOnce(
+      new Response(JSON.stringify({ success: true }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    );
     const formData = new FormData();
     formData.set('submissionId', 'sub-1');
 
-    const retryForm = cloneFormDataWithFallbackRetry(formData);
-
-    expect(formEntries(retryForm)).toEqual({
-      submissionId: 'sub-1',
-      llmRetry: 'fallback',
-    });
-    expect(formEntries(formData)).toEqual({ submissionId: 'sub-1' });
-  });
-
-  test('posts a fallback retry after a 202 retry response', async () => {
-    const fetcher = mock()
-      .mockResolvedValueOnce(
-        new Response(JSON.stringify({ retrying: true }), {
-          status: 202,
-          headers: { 'Content-Type': 'application/json' },
-        })
-      )
-      .mockResolvedValueOnce(
-        new Response(JSON.stringify({ success: true }), {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' },
-        })
-      );
-    const onRetry = mock();
-    const formData = new FormData();
-    formData.set('submissionId', 'sub-1');
-
-    const result = await postFormWithFallbackRetry({
+    const result = await postJsonForm({
       fetcher: fetcher as unknown as typeof fetch,
       action: '/api/domain/grade-essay-ai',
       formData,
-      onRetry,
     });
 
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(fetcher).toHaveBeenCalledWith('/api/domain/grade-essay-ai', {
+      method: 'POST',
+      body: formData,
+    });
     expect(result.response.status).toBe(200);
     expect(result.json).toEqual({ success: true });
-    expect(onRetry).toHaveBeenCalledTimes(1);
-    expect(formEntries(fetcher.mock.calls[1]?.[1]?.body as FormData)).toEqual({
-      submissionId: 'sub-1',
-      llmRetry: 'fallback',
+  });
+
+  test('never retries - a 202 "retrying" response is just returned as-is', async () => {
+    // The server can no longer emit this response for grading/tutor
+    // (allowFallbackProvider: false removed the only thing it signaled),
+    // but if it ever did, there is nothing here that would resubmit.
+    const fetcher = mock().mockResolvedValueOnce(
+      new Response(JSON.stringify({ retrying: true }), {
+        status: 202,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    );
+    const formData = new FormData();
+
+    const result = await postJsonForm({
+      fetcher: fetcher as unknown as typeof fetch,
+      action: '/api/domain/grade-essay-ai',
+      formData,
     });
+
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(result.response.status).toBe(202);
+    expect(result.json).toEqual({ retrying: true });
   });
 });

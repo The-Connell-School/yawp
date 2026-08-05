@@ -432,7 +432,13 @@ describe('api.domain.grade-essay-ai', () => {
     }
   });
 
-  test('returns a retry signal without persisting when fallback retry is requested', async () => {
+  test('an Anthropic outage is a plain failure, not a fallback-retry signal', async () => {
+    // Cross-provider fallback is disabled for grading (allowFallbackProvider:
+    // false), so getLLMCompletion can never actually throw
+    // LlmFallbackRetrySignal for this call site in production. This proves
+    // the route no longer special-cases it into a 202 "retrying" response
+    // even if it somehow received one - it's just an unhandled error, like
+    // any other failed call.
     getLLMCompletion.mockReset();
     getLLMCompletion.mockImplementationOnce(() => {
       throw new LlmFallbackRetrySignal({
@@ -448,23 +454,26 @@ describe('api.domain.grade-essay-ai', () => {
     const form = new FormData();
     form.append('submissionId', 'sub-retry');
 
-    const response = (await action({
-      request: new Request('https://example.com/api/domain/grade-essay-ai', {
-        method: 'POST',
-        body: form,
-      }),
-    } as any)) as {
-      init?: { status?: number };
-      data: Record<string, unknown>;
-    };
+    let caught: unknown;
+    try {
+      await action({
+        request: new Request(
+          'https://example.com/api/domain/grade-essay-ai',
+          { method: 'POST', body: form }
+        ),
+      } as any);
+    } catch (error) {
+      caught = error;
+    }
 
-    expect(response.init?.status).toBe(202);
-    expect(response.data.retrying).toBe(true);
+    // The signal propagates as an ordinary unhandled error - nothing
+    // converts it into a 202/retrying response.
+    expect(caught).toBeInstanceOf(LlmFallbackRetrySignal);
     expect(prisma.submission.update).not.toHaveBeenCalled();
     expect(prisma.submissionGradingAssistantRun.create).not.toHaveBeenCalled();
   });
 
-  test('forces fallback model on retry requests', async () => {
+  test('no longer accepts an llmRetry field - there is nothing to retry onto', async () => {
     prisma.submission.findFirst.mockResolvedValue(
       mockSubmission({ id: 'sub-fallback' })
     );
@@ -482,10 +491,8 @@ describe('api.domain.grade-essay-ai', () => {
 
     expect(getLLMCompletion).toHaveBeenCalled();
     for (const call of getLLMCompletion.mock.calls) {
-      expect(call[0]).toMatchObject({
-        forceFallback: true,
-        signalFallbackRetry: false,
-      });
+      expect(call[0].forceFallback).toBeUndefined();
+      expect(call[0].signalFallbackRetry).toBeUndefined();
     }
   });
 
