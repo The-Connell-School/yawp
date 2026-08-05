@@ -754,7 +754,7 @@ test.describe('YAWP! Lesson Planner', () => {
     );
   });
 
-  test('collects kept lessons in the lesson library', async ({
+  test('shows every lesson in one history, drafts included', async ({
     page,
     signIn,
     e2eContext,
@@ -765,29 +765,138 @@ test.describe('YAWP! Lesson Planner', () => {
     await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
 
     await page.goto('/app/lesson-planner');
-    await page.getByRole('link', { name: /lesson library/i }).click();
+    await page.getByRole('link', { name: /all your lessons/i }).click();
     await expect(page).toHaveURL(/\/app\/lesson-planner\/library/);
 
-    // The lesson with something kept is a document; the untouched draft is not
-    // yet a lesson and stays out of the library. Assert on the two specific
-    // lessons rather than a row count — the library shows every kept lesson,
-    // and the app shell contributes list items of its own.
-    const keptLink = page.locator(
-      `a[href="/app/lesson-planner/${kept.conversationId}/packet"]`
+    // The old library hid anything with nothing kept, so a lesson a teacher
+    // had started looked lost. Both belong in a history.
+    const keptRow = page.locator(
+      `a[href="/app/lesson-planner?c=${kept.conversationId}"]`
     );
-    const draftLink = page.locator(
-      `a[href="/app/lesson-planner/${draft.conversationId}/packet"]`
+    const draftRow = page.locator(
+      `a[href="/app/lesson-planner?c=${draft.conversationId}"]`
     );
-    await expect(keptLink).toHaveCount(1);
-    await expect(draftLink).toHaveCount(0);
+    await expect(keptRow).toHaveCount(1);
+    await expect(draftRow).toHaveCount(1);
+    // A lesson with nothing kept says so rather than pretending to be one.
     await expect(
-      page.getByRole('listitem').filter({ has: keptLink })
-    ).toContainText(/1 section/i);
+      page.getByRole('listitem').filter({ has: draftRow })
+    ).toContainText(/draft/i);
+    await expect(
+      page.getByRole('listitem').filter({ has: keptRow })
+    ).toContainText(/1 resource/i);
+  });
 
-    await keptLink.click();
-    await expect(page).toHaveURL(
-      new RegExp(`/app/lesson-planner/${kept.conversationId}/packet`)
+  test('stars a lesson and lifts it to the top of the history', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    await setLessonPlannerEnabled(e2eContext.organizationId, true);
+    const older = await seedLessonPlan(e2eContext, { keepFirst: true });
+    // Seeded second, so without a star it sorts above the first.
+    await seedLessonPlan(e2eContext, { keepFirst: true });
+    await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+    await page.goto('/app/lesson-planner/library');
+
+    const olderRow = page.getByRole('listitem').filter({
+      has: page.locator(
+        `a[href="/app/lesson-planner?c=${older.conversationId}"]`
+      ),
+    });
+    const starred = page.waitForResponse(
+      (response) =>
+        response.url().includes('/api/domain/lesson-planner/packet') &&
+        response.request().method() === 'POST'
     );
+    await olderRow.getByTestId('history-star').click();
+    await starred;
+
+    // Starred lessons get their own group, above everything else.
+    await expect(page.getByText('Starred', { exact: true })).toBeVisible();
+    await page.reload();
+    const rows = page.getByTestId('history-lesson');
+    await expect(rows.first()).toContainText('Conclusions lesson');
+    await expect(rows.first().getByTestId('history-star')).toHaveAttribute(
+      'aria-pressed',
+      'true'
+    );
+
+    // And it is reversible — the old library had no way out.
+    const unstarred = page.waitForResponse(
+      (response) =>
+        response.url().includes('/api/domain/lesson-planner/packet') &&
+        response.request().method() === 'POST'
+    );
+    await rows.first().getByTestId('history-star').click();
+    await unstarred;
+    await page.reload();
+    await expect(page.getByText('Starred', { exact: true })).toHaveCount(0);
+  });
+
+  test('deletes a lesson out of the history', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    await setLessonPlannerEnabled(e2eContext.organizationId, true);
+    const doomed = await seedLessonPlan(e2eContext, { keepFirst: true });
+    await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+    await page.goto('/app/lesson-planner/library');
+
+    const row = page.getByRole('listitem').filter({
+      has: page.locator(
+        `a[href="/app/lesson-planner?c=${doomed.conversationId}"]`
+      ),
+    });
+    await expect(row).toHaveCount(1);
+    const removed = page.waitForResponse(
+      (response) =>
+        response.url().includes('/api/domain/lesson-planner/packet') &&
+        response.request().method() === 'POST'
+    );
+    await row.getByTestId('history-delete').click();
+    await removed;
+    await page.reload();
+    await expect(
+      page.locator(`a[href="/app/lesson-planner?c=${doomed.conversationId}"]`)
+    ).toHaveCount(0);
+  });
+
+  test('stars a lesson from its packet', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    await setLessonPlannerEnabled(e2eContext.organizationId, true);
+    const { conversationId } = await seedLessonPlan(e2eContext, {
+      keepFirst: true,
+    });
+    await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+    await page.goto(`/app/lesson-planner/${conversationId}/packet`);
+
+    const star = page.getByTestId('packet-star');
+    await expect(star).toContainText(/star this lesson/i);
+
+    // The button answers optimistically, so wait for the write itself before
+    // reloading — otherwise the assertion passes against the local guess.
+    const saved = page.waitForResponse(
+      (response) =>
+        response.url().includes('/api/domain/lesson-planner/packet') &&
+        response.request().method() === 'POST'
+    );
+    await star.click();
+    await expect(star).toContainText(/starred/i);
+    await saved;
+
+    // It survives the round trip, and the history agrees.
+    await page.reload();
+    await expect(page.getByTestId('packet-star')).toHaveAttribute(
+      'aria-pressed',
+      'true'
+    );
+    await page.goto('/app/lesson-planner/library');
+    await expect(page.getByText('Starred', { exact: true })).toBeVisible();
   });
 
   test('scrolls the whole packet when a handout runs past the viewport', async ({

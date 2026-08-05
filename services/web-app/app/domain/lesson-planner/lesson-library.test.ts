@@ -1,5 +1,9 @@
 import { describe, expect, test } from 'bun:test';
-import { buildLessonLibrary, classDisplayName } from './lesson-library';
+import {
+  buildLessonLibrary,
+  classDisplayName,
+  groupLessonHistory,
+} from './lesson-library';
 
 function lesson(overrides: Record<string, unknown> = {}) {
   return {
@@ -7,6 +11,7 @@ function lesson(overrides: Record<string, unknown> = {}) {
     title: 'Plan a lesson on conclusions',
     packetTitle: 'Conclusions, period 3',
     updatedAt: new Date('2026-08-04T10:00:00.000Z'),
+    starredAt: null,
     messages: [
       { keptAudience: 'teacher' },
       { keptAudience: 'student' },
@@ -75,13 +80,24 @@ describe('buildLessonLibrary', () => {
     expect(row).toMatchObject({ className: null, assignmentTitle: null });
   });
 
-  test('leaves drafts out — a lesson with nothing kept is not a lesson yet', () => {
+  test('keeps a draft in the history rather than hiding it', () => {
+    // The old library dropped anything with nothing kept, so a lesson a
+    // teacher started and came back to later looked lost.
+    const rows = buildLessonLibrary([
+      lesson({ messages: [{ keptAudience: null }] }),
+      lesson({ id: 'plan-2', messages: [] }),
+    ]);
+    expect(rows).toHaveLength(2);
+    expect(rows.every((row) => row.sectionCount === 0)).toBe(true);
+  });
+
+  test('reports whether the teacher starred it', () => {
+    expect(buildLessonLibrary([lesson()])[0]!.starred).toBe(false);
     expect(
       buildLessonLibrary([
-        lesson({ messages: [{ keptAudience: null }] }),
-        lesson({ id: 'plan-2', messages: [] }),
-      ])
-    ).toEqual([]);
+        lesson({ starredAt: new Date('2026-08-05T00:00:00.000Z') }),
+      ])[0]!.starred
+    ).toBe(true);
   });
 
   test('serializes the timestamp for the client', () => {
@@ -93,5 +109,28 @@ describe('buildLessonLibrary', () => {
         lesson({ updatedAt: '2026-01-01T00:00:00.000Z' }),
       ])[0]!.updatedAt
     ).toBe('2026-01-01T00:00:00.000Z');
+  });
+});
+
+describe('groupLessonHistory', () => {
+  test('lifts the starred lessons above the rest', () => {
+    const rows = buildLessonLibrary([
+      lesson({ id: 'a', packetTitle: 'Unstarred' }),
+      lesson({
+        id: 'b',
+        packetTitle: 'Starred',
+        starredAt: new Date('2026-08-05T00:00:00.000Z'),
+      }),
+    ]);
+    const { starred, recent } = groupLessonHistory(rows);
+    expect(starred.map((row) => row.title)).toEqual(['Starred']);
+    expect(recent.map((row) => row.title)).toEqual(['Unstarred']);
+  });
+
+  test('copes with a history that is all one or the other', () => {
+    expect(groupLessonHistory([])).toEqual({ starred: [], recent: [] });
+    const none = buildLessonLibrary([lesson()]);
+    expect(groupLessonHistory(none).starred).toEqual([]);
+    expect(groupLessonHistory(none).recent).toHaveLength(1);
   });
 });

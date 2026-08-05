@@ -40,6 +40,9 @@ const POST = z
       'add-material',
       'remove-material',
       'rename-material',
+      'star',
+      'unstar',
+      'delete',
     ]),
     conversationId: z.string().min(1),
     messageId: z.string().min(1).optional(),
@@ -94,6 +97,28 @@ export async function action({ request }: ActionFunctionArgs) {
   });
   if (!conversation) {
     return dataResponse({ error: 'Conversation not found.' }, { status: 404 });
+  }
+
+  // Starring is the teacher's own judgement about what is worth finding again,
+  // and it is reversible — unlike the old library, which a lesson entered as a
+  // side effect of keeping a reply and could never leave.
+  if (data.intent === 'star' || data.intent === 'unstar') {
+    const starredAt = data.intent === 'star' ? new Date() : null;
+    await prisma.lessonPlanConversation.update({
+      where: { id: conversation.id },
+      data: { starredAt },
+    });
+    return dataResponse({ starredAt: starredAt?.toISOString() ?? null });
+  }
+
+  // Soft delete: every read already filters on deletedAt, and a teacher who
+  // clears out a stale draft should not lose the messages underneath it.
+  if (data.intent === 'delete') {
+    await prisma.lessonPlanConversation.update({
+      where: { id: conversation.id },
+      data: { deletedAt: new Date() },
+    });
+    return dataResponse({ deleted: true });
   }
 
   if (data.intent === 'rename') {

@@ -15,6 +15,7 @@ import {
   collectToolLinks,
   verifyLessonLinks,
 } from '~/domain/lesson-planner/lesson-links';
+import { shouldRenameLesson } from '~/domain/lesson-planner/lesson-name';
 import { buildLessonPlannerSystemPrompt } from './build-system-prompt';
 import {
   AiRateLimitError,
@@ -240,6 +241,18 @@ export async function action({ request }: ActionFunctionArgs) {
   // either.
   reply = verifyLessonLinks(reply, toolLinks).reply;
 
+  // A lesson is named after the plan it turned out to be, not after the
+  // sentence that started it — otherwise every lesson opened from the pinned
+  // suggestion is called "Look at my classes and tell me what they need work
+  // on", and the history is unreadable.
+  const lessonName = shouldRenameLesson({
+    reply,
+    priorReplies: priorMessages
+      .filter((message) => message.role === AgentType.Assistant)
+      .map((message) => message.content),
+    teacherNamedIt: Boolean(conversation?.packetTitle?.trim()),
+  });
+
   // Stamp explicit, strictly-increasing timestamps: both rows land in one
   // nested create, so the DB default would give them the same createdAt and
   // leave the question/answer order ambiguous on replay.
@@ -284,7 +297,10 @@ export async function action({ request }: ActionFunctionArgs) {
 
       await transaction.lessonPlanConversation.update({
         where: { id: persistedConversation.id },
-        data: { updatedAt: new Date() },
+        data: {
+          updatedAt: new Date(),
+          ...(lessonName ? { title: lessonName } : {}),
+        },
       });
 
       return { conversation: persistedConversation, assistantMessage };

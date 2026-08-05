@@ -1,16 +1,22 @@
 /**
- * The lesson library: every lesson this teacher has planned, as documents
- * rather than as chat transcripts.
+ * The lesson history: every lesson this teacher has planned.
  *
- * A lesson earns a place in the library once something has been kept in its
- * packet; an abandoned conversation is not a lesson. What the teacher scans by
- * is the packet name, the class it was built for, and how much of it is ready.
+ * This used to be a "library" whose membership nobody chose. A lesson appeared
+ * in it because the teacher had clicked "Keep for the lesson" on some reply —
+ * an action about what goes in the printed packet, not about what is worth
+ * finding again — and once in, it could never leave. Meanwhile the planner's
+ * own rail listed everything under the heading "Saved lessons", so two lists
+ * disagreed about what "saved" meant.
+ *
+ * Now there is one list. Everything you planned is in it, newest first, and
+ * starring is a decision you make and can undo.
  */
 export type LibraryLessonInput = {
   id: string;
   title: string;
   packetTitle: string | null;
   updatedAt: Date | string;
+  starredAt: Date | string | null;
   messages: Array<{ keptAudience: string | null }>;
   originClassAssignment?: {
     class: {
@@ -29,6 +35,7 @@ export type LibraryLesson = {
   assignmentTitle: string | null;
   sectionCount: number;
   handoutCount: number;
+  starred: boolean;
   updatedAt: string;
 };
 
@@ -44,32 +51,50 @@ export function classDisplayName(klass: {
   return klass.grade ?? null;
 }
 
+function asIsoString(value: Date | string): string {
+  return typeof value === 'string' ? value : value.toISOString();
+}
+
 /**
- * Shape saved conversations into library rows, dropping the ones with nothing
- * kept — those are still drafts, and they already live in the planner's rail.
+ * Shape saved conversations into history rows.
+ *
+ * Nothing is filtered out: a lesson the teacher started and abandoned is still
+ * something they may want to reopen, and hiding it is what made the old
+ * library feel like it had lost things.
  */
 export function buildLessonLibrary(
   lessons: LibraryLessonInput[]
 ): LibraryLesson[] {
-  return lessons
-    .map((lesson) => {
-      const kept = lesson.messages.filter((message) => message.keptAudience);
-      return {
-        id: lesson.id,
-        title: (lesson.packetTitle ?? lesson.title).trim() || 'Lesson plan',
-        className: lesson.originClassAssignment
-          ? classDisplayName(lesson.originClassAssignment.class)
-          : null,
-        assignmentTitle: lesson.originClassAssignment?.assignment.title ?? null,
-        sectionCount: kept.length,
-        handoutCount: kept.filter(
-          (message) => message.keptAudience === 'student'
-        ).length,
-        updatedAt:
-          typeof lesson.updatedAt === 'string'
-            ? lesson.updatedAt
-            : lesson.updatedAt.toISOString(),
-      };
-    })
-    .filter((lesson) => lesson.sectionCount > 0);
+  return lessons.map((lesson) => {
+    const kept = lesson.messages.filter((message) => message.keptAudience);
+    return {
+      id: lesson.id,
+      title: (lesson.packetTitle ?? lesson.title).trim() || 'Lesson plan',
+      className: lesson.originClassAssignment
+        ? classDisplayName(lesson.originClassAssignment.class)
+        : null,
+      assignmentTitle: lesson.originClassAssignment?.assignment.title ?? null,
+      sectionCount: kept.length,
+      handoutCount: kept.filter((message) => message.keptAudience === 'student')
+        .length,
+      starred: Boolean(lesson.starredAt),
+      updatedAt: asIsoString(lesson.updatedAt),
+    };
+  });
+}
+
+/**
+ * The history in two groups: what the teacher starred, then everything else.
+ *
+ * Starred lessons are the ones taught again next year, so they sit at the top
+ * rather than sinking as newer drafts push them down.
+ */
+export function groupLessonHistory(lessons: LibraryLesson[]): {
+  starred: LibraryLesson[];
+  recent: LibraryLesson[];
+} {
+  return {
+    starred: lessons.filter((lesson) => lesson.starred),
+    recent: lessons.filter((lesson) => !lesson.starred),
+  };
 }

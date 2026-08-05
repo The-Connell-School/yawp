@@ -512,6 +512,9 @@ model LessonPlanConversation {
   createdAt               DateTime            @default(now()) @db.Timestamptz(6)
   updatedAt               DateTime            @default(now()) @updatedAt @db.Timestamptz(6)
   deletedAt               DateTime?           @db.Timestamptz(6)
+  /// Set when the teacher stars the lesson as worth finding again. Starring is
+  /// a decision they make, separate from keeping a reply in the packet.
+  starredAt               DateTime?           @db.Timestamptz(6)
   title                   String              @default("New lesson")
   /// The name the teacher gave the printable packet; falls back to `title`.
   packetTitle             String?
@@ -525,6 +528,7 @@ model LessonPlanConversation {
   materials               LessonPlanMaterial[]
 
   @@index([membershipId, updatedAt(sort: Desc)])
+  @@index([membershipId, starredAt(sort: Desc)])
   @@index([organizationId])
   @@index([originClassAssignmentId])
 }

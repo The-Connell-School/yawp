@@ -12,6 +12,7 @@ import {
   Lightbulb,
   ListTree,
   Rows,
+  Star,
 } from 'lucide-react';
 import {
   KIND_LABEL,
@@ -39,7 +40,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 }
 
 export default function LessonPacketRoute() {
-  const { conversationId, packet, packetTitleValue } =
+  const { conversationId, packet, packetTitleValue, starred } =
     useLoaderData<typeof loader>();
   const fetcher = useFetcher();
   const [view, setView] = useState<'full' | 'outline' | 'handout'>('full');
@@ -48,6 +49,14 @@ export default function LessonPacketRoute() {
   const [excluded, setExcluded] = useState<string[]>([]);
   const [filter, setFilter] = useState<ResourceFilter>('all');
   const scrollerRef = useRef<HTMLElement>(null);
+
+  // Answer the click straight away; waiting on the round trip reads as a
+  // button that did not work.
+  const pendingStar = fetcher.formData?.get('intent');
+  const isStarred =
+    pendingStar === 'star' || pendingStar === 'unstar'
+      ? pendingStar === 'star'
+      : starred;
 
   /**
    * The file behind every print control on this page.
@@ -138,7 +147,32 @@ export default function LessonPacketRoute() {
             </Link>
           </Button>
           <Button variant="ghost" size="sm" asChild>
-            <Link to="/app/lesson-planner/library">Lesson library</Link>
+            <Link to="/app/lesson-planner/library">All your lessons</Link>
+          </Button>
+          {/* The moment a teacher knows a lesson was worth keeping is the
+              moment they are looking at the finished thing. */}
+          <Button
+            type="button"
+            variant={isStarred ? 'default' : 'outline'}
+            size="sm"
+            data-testid="packet-star"
+            aria-pressed={isStarred}
+            onClick={() =>
+              fetcher.submit(
+                {
+                  intent: isStarred ? 'unstar' : 'star',
+                  conversationId,
+                },
+                { method: 'post', action: '/api/domain/lesson-planner/packet' }
+              )
+            }
+          >
+            <Star
+              size={15}
+              className="mr-1.5"
+              fill={isStarred ? 'currentColor' : 'none'}
+            />
+            {isStarred ? 'Starred' : 'Star this lesson'}
           </Button>
           <div className="ml-auto flex items-center gap-2">
             <div className="flex rounded-lg border p-0.5">

@@ -17,6 +17,7 @@ import {
   Plus,
   Printer,
   Send,
+  Star,
 } from 'lucide-react';
 import { Button } from '~/components/ui/button';
 import { Textarea } from '~/components/ui/textarea';
@@ -73,8 +74,14 @@ export async function loader({ request }: LoaderFunctionArgs) {
     where: { membershipId: access.membership.id, deletedAt: null },
     // packetTitle when the teacher named the lesson: naming it on the packet
     // should rename it everywhere, not just on that page.
-    select: { id: true, title: true, packetTitle: true, updatedAt: true },
-    orderBy: { updatedAt: 'desc' },
+    select: {
+      id: true,
+      title: true,
+      packetTitle: true,
+      updatedAt: true,
+      starredAt: true,
+    },
+    orderBy: [{ starredAt: 'desc' }, { updatedAt: 'desc' }],
     take: 30,
   });
 
@@ -128,6 +135,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     conversations: conversations.map((conversation) => ({
       id: conversation.id,
       title: conversation.packetTitle?.trim() || conversation.title,
+      starred: Boolean(conversation.starredAt),
     })),
     selectedConversation: selected
       ? {
@@ -407,13 +415,13 @@ export default function LessonPlannerRoute() {
             className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-primary"
           >
             <FileText size={14} />
-            Lesson library
+            All your lessons
           </Link>
         </div>
         <div className="no-scrollbar flex-1 overflow-y-auto px-2 pb-3">
           {conversations.length === 0 ? (
             <p className="px-2 py-4 text-sm text-muted-foreground">
-              Your saved lessons will show up here.
+              Lessons you plan will show up here.
             </p>
           ) : (
             <ul className="flex flex-col gap-1">
@@ -429,14 +437,23 @@ export default function LessonPlannerRoute() {
                       setSearchParams(next);
                     }}
                     className={cn(
-                      'w-full truncate rounded-lg px-3 py-2 text-left text-sm text-muted-foreground hover:bg-foreground/5 hover:text-foreground',
+                      'w-full rounded-lg px-3 py-2 text-left text-sm text-muted-foreground hover:bg-foreground/5 hover:text-foreground',
                       {
                         'bg-primary/10 text-primary hover:bg-primary/10':
                           conversation.id === conversationId,
                       }
                     )}
                   >
-                    {conversation.title}
+                    <span className="flex items-center gap-1.5">
+                      {conversation.starred ? (
+                        <Star
+                          size={12}
+                          className="shrink-0 text-primary"
+                          fill="currentColor"
+                        />
+                      ) : null}
+                      <span className="truncate">{conversation.title}</span>
+                    </span>
                   </button>
                 </li>
               ))}
@@ -463,11 +480,11 @@ export default function LessonPlannerRoute() {
                 className="sr-only"
                 htmlFor="lesson-planner-mobile-history"
               >
-                Saved lessons
+                Your lessons
               </label>
               <select
                 id="lesson-planner-mobile-history"
-                aria-label="Saved lessons"
+                aria-label="Your lessons"
                 value={selectedConversation?.id ?? ''}
                 onChange={(event) => {
                   if (!event.target.value) return;
@@ -479,7 +496,7 @@ export default function LessonPlannerRoute() {
                 }}
                 className="h-9 max-w-32 rounded-md border bg-background px-2 text-sm"
               >
-                <option value="">Saved lessons</option>
+                <option value="">Your lessons</option>
                 {conversations.map((conversation) => (
                   <option key={conversation.id} value={conversation.id}>
                     {conversation.title}
