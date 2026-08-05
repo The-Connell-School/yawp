@@ -11,19 +11,34 @@ function escapeRegExp(value: string): string {
  *  - lower case sample -> lower case target
  *  - anything mixed/irregular -> target returned unchanged
  */
+function capitalizeWord(word: string): string {
+  return word.length === 0
+    ? word
+    : word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+}
+
 function matchCase(sample: string, target: string): string {
   if (sample.length === 0) return target;
   if (sample === sample.toUpperCase() && sample !== sample.toLowerCase()) {
     return target.toUpperCase();
   }
-  const isTitleCase =
-    sample[0] === sample[0].toUpperCase() &&
-    sample.slice(1) === sample.slice(1).toLowerCase();
-  if (isTitleCase) {
-    return target.charAt(0).toUpperCase() + target.slice(1).toLowerCase();
-  }
   if (sample === sample.toLowerCase()) {
     return target.toLowerCase();
+  }
+  // Title Case: every word starts uppercase, rest lowercase. Apply per-word
+  // to `target` independently of how many words `sample` has, so a
+  // single-word pseudonym ("Alex") can still correctly case a multi-word
+  // real name it stands in for ("Amelia Brooks"), and vice versa.
+  const isTitleCase = sample
+    .split(' ')
+    .every(
+      (word) =>
+        word.length === 0 ||
+        (word[0] === word[0].toUpperCase() &&
+          word.slice(1) === word.slice(1).toLowerCase())
+    );
+  if (isTitleCase) {
+    return target.split(' ').map(capitalizeWord).join(' ');
   }
   return target;
 }

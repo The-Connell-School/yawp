@@ -40,7 +40,8 @@ function fnv1aHash(value: string): number {
  * collision, it's the same identifier.
  */
 export function buildRedactionMapping(
-  names: ReadonlyArray<string | null | undefined>
+  names: ReadonlyArray<string | null | undefined>,
+  pool: readonly string[] = PSEUDONYM_FIRST_NAME_POOL
 ): RedactionMapping {
   const realToPseudonym = new Map<
     string,
@@ -59,15 +60,14 @@ export function buildRedactionMapping(
     const realName = rawName?.trim();
     if (!realName) continue;
     const key = realName.toLowerCase();
-    if (realToPseudonym.has(key)) continue; // shared first name -> shared pseudonym
+    if (realToPseudonym.has(key)) continue; // shared name -> shared pseudonym
 
-    const poolLength = PSEUDONYM_FIRST_NAME_POOL.length;
+    const poolLength = pool.length;
     const startIndex = fnv1aHash(key) % poolLength;
 
     let pseudonym: string | undefined;
     for (let probe = 0; probe < poolLength; probe++) {
-      const candidate =
-        PSEUDONYM_FIRST_NAME_POOL[(startIndex + probe) % poolLength];
+      const candidate = pool[(startIndex + probe) % poolLength];
       const candidateKey = candidate.toLowerCase();
       if (usedPseudonyms.has(candidateKey)) continue;
       if (realNameKeysLower.has(candidateKey)) continue; // never reuse a real name as a pseudonym
@@ -79,8 +79,7 @@ export function buildRedactionMapping(
     // entries) - fall back to a suffixed variant of the hashed candidate
     // rather than throwing, so redaction never blocks a grading request.
     if (!pseudonym) {
-      const fallbackBase =
-        PSEUDONYM_FIRST_NAME_POOL[startIndex % poolLength];
+      const fallbackBase = pool[startIndex % poolLength];
       let suffix = 2;
       let candidate = `${fallbackBase}${suffix}`;
       while (usedPseudonyms.has(candidate.toLowerCase())) {
