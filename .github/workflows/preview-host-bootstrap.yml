@@ -5,7 +5,7 @@ name: Preview host bootstrap
 # The host is reachable only with PREVIEW_SSH_PRIVATE_KEY, which is write-only, so
 # host-level changes cannot be applied from a workstation — they have to come through a
 # workflow that holds the secret. bootstrap-host.sh is idempotent, so running it again is
-# how the host picks up changes to Traefik, the shared Postgres, or the access gate.
+# how the host picks up changes to Traefik or the shared Postgres.
 #
 # It does NOT touch any deployed preview: it rewrites the Traefik and Postgres compose
 # files and brings those two back up. Preview containers keep running.
@@ -32,8 +32,6 @@ jobs:
       PREVIEW_HOST: ${{ vars.PREVIEW_HOST }}
       PREVIEW_ROOT: ${{ vars.PREVIEW_ROOT || '/srv/yawp-preview' }}
       PREVIEW_SSH_USER: ${{ vars.PREVIEW_SSH_USER || 'ec2-user' }}
-      PREVIEW_BASIC_AUTH: ${{ secrets.PREVIEW_BASIC_AUTH }}
-      PREVIEW_BASIC_AUTH_PASSWORD: ${{ secrets.PREVIEW_BASIC_AUTH_PASSWORD }}
       PREVIEW_DB_PASSWORD: ${{ secrets.PREVIEW_DB_PASSWORD }}
       PREVIEW_ACME_EMAIL: ${{ vars.PREVIEW_ACME_EMAIL || 'bryant@brock.software' }}
     steps:
@@ -44,8 +42,6 @@ jobs:
           set -euo pipefail
           test -n "$PREVIEW_HOST" || { echo "Missing repository variable PREVIEW_HOST"; exit 1; }
           test -n "$PREVIEW_SSH_PRIVATE_KEY" || { echo "Missing repository secret PREVIEW_SSH_PRIVATE_KEY"; exit 1; }
-          # Without this the bootstrap would quietly stand the host back up with no gate.
-          test -n "$PREVIEW_BASIC_AUTH" || { echo "Missing repository secret PREVIEW_BASIC_AUTH"; exit 1; }
 
       - name: Checkout the requested ref
         uses: actions/checkout@v4
@@ -77,40 +73,8 @@ jobs:
           shell_quote() { printf '%q' "$1"; }
           remote_env=(
             "PREVIEW_ROOT=$(shell_quote "$PREVIEW_ROOT")"
-            "PREVIEW_BASIC_AUTH=$(shell_quote "$PREVIEW_BASIC_AUTH")"
             "PREVIEW_DB_PASSWORD=$(shell_quote "$PREVIEW_DB_PASSWORD")"
             "PREVIEW_ACME_EMAIL=$(shell_quote "$PREVIEW_ACME_EMAIL")"
           )
           ssh -i ~/.ssh/preview_key "${PREVIEW_SSH_USER}@${PREVIEW_HOST}" \
             "cd ${PREVIEW_ROOT}/bootstrap && ${remote_env[*]} bash scripts/preview/bootstrap-host.sh"
-
-      - name: Prove the gate is live on an existing preview
-        env:
-          PREVIEW_DOMAIN: ${{ vars.PREVIEW_DOMAIN }}
-        run: |
-          set -euo pipefail
-          # Any already-deployed preview will do — the point is that a preview which was
-          # deployed BEFORE the gate existed is now gated, which is the whole reason for
-          # applying this at the entrypoint instead of per-compose.
-          host="$(ssh -i ~/.ssh/preview_key "${PREVIEW_SSH_USER}@${PREVIEW_HOST}" \
-            "ls -1 ${PREVIEW_ROOT}/previews 2>/dev/null | head -1" || true)"
-          if [ -z "$host" ]; then
-            echo "No deployed previews on the host; nothing to prove against."
-            exit 0
-          fi
-
-          url="https://${host}.${PREVIEW_DOMAIN}/"
-          user="${PREVIEW_BASIC_AUTH%%:*}"
-
-          anon="$(curl -sk -o /dev/null -m 20 -w '%{http_code}' "$url" || true)"
-          if [ "$anon" != "401" ]; then
-            echo "Gate NOT applied: anonymous request to $url returned HTTP ${anon:-none}" >&2
-            exit 1
-          fi
-
-          auth="$(curl -sk -o /dev/null -m 20 -w '%{http_code}' \
-            --user "${user}:${PREVIEW_BASIC_AUTH_PASSWORD}" "$url" || true)"
-          case "$auth" in
-            200|302|303) echo "Gate live at $url: anonymous 401, authenticated $auth" ;;
-            *) echo "Gate is blocking valid credentials too: HTTP ${auth:-none}" >&2; exit 1 ;;
-          esac

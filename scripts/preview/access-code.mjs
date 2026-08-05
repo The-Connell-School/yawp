@@ -1,0 +1,34 @@
+import { fileURLToPath } from 'node:url';
+import {
+  ACCESS_CODE_ADJECTIVES,
+  ACCESS_CODE_ANIMALS,
+  generatePreviewAccessCode,
+  generatePreviewAccessSeats,
+} from '../../packages/prisma/preview-access-code.ts';
+
+export {
+  ACCESS_CODE_ADJECTIVES,
+  ACCESS_CODE_ANIMALS,
+  generatePreviewAccessCode,
+  generatePreviewAccessSeats,
+};
+
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  if (process.argv.includes('--seats')) {
+    const existingCodes = String(process.env.PREVIEW_ACCESS_CODES ?? '')
+      .split(/[;,\n]/)
+      .map((code) => code.trim().toLowerCase())
+      .filter(Boolean);
+    const existingSeats = process.env.PREVIEW_EXISTING_ACCESS_SEATS
+      ? JSON.parse(process.env.PREVIEW_EXISTING_ACCESS_SEATS)
+      : [];
+    const count = Number(process.env.PREVIEW_SEAT_COUNT ?? 1);
+    process.stdout.write(
+      `${JSON.stringify(
+        generatePreviewAccessSeats({ count, existingCodes, existingSeats })
+      )}\n`
+    );
+  } else {
+    process.stdout.write(`${generatePreviewAccessCode()}\n`);
+  }
+}
