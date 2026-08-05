@@ -397,11 +397,24 @@ async function seedAskTurn(
         membershipId: e2eContext.teacherMembershipId,
         organizationId: e2eContext.organizationId,
         title: 'Intake lesson',
+        // The controls arrive on a later turn on purpose: the app suppresses
+        // the length question while the planner is still asking what the
+        // lesson is about, so an opening reply would draw no slider at all.
         messages: {
           create: [
             {
               role: 'user',
               content: 'Plan a lesson on explaining evidence.',
+              createdAt: new Date('2026-08-05T09:59:00.000Z'),
+            },
+            {
+              role: 'assistant',
+              content: 'Which class is this for?',
+              createdAt: new Date('2026-08-05T09:59:01.000Z'),
+            },
+            {
+              role: 'user',
+              content: 'English 10 · Period 3.',
               createdAt: new Date('2026-08-05T10:00:00.000Z'),
             },
             {
@@ -1567,6 +1580,54 @@ test.describe('YAWP! Lesson Planner', () => {
     );
     await slider.fill('5');
     await expect(page.getByTestId('lesson-minutes-value')).toHaveText('5 min');
+  });
+
+  test('does not ask how long before it knows what the lesson is', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    await setLessonPlannerEnabled(e2eContext.organizationId, true);
+    // The planner drew the slider on its opening turn, so tapping "Look at my
+    // classes and tell me what they need work on" sent "…what they need work
+    // on. 50 minutes." — a period length on a request to read the gradebook.
+    const prisma = createE2EPrismaClient();
+    const conversation = await prisma.lessonPlanConversation.create({
+      data: {
+        membershipId: e2eContext.teacherMembershipId,
+        organizationId: e2eContext.organizationId,
+        title: 'Opening turn',
+        messages: {
+          create: [
+            {
+              role: 'user',
+              content: 'Help me plan something.',
+              createdAt: new Date('2026-08-05T10:00:00.000Z'),
+            },
+            {
+              role: 'assistant',
+              content:
+                'What should this lesson be about?\n\n```yawp-ask\nminutes: 50\nactivities\n```',
+              createdAt: new Date('2026-08-05T10:00:01.000Z'),
+            },
+          ],
+        },
+      },
+      select: { id: true },
+    });
+    await prisma.$disconnect();
+
+    await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+    await page.goto(`/app/lesson-planner?c=${conversation.id}`);
+
+    // No slider on a turn that has not settled the subject...
+    await expect(
+      page.getByRole('slider', { name: /lesson length in minutes/i })
+    ).toHaveCount(0);
+    // ...but the activities question still makes sense, so it stays.
+    await expect(
+      page.getByRole('checkbox', { name: /you pick the ones that fit/i })
+    ).toBeVisible();
   });
 
   test('sends the activities a teacher checks as their own message', async ({

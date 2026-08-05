@@ -264,3 +264,69 @@ export function deckAsMaterial(reply: string): LessonMaterial | null {
 export function hasLessonMaterials(content: string): boolean {
   return readLessonMaterials(content).materials.length > 0;
 }
+
+/** Where a material's card sits on the page, for links from the plan itself. */
+export function materialAnchor(key: string): string {
+  return `material-${key}`;
+}
+
+/** Longer than this is a real name; shorter is a word the plan uses anyway. */
+const MIN_LINKABLE_TITLE = 6;
+
+function escapeForRegExp(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * Turn each mention of a material into a link to its card.
+ *
+ * A plan that says 'project the two drafts from the handout below ("Version A
+ * vs. Version B")' is telling the teacher to go and look for something that is
+ * already on the same screen. Naming it is enough; the app makes the name the
+ * way there.
+ *
+ * Only the first mention of each material is linked — a step that refers to a
+ * handout three times should not turn into three links — and a name already
+ * inside a link or a heading is left alone.
+ */
+export function linkMaterialTitles(
+  body: string,
+  materials: Array<{ key: string; title: string }>
+): string {
+  const linkable = materials.filter(
+    (material) => material.title.trim().length >= MIN_LINKABLE_TITLE
+  );
+  if (!linkable.length) return body;
+
+  const linked = new Set<string>();
+  let inFence = false;
+
+  return body
+    .split('\n')
+    .map((line) => {
+      if (/^\s{0,3}```/.test(line)) {
+        inFence = !inFence;
+        return line;
+      }
+      // A heading that names the material IS the material's own title, and a
+      // fenced block is machinery — neither is a mention to link.
+      if (inFence || /^\s{0,3}#{1,6}\s/.test(line)) return line;
+
+      let result = line;
+      for (const material of linkable) {
+        if (linked.has(material.key)) continue;
+        const title = material.title.trim();
+        const pattern = new RegExp(
+          `(?<!\\[)\\b${escapeForRegExp(title)}\\b(?!\\]\\()`
+        );
+        if (!pattern.test(result)) continue;
+        result = result.replace(
+          pattern,
+          `[${title}](#${materialAnchor(material.key)})`
+        );
+        linked.add(material.key);
+      }
+      return result;
+    })
+    .join('\n');
+}

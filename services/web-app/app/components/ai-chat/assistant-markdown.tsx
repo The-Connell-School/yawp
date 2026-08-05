@@ -55,11 +55,16 @@ export const MARKDOWN_CLASS = cn(
 function newTabRenderer(): InstanceType<typeof marked.Renderer> {
   const renderer = new marked.Renderer();
   const renderLink = renderer.link.bind(renderer);
-  renderer.link = (href, title, text) =>
-    renderLink(href, title, text).replace(
+  renderer.link = (href, title, text) => {
+    const html = renderLink(href, title, text);
+    // A link into this same reply — to a material's card further down — is
+    // navigation within the page, not a trip out of it.
+    if (typeof href === 'string' && href.startsWith('#')) return html;
+    return html.replace(
       /^<a /,
       '<a target="_blank" rel="noopener noreferrer" '
     );
+  };
   return renderer;
 }
 

@@ -14,6 +14,7 @@ import {
   FileText,
   Lightbulb,
   Loader2,
+  ChevronDown,
   Plus,
   Printer,
   Send,
@@ -44,6 +45,7 @@ import {
 } from '~/domain/lesson-planner/lesson-ask';
 import { readDailyPagesExercises } from '~/domain/lesson-planner/daily-pages-block';
 import { readLessonResources } from '~/domain/lesson-planner/lesson-resource';
+import { linkMaterialTitles } from '~/domain/lesson-planner/lesson-material';
 import { LessonResourceCard } from '~/components/ai-chat/lesson-resource-card';
 import { DailyPagesCard } from '~/components/ai-chat/daily-pages-card';
 import { findDailyPagesTypeId } from '~/domain/lesson-planner/yawp-catalog.server';
@@ -743,7 +745,10 @@ function MessageBubble({
     readDailyPagesExercises(withWarmUps);
   // Yawp material the lesson leans on, brought in as something to open rather
   // than as directions to go and find it.
-  const { resources, body } = readLessonResources(withResources);
+  const { resources, body: withLinks } = readLessonResources(withResources);
+  // A plan that names a handout should be the way to it: the teacher is
+  // already looking at the screen it is on.
+  const body = linkMaterialTitles(withLinks, materials);
   // Only offer print/PDF on substantial replies (a lesson), not one-liners.
   const isArtifact = /(^|\n)#{1,3}\s/.test(body) || /\n\|.*\|/.test(body);
   // The opening turn always offers the data-driven route, and a delivered plan
@@ -812,24 +817,38 @@ function MessageBubble({
             />
           ))}
           {materials.length ? (
-            <div className={cn('flex flex-col gap-2', body && 'mt-3')}>
-              {materials.map((material) => (
-                <MaterialCard
-                  key={material.key}
-                  material={material}
-                  added={
-                    !!message.id &&
-                    addedMaterials.has(`${message.id}:${material.key}`)
-                  }
-                  onToggle={
-                    message.id
-                      ? (added) => onMaterial(message.id!, material.key, added)
-                      : null
-                  }
-                  disabled={disabled}
+            <details
+              open
+              data-testid="materials-group"
+              className={cn('group', body && 'mt-3')}
+            >
+              <summary className="mb-2 flex cursor-pointer select-none list-none items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground hover:text-foreground">
+                <ChevronDown
+                  size={13}
+                  className="transition-transform group-open:rotate-0 [details:not([open])_&]:-rotate-90"
                 />
-              ))}
-            </div>
+                Materials in this lesson ({materials.length})
+              </summary>
+              <div className="flex flex-col gap-2">
+                {materials.map((material) => (
+                  <MaterialCard
+                    key={material.key}
+                    material={material}
+                    added={
+                      !!message.id &&
+                      addedMaterials.has(`${message.id}:${material.key}`)
+                    }
+                    onToggle={
+                      message.id
+                        ? (added) =>
+                            onMaterial(message.id!, material.key, added)
+                        : null
+                    }
+                    disabled={disabled}
+                  />
+                ))}
+              </div>
+            </details>
           ) : null}
           {deckOutcome.kind === 'unreadable' ? (
             <p

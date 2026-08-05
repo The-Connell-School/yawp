@@ -22,6 +22,7 @@ import {
 import { MarkdownContent } from './assistant-markdown';
 import {
   MATERIAL_KIND_LABELS,
+  materialAnchor,
   type ArtifactKind,
   type LessonMaterial,
 } from '~/domain/lesson-planner/lesson-material';
@@ -55,9 +56,12 @@ export function MaterialCard({
 
   return (
     <div
+      id={materialAnchor(material.key)}
       data-testid="material-card"
       data-material-kind={material.kind}
-      className="overflow-hidden rounded-xl border border-border bg-background"
+      // scroll-mt keeps the card clear of the sticky header when the plan
+      // links to it; the ring is how it says "this is the one".
+      className="scroll-mt-24 overflow-hidden rounded-xl border border-border bg-background target:ring-2 target:ring-primary/40"
     >
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-3 py-2.5">
         <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-foreground/[0.06] text-muted-foreground">

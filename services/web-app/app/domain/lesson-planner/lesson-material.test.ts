@@ -4,6 +4,7 @@ import {
   MATERIAL_FENCE,
   readLessonMaterials,
   hasLessonMaterials,
+  linkMaterialTitles,
 } from './lesson-material';
 
 function fenced(body: string): string {
@@ -184,5 +185,53 @@ describe('deckAsMaterial', () => {
     expect(
       deckAsMaterial('```yawp-slides\n{"slides":[{"layout":"bullets"}]}\n```')
     ).toBeNull();
+  });
+});
+
+describe('linkMaterialTitles', () => {
+  const materials = [
+    { key: 'a', title: 'Diagnose & Repair — Quote Analysis' },
+    { key: 'b', title: 'Exit Ticket — Quoting vs. Analyzing' },
+  ];
+
+  test('makes a named material the way to it', () => {
+    // "the handout below" is an instruction to go hunting on a page the
+    // teacher is already looking at.
+    expect(
+      linkMaterialTitles(
+        'Project Diagnose & Repair — Quote Analysis and read Version A aloud.',
+        materials
+      )
+    ).toBe(
+      'Project [Diagnose & Repair — Quote Analysis](#material-a) and read Version A aloud.'
+    );
+  });
+
+  test('links each material once, not every time it is mentioned', () => {
+    const linked = linkMaterialTitles(
+      'Hand out Exit Ticket — Quoting vs. Analyzing. Collect Exit Ticket — Quoting vs. Analyzing at the door.',
+      materials
+    );
+    expect(linked.match(/#material-b/g)).toHaveLength(1);
+  });
+
+  test('leaves a name that is already a link alone', () => {
+    const body = 'See [Diagnose & Repair — Quote Analysis](/somewhere).';
+    expect(linkMaterialTitles(body, materials)).toBe(body);
+  });
+
+  test('does not turn a heading into a link', () => {
+    const body = '## Diagnose & Repair — Quote Analysis\n\nUse it.';
+    expect(linkMaterialTitles(body, materials)).toBe(body);
+  });
+
+  test('ignores a title too short to be a name', () => {
+    const body = 'Use the key for this.';
+    expect(linkMaterialTitles(body, [{ key: 'c', title: 'key' }])).toBe(body);
+  });
+
+  test('leaves a plan that never names its materials untouched', () => {
+    const body = 'Warm up, then model one together.';
+    expect(linkMaterialTitles(body, materials)).toBe(body);
   });
 });
