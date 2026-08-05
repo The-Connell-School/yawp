@@ -148,18 +148,25 @@ export function LessonAskCard({
                       <label
                         key={activity.id}
                         className={cn(
-                          'inline-flex cursor-pointer items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm transition',
+                          'relative inline-flex cursor-pointer items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm transition',
+                          // The input carries the focus, so the chip has to show
+                          // it — a hidden checkbox is otherwise invisible to
+                          // anyone tabbing through.
+                          'focus-within:ring-2 focus-within:ring-primary focus-within:ring-offset-1',
                           checked
                             ? 'border-primary bg-primary/10 font-medium text-primary'
                             : 'border-border hover:bg-foreground/[0.03]'
                         )}
                       >
+                        {/* Transparent but full-size, so the whole chip is the
+                            real control rather than a label standing in front
+                            of a 1px checkbox nothing can actually hit. */}
                         <input
                           type="checkbox"
                           checked={checked}
                           disabled={disabled || plannerPicks}
                           onChange={() => toggleActivity(activity.id)}
-                          className="sr-only"
+                          className="absolute inset-0 h-full w-full cursor-pointer appearance-none rounded-full opacity-0"
                         />
                         {activity.label}
                       </label>

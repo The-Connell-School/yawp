@@ -414,6 +414,46 @@ async function seedAskTurn(
   }
 }
 
+/**
+ * A plain lesson plan carrying no artifacts, so the follow-on offers are both
+ * still on the table. A reply that already built a handout suppresses that
+ * offer on purpose, which is a different case.
+ */
+async function seedBareLessonPlan(e2eContext: {
+  teacherMembershipId: string;
+  organizationId: string;
+}) {
+  const prisma = createE2EPrismaClient();
+  try {
+    const conversation = await prisma.lessonPlanConversation.create({
+      data: {
+        membershipId: e2eContext.teacherMembershipId,
+        organizationId: e2eContext.organizationId,
+        title: 'Bare plan',
+        messages: {
+          create: [
+            {
+              role: 'user',
+              content: 'Plan a lesson on explaining evidence.',
+              createdAt: new Date('2026-08-05T10:00:00.000Z'),
+            },
+            {
+              role: 'assistant',
+              content:
+                '## Objective\n\nExplain what a quote proves.\n\n## Lesson Sequence\n\nWarm-up, mini-lesson, practice.',
+              createdAt: new Date('2026-08-05T10:00:01.000Z'),
+            },
+          ],
+        },
+      },
+      select: { id: true },
+    });
+    return { conversationId: conversation.id };
+  } finally {
+    await prisma.$disconnect();
+  }
+}
+
 test.describe('YAWP! Lesson Planner', () => {
   test.afterEach(async ({ e2eContext }) => {
     // Leave the org in its default (disabled) state for other specs.
@@ -1212,12 +1252,12 @@ test.describe('YAWP! Lesson Planner', () => {
     e2eContext,
   }) => {
     await setLessonPlannerEnabled(e2eContext.organizationId, true);
-    const { conversationId } = await seedLessonWithMaterials(e2eContext);
+    const { conversationId } = await seedBareLessonPlan(e2eContext);
     await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
     await page.goto(`/app/lesson-planner?c=${conversationId}`);
 
-    // The seeded reply is a plan, so the two follow-ons are pinned by the app
-    // rather than left to whatever the model happened to suggest.
+    // The seeded reply is a plan that built nothing, so both follow-ons are
+    // pinned by the app rather than left to whatever the model suggested.
     await expect(
       page.getByRole('button', {
         name: /build the slide deck for this lesson/i,
