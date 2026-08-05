@@ -1,0 +1,1717 @@
+{
+  "generatedAt": "2026-08-05T13:51:25.951Z",
+  "model": "claude-sonnet-4-5",
+  "results": [
+    {
+      "id": "E01-strong-tech-optimism",
+      "band": "strong",
+      "note": "Strong writing: sharp thesis, sustained analysis, original conclusion.",
+      "studentFullName": "Amelia Chen",
+      "studentFirstName": "Amelia",
+      "pseudonymFirstName": "Taylor",
+      "control": {
+        "categories": [
+          {
+            "key": "thesis_and_content",
+            "score": 5,
+            "comment": "Your thesis is intellectually bold and original—technology as mirror rather than ladder is a sophisticated metaphor that reframes the entire conversation. The essay delivers on this promise with genuine discovery: the printing press example beautifully complicates your argument, and your final turn (that we must become 'people worth reflecting') is an earned deduction that makes readers reconsider their relationship with technology. This is precisely the kind of critical thinking and conceptual risk-taking that defines exemplary work."
+          },
+          {
+            "key": "organization_and_structure",
+            "score": 5,
+            "comment": "The introduction builds compellingly from cultural assumption to counterargument to thesis. Your body paragraph on the printing press directly supports your central claim with historical nuance, and the transition to your conclusion ('This is why...') feels organic and purposeful. The final paragraph extends your thinking rather than merely restating it, offering a prescriptive insight that grows naturally from your analysis."
+          },
+          {
+            "key": "evidence_and_support",
+            "score": 4,
+            "comment": "The printing press example is well-chosen and integrated seamlessly—it illuminates your claim about amplification without overwhelming your own voice. The smartphone and algorithm references are precise and effective. To reach the highest level, consider adding one more concrete, researched example that deepens the historical or contemporary dimension of your argument and builds additional authority."
+          },
+          {
+            "key": "voice_and_style",
+            "score": 5,
+            "comment": "Your voice is confident, engaging, and memorable. Phrases like 'found the seam in our attention' and 'the story we prefer to tell about ourselves' demonstrate creative risk-taking that remains academically credible. The rhythm is compelling throughout, and your tone balances philosophical seriousness with accessibility. This is authentic, precise writing that commands attention."
+          },
+          {
+            "key": "grammar_and_mechanics",
+            "score": 5,
+            "comment": "The essay is polished and technically excellent. Sentence variety enhances clarity, punctuation (including the effective use of dashes and semicolons) supports your sophisticated ideas, and no errors distract from meaning. The presentation is clean and professional."
+          }
+        ],
+        "overallComment": "Amelia, you've written an essay that does exactly what the best writing should do: it makes readers think differently. Your central metaphor—technology as mirror rather than ladder—is the kind of original insight that reframes an entire conversation, and you sustain that intellectual courage throughout. The printing press example is particularly effective because it complicates rather than simplifies your argument, showing genuine engagement with historical nuance. Your voice is confident and precise, taking creative risks ('found the seam in our attention') that pay off beautifully. The one area for growth is evidence: while your examples are well-chosen, adding one more researched, concrete instance would deepen your authority and give readers an even richer foundation for your claims. This is sophisticated, compelling work that demonstrates real discovery through writing.",
+        "totalPercent": 96,
+        "neededRepair": false,
+        "neededOverallCommentFollowup": false
+      },
+      "treatment": {
+        "categories": [
+          {
+            "key": "thesis_and_content",
+            "score": 5,
+            "comment": "Your thesis is intellectually bold and genuinely original—the mirror metaphor is precise, sophisticated, and sets up a multi-layered argument that takes real risks. The body delivers on this promise with sustained critical thinking: the printing press example is unexpected and deepens the analysis beautifully, and your final move—rejecting both optimism and pessimism to argue for internal progress first—feels like genuine discovery. This is the kind of thinking that makes readers reconsider their assumptions."
+          },
+          {
+            "key": "organization_and_structure",
+            "score": 5,
+            "comment": "The essay builds compellingly from the opening challenge to convention, through the historical complication, to a conclusion that extends your thinking rather than restating it. Transitions are organic ('This is why I am suspicious...'), and each paragraph serves a distinct purpose in your argument's progression. The structure feels purposeful and inevitable—each idea leads naturally to the next."
+          },
+          {
+            "key": "evidence_and_support",
+            "score": 4,
+            "comment": "The printing press example is precisely chosen and seamlessly integrated, building real authority for your argument. Your analysis remains primary throughout, and the evidence illuminates rather than just supports your claims. To reach exemplary, consider adding one more concrete, contemporary example—perhaps a specific algorithm or platform—to balance the historical reference and deepen the dialogue with sources."
+          },
+          {
+            "key": "voice_and_style",
+            "score": 5,
+            "comment": "Your voice is confident, authentic, and memorable. Phrases like 'found the seam in our attention' and 'let us off the hook' take creative risks while maintaining academic credibility. The language is precise and economical throughout, and the rhythm—especially in the opening litany of examples—is genuinely compelling. This reads like someone thinking on the page, not reciting received wisdom."
+          },
+          {
+            "key": "grammar_and_mechanics",
+            "score": 5,
+            "comment": "The essay is polished and technically excellent. Sentence variety enhances clarity, punctuation choices (especially the dashes and semicolons) are sophisticated and effective, and there are no distracting errors. The presentation is clean and professional throughout."
+          }
+        ],
+        "overallComment": "Amelia, this essay does exactly what the best writing should do: it makes readers think differently. Your mirror metaphor is not just clever—it's a genuinely original framework that reframes the entire technology debate, and you sustain that insight with intellectual courage throughout. The printing press example is particularly brilliant because it complicates your argument rather than simply supporting it, showing real critical thinking at work. Your voice is confident without being showy, and your conclusion earns its authority by offering a deduction that feels both surprising and inevitable. The only opportunity for growth would be to add one more piece of concrete, contemporary evidence to balance the historical example and give readers an additional anchor point. But this is sophisticated, risk-taking work that demonstrates what happens when a writer trusts their own thinking.",
+        "totalPercent": 96,
+        "neededRepair": false,
+        "neededOverallCommentFollowup": false
+      },
+      "categoryDeltas": [
+        {
+          "key": "thesis_and_content",
+          "control": 5,
+          "treatment": 5,
+          "delta": 0
+        },
+        {
+          "key": "organization_and_structure",
+          "control": 5,
+          "treatment": 5,
+          "delta": 0
+        },
+        {
+          "key": "evidence_and_support",
+          "control": 4,
+          "treatment": 4,
+          "delta": 0
+        },
+        {
+          "key": "voice_and_style",
+          "control": 5,
+          "treatment": 5,
+          "delta": 0
+        },
+        {
+          "key": "grammar_and_mechanics",
+          "control": 5,
+          "treatment": 5,
+          "delta": 0
+        }
+      ],
+      "totalDelta": 0,
+      "leaks": {
+        "realNameInTreatmentOutboundPrompt": {
+          "found": false,
+          "matches": []
+        },
+        "realNameInTreatmentRawResponse": false,
+        "pseudonymStrayInTreatmentFinalOutput": {
+          "found": false,
+          "matches": []
+        }
+      },
+      "nameCorrectness": {
+        "controlOverallCommentHasRealName": true,
+        "treatmentOverallCommentHasRealName": true,
+        "pass": true
+      },
+      "judge": {
+        "aSide": "treatment",
+        "rawWinner": "tie",
+        "winner": "tie",
+        "reason": "These comments are nearly identical in quality, structure, and content. Both open with the same phrase ('does exactly what the best writing should do: it makes readers think differently'), praise the mirror metaphor as 'original,' highlight the printing press example for 'complicating' the argument, commend the voice as 'confident,' cite the same specific phrase ('found the seam in our attention' vs 'seam in our attention'), and offer virtually the same suggestion about adding contemporary/concrete evidence. Comment A mentions 'risk-taking work' while B says 'taking creative risks,' but these are trivial variations. Both demonstrate warmth, specificity to the essay's actual content, and useful guidance. The differences are cosmetic rather than substantive.",
+        "groundednessA": "Highly grounded—references the mirror metaphor, printing press example, and quotes 'found the seam in our attention' from the essay.",
+        "groundednessB": "Highly grounded—references the mirror/ladder metaphor, printing press example, and quotes 'found the seam in our attention' from the essay."
+      }
+    },
+    {
+      "id": "E03-mid-climate-policy",
+      "band": "mid",
+      "note": "Mid-range writing: competent five-paragraph structure, adequate but unremarkable analysis.",
+      "studentFullName": "Priya Patel",
+      "studentFirstName": "Priya",
+      "pseudonymFirstName": "Shay",
+      "control": {
+        "categories": [
+          {
+            "key": "thesis_and_content",
+            "score": 2,
+            "comment": "The thesis presents a position on carbon tax but lacks the intellectual complexity and originality expected at higher levels. The argument remains surface-level—'carbon tax is effective because it incentivizes businesses and generates revenue'—without genuine discovery or sophisticated analysis. Body paragraphs address counterarguments but don't build or evolve ideas; they simply acknowledge concerns and offer standard rebuttals. The essay doesn't demonstrate sustained critical thinking or make readers reconsider the subject in new ways."
+          },
+          {
+            "key": "organization_and_structure",
+            "score": 3,
+            "comment": "The essay follows a clear organizational pattern: introduction with thesis, two body paragraphs addressing counterarguments, and conclusion. However, the structure feels formulaic rather than purposeful. The introduction is abrupt, jumping immediately to the claim without building compellingly. Transitions between ideas are mechanical ('Critics argue,' 'Some also worry'). The conclusion restates the thesis rather than extending thinking or offering earned deductions that add new insight."
+          },
+          {
+            "key": "evidence_and_support",
+            "score": 2,
+            "comment": "Evidence is vague and generic throughout. References to 'several economists' and 'studies suggest' lack precision and specificity—no actual sources are named or integrated. The essay makes claims about carbon dividend models and their effects on households without concrete data or authoritative support. There's no dialogue with sources because no real sources are present. The argument relies on assertion rather than substantiated evidence."
+          },
+          {
+            "key": "voice_and_style",
+            "score": 3,
+            "comment": "The voice is clear and appropriate for academic writing, maintaining a consistent, measured tone. However, it lacks authenticity and engagement—the language feels safe and generic rather than confident or memorable. Phrases like 'one of the most important issues' and 'economically sound first step' are stock expressions. The writing is readable but doesn't take creative risks or demonstrate the precise, economical wording that makes prose compelling."
+          },
+          {
+            "key": "grammar_and_mechanics",
+            "score": 4,
+            "comment": "The essay demonstrates strong technical control with very few grammar or syntax errors. Sentences are clear and varied appropriately. Formatting appears clean and professional. The writing is polished at the sentence level, which supports readability and clarity throughout the piece."
+          }
+        ],
+        "overallComment": "Priya, you've written a technically competent essay that takes a clear position on carbon taxation, and your grammar and sentence-level clarity are strong. However, the essay doesn't yet demonstrate the intellectual depth and originality this rubric prioritizes. Your thesis states a position but doesn't offer the multi-layered analysis or genuine discovery that comes from deep engagement with the subject. The argument feels familiar—these are points readers have encountered before, presented without new insight or unexpected connections. Your body paragraphs acknowledge counterarguments, which shows awareness of complexity, but they don't build ideas or evolve your thinking; instead, they offer standard rebuttals. Most critically, your evidence is too vague to be persuasive. References to 'several economists' and 'studies' without specific sources or data weaken your authority significantly. To move this essay toward excellence, dig deeper into the research: find precise evidence, engage with it critically, and let that engagement lead you to more sophisticated conclusions. Push yourself to discover something new about this topic rather than confirming what's already widely accepted. Your technical skills are solid—now challenge yourself to take intellectual risks that make readers think differently.",
+        "totalPercent": 53,
+        "neededRepair": false,
+        "neededOverallCommentFollowup": false
+      },
+      "treatment": {
+        "categories": [
+          {
+            "key": "thesis_and_content",
+            "score": 2,
+            "comment": "The thesis presents a position but lacks the complexity and intellectual risk this rubric rewards. The argument—that a carbon tax is effective and concerns can be mitigated—is predictable and doesn't demonstrate genuine discovery or original thinking. Body content addresses counterarguments but remains surface-level, relying on general claims ('several economists,' 'studies suggest') without developing sophisticated connections or unexpected insights. The essay explains a position but doesn't make the reader reconsider the subject in a meaningful way."
+          },
+          {
+            "key": "organization_and_structure",
+            "score": 3,
+            "comment": "The essay follows a clear structure: introduction with thesis, two counterargument paragraphs, and conclusion. However, the opening lacks a compelling strategy—it jumps directly to the claim without building interest. Transitions between paragraphs are functional but mechanical ('Critics argue,' 'Some also worry'). The conclusion restates the position with minor qualifications rather than extending thinking or offering earned deductions. The progression is logical but feels formulaic rather than purposeful."
+          },
+          {
+            "key": "evidence_and_support",
+            "score": 2,
+            "comment": "Evidence is vague and lacks precision. References to 'several economists' and 'studies suggest' provide no concrete support or authority. There are no integrated sources, specific data, or examples that deepen the analysis. The essay makes claims about carbon dividends and policy outcomes but doesn't engage with actual evidence to build credibility. Analysis remains assertion-based rather than evidence-driven."
+          },
+          {
+            "key": "voice_and_style",
+            "score": 3,
+            "comment": "The voice is clear and appropriately academic, with consistent tone throughout. Language is accessible and mostly precise ('financial incentive,' 'carbon dividend model'). However, the voice feels generic rather than authentic or engaging—it could belong to any policy brief. There's little creative risk or memorable phrasing. Sentences are readable but lack the rhythm and economy that would make the writing compelling."
+          },
+          {
+            "key": "grammar_and_mechanics",
+            "score": 4,
+            "comment": "Grammar and syntax are largely correct with only minor issues. Sentences are well-constructed with some variety. Punctuation is appropriate and formatting appears clean. The essay reads smoothly without distracting errors. A more thoughtful title would enhance presentation, but overall technical execution is solid and supports clarity effectively."
+          }
+        ],
+        "overallComment": "Priya, you've written a clear, competent argument that demonstrates your ability to structure a position and anticipate counterarguments—those are real strengths. However, this rubric prioritizes intellectual courage and original thinking, and your essay plays it safe. The carbon tax argument, while reasonable, doesn't take you anywhere unexpected. You're explaining a position rather than discovering something through your writing. To move toward exemplary work, push yourself during pre-writing: What surprising connection could you make? What tension exists within your own position? What would make a reader reconsider their assumptions rather than simply nod along? Your technical skills are strong enough to support bolder thinking—now take the intellectual risks that transform competent writing into compelling writing. Consider also that vague references to 'economists' and 'studies' weaken your authority; precise, integrated evidence would give your claims the weight they need.",
+        "totalPercent": 53,
+        "neededRepair": false,
+        "neededOverallCommentFollowup": false
+      },
+      "categoryDeltas": [
+        {
+          "key": "thesis_and_content",
+          "control": 2,
+          "treatment": 2,
+          "delta": 0
+        },
+        {
+          "key": "organization_and_structure",
+          "control": 3,
+          "treatment": 3,
+          "delta": 0
+        },
+        {
+          "key": "evidence_and_support",
+          "control": 2,
+          "treatment": 2,
+          "delta": 0
+        },
+        {
+          "key": "voice_and_style",
+          "control": 3,
+          "treatment": 3,
+          "delta": 0
+        },
+        {
+          "key": "grammar_and_mechanics",
+          "control": 4,
+          "treatment": 4,
+          "delta": 0
+        }
+      ],
+      "totalDelta": 0,
+      "leaks": {
+        "realNameInTreatmentOutboundPrompt": {
+          "found": false,
+          "matches": []
+        },
+        "realNameInTreatmentRawResponse": false,
+        "pseudonymStrayInTreatmentFinalOutput": {
+          "found": false,
+          "matches": []
+        }
+      },
+      "nameCorrectness": {
+        "controlOverallCommentHasRealName": true,
+        "treatmentOverallCommentHasRealName": true,
+        "pass": true
+      },
+      "judge": {
+        "aSide": "control",
+        "rawWinner": "tie",
+        "winner": "tie",
+        "reason": "Both comments are nearly identical in quality, structure, and content. Each opens with praise for technical competence, identifies the same core weakness (lack of intellectual depth/originality), references the same specific vagueness issue ('several economists' and 'studies'), and closes with similar encouragement to take intellectual risks. Comment A is slightly more verbose ('multi-layered analysis,' 'genuine discovery,' 'evolve your thinking') while Comment B is more concise ('plays it safe,' 'explaining a position rather than discovering'), but both deliver essentially the same message with equal warmth and specificity. Both ground their feedback in concrete essay details (the carbon tax thesis, the counterargument structure, the vague sourcing). Neither offers a meaningfully different perspective or additional value to the student.",
+        "groundednessA": "Comment A directly references the essay's thesis on carbon taxation, the counterargument structure in body paragraphs, and specifically cites the vague phrases 'several economists' and 'studies' from the text.",
+        "groundednessB": "Comment B references the carbon tax argument, the counterargument anticipation, and specifically identifies the same vague references to 'economists' and 'studies' as problematic sourcing."
+      }
+    },
+    {
+      "id": "E04-strong-name-in-body",
+      "band": "strong",
+      "note": "Key edge case: the essay text names the author directly and closes with a signature -- tests whether redaction leaks or garbles the essay body itself.",
+      "studentFullName": "Sophia Marín",
+      "studentFirstName": "Sophia",
+      "pseudonymFirstName": "Teagan",
+      "control": {
+        "categories": [
+          {
+            "key": "thesis_and_content",
+            "score": 5,
+            "comment": "Your thesis is beautifully layered—connecting inherited silence to writing as resistance—and demonstrates genuine discovery. The content delivers on this promise with sophisticated connections between your grandmother's letters, your own evolution as a writer, and the broader tension between comfort and truth. Your insight that honesty makes you 'late' rather than 'brave' is the kind of unexpected, earned deduction that distinguishes exemplary thinking."
+          },
+          {
+            "key": "organization_and_structure",
+            "score": 5,
+            "comment": "The introduction builds compellingly from childhood memory to the transformative discovery of your grandmother's letters, landing purposefully on your thesis. Each paragraph supports a distinct element: silence as misunderstood strength, writing as corrective action, and the reframing of courage as belatedness. The conclusion extends thinking rather than restating it, offering a final insight that resonates beyond the essay itself."
+          },
+          {
+            "key": "evidence_and_support",
+            "score": 4,
+            "comment": "Your personal evidence—the grandmother's twenty words, the discovered letters, the contrast between dinner-table versions and truth—is precise and well-integrated. The examples of how you now write about family and mistakes illuminate your claims effectively. To reach exemplary, consider deepening the analysis of one specific moment from those letters or a particular essay where you practiced this new honesty."
+          },
+          {
+            "key": "voice_and_style",
+            "score": 5,
+            "comment": "Your voice is authentic, confident, and memorable. Phrases like 'softened version we tell at dinner' and 'I would rather arrive late than not arrive at all' take creative risks while maintaining academic credibility. The rhythm is compelling—economical without being sparse, reflective without becoming indulgent. This is writing that makes readers reconsider silence, honesty, and inheritance."
+          },
+          {
+            "key": "grammar_and_mechanics",
+            "score": 5,
+            "comment": "Grammar and syntax are polished and non-distracting. Sentence variety enhances clarity—the short, declarative 'I do not think this makes me brave' gains power from its placement after longer, more complex sentences. Punctuation supports meaning throughout. The presentation is clean and professional."
+          }
+        ],
+        "overallComment": "Sophia, this essay demonstrates the kind of intellectual courage and genuine discovery that defines exemplary writing. Your thesis—that writing is your argument against inherited silence—emerges from real reflection rather than formula, and every paragraph deepens that central claim with precision and insight. The structural choices feel purposeful: opening with your grandmother's twenty words, moving through the discovery of her letters, and arriving at the realization that honesty makes you 'late' rather than 'brave.' That final reframing is exactly the kind of earned deduction that makes readers think differently. Your voice is confident without being performative, vulnerable without losing authority. The only area for growth is in evidence—while your personal examples are vivid and well-chosen, adding one more layer of specific detail (perhaps a line from those letters, or a concrete moment from an essay where you practiced this new honesty) would deepen the analysis further. This is writing that does what the best essays do: it names something true that was previously unsaid.",
+        "totalPercent": 96,
+        "neededRepair": false,
+        "neededOverallCommentFollowup": false
+      },
+      "treatment": {
+        "categories": [
+          {
+            "key": "thesis_and_content",
+            "score": 2,
+            "comment": "This reads as a personal reflection rather than a thesis-driven essay. There's no clear argument or analytical claim—just narrative and introspection. While the writing is thoughtful, it lacks the 'observation + analysis' structure the assignment requires. To move forward, identify a specific, defensible position about silence, inherited trauma, honesty in writing, or another concept you can argue and support with evidence."
+          },
+          {
+            "key": "organization_and_structure",
+            "score": 3,
+            "comment": "The three-paragraph structure has a clear emotional arc (childhood belief → discovery → current practice), and the progression is easy to follow. However, there's no thesis to organize around, so the essay feels more like a memoir excerpt than an argument. The conclusion gestures toward insight but doesn't extend thinking in a way that challenges the reader or deepens the analysis."
+          },
+          {
+            "key": "evidence_and_support",
+            "score": 1,
+            "comment": "No external evidence or source material is present. The essay relies entirely on personal anecdote. For a thesis-driven essay, you'll need to integrate outside sources—texts, research, or other voices—that you can analyze and build into a larger argument. Personal experience can enhance an argument, but it can't replace evidence."
+          },
+          {
+            "key": "voice_and_style",
+            "score": 5,
+            "comment": "This is where the essay shines. Your voice is authentic, confident, and memorable. Phrases like 'I mistook her quiet for wisdom rather than exhaustion' and 'I think it makes me late' are precise, economical, and emotionally resonant. The tone is consistent and engaging throughout. This strength will serve you well once you channel it into argumentative writing."
+          },
+          {
+            "key": "grammar_and_mechanics",
+            "score": 5,
+            "comment": "Technically polished. Sentence variety is strong, punctuation enhances clarity, and there are no distracting errors. The em-dashes are used effectively, and the pacing supports the reflective tone. No issues here."
+          }
+        ],
+        "overallComment": "Sophia, you've written something deeply personal and stylistically compelling, but it doesn't yet meet the requirements of a thesis-driven essay. What's here is a reflective narrative—beautiful in its honesty and precision—but without an argument, evidence, or critical analysis. The rubric prioritizes original thinking and intellectual risk, which means taking a position and defending it with outside sources, not just lived experience. Your voice is a real asset: you write with clarity, rhythm, and emotional intelligence. Now the challenge is to harness that voice in service of an argument. Ask yourself: what claim can I make about silence, honesty, family narratives, or the ethics of storytelling that a reader might doubt or disagree with? Then build your case with evidence and analysis. You have the tools—you just need to reframe the task.",
+        "totalPercent": 59,
+        "neededRepair": false,
+        "neededOverallCommentFollowup": false
+      },
+      "categoryDeltas": [
+        {
+          "key": "thesis_and_content",
+          "control": 5,
+          "treatment": 2,
+          "delta": -3
+        },
+        {
+          "key": "organization_and_structure",
+          "control": 5,
+          "treatment": 3,
+          "delta": -2
+        },
+        {
+          "key": "evidence_and_support",
+          "control": 4,
+          "treatment": 1,
+          "delta": -3
+        },
+        {
+          "key": "voice_and_style",
+          "control": 5,
+          "treatment": 5,
+          "delta": 0
+        },
+        {
+          "key": "grammar_and_mechanics",
+          "control": 5,
+          "treatment": 5,
+          "delta": 0
+        }
+      ],
+      "totalDelta": -37,
+      "leaks": {
+        "realNameInTreatmentOutboundPrompt": {
+          "found": true,
+          "matches": [
+            "userPrompt"
+          ]
+        },
+        "realNameInTreatmentRawResponse": false,
+        "pseudonymStrayInTreatmentFinalOutput": {
+          "found": false,
+          "matches": []
+        }
+      },
+      "nameCorrectness": {
+        "controlOverallCommentHasRealName": true,
+        "treatmentOverallCommentHasRealName": true,
+        "pass": false
+      },
+      "judge": {
+        "aSide": "control",
+        "rawWinner": "A",
+        "winner": "control",
+        "reason": "Comment A engages deeply with the specific content of Sophia's essay, citing concrete details like 'twenty words,' the grandmother's letters, and the 'late' vs 'brave' distinction, while offering substantive praise grounded in what's actually on the page. Comment B, while thoughtful, makes a critical assumption that this is meant to be a 'thesis-driven essay' with 'outside sources'—requirements never mentioned in the prompt or visible rubric. Without knowing the actual assignment, Comment B's criticism may be entirely misplaced. Comment A meets the student where she is, acknowledges the essay's strengths with specificity, and offers targeted, actionable feedback (adding concrete details from the letters). It's warmer, more grounded in the actual text, and more useful regardless of the assignment context.",
+        "groundednessA": "Highly grounded—references 'twenty words,' the letters, the 'late' vs 'brave' reframing, and specific structural choices from the essay.",
+        "groundednessB": "Moderately grounded—acknowledges the personal narrative and voice quality, but spends most energy critiquing against unstated requirements rather than engaging with what Sophia actually wrote."
+      }
+    },
+    {
+      "id": "E05-mid-shared-name-maya-thompson",
+      "band": "mid",
+      "note": "Shared-first-name pair (A): tests that two students named Maya map to the same pseudonym.",
+      "studentFullName": "Maya Thompson",
+      "studentFirstName": "Maya",
+      "pseudonymFirstName": "Rowan",
+      "control": {
+        "categories": [
+          {
+            "key": "thesis_and_content",
+            "score": 2,
+            "comment": "Your reflection on translation and careful listening shows genuine personal insight, but this reads more as a personal narrative than a thesis-driven essay. The third paragraph gestures toward an argument about intellectual discipline, but it never develops into a defensible, analytical thesis that body paragraphs could explore with depth. The essay stops at observation rather than building toward sustained critical thinking or meaningful deductions about the broader implications of your experience."
+          },
+          {
+            "key": "organization_and_structure",
+            "score": 2,
+            "comment": "The three-paragraph structure feels more like a reflective introduction than a complete essay. There's no developed body to explore distinct elements of a thesis, no transitions between analytical claims, and no conclusion that extends thinking beyond restatement. The progression moves chronologically through your realization but doesn't build an argument architecturally."
+          },
+          {
+            "key": "evidence_and_support",
+            "score": 1,
+            "comment": "The essay relies entirely on personal anecdote without engaging any outside sources, texts, or evidence that could deepen the analysis. While personal experience can illustrate ideas, a thesis-driven essay requires precise, well-integrated evidence from literature, research, or other authoritative material to build intellectual authority and move beyond memoir."
+          },
+          {
+            "key": "voice_and_style",
+            "score": 4,
+            "comment": "Your voice is authentic, thoughtful, and engaging—this is the essay's greatest strength. Phrases like 'sit with the gap rather than fill it badly' are precise and memorable. The tone is reflective without being overwrought, and your writing demonstrates real control and confidence. This quality of voice would serve a thesis-driven argument beautifully if applied to analytical content."
+          },
+          {
+            "key": "grammar_and_mechanics",
+            "score": 5,
+            "comment": "The writing is technically polished with varied sentence structure, correct punctuation, and clean presentation. Grammar and syntax support clarity throughout, and the prose flows smoothly without distracting errors."
+          }
+        ],
+        "overallComment": "Maya, your writing has a reflective grace and authenticity that's genuinely compelling—your voice is clear, confident, and memorable. The challenge here is that this reads as a personal essay or memoir rather than the thesis-driven analytical essay the assignment requires. You've offered a meaningful personal insight about careful listening and intellectual humility, but you haven't yet built that insight into a defensible argument supported by evidence, developed through body paragraphs, and extended through critical thinking. A thesis-driven essay needs you to take that beautiful observation about translation and discipline and ask: What does this reveal about how we construct meaning in literature, navigate cultural difference, or approach complex texts? Then build an argument with outside sources and sustained analysis. Your prose style is already strong enough to carry sophisticated ideas—now channel that clarity toward analytical depth and structured argumentation.",
+        "totalPercent": 50,
+        "neededRepair": false,
+        "neededOverallCommentFollowup": false
+      },
+      "treatment": {
+        "categories": [
+          {
+            "key": "thesis_and_content",
+            "score": 4,
+            "comment": "Your thesis demonstrates thoughtful reflection and moves beyond the obvious—translating the bilingual experience into a broader intellectual discipline is insightful. The essay shows genuine discovery and your deductions feel earned. To reach exemplary, push the analysis further: explore *how* this discipline manifests in specific reading or argument scenarios, and consider complicating your claim with moments when the discipline fails or creates new problems."
+          },
+          {
+            "key": "organization_and_structure",
+            "score": 4,
+            "comment": "The introduction builds naturally to your thesis, and the progression from personal experience to broader application is logical and purposeful. The conclusion gestures toward humility and ongoing growth, which is effective. To strengthen further, develop the body more fully—right now, the essay moves quickly from anecdote to claim. Adding a paragraph that tests your thesis against a concrete example (a specific text, a real disagreement) would deepen the structure and give the conclusion more to build on."
+          },
+          {
+            "key": "evidence_and_support",
+            "score": 3,
+            "comment": "Your personal experience serves as meaningful evidence and is integrated smoothly, but the essay would benefit from additional support—either a literary example, a moment from an actual argument, or engagement with a source that explores translation or interpretation. The claim about 'careful listening' is compelling but remains somewhat abstract without a scene or text that demonstrates it in action. More precise evidence would elevate your authority and deepen the analysis."
+          },
+          {
+            "key": "voice_and_style",
+            "score": 5,
+            "comment": "Your voice is authentic, confident, and memorable. Phrases like 'sit with the gap rather than fill it badly' and 'the discipline of not assuming you already understand' are precise and economical. The tone is reflective without being self-indulgent, and the pacing feels deliberate. This is writing that takes creative risks while remaining academically credible—exactly what strong personal-intellectual essays should do."
+          },
+          {
+            "key": "grammar_and_mechanics",
+            "score": 5,
+            "comment": "The essay is polished and technically sound. Sentence variety enhances clarity, punctuation is handled skillfully (especially the em-dashes), and there are no distracting errors. The presentation is clean and professional."
+          }
+        ],
+        "overallComment": "Maya, this essay demonstrates real intellectual promise. You've taken a personal experience and transformed it into a broader claim about interpretive discipline, and your voice throughout is confident and engaging. The writing is polished, and your central insight—that translation gaps teach careful listening—feels genuinely discovered rather than prescribed. What would push this into exemplary territory is more evidence and development in the body. Right now, the essay moves quickly from anecdote to thesis to conclusion, but it would benefit from a middle section that tests your claim against a concrete example: a specific text you've read, a real argument you've had, or a moment when the discipline you describe either succeeded or failed. That additional layer would give your conclusion more weight and allow your analysis to build and evolve. You're already writing with clarity and purpose—now deepen the exploration and let your ideas complicate themselves.",
+        "totalPercent": 82,
+        "neededRepair": false,
+        "neededOverallCommentFollowup": false
+      },
+      "categoryDeltas": [
+        {
+          "key": "thesis_and_content",
+          "control": 2,
+          "treatment": 4,
+          "delta": 2
+        },
+        {
+          "key": "organization_and_structure",
+          "control": 2,
+          "treatment": 4,
+          "delta": 2
+        },
+        {
+          "key": "evidence_and_support",
+          "control": 1,
+          "treatment": 3,
+          "delta": 2
+        },
+        {
+          "key": "voice_and_style",
+          "control": 4,
+          "treatment": 5,
+          "delta": 1
+        },
+        {
+          "key": "grammar_and_mechanics",
+          "control": 5,
+          "treatment": 5,
+          "delta": 0
+        }
+      ],
+      "totalDelta": 32,
+      "leaks": {
+        "realNameInTreatmentOutboundPrompt": {
+          "found": false,
+          "matches": []
+        },
+        "realNameInTreatmentRawResponse": false,
+        "pseudonymStrayInTreatmentFinalOutput": {
+          "found": false,
+          "matches": []
+        }
+      },
+      "nameCorrectness": {
+        "controlOverallCommentHasRealName": true,
+        "treatmentOverallCommentHasRealName": true,
+        "pass": true
+      },
+      "judge": {
+        "aSide": "control",
+        "rawWinner": "B",
+        "winner": "treatment",
+        "reason": "Comment B is more grounded in the actual essay content and provides warmer, more constructive feedback. While both comments correctly identify that the essay lacks traditional analytical structure, Comment B acknowledges what the student has actually accomplished ('transformed it into a broader claim about interpretive discipline,' 'your central insight—that translation gaps teach careful listening—feels genuinely discovered') by referencing specific content from the essay. Comment A is more generic in its critique, using phrases like 'reflective grace' and 'beautiful observation' without anchoring them to particular moments in the text. Comment B also offers more actionable guidance ('test your claim against a concrete example: a specific text you've read, a real argument you've had') that directly responds to the essay's own examples (reading literature, arguing with people). Both comments are professionally written, but B strikes a better balance between validation and direction, making it more useful to the student.",
+        "groundednessA": "Comment A stays relatively generic, praising 'reflective grace' and 'beautiful observation' without citing specific phrases or examples from the essay itself.",
+        "groundednessB": "Comment B directly references the essay's central claim about 'translation gaps teach careful listening' and the student's own examples of reading literature and having arguments, making it more grounded in actual content."
+      }
+    },
+    {
+      "id": "E06-strong-shared-name-maya-obrien",
+      "band": "strong",
+      "note": "Shared-first-name pair (B): second student named Maya, different essay/topic, tests deterministic shared pseudonym across two separate requests.",
+      "studentFullName": "Maya O'Brien",
+      "studentFirstName": "Maya",
+      "pseudonymFirstName": "Rowan",
+      "control": {
+        "categories": [
+          {
+            "key": "thesis_and_content",
+            "score": 4,
+            "comment": "Your thesis is sharp and defensible: reframing AI ethics as a present audit problem rather than a future policy issue shows genuine critical thinking. The hiring algorithm example effectively grounds your argument. To reach exemplary, push your deductions further—what specific institutional practices need to change? How does this reframing alter our immediate responsibilities? The essay promises discovery but stops just short of fully delivering unexpected connections or evolved thinking in the conclusion."
+          },
+          {
+            "key": "organization_and_structure",
+            "score": 4,
+            "comment": "The introduction builds purposefully to your thesis, and the progression from problem identification to reframing to implication is logical and clear. Transitions between ideas are smooth. However, the conclusion feels more like a strong restatement than an extension of your thinking. An exemplary ending would offer a new insight or deduction that makes readers reconsider not just AI ethics, but perhaps institutional accountability more broadly."
+          },
+          {
+            "key": "evidence_and_support",
+            "score": 3,
+            "comment": "The hiring algorithm example is well-chosen and clearly explained, but it remains your only concrete evidence. The essay would benefit from additional precise examples or engagement with source material to deepen authority and illuminate your claims from multiple angles. The analysis of the example is solid, but more evidence would transform this from a promising argument into a fully supported one."
+          },
+          {
+            "key": "voice_and_style",
+            "score": 5,
+            "comment": "Your voice is confident, direct, and genuinely engaging. Phrases like 'the uncomfortable truth' and 'cannot be pulled aside for a conversation' show creative risk-taking that remains academically credible. The language is precise and economical throughout, and the tone maintains authority without becoming distant. This is writing that makes readers pay attention."
+          },
+          {
+            "key": "grammar_and_mechanics",
+            "score": 5,
+            "comment": "The essay is technically polished with varied sentence structures that enhance clarity and rhythm. Punctuation is handled skillfully, particularly in complex sentences. No distracting errors appear, and the presentation supports rather than distracts from your ideas."
+          }
+        ],
+        "overallComment": "Maya, you've written an essay with a genuinely fresh perspective that challenges how we typically frame AI ethics. Your reframing of the issue as an audit problem rather than a future policy concern shows the kind of intellectual courage this rubric values. The voice is confident and engaging throughout, and your writing is technically strong. The central weakness is in evidence depth—one example, however well-analyzed, isn't quite enough to fully support the weight of your argument. Adding one or two more precise examples or engaging with existing scholarship on algorithmic bias would strengthen your authority considerably. Additionally, your conclusion restates your position powerfully but doesn't quite extend your thinking into new territory. What would it look like if institutions actually took up this audit obligation tomorrow? What resistance would emerge, and why? Push yourself to that next level of deduction, and you'll move from a strong argument to a truly compelling one.",
+        "totalPercent": 82,
+        "neededRepair": false,
+        "neededOverallCommentFollowup": false
+      },
+      "treatment": {
+        "categories": [
+          {
+            "key": "thesis_and_content",
+            "score": 4,
+            "comment": "Your thesis is sharp and defensible: treating AI ethics as a future problem is itself an ethical failure. The reframing from 'technology problem' to 'audit problem' is insightful and demonstrates critical thinking. However, the essay feels more like a compelling introduction than a fully developed argument. You've identified the problem powerfully, but the body doesn't yet build the multi-layered exploration promised by your opening. To reach exemplary, extend your analysis: explore counterarguments, complicate your claim with additional dimensions, or show how the 'audit problem' plays out across different contexts."
+          },
+          {
+            "key": "organization_and_structure",
+            "score": 3,
+            "comment": "Your introduction builds effectively to the thesis, and the hiring algorithm example provides a strong anchor. However, the essay lacks the purposeful progression of a fully realized argument. The third paragraph introduces the 'audit problem' reframing, and the fourth offers a closing observation, but these feel more like extensions of the introduction than distinct developmental moves. The conclusion restates your position rather than extending it with new insight. To improve, develop body paragraphs that each tackle a separate dimension of your thesis, with organic transitions showing how ideas build."
+          },
+          {
+            "key": "evidence_and_support",
+            "score": 3,
+            "comment": "The hiring algorithm example is well-chosen and clearly explained, effectively illustrating your central claim. However, the essay relies on a single extended example rather than building authority through multiple, varied sources of evidence. The analysis of the example is solid but could go deeper—what specific studies, cases, or expert perspectives support your 'audit problem' framing? To strengthen this category, integrate additional evidence that illuminates different facets of your argument and creates a dialogue with existing scholarship or real-world cases."
+          },
+          {
+            "key": "voice_and_style",
+            "score": 5,
+            "comment": "Your voice is confident, authentic, and intellectually engaging. Phrases like 'formalize it, encode it into weights' and 'cannot be pulled aside for a conversation' are both precise and memorable. You take creative risks with language while maintaining academic credibility. The rhythm is compelling, and your tone balances urgency with thoughtfulness. This is writing that makes readers reconsider their assumptions—exactly what exemplary voice should accomplish."
+          },
+          {
+            "key": "grammar_and_mechanics",
+            "score": 5,
+            "comment": "Your grammar and syntax are polished and enhance clarity throughout. Sentence variety is strong, punctuation is used effectively, and there are no distracting errors. The presentation is clean and professional. The writing demonstrates technical mastery that supports rather than distracts from your ideas."
+          }
+        ],
+        "overallComment": "Maya, you've written an intellectually bold and stylistically excellent piece that reframes AI ethics in a genuinely fresh way. Your voice is confident and engaging, your language is precise, and your central insight—that AI ethics is an audit problem, not a future technology problem—is the kind of claim that makes readers think differently. The hiring algorithm example is well-executed and effectively grounds your argument. Where the essay needs development is in scope and structure. Right now, it reads more like a powerful introduction to a longer argument than a complete essay. To reach the full potential of your thesis, build out the body with additional evidence, explore complications or counterarguments, and ensure each paragraph advances a distinct element of your claim. Your conclusion should offer earned deductions that extend beyond restating your position—perhaps implications for how institutions should act now, or what resistance to the 'audit' reveals about our relationship to historical bias. The thinking here is sharp and the writing is compelling; now give yourself the space to fully develop what you've started.",
+        "totalPercent": 77,
+        "neededRepair": false,
+        "neededOverallCommentFollowup": false
+      },
+      "categoryDeltas": [
+        {
+          "key": "thesis_and_content",
+          "control": 4,
+          "treatment": 4,
+          "delta": 0
+        },
+        {
+          "key": "organization_and_structure",
+          "control": 4,
+          "treatment": 3,
+          "delta": -1
+        },
+        {
+          "key": "evidence_and_support",
+          "control": 3,
+          "treatment": 3,
+          "delta": 0
+        },
+        {
+          "key": "voice_and_style",
+          "control": 5,
+          "treatment": 5,
+          "delta": 0
+        },
+        {
+          "key": "grammar_and_mechanics",
+          "control": 5,
+          "treatment": 5,
+          "delta": 0
+        }
+      ],
+      "totalDelta": -5,
+      "leaks": {
+        "realNameInTreatmentOutboundPrompt": {
+          "found": false,
+          "matches": []
+        },
+        "realNameInTreatmentRawResponse": false,
+        "pseudonymStrayInTreatmentFinalOutput": {
+          "found": false,
+          "matches": []
+        }
+      },
+      "nameCorrectness": {
+        "controlOverallCommentHasRealName": true,
+        "treatmentOverallCommentHasRealName": true,
+        "pass": true
+      },
+      "judge": {
+        "aSide": "treatment",
+        "rawWinner": "tie",
+        "winner": "tie",
+        "reason": "Both comments are exceptionally strong and nearly indistinguishable in quality. Each opens with warm, specific praise that references Maya's actual thesis (the 'audit problem' reframing), acknowledges the hiring algorithm example explicitly, and identifies the same core weaknesses: insufficient evidence/scope and a conclusion that restates rather than extends. Both use encouraging, constructive language and offer concrete guidance for revision. Comment A phrases the scope issue as 'reads more like a powerful introduction,' while Comment B frames it as 'one example...isn't quite enough'—slightly different angles on the same diagnosis. Comment A's suggestion to 'explore complications or counterarguments' is marginally more specific about structural development, while Comment B's question 'What would it look like if institutions actually took up this audit obligation tomorrow?' provides a slightly more concrete prompt for extending the conclusion. These differences are too minor to constitute a meaningful quality gap. Both comments demonstrate excellent grounding in the essay's actual content and provide equally useful feedback.",
+        "groundednessA": "Highly grounded—explicitly references the hiring algorithm example, the 'audit problem' thesis, and Maya's confident voice with specific textual awareness.",
+        "groundednessB": "Highly grounded—directly cites the 'audit problem' reframing, the hiring algorithm example, and the essay's argumentative structure with concrete detail."
+      }
+    },
+    {
+      "id": "E07-mid-pseudonym-pool-collision",
+      "band": "mid",
+      "note": "Edge case: the student's real first name (Logan) is itself an entry in PSEUDONYM_FIRST_NAME_POOL -- exercises the never-reuse-a-real-name-as-a-pseudonym collision guard in mapping.server.ts.",
+      "studentFullName": "Logan Fitzgerald",
+      "studentFirstName": "Logan",
+      "pseudonymFirstName": "Alex",
+      "control": {
+        "categories": [
+          {
+            "key": "thesis_and_content",
+            "score": 5,
+            "comment": "Your thesis demonstrates genuine intellectual courage by reframing the debate entirely—shifting from 'is the SAT fair?' to 'what's fairer?' This is sophisticated, multi-layered thinking. The body paragraphs deliver on this promise with unexpected connections (portfolio bias mirroring test prep privilege) and sustained critical analysis that avoids easy answers. Your conclusion offers an earned deduction about transparency that makes readers reconsider the entire reform conversation."
+          },
+          {
+            "key": "organization_and_structure",
+            "score": 5,
+            "comment": "The introduction builds compellingly by acknowledging the opposition before pivoting to your more nuanced question. Each paragraph directly supports a distinct element of your argument: alternative flaws, subjectivity risks, and the transparency principle. Transitions feel organic ('None of this is an argument for...') and the conclusion extends thinking rather than restating. The progression is purposeful and controlled throughout."
+          },
+          {
+            "key": "evidence_and_support",
+            "score": 4,
+            "comment": "Your evidence is well-chosen and integrated—portfolio bias correlating with income, holistic review's subjectivity issues, and the historical favoritism in subjective processes all illuminate your claims effectively. To reach exemplary, consider incorporating one or two specific examples or brief references to studies/institutions that would deepen authority and create more dialogue with sources."
+          },
+          {
+            "key": "voice_and_style",
+            "score": 5,
+            "comment": "Your voice is confident, authentic, and intellectually engaging. Phrases like 'the more useful question' and 'make the unfairness harder to see and harder to challenge' show precise, economical language that takes creative risks while maintaining academic credibility. The tone is consistent and compelling—you sound like someone genuinely wrestling with complexity, not performing an argument."
+          },
+          {
+            "key": "grammar_and_mechanics",
+            "score": 5,
+            "comment": "Grammar and syntax are polished throughout. Sentence variety enhances clarity—your use of dashes, parallel structure, and varied sentence length creates excellent rhythm. Punctuation is handled expertly. The essay reads as a finished, professional piece with no distracting errors."
+          }
+        ],
+        "overallComment": "Logan, this essay exemplifies what intellectual risk-taking looks like in academic writing. You've taken a well-worn debate and found an angle that actually advances the conversation rather than rehearsing familiar positions. Your willingness to sit in the discomfort of 'there's no perfect answer' while still offering a principled direction (transparency over elimination) shows real maturity of thought. The writing itself is controlled and confident—you guide readers through complexity without losing them, and your voice never wavers into either oversimplification or unnecessary jargon. This is the kind of essay that makes readers think differently about a subject they thought they'd already figured out. The one area for growth would be integrating more concrete evidence or brief source references to build even greater authority, but the analytical framework you've built here is genuinely impressive. Keep writing with this kind of courage.",
+        "totalPercent": 96,
+        "neededRepair": false,
+        "neededOverallCommentFollowup": false
+      },
+      "treatment": {
+        "categories": [
+          {
+            "key": "thesis_and_content",
+            "score": 5,
+            "comment": "Your thesis is intellectually sophisticated and takes a genuine risk by refusing the easy binary. The claim that removing flawed measures can obscure rather than eliminate bias is a sharp, counterintuitive insight. Body paragraphs deliver on this promise with sustained critical thinking—your treatment of portfolio-based admissions and holistic review demonstrates deep engagement with the complexity of the issue. The conclusion offers an earned deduction about transparency that makes readers reconsider reform itself."
+          },
+          {
+            "key": "organization_and_structure",
+            "score": 5,
+            "comment": "The introduction builds compellingly by reframing the debate before delivering the thesis. Each body paragraph targets a distinct alternative (portfolio, holistic review) and directly supports your argument about hidden bias. Transitions are organic—'None of this is an argument for...' pivots beautifully to your nuanced conclusion. The progression feels purposeful and the final insight about transparency extends rather than restates your thinking."
+          },
+          {
+            "key": "evidence_and_support",
+            "score": 4,
+            "comment": "Your evidence is well-chosen and integrated seamlessly—references to income correlation and subjectivity's history build authority. The analysis remains primary throughout. To reach exemplary, consider adding one precise example or data point (e.g., a specific pilot program outcome or study) to deepen the dialogue with sources and further illuminate your claims about portfolio bias."
+          },
+          {
+            "key": "voice_and_style",
+            "score": 5,
+            "comment": "Your voice is confident, authentic, and intellectually engaging. Phrases like 'does not automatically produce a fairer process—it can just make the unfairness harder to see' demonstrate precise, economical language that takes creative risks while maintaining academic credibility. The rhythm is compelling and the tone consistently thoughtful. This essay has a memorable voice that commands attention."
+          },
+          {
+            "key": "grammar_and_mechanics",
+            "score": 5,
+            "comment": "Grammar and syntax are polished with excellent sentence variety. Punctuation enhances clarity throughout—your use of dashes and commas guides the reader skillfully. The presentation is clean and professional with no distracting errors. Technical execution supports rather than distracts from your sophisticated argument."
+          }
+        ],
+        "overallComment": "Logan, you've written an essay that genuinely makes readers think differently about college admissions reform. What distinguishes this work is your intellectual courage—you resist the comfortable position and instead offer a nuanced argument about transparency versus obscured bias that feels discovered rather than rehearsed. Your thesis combines sharp observation with sophisticated analysis, and every paragraph delivers on that promise with depth and precision. The structure guides readers through complex terrain with organic transitions, and your voice is both authentic and commanding. To push this even further, consider anchoring one of your claims about portfolio or holistic review bias with a specific example or study—this would deepen the dialogue with sources and add another layer of authority to an already compelling argument. This is exemplary work that demonstrates sustained critical thinking and genuine discovery.",
+        "totalPercent": 96,
+        "neededRepair": false,
+        "neededOverallCommentFollowup": false
+      },
+      "categoryDeltas": [
+        {
+          "key": "thesis_and_content",
+          "control": 5,
+          "treatment": 5,
+          "delta": 0
+        },
+        {
+          "key": "organization_and_structure",
+          "control": 5,
+          "treatment": 5,
+          "delta": 0
+        },
+        {
+          "key": "evidence_and_support",
+          "control": 4,
+          "treatment": 4,
+          "delta": 0
+        },
+        {
+          "key": "voice_and_style",
+          "control": 5,
+          "treatment": 5,
+          "delta": 0
+        },
+        {
+          "key": "grammar_and_mechanics",
+          "control": 5,
+          "treatment": 5,
+          "delta": 0
+        }
+      ],
+      "totalDelta": 0,
+      "leaks": {
+        "realNameInTreatmentOutboundPrompt": {
+          "found": false,
+          "matches": []
+        },
+        "realNameInTreatmentRawResponse": false,
+        "pseudonymStrayInTreatmentFinalOutput": {
+          "found": false,
+          "matches": []
+        }
+      },
+      "nameCorrectness": {
+        "controlOverallCommentHasRealName": true,
+        "treatmentOverallCommentHasRealName": true,
+        "pass": true
+      },
+      "judge": {
+        "aSide": "control",
+        "rawWinner": "A",
+        "winner": "control",
+        "reason": "Both comments are warm and encouraging, but Comment A edges ahead through slightly more specific grounding in the essay's actual content. Comment A explicitly references the essay's core tension ('there's no perfect answer'), quotes the specific solution offered ('transparency over elimination'), and names the essay's rhetorical achievement ('sit in the discomfort'). Comment B uses more generic praise language ('intellectual courage,' 'nuanced argument,' 'sharp observation') that could apply to many strong essays on controversial topics. Both suggest adding concrete evidence, but Comment A's feedback feels marginally more tailored to what Logan actually wrote, while Comment B relies more on formulaic compliments about 'voice' and 'structure' without citing specific structural choices or voice qualities from the text.",
+        "groundednessA": "References the essay's specific argumentative move (acknowledging imperfection while advocating transparency) and quotes the phrase 'transparency over elimination' directly from the conclusion.",
+        "groundednessB": "Mentions 'transparency versus obscured bias' and 'portfolio or holistic review' but relies heavily on generic praise terms that don't cite specific essay language or structural choices."
+      }
+    },
+    {
+      "id": "E08-strong-gatsby-symbolism",
+      "band": "strong",
+      "note": "Strong literary analysis with textual specificity.",
+      "studentFullName": "Ethan Brooks",
+      "studentFirstName": "Ethan",
+      "pseudonymFirstName": "Devon",
+      "control": {
+        "categories": [
+          {
+            "key": "thesis_and_content",
+            "score": 5,
+            "comment": "Your thesis is sophisticated and intellectually bold—you argue that the green light's meaning shifts and that this shift reframes Gatsby's failure as a national diagnosis rather than personal tragedy. This is genuine discovery. Your body paragraphs deliver on that promise with layered analysis, connecting Gatsby's individual longing to the American myth of self-reinvention. The move from private gesture to cultural critique is both unexpected and earned."
+          },
+          {
+            "key": "organization_and_structure",
+            "score": 5,
+            "comment": "The essay builds compellingly: you open with a claim that challenges conventional readings, develop it through close attention to textual moments, and conclude with a powerful reframing that extends your thinking. Transitions are organic ('That shift matters because...', 'Read this way...'), and each paragraph advances the argument purposefully. The structure mirrors the interpretive journey you're guiding the reader through."
+          },
+          {
+            "key": "evidence_and_support",
+            "score": 5,
+            "comment": "Evidence is selected with precision and integrated seamlessly. Gatsby 'trembling,' the 'orgastic future that year by year recedes,' and the 'fresh, green breast of the new world' are all chosen to illuminate your claim about symbolic evolution. You create dialogue with Fitzgerald's language rather than simply citing it, and your analysis remains primary throughout."
+          },
+          {
+            "key": "voice_and_style",
+            "score": 5,
+            "comment": "Your voice is confident, engaging, and memorable. Phrases like 'not wrong so much as incomplete,' 'a light that recedes exactly as fast as we row toward it,' and 'runs on the same fuel' demonstrate creative risk-taking within academic credibility. The writing is economical and precise, with rhythm that propels the reader forward. This is authentic intellectual voice."
+          },
+          {
+            "key": "grammar_and_mechanics",
+            "score": 5,
+            "comment": "Grammar and syntax are polished and error-free. Sentence variety enhances clarity and flow—short declaratives ('The symbol does not stay still.') alternate with more complex structures. Punctuation supports meaning throughout. The presentation is clean and professional."
+          }
+        ],
+        "overallComment": "Ethan, this essay exemplifies what thesis-driven writing should be: you take an intellectual risk by arguing that the green light's meaning evolves from private symbol to national diagnosis, and you sustain that argument with precision and sophistication. Your close reading moves beyond surface interpretation to reveal how Fitzgerald connects individual longing to the American myth of self-reinvention. The structure guides readers through genuine discovery, transitions feel organic, and your voice is both confident and engaging. Evidence is selected with care and integrated seamlessly, always in service of your larger claim. This is the kind of writing that makes readers reconsider a text they thought they understood—exactly what literary analysis should accomplish.",
+        "totalPercent": 100,
+        "neededRepair": false,
+        "neededOverallCommentFollowup": false
+      },
+      "treatment": {
+        "categories": [
+          {
+            "key": "thesis_and_content",
+            "score": 5,
+            "comment": "Your thesis is intellectually bold and precise: the green light 'does not stay still' but shifts from private longing to national diagnosis. This is sophisticated, multi-layered thinking that demonstrates genuine discovery. Your body paragraphs deliver beautifully on this promise, building from Gatsby's individual failure to a critique of the American Dream itself. The connection between Gatsby's hope and the Dutch sailors' vision is unexpected and earned—exactly the kind of sophisticated insight that makes readers reconsider the text."
+          },
+          {
+            "key": "organization_and_structure",
+            "score": 5,
+            "comment": "The essay's progression is purposeful and compelling. You open with a provocative claim ('not wrong so much as incomplete'), build through the two-part structure of the symbol, and culminate in a conclusion that genuinely extends thinking rather than restating. The transition from paragraph one to two ('That shift matters because...') is organic and propels the argument forward. Each paragraph supports a distinct element of your thesis while maintaining clear momentum."
+          },
+          {
+            "key": "evidence_and_support",
+            "score": 5,
+            "comment": "Your evidence is selected with precision and integrated seamlessly. The contrast between Gatsby 'trembling' and Nick's reflection on 'the orgastic future' is perfectly chosen to illuminate your claim about the symbol's movement. The reference to 'the fresh, green breast of the new world' builds authority and creates genuine dialogue with Fitzgerald's text. You maintain analytical primacy throughout—the evidence serves your thinking rather than replacing it."
+          },
+          {
+            "key": "voice_and_style",
+            "score": 5,
+            "comment": "Your voice is confident, engaging, and memorable. Phrases like 'runs on the same fuel' and 'a light that recedes exactly as fast as we row toward it' take creative risks while remaining academically credible. The language is economical and precise throughout. The rhythm of your sentences—especially in the final paragraph's build from 'not a cautionary tale' to the closing image—is genuinely compelling."
+          },
+          {
+            "key": "grammar_and_mechanics",
+            "score": 5,
+            "comment": "The essay is technically polished with no distracting errors. Sentence variety enhances clarity, and punctuation choices (the em-dashes, the colon in the final sentence) are deliberate and effective. The presentation is clean and professional throughout."
+          }
+        ],
+        "overallComment": "Ethan, this essay is exceptional. You've taken a familiar symbol and made it unfamiliar again through genuinely original thinking. What distinguishes this work is your willingness to complicate the easy reading—to insist that the green light 'does not stay still'—and then to follow that insight to its logical, devastating conclusion about American mythology itself. The progression from private gesture to national diagnosis is earned through precise evidence and confident prose. Your final image of the receding light captures both Fitzgerald's vision and your own analytical discovery. This is exactly the kind of writing that makes readers think differently about a text they thought they understood. Truly impressive work.",
+        "totalPercent": 100,
+        "neededRepair": false,
+        "neededOverallCommentFollowup": false
+      },
+      "categoryDeltas": [
+        {
+          "key": "thesis_and_content",
+          "control": 5,
+          "treatment": 5,
+          "delta": 0
+        },
+        {
+          "key": "organization_and_structure",
+          "control": 5,
+          "treatment": 5,
+          "delta": 0
+        },
+        {
+          "key": "evidence_and_support",
+          "control": 5,
+          "treatment": 5,
+          "delta": 0
+        },
+        {
+          "key": "voice_and_style",
+          "control": 5,
+          "treatment": 5,
+          "delta": 0
+        },
+        {
+          "key": "grammar_and_mechanics",
+          "control": 5,
+          "treatment": 5,
+          "delta": 0
+        }
+      ],
+      "totalDelta": 0,
+      "leaks": {
+        "realNameInTreatmentOutboundPrompt": {
+          "found": false,
+          "matches": []
+        },
+        "realNameInTreatmentRawResponse": false,
+        "pseudonymStrayInTreatmentFinalOutput": {
+          "found": false,
+          "matches": []
+        }
+      },
+      "nameCorrectness": {
+        "controlOverallCommentHasRealName": true,
+        "treatmentOverallCommentHasRealName": true,
+        "pass": true
+      },
+      "judge": {
+        "aSide": "treatment",
+        "rawWinner": "A",
+        "winner": "treatment",
+        "reason": "Comment A is more grounded in the specific essay content and demonstrates closer engagement with Ethan's actual language and ideas. It directly quotes the essay's phrase 'does not stay still,' references the 'progression from private gesture to national diagnosis,' and engages with the 'final image of the receding light'—all concrete elements from the essay. Comment B, while praising the same general thesis, remains more abstract and generic in its praise ('thesis-driven writing,' 'structure guides readers,' 'transitions feel organic'), offering observations that could apply to many strong essays. Comment A's specificity ('made it unfamiliar again,' 'earned through precise evidence') feels more tailored to what Ethan actually accomplished, while Comment B relies more on standard evaluative language for good literary analysis.",
+        "groundednessA": "Comment A quotes the essay directly ('does not stay still') and references specific argumentative moves like the progression from private gesture to national diagnosis and the final receding light image.",
+        "groundednessB": "Comment B describes the essay's thesis and approach in general terms but doesn't quote or cite specific phrases, relying instead on generic praise about structure, transitions, and evidence selection."
+      }
+    },
+    {
+      "id": "E09-weak-short-off-topic",
+      "band": "weak",
+      "note": "Weak/short: barely on-topic, minimal development, tests the low end of the scoring band.",
+      "studentFullName": "Destiny Rivera",
+      "studentFirstName": "Destiny",
+      "pseudonymFirstName": "Morgan",
+      "control": {
+        "categories": [
+          {
+            "key": "thesis_and_content",
+            "score": 1,
+            "comment": "The essay lacks a developed thesis. The opening statement ('School uniforms are dumb honestly') is informal and underdeveloped rather than analytical. Body content does not sustain critical thinking or offer meaningful deductions—ideas remain at surface level (e.g., 'uniforms don't let us express ourselves') without exploration or complexity. No genuine discovery or intellectual risk is present."
+          },
+          {
+            "key": "organization_and_structure",
+            "score": 1,
+            "comment": "The essay has minimal organizational structure. There is no purposeful introduction that builds to a thesis, and body paragraphs do not develop distinct elements of an argument. Transitions are absent, and the conclusion ('Basically uniforms dont fix anything') simply restates earlier points without adding insight or deduction. The progression feels aimless."
+          },
+          {
+            "key": "evidence_and_support",
+            "score": 1,
+            "comment": "No evidence is provided to support claims. The essay relies entirely on unsupported personal opinion ('I dont really think that true') without citations, examples, data, or source material. There is no attempt to build authority or engage with outside perspectives, which is essential for thesis-driven academic writing."
+          },
+          {
+            "key": "voice_and_style",
+            "score": 1,
+            "comment": "Voice is overly casual and inconsistent with academic expectations ('dumb honestly,' 'not fun'). Language lacks precision and economy—phrasing is vague ('some stuff,' 'more boring') and repetitive. The tone does not establish credibility or engage the reader in a compelling way."
+          },
+          {
+            "key": "grammar_and_mechanics",
+            "score": 2,
+            "comment": "Frequent grammar and mechanical errors interfere with clarity: missing apostrophes ('dont,' 'Its'), run-on sentences, and inconsistent punctuation. The essay lacks a thoughtful title and shows minimal attention to formatting or polish. While meaning is mostly discernible, technical issues are distracting."
+          }
+        ],
+        "overallComment": "Destiny, this draft needs significant development to meet the expectations of thesis-driven academic writing. Right now, the essay reads as an informal opinion piece rather than a structured argument. To improve, start by crafting a specific, defensible thesis that combines observation with analysis—something like exploring how uniform policies intersect with identity formation, economic equity, or school culture. Then, build body paragraphs that each develop a distinct part of that thesis using concrete evidence from credible sources. Work on integrating research seamlessly and letting your analysis lead. Pay attention to academic tone and voice—aim for confident and precise language that invites the reader into your thinking. Finally, proofread carefully for grammar and mechanics so that technical errors don't distract from your ideas. You have the beginning of a position here; now it's time to deepen, support, and refine it into a compelling essay.",
+        "totalPercent": 22,
+        "neededRepair": false,
+        "neededOverallCommentFollowup": false
+      },
+      "treatment": {
+        "categories": [
+          {
+            "key": "thesis_and_content",
+            "score": 1,
+            "comment": "The essay lacks a formal thesis statement. The opening claim ('School uniforms are dumb') is informal and unsupported by critical thinking. Body content does not develop a multi-layered argument—ideas remain at surface level without genuine discovery, analysis, or engagement with complexity. The conclusion offers no earned deductions."
+          },
+          {
+            "key": "organization_and_structure",
+            "score": 1,
+            "comment": "There is no clear introduction that builds to a thesis, and no identifiable opening strategy. The essay consists of loosely connected thoughts rather than purposeful paragraphs. Transitions are absent, and the conclusion simply restates the opening opinion without extending thinking or offering new insight."
+          },
+          {
+            "key": "evidence_and_support",
+            "score": 1,
+            "comment": "No evidence is provided—no sources, examples, data, or integrated support. The single counterargument mentioned ('Some people say...') is dismissed without analysis or authoritative backing. Claims remain unsupported assertions throughout."
+          },
+          {
+            "key": "voice_and_style",
+            "score": 1,
+            "comment": "The voice is overly casual and conversational ('dumb honestly,' 'not fun'), lacking the academic credibility expected in formal essay writing. Language is imprecise and repetitive. Phrasing feels unrevised, with filler words and vague expressions that undermine authority."
+          },
+          {
+            "key": "grammar_and_mechanics",
+            "score": 2,
+            "comment": "Frequent grammar and punctuation errors appear throughout: missing apostrophes ('dont,' 'Its'), run-on sentences, and informal contractions. There is no title. Sentence structure is simplistic and repetitive. While meaning is mostly clear, technical errors distract from readability and professionalism."
+          }
+        ],
+        "overallComment": "Destiny, this draft needs significant development before it can function as a thesis-driven essay. Right now, it reads more like an informal opinion piece than an academic argument. To move forward, start by crafting a formal, defensible thesis that goes beyond 'uniforms are dumb'—what specific, complex claim can you make about school uniforms that requires real analysis? Then, build body paragraphs that each explore one element of that thesis with depth, using concrete evidence from credible sources (studies, expert opinions, real-world examples). Work on organizing your ideas into a clear structure with an introduction that builds to your thesis, body paragraphs with smooth transitions, and a conclusion that offers new insight rather than restatement. Finally, revise for academic tone and technical correctness—this means eliminating casual language, fixing grammar and punctuation errors, and polishing your presentation. You have the seed of an argument here, but it needs substantial expansion, evidence, and formal development to meet the expectations of thesis-driven writing.",
+        "totalPercent": 22,
+        "neededRepair": false,
+        "neededOverallCommentFollowup": false
+      },
+      "categoryDeltas": [
+        {
+          "key": "thesis_and_content",
+          "control": 1,
+          "treatment": 1,
+          "delta": 0
+        },
+        {
+          "key": "organization_and_structure",
+          "control": 1,
+          "treatment": 1,
+          "delta": 0
+        },
+        {
+          "key": "evidence_and_support",
+          "control": 1,
+          "treatment": 1,
+          "delta": 0
+        },
+        {
+          "key": "voice_and_style",
+          "control": 1,
+          "treatment": 1,
+          "delta": 0
+        },
+        {
+          "key": "grammar_and_mechanics",
+          "control": 2,
+          "treatment": 2,
+          "delta": 0
+        }
+      ],
+      "totalDelta": 0,
+      "leaks": {
+        "realNameInTreatmentOutboundPrompt": {
+          "found": false,
+          "matches": []
+        },
+        "realNameInTreatmentRawResponse": false,
+        "pseudonymStrayInTreatmentFinalOutput": {
+          "found": false,
+          "matches": []
+        }
+      },
+      "nameCorrectness": {
+        "controlOverallCommentHasRealName": true,
+        "treatmentOverallCommentHasRealName": true,
+        "pass": true
+      },
+      "judge": {
+        "aSide": "treatment",
+        "rawWinner": "tie",
+        "winner": "tie",
+        "reason": "Both comments are nearly identical in quality, structure, and approach. Each correctly identifies the essay's informal tone, lack of thesis, absence of evidence, and mechanical errors. Both offer similar developmental advice (craft a formal thesis, use evidence, improve organization, adopt academic tone). Neither comment references specific content from the essay beyond the general topic of uniforms—neither quotes Destiny's actual claims about self-expression, cost concerns, or the bullying counterargument. Comment B provides slightly more concrete thesis examples ('identity formation, economic equity, or school culture'), while Comment A offers slightly more structural guidance ('introduction that builds to your thesis... conclusion that offers new insight'). However, these minor differences don't create a meaningful quality gap. Both are professionally written, appropriately warm yet direct, and equally useful (or equally generic) to the student.",
+        "groundednessA": "Does not cite specific essay content; stays at the generic level of identifying the topic and general weaknesses.",
+        "groundednessB": "Does not cite specific essay content; stays at the generic level of identifying the topic and general weaknesses."
+      }
+    },
+    {
+      "id": "E10-mid-renewable-subsidies",
+      "band": "mid",
+      "note": "Mid-range persuasive essay, adequate structure and evidence.",
+      "studentFullName": "Omar Haddad",
+      "studentFirstName": "Omar",
+      "pseudonymFirstName": "Quinn",
+      "control": {
+        "categories": [
+          {
+            "key": "thesis_and_content",
+            "score": 4,
+            "comment": "Your thesis is clear, defensible, and thoughtfully positioned—renewable subsidies as corrective rather than distortive. The 'hidden subsidy' insight is strong and shows critical thinking. To reach exemplary, push further: explore *how* subsidies should phase out, or complicate your claim by acknowledging when correction becomes overreach. Right now, the argument is solid but stops short of the intellectual risk and discovery that would make it unforgettable."
+          },
+          {
+            "key": "organization_and_structure",
+            "score": 3,
+            "comment": "Your structure is logical—thesis, counterargument, qualification, conclusion—but it feels more like a template than a purposeful progression. The introduction jumps quickly to the thesis without building tension or context. Transitions between paragraphs are implied rather than organic. The conclusion restates your position clearly but doesn't extend your thinking or leave the reader with a new lens. Work on making each section feel like it *must* come next, not just that it *can*."
+          },
+          {
+            "key": "evidence_and_support",
+            "score": 2,
+            "comment": "This is where the essay struggles most. You make claims—'dramatically cheaper,' 'over a century,' 'healthcare costs and climate damage'—but offer no data, sources, or concrete examples to ground them. The argument relies entirely on assertion. To improve, integrate specific evidence: cost trends for solar/wind, examples of fossil fuel subsidies, studies quantifying externalized costs. Right now, the essay reads more like an opinion piece than an evidence-based argument."
+          },
+          {
+            "key": "voice_and_style",
+            "score": 4,
+            "comment": "Your voice is confident, clear, and engaging. Phrases like 'not a handout' and 'government thumb on the scale' are memorable and precise. The tone is appropriately academic without being stiff. To reach exemplary, vary your sentence rhythm more—several paragraphs rely on similar structures—and take a few more creative risks with language while maintaining credibility. You're close; just needs more polish and personality."
+          },
+          {
+            "key": "grammar_and_mechanics",
+            "score": 5,
+            "comment": "Technically polished. Grammar, syntax, and punctuation are clean and support clarity throughout. Sentence variety is present, and the essay feels finished—no draft artifacts or distracting errors. Well done here."
+          }
+        ],
+        "overallComment": "Omar, you've written a clear, well-reasoned argument with a strong central insight—that renewable subsidies correct for fossil fuel externalities rather than distort the market. Your voice is confident and your technical execution is excellent. However, the essay feels more like a well-structured opinion than a fully developed thesis-driven argument. The biggest gap is evidence: your claims need data, sources, and concrete examples to build authority and deepen analysis. Additionally, your structure, while logical, follows a predictable template rather than creating a compelling progression that builds toward discovery. To move this essay into exemplary territory, ground your argument in specific evidence, complicate your thesis by exploring tensions or limitations in your own position, and craft transitions that make each idea feel inevitable rather than merely next in line. You're demonstrating solid critical thinking—now show me the research and intellectual risk that will make your argument undeniable.",
+        "totalPercent": 69,
+        "neededRepair": false,
+        "neededOverallCommentFollowup": false
+      },
+      "treatment": {
+        "categories": [
+          {
+            "key": "thesis_and_content",
+            "score": 3,
+            "comment": "Your thesis is clear and defensible—renewables need support to compete fairly—but it stops short of the intellectual risk or discovery the top tier requires. The 'hidden subsidy' insight is solid but fairly well-trodden ground. Body content supports your claim but doesn't evolve much beyond the initial position. To reach exemplary, push into less obvious territory: What are the second-order effects of phasing out subsidies? What trade-offs emerge when governments pick energy winners? Let your thinking surprise the reader."
+          },
+          {
+            "key": "organization_and_structure",
+            "score": 3,
+            "comment": "The essay follows a logical sequence—claim, counterargument, qualification, conclusion—but the structure feels more formulaic than purposeful. Transitions are clear but mechanical ('That said,' 'Overall'). Your conclusion restates the thesis rather than extending it with new insight or deduction. To elevate this, let each paragraph build momentum toward a conclusion that makes the reader reconsider the issue, not just recap your stance."
+          },
+          {
+            "key": "evidence_and_support",
+            "score": 2,
+            "comment": "You make strong claims—'dramatically cheaper,' 'enormous hidden subsidy,' 'over a century'—but offer no evidence to ground them. Where are the cost comparisons, the policy examples, the data on fossil fuel subsidies or pollution externalities? Right now, assertions stand in for analysis. Integrate precise evidence (studies, historical examples, economic data) and use it to deepen your argument, not just decorate it."
+          },
+          {
+            "key": "voice_and_style",
+            "score": 4,
+            "comment": "Your voice is confident, direct, and engaging. Phrases like 'not a handout' and 'government thumb on the scale' show personality and precision. The tone is consistent and appropriate for academic argument. To reach exemplary, take a few more creative risks with language—vary sentence rhythm, use a metaphor that lingers, make the prose as compelling as the ideas."
+          },
+          {
+            "key": "grammar_and_mechanics",
+            "score": 5,
+            "comment": "Technically polished. Grammar, syntax, and punctuation are clean and support clarity throughout. Sentence variety is strong, and there are no distracting errors. Well done."
+          }
+        ],
+        "overallComment": "Omar, you've built a clear, confident argument with a strong grasp of structure and style. Your voice is engaging, and your technical execution is excellent. The core weakness here is evidentiary support—your claims need grounding in data, examples, or scholarship to carry the weight they deserve. Right now, the essay reads more like a well-reasoned opinion than a researched argument. Additionally, push your thesis and conclusion further: don't just restate a defensible position, but guide your reader toward a new way of seeing the issue. You're capable of sharper analysis and deeper discovery—let the essay reflect that.",
+        "totalPercent": 64,
+        "neededRepair": false,
+        "neededOverallCommentFollowup": false
+      },
+      "categoryDeltas": [
+        {
+          "key": "thesis_and_content",
+          "control": 4,
+          "treatment": 3,
+          "delta": -1
+        },
+        {
+          "key": "organization_and_structure",
+          "control": 3,
+          "treatment": 3,
+          "delta": 0
+        },
+        {
+          "key": "evidence_and_support",
+          "control": 2,
+          "treatment": 2,
+          "delta": 0
+        },
+        {
+          "key": "voice_and_style",
+          "control": 4,
+          "treatment": 4,
+          "delta": 0
+        },
+        {
+          "key": "grammar_and_mechanics",
+          "control": 5,
+          "treatment": 5,
+          "delta": 0
+        }
+      ],
+      "totalDelta": -5,
+      "leaks": {
+        "realNameInTreatmentOutboundPrompt": {
+          "found": false,
+          "matches": []
+        },
+        "realNameInTreatmentRawResponse": false,
+        "pseudonymStrayInTreatmentFinalOutput": {
+          "found": false,
+          "matches": []
+        }
+      },
+      "nameCorrectness": {
+        "controlOverallCommentHasRealName": true,
+        "treatmentOverallCommentHasRealName": true,
+        "pass": true
+      },
+      "judge": {
+        "aSide": "treatment",
+        "rawWinner": "B",
+        "winner": "control",
+        "reason": "Comment B is more grounded in the specific content of the essay and provides more actionable, detailed feedback. While both comments correctly identify the lack of evidence as the main weakness, Comment B explicitly references the essay's 'central insight—that renewable subsidies correct for fossil fuel externalities rather than distort the market,' demonstrating engagement with the actual argument made. Comment B also provides more specific guidance on what's needed: it distinguishes between 'well-structured opinion' and 'thesis-driven argument,' calls for exploring 'tensions or limitations' in the position, and addresses the predictability of the structure with concrete advice about making ideas 'feel inevitable rather than merely next in line.' Comment A covers similar ground but remains more generic, using phrases like 'guide your reader toward a new way of seeing the issue' without the same level of specificity. Both are warm and encouraging, but B offers more useful, essay-specific direction.",
+        "groundednessA": "Comment A stays relatively generic, mentioning structure and style but not citing specific claims or the essay's central argument about externalities.",
+        "groundednessB": "Comment B directly references the essay's core argument about correcting for fossil fuel externalities, showing engagement with the actual content presented."
+      }
+    },
+    {
+      "id": "E11-strong-beloved-quotes",
+      "band": "strong",
+      "note": "Strong essay with heavy, well-integrated textual evidence -- tests groundedness/specificity retention.",
+      "studentFullName": "Naomi Ito",
+      "studentFirstName": "Naomi",
+      "pseudonymFirstName": "Rowan",
+      "control": {
+        "categories": [
+          {
+            "key": "thesis_and_content",
+            "score": 5,
+            "comment": "Your thesis is strikingly original—positioning memory as spatial rather than psychological is a sophisticated, multi-layered claim that demonstrates genuine discovery. The body paragraphs deliver on this promise with depth: the structural analysis of non-chronological narrative, the reading of Beloved as literal embodiment, and the insight about collective exorcism all build toward earned, unexpected deductions. This is intellectually courageous writing that makes readers reconsider the novel."
+          },
+          {
+            "key": "organization_and_structure",
+            "score": 5,
+            "comment": "The opening strategy is compelling—you move seamlessly from Morrison's concept of rememory to your spatial thesis. Each paragraph supports a distinct element: theory, narrative structure, embodiment, resolution. Transitions are organic ('This has direct consequences,' 'Beloved herself... is the most literal embodiment'), and the conclusion extends thinking by connecting physicality to communal action. The progression feels purposeful and inevitable."
+          },
+          {
+            "key": "evidence_and_support",
+            "score": 5,
+            "comment": "The rememory passage is selected precisely and integrated seamlessly—it anchors your entire argument. You create genuine dialogue with Morrison's text, using evidence to illuminate rather than prove. The balance between quotation and analysis is exemplary; your voice remains primary while the source material builds authority. Every textual reference deepens the spatial reading."
+          },
+          {
+            "key": "voice_and_style",
+            "score": 5,
+            "comment": "Your voice is confident, authentic, and memorable. Phrases like 'refuses to let memory function as simple narration' and 'a rememory made flesh' are precise and economical. The rhythm is compelling—notice how 'waiting' lands at the end of paragraph one, or how the final clause builds to 'physically, collectively, drives Beloved out.' You take creative risks while maintaining academic credibility throughout."
+          },
+          {
+            "key": "grammar_and_mechanics",
+            "score": 5,
+            "comment": "Grammar and syntax are polished and non-distracting. Sentence variety enhances clarity—you move fluidly between complex analysis and sharp, declarative statements. Punctuation (em-dashes, semicolons) is handled with sophistication. The presentation is clean and professional."
+          }
+        ],
+        "overallComment": "Naomi, this essay is exemplary in every dimension. Your central insight—that Morrison constructs memory as spatial rather than psychological—is the kind of original, defensible claim that transforms how we read the novel. What makes this work so compelling is not just the thesis itself, but how rigorously you follow its implications: into narrative structure, into characterization, into the novel's resolution. You demonstrate that close reading and bold thinking are not opposites but partners. The writing is confident and precise, with a voice that feels both authentic and intellectually mature. This is exactly the kind of essay that makes readers—and teachers—reconsider a text they thought they understood. Exceptional work.",
+        "totalPercent": 100,
+        "neededRepair": false,
+        "neededOverallCommentFollowup": false
+      },
+      "treatment": {
+        "categories": [
+          {
+            "key": "thesis_and_content",
+            "score": 5,
+            "comment": "Your thesis is intellectually bold and original—'spatial rather than psychological' is a genuinely fresh lens that reframes how we understand Morrison's project. The claim that memory 'can still be standing in a place, waiting' is precise, evocative, and complex enough to sustain deep exploration. Your body paragraphs deliver on this promise with layered thinking: the structural argument (narrative circles enact rememory), the embodiment argument (Beloved as literal rememory), and the exorcism argument (physical resolution) all build meaningfully on each other. This is sustained critical thinking that feels discovered, not borrowed."
+          },
+          {
+            "key": "organization_and_structure",
+            "score": 5,
+            "comment": "The essay's progression is purposeful and elegant. You open with Morrison's concept, then immediately pivot to its structural consequences, then escalate to Beloved as embodiment, and finally arrive at the communal exorcism as proof of your spatial claim. Each paragraph feels like a necessary step in the argument. Transitions are organic ('This has direct consequences,' 'Beloved herself... is the most literal embodiment')—they grow from the logic rather than mechanically linking ideas. The conclusion extends thinking rather than restating it."
+          },
+          {
+            "key": "evidence_and_support",
+            "score": 4,
+            "comment": "The Sethe quotation is well-chosen and integrated seamlessly—it anchors your entire argument. You create genuine dialogue with Morrison's language ('bumps into,' 'rememory') and use it to build authority. The analysis remains primary throughout. To reach exemplary, consider adding one more precise textual moment (perhaps from the exorcism scene or a Sweet Home flashback) to deepen the middle paragraphs and give readers additional grounding in Morrison's prose."
+          },
+          {
+            "key": "voice_and_style",
+            "score": 5,
+            "comment": "Your voice is confident, precise, and memorable. Phrases like 'trauma that is spatial rather than psychological' and 'a rememory made flesh' take intellectual risks while remaining academically credible. The rhythm is compelling—sentences build momentum without sacrificing clarity. 'Morrison is not asking us to interpret trauma as a symbol. She is asking us to treat it as a physical fact' is the kind of sentence that makes readers pause and reconsider. This is authentic, engaging academic writing."
+          },
+          {
+            "key": "grammar_and_mechanics",
+            "score": 5,
+            "comment": "Grammar and syntax are polished and nearly flawless. Sentence variety enhances clarity—you move confidently between complex and direct structures. Punctuation (em-dashes, semicolons) is used purposefully. The presentation is clean and professional. No distracting errors interfere with the reading experience."
+          }
+        ],
+        "overallComment": "Naomi, this essay demonstrates exactly the kind of intellectual courage and originality we're looking for. Your spatial reading of rememory is genuinely fresh—it reframes Morrison's entire narrative project in a way that feels discovered rather than borrowed. The argument builds with precision: you move from concept to structure to embodiment to exorcism, and each step feels necessary and earned. Your voice is confident and engaging, with moments ('a rememory made flesh,' 'the past refuses to stay past') that linger in the reader's mind. The one area for growth is evidence density—while your Sethe quotation is expertly chosen and integrated, adding one or two more precise textual moments would deepen the middle sections and give readers even more grounding in Morrison's language. But this is minor. You're writing with sophistication, clarity, and real insight. Keep taking these kinds of intellectual risks.",
+        "totalPercent": 96,
+        "neededRepair": false,
+        "neededOverallCommentFollowup": false
+      },
+      "categoryDeltas": [
+        {
+          "key": "thesis_and_content",
+          "control": 5,
+          "treatment": 5,
+          "delta": 0
+        },
+        {
+          "key": "organization_and_structure",
+          "control": 5,
+          "treatment": 5,
+          "delta": 0
+        },
+        {
+          "key": "evidence_and_support",
+          "control": 5,
+          "treatment": 4,
+          "delta": -1
+        },
+        {
+          "key": "voice_and_style",
+          "control": 5,
+          "treatment": 5,
+          "delta": 0
+        },
+        {
+          "key": "grammar_and_mechanics",
+          "control": 5,
+          "treatment": 5,
+          "delta": 0
+        }
+      ],
+      "totalDelta": -4,
+      "leaks": {
+        "realNameInTreatmentOutboundPrompt": {
+          "found": false,
+          "matches": []
+        },
+        "realNameInTreatmentRawResponse": false,
+        "pseudonymStrayInTreatmentFinalOutput": {
+          "found": false,
+          "matches": []
+        }
+      },
+      "nameCorrectness": {
+        "controlOverallCommentHasRealName": true,
+        "treatmentOverallCommentHasRealName": true,
+        "pass": true
+      },
+      "judge": {
+        "aSide": "treatment",
+        "rawWinner": "A",
+        "winner": "treatment",
+        "reason": "Comment A provides more actionable, specific feedback while maintaining warmth and praise. It identifies a concrete area for improvement ('evidence density') and points to specific phrases from the essay that work well ('a rememory made flesh,' 'the past refuses to stay past'). Comment B, while enthusiastic and well-written, offers only praise without any developmental feedback or specific textual references from the essay itself. For a student's growth, Comment A's balance of affirmation and constructive guidance is more useful than Comment B's unqualified praise.",
+        "groundednessA": "Comment A quotes specific phrases from Naomi's essay ('a rememory made flesh,' 'the past refuses to stay past') and references the Sethe quotation used, showing engagement with actual essay content.",
+        "groundednessB": "Comment B remains entirely at the level of general praise without citing any specific phrases, arguments, or textual moments from Naomi's actual essay, making it more generic despite its eloquence."
+      }
+    },
+    {
+      "id": "E12-weak-grammar-heavy",
+      "band": "weak",
+      "note": "Weak, heavy grammar/mechanics errors; tests whether the grammar-heavy signal stays consistent across control and treatment.",
+      "studentFullName": "Tyler Brooks",
+      "studentFirstName": "Tyler",
+      "pseudonymFirstName": "Wren",
+      "control": {
+        "categories": [
+          {
+            "key": "thesis_and_content",
+            "score": 1,
+            "comment": "The essay lacks a defensible thesis. The opening statement is too general and obvious ('it's a good thing'), and the body never develops a sophisticated argument. Claims remain surface-level—responsibility, money management, independence—without discovery, critical thinking, or meaningful deductions. The conclusion restates rather than extends thinking."
+          },
+          {
+            "key": "organization_and_structure",
+            "score": 1,
+            "comment": "There is no compelling introduction or opening strategy—just an immediate claim. Body paragraphs lack clear structure and don't develop distinct thesis elements. Transitions are absent. The essay reads as a list of loosely connected observations rather than a purposeful progression of ideas."
+          },
+          {
+            "key": "evidence_and_support",
+            "score": 1,
+            "comment": "No evidence is provided. The essay relies entirely on unsupported generalizations and personal opinion. There are no sources, examples, data, or integrated quotations to build authority or deepen analysis. Claims about responsibility and independence are asserted but never substantiated."
+          },
+          {
+            "key": "voice_and_style",
+            "score": 1,
+            "comment": "Voice is undeveloped and generic. Language lacks precision and economy ('a good thing,' 'help them grow up'). Phrasing is awkward and repetitive. The tone feels conversational to the point of being too informal for academic writing, and there's no evidence of creative risk-taking or engaging style."
+          },
+          {
+            "key": "grammar_and_mechanics",
+            "score": 1,
+            "comment": "Frequent errors interfere with clarity: 'Alot' (a lot), 'it teach' (teaches), 'managment' (management), 'dont' (don't), 'your told' (you're told), 'a important' (an important), 'give' (gives), 'it dont' (doesn't). Run-on sentences and comma splices appear throughout. No clear formatting or title is present."
+          }
+        ],
+        "overallComment": "Tyler, this draft needs significant development before it can function as a thesis-driven essay. Right now, it reads more like an informal opinion piece than an academic argument. You're missing the foundational elements: a defensible, multi-layered thesis; body paragraphs that build and deepen analysis; evidence from credible sources; and technical correctness in grammar and mechanics. Start by crafting a precise thesis that goes beyond 'part-time jobs are good'—what specific, non-obvious insight can you offer? Then, support that thesis with concrete evidence and sustained critical thinking. Finally, revise carefully for grammar, spelling, and sentence structure. This topic has potential, but the essay needs to be rebuilt from the ground up to meet academic standards.",
+        "totalPercent": 20,
+        "neededRepair": false,
+        "neededOverallCommentFollowup": false
+      },
+      "treatment": {
+        "categories": [
+          {
+            "key": "thesis_and_content",
+            "score": 1,
+            "comment": "The essay lacks a developed thesis. The opening statement ('its a good thing') is vague and unsupported by critical thinking. Body content offers surface-level observations (responsibility, money, independence) without depth, analysis, or genuine discovery. No engagement with complexity or counterarguments beyond a single dismissive sentence. The conclusion restates rather than deduces."
+          },
+          {
+            "key": "organization_and_structure",
+            "score": 1,
+            "comment": "No clear introduction or opening strategy—the essay begins abruptly with a general claim. Paragraphs lack focus and wander between loosely related ideas. Transitions are absent. The conclusion does not extend thinking or offer new insight. Overall progression feels random rather than purposeful."
+          },
+          {
+            "key": "evidence_and_support",
+            "score": 1,
+            "comment": "No evidence, sources, or concrete examples are provided. Claims rest entirely on unsupported personal opinion ('in my opinion,' 'i think'). Without textual support or research, the essay cannot build authority or deepen analysis."
+          },
+          {
+            "key": "voice_and_style",
+            "score": 1,
+            "comment": "Voice is underdeveloped and overly casual for academic writing. Language is imprecise and repetitive ('good thing,' 'important skill') with minimal sentence variety. Phrasing is often awkward ('what your told,' 'it help them grow up'), and the tone feels conversational rather than thoughtfully crafted."
+          },
+          {
+            "key": "grammar_and_mechanics",
+            "score": 1,
+            "comment": "Frequent and distracting errors throughout: 'Alot' (a lot), 'teenager' (teenagers), 'it teach' (teaches), 'dont' (don't), 'your told' (you're told), 'a important' (an important), 'give' (gives), 'make' (makes), 'good' (well), and run-on sentences. No title is provided. These errors significantly interfere with clarity and readability."
+          }
+        ],
+        "overallComment": "Tyler, this draft needs substantial development before it can function as a thesis-driven essay. Right now, it reads more like an informal reflection than an academic argument. You'll need to craft a specific, defensible thesis that goes beyond 'part-time jobs are good'—dig into *why* they matter, *what* complexities arise, and *how* your thinking has evolved through exploration of the topic. Build body paragraphs that each tackle a distinct element of that thesis with depth and evidence. Integrate research or concrete examples to support your claims and give your argument authority. Pay close attention to grammar, punctuation, and sentence structure; the technical errors here are pervasive enough to distract from your ideas. Finally, develop an authentic academic voice that balances clarity with intellectual engagement. This rubric rewards bold thinking and genuine discovery—challenge yourself to move past obvious observations and truly wrestle with the subject.",
+        "totalPercent": 20,
+        "neededRepair": false,
+        "neededOverallCommentFollowup": false
+      },
+      "categoryDeltas": [
+        {
+          "key": "thesis_and_content",
+          "control": 1,
+          "treatment": 1,
+          "delta": 0
+        },
+        {
+          "key": "organization_and_structure",
+          "control": 1,
+          "treatment": 1,
+          "delta": 0
+        },
+        {
+          "key": "evidence_and_support",
+          "control": 1,
+          "treatment": 1,
+          "delta": 0
+        },
+        {
+          "key": "voice_and_style",
+          "control": 1,
+          "treatment": 1,
+          "delta": 0
+        },
+        {
+          "key": "grammar_and_mechanics",
+          "control": 1,
+          "treatment": 1,
+          "delta": 0
+        }
+      ],
+      "totalDelta": 0,
+      "leaks": {
+        "realNameInTreatmentOutboundPrompt": {
+          "found": false,
+          "matches": []
+        },
+        "realNameInTreatmentRawResponse": false,
+        "pseudonymStrayInTreatmentFinalOutput": {
+          "found": false,
+          "matches": []
+        }
+      },
+      "nameCorrectness": {
+        "controlOverallCommentHasRealName": true,
+        "treatmentOverallCommentHasRealName": true,
+        "pass": true
+      },
+      "judge": {
+        "aSide": "treatment",
+        "rawWinner": "A",
+        "winner": "treatment",
+        "reason": "Comment A is more specific and grounded in the actual essay content. It directly references the essay's current state ('reads more like an informal reflection'), acknowledges what the student is attempting ('part-time jobs are good'), and provides concrete guidance tied to the rubric's emphasis on 'bold thinking and genuine discovery.' Comment A also specifically mentions issues present in the essay like 'technical errors,' 'grammar, punctuation, and sentence structure,' and the need to move 'past obvious observations.' Comment B, while covering similar territory, is more generic and formulaic—it lists standard essay requirements without engaging as directly with what this particular student wrote. The phrase 'rebuilt from the ground up' in B is harsher without being more helpful. Comment A's closing encouragement to 'truly wrestle with the subject' shows more warmth and investment in the student's growth.",
+        "groundednessA": "References the essay's informal tone, the basic claim about part-time jobs, and the pervasive technical errors, showing engagement with the actual text.",
+        "groundednessB": "Mentions it reads like an 'opinion piece' and references the 'part-time jobs are good' claim, but remains more generic in its prescriptions."
+      }
+    },
+    {
+      "id": "E13-mid-overcoming-failure",
+      "band": "mid",
+      "note": "Mid-range personal narrative, reflective but somewhat generic conclusion.",
+      "studentFullName": "Ava Whitfield",
+      "studentFirstName": "Ava",
+      "pseudonymFirstName": "Teagan",
+      "control": {
+        "categories": [
+          {
+            "key": "thesis_and_content",
+            "score": 2,
+            "comment": "The essay offers a personal reflection but lacks a clear, defensible thesis that combines observation with analysis. The insight about pride and asking for help is present but underdeveloped—it reads more as a personal realization than sustained critical thinking. Body paragraphs narrate the experience rather than building a complex argument. The conclusion gestures toward growth but doesn't offer the kind of earned deductions or sophisticated connections expected in thesis-driven writing."
+          },
+          {
+            "key": "organization_and_structure",
+            "score": 3,
+            "comment": "The chronological structure is clear and easy to follow, moving from the bathroom scene to reflection to lesson learned. However, the introduction doesn't build toward a thesis so much as set up a story. Paragraphs progress logically but feel more like narrative beats than purposeful support of distinct analytical claims. Transitions are functional but not organic. The conclusion offers a moment of self-awareness but doesn't extend thinking beyond the personal experience."
+          },
+          {
+            "key": "evidence_and_support",
+            "score": 2,
+            "comment": "The essay relies entirely on personal anecdote without integrating outside sources, textual evidence, or research to deepen analysis or build authority. While personal experience can be powerful, thesis-driven essays require evidence that illuminates claims and creates dialogue with broader ideas. The specific details (bathroom, three-week delay) are vivid but serve narrative rather than analytical purposes."
+          },
+          {
+            "key": "voice_and_style",
+            "score": 4,
+            "comment": "Your voice is authentic, clear, and engaging—this is the essay's strongest element. Sentences like 'I did not have a script for what to do with that feeling' and 'I would rather feel embarrassed for five minutes than stuck for three weeks' are precise and memorable. The tone is consistent and the pacing is strong. The writing feels genuine and confident, even if the content doesn't yet meet the analytical demands of the assignment."
+          },
+          {
+            "key": "grammar_and_mechanics",
+            "score": 5,
+            "comment": "The essay is technically polished with no distracting errors. Sentence variety is strong, punctuation enhances clarity, and the prose flows smoothly. Formatting is clean and professional. The technical execution supports readability throughout."
+          }
+        ],
+        "overallComment": "Ava, you've written a clear, honest, and well-crafted personal narrative with a strong voice and polished mechanics—but this assignment asks for thesis-driven analytical writing, and your essay doesn't yet meet that standard. The difference is crucial: instead of narrating an experience and reflecting on what you learned, a thesis-driven essay makes an argument that requires evidence, analysis, and intellectual risk. Your insight about pride and asking for help is a starting point, but it needs to be developed into a complex, defensible claim supported by evidence beyond personal anecdote. Think about what larger question your experience helps answer, what sources could deepen your analysis, and how you might structure body paragraphs around distinct analytical claims rather than chronological storytelling. Your writing skills are strong—now channel them toward building an argument that makes your reader think differently about the subject.",
+        "totalPercent": 59,
+        "neededRepair": false,
+        "neededOverallCommentFollowup": false
+      },
+      "treatment": {
+        "categories": [
+          {
+            "key": "thesis_and_content",
+            "score": 2,
+            "comment": "The essay offers a personal reflection on pride and asking for help, but it lacks a defensible thesis that combines observation with analysis. The narrative remains descriptive rather than argumentative. While the insight about pride is present, the content does not sustain critical thinking or build toward sophisticated deductions. The piece reads as a personal narrative rather than a thesis-driven essay that makes an arguable claim requiring evidence and analysis."
+          },
+          {
+            "key": "organization_and_structure",
+            "score": 3,
+            "comment": "The chronological structure is clear and easy to follow, moving from the initial failure to the delayed response to current reflection. However, the introduction does not build toward a thesis statement, and the conclusion restates rather than extends thinking. Transitions between paragraphs are functional but not organic. The essay would benefit from a purposeful structure that supports an argumentative claim rather than following a narrative timeline."
+          },
+          {
+            "key": "evidence_and_support",
+            "score": 1,
+            "comment": "This category expects textual evidence from sources to support an analytical argument. The essay contains only personal anecdote without external evidence, source integration, or citation. For a thesis-driven essay assignment, evidence must come from researched material that builds authority and deepens analysis. Personal experience alone cannot fulfill this requirement."
+          },
+          {
+            "key": "voice_and_style",
+            "score": 4,
+            "comment": "Your voice is authentic, clear, and engaging. Sentences like 'I did not have a script for what to do with that feeling' show precise, economical language. The tone is consistent and the pacing is strong. The writing demonstrates confidence and readability. While the voice works well for personal reflection, a thesis-driven essay also requires the academic credibility that comes from engaging with outside ideas and sources."
+          },
+          {
+            "key": "grammar_and_mechanics",
+            "score": 5,
+            "comment": "The writing is technically polished with virtually no grammar or syntax errors. Sentence variety enhances clarity, and punctuation is used effectively. The presentation is clean and professional. This technical control supports the narrative well."
+          }
+        ],
+        "overallComment": "Ava, you've written a thoughtful and well-crafted personal reflection with an authentic voice and strong technical control. The narrative about learning to ask for help is clear and relatable, and your writing demonstrates real skill in pacing and precision. However, this assignment requires a thesis-driven essay—one that makes an arguable claim, engages with outside sources, and sustains critical analysis throughout. What you've submitted is a personal narrative without a defensible thesis, analytical framework, or textual evidence. To meet the assignment expectations, you'll need to develop a complex argument that requires proof, integrate researched sources that build authority, and structure body paragraphs around analytical claims rather than chronological events. Your writing ability is evident; now channel that skill toward making an intellectual argument that challenges readers to think differently about a subject. Consider what larger question about pride, failure, or growth you could explore through research and analysis, using your personal insight as a starting point rather than the entire essay.",
+        "totalPercent": 55,
+        "neededRepair": false,
+        "neededOverallCommentFollowup": false
+      },
+      "categoryDeltas": [
+        {
+          "key": "thesis_and_content",
+          "control": 2,
+          "treatment": 2,
+          "delta": 0
+        },
+        {
+          "key": "organization_and_structure",
+          "control": 3,
+          "treatment": 3,
+          "delta": 0
+        },
+        {
+          "key": "evidence_and_support",
+          "control": 2,
+          "treatment": 1,
+          "delta": -1
+        },
+        {
+          "key": "voice_and_style",
+          "control": 4,
+          "treatment": 4,
+          "delta": 0
+        },
+        {
+          "key": "grammar_and_mechanics",
+          "control": 5,
+          "treatment": 5,
+          "delta": 0
+        }
+      ],
+      "totalDelta": -4,
+      "leaks": {
+        "realNameInTreatmentOutboundPrompt": {
+          "found": false,
+          "matches": []
+        },
+        "realNameInTreatmentRawResponse": false,
+        "pseudonymStrayInTreatmentFinalOutput": {
+          "found": false,
+          "matches": []
+        }
+      },
+      "nameCorrectness": {
+        "controlOverallCommentHasRealName": true,
+        "treatmentOverallCommentHasRealName": true,
+        "pass": true
+      },
+      "judge": {
+        "aSide": "treatment",
+        "rawWinner": "tie",
+        "winner": "tie",
+        "reason": "Both comments are nearly identical in content, structure, and quality. Each opens with the same compliment about the student's writing ability, identifies the same core problem (personal narrative vs. thesis-driven essay), provides similar guidance about what's needed (arguable claim, outside sources, analytical structure), and closes with the same encouragement to redirect existing skills. Comment A is slightly more detailed in places (mentioning 'textual evidence,' 'researched sources,' and 'chronological events'), while Comment B uses phrases like 'intellectual risk' and 'evidence beyond personal anecdote.' However, these are stylistic variations rather than meaningful quality differences. Neither comment references specific details from the essay itself—both could apply to virtually any personal narrative submitted for an analytical assignment. The warmth, specificity, and usefulness are essentially equivalent.",
+        "groundednessA": "Generic; does not cite specific essay content like the bathroom scene, the three-week delay, or particular phrases from the student's reflection.",
+        "groundednessB": "Generic; acknowledges the topic of 'pride and asking for help' but does not reference concrete details, quotes, or specific moments from the essay."
+      }
+    },
+    {
+      "id": "E14-strong-ubi-counterargument",
+      "band": "strong",
+      "note": "Strong argumentative essay that explicitly engages and rebuts a counterargument.",
+      "studentFullName": "Diego Morales",
+      "studentFirstName": "Diego",
+      "pseudonymFirstName": "Wren",
+      "control": {
+        "categories": [
+          {
+            "key": "thesis_and_content",
+            "score": 4,
+            "comment": "Your thesis is clear, defensible, and intellectually honest—you engage the strongest counterargument rather than dismissing it, which shows maturity. The content delivers on your promise: you present evidence, complicate the objection, and offer a nuanced conclusion. To reach exemplary, push your analysis further—what are the *implications* of people working for structure and status? Does that suggest UBI might need to be paired with other social supports? Right now, your thinking is solid but stops just short of the unexpected insight or deeper discovery that would elevate it."
+          },
+          {
+            "key": "organization_and_structure",
+            "score": 4,
+            "comment": "Your essay moves logically: objection → evidence → complication → conclusion. The progression is clear and purposeful. However, your introduction is somewhat abrupt—you launch directly into the objection without building context or drawing the reader in with a compelling opening strategy. Your conclusion gestures toward new thinking ('our best available evidence does not confirm'), but it feels slightly restrained. Push it one step further: what should we reconsider now? A more developed opening and a bolder closing would strengthen the arc."
+          },
+          {
+            "key": "evidence_and_support",
+            "score": 4,
+            "comment": "You cite specific pilots (U.S., Canada, Finland, Kenya) and summarize findings efficiently. The evidence supports your claims and is well-integrated. To deepen this, engage more directly with the data—what were the actual percentage reductions in work hours? Who conducted these studies, and what limitations did they acknowledge? Right now, the evidence feels summarized rather than interrogated. Precision and a bit more dialogue with your sources would add authority and move this toward exemplary."
+          },
+          {
+            "key": "voice_and_style",
+            "score": 4,
+            "comment": "Your voice is confident, measured, and academically credible. Phrases like 'complicates it considerably' and 'not obviously wrong' show intellectual honesty without hedging too much. The tone is consistent and engaging. To reach the next level, take a few more stylistic risks—vary your sentence rhythm, use a metaphor, or find a more memorable way to frame your central insight. Your writing is clear and precise, but it could be more *distinctive*."
+          },
+          {
+            "key": "grammar_and_mechanics",
+            "score": 5,
+            "comment": "Your grammar and syntax are polished and error-free. Sentence structure is varied and punctuation enhances clarity. The essay reads smoothly with no distracting mistakes. Well done."
+          }
+        ],
+        "overallComment": "Diego, you've written a thoughtful, well-reasoned essay that takes on a genuinely difficult question without oversimplifying it. Your willingness to engage the strongest objection head-on, rather than strawmanning the opposition, is a real strength—it shows intellectual honesty and maturity. The structure is logical, the evidence is relevant, and your voice is clear and credible throughout. What would take this essay to the next level is *depth*. You present the data and complicate the objection, but you stop just short of the deeper insight: if people work for structure, status, and purpose, what does that mean for how we design UBI or think about work itself? Push your analysis one layer further. Also, consider your opening—right now, you dive straight into the argument, but a more compelling introduction could draw your reader in and set up the stakes more vividly. Your conclusion gestures toward new thinking, but it could be bolder. You're doing strong, honest work here—now take the intellectual risk of going deeper.",
+        "totalPercent": 82,
+        "neededRepair": false,
+        "neededOverallCommentFollowup": false
+      },
+      "treatment": {
+        "categories": [
+          {
+            "key": "thesis_and_content",
+            "score": 4,
+            "comment": "Your thesis is clear, defensible, and thoughtful—you identify the strongest objection to UBI and argue that evidence complicates it. The structure (objection → evidence → rebuttal) is logical, and you engage meaningfully with counterarguments. To reach exemplary, push further into the *implications* of your claim: if the incentive-to-work objection fails, what does that reveal about how we conceptualize labor, dignity, or social participation? Your conclusion gestures at this but stops short of full discovery."
+          },
+          {
+            "key": "organization_and_structure",
+            "score": 4,
+            "comment": "The essay moves purposefully: you establish the objection, present evidence, interpret it, and conclude. Transitions between ideas are clear and organic. The conclusion offers a reasonable deduction but leans toward restatement ('the data does not support it') rather than extending your thinking into new terrain. Consider: what question does your argument open up, rather than close down?"
+          },
+          {
+            "key": "evidence_and_support",
+            "score": 4,
+            "comment": "You deploy evidence strategically—the 1970s experiments, Finland, Kenya—and interpret it rather than simply cite it. The move from data to insight ('people work for structure, status, and purpose') is strong. To deepen further, engage more directly with potential counterinterpretations: a critic might argue the pilots were too short-term or culturally specific. Anticipating and addressing that would build even greater authority."
+          },
+          {
+            "key": "voice_and_style",
+            "score": 5,
+            "comment": "Your voice is confident, precise, and engaging. Phrases like 'This objection deserves to be taken seriously rather than dismissed, because it is not obviously wrong' demonstrate intellectual generosity and rigor. The tone is measured but never flat. Your economy of language—'outcomes most people would not describe as social harms'—is both sharp and credible. This is exemplary academic writing with personality."
+          },
+          {
+            "key": "grammar_and_mechanics",
+            "score": 5,
+            "comment": "The essay is technically polished. Sentence variety enhances readability, punctuation is precise, and there are no distracting errors. The structure supports clarity throughout."
+          }
+        ],
+        "overallComment": "Diego, this is a model of how to engage a contentious issue with intellectual honesty and precision. You don't dismiss the objection to UBI—you take it seriously, test it against evidence, and show where it falters. Your voice is confident without being dogmatic, and your reasoning is clear and compelling. The essay's greatest strength is its restraint: you make exactly the claim your evidence supports, no more and no less. To push this into truly exemplary territory, consider what your argument *opens* rather than what it closes. If the incentive-to-work objection is weaker than assumed, what does that suggest about how we should think about work, meaning, or policy design going forward? That move—from rebuttal to implication—would transform a strong argument into one that lingers with readers long after they finish.",
+        "totalPercent": 86,
+        "neededRepair": false,
+        "neededOverallCommentFollowup": false
+      },
+      "categoryDeltas": [
+        {
+          "key": "thesis_and_content",
+          "control": 4,
+          "treatment": 4,
+          "delta": 0
+        },
+        {
+          "key": "organization_and_structure",
+          "control": 4,
+          "treatment": 4,
+          "delta": 0
+        },
+        {
+          "key": "evidence_and_support",
+          "control": 4,
+          "treatment": 4,
+          "delta": 0
+        },
+        {
+          "key": "voice_and_style",
+          "control": 4,
+          "treatment": 5,
+          "delta": 1
+        },
+        {
+          "key": "grammar_and_mechanics",
+          "control": 5,
+          "treatment": 5,
+          "delta": 0
+        }
+      ],
+      "totalDelta": 4,
+      "leaks": {
+        "realNameInTreatmentOutboundPrompt": {
+          "found": false,
+          "matches": []
+        },
+        "realNameInTreatmentRawResponse": false,
+        "pseudonymStrayInTreatmentFinalOutput": {
+          "found": false,
+          "matches": []
+        }
+      },
+      "nameCorrectness": {
+        "controlOverallCommentHasRealName": true,
+        "treatmentOverallCommentHasRealName": true,
+        "pass": true
+      },
+      "judge": {
+        "aSide": "treatment",
+        "rawWinner": "A",
+        "winner": "treatment",
+        "reason": "Both comments are warm, substantive, and constructive, but Comment A is more focused and precise. It identifies the essay's core strength ('restraint: you make exactly the claim your evidence supports') with sharp specificity, and offers a single, clear developmental suggestion about moving 'from rebuttal to implication.' Comment B covers similar ground but dilutes its impact by listing multiple suggestions (deeper analysis, stronger opening, bolder conclusion) without the same laser focus. Comment A's conciseness and singular forward-looking question ('what does that suggest about how we should think about work, meaning, or policy design?') makes it more actionable and memorable. Both are grounded in the essay's actual content, but A's economy and clarity give it the edge.",
+        "groundednessA": "Grounded: references the essay's treatment of the UBI objection, its use of evidence, and its restrained claim-making.",
+        "groundednessB": "Grounded: cites the essay's engagement with the strongest objection, use of data, and the insight about structure/status/purpose."
+      }
+    }
+  ],
+  "errors": [
+    {
+      "id": "E02-weak-social-media",
+      "error": "Malformed grading assistant response for \"Marcus\" even after repair. Raw: ```json\n{\n  \"categories\": [\n    {\n      \"key\": \"thesis_and_content\",\n      \"score\": 2,\n      \"comment\": \"The thesis ('Social media is bad for teenagers') is present but overly simplistic and lacks analytical depth. The essay offers familiar observations (addiction, self-esteem, cyberbullying) without original insight or critical thinking. Body paragraphs list problems rather than exploring complexity or making meaningful deductions. To improve, develop a more nuanced argument that moves beyond o"
+    }
+  ]
+}
