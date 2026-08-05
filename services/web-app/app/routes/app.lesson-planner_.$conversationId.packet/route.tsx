@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   Link,
-  redirect,
   useFetcher,
   useLoaderData,
   type LoaderFunctionArgs,
@@ -23,116 +22,21 @@ import {
 } from './resource-index';
 import { Button } from '~/components/ui/button';
 import { cn } from '~/utils/misc';
-import { prisma } from '~/utils/db.server';
-import { getLessonPlannerAccess } from '~/utils/lesson-planner/lesson-planner-access.server';
 import { MarkdownContent } from '~/components/ai-chat/assistant-markdown';
 import { SlideDeckCard } from '~/components/ai-chat/slide-deck-card';
 import { readSlideDeck } from '~/domain/lesson-planner/slide-deck';
-import { buildLessonPacket } from '~/domain/lesson-planner/lesson-packet';
 import { buildStudentHandout } from '~/domain/lesson-planner/student-handout';
+import { loadLessonPacket } from '~/domain/lesson-planner/load-lesson-packet.server';
 import {
   MATERIAL_KIND_LABELS,
-  packetKindForMaterial,
   type LessonMaterial,
 } from '~/domain/lesson-planner/lesson-material';
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
-  const access = await getLessonPlannerAccess(request);
-  if (!access.allowed) throw redirect('/app');
-
-  const conversation = await prisma.lessonPlanConversation.findFirst({
-    where: {
-      id: params.conversationId,
-      membershipId: access.membership.id,
-      deletedAt: null,
-    },
-    select: {
-      id: true,
-      title: true,
-      packetTitle: true,
-      originClassAssignment: {
-        select: {
-          class: { select: { title: true, grade: true, period: true } },
-          assignment: { select: { title: true } },
-        },
-      },
-      messages: {
-        where: { keptAt: { not: null }, role: 'assistant' },
-        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
-        select: {
-          id: true,
-          createdAt: true,
-          content: true,
-          keptAudience: true,
-          keptTitle: true,
-        },
-      },
-      materials: {
-        orderBy: [{ sourceCreatedAt: 'asc' }, { blockKey: 'asc' }],
-        select: {
-          id: true,
-          sourceCreatedAt: true,
-          blockKey: true,
-          kind: true,
-          title: true,
-          audience: true,
-          content: true,
-        },
-      },
-    },
+  return loadLessonPacket({
+    request,
+    conversationId: params.conversationId,
   });
-  if (!conversation) throw new Response('Not Found', { status: 404 });
-
-  const klass = conversation.originClassAssignment?.class;
-  const className = klass
-    ? (klass.title ??
-      (klass.grade && klass.period
-        ? `${klass.grade} · Period ${klass.period}`
-        : (klass.grade ?? null)))
-    : null;
-
-  // Kept replies and individually saved materials are one document, ordered by
-  // the reply each came from so the packet reads in lesson order rather than in
-  // the order the teacher happened to click.
-  const sections = [
-    ...conversation.messages.map((message) => ({
-      at: message.createdAt.getTime(),
-      order: 0,
-      section: {
-        id: message.id,
-        content: message.content,
-        keptAudience: message.keptAudience,
-        keptTitle: message.keptTitle,
-      },
-    })),
-    ...conversation.materials.map((material) => ({
-      at: material.sourceCreatedAt.getTime(),
-      // A material sits after the reply that produced it.
-      order: 1,
-      section: {
-        id: material.id,
-        content: material.content,
-        keptAudience: material.audience,
-        keptTitle: material.title,
-        kind: packetKindForMaterial(material.kind),
-        origin: 'material' as const,
-      },
-    })),
-  ]
-    .sort((a, b) => a.at - b.at || a.order - b.order)
-    .map((entry) => entry.section);
-
-  return {
-    conversationId: conversation.id,
-    packet: buildLessonPacket({
-      title: conversation.packetTitle ?? conversation.title,
-      className,
-      sections,
-    }),
-    // Kept separate from the packet title so a blank field falls back rather
-    // than saving the conversation title as an explicit name.
-    packetTitleValue: conversation.packetTitle ?? '',
-  };
 }
 
 export default function LessonPacketRoute() {
@@ -160,24 +64,24 @@ export default function LessonPacketRoute() {
     return () => window.removeEventListener('afterprint', restore);
   }, [printOnly]);
 
-  /**
-   * Both buttons end at the browser's print dialog, because that dialog is the
-   * only way a web page becomes paper or a PDF. What "Save as PDF" changes is
-   * the name of the file that comes out: browsers take the suggested filename
-   * from the document title, so a teacher saving this gets the lesson's name
-   * rather than the app's.
-   */
-  function printPacket({ asPdf }: { asPdf: boolean }) {
+  // The download mirrors what is on screen: on the handout view it is the
+  // handout, carrying the pieces the teacher has left out of it.
+  const pdfHref = (() => {
+    const params = new URLSearchParams();
+    if (view === 'handout') {
+      params.set('view', 'handout');
+      if (excluded.length) params.set('exclude', excluded.join(','));
+    }
+    const query = params.toString();
+    return `/app/lesson-planner/${conversationId}/packet.pdf${
+      query ? `?${query}` : ''
+    }`;
+  })();
+
+  /** Paper. The browser's dialog is the right tool for that and only that. */
+  function printPacket() {
     setFilter('all');
     setPrintOnly(null);
-    const previousTitle = document.title;
-    // packet.title is already the name the teacher gave the lesson, falling
-    // back to the conversation's — the same string the heading shows.
-    if (asPdf) document.title = packet.title;
-    const restore = () => {
-      document.title = previousTitle;
-    };
-    window.addEventListener('afterprint', restore, { once: true });
     requestAnimationFrame(() => window.print());
   }
 
@@ -296,21 +200,30 @@ export default function LessonPacketRoute() {
                 size="sm"
                 variant="outline"
                 data-testid="packet-print"
-                onClick={() => printPacket({ asPdf: false })}
+                onClick={printPacket}
                 disabled={packet.sections.length === 0}
               >
                 <Printer size={15} className="mr-1.5" />
                 Print
               </Button>
+              {/* A real file, built on the server. `download` and the route's
+                  own Content-Disposition both name it after the lesson, and
+                  the handout view downloads the handout rather than the plan. */}
               <Button
                 type="button"
                 size="sm"
-                data-testid="packet-save-pdf"
-                onClick={() => printPacket({ asPdf: true })}
+                asChild
                 disabled={packet.sections.length === 0}
               >
-                <FileDown size={15} className="mr-1.5" />
-                Save as PDF
+                <a
+                  data-testid="packet-save-pdf"
+                  href={pdfHref}
+                  download
+                  aria-disabled={packet.sections.length === 0}
+                >
+                  <FileDown size={15} className="mr-1.5" />
+                  Save as PDF
+                </a>
               </Button>
             </div>
           </div>

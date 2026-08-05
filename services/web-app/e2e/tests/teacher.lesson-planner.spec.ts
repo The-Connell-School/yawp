@@ -1,5 +1,6 @@
 import { test, expect } from '../test-setup';
 import { createE2EPrismaClient } from '../prisma-client';
+import { readFile } from 'node:fs/promises';
 
 const TEACHER_PASSWORD = 'teacher-e2e-password';
 
@@ -1290,23 +1291,15 @@ test.describe('YAWP! Lesson Planner', () => {
     await page.emulateMedia({ media: 'screen' });
   });
 
-  test('names the file after the lesson when saving as PDF', async ({
+  test('downloads the lesson as a real PDF in one click', async ({
     page,
     signIn,
     e2eContext,
   }) => {
     await setLessonPlannerEnabled(e2eContext.organizationId, true);
-    // Record the document title at the moment print() is called: browsers take
-    // the suggested PDF filename from it, so that is the whole difference
-    // between the two buttons.
-    await page.addInitScript(() => {
-      (window as any).__printedTitles = [];
-      window.print = () => {
-        (window as any).__printedTitles.push(document.title);
-      };
-    });
     const { conversationId } = await seedLessonPlan(e2eContext, {
       keepFirst: true,
+      keepLongHandout: true,
     });
     await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
     await page.goto(`/app/lesson-planner/${conversationId}/packet`);
@@ -1316,24 +1309,67 @@ test.describe('YAWP! Lesson Planner', () => {
     )?.trim();
     expect(lessonName).toBeTruthy();
 
-    // Plain Print leaves the page's own title alone.
+    // One click, one file — no print dialog to steer.
+    const download = page.waitForEvent('download');
+    await page.getByTestId('packet-save-pdf').click();
+    const file = await download;
+
+    expect(file.suggestedFilename()).toBe(`${lessonName}.pdf`);
+    const path = await file.path();
+    const bytes = await readFile(path);
+    expect(bytes.subarray(0, 5).toString()).toBe('%PDF-');
+    expect(bytes.toString('latin1')).toContain('%%EOF');
+    // A whole lesson, not an empty shell.
+    expect(bytes.length).toBeGreaterThan(2000);
+  });
+
+  test('downloads the student handout when that is what is on screen', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    await setLessonPlannerEnabled(e2eContext.organizationId, true);
+    const { conversationId } = await seedLessonPlan(e2eContext, {
+      keepFirst: true,
+      keepLongHandout: true,
+    });
+    await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+    await page.goto(`/app/lesson-planner/${conversationId}/packet`);
+    await page.getByRole('button', { name: /student handout/i }).click();
+
+    const download = page.waitForEvent('download');
+    await page.getByTestId('packet-save-pdf').click();
+    const file = await download;
+
+    // The file says which one it is, so the two do not collide in Downloads.
+    expect(file.suggestedFilename()).toContain('Student handout');
+    expect(file.suggestedFilename().endsWith('.pdf')).toBe(true);
+    const bytes = await readFile(await file.path());
+    expect(bytes.subarray(0, 5).toString()).toBe('%PDF-');
+  });
+
+  test('still offers a plain Print for paper', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    await setLessonPlannerEnabled(e2eContext.organizationId, true);
+    await page.addInitScript(() => {
+      (window as any).__printed = 0;
+      window.print = () => {
+        (window as any).__printed += 1;
+      };
+    });
+    const { conversationId } = await seedLessonPlan(e2eContext, {
+      keepFirst: true,
+    });
+    await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+    await page.goto(`/app/lesson-planner/${conversationId}/packet`);
+
     await page.getByTestId('packet-print').click();
     await expect
-      .poll(() => page.evaluate(() => (window as any).__printedTitles.length))
+      .poll(() => page.evaluate(() => (window as any).__printed))
       .toBe(1);
-    const printedAs = await page.evaluate(
-      () => (window as any).__printedTitles[0] as string
-    );
-    expect(printedAs).not.toBe(lessonName);
-
-    // Save as PDF names the file after the lesson instead.
-    await page.getByTestId('packet-save-pdf').click();
-    await expect
-      .poll(() => page.evaluate(() => (window as any).__printedTitles.length))
-      .toBe(2);
-    expect(
-      await page.evaluate(() => (window as any).__printedTitles[1] as string)
-    ).toBe(lessonName);
   });
 
   test('offers the deck and the handout the moment a plan lands', async ({
