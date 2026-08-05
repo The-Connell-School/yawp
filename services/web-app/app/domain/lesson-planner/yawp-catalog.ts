@@ -140,6 +140,16 @@ export function listWritingLessonCatalog({
     }));
 }
 
+/**
+ * Daily Pages is identified by its title rather than a system key, the same way
+ * the assignment type page decides whether to show the prompt library.
+ */
+export const DAILY_PAGES_TITLE = 'daily pages';
+
+export function isDailyPagesTitle(title: string): boolean {
+  return title.trim().toLowerCase() === DAILY_PAGES_TITLE;
+}
+
 export type LoungeMaterialKind = 'slides' | 'document' | 'other';
 
 export type LoungeMaterial = {

@@ -382,9 +382,14 @@ async function seedRevisedHandout(e2eContext: {
 /** An intake turn that asks with controls rather than in prose. */
 async function seedAskTurn(
   e2eContext: { teacherMembershipId: string; organizationId: string },
-  block: string
+  block: string,
+  /** Options the reply offers alongside the controls, one per line. */
+  suggestions?: string
 ) {
   const prisma = createE2EPrismaClient();
+  const offered = suggestions
+    ? `\n\n\`\`\`suggestions\n${suggestions}\n\`\`\``
+    : '';
   try {
     const conversation = await prisma.lessonPlanConversation.create({
       data: {
@@ -400,7 +405,47 @@ async function seedAskTurn(
             },
             {
               role: 'assistant',
-              content: `Before I plan, two quick things.\n\n\`\`\`yawp-ask\n${block}\n\`\`\``,
+              content: `Before I plan, two quick things.\n\n\`\`\`yawp-ask\n${block}\n\`\`\`${offered}`,
+              createdAt: new Date('2026-08-05T10:00:01.000Z'),
+            },
+          ],
+        },
+      },
+      select: { id: true },
+    });
+    return { conversationId: conversation.id };
+  } finally {
+    await prisma.$disconnect();
+  }
+}
+
+/** A reply whose warm-up prompt the planner wrote itself. */
+async function seedWrittenWarmUp(e2eContext: {
+  teacherMembershipId: string;
+  organizationId: string;
+}) {
+  const prisma = createE2EPrismaClient();
+  try {
+    const conversation = await prisma.lessonPlanConversation.create({
+      data: {
+        membershipId: e2eContext.teacherMembershipId,
+        organizationId: e2eContext.organizationId,
+        title: 'Warm-up lesson',
+        messages: {
+          create: [
+            {
+              role: 'user',
+              content: 'Plan a lesson on explaining evidence.',
+              createdAt: new Date('2026-08-05T10:00:00.000Z'),
+            },
+            {
+              role: 'assistant',
+              content:
+                '## Warm-up (7 min)\n\nPost this and give them four minutes to write.\n\n' +
+                '```yawp-daily-pages\n' +
+                'Think of the last time you tried to convince someone of something.\n' +
+                '```\n\n' +
+                '## Mini-lesson\n\nWhat evidence actually does.',
               createdAt: new Date('2026-08-05T10:00:01.000Z'),
             },
           ],
@@ -1206,9 +1251,8 @@ test.describe('YAWP! Lesson Planner', () => {
     await expect(page.getByTestId('handout-part')).toBeVisible();
     await expect(page.locator('main')).toContainText('Underline the sentence');
     // The controls and the include/exclude list are not part of the handout.
-    await expect(
-      page.getByRole('button', { name: /print \/ save as pdf/i })
-    ).toBeHidden();
+    await expect(page.getByTestId('packet-print')).toBeHidden();
+    await expect(page.getByTestId('packet-save-pdf')).toBeHidden();
     await expect(page.getByText('What goes in this handout')).toBeHidden();
     await page.emulateMedia({ media: 'screen' });
   });
@@ -1244,6 +1288,52 @@ test.describe('YAWP! Lesson Planner', () => {
     await expect(sections.nth(0)).toBeHidden();
     await expect(sections.nth(1)).toBeVisible();
     await page.emulateMedia({ media: 'screen' });
+  });
+
+  test('names the file after the lesson when saving as PDF', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    await setLessonPlannerEnabled(e2eContext.organizationId, true);
+    // Record the document title at the moment print() is called: browsers take
+    // the suggested PDF filename from it, so that is the whole difference
+    // between the two buttons.
+    await page.addInitScript(() => {
+      (window as any).__printedTitles = [];
+      window.print = () => {
+        (window as any).__printedTitles.push(document.title);
+      };
+    });
+    const { conversationId } = await seedLessonPlan(e2eContext, {
+      keepFirst: true,
+    });
+    await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+    await page.goto(`/app/lesson-planner/${conversationId}/packet`);
+
+    const lessonName = (
+      await page.locator('article h1').first().textContent()
+    )?.trim();
+    expect(lessonName).toBeTruthy();
+
+    // Plain Print leaves the page's own title alone.
+    await page.getByTestId('packet-print').click();
+    await expect
+      .poll(() => page.evaluate(() => (window as any).__printedTitles.length))
+      .toBe(1);
+    const printedAs = await page.evaluate(
+      () => (window as any).__printedTitles[0] as string
+    );
+    expect(printedAs).not.toBe(lessonName);
+
+    // Save as PDF names the file after the lesson instead.
+    await page.getByTestId('packet-save-pdf').click();
+    await expect
+      .poll(() => page.evaluate(() => (window as any).__printedTitles.length))
+      .toBe(2);
+    expect(
+      await page.evaluate(() => (window as any).__printedTitles[1] as string)
+    ).toBe(lessonName);
   });
 
   test('offers the deck and the handout the moment a plan lands', async ({
@@ -1430,6 +1520,79 @@ test.describe('YAWP! Lesson Planner', () => {
     await page.getByTestId('lesson-ask-send').click();
     const request = await sent;
     expect(request.postData()).toContain('You+pick+the+activities');
+  });
+
+  test('carries the chosen option and the length in one message', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    await setLessonPlannerEnabled(e2eContext.organizationId, true);
+    const { conversationId } = await seedAskTurn(
+      e2eContext,
+      'minutes: 50',
+      'Build it around Evidence/Support\nFocus on integrating quotes'
+    );
+    await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+    await page.goto(`/app/lesson-planner?c=${conversationId}`);
+
+    const card = page.getByTestId('lesson-ask-card');
+    const option = page.getByRole('button', {
+      name: 'Build it around Evidence/Support',
+    });
+    // Exactly one of them, and it is inside the card — two independent senders
+    // on one turn meant whichever the teacher touched first threw the other
+    // answer away.
+    await expect(option).toHaveCount(1);
+    await expect(
+      card.getByRole('button', { name: /evidence\/support/i })
+    ).toBeVisible();
+
+    await option.click();
+    await page
+      .getByRole('slider', { name: /lesson length in minutes/i })
+      .fill('45');
+
+    const sent = page.waitForRequest(
+      (request) =>
+        request.url().includes('/api/domain/lesson-planner') &&
+        request.method() === 'POST'
+    );
+    await page.getByTestId('lesson-ask-send').click();
+    const request = await sent;
+
+    // One message, carrying the subject and then its length.
+    expect(request.postData()).toContain('Build+it+around+Evidence%2FSupport.');
+    expect(request.postData()).toContain('45+minutes.');
+  });
+
+  test('turns a warm-up it wrote into a Daily Pages exercise', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    await setLessonPlannerEnabled(e2eContext.organizationId, true);
+    const { conversationId } = await seedWrittenWarmUp(e2eContext);
+    await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+    await page.goto(`/app/lesson-planner?c=${conversationId}`);
+
+    // The prompt is shown as students would read it, never as a fence.
+    await expect(page.locator('main')).not.toContainText('yawp-daily-pages');
+    const card = page.getByTestId('daily-pages-card');
+    await expect(card).toContainText(
+      'Think of the last time you tried to convince someone'
+    );
+
+    // And it is one click from being a real assignment, prompt already in it.
+    await card.getByTestId('daily-pages-create').click();
+    await expect(page).toHaveURL(
+      new RegExp(
+        `/app/assignment-types/${e2eContext.dailyPagesAssignmentTypeId}`
+      )
+    );
+    await expect(page.locator('#assignment-create-prompt')).toHaveValue(
+      /Think of the last time you tried to convince someone/
+    );
   });
 
   test('refuses to present a reply that has no deck in it', async ({

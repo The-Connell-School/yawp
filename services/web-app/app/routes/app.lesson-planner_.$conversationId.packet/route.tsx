@@ -8,6 +8,7 @@ import {
 } from 'react-router';
 import {
   ChevronLeft,
+  FileDown,
   FileText,
   Lightbulb,
   ListTree,
@@ -159,6 +160,27 @@ export default function LessonPacketRoute() {
     return () => window.removeEventListener('afterprint', restore);
   }, [printOnly]);
 
+  /**
+   * Both buttons end at the browser's print dialog, because that dialog is the
+   * only way a web page becomes paper or a PDF. What "Save as PDF" changes is
+   * the name of the file that comes out: browsers take the suggested filename
+   * from the document title, so a teacher saving this gets the lesson's name
+   * rather than the app's.
+   */
+  function printPacket({ asPdf }: { asPdf: boolean }) {
+    setFilter('all');
+    setPrintOnly(null);
+    const previousTitle = document.title;
+    // packet.title is already the name the teacher gave the lesson, falling
+    // back to the conversation's — the same string the heading shows.
+    if (asPdf) document.title = packet.title;
+    const restore = () => {
+      document.title = previousTitle;
+    };
+    window.addEventListener('afterprint', restore, { once: true });
+    requestAnimationFrame(() => window.print());
+  }
+
   function jumpTo(anchor: string) {
     setView('full');
     // Wait for the full-plan view in case the outline was showing.
@@ -268,19 +290,29 @@ export default function LessonPacketRoute() {
                 Student handout
               </button>
             </div>
-            <Button
-              type="button"
-              size="sm"
-              onClick={() => {
-                setFilter('all');
-                setPrintOnly(null);
-                requestAnimationFrame(() => window.print());
-              }}
-              disabled={packet.sections.length === 0}
-            >
-              <Printer size={15} className="mr-1.5" />
-              Print / Save as PDF
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                data-testid="packet-print"
+                onClick={() => printPacket({ asPdf: false })}
+                disabled={packet.sections.length === 0}
+              >
+                <Printer size={15} className="mr-1.5" />
+                Print
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                data-testid="packet-save-pdf"
+                onClick={() => printPacket({ asPdf: true })}
+                disabled={packet.sections.length === 0}
+              >
+                <FileDown size={15} className="mr-1.5" />
+                Save as PDF
+              </Button>
+            </div>
           </div>
         </div>
 

@@ -38,6 +38,9 @@ import {
 import { MaterialCard } from '~/components/ai-chat/material-card';
 import { LessonAskCard } from '~/components/ai-chat/lesson-ask-card';
 import { readLessonAsks } from '~/domain/lesson-planner/lesson-ask';
+import { readDailyPagesExercises } from '~/domain/lesson-planner/daily-pages-block';
+import { DailyPagesCard } from '~/components/ai-chat/daily-pages-card';
+import { findDailyPagesTypeId } from '~/domain/lesson-planner/yawp-catalog.server';
 import {
   looksLikeLessonPlan,
   mentionsRoomPersonality,
@@ -113,7 +116,15 @@ export async function loader({ request }: LoaderFunctionArgs) {
         stepIndex: url.searchParams.get('step'),
       });
 
+  // Needed to turn a warm-up the planner wrote into a real assignment. Null
+  // for an org without Daily Pages, which just means no button.
+  const dailyPagesTypeId = await findDailyPagesTypeId({
+    membershipId: access.membership.id,
+    organizationId: access.membership.organization.id,
+  });
+
   return {
+    dailyPagesTypeId,
     conversations: conversations.map((conversation) => ({
       id: conversation.id,
       title: conversation.packetTitle?.trim() || conversation.title,
@@ -154,8 +165,13 @@ type LessonPlannerActionData = {
 };
 
 export default function LessonPlannerRoute() {
-  const { conversations, selectedConversation, recommendedPrompts, seed } =
-    useLoaderData<typeof loader>();
+  const {
+    conversations,
+    selectedConversation,
+    recommendedPrompts,
+    seed,
+    dailyPagesTypeId,
+  } = useLoaderData<typeof loader>();
   const [searchParams, setSearchParams] = useSearchParams();
   const fetcher = useFetcher<LessonPlannerActionData>();
 
@@ -506,6 +522,7 @@ export default function LessonPlannerRoute() {
                   addedMaterials={addedMaterials}
                   onMaterial={setMaterialAdded}
                   lessonHas={selectedConversation?.lessonHas ?? {}}
+                  dailyPagesTypeId={dailyPagesTypeId}
                   conversationId={conversationId}
                   onSuggestion={send}
                   onKeep={setKept}
@@ -652,6 +669,7 @@ function MessageBubble({
   addedMaterials,
   onMaterial,
   lessonHas,
+  dailyPagesTypeId,
   conversationId,
   onSuggestion,
   onKeep,
@@ -667,6 +685,8 @@ function MessageBubble({
   onMaterial: (messageId: string, materialKey: string, added: boolean) => void;
   /** What the lesson's packet already holds, so it is not offered again. */
   lessonHas: { deck?: boolean; handout?: boolean };
+  /** Where a written warm-up becomes a real assignment; null without the type. */
+  dailyPagesTypeId: string | null;
   conversationId: string | null;
   onSuggestion: (text: string) => void;
   onKeep: (messageId: string, audience: PacketAudience | null) => void;
@@ -694,7 +714,10 @@ function MessageBubble({
   const { materials, body: withAsks } = readLessonMaterials(withMaterials);
   // A period length and a set of activities are a slider and a checklist, not a
   // sentence the teacher has to type between classes.
-  const { asks, body } = readLessonAsks(withAsks);
+  const { asks, body: withWarmUps } = readLessonAsks(withAsks);
+  // A warm-up the planner wrote is one button away from being a real Daily
+  // Pages assignment, rather than something to retype.
+  const { exercises, body } = readDailyPagesExercises(withWarmUps);
   // Only offer print/PDF on substantial replies (a lesson), not one-liners.
   const isArtifact = /(^|\n)#{1,3}\s/.test(body) || /\n\|.*\|/.test(body);
   // The opening turn always offers the data-driven route, and a delivered plan
@@ -742,6 +765,13 @@ function MessageBubble({
               />
             </div>
           ) : null}
+          {exercises.map((exercise, index) => (
+            <DailyPagesCard
+              key={`${message.id ?? 'pending'}:daily-pages:${index}`}
+              exercise={exercise}
+              assignmentTypeId={dailyPagesTypeId}
+            />
+          ))}
           {materials.length ? (
             <div className={cn('flex flex-col gap-2', body && 'mt-3')}>
               {materials.map((material) => (

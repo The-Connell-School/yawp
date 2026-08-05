@@ -81,10 +81,13 @@ export function LessonAskCard({
     >
       {suggestions.length > 0 ? (
         <div className="border-b border-primary/15 px-4 py-3.5">
+          {/* The reply's own question sits right above this card, so the label
+              says what to do with the options rather than restating it. */}
           <div className="mb-2.5 flex items-center gap-2">
             <CornerDownRight size={15} className="shrink-0 text-primary" />
-            <span className="text-sm font-medium">
-              What should this lesson be about?
+            <span className="text-sm font-medium">Pick an answer</span>
+            <span className="ml-auto text-xs text-muted-foreground">
+              or type your own below
             </span>
           </div>
           <div className="flex flex-wrap gap-2">

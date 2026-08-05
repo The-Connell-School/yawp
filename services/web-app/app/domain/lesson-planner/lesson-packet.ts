@@ -11,6 +11,7 @@ import { parseAssistantMessage } from '~/components/ai-chat/parse-assistant-mess
 import { hasSlideDeck } from './slide-deck';
 import { readLessonMaterials, type LessonMaterial } from './lesson-material';
 import { readLessonAsks } from './lesson-ask';
+import { inlineDailyPagesExercises } from './daily-pages-block';
 
 export const PACKET_AUDIENCES = ['teacher', 'student'] as const;
 
@@ -192,7 +193,11 @@ export function buildLessonPacket({
     const { materials, body: withAsks } = readLessonMaterials(withMaterials);
     // A kept intake turn still carries its control request. It is machinery, so
     // it is stripped rather than printed — the same reason the deck's JSON is.
-    const { body } = readLessonAsks(withAsks);
+    const { body: withWarmUps } = readLessonAsks(withAsks);
+    // A warm-up the planner wrote is lesson content, not machinery: the packet
+    // has no button to offer, so the prompt comes back as the blockquote it
+    // would have been rather than as a fence printed on the page.
+    const body = inlineDailyPagesExercises(withWarmUps);
     const derivedTitle = deriveSectionTitle(body, index);
     const audience = parsePacketAudience(section.keptAudience);
     return {

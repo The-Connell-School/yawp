@@ -486,6 +486,44 @@ describe('api.domain.lesson-planner action', () => {
     expect((response.data as any).reply).toBe(reply);
   });
 
+  test('strips a link the catalog never handed back', async () => {
+    // The planner invents Lounge material that sounds entirely real, and the
+    // teacher finds out it goes nowhere in front of a class.
+    handleLessonPlannerToolCall.mockResolvedValue(
+      JSON.stringify({
+        trainings: [
+          { title: 'Body Paragraphs', href: '/app/teacher-trainings/t1' },
+        ],
+      })
+    );
+    getLLMCompletion.mockImplementation(async ({ handleToolCall }: any) => {
+      if (handleToolCall) await handleToolCall('list_lounge_materials', {});
+      return (
+        'Project [Body Paragraphs](/app/teacher-trainings/t1) for the mini-lesson.\n' +
+        'Hand out [Citing & Integrating Quotations](/app/resources/citing).'
+      );
+    });
+    prisma.lessonPlanConversation.create.mockResolvedValue({
+      id: 'plan-1',
+      messages: [],
+    });
+    prisma.lessonPlanConversation.update.mockResolvedValue({});
+
+    const response = await action({
+      request: formRequest({ message: 'plan a lesson' }),
+    } as any);
+
+    const expected =
+      'Project [Body Paragraphs](/app/teacher-trainings/t1) for the mini-lesson.\n' +
+      'Hand out Citing & Integrating Quotations.';
+    expect((response.data as any).reply).toBe(expected);
+    // The dead link never enters the conversation's history either.
+    const stored = prisma.lessonPlanMessage.create.mock.calls.map(
+      (call: any) => call[0].data
+    );
+    expect(stored[1].content).toBe(expected);
+  });
+
   test('returns 404 when a conversationId does not belong to the teacher', async () => {
     prisma.lessonPlanConversation.findFirst.mockResolvedValue(null);
 

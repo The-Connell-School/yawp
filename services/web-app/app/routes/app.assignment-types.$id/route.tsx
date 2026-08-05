@@ -1,11 +1,16 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   type LoaderFunctionArgs,
   data as dataResponse,
   type ActionFunctionArgs,
   Form,
 } from 'react-router';
-import { Link, useLoaderData, useNavigation } from 'react-router';
+import {
+  Link,
+  useLoaderData,
+  useNavigation,
+  useSearchParams,
+} from 'react-router';
 import { ChevronDownIcon, PlusIcon } from 'lucide-react';
 import { DocumentLink } from '~/components/document-link.js';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
@@ -54,8 +59,10 @@ import {
   type PromptType,
 } from './prompts-library/data';
 import promptsRaw from './prompts-library/prompts.json';
+import { isDailyPagesTitle } from '~/domain/lesson-planner/yawp-catalog';
 
-const DAILY_PAGES_TITLE = 'daily pages';
+/** How the Lesson Planner hands a written warm-up to this page. */
+const NEW_PROMPT_PARAM = 'newPrompt';
 const ALL_PROMPTS = promptsRaw as LibraryPrompt[];
 const SERIOUSNESS_ORDER: PromptSeriousness[] = [
   'playful',
@@ -355,8 +362,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     });
   }
 
-  const isDailyPages =
-    assignmentType.title.trim().toLowerCase() === DAILY_PAGES_TITLE;
+  const isDailyPages = isDailyPagesTitle(assignmentType.title);
   const isApHistory =
     assignmentType.systemKey === AP_HISTORY_ASSIGNMENT_TYPE_KEY;
   const promptLibrary =
@@ -492,6 +498,27 @@ export default function AppAssignmentTypesIdRoute() {
     essayType: string;
   } | null>(null);
   const showPromptsLibrary = data.promptLibrary != null;
+
+  // The Lesson Planner sends a teacher here with a warm-up it wrote, to be
+  // assigned rather than retyped. Open the sheet on it once, then drop the
+  // param so a refresh (or the back button) does not reopen it.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const incomingPrompt = searchParams.get(NEW_PROMPT_PARAM);
+  useEffect(() => {
+    if (!incomingPrompt) return;
+    setLibraryPrompt(incomingPrompt);
+    setApHistoryEntry(null);
+    setIsAssignmentSheetOpen(true);
+    setSearchParams(
+      (previous) => {
+        const next = new URLSearchParams(previous);
+        next.delete(NEW_PROMPT_PARAM);
+        return next;
+      },
+      { replace: true, preventScrollReset: true }
+    );
+  }, [incomingPrompt, setSearchParams]);
+
   const isApHistoryAssignmentType =
     data.assignmentType.systemKey === AP_HISTORY_ASSIGNMENT_TYPE_KEY;
   const canCreateDirectDocument = !isApHistoryAssignmentType;

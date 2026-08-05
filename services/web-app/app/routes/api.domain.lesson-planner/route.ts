@@ -11,6 +11,10 @@ import {
 } from '~/domain/lesson-planner/lesson-planner-tools.server';
 import { repairSlideDeck } from '~/domain/lesson-planner/repair-slide-deck.server';
 import { markFailedDecks } from '~/domain/lesson-planner/slide-deck';
+import {
+  collectToolLinks,
+  verifyLessonLinks,
+} from '~/domain/lesson-planner/lesson-links';
 import { buildLessonPlannerSystemPrompt } from './build-system-prompt';
 import {
   AiRateLimitError,
@@ -180,6 +184,10 @@ export async function action({ request }: ActionFunctionArgs) {
     { role: AgentType.User, content: data.message },
   ];
 
+  // Every link the reply is allowed to contain came back from a tool on this
+  // request. Anything else it writes, it made up.
+  const toolLinks = new Set<string>();
+
   let reply: string;
   try {
     reply = await getLLMCompletion({
@@ -189,8 +197,11 @@ export async function action({ request }: ActionFunctionArgs) {
       maxTokens: PLANNER_MAX_TOKENS,
       maxToolRounds: PLANNER_MAX_TOOL_ROUNDS,
       tools: LESSON_PLANNER_TOOLS,
-      handleToolCall: (name, input) =>
-        handleLessonPlannerToolCall(name, input, ctx),
+      handleToolCall: async (name, input) => {
+        const result = await handleLessonPlannerToolCall(name, input, ctx);
+        for (const link of collectToolLinks(result)) toolLinks.add(link);
+        return result;
+      },
       allowFallbackProvider: false,
       signal: AbortSignal.timeout(PLANNER_REQUEST_DEADLINE_MS),
       logPayload: 'metadata-only',
@@ -222,6 +233,12 @@ export async function action({ request }: ActionFunctionArgs) {
       }),
   });
   reply = repaired.reply;
+
+  // A link the catalog never handed back goes nowhere, and a teacher finds that
+  // out in front of a class. Strip the href and keep the words. Done before the
+  // reply is stored, so the dead link never enters the conversation's history
+  // either.
+  reply = verifyLessonLinks(reply, toolLinks).reply;
 
   // Stamp explicit, strictly-increasing timestamps: both rows land in one
   // nested create, so the DB default would give them the same createdAt and

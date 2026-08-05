@@ -41,12 +41,38 @@ export const MARKDOWN_CLASS = cn(
   '[&_details>*:not(summary)]:mt-2'
 );
 
+/**
+ * Send every link in a reply to its own tab.
+ *
+ * A teacher following a link out of a lesson plan is looking something up
+ * mid-plan, not leaving. Navigating this tab away loses the conversation they
+ * are in the middle of, which reads as the link being broken.
+ *
+ * Wraps marked's own link renderer rather than replacing it, so the URL is
+ * still cleaned and escaped exactly as marked would; an href marked rejects
+ * comes back as plain text and never matches the opening tag.
+ */
+function newTabRenderer(): InstanceType<typeof marked.Renderer> {
+  const renderer = new marked.Renderer();
+  const renderLink = renderer.link.bind(renderer);
+  renderer.link = (href, title, text) =>
+    renderLink(href, title, text).replace(
+      /^<a /,
+      '<a target="_blank" rel="noopener noreferrer" '
+    );
+  return renderer;
+}
+
 /** Markdown → sanitized HTML. Browser-only (DOMPurify needs a DOM). */
 export function markdownToSafeHtml(content: string): string {
-  const parsed = marked.parse(content, { async: false, gfm: true }) as string;
+  const parsed = marked.parse(content, {
+    async: false,
+    gfm: true,
+    renderer: newTabRenderer(),
+  }) as string;
   return DOMPurify.sanitize(parsed, {
     ADD_TAGS: ['details', 'summary'],
-    ADD_ATTR: ['open'],
+    ADD_ATTR: ['open', 'target', 'rel'],
   });
 }
 

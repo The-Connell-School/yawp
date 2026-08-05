@@ -7,6 +7,7 @@
 import { prisma } from '~/utils/db.server';
 import { getAvailableAssignmentTypesForScopes } from '~/utils/assignment-type-access.server';
 import {
+  isDailyPagesTitle,
   summarizeLoungeMaterials,
   type LoungeTrainingSummary,
 } from './yawp-catalog';
@@ -101,4 +102,18 @@ export async function listAssignableTypes(
   });
 
   return types.map((type) => ({ id: type.id, title: type.title }));
+}
+
+/**
+ * The teacher's own Daily Pages assignment type, if their org has it enabled.
+ *
+ * The planner needs the id to offer "create this Daily Pages exercise" on a
+ * warm-up it wrote. A teacher whose org does not have Daily Pages gets no
+ * button rather than a link into a page they cannot open.
+ */
+export async function findDailyPagesTypeId(
+  ctx: CatalogContext
+): Promise<string | null> {
+  const types = await listAssignableTypes(ctx);
+  return types.find((type) => isDailyPagesTitle(type.title))?.id ?? null;
 }

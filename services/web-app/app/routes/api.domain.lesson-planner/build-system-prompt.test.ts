@@ -201,6 +201,40 @@ describe('buildLessonPlannerSystemPrompt — teaching out of Yawp', () => {
   test('prefers existing Yawp material over inventing an activity', () => {
     expect(prompt.toLowerCase()).toContain('before you invent');
   });
+
+  test('forbids assembling a link the tools never returned', () => {
+    const lower = prompt.toLowerCase();
+    expect(lower).toContain('came back from a tool in this conversation');
+    // The app strips them; the model should know that rather than be surprised.
+    expect(lower).toContain('strips any link it cannot match');
+  });
+});
+
+describe('buildLessonPlannerSystemPrompt — a warm-up it wrote', () => {
+  const prompt = buildLessonPlannerSystemPrompt({
+    teacherName: null,
+    organizationName: 'Connell School',
+  });
+
+  test('names the fence the chat parses', () => {
+    expect(prompt).toContain('```yawp-daily-pages');
+  });
+
+  test('says the block is what makes the prompt assignable', () => {
+    expect(prompt.toLowerCase()).toContain('daily pages assignment');
+  });
+
+  test('bans the "not from the library" disclaimer the teacher never wanted', () => {
+    const lower = prompt.toLowerCase();
+    expect(lower).toContain('not from the library');
+    expect(lower).toContain('never write');
+    // And the instruction that used to produce it is gone.
+    expect(lower).not.toContain('say so in one clause');
+  });
+
+  test('keeps the prompt out of the plan as well as in the block', () => {
+    expect(prompt.toLowerCase()).toContain('do not also quote the prompt');
+  });
 });
 
 describe('buildLessonPlannerSystemPrompt — slide decks', () => {
