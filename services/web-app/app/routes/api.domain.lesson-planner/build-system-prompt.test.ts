@@ -539,3 +539,46 @@ describe('buildLessonPlannerSystemPrompt — when to ask the length', () => {
     expect(lower).toContain('yawp removes the control');
   });
 });
+
+describe('buildLessonPlannerSystemPrompt — a deck is not a playlist', () => {
+  const prompt = buildLessonPlannerSystemPrompt({
+    teacherName: null,
+    organizationName: 'Connell School',
+  });
+
+  test('requires a time budget on handed-over material', () => {
+    // "Project the deck" plus a handout inside a 12-minute step is not a plan
+    // anybody can follow.
+    expect(prompt.toLowerCase()).toContain('it must contain a time budget');
+    expect(prompt.toLowerCase()).toContain('make the arithmetic work');
+  });
+
+  test('says to scope a deck by topic, never by slide number', () => {
+    const lower = prompt.toLowerCase();
+    expect(lower).toContain('something to draw from, not something to play');
+    expect(lower).toContain('never by slide number');
+    // And it says why: it has not seen them.
+    expect(lower).toContain('any number you write is invented');
+  });
+});
+
+describe('buildLessonPlannerSystemPrompt — the check covers the objective', () => {
+  const prompt = buildLessonPlannerSystemPrompt({
+    teacherName: null,
+    organizationName: 'Connell School',
+  });
+
+  test('requires the exit ticket to cover every part of the objective', () => {
+    // A three-part objective checked by a one-part exit ticket leaves the
+    // teacher finding out at essay-grading time.
+    const lower = prompt.toLowerCase();
+    expect(lower).toContain('check the whole objective');
+    expect(lower).toContain('evidence of every one of them');
+  });
+
+  test('does not let self-report stand in for evidence', () => {
+    expect(prompt.toLowerCase()).toContain(
+      'asking students how confident they feel is not assessment'
+    );
+  });
+});
