@@ -102,16 +102,25 @@ export function inlineDailyPagesExercises(content: string): string {
   });
 }
 
+/** The search param that carries the lesson a teacher came from. */
+export const FROM_LESSON_PARAM = 'fromLesson';
+
 /**
  * Where the teacher lands when they accept the offer: the Daily Pages
  * assignment type, with its creation sheet open and the prompt already filled
  * in. `newPrompt` is the search param that page reads.
+ *
+ * The lesson's own id travels with them. Embedding a creator inside a plan
+ * means the button is a door out of the planner, and a teacher who walks
+ * through it should not have to find their way back through the sidebar to a
+ * lesson they were in the middle of.
  */
 export function dailyPagesCreateHref(
   assignmentTypeId: string,
-  prompt: string
+  prompt: string,
+  conversationId?: string | null
 ): string {
-  return `/app/assignment-types/${assignmentTypeId}?newPrompt=${encodeURIComponent(
-    prompt
-  )}`;
+  const params = new URLSearchParams({ newPrompt: prompt });
+  if (conversationId) params.set(FROM_LESSON_PARAM, conversationId);
+  return `/app/assignment-types/${assignmentTypeId}?${params}`;
 }

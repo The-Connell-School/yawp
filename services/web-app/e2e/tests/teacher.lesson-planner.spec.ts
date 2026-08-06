@@ -1767,6 +1767,19 @@ test.describe('YAWP! Lesson Planner', () => {
     await expect(page.locator('#assignment-create-prompt')).toHaveValue(
       /Think of the last time you tried to convince someone/
     );
+
+    // Embedding a creator in a plan means the button is a door out of the
+    // planner; the way back has to still be there after the sheet is done,
+    // not only in the moment it opens.
+    await page.keyboard.press('Escape');
+    const back = page.getByTestId('back-to-lesson');
+    await expect(back).toBeVisible();
+    await back.click();
+    await expect(page).toHaveURL(
+      new RegExp(`/app/lesson-planner\\?c=${conversationId}`)
+    );
+    // And the lesson is the one they left, not a blank planner.
+    await expect(page.getByTestId('daily-pages-card')).toBeVisible();
   });
 
   test('refuses to present a reply that has no deck in it', async ({

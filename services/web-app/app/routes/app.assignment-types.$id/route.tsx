@@ -60,6 +60,7 @@ import {
 } from './prompts-library/data';
 import promptsRaw from './prompts-library/prompts.json';
 import { isDailyPagesTitle } from '~/domain/lesson-planner/yawp-catalog';
+import { FROM_LESSON_PARAM } from '~/domain/lesson-planner/daily-pages-block';
 
 /** How the Lesson Planner hands a written warm-up to this page. */
 const NEW_PROMPT_PARAM = 'newPrompt';
@@ -504,6 +505,10 @@ export default function AppAssignmentTypesIdRoute() {
   // param so a refresh (or the back button) does not reopen it.
   const [searchParams, setSearchParams] = useSearchParams();
   const incomingPrompt = searchParams.get(NEW_PROMPT_PARAM);
+  // Kept in the URL after the prompt is consumed: a teacher who followed a
+  // button out of a half-finished lesson needs the way back to still be there
+  // once the sheet has done its job.
+  const fromLesson = searchParams.get(FROM_LESSON_PARAM);
   useEffect(() => {
     if (!incomingPrompt) return;
     setLibraryPrompt(incomingPrompt);
@@ -530,10 +535,23 @@ export default function AppAssignmentTypesIdRoute() {
     <div className="no-scrollbar h-full w-full overflow-y-scroll">
       <div className="mx-auto flex h-full w-full max-w-screen-md flex-col p-3 sm:p-5">
         <div className="mb-4 flex justify-between gap-2">
+          {/* Arriving from a lesson, the way back is to that lesson. The
+              planner embeds this page's creator inside a plan, so a teacher
+              gets here mid-lesson and "Back to dashboard" strands them. */}
           <Button asChild variant="outline">
-            <Link to="/app" className="w-fit">
-              <CaretLeftIcon className="mr-1 h-5 w-5" /> Back to dashboard
-            </Link>
+            {fromLesson ? (
+              <Link
+                to={`/app/lesson-planner?c=${fromLesson}`}
+                className="w-fit"
+                data-testid="back-to-lesson"
+              >
+                <CaretLeftIcon className="mr-1 h-5 w-5" /> Back to your lesson
+              </Link>
+            ) : (
+              <Link to="/app" className="w-fit">
+                <CaretLeftIcon className="mr-1 h-5 w-5" /> Back to dashboard
+              </Link>
+            )}
           </Button>
 
           {isTeacher ? (

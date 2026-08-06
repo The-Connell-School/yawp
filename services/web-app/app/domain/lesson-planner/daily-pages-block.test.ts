@@ -102,9 +102,13 @@ describe('inlineDailyPagesExercises', () => {
 
 describe('dailyPagesCreateHref', () => {
   test('carries the prompt to the assignment sheet', () => {
+    // URLSearchParams spells a space "+", which reads back as a space.
     expect(dailyPagesCreateHref('type-1', 'What made it land?')).toBe(
-      '/app/assignment-types/type-1?newPrompt=What%20made%20it%20land%3F'
+      '/app/assignment-types/type-1?newPrompt=What+made+it+land%3F'
     );
+    expect(
+      new URLSearchParams('newPrompt=What+made+it+land%3F').get('newPrompt')
+    ).toBe('What made it land?');
   });
 });
 
@@ -136,5 +140,24 @@ describe('a warm-up the planner found in the library', () => {
         '```yawp-daily-pages\nid: FW-001\nWhat made it land?\n```'
       )
     ).toBe('> What made it land?');
+  });
+});
+
+describe('dailyPagesCreateHref — the way back', () => {
+  test('carries the lesson the teacher came from', () => {
+    // The button is a door out of the planner. Walking through it should not
+    // cost a teacher the half-finished lesson they were standing in.
+    expect(dailyPagesCreateHref('type-1', 'What made it land?', 'plan-9')).toBe(
+      '/app/assignment-types/type-1?newPrompt=What+made+it+land%3F&fromLesson=plan-9'
+    );
+  });
+
+  test('leaves the link alone when there is no lesson to return to', () => {
+    expect(dailyPagesCreateHref('type-1', 'Write.', null)).toBe(
+      '/app/assignment-types/type-1?newPrompt=Write.'
+    );
+    expect(dailyPagesCreateHref('type-1', 'Write.')).toBe(
+      '/app/assignment-types/type-1?newPrompt=Write.'
+    );
   });
 });

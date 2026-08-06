@@ -801,6 +801,7 @@ function MessageBubble({
                   key={key}
                   exercise={part.exercise}
                   assignmentTypeId={dailyPagesTypeId}
+                  conversationId={conversationId}
                 />
               );
             }

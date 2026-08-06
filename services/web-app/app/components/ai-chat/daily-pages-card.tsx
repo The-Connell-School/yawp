@@ -17,10 +17,13 @@ import {
 export function DailyPagesCard({
   exercise,
   assignmentTypeId,
+  conversationId,
 }: {
   exercise: DailyPagesExercise;
   /** Null when this org does not have Daily Pages — then it is just a prompt. */
   assignmentTypeId: string | null;
+  /** Travels with the teacher so they can get back to this lesson. */
+  conversationId?: string | null;
 }) {
   return (
     <div
@@ -39,7 +42,11 @@ export function DailyPagesCard({
       {assignmentTypeId ? (
         <div className="border-t border-primary/15 bg-primary/[0.04] px-4 py-2.5">
           <Link
-            to={dailyPagesCreateHref(assignmentTypeId, exercise.prompt)}
+            to={dailyPagesCreateHref(
+              assignmentTypeId,
+              exercise.prompt,
+              conversationId
+            )}
             data-testid="daily-pages-create"
             className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground transition hover:opacity-90"
           >
