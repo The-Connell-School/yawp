@@ -362,6 +362,24 @@ export async function renderPacketPdf(
 }
 
 /**
+ * Whether a download should be rendered as a page students write on.
+ *
+ * The handout view obviously is. Less obviously, so is a single student-facing
+ * piece downloaded on its own — a teacher saves just the warm-up or just the
+ * exit ticket far more often than the whole packet, and that sheet still ends
+ * up in thirty pairs of hands and has to come back sortable.
+ */
+export function printsForStudents({
+  wantsHandout,
+  singleSectionAudience,
+}: {
+  wantsHandout: boolean;
+  singleSectionAudience?: string | null;
+}): boolean {
+  return wantsHandout || singleSectionAudience === 'student';
+}
+
+/**
  * The student-facing half, numbered as one packet a class can be led through —
  * the same reading the packet page shows, minus whatever the teacher excluded.
  */
@@ -376,13 +394,17 @@ export async function renderHandoutPdf({
   const doc = newDocument(handout.title);
   drawTitle(doc, { title: handout.title, subtitle: handout.className });
 
-  // The line students write their own name on. A handout without one comes
-  // back in a pile nobody can sort.
+  // The line students fill in themselves. Section belongs here as much as
+  // name: a teacher running five periods collects five piles of the same
+  // worksheet, and a page with only a name on it cannot be sorted back into
+  // the class it came from.
   doc
     .font(FONTS.body)
     .fontSize(9.5)
     .fillColor(MUTED)
-    .text('Name: ______________________________     Date: ______________');
+    .text(
+      'Name: ____________________________   Section: __________   Date: __________'
+    );
   doc.moveDown(0.5);
 
   handout.parts.forEach((part, index) => {

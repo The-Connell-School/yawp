@@ -3,6 +3,7 @@ import { inflateSync } from 'node:zlib';
 import { buildLessonPacket } from './lesson-packet';
 import {
   pdfFilename,
+  printsForStudents,
   tableRowBottom,
   renderHandoutPdf,
   renderPacketPdf,
@@ -194,11 +195,17 @@ describe('renderHandoutPdf', () => {
     expect(text).toContain('Student exit ticket');
   });
 
-  test('gives students somewhere to put their name', async () => {
+  test('gives students somewhere to put their name, section and date', async () => {
+    // Section as well as name: a teacher running five periods gets back five
+    // piles of the same worksheet, and a page carrying only a name cannot be
+    // sorted back into the class it came from.
     const packet = packetWith([
       { id: 's1', content: '## Practice\n\nWrite.', keptAudience: 'student' },
     ]);
-    expect(pdfText(await renderHandoutPdf({ packet }))).toContain('Name:');
+    const text = pdfText(await renderHandoutPdf({ packet }));
+    expect(text).toContain('Name:');
+    expect(text).toContain('Section:');
+    expect(text).toContain('Date:');
   });
 
   test('still produces a file when nothing is marked for students', async () => {
@@ -279,5 +286,35 @@ describe('tableRowBottom — a worksheet needs somewhere to write', () => {
 
   test('leaves the header hugging its text', () => {
     expect(tableRowBottom(100, 112, true)).toBe(112);
+  });
+});
+
+describe('printsForStudents', () => {
+  test('the handout view is for students', () => {
+    expect(printsForStudents({ wantsHandout: true })).toBe(true);
+  });
+
+  test('so is one student-facing piece downloaded on its own', () => {
+    // A teacher saves just the warm-up or just the exit ticket far more often
+    // than the whole packet, and that sheet still goes out to thirty kids.
+    expect(
+      printsForStudents({
+        wantsHandout: false,
+        singleSectionAudience: 'student',
+      })
+    ).toBe(true);
+  });
+
+  test('the teacher’s own plan is not', () => {
+    expect(
+      printsForStudents({
+        wantsHandout: false,
+        singleSectionAudience: 'teacher',
+      })
+    ).toBe(false);
+    expect(printsForStudents({ wantsHandout: false })).toBe(false);
+    expect(
+      printsForStudents({ wantsHandout: false, singleSectionAudience: null })
+    ).toBe(false);
   });
 });

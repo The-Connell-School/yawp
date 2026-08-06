@@ -10,6 +10,7 @@ import type { LoaderFunctionArgs } from 'react-router';
 import { loadLessonPacket } from '~/domain/lesson-planner/load-lesson-packet.server';
 import {
   pdfFilename,
+  printsForStudents,
   renderHandoutPdf,
   renderPacketPdf,
 } from '~/domain/lesson-planner/lesson-pdf.server';
@@ -43,11 +44,18 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     throw new Response('Not Found', { status: 404 });
   }
 
-  const pdf = wantsHandout
-    ? await renderHandoutPdf({ packet, excluded })
-    : await renderPacketPdf(
-        single ? { ...packet, sections: [single] } : packet
-      );
+  // Exclusions are dropped when one piece was asked for by name: the teacher
+  // pointed at that piece, so leaving it out would answer with nothing.
+  const chosen = single ? { ...packet, sections: [single] } : packet;
+  const pdf = printsForStudents({
+    wantsHandout,
+    singleSectionAudience: single?.audience,
+  })
+    ? await renderHandoutPdf({
+        packet: chosen,
+        excluded: single ? [] : excluded,
+      })
+    : await renderPacketPdf(chosen);
 
   const filename = pdfFilename(
     packet.title,

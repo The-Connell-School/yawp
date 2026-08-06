@@ -295,9 +295,13 @@ export default function LessonPacketRoute() {
               </p>
             ) : view === 'handout' ? (
               <div data-testid="student-handout">
-                {/* One name/date line for the whole packet, not one per page. */}
+                {/* One heading line for the whole packet, not one per page.
+                    Section as well as name: a teacher with five periods gets
+                    back five piles of the same worksheet, and without it the
+                    only way to sort them is to know every student by sight. */}
                 <div className="mb-6 flex items-end justify-between gap-6 border-b pb-2 text-sm text-muted-foreground">
                   <span className="flex-1">Name ______________________</span>
+                  <span>Section __________</span>
                   <span>Date ____________</span>
                 </div>
                 {handout.parts.length === 0 ? (

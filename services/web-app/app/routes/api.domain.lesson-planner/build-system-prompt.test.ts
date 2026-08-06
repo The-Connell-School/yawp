@@ -634,7 +634,13 @@ describe('buildLessonPlannerSystemPrompt — a page a student can actually use',
 
   test('leaves room to answer and does not duplicate the packet header', () => {
     expect(lower).toContain('leave real room to answer');
-    expect(lower).toContain('do not write your own name-and-date line');
+    // Yawp prints Name / Section / Date itself, so a second one the model
+    // wrote would sit on the same sheet as the real one.
+    expect(lower).toContain('do not write your own name line');
+    expect(lower).toContain('"name / section / date"');
+    expect(lower).toContain(
+      'never ask a student to write their name, section, period, or the date'
+    );
   });
 });
 

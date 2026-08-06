@@ -1332,8 +1332,11 @@ test.describe('YAWP! Lesson Planner', () => {
     await expect(parts.first()).toContainText('Two conclusions, side by side');
     await expect(parts.nth(1)).toContainText('Part 2.');
     await expect(parts.nth(1)).toContainText('Diagnose & Repair');
-    // One name/date line for the packet, not one per piece.
+    // One heading line for the packet, not one per piece — and it carries the
+    // section, because a teacher with five periods sorts by section first.
     await expect(page.getByText(/^Name _+$/)).toHaveCount(1);
+    await expect(page.getByText(/^Section _+$/)).toHaveCount(1);
+    await expect(page.getByText(/^Date _+$/)).toHaveCount(1);
 
     // The teacher can leave a piece out, and the numbering follows.
     await page
