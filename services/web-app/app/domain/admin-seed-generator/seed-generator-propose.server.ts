@@ -201,7 +201,9 @@ export async function proposeSeedGraph(params: {
       },
       allowFallbackProvider: false,
       signal: AbortSignal.timeout(SEED_GRAPH_REQUEST_DEADLINE_MS),
-      logPayload: 'metadata-only',
+      // TEMP DIAGNOSTIC (revert before merge): full payload logging to see
+      // the raw tool-call failure in /app/admin/audit while debugging the
+      // live "could not turn instructions into a valid graph" error.
       metadata: {
         feature: 'admin-seed-generator-structure',
         organizationId: params.ctx.organizationId,
