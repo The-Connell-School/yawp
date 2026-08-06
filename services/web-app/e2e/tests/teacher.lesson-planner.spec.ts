@@ -1624,10 +1624,17 @@ test.describe('YAWP! Lesson Planner', () => {
     await expect(
       page.getByRole('slider', { name: /lesson length in minutes/i })
     ).toHaveCount(0);
-    // ...but the activities question still makes sense, so it stays.
+
+    // ...but the activities question still makes sense, so it survives — one
+    // step along, because the app pins its own opening option as step one.
+    await page.getByTestId('lesson-ask-next').click();
     await expect(
       page.getByRole('checkbox', { name: /you pick the ones that fit/i })
     ).toBeVisible();
+    // Still no slider once the whole card is open.
+    await expect(
+      page.getByRole('slider', { name: /lesson length in minutes/i })
+    ).toHaveCount(0);
   });
 
   test('sends the activities a teacher checks as their own message', async ({
@@ -1643,6 +1650,8 @@ test.describe('YAWP! Lesson Planner', () => {
     await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
     await page.goto(`/app/lesson-planner?c=${conversationId}`);
 
+    // The card asks one thing at a time; the activities are the last step.
+    await page.getByTestId('lesson-ask-next').click();
     await page.getByRole('checkbox', { name: 'Jigsaw' }).check();
     await page.getByRole('checkbox', { name: 'Gallery walk' }).check();
 
