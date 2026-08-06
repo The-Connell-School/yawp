@@ -153,10 +153,36 @@ export function isDailyPagesTitle(title: string): boolean {
 export type LoungeMaterialKind = 'slides' | 'document' | 'other';
 
 export type LoungeMaterial = {
+  /** Handle for read_lounge_material. */
+  id: string;
   name: string;
   kind: LoungeMaterialKind;
   href: string;
+  /**
+   * Whether the planner can open this file and read what is in it. False means
+   * it knows the name and nothing else, and must not describe the contents.
+   */
+  readable: boolean;
 };
+
+/**
+ * The formats we can open. Both are zip archives of XML — see
+ * `~/domain/office`. Everything else (Keynote, PDF, video, images) is still
+ * listed and linked, but its contents are unknown and have to stay that way.
+ */
+export function isReadableMaterial(resource: {
+  name: string;
+  contentType: string;
+}): boolean {
+  const name = resource.name.trim().toLowerCase();
+  const contentType = resource.contentType.trim().toLowerCase();
+  return (
+    name.endsWith('.pptx') ||
+    name.endsWith('.docx') ||
+    contentType.includes('presentationml.presentation') ||
+    contentType.includes('wordprocessingml.document')
+  );
+}
 
 export type LoungeModuleSummary = {
   title: string;
@@ -242,9 +268,11 @@ export function summarizeLoungeMaterials(
                 !isCaptionResource(resource) && !isTranscriptResource(resource)
             )
             .map((resource) => ({
+              id: resource.id,
               name: resource.name,
               kind: classifyMaterial(resource),
               href: `/api/teacher-training-module-resource/${resource.id}`,
+              readable: isReadableMaterial(resource),
             })),
         }))
         .filter((module) => module.materials.length > 0);

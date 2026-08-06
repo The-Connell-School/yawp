@@ -8,9 +8,16 @@ import { prisma } from '~/utils/db.server';
 import { getAvailableAssignmentTypesForScopes } from '~/utils/assignment-type-access.server';
 import {
   isDailyPagesTitle,
+  isReadableMaterial,
   summarizeLoungeMaterials,
   type LoungeTrainingSummary,
 } from './yawp-catalog';
+import { readDocxText } from '~/domain/office/docx';
+import {
+  hasSlideText,
+  readPptxSlides,
+  type PptxSlide,
+} from '~/domain/office/pptx';
 
 export type CatalogContext = {
   membershipId: string;
@@ -20,26 +27,35 @@ export type CatalogContext = {
 export type AssignableType = { id: string; title: string };
 
 /**
- * Teaching material in the Teacher's Lounge — module decks, handouts, and the
- * course links that go with them.
+ * Which Lounge courses this teacher can see: their assigned ones once they have
+ * any, and otherwise all of them — the same scoping the Lounge index does.
  *
- * Scoping mirrors the Lounge index: once a teacher has assigned courses they
- * see only those, and otherwise the whole library is open to them.
+ * Shared so that reading a file cannot reach further than listing one. A
+ * resource id is a handle the model holds onto, and the read tool must not
+ * become a way around the scoping the listing already applies.
  */
-export async function listLoungeMaterials(
-  ctx: CatalogContext
-): Promise<LoungeTrainingSummary[]> {
+async function visibleTrainingsWhere(ctx: CatalogContext) {
   const assignmentCounts = await prisma.orgMembership.findUnique({
     where: { id: ctx.membershipId, role: 'TEACHER' },
     select: { _count: { select: { assignedTeacherTrainings: true } } },
   });
   const hasAssignedCourses =
     (assignmentCounts?._count.assignedTeacherTrainings ?? 0) > 0;
+  return hasAssignedCourses
+    ? { assignedTeachers: { some: { id: ctx.membershipId } } }
+    : undefined;
+}
 
+/**
+ * Teaching material in the Teacher's Lounge — module decks, handouts, and the
+ * course links that go with them. Names and addresses only; see
+ * `readLoungeMaterial` for what is inside one.
+ */
+export async function listLoungeMaterials(
+  ctx: CatalogContext
+): Promise<LoungeTrainingSummary[]> {
   const trainings = await prisma.teacherTraining.findMany({
-    where: hasAssignedCourses
-      ? { assignedTeachers: { some: { id: ctx.membershipId } } }
-      : undefined,
+    where: await visibleTrainingsWhere(ctx),
     select: {
       id: true,
       title: true,
@@ -63,6 +79,121 @@ export async function listLoungeMaterials(
   });
 
   return summarizeLoungeMaterials(trainings);
+}
+
+/**
+ * What is actually inside one Lounge file.
+ *
+ * Everything the planner says about Lounge material used to be invented: it was
+ * handed a filename and a link and nothing else, so "project slides 4–9" was a
+ * guess dressed up as a fact. This is the difference.
+ */
+export type LoungeMaterialContents =
+  | {
+      kind: 'slides';
+      name: string;
+      href: string;
+      slides: PptxSlide[];
+      truncated: boolean;
+    }
+  | {
+      kind: 'document';
+      name: string;
+      href: string;
+      text: string;
+      truncated: boolean;
+    };
+
+/**
+ * A ceiling on how much of one file comes back. A hundred-slide course deck
+ * would otherwise crowd out the conversation it is supposed to inform.
+ */
+const MAX_CHARACTERS = 40_000;
+
+function capSlides(slides: PptxSlide[]): {
+  slides: PptxSlide[];
+  truncated: boolean;
+} {
+  const kept: PptxSlide[] = [];
+  let spent = 0;
+  for (const slide of slides) {
+    spent += slide.lines.join(' ').length + slide.notes.length;
+    if (spent > MAX_CHARACTERS && kept.length) {
+      return { slides: kept, truncated: true };
+    }
+    kept.push(slide);
+  }
+  return { slides: kept, truncated: false };
+}
+
+export async function readLoungeMaterial(
+  ctx: CatalogContext,
+  resourceId: string
+): Promise<LoungeMaterialContents | { error: string }> {
+  const resource = await prisma.teacherTrainingModuleResource.findFirst({
+    // Scoped through the module's course, so this can only open a file the
+    // same teacher's list_lounge_materials would already have shown them.
+    where: {
+      id: resourceId,
+      teacherTrainingModule: {
+        deletedAt: null,
+        teacherTraining: await visibleTrainingsWhere(ctx),
+      },
+    },
+    select: { name: true, contentType: true, blob: true },
+  });
+
+  if (!resource) {
+    return {
+      error:
+        "No such material in this teacher's Teacher's Lounge. Call list_lounge_materials and use an id from it.",
+    };
+  }
+
+  const href = `/api/teacher-training-module-resource/${resourceId}`;
+  if (!isReadableMaterial(resource)) {
+    return {
+      error: `"${resource.name}" is not a format Yawp can open — only .pptx and .docx can be read. Link it by name and say nothing about what is inside it.`,
+    };
+  }
+
+  const bytes = Uint8Array.from(resource.blob);
+  const isSlides = /\.pptx$/i.test(resource.name.trim())
+    ? true
+    : /\.docx$/i.test(resource.name.trim())
+      ? false
+      : resource.contentType.includes('presentationml.presentation');
+
+  try {
+    if (isSlides) {
+      const all = readPptxSlides(bytes);
+      if (!hasSlideText(all)) {
+        return {
+          error: `"${resource.name}" has no readable text — the slides are images. Link it by name and say nothing about what is on them.`,
+        };
+      }
+      const { slides, truncated } = capSlides(all);
+      return { kind: 'slides', name: resource.name, href, slides, truncated };
+    }
+
+    const text = readDocxText(bytes);
+    if (!text.trim()) {
+      return {
+        error: `"${resource.name}" has no readable text. Link it by name and say nothing about what is inside it.`,
+      };
+    }
+    return {
+      kind: 'document',
+      name: resource.name,
+      href,
+      text: text.slice(0, MAX_CHARACTERS),
+      truncated: text.length > MAX_CHARACTERS,
+    };
+  } catch {
+    return {
+      error: `"${resource.name}" could not be opened. Link it by name and say nothing about what is inside it.`,
+    };
+  }
 }
 
 /**

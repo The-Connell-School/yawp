@@ -3,6 +3,7 @@ import { afterAll, beforeEach, describe, expect, mock, test } from 'bun:test';
 const handleReporterToolCall = mock();
 const listLoungeMaterials = mock();
 const listAssignableTypes = mock();
+const readLoungeMaterial = mock();
 
 mock.module('~/domain/reporter/reporter-tools.server', () => ({
   handleReporterToolCall,
@@ -21,6 +22,7 @@ mock.module('~/domain/reporter/reporter-tools.server', () => ({
 mock.module('~/domain/lesson-planner/yawp-catalog.server', () => ({
   listLoungeMaterials,
   listAssignableTypes,
+  readLoungeMaterial,
 }));
 
 const {
@@ -40,7 +42,34 @@ beforeEach(() => {
   handleReporterToolCall.mockReset().mockResolvedValue('{"ok":true}');
   listLoungeMaterials.mockReset().mockResolvedValue([]);
   listAssignableTypes.mockReset().mockResolvedValue([]);
+  readLoungeMaterial.mockReset().mockResolvedValue({ error: 'not stubbed' });
 });
+
+/** One course, one module, one deck — enough to exercise the listing's note. */
+function loungeWith(materials: Array<{ readable: boolean }>) {
+  return [
+    {
+      title: 'Argument Writing',
+      description: null,
+      href: '/app/teacher-trainings/t1',
+      modules: [
+        {
+          title: 'Body Paragraphs',
+          description: null,
+          href: '/app/teacher-trainings/t1/modules/m1',
+          materials: materials.map((material, index) => ({
+            id: `res-${index}`,
+            name: `Deck ${index}.pptx`,
+            kind: 'slides',
+            href: `/api/teacher-training-module-resource/res-${index}`,
+            readable: material.readable,
+          })),
+        },
+      ],
+      links: [],
+    },
+  ];
+}
 
 describe('LESSON_PLANNER_TOOLS', () => {
   test('exposes the class-context tools and the Yawp catalog', () => {
@@ -205,5 +234,60 @@ describe('handleLessonPlannerToolCall', () => {
 
     expect(result.error).toMatch(/plan without it/i);
     expect(result.error).not.toContain('db down');
+  });
+});
+
+describe('read_lounge_material', () => {
+  test('is offered alongside the listing', () => {
+    expect(LESSON_PLANNER_TOOL_NAMES).toContain('read_lounge_material');
+    const tool = LESSON_PLANNER_CATALOG_TOOLS.find(
+      (candidate) => candidate.name === 'read_lounge_material'
+    )!;
+    expect(tool.input_schema.required).toEqual(['id']);
+    // The description has to say what the listing does NOT give you, or the
+    // model keeps describing decks it has only seen the filename of.
+    expect(tool.description).toMatch(/before/i);
+  });
+
+  test('opens the file the model asked for, under the teacher scope', async () => {
+    readLoungeMaterial.mockResolvedValue({
+      kind: 'slides',
+      name: 'Body Paragraphs.pptx',
+      href: '/api/teacher-training-module-resource/res-0',
+      slides: [{ number: 1, lines: ['Claim first'], notes: '' }],
+      truncated: false,
+    });
+
+    const result = JSON.parse(
+      await handleLessonPlannerToolCall(
+        'read_lounge_material',
+        { id: 'res-0' },
+        { ...ctx }
+      )
+    );
+
+    expect(readLoungeMaterial).toHaveBeenCalledWith(ctx, 'res-0');
+    expect(result.slides[0].lines).toEqual(['Claim first']);
+  });
+
+  test('tells the model to go read the files it can open', async () => {
+    listLoungeMaterials.mockResolvedValue(loungeWith([{ readable: true }]));
+
+    const result = JSON.parse(
+      await handleLessonPlannerToolCall('list_lounge_materials', {}, { ...ctx })
+    );
+
+    expect(result.note).toMatch(/read_lounge_material/);
+    expect(result.note).toMatch(/filename tells you nothing/i);
+  });
+
+  test('tells it to stay quiet about files it cannot open', async () => {
+    listLoungeMaterials.mockResolvedValue(loungeWith([{ readable: false }]));
+
+    const result = JSON.parse(
+      await handleLessonPlannerToolCall('list_lounge_materials', {}, { ...ctx })
+    );
+
+    expect(result.note).toMatch(/say nothing about what is inside/i);
   });
 });

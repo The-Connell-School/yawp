@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import {
   listWritingLessonCatalog,
   searchDailyPagesPrompts,
+  isReadableMaterial,
   summarizeLoungeMaterials,
   WRITING_LESSON_SKILL_HINTS,
 } from './yawp-catalog';
@@ -179,6 +180,14 @@ describe('summarizeLoungeMaterials', () => {
     expect(summary!.modules[0]!.materials[0]!.kind).toBe('slides');
   });
 
+  test('hands back an id the planner can open the file with', () => {
+    const [summary] = summarizeLoungeMaterials([training]);
+    expect(summary!.modules[0]!.materials[0]).toMatchObject({
+      id: 'res-deck',
+      readable: true,
+    });
+  });
+
   test('classifies other material by its type rather than guessing', () => {
     const [summary] = summarizeLoungeMaterials([
       {
@@ -221,5 +230,42 @@ describe('summarizeLoungeMaterials', () => {
         },
       ])
     ).toEqual([]);
+  });
+});
+
+describe('isReadableMaterial', () => {
+  test('opens the two formats Yawp can actually unpack', () => {
+    // Both are zip archives of XML — see ~/domain/office.
+    expect(
+      isReadableMaterial({ name: 'Conclusions.pptx', contentType: '' })
+    ).toBe(true);
+    expect(isReadableMaterial({ name: 'Handout.DOCX', contentType: '' })).toBe(
+      true
+    );
+    expect(
+      isReadableMaterial({
+        name: 'deck',
+        contentType:
+          'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      })
+    ).toBe(true);
+  });
+
+  test('leaves everything else closed rather than half-open', () => {
+    // A file we cannot read has to be marked unreadable, not optimistically
+    // included: the whole point of the flag is that the planner stays silent
+    // about contents it has no way to know.
+    for (const name of [
+      'Conclusions.key',
+      'Conclusions.ppt',
+      'Reading.pdf',
+      'walkthrough.mp4',
+      'board.png',
+    ]) {
+      expect(isReadableMaterial({ name, contentType: '' })).toBe(false);
+    }
+    expect(
+      isReadableMaterial({ name: 'deck', contentType: 'application/pdf' })
+    ).toBe(false);
   });
 });

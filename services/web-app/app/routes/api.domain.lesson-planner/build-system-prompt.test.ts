@@ -508,18 +508,33 @@ describe('buildLessonPlannerSystemPrompt — only claim what it has read', () =>
     organizationName: 'Connell School',
   });
 
-  test('forbids describing the inside of a Lounge file', () => {
+  test('sends it to open the file before it describes one', () => {
     // list_lounge_materials returns a name, a type and an address — never the
-    // contents — so "slides 4–9 cover how to introduce a quote" is invented.
+    // contents. read_lounge_material is the difference between "slides 4–9
+    // cover how to introduce a quote" being a fact and being invented.
     const lower = prompt.toLowerCase();
-    expect(lower).toContain('you have not read a lounge file');
-    expect(lower).toContain('never say what is inside one');
+    expect(lower).toContain('open the file before you describe it');
+    expect(lower).toContain('`read_lounge_material` gives you the contents');
+  });
+
+  test('expects it to use what it read, not hedge', () => {
+    // Having opened the deck and then written "project the relevant part" is
+    // the worst of both — the cost of reading with none of the benefit.
+    const lower = prompt.toLowerCase();
+    expect(lower).toContain('once you have read it, use what you read');
+    expect(lower).toContain('quote a line off the slide');
+  });
+
+  test('keeps the old silence for anything it still cannot open', () => {
+    // Keynote, PDFs, and image-only decks are still closed books.
+    const lower = prompt.toLowerCase();
+    expect(lower).toContain('anything you have not read stays closed');
     expect(lower).toContain('never cite a page or slide number');
   });
 
   test('keeps the rule off the sources it really can read', () => {
     expect(prompt).toContain(
-      'Quick Writing Lessons and Daily Pages prompts ARE different'
+      'Quick Writing Lessons and Daily Pages prompts come back as real text'
     );
   });
 });
@@ -561,12 +576,17 @@ describe('buildLessonPlannerSystemPrompt — a deck is not a playlist', () => {
     expect(prompt.toLowerCase()).toContain('make the arithmetic work');
   });
 
-  test('says to scope a deck by topic, never by slide number', () => {
+  test('says to name the part of a deck to use, not to play the whole thing', () => {
     const lower = prompt.toLowerCase();
     expect(lower).toContain('something to draw from, not something to play');
-    expect(lower).toContain('never by slide number');
-    // And it says why: it has not seen them.
-    expect(lower).toContain('any number you write is invented');
+    // Now that it can open the deck, the numbers are the useful answer — but
+    // only the ones it actually read.
+    expect(lower).toContain(
+      'slide numbers you got from `read_lounge_material`'
+    );
+    expect(lower).toContain(
+      'if you have not opened the deck, you have no numbers'
+    );
   });
 });
 

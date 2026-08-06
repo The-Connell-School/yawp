@@ -25,6 +25,7 @@ import {
 import {
   listAssignableTypes,
   listLoungeMaterials,
+  readLoungeMaterial,
 } from './yawp-catalog.server';
 import { getQuickWritingLessonBySlug } from '~/utils/writing-lessons/static-lessons.server';
 
@@ -140,6 +141,23 @@ export const LESSON_PLANNER_CATALOG_TOOLS: ReporterTool[] = [
     },
   },
   {
+    name: 'read_lounge_material',
+    description:
+      "Open one Teacher's Lounge file and read what is actually in it. For a slide deck this returns every slide in presentation order with its text and speaker notes; for a document it returns the text. Call this BEFORE saying anything about what a Lounge file contains — which slides to project, what a handout asks, what a deck covers. Without it you know only the filename. Only .pptx and .docx can be opened.",
+    input_schema: {
+      type: 'object',
+      properties: {
+        id: {
+          type: 'string',
+          description:
+            'The material id from list_lounge_materials. Only materials marked readable can be opened.',
+        },
+      },
+      required: ['id'],
+      additionalProperties: false,
+    },
+  },
+  {
     name: 'list_assignment_types',
     description:
       'List the assignment types this teacher can actually assign to a class (Daily Pages, the course essays their school has enabled). Use it to end a lesson on the real Yawp assignment the students will write.',
@@ -202,8 +220,24 @@ async function handleCatalogToolCall(
         content: lesson.content,
       };
     }
-    case 'list_lounge_materials':
-      return { trainings: await listLoungeMaterials(ctx) };
+    case 'list_lounge_materials': {
+      const trainings = await listLoungeMaterials(ctx);
+      const readable = trainings.some((training) =>
+        training.modules.some((module) =>
+          module.materials.some((material) => material.readable)
+        )
+      );
+      return {
+        trainings,
+        note: readable
+          ? 'Anything marked readable can be opened with read_lounge_material. Do that before you describe what is in it or say which part to project — a filename tells you nothing about the contents.'
+          : 'None of these can be opened. Link them by name and say nothing about what is inside them.',
+      };
+    }
+    case 'read_lounge_material': {
+      const id = typeof input.id === 'string' ? input.id : '';
+      return readLoungeMaterial(ctx, id);
+    }
     case 'list_assignment_types':
       return { assignmentTypes: await listAssignableTypes(ctx) };
     default:
