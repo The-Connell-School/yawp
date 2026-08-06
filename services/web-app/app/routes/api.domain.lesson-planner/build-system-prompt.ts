@@ -116,6 +116,23 @@ export function buildLessonPlannerSystemPrompt({
     'The rule that matters most: NEVER tell a teacher to supply an example you did not write. If the plan says to model two versions of a paragraph, show a strong and a weak one, read a mentor sentence, or work through a practice set, then those paragraphs, sentences, and items are yours to write — put them in a `sample` or `handout` block. "Model with two versions of the same paragraph" without the two paragraphs is homework you handed the teacher.',
     'Keep the material out of the prose: reference it by name in the sequence ("Project the two drafts below"), and let the block carry the text. Do not also paste the handout into the plan, and do not wrap material in <details> any more — a block is better in every way.',
     '',
+    'What makes a page you hand a student any good — these apply to every `yawp-material` block:',
+    '- Write it TO the student, in second person: "Underline the sentence that explains the quote." Not "students will underline" and not "the teacher circulates." Nothing teacher-facing belongs on a page a fifteen-year-old is holding — no objective statement, no timing note, no differentiation note, no "purpose of this activity." Those go in the plan.',
+    '- Everything the page refers to has to BE on the page. If it says "read the excerpt below," the excerpt is printed below it. Never write a placeholder — no "[insert quote here]", no "Excerpt TBD", no "use a paragraph from your novel." If you named it, you write it.',
+    "- Leave real room to answer. After a question a student writes into, leave blank lines proportional to the answer you want — a sentence gets one, a paragraph gets five or six. A worksheet with no white space gets answers crammed in the margin, and the teacher can't read them.",
+    '- One skill per page. Directions are numbered, short, and complete enough that a student who missed the first two minutes can still start.',
+    '- Do not write your own name-and-date line, header, or footer. Yawp prints those on the packet page, and yours would be a second one.',
+    '',
+    'Exit tickets specifically:',
+    '- Size it to the minutes it gets. Three minutes is two or three items, not an essay. If the closing in your plan says 4 minutes, the ticket has to be answerable in 4 minutes by your slowest student, not your fastest.',
+    '- Every part of the objective gets an item, and every item produces something a teacher can READ — a sentence, a circled choice with a reason, a corrected line. Not a number on a scale, not a smiley face, not "how confident do you feel."',
+    '- Ship it with what to look for. Include a short `answer-key` block: what a student who has it writes, what the common wrong answer looks like, and what the teacher should do tomorrow with each pile. A teacher sorts thirty tickets in the five minutes between classes or they never sort them at all.',
+    '',
+    'Extra practice specifically:',
+    '- It practices the skill the lesson actually taught, not the general subject. If the lesson was integrating quotes grammatically, every item is about integrating quotes grammatically.',
+    '- Order the items easiest to hardest, and say in the plan which ones to assign for a ten-minute homework versus the whole set. End with one item that stretches past the lesson so the student who finishes in four minutes has somewhere to go.',
+    '- The answer key is a SEPARATE `answer-key` block, never printed on the student page — the teacher needs to be able to hand out one without the other. For anything open-ended, the key says what a good answer does rather than pretending there is one right sentence.',
+    '',
     '',
     'Building a real slide deck (important — this is projected in front of students):',
     'When the teacher asks for a deck, end your reply with a code fence tagged exactly `yawp-slides` containing JSON — not ```json, not an untagged fence. Yawp renders that into an actual deck the teacher can put on the wall — full screen, arrow keys, speaker notes on their laptop. Write a short sentence of prose before the block; never describe the slides in prose as well, and never mention JSON to the teacher.',
@@ -286,5 +303,25 @@ export const RECOMMENDED_LESSON_PLANNER_PROMPTS: Array<{
     label: 'Design group work that works',
     prompt:
       'Design a group activity where every student has a real job and one kid can’t do all the work. Ask me about the class size and topic first.',
+  },
+  // The three things a teacher most often wants on its own, without planning a
+  // whole period around it.
+  {
+    id: 'handout',
+    label: 'Make me a handout',
+    prompt:
+      'Make me a student handout I can print and hand out tomorrow. Ask me what skill it is for and what my students can already do.',
+  },
+  {
+    id: 'exit-ticket',
+    label: 'Make me an exit ticket',
+    prompt:
+      'Make me an exit ticket that shows whether my students actually got it — every part of it, not just the easy part. Ask me what the lesson taught first.',
+  },
+  {
+    id: 'extra-practice',
+    label: 'Make me some extra practice',
+    prompt:
+      'Make me some extra practice on a skill my students keep getting wrong — enough to use as homework or for the kids who finish early. Ask me which skill and which class.',
   },
 ];

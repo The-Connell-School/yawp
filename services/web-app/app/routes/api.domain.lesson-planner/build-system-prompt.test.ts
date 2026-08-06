@@ -118,6 +118,14 @@ describe('RECOMMENDED_LESSON_PLANNER_PROMPTS', () => {
     }
     expect(ids.size).toBe(RECOMMENDED_LESSON_PLANNER_PROMPTS.length);
   });
+
+  test('offers the single artifacts a teacher asks for on their own', () => {
+    // Not every visit is a whole period; sometimes it is just the handout.
+    const ids = RECOMMENDED_LESSON_PLANNER_PROMPTS.map((entry) => entry.id);
+    expect(ids).toContain('handout');
+    expect(ids).toContain('exit-ticket');
+    expect(ids).toContain('extra-practice');
+  });
 });
 
 describe('buildLessonPlannerSystemPrompt — teaching out of Yawp', () => {
@@ -579,6 +587,66 @@ describe('buildLessonPlannerSystemPrompt — the check covers the objective', ()
   test('does not let self-report stand in for evidence', () => {
     expect(prompt.toLowerCase()).toContain(
       'asking students how confident they feel is not assessment'
+    );
+  });
+});
+
+describe('buildLessonPlannerSystemPrompt — a page a student can actually use', () => {
+  const prompt = buildLessonPlannerSystemPrompt({
+    teacherName: null,
+    organizationName: 'Connell School',
+  });
+  const lower = prompt.toLowerCase();
+
+  test('addresses the student, not the teacher', () => {
+    expect(lower).toContain('write it to the student, in second person');
+    expect(lower).toContain(
+      'nothing teacher-facing belongs on a page a fifteen-year-old is holding'
+    );
+  });
+
+  test('refuses placeholders for material it did not write', () => {
+    expect(lower).toContain(
+      'everything the page refers to has to be on the page'
+    );
+    expect(lower).toContain('never write a placeholder');
+  });
+
+  test('leaves room to answer and does not duplicate the packet header', () => {
+    expect(lower).toContain('leave real room to answer');
+    expect(lower).toContain('do not write your own name-and-date line');
+  });
+});
+
+describe('buildLessonPlannerSystemPrompt — exit tickets and extra practice', () => {
+  const prompt = buildLessonPlannerSystemPrompt({
+    teacherName: null,
+    organizationName: 'Connell School',
+  });
+  const lower = prompt.toLowerCase();
+
+  test('sizes the exit ticket to the minutes it was given', () => {
+    expect(lower).toContain('size it to the minutes it gets');
+    expect(lower).toContain('by your slowest student');
+  });
+
+  test('sends the exit ticket out with what to look for', () => {
+    // A teacher sorts tickets between classes or not at all.
+    expect(lower).toContain('ship it with what to look for');
+    expect(lower).toContain('what the common wrong answer looks like');
+  });
+
+  test('keeps practice on the skill the lesson taught, hardest last', () => {
+    expect(lower).toContain(
+      'practices the skill the lesson actually taught, not the general subject'
+    );
+    expect(lower).toContain('order the items easiest to hardest');
+    expect(lower).toContain('one item that stretches past the lesson');
+  });
+
+  test('keeps the answer key off the student page', () => {
+    expect(lower).toContain(
+      'separate `answer-key` block, never printed on the student page'
     );
   });
 });
