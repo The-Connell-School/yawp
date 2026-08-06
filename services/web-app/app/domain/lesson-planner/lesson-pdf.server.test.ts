@@ -216,6 +216,55 @@ describe('renderHandoutPdf', () => {
     expect(Buffer.from(bytes.subarray(0, 5)).toString()).toBe('%PDF-');
     expect(pdfText(bytes)).toContain('Nothing in this lesson is marked');
   });
+
+  test('renders one piece alone, ignoring exclusions', async () => {
+    // `only` is how a teacher gets pieces as separate files instead of one
+    // combined handout — it must win even over an exclusion, since asking for
+    // a piece by name and getting nothing back would be a worse bug than the
+    // exclusion being ignored.
+    const packet = packetWith([
+      {
+        id: 's1',
+        content: '## Warm-up\n\nStudent warm-up.',
+        keptAudience: 'student',
+      },
+      {
+        id: 's2',
+        content: '## Exit\n\nStudent exit ticket.',
+        keptAudience: 'student',
+      },
+    ]);
+    const text = pdfText(
+      await renderHandoutPdf({ packet, excluded: ['s2'], only: 's2' })
+    );
+    expect(text).toContain('Student exit ticket');
+    expect(text).not.toContain('Student warm-up');
+  });
+
+  test('drops the numbering on a piece rendered alone', async () => {
+    // "1. Exit Ticket" reads like something is missing when the ticket is the
+    // whole document rather than the first of several.
+    const packet = packetWith([
+      {
+        id: 's1',
+        content: '## Exit\n\nStudent exit ticket.',
+        keptAudience: 'student',
+        keptTitle: 'Exit Ticket',
+      },
+    ]);
+    const text = pdfText(await renderHandoutPdf({ packet, only: 's1' }));
+    expect(text).toContain('Exit Ticket');
+    expect(text).not.toContain('1. Exit Ticket');
+  });
+
+  test('still carries name, section and date when rendered alone', async () => {
+    const packet = packetWith([
+      { id: 's1', content: '## Practice\n\nWrite.', keptAudience: 'student' },
+    ]);
+    const text = pdfText(await renderHandoutPdf({ packet, only: 's1' }));
+    expect(text).toContain('Name:');
+    expect(text).toContain('Section:');
+  });
 });
 
 describe('pdfFilename', () => {

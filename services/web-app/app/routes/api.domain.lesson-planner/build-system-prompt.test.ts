@@ -676,3 +676,39 @@ describe('buildLessonPlannerSystemPrompt — exit tickets and extra practice', (
     );
   });
 });
+
+describe('buildLessonPlannerSystemPrompt — a unit is not one long lesson', () => {
+  const prompt = buildLessonPlannerSystemPrompt({
+    teacherName: null,
+    organizationName: 'Connell School',
+  });
+  const lower = prompt.toLowerCase();
+
+  test('offers a unit plan rather than a single period built out of Yawp', () => {
+    const ids = RECOMMENDED_LESSON_PLANNER_PROMPTS.map((entry) => entry.id);
+    expect(ids).toContain('unit-plan');
+    expect(ids).not.toContain('build-from-yawp');
+  });
+
+  test('asks for the day-by-day map before any lesson is written', () => {
+    // Ten full lessons in one reply is unreadable, unchangeable, and mostly
+    // wrong the moment the teacher reacts to day one.
+    expect(lower).toContain('give the map first and stop there');
+    expect(lower).toContain('do not write ten full lessons in one reply');
+  });
+
+  test('requires each day to build on the last', () => {
+    expect(lower).toContain('name what is new on each day');
+    expect(lower).toContain('"continue practicing" is not a day');
+  });
+
+  test('counts the drafting and assessment days against the periods given', () => {
+    expect(lower).toContain('if the teacher has 8 periods, the map has 8 days');
+    expect(lower).toContain('an essay that appears from nowhere');
+  });
+
+  test('places the checks before the final piece', () => {
+    expect(lower).toContain('which days carry a quick formative check');
+    expect(lower).toContain('too late to teach');
+  });
+});

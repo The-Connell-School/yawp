@@ -386,13 +386,32 @@ export function printsForStudents({
 export async function renderHandoutPdf({
   packet,
   excluded = [],
+  only,
 }: {
   packet: LessonPacket;
   excluded?: string[];
+  /**
+   * Render exactly one handout piece by its id, ignoring `excluded` — a
+   * teacher who asked for one piece by name gets that piece, not an empty
+   * document because it happened to be unchecked. Used when a teacher wants
+   * pieces as separate files rather than one combined handout.
+   */
+  only?: string;
 }): Promise<Uint8Array> {
-  const handout = buildStudentHandout({ packet, excluded });
-  const doc = newDocument(handout.title);
-  drawTitle(doc, { title: handout.title, subtitle: handout.className });
+  const handout = buildStudentHandout({
+    packet,
+    excluded: only ? [] : excluded,
+  });
+  const parts = only
+    ? handout.parts.filter((part) => part.id === only)
+    : handout.parts;
+  const doc = newDocument(
+    only ? (parts[0]?.title ?? handout.title) : handout.title
+  );
+  drawTitle(doc, {
+    title: only ? (parts[0]?.title ?? handout.title) : handout.title,
+    subtitle: handout.className,
+  });
 
   // The line students fill in themselves. Section belongs here as much as
   // name: a teacher running five periods collects five piles of the same
@@ -410,17 +429,25 @@ export async function renderHandoutPdf({
     );
   doc.moveDown(1.1);
 
-  handout.parts.forEach((part, index) => {
+  parts.forEach((part, index) => {
     if (index > 0) doc.addPage();
     drawBlock(doc, {
       kind: 'heading',
       level: 1,
-      runs: [{ text: `${part.number}. ${part.title}`, bold: true }],
+      // A lone piece isn't part of a sequence, so it gets its title alone —
+      // "1. Exit Ticket" reads like something is missing when it is the whole
+      // document.
+      runs: [
+        {
+          text: only ? part.title : `${part.number}. ${part.title}`,
+          bold: true,
+        },
+      ],
     });
     drawMarkdown(doc, part.content);
   });
 
-  if (!handout.parts.length) {
+  if (!parts.length) {
     doc
       .font(FONTS.italic)
       .fontSize(BODY_SIZE)

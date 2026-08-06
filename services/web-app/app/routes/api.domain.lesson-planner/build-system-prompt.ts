@@ -100,6 +100,14 @@ export function buildLessonPlannerSystemPrompt({
     '- Handouts, graphic organizers, sentence stems, model paragraphs, practice sets, exit tickets, and simple rubrics or checklists — as `yawp-material` blocks, see below.',
     '- If the teacher is vague about the format, plan the lesson first and then offer the artifacts you could build from it.',
     '',
+    'Planning a whole unit (when the teacher asks for a unit, not a lesson):',
+    '- Give the MAP first and stop there. A numbered day-by-day list: for each day, its objective in one line, what students actually do, and what it hands to the next day. Do not write ten full lessons in one reply — the teacher cannot read that, cannot change it, and most of it will be wrong once they react to day one. End by offering to build any day out in full.',
+    '- Anchor the unit on what students hand in at the end. Call list_assignment_types and end on a real Yawp assignment where one fits. Every day should be visibly upstream of that final piece; if a day is not, cut it or say what it is for.',
+    '- The arc has to build. Name what is NEW on each day — a new move, a harder text, less scaffolding, more independence. "Continue practicing" is not a day. If two days would look the same to a student, they are one day and you have a spare period.',
+    '- Make the arithmetic work here too. If the teacher has 8 periods, the map has 8 days, and that includes the days students spend drafting, revising, and being assessed — not 8 days of new instruction plus an essay that appears from nowhere.',
+    '- Say where the checks are: which days carry a quick formative check, and which day is the real assessment. A unit with no check until the final piece is a unit where nobody finds out anything until it is too late to teach.',
+    '- Build it out of Yawp the same way a single lesson is: Daily Pages for the openings, Quick Writing Lessons for the sentence-level days, Lounge decks for the ones they cover. Search before you invent, on the unit as much as on the lesson.',
+    '',
     '',
     'Handing over real material (important — a plan that names material it does not include is unfinished work):',
     "Anything a teacher would print, project, photocopy, or read aloud goes in its own fenced block tagged exactly `yawp-material`. Yawp turns each block into its own card with a one-tap button that files it in the teacher's lesson packet, where it prints on its own page under a name, section and date line. Material left loose in the plan is something they have to select and copy out at 7am.",
@@ -283,10 +291,10 @@ export const RECOMMENDED_LESSON_PLANNER_PROMPTS: Array<{
       'Look at how one of my classes has been scoring on the rubric and plan a lesson that targets their weakest skill. List my classes first so I can pick.',
   },
   {
-    id: 'build-from-yawp',
-    label: 'Build a period out of Yawp',
+    id: 'unit-plan',
+    label: 'Build a unit plan',
     prompt:
-      "Plan a full class period using what Yawp already has — a Daily Pages warm-up, a Quick Writing Lesson for the mini-lesson, and any slides in the Teacher's Lounge that fit. Ask me what we're working on and what my class is reading.",
+      'Build me a unit plan: the arc of lessons from where my students are now to the piece of writing they will hand in at the end. Ask me what the unit is about, how many class periods I have, and what my students can already do. Give me the day-by-day map first, before you write any single lesson.',
   },
   {
     id: 'slide-deck',

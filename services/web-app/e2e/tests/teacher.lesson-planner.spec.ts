@@ -1347,6 +1347,49 @@ test.describe('YAWP! Lesson Planner', () => {
     await expect(parts.first()).toContainText('Diagnose & Repair');
   });
 
+  test('downloads one handout piece alone instead of the combined handout', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    // A teacher wants their handouts kept separate far more often than they
+    // want them merged into one long document — this is that path, reachable
+    // from the same checklist the combined handout uses.
+    await setLessonPlannerEnabled(e2eContext.organizationId, true);
+    const { conversationId } = await seedLessonWithMaterials(e2eContext);
+    await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+    await page.goto(`/app/lesson-planner?c=${conversationId}`);
+
+    for (const index of [0, 1]) {
+      const save = page.waitForResponse(
+        (response) =>
+          response.url().includes('/api/domain/lesson-planner/packet') &&
+          response.request().method() === 'POST'
+      );
+      await page
+        .getByTestId('material-card')
+        .nth(index)
+        .getByTestId('material-toggle')
+        .click();
+      await save;
+    }
+
+    await page.goto(`/app/lesson-planner/${conversationId}/packet`);
+    await page.getByRole('button', { name: /student handout/i }).click();
+
+    const download = page.waitForEvent('download');
+    await page
+      .getByRole('link', {
+        name: 'Download Diagnose & Repair as its own PDF',
+      })
+      .click();
+    const file = await download;
+
+    expect(file.suggestedFilename()).toContain('Diagnose & Repair');
+    const bytes = await readFile(await file.path());
+    expect(bytes.subarray(0, 5).toString()).toBe('%PDF-');
+  });
+
   test('prints the student handout without the teacher’s plan', async ({
     page,
     signIn,

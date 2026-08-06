@@ -80,6 +80,16 @@ export default function LessonPacketRoute() {
     }`;
   }
 
+  /**
+   * One handout piece on its own, kept separate rather than folded into the
+   * combined handout. Distinct from `pdfHref(sectionId)`: a piece can be
+   * material nested inside a kept reply, which has no section id of its own.
+   */
+  function handoutPieceHref(pieceId: string) {
+    const params = new URLSearchParams({ piece: pieceId });
+    return `/app/lesson-planner/${conversationId}/packet.pdf?${params}`;
+  }
+
   function jumpTo(anchor: string) {
     setView('full');
     // Wait for the full-plan view in case the outline was showing.
@@ -330,28 +340,44 @@ export default function LessonPacketRoute() {
                   <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                     What goes in this handout
                   </p>
+                  <p className="mb-2 text-xs text-muted-foreground">
+                    Check what belongs in the one combined handout below, or
+                    download any piece on its own instead.
+                  </p>
                   <div className="flex flex-col gap-1.5">
                     {allHandoutParts.map((part) => {
                       const isIn = !excluded.includes(part.id);
                       return (
-                        <label
+                        <div
                           key={part.id}
-                          className="flex cursor-pointer items-center gap-2 text-sm"
+                          className="flex items-center justify-between gap-2"
                         >
-                          <input
-                            type="checkbox"
-                            checked={isIn}
-                            onChange={() =>
-                              setExcluded((prev) =>
-                                isIn
-                                  ? [...prev, part.id]
-                                  : prev.filter((id) => id !== part.id)
-                              )
-                            }
-                            className="h-4 w-4 rounded border-border"
-                          />
-                          {part.title}
-                        </label>
+                          <label className="flex cursor-pointer items-center gap-2 text-sm">
+                            <input
+                              type="checkbox"
+                              checked={isIn}
+                              onChange={() =>
+                                setExcluded((prev) =>
+                                  isIn
+                                    ? [...prev, part.id]
+                                    : prev.filter((id) => id !== part.id)
+                                )
+                              }
+                              className="h-4 w-4 rounded border-border"
+                            />
+                            {part.title}
+                          </label>
+                          <a
+                            href={handoutPieceHref(part.id)}
+                            download
+                            data-testid="handout-piece-pdf"
+                            aria-label={`Download ${part.title} as its own PDF`}
+                            className="inline-flex shrink-0 items-center gap-1 rounded-md px-1.5 py-0.5 text-xs text-muted-foreground transition hover:bg-foreground/5 hover:text-foreground"
+                          >
+                            <FileDown size={12} />
+                            Download alone
+                          </a>
+                        </div>
                       );
                     })}
                   </div>
