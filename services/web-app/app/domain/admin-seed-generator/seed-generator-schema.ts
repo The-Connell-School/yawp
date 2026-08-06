@@ -44,7 +44,7 @@ export const seedGradeSchema = z
   })
   .strict();
 
-export const seedSubmissionSchema = z
+const seedSubmissionBaseSchema = z
   .object({
     localId: z.string().min(1).max(100),
     assignmentLocalId: z.string().min(1).max(100),
@@ -52,16 +52,24 @@ export const seedSubmissionSchema = z
     status: z.enum(['draft', 'submitted', 'graded']),
     grade: seedGradeSchema.optional(),
   })
-  .strict()
-  .superRefine((value, ctx) => {
-    if (value.status === 'graded' && !value.grade) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['grade'],
-        message: 'grade is required when status is "graded".',
-      });
-    }
-  });
+  .strict();
+
+function requireGradeForGradedSubmission(
+  value: z.infer<typeof seedSubmissionBaseSchema>,
+  ctx: z.RefinementCtx
+) {
+  if (value.status === 'graded' && !value.grade) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['grade'],
+      message: 'grade is required when status is "graded".',
+    });
+  }
+}
+
+export const seedSubmissionSchema = seedSubmissionBaseSchema.superRefine(
+  requireGradeForGradedSubmission
+);
 
 export const seedClassSchema = z
   .object({
@@ -120,9 +128,19 @@ export const seedCommitClassSchema = seedClassSchema.extend({
 export const seedCommitAssignmentSchema = seedAssignmentSchema.extend({
   approved: z.boolean(),
 });
-export const seedCommitStudentSchema = seedStudentSchema.extend({
-  approved: z.boolean(),
-});
+export const seedCommitSubmissionSchema = seedSubmissionBaseSchema
+  .extend({
+    approved: z.boolean(),
+    documentLocalId: z.string().min(1).max(100).optional(),
+  })
+  .superRefine(requireGradeForGradedSubmission);
+export const seedCommitStudentSchema = seedStudentSchema
+  .omit({ submissions: true })
+  .extend({
+    approved: z.boolean(),
+    existingMembershipId: z.string().min(1).optional(),
+    submissions: z.array(seedCommitSubmissionSchema).min(1).max(10),
+  });
 export const seedCommitProposalSchema = z
   .object({
     classes: z.array(seedCommitClassSchema).max(10),
@@ -133,154 +151,313 @@ export const seedCommitProposalSchema = z
 
 export type SeedCommitProposal = z.infer<typeof seedCommitProposalSchema>;
 
-const rubricScoresJsonSchema = {
-  type: 'object',
-  description:
-    'Subset of the five rubric categories, each scored 1-5. Omit a category rather than guessing.',
-  properties: Object.fromEntries(
-    RUBRIC_CATEGORY_KEYS.map((key) => [
-      key,
-      { type: 'number', description: '1 (weak) to 5 (excellent).' },
-    ])
-  ),
-  additionalProperties: false,
-} as const;
+export const seedNodeKindSchema = z.enum([
+  'class',
+  'assignment',
+  'student',
+  'document',
+  'submission',
+]);
+export const seedNodeReviewStatusSchema = z.enum([
+  'proposed',
+  'approved',
+  'rejected',
+  'committed',
+]);
 
-/**
- * Tool definition handed to the Anthropic API via getLLMCompletion's `tools`
- * param. This IS the model-facing contract for structured output -- see
- * app/domain/reporter/reporter-tools.server.ts for the same
- * hand-written-JSON-Schema-next-to-its-zod-twin convention this follows.
- */
-export const SEED_GENERATOR_TOOL = {
-  name: 'propose_seed_data',
-  description:
-    'Propose new demo seed data for this organization: classes, assignments, and students (each with submissions and grades). This is a PROPOSAL ONLY -- nothing is written to the database until a human admin approves individual items in the UI. Call this exactly once with your complete proposal. Every essay must be full writing you author yourself, several paragraphs, in a voice that actually matches the requested writing profile -- a "struggling" writer should read as genuinely struggling (thin evidence, weak organization, mechanical errors), not just a shorter version of good writing.',
-  input_schema: {
-    type: 'object',
-    properties: {
-      classes: {
-        type: 'array',
-        description:
-          'Brand-new classes to create. Leave empty if the request only adds students/assignments to a class already listed in the "existing classes" context.',
-        items: {
+const structuralNodeFields = {
+  localId: z.string().min(1).max(100),
+};
+
+export const seedStructuralNodeSchema = z.discriminatedUnion('kind', [
+  z
+    .object({
+      ...structuralNodeFields,
+      kind: z.literal('class'),
+      parentLocalId: z.null(),
+      data: seedClassSchema.omit({ localId: true }),
+    })
+    .strict(),
+  z
+    .object({
+      ...structuralNodeFields,
+      kind: z.literal('assignment'),
+      parentLocalId: z.string().min(1).max(100),
+      data: seedAssignmentSchema.omit({
+        localId: true,
+        classLocalId: true,
+      }),
+    })
+    .strict(),
+  z
+    .object({
+      ...structuralNodeFields,
+      kind: z.literal('student'),
+      parentLocalId: z.string().min(1).max(100),
+      data: seedStudentSchema
+        .omit({ localId: true, classLocalId: true, submissions: true })
+        .strict(),
+    })
+    .strict(),
+  z
+    .object({
+      ...structuralNodeFields,
+      kind: z.literal('document'),
+      parentLocalId: z.string().min(1).max(100),
+      data: z
+        .object({
+          title: z.string().min(1).max(200),
+          studentLocalId: z.string().min(1).max(100),
+        })
+        .strict(),
+    })
+    .strict(),
+  z
+    .object({
+      ...structuralNodeFields,
+      kind: z.literal('submission'),
+      parentLocalId: z.string().min(1).max(100),
+      data: z
+        .object({ status: z.enum(['draft', 'submitted', 'graded']) })
+        .strict(),
+    })
+    .strict(),
+]);
+
+export const seedGraphProposalSchema = z
+  .object({
+    nodes: z.array(seedStructuralNodeSchema).min(1).max(150),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    const seen = new Set<string>();
+    for (const [index, node] of value.nodes.entries()) {
+      if (seen.has(node.localId)) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['nodes', index, 'localId'],
+          message: `Duplicate localId "${node.localId}".`,
+        });
+      }
+      seen.add(node.localId);
+    }
+  });
+
+export const seedContentFillSchema = z
+  .object({
+    status: z.enum(['draft', 'submitted', 'graded']),
+    essayText: z.string().min(1).max(20_000),
+    grade: seedGradeSchema.optional(),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (value.status === 'graded' && !value.grade) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['grade'],
+        message: 'grade is required when status is "graded".',
+      });
+    }
+    if (value.status !== 'graded' && value.grade) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['grade'],
+        message: 'grade must be omitted unless status is "graded".',
+      });
+    }
+  });
+
+export type SeedStructuralNode = z.infer<typeof seedStructuralNodeSchema>;
+export type SeedGraphProposal = z.infer<typeof seedGraphProposalSchema>;
+export type SeedContentFill = z.infer<typeof seedContentFillSchema>;
+export type SeedNodeKind = z.infer<typeof seedNodeKindSchema>;
+export type SeedNodeReviewStatus = z.infer<typeof seedNodeReviewStatusSchema>;
+
+const structuralNodeJsonSchema = {
+  oneOf: [
+    {
+      type: 'object',
+      properties: {
+        localId: { type: 'string' },
+        kind: { const: 'class' },
+        parentLocalId: { type: 'null' },
+        data: {
           type: 'object',
           properties: {
-            localId: {
-              type: 'string',
-              description: 'A unique id you invent for this class, e.g. "class-1".',
-            },
-            title: { type: 'string', description: 'e.g. "English 9 - Period 3".' },
-            grade: { type: 'string', description: 'Grade level, e.g. "9".' },
-            period: { type: 'string' },
-            schoolYear: { type: 'string', description: 'e.g. "2025-2026".' },
-          },
-          required: ['localId', 'title', 'grade', 'period', 'schoolYear'],
-          additionalProperties: false,
-        },
-      },
-      assignments: {
-        type: 'array',
-        description:
-          'New assignments, each attached to one class. A class needs at least one assignment before students can submit writing for it.',
-        items: {
-          type: 'object',
-          properties: {
-            localId: { type: 'string' },
-            classLocalId: {
-              type: 'string',
-              description:
-                'The localId of a class in THIS proposal\'s "classes" array, OR the id of an existing class from context.',
-            },
             title: { type: 'string' },
-            prompt: { type: 'string', description: 'The writing prompt shown to students.' },
-            assignmentTypeTitle: {
-              type: 'string',
-              description:
-                'Must exactly match one of the organization-enabled assignment type titles given in context.',
-            },
+            grade: { type: 'string' },
+            period: { type: 'string' },
+            schoolYear: { type: 'string' },
           },
-          required: ['localId', 'classLocalId', 'title', 'prompt', 'assignmentTypeTitle'],
+          required: ['title', 'grade', 'period', 'schoolYear'],
           additionalProperties: false,
         },
       },
-      students: {
-        type: 'array',
-        description: 'Students to create, each with their own writing.',
-        items: {
+      required: ['localId', 'kind', 'parentLocalId', 'data'],
+      additionalProperties: false,
+    },
+    {
+      type: 'object',
+      properties: {
+        localId: { type: 'string' },
+        kind: { const: 'assignment' },
+        parentLocalId: {
+          type: 'string',
+          description: 'The localId of its class, or an existing class id.',
+        },
+        data: {
           type: 'object',
           properties: {
-            localId: { type: 'string' },
-            name: { type: 'string', description: "The student's full name." },
-            classLocalId: {
-              type: 'string',
-              description:
-                'The localId of a class in THIS proposal\'s "classes" array, OR the id of an existing class from context.',
-            },
+            title: { type: 'string' },
+            prompt: { type: 'string' },
+            assignmentTypeTitle: { type: 'string' },
+          },
+          required: ['title', 'prompt', 'assignmentTypeTitle'],
+          additionalProperties: false,
+        },
+      },
+      required: ['localId', 'kind', 'parentLocalId', 'data'],
+      additionalProperties: false,
+    },
+    {
+      type: 'object',
+      properties: {
+        localId: { type: 'string' },
+        kind: { const: 'student' },
+        parentLocalId: {
+          type: 'string',
+          description: 'The localId of their class, or an existing class id.',
+        },
+        data: {
+          type: 'object',
+          properties: {
+            name: { type: 'string' },
             writingProfile: {
               type: 'string',
               enum: ['struggling', 'on_track', 'advanced'],
-              description: 'Drives how the essay text you write for this student should read.',
-            },
-            submissions: {
-              type: 'array',
-              description: "This student's documents/submissions. At least one.",
-              items: {
-                type: 'object',
-                properties: {
-                  localId: { type: 'string' },
-                  assignmentLocalId: {
-                    type: 'string',
-                    description:
-                      'The localId of an assignment in THIS proposal\'s "assignments" array (not an id from context -- only newly proposed assignments can be referenced).',
-                  },
-                  essayText: {
-                    type: 'string',
-                    description:
-                      "The full essay text, written by you in the student's voice per writingProfile. Several paragraphs, not a stub or a summary.",
-                  },
-                  status: {
-                    type: 'string',
-                    enum: ['draft', 'submitted', 'graded'],
-                    description:
-                      '"draft" = in-progress document only, no submission yet. "submitted" = submitted, awaiting grading. "graded" = submitted and graded.',
-                  },
-                  grade: {
-                    type: 'object',
-                    description: 'Required when status is "graded"; omit otherwise.',
-                    properties: {
-                      numericPercentage: { type: 'number' },
-                      letterGrade: { type: 'string' },
-                      overallScore: { type: 'number', description: '1-5.' },
-                      overallComment: { type: 'string' },
-                      rubricScores: rubricScoresJsonSchema,
-                      released: {
-                        type: 'boolean',
-                        description: 'Whether the grade is released to the student yet.',
-                      },
-                    },
-                    required: [
-                      'numericPercentage',
-                      'letterGrade',
-                      'overallScore',
-                      'overallComment',
-                      'rubricScores',
-                      'released',
-                    ],
-                    additionalProperties: false,
-                  },
-                },
-                required: ['localId', 'assignmentLocalId', 'essayText', 'status'],
-                additionalProperties: false,
-              },
             },
           },
-          required: ['localId', 'name', 'classLocalId', 'writingProfile', 'submissions'],
+          required: ['name', 'writingProfile'],
           additionalProperties: false,
         },
       },
+      required: ['localId', 'kind', 'parentLocalId', 'data'],
+      additionalProperties: false,
     },
-    required: ['classes', 'assignments', 'students'],
+    {
+      type: 'object',
+      properties: {
+        localId: { type: 'string' },
+        kind: { const: 'document' },
+        parentLocalId: {
+          type: 'string',
+          description: 'The localId of the assignment this document answers.',
+        },
+        data: {
+          type: 'object',
+          properties: {
+            title: { type: 'string' },
+            studentLocalId: {
+              type: 'string',
+              description: 'The localId of the student who owns this document.',
+            },
+          },
+          required: ['title', 'studentLocalId'],
+          additionalProperties: false,
+        },
+      },
+      required: ['localId', 'kind', 'parentLocalId', 'data'],
+      additionalProperties: false,
+    },
+    {
+      type: 'object',
+      properties: {
+        localId: { type: 'string' },
+        kind: { const: 'submission' },
+        parentLocalId: {
+          type: 'string',
+          description: 'The localId of the document being submitted.',
+        },
+        data: {
+          type: 'object',
+          properties: {
+            status: {
+              type: 'string',
+              enum: ['draft', 'submitted', 'graded'],
+            },
+          },
+          required: ['status'],
+          additionalProperties: false,
+        },
+      },
+      required: ['localId', 'kind', 'parentLocalId', 'data'],
+      additionalProperties: false,
+    },
+  ],
+} as const;
+
+export const SEED_GRAPH_TOOL = {
+  name: 'propose_seed_graph',
+  description:
+    'Propose only the structural entity graph for demo data. Include relationships and submission state, but never essay prose or grading results.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      nodes: {
+        type: 'array',
+        minItems: 1,
+        maxItems: 150,
+        items: structuralNodeJsonSchema,
+      },
+    },
+    required: ['nodes'],
+    additionalProperties: false,
+  },
+} as const;
+
+export const SEED_CONTENT_FILL_TOOL = {
+  name: 'fill_seed_submission',
+  description:
+    'Author content for exactly one proposed submission. Return its full essay and, only when its status is graded, a grounded grade.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      status: { type: 'string', enum: ['draft', 'submitted', 'graded'] },
+      essayText: {
+        type: 'string',
+        description: 'The complete essay text for this one document.',
+      },
+      grade: {
+        type: 'object',
+        properties: {
+          numericPercentage: { type: 'number' },
+          letterGrade: { type: 'string' },
+          overallScore: { type: 'number' },
+          overallComment: { type: 'string' },
+          rubricScores: {
+            type: 'object',
+            properties: Object.fromEntries(
+              RUBRIC_CATEGORY_KEYS.map((key) => [
+                key,
+                { type: 'number', description: '1 (weak) to 5 (excellent).' },
+              ])
+            ),
+            additionalProperties: false,
+          },
+          released: { type: 'boolean' },
+        },
+        required: [
+          'numericPercentage',
+          'letterGrade',
+          'overallScore',
+          'overallComment',
+          'rubricScores',
+          'released',
+        ],
+        additionalProperties: false,
+      },
+    },
+    required: ['status', 'essayText'],
     additionalProperties: false,
   },
 } as const;

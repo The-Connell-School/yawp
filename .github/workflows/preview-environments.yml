@@ -213,6 +213,7 @@ jobs:
             **PR preview**
 
             - **URL:** ${{ steps.deploy.outputs.url }}
+            - **Access code:** `${{ steps.deploy.outputs.access_code }}`
             - **Runtime:** Docker Compose on the preview environment host
             - **Data:** seeded local-dev data in an isolated PR database
             - **Deploy elapsed:** `${{ steps.deploy.outputs.elapsed_ms }}ms`

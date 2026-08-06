@@ -11,9 +11,12 @@ mock.module('~/utils/auth.server', () => ({
   getPasswordHash: mock(async () => 'hashed'),
 }));
 
-const { resolveApprovedSeedItems } = await import('./seed-generator-write.server');
+const { resolveApprovedSeedItems } =
+  await import('./seed-generator-write.server');
 
-function baseProposal(overrides: Partial<SeedCommitProposal> = {}): SeedCommitProposal {
+function baseProposal(
+  overrides: Partial<SeedCommitProposal> = {}
+): SeedCommitProposal {
   return {
     classes: [
       {
@@ -47,6 +50,7 @@ function baseProposal(overrides: Partial<SeedCommitProposal> = {}): SeedCommitPr
             assignmentLocalId: 'assignment-1',
             essayText: 'Some struggling essay text.',
             status: 'submitted',
+            approved: true,
           },
         ],
         approved: true,
@@ -62,6 +66,7 @@ function baseProposal(overrides: Partial<SeedCommitProposal> = {}): SeedCommitPr
             assignmentLocalId: 'assignment-1',
             essayText: 'Some on-track essay text.',
             status: 'draft',
+            approved: true,
           },
         ],
         approved: false, // rejected
@@ -73,6 +78,8 @@ function baseProposal(overrides: Partial<SeedCommitProposal> = {}): SeedCommitPr
 
 const ctx = {
   existingClassIds: new Set<string>(),
+  existingAssignmentIds: new Set<string>(),
+  existingStudentMembershipIds: new Set<string>(),
   assignmentTypeIdByTitle: new Map([['The Thesis-Driven Essay', 'type-1']]),
 };
 
@@ -80,15 +87,21 @@ describe('resolveApprovedSeedItems', () => {
   test('only approved classes/assignments/students are included', () => {
     const result = resolveApprovedSeedItems(baseProposal(), ctx);
     expect(result.approvedClasses.map((c) => c.localId)).toEqual(['class-1']);
-    expect(result.approvedAssignments.map((a) => a.localId)).toEqual(['assignment-1']);
-    expect(result.approvedStudents.map(({ student }) => student.localId)).toEqual(['student-1']);
+    expect(result.approvedAssignments.map((a) => a.localId)).toEqual([
+      'assignment-1',
+    ]);
+    expect(
+      result.approvedStudents.map(({ student }) => student.localId)
+    ).toEqual(['student-1']);
   });
 
   test('a rejected student never appears in approvedStudents, even with a valid class/assignment', () => {
     const result = resolveApprovedSeedItems(baseProposal(), ctx);
-    expect(result.approvedStudents.some(({ student }) => student.localId === 'student-2')).toBe(
-      false
-    );
+    expect(
+      result.approvedStudents.some(
+        ({ student }) => student.localId === 'student-2'
+      )
+    ).toBe(false);
   });
 
   test('rejecting the class also drops a student who referenced it', () => {
@@ -114,6 +127,8 @@ describe('resolveApprovedSeedItems', () => {
     const proposal = baseProposal();
     const ctxWithNoTypes = {
       existingClassIds: new Set<string>(),
+      existingAssignmentIds: new Set<string>(),
+      existingStudentMembershipIds: new Set<string>(),
       assignmentTypeIdByTitle: new Map<string, string>(), // nothing enabled
     };
     const result = resolveApprovedSeedItems(proposal, ctxWithNoTypes);
@@ -147,6 +162,7 @@ describe('resolveApprovedSeedItems', () => {
               assignmentLocalId: 'assignment-1',
               essayText: 'essay text',
               status: 'submitted',
+              approved: true,
             },
           ],
           approved: true,
@@ -155,6 +171,8 @@ describe('resolveApprovedSeedItems', () => {
     };
     const result = resolveApprovedSeedItems(proposal, {
       existingClassIds: new Set(['existing-class-9']),
+      existingAssignmentIds: new Set<string>(),
+      existingStudentMembershipIds: new Set<string>(),
       assignmentTypeIdByTitle: new Map([['The Thesis-Driven Essay', 'type-1']]),
     });
     expect(result.approvedStudents).toHaveLength(1);
@@ -162,6 +180,53 @@ describe('resolveApprovedSeedItems', () => {
       kind: 'existing',
       id: 'existing-class-9',
     });
+  });
+
+  test('a rejected submission is excluded independently from its approved student', () => {
+    const proposal = baseProposal();
+    proposal.students[0]!.submissions[0]!.approved = false;
+    const result = resolveApprovedSeedItems(proposal, ctx);
+
+    expect(result.approvedStudents).toHaveLength(0);
+    expect(result.skippedStudents[0]?.reason).toMatch(/approved submissions/);
+  });
+
+  test('a committed student can add a submission against a committed assignment', () => {
+    const proposal: SeedCommitProposal = {
+      classes: [],
+      assignments: [],
+      students: [
+        {
+          localId: 'student-1',
+          existingMembershipId: 'membership-real-1',
+          name: 'Maya R.',
+          classLocalId: 'class-real-1',
+          writingProfile: 'struggling',
+          approved: true,
+          submissions: [
+            {
+              localId: 'submission-2',
+              documentLocalId: 'document-2',
+              assignmentLocalId: 'assignment-real-1',
+              essayText: 'A follow-up essay.',
+              status: 'submitted',
+              approved: true,
+            },
+          ],
+        },
+      ],
+    };
+    const result = resolveApprovedSeedItems(proposal, {
+      existingClassIds: new Set(['class-real-1']),
+      existingAssignmentIds: new Set(['assignment-real-1']),
+      existingStudentMembershipIds: new Set(['membership-real-1']),
+      assignmentTypeIdByTitle: new Map(),
+    });
+
+    expect(result.approvedStudents).toHaveLength(1);
+    expect(result.approvedStudents[0]?.student.existingMembershipId).toBe(
+      'membership-real-1'
+    );
   });
 
   test('an unresolved class reference (a typo in the id) is skipped, not silently dropped without record', () => {
@@ -178,6 +243,7 @@ describe('resolveApprovedSeedItems', () => {
               assignmentLocalId: 'assignment-1',
               essayText: 'essay text',
               status: 'submitted',
+              approved: true,
             },
           ],
           approved: true,
@@ -187,6 +253,8 @@ describe('resolveApprovedSeedItems', () => {
     const result = resolveApprovedSeedItems(proposal, ctx);
     expect(result.approvedStudents).toHaveLength(0);
     expect(result.skippedStudents).toHaveLength(1);
-    expect(result.skippedStudents[0]?.reason).toMatch(/unresolved or unapproved class/);
+    expect(result.skippedStudents[0]?.reason).toMatch(
+      /unresolved or unapproved class/
+    );
   });
 });
