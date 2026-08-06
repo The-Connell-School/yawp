@@ -169,12 +169,23 @@ const structuralNodeFields = {
   localId: z.string().min(1).max(100),
 };
 
+// Anthropic tool-use structured generation is unreliable at emitting a
+// literal JSON `null` for a nullable-typed field -- in live testing every
+// class node failed validation here, which broke every proposal (almost
+// every graph includes a class). LLMs are far more consistent at emitting an
+// empty string for "no parent" than at emitting `null` for a field typed
+// `['string', 'null']`, so the JSON schema below asks for `""` and this
+// parses/normalizes it (and, defensively, an actual `null` too) to `null`.
+const classParentLocalIdSchema = z
+  .union([z.null(), z.literal('')])
+  .transform(() => null as null);
+
 export const seedStructuralNodeSchema = z.discriminatedUnion('kind', [
   z
     .object({
       ...structuralNodeFields,
       kind: z.literal('class'),
-      parentLocalId: z.null(),
+      parentLocalId: classParentLocalIdSchema,
       data: seedClassSchema.omit({ localId: true }),
     })
     .strict(),
@@ -291,9 +302,9 @@ const structuralNodeJsonSchema = {
       enum: ['class', 'assignment', 'student', 'document', 'submission'],
     },
     parentLocalId: {
-      type: ['string', 'null'],
+      type: 'string',
       description:
-        'null only for kind="class". Otherwise: the class localId (or an existing class id) for assignment/student; the assignment localId for document; the document localId for submission.',
+        'Empty string "" for kind="class" (a class has no parent -- do not write the word null, use an empty string). Otherwise: the class localId (or an existing class id) for assignment/student; the assignment localId for document; the document localId for submission.',
     },
     data: {
       type: 'object',

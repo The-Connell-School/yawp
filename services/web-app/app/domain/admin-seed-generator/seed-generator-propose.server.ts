@@ -128,7 +128,7 @@ Worked examples (follow these exactly):
 - "Maya's essay has a released B" -> status: graded.
 
 Relationship contract:
-- class has parentLocalId: null.
+- class has parentLocalId: "" (empty string -- a class has no parent; never the literal word null).
 - assignment points to its class localId, or an existing class id.
 - student points to their class localId, or an existing class id.
 - document points to its assignment and stores studentLocalId in data.
