@@ -493,3 +493,25 @@ describe('buildLessonPlannerSystemPrompt — bringing material in', () => {
     );
   });
 });
+
+describe('buildLessonPlannerSystemPrompt — only claim what it has read', () => {
+  const prompt = buildLessonPlannerSystemPrompt({
+    teacherName: null,
+    organizationName: 'Connell School',
+  });
+
+  test('forbids describing the inside of a Lounge file', () => {
+    // list_lounge_materials returns a name, a type and an address — never the
+    // contents — so "slides 4–9 cover how to introduce a quote" is invented.
+    const lower = prompt.toLowerCase();
+    expect(lower).toContain('you have not read a lounge file');
+    expect(lower).toContain('never say what is inside one');
+    expect(lower).toContain('never cite a page or slide number');
+  });
+
+  test('keeps the rule off the sources it really can read', () => {
+    expect(prompt).toContain(
+      'Quick Writing Lessons and Daily Pages prompts ARE different'
+    );
+  });
+});

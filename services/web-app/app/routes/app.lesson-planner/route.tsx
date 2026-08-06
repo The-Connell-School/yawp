@@ -43,8 +43,10 @@ import {
   asksWorthShowing,
   readLessonAsks,
 } from '~/domain/lesson-planner/lesson-ask';
-import { readDailyPagesExercises } from '~/domain/lesson-planner/daily-pages-block';
-import { readLessonResources } from '~/domain/lesson-planner/lesson-resource';
+import {
+  partsSummary,
+  splitReplyParts,
+} from '~/domain/lesson-planner/reply-parts';
 import { linkMaterialTitles } from '~/domain/lesson-planner/lesson-material';
 import { LessonResourceCard } from '~/components/ai-chat/lesson-resource-card';
 import { DailyPagesCard } from '~/components/ai-chat/daily-pages-card';
@@ -733,22 +735,19 @@ function MessageBubble({
   const deckOutcome = readSlideDeck(withDeck);
   const withMaterials =
     deckOutcome.kind === 'none' ? withDeck : deckOutcome.body;
-  // Every handout, sample, and exit ticket becomes its own card with its own
-  // way into the packet, rather than something to select and copy out.
-  const { materials, body: withAsks } = readLessonMaterials(withMaterials);
   // A period length and a set of activities are a slider and a checklist, not a
   // sentence the teacher has to type between classes.
-  const { asks: requestedAsks, body: withWarmUps } = readLessonAsks(withAsks);
-  // A warm-up the planner wrote is one button away from being a real Daily
-  // Pages assignment, rather than something to retype.
-  const { exercises, body: withResources } =
-    readDailyPagesExercises(withWarmUps);
-  // Yawp material the lesson leans on, brought in as something to open rather
-  // than as directions to go and find it.
-  const { resources, body: withLinks } = readLessonResources(withResources);
-  // A plan that names a handout should be the way to it: the teacher is
-  // already looking at the screen it is on.
-  const body = linkMaterialTitles(withLinks, materials);
+  const { asks: requestedAsks, body: withParts } =
+    readLessonAsks(withMaterials);
+  // Everything the reply hands over, kept in the order it was written: a
+  // warm-up prompt belongs at the warm-up, not in a pile below the plan.
+  const parts = splitReplyParts(withParts);
+  const { materials } = partsSummary(parts);
+  // What the prose says, for the reply-level judgements below.
+  const body = parts
+    .filter((part) => part.kind === 'markdown')
+    .map((part) => (part.kind === 'markdown' ? part.text : ''))
+    .join('\n\n');
   // Only offer print/PDF on substantial replies (a lesson), not one-liners.
   const isArtifact = /(^|\n)#{1,3}\s/.test(body) || /\n\|.*\|/.test(body);
   // The opening turn always offers the data-driven route, and a delivered plan
@@ -767,7 +766,7 @@ function MessageBubble({
     deliveredPlan,
     produced: {
       deck: deckOutcome.kind !== 'none',
-      handout: materials.some((material) => material.audience === 'student'),
+      handout: partsSummary(parts).hasHandout,
     },
     inPacket: lessonHas,
     asksForMinutes: asks.some((ask) => ask.kind === 'minutes'),
@@ -780,9 +779,54 @@ function MessageBubble({
       </div>
       <div className="min-w-0 flex-1">
         <div className="rounded-2xl rounded-tl-sm border border-border/60 bg-card px-4 py-3 text-foreground shadow-sm">
-          {body ? <MarkdownContent content={body} /> : null}
+          {/* The reply in its own order: a step, then the thing that step
+              hands over, then the next step. Everything used to be lifted out
+              and stacked below the plan, so the button to assign a warm-up sat
+              inches away from the warm-up. */}
+          {parts.map((part, index) => {
+            const key = `${message.id ?? 'pending'}:${index}`;
+            if (part.kind === 'markdown') {
+              return (
+                <div key={key} className={index > 0 ? 'mt-3' : undefined}>
+                  <MarkdownContent
+                    content={linkMaterialTitles(part.text, materials)}
+                  />
+                </div>
+              );
+            }
+            if (part.kind === 'daily-pages') {
+              return (
+                <DailyPagesCard
+                  key={key}
+                  exercise={part.exercise}
+                  assignmentTypeId={dailyPagesTypeId}
+                />
+              );
+            }
+            if (part.kind === 'resource') {
+              return <LessonResourceCard key={key} resource={part.resource} />;
+            }
+            return (
+              <div key={key} className="mt-3">
+                <MaterialCard
+                  material={part.material}
+                  added={
+                    !!message.id &&
+                    addedMaterials.has(`${message.id}:${part.material.key}`)
+                  }
+                  onToggle={
+                    message.id
+                      ? (added) =>
+                          onMaterial(message.id!, part.material.key, added)
+                      : null
+                  }
+                  disabled={disabled}
+                />
+              </div>
+            );
+          })}
           {deckOutcome.kind === 'deck' ? (
-            <div className={cn(body && 'mt-3')}>
+            <div className="mt-3">
               <SlideDeckCard
                 deck={deckOutcome.deck}
                 added={
@@ -802,53 +846,6 @@ function MessageBubble({
                 }
               />
             </div>
-          ) : null}
-          {resources.map((resource, index) => (
-            <LessonResourceCard
-              key={`${message.id ?? 'pending'}:resource:${index}`}
-              resource={resource}
-            />
-          ))}
-          {exercises.map((exercise, index) => (
-            <DailyPagesCard
-              key={`${message.id ?? 'pending'}:daily-pages:${index}`}
-              exercise={exercise}
-              assignmentTypeId={dailyPagesTypeId}
-            />
-          ))}
-          {materials.length ? (
-            <details
-              open
-              data-testid="materials-group"
-              className={cn('group', body && 'mt-3')}
-            >
-              <summary className="mb-2 flex cursor-pointer select-none list-none items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground hover:text-foreground">
-                <ChevronDown
-                  size={13}
-                  className="transition-transform group-open:rotate-0 [details:not([open])_&]:-rotate-90"
-                />
-                Materials in this lesson ({materials.length})
-              </summary>
-              <div className="flex flex-col gap-2">
-                {materials.map((material) => (
-                  <MaterialCard
-                    key={material.key}
-                    material={material}
-                    added={
-                      !!message.id &&
-                      addedMaterials.has(`${message.id}:${material.key}`)
-                    }
-                    onToggle={
-                      message.id
-                        ? (added) =>
-                            onMaterial(message.id!, material.key, added)
-                        : null
-                    }
-                    disabled={disabled}
-                  />
-                ))}
-              </div>
-            </details>
           ) : null}
           {deckOutcome.kind === 'unreadable' ? (
             <p
