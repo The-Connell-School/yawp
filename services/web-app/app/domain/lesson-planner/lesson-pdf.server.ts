@@ -397,15 +397,18 @@ export async function renderHandoutPdf({
   // The line students fill in themselves. Section belongs here as much as
   // name: a teacher running five periods collects five piles of the same
   // worksheet, and a page with only a name on it cannot be sorted back into
-  // the class it came from.
+  // the class it came from. Given its own breathing room above and below —
+  // set right against the title rule and the first heading, it read as one
+  // cramped paragraph rather than a line meant to be written on.
+  doc.moveDown(0.6);
   doc
     .font(FONTS.body)
-    .fontSize(9.5)
+    .fontSize(10.5)
     .fillColor(MUTED)
     .text(
-      'Name: ____________________________   Section: __________   Date: __________'
+      'Name: _______________________     Section: ____________     Date: ____________'
     );
-  doc.moveDown(0.5);
+  doc.moveDown(1.1);
 
   handout.parts.forEach((part, index) => {
     if (index > 0) doc.addPage();
