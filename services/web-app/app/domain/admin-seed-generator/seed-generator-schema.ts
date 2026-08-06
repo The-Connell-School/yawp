@@ -273,127 +273,52 @@ export type SeedContentFill = z.infer<typeof seedContentFillSchema>;
 export type SeedNodeKind = z.infer<typeof seedNodeKindSchema>;
 export type SeedNodeReviewStatus = z.infer<typeof seedNodeReviewStatusSchema>;
 
+// NOTE: this is deliberately a FLAT schema, not a `oneOf`-discriminated union
+// keyed on `kind`. Every other tool in this codebase (REPORTER_TOOLS,
+// SEED_CONTENT_FILL_TOOL just below) uses a flat `type: 'object'` schema for
+// Anthropic tool-use, and a `oneOf` array-item schema was found to make the
+// model unreliably fail to produce a validatable call (see the seed-generator
+// rebuild PR discussion). `data` lists every field any node kind can use;
+// which ones apply for a given `kind` is explained in prose, and the
+// authoritative shape check still happens server-side against the
+// `seedStructuralNodeSchema` discriminated-union zod schema below.
 const structuralNodeJsonSchema = {
-  oneOf: [
-    {
-      type: 'object',
-      properties: {
-        localId: { type: 'string' },
-        kind: { const: 'class' },
-        parentLocalId: { type: 'null' },
-        data: {
-          type: 'object',
-          properties: {
-            title: { type: 'string' },
-            grade: { type: 'string' },
-            period: { type: 'string' },
-            schoolYear: { type: 'string' },
-          },
-          required: ['title', 'grade', 'period', 'schoolYear'],
-          additionalProperties: false,
-        },
-      },
-      required: ['localId', 'kind', 'parentLocalId', 'data'],
-      additionalProperties: false,
+  type: 'object',
+  properties: {
+    localId: { type: 'string' },
+    kind: {
+      type: 'string',
+      enum: ['class', 'assignment', 'student', 'document', 'submission'],
     },
-    {
+    parentLocalId: {
+      type: ['string', 'null'],
+      description:
+        'null only for kind="class". Otherwise: the class localId (or an existing class id) for assignment/student; the assignment localId for document; the document localId for submission.',
+    },
+    data: {
       type: 'object',
+      description:
+        'Only include the fields relevant to this node\'s kind, and omit every other field. class: title, grade, period, schoolYear. assignment: title, prompt, assignmentTypeTitle. student: name, writingProfile. document: title, studentLocalId. submission: status.',
       properties: {
-        localId: { type: 'string' },
-        kind: { const: 'assignment' },
-        parentLocalId: {
+        title: { type: 'string' },
+        grade: { type: 'string' },
+        period: { type: 'string' },
+        schoolYear: { type: 'string' },
+        prompt: { type: 'string' },
+        assignmentTypeTitle: { type: 'string' },
+        name: { type: 'string' },
+        writingProfile: {
           type: 'string',
-          description: 'The localId of its class, or an existing class id.',
+          enum: ['struggling', 'on_track', 'advanced'],
         },
-        data: {
-          type: 'object',
-          properties: {
-            title: { type: 'string' },
-            prompt: { type: 'string' },
-            assignmentTypeTitle: { type: 'string' },
-          },
-          required: ['title', 'prompt', 'assignmentTypeTitle'],
-          additionalProperties: false,
-        },
+        studentLocalId: { type: 'string' },
+        status: { type: 'string', enum: ['draft', 'submitted', 'graded'] },
       },
-      required: ['localId', 'kind', 'parentLocalId', 'data'],
       additionalProperties: false,
     },
-    {
-      type: 'object',
-      properties: {
-        localId: { type: 'string' },
-        kind: { const: 'student' },
-        parentLocalId: {
-          type: 'string',
-          description: 'The localId of their class, or an existing class id.',
-        },
-        data: {
-          type: 'object',
-          properties: {
-            name: { type: 'string' },
-            writingProfile: {
-              type: 'string',
-              enum: ['struggling', 'on_track', 'advanced'],
-            },
-          },
-          required: ['name', 'writingProfile'],
-          additionalProperties: false,
-        },
-      },
-      required: ['localId', 'kind', 'parentLocalId', 'data'],
-      additionalProperties: false,
-    },
-    {
-      type: 'object',
-      properties: {
-        localId: { type: 'string' },
-        kind: { const: 'document' },
-        parentLocalId: {
-          type: 'string',
-          description: 'The localId of the assignment this document answers.',
-        },
-        data: {
-          type: 'object',
-          properties: {
-            title: { type: 'string' },
-            studentLocalId: {
-              type: 'string',
-              description: 'The localId of the student who owns this document.',
-            },
-          },
-          required: ['title', 'studentLocalId'],
-          additionalProperties: false,
-        },
-      },
-      required: ['localId', 'kind', 'parentLocalId', 'data'],
-      additionalProperties: false,
-    },
-    {
-      type: 'object',
-      properties: {
-        localId: { type: 'string' },
-        kind: { const: 'submission' },
-        parentLocalId: {
-          type: 'string',
-          description: 'The localId of the document being submitted.',
-        },
-        data: {
-          type: 'object',
-          properties: {
-            status: {
-              type: 'string',
-              enum: ['draft', 'submitted', 'graded'],
-            },
-          },
-          required: ['status'],
-          additionalProperties: false,
-        },
-      },
-      required: ['localId', 'kind', 'parentLocalId', 'data'],
-      additionalProperties: false,
-    },
-  ],
+  },
+  required: ['localId', 'kind', 'parentLocalId', 'data'],
+  additionalProperties: false,
 } as const;
 
 export const SEED_GRAPH_TOOL = {
