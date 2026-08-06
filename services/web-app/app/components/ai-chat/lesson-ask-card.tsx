@@ -7,7 +7,13 @@
  * this control exists.
  */
 import { useState } from 'react';
-import { Clock, CornerDownRight, Send, Shapes } from 'lucide-react';
+import {
+  ChevronRight,
+  Clock,
+  CornerDownRight,
+  Send,
+  Shapes,
+} from 'lucide-react';
 import {
   composeAskReply,
   LESSON_ACTIVITIES,
@@ -55,6 +61,29 @@ export function LessonAskCard({
   );
   const [activityIds, setActivityIds] = useState<string[]>([]);
 
+  /**
+   * One question at a time.
+   *
+   * Options, a slider and sixteen checkboxes arriving together is a form, and
+   * a teacher between classes reads a form as work. Each step appears once the
+   * one above it has been answered, so the card is only ever asking for one
+   * thing — and the button says "Next" until the last of them, so nobody is
+   * stuck behind a step they had no opinion about.
+   */
+  const steps = [
+    suggestions.length > 0 ? 'note' : null,
+    minutes !== null ? 'minutes' : null,
+    wantsActivities ? 'activities' : null,
+  ].filter(Boolean) as Array<'note' | 'minutes' | 'activities'>;
+
+  const [reached, setReached] = useState(0);
+  const showing = (step: 'note' | 'minutes' | 'activities') => {
+    const index = steps.indexOf(step);
+    return index !== -1 && index <= reached;
+  };
+  const onLastStep = reached >= steps.length - 1;
+  const advance = () => setReached((at) => Math.min(at + 1, steps.length - 1));
+
   function toggleActivity(id: string) {
     setActivityIds((prev) => {
       if (prev.includes(id)) return prev.filter((other) => other !== id);
@@ -79,7 +108,7 @@ export function LessonAskCard({
       data-testid="lesson-ask-card"
       className="mt-3 overflow-hidden rounded-xl border border-primary/25 bg-primary/[0.03]"
     >
-      {suggestions.length > 0 ? (
+      {showing('note') ? (
         <div className="border-b border-primary/15 px-4 py-3.5">
           {/* The reply's own question sits right above this card, so the label
               says what to do with the options rather than restating it. */}
@@ -101,7 +130,11 @@ export function LessonAskCard({
                   disabled={disabled}
                   // Tapping the chosen one again clears it, so a teacher who
                   // picked the wrong option is not stuck with it.
-                  onClick={() => setNote(chosen ? null : suggestion)}
+                  onClick={() => {
+                    setNote(chosen ? null : suggestion);
+                    // Picking one is a decision; the next question can come.
+                    if (!chosen) advance();
+                  }}
                   className={cn(
                     'rounded-full border px-3 py-1.5 text-left text-sm transition disabled:opacity-50',
                     chosen
@@ -117,7 +150,7 @@ export function LessonAskCard({
         </div>
       ) : null}
 
-      {minutes !== null ? (
+      {showing('minutes') && minutes !== null ? (
         <div className="border-b border-primary/15 px-4 py-3.5">
           <div className="mb-3 flex items-center gap-2">
             <Clock size={15} className="shrink-0 text-primary" />
@@ -147,7 +180,7 @@ export function LessonAskCard({
         </div>
       ) : null}
 
-      {wantsActivities ? (
+      {showing('activities') ? (
         <div className="px-4 py-3.5">
           <div className="mb-2.5 flex items-center gap-2">
             <Shapes size={15} className="shrink-0 text-primary" />
@@ -234,16 +267,29 @@ export function LessonAskCard({
         <p className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
           {message || 'Pick an option, set the length, choose some activities.'}
         </p>
-        <button
-          type="button"
-          data-testid="lesson-ask-send"
-          disabled={disabled || !message}
-          onClick={() => onSend(message)}
-          className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:opacity-40"
-        >
-          <Send size={13} />
-          Send
-        </button>
+        {onLastStep ? (
+          <button
+            type="button"
+            data-testid="lesson-ask-send"
+            disabled={disabled || !message}
+            onClick={() => onSend(message)}
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:opacity-40"
+          >
+            <Send size={13} />
+            Send
+          </button>
+        ) : (
+          <button
+            type="button"
+            data-testid="lesson-ask-next"
+            disabled={disabled}
+            onClick={advance}
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:opacity-40"
+          >
+            Next
+            <ChevronRight size={13} />
+          </button>
+        )}
       </div>
     </div>
   );

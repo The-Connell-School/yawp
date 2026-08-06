@@ -226,6 +226,14 @@ describe('asksWorthShowing — the clock waits for the subject', () => {
     expect(asksWorthShowing(both, { topicSettled: true })).toEqual(both);
   });
 
+  test('does not ask how long after it has already timed every step', () => {
+    // The slider turned up under a finished plan, below "5. The writing
+    // (remaining time)". The length was decided several paragraphs earlier.
+    expect(
+      asksWorthShowing(both, { topicSettled: true, planAlreadyWritten: true })
+    ).toEqual([{ kind: 'activities' }]);
+  });
+
   test('leaves a turn that only wanted activities alone', () => {
     const activities: LessonAsk[] = [{ kind: 'activities' }];
     expect(asksWorthShowing(activities, { topicSettled: false })).toEqual(

@@ -754,11 +754,12 @@ function MessageBubble({
   // always offers the two artifacts that come next — in the app's own words,
   // rather than whatever the model happened to think of this run.
   const deliveredPlan = looksLikeLessonPlan(body);
-  // While the app is still pinning "look at my classes and tell me what they
-  // need work on", the teacher has not said what they want to teach — so this
-  // is not the turn to ask how long it runs.
+  // The slider belongs in the intake batch and nowhere else: not on the
+  // opening reply, where the subject is still open, and not under a finished
+  // plan, where every step has already been timed.
   const asks = asksWorthShowing(requestedAsks, {
-    topicSettled: deliveredPlan || !isOpeningReply,
+    topicSettled: !isOpeningReply,
+    planAlreadyWritten: deliveredPlan,
   });
   const suggestions = withStandardSuggestions(modelSuggestions, {
     isOpeningReply,

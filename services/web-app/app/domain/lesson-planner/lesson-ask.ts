@@ -143,23 +143,35 @@ export function hasLessonAsks(content: string): boolean {
 }
 
 /**
- * Drop the length question from a turn that has not settled the subject yet.
+ * Drop the length question from any turn that is not the intake batch.
  *
- * The planner is told to ask what the lesson is about before it asks how long
- * the period is. It asks anyway, and the result is a teacher tapping
- * "Look at my classes and tell me what they need work on" and sending
- * "…what they need work on. 50 minutes." — a period length bolted onto a
- * request to go read the gradebook, and a commitment to fifty minutes made
- * before they had said one word about what they wanted to teach.
+ * There is exactly one moment the slider belongs in: after the teacher has
+ * said what they want to teach, and before the plan is written. Either side of
+ * that window it is nonsense.
  *
- * The activities question survives: "what kinds of activities do you want?"
- * still makes sense while the topic is open. Only the clock has to wait.
+ * Too early — on the opening reply — and tapping "Look at my classes and tell
+ * me what they need work on" sends "…what they need work on. 50 minutes.": a
+ * period length bolted onto a request to go read the gradebook, and a
+ * commitment to fifty minutes made before a word about the subject.
+ *
+ * Too late — under a finished plan — and it is asking how long a period is
+ * after timing every step of it. The planner has already decided; the question
+ * is theatre.
+ *
+ * The activities question has no such window. "What kinds of activities do you
+ * want?" is a fair question while the topic is open and a fair one after a
+ * plan, so only the clock is held.
  */
 export function asksWorthShowing(
   asks: LessonAsk[],
-  { topicSettled }: { topicSettled: boolean }
+  {
+    /** The teacher has said what they want; the opening reply has passed. */
+    topicSettled,
+    /** This reply handed over a lesson, so its length is already decided. */
+    planAlreadyWritten = false,
+  }: { topicSettled: boolean; planAlreadyWritten?: boolean }
 ): LessonAsk[] {
-  if (topicSettled) return asks;
+  if (topicSettled && !planAlreadyWritten) return asks;
   return asks.filter((ask) => ask.kind !== 'minutes');
 }
 

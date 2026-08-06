@@ -515,3 +515,27 @@ describe('buildLessonPlannerSystemPrompt — only claim what it has read', () =>
     );
   });
 });
+
+describe('buildLessonPlannerSystemPrompt — when to ask the length', () => {
+  const prompt = buildLessonPlannerSystemPrompt({
+    teacherName: null,
+    organizationName: 'Connell School',
+  });
+
+  test('names the one turn the slider belongs on', () => {
+    expect(prompt.toLowerCase()).toContain(
+      'exactly one turn for `minutes`: the intake batch'
+    );
+  });
+
+  test('forbids it on the opening turn and under a finished plan', () => {
+    const lower = prompt.toLowerCase();
+    expect(lower).toContain('never ask for `minutes` on your opening turn');
+    expect(lower).toContain(
+      'never ask for `minutes` in a reply that contains a lesson plan'
+    );
+    // The app strips it either way; the model should know rather than be
+    // surprised that its control vanished.
+    expect(lower).toContain('yawp removes the control');
+  });
+});

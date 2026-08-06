@@ -30,13 +30,6 @@ export function DailyPagesCard({
       <div className="flex items-center gap-2 border-b border-primary/15 px-4 py-2.5">
         <PenLine size={15} className="shrink-0 text-primary" />
         <span className="text-sm font-medium">Daily Pages warm-up</span>
-        {/* A real library prompt says which one it is, so the teacher can go
-            and check it rather than taking the reference on faith. */}
-        {exercise.promptId ? (
-          <span className="ml-auto rounded-md bg-primary/10 px-2 py-0.5 font-mono text-[11px] font-medium text-primary">
-            {exercise.promptId}
-          </span>
-        ) : null}
       </div>
 
       <blockquote className="whitespace-pre-wrap border-l-2 border-primary/40 px-4 py-3.5 text-sm leading-relaxed text-foreground/90">
