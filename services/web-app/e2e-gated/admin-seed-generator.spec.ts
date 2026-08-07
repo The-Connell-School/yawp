@@ -110,7 +110,11 @@ test('admin reviews, lazy-fills, approves, and commits a complete graph', async 
     },
   ];
 
-  await page.route('**/app/api/domain/seed-generator', async (route) => {
+  // The page reaches this resource route through `fetcher.submit`, and React
+  // Router's single fetch appends a `.data` suffix to the request it actually
+  // puts on the wire. Other specs mock plain `fetch()` calls and can match the
+  // bare path; this one cannot, so the pattern has to stay open at the end.
+  await page.route('**/app/api/domain/seed-generator*', async (route) => {
     const form = new URLSearchParams(route.request().postData() ?? '');
     const intent = form.get('intent');
     const localId = form.get('localId');
