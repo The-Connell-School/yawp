@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react';
 import {
   Link,
   data as dataResponse,
+  redirect,
   useLoaderData,
   type LoaderFunctionArgs,
 } from 'react-router';
@@ -25,7 +26,11 @@ import {
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
-  await requireMembership(request, userId);
+  const membership = await requireMembership(request, userId);
+
+  if (!membership.organization.writingPracticeEnabled) {
+    throw redirect('/app');
+  }
 
   const lesson = getQuickWritingLessonBySlug(params.lessonSlug);
   if (!lesson) {
