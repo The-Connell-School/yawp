@@ -198,6 +198,7 @@ describe('AssignmentCreationSheetContent', () => {
       expectText('Beginner');
       expectText('Intermediate');
       expectText('Advanced');
+      expectText('Enable tutor');
       expectNoText('Tutor Context');
 
       const form = document.querySelector('form');
@@ -216,8 +217,26 @@ describe('AssignmentCreationSheetContent', () => {
       expect(inputByName('gradingAssistantStrictnessLevel').value).toBe(
         'intermediate'
       );
+
+      // Tutor defaults to enabled, preserving today's behavior.
+      expect(inputByName('tutorEnabled').value).toBe('false');
+      const tutorEnabled = controlById('assignment-create-tutor-enabled');
+      expect(isChecked(tutorEnabled)).toBe(true);
     }
   );
+
+  it('submits tutorEnabled=false when the tutor toggle is turned off', () => {
+    root = renderSheet().root;
+
+    act(() => {
+      controlById('assignment-create-tutor-enabled').click();
+    });
+
+    expect(isChecked(controlById('assignment-create-tutor-enabled'))).toBe(
+      false
+    );
+    expect(inputByName('tutorEnabled').value).toBe('false');
+  });
 
   it('shows grading assistant strictness help text', () => {
     root = renderSheet().root;

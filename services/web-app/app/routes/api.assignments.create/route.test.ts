@@ -214,6 +214,68 @@ describe('api.assignments.create', () => {
     expect(createAssignmentDeployedToClasses).not.toHaveBeenCalled();
   });
 
+  test('defaults the tutor to enabled when not specified (preserves current behavior)', async () => {
+    const response = await action({
+      request: requestFor({
+        intent: 'create-assignment',
+        assignmentTypeId: 'at-1',
+        classIds: ['class-1', 'class-2'],
+        prompt: 'Write the essay.',
+        title: 'Essay',
+      }),
+      params: {},
+    } as any);
+
+    const body = await readBody(response);
+    expect(body.success).toBe(true);
+    expect(createAssignmentDeployedToClasses).toHaveBeenCalledWith({
+      data: expect.objectContaining({ tutorEnabled: true }),
+      classIds: ['class-1', 'class-2'],
+    });
+  });
+
+  test('disables the tutor when the toggle is turned off', async () => {
+    const response = await action({
+      request: requestFor({
+        intent: 'create-assignment',
+        assignmentTypeId: 'at-1',
+        classIds: ['class-1', 'class-2'],
+        prompt: 'Write the essay.',
+        title: 'Essay',
+        tutorEnabled: 'false',
+      }),
+      params: {},
+    } as any);
+
+    const body = await readBody(response);
+    expect(body.success).toBe(true);
+    expect(createAssignmentDeployedToClasses).toHaveBeenCalledWith({
+      data: expect.objectContaining({ tutorEnabled: false }),
+      classIds: ['class-1', 'class-2'],
+    });
+  });
+
+  test('rejects an invalid tutor toggle value', async () => {
+    const response = await action({
+      request: requestFor({
+        intent: 'create-assignment',
+        assignmentTypeId: 'at-1',
+        classIds: ['class-1'],
+        prompt: 'Write the essay.',
+        tutorEnabled: 'maybe',
+      }),
+      params: {},
+    } as any);
+
+    const body = await readBody(response);
+    expect(responseStatus(response)).toBe(400);
+    expect(body).toMatchObject({
+      success: false,
+      message: 'Tutor enabled value is invalid.',
+    });
+    expect(createAssignmentDeployedToClasses).not.toHaveBeenCalled();
+  });
+
   test('creates ungraded assignments without a point value', async () => {
     prisma.class.findMany.mockResolvedValueOnce([
       { id: 'class-1', school: { id: 'school-1', organizationId: 'org-1' } },
@@ -391,6 +453,49 @@ describe('api.assignments.create', () => {
         }),
         gradingAssistantStrictnessLevel: 'intermediate',
       }),
+      classIds: ['class-1', 'class-2'],
+    });
+  });
+
+  test('carries the tutor toggle through the AP History creation path', async () => {
+    const libraryEntry = {
+      externalKey: 'apush-dbq-new-deal-federal-power',
+      course: 'apush',
+      essayType: 'dbq',
+      title: 'New Deal and Federal Power DBQ',
+      prompt:
+        'Evaluate the extent to which the New Deal changed the role of the federal government.',
+      period: '1932-1980',
+      periodNumber: 7,
+      reasoningSkill: 'causation',
+      defaultTimeMode: 'untimed',
+      defaultDurationMinutes: 60,
+      sources: [],
+    };
+    mockAssignmentTypeAvailable({
+      id: 'ap-type-1',
+      systemKey: 'ap_history_essay',
+    });
+    prisma.apHistoryPromptLibraryEntry.findFirst.mockResolvedValue(
+      libraryEntry
+    );
+
+    const response = await action({
+      request: requestFor({
+        intent: 'create-assignment',
+        assignmentTypeId: 'ap-type-1',
+        classIds: ['class-1', 'class-2'],
+        title: 'Unit 7 DBQ',
+        apHistoryLibraryEntryId: 'apush-dbq-new-deal-federal-power',
+        tutorEnabled: 'false',
+      }),
+      params: {},
+    } as any);
+
+    const body = await readBody(response);
+    expect(body.success).toBe(true);
+    expect(createAssignmentDeployedToClasses).toHaveBeenCalledWith({
+      data: expect.objectContaining({ tutorEnabled: false }),
       classIds: ['class-1', 'class-2'],
     });
   });
