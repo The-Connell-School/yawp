@@ -49,7 +49,11 @@ export function createRedactionSession(
       registeredNames.push(realName);
       snapshot = buildRedactionMapping(registeredNames, pool);
     }
-    return snapshot.realToPseudonym.get(key)!.pseudonym;
+    // No entry means redaction is switched off for this process
+    // (AI_PII_REDACTION_ENABLED=false makes buildRedactionMapping return an
+    // empty mapping). The kill switch has to degrade to a pass-through, not
+    // to a crash, so fall back to the real name.
+    return snapshot.realToPseudonym.get(key)?.pseudonym ?? realName;
   }
 
   function registerStudentFullName(

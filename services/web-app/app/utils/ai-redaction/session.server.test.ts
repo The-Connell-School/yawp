@@ -1,9 +1,43 @@
-import { describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { createRedactionSession } from './session.server';
 import { redact, rehydrate } from './redact.server';
 import { ORG_PSEUDONYM_NAME_POOL } from './org-pseudonym-pool.server';
 
 describe('createRedactionSession', () => {
+  describe('with the AI_PII_REDACTION_ENABLED kill switch off', () => {
+    const ORIGINAL = process.env.AI_PII_REDACTION_ENABLED;
+    beforeEach(() => {
+      process.env.AI_PII_REDACTION_ENABLED = 'false';
+    });
+    afterEach(() => {
+      if (ORIGINAL === undefined) delete process.env.AI_PII_REDACTION_ENABLED;
+      else process.env.AI_PII_REDACTION_ENABLED = ORIGINAL;
+    });
+
+    test('pseudonymFor returns the real name instead of throwing', () => {
+      const session = createRedactionSession();
+
+      expect(session.pseudonymFor('Amelia Brooks')).toBe('Amelia Brooks');
+    });
+
+    test('registerStudentFullName returns the real name instead of throwing', () => {
+      const session = createRedactionSession();
+
+      expect(session.registerStudentFullName('Amelia Brooks')).toBe(
+        'Amelia Brooks'
+      );
+    });
+
+    test('redact against the session mapping is a pass-through', () => {
+      const session = createRedactionSession();
+      session.registerStudentFullName('Amelia Brooks');
+
+      expect(redact('Amelia Brooks wrote this.', session.mapping)).toBe(
+        'Amelia Brooks wrote this.'
+      );
+    });
+  });
+
   test('registers a new real name on first lookup and reuses it after', () => {
     const session = createRedactionSession();
 
