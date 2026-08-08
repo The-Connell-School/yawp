@@ -31,6 +31,7 @@ import {
 } from '~/domain/documents.server';
 import { listApHistoryLibraryEntries } from '~/domain/ap-history/library.server';
 import { listSavedThesisPrompts } from '~/domain/thesis-prompts/saved-prompts.server';
+import { listSavedDailyPagesPrompts } from '~/domain/daily-pages-prompts/saved-prompts.server';
 import { AP_HISTORY_ASSIGNMENT_TYPE_KEY } from '~/domain/ap-history/schema';
 import {
   getAvailableAssignmentTypesForScopes,
@@ -42,17 +43,22 @@ import { prisma } from '~/utils/db.server';
 import { redirectWithToast } from '~/utils/toast.server';
 import { ApHistoryLibrary } from './ap-history-library';
 import { CreateAssignmentSheet } from './create-assignment-sheet';
+import { DailyPagesPromptGenerator } from './prompts-library/daily-pages-prompt-generator';
 import { PromptsLibrary } from './prompts-library/prompts-library';
 import { TeacherDirections } from './prompts-library/teacher-directions';
 import {
   type CognitiveMove,
+  COLLECTION_ORDER,
   FACET_KEYS,
   type FacetValues,
   type GradeBand,
+  type LibraryEntry,
   type LibraryPrompt,
   type OptionCounts,
   type PromptSeriousness,
   type PromptType,
+  savedPromptToLibraryEntry,
+  toLibraryEntries,
 } from './prompts-library/data';
 import promptsRaw from './prompts-library/prompts.json';
 import { ThesisPromptsLibrary } from './thesis-prompts-library/thesis-prompts-library';
@@ -63,7 +69,7 @@ import {
   buildFacets as buildThesisFacets,
   buildOptionCounts as buildThesisOptionCounts,
   readFilters as readThesisFilters,
-  savedPromptToLibraryEntry,
+  savedPromptToLibraryEntry as savedThesisPromptToLibraryEntry,
   toLibraryEntries as toThesisLibraryEntries,
   type ThesisPrompt,
 } from './thesis-prompts-library/data';
@@ -71,7 +77,7 @@ import thesisPromptsRaw from './thesis-prompts-library/prompts.json';
 
 const DAILY_PAGES_TITLE = 'daily pages';
 const THESIS_ESSAY_TITLE = 'the thesis-driven essay';
-const ALL_PROMPTS = promptsRaw as LibraryPrompt[];
+const ALL_PROMPTS = toLibraryEntries(promptsRaw as LibraryPrompt[]);
 const ALL_THESIS_PROMPTS = toThesisLibraryEntries(
   thesisPromptsRaw as ThesisPrompt[]
 );
@@ -123,7 +129,7 @@ function buildAssignmentTypeScopes({
   }));
 }
 
-function buildFacets(prompts: LibraryPrompt[]): FacetValues {
+function buildFacets(prompts: LibraryEntry[]): FacetValues {
   const themes = new Set<string>();
   const textsOrUnits = new Set<string>();
   const cognitiveMoves = new Set<CognitiveMove>();
@@ -135,12 +141,15 @@ function buildFacets(prompts: LibraryPrompt[]): FacetValues {
     prompt.themes.forEach((theme) => themes.add(theme));
     prompt.textsOrUnits.forEach((textOrUnit) => textsOrUnits.add(textOrUnit));
     prompt.cognitiveMoves.forEach((move) => cognitiveMoves.add(move));
-    types.add(prompt.type);
-    seriousness.add(prompt.seriousness);
+    if (prompt.type) types.add(prompt.type);
+    if (prompt.seriousness) seriousness.add(prompt.seriousness);
     prompt.gradeBands.forEach((gradeBand) => gradeBands.add(gradeBand));
   }
 
   return {
+    // Both collections are always offered, even when the teacher has saved
+    // nothing yet — "My prompts" has to be visible to be discovered.
+    collections: [...COLLECTION_ORDER],
     themes: [...themes].sort(),
     textsOrUnits: [...textsOrUnits].sort(),
     cognitiveMoves: [...cognitiveMoves].sort(),
@@ -150,8 +159,12 @@ function buildFacets(prompts: LibraryPrompt[]): FacetValues {
   };
 }
 
-function buildOptionCounts(prompts: LibraryPrompt[]): OptionCounts {
+function buildOptionCounts(prompts: LibraryEntry[]): OptionCounts {
   const counts: OptionCounts = {
+    // Seeded so an empty collection still reports a count of 0.
+    collections: Object.fromEntries(
+      COLLECTION_ORDER.map((collection) => [collection, 0])
+    ),
     themes: {},
     textsOrUnits: {},
     cognitiveMoves: {},
@@ -164,13 +177,14 @@ function buildOptionCounts(prompts: LibraryPrompt[]): OptionCounts {
   };
 
   for (const prompt of prompts) {
+    bump(counts.collections, prompt.collection);
     prompt.themes.forEach((theme) => bump(counts.themes, theme));
     prompt.textsOrUnits.forEach((textOrUnit) =>
       bump(counts.textsOrUnits, textOrUnit)
     );
     prompt.cognitiveMoves.forEach((move) => bump(counts.cognitiveMoves, move));
-    bump(counts.types, prompt.type);
-    bump(counts.seriousness, prompt.seriousness);
+    if (prompt.type) bump(counts.types, prompt.type);
+    if (prompt.seriousness) bump(counts.seriousness, prompt.seriousness);
     prompt.gradeBands.forEach((gradeBand) =>
       bump(counts.gradeBands, gradeBand)
     );
@@ -179,11 +193,9 @@ function buildOptionCounts(prompts: LibraryPrompt[]): OptionCounts {
   return counts;
 }
 
-const ALL_FACETS = buildFacets(ALL_PROMPTS);
-const ALL_OPTION_COUNTS = buildOptionCounts(ALL_PROMPTS);
-
 type LibraryFilters = {
   q: string;
+  collections: Set<string>;
   themes: Set<string>;
   textsOrUnits: Set<string>;
   cognitiveMoves: Set<string>;
@@ -198,6 +210,7 @@ function readFilters(url: URL): LibraryFilters {
 
   return {
     q: (url.searchParams.get(FACET_KEYS.search) ?? '').trim().toLowerCase(),
+    collections: readSet(FACET_KEYS.collections),
     themes: readSet(FACET_KEYS.themes),
     textsOrUnits: readSet(FACET_KEYS.textsOrUnits),
     cognitiveMoves: readSet(FACET_KEYS.cognitiveMoves),
@@ -208,10 +221,16 @@ function readFilters(url: URL): LibraryFilters {
 }
 
 function applyFilters(
-  prompts: LibraryPrompt[],
+  prompts: LibraryEntry[],
   filters: LibraryFilters
-): LibraryPrompt[] {
+): LibraryEntry[] {
   return prompts.filter((prompt) => {
+    if (
+      filters.collections.size &&
+      !filters.collections.has(prompt.collection)
+    ) {
+      return false;
+    }
     if (
       filters.themes.size &&
       !prompt.themes.some((theme) => filters.themes.has(theme))
@@ -232,10 +251,17 @@ function applyFilters(
     ) {
       return false;
     }
-    if (filters.types.size && !filters.types.has(prompt.type)) return false;
+    // A saved prompt only carries the tags the generator gave it, so an untagged
+    // facet filters it out rather than matching a missing value.
+    if (
+      filters.types.size &&
+      (!prompt.type || !filters.types.has(prompt.type))
+    ) {
+      return false;
+    }
     if (
       filters.seriousness.size &&
-      !filters.seriousness.has(prompt.seriousness)
+      (!prompt.seriousness || !filters.seriousness.has(prompt.seriousness))
     ) {
       return false;
     }
@@ -378,13 +404,29 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const isThesisEssay = normalizedTitle === THESIS_ESSAY_TITLE;
   const isApHistory =
     assignmentType.systemKey === AP_HISTORY_ASSIGNMENT_TYPE_KEY;
+  // "My prompts": prompts this teacher generated and kept, shown in the same
+  // library alongside the fixed corpus and filterable on their own.
+  const savedPrompts =
+    profile.role === "TEACHER" && isDailyPages
+      ? await listSavedDailyPagesPrompts({
+          membershipId: profile.id,
+          assignmentTypeId: assignmentType.id,
+        })
+      : [];
+  const libraryEntries =
+    profile.role === "TEACHER" && isDailyPages
+      ? [...savedPrompts.map(savedPromptToLibraryEntry), ...ALL_PROMPTS]
+      : [];
   const promptLibrary =
     profile.role === "TEACHER" && isDailyPages
       ? {
-          prompts: applyFilters(ALL_PROMPTS, readFilters(new URL(request.url))),
-          facets: ALL_FACETS,
-          optionCounts: ALL_OPTION_COUNTS,
-          totalCount: ALL_PROMPTS.length,
+          prompts: applyFilters(
+            libraryEntries,
+            readFilters(new URL(request.url))
+          ),
+          facets: buildFacets(libraryEntries),
+          optionCounts: buildOptionCounts(libraryEntries),
+          totalCount: libraryEntries.length,
         }
       : null;
   // "My prompts": prompts this teacher generated and kept, shown in the same
@@ -399,7 +441,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const thesisLibraryEntries =
     profile.role === "TEACHER" && isThesisEssay
       ? [
-          ...savedThesisPrompts.map(savedPromptToLibraryEntry),
+          ...savedThesisPrompts.map(savedThesisPromptToLibraryEntry),
           ...ALL_THESIS_PROMPTS,
         ]
       : [];
@@ -586,7 +628,7 @@ export default function AppAssignmentTypesIdRoute() {
                       >
                         Assignment
                       </DropdownMenuItem>
-                      {showThesisLibrary ? (
+                      {showThesisLibrary || showPromptsLibrary ? (
                         <DropdownMenuItem
                           disabled={data.teacherClasses.length === 0}
                           onSelect={() => setIsPromptGeneratorOpen(true)}
@@ -616,6 +658,18 @@ export default function AppAssignmentTypesIdRoute() {
                   onUsePrompt={(promptBody) => {
                     setApHistoryEntry(null);
                     setLibraryPrompt(promptBody);
+                    setIsPromptGeneratorOpen(false);
+                    setIsAssignmentSheetOpen(true);
+                  }}
+                />
+              ) : showPromptsLibrary ? (
+                <DailyPagesPromptGenerator
+                  open={isPromptGeneratorOpen}
+                  onOpenChange={setIsPromptGeneratorOpen}
+                  assignmentTypeId={data.assignmentType.id}
+                  onUsePrompt={(prompt) => {
+                    setApHistoryEntry(null);
+                    setLibraryPrompt(prompt);
                     setIsPromptGeneratorOpen(false);
                     setIsAssignmentSheetOpen(true);
                   }}
