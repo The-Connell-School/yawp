@@ -24,6 +24,10 @@ async function snapshot(specifier: string) {
 }
 
 globalThis.__realModules = {
+  // Needed by the owner-facing authorization tests: several route test files stub
+  // requireOwner/requireMembership wholesale, which would otherwise mean no test in the
+  // suite ever runs the real cross-organization ownership check.
+  '~/utils/auth.server': await snapshot('~/utils/auth.server'),
   '~/utils/assignment-type-access.server': await snapshot(
     '~/utils/assignment-type-access.server'
   ),

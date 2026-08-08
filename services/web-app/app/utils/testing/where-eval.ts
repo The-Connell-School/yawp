@@ -67,6 +67,55 @@ export function matchesDocumentWhere(
   return true;
 }
 
+export type ScopedMembership = {
+  id: string;
+  organizationId: string;
+  isOrgOwner: boolean;
+};
+
+export type ScopedUser = {
+  id: string;
+  memberships: ScopedMembership[];
+};
+
+/**
+ * Evaluates the `where` clause `requireOwner` hands to `prisma.user.findFirst`
+ * against a fixture user.
+ *
+ * Same reasoning as `matchesDocumentWhere`: asserting on the shape of the clause would
+ * pass against the pre-fix `{ memberships: { some: { isOrgOwner: true } } }` just as
+ * happily as against a clause that pins the owner membership to the active one. Running
+ * the clause against a user who owns one organization and merely belongs to another is
+ * what makes the cross-organization escalation observable.
+ */
+export function matchesOwnerWhere(where: unknown, user: ScopedUser): boolean {
+  if (!where || typeof where !== 'object') return true;
+
+  for (const [key, value] of Object.entries(where as Record<string, unknown>)) {
+    switch (key) {
+      case 'id':
+        if (value !== user.id) return false;
+        break;
+      case 'memberships': {
+        const some = (value as any)?.some;
+        if (!some || typeof some !== 'object') return false;
+        const matched = user.memberships.some((membership) =>
+          Object.entries(some as Record<string, unknown>).every(
+            ([field, expected]) =>
+              (membership as Record<string, unknown>)[field] === expected
+          )
+        );
+        if (!matched) return false;
+        break;
+      }
+      default:
+        break;
+    }
+  }
+
+  return true;
+}
+
 export type ScopedSession = {
   id: string;
   document: ScopedDocument;
