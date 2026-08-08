@@ -1,17 +1,30 @@
 import { createHash } from 'node:crypto';
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
+import {
+  matchesSessionWhere,
+  type ScopedSession,
+} from '~/utils/testing/where-eval';
 
 const getLLMCompletion = mock();
 const requireMutableRequest = mock();
 const requireAdmin = mock();
+const requireUserId = mock();
+const requireMembership = mock();
 const prisma = {
+  user: { findUnique: mock() },
   assignmentModuleSession: {
+    findFirst: mock(),
     findUnique: mock(),
     update: mock(),
   },
 };
 
-mock.module('~/utils/auth.server', () => ({ requireMutableRequest, requireAdmin }));
+mock.module('~/utils/auth.server', () => ({
+  requireMutableRequest,
+  requireAdmin,
+  requireUserId,
+  requireMembership,
+}));
 mock.module('~/utils/db.server', () => ({ prisma }));
 mock.module('~/utils/getLLMCompletion', () => ({
   AgentType: {
@@ -32,6 +45,13 @@ describe('api.domain.tutor-response read-only impersonation', () => {
     requireMutableRequest.mockReset();
     requireAdmin.mockReset();
     requireMutableRequest.mockResolvedValue(undefined);
+    requireUserId.mockReset();
+    requireMembership.mockReset();
+    requireUserId.mockResolvedValue('user-1');
+    requireMembership.mockResolvedValue({ id: 'profile-1', role: 'STUDENT' });
+    prisma.user.findUnique.mockReset();
+    prisma.user.findUnique.mockResolvedValue({ isAdmin: false });
+    prisma.assignmentModuleSession.findFirst.mockReset();
     prisma.assignmentModuleSession.findUnique.mockReset();
     prisma.assignmentModuleSession.update.mockReset();
   });
@@ -39,7 +59,7 @@ describe('api.domain.tutor-response read-only impersonation', () => {
   function mockCms(
     documentOverrides: Record<string, unknown> = {}
   ) {
-    prisma.assignmentModuleSession.findUnique.mockResolvedValueOnce({
+    prisma.assignmentModuleSession.findFirst.mockResolvedValueOnce({
       id: 'cms-1',
       instructionsCompleted: 0,
       assignmentModule: {
@@ -321,5 +341,154 @@ describe('api.domain.tutor-response read-only impersonation', () => {
 
     expect(payload.init?.status ?? 200).not.toBe(403);
     expect(getLLMCompletion).toHaveBeenCalled();
+  });
+});
+
+describe('api.domain.tutor-response authorization', () => {
+  // Student B owns doc-b and the tutor session cms-b. Teacher T teaches B's class.
+  // Student A is unrelated.
+  const SESSION_B: ScopedSession = {
+    id: 'cms-b',
+    document: {
+      id: 'doc-b',
+      membershipId: 'profile-b',
+      teacherProfileIds: ['profile-teacher'],
+    },
+  };
+
+  beforeEach(() => {
+    getLLMCompletion.mockReset();
+    requireMutableRequest.mockReset();
+    requireAdmin.mockReset();
+    requireUserId.mockReset();
+    requireMembership.mockReset();
+    prisma.user.findUnique.mockReset();
+    prisma.assignmentModuleSession.findFirst.mockReset();
+    prisma.assignmentModuleSession.findUnique.mockReset();
+    prisma.assignmentModuleSession.update.mockReset();
+
+    requireMutableRequest.mockResolvedValue(undefined);
+    requireUserId.mockResolvedValue('user-b');
+    requireMembership.mockResolvedValue({ id: 'profile-b', role: 'STUDENT' });
+    prisma.user.findUnique.mockResolvedValue({ isAdmin: false });
+    getLLMCompletion.mockResolvedValue('Try tightening your thesis.');
+
+    // Stands in for the database: the session comes back only when the query's own
+    // where clause actually selects it. Both finders share it, so an unscoped
+    // `findUnique({ where: { id } })` really does hand back student B's row -- which is
+    // exactly the behaviour these tests have to be able to observe.
+    const findSession = async ({ where }: any) =>
+      matchesSessionWhere(where, SESSION_B)
+          ? {
+              id: SESSION_B.id,
+              instructionsCompleted: 0,
+              assignmentModuleId: 'module-1',
+              assignmentModule: {
+                tutorInstructions: 'Coach the student.',
+                rubricAlignmentJson: {},
+                assignmentType: {
+                  id: 'assignment-type-1',
+                  gradingAssistantVersion: 7,
+                  rubricJson: { categories: [] },
+                },
+                instructions: [{ id: 'instruction-1', tutorInstructions: '' }],
+              },
+              messages: [
+                {
+                  id: 'msg-b-1',
+                  agent: 'assistant',
+                  content: "Student B's private tutor conversation",
+                },
+              ],
+              document: {
+                id: SESSION_B.document.id,
+                text: "Student B's essay",
+                assignment: { tutorEnabled: true },
+              },
+            }
+          : null;
+
+    prisma.assignmentModuleSession.findFirst.mockImplementation(findSession);
+    prisma.assignmentModuleSession.findUnique.mockImplementation(findSession);
+    prisma.assignmentModuleSession.update.mockResolvedValue({ id: 'cms-b' });
+  });
+
+  function tutorRequest(cmsId: string) {
+    const body = new FormData();
+    body.set('response', 'hi');
+    body.set('cmsId', cmsId);
+    body.set('content', 'x');
+    return new Request('https://example.com/api/domain/tutor-response', {
+      method: 'POST',
+      body,
+    });
+  }
+
+  test('refuses a caller with no session at all', async () => {
+    // requireUserId redirects to login when there is no session cookie. The route's
+    // catch-all must not swallow that into a 200 or a 500.
+    const loginRedirect = new Response(null, {
+      status: 302,
+      headers: { location: '/auth/login' },
+    });
+    requireUserId.mockImplementation(() => {
+      throw loginRedirect;
+    });
+
+    let thrown: unknown;
+    let returned: unknown;
+    try {
+      returned = await action({ request: tutorRequest('cms-b') } as any);
+    } catch (error) {
+      thrown = error;
+    }
+
+    expect(thrown).toBe(loginRedirect);
+    expect(returned).toBeUndefined();
+    expect(getLLMCompletion).not.toHaveBeenCalled();
+    expect(prisma.assignmentModuleSession.update).not.toHaveBeenCalled();
+  });
+
+  test("refuses another student's tutor session", async () => {
+    requireUserId.mockResolvedValue('user-a');
+    requireMembership.mockResolvedValue({ id: 'profile-a', role: 'STUDENT' });
+
+    const response = (await action({
+      request: tutorRequest('cms-b'),
+    } as any)) as { data: any; init?: { status?: number } };
+
+    expect(response.init?.status).toBe(404);
+    expect(JSON.stringify(response.data)).not.toContain(
+      "Student B's private tutor conversation"
+    );
+    expect(getLLMCompletion).not.toHaveBeenCalled();
+    expect(prisma.assignmentModuleSession.update).not.toHaveBeenCalled();
+  });
+
+  test('lets the student who owns the session drive the tutor', async () => {
+    const response = (await action({
+      request: tutorRequest('cms-b'),
+    } as any)) as { data: any; init?: { status?: number } };
+
+    expect(response.init?.status ?? 200).toBe(200);
+    expect(getLLMCompletion).toHaveBeenCalledTimes(1);
+    expect(prisma.assignmentModuleSession.update).toHaveBeenCalledTimes(1);
+  });
+
+  test("refuses a teacher writing into a student's tutor transcript", async () => {
+    // Teachers read student work elsewhere; they do not get to author dialogue the
+    // student never wrote into the student's own session record.
+    requireUserId.mockResolvedValue('user-teacher');
+    requireMembership.mockResolvedValue({
+      id: 'profile-teacher',
+      role: 'TEACHER',
+    });
+
+    const response = (await action({
+      request: tutorRequest('cms-b'),
+    } as any)) as { data: any; init?: { status?: number } };
+
+    expect(response.init?.status).toBe(404);
+    expect(prisma.assignmentModuleSession.update).not.toHaveBeenCalled();
   });
 });
