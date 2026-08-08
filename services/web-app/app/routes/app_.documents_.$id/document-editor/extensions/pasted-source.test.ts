@@ -5,7 +5,14 @@ try {
   // Multiple Bun test files can share the same process.
 }
 
-import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  setSystemTime,
+} from 'bun:test';
 import { Editor } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
 import { PastedSource, insertedRangeFromTransaction } from './pasted-source';
@@ -17,6 +24,31 @@ function makeEditor(content: string) {
     extensions: [StarterKit, PastedSource],
     content,
   });
+}
+
+/**
+ * A clock that hands out a distinct instant per call, so a test never
+ * depends on two calls landing in different milliseconds of wall time.
+ */
+function countingClock(start = Date.parse('2026-01-01T00:00:00.000Z')) {
+  let tick = 0;
+  return () => new Date(start + tick++).toISOString();
+}
+
+/** The pasted runs in the document, one entry per distinct paste mark. */
+function markedRuns(target: Editor): { at: string | null; text: string }[] {
+  const markType = target.state.schema.marks.pastedSource;
+  const runs: { at: string | null; text: string }[] = [];
+
+  target.state.doc.descendants((node) => {
+    if (!node.isText) return true;
+    const mark = node.marks.find((candidate) => candidate.type === markType);
+    if (!mark) return true;
+    runs.push({ at: mark.attrs.at ?? null, text: node.text ?? '' });
+    return true;
+  });
+
+  return runs;
 }
 
 /**
@@ -100,18 +132,69 @@ describe('PastedSource range tracking', () => {
     expect(editor!.getHTML()).not.toContain('data-pasted-source');
   });
 
+});
+
+/**
+ * Two pastes in quick succession are the ordinary case, not an edge case, and
+ * the wall clock is not allowed to decide whether they stay distinct: the
+ * clock is frozen for these tests, so a build that stamped both marks with the
+ * same instant would merge them into one run and fail every time.
+ */
+describe('PastedSource across consecutive pastes', () => {
+  beforeEach(() => {
+    setSystemTime(new Date('2026-01-01T00:00:00.000Z'));
+    editor = new Editor({
+      extensions: [StarterKit, PastedSource.configure({ now: countingClock() })],
+      content: '<p>Student wrote this. </p>',
+    });
+    editor.commands.focus('end');
+  });
+
+  afterEach(() => {
+    setSystemTime();
+  });
+
   it('marks only the newest paste when a second paste follows a marked one', () => {
     paste(editor!, 'first passage');
     editor!.commands.markLastPasteAsExternal();
     paste(editor!, ' second passage');
     editor!.commands.markLastPasteAsExternal();
 
-    const marked = editor!
-      .getHTML()
-      .match(/data-pasted-source="external"[^>]*>([^<]*)</g)
-      ?.map((m) => m.slice(m.indexOf('>') + 1, -1));
+    expect(markedRuns(editor!).map((run) => run.text)).toEqual([
+      'first passage',
+      ' second passage',
+    ]);
+  });
 
-    expect(marked).toEqual(['first passage', ' second passage']);
+  it('gives each paste its own timestamp, so the two runs stay separable', () => {
+    paste(editor!, 'first passage');
+    editor!.commands.markLastPasteAsExternal();
+    paste(editor!, ' second passage');
+    editor!.commands.markLastPasteAsExternal();
+
+    const stamps = markedRuns(editor!).map((run) => run.at);
+    expect(stamps).toHaveLength(2);
+    expect(stamps[0]).not.toBe(stamps[1]);
+  });
+
+  it('keeps the runs apart on the default clock, with both pastes inside one millisecond', () => {
+    // No injected clock: this is the extension exactly as the editor ships it,
+    // with the wall clock frozen so both pastes read the same millisecond.
+    const shipped = makeEditor('<p>Student wrote this. </p>');
+    try {
+      shipped.commands.focus('end');
+      paste(shipped, 'first passage');
+      shipped.commands.markLastPasteAsExternal();
+      paste(shipped, ' second passage');
+      shipped.commands.markLastPasteAsExternal();
+
+      expect(markedRuns(shipped).map((run) => run.text)).toEqual([
+        'first passage',
+        ' second passage',
+      ]);
+    } finally {
+      shipped.destroy();
+    }
   });
 });
 

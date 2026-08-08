@@ -29,6 +29,18 @@ type PastedSourceState = {
   lastPaste: { from: number; to: number } | null;
 };
 
+export type PastedSourceOptions = {
+  /**
+   * Instant stamped on each mark, as an ISO string. Injectable because the
+   * timestamp is the only thing distinguishing one paste's mark from the
+   * next: two marks stamped with the same instant are attribute-identical,
+   * and ProseMirror merges adjacent identical marks into a single run — so
+   * two pastes a millisecond apart would read as one. Tests pass a clock
+   * that always advances; production reads the wall clock.
+   */
+  now: () => string;
+};
+
 declare module '@tiptap/core' {
   interface Commands<ReturnType> {
     pastedSource: {
@@ -97,10 +109,29 @@ export function insertedRangeFromTransaction(
  * markLastPasteAsExternal() once it has decided, in the same synchronous
  * paste event.
  */
-export const PastedSource = Mark.create({
+/**
+ * The wall clock, never handing out the same instant twice. Two pastes inside
+ * one millisecond are ordinary — a student pasting twice in a row, or a test
+ * driving both in the same tick — and identical timestamps would silently
+ * merge the two marked runs into one.
+ */
+function monotonicClock(): () => string {
+  let last = 0;
+  return () => {
+    const next = Math.max(Date.now(), last + 1);
+    last = next;
+    return new Date(next).toISOString();
+  };
+}
+
+export const PastedSource = Mark.create<PastedSourceOptions>({
   name: 'pastedSource',
 
   inclusive: false,
+
+  addOptions() {
+    return { now: monotonicClock() };
+  },
 
   // Coexists with bold/italic/comment rather than replacing them.
   excludes: '',
@@ -135,6 +166,8 @@ export const PastedSource = Mark.create({
   },
 
   addCommands() {
+    const { now } = this.options;
+
     return {
       markLastPasteAsExternal:
         () =>
@@ -146,9 +179,7 @@ export const PastedSource = Mark.create({
             tr.addMark(
               range.from,
               range.to,
-              state.schema.marks.pastedSource.create({
-                at: new Date().toISOString(),
-              })
+              state.schema.marks.pastedSource.create({ at: now() })
             );
             dispatch(tr);
           }
