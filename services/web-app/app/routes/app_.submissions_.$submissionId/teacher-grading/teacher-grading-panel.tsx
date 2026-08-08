@@ -31,9 +31,11 @@ import {
   legacyRubricDisplayConfig,
   normalizeRubricDisplayConfig,
   normalizeRubricScoresForCategories,
+  toPersistedRubricScores,
   type RubricDisplayConfig,
   type RubricScore,
 } from '~/domain/grading/rubric-display';
+import { rubricScaleGradeFieldsFromScores } from '~/domain/grading/recorded-grade';
 import {
   getCategoryScoreLabel,
   isCategoryFeedbackEnabled,
@@ -80,6 +82,7 @@ function formatExcerpt(excerpt: string, maxChars = 90) {
 export type SavedGradeSnapshot = {
   numericPercentage: number | null;
   letterGrade: string | null;
+  overallScore: number | null;
   score: string | null;
   overallComment: string | null;
   rubricScores: unknown;
@@ -90,7 +93,7 @@ export type TeacherGradingPanelHeaderState = {
   gradeBadgeClassName: string;
   hasUnsavedChanges: boolean;
   hasDraftToReplace: boolean;
-  hasNumericPercentage: boolean;
+  hasGrade: boolean;
   isGenerating: boolean;
   isAiRetrying: boolean;
   isBusy: boolean;
@@ -198,6 +201,23 @@ export function TeacherGradingPanel({
     );
   }, [activeRubricConfig, rubricScores]);
 
+  /**
+   * The grade this rubric produces on a scale that reports raw points rather
+   * than a percentage (Daily Pages, ACT writing). Null on percentage scales,
+   * whose grade comes from the overall percentage field.
+   */
+  const rubricScaleGrade = useMemo(
+    () =>
+      rubricScaleGradeFieldsFromScores({
+        rubricScores,
+        categories: activeRubricConfig.categories,
+        minScore: activeRubricConfig.minScore,
+        maxScore: activeRubricConfig.maxScore,
+        scoringType: activeRubricConfig.scoringType,
+      }),
+    [activeRubricConfig, rubricScores]
+  );
+
   const resolvedNumericPercentage = useMemo(() => {
     if (numericPercentage === '') return null;
     const raw = Number(numericPercentage);
@@ -214,10 +234,11 @@ export function TeacherGradingPanel({
           ? null
           : letterFromPercent(resolvedNumericPercentage)
       ) ||
+      rubricScaleGrade?.score ||
       existingGrade?.score ||
       '—'
     );
-  }, [existingGrade?.score, resolvedNumericPercentage]);
+  }, [existingGrade?.score, resolvedNumericPercentage, rubricScaleGrade]);
   const gradingAssistantStrictnessLabel = useMemo(
     () => getGradingAssistantStrictnessLabel(gradingAssistantStrictnessLevel),
     [gradingAssistantStrictnessLevel]
@@ -234,9 +255,16 @@ export function TeacherGradingPanel({
         rubricScores,
         overallComment,
         numericPercentage,
-        grammarIssues.length
+        grammarIssues.length,
+        activeRubricConfig.minScore
       ),
-    [rubricScores, overallComment, numericPercentage, grammarIssues.length]
+    [
+      activeRubricConfig.minScore,
+      rubricScores,
+      overallComment,
+      numericPercentage,
+      grammarIssues.length,
+    ]
   );
 
   const currentSnapshot = useMemo(
@@ -463,16 +491,35 @@ export function TeacherGradingPanel({
         : null;
     const letter = percent === null ? null : letterFromPercent(percent);
 
+    // What the teacher's own scores are worth on this rubric's scale. On a
+    // percentage scale this is null and the overall percentage below is the
+    // grade; on a raw-points scale it *is* the grade, and nothing else will
+    // compute it -- the assistant only runs its own grading route.
+    const scaleGrade = rubricScaleGradeFieldsFromScores({
+      rubricScores: effectiveRubric,
+      categories: activeRubricConfig.categories,
+      minScore: activeRubricConfig.minScore,
+      maxScore: activeRubricConfig.maxScore,
+      scoringType: activeRubricConfig.scoringType,
+    });
+
     const payload: Record<string, unknown> = {
       feedback: effectiveComment,
       overallComment: effectiveComment,
-      rubricScores: effectiveRubric,
+      rubricScores: toPersistedRubricScores(
+        effectiveRubric,
+        activeRubricConfig.minScore
+      ),
       grammarIssues: effectiveGrammarIssues,
     };
-    if (percent !== null) payload.numericPercentage = percent;
-    if (letter) payload.letterGrade = letter;
-    if (percent !== null) payload.score = formatGrade(percent, letter) ?? '';
-    if (percent === null && existingGrade?.score) {
+    if (percent !== null) {
+      payload.numericPercentage = percent;
+      if (letter) payload.letterGrade = letter;
+      payload.score = formatGrade(percent, letter) ?? '';
+    } else if (scaleGrade) {
+      payload.overallScore = scaleGrade.overallScore;
+      payload.score = scaleGrade.score;
+    } else if (existingGrade?.score) {
       payload.score = existingGrade.score;
     }
 
@@ -536,8 +583,13 @@ export function TeacherGradingPanel({
     return {
       numericPercentage: resolvedNumericPercentage,
       letterGrade: letter,
+      overallScore:
+        resolvedNumericPercentage === null
+          ? (rubricScaleGrade?.overallScore ?? null)
+          : null,
       score:
         formatGrade(resolvedNumericPercentage, letter) ||
+        rubricScaleGrade?.score ||
         existingGrade?.score ||
         '',
       overallComment,
@@ -547,6 +599,7 @@ export function TeacherGradingPanel({
     existingGrade?.score,
     overallComment,
     resolvedNumericPercentage,
+    rubricScaleGrade,
     rubricScores,
   ]);
 
@@ -595,7 +648,9 @@ export function TeacherGradingPanel({
       gradeBadgeClassName,
       hasUnsavedChanges,
       hasDraftToReplace,
-      hasNumericPercentage: resolvedNumericPercentage !== null,
+      // A grade exists when this rubric's own scale has produced one --
+      // a percentage, or the raw points a points scale reports instead.
+      hasGrade: resolvedNumericPercentage !== null || rubricScaleGrade !== null,
       isGenerating,
       isAiRetrying,
       isBusy,
@@ -615,6 +670,7 @@ export function TeacherGradingPanel({
       isBusy,
       isGenerating,
       resolvedNumericPercentage,
+      rubricScaleGrade,
     ]
   );
 
@@ -655,7 +711,11 @@ export function TeacherGradingPanel({
             ) : null}
           </div>
           <div className="flex items-center justify-between gap-2">
-            <Badge variant="secondary" className={gradeBadgeClassName}>
+            <Badge
+              variant="secondary"
+              className={gradeBadgeClassName}
+              data-testid="grading-grade-badge"
+            >
               {gradeDisplay}
             </Badge>
             <div className="flex items-center gap-2">

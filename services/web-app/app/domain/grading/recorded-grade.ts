@@ -89,7 +89,13 @@ export function rubricScaleGradeFieldsFromScores({
   maxScore,
   scoringType,
 }: {
-  rubricScores: Record<string, { score: number } | undefined> | null | undefined;
+  rubricScores:
+    | Record<
+        string,
+        { score?: number | null; comment?: string; isAi?: boolean } | undefined
+      >
+    | null
+    | undefined;
   categories: readonly RubricDisplayCategory[];
   minScore: number;
   maxScore: number;
