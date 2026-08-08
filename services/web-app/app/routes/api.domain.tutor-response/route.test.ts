@@ -144,11 +144,21 @@ describe('api.domain.tutor-response read-only impersonation', () => {
     const completionArgs = getLLMCompletion.mock.calls[0]?.[0] as any;
     expect(completionArgs.tools).toBeUndefined();
     expect(completionArgs.handleToolCall).toBeUndefined();
-    expect(completionArgs.system).toContain('student_document_context');
-    expect(completionArgs.system).toContain('Module rubric guidance');
-    expect(completionArgs.system).toContain('Primary');
-    expect(completionArgs.system).toContain('Thesis/Content (25%)');
-    expect(completionArgs.system).not.toContain('Grammar/Syntax/Formatting');
+    // `system` is now cache_control-bearing content blocks (see
+    // getLLMCompletion's CacheableSystemBlock), not a plain string — the
+    // whole tutor prompt is module-invariant, so it's one cached block.
+    expect(completionArgs.system).toEqual([
+      expect.objectContaining({
+        type: 'text',
+        cache_control: { type: 'ephemeral' },
+      }),
+    ]);
+    const systemText = completionArgs.system[0].text as string;
+    expect(systemText).toContain('student_document_context');
+    expect(systemText).toContain('Module rubric guidance');
+    expect(systemText).toContain('Primary');
+    expect(systemText).toContain('Thesis/Content (25%)');
+    expect(systemText).not.toContain('Grammar/Syntax/Formatting');
 
     const documentContextMessage = completionArgs.messages.find(
       (message: { role: string; content: string }) =>
