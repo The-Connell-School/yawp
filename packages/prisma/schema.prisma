@@ -335,6 +335,14 @@ model AssignmentModuleSessionMessage {
   context                   String?
   assignmentModuleSessionId String
   assignmentModuleSession   AssignmentModuleSession @relation(fields: [assignmentModuleSessionId], references: [id], onDelete: Cascade)
+  /// Who spoke this turn. NULL on every historical row and on every 'assistant' turn.
+  /// An AssignmentModuleSession hangs off a Document, not off a student, so once a
+  /// document has collaborators one transcript carries several speakers; this is the
+  /// only thing that can tell them apart.
+  membershipId              String?
+  membership                OrgMembership?          @relation("AssignmentModuleSessionMessageAuthor", fields: [membershipId], references: [id], onDelete: SetNull)
+
+  @@index([membershipId])
 }
 
 model Document {
@@ -361,11 +369,44 @@ model Document {
   pasteAlerts              PasteAlert[]
   revisions                DocumentRevision[]
   submissions              Submission[]
+  collaborators            DocumentCollaborator[]
 
   @@index([assignmentId])
   @@index([classAssignmentId])
   @@index([assignmentTypeId])
   @@index([membershipId])
+}
+
+/// A second student the document OWNER has invited to co-author with them, for group
+/// projects. This is the ONLY thing in the schema that widens who may read or write a
+/// Document beyond its owner and that owner's teachers.
+///
+/// The row alone does not grant access. `collaboratorArm` in
+/// services/web-app/app/utils/document-access.server.ts ANDs it with a live check that
+/// the collaborator is still enrolled in the class the document is assigned to, so a
+/// student who transfers out or is unenrolled loses access on their next request with no
+/// cleanup job and no stale-row sweep. A document with a NULL classAssignmentId can never
+/// satisfy the arm at all, which is what makes practice documents structurally
+/// unshareable.
+///
+/// Revoking sets `revokedAt` rather than deleting, so who invited whom and when it was
+/// withdrawn survives for an academic-integrity conversation. Every predicate filters
+/// `revokedAt: null`.
+model DocumentCollaborator {
+  id                    String        @id @default(cuid())
+  createdAt             DateTime      @default(now()) @db.Timestamptz(6)
+  revokedAt             DateTime?     @db.Timestamptz(6)
+  documentId            String
+  document              Document      @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  membershipId          String
+  membership            OrgMembership @relation("DocumentCollaboratorMembership", fields: [membershipId], references: [id], onDelete: Cascade)
+  invitedByMembershipId String
+  invitedBy             OrgMembership @relation("DocumentCollaboratorInvitedBy", fields: [invitedByMembershipId], references: [id], onDelete: Cascade)
+
+  @@unique([documentId, membershipId])
+  @@index([documentId, revokedAt])
+  @@index([membershipId, revokedAt])
+  @@index([invitedByMembershipId])
 }
 
 model DocumentClassForensic {
@@ -607,6 +648,10 @@ model OrgMembership {
   grade                         String?
   period                        String?
   documents                     Document[]
+  documentsCollaboratingOn      DocumentCollaborator[]         @relation("DocumentCollaboratorMembership")
+  documentCollaboratorsInvited  DocumentCollaborator[]         @relation("DocumentCollaboratorInvitedBy")
+  assignmentModuleSessionMessages AssignmentModuleSessionMessage[] @relation("AssignmentModuleSessionMessageAuthor")
+  submissionsSubmitted          Submission[]                   @relation("SubmissionSubmittedBy")
   documentComments              DocumentComment[]
   documentCommentResponses      DocumentCommentResponse[]
   pasteAlerts                   PasteAlert[]
@@ -970,6 +1015,15 @@ model Submission {
   unsubmittedBy             OrgMembership?                  @relation("SubmissionUnsubmittedBy", fields: [unsubmittedByMembershipId], references: [id], onDelete: SetNull)
   documentId                String
   document                  Document                        @relation(fields: [documentId], references: [id], onDelete: Restrict)
+  /// Which group member pressed Submit. NULL means "the document's owner", which is
+  /// exactly how ownership was derived before collaborators existed
+  /// (`submission.document.membershipId`), so every historical row stays correct with no
+  /// backfill. Read it through `effectiveSubmitterWhere` in
+  /// services/web-app/app/utils/document-access.server.ts rather than by hand — the NULL
+  /// case is easy to forget and forgetting it silently detaches every pre-existing
+  /// submission from its student.
+  submittedByMembershipId   String?
+  submittedBy               OrgMembership?                  @relation("SubmissionSubmittedBy", fields: [submittedByMembershipId], references: [id], onDelete: SetNull)
   comments                  SubmissionComment[]
   gradingAssistantRuns      SubmissionGradingAssistantRun[]
 
@@ -978,6 +1032,7 @@ model Submission {
   @@index([documentId, unsubmittedAt])
   @@index([gradedByMembershipId])
   @@index([unsubmittedByMembershipId])
+  @@index([submittedByMembershipId])
   @@index([releasedAt])
 }
 
