@@ -1069,6 +1069,7 @@ export default function Route() {
                 serverUpdatedAt={data.doc.updatedAt}
                 initialRevision={data.doc.revision}
                 isEditable={isEditorEditable}
+                showPastedSource={isViewingAsTeacher}
                 onBridgeReady={(b) => {
                   editorBridgeRef.current = b;
                 }}
