@@ -76,10 +76,18 @@ describe('Writing Practice sidebar gating', () => {
     ).not.toContain('/app/writing-lessons');
   });
 
-  test('hidden for a teacher even when the org flag is on', () => {
+  test('visible for a teacher when the org flag is on', () => {
     expect(
       destinationsFor(
         userWith({ role: 'TEACHER', writingPracticeEnabled: true })
+      )
+    ).toContain('/app/writing-lessons');
+  });
+
+  test('hidden for a teacher when the org flag is off', () => {
+    expect(
+      destinationsFor(
+        userWith({ role: 'TEACHER', writingPracticeEnabled: false })
       )
     ).not.toContain('/app/writing-lessons');
   });

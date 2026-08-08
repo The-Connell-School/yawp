@@ -47,7 +47,8 @@ const reporterEnabled = (user: User, studentPreviewActive = false) =>
   teacher(user, studentPreviewActive) &&
   Boolean(user.selectedMembership?.organization?.reporterEnabled);
 const writingPracticeEnabled = (user: User, studentPreviewActive = false) =>
-  student(user, studentPreviewActive) &&
+  (teacher(user, studentPreviewActive) ||
+    student(user, studentPreviewActive)) &&
   Boolean(user.selectedMembership?.organization?.writingPracticeEnabled);
 
 const icons = {
