@@ -286,8 +286,8 @@ export default function SchoolRoute() {
               ) : (
                 school.classes.map((klass) => (
                   <TableRow key={klass.id}>
-                    <TableCell>{klass.grade}</TableCell>
-                    <TableCell>{klass.period}</TableCell>
+                    <TableCell>{klass.grade ?? '—'}</TableCell>
+                    <TableCell>{klass.period ?? '—'}</TableCell>
                     <TableCell className="whitespace-nowrap">
                       <span className="inline-flex items-center gap-1.5">
                         <User className="h-4 w-4 text-muted-foreground" />

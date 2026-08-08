@@ -16,6 +16,7 @@ import { FormSelect } from '~/components/rvf-forms/form-select';
 import { redirectWithToast } from '~/utils/toast.server';
 import { getStudentPreviewState } from '~/utils/student-preview.server';
 import { EnterCodeEscapeActions } from './escape-actions';
+import { formatClassGradePeriod } from '~/utils/class-display';
 
 const CodeSchema = z.object({
   code: z.string().min(1, 'Code is required'),
@@ -223,8 +224,10 @@ export default function Route() {
               { value: '', label: 'Select a class' },
               ...data.classes.map((klass) => ({
                 value: klass.id,
-                label: `${klass.school.name} • ${klass.schoolYear} • Grade ${klass.grade}${
-                  klass.period ? ` • Period ${klass.period}` : ''
+                label: `${klass.school.name} • ${klass.schoolYear}${
+                  formatClassGradePeriod(klass)
+                    ? ` • ${formatClassGradePeriod(klass)}`
+                    : ''
                 } • ${
                   klass.teachers
                     .map((t) => t.user.name)

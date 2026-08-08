@@ -48,6 +48,7 @@ import { Label } from '~/components/ui/label';
 import { Textarea } from '~/components/ui/textarea';
 import { parseFormData, validationError } from '@rvf/react-router';
 import { z } from 'zod';
+import { formatClassGradePeriod } from '~/utils/class-display';
 
 const COLUMNS: CookieColumns = {
   name: {
@@ -460,8 +461,10 @@ export default function OrganizationStudentsRoute() {
     () =>
       classes.map((klass) => ({
         value: klass.id,
-        label: `${klass.school.name} - ${klass.grade}${
-          klass.period ? ` - Period ${klass.period}` : ''
+        label: `${klass.school.name}${
+          formatClassGradePeriod(klass)
+            ? ` - ${formatClassGradePeriod(klass)}`
+            : ''
         } (${klass.schoolYear})`,
       })),
     [classes]
@@ -871,9 +874,11 @@ function StudentSheet({
                         htmlFor={`class-${cls.id}`}
                         className="text-sm font-normal cursor-pointer flex-1"
                       >
-                        {cls.school.name} - {cls.grade}
-                        {cls.period ? ` - Period ${cls.period}` : ''} (
-                        {cls.schoolYear})
+                        {cls.school.name}
+                        {formatClassGradePeriod(cls)
+                          ? ` - ${formatClassGradePeriod(cls)}`
+                          : ''}{' '}
+                        ({cls.schoolYear})
                       </Label>
                     </div>
                   ))
