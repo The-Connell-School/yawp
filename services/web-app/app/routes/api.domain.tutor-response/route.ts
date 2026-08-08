@@ -4,7 +4,15 @@ import { z } from 'zod';
 import { prisma } from '~/utils/db.server';
 import { AgentType, getLLMCompletion } from '~/utils/getLLMCompletion';
 import { isLlmFallbackRetrySignal } from '~/utils/getLLMCompletion/llm-provider-errors.server';
-import { requireMutableRequest } from '~/utils/auth.server';
+import {
+  requireMembership,
+  requireMutableRequest,
+  requireUserId,
+} from '~/utils/auth.server';
+import {
+  documentOwnerSessionWhere,
+  getIsPlatformAdmin,
+} from '~/utils/document-access.server';
 import {
   buildModuleRubricGuidance,
   buildTutorSystemPromptBlocks,
@@ -49,14 +57,28 @@ function buildDocumentContextMessage({
 }
 
 export async function action({ request }: ActionFunctionArgs) {
+  // Kept ahead of requireUserId so a read-only impersonation session still gets its
+  // explicit 403 rather than a login redirect.
   await requireMutableRequest(request);
+
+  // Deliberately outside the try/catch below: requireUserId throws a redirect Response
+  // when there is no session, and the catch-all would otherwise turn that into a 500.
+  const userId = await requireUserId(request);
+  const profile = await requireMembership(request, userId);
+  const isAdmin = await getIsPlatformAdmin(userId);
 
   try {
     const { error, data } = await parseFormData(request, POST);
     if (error) return validationError(error);
 
-    const cms = await prisma.assignmentModuleSession.findUnique({
-      where: { id: data.cmsId },
+    // Owner-scoped, not merely authenticated: driving the tutor bills a completion and
+    // writes two messages (one carrying the document text) into the session, so only the
+    // student whose document it is may reach it. A revoked account no longer matches.
+    const cms = await prisma.assignmentModuleSession.findFirst({
+      where: {
+        id: data.cmsId,
+        ...documentOwnerSessionWhere({ profileId: profile.id, isAdmin }),
+      },
       include: {
         assignmentModule: {
           include: {
