@@ -633,4 +633,75 @@ describe('api.domain.reporter action', () => {
     expect(reserveAiRequest).not.toHaveBeenCalled();
     expect(getLLMCompletion).not.toHaveBeenCalled();
   });
+  test('the cacheable system prefix is byte-identical across requests with different rosters and different orgs', async () => {
+    // The whole point of prompt caching is a byte-for-byte prefix match.
+    // Redaction is per-request by construction (the pseudonym pool is
+    // walked from the names present in THIS request), so if any redacted
+    // value leaked into the cacheable block the cache would miss on every
+    // single call.
+    prisma.reporterConversation.create.mockResolvedValue({
+      id: 'conv-cache',
+      messages: [],
+    });
+    prisma.reporterConversation.update.mockResolvedValue({});
+
+    listReporterRedactableStudentNames.mockResolvedValue(['Amelia Brooks']);
+    getLLMCompletion.mockResolvedValueOnce('ok');
+    await action({
+      request: formRequest({ message: 'How is Amelia Brooks doing?' }),
+    } as any);
+
+    requireReporterAccess.mockResolvedValue({
+      ...access,
+      membership: {
+        ...access.membership,
+        organization: { id: 'org-2', name: 'A Completely Different School' },
+      },
+    });
+    listReporterRedactableStudentNames.mockResolvedValue([
+      'Noah Diaz',
+      'Sophia Marin',
+    ]);
+    getLLMCompletion.mockResolvedValueOnce('ok');
+    await action({
+      request: formRequest({ message: 'How is Noah Diaz doing?' }),
+    } as any);
+
+    const prefixA = getLLMCompletion.mock.calls[0][0].system[0];
+    const prefixB = getLLMCompletion.mock.calls[1][0].system[0];
+
+    expect(prefixA.cache_control).toEqual({ type: 'ephemeral' });
+    expect(prefixB.cache_control).toEqual({ type: 'ephemeral' });
+    expect(prefixA.text).toBe(prefixB.text);
+  });
+
+  test('AI_PII_REDACTION_ENABLED=false sends real names straight through and does not throw', async () => {
+    const ORIGINAL = process.env.AI_PII_REDACTION_ENABLED;
+    process.env.AI_PII_REDACTION_ENABLED = 'false';
+    try {
+      listReporterRedactableStudentNames.mockResolvedValue(['Amelia Brooks']);
+      getLLMCompletion.mockResolvedValue('Amelia Brooks is doing well.');
+      prisma.reporterConversation.create.mockResolvedValue({
+        id: 'conv-kill',
+        messages: [],
+      });
+      prisma.reporterConversation.update.mockResolvedValue({});
+
+      const response = await action({
+        request: formRequest({ message: 'How is Amelia Brooks doing?' }),
+      } as any);
+      const body = (await response.data) as any;
+
+      const llmArgs = getLLMCompletion.mock.calls[0][0];
+      // Switch off: the real student name and the real org name both go out.
+      expect(llmArgs.messages.at(-1).content).toBe(
+        'How is Amelia Brooks doing?'
+      );
+      expect(JSON.stringify(llmArgs.system)).toContain('Test Org');
+      expect(body.reply).toBe('Amelia Brooks is doing well.');
+    } finally {
+      if (ORIGINAL === undefined) delete process.env.AI_PII_REDACTION_ENABLED;
+      else process.env.AI_PII_REDACTION_ENABLED = ORIGINAL;
+    }
+  });
 });

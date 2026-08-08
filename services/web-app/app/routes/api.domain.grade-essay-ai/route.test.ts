@@ -392,6 +392,52 @@ describe('api.domain.grade-essay-ai', () => {
     ).toBe('Jordan, this draft has clear progress and focus.');
   });
 
+  test('AI_PII_REDACTION_ENABLED=false sends the real name straight through and does not throw', async () => {
+    const ORIGINAL = process.env.AI_PII_REDACTION_ENABLED;
+    process.env.AI_PII_REDACTION_ENABLED = 'false';
+    try {
+      getLLMCompletion.mockReset();
+      getLLMCompletion
+        .mockResolvedValueOnce(
+          JSON.stringify({
+            categories: rubricKeys.map((key) => ({
+              key,
+              score: 3,
+              comment: `Comment for ${key}`,
+            })),
+            overallComment: 'Jordan, this draft has clear progress and focus.',
+          })
+        )
+        .mockResolvedValueOnce(JSON.stringify({ issues: [] }));
+
+      prisma.submission.findFirst.mockResolvedValue(
+        mockSubmission({ id: 'sub-killswitch' })
+      );
+
+      const form = new FormData();
+      form.append('submissionId', 'sub-killswitch');
+
+      const response = await action({
+        request: new Request('https://example.com/api/domain/grade-essay-ai', {
+          method: 'POST',
+          body: form,
+        }),
+      } as any);
+      const payload = (response as { data: Record<string, unknown> }).data;
+
+      // The switch is off, so the real first name goes out unredacted.
+      const firstCall = getLLMCompletion.mock.calls[0]?.[0];
+      expect(JSON.stringify(firstCall.messages)).toContain('Jordan');
+      // ...and rehydration is a no-op, so the output is unaffected.
+      expect(payload.overallComment).toBe(
+        'Jordan, this draft has clear progress and focus.'
+      );
+    } finally {
+      if (ORIGINAL === undefined) delete process.env.AI_PII_REDACTION_ENABLED;
+      else process.env.AI_PII_REDACTION_ENABLED = ORIGINAL;
+    }
+  });
+
   test('also redacts the student last name out of the essay body, not just the first name', async () => {
     getLLMCompletion.mockReset();
     getLLMCompletion
