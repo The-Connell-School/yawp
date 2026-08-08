@@ -198,7 +198,12 @@ describe('AssignmentCreationSheetContent', () => {
       expectText('Extract from PDF');
       expectText('Submit for grade');
       expectText('Point value');
-      expectText('Enable tutor');
+      expectText(
+        "Turning the tutor off will remove the tutor from the student's documents."
+      );
+      expectText(
+        "Do this if you want to test the student's ability to write a paper independently of tutor guidance."
+      );
       expectNoText('Grading assistant strictness');
       expectNoText('Tutor Context');
 
@@ -222,6 +227,7 @@ describe('AssignmentCreationSheetContent', () => {
       // Tutor defaults to enabled, preserving today's behavior.
       expect(inputByName('tutorEnabled').value).toBe('false');
       const tutorEnabled = controlById('assignment-create-tutor-enabled');
+      expect(tutorEnabled.getAttribute('role')).toBe('switch');
       expect(isChecked(tutorEnabled)).toBe(true);
     }
   );

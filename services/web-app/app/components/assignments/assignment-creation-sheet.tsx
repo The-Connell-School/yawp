@@ -20,6 +20,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from '~/components/ui/sheet';
+import { Switch } from '~/components/ui/switch';
 import { Textarea } from '~/components/ui/textarea';
 import {
   DEFAULT_GRADING_ASSISTANT_STRICTNESS_LEVEL,
@@ -228,6 +229,7 @@ export function AssignmentCreationSheetContent({
     setPrompt(initialPrompt);
     setSubmitForGrade(true);
     setPointValue('100');
+    setTutorEnabled(true);
     setGradingAssistantStrictnessLevel(
       DEFAULT_GRADING_ASSISTANT_STRICTNESS_LEVEL
     );
@@ -592,27 +594,29 @@ export function AssignmentCreationSheetContent({
 
         <div className="pt-6">
           <input type="hidden" name="tutorEnabled" value="false" />
-          <div className="flex items-center gap-2.5">
-            <Checkbox
+          <div className="flex items-start justify-between gap-4">
+            <Label
+              htmlFor="assignment-create-tutor-enabled"
+              className="grid min-w-0 flex-1 cursor-pointer gap-2 text-base/7 font-normal text-muted-foreground sm:text-sm/6"
+            >
+              <span>
+                Turning the tutor off will remove the tutor from the
+                student&apos;s documents.
+              </span>
+              <span>
+                Do this if you want to test the student&apos;s ability to write
+                a paper independently of tutor guidance.
+              </span>
+            </Label>
+            <Switch
               id="assignment-create-tutor-enabled"
               name="tutorEnabled"
               value="true"
               checked={tutorEnabled}
-              onCheckedChange={(checked) => setTutorEnabled(checked === true)}
+              onCheckedChange={setTutorEnabled}
               disabled={isSaving}
-              className="size-4 shrink-0"
             />
-            <Label
-              htmlFor="assignment-create-tutor-enabled"
-              className="cursor-pointer font-normal leading-none"
-            >
-              Enable tutor
-            </Label>
           </div>
-          <p className="mt-1 pl-[calc(1rem+0.625rem)] text-sm text-muted-foreground">
-            Students can ask the tutor for help while working on this
-            assignment.
-          </p>
         </div>
 
         {!submitForGrade ? <input type="hidden" name="pointValue" value="" /> : null}
