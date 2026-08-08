@@ -847,3 +847,117 @@ describe('class detail loader document visibility', () => {
     ).toBe('Untitled draft');
   });
 });
+
+describe('class detail loader for students', () => {
+  beforeEach(() => {
+    for (const model of Object.values(prisma)) {
+      for (const fn of Object.values(model)) {
+        fn.mockReset();
+      }
+    }
+    requireUserId.mockReset();
+    requireMembership.mockReset();
+    getAvailableAssignmentTypesForScopes.mockReset();
+
+    requireUserId.mockResolvedValue('user-2');
+    requireMembership.mockResolvedValue({
+      id: 'student-1',
+      role: 'STUDENT',
+      organization: { id: 'org-1', name: 'Org' },
+    });
+    prisma.class.findFirst.mockResolvedValue({
+      id: 'class-1',
+      grade: '9',
+      period: '2',
+      title: 'World History',
+      classArtIndex: 3,
+      classArtKey: 'art-key',
+      school: {
+        id: 'school-1',
+        name: 'Tallassee High',
+        organizationId: 'org-1',
+      },
+      teachers: [{ id: 'teacher-1', user: { name: 'Ms. Frizzle' } }],
+    });
+    prisma.classAssignment.findMany.mockResolvedValue([
+      {
+        id: 'ca-1',
+        assignment: {
+          id: 'assignment-1',
+          title: 'Thesis practice',
+          prompt: 'Write a thesis.',
+          assignmentType: { id: 'type-1', title: 'Thesis Builder' },
+        },
+      },
+    ]);
+    prisma.document.findMany.mockResolvedValue([]);
+    getAvailableAssignmentTypesForScopes.mockResolvedValue([
+      { id: 'type-1', title: 'Thesis Builder' },
+    ]);
+  });
+
+  test('serves the class a student is enrolled in', async () => {
+    const response = await loader({
+      request: new Request('https://example.test/app/my-classes/class-1'),
+      params: { classId: 'class-1' },
+      context: {} as never,
+    });
+    const data = (response as { data: any }).data;
+
+    expect(data.role).toBe('STUDENT');
+    expect(data.klass.id).toBe('class-1');
+    expect(data.klass.teacherNames).toEqual(['Ms. Frizzle']);
+    expect(data.assignments).toHaveLength(1);
+    expect(data.assignmentTypes).toEqual([
+      { id: 'type-1', title: 'Thesis Builder' },
+    ]);
+    expect(prisma.class.findFirst.mock.calls[0][0].where).toEqual({
+      id: 'class-1',
+      isArchived: false,
+      students: { some: { id: 'student-1' } },
+    });
+  });
+
+  test('refuses a class the student is not enrolled in', async () => {
+    // A student enrolled in a different section: the enrollment predicate in
+    // the query means this class never matches for them.
+    prisma.class.findFirst.mockResolvedValue(null);
+
+    let thrown: unknown;
+    try {
+      await loader({
+        request: new Request('https://example.test/app/my-classes/class-2'),
+        params: { classId: 'class-2' },
+        context: {} as never,
+      });
+    } catch (error) {
+      thrown = error;
+    }
+
+    expect(thrown).toBeInstanceOf(Response);
+    expect((thrown as Response).status).toBe(404);
+  });
+
+  test('never reads the roster, other students work, or paste alerts', async () => {
+    await loader({
+      request: new Request('https://example.test/app/my-classes/class-1'),
+      params: { classId: 'class-1' },
+      context: {} as never,
+    });
+
+    expect(prisma.pasteAlert.findMany).not.toHaveBeenCalled();
+    expect(prisma.submission.findMany).not.toHaveBeenCalled();
+    expect(prisma.reporterGrowthPlan.findMany).not.toHaveBeenCalled();
+    expect(
+      prisma.class.findFirst.mock.calls[0][0].select.students
+    ).toBeUndefined();
+    expect(prisma.document.findMany.mock.calls[0][0].where).toEqual({
+      deletedAt: null,
+      archivedAt: null,
+      OR: [
+        { classAssignment: { classId: 'class-1' }, membershipId: 'student-1' },
+        { classAssignmentId: null, membershipId: 'student-1' },
+      ],
+    });
+  });
+});

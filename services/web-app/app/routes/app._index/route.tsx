@@ -3,7 +3,7 @@ import {
   data as dataResponse,
   redirect,
 } from 'react-router';
-import { Form, Link, useLoaderData, useRouteLoaderData } from 'react-router';
+import { useLoaderData, useRouteLoaderData } from 'react-router';
 import { useState } from 'react';
 import type { Route as RootRoute } from '../../+types/root';
 import { AssignmentCreationSheet } from '~/components/assignments/assignment-creation-sheet';
@@ -25,15 +25,10 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from '~/components/ui/accordion';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '~/components/ui/dropdown-menu';
-import { PenLine } from 'lucide-react';
 import type { TeacherClassCardData } from '~/components/teacher-class-card';
 import { StudentClassCard } from '~/components/student-class-card';
+import { StudentAssignmentCard } from '~/components/student-assignment-card';
+import { StudentWriteSomethingNew } from '~/components/student-write-something-new';
 import { getTeacherClassCardStats } from '~/utils/teacher-class-card-stats.server';
 import { getTeacherRecentActiveClassIds } from '~/utils/teacher-dashboard-recent-classes.server';
 import { getStudentEnrolledClasses } from '~/utils/student-classes.server';
@@ -493,25 +488,9 @@ export default function AppRoute() {
                 manage your writing.
               </p>
             </div>
-            {data.assignmentTypes.length > 0 ? (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button size="sm" className="shrink-0">
-                    <PenLine className="mr-2 h-4 w-4" />
-                    Write something new
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  {data.assignmentTypes.map((assignmentType) => (
-                    <DropdownMenuItem key={assignmentType.id} asChild>
-                      <Link to={`/app/assignment-types/${assignmentType.id}`}>
-                        {assignmentType.title}
-                      </Link>
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            ) : null}
+            <StudentWriteSomethingNew
+              assignmentTypes={data.assignmentTypes}
+            />
           </div>
         </div>
       </div>
@@ -537,34 +516,11 @@ export default function AppRoute() {
             {data.assignments.length > 0 ? (
               <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
                 {data.assignments.map((classAssignment) => (
-                  <Form
-                    method="post"
-                    action={`/app/class-assignments/${classAssignment.id}/start`}
+                  <StudentAssignmentCard
                     key={classAssignment.id}
-                  >
-                    <button
-                      type="submit"
-                      className="flex h-full w-full flex-col rounded-lg border bg-muted text-left transition-shadow hover:shadow"
-                    >
-                      <div className="h-24 w-full rounded-t-lg bg-gradient-to-br from-foreground/5 to-foreground/20 px-3 py-2">
-                        <p className="line-clamp-3 text-xs text-muted-foreground">
-                          {classAssignment.assignment.prompt}
-                        </p>
-                      </div>
-                      <div className="flex flex-1 flex-col gap-1 p-3">
-                        <h4 className="text-foreground/90 font-medium">
-                          {classAssignment.assignment.title?.trim() ||
-                            'Untitled Assignment'}
-                        </h4>
-                        <p className="text-xs text-muted-foreground">
-                          {classAssignment.assignment.assignmentType.title}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          {formatClassLabel(classAssignment.class)}
-                        </p>
-                      </div>
-                    </button>
-                  </Form>
+                    classAssignment={classAssignment}
+                    classLabel={formatClassLabel(classAssignment.class)}
+                  />
                 ))}
               </div>
             ) : (
