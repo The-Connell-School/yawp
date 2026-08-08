@@ -14,12 +14,10 @@ import {
   ACT_WRITING_SCORING_TYPE,
   rubricScaleGradeFields,
 } from '~/domain/grading/recorded-grade';
-import {
-  firstNameFromFullName,
-  restOfNameFromFullName,
-} from '~/domain/grading/personalize';
+import { firstNameFromFullName } from '~/domain/grading/personalize';
 import {
   buildRedactionMapping,
+  redactableNamePartsFromFullName,
   redact,
   rehydrate,
 } from '~/utils/ai-redaction';
@@ -626,11 +624,15 @@ export async function action({ request }: ActionFunctionArgs) {
   // name) so a student who signs their essay with their full name doesn't
   // leak it through `redactedEssayText` below - only the first name is
   // ever used in a prompt field, but the essay body is free text and can
-  // contain the whole name.
-  const gradingNameMapping = buildRedactionMapping([
-    studentFirstName,
-    ...restOfNameFromFullName(studentFullName),
-  ]);
+  // contain the whole name. Those trailing parts are registered as
+  // `secondary`, so in prose they only match next to the first name or
+  // after an honorific - a student named "Marcus Green" must not have
+  // "green energy" rewritten inside their own essay. Returns [] for a
+  // nameless account, so the 'Student' display fallback never becomes a
+  // redaction key. See mapping.server.ts.
+  const gradingNameMapping = buildRedactionMapping(
+    redactableNamePartsFromFullName(studentFullName)
+  );
   const pseudonymFirstName = redact(studentFirstName, gradingNameMapping);
   // Students sign their work and write about themselves by name, so the
   // essay body carries the real name just as surely as the name field does.

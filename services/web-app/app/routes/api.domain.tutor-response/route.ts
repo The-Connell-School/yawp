@@ -14,11 +14,13 @@ import {
   buildAiContextAuditMetadata,
   buildAiTextContextAudit,
 } from '~/utils/ai-context-audit.server';
+import { firstNameFromFullName } from '~/domain/grading/personalize';
 import {
-  firstNameFromFullName,
-  restOfNameFromFullName,
-} from '~/domain/grading/personalize';
-import { buildRedactionMapping, redact, rehydrate } from '~/utils/ai-redaction';
+  buildRedactionMapping,
+  redactableNamePartsFromFullName,
+  redact,
+  rehydrate,
+} from '~/utils/ai-redaction';
 
 const LLM_FAILED = 'Failed to get a response from the tutor. Please try again.';
 
@@ -134,10 +136,9 @@ export async function action({ request }: ActionFunctionArgs) {
     // student who signs their document or mentions their own full name in
     // chat doesn't leak it - see the identical comment in
     // api.domain.grade-essay-ai/route.ts.
-    const nameMapping = buildRedactionMapping([
-      studentFirstName,
-      ...restOfNameFromFullName(studentFullName),
-    ]);
+    const nameMapping = buildRedactionMapping(
+      redactableNamePartsFromFullName(studentFullName)
+    );
 
     const documentSource =
       data.content === undefined ? 'db-document-text' : 'client-content';

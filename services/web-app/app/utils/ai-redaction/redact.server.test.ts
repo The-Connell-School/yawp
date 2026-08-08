@@ -1,5 +1,8 @@
 import { describe, expect, test } from 'bun:test';
-import { buildRedactionMapping } from './mapping.server';
+import {
+  buildRedactionMapping,
+  redactableNamePartsFromFullName,
+} from './mapping.server';
 import { redact, rehydrate } from './redact.server';
 
 describe('redact', () => {
@@ -168,6 +171,99 @@ describe('redact prose mode', () => {
     const pseudonym = mapping.realToPseudonym.get('will')!.pseudonym;
 
     expect(redact('will', mapping)).toBe(pseudonym.toLowerCase());
+  });
+
+  test('does not redact a bare surname that is also an ordinary word', () => {
+    // Reproduces the reverted defect: 'Marcus Green' registered both parts,
+    // so 'Green energy is the future. Many green initiatives...' went to the
+    // provider as 'Dakota energy is the future. Many dakota initiatives...'
+    // - the student's own essay, mangled, and graded in that state.
+    const mapping = buildRedactionMapping(
+      redactableNamePartsFromFullName('Marcus Green')
+    );
+
+    const essay =
+      'Green energy is the future. Many green initiatives start small.';
+
+    expect(redact(essay, mapping, { mode: 'prose' })).toBe(essay);
+  });
+
+  test('does not redact bare surnames that are ordinary words in any casing', () => {
+    for (const [fullName, essay] of [
+      ['Ana Brown', 'The lights brown out during the storm.'],
+      ['Tim Young', 'The young reader is not the intended audience.'],
+      ['Nia White', 'White space on the page carries meaning.'],
+      ['Omar Long', 'The long march toward reform is unfinished.'],
+    ] as const) {
+      const mapping = buildRedactionMapping(
+        redactableNamePartsFromFullName(fullName)
+      );
+      expect(redact(essay, mapping, { mode: 'prose' })).toBe(essay);
+    }
+  });
+
+  test('still redacts a surname when the first name makes it unambiguous', () => {
+    const mapping = buildRedactionMapping(
+      redactableNamePartsFromFullName('Marcus Green')
+    );
+    const first = mapping.realToPseudonym.get('marcus')!.pseudonym;
+    const last = mapping.realToPseudonym.get('green')!.pseudonym;
+
+    const signed = 'A personal narrative by Marcus Green.';
+    const out = redact(signed, mapping, { mode: 'prose' });
+
+    expect(out).toBe(`A personal narrative by ${first} ${last}.`);
+    expect(rehydrate(out, mapping)).toBe(signed);
+  });
+
+  test('redacts every part of a multi-part full name signature', () => {
+    const mapping = buildRedactionMapping(
+      redactableNamePartsFromFullName('Sophia Marín Lopez')
+    );
+
+    const out = redact('-- Sophia Marín Lopez', mapping, { mode: 'prose' });
+
+    expect(out).not.toContain('Sophia');
+    expect(out).not.toContain('Marín');
+    expect(out).not.toContain('Lopez');
+    expect(rehydrate(out, mapping)).toBe('-- Sophia Marín Lopez');
+  });
+
+  test('still redacts a surname after an honorific', () => {
+    const mapping = buildRedactionMapping(
+      redactableNamePartsFromFullName('Marcus Green')
+    );
+    const last = mapping.realToPseudonym.get('green')!.pseudonym;
+
+    expect(redact('Mr. Green graded it.', mapping, { mode: 'prose' })).toBe(
+      `Mr. ${last} graded it.`
+    );
+    expect(redact('Ms Green graded it.', mapping, { mode: 'prose' })).toBe(
+      `Ms ${last} graded it.`
+    );
+  });
+
+  test('field mode still redacts a bare surname, because field values are ours', () => {
+    const mapping = buildRedactionMapping(
+      redactableNamePartsFromFullName('Marcus Green')
+    );
+    const last = mapping.realToPseudonym.get('green')!.pseudonym;
+
+    expect(redact('Green', mapping)).toBe(last);
+  });
+
+  test('does not register the "Student" display fallback as a redaction key', () => {
+    // firstNameFromFullName returns the literal 'Student' for a nameless
+    // account. Registering it rewrote the word inside the teacher's own
+    // assignment prompt.
+    const mapping = buildRedactionMapping(redactableNamePartsFromFullName(null));
+
+    expect(mapping.realToPseudonym.size).toBe(0);
+    expect(
+      redact('Describe a time a student changed your mind.', mapping, {
+        mode: 'prose',
+      })
+    ).toBe('Describe a time a student changed your mind.');
   });
 
   test('prose redaction round-trips through rehydrate', () => {

@@ -1,5 +1,12 @@
-export { buildRedactionMapping } from './mapping.server';
-export type { RedactionMapping } from './mapping.server';
+export {
+  buildRedactionMapping,
+  redactableNamePartsFromFullName,
+} from './mapping.server';
+export type {
+  RedactionMapping,
+  RedactionNameInput,
+  NameRole,
+} from './mapping.server';
 export { redact, rehydrate } from './redact.server';
 export type { RedactionMode } from './redact.server';
 export {

@@ -110,6 +110,22 @@ describe('createRedactionSession', () => {
     expect(redacted.startsWith(pseudonym)).toBe(true);
   });
 
+  test('a first-name-only mention round-trips back to the first name, not the full name', () => {
+    // Reproduces the reverted defect: withAliasKey registered the alias in
+    // one direction only, so "Sophia, you have a strong thesis." came back
+    // out of rehydrate as "Sophia Martinez, you have a strong thesis." —
+    // every quoted comment silently gaining a surname in text the teacher
+    // reads and that is persisted to ReporterMessage.content.
+    const session = createRedactionSession();
+    session.registerStudentFullName('Sophia Martinez');
+
+    const original = 'Sophia, you have a strong thesis but thin evidence.';
+    const redacted = redact(original, session.mapping, { mode: 'prose' });
+
+    expect(redacted).not.toContain('Sophia');
+    expect(rehydrate(redacted, session.mapping)).toBe(original);
+  });
+
   test('registerStudentFullName() resolves a shared-first-name alias to whichever student claimed it first, and never lets a second claimant overwrite it', () => {
     const session = createRedactionSession();
     const riveraPseudonym = session.registerStudentFullName('Alex Rivera');

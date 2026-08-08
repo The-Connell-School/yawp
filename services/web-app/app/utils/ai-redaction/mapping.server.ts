@@ -6,14 +6,73 @@ import { PSEUDONYM_FIRST_NAME_POOL } from './pseudonym-pool.server';
  * it exists only for the lifetime of one outbound AI call and the
  * rehydration of its response.
  */
+/**
+ * How a registered name part may be matched in PROSE.
+ *
+ * `primary` — a whole name ("Sophia Martinez") or a first name ("Sophia").
+ * Matched on its own, because a first name standing alone in a student's
+ * essay is a reference to a person.
+ *
+ * `secondary` — a name part after the first: a surname or a middle name.
+ * NEVER matched standing alone in prose. Surnames are overwhelmingly
+ * ordinary English words (Green, Brown, White, Young, King, Long, Price,
+ * Cook, Wood, Stone, Hill, Rose, Snow, Frost, Day, Bell, Fields...), and no
+ * word list will ever be complete, so keying on the bare word silently
+ * corrupts the student's own essay. A secondary part is only substituted
+ * when something unambiguous sits next to it — the registered first name
+ * ("Marcus Green") or an honorific ("Mr. Green"). See `redact`.
+ */
+export type NameRole = 'primary' | 'secondary';
+
+export type RedactionNameInput =
+  | string
+  | null
+  | undefined
+  | { name: string; role: NameRole };
+
 export interface RedactionMapping {
-  /** lowercased real name -> { pseudonym, canonical original-cased real name } */
+  /** lowercased real name -> { pseudonym, canonical original-cased real name, role } */
   readonly realToPseudonym: ReadonlyMap<
     string,
-    { pseudonym: string; realName: string }
+    { pseudonym: string; realName: string; role: NameRole }
   >;
   /** lowercased pseudonym -> canonical original-cased real name */
   readonly pseudonymToReal: ReadonlyMap<string, string>;
+}
+
+function normalizeNameInput(
+  input: RedactionNameInput
+): { name: string; role: NameRole } | null {
+  if (input == null) return null;
+  if (typeof input === 'string') {
+    const name = input.trim();
+    return name ? { name, role: 'primary' } : null;
+  }
+  const name = input.name?.trim();
+  return name ? { name, role: input.role } : null;
+}
+
+/**
+ * The name parts of one person that are worth registering for redaction,
+ * tagged with how each may be matched.
+ *
+ * Returns [] when there is no real name. `firstNameFromFullName` falls back
+ * to the literal string 'Student' for a nameless account, and registering
+ * that sentinel made the ordinary word "student" a redaction key — it was
+ * then rewritten inside the teacher's own assignment prompt. 'Student'
+ * stays a display/greeting fallback only; it is never a redaction key.
+ */
+export function redactableNamePartsFromFullName(
+  fullName: string | null | undefined
+): RedactionNameInput[] {
+  const trimmed = (fullName ?? '').trim();
+  if (!trimmed) return [];
+  const [first, ...rest] = trimmed.split(/\s+/);
+  if (!first) return [];
+  return [
+    first,
+    ...rest.map((part) => ({ name: part, role: 'secondary' as const })),
+  ];
 }
 
 /**
@@ -52,26 +111,26 @@ function fnv1aHash(value: string): number {
  * collision, it's the same identifier.
  */
 export function buildRedactionMapping(
-  namesInput: ReadonlyArray<string | null | undefined>,
+  namesInput: ReadonlyArray<RedactionNameInput>,
   pool: readonly string[] = PSEUDONYM_FIRST_NAME_POOL
 ): RedactionMapping {
-  const names = isPiiRedactionEnabled() ? namesInput : [];
+  const names = (isPiiRedactionEnabled() ? namesInput : [])
+    .map(normalizeNameInput)
+    .filter((entry): entry is { name: string; role: NameRole } =>
+      Boolean(entry)
+    );
   const realToPseudonym = new Map<
     string,
-    { pseudonym: string; realName: string }
+    { pseudonym: string; realName: string; role: NameRole }
   >();
   const pseudonymToReal = new Map<string, string>();
   const usedPseudonyms = new Set<string>();
   const realNameKeysLower = new Set(
-    names
-      .map((name) => name?.trim())
-      .filter((name): name is string => Boolean(name))
-      .map((name) => name.toLowerCase())
+    names.map((entry) => entry.name.toLowerCase())
   );
 
-  for (const rawName of names) {
-    const realName = rawName?.trim();
-    if (!realName) continue;
+  for (const entry of names) {
+    const realName = entry.name;
     const key = realName.toLowerCase();
     if (realToPseudonym.has(key)) continue; // shared name -> shared pseudonym
 
@@ -103,7 +162,7 @@ export function buildRedactionMapping(
     }
 
     usedPseudonyms.add(pseudonym.toLowerCase());
-    realToPseudonym.set(key, { pseudonym, realName });
+    realToPseudonym.set(key, { pseudonym, realName, role: entry.role });
     pseudonymToReal.set(pseudonym.toLowerCase(), realName);
   }
 
@@ -150,6 +209,27 @@ export function withAliasKey(
   realToPseudonym.set(aliasKey, {
     pseudonym: canonicalEntry.pseudonym,
     realName: alias,
+    role: 'primary',
   });
-  return { realToPseudonym, pseudonymToReal: mapping.pseudonymToReal };
+
+  // Point the reverse direction at the alias too, so the round trip is an
+  // identity for the form that is actually matched in practice. Without
+  // this, "Sophia, you have a strong thesis" redacted to "Harper, you have
+  // a strong thesis" and rehydrated to "Sophia MARTINEZ, you have a strong
+  // thesis" — every quoted comment silently gaining a surname.
+  //
+  // One pseudonym now stands for two real forms ("Sophia Martinez" and
+  // "Sophia") and rehydrate sees a single token, so it has to pick one. It
+  // picks the shorter: it matches the shape of the pseudonym itself (a bare
+  // first name), it is what the model was most likely echoing, and it can
+  // never fabricate a surname the source text did not have. The cost is
+  // that a genuine full-name mention comes back as a first name — a small
+  // loss of formality, not corrupted text.
+  const pseudonymToReal = new Map(mapping.pseudonymToReal);
+  const pseudonymKey = canonicalEntry.pseudonym.toLowerCase();
+  const existing = pseudonymToReal.get(pseudonymKey);
+  if (!existing || alias.length < existing.length) {
+    pseudonymToReal.set(pseudonymKey, alias);
+  }
+  return { realToPseudonym, pseudonymToReal };
 }
