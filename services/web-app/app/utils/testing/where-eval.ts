@@ -163,3 +163,89 @@ export function matchesSessionWhere(
 
   return true;
 }
+
+export type ScopedClass = {
+  id: string;
+  /** The enrollment code a student types in. Unique per school, not globally. */
+  code: string;
+  isArchived: boolean;
+  /** Organization that owns the class's school. */
+  organizationId: string;
+};
+
+/**
+ * Evaluates the `where` clause the `/enter-code` route hands to `prisma.class.findMany`
+ * and `prisma.class.findFirst` against a fixture class row.
+ *
+ * Same reasoning as the evaluators above. Asserting on the clause's shape would pass
+ * against the pre-fix `{ id, isArchived: false }` just as happily as against a clause
+ * that also re-checks the submitted code and the caller's organization. Running the
+ * clause against a fixture set that holds a same-code class in another organization is
+ * what makes the enrollment bypass and the cross-tenant collision observable.
+ */
+export function matchesClassWhere(where: unknown, klass: ScopedClass): boolean {
+  if (!where || typeof where !== 'object') return true;
+
+  for (const [key, value] of Object.entries(where as Record<string, unknown>)) {
+    switch (key) {
+      case 'id':
+        if (value !== klass.id) return false;
+        break;
+      case 'isArchived':
+        if (value !== klass.isArchived) return false;
+        break;
+      case 'code': {
+        if (typeof value === 'string') {
+          if (value !== klass.code) return false;
+          break;
+        }
+        const equals = (value as any)?.equals;
+        if (typeof equals !== 'string') return false;
+        const matched =
+          (value as any)?.mode === 'insensitive'
+            ? equals.toLowerCase() === klass.code.toLowerCase()
+            : equals === klass.code;
+        if (!matched) return false;
+        break;
+      }
+      case 'school': {
+        const nested = ((value as any)?.is ?? value) as Record<string, unknown>;
+        if (!nested || typeof nested !== 'object') return false;
+        if (
+          'organizationId' in nested &&
+          nested.organizationId !== klass.organizationId
+        ) {
+          return false;
+        }
+        if ('organization' in nested) {
+          const org = ((nested.organization as any)?.is ??
+            nested.organization) as Record<string, unknown>;
+          if (org?.id !== undefined && org.id !== klass.organizationId) {
+            return false;
+          }
+        }
+        break;
+      }
+      case 'OR':
+        if (
+          !Array.isArray(value) ||
+          !value.some((clause) => matchesClassWhere(clause, klass))
+        ) {
+          return false;
+        }
+        break;
+      case 'AND':
+        if (
+          !Array.isArray(value) ||
+          !value.every((clause) => matchesClassWhere(clause, klass))
+        ) {
+          return false;
+        }
+        break;
+      default:
+        break;
+    }
+  }
+
+  return true;
+}
