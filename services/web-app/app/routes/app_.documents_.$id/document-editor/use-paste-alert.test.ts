@@ -20,57 +20,39 @@ let root: Root | null = null;
 let container: HTMLDivElement | null = null;
 let editor: Editor | null = null;
 
-function mountPasteAlert(docId: string) {
+function mountPasteAlert(docId: string, targetEditor: Editor) {
   function Harness() {
-    usePasteAlert(editor, docId);
+    usePasteAlert(targetEditor, docId);
     return null;
   }
 
-  container = document.createElement('div');
-  document.body.appendChild(container);
-  root = createRoot(container);
+  const localContainer = document.createElement('div');
+  document.body.appendChild(localContainer);
+  const localRoot = createRoot(localContainer);
   act(() => {
-    root!.render(createElement(Harness));
+    localRoot.render(createElement(Harness));
   });
+  return { root: localRoot, container: localContainer };
 }
 
 function editorDom() {
   return editor!.view.dom as HTMLElement;
 }
 
-/** Selects all text inside the editor's DOM so getSelection() resolves inside it. */
-function selectInsideEditor() {
-  const dom = editorDom();
-  const range = document.createRange();
-  range.selectNodeContents(dom);
-  const selection = window.getSelection()!;
-  selection.removeAllRanges();
-  selection.addRange(range);
-}
-
-/** Selects text inside an element outside the editor. */
-function selectOutsideEditor(el: HTMLElement) {
-  const range = document.createRange();
-  range.selectNodeContents(el);
-  const selection = window.getSelection()!;
-  selection.removeAllRanges();
-  selection.addRange(range);
-}
-
-function firePaste(text: string) {
+function firePaste(text: string, target: HTMLElement = editorDom()) {
   const event = new Event('paste', { bubbles: true, cancelable: true }) as ClipboardEvent;
   Object.defineProperty(event, 'clipboardData', {
     value: { getData: () => text },
   });
   act(() => {
-    editorDom().dispatchEvent(event);
+    target.dispatchEvent(event);
   });
 }
 
-function fireCopyOrCut(type: 'copy' | 'cut') {
+function fireCopyOrCut(type: 'copy' | 'cut', target: EventTarget = document) {
   const event = new Event(type, { bubbles: true, cancelable: true });
   act(() => {
-    document.dispatchEvent(event);
+    target.dispatchEvent(event);
   });
 }
 
@@ -87,7 +69,9 @@ describe('usePasteAlert', () => {
     originalFetch = globalThis.fetch;
     fetchMock = mock(() => Promise.resolve(new Response('{}')));
     globalThis.fetch = fetchMock as unknown as typeof fetch;
-    mountPasteAlert(DOC_ID);
+    const mounted = mountPasteAlert(DOC_ID, editor);
+    root = mounted.root;
+    container = mounted.container;
   });
 
   afterEach(() => {
@@ -102,7 +86,7 @@ describe('usePasteAlert', () => {
     editor = null;
   });
 
-  it('posts a paste alert for a large paste with no prior in-editor copy', () => {
+  it('posts a paste alert for a large paste with no prior copy anywhere in the app', () => {
     firePaste('x'.repeat(200));
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -121,48 +105,31 @@ describe('usePasteAlert', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it('does not post when the same text was just copied from inside the editor', () => {
-    selectInsideEditor();
+  it('does not post when a copy happened anywhere in the app first', () => {
     fireCopyOrCut('copy');
     firePaste('x'.repeat(200));
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it('does not post when the same text was just cut from inside the editor (reorder paragraph)', () => {
-    selectInsideEditor();
+  it('does not post when a cut happened anywhere in the app first (reorder a paragraph)', () => {
     fireCopyOrCut('cut');
     firePaste('x'.repeat(200));
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it('still posts when the copy originated outside the editor', () => {
+  it('does not require the copy/cut selection to be inside this editor — any app surface counts', () => {
     const outside = document.createElement('div');
-    outside.textContent = 'some other page text';
+    outside.textContent = 'a prompt panel elsewhere in the app';
     document.body.appendChild(outside);
 
-    selectOutsideEditor(outside);
-    fireCopyOrCut('copy');
+    fireCopyOrCut('copy', outside);
     firePaste('x'.repeat(200));
 
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).not.toHaveBeenCalled();
     outside.remove();
   });
 
-  it('still posts when the cut originated outside the editor', () => {
-    const outside = document.createElement('div');
-    outside.textContent = 'some other page text';
-    document.body.appendChild(outside);
-
-    selectOutsideEditor(outside);
-    fireCopyOrCut('cut');
-    firePaste('x'.repeat(200));
-
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    outside.remove();
-  });
-
-  it('consumes the same-doc flag after one paste — a second paste posts an alert', () => {
-    selectInsideEditor();
+  it('consumes the internal-copy flag after one paste — a second unrelated paste posts an alert', () => {
     fireCopyOrCut('copy');
     firePaste('x'.repeat(200));
     expect(fetchMock).not.toHaveBeenCalled();
@@ -171,53 +138,33 @@ describe('usePasteAlert', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
-  it('recognizes a same-document copy/paste across two editor instances sharing the browser (cross-tab)', () => {
-    // Simulate tab A: copy inside the editor.
-    selectInsideEditor();
+  it('recognizes an in-app copy across two editor instances sharing the browser (cross-tab, no time limit)', async () => {
     fireCopyOrCut('copy');
 
-    // Simulate tab B for the *same* document: a fresh hook instance backed
-    // by a fresh editor, sharing localStorage (as two real tabs would).
+    // Simulate a large delay before the paste — the old 5s window would
+    // have expired this; the new rule has no expiry.
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    // Simulate tab B for a *different* document: a fresh hook instance
+    // backed by a fresh editor, sharing localStorage (as two real tabs
+    // would).
     const editorB = new Editor({
       extensions: [StarterKit],
       content: '<p>tab b content</p>',
     });
-    function HarnessB() {
-      usePasteAlert(editorB, DOC_ID);
-      return null;
-    }
-    const containerB = document.createElement('div');
-    document.body.appendChild(containerB);
-    const rootB = createRoot(containerB);
-    act(() => {
-      rootB.render(createElement(HarnessB));
-    });
+    const mountedB = mountPasteAlert('doc-2', editorB);
 
-    const pasteEvent = new Event('paste', {
-      bubbles: true,
-      cancelable: true,
-    }) as ClipboardEvent;
-    Object.defineProperty(pasteEvent, 'clipboardData', {
-      value: { getData: () => 'x'.repeat(200) },
-    });
-    act(() => {
-      (editorB.view.dom as HTMLElement).dispatchEvent(pasteEvent);
-    });
+    firePaste('x'.repeat(200), editorB.view.dom as HTMLElement);
 
     expect(fetchMock).not.toHaveBeenCalled();
 
-    act(() => rootB.unmount());
-    containerB.remove();
+    act(() => mountedB.root.unmount());
+    mountedB.container.remove();
     editorB.destroy();
   });
 
-  it('posts again once the same-doc window has elapsed', async () => {
-    selectInsideEditor();
-    fireCopyOrCut('copy');
-
-    await new Promise((resolve) => setTimeout(resolve, 5100));
-
-    firePaste('x'.repeat(200));
+  it('still posts an alert when nothing was ever copied in the app (genuinely external paste)', () => {
+    firePaste('x'.repeat(500));
     expect(fetchMock).toHaveBeenCalledTimes(1);
-  }, 6000);
+  });
 });
