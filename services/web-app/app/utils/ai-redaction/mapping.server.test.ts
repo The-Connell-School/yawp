@@ -1,6 +1,32 @@
-import { describe, expect, test } from 'bun:test';
+import { afterEach, describe, expect, test } from 'bun:test';
 import { buildRedactionMapping, withAliasKey } from './mapping.server';
 import { PSEUDONYM_FIRST_NAME_POOL } from './pseudonym-pool.server';
+
+describe('buildRedactionMapping kill switch', () => {
+  const ORIGINAL = process.env.AI_PII_REDACTION_ENABLED;
+  afterEach(() => {
+    if (ORIGINAL === undefined) delete process.env.AI_PII_REDACTION_ENABLED;
+    else process.env.AI_PII_REDACTION_ENABLED = ORIGINAL;
+  });
+
+  test('is on by default (no env var set)', () => {
+    delete process.env.AI_PII_REDACTION_ENABLED;
+    const mapping = buildRedactionMapping(['Maya']);
+    expect(mapping.realToPseudonym.size).toBe(1);
+  });
+
+  test('AI_PII_REDACTION_ENABLED=false disables redaction entirely - names pass through unmapped', () => {
+    process.env.AI_PII_REDACTION_ENABLED = 'false';
+    const mapping = buildRedactionMapping(['Maya']);
+    expect(mapping.realToPseudonym.size).toBe(0);
+  });
+
+  test('any other value keeps redaction on', () => {
+    process.env.AI_PII_REDACTION_ENABLED = 'nonsense';
+    const mapping = buildRedactionMapping(['Maya']);
+    expect(mapping.realToPseudonym.size).toBe(1);
+  });
+});
 
 describe('buildRedactionMapping', () => {
   test('assigns a pseudonym from the plausible-name pool, not a placeholder', () => {

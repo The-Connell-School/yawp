@@ -16,6 +16,18 @@ export interface RedactionMapping {
   readonly pseudonymToReal: ReadonlyMap<string, string>;
 }
 
+/**
+ * Kill switch for the whole AI PII redaction feature (grading, Reporter,
+ * tutor - every caller goes through `buildRedactionMapping`, so gating it
+ * here is a single choke point). Defaults ON: only an explicit `'false'`
+ * disables it. Flip with `AI_PII_REDACTION_ENABLED=false` if redaction
+ * itself is ever suspected of causing a production incident and needs to
+ * come out fast, independent of a deploy.
+ */
+export function isPiiRedactionEnabled(): boolean {
+  return process.env.AI_PII_REDACTION_ENABLED !== 'false';
+}
+
 /** Simple, dependency-free deterministic string hash (FNV-1a, 32-bit). */
 function fnv1aHash(value: string): number {
   let hash = 0x811c9dc5;
@@ -40,9 +52,10 @@ function fnv1aHash(value: string): number {
  * collision, it's the same identifier.
  */
 export function buildRedactionMapping(
-  names: ReadonlyArray<string | null | undefined>,
+  namesInput: ReadonlyArray<string | null | undefined>,
   pool: readonly string[] = PSEUDONYM_FIRST_NAME_POOL
 ): RedactionMapping {
+  const names = isPiiRedactionEnabled() ? namesInput : [];
   const realToPseudonym = new Map<
     string,
     { pseudonym: string; realName: string }
