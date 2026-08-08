@@ -19,7 +19,7 @@ export type StudentDocumentGroup<T extends StudentDocumentGroupingRow> = {
   documents: T[];
 };
 
-const UNASSIGNED_LABEL = 'Not tied to a class';
+export const UNASSIGNED_LABEL = 'Not tied to a class';
 
 /**
  * Groups a student's documents by the class their assignment belongs to,

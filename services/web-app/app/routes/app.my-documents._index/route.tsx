@@ -3,15 +3,27 @@ import {
   data as dataResponse,
   redirect,
 } from 'react-router';
-import { useLoaderData } from 'react-router';
+import { useMemo } from 'react';
+import { useLoaderData, useSearchParams } from 'react-router';
 import { DocumentLink } from '~/components/document-link.js';
 import { NoDataPlaceholder } from '~/components/no-data-placeholder.js';
+import { StudentDocumentFiltersBar } from '~/components/student-document-filters';
 import { requireMembership, requireUserId } from '~/utils/auth.server.js';
 import { prisma } from '~/utils/db.server.js';
 import {
   groupStudentDocumentsByClass,
   type StudentDocumentGroupingRow,
 } from '~/utils/student-document-grouping';
+import {
+  buildStudentAssignmentFilterOptions,
+  buildStudentClassFilterOptions,
+  filterStudentDocuments,
+  hasActiveStudentDocumentFilters,
+  parseStudentDocumentFilters,
+  serializeStudentDocumentFilters,
+  type StudentDocumentFilters,
+} from '~/utils/student-document-filters';
+import { countStudentDocumentStatuses } from '~/utils/student-document-status';
 import {
   orderAssignmentModuleSessionsForCurrentStep,
   type AssignmentModuleSessionResumeCandidate,
@@ -31,6 +43,7 @@ function orderDocumentTileModuleSessions<
 }
 
 const documentInclude = {
+  assignment: { select: { id: true, title: true } },
   classAssignment: {
     select: {
       class: {
@@ -54,6 +67,10 @@ const documentInclude = {
       title: true,
       releasedAt: true,
       submittedAt: true,
+      // Read by both the status filter and DocumentLink's badge, which both
+      // treat archived and teacher-unsubmitted submissions as invisible.
+      archivedAt: true,
+      unsubmittedAt: true,
     },
   },
 } as const;
@@ -72,17 +89,80 @@ export async function loader({ request }: LoaderFunctionArgs) {
     include: documentInclude,
   });
 
-  const groups = groupStudentDocumentsByClass(
-    orderDocumentTileModuleSessions(
-      documents
-    ) as unknown as StudentDocumentGroupingRow[]
-  );
+  const ordered = orderDocumentTileModuleSessions(documents);
+  const url = new URL(request.url);
 
-  return dataResponse({ groups, documentCount: documents.length });
+  return dataResponse({
+    documents: ordered,
+    documentCount: documents.length,
+    classes: buildStudentClassFilterOptions(ordered),
+    assignments: buildStudentAssignmentFilterOptions(ordered),
+    filters: parseStudentDocumentFilters(url.searchParams),
+  });
 }
 
 export default function MyDocumentsRoute() {
-  const { groups, documentCount } = useLoaderData<typeof loader>();
+  const { documents, documentCount, classes, assignments, filters } =
+    useLoaderData<typeof loader>();
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  const filteredDocuments = useMemo(
+    () => filterStudentDocuments(documents, filters),
+    [documents, filters]
+  );
+
+  const groups = useMemo(
+    () =>
+      groupStudentDocumentsByClass(
+        filteredDocuments as unknown as StudentDocumentGroupingRow[]
+      ),
+    [filteredDocuments]
+  );
+
+  // Counts on the status pills reflect the class/assignment narrowing already
+  // applied, the same way the teacher pills do.
+  const statusCounts = useMemo(
+    () =>
+      countStudentDocumentStatuses(
+        filterStudentDocuments(documents, {
+          ...filters,
+          status: 'all',
+        })
+      ),
+    [documents, filters]
+  );
+
+  const totalCount = useMemo(
+    () =>
+      Object.values(statusCounts).reduce((total, count) => total + count, 0),
+    [statusCounts]
+  );
+
+  const hasActiveFilters = hasActiveStudentDocumentFilters(filters);
+
+  const updateFilters = (updates: Partial<StudentDocumentFilters>) => {
+    setSearchParams(
+      serializeStudentDocumentFilters(
+        { ...filters, ...updates },
+        searchParams
+      ),
+      { replace: true }
+    );
+  };
+
+  const clearFilters = () => {
+    setSearchParams(
+      serializeStudentDocumentFilters(
+        { classIds: [], assignmentIds: [], status: 'all' },
+        searchParams
+      ),
+      { replace: true }
+    );
+  };
+
+  const exitTo = `/app/my-documents${
+    searchParams.toString() ? `?${searchParams.toString()}` : ''
+  }`;
 
   return (
     <section
@@ -107,22 +187,47 @@ export default function MyDocumentsRoute() {
             subtitle="Documents you write will show up here, organized by class."
           />
         ) : (
-          <div className="flex flex-col gap-8">
-            {groups.map((group) => (
-              <div key={group.classId ?? 'unassigned'}>
-                <p className="my-2 text-foreground/60">{group.label}</p>
-                <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
-                  {group.documents.map((doc: any) => (
-                    <DocumentLink
-                      key={doc.id}
-                      doc={doc}
-                      exitTo="/app/my-documents"
-                      isStudentView
-                    />
-                  ))}
-                </div>
+          <div className="flex flex-col gap-6">
+            <StudentDocumentFiltersBar
+              filters={filters}
+              statusCounts={statusCounts}
+              totalCount={totalCount}
+              classes={classes}
+              assignments={assignments}
+              hasActiveFilters={hasActiveFilters}
+              onFiltersChange={updateFilters}
+              onClearFilters={clearFilters}
+            />
+
+            {filteredDocuments.length === 0 ? (
+              <div
+                className="flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed bg-muted p-12"
+                data-testid="my-documents-empty"
+              >
+                <span className="text-lg font-bold">No documents found</span>
+                <span className="text-sm text-muted-foreground">
+                  Try adjusting your filters
+                </span>
               </div>
-            ))}
+            ) : (
+              <div className="flex flex-col gap-8">
+                {groups.map((group) => (
+                  <div key={group.classId ?? 'unassigned'}>
+                    <p className="my-2 text-foreground/60">{group.label}</p>
+                    <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+                      {group.documents.map((doc: any) => (
+                        <DocumentLink
+                          key={doc.id}
+                          doc={doc}
+                          exitTo={exitTo}
+                          isStudentView
+                        />
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>
