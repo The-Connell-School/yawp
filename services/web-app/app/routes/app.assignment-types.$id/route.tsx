@@ -30,6 +30,7 @@ import {
   DocumentCreationError,
 } from '~/domain/documents.server';
 import { listApHistoryLibraryEntries } from '~/domain/ap-history/library.server';
+import { listSavedThesisPrompts } from '~/domain/thesis-prompts/saved-prompts.server';
 import { AP_HISTORY_ASSIGNMENT_TYPE_KEY } from '~/domain/ap-history/schema';
 import {
   getAvailableAssignmentTypesForScopes,
@@ -54,9 +55,26 @@ import {
   type PromptType,
 } from './prompts-library/data';
 import promptsRaw from './prompts-library/prompts.json';
+import { ThesisPromptsLibrary } from './thesis-prompts-library/thesis-prompts-library';
+import { ThesisPromptGenerator } from './thesis-prompts-library/thesis-prompt-generator';
+import { ThesisTeacherDirections } from './thesis-prompts-library/thesis-teacher-directions';
+import {
+  applyFilters as applyThesisFilters,
+  buildFacets as buildThesisFacets,
+  buildOptionCounts as buildThesisOptionCounts,
+  readFilters as readThesisFilters,
+  savedPromptToLibraryEntry,
+  toLibraryEntries as toThesisLibraryEntries,
+  type ThesisPrompt,
+} from './thesis-prompts-library/data';
+import thesisPromptsRaw from './thesis-prompts-library/prompts.json';
 
 const DAILY_PAGES_TITLE = 'daily pages';
+const THESIS_ESSAY_TITLE = 'the thesis-driven essay';
 const ALL_PROMPTS = promptsRaw as LibraryPrompt[];
+const ALL_THESIS_PROMPTS = toThesisLibraryEntries(
+  thesisPromptsRaw as ThesisPrompt[]
+);
 const SERIOUSNESS_ORDER: PromptSeriousness[] = [
   'playful',
   'light',
@@ -355,8 +373,9 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     });
   }
 
-  const isDailyPages =
-    assignmentType.title.trim().toLowerCase() === DAILY_PAGES_TITLE;
+  const normalizedTitle = assignmentType.title.trim().toLowerCase();
+  const isDailyPages = normalizedTitle === DAILY_PAGES_TITLE;
+  const isThesisEssay = normalizedTitle === THESIS_ESSAY_TITLE;
   const isApHistory =
     assignmentType.systemKey === AP_HISTORY_ASSIGNMENT_TYPE_KEY;
   const promptLibrary =
@@ -366,6 +385,34 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           facets: ALL_FACETS,
           optionCounts: ALL_OPTION_COUNTS,
           totalCount: ALL_PROMPTS.length,
+        }
+      : null;
+  // "My prompts": prompts this teacher generated and kept, shown in the same
+  // library alongside the fixed corpus and filterable on their own.
+  const savedThesisPrompts =
+    profile.role === "TEACHER" && isThesisEssay
+      ? await listSavedThesisPrompts({
+          membershipId: profile.id,
+          assignmentTypeId: assignmentType.id,
+        })
+      : [];
+  const thesisLibraryEntries =
+    profile.role === "TEACHER" && isThesisEssay
+      ? [
+          ...savedThesisPrompts.map(savedPromptToLibraryEntry),
+          ...ALL_THESIS_PROMPTS,
+        ]
+      : [];
+  const thesisPromptLibrary =
+    profile.role === "TEACHER" && isThesisEssay
+      ? {
+          prompts: applyThesisFilters(
+            thesisLibraryEntries,
+            readThesisFilters(new URL(request.url))
+          ),
+          facets: buildThesisFacets(thesisLibraryEntries),
+          optionCounts: buildThesisOptionCounts(thesisLibraryEntries),
+          totalCount: thesisLibraryEntries.length,
         }
       : null;
   const enabledTeacherClassIds = profile.role === "TEACHER"
@@ -390,6 +437,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     archivedDocuments,
     teacherClasses: assignmentEnabledTeacherClasses,
     promptLibrary,
+    thesisPromptLibrary,
     apHistoryLibrary,
   });
 }
@@ -483,6 +531,7 @@ export default function AppAssignmentTypesIdRoute() {
   const isLoading = navigation.state !== 'idle';
   const docFormRef = useRef<HTMLFormElement>(null);
   const [isAssignmentSheetOpen, setIsAssignmentSheetOpen] = useState(false);
+  const [isPromptGeneratorOpen, setIsPromptGeneratorOpen] = useState(false);
   const [libraryPrompt, setLibraryPrompt] = useState('');
   const [apHistoryEntry, setApHistoryEntry] = useState<{
     externalKey: string;
@@ -491,6 +540,7 @@ export default function AppAssignmentTypesIdRoute() {
     essayType: string;
   } | null>(null);
   const showPromptsLibrary = data.promptLibrary != null;
+  const showThesisLibrary = data.thesisPromptLibrary != null;
   const isApHistoryAssignmentType =
     data.assignmentType.systemKey === AP_HISTORY_ASSIGNMENT_TYPE_KEY;
   const canCreateDirectDocument = !isApHistoryAssignmentType;
@@ -536,6 +586,14 @@ export default function AppAssignmentTypesIdRoute() {
                       >
                         Assignment
                       </DropdownMenuItem>
+                      {showThesisLibrary ? (
+                        <DropdownMenuItem
+                          disabled={data.teacherClasses.length === 0}
+                          onSelect={() => setIsPromptGeneratorOpen(true)}
+                        >
+                          Generate a prompt
+                        </DropdownMenuItem>
+                      ) : null}
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </>
@@ -547,8 +605,22 @@ export default function AppAssignmentTypesIdRoute() {
                 open={isAssignmentSheetOpen}
                 onOpenChange={setIsAssignmentSheetOpen}
                 initialPrompt={libraryPrompt}
+                titleRequired={showThesisLibrary}
                 apHistoryEntry={apHistoryEntry}
               />
+              {showThesisLibrary ? (
+                <ThesisPromptGenerator
+                  open={isPromptGeneratorOpen}
+                  onOpenChange={setIsPromptGeneratorOpen}
+                  assignmentTypeId={data.assignmentType.id}
+                  onUsePrompt={(promptBody) => {
+                    setApHistoryEntry(null);
+                    setLibraryPrompt(promptBody);
+                    setIsPromptGeneratorOpen(false);
+                    setIsAssignmentSheetOpen(true);
+                  }}
+                />
+              ) : null}
             </>
           ) : canCreateDirectDocument ? (
             <Form method="post">
@@ -579,23 +651,41 @@ export default function AppAssignmentTypesIdRoute() {
           </div>
         </div>
         {showPromptsLibrary ? <TeacherDirections /> : null}
+        {showThesisLibrary ? <ThesisTeacherDirections /> : null}
         {hasModules ? (
-          <>
-            <h3 className="mb-2 text-foreground/75">Modules</h3>
-            <div className="border-b" />
-            <Accordion type="multiple" className="pb-6">
-              {data.assignmentType.assignmentModules.map((cm) => (
-                <AccordionItem key={cm.id} value={cm.id}>
-                  <AccordionTrigger className="py-2 text-base">
-                    {cm.title}
-                  </AccordionTrigger>
-                  <AccordionContent className="text-muted-foreground">
-                    {cm.description || 'No description.'}
-                  </AccordionContent>
-                </AccordionItem>
-              ))}
-            </Accordion>
-          </>
+          <Accordion type="single" collapsible>
+            <AccordionItem value="modules">
+              <AccordionTrigger className="py-2 text-base">
+                Modules
+              </AccordionTrigger>
+              <AccordionContent>
+                {showThesisLibrary ? (
+                  <p className="mb-3 text-sm text-muted-foreground">
+                    Click on the modules to see the overview of the writing
+                    process that you&rsquo;ll teach your students. Training
+                    videos and lesson materials are available in the
+                    Teachers&rsquo; Lounge.
+                  </p>
+                ) : null}
+                <Accordion type="multiple">
+                  {data.assignmentType.assignmentModules.map((cm) => (
+                    <AccordionItem
+                      key={cm.id}
+                      value={cm.id}
+                      className="border-b border-border/40"
+                    >
+                      <AccordionTrigger className="py-2 text-sm">
+                        {cm.title}
+                      </AccordionTrigger>
+                      <AccordionContent className="text-muted-foreground">
+                        {cm.description || 'No description.'}
+                      </AccordionContent>
+                    </AccordionItem>
+                  ))}
+                </Accordion>
+              </AccordionContent>
+            </AccordionItem>
+          </Accordion>
         ) : null}
         {data.promptLibrary ? (
           <div className="pb-6">
@@ -604,6 +694,21 @@ export default function AppAssignmentTypesIdRoute() {
               facets={data.promptLibrary.facets}
               optionCounts={data.promptLibrary.optionCounts}
               totalCount={data.promptLibrary.totalCount}
+              onSelectPrompt={(prompt) => {
+                setApHistoryEntry(null);
+                setLibraryPrompt(prompt);
+                setIsAssignmentSheetOpen(true);
+              }}
+            />
+          </div>
+        ) : null}
+        {data.thesisPromptLibrary ? (
+          <div className="pb-6">
+            <ThesisPromptsLibrary
+              prompts={data.thesisPromptLibrary.prompts}
+              facets={data.thesisPromptLibrary.facets}
+              optionCounts={data.thesisPromptLibrary.optionCounts}
+              totalCount={data.thesisPromptLibrary.totalCount}
               onSelectPrompt={(prompt) => {
                 setApHistoryEntry(null);
                 setLibraryPrompt(prompt);

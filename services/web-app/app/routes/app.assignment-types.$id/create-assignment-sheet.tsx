@@ -33,6 +33,7 @@ type Props = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   initialPrompt?: string;
+  titleRequired?: boolean;
   apHistoryEntry?: {
     externalKey: string;
     title: string;
@@ -52,6 +53,7 @@ export function CreateAssignmentSheet({
   open,
   onOpenChange,
   initialPrompt = '',
+  titleRequired = false,
   apHistoryEntry = null,
 }: Props) {
   const fetcher = useFetcher<{ success?: boolean; message?: string }>();
@@ -84,6 +86,7 @@ export function CreateAssignmentSheet({
         assignmentTypes={[{ id: assignmentTypeId, title: assignmentTypeTitle }]}
         teacherClasses={teacherClasses}
         initialPrompt={initialPrompt}
+        titleRequired={titleRequired}
       />
     );
   }

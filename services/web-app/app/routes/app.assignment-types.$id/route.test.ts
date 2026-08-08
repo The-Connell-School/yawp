@@ -23,6 +23,9 @@ const prisma = {
   apHistoryPromptLibraryEntry: {
     findMany: mock(),
   },
+  savedThesisPrompt: {
+    findMany: mock(),
+  },
 };
 
 const requireUserId = mock();
@@ -102,6 +105,8 @@ describe('app.assignment-types.$id action', () => {
     prisma.organizationAssignmentType.findMany.mockReset();
     prisma.school.findMany.mockReset();
     prisma.orgMembership.findMany.mockReset();
+    prisma.savedThesisPrompt.findMany.mockReset();
+    prisma.savedThesisPrompt.findMany.mockResolvedValue([]);
     requireUserId.mockReset();
     requireMembership.mockReset();
     createDocumentForAssignmentType.mockReset();
@@ -258,6 +263,105 @@ describe('app.assignment-types.$id loader Daily Pages prompt library', () => {
     expect(response.data.promptLibrary.facets.textsOrUnits).toContain(
       'Macbeth'
     );
+  });
+
+  test('provides thesis prompt library for teachers viewing The Thesis-Driven Essay', async () => {
+    getAvailableAssignmentTypesForScopes.mockResolvedValue([
+      withOrganizationAssignment(
+        makeAssignmentType({ title: 'The Thesis-Driven Essay' })
+      ),
+    ]);
+
+    const response = (await loader({
+      request: new Request(
+        'https://example.test/app/assignment-types/at-1?tp_cat=single-text'
+      ),
+      params: { id: 'at-1' },
+    } as never)) as any;
+
+    // Daily Pages library stays null for this assignment type.
+    expect(response.data.promptLibrary).toBeNull();
+    expect(response.data.thesisPromptLibrary.totalCount).toBeGreaterThan(0);
+    expect(
+      response.data.thesisPromptLibrary.prompts.every(
+        (p: { category: string }) => p.category === 'single-text'
+      )
+    ).toBe(true);
+    expect(response.data.thesisPromptLibrary.facets.categories).toContain(
+      'general'
+    );
+  });
+
+  test('merges the teacher\'s saved prompts into the thesis library as "My prompts"', async () => {
+    getAvailableAssignmentTypesForScopes.mockResolvedValue([
+      withOrganizationAssignment(
+        makeAssignmentType({ title: 'The Thesis-Driven Essay' })
+      ),
+    ]);
+    prisma.savedThesisPrompt.findMany.mockResolvedValue([
+      {
+        id: 'saved-1',
+        title: 'Loyalty Under Pressure',
+        prompt: 'Write a thesis-driven critical essay on loyalty.',
+        createdAt: new Date('2026-07-27T12:00:00.000Z'),
+      },
+    ]);
+
+    const response = (await loader({
+      request: new Request(
+        'https://example.test/app/assignment-types/at-1?tp_coll=mine'
+      ),
+      params: { id: 'at-1' },
+    } as never)) as any;
+
+    expect(prisma.savedThesisPrompt.findMany.mock.calls[0][0].where).toEqual({
+      membershipId: 'teacher-1',
+      assignmentTypeId: 'at-1',
+      archivedAt: null,
+    });
+    // The saved prompt is the only thing the "My prompts" filter keeps.
+    expect(response.data.thesisPromptLibrary.prompts).toHaveLength(1);
+    expect(response.data.thesisPromptLibrary.prompts[0]).toMatchObject({
+      id: 'saved-1',
+      title: 'Loyalty Under Pressure',
+      collection: 'mine',
+    });
+    expect(response.data.thesisPromptLibrary.facets.collections).toEqual([
+      'library',
+      'mine',
+    ]);
+    expect(response.data.thesisPromptLibrary.optionCounts.collections.mine).toBe(
+      1
+    );
+  });
+
+  test('omits thesis prompt library for students and other assignment types', async () => {
+    requireMembership.mockResolvedValueOnce({
+      id: 'profile-1',
+      role: 'STUDENT',
+      organization: { id: 'org-1', name: 'Org' },
+    });
+    getAvailableAssignmentTypesForScopes.mockResolvedValueOnce([
+      withOrganizationAssignment(
+        makeAssignmentType({ title: 'The Thesis-Driven Essay' })
+      ),
+    ]);
+
+    const studentResponse = (await loader({
+      request: new Request('https://example.test/app/assignment-types/at-1'),
+      params: { id: 'at-1' },
+    } as never)) as any;
+    expect(studentResponse.data.thesisPromptLibrary).toBeNull();
+
+    getAvailableAssignmentTypesForScopes.mockResolvedValueOnce([
+      withOrganizationAssignment(makeAssignmentType({ title: 'Daily Pages' })),
+    ]);
+    const dailyPagesResponse = (await loader({
+      request: new Request('https://example.test/app/assignment-types/at-1'),
+      params: { id: 'at-1' },
+    } as never)) as any;
+    expect(dailyPagesResponse.data.thesisPromptLibrary).toBeNull();
+    expect(dailyPagesResponse.data.promptLibrary).not.toBeNull();
   });
 
   test('returns all teacher classes for assignment creation', async () => {
