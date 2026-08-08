@@ -198,13 +198,15 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
   const isAdmin = hasEffectivePlatformAdmin(user?.isAdmin);
 
-  // A teacher unsubmit hides this submission from the student — it's no
-  // different from it never having been turned in. Send them back to the
+  // Unsubmitting is student-initiated and owner-only — /api/domain/unsubmit-
+  // submission refuses teachers and admins — so the only way an owner reaches
+  // an unsubmitted submission is that they withdrew it themselves. Once
+  // withdrawn it stops counting as turned in, so send them back to the
   // document, which is untouched and open to a new submission.
   if (isOwner && submission.unsubmittedAt) {
     return redirectWithToast(`/app/documents/${submission.documentId}`, {
       description:
-        'Your teacher unsubmitted this document. You can revise and resubmit it.',
+        'You unsubmitted this document. You can revise and resubmit it.',
       type: 'message',
     });
   }
@@ -256,11 +258,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 // ── Component ────────────────────────────────────────────────────────
 
 export default function SubmissionRoute() {
-  const {
-    submission,
-    isOwner,
-    isTeacher,
-  } = useLoaderData<typeof loader>();
+  const { submission, isOwner, isTeacher } = useLoaderData<typeof loader>();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const location = useLocation();
@@ -297,13 +295,13 @@ export default function SubmissionRoute() {
     setIsEditingGrade(
       !submission.releasedAt &&
         !(
-        submission.gradedAt &&
-        hasRecordedGrade({
-          numericPercentage: submission.numericPercentage,
-          overallScore: submission.overallScore,
-          score: submission.score,
-        })
-      )
+          submission.gradedAt &&
+          hasRecordedGrade({
+            numericPercentage: submission.numericPercentage,
+            overallScore: submission.overallScore,
+            score: submission.score,
+          })
+        )
     );
   }, [submission.id]);
 
@@ -915,8 +913,7 @@ export default function SubmissionRoute() {
                 teacherGradeUi?.rubricConfig ?? submission.rubricConfig
               }
               initialGradingAssistantStrictnessLevel={
-                submission.document.assignment
-                  ?.gradingAssistantStrictnessLevel
+                submission.document.assignment?.gradingAssistantStrictnessLevel
               }
             />
           ) : (
