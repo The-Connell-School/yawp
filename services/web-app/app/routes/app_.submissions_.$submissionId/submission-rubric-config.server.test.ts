@@ -209,4 +209,41 @@ describe('resolveRubricConfigForSubmission', () => {
       'grammar_and_mechanics'
     );
   });
+
+  test('carries the customizable category options through the snapshot round trip', async () => {
+    const config = await resolveRubricConfigForSubmission({
+      assignmentTypeId: 'assignment-type-daily-pages',
+      latestGradingRun: {
+        assignmentTypeRubricSnapshot: {
+          minScore: 1,
+          maxScore: 5,
+          scoringType: 'weighted_1_5',
+          categories: [
+            {
+              key: 'daily_habit',
+              label: 'Daily Habit',
+              description: 'Did the student write today?',
+              weight: 1,
+              scoreLabels: [
+                { value: 1, label: 'Skipped' },
+                { value: 5, label: 'Every day' },
+              ],
+              feedbackEnabled: false,
+              grammarHighlighting: false,
+            },
+          ],
+        },
+      },
+      rubricScores: {
+        daily_habit: { score: 5, comment: '' },
+      },
+    });
+
+    expect(config.categories[0].scoreLabels).toEqual([
+      { value: 1, label: 'Skipped' },
+      { value: 5, label: 'Every day' },
+    ]);
+    expect(config.categories[0].feedbackEnabled).toBe(false);
+    expect(config.categories[0].grammarHighlighting).toBe(false);
+  });
 });

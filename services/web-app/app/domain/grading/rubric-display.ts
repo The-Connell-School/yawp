@@ -1,10 +1,19 @@
 import { rubricCategories } from './rubric';
+import {
+  getCategoryScoreLabel,
+  parseOptionalBoolean,
+  parseRubricScoreLabels,
+} from '~/domain/assignment-types/rubric-category-options';
+import type { RubricScoreLabel } from '~/domain/assignment-types/assignment-type-rubric.shared';
 
 export type RubricDisplayCategory = {
   key: string;
   label: string;
   description: string;
   weight: number;
+  scoreLabels?: RubricScoreLabel[];
+  feedbackEnabled?: boolean;
+  grammarHighlighting?: boolean;
 };
 
 export type RubricDisplaySource = 'assignment-type' | 'thesis-default';
@@ -84,7 +93,24 @@ export function normalizeRubricDisplayConfig(
               ? category.weight
               : 0;
           if (!key || !label) return null;
-          return { key, label, description, weight };
+          const scoreLabels = parseRubricScoreLabels(category.scoreLabels);
+          const feedbackEnabled = parseOptionalBoolean(
+            category.feedbackEnabled
+          );
+          const grammarHighlighting = parseOptionalBoolean(
+            category.grammarHighlighting
+          );
+          return {
+            key,
+            label,
+            description,
+            weight,
+            ...(scoreLabels ? { scoreLabels } : {}),
+            ...(feedbackEnabled === undefined ? {} : { feedbackEnabled }),
+            ...(grammarHighlighting === undefined
+              ? {}
+              : { grammarHighlighting }),
+          };
         })
         .filter(
           (category): category is RubricDisplayCategory => category !== null
@@ -163,13 +189,28 @@ export function normalizeRubricScoresForCategories({
   return normalized;
 }
 
-export function buildScoreOptions(minScore: number, maxScore: number) {
+/**
+ * Builds the score dropdown options for one rubric category.
+ *
+ * `scoreLabels` are this category's own configured words. Any score value they
+ * do not cover falls back to the shared 1-5 labels, which is exactly what every
+ * rubric did before score labels became configurable.
+ */
+export function buildScoreOptions(
+  minScore: number,
+  maxScore: number,
+  scoreLabels?: RubricScoreLabel[]
+) {
   return Array.from(
     { length: Math.max(0, maxScore - minScore + 1) },
     (_, index) => minScore + index
   ).map((score) => {
+    const configured = scoreLabels
+      ? getCategoryScoreLabel({ scoreLabels }, score)
+      : null;
     const suffix =
-      maxScore === 5 && minScore === 1 ? legacyScoreLabels[score] : null;
+      configured ??
+      (maxScore === 5 && minScore === 1 ? legacyScoreLabels[score] : null);
     return {
       value: score.toString(),
       label: suffix ? `${score} - ${suffix}` : score.toString(),

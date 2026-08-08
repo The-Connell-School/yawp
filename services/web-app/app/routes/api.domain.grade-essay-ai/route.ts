@@ -16,6 +16,10 @@ import { parseGrammarIssuesPayload } from '~/domain/grading/grammarIssues';
 import { resolveAssignmentTypeGradingConfig } from '~/domain/assignment-types/assignment-type-grading-config.server';
 import type { RubricCategory as GradingRubricCategory } from '~/domain/assignment-types/assignment-type-rubric.shared';
 import {
+  isGrammarHighlightCategory,
+  resolveGrammarHighlightingEnabled,
+} from '~/domain/assignment-types/rubric-category-options';
+import {
   applyGradingAssistantStrictnessToActComposite,
   applyGradingAssistantStrictnessToPercentage,
   DEFAULT_GRADING_ASSISTANT_STRICTNESS_LEVEL,
@@ -1005,12 +1009,19 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
       gradingAssistantStrictnessLevel,
     });
 
+  // Grammar/syntax highlighting has always run for every non-AP-History
+  // rubric, so a rubric whose categories say nothing about it keeps running it.
+  // Only a rubric that explicitly opts every category out skips the pass.
+  const grammarHighlightingEnabled =
+    resolveGrammarHighlightingEnabled(rubricCategories);
+  const grammarCategoryKeys = new Set(
+    rubricCategories
+      .filter((category) => isGrammarHighlightCategory(category))
+      .map((category) => category.key)
+  );
   const grammarAndMechanicsScore =
-    parsed.categories.find(
-      (item) =>
-        item.key === 'grammar_and_mechanics' ||
-        item.key === 'language_use_and_conventions'
-    )?.score ?? null;
+    parsed.categories.find((item) => grammarCategoryKeys.has(item.key))
+      ?.score ?? null;
 
   let grammarIssues: Prisma.InputJsonValue | null = null;
   const parseGrammarIssuesFromResponseText = (responseText: string) => {
@@ -1048,7 +1059,12 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
       })),
     }) satisfies Prisma.InputJsonValue;
 
-  if (useE2EFixture) {
+  if (!grammarHighlightingEnabled) {
+    // Write an empty issue set rather than leaving the field untouched, so
+    // turning highlighting off and re-grading clears highlights an earlier run
+    // stored. A grammar pass that merely fails still leaves them alone.
+    grammarIssues = buildGrammarIssuesPayload([]);
+  } else if (useE2EFixture) {
     grammarIssues = buildGrammarIssuesPayload(
       parseGrammarIssuesPayload(
         {
