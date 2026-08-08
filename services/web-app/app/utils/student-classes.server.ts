@@ -3,7 +3,7 @@ import { prisma } from '~/utils/db.server.js';
 export type StudentEnrolledClass = {
   id: string;
   grade: string;
-  period: string;
+  period: string | null;
   title: string | null;
   classArtKey: string | null;
   legacyClassArtIndex: number | null;

@@ -150,10 +150,12 @@ export function getDraftDisplayTitle(document: {
 
 function classAssignmentOptionLabel(klass: {
   grade: string;
-  period: string;
+  period: string | null;
   title: string | null;
 }) {
-  const base = `Grade ${klass.grade} • Period ${klass.period}`;
+  const base = klass.period
+    ? `Grade ${klass.grade} • Period ${klass.period}`
+    : `Grade ${klass.grade}`;
   return klass.title ? `${base} — ${klass.title}` : base;
 }
 
