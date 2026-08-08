@@ -36,7 +36,9 @@ describe('api.domain.tutor-response read-only impersonation', () => {
     prisma.assignmentModuleSession.update.mockReset();
   });
 
-  function mockCms() {
+  function mockCms(
+    documentOverrides: Record<string, unknown> = {}
+  ) {
     prisma.assignmentModuleSession.findUnique.mockResolvedValueOnce({
       id: 'cms-1',
       instructionsCompleted: 0,
@@ -77,6 +79,8 @@ describe('api.domain.tutor-response read-only impersonation', () => {
       document: {
         id: 'doc-1',
         text: 'Original draft',
+        assignment: { tutorEnabled: true },
+        ...documentOverrides,
       },
     });
   }
@@ -263,5 +267,49 @@ describe('api.domain.tutor-response read-only impersonation', () => {
       agent: 'assistant',
       content: 'Draft a clearer thesis.',
     });
+  });
+
+  test('blocks the tutor response when the assignment has tutorEnabled=false', async () => {
+    mockCms({ assignment: { tutorEnabled: false } });
+
+    const body = new FormData();
+    body.set('response', 'Can you help?');
+    body.set('cmsId', 'cms-1');
+
+    const response = await action({
+      request: new Request('https://example.com/api/domain/tutor-response', {
+        method: 'POST',
+        body,
+      }),
+    } as any);
+    const payload = response as {
+      data: { error?: string };
+      init?: { status?: number };
+    };
+
+    expect(payload.init?.status).toBe(403);
+    expect(payload.data.error).toContain('tutor is turned off');
+    expect(getLLMCompletion).not.toHaveBeenCalled();
+    expect(prisma.assignmentModuleSession.update).not.toHaveBeenCalled();
+  });
+
+  test('allows the tutor response when the document has no linked assignment', async () => {
+    getLLMCompletion.mockResolvedValue('Draft a clearer thesis.');
+    mockCms({ assignment: null });
+
+    const body = new FormData();
+    body.set('response', 'Can you help?');
+    body.set('cmsId', 'cms-1');
+
+    const response = await action({
+      request: new Request('https://example.com/api/domain/tutor-response', {
+        method: 'POST',
+        body,
+      }),
+    } as any);
+    const payload = response as { init?: { status?: number } };
+
+    expect(payload.init?.status ?? 200).not.toBe(403);
+    expect(getLLMCompletion).toHaveBeenCalled();
   });
 });

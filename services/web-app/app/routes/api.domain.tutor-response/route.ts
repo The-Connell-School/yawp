@@ -75,6 +75,7 @@ export async function action({ request }: ActionFunctionArgs) {
           select: {
             id: true,
             text: true,
+            assignment: { select: { tutorEnabled: true } },
           },
         },
       },
@@ -84,6 +85,13 @@ export async function action({ request }: ActionFunctionArgs) {
       return dataResponse(
         { error: 'No course module session found' },
         { status: 404 }
+      );
+    }
+
+    if (cms.document?.assignment?.tutorEnabled === false) {
+      return dataResponse(
+        { error: 'The tutor is turned off for this assignment.' },
+        { status: 403 }
       );
     }
 

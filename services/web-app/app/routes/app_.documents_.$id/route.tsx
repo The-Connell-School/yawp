@@ -205,6 +205,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           title: true,
           prompt: true,
           apHistorySnapshot: true,
+          tutorEnabled: true,
         },
       },
       classAssignment: {
@@ -444,6 +445,18 @@ export function getGenericAssignmentPromptForEditor<T>(
     : null;
 }
 
+/**
+ * Whether the tutor affordance (tab + panel) should be shown for a document.
+ * A document with no linked assignment (e.g. free writing) keeps today's
+ * behavior of always showing the tutor. Defaults to enabled when the flag
+ * is missing, which preserves current behavior for existing assignments.
+ */
+export function isTutorEnabledForAssignment(
+  assignment: { tutorEnabled?: boolean } | null | undefined
+): boolean {
+  return assignment?.tutorEnabled !== false;
+}
+
 export default function Route() {
   const data = useLoaderData<typeof loader>();
   const user = useUser();
@@ -467,7 +480,9 @@ export default function Route() {
       ? data.currentCmsIdx
       : fallbackCmsIdx;
   const explicitExitTarget = sanitizeExitTarget(searchParams.get('exitTo'));
-  const tab = searchParams.get('tab') ?? 'tutor';
+  const tutorEnabled = isTutorEnabledForAssignment(data.doc.assignment);
+  const tab =
+    searchParams.get('tab') ?? (tutorEnabled ? 'tutor' : 'editor');
   const isViewingAsTeacher = data.doc && user.id !== data.doc?.membership.userId;
   // Owner or class teacher (loader); api.model.document allows both to persist edits.
   const isDocumentEditable = true;
@@ -926,9 +941,11 @@ export default function Route() {
         </nav>
         <Tabs onValueChange={changeTab} value={tab} className="md:hidden">
           <TabsList className="w-full rounded-none border-b px-3">
-            <TabsTrigger value="tutor" className="w-full">
-              Tutor
-            </TabsTrigger>
+            {tutorEnabled ? (
+              <TabsTrigger value="tutor" className="w-full">
+                Tutor
+              </TabsTrigger>
+            ) : null}
             <TabsTrigger value="editor" className="w-full">
               Editor
             </TabsTrigger>
@@ -939,7 +956,7 @@ export default function Route() {
         </Tabs>
         <CommentsSelectionProvider>
           <div className="mx-auto flex min-h-0 flex-1 w-full max-w-screen-2xl overflow-hidden">
-            {isMobile && tab !== 'tutor' ? null : (
+            {!tutorEnabled || (isMobile && tab !== 'tutor') ? null : (
               <Tutor
                 docId={data.doc.id}
                 cms={(tutor.cms ?? data.currentCms) as any}
