@@ -10,7 +10,7 @@ import {
   parseRubric,
   parseScoringScale,
 } from '~/domain/assignment-types/assignment-type-rubric.shared';
-import { hasAssignmentTypeOwnedRubric } from '~/domain/assignment-types/assignment-type-rubric-config';
+import { isRubricFullyPopulated } from '~/domain/assignment-types/assignment-type-rubric-config';
 
 function parseJsonFormField(formData: FormData, name: string) {
   const value = formData.get(name);
@@ -116,20 +116,20 @@ export async function action({ request, params }: ActionFunctionArgs) {
       : {};
 
     if (hasGradingConfigFields) {
-      const nextRubricUsable = hasAssignmentTypeOwnedRubric(
+      const nextRubricComplete = isRubricFullyPopulated(
         parseRubric(gradingConfigData.rubricJson)
       );
-      if (!nextRubricUsable) {
-        // Grandfather assignment types that already fell back to the thesis
-        // default rubric before this edit — don't force an unrelated save
-        // (e.g. a title change) to be blocked on fixing a pre-existing gap.
-        // Only block edits that would newly introduce the fallback.
-        const previouslyUsable = hasAssignmentTypeOwnedRubric(
+      if (!nextRubricComplete) {
+        // Grandfather assignment types whose rubric was already incomplete
+        // before this edit — don't force an unrelated save (e.g. a title
+        // change) to be blocked on fixing a pre-existing gap. Only block edits
+        // that would newly break a rubric that was whole.
+        const previouslyComplete = isRubricFullyPopulated(
           parseRubric((existing as { rubricJson?: unknown }).rubricJson)
         );
-        if (previouslyUsable) {
+        if (previouslyComplete) {
           throw new Response(
-            'Add at least one fully-populated rubric category (key, label, description, and weight) before saving. Otherwise grading silently falls back to the thesis-driven essay rubric.',
+            'Every rubric category needs a key, label, description, and weight before saving. Finish the categories you started, or remove them.',
             { status: 400 }
           );
         }

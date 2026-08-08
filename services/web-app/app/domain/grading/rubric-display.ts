@@ -34,6 +34,11 @@ export type RubricDisplayConfig = {
    * snapshots, the hardcoded pre-assignment-type display fallback).
    */
   source?: RubricDisplaySource;
+  /**
+   * The assignment type owns this rubric but left some categories unfinished.
+   * Surfaced to the teacher instead of quietly falling back to a default.
+   */
+  rubricIncomplete?: boolean;
 };
 
 const rubricDisplaySources = new Set<string>([
@@ -158,6 +163,7 @@ export function normalizeRubricDisplayConfig(
     maxScore: Math.max(minScore, maxScore),
     scoringType,
     source: parseRubricDisplaySource(raw.source),
+    rubricIncomplete: raw.rubricIncomplete === true,
   };
 }
 

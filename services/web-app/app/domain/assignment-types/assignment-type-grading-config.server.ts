@@ -28,6 +28,12 @@ export type AssignmentTypeGradingInstructions =
 
 export type ResolvedAssignmentTypeGradingConfig = {
   source: AssignmentTypeRubricConfigSource;
+  /**
+   * The assignment type's own rubric is in use but some categories are not
+   * fully filled in. Grading still uses it; the flag exists so the gap is
+   * shown rather than silently swapping in a default rubric.
+   */
+  rubricIncomplete: boolean;
   assignmentTypeId: string;
   assignmentTypeKind: string | null;
   assignmentTypeTitle: string | null;
@@ -161,6 +167,7 @@ function buildResolvedConfig({
 
   return {
     source: parsedConfig.source,
+    rubricIncomplete: parsedConfig.rubricIncomplete,
     assignmentTypeId,
     assignmentTypeKind: row?.kind ?? assignmentTypeKind,
     assignmentTypeTitle: row?.title ?? assignmentTypeTitle,

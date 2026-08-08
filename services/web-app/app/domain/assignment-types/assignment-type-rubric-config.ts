@@ -52,6 +52,13 @@ export type AssignmentTypeRubricConfig = {
   outputSchema: Record<string, unknown>;
   calibrationNotes: string | null;
   /**
+   * True when this is the assignment type's own rubric but some of its
+   * categories are missing a key, label, description, or weight. The rubric is
+   * still used — the flag exists so the incompleteness is surfaced to whoever
+   * is grading rather than quietly changing which rubric applies.
+   */
+  rubricIncomplete: boolean;
+  /**
    * What to call this config when it did not come from the assignment type's
    * own saved rubric. Undefined for `assignment-type`, which uses the title.
    */
@@ -83,6 +90,7 @@ const thesisDefaultConfig: AssignmentTypeRubricConfig = {
   outputSchema: { ...DEFAULT_OUTPUT_SCHEMA_JSON },
   calibrationNotes:
     'Represents the pre-existing Yawp thesis-driven essay grading assistant path.',
+  rubricIncomplete: false,
   defaultLabel: 'Thesis-driven essay grading assistant',
 };
 
@@ -104,6 +112,7 @@ const defaultRubricConfigsByKind: Record<string, AssignmentTypeRubricConfig> = {
     outputSchema: { ...DEFAULT_OUTPUT_SCHEMA_JSON },
     calibrationNotes:
       'Daily Pages judges engagement only, with overall feedback and no grammar highlighting.',
+    rubricIncomplete: false,
     defaultLabel: 'Daily Pages engagement',
   },
 };
@@ -123,34 +132,67 @@ function parseOutputSchema(raw: unknown): Record<string, unknown> {
   return isRecord(raw) ? raw : { ...DEFAULT_OUTPUT_SCHEMA_JSON };
 }
 
-export function hasAssignmentTypeOwnedRubric(rubric: RubricData) {
-  return (
-    rubric.categories.length > 0 &&
-    rubric.categories.every(
-      (category) =>
-        category.key.trim() &&
-        category.label.trim() &&
-        category.description.trim() &&
-        Number.isFinite(category.weight)
-    )
+export type AssignmentTypeRubricCompleteness = 'none' | 'partial' | 'complete';
+
+function isCategoryComplete(category: RubricCategory) {
+  return Boolean(
+    category.key.trim() &&
+      category.label.trim() &&
+      category.description.trim() &&
+      Number.isFinite(category.weight)
   );
+}
+
+/**
+ * How much of an assignment type's own rubric an admin actually filled in.
+ *
+ * `partial` is the case worth naming: at least one category is usable and at
+ * least one is not. Treating that as owned grades against a half-written
+ * rubric; treating it as unowned swaps the whole rubric for the thesis default
+ * behind the admin's back. Neither is acceptable silently, so the reading path
+ * keeps the rubric and the partial state is reported loudly instead.
+ */
+export function classifyAssignmentTypeRubric(
+  rubric: RubricData
+): AssignmentTypeRubricCompleteness {
+  if (rubric.categories.length === 0) return 'none';
+  if (rubric.categories.every(isCategoryComplete)) return 'complete';
+  if (rubric.categories.some(isCategoryComplete)) return 'partial';
+  return 'none';
+}
+
+/**
+ * Reading: permissive on purpose. A rubric with any usable category stays the
+ * assignment type's own, so no persisted rubric ever changes out from under
+ * scores that were already entered against it.
+ */
+export function hasAssignmentTypeOwnedRubric(rubric: RubricData) {
+  return classifyAssignmentTypeRubric(rubric) !== 'none';
+}
+
+/**
+ * Writing: strict. Save-time guards use this so a partial rubric cannot be
+ * newly introduced, which is the only point at which blocking is safe.
+ */
+export function isRubricFullyPopulated(rubric: RubricData) {
+  return classifyAssignmentTypeRubric(rubric) === 'complete';
 }
 
 export function getThesisDefaultRubricConfig(): AssignmentTypeRubricConfig {
   return parseAssignmentTypeRubricConfig({});
 }
 
-function hasUsableRubric(rubric: RubricData) {
-  return hasAssignmentTypeOwnedRubric(rubric);
-}
-
 export function parseAssignmentTypeRubricConfig(
   input: AssignmentTypeRubricConfigInput
 ): AssignmentTypeRubricConfig {
   const rubric = parseRubric(input.rubricJson);
+  const completeness = classifyAssignmentTypeRubric(rubric);
 
-  if (!hasUsableRubric(rubric)) {
-    return getDefaultRubricConfig(input.assignmentTypeKind);
+  if (completeness === 'none') {
+    return {
+      ...getDefaultRubricConfig(input.assignmentTypeKind),
+      rubricIncomplete: false,
+    };
   }
 
   return {
@@ -160,6 +202,7 @@ export function parseAssignmentTypeRubricConfig(
     promptConfig: parsePromptConfig(input.gradingPromptConfigJson),
     outputSchema: parseOutputSchema(input.gradingOutputSchemaJson),
     calibrationNotes: input.gradingCalibrationNotes ?? null,
+    rubricIncomplete: completeness === 'partial',
   };
 }
 

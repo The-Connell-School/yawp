@@ -221,4 +221,43 @@ describe('TeacherGradingPanel', () => {
     );
     expect(banner).toBeNull();
   });
+
+  it('warns the teacher when the assignment type rubric has incomplete categories', async () => {
+    ({ root } = renderPanel({
+      rubricConfig: {
+        source: 'assignment-type',
+        rubricIncomplete: true,
+        minScore: 1,
+        maxScore: 5,
+        scoringType: 'weighted_1_5',
+        categories: [
+          {
+            key: 'claim',
+            label: 'Claim',
+            description: 'A clear defensible claim.',
+            weight: 0.5,
+          },
+          {
+            key: 'evidence',
+            label: 'Evidence',
+            description: '',
+            weight: 0.5,
+          },
+        ],
+      },
+    }));
+
+    const banner = document.querySelector(
+      '[data-testid="teacher-grading-rubric-incomplete-warning"]'
+    );
+    expect(banner).not.toBeNull();
+    expect(banner?.textContent).toContain('incomplete');
+    // It is still this assignment type's own rubric -- the thesis fallback
+    // banner must not claim the rubric was swapped out.
+    expect(
+      document.querySelector(
+        '[data-testid="teacher-grading-rubric-source-warning"]'
+      )
+    ).toBeNull();
+  });
 });

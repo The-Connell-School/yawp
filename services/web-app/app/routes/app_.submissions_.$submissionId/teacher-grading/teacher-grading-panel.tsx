@@ -57,7 +57,7 @@ import {
   parseGradingAssistantStrictnessLevel,
   type GradingAssistantStrictnessLevel,
 } from '~/domain/grading/grading-assistant-strictness';
-import { Info, Loader2, TrendingUp } from 'lucide-react';
+import { AlertTriangle, Info, Loader2, TrendingUp } from 'lucide-react';
 import { Tooltip } from '~/components/ui/tooltip';
 import { cn } from '~/utils/misc';
 import { useUpdateSubmission } from './use-update-submission';
@@ -898,6 +898,25 @@ export function TeacherGradingPanel({
                   This assignment type has no rubric of its own configured, so
                   the thesis-driven essay grading assistant rubric was applied
                   instead.
+                </p>
+              </div>
+            </div>
+          ) : null}
+          {activeRubricConfig.rubricIncomplete ? (
+            <div
+              data-testid="teacher-grading-rubric-incomplete-warning"
+              className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3"
+            >
+              <AlertTriangle className="mt-0.5 size-5 shrink-0 text-amber-600" />
+              <div>
+                <p className="text-sm font-medium">
+                  This rubric is incomplete
+                </p>
+                <p className="mt-0.5 text-sm text-muted-foreground text-pretty">
+                  Some categories on this assignment type are missing a name,
+                  description, or weight. Grading still uses this rubric as
+                  saved. Ask an admin to finish or remove the unfinished
+                  categories.
                 </p>
               </div>
             </div>

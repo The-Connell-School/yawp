@@ -14,6 +14,7 @@ function resolvedGradingConfig(
 ) {
   return {
     source: 'assignment-type' as const,
+    rubricIncomplete: false,
     assignmentTypeId: 'assignment-type-custom',
     assignmentTypeKind: null,
     assignmentTypeTitle: 'Custom assignment',
