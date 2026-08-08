@@ -17,7 +17,11 @@ export type LatestGradingRunRubricSnapshot = {
   source?: string | null;
 };
 
-const rubricDisplaySources = new Set<string>(['assignment-type', 'thesis-default']);
+const rubricDisplaySources = new Set<string>([
+  'assignment-type',
+  'thesis-default',
+  'daily-pages-default',
+]);
 
 function parseRubricDisplaySource(
   value: string | null | undefined

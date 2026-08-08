@@ -16,7 +16,10 @@ export type RubricDisplayCategory = {
   grammarHighlighting?: boolean;
 };
 
-export type RubricDisplaySource = 'assignment-type' | 'thesis-default';
+export type RubricDisplaySource =
+  | 'assignment-type'
+  | 'thesis-default'
+  | 'daily-pages-default';
 
 export type RubricDisplayConfig = {
   categories: RubricDisplayCategory[];
@@ -33,7 +36,11 @@ export type RubricDisplayConfig = {
   source?: RubricDisplaySource;
 };
 
-const rubricDisplaySources = new Set<string>(['assignment-type', 'thesis-default']);
+const rubricDisplaySources = new Set<string>([
+  'assignment-type',
+  'thesis-default',
+  'daily-pages-default',
+]);
 
 function parseRubricDisplaySource(value: unknown): RubricDisplaySource | undefined {
   return typeof value === 'string' && rubricDisplaySources.has(value)
