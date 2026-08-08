@@ -1,5 +1,6 @@
 import { type ActionFunctionArgs } from 'react-router';
 import { prisma } from '~/utils/db.server';
+import { hasRecordedGrade } from '~/domain/grading/recorded-grade';
 import {
   buildTeacherClassWhere,
   canManageGrades,
@@ -48,6 +49,8 @@ export async function action({ request }: ActionFunctionArgs) {
       gradedAt: true,
       gradedByMembershipId: true,
       numericPercentage: true,
+      overallScore: true,
+      score: true,
       unsubmittedAt: true,
       document: {
         select: {
@@ -144,20 +147,26 @@ export async function action({ request }: ActionFunctionArgs) {
 
   // Explicitly mark as graded when requested
   if (fields.markAsGraded) {
-    const incomingNumericPercentage =
-      typeof fields.numericPercentage === 'number' &&
-      Number.isFinite(fields.numericPercentage)
-        ? fields.numericPercentage
-        : undefined;
-    const hasNumericGrade =
-      incomingNumericPercentage !== undefined ||
-      submission.numericPercentage != null;
+    // A grade counts when it exists on the rubric's own scale, whether that
+    // is a percentage or the raw points a points scale reports instead.
+    // Grade fields arriving in this same request count too.
+    const isGraded =
+      hasRecordedGrade({
+        numericPercentage: data.numericPercentage as number | undefined,
+        overallScore: data.overallScore as number | undefined,
+        score: data.score as string | undefined,
+      }) ||
+      hasRecordedGrade({
+        numericPercentage: submission.numericPercentage,
+        overallScore: submission.overallScore,
+        score: submission.score,
+      });
 
-    if (!hasNumericGrade) {
+    if (!isGraded) {
       return Response.json(
         {
           success: false,
-          message: 'An overall percentage is required before marking as graded.',
+          message: 'An overall grade is required before marking as graded.',
         },
         { status: 400 }
       );

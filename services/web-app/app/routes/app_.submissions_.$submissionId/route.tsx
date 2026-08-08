@@ -25,6 +25,7 @@ import { prisma } from '~/utils/db.server';
 import { hasEffectivePlatformAdmin } from '~/utils/preview-access.server';
 import { redirectWithToast } from '~/utils/toast.server';
 import { formatAssignmentGrade } from '~/domain/grading/gradeMath';
+import { hasRecordedGrade } from '~/domain/grading/recorded-grade';
 import { type RubricDisplayConfig } from '~/domain/grading/rubric-display';
 import {
   type GrammarIssue,
@@ -272,11 +273,19 @@ export default function SubmissionRoute() {
   const [isEditingGrade, setIsEditingGrade] = useState(
     () =>
       !submission.releasedAt &&
-      !(submission.gradedAt && submission.numericPercentage != null)
+      !(
+        submission.gradedAt &&
+        hasRecordedGrade({
+          numericPercentage: submission.numericPercentage,
+          overallScore: submission.overallScore,
+          score: submission.score,
+        })
+      )
   );
   const [teacherGradeUi, setTeacherGradeUi] = useState<{
     numericPercentage: number | null;
     letterGrade: string | null;
+    overallScore: number | null;
     score: string | null;
     overallComment: string | null;
     rubricScores: unknown;
@@ -287,7 +296,14 @@ export default function SubmissionRoute() {
     setTeacherGradeUi(null);
     setIsEditingGrade(
       !submission.releasedAt &&
-        !(submission.gradedAt && submission.numericPercentage != null)
+        !(
+        submission.gradedAt &&
+        hasRecordedGrade({
+          numericPercentage: submission.numericPercentage,
+          overallScore: submission.overallScore,
+          score: submission.score,
+        })
+      )
     );
   }, [submission.id]);
 
@@ -303,11 +319,17 @@ export default function SubmissionRoute() {
   const isReleased = !!effectiveReleasedAt;
   const effectiveNumericPct =
     teacherGradeUi?.numericPercentage ?? submission.numericPercentage ?? null;
-  const hasNumericGrade = effectiveNumericPct != null;
+  const effectiveOverallScore =
+    teacherGradeUi?.overallScore ?? submission.overallScore ?? null;
+  const effectiveScore = teacherGradeUi?.score ?? submission.score ?? null;
   const lifecycleState = resolveSubmissionLifecycleState({
     isGraded,
     isReleased,
-    hasNumericGrade,
+    hasGrade: hasRecordedGrade({
+      numericPercentage: effectiveNumericPct,
+      overallScore: effectiveOverallScore,
+      score: effectiveScore,
+    }),
   });
   const isGradeMode = resolveSubmissionGradeMode({
     isGradingOther,
@@ -344,10 +366,10 @@ export default function SubmissionRoute() {
       numericPercentage: effectiveNumericPct,
       letterGrade: effectiveLetterGrade,
       pointValue: submission.document.assignment?.pointValue ?? null,
-      score: teacherGradeUi?.score ?? submission.score,
+      score: effectiveScore,
     }) ||
-    (assignmentIsSubmittedForGrade && submission.overallScore
-      ? `${submission.overallScore}/5`
+    (assignmentIsSubmittedForGrade && effectiveOverallScore != null
+      ? `${effectiveOverallScore}/${submission.rubricConfig?.maxScore ?? 5}`
       : null);
 
   // ── Status badge (reflects optimistic save / release) ─────────────
@@ -569,12 +591,13 @@ export default function SubmissionRoute() {
     (payload: {
       numericPercentage: number | null;
       letterGrade: string | null;
+      overallScore?: number | null;
       score: string | null;
       overallComment: string | null;
       rubricScores: unknown;
       rubricConfig?: RubricDisplayConfig | null;
     }) => {
-      setTeacherGradeUi(payload);
+      setTeacherGradeUi({ overallScore: null, ...payload });
     },
     []
   );
@@ -583,6 +606,7 @@ export default function SubmissionRoute() {
     (snapshot: {
       numericPercentage: number | null;
       letterGrade: string | null;
+      overallScore: number | null;
       score: string | null;
       overallComment: string | null;
       rubricScores: unknown;
@@ -590,6 +614,7 @@ export default function SubmissionRoute() {
       setTeacherGradeUi((prev) => ({
         numericPercentage: snapshot.numericPercentage,
         letterGrade: snapshot.letterGrade,
+        overallScore: snapshot.overallScore,
         score: snapshot.score,
         overallComment: snapshot.overallComment,
         rubricScores: snapshot.rubricScores,
@@ -631,7 +656,9 @@ export default function SubmissionRoute() {
       numericPercentage:
         teacherGradeUi?.numericPercentage ?? submission.numericPercentage,
       letterGrade: teacherGradeUi?.letterGrade ?? submission.letterGrade,
+      overallScore: teacherGradeUi?.overallScore ?? submission.overallScore,
       score: teacherGradeUi?.score ?? submission.score,
+      rubricConfig: teacherGradeUi?.rubricConfig ?? submission.rubricConfig,
       overallComment:
         teacherGradeUi?.overallComment ?? submission.overallComment,
       rubricScores: teacherGradeUi?.rubricScores ?? submission.rubricScores,

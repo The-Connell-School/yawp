@@ -5,6 +5,7 @@ import {
   isScored,
   normalizeRubricDisplayConfig,
   normalizeRubricScoresForCategories,
+  toPersistedRubricScores,
   unscoredValue,
 } from './rubric-display';
 
@@ -221,5 +222,57 @@ describe('an unscored value on a scale that starts below 1', () => {
       { value: '2', label: '2' },
       { value: '3', label: '3 - All in' },
     ]);
+  });
+});
+
+describe('toPersistedRubricScores', () => {
+  test('writes the not-yet-scored sentinel out as null', () => {
+    // -1 is the sentinel on a 0-3 scale. Persisting it makes every reader
+    // that accepts any finite number average an unscored entry in as a -1.
+    expect(
+      toPersistedRubricScores({ engagement: { score: -1, comment: '' } }, 0)
+    ).toEqual({ engagement: { score: null, comment: '' } });
+  });
+
+  test('keeps a real zero on a 0-floor scale', () => {
+    expect(
+      toPersistedRubricScores({ engagement: { score: 0, comment: '' } }, 0)
+    ).toEqual({ engagement: { score: 0, comment: '' } });
+  });
+
+  test('writes the legacy 0 sentinel on a 1-5 scale out as null', () => {
+    expect(
+      toPersistedRubricScores(
+        { thesis_and_content: { score: 0, comment: '' } },
+        1
+      )
+    ).toEqual({ thesis_and_content: { score: null, comment: '' } });
+  });
+
+  test('keeps a comment written before a score was chosen', () => {
+    expect(
+      toPersistedRubricScores(
+        { thesis_and_content: { score: 0, comment: 'clearer claim', isAi: false } },
+        1
+      )
+    ).toEqual({
+      thesis_and_content: { score: null, comment: 'clearer claim', isAi: false },
+    });
+  });
+});
+
+describe('normalizeRubricScoresForCategories', () => {
+  test('reads a persisted null score back as not yet scored', () => {
+    const categories = [
+      { key: 'engagement', label: 'Engagement', description: '', weight: 1 },
+    ];
+    expect(
+      normalizeRubricScoresForCategories({
+        raw: { engagement: { score: null, comment: 'later' } },
+        categories,
+        minScore: 0,
+        maxScore: 3,
+      })
+    ).toEqual({ engagement: { score: -1, comment: 'later', isAi: false } });
   });
 });

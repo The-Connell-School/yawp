@@ -9,10 +9,12 @@ import { isLlmFallbackRetrySignal } from '~/utils/getLLMCompletion/llm-provider-
 import {
   formatGrade,
   letterFromPercent,
-  pointsScaleGradeFields,
-  POINTS_SCALE_SCORING_TYPE,
   scoreToPercent,
 } from '~/domain/grading/gradeMath';
+import {
+  ACT_WRITING_SCORING_TYPE,
+  rubricScaleGradeFields,
+} from '~/domain/grading/recorded-grade';
 import { firstNameFromFullName } from '~/domain/grading/personalize';
 import { parseGrammarIssuesPayload } from '~/domain/grading/grammarIssues';
 import { resolveAssignmentTypeGradingConfig } from '~/domain/assignment-types/assignment-type-grading-config.server';
@@ -324,35 +326,6 @@ function computeWeightedPercentageForCategories({
   return Math.round(weightedSum / totalWeight);
 }
 
-function computeGradeFields({
-  categories,
-  scoringType,
-  maxScore,
-}: {
-  categories: Array<{ score: number }>;
-  scoringType: string;
-  maxScore: number;
-}) {
-  const average =
-    categories.reduce((sum, item) => sum + item.score, 0) / categories.length;
-
-  if (scoringType === POINTS_SCALE_SCORING_TYPE) {
-    return pointsScaleGradeFields({ categories, maxScore });
-  }
-
-  if (scoringType === 'act_writing_2_12') {
-    const composite = Math.max(2, Math.min(12, Math.round(average * 2)));
-    return {
-      overallScore: composite,
-      numericPercentage: null,
-      letterGrade: null,
-      score: `${composite}/12`,
-    };
-  }
-
-  return null;
-}
-
 function computeLegacyGradeFields({
   categories,
   rubricScores,
@@ -389,7 +362,7 @@ function buildDynamicGradeFields({
   maxScore: number;
   rubricCategories: GradingRubricCategory[];
 }) {
-  const nonLegacy = computeGradeFields({
+  const nonLegacy = rubricScaleGradeFields({
     categories,
     scoringType,
     maxScore,
@@ -418,7 +391,7 @@ function applyStrictnessToGradeFields({
   scoringType: string;
   gradingAssistantStrictnessLevel: GradingAssistantStrictnessLevel;
 }) {
-  if (scoringType === 'act_writing_2_12') {
+  if (scoringType === ACT_WRITING_SCORING_TYPE) {
     const adjustedComposite = applyGradingAssistantStrictnessToActComposite(
       overallScore,
       gradingAssistantStrictnessLevel

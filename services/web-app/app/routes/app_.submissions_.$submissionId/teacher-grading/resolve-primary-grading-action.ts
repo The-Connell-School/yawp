@@ -15,17 +15,16 @@ export function canSaveGradingDraft({
   lifecycleState,
   hasDraftToReplace,
   hasUnsavedChanges,
-  hasNumericPercentage,
+  hasGrade,
 }: {
   lifecycleState: SubmissionLifecycleState;
   hasDraftToReplace: boolean;
   hasUnsavedChanges: boolean;
-  hasNumericPercentage: boolean;
+  /** An overall grade exists on this rubric's own scale -- see hasRecordedGrade. */
+  hasGrade: boolean;
 }) {
   if (lifecycleState === 'needs_grading') {
-    return (
-      (hasDraftToReplace || hasUnsavedChanges) && hasNumericPercentage
-    );
+    return (hasDraftToReplace || hasUnsavedChanges) && hasGrade;
   }
   if (lifecycleState === 'graded') {
     return hasUnsavedChanges;

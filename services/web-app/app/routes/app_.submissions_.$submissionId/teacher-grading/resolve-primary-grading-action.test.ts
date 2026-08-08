@@ -25,7 +25,7 @@ describe('canSaveGradingDraft', () => {
         lifecycleState: 'needs_grading',
         hasDraftToReplace: false,
         hasUnsavedChanges: false,
-        hasNumericPercentage: false,
+        hasGrade: false,
       })
     ).toBe(false);
   });
@@ -36,7 +36,7 @@ describe('canSaveGradingDraft', () => {
         lifecycleState: 'needs_grading',
         hasDraftToReplace: true,
         hasUnsavedChanges: false,
-        hasNumericPercentage: false,
+        hasGrade: false,
       })
     ).toBe(false);
   });
@@ -47,7 +47,7 @@ describe('canSaveGradingDraft', () => {
         lifecycleState: 'needs_grading',
         hasDraftToReplace: true,
         hasUnsavedChanges: false,
-        hasNumericPercentage: true,
+        hasGrade: true,
       })
     ).toBe(true);
   });
@@ -58,7 +58,7 @@ describe('canSaveGradingDraft', () => {
         lifecycleState: 'needs_grading',
         hasDraftToReplace: false,
         hasUnsavedChanges: true,
-        hasNumericPercentage: false,
+        hasGrade: false,
       })
     ).toBe(false);
   });
@@ -69,7 +69,7 @@ describe('canSaveGradingDraft', () => {
         lifecycleState: 'graded',
         hasDraftToReplace: true,
         hasUnsavedChanges: false,
-        hasNumericPercentage: true,
+        hasGrade: true,
       })
     ).toBe(false);
     expect(
@@ -77,7 +77,7 @@ describe('canSaveGradingDraft', () => {
         lifecycleState: 'graded',
         hasDraftToReplace: true,
         hasUnsavedChanges: true,
-        hasNumericPercentage: true,
+        hasGrade: true,
       })
     ).toBe(true);
   });

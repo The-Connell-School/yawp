@@ -225,6 +225,62 @@ describe('api.domain.update-submission', () => {
     expect(prisma.submission.updateMany).not.toHaveBeenCalled();
   });
 
+  test('marks a points-scale submission graded, which records points and no percentage', async () => {
+    prisma.submission.findFirst.mockResolvedValue({
+      id: 'sub-1',
+      gradedAt: null,
+      gradedByMembershipId: null,
+      numericPercentage: null,
+      overallScore: 2,
+      score: '2/3',
+      unsubmittedAt: null,
+      document: {
+        membershipId: 'student-1',
+        assignment: null,
+        membership: { classesAsStudent: [] },
+      },
+    });
+
+    const response = (await action({
+      request: makeRequest({
+        submissionId: 'sub-1',
+        markAsGraded: true,
+      }),
+    } as any)) as Response;
+
+    expect(response.status).toBe(200);
+    const updateCall = prisma.submission.updateMany.mock.calls[0][0];
+    expect(updateCall.data.gradedAt).toBeInstanceOf(Date);
+  });
+
+  test('marks graded when the points grade arrives in the same request', async () => {
+    prisma.submission.findFirst.mockResolvedValue({
+      id: 'sub-1',
+      gradedAt: null,
+      gradedByMembershipId: null,
+      numericPercentage: null,
+      overallScore: null,
+      score: null,
+      unsubmittedAt: null,
+      document: {
+        membershipId: 'student-1',
+        assignment: null,
+        membership: { classesAsStudent: [] },
+      },
+    });
+
+    const response = (await action({
+      request: makeRequest({
+        submissionId: 'sub-1',
+        markAsGraded: true,
+        overallScore: 0,
+        score: '0/3',
+      }),
+    } as any)) as Response;
+
+    expect(response.status).toBe(200);
+  });
+
   test('does not overwrite gradedAt on subsequent edits', async () => {
     const existingGradedAt = new Date('2026-01-01');
     prisma.submission.findFirst.mockResolvedValue({

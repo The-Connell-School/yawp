@@ -266,7 +266,7 @@ export function SubmissionLifecyclePanel({
         lifecycleState,
         hasDraftToReplace: headerState.hasDraftToReplace,
         hasUnsavedChanges: headerState.hasUnsavedChanges,
-        hasNumericPercentage: headerState.hasNumericPercentage,
+        hasGrade: headerState.hasGrade,
       })
     : false;
 
@@ -281,7 +281,7 @@ export function SubmissionLifecyclePanel({
       onGradeSaved(headerState.getSavedGradeSnapshot());
       if (
         lifecycleState === 'needs_grading' &&
-        headerState.hasNumericPercentage
+        headerState.hasGrade
       ) {
         await onMarkGraded();
       }
