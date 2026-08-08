@@ -4,11 +4,12 @@ import { markInternalCopy } from '~/utils/internal-copy';
 /**
  * Records that the most recent copy/cut happened inside YAWP.
  *
- * Mounted once by the /app layout so the listeners are live on every
- * authenticated page, not just while a document editor is open. Without
- * that reach, a student who copies on the class page or an assignment
- * prompt and then pastes into an editor looks like an external paste and
- * gets a false alarm.
+ * Mounted once by the root layout so the listeners are live on every page,
+ * not just while a document editor is open. The root — not the /app layout
+ * — because the document editor route (`app_.documents_.$id`) opts out of
+ * that layout. Without that reach, a student who copies on the class page
+ * or an assignment prompt and then pastes into an editor looks like an
+ * external paste and gets a false alarm.
  */
 export function useInternalCopyMarker() {
   useEffect(() => {

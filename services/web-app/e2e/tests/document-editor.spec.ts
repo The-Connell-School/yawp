@@ -487,6 +487,82 @@ test.describe.serial('Document Editor E2E Tests', () => {
     expect(pasteAlertCount).toBe(0);
   });
 
+  test('does not post paste-alert when the copy happened on a non-editor page before navigating in', async ({
+    page,
+    signIn,
+    e2eContext,
+    helpers,
+  }) => {
+    const prisma = createE2EPrismaClient();
+    try {
+      await signIn('jdoe@brock.software', 'johndoe');
+      await page
+        .context()
+        .grantPermissions(['clipboard-read', 'clipboard-write']);
+
+      // Start on a page with no document editor on it at all.
+      await page.goto('/app');
+      await page.waitForLoadState('networkidle');
+      await expect(page.locator(EDITOR_SELECTOR)).toHaveCount(0);
+
+      // A real browser copy of app content from that page — the copy event
+      // has to be heard by the layout, not by an editor that isn't mounted.
+      const longText = 'w'.repeat(201);
+      const copied = await page.evaluate((text) => {
+        const source = document.createElement('p');
+        source.id = 'e2e-non-editor-copy-source';
+        source.textContent = text;
+        document.body.appendChild(source);
+        const range = document.createRange();
+        range.selectNodeContents(source);
+        const selection = window.getSelection();
+        selection?.removeAllRanges();
+        selection?.addRange(range);
+        // execCommand rather than the keyboard shortcut: this is a real
+        // browser copy (it fires the copy event and fills the clipboard)
+        // from a plain page region, not a focused contenteditable.
+        return document.execCommand('copy');
+      }, longText);
+      expect(copied).toBe(true);
+      await expect
+        .poll(() =>
+          page.evaluate(() =>
+            localStorage.getItem('yawp-internal-clipboard-copy')
+          )
+        )
+        .toBe('true');
+
+      const alertsBefore = await prisma.pasteAlert.count({
+        where: { documentId: e2eContext.editedDocumentId },
+      });
+
+      let pasteAlertCount = 0;
+      page.on('request', (req) => {
+        if (req.url().includes('/api/paste-alert') && req.method() === 'POST') {
+          pasteAlertCount++;
+        }
+      });
+
+      // Now navigate into a document and paste what was copied.
+      await helpers.openDocument(e2eContext.editedDocumentId, { retry: true });
+      const editor = helpers.getEditor();
+      await editor.click();
+      await page.keyboard.press(PASTE_SHORTCUT);
+      await expect(editor).toContainText(longText);
+      // Brief pause for any in-flight paste-alert requests to arrive before asserting zero
+      await page.waitForTimeout(500);
+
+      expect(pasteAlertCount).toBe(0);
+      expect(
+        await prisma.pasteAlert.count({
+          where: { documentId: e2eContext.editedDocumentId },
+        })
+      ).toBe(alertsBefore);
+    } finally {
+      await prisma.$disconnect();
+    }
+  });
+
   test('submit dialog default title matches live nav title without reload', async ({
     page,
     signIn,

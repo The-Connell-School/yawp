@@ -24,7 +24,7 @@ let layoutRoot: Root | null = null;
 let layoutContainer: HTMLDivElement | null = null;
 
 /**
- * Stands in for the /app layout, which owns the copy/cut listeners. It is
+ * Stands in for the root layout, which owns the copy/cut listeners. It is
  * mounted before — and unmounted after — any editor, exactly as the real
  * layout outlives the editor route beneath it.
  */

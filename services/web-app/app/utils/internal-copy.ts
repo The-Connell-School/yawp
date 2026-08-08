@@ -10,7 +10,7 @@
 // rather than the narrower "same document, same tab, within 5s" proxy
 // this used to check.
 //
-// The listeners that set this flag are registered once by the /app layout
+// The listeners that set this flag are registered once by the root layout
 // (see useInternalCopyMarker), not by the document editor, so a copy made
 // on any page in the app — class detail, an assignment prompt, writing
 // lessons — is recognized when the student later pastes into an editor.
