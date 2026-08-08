@@ -44,13 +44,13 @@ import {
 } from '~/domain/grading/grammarIssues';
 import {
   DEFAULT_GRADING_ASSISTANT_STRICTNESS_LEVEL,
-  GRADING_ASSISTANT_STRICTNESS_UI_ENABLED,
   getGradingAssistantStrictnessLabel,
   gradingAssistantStrictnessOptions,
   parseGradingAssistantStrictnessLevel,
   type GradingAssistantStrictnessLevel,
 } from '~/domain/grading/grading-assistant-strictness';
 import { Info, Loader2, TrendingUp } from 'lucide-react';
+import { Tooltip } from '~/components/ui/tooltip';
 import { cn } from '~/utils/misc';
 import { useUpdateSubmission } from './use-update-submission';
 import { hasGradingDraftToReplace } from './has-grading-draft-to-replace';
@@ -658,31 +658,35 @@ export function TeacherGradingPanel({
               {gradeDisplay}
             </Badge>
             <div className="flex items-center gap-2">
-              {GRADING_ASSISTANT_STRICTNESS_UI_ENABLED ? (
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      type="button"
-                      size="icon-sm"
-                      variant="outline"
-                      className="rounded-full"
-                      aria-label={`Grading assistant strictness: ${gradingAssistantStrictnessLabel}`}
-                      title={`Grading assistant strictness: ${gradingAssistantStrictnessLabel}`}
-                      data-testid="grading-assistant-strictness-menu"
-                      disabled={isGenerating}
-                    >
-                      <TrendingUp className="h-4 w-4" />
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent align="end" className="w-96 rounded-md p-3">
-                    <p className="mb-2 text-sm font-semibold">Strictness</p>
-                    <div className="grid items-start gap-2 sm:grid-cols-3">
-                      {gradingAssistantStrictnessOptions.map((option) => {
-                        const selected =
-                          gradingAssistantStrictnessLevel === option.value;
-                        return (
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    type="button"
+                    size="icon-sm"
+                    variant="outline"
+                    className="rounded-full"
+                    aria-label={`Grading assistant strictness: ${gradingAssistantStrictnessLabel}`}
+                    title={`Grading assistant strictness: ${gradingAssistantStrictnessLabel}`}
+                    data-testid="grading-assistant-strictness-menu"
+                    disabled={isGenerating}
+                  >
+                    <TrendingUp className="h-4 w-4" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent align="end" className="w-96 rounded-md p-3">
+                  <p className="mb-2 text-sm font-semibold">Strictness</p>
+                  <div className="grid items-start gap-2 sm:grid-cols-3">
+                    {gradingAssistantStrictnessOptions.map((option) => {
+                      const selected =
+                        gradingAssistantStrictnessLevel === option.value;
+                      return (
+                        <Tooltip
+                          key={option.value}
+                          text={option.description}
+                          delayDuration={200}
+                          contentProps={{ side: 'bottom', className: 'max-w-xs' }}
+                        >
                           <button
-                            key={option.value}
                             type="button"
                             className={`flex h-full flex-col items-start justify-start rounded-md border px-3 py-2 text-left text-sm transition ${
                               selected
@@ -700,12 +704,12 @@ export function TeacherGradingPanel({
                               {option.label}
                             </span>
                           </button>
-                        );
-                      })}
-                    </div>
-                  </PopoverContent>
-                </Popover>
-              ) : null}
+                        </Tooltip>
+                      );
+                    })}
+                  </div>
+                </PopoverContent>
+              </Popover>
               {hasDraftToReplace ? (
                 <ConfirmationDialog
                   title="Replace Existing Grading Feedback?"

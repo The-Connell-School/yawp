@@ -8,13 +8,28 @@ try {
 
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 
-import { afterEach, describe, expect, it } from 'bun:test';
-import { act, type ReactElement, type FormHTMLAttributes } from 'react';
-import { createRoot, type Root } from 'react-dom/client';
+import { afterEach, describe, expect, it, mock } from 'bun:test';
 import {
-  AssignmentCreationSheetContent,
-  assignmentCreationClassLabel,
-} from './assignment-creation-sheet';
+  act,
+  type ReactElement,
+  type ReactNode,
+  type FormHTMLAttributes,
+} from 'react';
+import { createRoot, type Root } from 'react-dom/client';
+
+// Radix only renders tooltip content on hover. Flattening it puts the
+// per-level hover copy in the DOM without driving a real pointer.
+mock.module('~/components/ui/tooltip', () => ({
+  Tooltip: ({ children, text }: { children: ReactNode; text: ReactNode }) => (
+    <>
+      {children}
+      <span>{text}</span>
+    </>
+  ),
+}));
+
+const { AssignmentCreationSheetContent, assignmentCreationClassLabel } =
+  await import('./assignment-creation-sheet');
 
 describe('assignmentCreationClassLabel', () => {
   it('shows grade and period when both are present', () => {
@@ -204,7 +219,7 @@ describe('AssignmentCreationSheetContent', () => {
       expectText(
         "Do this if you want to test the student's ability to write a paper independently of tutor guidance."
       );
-      expectNoText('Grading assistant strictness');
+      expectText('Grading assistant strictness');
       expectNoText('Tutor Context');
 
       const form = document.querySelector('form');
@@ -245,16 +260,27 @@ describe('AssignmentCreationSheetContent', () => {
     expect(inputByName('tutorEnabled').value).toBe('false');
   });
 
-  it('hides the grading assistant strictness picker from teachers', () => {
+  it('shows the grading assistant strictness picker to teachers', () => {
     root = renderSheet().root;
 
-    expectNoText('Grading assistant strictness');
-    expect(
-      document.querySelector('[aria-label="Grading assistant strictness help"]')
-    ).toBeNull();
+    expectText('Grading assistant strictness');
+    expectText('Beginner');
+    expectText('Intermediate');
+    expectText('Advanced');
 
-    // The control is hidden, not removed: assignments created here still
-    // carry the default strictness level so grading behavior is unchanged.
+    // Each level explains its reading posture on hover -- never a point
+    // adjustment, which is the framing Brian Connell objected to.
+    expectText(
+      'The assistant reads gently, expecting a writer still learning the fundamentals.'
+    );
+    expectText(
+      'The assistant reads at the standard expected for the grade level.'
+    );
+    expectText(
+      'The assistant reads demandingly, expecting polished and precise writing.'
+    );
+    expectNoText('points');
+
     expect(inputByName('gradingAssistantStrictnessLevel').value).toBe(
       'intermediate'
     );
