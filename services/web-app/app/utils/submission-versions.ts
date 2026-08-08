@@ -1,7 +1,7 @@
 export type SubmissionWithArchive = {
   id: string;
   archivedAt?: Date | string | null;
-  /** Teacher-initiated unsubmit. Treated as inactive, same as archivedAt. */
+  /** Student-initiated unsubmit. Treated as inactive, same as archivedAt. */
   unsubmittedAt?: Date | string | null;
 };
 

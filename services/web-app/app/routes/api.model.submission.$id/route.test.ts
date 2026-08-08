@@ -33,10 +33,10 @@ describe('api.model.submission.$id', () => {
     prisma.user.findUnique.mockResolvedValue({ isAdmin: false });
   });
 
-  test('archives when intent=archive and student owns document', async () => {
-    prisma.submission.findFirst.mockResolvedValue({ id: 'sub-1' });
-    prisma.submission.update.mockResolvedValue({} as any);
-
+  // Archive is retired: Unsubmit is the single way a student takes a
+  // submission out of active state. These intents must not be reachable
+  // even if a client still POSTs them directly.
+  test('intent=archive is no longer supported', async () => {
     const form = new FormData();
     form.set('intent', 'archive');
     const res = await action({
@@ -48,18 +48,14 @@ describe('api.model.submission.$id', () => {
       context: {},
     } as any);
 
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(400);
     const body = await res.json();
-    expect(body.success).toBe(true);
-    expect(prisma.submission.update).toHaveBeenCalled();
-    const updateArg = prisma.submission.update.mock.calls[0][0];
-    expect(updateArg.data.archivedAt).toBeInstanceOf(Date);
+    expect(body.success).toBe(false);
+    expect(prisma.submission.findFirst).not.toHaveBeenCalled();
+    expect(prisma.submission.update).not.toHaveBeenCalled();
   });
 
-  test('unarchive clears archivedAt', async () => {
-    prisma.submission.findFirst.mockResolvedValue({ id: 'sub-1' });
-    prisma.submission.update.mockResolvedValue({} as any);
-
+  test('intent=unarchive is no longer supported', async () => {
     const form = new FormData();
     form.set('intent', 'unarchive');
     const res = await action({
@@ -71,26 +67,11 @@ describe('api.model.submission.$id', () => {
       context: {},
     } as any);
 
-    expect(res.status).toBe(200);
-    const updateArg = prisma.submission.update.mock.calls[0][0];
-    expect(updateArg.data.archivedAt).toBeNull();
-  });
-
-  test('404 when submission not found for owner', async () => {
-    prisma.submission.findFirst.mockResolvedValue(null);
-
-    const form = new FormData();
-    form.set('intent', 'archive');
-    const res = await action({
-      request: new Request('https://example.com/api/model/submission/missing', {
-        method: 'POST',
-        body: form,
-      }),
-      params: { id: 'missing' },
-      context: {},
-    } as any);
-
-    expect(res.status).toBe(404);
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.success).toBe(false);
+    expect(prisma.submission.findFirst).not.toHaveBeenCalled();
+    expect(prisma.submission.update).not.toHaveBeenCalled();
   });
 
   test('400 when intent=updateTitle but title is not a string', async () => {

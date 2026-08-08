@@ -9,7 +9,6 @@ import {
   useFetcher,
   useLoaderData,
   useNavigate,
-  useRevalidator,
   useSearchParams,
   Link,
 } from 'react-router';
@@ -20,7 +19,6 @@ import {
   FileText,
   ExternalLink,
   Archive,
-  ArchiveRestore,
   RotateCcw,
   Clock,
   EllipsisVertical,
@@ -507,9 +505,7 @@ export default function Route() {
   const data = useLoaderData<typeof loader>();
   const user = useUser();
   const fetcher = useFetcher();
-  const submissionArchiveFetcher = useFetcher();
   const submissionUnsubmitFetcher = useFetcher();
-  const revalidator = useRevalidator();
   const navigate = useNavigate();
   const breakpoint = useBreakpoint();
   const [syncStatus, setSyncStatus] = useState<SyncStatus>('synced');
@@ -733,20 +729,6 @@ export default function Route() {
   }, [data.doc.html, getLiveDocumentTitle, studentName]);
 
   useEffect(() => {
-    if (submissionArchiveFetcher.state !== 'idle') return;
-    const body = submissionArchiveFetcher.data as
-      | { success?: boolean }
-      | undefined;
-    if (body?.success) {
-      revalidator.revalidate();
-    }
-  }, [
-    submissionArchiveFetcher.state,
-    submissionArchiveFetcher.data,
-    revalidator,
-  ]);
-
-  useEffect(() => {
     if (submissionUnsubmitFetcher.state !== 'idle') return;
     const body = submissionUnsubmitFetcher.data as
       | { success?: boolean }
@@ -935,26 +917,6 @@ export default function Route() {
                                   </Button>
                                 )
                               ) : null}
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8 shrink-0 text-muted-foreground"
-                                aria-label="Archive submission"
-                                disabled={
-                                  submissionArchiveFetcher.state !== 'idle'
-                                }
-                                onClick={() => {
-                                  const fd = new FormData();
-                                  fd.set('intent', 'archive');
-                                  submissionArchiveFetcher.submit(fd, {
-                                    method: 'POST',
-                                    action: `/api/model/submission/${s.id}`,
-                                  });
-                                }}
-                              >
-                                <Archive className="h-4 w-4" />
-                              </Button>
                             </div>
                           ) : null}
                         </div>
@@ -1320,7 +1282,8 @@ export default function Route() {
             <DialogTitle>Archived submissions</DialogTitle>
             <DialogDescription>
               Hidden from your main list. Your teacher can still view and grade
-              them.
+              them. These are read-only — archiving is retired, so this list
+              only shows submissions archived before that change.
             </DialogDescription>
           </DialogHeader>
           <div className="max-h-72 space-y-2 overflow-y-auto">
@@ -1349,24 +1312,6 @@ export default function Route() {
                   >
                     {isGraded ? 'Graded' : 'Submitted'}
                   </Badge>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="shrink-0 gap-1"
-                    disabled={submissionArchiveFetcher.state !== 'idle'}
-                    onClick={() => {
-                      const fd = new FormData();
-                      fd.set('intent', 'unarchive');
-                      submissionArchiveFetcher.submit(fd, {
-                        method: 'POST',
-                        action: `/api/model/submission/${s.id}`,
-                      });
-                    }}
-                  >
-                    <ArchiveRestore className="h-3.5 w-3.5" />
-                    Restore
-                  </Button>
                 </div>
               );
             })}
