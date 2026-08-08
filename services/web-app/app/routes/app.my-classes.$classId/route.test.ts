@@ -253,6 +253,64 @@ describe('class detail loader document visibility', () => {
     expect(data.growthPlansByStudentId['student-1']).toHaveLength(1);
   });
 
+  test('skips the paste alert query when the class has no students', async () => {
+    const response = await loader({
+      request: new Request('https://example.test/app/my-classes/class-1'),
+      params: { classId: 'class-1' },
+      context: {} as never,
+    });
+    const data = (response as { data: any }).data;
+
+    expect(data.pasteAlertsByStudentId).toEqual({});
+    expect(prisma.pasteAlert.findMany).not.toHaveBeenCalled();
+  });
+
+  test('scopes the paste alert query to this class’s enrolled students and groups by student', async () => {
+    prisma.class.findFirst.mockResolvedValue({
+      id: 'class-1',
+      grade: '9',
+      period: '2',
+      title: 'World History',
+      school: {
+        id: 'school-1',
+        name: 'Tallassee High School',
+        organizationId: 'org-1',
+        organization: { classInsightsEnabled: false, reporterEnabled: false },
+      },
+      students: [
+        { id: 'student-1', user: { name: 'Ada Lovelace', email: 'ada@x.test' } },
+        { id: 'student-2', user: { name: 'Grace Hopper', email: 'grace@x.test' } },
+      ],
+    });
+    prisma.pasteAlert.findMany.mockResolvedValue([
+      {
+        id: 'alert-1',
+        documentId: 'doc-1',
+        membershipId: 'student-1',
+        textLength: 250,
+        createdAt: new Date('2026-07-01T00:00:00.000Z'),
+      },
+    ]);
+
+    const response = await loader({
+      request: new Request('https://example.test/app/my-classes/class-1'),
+      params: { classId: 'class-1' },
+      context: {} as never,
+    });
+    const data = (response as { data: any }).data;
+
+    expect(prisma.pasteAlert.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { membershipId: { in: ['student-1', 'student-2'] } },
+      })
+    );
+    expect(Object.keys(data.pasteAlertsByStudentId)).toEqual(['student-1']);
+    expect(data.pasteAlertsByStudentId['student-1']).toHaveLength(1);
+    expect(data.pasteAlertsByStudentId['student-1'][0].documentId).toBe(
+      'doc-1'
+    );
+  });
+
   test('redirects the legacy summary tab to assignments and preserves other search params', async () => {
     const response = await loader({
       request: new Request(
