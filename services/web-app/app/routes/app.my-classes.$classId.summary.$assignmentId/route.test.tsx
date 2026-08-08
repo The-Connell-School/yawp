@@ -43,16 +43,51 @@ const ASSIGNMENT = {
   insight: null,
 };
 
+function sectionFixture(
+  classId: string,
+  label: string,
+  submissionCount: number | null
+) {
+  return {
+    classId,
+    classAssignmentId: `ca-${classId}`,
+    label,
+    gradedCount: submissionCount ?? 0,
+    insight:
+      submissionCount === null
+        ? null
+        : {
+            status: 'ready' as const,
+            submissionCount,
+            generatedAt: '2026-08-01T00:00:00.000Z',
+            summary: {
+              overview: `Overview for ${label}.`,
+              categories: [
+                {
+                  key: 'thesis',
+                  label: 'Thesis',
+                  status: 'strength' as const,
+                  summary: 'Clear claims.',
+                },
+              ],
+              nextSteps: [],
+            },
+          },
+  };
+}
+
 // Mutated per test so one module-level useRouteLoaderData mock can serve both
 // the flag-on and flag-off pages.
 let parentData: any = null;
+let loaderData: any = { sections: [] };
 let searchParams = new URLSearchParams();
 let routeParams: { classId?: string; assignmentId?: string } = {};
 
 const actualReactRouter = await import('react-router');
 mock.module('react-router', () => ({
   ...actualReactRouter,
-  Link: ({ children, to, ...props }: any) => (
+  // `replace` is a router-only prop; passing it through would land on the DOM.
+  Link: ({ children, to, replace: _replace, ...props }: any) => (
     <a href={to} {...props}>
       {children}
     </a>
@@ -60,6 +95,7 @@ mock.module('react-router', () => ({
   useFetcher: () => fetcher,
   useParams: () => routeParams,
   useSearchParams: () => [searchParams, mock()],
+  useLoaderData: () => loaderData,
   useRouteLoaderData: () => parentData,
 }));
 
@@ -85,6 +121,7 @@ beforeEach(() => {
   fetcher.data = null;
   routeParams = { classId: 'class-1', assignmentId: 'assignment-1' };
   searchParams = new URLSearchParams('tab=documents&assignmentId=assignment-1');
+  loaderData = { sections: [] };
   parentData = {
     klass: { id: 'class-1', grade: '9', period: '2', title: 'History' },
     classInsightsEnabled: true,
@@ -153,6 +190,124 @@ describe('ClassSummaryRoute', () => {
     expect(notice?.textContent).toContain('not turned on');
     // The teacher still has a way back out.
     expect(el.textContent).toContain('Back to documents');
+  });
+
+  it('offers no scope toggle when the assignment runs in one class only', () => {
+    loaderData = { sections: [sectionFixture('class-1', 'Period 1', 20)] };
+    const el = render(<ClassSummaryRoute />);
+
+    expect(
+      el.querySelector('[data-testid="class-summary-scope-toggle"]')
+    ).toBeFalsy();
+    expect(
+      el.querySelector('[data-testid="across-sections-panel"]')
+    ).toBeFalsy();
+  });
+
+  it('defaults to this class and offers the other sections as opt-in', () => {
+    loaderData = {
+      sections: [
+        sectionFixture('class-1', 'Period 1', 20),
+        sectionFixture('class-2', 'Period 2', 18),
+      ],
+    };
+    const el = render(<ClassSummaryRoute />);
+
+    // Single class is what renders without asking for anything else.
+    expect(
+      el.querySelector('[data-testid="across-sections-panel"]')
+    ).toBeFalsy();
+    expect(el.textContent).toContain('Class performance summary');
+
+    const toggle = el.querySelector(
+      '[data-testid="class-summary-scope-toggle"]'
+    )!;
+    expect(toggle).toBeTruthy();
+    const thisClass = toggle.querySelector(
+      '[data-testid="class-summary-scope-this-class"]'
+    )!;
+    const allSections = toggle.querySelector(
+      '[data-testid="class-summary-scope-all-sections"]'
+    )!;
+    expect(thisClass.getAttribute('aria-current')).toBe('true');
+    expect(allSections.getAttribute('aria-current')).toBeNull();
+    expect(allSections.textContent).toContain('All 2 sections');
+    // Opting in keeps the params the teacher arrived with.
+    expect(allSections.getAttribute('href')).toBe(
+      '/app/my-classes/class-1/summary/assignment-1?tab=documents&assignmentId=assignment-1&sections=all'
+    );
+  });
+
+  it('renders the across-sections view when opted in, and offers the way back', () => {
+    searchParams = new URLSearchParams('tab=documents&sections=all');
+    loaderData = {
+      sections: [
+        sectionFixture('class-1', 'Period 1', 20),
+        sectionFixture('class-2', 'Period 2', 18),
+      ],
+    };
+    const el = render(<ClassSummaryRoute />);
+
+    expect(
+      el.querySelector('[data-testid="across-sections-panel"]')
+    ).toBeTruthy();
+    expect(
+      el.querySelector('[data-testid="across-sections-subtitle"]')?.textContent
+    ).toContain('2 of 2 sections summarized');
+    expect(el.textContent).toContain('38 submissions in total');
+
+    const thisClass = el.querySelector(
+      '[data-testid="class-summary-scope-this-class"]'
+    )!;
+    expect(thisClass.getAttribute('href')).toBe(
+      '/app/my-classes/class-1/summary/assignment-1?tab=documents'
+    );
+  });
+
+  it('shows a thin section rather than folding it into a single number', () => {
+    searchParams = new URLSearchParams('sections=all');
+    loaderData = {
+      sections: [
+        sectionFixture('class-1', 'Period 1', 24),
+        sectionFixture('class-2', 'Period 2', 3),
+      ],
+    };
+    const el = render(<ClassSummaryRoute />);
+
+    const warning = el.querySelector(
+      '[data-testid="across-sections-coverage-warning"]'
+    );
+    expect(warning?.textContent).toContain('Period 2');
+    expect(
+      el.querySelectorAll('[data-testid="section-thin-badge"]')
+    ).toHaveLength(1);
+    // Both sections' own counts are on the page.
+    const cards = el.querySelectorAll(
+      '[data-testid="across-sections-coverage-card"]'
+    );
+    expect(cards).toHaveLength(2);
+    expect(cards[0].textContent).toContain('24');
+    expect(cards[1].textContent).toContain('3');
+  });
+
+  it('names a section with no summary instead of quietly omitting it', () => {
+    searchParams = new URLSearchParams('sections=all');
+    loaderData = {
+      sections: [
+        sectionFixture('class-1', 'Period 1', 20),
+        sectionFixture('class-2', 'Period 2', null),
+      ],
+    };
+    const el = render(<ClassSummaryRoute />);
+
+    const warning = el.querySelector(
+      '[data-testid="across-sections-coverage-warning"]'
+    );
+    expect(warning?.textContent).toContain('Period 2');
+    expect(warning?.textContent).toContain('no summary yet');
+    expect(
+      el.querySelector('[data-testid="across-sections-subtitle"]')?.textContent
+    ).toContain('1 of 2 sections summarized');
   });
 
   it('renders a not-found state when the assignment is not on this class', () => {
