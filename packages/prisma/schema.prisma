@@ -311,6 +311,106 @@ model ClassStudentCourseForensic {
   @@id([classId, studentCourseId])
 }
 
+// Forensic archives from the 2026-06-12 assignment-template split and the
+// 2026-06-13 OrgMembership cutover (see
+// docs/superpowers/plans/2026-06-13-org-membership-cutover-runbook.md).
+// These tables were created by hand-written migrations and are read by
+// packages/prisma/scripts/org-membership-staging-verify.ts; they were never
+// declared in this schema, which made `prisma migrate dev` propose dropping
+// them. Declaring them here stops that false-positive drift.
+model AssignmentClassIdForensic {
+  assignmentId String   @id
+  classId      String
+  capturedAt   DateTime @default(now()) @db.Timestamptz(6)
+}
+
+model AssignmentDueDateForensic {
+  assignmentId String   @id
+  dueDate      DateTime @db.Timestamptz(6)
+  capturedAt   DateTime @default(now()) @db.Timestamptz(6)
+}
+
+model DocumentStudentProfileIdForensic {
+  documentId       String   @id
+  studentProfileId String
+  capturedAt       DateTime @default(now()) @db.Timestamptz(6)
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model FeatureAccessTargetTeacherForensic {
+  id         String?
+  createdAt  DateTime? @db.Timestamptz(6)
+  updatedAt  DateTime? @db.Timestamptz(6)
+  featureKey String?
+  targetKind String?
+  targetId   String?
+  enabled    Boolean?
+  expiresAt  DateTime? @db.Timestamptz(6)
+  note       String?
+  capturedAt DateTime? @db.Timestamptz(6)
+
+  @@ignore
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model ProfileDuplicateForensic {
+  id             String?
+  createdAt      DateTime?       @db.Timestamptz(6)
+  organizationId String?
+  userId         String?
+  isOrgOwner     Boolean?
+  role           MembershipRole?
+  isActive       Boolean?
+  school         String?
+  schoolTeacher  String?
+  grade          String?
+  period         String?
+  archivedAt     DateTime?       @db.Timestamptz(6)
+
+  @@ignore
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model ProfileOrphanForensic {
+  id             String?
+  createdAt      DateTime?       @db.Timestamptz(6)
+  organizationId String?
+  userId         String?
+  isOrgOwner     Boolean?
+  role           MembershipRole?
+  isActive       Boolean?
+  school         String?
+  schoolTeacher  String?
+  grade          String?
+  period         String?
+  archivedAt     DateTime?       @db.Timestamptz(6)
+
+  @@ignore
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model StudentProfileForensic {
+  id            String?
+  createdAt     DateTime? @db.Timestamptz(6)
+  school        String?
+  schoolTeacher String?
+  grade         String?
+  period        String?
+  profileId     String?
+
+  @@ignore
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model TeacherProfileForensic {
+  id        String?
+  createdAt DateTime? @db.Timestamptz(6)
+  isActive  Boolean?
+  profileId String?
+
+  @@ignore
+}
+
 model DocumentComment {
   id           String                    @id @default(cuid())
   createdAt    DateTime                  @default(now()) @db.Timestamptz(6)
