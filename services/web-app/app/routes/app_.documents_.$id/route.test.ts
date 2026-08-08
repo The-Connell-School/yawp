@@ -43,12 +43,16 @@ const prisma = {
   documentRevision: {
     create: mock(),
   },
+  assignmentModuleSession: {
+    findMany: mock(),
+  },
 };
 
 const requireUserId = mock();
 const requireMembership = mock();
 const requireMutableRequest = mock();
 const redirectWithToast = mock();
+const ensureAssignmentModuleSessionsForDocument = mock();
 
 mock.module('~/utils/db.server', () => ({ prisma }));
 mock.module('~/utils/auth.server', () => ({
@@ -58,6 +62,9 @@ mock.module('~/utils/auth.server', () => ({
 }));
 mock.module('~/utils/toast.server', () => ({
   redirectWithToast,
+}));
+mock.module('~/domain/documents.server', () => ({
+  ensureAssignmentModuleSessionsForDocument,
 }));
 
 mock.module('./comments', () => ({ Comments: () => null }));
@@ -215,11 +222,14 @@ describe('app_.documents_.$id loader', () => {
     prisma.user.findUnique.mockReset();
     prisma.document.findFirst.mockReset();
     prisma.documentRevision.create.mockReset();
+    prisma.assignmentModuleSession.findMany.mockReset();
     requireUserId.mockReset();
     requireMembership.mockReset();
     requireMutableRequest.mockReset();
     redirectWithToast.mockReset();
+    ensureAssignmentModuleSessionsForDocument.mockReset();
 
+    ensureAssignmentModuleSessionsForDocument.mockResolvedValue(false);
     requireUserId.mockResolvedValue('user-1');
     requireMutableRequest.mockResolvedValue(undefined);
     requireMembership.mockResolvedValue({
@@ -333,6 +343,60 @@ describe('app_.documents_.$id loader', () => {
     expect(response.data.currentCms.id).toBe('cms-prewriting');
     expect(response.data.currentCmsIdx).toBe(0);
     expect(response.data.hasPreviousCms).toBe(false);
+  });
+
+  test('backfills missing module sessions instead of dead-ending when a document has none', async () => {
+    prisma.document.findFirst.mockResolvedValueOnce(
+      makeDocument({ includeSnapshot: true, assignmentModuleSessions: [] })
+    );
+    ensureAssignmentModuleSessionsForDocument.mockResolvedValueOnce(true);
+    prisma.assignmentModuleSession.findMany.mockResolvedValueOnce([
+      makeModuleSession({
+        id: 'cms-backfilled',
+        moduleId: 'module-prewriting',
+        position: 1,
+        instructionsCompleted: 0,
+      }),
+    ]);
+
+    const response = (await loader({
+      request: new Request('https://example.test/app/documents/doc-1'),
+      params: { id: 'doc-1' },
+    } as never)) as any;
+
+    expect(ensureAssignmentModuleSessionsForDocument).toHaveBeenCalledWith(
+      'doc-1',
+      'type-1',
+      []
+    );
+    expect(prisma.assignmentModuleSession.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { documentId: 'doc-1', deletedAt: null },
+      })
+    );
+    expect(redirectWithToast).not.toHaveBeenCalled();
+    expect(response.data.currentCms.id).toBe('cms-backfilled');
+  });
+
+  test('redirects with an actionable message when the assignment type has no modules to backfill', async () => {
+    prisma.document.findFirst.mockResolvedValueOnce(
+      makeDocument({ includeSnapshot: true, assignmentModuleSessions: [] })
+    );
+    ensureAssignmentModuleSessionsForDocument.mockResolvedValueOnce(false);
+
+    const response = (await loader({
+      request: new Request('https://example.test/app/documents/doc-1'),
+      params: { id: 'doc-1' },
+    } as never)) as any;
+
+    expect(redirectWithToast).toHaveBeenCalledWith(
+      '/app',
+      expect.objectContaining({
+        type: 'error',
+        description: expect.stringContaining('Contact support'),
+      })
+    );
+    expect(response.redirectedTo).toBe('/app');
   });
 });
 
