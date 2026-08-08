@@ -10,6 +10,7 @@ import { useCommentsSelection } from '../comments/selection-context';
 import { Bar } from './editor-bar';
 import { ErrorBoundary } from './error-boundry';
 import { Comment, CommentExtension } from './extensions/comment';
+import { EmDash } from './extensions/em-dash';
 import { LineHeight } from './extensions/line-height';
 import { TabIndent } from './extensions/tab-indent';
 import { SourceTracker } from './extensions/source-tracker';
@@ -40,6 +41,7 @@ const extensions = [
   Comment,
   CommentExtension,
   SourceTracker,
+  EmDash,
 ];
 
 type Props = {
