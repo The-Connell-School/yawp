@@ -1,5 +1,6 @@
 import { Link } from 'react-router';
 import {
+  BookOpenIcon,
   ClipboardList,
   CogIcon,
   FileText,
@@ -38,19 +39,26 @@ export type SidebarNavSection = {
 
 const teacher = (user: User, studentPreviewActive = false) =>
   user.selectedMembership?.role === 'TEACHER' && !studentPreviewActive;
+const student = (user: User, studentPreviewActive = false) =>
+  user.selectedMembership?.role === 'STUDENT' || studentPreviewActive;
 const owner = (user: User) => user.selectedMembership?.isOrgOwner;
 const admin = (user: User) => user.isAdmin;
 const reporterEnabled = (user: User, studentPreviewActive = false) =>
   teacher(user, studentPreviewActive) &&
   Boolean(user.selectedMembership?.organization?.reporterEnabled);
+const writingPracticeEnabled = (user: User, studentPreviewActive = false) =>
+  student(user, studentPreviewActive) &&
+  Boolean(user.selectedMembership?.organization?.writingPracticeEnabled);
 
 const icons = {
   dashboard: <GaugeIcon size={20} className="shrink-0" />,
   classes: <Users size={20} className="shrink-0" />,
   studentWork: <FileText size={20} className="shrink-0" />,
   assignments: <ClipboardList size={20} className="shrink-0" />,
+  myDocuments: <FileText size={20} className="shrink-0" />,
   lounge: <MonitorPlay size={20} className="shrink-0" />,
   reporter: <Microscope size={20} className="shrink-0" />,
+  writingPractice: <BookOpenIcon size={20} className="shrink-0" />,
   organization: <CogIcon size={20} className="shrink-0" />,
   admin: <LockIcon size={20} className="shrink-0" />,
 };
@@ -68,7 +76,7 @@ export const FLAT_SIDEBAR_SECTIONS: SidebarNavSection[] = [
         to: '/app/my-classes',
         label: 'My Classes',
         icon: icons.classes,
-        requires: teacher,
+        requires: { OR: [teacher, student] },
       },
       {
         to: '/app/documents',
@@ -81,6 +89,18 @@ export const FLAT_SIDEBAR_SECTIONS: SidebarNavSection[] = [
         label: 'My Assignments',
         icon: icons.assignments,
         requires: teacher,
+      },
+      {
+        to: '/app/my-documents',
+        label: 'My Documents',
+        icon: icons.myDocuments,
+        requires: student,
+      },
+      {
+        to: '/app/writing-lessons',
+        label: 'Writing Practice',
+        icon: icons.writingPractice,
+        requires: writingPracticeEnabled,
       },
       {
         to: '/app/teacher-trainings',
