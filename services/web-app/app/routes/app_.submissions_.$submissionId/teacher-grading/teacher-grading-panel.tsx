@@ -34,6 +34,11 @@ import {
   type RubricScore,
 } from '~/domain/grading/rubric-display';
 import {
+  getCategoryScoreLabel,
+  isCategoryFeedbackEnabled,
+  isGrammarHighlightCategory,
+} from '~/domain/assignment-types/rubric-category-options';
+import {
   computeWeightedPercentageForCategories,
   formatGrade,
   letterFromPercent,
@@ -181,15 +186,6 @@ export function TeacherGradingPanel({
       ) ?? DEFAULT_GRADING_ASSISTANT_STRICTNESS_LEVEL
     );
   const [savedSnapshot, setSavedSnapshot] = useState<string | null>(null);
-  const scoreOptions = useMemo(
-    () =>
-      buildScoreOptions(
-        activeRubricConfig.minScore,
-        activeRubricConfig.maxScore
-      ),
-    [activeRubricConfig.maxScore, activeRubricConfig.minScore]
-  );
-
   const computedNumericPercentage = useMemo(() => {
     if (activeRubricConfig.scoringType !== 'weighted_1_5') return null;
     return computeWeightedPercentageForCategories(
@@ -857,12 +853,21 @@ export function TeacherGradingPanel({
                   void saveAll(newRubric);
                 }
               };
+              const configuredScoreLabel = current.score
+                ? getCategoryScoreLabel(item, current.score)
+                : null;
               const scoreLabel = current.score
-                ? `${current.score}/${activeRubricConfig.maxScore}`
+                ? configuredScoreLabel
+                  ? `${configuredScoreLabel} (${current.score}/${activeRubricConfig.maxScore})`
+                  : `${current.score}/${activeRubricConfig.maxScore}`
                 : 'Not scored';
-              const isGrammarCategory =
-                item.key === 'grammar_and_mechanics' ||
-                item.key === 'language_use_and_conventions';
+              const isGrammarCategory = isGrammarHighlightCategory(item);
+              const showFeedback = isCategoryFeedbackEnabled(item);
+              const scoreOptions = buildScoreOptions(
+                activeRubricConfig.minScore,
+                activeRubricConfig.maxScore,
+                item.scoreLabels
+              );
 
               return (
                 <AccordionItem
@@ -901,37 +906,39 @@ export function TeacherGradingPanel({
                         ))}
                       </SelectContent>
                     </Select>
-                    <Textarea
-                      data-testid={`grading-rubric-comment-${item.key}`}
-                      value={current.comment}
-                      disabled={isGenerating}
-                      onChange={(e) =>
-                        setRubricScores((prev) => ({
-                          ...prev,
-                          [item.key]: {
-                            ...prev[item.key],
-                            comment: e.target.value,
-                            isAi: false,
-                          },
-                        }))
-                      }
-                      onBlur={(e) => {
-                        const newRubric = {
-                          ...rubricScores,
-                          [item.key]: {
-                            ...rubricScores[item.key],
-                            comment: e.currentTarget.value,
-                            isAi: false,
-                          },
-                        };
-                        setRubricScores(newRubric);
-                        if (!hideHeader) {
-                          void saveAll(newRubric);
+                    {showFeedback ? (
+                      <Textarea
+                        data-testid={`grading-rubric-comment-${item.key}`}
+                        value={current.comment}
+                        disabled={isGenerating}
+                        onChange={(e) =>
+                          setRubricScores((prev) => ({
+                            ...prev,
+                            [item.key]: {
+                              ...prev[item.key],
+                              comment: e.target.value,
+                              isAi: false,
+                            },
+                          }))
                         }
-                      }}
-                      placeholder="Enter category feedback..."
-                      rows={4}
-                    />
+                        onBlur={(e) => {
+                          const newRubric = {
+                            ...rubricScores,
+                            [item.key]: {
+                              ...rubricScores[item.key],
+                              comment: e.currentTarget.value,
+                              isAi: false,
+                            },
+                          };
+                          setRubricScores(newRubric);
+                          if (!hideHeader) {
+                            void saveAll(newRubric);
+                          }
+                        }}
+                        placeholder="Enter category feedback..."
+                        rows={4}
+                      />
+                    ) : null}
                     {isGrammarCategory ? (
                       <div className="space-y-2">
                         <p className="text-xs text-muted-foreground">

@@ -56,7 +56,7 @@ export function parseOptionalBoolean(raw: unknown): boolean | undefined {
 
 /** Per-category feedback textareas are on unless a category opts out. */
 export function isCategoryFeedbackEnabled(
-  category: Pick<RubricCategoryOptions, 'feedbackEnabled'>
+  category: Partial<RubricCategoryOptions>
 ) {
   return category.feedbackEnabled !== false;
 }
@@ -67,7 +67,7 @@ export function isCategoryFeedbackEnabled(
  * every rubric saved before this setting behaves exactly as it did.
  */
 export function isGrammarHighlightCategory(
-  category: Pick<RubricCategoryOptions, 'key' | 'grammarHighlighting'>
+  category: RubricCategoryOptions
 ) {
   if (typeof category.grammarHighlighting === 'boolean') {
     return category.grammarHighlighting;
@@ -85,7 +85,7 @@ export function isGrammarHighlightCategory(
  * opts every category out turns it off.
  */
 export function resolveGrammarHighlightingEnabled(
-  categories: Pick<RubricCategoryOptions, 'grammarHighlighting'>[]
+  categories: Partial<RubricCategoryOptions>[]
 ) {
   const hasExplicitFlag = categories.some(
     (category) => typeof category.grammarHighlighting === 'boolean'
@@ -96,7 +96,7 @@ export function resolveGrammarHighlightingEnabled(
 
 /** The configured word for a score value in this category, if there is one. */
 export function getCategoryScoreLabel(
-  category: Pick<RubricCategoryOptions, 'scoreLabels'>,
+  category: Partial<RubricCategoryOptions>,
   score: number
 ) {
   return (

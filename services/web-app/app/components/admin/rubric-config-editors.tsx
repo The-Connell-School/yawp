@@ -31,6 +31,7 @@ import { Button } from '~/components/ui/button';
 import { Card, CardContent } from '~/components/ui/card';
 import { Input } from '~/components/ui/input';
 import { Label } from '~/components/ui/label';
+import { Switch } from '~/components/ui/switch';
 import { Textarea } from '~/components/ui/textarea';
 import {
   Select,
@@ -52,6 +53,7 @@ import {
   type RubricData,
   type ScoringScaleData,
 } from '~/domain/assignment-types/assignment-type-rubric.shared';
+import { isGrammarHighlightCategory } from '~/domain/assignment-types/rubric-category-options';
 
 const SCORING_SCALE_TYPES = [
   { value: 'weighted_1_5', label: 'Weighted 1–5' },
@@ -77,6 +79,13 @@ function createRubricCategoryRow(
     label: category.label ?? '',
     weight: category.weight ?? 0,
     description: category.description ?? '',
+    ...(category.scoreLabels ? { scoreLabels: category.scoreLabels } : {}),
+    ...(category.feedbackEnabled === undefined
+      ? {}
+      : { feedbackEnabled: category.feedbackEnabled }),
+    ...(category.grammarHighlighting === undefined
+      ? {}
+      : { grammarHighlighting: category.grammarHighlighting }),
   };
 }
 
@@ -86,6 +95,37 @@ function rowsFromCategories(categories: RubricCategory[]): RubricCategoryRow[] {
 
 function pct(weight: number) {
   return Math.round(weight * 100);
+}
+
+/**
+ * Serializes one category for storage. The optional per-category settings are
+ * omitted entirely when unset, so a rubric that never touched them round-trips
+ * byte-identically to how it was stored.
+ */
+function serializeCategory(category: RubricCategory): RubricCategory {
+  const scoreLabels = category.scoreLabels?.filter((entry) =>
+    entry.label.trim()
+  );
+  return {
+    key: labelToKey(category.label) || category.key,
+    label: category.label,
+    weight: category.weight,
+    description: category.description,
+    ...(scoreLabels?.length
+      ? {
+          scoreLabels: scoreLabels.map((entry) => ({
+            value: entry.value,
+            label: entry.label.trim(),
+          })),
+        }
+      : {}),
+    ...(category.feedbackEnabled === undefined
+      ? {}
+      : { feedbackEnabled: category.feedbackEnabled }),
+    ...(category.grammarHighlighting === undefined
+      ? {}
+      : { grammarHighlighting: category.grammarHighlighting }),
+  };
 }
 
 export function ScoringScaleEditor({
@@ -528,12 +568,16 @@ function RubricImportPanel({
 
 function CategoryEditSheet({
   category,
+  minScore,
+  maxScore,
   open,
   onOpenChange,
   onSave,
   onRemove,
 }: {
   category: RubricCategoryRow | null;
+  minScore: number;
+  maxScore: number;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSave: (patch: Partial<RubricCategory>) => void;
@@ -546,6 +590,28 @@ function CategoryEditSheet({
   }, [category]);
 
   if (!draft) return null;
+
+  const scoreValues = Array.from(
+    { length: Math.max(0, maxScore - minScore + 1) },
+    (_, index) => minScore + index
+  );
+
+  function setScoreLabel(value: number, label: string) {
+    setDraft((current) => {
+      if (!current) return current;
+      const rest = (current.scoreLabels ?? []).filter(
+        (entry) => entry.value !== value
+      );
+      const next = label.trim()
+        ? [...rest, { value, label }].sort((a, b) => a.value - b.value)
+        : rest;
+      return { ...current, scoreLabels: next };
+    });
+  }
+
+  function currentScoreLabel(value: number) {
+    return draft?.scoreLabels?.find((entry) => entry.value === value)?.label ?? '';
+  }
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange} modal={false}>
@@ -606,6 +672,72 @@ function CategoryEditSheet({
               }
             />
           </div>
+          <div className="space-y-2">
+            <Label>Score labels</Label>
+            <p className="text-sm text-muted-foreground text-pretty">
+              The word shown for each score in this category. Leave a score blank
+              to keep the shared label.
+            </p>
+            <div className="space-y-2">
+              {scoreValues.map((value) => (
+                <div key={value} className="flex items-center gap-2">
+                  <span className="w-6 shrink-0 tabular-nums text-sm text-muted-foreground">
+                    {value}
+                  </span>
+                  <Input
+                    id={`category-edit-score-label-${value}`}
+                    aria-label={`Score ${value} label`}
+                    value={currentScoreLabel(value)}
+                    placeholder="e.g. Proficient"
+                    onChange={(event) =>
+                      setScoreLabel(value, event.target.value)
+                    }
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <Label htmlFor="category-edit-feedback-enabled">
+                Category feedback
+              </Label>
+              <p className="mt-1 text-sm text-muted-foreground text-pretty">
+                Give this category its own feedback box on the grading panel.
+              </p>
+            </div>
+            <Switch
+              id="category-edit-feedback-enabled"
+              checked={draft.feedbackEnabled !== false}
+              onCheckedChange={(checked) =>
+                setDraft((current) =>
+                  current ? { ...current, feedbackEnabled: checked } : current
+                )
+              }
+            />
+          </div>
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <Label htmlFor="category-edit-grammar-highlighting">
+                Grammar highlighting
+              </Label>
+              <p className="mt-1 text-sm text-muted-foreground text-pretty">
+                Produce grammar and syntax highlights on the student's essay for
+                this category.
+              </p>
+            </div>
+            <Switch
+              id="category-edit-grammar-highlighting"
+              checked={isGrammarHighlightCategory(draft)}
+              onCheckedChange={(checked) =>
+                setDraft((current) =>
+                  current
+                    ? { ...current, grammarHighlighting: checked }
+                    : current
+                )
+              }
+            />
+          </div>
           <div className="flex items-center justify-between gap-3">
             <Button
               type="button"
@@ -625,6 +757,9 @@ function CategoryEditSheet({
                   label: draft.label,
                   weight: draft.weight,
                   description: draft.description,
+                  scoreLabels: draft.scoreLabels,
+                  feedbackEnabled: draft.feedbackEnabled,
+                  grammarHighlighting: draft.grammarHighlighting,
                 });
                 onOpenChange(false);
               }}
@@ -712,11 +847,16 @@ export function RubricEditor({
   categories: controlledCategories,
   onCategoriesChange,
   namePrefix = '',
+  minScore = DEFAULT_SCORING_SCALE.minScore,
+  maxScore = DEFAULT_SCORING_SCALE.maxScore,
 }: {
   initial?: RubricData;
   categories?: RubricCategoryRow[];
   onCategoriesChange?: (categories: RubricCategoryRow[]) => void;
   namePrefix?: string;
+  /** Score range the per-category score labels are collected for. */
+  minScore?: number;
+  maxScore?: number;
 }) {
   const [internalCats, setInternalCats] = useState<RubricCategoryRow[]>(() =>
     rowsFromCategories(initial?.categories ?? [])
@@ -845,6 +985,8 @@ export function RubricEditor({
 
       <CategoryEditSheet
         category={editingCategory}
+        minScore={minScore}
+        maxScore={maxScore}
         open={Boolean(editingCategory)}
         onOpenChange={(open) => {
           if (!open) setEditingCategoryId(null);
@@ -865,12 +1007,9 @@ export function RubricEditor({
         type="hidden"
         name="rubricJson"
         value={JSON.stringify({
-          categories: cats.map(({ id: _id, label, weight, description }) => ({
-            key: labelToKey(label),
-            label,
-            weight,
-            description,
-          })),
+          categories: cats.map(({ id: _id, ...category }) =>
+            serializeCategory(category)
+          ),
         })}
       />
     </div>
@@ -879,12 +1018,9 @@ export function RubricEditor({
 
 function categoriesToRubric(categories: RubricCategoryRow[]): RubricData {
   return {
-    categories: categories.map(({ label, weight, description }) => ({
-      key: labelToKey(label),
-      label,
-      weight,
-      description,
-    })),
+    categories: categories.map(({ id: _id, ...category }) =>
+      serializeCategory(category)
+    ),
   };
 }
 
@@ -961,6 +1097,8 @@ export function RubricConfigurationEditor({
         categories={categories}
         onCategoriesChange={updateCategories}
         namePrefix={namePrefix}
+        minScore={scoringScale.minScore}
+        maxScore={scoringScale.maxScore}
       />
     </div>
   );
@@ -1029,12 +1167,13 @@ export function promptConfigSnapshot(cfg: PromptConfigData) {
 
 export function rubricSnapshot(rubric: RubricData) {
   return JSON.stringify({
-    categories: rubric.categories.map((category) => ({
-      key: labelToKey(category.label) || category.key,
-      label: category.label.trim(),
-      weight: category.weight,
-      description: category.description.trim(),
-    })),
+    categories: rubric.categories.map((category) =>
+      serializeCategory({
+        ...category,
+        label: category.label.trim(),
+        description: category.description.trim(),
+      })
+    ),
   });
 }
 
