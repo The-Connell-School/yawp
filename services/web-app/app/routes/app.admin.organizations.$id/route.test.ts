@@ -63,6 +63,7 @@ function organizationFixture() {
     numOfTeacherSeats: 10,
     reporterEnabled: false,
     classInsightsEnabled: false,
+    writingPracticeEnabled: false,
     accessExpiresAt: null,
     memberships: [],
     assignmentTypeAssignments: [],
@@ -179,6 +180,43 @@ describe('admin organization detail route', () => {
     expect(prisma.organization.update.mock.calls[0][0].data).toMatchObject({
       reporterEnabled: false,
       classInsightsEnabled: false,
+    });
+  });
+
+  test('updates the Writing Practice rollout gate for the organization', async () => {
+    const form = new URLSearchParams();
+    form.set('intent', 'update');
+    form.set('name', 'Test Org');
+    form.set('numOfStudentSeats', '30');
+    form.set('numOfTeacherSeats', '10');
+    form.set('writingPracticeEnabled', 'true');
+
+    await action({
+      request: updateRequest(form),
+      params: { id: 'org-1' },
+      context: {} as never,
+    });
+
+    expect(prisma.organization.update.mock.calls[0][0].data).toMatchObject({
+      writingPracticeEnabled: true,
+    });
+  });
+
+  test('disables the Writing Practice rollout gate when its toggle is absent', async () => {
+    const form = new URLSearchParams();
+    form.set('intent', 'update');
+    form.set('name', 'Test Org');
+    form.set('numOfStudentSeats', '30');
+    form.set('numOfTeacherSeats', '10');
+
+    await action({
+      request: updateRequest(form),
+      params: { id: 'org-1' },
+      context: {} as never,
+    });
+
+    expect(prisma.organization.update.mock.calls[0][0].data).toMatchObject({
+      writingPracticeEnabled: false,
     });
   });
 });
