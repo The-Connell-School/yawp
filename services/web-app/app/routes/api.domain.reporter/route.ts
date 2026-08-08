@@ -213,12 +213,18 @@ export async function action({ request }: ActionFunctionArgs) {
   // below: a name is only catchable by `redact()` if it was already
   // registered, and tool results alone don't cover names that only ever
   // appeared in typed text.
+  //
+  // Uses registerStudentFullName (not the bare pseudonymFor) so a teacher
+  // who types a student's bare first name in chat ("How's Sophia doing?")
+  // is still caught here, before any tool call runs this turn - grading
+  // always addresses a student by first name only in stored feedback, so
+  // teachers commonly do too.
   const redactableStudentNames = await listReporterRedactableStudentNames({
     membershipId: ctx.membershipId,
     organizationId: ctx.organizationId,
   });
   for (const name of redactableStudentNames) {
-    nameRedaction.pseudonymFor(name);
+    nameRedaction.registerStudentFullName(name);
   }
 
   const system = buildReporterSystemPrompt({

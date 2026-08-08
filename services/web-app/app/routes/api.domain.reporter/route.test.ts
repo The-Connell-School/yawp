@@ -308,6 +308,26 @@ describe('api.domain.reporter action', () => {
     expect(turn3Serialized).toContain('Amelia Brooks');
   });
 
+  test('redacts a bare first-name mention in the teacher own typed message, before any tool call runs', async () => {
+    // Teachers commonly refer to a student by first name alone in chat
+    // ("How's Sophia doing?"), and the roster-seed loop runs before any
+    // tool call this turn - the seed must catch this, not just full-name
+    // mentions.
+    listReporterRedactableStudentNames.mockResolvedValue(['Sophia Marín']);
+    getLLMCompletion.mockResolvedValueOnce('placeholder');
+    prisma.reporterConversation.create.mockResolvedValue({
+      id: 'conv-bare-first-name',
+      messages: [],
+    });
+
+    await action({
+      request: formRequest({ message: "How's Sophia doing?" }),
+    } as any);
+
+    const llmArgs = getLLMCompletion.mock.calls[0][0];
+    expect(JSON.stringify(llmArgs.messages)).not.toContain('Sophia');
+  });
+
   test('continues an existing conversation with prior messages', async () => {
     prisma.reporterConversation.findFirst.mockResolvedValue({
       id: 'conv-9',
