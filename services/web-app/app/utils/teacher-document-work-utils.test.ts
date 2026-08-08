@@ -29,6 +29,12 @@ describe('formatClassLabel', () => {
       })
     ).toBe('Honors · Grade 9');
   });
+
+  test('still renders a usable label when grade and period are both null', () => {
+    expect(
+      formatClassLabel({ id: 'c1', grade: null, period: null, title: null })
+    ).toBe('Untitled Class');
+  });
 });
 
 function documentRow(

@@ -127,4 +127,48 @@ describe('formatClassLabel', () => {
       'Grade 9'
     );
   });
+
+  test('falls back to untitled class when grade, period, and title are all missing', () => {
+    expect(formatClassLabel({ grade: null, period: null, title: null })).toBe(
+      'Untitled Class'
+    );
+  });
+
+  test('falls back to untitled class when grade, period, and title are blank', () => {
+    expect(formatClassLabel({ grade: '  ', period: '  ', title: '  ' })).toBe(
+      'Untitled Class'
+    );
+  });
+
+  test('tolerates a class record carrying unrelated fields', () => {
+    expect(
+      formatClassLabel({
+        id: 'c1',
+        schoolYear: '2026-2027',
+        grade: null,
+        period: null,
+        title: null,
+      })
+    ).toBe('Untitled Class');
+  });
+});
+
+describe('getClassCardHeading with no grade and no period', () => {
+  test('returns the untitled fallback with no subtitle when nothing is set', () => {
+    expect(
+      getClassCardHeading({ grade: null, period: null, title: null })
+    ).toEqual({
+      title: 'Untitled Class',
+      subtitle: null,
+    });
+  });
+
+  test('keeps the custom title and drops the subtitle', () => {
+    expect(
+      getClassCardHeading({ grade: null, period: null, title: 'Honors' })
+    ).toEqual({
+      title: 'Honors',
+      subtitle: null,
+    });
+  });
 });

@@ -28,6 +28,29 @@ describe('assignmentCreationClassLabel', () => {
       assignmentCreationClassLabel({ id: 'c1', grade: '9', period: null })
     ).toBe('Grade 9');
   });
+
+  it('falls back to period only when grade is null', () => {
+    expect(
+      assignmentCreationClassLabel({ id: 'c1', grade: null, period: '2' })
+    ).toBe('Period 2');
+  });
+
+  it('falls back to a usable label when grade and period are both null', () => {
+    expect(
+      assignmentCreationClassLabel({ id: 'c1', grade: null, period: null })
+    ).toBe('Untitled Class');
+  });
+
+  it('prefers the class title when grade and period are both null', () => {
+    expect(
+      assignmentCreationClassLabel({
+        id: 'c1',
+        grade: null,
+        period: null,
+        title: 'Honors',
+      })
+    ).toBe('Honors');
+  });
 });
 
 const FetcherForm = ({
