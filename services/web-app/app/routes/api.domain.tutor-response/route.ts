@@ -7,7 +7,7 @@ import { isLlmFallbackRetrySignal } from '~/utils/getLLMCompletion/llm-provider-
 import { requireMutableRequest } from '~/utils/auth.server';
 import {
   buildModuleRubricGuidance,
-  buildTutorSystemPrompt,
+  buildTutorSystemPromptBlocks,
 } from './build-system-prompt';
 import { parseRubric } from '~/domain/assignment-types/assignment-type-rubric.shared';
 import { normalizeModuleRubricAlignment } from '~/domain/assignment-types/assignment-type-rubric-config';
@@ -104,7 +104,7 @@ export async function action({ request }: ActionFunctionArgs) {
       alignment: cms.assignmentModule.rubricAlignmentJson,
     });
 
-    const system = buildTutorSystemPrompt({
+    const system = buildTutorSystemPromptBlocks({
       tutorInstructions: cms.assignmentModule.tutorInstructions,
       instructionTutorInstructions: instruction.tutorInstructions,
       moduleRubricGuidance,
