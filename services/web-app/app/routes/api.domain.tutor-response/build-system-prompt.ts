@@ -53,6 +53,23 @@ export const buildTutorSystemPrompt = ({
  * case (no error, `cache_creation_input_tokens: 0`). That's an acceptable
  * miss, not a bug: nothing here can force a short module's prompt to be
  * longer just to clear the threshold.
+ *
+ * RESIDUAL PII GAP — read this before trusting the paragraph above.
+ * "Nothing student-specific is ever mixed in here" is true of the SCHEMA,
+ * not of the content. `tutorInstructions` and `instructionTutorInstructions`
+ * are teacher-authored free text, and a teacher can write a student's real
+ * name into them ("Aiden struggles with topic sentences — push him on
+ * those"). Nothing on this path redacts the system prompt: the route builds
+ * it before the per-student redaction mapping exists at all. That string
+ * then sits inside the ephemeral cache prefix, held provider-side for the
+ * cache TTL and re-sent verbatim on every tutor turn by every student in
+ * the module, not just the student it names.
+ *
+ * Redacting it here is not viable as-is: the mapping is per-student, so a
+ * redacted prefix would differ per student and destroy the cache hit this
+ * block exists for. The durable fix is server-side validation on the module
+ * editor that warns when instruction text matches a roster name. Until then
+ * this gap is real and is deliberately not papered over.
  */
 export const buildTutorSystemPromptBlocks = (
   params: Parameters<typeof buildTutorSystemPrompt>[0]
