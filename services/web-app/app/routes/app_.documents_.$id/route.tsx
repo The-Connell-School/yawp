@@ -58,6 +58,7 @@ import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { hasEffectivePlatformAdmin } from '~/utils/preview-access.server';
 import { redirectWithToast } from '~/utils/toast.server';
+import { ensureAssignmentModuleSessionsForDocument } from '~/domain/documents.server';
 import { Comments } from './comments';
 import { CommentsSelectionProvider } from './comments/selection-context';
 import { DocumentEditor } from './document-editor/document-editor';
@@ -146,6 +147,39 @@ function sortDocumentCommentsByMarkupOrder<
     return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
   });
 }
+
+// Shared with the post-backfill refetch below so a session created on demand
+// comes back in the same shape as one loaded on the initial document query.
+const assignmentModuleSessionsOrderBy = [
+  { assignmentModule: { position: 'asc' as const } },
+  { createdAt: 'desc' as const },
+];
+
+const assignmentModuleSessionsInclude = {
+  assignmentModule: {
+    include: {
+      instructions: {
+        orderBy: { position: 'asc' as const },
+        include: {
+          buttons: {
+            orderBy: { position: 'asc' as const },
+          },
+        },
+      },
+      assignmentType: {
+        select: {
+          assignmentModules: {
+            select: { id: true, position: true },
+            orderBy: { position: 'asc' as const },
+          },
+        },
+      },
+    },
+  },
+  messages: {
+    orderBy: [{ createdAt: 'asc' as const }, { id: 'asc' as const }],
+  },
+};
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   invariant(params.id, 'No document id found');
@@ -251,35 +285,8 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       },
       revisions: { orderBy: { createdAt: 'desc' } },
       assignmentModuleSessions: {
-        orderBy: [
-          { assignmentModule: { position: 'asc' } },
-          { createdAt: 'desc' },
-        ],
-        include: {
-          assignmentModule: {
-            include: {
-              instructions: {
-                orderBy: { position: 'asc' },
-                include: {
-                  buttons: {
-                    orderBy: { position: 'asc' },
-                  },
-                },
-              },
-              assignmentType: {
-                select: {
-                  assignmentModules: {
-                    select: { id: true, position: true },
-                    orderBy: { position: 'asc' },
-                  },
-                },
-              },
-            },
-          },
-          messages: {
-            orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
-          },
-        },
+        orderBy: assignmentModuleSessionsOrderBy,
+        include: assignmentModuleSessionsInclude,
       },
       comments: {
         include: {
@@ -345,11 +352,35 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     }
   }
 
+  // A document should always have a session per AssignmentModule — they're
+  // created together in createDocumentForAssignmentType. If none exist here,
+  // the document reached that state some other way (hand-written seed/import
+  // data, or a module added after the document was created). Recover on the
+  // spot rather than dead-ending the student/teacher: back-fill the missing
+  // sessions and re-read them.
+  let assignmentModuleSessions = doc.assignmentModuleSessions;
+  if (assignmentModuleSessions.length === 0 && doc.assignmentType?.id) {
+    const created = await ensureAssignmentModuleSessionsForDocument(
+      doc.id,
+      doc.assignmentType.id,
+      []
+    );
+    if (created) {
+      assignmentModuleSessions = await prisma.assignmentModuleSession.findMany(
+        {
+          where: { documentId: doc.id, deletedAt: null },
+          orderBy: assignmentModuleSessionsOrderBy,
+          include: assignmentModuleSessionsInclude,
+        }
+      );
+    }
+  }
+
   const moduleSessionsByModuleId = new Map<
     string,
-    (typeof doc.assignmentModuleSessions)[number]
+    (typeof assignmentModuleSessions)[number]
   >();
-  for (const session of doc.assignmentModuleSessions) {
+  for (const session of assignmentModuleSessions) {
     if (!moduleSessionsByModuleId.has(session.assignmentModuleId)) {
       moduleSessionsByModuleId.set(session.assignmentModuleId, session);
     }
@@ -362,8 +393,12 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   );
 
   if (!currentCms) {
+    // The AssignmentType backing this document has no active modules to
+    // create sessions from — a data problem the student/teacher can't fix
+    // themselves, unlike an ordinary missing-session case above.
     return redirectWithToast('/app', {
-      description: 'No assignment module session found.',
+      description:
+        "This document's assignment has no active steps to open. Contact support.",
       type: 'error',
     });
   }
