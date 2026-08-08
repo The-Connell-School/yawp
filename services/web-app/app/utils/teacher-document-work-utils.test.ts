@@ -2,8 +2,34 @@ import { describe, expect, test } from 'bun:test';
 
 import {
   buildReleaseGradeRows,
+  formatClassLabel,
   type TeacherDocumentWorkRow,
 } from './teacher-document-work-utils';
+
+describe('formatClassLabel', () => {
+  test('includes the period when present', () => {
+    expect(
+      formatClassLabel({ id: 'c1', grade: '9', period: '2', title: null })
+    ).toBe('Grade 9 • Period 2');
+  });
+
+  test('omits the period segment when period is null', () => {
+    expect(
+      formatClassLabel({ id: 'c1', grade: '9', period: null, title: null })
+    ).toBe('Grade 9');
+  });
+
+  test('keeps the title suffix when period is null', () => {
+    expect(
+      formatClassLabel({
+        id: 'c1',
+        grade: '9',
+        period: null,
+        title: 'Honors',
+      })
+    ).toBe('Grade 9 — Honors');
+  });
+});
 
 function documentRow(
   overrides: Partial<TeacherDocumentWorkRow> &

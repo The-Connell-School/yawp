@@ -1668,8 +1668,8 @@ function ClassDetailPage() {
                   >
                     {data.teacherClasses.map((klass) => (
                       <option key={klass.id} value={klass.id}>
-                        {klass.school.name} — Grade {klass.grade}, Period{' '}
-                        {klass.period}
+                        {klass.school.name} — Grade {klass.grade}
+                        {klass.period ? `, Period ${klass.period}` : ''}
                         {klass.title ? ` — ${klass.title}` : ''}
                       </option>
                     ))}

@@ -24,7 +24,7 @@ export type ClassManageRow = {
   schoolId: string;
   schoolYear: string;
   grade: string;
-  period: string;
+  period: string | null;
   title: string | null;
   code: string;
 };
@@ -65,7 +65,7 @@ export function ClassManageSheet({
       setSchoolId(editingClass.schoolId);
       setSchoolYear(editingClass.schoolYear);
       setGrade(editingClass.grade);
-      setPeriod(editingClass.period);
+      setPeriod(editingClass.period ?? '');
       setTitle(editingClass.title || '');
       setCode(editingClass.code);
       return;

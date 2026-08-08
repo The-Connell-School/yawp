@@ -49,10 +49,12 @@ export type AssignmentTypeRow = {
 
 function formatClassLabel(klass: {
   grade: string;
-  period: string;
+  period: string | null;
   title: string | null;
 }) {
-  const base = `Grade ${klass.grade} • Period ${klass.period}`;
+  const base = klass.period
+    ? `Grade ${klass.grade} • Period ${klass.period}`
+    : `Grade ${klass.grade}`;
   return klass.title ? `${base} — ${klass.title}` : base;
 }
 
@@ -292,7 +294,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       return (
         (a.title ?? '').localeCompare(b.title ?? '') ||
         a.grade.localeCompare(b.grade) ||
-        a.period.localeCompare(b.period)
+        (a.period ?? '').localeCompare(b.period ?? '')
       );
     });
   }
@@ -580,8 +582,10 @@ export default function AppRoute() {
                             {classAssignment.assignment.assignmentType.title}
                           </p>
                           <p className="text-xs text-muted-foreground">
-                            Grade {classAssignment.class.grade} • Period{' '}
-                            {classAssignment.class.period}
+                            Grade {classAssignment.class.grade}
+                            {classAssignment.class.period
+                              ? ` • Period ${classAssignment.class.period}`
+                              : ''}
                             {classAssignment.class.title
                               ? ` • ${classAssignment.class.title}`
                               : ''}
