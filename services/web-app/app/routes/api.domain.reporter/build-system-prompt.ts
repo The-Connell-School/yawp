@@ -1,11 +1,13 @@
 import { rubricCategories } from '~/domain/grading/rubric';
+import type { CacheableSystemBlock } from '~/utils/getLLMCompletion/getLLMCompletion';
 
 /**
- * System prompt for the Yawp Reporter chat. The reporter is a data-grounded
- * assistant for teachers: it answers by calling the report tools rather than
- * guessing, and it never invents numbers.
+ * The personalized opening sentence of the reporter system prompt — the
+ * only part of it that varies per conversation (teacher name, org name).
+ * Kept separate from `buildReporterCacheableSystemPrompt` so the fixed
+ * instruction body can sit ahead of it as a byte-stable, cacheable prefix.
  */
-export function buildReporterSystemPrompt({
+export function buildReporterPersonalizedIntro({
   teacherName,
   organizationName,
 }: {
@@ -13,6 +15,19 @@ export function buildReporterSystemPrompt({
   organizationName: string;
 }): string {
   const who = teacherName ? `${teacherName}, a teacher` : 'a teacher';
+  return `You are Yawp Reporter, an assistant that helps ${who} at ${organizationName} understand their classes and students.`;
+}
+
+/**
+ * The fixed instruction body of the reporter system prompt: identical for
+ * every conversation, every teacher, every organization. This is the part
+ * that's worth caching — it's most of the prompt's ~2,500–3,000 tokens, and
+ * a Sonnet-tier model needs at least 1,024 tokens in the cacheable prefix
+ * for a cache entry to actually get written (see
+ * `shared/prompt-caching.md`'s per-model minimum table) — this block clears
+ * that easily.
+ */
+export function buildReporterCacheableSystemPrompt(): string {
   // The actual grading rubric, verbatim, so the reporter uses Yawp's own
   // definitions and names for each skill instead of inventing its own.
   const rubricBlock = rubricCategories
@@ -22,8 +37,6 @@ export function buildReporterSystemPrompt({
     )
     .join('\n');
   return [
-    `You are Yawp Reporter, an assistant that helps ${who} at ${organizationName} understand their classes and students.`,
-    '',
     'How you work:',
     '- Answer questions about classes, students, grades, and growth by calling the provided tools. Never fabricate grades, averages, or student names — if you do not have the data, call a tool to get it.',
     "- For class reports you need a class id: call list_classes first to discover ids. For student reports you can pass the student's full name directly (the tools match names within your classes) — you do not need their id.",
@@ -77,6 +90,50 @@ export function buildReporterSystemPrompt({
     '- Only put concrete, pickable options in that block (never freeform questions). Omit the block entirely when you are not asking the teacher to choose.',
     '- You may also add 1–3 suggestions for natural follow-up reports the teacher might want next (e.g. "Growth report for Ada Lovelace").',
   ].join('\n');
+}
+
+/**
+ * The full reporter system prompt as a single string, personalized intro
+ * first — this is the original shape, preserved for any caller that just
+ * wants the plain text (audit logs, tests). The API-facing caller should use
+ * `buildReporterSystemPromptBlocks` instead so the fixed instruction body
+ * can be cached.
+ */
+export function buildReporterSystemPrompt(params: {
+  teacherName: string | null;
+  organizationName: string;
+}): string {
+  return [
+    buildReporterPersonalizedIntro(params),
+    '',
+    buildReporterCacheableSystemPrompt(),
+  ].join('\n');
+}
+
+/**
+ * The reporter system prompt as `system` content blocks, ordered so the
+ * fixed instruction body — invariant across every teacher and every
+ * organization — is the cacheable prefix, and the short personalized intro
+ * (which does vary by org) comes after the cache breakpoint. See
+ * `shared/prompt-caching.md`: the cache is a byte-for-byte prefix match, so
+ * the varying sentence cannot sit ahead of the marker without invalidating
+ * the whole cache on every request.
+ */
+export function buildReporterSystemPromptBlocks(params: {
+  teacherName: string | null;
+  organizationName: string;
+}): CacheableSystemBlock[] {
+  return [
+    {
+      type: 'text',
+      text: buildReporterCacheableSystemPrompt(),
+      cache_control: { type: 'ephemeral' },
+    },
+    {
+      type: 'text',
+      text: buildReporterPersonalizedIntro(params),
+    },
+  ];
 }
 
 /**

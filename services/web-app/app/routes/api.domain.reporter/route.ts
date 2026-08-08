@@ -9,7 +9,7 @@ import {
   handleReporterToolCall,
   REPORTER_TOOLS,
 } from '~/domain/reporter/reporter-tools.server';
-import { buildReporterSystemPrompt } from './build-system-prompt';
+import { buildReporterSystemPromptBlocks } from './build-system-prompt';
 import {
   AiRateLimitError,
   reserveAiRequest,
@@ -186,7 +186,7 @@ export async function action({ request }: ActionFunctionArgs) {
   );
   const isNewConversation = !conversation;
 
-  const system = buildReporterSystemPrompt({
+  const system = buildReporterSystemPromptBlocks({
     teacherName: null,
     organizationName: access.membership.organization.name,
   });
