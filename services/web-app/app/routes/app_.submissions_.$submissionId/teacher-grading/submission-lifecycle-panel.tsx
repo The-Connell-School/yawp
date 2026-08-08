@@ -105,7 +105,9 @@ export function GradingAssistantSplitButton({
           type="button"
           size="sm"
           variant="outline"
-          className="rounded-r-none border-r-0"
+          className={cn(
+            GRADING_ASSISTANT_STRICTNESS_UI_ENABLED && 'rounded-r-none border-r-0'
+          )}
           data-testid="grading-assistant-generate"
           disabled={isBusy || !headerState}
           onClick={() => runWithOptionalConfirm(generateAiSuggestions)}
@@ -217,9 +219,6 @@ export function SubmissionLifecyclePanel({
   isSavingGrade,
   onRelease,
   isReleasing,
-  onUnsubmit,
-  isUnsubmitting,
-  isUnsubmitted = false,
   submissionForView,
   ...teacherGradingPanelProps
 }: {
@@ -231,11 +230,6 @@ export function SubmissionLifecyclePanel({
   isSavingGrade: boolean;
   onRelease: () => void;
   isReleasing: boolean;
-  /** Undo this submission: hides it everywhere without deleting the document. */
-  onUnsubmit: () => void;
-  isUnsubmitting: boolean;
-  /** Already unsubmitted — hide the action, this view is now read-only history. */
-  isUnsubmitted?: boolean;
   submissionForView: ViewPanelSubmission;
 } & ComponentProps<typeof TeacherGradingPanel>) {
   const label = lifecycleState === 'needs_grading' ? 'Grading' : 'Grade Summary';
@@ -351,26 +345,12 @@ export function SubmissionLifecyclePanel({
                 onAbortStart={() => setIsGradingAssistantPending(false)}
               />
             ) : null}
-            {!isUnsubmitted ? (
-              <ConfirmationDialog
-                title="Unsubmit this document?"
-                description="This removes the submission from grading — any grade or AI feedback already on it will no longer be visible to you or the student. The student's document itself is not deleted and its revision history is kept; they'll be able to revise and resubmit it."
-                confirmText="Unsubmit"
-                cancelText="Cancel"
-                variant="destructive"
-                onConfirm={() => void onUnsubmit()}
-              >
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  data-testid="submission-lifecycle-unsubmit"
-                  disabled={isUnsubmitting}
-                >
-                  {isUnsubmitting ? 'Unsubmitting...' : 'Unsubmit'}
-                </Button>
-              </ConfirmationDialog>
-            ) : null}
+            {/* Teachers can no longer unsubmit a document from here — only
+                the student who owns it can. The unsubmit machinery
+                (Submission.unsubmittedAt/unsubmittedByMembershipId, the
+                /api/domain/unsubmit-submission endpoint, and its
+                exclusion from active reads) is unchanged; only this
+                teacher-facing entry point was removed. */}
           </div>
         </div>
       </div>

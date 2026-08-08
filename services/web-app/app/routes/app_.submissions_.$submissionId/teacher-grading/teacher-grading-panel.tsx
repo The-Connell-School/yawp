@@ -487,6 +487,19 @@ export function TeacherGradingPanel({
     });
   };
 
+  /**
+   * Overwrite the overall percentage with the total computed from the
+   * current rubric category scores. Does not touch rubric scores, rubric
+   * comments, or overall feedback, and does not save — like every other
+   * field edit in this panel, the change is staged until the teacher clicks
+   * Save (or discarded via Cancel).
+   */
+  const handleRecalculateFromRubric = () => {
+    if (computedNumericPercentage === null) return;
+    setNumericPercentage(computedNumericPercentage.toString());
+    setHasManualPercentOverride(false);
+  };
+
   const generateAiSuggestionsAtLevel = useCallback(
     (level: GradingAssistantStrictnessLevel) => {
       setGradingAssistantStrictnessLevel(level);
@@ -763,6 +776,27 @@ export function TeacherGradingPanel({
               }
             }}
           />
+          {computedNumericPercentage !== null ? (
+            <div>
+              <Button
+                type="button"
+                variant="link"
+                size="sm"
+                className="h-auto p-0 text-xs"
+                data-testid="grading-recalculate-from-rubric"
+                disabled={isGenerating}
+                onClick={handleRecalculateFromRubric}
+              >
+                Recalculate from rubric scores
+              </Button>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                Sets the overall percentage above to match the rubric scores
+                below ({computedNumericPercentage}%). Rubric scores and
+                comments aren't changed, and nothing saves until you click
+                Save.
+              </p>
+            </div>
+          ) : null}
         </div>
 
         <div className="space-y-2">
