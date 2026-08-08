@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, mock, test } from 'bun:test';
 // Deliberately do NOT stub prisma.document or prisma.documentRevision here.
 // If the unsubmit action ever touches either model, calling an unstubbed
 // method throws a TypeError and the test fails loudly — that's how we prove
-// the student's document and its revision history are never written to.
+// the student's document and its full revision history are never written to.
 const prisma = {
   $transaction: mock(),
   submission: {
@@ -13,15 +13,9 @@ const prisma = {
 };
 
 const getGradingActor = mock();
-const canManageGrades = mock();
-const isGradingOwnDocument = mock();
 
 mock.module('~/utils/db.server', () => ({ prisma }));
-mock.module('~/utils/grading-auth.server', () => ({
-  getGradingActor,
-  canManageGrades,
-  isGradingOwnDocument,
-}));
+mock.module('~/utils/grading-auth.server', () => ({ getGradingActor }));
 
 const { action } = await import('./route');
 
@@ -34,22 +28,31 @@ function makeRequest(submissionId?: string) {
   });
 }
 
-function eligibleSubmission(overrides: Record<string, unknown> = {}) {
+function studentActor(overrides: Record<string, unknown> = {}) {
   return {
-    id: 'sub-1',
-    unsubmittedAt: null,
-    document: {
-      membershipId: 'student-1',
-      classAssignment: {
-        class: {
-          id: 'class-1',
-          teachers: [{ id: 'teacher-1' }],
-        },
-      },
-    },
+    membershipId: 'student-1',
+    organizationId: 'org-1',
+    teacherProfileId: null,
+    isTeacher: false,
+    isAdmin: false,
     ...overrides,
   };
 }
+
+function ownedSubmission(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 'sub-1',
+    gradedAt: null,
+    releasedAt: null,
+    document: { membershipId: 'student-1' },
+    ...overrides,
+  };
+}
+
+type ActionResponse = {
+  data: { success?: boolean; message?: string };
+  init?: { status?: number };
+};
 
 describe('api.domain.unsubmit-submission', () => {
   beforeEach(() => {
@@ -57,109 +60,159 @@ describe('api.domain.unsubmit-submission', () => {
     prisma.submission.findFirst.mockReset();
     prisma.submission.updateMany.mockReset();
     getGradingActor.mockReset();
-    canManageGrades.mockReset();
-    isGradingOwnDocument.mockReset();
 
-    getGradingActor.mockResolvedValue({
-      membershipId: 'teacher-1',
-      teacherProfileId: 'teacher-1',
-      isTeacher: true,
-      isAdmin: false,
-    });
-    canManageGrades.mockReturnValue(true);
-    isGradingOwnDocument.mockReturnValue(false);
+    getGradingActor.mockResolvedValue(studentActor());
     prisma.submission.updateMany.mockResolvedValue({ count: 1 });
     prisma.$transaction.mockImplementation(async (callback: any) =>
       callback(prisma)
     );
   });
 
-  test('rejects non-teachers', async () => {
-    canManageGrades.mockReturnValue(false);
+  test('allows a student to unsubmit their own ungraded, unreleased submission', async () => {
+    prisma.submission.findFirst.mockResolvedValue(ownedSubmission());
 
     const response = (await action({
       request: makeRequest('sub-1'),
-    } as any)) as { data: Record<string, unknown>; init?: { status?: number } };
+    } as any)) as ActionResponse;
+
+    expect(response.data.success).toBe(true);
+    expect(prisma.submission.findFirst).toHaveBeenCalledTimes(1);
+    const lookup = prisma.submission.findFirst.mock.calls[0][0];
+    expect(lookup.where).toEqual({
+      id: 'sub-1',
+      unsubmittedAt: null,
+      document: { is: { membershipId: 'student-1' } },
+    });
+  });
+
+  test('refuses a teacher even for a submission in their own class', async () => {
+    getGradingActor.mockResolvedValue(
+      studentActor({
+        membershipId: 'teacher-1',
+        teacherProfileId: 'teacher-1',
+        isTeacher: true,
+      })
+    );
+
+    const response = (await action({
+      request: makeRequest('sub-1'),
+    } as any)) as ActionResponse;
 
     expect(response.init?.status).toBe(403);
+    expect(response.data.message).toBe(
+      'Only students can unsubmit their own work.'
+    );
     expect(prisma.submission.findFirst).not.toHaveBeenCalled();
+  });
+
+  test('refuses an admin', async () => {
+    getGradingActor.mockResolvedValue(
+      studentActor({ membershipId: 'admin-1', isAdmin: true })
+    );
+
+    const response = (await action({
+      request: makeRequest('sub-1'),
+    } as any)) as ActionResponse;
+
+    expect(response.init?.status).toBe(403);
+    expect(response.data.message).toBe(
+      'Only students can unsubmit their own work.'
+    );
+    expect(prisma.submission.findFirst).not.toHaveBeenCalled();
+  });
+
+  test("404s when a student tries to unsubmit another student's submission", async () => {
+    prisma.submission.findFirst.mockResolvedValue(null);
+
+    const response = (await action({
+      request: makeRequest('sub-2'),
+    } as any)) as ActionResponse;
+
+    expect(response.init?.status).toBe(404);
+    expect(response.data.message).toBe(
+      'Submission not found, already unsubmitted, or you do not have permission to unsubmit it.'
+    );
+    expect(prisma.submission.findFirst.mock.calls[0][0].where.document).toEqual(
+      { is: { membershipId: 'student-1' } }
+    );
+    expect(prisma.submission.updateMany).not.toHaveBeenCalled();
   });
 
   test('requires a submissionId', async () => {
     const response = (await action({
       request: makeRequest(),
-    } as any)) as { data: Record<string, unknown>; init?: { status?: number } };
+    } as any)) as ActionResponse;
 
     expect(response.init?.status).toBe(422);
   });
 
-  test('404s when the submission is not found or the teacher does not own the class', async () => {
+  test('404s when the submission is already unsubmitted', async () => {
     prisma.submission.findFirst.mockResolvedValue(null);
 
     const response = (await action({
       request: makeRequest('sub-1'),
-    } as any)) as { data: Record<string, unknown>; init?: { status?: number } };
+    } as any)) as ActionResponse;
 
     expect(response.init?.status).toBe(404);
     expect(prisma.submission.updateMany).not.toHaveBeenCalled();
   });
 
-  test('scopes the lookup to submissions in a class the teacher teaches, excluding their own documents', async () => {
-    prisma.submission.findFirst.mockResolvedValue(eligibleSubmission());
-
-    await action({ request: makeRequest('sub-1') } as any);
-
-    const where = prisma.submission.findFirst.mock.calls[0][0].where;
-    expect(where.id).toBe('sub-1');
-    expect(where.unsubmittedAt).toBeNull();
-    expect(where.document.is.classAssignment.class.teachers.some.id).toBe(
-      'teacher-1'
+  test('refuses an owned graded submission server-side with a clear lifecycle message', async () => {
+    prisma.submission.findFirst.mockResolvedValue(
+      ownedSubmission({ gradedAt: new Date('2026-08-08T12:00:00Z') })
     );
-    expect(where.document.is.membershipId.not).toBe('teacher-1');
-  });
-
-  test('rejects unsubmitting a submission already marked unsubmitted', async () => {
-    prisma.submission.findFirst.mockResolvedValue(null); // where clause excludes unsubmittedAt != null
 
     const response = (await action({
       request: makeRequest('sub-1'),
-    } as any)) as { data: Record<string, unknown>; init?: { status?: number } };
+    } as any)) as ActionResponse;
 
-    expect(response.init?.status).toBe(404);
+    expect(response.init?.status).toBe(409);
+    expect(response.data.message).toBe(
+      'This submission can no longer be unsubmitted because it has been graded.'
+    );
+    expect(prisma.submission.updateMany).not.toHaveBeenCalled();
   });
 
-  test('sets unsubmittedAt/unsubmittedByMembershipId and touches nothing else on the submission', async () => {
-    prisma.submission.findFirst.mockResolvedValue(eligibleSubmission());
+  test('defensively refuses an owned released submission even if gradedAt is unexpectedly null', async () => {
+    prisma.submission.findFirst.mockResolvedValue(
+      ownedSubmission({ releasedAt: new Date('2026-08-08T12:00:00Z') })
+    );
 
     const response = (await action({
       request: makeRequest('sub-1'),
-    } as any)) as { data: Record<string, unknown> };
+    } as any)) as ActionResponse;
+
+    expect(response.init?.status).toBe(409);
+    expect(response.data.message).toBe(
+      'This submission can no longer be unsubmitted because it has been graded.'
+    );
+    expect(prisma.submission.updateMany).not.toHaveBeenCalled();
+  });
+
+  test('writes only unsubmittedAt and unsubmittedByMembershipId', async () => {
+    prisma.submission.findFirst.mockResolvedValue(ownedSubmission());
+
+    const response = (await action({
+      request: makeRequest('sub-1'),
+    } as any)) as ActionResponse;
 
     expect(prisma.submission.updateMany).toHaveBeenCalledTimes(1);
     const call = prisma.submission.updateMany.mock.calls[0][0];
-    expect(call.where).toEqual(
-      expect.objectContaining({ id: 'sub-1', unsubmittedAt: null })
-    );
-    expect(call.data.unsubmittedByMembershipId).toBe('teacher-1');
-    expect(call.data.unsubmittedAt).toBeInstanceOf(Date);
-
-    // Grade / AI feedback fields must NOT be part of the update — they stay
-    // on the row untouched so the action is reversible.
-    expect(call.data).not.toHaveProperty('score');
-    expect(call.data).not.toHaveProperty('feedback');
-    expect(call.data).not.toHaveProperty('rubricScores');
-    expect(call.data).not.toHaveProperty('aiMeta');
-    expect(call.data).not.toHaveProperty('gradedAt');
-    expect(call.data).not.toHaveProperty('releasedAt');
-    expect(call.data).not.toHaveProperty('documentId');
-    expect(call.data).not.toHaveProperty('html');
-    expect(call.data).not.toHaveProperty('text');
-
+    expect(call.where).toEqual({
+      id: 'sub-1',
+      unsubmittedAt: null,
+      gradedAt: null,
+      releasedAt: null,
+    });
+    expect(call.data).toEqual({
+      unsubmittedAt: expect.any(Date),
+      unsubmittedByMembershipId: 'student-1',
+    });
     expect(response.data.success).toBe(true);
   });
 
-  test('never calls prisma.document or prisma.documentRevision', async () => {
-    prisma.submission.findFirst.mockResolvedValue(eligibleSubmission());
+  test('preserves the document and its full DocumentRevision history', async () => {
+    prisma.submission.findFirst.mockResolvedValue(ownedSubmission());
 
     await action({ request: makeRequest('sub-1') } as any);
 
@@ -167,14 +220,17 @@ describe('api.domain.unsubmit-submission', () => {
     expect((prisma as any).documentRevision).toBeUndefined();
   });
 
-  test('409s on a concurrent unsubmit (optimistic concurrency)', async () => {
-    prisma.submission.findFirst.mockResolvedValue(eligibleSubmission());
+  test('409s on a concurrent unsubmit or grade change', async () => {
+    prisma.submission.findFirst.mockResolvedValue(ownedSubmission());
     prisma.submission.updateMany.mockResolvedValue({ count: 0 });
 
     const response = (await action({
       request: makeRequest('sub-1'),
-    } as any)) as { data: Record<string, unknown>; init?: { status?: number } };
+    } as any)) as ActionResponse;
 
     expect(response.init?.status).toBe(409);
+    expect(response.data.message).toBe(
+      'This submission was already changed. Please refresh and try again.'
+    );
   });
 });
