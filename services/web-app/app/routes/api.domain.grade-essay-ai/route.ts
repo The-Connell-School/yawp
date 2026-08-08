@@ -10,7 +10,10 @@ import {
   letterFromPercent,
   scoreToPercent,
 } from '~/domain/grading/gradeMath';
-import { firstNameFromFullName } from '~/domain/grading/personalize';
+import {
+  firstNameFromFullName,
+  restOfNameFromFullName,
+} from '~/domain/grading/personalize';
 import {
   buildRedactionMapping,
   redact,
@@ -618,16 +621,22 @@ export async function action({ request }: ActionFunctionArgs) {
     )
     .join('\n');
 
-  const studentFirstName = firstNameFromFullName(
-    submission.document.membership?.user?.name
-  );
+  const studentFullName = submission.document.membership?.user?.name;
+  const studentFirstName = firstNameFromFullName(studentFullName);
   // The student's real first name never leaves our servers: every prompt
   // sent to the AI provider below uses `pseudonymFirstName`, and every
   // piece of model-authored feedback is rehydrated back to the real name
   // before it is persisted or returned to the caller. This mapping is
   // in-memory only for the life of this request - it is never logged or
-  // persisted.
-  const gradingNameMapping = buildRedactionMapping([studentFirstName]);
+  // persisted. Also registers any remaining name parts (e.g. the last
+  // name) so a student who signs their essay with their full name doesn't
+  // leak it through `redactedEssayText` below - only the first name is
+  // ever used in a prompt field, but the essay body is free text and can
+  // contain the whole name.
+  const gradingNameMapping = buildRedactionMapping([
+    studentFirstName,
+    ...restOfNameFromFullName(studentFullName),
+  ]);
   const pseudonymFirstName = redact(studentFirstName, gradingNameMapping);
   // Students sign their work and write about themselves by name, so the
   // essay body carries the real name just as surely as the name field does.

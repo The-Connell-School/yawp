@@ -389,6 +389,52 @@ describe('api.domain.grade-essay-ai', () => {
     ).toBe('Jordan, this draft has clear progress and focus.');
   });
 
+  test('also redacts the student last name out of the essay body, not just the first name', async () => {
+    getLLMCompletion.mockReset();
+    getLLMCompletion
+      .mockResolvedValueOnce(buildRubricResponseJson())
+      .mockResolvedValueOnce(JSON.stringify({ issues: [] }));
+
+    prisma.submission.findFirst.mockResolvedValue(
+      mockSubmission({
+        id: 'sub-lastname',
+        // Students sign their work with their full name, not just first.
+        text: 'This essay argues for change.\n\n-- Sophia Marín',
+        document: {
+          id: 'doc-1',
+          membershipId: 'student-profile-1',
+          assignmentTypeId: 'assignment-type-legacy',
+          assignmentType: {
+            id: 'assignment-type-legacy',
+            kind: null,
+            title: 'Critical Essay',
+          },
+          classAssignment: { class: { schoolId: 'school-1' } },
+          membership: {
+            classesAsStudent: [],
+            user: { name: 'Sophia Marín' },
+          },
+        },
+      })
+    );
+
+    const form = new FormData();
+    form.append('submissionId', 'sub-lastname');
+
+    await action({
+      request: new Request('https://example.com/api/domain/grade-essay-ai', {
+        method: 'POST',
+        body: form,
+      }),
+    } as any);
+
+    for (const call of getLLMCompletion.mock.calls) {
+      const args = call[0];
+      expect(args.system ?? '').not.toContain('Marín');
+      expect(JSON.stringify(args.messages)).not.toContain('Marín');
+    }
+  });
+
   test('starts the grading deadline before request preflight work', async () => {
     const originalTimeout = AbortSignal.timeout;
     const timeout = mock((milliseconds: number) =>

@@ -363,4 +363,46 @@ describe('api.domain.tutor-response read-only impersonation', () => {
       'Amelia, your thesis is getting sharper.'
     );
   });
+
+  test('also redacts the student last name out of the document body, not just the first name', async () => {
+    getLLMCompletion.mockResolvedValue('Sounds good.');
+    prisma.assignmentModuleSession.findUnique.mockResolvedValueOnce({
+      id: 'cms-1',
+      instructionsCompleted: 0,
+      assignmentModule: {
+        tutorInstructions: 'Coach the student.',
+        rubricAlignmentJson: {},
+        assignmentType: { id: 'assignment-type-1', rubricJson: { categories: [] } },
+        instructions: [{ id: 'instruction-1', tutorInstructions: '' }],
+      },
+      messages: [],
+      document: {
+        id: 'doc-1',
+        text: 'This essay argues for change.\n\n-- Sophia Marín',
+        membership: { user: { name: 'Sophia Marín' } },
+      },
+    });
+    prisma.assignmentModuleSession.findUnique.mockResolvedValueOnce({
+      id: 'cms-1',
+      messages: [],
+      assignmentModule: {
+        instructions: [],
+        assignmentType: { assignmentModules: [] },
+      },
+    });
+
+    const body = new FormData();
+    body.set('response', 'Can you review this?');
+    body.set('cmsId', 'cms-1');
+
+    await action({
+      request: new Request('https://example.com/api/domain/tutor-response', {
+        method: 'POST',
+        body,
+      }),
+    } as any);
+
+    const completionArgs = getLLMCompletion.mock.calls[0]?.[0] as any;
+    expect(JSON.stringify(completionArgs.messages)).not.toContain('Marín');
+  });
 });
