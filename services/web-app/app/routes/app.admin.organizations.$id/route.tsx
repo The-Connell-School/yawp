@@ -2,8 +2,10 @@ import {
   type ActionFunctionArgs,
   data as dataResponse,
   Link,
+  Outlet,
   type LoaderFunctionArgs,
   redirect,
+  useLocation,
 } from 'react-router';
 import { useLoaderData, useFetcher } from 'react-router';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
@@ -40,48 +42,44 @@ import { generateTOTP } from '~/utils/totp.server';
 import { getDomainUrl } from '~/utils/misc';
 import { Prisma } from '@app/prisma';
 import { normalizeEmail } from '~/utils/normalize-email';
+import { isIsolatedPreviewSeatMode } from '~/utils/preview-access.server';
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   const currentUser = await requireAdmin(request);
   const profile = await requireMembership(request, currentUser.id);
 
-  const [
-    organization,
-    invitations,
-    totalOrganizations,
-    assignmentTypes,
-  ] =
+  const [organization, invitations, totalOrganizations, assignmentTypes] =
     await Promise.all([
-    prisma.organization.findUnique({
-      where: { id: params.id },
-      include: {
-        memberships: {
-          where: { isOrgOwner: true },
-          include: { user: { select: { name: true, email: true } } },
-        },
-        assignmentTypeAssignments: {
-          include: {
-            assignmentType: {
-              select: { id: true, title: true, description: true },
-            },
+      prisma.organization.findUnique({
+        where: { id: params.id },
+        include: {
+          memberships: {
+            where: { isOrgOwner: true },
+            include: { user: { select: { name: true, email: true } } },
           },
-          orderBy: { assignmentType: { position: 'asc' } },
+          assignmentTypeAssignments: {
+            include: {
+              assignmentType: {
+                select: { id: true, title: true, description: true },
+              },
+            },
+            orderBy: { assignmentType: { position: 'asc' } },
+          },
         },
-      },
-    }),
-    prisma.invitation.findMany({
-      where: {
-        metadata: JSON.stringify({ organizationId: params.id }),
-        type: 'onboard-owner',
-      },
-    }),
-    prisma.organization.count(),
-    prisma.assignmentType.findMany({
-      where: { archivedAt: null },
-      select: { id: true, title: true, description: true },
-      orderBy: { position: 'asc' },
-    }),
-  ]);
+      }),
+      prisma.invitation.findMany({
+        where: {
+          metadata: JSON.stringify({ organizationId: params.id }),
+          type: 'onboard-owner',
+        },
+      }),
+      prisma.organization.count(),
+      prisma.assignmentType.findMany({
+        where: { archivedAt: null },
+        select: { id: true, title: true, description: true },
+        orderBy: { position: 'asc' },
+      }),
+    ]);
 
   if (!organization) {
     throw new Response('Not Found', { status: 404 });
@@ -97,6 +95,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     invitations,
     assignmentTypes,
     canDelete: !isUserAssignedToOrg && !isOnlyOrganization,
+    previewSeatMode: isIsolatedPreviewSeatMode(),
   });
 }
 
@@ -339,13 +338,14 @@ function OrganizationInviteEmail({
 }
 
 export default function OrganizationRoute() {
+  const location = useLocation();
   const {
     organization,
     invitations,
     assignmentTypes,
     canDelete,
-  } =
-    useLoaderData<typeof loader>();
+    previewSeatMode,
+  } = useLoaderData<typeof loader>();
   const fetcher = useFetcher();
   const inviteFetcher = useFetcher();
   const [isEditSheetOpen, setIsEditSheetOpen] = React.useState(false);
@@ -371,6 +371,10 @@ export default function OrganizationRoute() {
       setIsInviteSheetOpen(false);
     }
   }, [inviteFetcher.data]);
+
+  if (/\/seed-generator\/?$/.test(location.pathname)) {
+    return <Outlet />;
+  }
 
   return (
     <div className="grid gap-4 p-3 md:p-5">
@@ -482,9 +486,7 @@ export default function OrganizationRoute() {
                         className="mt-1 h-4 w-4"
                       />
                       <span className="min-w-0">
-                        <span className="block font-medium">
-                          Yawp Reporter
-                        </span>
+                        <span className="block font-medium">Yawp Reporter</span>
                         <span className="block text-xs text-muted-foreground">
                           Adds Reporter to the teacher sidebar.
                         </span>
@@ -498,9 +500,7 @@ export default function OrganizationRoute() {
                   data-testid="organization-assignment-types-manager"
                 >
                   <div className="space-y-1">
-                    <h3 className="text-sm font-semibold">
-                      Assignment Types
-                    </h3>
+                    <h3 className="text-sm font-semibold">Assignment Types</h3>
                     <p className="text-sm text-muted-foreground">
                       Select the assignment types teachers in this organization
                       can see and use.
@@ -633,6 +633,27 @@ export default function OrganizationRoute() {
         </SheetContent>
       </Sheet>
 
+      {previewSeatMode ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Demo data workspace</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <p className="max-w-2xl text-sm text-muted-foreground">
+              Build and review classes, assignments, students, documents, and
+              submissions in a dedicated threaded workspace.
+            </p>
+            <Button asChild className="shrink-0">
+              <Link
+                to={`/app/admin/organizations/${organization.id}/seed-generator`}
+              >
+                Open seed generator
+              </Link>
+            </Button>
+          </CardContent>
+        </Card>
+      ) : null}
+
       <div className="grid gap-4 md:grid-cols-3">
         <Card className="bg-muted">
           <CardHeader>
@@ -651,7 +672,15 @@ export default function OrganizationRoute() {
                   Created At
                 </dt>
                 <dd className="text-base">
-                  {new Date(organization.createdAt).toLocaleDateString()}
+                  {new Date(organization.createdAt).toLocaleDateString(
+                    'en-US',
+                    {
+                      year: 'numeric',
+                      month: 'numeric',
+                      day: 'numeric',
+                      timeZone: 'UTC',
+                    }
+                  )}
                 </dd>
               </div>
               {organization.accessExpiresAt && (
@@ -660,9 +689,15 @@ export default function OrganizationRoute() {
                     Access Expires
                   </dt>
                   <dd className="text-base">
-                    {new Date(
-                      organization.accessExpiresAt
-                    ).toLocaleDateString()}
+                    {new Date(organization.accessExpiresAt).toLocaleDateString(
+                      'en-US',
+                      {
+                        year: 'numeric',
+                        month: 'numeric',
+                        day: 'numeric',
+                        timeZone: 'UTC',
+                      }
+                    )}
                   </dd>
                 </div>
               )}
@@ -716,7 +751,12 @@ export default function OrganizationRoute() {
                     </TableCell>
                     <TableCell>{profile.user.email}</TableCell>
                     <TableCell>
-                      {new Date(profile.createdAt).toLocaleDateString()}
+                      {new Date(profile.createdAt).toLocaleDateString('en-US', {
+                        year: 'numeric',
+                        month: 'numeric',
+                        day: 'numeric',
+                        timeZone: 'UTC',
+                      })}
                     </TableCell>
                   </TableRow>
                 ))
@@ -735,7 +775,6 @@ export default function OrganizationRoute() {
           </Table>
         </CardContent>
       </Card>
-
     </div>
   );
 }
