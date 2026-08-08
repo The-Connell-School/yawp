@@ -264,12 +264,12 @@ export async function action({ request }: ActionFunctionArgs) {
     const schoolId = formData.get('schoolId') as string;
     const schoolYear = formData.get('schoolYear') as string;
     const grade = formData.get('grade') as string;
-    const period = formData.get('period') as string;
+    const period = (formData.get('period') as string)?.trim() || null;
     const title = (formData.get('title') as string)?.trim() || null;
     let code = (formData.get('code') as string)?.trim().toUpperCase() || '';
     const teacherIds = formData.getAll('teacherIds') as string[];
 
-    if (!schoolId || !schoolYear || !grade || !period) {
+    if (!schoolId || !schoolYear || !grade) {
       return dataResponse(
         { error: 'All fields are required' },
         { status: 400 }
@@ -353,12 +353,12 @@ export async function action({ request }: ActionFunctionArgs) {
     const schoolId = formData.get('schoolId') as string;
     const schoolYear = formData.get('schoolYear') as string;
     const grade = formData.get('grade') as string;
-    const period = formData.get('period') as string;
+    const period = (formData.get('period') as string)?.trim() || null;
     const title = (formData.get('title') as string)?.trim() || null;
     const code = (formData.get('code') as string)?.trim().toUpperCase() || '';
     const teacherIds = formData.getAll('teacherIds') as string[];
 
-    if (!classId || !schoolId || !schoolYear || !grade || !period || !code) {
+    if (!classId || !schoolId || !schoolYear || !grade || !code) {
       return dataResponse(
         { error: 'All fields are required' },
         { status: 400 }
@@ -925,7 +925,7 @@ export default function OrganizationClassesRoute() {
                         </TableCell>
                         <TableCell>{cls.schoolYear}</TableCell>
                         <TableCell>{cls.grade}</TableCell>
-                        <TableCell>{cls.period}</TableCell>
+                        <TableCell>{cls.period ?? '—'}</TableCell>
                         <TableCell>
                           <Badge variant="secondary">
                             {cls._count.students}
@@ -1168,12 +1168,18 @@ function ClassSheet({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="period">Period</Label>
-            <Select value={period} onValueChange={setPeriod} required>
+            <Label htmlFor="period">Period (Optional)</Label>
+            <Select
+              value={period || NO_PERIOD_VALUE}
+              onValueChange={(value) =>
+                setPeriod(value === NO_PERIOD_VALUE ? '' : value)
+              }
+            >
               <SelectTrigger>
                 <SelectValue placeholder="Select a period" />
               </SelectTrigger>
               <SelectContent>
+                <SelectItem value={NO_PERIOD_VALUE}>No period</SelectItem>
                 <SelectItem value="1">1</SelectItem>
                 <SelectItem value="2">2</SelectItem>
                 <SelectItem value="3">3</SelectItem>
@@ -1270,6 +1276,7 @@ function ClassSheet({
 }
 
 const BULK_SCHOOL_UNCHANGED = '__unchanged__';
+const NO_PERIOD_VALUE = '__none__';
 
 function BulkEditClassSheet({
   open,
