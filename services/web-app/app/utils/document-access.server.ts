@@ -58,6 +58,23 @@ export function documentOwnerWhere({
   return { membershipId: profileId };
 }
 
+/**
+ * The same owner rule, expressed against a model that hangs off a Document
+ * (AssignmentModuleSession). Returns `{}` for a platform admin rather than an empty
+ * relation filter, so no query ever carries a `document: { is: {} }` no-op.
+ */
+export function documentOwnerSessionWhere({
+  profileId,
+  isAdmin,
+}: {
+  profileId: string;
+  isAdmin?: boolean | null;
+}): Prisma.AssignmentModuleSessionWhereInput {
+  if (hasEffectivePlatformAdmin(isAdmin)) return {};
+
+  return { document: { is: { membershipId: profileId } } };
+}
+
 export async function getIsPlatformAdmin(userId: string) {
   const user = await prisma.user.findUnique({
     where: { id: userId },

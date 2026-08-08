@@ -10,7 +10,7 @@ import {
   requireUserId,
 } from '~/utils/auth.server';
 import {
-  documentOwnerWhere,
+  documentOwnerSessionWhere,
   getIsPlatformAdmin,
 } from '~/utils/document-access.server';
 import {
@@ -77,7 +77,7 @@ export async function action({ request }: ActionFunctionArgs) {
     const cms = await prisma.assignmentModuleSession.findFirst({
       where: {
         id: data.cmsId,
-        document: { is: documentOwnerWhere({ profileId: profile.id, isAdmin }) },
+        ...documentOwnerSessionWhere({ profileId: profile.id, isAdmin }),
       },
       include: {
         assignmentModule: {

@@ -6,7 +6,7 @@ import { zfd } from 'zod-form-data';
 import { requireMembership, requireUserId } from '~/utils/auth.server.js';
 import { prisma } from '~/utils/db.server.js';
 import {
-  documentOwnerWhere,
+  documentOwnerSessionWhere,
   getIsPlatformAdmin,
 } from '~/utils/document-access.server';
 import omit from 'lodash/omit';
@@ -54,7 +54,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
   const cms = await prisma.assignmentModuleSession.findFirst({
     where: {
       id: params.id,
-      document: { is: documentOwnerWhere({ profileId: profile.id, isAdmin }) },
+      ...documentOwnerSessionWhere({ profileId: profile.id, isAdmin }),
     },
     include: {
       assignmentModule: {
