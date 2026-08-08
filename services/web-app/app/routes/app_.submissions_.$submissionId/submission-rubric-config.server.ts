@@ -1,16 +1,16 @@
 import { resolveAssignmentTypeGradingConfig } from '~/domain/assignment-types/assignment-type-grading-config.server';
 import {
   legacyRubricDisplayConfig,
+  type RubricDisplayCategory,
   type RubricDisplayConfig,
   type RubricDisplaySource,
 } from '~/domain/grading/rubric-display';
+import {
+  parseOptionalBoolean,
+  parseRubricScoreLabels,
+} from '~/domain/assignment-types/rubric-category-options';
 
-type RubricSnapshotCategory = {
-  key: string;
-  label: string;
-  description: string;
-  weight: number;
-};
+type RubricSnapshotCategory = RubricDisplayCategory;
 
 export type LatestGradingRunRubricSnapshot = {
   assignmentTypeRubricSnapshot: unknown;
@@ -52,7 +52,20 @@ function parseSnapshotCategory(value: unknown): RubricSnapshotCategory | null {
       : null;
 
   if (!key || !label || !description || weight === null) return null;
-  return { key, label, description, weight };
+
+  const scoreLabels = parseRubricScoreLabels(value.scoreLabels);
+  const feedbackEnabled = parseOptionalBoolean(value.feedbackEnabled);
+  const grammarHighlighting = parseOptionalBoolean(value.grammarHighlighting);
+
+  return {
+    key,
+    label,
+    description,
+    weight,
+    ...(scoreLabels ? { scoreLabels } : {}),
+    ...(feedbackEnabled === undefined ? {} : { feedbackEnabled }),
+    ...(grammarHighlighting === undefined ? {} : { grammarHighlighting }),
+  };
 }
 
 export function buildRubricConfigFromSnapshot(

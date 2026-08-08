@@ -1,3 +1,8 @@
+import {
+  parseOptionalBoolean,
+  parseRubricScoreLabels,
+} from './rubric-category-options';
+
 export const DEFAULT_OUTPUT_SCHEMA_JSON = {
   responseShape: 'categories_overall_comment',
   schemaVersion: 1,
@@ -11,11 +16,29 @@ export type ScoringScaleData = {
   compositeMax?: number;
 };
 
+/** The word shown for one score value inside one rubric category. */
+export type RubricScoreLabel = {
+  value: number;
+  label: string;
+};
+
 export type RubricCategory = {
   key: string;
   label: string;
   weight: number;
   description: string;
+  /**
+   * Per-category words for each score value. Absent means fall back to the
+   * shared score labels, which is how every rubric behaved before this existed.
+   */
+  scoreLabels?: RubricScoreLabel[];
+  /** Whether this category gets its own feedback textarea. Absent means yes. */
+  feedbackEnabled?: boolean;
+  /**
+   * Whether this category produces grammar/syntax highlighting output. Absent
+   * means fall back to the legacy grammar category keys.
+   */
+  grammarHighlighting?: boolean;
 };
 
 export type RubricData = {
@@ -52,12 +75,39 @@ export function parseRubric(raw: unknown): RubricData {
   const d = raw as Partial<RubricData> | null;
   const cats = Array.isArray(d?.categories) ? d!.categories : [];
   return {
-    categories: cats.map((c: Partial<RubricCategory>) => ({
-      key: c.key ?? '',
-      label: c.label ?? '',
-      weight: typeof c.weight === 'number' ? c.weight : 0,
-      description: c.description ?? '',
-    })),
+    categories: cats.map((c: Partial<RubricCategory>) =>
+      withRubricCategoryOptions(
+        {
+          key: c.key ?? '',
+          label: c.label ?? '',
+          weight: typeof c.weight === 'number' ? c.weight : 0,
+          description: c.description ?? '',
+        },
+        c
+      )
+    ),
+  };
+}
+
+/**
+ * Copies the optional customizable options off a raw category onto a parsed
+ * one, omitting each key entirely when it was absent or malformed. Shared by
+ * every parser of this shape so a save or snapshot round trip cannot drop them.
+ */
+export function withRubricCategoryOptions<T extends { key: string }>(
+  category: T,
+  raw: unknown
+): T {
+  const source = (raw ?? {}) as Partial<RubricCategory>;
+  const scoreLabels = parseRubricScoreLabels(source.scoreLabels);
+  const feedbackEnabled = parseOptionalBoolean(source.feedbackEnabled);
+  const grammarHighlighting = parseOptionalBoolean(source.grammarHighlighting);
+
+  return {
+    ...category,
+    ...(scoreLabels ? { scoreLabels } : {}),
+    ...(feedbackEnabled === undefined ? {} : { feedbackEnabled }),
+    ...(grammarHighlighting === undefined ? {} : { grammarHighlighting }),
   };
 }
 

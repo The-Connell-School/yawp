@@ -213,3 +213,85 @@ describe('normalizeModuleRubricAlignment', () => {
     });
   });
 });
+
+describe('customizable rubric category options', () => {
+  const customRubric = {
+    categories: [
+      {
+        key: 'daily_habit',
+        label: 'Daily Habit',
+        weight: 0.5,
+        description: 'Did the student write today?',
+        scoreLabels: [
+          { value: 1, label: 'Skipped' },
+          { value: 5, label: 'Every day' },
+        ],
+        feedbackEnabled: false,
+        grammarHighlighting: false,
+      },
+      {
+        key: 'reflection',
+        label: 'Reflection',
+        weight: 0.5,
+        description: 'Depth of reflection.',
+      },
+    ],
+  };
+
+  test('parseAssignmentTypeRubricConfig preserves the new optional category fields', () => {
+    const config = parseAssignmentTypeRubricConfig({ rubricJson: customRubric });
+
+    expect(config.source).toBe('assignment-type');
+    expect(config.rubric.categories[0].scoreLabels).toEqual([
+      { value: 1, label: 'Skipped' },
+      { value: 5, label: 'Every day' },
+    ]);
+    expect(config.rubric.categories[0].feedbackEnabled).toBe(false);
+    expect(config.rubric.categories[0].grammarHighlighting).toBe(false);
+  });
+
+  test('categories that omit the new fields leave them undefined', () => {
+    const config = parseAssignmentTypeRubricConfig({ rubricJson: customRubric });
+
+    expect(config.rubric.categories[1].scoreLabels).toBeUndefined();
+    expect(config.rubric.categories[1].feedbackEnabled).toBeUndefined();
+    expect(config.rubric.categories[1].grammarHighlighting).toBeUndefined();
+  });
+
+  test('the new fields do not affect whether a rubric counts as assignment-type owned', () => {
+    expect(hasAssignmentTypeOwnedRubric(customRubric)).toBe(true);
+  });
+
+  test('the thesis default rubric is unchanged and carries no new fields', () => {
+    const thesis = getThesisDefaultRubricConfig();
+
+    expect(thesis.source).toBe('thesis-default');
+    for (const category of thesis.rubric.categories) {
+      expect(category.scoreLabels).toBeUndefined();
+      expect(category.feedbackEnabled).toBeUndefined();
+      expect(category.grammarHighlighting).toBeUndefined();
+    }
+  });
+
+  test('malformed new-field values are dropped instead of persisted', () => {
+    const config = parseAssignmentTypeRubricConfig({
+      rubricJson: {
+        categories: [
+          {
+            key: 'a',
+            label: 'A',
+            weight: 1,
+            description: 'd',
+            scoreLabels: 'nope',
+            feedbackEnabled: 'yes',
+            grammarHighlighting: 1,
+          },
+        ],
+      },
+    });
+
+    expect(config.rubric.categories[0].scoreLabels).toBeUndefined();
+    expect(config.rubric.categories[0].feedbackEnabled).toBeUndefined();
+    expect(config.rubric.categories[0].grammarHighlighting).toBeUndefined();
+  });
+});
