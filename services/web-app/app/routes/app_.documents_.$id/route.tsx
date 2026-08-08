@@ -246,6 +246,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           gradedAt: true,
           releasedAt: true,
           archivedAt: true,
+          unsubmittedAt: true,
         },
       },
       revisions: { orderBy: { createdAt: 'desc' } },
@@ -418,6 +419,7 @@ type SubmissionRow = {
   gradedAt: string | null;
   releasedAt: string | null;
   archivedAt: string | Date | null;
+  unsubmittedAt?: string | Date | null;
 };
 
 type AssignmentWithApHistorySnapshot = {

@@ -793,6 +793,9 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           deletedAt: null,
         },
       },
+      // A teacher-unsubmitted submission is withdrawn, not just archived —
+      // exclude it from the class's document/grading views entirely.
+      unsubmittedAt: null,
     },
     select: {
       id: true,

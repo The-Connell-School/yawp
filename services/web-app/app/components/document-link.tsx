@@ -33,7 +33,9 @@ export const DocumentLink = ({
 }: Props) => {
   const archiveFetcher = useFetcher();
   const submissions = doc.submissions ?? [];
-  const visibleSubmissions = submissions.filter((s) => !s.archivedAt);
+  const visibleSubmissions = submissions.filter(
+    (s) => !s.archivedAt && !s.unsubmittedAt
+  );
   const isSubmitted = visibleSubmissions.length > 0;
   const gradedSubmissions = visibleSubmissions.filter(
     (s) => s.releasedAt !== null && s.releasedAt !== undefined

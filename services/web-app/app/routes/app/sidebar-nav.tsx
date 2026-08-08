@@ -1,5 +1,6 @@
 import { Link } from 'react-router';
 import {
+  ClipboardList,
   CogIcon,
   FileText,
   GaugeIcon,
@@ -47,6 +48,7 @@ const icons = {
   dashboard: <GaugeIcon size={20} className="shrink-0" />,
   classes: <Users size={20} className="shrink-0" />,
   studentWork: <FileText size={20} className="shrink-0" />,
+  assignments: <ClipboardList size={20} className="shrink-0" />,
   lounge: <MonitorPlay size={20} className="shrink-0" />,
   reporter: <Microscope size={20} className="shrink-0" />,
   organization: <CogIcon size={20} className="shrink-0" />,
@@ -72,6 +74,12 @@ export const FLAT_SIDEBAR_SECTIONS: SidebarNavSection[] = [
         to: '/app/documents',
         label: 'Documents',
         icon: icons.studentWork,
+        requires: teacher,
+      },
+      {
+        to: '/app/assignments',
+        label: 'My Assignments',
+        icon: icons.assignments,
         requires: teacher,
       },
       {

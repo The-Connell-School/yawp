@@ -161,6 +161,9 @@ describe('class detail loader document visibility', () => {
         deletedAt: null,
       },
     });
+    expect(prisma.submission.findMany.mock.calls[0][0].where.unsubmittedAt).toBe(
+      null
+    );
     expect(prisma.document.findMany.mock.calls[0][0].where).toEqual({
       ...expectedScope,
       deletedAt: null,

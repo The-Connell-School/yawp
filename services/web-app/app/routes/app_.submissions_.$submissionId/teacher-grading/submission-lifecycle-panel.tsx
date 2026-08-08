@@ -231,6 +231,9 @@ export function SubmissionLifecyclePanel({
   isSavingGrade,
   onRelease,
   isReleasing,
+  onUnsubmit,
+  isUnsubmitting,
+  isUnsubmitted = false,
   submissionForView,
   ...teacherGradingPanelProps
 }: {
@@ -242,6 +245,11 @@ export function SubmissionLifecyclePanel({
   isSavingGrade: boolean;
   onRelease: () => void;
   isReleasing: boolean;
+  /** Undo this submission: hides it everywhere without deleting the document. */
+  onUnsubmit: () => void;
+  isUnsubmitting: boolean;
+  /** Already unsubmitted — hide the action, this view is now read-only history. */
+  isUnsubmitted?: boolean;
   submissionForView: ViewPanelSubmission;
 } & ComponentProps<typeof TeacherGradingPanel>) {
   const label = lifecycleState === 'needs_grading' ? 'Grading' : 'Grade Summary';
@@ -317,45 +325,67 @@ export function SubmissionLifecyclePanel({
       <div className="shrink-0 border-b px-4 py-2.5">
         <div className="flex items-center justify-between gap-2">
           <span className="text-sm font-semibold">{label}</span>
-          {lifecycleState === 'released' ? (
-            <GradeSummaryReleasedLabel />
-          ) : null}
-          {isReadyToRelease ? (
-            <div className="flex flex-wrap items-center justify-end gap-2">
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            {lifecycleState === 'released' ? (
+              <GradeSummaryReleasedLabel />
+            ) : null}
+            {isReadyToRelease ? (
+              <>
+                <ConfirmationDialog
+                  title="Release Grade?"
+                  description="This will make the grade and all feedback visible to the student. This action cannot be undone."
+                  confirmText="Release"
+                  cancelText="Cancel"
+                  onConfirm={() => void onRelease()}
+                >
+                  <Button
+                    size="sm"
+                    data-testid="submission-lifecycle-release"
+                    disabled={isReleasing}
+                  >
+                    {isReleasing ? 'Releasing...' : 'Release Grade'}
+                  </Button>
+                </ConfirmationDialog>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  data-testid="submission-lifecycle-edit"
+                  onClick={() => onEditingGradeChange(true)}
+                >
+                  Edit
+                </Button>
+              </>
+            ) : null}
+            {showEditingForm ? (
+              <GradingAssistantSplitButton
+                headerState={headerState}
+                isPendingStart={isGradingAssistantPending}
+                onStart={() => setIsGradingAssistantPending(true)}
+                onAbortStart={() => setIsGradingAssistantPending(false)}
+              />
+            ) : null}
+            {!isUnsubmitted ? (
               <ConfirmationDialog
-                title="Release Grade?"
-                description="This will make the grade and all feedback visible to the student. This action cannot be undone."
-                confirmText="Release"
+                title="Unsubmit this document?"
+                description="This removes the submission from grading — any grade or AI feedback already on it will no longer be visible to you or the student. The student's document itself is not deleted and its revision history is kept; they'll be able to revise and resubmit it."
+                confirmText="Unsubmit"
                 cancelText="Cancel"
-                onConfirm={() => void onRelease()}
+                variant="destructive"
+                onConfirm={() => void onUnsubmit()}
               >
                 <Button
+                  type="button"
                   size="sm"
-                  data-testid="submission-lifecycle-release"
-                  disabled={isReleasing}
+                  variant="outline"
+                  data-testid="submission-lifecycle-unsubmit"
+                  disabled={isUnsubmitting}
                 >
-                  {isReleasing ? 'Releasing...' : 'Release Grade'}
+                  {isUnsubmitting ? 'Unsubmitting...' : 'Unsubmit'}
                 </Button>
               </ConfirmationDialog>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                data-testid="submission-lifecycle-edit"
-                onClick={() => onEditingGradeChange(true)}
-              >
-                Edit
-              </Button>
-            </div>
-          ) : null}
-          {showEditingForm ? (
-            <GradingAssistantSplitButton
-              headerState={headerState}
-              isPendingStart={isGradingAssistantPending}
-              onStart={() => setIsGradingAssistantPending(true)}
-              onAbortStart={() => setIsGradingAssistantPending(false)}
-            />
-          ) : null}
+            ) : null}
+          </div>
         </div>
       </div>
 
