@@ -91,6 +91,7 @@ mock.module('./hooks/use-document-submit', () => ({
 const {
   getGenericAssignmentPromptForEditor,
   getRenderableApHistorySnapshot,
+  isTutorEnabledForAssignment,
   loader,
   shouldShowGenericAssignmentPrompt,
 } = await import('./route');
@@ -402,5 +403,24 @@ describe('app_.documents_.$id AP History assignment rendering', () => {
     expect(html).toContain('Source 1');
     expect(html).toContain('max-h-');
     expect(html).toContain('overflow-y-auto');
+  });
+});
+
+describe('isTutorEnabledForAssignment', () => {
+  test('is enabled when the assignment has no explicit flag (preserves current behavior)', () => {
+    expect(isTutorEnabledForAssignment({})).toBe(true);
+  });
+
+  test('is enabled when there is no linked assignment (e.g. free writing)', () => {
+    expect(isTutorEnabledForAssignment(null)).toBe(true);
+    expect(isTutorEnabledForAssignment(undefined)).toBe(true);
+  });
+
+  test('is enabled when tutorEnabled is explicitly true', () => {
+    expect(isTutorEnabledForAssignment({ tutorEnabled: true })).toBe(true);
+  });
+
+  test('is disabled only when tutorEnabled is explicitly false', () => {
+    expect(isTutorEnabledForAssignment({ tutorEnabled: false })).toBe(false);
   });
 });
