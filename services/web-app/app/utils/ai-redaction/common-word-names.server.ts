@@ -31,8 +31,11 @@ export const COMMON_WORD_FIRST_NAMES = new Set([
   'faith',
   'frank',
   'grace',
+  'gray',
+  'grey',
   'guy',
   'hope',
+  'indigo',
   'jack',
   'jean',
   'joy',
@@ -52,11 +55,13 @@ export const COMMON_WORD_FIRST_NAMES = new Set([
   'robin',
   'rose',
   'rusty',
+  'sawyer',
   'sky',
   'sunny',
   'summer',
   'wade',
   'will',
+  'wren',
 ]);
 
 export function isCommonWordFirstName(name: string): boolean {

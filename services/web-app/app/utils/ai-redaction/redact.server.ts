@@ -18,6 +18,10 @@ function capitalizeWord(word: string): string {
     : word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
 }
 
+function titleCaseWords(value: string): string {
+  return value.split(' ').map(capitalizeWord).join(' ');
+}
+
 function matchCase(sample: string, target: string): string {
   if (sample.length === 0) return target;
   if (sample === sample.toUpperCase() && sample !== sample.toLowerCase()) {
@@ -39,7 +43,7 @@ function matchCase(sample: string, target: string): string {
           word.slice(1) === word.slice(1).toLowerCase())
     );
   if (isTitleCase) {
-    return target.split(' ').map(capitalizeWord).join(' ');
+    return titleCaseWords(target);
   }
   return target;
 }
@@ -139,22 +143,46 @@ export function redact(
 /**
  * Replaces every pseudonym in `text` with the real name it stands in for.
  * Must run on the model's response before that text reaches the UI or is
- * persisted. Robust to the model not echoing the pseudonym's exact casing
- * and to possessive forms, matching the same rules `redact` uses.
+ * persisted.
+ *
+ * CAPITALIZED FORMS ONLY, deliberately. This is the one substitution in
+ * this module whose failure modes are asymmetric:
+ *
+ *  - missing a substitution leaves a pseudonym visible in the UI. Odd, and
+ *    self-evident to whoever reads it, but nothing is lost or leaked.
+ *  - making one too many rewrites an ordinary English word into a real
+ *    student's name, inside feedback that is persisted and shown to the
+ *    teacher AND the student. That is silent corruption, and it also
+ *    surfaces a real name in a place nobody asked for one.
+ *
+ * A pseudonym is a proper noun we minted. Every legitimate reference to it
+ * in model output is capitalized ("Darcy, your thesis...", or "DARCY" in a
+ * shouted heading). An all-lowercase occurrence is, by construction, the
+ * ordinary word and not a person - so we leave it alone. The pool is also
+ * kept clear of ordinary English words (see pseudonym-pool.server.ts); this
+ * rule is the structural guarantee that survives any future pool edit and
+ * the `${base}${n}` fallback pseudonyms buildRedactionMapping can invent.
+ *
+ * Possessive forms are still handled ("Darcy's" / "Darcy’s").
  */
 export function rehydrate(text: string, mapping: RedactionMapping): string {
   if (!text) return text;
-  const pseudonyms = Array.from(mapping.pseudonymToReal.keys()).map(
-    (lower) => {
-      // Recover a display-cased pseudonym for regex construction; case is
-      // irrelevant here because matching is case-insensitive either way.
-      for (const entry of mapping.realToPseudonym.values()) {
-        if (entry.pseudonym.toLowerCase() === lower) return entry.pseudonym;
+  const forms = new Set<string>();
+  for (const lower of mapping.pseudonymToReal.keys()) {
+    // Recover a display-cased pseudonym for regex construction.
+    let display = lower;
+    for (const entry of mapping.realToPseudonym.values()) {
+      if (entry.pseudonym.toLowerCase() === lower) {
+        display = entry.pseudonym;
+        break;
       }
-      return lower;
     }
-  );
-  const regex = buildWholeWordAlternationRegex(pseudonyms);
+    forms.add(titleCaseWords(display));
+    forms.add(display.toUpperCase());
+  }
+  const regex = buildWholeWordAlternationRegex(forms, {
+    caseInsensitive: false,
+  });
   if (!regex) return text;
 
   return text.replace(regex, (fullMatch, namePart: string, suffix = '') => {

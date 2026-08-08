@@ -62,15 +62,40 @@ describe('rehydrate', () => {
     expect(restored).toContain('Maya');
   });
 
-  test('is robust to the model changing the pseudonym’s capitalization', () => {
+  test('is robust to the model shouting the pseudonym in a heading', () => {
     const mapping = buildRedactionMapping(['Maya']);
     const pseudonym = mapping.realToPseudonym.get('maya')!.pseudonym;
 
-    const lower = rehydrate(`${pseudonym.toLowerCase()}, nice work.`, mapping);
     const upper = rehydrate(`${pseudonym.toUpperCase()}, NICE WORK.`, mapping);
 
-    expect(lower.startsWith('maya,')).toBe(true);
     expect(upper.startsWith('MAYA,')).toBe(true);
+  });
+
+  test('does not rehydrate an all-lowercase pseudonym, which is an ordinary word not a person', () => {
+    // A pseudonym is a proper noun we minted; every legitimate reference to
+    // it in model output is capitalized. A lowercase occurrence is, by
+    // definition, the ordinary English word - see the pool test below.
+    const mapping = buildRedactionMapping(['Isaac'], ['Drew']);
+
+    expect(rehydrate('you drew a clear connection.', mapping)).toBe(
+      'you drew a clear connection.'
+    );
+    expect(rehydrate('Drew, nice work.', mapping)).toBe('Isaac, nice work.');
+  });
+
+  test('never rewrites an ordinary English word into a real student name', () => {
+    // Reproduces the reverted defect: a pseudonym that is also a common word
+    // turned "you drew a clear connection" into "you isaac a clear
+    // connection", in text persisted as Submission.overallComment and read
+    // by the teacher and the student.
+    const mapping = buildRedactionMapping(['Isaac'], ['Drew']);
+
+    const modelOutput =
+      'Drew, your essay drew a clear line between cause and effect. You drew on strong evidence.';
+
+    expect(rehydrate(modelOutput, mapping)).toBe(
+      'Isaac, your essay drew a clear line between cause and effect. You drew on strong evidence.'
+    );
   });
 
   test('is robust to possessive forms the model may introduce', () => {
