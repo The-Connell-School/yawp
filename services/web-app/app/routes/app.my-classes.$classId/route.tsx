@@ -10,6 +10,7 @@ import {
   useSearchParams,
   useFetcher,
   useNavigate,
+  useOutlet,
   useRevalidator,
 } from 'react-router';
 import { Link } from 'react-router';
@@ -134,6 +135,7 @@ import {
   type ClassAssignmentsTabAssignment,
 } from './class-assignments-tab';
 import type { ClassInsightSummary } from '../app.my-classes.$classId_.assignments.$assignmentId/class-insights-panel';
+import { buildGradedCountByAssignmentId } from './graded-count';
 
 export function getDraftDisplayTitle(document: {
   title?: string | null;
@@ -148,7 +150,7 @@ export function getDraftDisplayTitle(document: {
   return 'Untitled draft';
 }
 
-function classAssignmentOptionLabel(klass: {
+export function classAssignmentOptionLabel(klass: {
   grade: string;
   period: string | null;
   title: string | null;
@@ -1097,6 +1099,23 @@ function ClassDetailPage() {
   const navigate = useNavigate();
   const revalidator = useRevalidator();
   const studentFetcher = useFetcher();
+  // Non-null when the nested assignment detail route
+  // (app.my-classes.$classId.assignment.$assignmentId) matches — i.e. the
+  // teacher opened an assignment. That region swaps for the table/search
+  // bar in place, sliding in over the same footprint.
+  const assignmentDetailOutlet = useOutlet();
+  const isAssignmentDetailActive = assignmentDetailOutlet != null;
+  // Tracks which way we just transitioned so the incoming panel (table or
+  // detail) slides in from the correct side — right when opening an
+  // assignment, left when returning to the table.
+  const wasAssignmentDetailActive = useRef(isAssignmentDetailActive);
+  const enteringAssignmentDetail =
+    isAssignmentDetailActive && !wasAssignmentDetailActive.current;
+  const leavingAssignmentDetail =
+    !isAssignmentDetailActive && wasAssignmentDetailActive.current;
+  useEffect(() => {
+    wasAssignmentDetailActive.current = isAssignmentDetailActive;
+  }, [isAssignmentDetailActive]);
   const [isClassEditSheetOpen, setIsClassEditSheetOpen] = useState(false);
   const [isAddStudentSheetOpen, setIsAddStudentSheetOpen] = useState(false);
   const [addStudentStep, setAddStudentStep] = useState<'email' | 'confirm'>(
@@ -1335,16 +1354,12 @@ function ClassDetailPage() {
   );
 
   // Graded counts per assignment, derived from the same submissions already
-  // loaded for the Documents tab — no second query.
-  const gradedCountByAssignmentId = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const submission of allSubmissions) {
-      const assignmentId = submission.document.assignment?.id;
-      if (!assignmentId || !submission.gradedAt) continue;
-      counts.set(assignmentId, (counts.get(assignmentId) ?? 0) + 1);
-    }
-    return counts;
-  }, [allSubmissions]);
+  // loaded for the Documents tab — no second query. Shared with the
+  // assignment detail page so both read the same computation.
+  const gradedCountByAssignmentId = useMemo(
+    () => buildGradedCountByAssignmentId(allSubmissions),
+    [allSubmissions]
+  );
 
   const managedAssignments = useMemo(
     (): ClassAssignmentsTabAssignment[] =>
@@ -1763,6 +1778,9 @@ function ClassDetailPage() {
           assignmentTypes={data.assignmentTypes}
           classInsightsEnabled={classInsightsEnabled}
           onViewDocuments={handleViewAssignmentDocuments}
+          onSelectAssignment={(assignmentId) =>
+            navigate(`/app/my-classes/${data.klass.id}/assignment/${assignmentId}`)
+          }
         />
       );
     }
@@ -2199,47 +2217,68 @@ function ClassDetailPage() {
           documentCount={classDocuments.length}
           assignmentCount={data.assignments.length}
           showAssignmentsTab={assignmentsEnabled}
-          activeTab={activeHeaderTab}
+          activeTab={isAssignmentDetailActive ? 'assignments' : activeHeaderTab}
           onTabChange={handleHeaderTabChange}
           onEdit={() => setIsClassEditSheetOpen(true)}
         />
 
-        <div
-          key={activeHeaderTab}
-          className="animate-in fade-in-0 slide-in-from-right-2 duration-300"
-        >
-          {activeTab === 'documents' &&
-          classInsightsEnabled &&
-          selectedClassAssignment ? (
-            <div className="mb-4 flex items-center justify-between gap-3 rounded-lg border bg-muted/30 p-3">
-              <p className="text-sm text-muted-foreground">
-                See how the whole class did on{' '}
-                <span className="font-medium text-foreground">
-                  {selectedClassAssignment.title ?? 'this assignment'}
-                </span>
-                .
-              </p>
-              <Button asChild variant="outline" size="sm">
-                <Link
-                  to={`/app/my-classes/${data.klass.id}/assignments/${selectedClassAssignment.id}`}
-                >
-                  Class performance summary
-                </Link>
-              </Button>
-            </div>
-          ) : null}
-          <div>{renderTable()}</div>
-          {activeTab === 'students' && currentTabData.length > 0 ? (
-            <div className="mt-4">
-              <Pagination
-                totalCount={currentTabData.length}
-                skip={pagination.skip}
-                take={pagination.take}
-                onChange={handlePaginationChange}
-              />
-            </div>
-          ) : null}
-        </div>
+        {isAssignmentDetailActive ? (
+          <div
+            key="assignment-detail"
+            data-testid="assignment-detail-panel"
+            className={cn(
+              'motion-reduce:animate-none',
+              'animate-in fade-in-0 duration-300',
+              enteringAssignmentDetail && 'slide-in-from-right-8'
+            )}
+          >
+            {assignmentDetailOutlet}
+          </div>
+        ) : (
+          <div
+            key={activeHeaderTab}
+            data-testid="class-detail-table-panel"
+            className={cn(
+              'motion-reduce:animate-none',
+              'animate-in fade-in-0 duration-300',
+              leavingAssignmentDetail
+                ? 'slide-in-from-left-8'
+                : 'slide-in-from-right-2'
+            )}
+          >
+            {activeTab === 'documents' &&
+            classInsightsEnabled &&
+            selectedClassAssignment ? (
+              <div className="mb-4 flex items-center justify-between gap-3 rounded-lg border bg-muted/30 p-3">
+                <p className="text-sm text-muted-foreground">
+                  See how the whole class did on{' '}
+                  <span className="font-medium text-foreground">
+                    {selectedClassAssignment.title ?? 'this assignment'}
+                  </span>
+                  .
+                </p>
+                <Button asChild variant="outline" size="sm">
+                  <Link
+                    to={`/app/my-classes/${data.klass.id}/assignments/${selectedClassAssignment.id}`}
+                  >
+                    Class performance summary
+                  </Link>
+                </Button>
+              </div>
+            ) : null}
+            <div>{renderTable()}</div>
+            {activeTab === 'students' && currentTabData.length > 0 ? (
+              <div className="mt-4">
+                <Pagination
+                  totalCount={currentTabData.length}
+                  skip={pagination.skip}
+                  take={pagination.take}
+                  onChange={handlePaginationChange}
+                />
+              </div>
+            ) : null}
+          </div>
+        )}
       </div>
 
       <ClassManageSheet
