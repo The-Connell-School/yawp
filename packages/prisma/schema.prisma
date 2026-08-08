@@ -18,7 +18,7 @@ model Class {
   updatedAt        DateTime          @default(now()) @db.Timestamptz(6)
   code             String
   schoolYear       String            @default("2024-2025")
-  period           String
+  period           String?
   grade            String
   title            String?
   cardGradientKey  String            @default("indigo-purple-pink")
@@ -87,6 +87,7 @@ model Assignment {
   submitForGrade                  Boolean           @default(true)
   pointValue                      Int?              @default(100)
   gradingAssistantStrictnessLevel String            @default("intermediate")
+  tutorEnabled                    Boolean           @default(true)
   apHistorySnapshot               Json?
   classAssignments                ClassAssignment[]
   documents                       Document[]
