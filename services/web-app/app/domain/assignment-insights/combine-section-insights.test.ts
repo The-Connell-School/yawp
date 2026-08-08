@@ -187,6 +187,47 @@ describe('combineSectionInsights', () => {
     expect(thesis.notReportedBy).toEqual([]);
   });
 
+  /**
+   * A section label is built from nullable grade/period/title, so two real
+   * sections can render the same string. Identity has to come from the
+   * ClassAssignment, or a section silently disappears from the gaps the
+   * teacher is shown.
+   */
+  test('still names an uncovered section when two sections share a label', () => {
+    const combined = combineSectionInsights([
+      section('a', {
+        label: 'Grade 9',
+        categories: [
+          { key: 'thesis', label: 'Thesis', status: 'strength' },
+          { key: 'evidence', label: 'Evidence', status: 'gap' },
+        ],
+      }),
+      section('b', {
+        label: 'Grade 9',
+        categories: [{ key: 'thesis', label: 'Thesis', status: 'strength' }],
+      }),
+    ]);
+
+    const evidence = combined.categories.find((c) => c.key === 'evidence')!;
+    expect(evidence.sections.map((s) => s.classAssignmentId)).toEqual(['ca-a']);
+    expect(evidence.notReportedBy).toEqual(['Grade 9']);
+  });
+
+  test('counts both sections behind a next step when they share a label', () => {
+    const shared = {
+      title: 'Model evidence integration',
+      detail: 'Show a mentor paragraph that blends quote and analysis.',
+      rubricCategory: 'evidence',
+    };
+    const combined = combineSectionInsights([
+      section('a', { label: 'Grade 9', nextSteps: [shared] }),
+      section('b', { label: 'Grade 9', nextSteps: [shared] }),
+    ]);
+
+    expect(combined.nextSteps).toHaveLength(1);
+    expect(combined.nextSteps[0].sectionLabels).toEqual(['Grade 9', 'Grade 9']);
+  });
+
   test('merges identical next steps and records which sections raised them', () => {
     const shared = {
       title: 'Model evidence integration',
