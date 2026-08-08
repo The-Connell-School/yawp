@@ -10,6 +10,14 @@ export type GradingAssistantStrictnessLevel =
 export const DEFAULT_GRADING_ASSISTANT_STRICTNESS_LEVEL: GradingAssistantStrictnessLevel =
   'intermediate';
 
+// The Beginner/Intermediate/Advanced picker is hidden from teachers pending
+// product review of the ±5 percentage / ±1 ACT-composite adjustment it
+// applies. This is the single switch every render site consults; flip it
+// back to `true` to re-enable the control. Stored strictness values and the
+// apply-functions below are unaffected by this flag and keep working for any
+// assignment that already carries a non-default level.
+export const GRADING_ASSISTANT_STRICTNESS_UI_ENABLED = false;
+
 const gradingAssistantStrictnessPercentageAdjustments: Record<
   GradingAssistantStrictnessLevel,
   number
@@ -27,9 +35,6 @@ const gradingAssistantStrictnessActCompositeAdjustments: Record<
   intermediate: 0,
   advanced: -1,
 };
-
-export const gradingAssistantStrictnessHelpText =
-  'Strictness only adjusts the overall grade number after Grading Assistant suggestions. Use beginner for a slightly higher grade, advanced for a slightly lower grade, and intermediate for no adjustment.';
 
 export const gradingAssistantStrictnessOptions: Array<{
   value: GradingAssistantStrictnessLevel;
