@@ -136,6 +136,7 @@ import {
 } from './class-assignments-tab';
 import type { ClassInsightSummary } from '../app.my-classes.$classId_.assignments.$assignmentId/class-insights-panel';
 import { buildGradedCountByAssignmentId } from './graded-count';
+import { buildPasteAlertsByStudentId } from './class-paste-alerts';
 
 export function getDraftDisplayTitle(document: {
   title?: string | null;
@@ -1032,6 +1033,24 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     return acc;
   }, {});
 
+  // Paste alerts, per student, for the student sheet on this page. One
+  // query for the whole class (scoped to this class's enrolled students, so
+  // it can't leak another teacher's data) rather than one per student.
+  const pasteAlerts = klass.students.length
+    ? await prisma.pasteAlert.findMany({
+        where: { membershipId: { in: klass.students.map((s) => s.id) } },
+        select: {
+          id: true,
+          documentId: true,
+          membershipId: true,
+          textLength: true,
+          createdAt: true,
+        },
+        orderBy: { createdAt: 'desc' },
+      })
+    : [];
+  const pasteAlertsByStudentId = buildPasteAlertsByStudentId(pasteAlerts);
+
   return dataResponse({
     klass,
     submissions,
@@ -1049,6 +1068,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     classInsightsEnabled,
     reporterEnabled,
     growthPlansByStudentId,
+    pasteAlertsByStudentId,
   });
 }
 
@@ -2127,12 +2147,17 @@ function ClassDetailPage() {
                           .map((sub) => sub.documentId)
                       ).size;
 
+                    const studentHasPasteAlerts =
+                      (data.pasteAlertsByStudentId[s.id]?.length ?? 0) > 0;
+                    const studentSheetAvailable =
+                      reporterEnabled || studentHasPasteAlerts;
+
                     return (
                       <TableRow
                         key={s.id}
-                        className={cn(reporterEnabled && 'cursor-pointer')}
+                        className={cn(studentSheetAvailable && 'cursor-pointer')}
                         onClick={() => {
-                          if (!reporterEnabled) return;
+                          if (!studentSheetAvailable) return;
                           setGrowthPlanStudent({
                             id: s.id,
                             name: s.user.name ?? s.user.email,
@@ -2314,6 +2339,13 @@ function ClassDetailPage() {
           setGrowthPlanStudent(null);
           handleViewStudentDocuments(studentId);
         }}
+        pasteAlerts={
+          growthPlanStudent
+            ? (data.pasteAlertsByStudentId[growthPlanStudent.id] ?? [])
+            : []
+        }
+        pasteAlertsExitTo={classDetailExitTo}
+        showGrowthPlans={reporterEnabled}
       />
     </section>
   );

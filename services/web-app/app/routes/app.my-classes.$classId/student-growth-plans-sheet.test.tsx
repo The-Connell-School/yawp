@@ -11,12 +11,14 @@ try {
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import { act, type ReactElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
+import { MemoryRouter } from 'react-router';
 
 import {
   StudentGrowthPlansSheetContent,
   type GrowthPlanSheetStudent,
   type StudentGrowthPlan,
 } from './student-growth-plans-sheet';
+import type { StudentPasteAlert } from './student-paste-alerts-section';
 
 const STUDENT: GrowthPlanSheetStudent = {
   id: 'student-1',
@@ -41,7 +43,7 @@ function render(element: ReactElement) {
   document.body.appendChild(container);
   root = createRoot(container);
   act(() => {
-    root!.render(element);
+    root!.render(<MemoryRouter>{element}</MemoryRouter>);
   });
   return container;
 }
@@ -105,5 +107,53 @@ describe('StudentGrowthPlansSheetContent', () => {
       pill.dispatchEvent(new Event('click', { bubbles: true }));
     });
     expect(onViewDocuments).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows paste activity alongside growth plans when the student has any', () => {
+    const pasteAlerts: StudentPasteAlert[] = [
+      {
+        id: 'alert-1',
+        documentId: 'doc-abc123',
+        textLength: 312,
+        createdAt: new Date().toISOString(),
+      },
+    ];
+    const el = render(
+      <StudentGrowthPlansSheetContent
+        renderSheet={false}
+        student={STUDENT}
+        growthPlans={[]}
+        onViewDocuments={() => {}}
+        pasteAlerts={pasteAlerts}
+        pasteAlertsExitTo="/app/my-classes/class-1"
+      />
+    );
+    expect(el.textContent).toContain('doc-abc123');
+    expect(el.textContent).toMatch(/no growth plans yet/i);
+  });
+
+  it('hides the growth plans section but still shows paste activity when showGrowthPlans is false', () => {
+    const pasteAlerts: StudentPasteAlert[] = [
+      {
+        id: 'alert-1',
+        documentId: 'doc-abc123',
+        textLength: 312,
+        createdAt: new Date().toISOString(),
+      },
+    ];
+    const el = render(
+      <StudentGrowthPlansSheetContent
+        renderSheet={false}
+        student={STUDENT}
+        growthPlans={[]}
+        onViewDocuments={() => {}}
+        pasteAlerts={pasteAlerts}
+        pasteAlertsExitTo="/app/my-classes/class-1"
+        showGrowthPlans={false}
+      />
+    );
+    expect(el.textContent).not.toMatch(/no growth plans yet/i);
+    expect(el.textContent).not.toMatch(/growth plans from reporter/i);
+    expect(el.textContent).toContain('doc-abc123');
   });
 });
