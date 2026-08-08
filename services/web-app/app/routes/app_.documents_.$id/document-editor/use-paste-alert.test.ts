@@ -13,12 +13,35 @@ import { createRoot, type Root } from 'react-dom/client';
 import { Editor } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
 import { usePasteAlert } from './use-paste-alert';
+import { useInternalCopyMarker } from '~/hooks/useInternalCopyMarker';
 
 const DOC_ID = 'doc-1';
 
 let root: Root | null = null;
 let container: HTMLDivElement | null = null;
 let editor: Editor | null = null;
+let layoutRoot: Root | null = null;
+let layoutContainer: HTMLDivElement | null = null;
+
+/**
+ * Stands in for the /app layout, which owns the copy/cut listeners. It is
+ * mounted before — and unmounted after — any editor, exactly as the real
+ * layout outlives the editor route beneath it.
+ */
+function mountAppLayout() {
+  function Layout() {
+    useInternalCopyMarker();
+    return null;
+  }
+
+  const localContainer = document.createElement('div');
+  document.body.appendChild(localContainer);
+  const localRoot = createRoot(localContainer);
+  act(() => {
+    localRoot.render(createElement(Layout));
+  });
+  return { root: localRoot, container: localContainer };
+}
 
 function mountPasteAlert(docId: string, targetEditor: Editor) {
   function Harness() {
@@ -42,7 +65,9 @@ function editorDom() {
 function firePaste(text: string, target: HTMLElement = editorDom()) {
   const event = new Event('paste', { bubbles: true, cancelable: true }) as ClipboardEvent;
   Object.defineProperty(event, 'clipboardData', {
-    value: { getData: () => text },
+    // Only text/plain carries the payload; tiptap also probes for
+    // 'vscode-editor-data' and expects JSON or nothing.
+    value: { getData: (type: string) => (type === 'text/plain' ? text : '') },
   });
   act(() => {
     target.dispatchEvent(event);
@@ -69,6 +94,9 @@ describe('usePasteAlert', () => {
     originalFetch = globalThis.fetch;
     fetchMock = mock(() => Promise.resolve(new Response('{}')));
     globalThis.fetch = fetchMock as unknown as typeof fetch;
+    const layout = mountAppLayout();
+    layoutRoot = layout.root;
+    layoutContainer = layout.container;
     const mounted = mountPasteAlert(DOC_ID, editor);
     root = mounted.root;
     container = mounted.container;
@@ -77,6 +105,10 @@ describe('usePasteAlert', () => {
   afterEach(() => {
     if (root) act(() => root!.unmount());
     if (container) container.remove();
+    if (layoutRoot) act(() => layoutRoot!.unmount());
+    if (layoutContainer) layoutContainer.remove();
+    layoutRoot = null;
+    layoutContainer = null;
     editor?.destroy();
     globalThis.fetch = originalFetch;
     localStorage.clear();
@@ -161,6 +193,38 @@ describe('usePasteAlert', () => {
     act(() => mountedB.root.unmount());
     mountedB.container.remove();
     editorB.destroy();
+  });
+
+  it('does not alarm on copy from a non-editor page, then navigate to the editor and paste', () => {
+    // Start from a state where no editor is mounted at all — the student is
+    // on the class page / an assignment prompt / writing lessons.
+    act(() => root!.unmount());
+    container!.remove();
+    root = null;
+    container = null;
+
+    const classPageText = document.createElement('div');
+    classPageText.textContent = 'assignment prompt text on a non-editor page';
+    document.body.appendChild(classPageText);
+    fireCopyOrCut('copy', classPageText);
+    classPageText.remove();
+
+    // Now navigate to a document and paste what was copied.
+    const editorAfterNavigation = new Editor({
+      extensions: [StarterKit],
+      content: '<p>the document they navigated to</p>',
+    });
+    const mounted = mountPasteAlert('doc-after-navigation', editorAfterNavigation);
+    root = mounted.root;
+    container = mounted.container;
+
+    firePaste(
+      'x'.repeat(200),
+      editorAfterNavigation.view.dom as HTMLElement
+    );
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    editorAfterNavigation.destroy();
   });
 
   it('still posts an alert when nothing was ever copied in the app (genuinely external paste)', () => {

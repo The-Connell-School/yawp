@@ -31,6 +31,7 @@ import {
 } from '~/components/ui/popover.js';
 import { Tooltip } from '~/components/ui/tooltip';
 import useBreakpoint from '~/hooks/useBreakpoint';
+import { useInternalCopyMarker } from '~/hooks/useInternalCopyMarker';
 import { useOnSwipe } from '~/hooks/useHorizontalSwipe';
 import { useUser } from '~/hooks/useUser';
 import {
@@ -110,6 +111,12 @@ export default function Route() {
 
   const matches = useMatches();
   const isInAssistants = !!matches.find((m) => m.id.includes('app.assistants'));
+
+  // Copy/cut provenance for the paste alert. Lives here, not in the
+  // document editor, so a copy made anywhere in the app is recognized when
+  // the student later pastes into a document — otherwise copying on the
+  // class page and pasting in the editor reads as an external paste.
+  useInternalCopyMarker();
 
   const navState = useNavState();
   const breakpoint = useBreakpoint();
