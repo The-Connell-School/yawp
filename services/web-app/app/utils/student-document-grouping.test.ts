@@ -23,7 +23,7 @@ describe('groupStudentDocumentsByClass', () => {
     ]);
 
     expect(groups.map((g) => g.classId)).toEqual(['class-english', 'class-history']);
-    expect(groups[0].label).toBe('Grade 9 • Period 2 — English');
+    expect(groups[0].label).toBe('English · Grade 9 • Period 2');
     expect(groups[0].documents.map((d) => d.id)).toEqual([
       'doc-english',
       'doc-english-2',

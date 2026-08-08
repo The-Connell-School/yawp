@@ -107,7 +107,7 @@ describe('My Assignments loader', () => {
 
     expect(result.assignments[0].title).toBe('Untitled Assignment');
     expect(result.assignments[0].classLabel).toBe(
-      'Grade 10th • Period 2nd — Honors'
+      'Honors · Grade 10th • Period 2nd'
     );
   });
 });

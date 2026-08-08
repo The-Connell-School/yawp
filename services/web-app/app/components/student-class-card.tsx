@@ -1,19 +1,15 @@
 import { Link } from 'react-router';
 import { ClassArt } from '~/components/class-art';
+import {
+  getClassCardHeading,
+} from '~/utils/class-display';
 import type { StudentEnrolledClass } from '~/utils/student-classes.server';
 
-export function formatStudentClassLabel(klass: {
-  grade: string;
-  period: string | null;
-  title?: string | null;
-}) {
-  const base = klass.period
-    ? `Grade ${klass.grade} • Period ${klass.period}`
-    : `Grade ${klass.grade}`;
-  return klass.title ? `${base} — ${klass.title}` : base;
-}
+export { formatClassCardTitle as formatStudentClassLabel } from '~/utils/class-display';
 
 export function StudentClassCard({ klass }: { klass: StudentEnrolledClass }) {
+  const { title, subtitle } = getClassCardHeading(klass);
+
   return (
     <Link
       to="/app/my-documents"
@@ -33,8 +29,11 @@ export function StudentClassCard({ klass }: { klass: StudentEnrolledClass }) {
           </p>
         ) : null}
         <h4 className="text-balance text-base font-semibold tracking-tight text-foreground">
-          {formatStudentClassLabel(klass)}
+          {title}
         </h4>
+        {subtitle ? (
+          <p className="text-xs text-muted-foreground">{subtitle}</p>
+        ) : null}
         {klass.teacherNames.length > 0 ? (
           <p className="mt-1 text-xs text-muted-foreground">
             {klass.teacherNames.join(', ')}

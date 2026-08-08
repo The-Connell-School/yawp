@@ -19,8 +19,7 @@ import {
   DialogTrigger,
 } from '~/components/ui/dialog';
 import {
-  formatClassCardSubtitle,
-  formatClassCardTitle,
+  getClassCardHeading,
 } from '~/utils/class-display';
 import { cn } from '~/utils/misc';
 
@@ -272,6 +271,7 @@ export function ClassDetailHeader({
     }
     return base;
   }, [studentCount, documentCount, assignmentCount, showAssignmentsTab]);
+  const { title, subtitle } = getClassCardHeading(props.klass);
 
   return (
     <div
@@ -290,11 +290,11 @@ export function ClassDetailHeader({
           <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div className="min-w-0">
               <h1 className="text-balance text-xl font-semibold tracking-tight sm:text-2xl">
-                {formatClassCardTitle(props.klass)}
+                {title}
               </h1>
-              {formatClassCardSubtitle(props.klass) ? (
+              {subtitle ? (
                 <p className="mt-0.5 text-base/6 text-muted-foreground sm:text-sm/5">
-                  {formatClassCardSubtitle(props.klass)}
+                  {subtitle}
                 </p>
               ) : null}
               <ClassMetadata klass={props.klass} className="mt-1" />

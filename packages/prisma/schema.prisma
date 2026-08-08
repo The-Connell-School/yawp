@@ -19,7 +19,7 @@ model Class {
   code             String
   schoolYear       String            @default("2024-2025")
   period           String?
-  grade            String
+  grade            String?
   title            String?
   cardGradientKey  String            @default("indigo-purple-pink")
   classArtIndex    Int?

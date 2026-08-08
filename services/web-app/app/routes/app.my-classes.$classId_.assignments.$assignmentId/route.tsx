@@ -21,6 +21,9 @@ import {
 } from '~/components/ui/table';
 import { CaretLeftIcon } from '~/components/icons';
 import { timeAgo } from '~/utils/timeAgo';
+import {
+  getClassCardHeading,
+} from '~/utils/class-display';
 import { formatAssignmentGrade } from '~/domain/grading/gradeMath';
 import { Loader2 } from 'lucide-react';
 import { postFormWithFallbackRetry } from '~/utils/llm-retry-ui';
@@ -349,6 +352,7 @@ export default function AssignmentSubmissionsRoute() {
     graded: 'Graded',
     released: 'Released',
   };
+  const { title, subtitle } = getClassCardHeading(klass);
 
   return (
     <section className="no-scrollbar flex h-full w-full flex-col overflow-y-scroll">
@@ -356,10 +360,10 @@ export default function AssignmentSubmissionsRoute() {
       <div className="flex w-full justify-between border-b bg-secondary">
         <div className="mx-auto w-full max-w-screen-lg p-3 sm:p-5">
           <div className="flex flex-col">
-            <h2>
-              Grade {klass.grade}
-              {klass.period ? <> • Period {klass.period}</> : null}
-            </h2>
+            <h2>{title}</h2>
+            {subtitle ? (
+              <p className="mt-1 text-muted-foreground">{subtitle}</p>
+            ) : null}
             {klass.school?.name ? (
               <p className="mt-1 text-muted-foreground">{klass.school.name}</p>
             ) : null}

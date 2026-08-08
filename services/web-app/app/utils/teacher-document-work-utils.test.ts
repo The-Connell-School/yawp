@@ -19,7 +19,7 @@ describe('formatClassLabel', () => {
     ).toBe('Grade 9');
   });
 
-  test('keeps the title suffix when period is null', () => {
+  test('leads with title for combined labels', () => {
     expect(
       formatClassLabel({
         id: 'c1',
@@ -27,7 +27,7 @@ describe('formatClassLabel', () => {
         period: null,
         title: 'Honors',
       })
-    ).toBe('Grade 9 — Honors');
+    ).toBe('Honors · Grade 9');
   });
 });
 

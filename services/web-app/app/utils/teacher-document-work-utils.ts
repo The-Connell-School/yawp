@@ -9,7 +9,7 @@ import {
 
 export type TeacherDocumentWorkClassSummary = {
   id: string;
-  grade: string;
+  grade: string | null;
   period: string | null;
   title: string | null;
 };
@@ -67,12 +67,7 @@ export type ReleaseGradeRow = {
   };
 };
 
-export function formatClassLabel(klass: TeacherDocumentWorkClassSummary) {
-  const base = klass.period
-    ? `Grade ${klass.grade} • Period ${klass.period}`
-    : `Grade ${klass.grade}`;
-  return klass.title ? `${base} — ${klass.title}` : base;
-}
+export { formatClassLabel } from '~/utils/class-display';
 
 export function getDraftDisplayTitle(document: {
   title?: string | null;

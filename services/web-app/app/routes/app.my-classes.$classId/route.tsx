@@ -17,6 +17,7 @@ import { Link } from 'react-router';
 import { requireMembership, requireUserId } from '~/utils/auth.server.js';
 import { parseAssignmentGradingIntent } from '~/utils/assignment-grading-intent.server';
 import { parseAssignmentTutorEnabled } from '~/utils/assignment-tutor-enabled.server';
+import { formatClassLabel } from '~/utils/class-display';
 import { prisma } from '~/utils/db.server.js';
 import { getAvailableAssignmentTypesForScopes } from '~/utils/assignment-type-access.server';
 import {
@@ -156,10 +157,7 @@ export function classAssignmentOptionLabel(klass: {
   period: string | null;
   title: string | null;
 }) {
-  const base = klass.period
-    ? `Grade ${klass.grade} • Period ${klass.period}`
-    : `Grade ${klass.grade}`;
-  return klass.title ? `${base} — ${klass.title}` : base;
+  return formatClassLabel(klass);
 }
 
 async function getClassStudentMemberships(
@@ -2048,9 +2046,12 @@ function ClassDetailPage() {
                   >
                     {data.teacherClasses.map((klass) => (
                       <option key={klass.id} value={klass.id}>
-                        {klass.school.name} — Grade {klass.grade}
-                        {klass.period ? `, Period ${klass.period}` : ''}
-                        {klass.title ? ` — ${klass.title}` : ''}
+                        {klass.school.name} —{' '}
+                        {formatClassLabel({
+                          grade: klass.grade,
+                          period: klass.period,
+                          title: klass.title,
+                        })}
                       </option>
                     ))}
                   </select>

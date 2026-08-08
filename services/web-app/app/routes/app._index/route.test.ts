@@ -592,7 +592,7 @@ describe('app index loader assignments', () => {
     expect(data.assignmentCreationClasses).toEqual([
       {
         id: 'class-1',
-        name: 'Grade 9 • Period 1 — Pilot Class',
+        name: 'Pilot Class · Grade 9 • Period 1',
       },
     ]);
     expect(data.assignmentCreationTypes).toEqual([

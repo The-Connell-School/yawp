@@ -98,13 +98,13 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
   if (intent === 'updateClass') {
     const classId = formData.get('classId')?.toString();
-    const grade = formData.get('grade')?.toString().trim();
-    const period = formData.get('period')?.toString().trim();
+    const grade = formData.get('grade')?.toString().trim() || null;
+    const period = formData.get('period')?.toString().trim() || null;
     const teacherProfileIdRaw = formData.get('teacherProfileId');
     const teacherProfileId = teacherProfileIdRaw
       ? teacherProfileIdRaw.toString().trim()
       : undefined;
-    if (!classId || !grade || !period)
+    if (!classId)
       return dataResponse({ error: 'Missing fields' }, { status: 400 });
     const klass = await prisma.class.findFirst({
       where: {

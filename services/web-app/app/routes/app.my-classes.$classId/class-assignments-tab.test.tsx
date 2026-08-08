@@ -91,7 +91,7 @@ function render(element: ReactElement) {
 function renderTab(overrides: Record<string, unknown> = {}) {
   return render(
     <ClassAssignmentsTab
-      classOption={{ id: 'class-1', name: 'Grade 9 • Period 2 — History' }}
+      classOption={{ id: 'class-1', name: 'History · Grade 9 • Period 2' }}
       assignments={ASSIGNMENTS}
       assignmentTypes={[{ id: 'type-1', title: 'DBQ' }]}
       classInsightsEnabled
@@ -139,7 +139,7 @@ describe('ClassAssignmentsTab', () => {
       entryPoint: 'class',
       fixedClassId: 'class-1',
       teacherClasses: [
-        { id: 'class-1', name: 'Grade 9 • Period 2 — History' },
+        { id: 'class-1', name: 'History · Grade 9 • Period 2' },
       ],
     });
   });

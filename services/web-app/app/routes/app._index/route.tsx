@@ -44,6 +44,7 @@ import {
 import { AssignmentsAtAGlance } from './components/assignments-at-a-glance';
 import { ClassesAtAGlance } from './components/classes-at-a-glance';
 import { TeacherGradingAtAGlance } from './components/teacher-grading-at-a-glance';
+import { formatClassLabel } from '~/utils/class-display';
 
 const DASHBOARD_MAX_TEACHER_CLASSES = 6;
 
@@ -53,17 +54,6 @@ export type AssignmentTypeRow = {
   systemKey?: string | null;
   image?: { id: string } | null;
 };
-
-function formatClassLabel(klass: {
-  grade: string;
-  period: string | null;
-  title: string | null;
-}) {
-  const base = klass.period
-    ? `Grade ${klass.grade} • Period ${klass.period}`
-    : `Grade ${klass.grade}`;
-  return klass.title ? `${base} — ${klass.title}` : base;
-}
 
 function orderDocumentTileModuleSessions<
   T extends { assignmentModuleSessions: AssignmentModuleSessionResumeCandidate[] },
@@ -570,11 +560,7 @@ export default function AppRoute() {
                           {classAssignment.assignment.assignmentType.title}
                         </p>
                         <p className="text-xs text-muted-foreground">
-                          Grade {classAssignment.class.grade} • Period{' '}
-                          {classAssignment.class.period}
-                          {classAssignment.class.title
-                            ? ` • ${classAssignment.class.title}`
-                            : ''}
+                          {formatClassLabel(classAssignment.class)}
                         </p>
                       </div>
                     </button>

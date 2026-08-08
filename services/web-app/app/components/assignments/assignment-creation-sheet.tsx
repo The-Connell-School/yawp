@@ -594,28 +594,28 @@ export function AssignmentCreationSheetContent({
 
         <div className="pt-6">
           <input type="hidden" name="tutorEnabled" value="false" />
-          <div className="flex items-start justify-between gap-4">
-            <Label
-              htmlFor="assignment-create-tutor-enabled"
-              className="grid min-w-0 flex-1 cursor-pointer gap-2 text-base/7 font-normal text-muted-foreground sm:text-sm/6"
-            >
-              <span>
-                Turning the tutor off will remove the tutor from the
-                student&apos;s documents.
-              </span>
-              <span>
+          <div className="rounded-md border bg-muted/40 p-3">
+            <p className="text-base font-semibold text-foreground sm:text-sm">
+              Turning the tutor off will remove the tutor from the
+              student&apos;s documents.
+            </p>
+            <div className="mt-3 flex items-start justify-between gap-4">
+              <Label
+                htmlFor="assignment-create-tutor-enabled"
+                className="min-w-0 flex-1 cursor-pointer text-base/7 font-normal text-muted-foreground sm:text-sm/6"
+              >
                 Do this if you want to test the student&apos;s ability to write
                 a paper independently of tutor guidance.
-              </span>
-            </Label>
-            <Switch
-              id="assignment-create-tutor-enabled"
-              name="tutorEnabled"
-              value="true"
-              checked={tutorEnabled}
-              onCheckedChange={setTutorEnabled}
-              disabled={isSaving}
-            />
+              </Label>
+              <Switch
+                id="assignment-create-tutor-enabled"
+                name="tutorEnabled"
+                value="true"
+                checked={tutorEnabled}
+                onCheckedChange={setTutorEnabled}
+                disabled={isSaving}
+              />
+            </div>
           </div>
         </div>
 

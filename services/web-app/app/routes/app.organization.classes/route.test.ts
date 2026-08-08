@@ -154,11 +154,34 @@ describe('app.organization.classes action', () => {
     );
   });
 
-  test('create-class still requires grade', async () => {
+  test('create-class allows a missing grade', async () => {
     const body = new URLSearchParams();
     body.set('intent', 'create-class');
     body.set('schoolId', 'school-1');
     body.set('schoolYear', '2025-2026');
+    body.set('code', 'ABC123');
+
+    const request = new Request('https://example.com/app/organization/classes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body,
+    });
+
+    const result = (await action({ request } as any)) as {
+      data: { success: boolean };
+    };
+    expect(result.data.success).toBe(true);
+    expect(prisma.class.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ grade: null }),
+      })
+    );
+  });
+
+  test('create-class still requires school year', async () => {
+    const body = new URLSearchParams();
+    body.set('intent', 'create-class');
+    body.set('schoolId', 'school-1');
     body.set('code', 'ABC123');
 
     const request = new Request('https://example.com/app/organization/classes', {

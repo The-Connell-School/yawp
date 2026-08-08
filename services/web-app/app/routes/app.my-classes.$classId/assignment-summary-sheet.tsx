@@ -40,6 +40,12 @@ export type AssignmentSummarySheetContentProps = {
   renderSheet?: boolean;
 };
 
+export function assignmentSummaryLayoutClassName(renderSheet: boolean) {
+  return renderSheet
+    ? 'mt-4 space-y-6'
+    : 'mt-4 grid gap-6 lg:grid-cols-2 lg:items-start';
+}
+
 export const ASSIGNMENT_SUMMARY_SHEET_CONTENT_CLASS_NAME =
   'flex h-full w-full flex-col gap-0 overflow-hidden p-0 text-foreground dark:bg-card sm:max-w-xl';
 
@@ -176,7 +182,10 @@ export function AssignmentSummarySheetContent({
       {header}
 
       {assignment ? (
-        <div className="mt-4 space-y-6">
+        <div
+          className={assignmentSummaryLayoutClassName(renderSheet)}
+          data-testid="assignment-summary-layout"
+        >
           <AssignmentMetadataSection
             assignment={assignment}
             onViewDocuments={onViewDocuments}

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, useFetcher } from 'react-router';
 import {
   ArrowUpRight,
+  BarChart3,
   ChevronDown,
   Minus,
   TrendingUp,
@@ -12,6 +13,7 @@ import {
 import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
 import { timeAgo } from '~/utils/timeAgo';
+import type { ClassInsightGenerateAvailability } from '~/domain/assignment-insights/class-insight-generate-availability';
 import { useClassInsightGenerateAvailability } from './use-class-insight-generate-availability';
 
 type CategoryStatus = 'strength' | 'mixed' | 'gap';
@@ -116,6 +118,71 @@ function humanizeCategoryKey(key: string) {
     .replace(/_and_/g, ' & ')
     .replace(/_/g, ' ')
     .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+type ClassInsightPanelPresentation = {
+  subtitle: string;
+  showGenerateButton: boolean;
+  generateButtonLabel: string;
+};
+
+export function resolveClassInsightPanelPresentation({
+  hasInsight,
+  isWorking,
+  submissionCount,
+  generatedAt,
+  generateAvailability,
+}: {
+  hasInsight: boolean;
+  isWorking: boolean;
+  submissionCount: number;
+  generatedAt: string | null;
+  generateAvailability: ClassInsightGenerateAvailability;
+}): ClassInsightPanelPresentation {
+  if (isWorking) {
+    return {
+      subtitle: hasInsight
+        ? 'Updating the class performance summary…'
+        : 'Analyzing graded submissions…',
+      showGenerateButton: true,
+      generateButtonLabel: 'Analyzing…',
+    };
+  }
+
+  if (hasInsight) {
+    const summaryLead = `Based on ${submissionCount} submission${
+      submissionCount === 1 ? '' : 's'
+    }${generatedAt ? ` · updated ${timeAgo(generatedAt)}` : ''}.`;
+
+    if (!generateAvailability.canGenerate) {
+      return {
+        subtitle: `${summaryLead} ${generateAvailability.reason}`,
+        showGenerateButton: false,
+        generateButtonLabel: 'Regenerate',
+      };
+    }
+
+    return {
+      subtitle: summaryLead,
+      showGenerateButton: true,
+      generateButtonLabel: 'Regenerate',
+    };
+  }
+
+  if (!generateAvailability.canGenerate) {
+    return {
+      subtitle: generateAvailability.reason,
+      showGenerateButton: false,
+      generateButtonLabel: 'Summarize class performance',
+    };
+  }
+
+  return {
+    subtitle:
+      'Generate a summary to see class-wide strengths, gaps, and teaching next steps.',
+    showGenerateButton: true,
+    generateButtonLabel: 'Summarize class performance',
+  };
 }
 
 function CategoryCard({
@@ -476,6 +543,14 @@ export function ClassInsightsPanel({
       : null,
   });
 
+  const presentation = resolveClassInsightPanelPresentation({
+    hasInsight,
+    isWorking,
+    submissionCount: insight?.submissionCount ?? 0,
+    generatedAt,
+    generateAvailability,
+  });
+
   const generate = () => {
     fetcher.submit(
       { classAssignmentId },
@@ -492,16 +567,15 @@ export function ClassInsightsPanel({
             <h3 className="text-base font-semibold leading-tight text-foreground">
               Class performance summary
             </h3>
-            <p className="mt-0.5 text-base/7 text-muted-foreground [overflow-wrap:anywhere] @sm:text-sm/6">
-              {hasInsight
-                ? `Based on ${insight!.submissionCount} submissions${
-                    generatedAt ? ` · updated ${timeAgo(generatedAt)}` : ''
-                  }.`
-                : 'See how the whole class did on this assignment — strengths, gaps, and what to teach next.'}
+            <p
+              className="mt-0.5 text-base/7 text-muted-foreground [overflow-wrap:anywhere] @sm:text-sm/6"
+              data-testid="class-insight-panel-subtitle"
+            >
+              {presentation.subtitle}
             </p>
           </div>
         </div>
-        {isWorking || generateAvailability.canGenerate ? (
+        {presentation.showGenerateButton ? (
           <Button
             type="button"
             size="sm"
@@ -510,21 +584,11 @@ export function ClassInsightsPanel({
             onClick={generate}
             disabled={isWorking}
             isLoading={isWorking}
+            data-testid="class-insight-generate-button"
           >
-            {isWorking
-              ? 'Analyzing…'
-              : hasInsight
-                ? 'Regenerate'
-                : 'Summarize class performance'}
+            {presentation.generateButtonLabel}
           </Button>
-        ) : (
-          <p
-            className="w-full shrink-0 text-sm text-muted-foreground @xl:w-auto @xl:text-right"
-            data-testid="class-insight-generate-unavailable-reason"
-          >
-            {generateAvailability.reason}
-          </p>
-        )}
+        ) : null}
       </div>
 
       <div className="p-4">
@@ -548,11 +612,16 @@ export function ClassInsightsPanel({
           </div>
         )}
 
-        {!isWorking && !hasInsight && !errorMessage && (
-          <p className="text-sm text-muted-foreground">
-            No summary yet. Generate one to see class-wide strengths, gaps, and
-            teaching next steps.
-          </p>
+        {!hasInsight && !isWorking && (
+          <div
+            className="flex flex-col items-center justify-center rounded-lg border border-dashed bg-muted/20 px-6 py-10"
+            data-testid="class-summary-placeholder"
+            aria-hidden
+          >
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
+              <BarChart3 className="h-6 w-6 text-muted-foreground" />
+            </div>
+          </div>
         )}
 
         {hasInsight && (

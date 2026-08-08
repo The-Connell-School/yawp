@@ -1,9 +1,12 @@
 import { Link } from 'react-router';
 import { ClassArt } from '~/components/class-art';
+import {
+  getClassCardHeading,
+} from '~/utils/class-display';
 
 export type TeacherClassCardData = {
   id: string;
-  grade: string;
+  grade: string | null;
   period: string | null;
   title: string | null;
   classArtKey: string | null;
@@ -16,22 +19,15 @@ export type TeacherClassCardData = {
   };
 };
 
-export function formatTeacherClassLabel(klass: {
-  grade: string;
-  period: string | null;
-  title?: string | null;
-}) {
-  const base = klass.period
-    ? `Grade ${klass.grade} • Period ${klass.period}`
-    : `Grade ${klass.grade}`;
-  return klass.title ? `${base} — ${klass.title}` : base;
-}
+export { formatClassCardTitle as formatTeacherClassLabel } from '~/utils/class-display';
 
 export function TeacherClassCard({
   klass,
 }: {
   klass: TeacherClassCardData;
 }) {
+  const { title, subtitle } = getClassCardHeading(klass);
+
   return (
     <div className="flex min-h-full flex-col overflow-hidden rounded-lg bg-popover shadow-sm ring-1 ring-black/5 transition-shadow hover:shadow-md">
       <Link
@@ -54,8 +50,11 @@ export function TeacherClassCard({
               </p>
             ) : null}
             <h4 className="mt-1 text-balance text-base font-semibold tracking-tight text-foreground">
-              {formatTeacherClassLabel(klass)}
+              {title}
             </h4>
+            {subtitle ? (
+              <p className="mt-0.5 text-xs text-muted-foreground">{subtitle}</p>
+            ) : null}
           </div>
         </div>
 

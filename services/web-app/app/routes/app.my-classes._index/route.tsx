@@ -135,12 +135,12 @@ export async function action({ request }: ActionFunctionArgs) {
   if (intent === 'create-class') {
     const schoolId = formData.get('schoolId') as string;
     const schoolYear = formData.get('schoolYear') as string;
-    const grade = formData.get('grade') as string;
-    const period = formData.get('period') as string;
+    const grade = (formData.get('grade') as string)?.trim() || null;
+    const period = (formData.get('period') as string)?.trim() || null;
     const title = (formData.get('title') as string)?.trim() || null;
     let code = (formData.get('code') as string)?.trim().toUpperCase() || '';
 
-    if (!schoolId || !schoolYear || !grade || !period) {
+    if (!schoolId || !schoolYear) {
       return dataResponse({ error: 'All required fields must be filled.' }, { status: 400 });
     }
 
@@ -153,13 +153,6 @@ export async function action({ request }: ActionFunctionArgs) {
     }
 
     if (!code) code = generateClassCode();
-
-    if (!/^[A-Z0-9]{3,10}$/.test(code)) {
-      return dataResponse(
-        { error: 'Code must be 3-10 alphanumeric characters.' },
-        { status: 400 }
-      );
-    }
 
     try {
       await prisma.class.create({
@@ -193,12 +186,12 @@ export async function action({ request }: ActionFunctionArgs) {
     const classId = formData.get('classId') as string;
     const schoolId = formData.get('schoolId') as string;
     const schoolYear = formData.get('schoolYear') as string;
-    const grade = formData.get('grade') as string;
-    const period = formData.get('period') as string;
+    const grade = (formData.get('grade') as string)?.trim() || null;
+    const period = (formData.get('period') as string)?.trim() || null;
     const title = (formData.get('title') as string)?.trim() || null;
     const code = (formData.get('code') as string)?.trim().toUpperCase() || '';
 
-    if (!classId || !schoolId || !schoolYear || !grade || !period || !code) {
+    if (!classId || !schoolId || !schoolYear || !code) {
       return dataResponse({ error: 'All required fields must be filled.' }, { status: 400 });
     }
 
@@ -208,13 +201,6 @@ export async function action({ request }: ActionFunctionArgs) {
 
     if (!/^\d{4}-\d{4}$/.test(schoolYear)) {
       return dataResponse({ error: 'School year must be YYYY-YYYY.' }, { status: 400 });
-    }
-
-    if (!/^[A-Z0-9]{3,10}$/.test(code)) {
-      return dataResponse(
-        { error: 'Code must be 3-10 alphanumeric characters.' },
-        { status: 400 }
-      );
     }
 
     const existingClass = await prisma.class.findFirst({

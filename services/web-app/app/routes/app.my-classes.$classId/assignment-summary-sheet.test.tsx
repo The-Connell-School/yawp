@@ -37,6 +37,7 @@ const { MemoryRouter } = actualReactRouter;
 const {
   ASSIGNMENT_SUMMARY_SHEET_CONTENT_CLASS_NAME,
   AssignmentSummarySheetContent,
+  assignmentSummaryLayoutClassName,
 }: typeof import('./assignment-summary-sheet') = await import(
   './assignment-summary-sheet'
 );
@@ -227,6 +228,7 @@ describe('AssignmentSummarySheetContent', () => {
     expect(
       el.querySelector('[data-testid="class-insight-generate-button"]')
     ).toBeFalsy();
+    expect(el.querySelector('[data-testid="class-summary-placeholder"]')).toBeTruthy();
     expect(el.textContent).toMatch(
       /grade a few submissions first, then generate class insights/i
     );
@@ -241,9 +243,31 @@ describe('AssignmentSummarySheetContent', () => {
         onViewDocuments={() => {}}
       />
     );
-    expect(el.querySelector('[data-testid="class-summary-placeholder"]')).toBeFalsy();
+    expect(el.querySelector('[data-testid="class-summary-placeholder"]')).toBeTruthy();
     expect(el.textContent).toContain('Class performance summary');
     expect(el.textContent).toMatch(/summarize class performance/i);
+    expect(
+      el.querySelector('[data-testid="class-insight-generate-button"]')
+    ).toBeTruthy();
+  });
+
+  it('lays out metadata and class summary side by side on large screens in the full page', () => {
+    const el = render(
+      <AssignmentSummarySheetContent
+        renderSheet={false}
+        assignment={ASSIGNMENT}
+        classInsightsEnabled={true}
+        onViewDocuments={() => {}}
+      />
+    );
+    const layout = el.querySelector('[data-testid="assignment-summary-layout"]');
+    expect(layout?.className).toContain('lg:grid-cols-2');
+    expect(layout?.className).toContain('lg:items-start');
+  });
+
+  it('keeps metadata and class summary stacked in the narrow assignment sheet', () => {
+    expect(assignmentSummaryLayoutClassName(true)).toContain('space-y-6');
+    expect(assignmentSummaryLayoutClassName(true)).not.toContain('lg:grid-cols-2');
   });
 
   it('renders nothing assignment-specific when no assignment is selected', () => {
