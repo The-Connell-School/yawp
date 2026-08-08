@@ -23,6 +23,10 @@ import {
 import { Switch } from '~/components/ui/switch';
 import { Textarea } from '~/components/ui/textarea';
 import {
+  DEFAULT_SAVED_ASSIGNMENT_POINT_VALUE,
+  SAVED_ASSIGNMENTS_ENABLED,
+} from '~/domain/assignments/saved-assignments';
+import {
   DEFAULT_GRADING_ASSISTANT_STRICTNESS_LEVEL,
   GRADING_ASSISTANT_STRICTNESS_UI_ENABLED,
   gradingAssistantStrictnessOptions,
@@ -79,6 +83,14 @@ export type AssignmentCreationSheetProps = {
   emptyClassesMessage?: string;
   /** When true, a title must be entered before the assignment can be created. */
   titleRequired?: boolean;
+  /**
+   * Grading and tutor settings to start from. Reusing a saved assignment
+   * carries its whole configuration back into the sheet, not just its prompt.
+   */
+  initialSubmitForGrade?: boolean;
+  initialPointValue?: number | null;
+  initialTutorEnabled?: boolean;
+  initialGradingAssistantStrictnessLevel?: GradingAssistantStrictnessLevel;
 };
 
 type AssignmentCreationSheetContentProps = AssignmentCreationSheetProps & {
@@ -119,6 +131,13 @@ function initialClassIds(fixedClassId?: string) {
   return fixedClassId ? [fixedClassId] : [];
 }
 
+/** The point-value input is a string; a saved assignment may carry none. */
+function pointValueFieldValue(pointValue: number | null | undefined) {
+  return pointValue === null || pointValue === undefined
+    ? ''
+    : String(pointValue);
+}
+
 export function AssignmentCreationSheet({
   ...props
 }: AssignmentCreationSheetProps) {
@@ -147,6 +166,10 @@ export function AssignmentCreationSheetContent({
   initialPrompt = '',
   emptyClassesMessage = "You don't have any assignment-enabled classes yet.",
   titleRequired = false,
+  initialSubmitForGrade = true,
+  initialPointValue = DEFAULT_SAVED_ASSIGNMENT_POINT_VALUE,
+  initialTutorEnabled = true,
+  initialGradingAssistantStrictnessLevel = DEFAULT_GRADING_ASSISTANT_STRICTNESS_LEVEL,
   createFetcher,
   extractFetcher,
   renderSheet = true,
@@ -166,12 +189,15 @@ export function AssignmentCreationSheetContent({
   );
   const [title, setTitle] = useState('');
   const [prompt, setPrompt] = useState(initialPrompt);
-  const [submitForGrade, setSubmitForGrade] = useState(true);
-  const [pointValue, setPointValue] = useState('100');
-  const [tutorEnabled, setTutorEnabled] = useState(true);
+  const [submitForGrade, setSubmitForGrade] = useState(initialSubmitForGrade);
+  const [pointValue, setPointValue] = useState(
+    pointValueFieldValue(initialPointValue)
+  );
+  const [tutorEnabled, setTutorEnabled] = useState(initialTutorEnabled);
+  const [saveForReuse, setSaveForReuse] = useState(false);
   const [gradingAssistantStrictnessLevel, setGradingAssistantStrictnessLevel] =
     useState<GradingAssistantStrictnessLevel>(
-      DEFAULT_GRADING_ASSISTANT_STRICTNESS_LEVEL
+      initialGradingAssistantStrictnessLevel
     );
   const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
   const [extractionTruncated, setExtractionTruncated] = useState(false);
@@ -232,12 +258,11 @@ export function AssignmentCreationSheetContent({
     setSelectedClassIds(initialClassIds(fixedClassId));
     setTitle(initialTitle);
     setPrompt(initialPrompt);
-    setSubmitForGrade(true);
-    setPointValue('100');
-    setTutorEnabled(true);
-    setGradingAssistantStrictnessLevel(
-      DEFAULT_GRADING_ASSISTANT_STRICTNESS_LEVEL
-    );
+    setSubmitForGrade(initialSubmitForGrade);
+    setPointValue(pointValueFieldValue(initialPointValue));
+    setTutorEnabled(initialTutorEnabled);
+    setSaveForReuse(false);
+    setGradingAssistantStrictnessLevel(initialGradingAssistantStrictnessLevel);
     setAttachmentFile(null);
     setExtractionTruncated(false);
     if (attachmentInputRef.current) attachmentInputRef.current.value = '';
@@ -249,6 +274,10 @@ export function AssignmentCreationSheetContent({
     fixedClassId,
     initialPrompt,
     initialTitle,
+    initialSubmitForGrade,
+    initialPointValue,
+    initialTutorEnabled,
+    initialGradingAssistantStrictnessLevel,
     open,
     teacherClasses,
   ]);
@@ -627,6 +656,33 @@ export function AssignmentCreationSheetContent({
             </div>
           </div>
         </div>
+
+        {SAVED_ASSIGNMENTS_ENABLED && usesBulkCreateApi ? (
+          <div className="pt-6">
+            <input type="hidden" name="saveForReuse" value="false" />
+            <div className="flex items-center gap-2.5">
+              <Checkbox
+                id="assignment-create-save-for-reuse"
+                name="saveForReuse"
+                value="true"
+                checked={saveForReuse}
+                onCheckedChange={(checked) => setSaveForReuse(checked === true)}
+                disabled={isSaving}
+                className="size-4 shrink-0"
+              />
+              <Label
+                htmlFor="assignment-create-save-for-reuse"
+                className="cursor-pointer font-normal leading-none"
+              >
+                Save to My Saved Assignments
+              </Label>
+            </div>
+            <p className="mt-1 pl-[calc(1rem+0.625rem)] text-sm text-muted-foreground">
+              Keep this assignment so you can give it to another class later
+              without setting it up again.
+            </p>
+          </div>
+        ) : null}
 
         {!submitForGrade ? <input type="hidden" name="pointValue" value="" /> : null}
 

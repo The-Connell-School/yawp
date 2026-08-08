@@ -8,11 +8,18 @@
 // saved assignment re-opens the creation sheet pre-filled.
 
 import { createHash } from 'node:crypto';
+import type { SavedAssignment } from '~/domain/assignments/saved-assignments';
 import {
   DEFAULT_GRADING_ASSISTANT_STRICTNESS_LEVEL,
   type GradingAssistantStrictnessLevel,
 } from '~/domain/grading/grading-assistant-strictness';
 import { prisma } from '~/utils/db.server';
+
+export {
+  DEFAULT_SAVED_ASSIGNMENT_POINT_VALUE,
+  SAVED_ASSIGNMENTS_ENABLED,
+  type SavedAssignment,
+} from '~/domain/assignments/saved-assignments';
 
 export const MAX_SAVED_ASSIGNMENT_TITLE_LENGTH = 200;
 export const MAX_SAVED_ASSIGNMENT_PROMPT_LENGTH = 20000;
@@ -21,27 +28,6 @@ export const MAX_SAVED_ASSIGNMENT_PROMPT_LENGTH = 20000;
 export const SAVED_ASSIGNMENT_SOURCE_CREATION_SHEET = 'creation-sheet';
 
 const FALLBACK_TITLE = 'Untitled assignment';
-
-/**
- * Single switch for the whole feature. Every read and every render site
- * consults this, so turning it off hides "My Saved Assignments" without
- * touching rows already stored.
- */
-export const SAVED_ASSIGNMENTS_ENABLED = true;
-
-/** A saved assignment as the loaders and the UI see it. */
-export type SavedAssignment = {
-  id: string;
-  title: string;
-  prompt: string;
-  submitForGrade: boolean;
-  pointValue: number | null;
-  gradingAssistantStrictnessLevel: GradingAssistantStrictnessLevel;
-  tutorEnabled: boolean;
-  assignmentTypeId: string;
-  assignmentTypeTitle: string;
-  savedAt: string;
-};
 
 /** A save the caller got wrong (empty or implausibly long prompt). */
 export class SavedAssignmentError extends Error {
