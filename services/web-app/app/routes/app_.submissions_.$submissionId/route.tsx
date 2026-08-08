@@ -710,29 +710,6 @@ export default function SubmissionRoute() {
     }
   }, [submission.id]);
 
-  const [isUnsubmitting, setIsUnsubmitting] = useState(false);
-
-  const handleUnsubmit = useCallback(async () => {
-    setIsUnsubmitting(true);
-    try {
-      const formData = new FormData();
-      formData.append('submissionId', submission.id);
-      const res = await fetch('/api/domain/unsubmit-submission', {
-        method: 'POST',
-        body: formData,
-      });
-      const body = (await res.json().catch(() => null)) as {
-        success?: boolean;
-      } | null;
-      if (res.ok && body?.success) {
-        navigate('/app/documents');
-        return;
-      }
-    } finally {
-      setIsUnsubmitting(false);
-    }
-  }, [submission.id, navigate]);
-
   const [isSavingGrade, setIsSavingGrade] = useState(false);
 
   const handleMarkGraded = useCallback(async () => {
@@ -892,9 +869,6 @@ export default function SubmissionRoute() {
               isSavingGrade={isSavingGrade}
               onRelease={handleReleaseGrade}
               isReleasing={isReleasing}
-              onUnsubmit={handleUnsubmit}
-              isUnsubmitting={isUnsubmitting}
-              isUnsubmitted={Boolean(submission.unsubmittedAt)}
               submissionForView={submissionForView}
               documentId={submission.documentId}
               submissionId={submission.id}

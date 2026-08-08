@@ -2,7 +2,14 @@ import { test, expect } from '../test-setup';
 import { createE2EPrismaClient } from '../prisma-client';
 
 test.describe.serial('Teacher unsubmits a document', () => {
-  test('requires confirmation, then hides the submission without deleting the document', async ({
+  // There is no teacher-facing "Unsubmit" control anymore — see
+  // submission-lifecycle-panel.tsx. Only students can unsubmit their own
+  // document (a separate flow). The server machinery this test exercises
+  // (Submission.unsubmittedAt / unsubmittedByMembershipId, the "document and
+  // its revisions survive" guarantee, and active-read exclusion) stays in
+  // place for that student-facing flow to build on, so this test still
+  // drives the underlying API directly to keep that coverage.
+  test('unsubmitting hides the submission without deleting the document', async ({
     page,
     signIn,
     e2eContext,
@@ -21,32 +28,19 @@ test.describe.serial('Teacher unsubmits a document', () => {
     await page.goto(`/app/submissions/${e2eContext.submittedSubmissionId}`);
     await page.waitForLoadState('networkidle');
 
-    const unsubmitButton = page.getByTestId('submission-lifecycle-unsubmit');
-    await expect(unsubmitButton).toBeVisible();
-    await unsubmitButton.click();
-
-    // Confirmation dialog gates the destructive action.
-    const dialog = page.getByRole('alertdialog');
-    await expect(dialog).toBeVisible();
-    await expect(
-      dialog.getByText(/document itself is not deleted/i)
-    ).toBeVisible();
-
-    // Cancel first — must not unsubmit.
-    await dialog.getByRole('button', { name: 'Cancel' }).click();
-    await expect(dialog).toBeHidden();
-
-    const stillSubmitted = await prisma.submission.findUnique({
-      where: { id: e2eContext.submittedSubmissionId },
-      select: { unsubmittedAt: true },
-    });
-    expect(stillSubmitted?.unsubmittedAt).toBeNull();
-
-    // Now actually confirm.
-    await unsubmitButton.click();
-    await page.getByRole('alertdialog').getByRole('button', { name: 'Unsubmit' }).click();
-
-    await page.waitForURL('**/app/documents**', { timeout: 15000 });
+    // No teacher-facing entry point exists in the UI; call the (still-live,
+    // still teacher-authorized) API the same way the removed button used to.
+    const result = await page.evaluate(async (submissionId) => {
+      const formData = new FormData();
+      formData.append('submissionId', submissionId);
+      const res = await fetch('/api/domain/unsubmit-submission', {
+        method: 'POST',
+        body: formData,
+      });
+      return { status: res.status, body: await res.json() };
+    }, e2eContext.submittedSubmissionId);
+    expect(result.status).toBe(200);
+    expect(result.body.success).toBe(true);
 
     const submission = await prisma.submission.findUnique({
       where: { id: e2eContext.submittedSubmissionId },
