@@ -3,6 +3,8 @@ import { createE2EPrismaClient } from '../prisma-client';
 import type { Page } from '@playwright/test';
 
 const CLASS_LABEL = /Grade 9th .* Period 1st/;
+const TUTOR_TOGGLE_LABEL =
+  "Turning the tutor off will remove the tutor from the student's documents. Do this if you want to test the student's ability to write a paper independently of tutor guidance.";
 
 async function expectStandardizedAssignmentForm(page: Page) {
   const dialog = page.getByRole('dialog');
@@ -22,6 +24,21 @@ async function expectStandardizedAssignmentForm(page: Page) {
     dialog.getByRole('checkbox', { name: /submit for grade/i })
   ).toBeChecked();
   await expect(dialog.getByLabel(/point value/i)).toHaveValue('100');
+  await expect(
+    dialog.getByText(
+      "Turning the tutor off will remove the tutor from the student's documents.",
+      { exact: true }
+    )
+  ).toBeVisible();
+  await expect(
+    dialog.getByText(
+      "Do this if you want to test the student's ability to write a paper independently of tutor guidance.",
+      { exact: true }
+    )
+  ).toBeVisible();
+  await expect(
+    dialog.getByRole('switch', { name: TUTOR_TOGGLE_LABEL })
+  ).toBeChecked();
 }
 
 async function expectCreatedAssignment(params: {
@@ -30,6 +47,7 @@ async function expectCreatedAssignment(params: {
   prompt: string;
   title: string;
   pointValue: number;
+  tutorEnabled?: boolean;
 }) {
   const prisma = createE2EPrismaClient();
   try {
@@ -49,6 +67,7 @@ async function expectCreatedAssignment(params: {
             title: true,
             submitForGrade: true,
             pointValue: true,
+            tutorEnabled: true,
           },
         },
       },
@@ -56,6 +75,9 @@ async function expectCreatedAssignment(params: {
     expect(created?.assignment.title).toBe(params.title);
     expect(created?.assignment.submitForGrade).toBe(true);
     expect(created?.assignment.pointValue).toBe(params.pointValue);
+    if (params.tutorEnabled !== undefined) {
+      expect(created?.assignment.tutorEnabled).toBe(params.tutorEnabled);
+    }
   } finally {
     await prisma.$disconnect();
   }
@@ -267,6 +289,11 @@ test.describe.serial('Teacher dashboard workspace', () => {
       await page.getByLabel('Title (optional)').fill(title);
       await page.getByLabel('Prompt', { exact: true }).fill(prompt);
       await page.getByLabel(/point value/i).fill('25');
+      const tutorToggle = page.getByRole('switch', {
+        name: TUTOR_TOGGLE_LABEL,
+      });
+      await tutorToggle.click();
+      await expect(tutorToggle).not.toBeChecked();
       await page.getByRole('button', { name: 'Create Assignment' }).click();
 
       await expect(page).toHaveURL(
@@ -284,6 +311,7 @@ test.describe.serial('Teacher dashboard workspace', () => {
         prompt,
         title,
         pointValue: 25,
+        tutorEnabled: false,
       });
     } finally {
       await deleteAssignmentsByTitle(title);
