@@ -173,6 +173,39 @@ async function deleteAssignmentsByTitle(title: string) {
 }
 
 test.describe.serial('Teacher dashboard workspace', () => {
+  test('shows Writing Practice in the teacher sidebar when enabled for the organization', async ({
+    page,
+    e2eContext,
+    signIn,
+  }) => {
+    const prisma = createE2EPrismaClient();
+    try {
+      await prisma.organization.update({
+        where: { id: e2eContext.organizationId },
+        data: { writingPracticeEnabled: true },
+      });
+
+      await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
+      await page.goto('/app');
+
+      const writingPracticeLink = page.getByRole('link', {
+        name: 'Writing Practice',
+      });
+      await expect(writingPracticeLink).toBeVisible();
+      await writingPracticeLink.click();
+      await page.waitForURL('**/app/writing-lessons**');
+      await expect(
+        page.getByRole('heading', { name: 'Writing practice' })
+      ).toBeVisible();
+    } finally {
+      await prisma.organization.update({
+        where: { id: e2eContext.organizationId },
+        data: { writingPracticeEnabled: false },
+      });
+      await prisma.$disconnect();
+    }
+  });
+
   test('presents classes first with Assignments and Grading entry points', async ({
     page,
     e2eContext,
