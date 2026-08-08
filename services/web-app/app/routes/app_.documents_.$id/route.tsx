@@ -56,6 +56,7 @@ import { useUser } from '~/hooks/useUser';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { hasEffectivePlatformAdmin } from '~/utils/preview-access.server';
+import { documentReadWhere } from '~/utils/document-access.server';
 import { redirectWithToast } from '~/utils/toast.server';
 import { ensureAssignmentModuleSessionsForDocument } from '~/domain/documents.server';
 import { Comments } from './comments';
@@ -200,26 +201,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const doc = await prisma.document.findFirst({
     where: {
       id: params.id,
-      ...(hasEffectivePlatformAdmin(user?.isAdmin)
-        ? {}
-        : {
-            OR: [
-              { membershipId: profile.id },
-              {
-                membership: {
-                  classesAsStudent: {
-                    some: {
-                      teachers: {
-                        some: {
-                          id: profile.id,
-                        },
-                      },
-                    },
-                  },
-                },
-              },
-            ],
-          }),
+      ...documentReadWhere({ profileId: profile.id, isAdmin: user?.isAdmin }),
     },
     select: {
       id: true,

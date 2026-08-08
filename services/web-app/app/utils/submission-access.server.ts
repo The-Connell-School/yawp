@@ -1,4 +1,5 @@
 import { prisma } from '~/utils/db.server';
+import { documentReadWhere } from '~/utils/document-access.server';
 
 /** Owner, teacher of student's class, or admin — same visibility as submission page loader. */
 export async function findSubmissionForTitleEdit(params: {
@@ -12,21 +13,10 @@ export async function findSubmissionForTitleEdit(params: {
       document: {
         is: {
           deletedAt: null,
-          OR: [
-            { membershipId: params.membershipId },
-            {
-              membership: {
-                classesAsStudent: {
-                  some: {
-                    teachers: {
-                      some: { id: params.membershipId },
-                    },
-                  },
-                },
-              },
-            },
-            ...(params.isAdmin ? [{}] : []),
-          ],
+          ...documentReadWhere({
+            profileId: params.membershipId,
+            isAdmin: params.isAdmin,
+          }),
         },
       },
     },

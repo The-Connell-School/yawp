@@ -21,7 +21,21 @@ import { hasEffectivePlatformAdmin } from './preview-access.server';
  *   them would fabricate student dialogue, so teachers are deliberately excluded.
  *
  * Platform admin is preserved in both, matching `hasEffectivePlatformAdmin`.
+ *
+ * Every helper below starts by refusing an empty `profileId`. Prisma DROPS filter keys
+ * whose value is `undefined`, so `{ membershipId: undefined }` does not mean "match
+ * nothing", it means "no filter" — an OR arm that degrades to `{}` matches every row in
+ * the table. A single call site that passes an unresolved profile id would therefore turn
+ * an ownership predicate into a global read with no error and no failing test. The throw
+ * is the only thing standing between that mistake and a full-table leak; do not soften it
+ * into a silent `return { id: '__never__' }`.
  */
+
+function requireProfileId(profileId: string, helper: string): void {
+  if (!profileId || typeof profileId !== 'string') {
+    throw new Error(`${helper} requires a non-empty profileId`);
+  }
+}
 
 export function documentReadWhere({
   profileId,
@@ -30,6 +44,8 @@ export function documentReadWhere({
   profileId: string;
   isAdmin?: boolean | null;
 }): Prisma.DocumentWhereInput {
+  requireProfileId(profileId, 'documentReadWhere');
+
   if (hasEffectivePlatformAdmin(isAdmin)) return {};
 
   return {
@@ -53,6 +69,8 @@ export function documentOwnerWhere({
   profileId: string;
   isAdmin?: boolean | null;
 }): Prisma.DocumentWhereInput {
+  requireProfileId(profileId, 'documentOwnerWhere');
+
   if (hasEffectivePlatformAdmin(isAdmin)) return {};
 
   return { membershipId: profileId };
@@ -70,6 +88,8 @@ export function documentOwnerSessionWhere({
   profileId: string;
   isAdmin?: boolean | null;
 }): Prisma.AssignmentModuleSessionWhereInput {
+  requireProfileId(profileId, 'documentOwnerSessionWhere');
+
   if (hasEffectivePlatformAdmin(isAdmin)) return {};
 
   return { document: { is: { membershipId: profileId } } };
@@ -91,6 +111,8 @@ export function documentCommentReadWhere({
   profileId: string;
   isAdmin?: boolean | null;
 }): Prisma.DocumentCommentWhereInput {
+  requireProfileId(profileId, 'documentCommentReadWhere');
+
   if (hasEffectivePlatformAdmin(isAdmin)) return {};
 
   return { document: { is: documentReadWhere({ profileId }) } };

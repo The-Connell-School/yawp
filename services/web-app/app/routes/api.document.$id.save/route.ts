@@ -3,7 +3,7 @@ import { type ActionFunctionArgs } from 'react-router';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { contentHash as computeContentHash } from '~/utils/content-hash';
 import { prisma } from '~/utils/db.server';
-import { hasEffectivePlatformAdmin } from '~/utils/preview-access.server';
+import { documentReadWhere } from '~/utils/document-access.server';
 
 const REVISION_INTERVAL_MS = 30 * 60 * 1000; // 30 minutes
 
@@ -30,24 +30,7 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
   const document = await prisma.document.findFirst({
     where: {
       id: params.id,
-      ...(hasEffectivePlatformAdmin(user.isAdmin)
-        ? {}
-        : {
-            OR: [
-              { membershipId: profile.id },
-              {
-                membership: {
-                  classesAsStudent: {
-                    some: {
-                      teachers: {
-                        some: { id: profile.id },
-                      },
-                    },
-                  },
-                },
-              },
-            ],
-          }),
+      ...documentReadWhere({ profileId: profile.id, isAdmin: user.isAdmin }),
     },
     select: {
       id: true,
