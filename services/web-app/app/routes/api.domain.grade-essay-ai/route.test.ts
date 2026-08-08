@@ -1712,4 +1712,143 @@ describe('api.domain.grade-essay-ai', () => {
       });
     });
   });
+
+  describe('a Daily Pages submission', () => {
+    function mockDailyPagesSubmission(id: string) {
+      return mockSubmission({
+        id,
+        text: 'I kept writing until the ten minutes were up.',
+        document: {
+          id: `doc-${id}`,
+          membershipId: 'student-profile-1',
+          assignmentTypeId: 'assignment-type-daily-pages',
+          assignmentType: {
+            id: 'assignment-type-daily-pages',
+            kind: 'daily_pages',
+            title: 'Daily Pages',
+          },
+          classAssignment: { class: { schoolId: 'school-1' } },
+          membership: {
+            classesAsStudent: [],
+            user: { name: 'Jordan Student' },
+          },
+        },
+      });
+    }
+
+    async function gradeDailyPages(id: string, engagementScore = 2) {
+      prisma.assignmentType.findUnique.mockResolvedValue(
+        mockAssignmentType({
+          id: 'assignment-type-daily-pages',
+          title: 'Daily Pages',
+          kind: 'daily_pages',
+        })
+      );
+      prisma.submission.findFirst.mockResolvedValue(
+        mockDailyPagesSubmission(id)
+      );
+      getLLMCompletion.mockReset();
+      getLLMCompletion.mockResolvedValue(
+        JSON.stringify({
+          categories: [{ key: 'engagement', score: engagementScore }],
+          overallComment: 'Jordan, you stayed with the thought all the way.',
+        })
+      );
+
+      const form = new FormData();
+      form.append('submissionId', id);
+      const response = await action({
+        request: new Request('https://example.com/api/domain/grade-essay-ai', {
+          method: 'POST',
+          body: form,
+        }),
+      } as any);
+
+      return response;
+    }
+
+    function gradingCall() {
+      return getLLMCompletion.mock.calls.find(
+        (call: any[]) => call[0]?.metadata?.kind === 'rubric-evaluation'
+      )?.[0];
+    }
+
+    test('grades on the Daily Pages rubric without the assignment type saving one', async () => {
+      await gradeDailyPages('sub-daily-pages-config');
+
+      const run =
+        prisma.submissionGradingAssistantRun.create.mock.calls.at(-1)?.[0].data;
+      expect(run.source).toBe('daily-pages-default');
+      expect(
+        (run.assignmentTypeRubricSnapshot as { categories: { key: string }[] })
+          .categories.map((category) => category.key)
+      ).toEqual(['engagement']);
+    });
+
+    test('asks the model for one engagement judgment on the 0-3 scale', async () => {
+      await gradeDailyPages('sub-daily-pages-prompt');
+
+      const call = gradingCall();
+      expect(call.system).toContain('Make one judgment: Engagement.');
+      expect(call.system).toContain('integers 0-3');
+      expect(call.messages[0].content).toContain(
+        'Score meanings: 0 = Absent; 1 = Hardly there; 2 = Showed up; 3 = All in'
+      );
+    });
+
+    test('asks for overall feedback only, never per-category feedback', async () => {
+      await gradeDailyPages('sub-daily-pages-feedback');
+
+      const call = gradingCall();
+      expect(call.system).not.toContain('"comment": string');
+      expect(call.system).toContain(
+        'Do not write per-category feedback. Every word of feedback belongs in overallComment.'
+      );
+      expect(call.system).toContain('"overallComment": string');
+    });
+
+    test('never asks for grammar or syntax highlighting', async () => {
+      await gradeDailyPages('sub-daily-pages-grammar');
+
+      // The rubric prompt never asks for grammar output. The grading
+      // instructions do tell the model not to grade grammar, which is the
+      // opposite ask and has to survive.
+      const call = gradingCall();
+      expect(call.system.toLowerCase()).not.toContain('grammar');
+      expect(call.system.toLowerCase()).not.toContain('syntax');
+      expect(call.system.toLowerCase()).not.toContain('highlight');
+      expect(call.messages[0].content).toContain(
+        'Do not grade grammar, spelling, punctuation, or formatting'
+      );
+      expect(
+        getLLMCompletion.mock.calls.filter(
+          (call: any[]) => call[0]?.metadata?.kind === 'grammar-issues'
+        )
+      ).toHaveLength(0);
+      expect(
+        prisma.submission.update.mock.calls.at(-1)?.[0].data.grammarIssues
+      ).toEqual({ version: 1, issues: [] });
+    });
+
+    test('accepts a scored category with no comment and stores an empty one', async () => {
+      await gradeDailyPages('sub-daily-pages-score', 3);
+
+      const stored = prisma.submission.update.mock.calls.at(-1)?.[0].data;
+      expect(stored.rubricScores).toEqual({
+        engagement: { score: 3, comment: '', isAi: true },
+      });
+      expect(stored.overallComment).toBe(
+        'Jordan, you stayed with the thought all the way.'
+      );
+    });
+
+    test('grades Absent as a real score rather than a missing one', async () => {
+      await gradeDailyPages('sub-daily-pages-absent', 0);
+
+      const stored = prisma.submission.update.mock.calls.at(-1)?.[0].data;
+      expect(stored.rubricScores).toEqual({
+        engagement: { score: 0, comment: '', isAi: true },
+      });
+    });
+  });
 });
