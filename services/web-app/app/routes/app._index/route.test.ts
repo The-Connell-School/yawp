@@ -17,6 +17,7 @@ const getTeacherClassCardStats = mock();
 const getTeacherRecentActiveClassIds = mock();
 const getAvailableAssignmentTypesForScopes = mock();
 const getStudentPreviewState = mock();
+const getStudentEnrolledClasses = mock();
 
 mock.module('~/utils/db.server.js', () => ({ prisma }));
 mock.module('~/utils/auth.server.js', () => ({
@@ -43,6 +44,9 @@ mock.module('~/utils/student-preview.server', () => ({
     args: { membershipRole: string; previewActive: boolean }
   ) => args.membershipRole === 'STUDENT' || args.previewActive,
 }));
+mock.module('~/utils/student-classes.server', () => ({
+  getStudentEnrolledClasses,
+}));
 const { loader } = await import('./route');
 
 afterAll(() => {
@@ -64,6 +68,8 @@ describe('app index loader assignments', () => {
     getStudentPreviewState.mockReset();
     getStudentPreviewState.mockResolvedValue({ active: false, organizationId: null });
     getAvailableAssignmentTypesForScopes.mockResolvedValue([]);
+    getStudentEnrolledClasses.mockReset();
+    getStudentEnrolledClasses.mockResolvedValue([]);
     getTeacherClassCardStats.mockResolvedValue({
       ungradedCount: 0,
       gradedUnreleasedCount: 0,
@@ -114,6 +120,32 @@ describe('app index loader assignments', () => {
         where: { classId: { in: ['class-1', 'class-2'] } },
       })
     );
+  });
+
+  test('loads the classes a student is enrolled in for the dashboard Classes section', async () => {
+    getStudentEnrolledClasses.mockResolvedValue([
+      {
+        id: 'class-1',
+        grade: '9',
+        period: '1',
+        title: 'History',
+        classArtKey: null,
+        legacyClassArtIndex: null,
+        school: { id: 'school-1', name: 'E2E High' },
+        teacherNames: ['Mrs Test Teacher'],
+      },
+    ]);
+
+    const response = await loader({
+      request: new Request('https://example.test/app'),
+      params: {},
+      context: {} as never,
+    } as any);
+    const data = (response as { data: any }).data;
+
+    expect(getStudentEnrolledClasses).toHaveBeenCalledWith('profile-1');
+    expect(data.enrolledClasses).toHaveLength(1);
+    expect(data.enrolledClasses[0].id).toBe('class-1');
   });
 
   test('orders each student document tile by the current tutor module instead of the last module', async () => {
@@ -488,7 +520,7 @@ describe('app index loader assignments', () => {
     } as any);
     const data = (response as { data: any }).data;
 
-    expect(data.courses).toEqual([]);
+    expect(data.assignmentTypes).toEqual([]);
     expect(data.teacherAssignmentTypes).toEqual([
       {
         id: 'type-1',

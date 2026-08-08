@@ -3,10 +3,11 @@ import {
   data as dataResponse,
   redirect,
 } from 'react-router';
-import { Form, Link, useLoaderData, useRouteLoaderData, useSearchParams } from 'react-router';
+import { Form, Link, useLoaderData, useRouteLoaderData } from 'react-router';
 import { useState } from 'react';
 import type { Route as RootRoute } from '../../+types/root';
 import { AssignmentCreationSheet } from '~/components/assignments/assignment-creation-sheet';
+import { Button } from '~/components/ui/button';
 import { DocumentLink } from '~/components/document-link.js';
 import { NoDataPlaceholder } from '~/components/no-data-placeholder.js';
 import { useUser } from '~/hooks/useUser.js';
@@ -24,10 +25,18 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from '~/components/ui/accordion';
-import { Tabs, TabsList, TabsTrigger } from '~/components/ui/tabs';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '~/components/ui/dropdown-menu';
+import { PenLine } from 'lucide-react';
 import type { TeacherClassCardData } from '~/components/teacher-class-card';
+import { StudentClassCard } from '~/components/student-class-card';
 import { getTeacherClassCardStats } from '~/utils/teacher-class-card-stats.server';
 import { getTeacherRecentActiveClassIds } from '~/utils/teacher-dashboard-recent-classes.server';
+import { getStudentEnrolledClasses } from '~/utils/student-classes.server';
 import {
   orderAssignmentModuleSessionsForCurrentStep,
   type AssignmentModuleSessionResumeCandidate,
@@ -133,7 +142,11 @@ export async function loader({ request }: LoaderFunctionArgs) {
       ? studentAssignmentClassIds.length > 0
       : teacherAssignmentClassScopes.length > 0;
 
-  const [courses, documents, archivedDocuments, teacherClasses, assignments] =
+  const enrolledClasses = useStudentExperience
+    ? await getStudentEnrolledClasses(profile.id)
+    : [];
+
+  const [assignmentTypes, documents, archivedDocuments, teacherClasses, assignments] =
     await Promise.all([
     !useStudentExperience
       ? ([] as AssignmentTypeRow[])
@@ -375,7 +388,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
     }));
 
   return dataResponse({
-    courses,
+    assignmentTypes,
+    enrolledClasses,
     documents: orderDocumentTileModuleSessions(documents),
     archivedDocuments: orderDocumentTileModuleSessions(archivedDocuments),
     teacherClasses: teacherClassesOrdered,
@@ -398,7 +412,6 @@ export default function AppRoute() {
   const user = useUser();
   const rootData =
     useRouteLoaderData<RootRoute.ComponentProps['loaderData']>('root');
-  const [searchParams, setSearchParams] = useSearchParams();
   const [isCreateSheetOpen, setIsCreateSheetOpen] = useState(false);
   const [createAssignmentTypeId, setCreateAssignmentTypeId] = useState<
     string | undefined
@@ -407,10 +420,6 @@ export default function AppRoute() {
   const isTeacher =
     user.selectedMembership?.role === 'TEACHER' && !studentPreviewActive;
   const assignmentsEnabled = data.assignmentsEnabled ?? false;
-  const currentStudentTab =
-    assignmentsEnabled && searchParams.get('tab') === 'assignments'
-      ? 'assignments'
-      : 'courses';
 
   if (isTeacher) {
     const needsGradingCount = data.teacherWorkspaceClassStats.reduce(
@@ -486,119 +495,100 @@ export default function AppRoute() {
     >
       <div className="flex w-full justify-between border-b bg-secondary">
         <div className="mx-auto w-full max-w-screen-lg p-3 sm:p-5">
-          <div className="flex flex-col">
-            <h2>Welcome, {user.name}!</h2>
-            <p className="mt-3 max-w-full text-muted-foreground sm:max-w-[400px]">
-              Welcome to your dashboard. Here you can view and manage your
-              courses.
-            </p>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <div className="flex flex-col">
+              <h2>Welcome, {user.name}!</h2>
+              <p className="mt-3 max-w-full text-muted-foreground sm:max-w-[400px]">
+                Welcome to your dashboard. Here you can view your classes and
+                manage your writing.
+              </p>
+            </div>
+            {data.assignmentTypes.length > 0 ? (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button size="sm" className="shrink-0">
+                    <PenLine className="mr-2 h-4 w-4" />
+                    Write something new
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  {data.assignmentTypes.map((assignmentType) => (
+                    <DropdownMenuItem key={assignmentType.id} asChild>
+                      <Link to={`/app/assignment-types/${assignmentType.id}`}>
+                        {assignmentType.title}
+                      </Link>
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : null}
           </div>
         </div>
       </div>
       <div className="mx-auto w-full max-w-screen-lg px-3 py-3 pb-24 sm:px-5">
         <div className="flex flex-col">
-          {assignmentsEnabled ? (
-            <div className="mb-2">
-              <Tabs
-                value={currentStudentTab}
-                onValueChange={(value) => {
-                  const next = new URLSearchParams(searchParams);
-                  if (value === 'assignments') {
-                    next.set('tab', 'assignments');
-                  } else {
-                    next.delete('tab');
-                  }
-                  setSearchParams(next, { replace: true });
-                }}
-              >
-                <TabsList>
-                  <TabsTrigger value="courses">
-                    Courses ({data.courses.length})
-                  </TabsTrigger>
-                  <TabsTrigger value="assignments">
-                    Assignments ({data.assignments.length})
-                  </TabsTrigger>
-                </TabsList>
-              </Tabs>
+          <p className="my-2 text-foreground/60">Classes</p>
+          {data.enrolledClasses.length > 0 ? (
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3">
+              {data.enrolledClasses.map((klass) => (
+                <StudentClassCard key={klass.id} klass={klass} />
+              ))}
             </div>
-          ) : null}
-          {currentStudentTab === 'courses' ? (
-            <>
-              <p className="my-2 text-foreground/60">Courses</p>
-              <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
-                {data.courses.map((course) => (
-                  <Link
-                    to={`/app/assignment-types/${course.id}`}
-                    key={course.id}
-                    className="flex flex-col rounded-lg border transition-shadow hover:shadow bg-muted"
-                  >
-                    {course.image ? (
-                      <img
-                        src={`/api/image/course/${course.image.id}`}
-                        alt=""
-                        className="h-32 w-auto rounded-t-lg object-cover"
-                      />
-                    ) : (
-                      <div className="h-32 w-auto rounded-t-lg bg-gradient-to-br from-foreground/5 to-foreground/20" />
-                    )}
-                    <div className="max-w-42 flex items-center justify-between p-3">
-                      <h4 className="text-foreground/90">{course.title}</h4>
-                    </div>
-                  </Link>
-                ))}
-              </div>
-            </>
           ) : (
-            <>
-              <p className="my-2 text-foreground/60">Assignments</p>
-              {data.assignments.length > 0 ? (
-                <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
-                  {data.assignments.map((classAssignment) => (
-                    <Form
-                      method="post"
-                      action={`/app/class-assignments/${classAssignment.id}/start`}
-                      key={classAssignment.id}
-                    >
-                      <button
-                        type="submit"
-                        className="flex h-full w-full flex-col rounded-lg border bg-muted text-left transition-shadow hover:shadow"
-                      >
-                        <div className="h-24 w-full rounded-t-lg bg-gradient-to-br from-foreground/5 to-foreground/20 px-3 py-2">
-                          <p className="line-clamp-3 text-xs text-muted-foreground">
-                            {classAssignment.assignment.prompt}
-                          </p>
-                        </div>
-                        <div className="flex flex-1 flex-col gap-1 p-3">
-                          <h4 className="text-foreground/90 font-medium">
-                            {classAssignment.assignment.title?.trim() ||
-                              'Untitled Assignment'}
-                          </h4>
-                          <p className="text-xs text-muted-foreground">
-                            {classAssignment.assignment.assignmentType.title}
-                          </p>
-                          <p className="text-xs text-muted-foreground">
-                            Grade {classAssignment.class.grade}
-                            {classAssignment.class.period
-                              ? ` • Period ${classAssignment.class.period}`
-                              : ''}
-                            {classAssignment.class.title
-                              ? ` • ${classAssignment.class.title}`
-                              : ''}
-                          </p>
-                        </div>
-                      </button>
-                    </Form>
-                  ))}
-                </div>
-              ) : (
-                <NoDataPlaceholder
-                  title="No assignments"
-                  subtitle="When your teacher posts assignments, they will appear here."
-                />
-              )}
-            </>
+            <NoDataPlaceholder
+              title="No classes yet"
+              subtitle="When your teacher adds you to a class, it will appear here."
+            />
           )}
         </div>
+        {assignmentsEnabled ? (
+          <div className="mt-8 flex flex-col">
+            <p className="my-2 text-foreground/60">Assignments</p>
+            {data.assignments.length > 0 ? (
+              <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
+                {data.assignments.map((classAssignment) => (
+                  <Form
+                    method="post"
+                    action={`/app/class-assignments/${classAssignment.id}/start`}
+                    key={classAssignment.id}
+                  >
+                    <button
+                      type="submit"
+                      className="flex h-full w-full flex-col rounded-lg border bg-muted text-left transition-shadow hover:shadow"
+                    >
+                      <div className="h-24 w-full rounded-t-lg bg-gradient-to-br from-foreground/5 to-foreground/20 px-3 py-2">
+                        <p className="line-clamp-3 text-xs text-muted-foreground">
+                          {classAssignment.assignment.prompt}
+                        </p>
+                      </div>
+                      <div className="flex flex-1 flex-col gap-1 p-3">
+                        <h4 className="text-foreground/90 font-medium">
+                          {classAssignment.assignment.title?.trim() ||
+                            'Untitled Assignment'}
+                        </h4>
+                        <p className="text-xs text-muted-foreground">
+                          {classAssignment.assignment.assignmentType.title}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          Grade {classAssignment.class.grade} • Period{' '}
+                          {classAssignment.class.period}
+                          {classAssignment.class.title
+                            ? ` • ${classAssignment.class.title}`
+                            : ''}
+                        </p>
+                      </div>
+                    </button>
+                  </Form>
+                ))}
+              </div>
+            ) : (
+              <NoDataPlaceholder
+                title="No assignments"
+                subtitle="When your teacher posts assignments, they will appear here."
+              />
+            )}
+          </div>
+        ) : null}
         <div className="mt-8 flex flex-col">
           <p className="my-2 text-foreground/60">Documents</p>
           {data.documents.length ? (
@@ -615,7 +605,7 @@ export default function AppRoute() {
           ) : (
             <NoDataPlaceholder
               title="No documents"
-              subtitle="Select a course above to get started."
+              subtitle="Use Write something new above to get started."
             />
           )}
           {data.archivedDocuments.length > 0 && (
