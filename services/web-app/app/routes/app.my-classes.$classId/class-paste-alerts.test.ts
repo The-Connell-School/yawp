@@ -1,5 +1,8 @@
 import { describe, expect, test } from 'bun:test';
-import { buildPasteAlertsByStudentId } from './class-paste-alerts';
+import {
+  buildPasteAlertsByStudentId,
+  summarizeStudentPasteActivity,
+} from './class-paste-alerts';
 
 describe('buildPasteAlertsByStudentId', () => {
   test('groups alerts by membershipId', () => {
@@ -55,5 +58,33 @@ describe('buildPasteAlertsByStudentId', () => {
     ]);
 
     expect(result['student-1'].map((a) => a.id)).toEqual(['new', 'old']);
+  });
+});
+
+describe('summarizeStudentPasteActivity', () => {
+  const alert = (id: string) => ({
+    id,
+    documentId: `doc-${id}`,
+    membershipId: 'student-1',
+    textLength: 250,
+    createdAt: '2026-08-01T00:00:00.000Z',
+  });
+
+  test('returns null when the student has no paste activity', () => {
+    expect(summarizeStudentPasteActivity([])).toBeNull();
+    expect(summarizeStudentPasteActivity(undefined)).toBeNull();
+  });
+
+  test('labels a single paste in the singular', () => {
+    expect(summarizeStudentPasteActivity([alert('a1')])).toEqual({
+      count: 1,
+      label: '1 paste',
+    });
+  });
+
+  test('labels multiple pastes in the plural', () => {
+    expect(
+      summarizeStudentPasteActivity([alert('a1'), alert('a2'), alert('a3')])
+    ).toEqual({ count: 3, label: '3 pastes' });
   });
 });

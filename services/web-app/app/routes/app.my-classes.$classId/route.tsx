@@ -141,7 +141,10 @@ import {
 } from './class-assignments-tab';
 import type { ClassInsightSummary } from '../app.my-classes.$classId_.assignments.$assignmentId/class-insights-panel';
 import { buildGradedCountByAssignmentId } from './graded-count';
-import { buildPasteAlertsByStudentId } from './class-paste-alerts';
+import {
+  buildPasteAlertsByStudentId,
+  summarizeStudentPasteActivity,
+} from './class-paste-alerts';
 
 export function getDraftDisplayTitle(document: {
   title?: string | null;
@@ -2138,6 +2141,9 @@ function ClassDetailPage() {
                       </Button>
                     </TableHead>
                     <TableHead className="whitespace-nowrap">Email</TableHead>
+                    <TableHead className="whitespace-nowrap">
+                      Pasted text
+                    </TableHead>
                     <TableHead className="whitespace-nowrap pr-4">
                       Documents
                     </TableHead>
@@ -2155,10 +2161,11 @@ function ClassDetailPage() {
                           .map((sub) => sub.documentId)
                       ).size;
 
-                    const studentHasPasteAlerts =
-                      (data.pasteAlertsByStudentId[s.id]?.length ?? 0) > 0;
+                    const pasteActivity = summarizeStudentPasteActivity(
+                      data.pasteAlertsByStudentId[s.id]
+                    );
                     const studentSheetAvailable =
-                      reporterEnabled || studentHasPasteAlerts;
+                      reporterEnabled || pasteActivity !== null;
 
                     return (
                       <TableRow
@@ -2187,6 +2194,17 @@ function ClassDetailPage() {
                         </TableCell>
                         <TableCell className="text-muted-foreground">
                           {s.user.email}
+                        </TableCell>
+                        {/* Roll-up of this student's paste activity, so a
+                            teacher can scan the class instead of opening
+                            every sheet. Informational, not an alert: plain
+                            muted text, and nothing at all when there is
+                            none. */}
+                        <TableCell
+                          className="whitespace-nowrap text-muted-foreground"
+                          data-testid={`student-paste-activity-${s.id}`}
+                        >
+                          {pasteActivity ? pasteActivity.label : ''}
                         </TableCell>
                         <TableCell className="pr-4">
                           <button
