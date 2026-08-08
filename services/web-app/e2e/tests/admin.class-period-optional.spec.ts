@@ -7,7 +7,8 @@ test.describe.serial('Admin class creation: optional period', () => {
     signIn,
   }) => {
     const prisma = createE2EPrismaClient();
-    const code = `NOPER${Date.now().toString().slice(-6)}`;
+    // Server caps class codes at 10 alphanumeric characters.
+    const code = `NOPER${Date.now().toString().slice(-5)}`;
     let createdClassId: string | null = null;
 
     try {
