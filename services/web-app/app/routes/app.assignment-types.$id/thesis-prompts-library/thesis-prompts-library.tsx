@@ -7,6 +7,7 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from '~/components/ui/accordion';
+import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
 import { Input } from '~/components/ui/input';
 import {
@@ -17,22 +18,22 @@ import {
   SheetTrigger,
 } from '~/components/ui/sheet';
 import {
+  CATEGORY_LABEL,
   COGNITIVE_MOVE_LABEL,
-  type CognitiveMove,
   COLLECTION_LABEL,
   FACET_KEYS,
   type FacetValues,
-  type LibraryEntry,
   type OptionCounts,
-  type PromptCollection,
-  PROMPT_TYPE_LABEL,
-  type PromptSeriousness,
-  type PromptType,
-  SERIOUSNESS_LABEL,
+  SOURCE_NEED_LABEL,
+  type ThesisCategory,
+  type ThesisCognitiveMove,
+  type ThesisCollection,
+  type ThesisLibraryEntry,
+  type ThesisSourceNeed,
 } from './data';
 
 type Props = {
-  prompts: LibraryEntry[];
+  prompts: ThesisLibraryEntry[];
   facets: FacetValues;
   optionCounts: OptionCounts;
   totalCount: number;
@@ -51,25 +52,31 @@ const FACET_SECTIONS: FacetSpec[] = [
     facetKey: 'collections',
     paramKey: FACET_KEYS.collections,
     title: 'Collection',
-    renderLabel: (v) => COLLECTION_LABEL[v as PromptCollection],
+    renderLabel: (v) => COLLECTION_LABEL[v as ThesisCollection],
   },
+  {
+    facetKey: 'categories',
+    paramKey: FACET_KEYS.categories,
+    title: 'Category',
+    renderLabel: (v) => CATEGORY_LABEL[v as ThesisCategory],
+  },
+  { facetKey: 'subjects', paramKey: FACET_KEYS.subjects, title: 'Subject' },
   {
     facetKey: 'textsOrUnits',
     paramKey: FACET_KEYS.textsOrUnits,
-    title: 'Text / unit',
+    title: 'Text',
   },
-  { facetKey: 'themes', paramKey: FACET_KEYS.themes, title: 'Theme' },
   {
     facetKey: 'cognitiveMoves',
     paramKey: FACET_KEYS.cognitiveMoves,
-    title: 'Cognitive move',
-    renderLabel: (v) => COGNITIVE_MOVE_LABEL[v as CognitiveMove],
+    title: 'Cognitive mode',
+    renderLabel: (v) => COGNITIVE_MOVE_LABEL[v as ThesisCognitiveMove],
   },
   {
-    facetKey: 'types',
-    paramKey: FACET_KEYS.types,
-    title: 'Type',
-    renderLabel: (v) => PROMPT_TYPE_LABEL[v as PromptType],
+    facetKey: 'sourceNeeds',
+    paramKey: FACET_KEYS.sourceNeeds,
+    title: 'Source text',
+    renderLabel: (v) => SOURCE_NEED_LABEL[v as ThesisSourceNeed],
   },
   {
     facetKey: 'gradeBands',
@@ -77,15 +84,9 @@ const FACET_SECTIONS: FacetSpec[] = [
     title: 'Grade band',
     renderLabel: (v) => `Grade ${v}`,
   },
-  {
-    facetKey: 'seriousness',
-    paramKey: FACET_KEYS.seriousness,
-    title: 'Seriousness',
-    renderLabel: (v) => SERIOUSNESS_LABEL[v as PromptSeriousness],
-  },
 ];
 
-export function PromptsLibrary({
+export function ThesisPromptsLibrary({
   prompts,
   facets,
   optionCounts,
@@ -103,16 +104,12 @@ export function PromptsLibrary({
   }, [searchParams]);
 
   function readSelected(key: string): Set<string> {
-    return new Set(
-      searchParams.get(key)?.split(',').filter(Boolean) ?? []
-    );
+    return new Set(searchParams.get(key)?.split(',').filter(Boolean) ?? []);
   }
 
   function toggleFacet(key: string, value: string) {
     const next = new URLSearchParams(searchParams);
-    const current = new Set(
-      next.get(key)?.split(',').filter(Boolean) ?? []
-    );
+    const current = new Set(next.get(key)?.split(',').filter(Boolean) ?? []);
     if (current.has(value)) current.delete(value);
     else current.add(value);
     if (current.size === 0) next.delete(key);
@@ -155,11 +152,7 @@ export function PromptsLibrary({
     }
     const q = searchParams.get(FACET_KEYS.search);
     if (q) {
-      out.push({
-        paramKey: FACET_KEYS.search,
-        value: q,
-        label: `“${q}”`,
-      });
+      out.push({ paramKey: FACET_KEYS.search, value: q, label: `“${q}”` });
     }
     return out;
   }, [searchParams]);
@@ -267,9 +260,9 @@ export function PromptsLibrary({
                     : 'No prompts match the current filters.'}
                 </p>
               ) : (
-                <ul className="divide-y divide-border/40">
+                <ul className="flex min-w-0 flex-col gap-3">
                   {prompts.map((p) => (
-                    <PromptRow
+                    <PromptCard
                       key={p.id}
                       prompt={p}
                       onSelect={() => onSelectPrompt(p.prompt)}
@@ -285,69 +278,64 @@ export function PromptsLibrary({
   );
 }
 
-function PromptRow({
+function PromptCard({
   prompt,
   onSelect,
 }: {
-  prompt: LibraryEntry;
+  prompt: ThesisLibraryEntry;
   onSelect: () => void;
 }) {
-  const textOrUnit = prompt.textsOrUnits[0];
+  const text = prompt.textsOrUnits[0];
   const move = prompt.cognitiveMoves[0];
 
   return (
-    <li>
+    <li className="min-w-0">
       <button
         type="button"
         onClick={onSelect}
-        className="group/card block w-full cursor-pointer rounded-md py-5 text-left transition-colors hover:bg-foreground/[0.03] focus-visible:bg-foreground/[0.03] focus-visible:outline-none"
+        className="block w-full min-w-0 cursor-pointer rounded-lg border bg-card p-4 text-left text-card-foreground shadow-sm transition hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
-        <div className="flex items-start justify-between gap-3 px-2">
-          <p className="text-[17px] leading-relaxed text-foreground">
+        <div className="flex w-full min-w-0 flex-col gap-3">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+            <h3 className="min-w-0 break-words text-base font-semibold leading-snug">
+              {prompt.title}
+            </h3>
+            <Badge variant="secondary" size="sm" className="w-fit shrink-0">
+              {prompt.category
+                ? CATEGORY_LABEL[prompt.category]
+                : COLLECTION_LABEL[prompt.collection]}
+            </Badge>
+          </div>
+
+          <p className="line-clamp-3 whitespace-normal break-words text-sm font-normal leading-6 text-muted-foreground">
             {prompt.prompt}
           </p>
-          {prompt.collection === 'mine' ? (
-            <span className="mt-1 shrink-0 rounded-full bg-foreground/[0.06] px-2 py-0.5 text-[11px] leading-5 text-muted-foreground">
-              {COLLECTION_LABEL.mine}
-            </span>
-          ) : null}
-        </div>
 
-        <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 px-2 text-xs text-muted-foreground">
-          {textOrUnit ? <span>{textOrUnit}</span> : null}
-          {textOrUnit && move ? <span aria-hidden>·</span> : null}
-          {move ? <span>{COGNITIVE_MOVE_LABEL[move]}</span> : null}
-        </div>
-
-        <div className="hidden px-2 lg:group-hover/card:block lg:group-focus-visible/card:block">
-          <ExtraTags prompt={prompt} />
+          <div className="flex flex-wrap gap-2">
+            {text ? (
+              <Badge variant="outline" size="sm">
+                {text}
+              </Badge>
+            ) : null}
+            {prompt.subjects[0] ? (
+              <Badge variant="outline" size="sm">
+                {prompt.subjects[0]}
+              </Badge>
+            ) : null}
+            {move ? (
+              <Badge variant="outline" size="sm">
+                {COGNITIVE_MOVE_LABEL[move]}
+              </Badge>
+            ) : null}
+            {prompt.gradeBands.length > 0 ? (
+              <Badge variant="outline" size="sm">
+                Grades {prompt.gradeBands.join(', ')}
+              </Badge>
+            ) : null}
+          </div>
         </div>
       </button>
     </li>
-  );
-}
-
-function ExtraTags({ prompt }: { prompt: LibraryEntry }) {
-  return (
-    <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground/80">
-      {prompt.type ? <span>{PROMPT_TYPE_LABEL[prompt.type]}</span> : null}
-      {prompt.type && prompt.seriousness ? <span aria-hidden>·</span> : null}
-      {prompt.seriousness ? (
-        <span>{SERIOUSNESS_LABEL[prompt.seriousness]}</span>
-      ) : null}
-      {prompt.themes.length > 0 ? (
-        <>
-          <span aria-hidden>·</span>
-          <span>{prompt.themes.join(', ')}</span>
-        </>
-      ) : null}
-      {prompt.gradeBands.length > 0 ? (
-        <>
-          <span aria-hidden>·</span>
-          <span>Grades {prompt.gradeBands.join(', ')}</span>
-        </>
-      ) : null}
-    </div>
   );
 }
 

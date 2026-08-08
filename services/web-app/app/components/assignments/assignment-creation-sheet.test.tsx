@@ -388,6 +388,57 @@ describe('AssignmentCreationSheetContent', () => {
     expect((classControl as HTMLButtonElement).disabled).toBe(true);
   });
 
+  it('marks the title required and blocks submit while it is empty when titleRequired is set', () => {
+    root = renderSheet({
+      entryPoint: 'class',
+      fixedClassId: 'class-1',
+      initialPrompt: 'A prompt from the library.',
+      titleRequired: true,
+    }).root;
+
+    expectText('Title');
+    expectNoText('Title (optional)');
+    expect(inputByName('title').required).toBe(true);
+
+    // Everything else is satisfied (class, prompt, point value), so an empty
+    // title is the only thing blocking submit.
+    expect(
+      document.querySelector<HTMLButtonElement>('button[type="submit"]')!
+        .disabled
+    ).toBe(true);
+  });
+
+  it('allows submit once a required title is present', () => {
+    root = renderSheet({
+      entryPoint: 'class',
+      fixedClassId: 'class-1',
+      initialPrompt: 'A prompt from the library.',
+      initialTitle: 'Ambition in Macbeth',
+      titleRequired: true,
+    }).root;
+
+    expect(inputByName('title').value).toBe('Ambition in Macbeth');
+    expect(
+      document.querySelector<HTMLButtonElement>('button[type="submit"]')!
+        .disabled
+    ).toBe(false);
+  });
+
+  it('keeps the title optional by default', () => {
+    root = renderSheet({
+      entryPoint: 'class',
+      fixedClassId: 'class-1',
+      initialPrompt: 'A prompt from the library.',
+    }).root;
+
+    expectText('Title (optional)');
+    expect(inputByName('title').required).toBe(false);
+    expect(
+      document.querySelector<HTMLButtonElement>('button[type="submit"]')!
+        .disabled
+    ).toBe(false);
+  });
+
   it('clears the point value when submit for grade is disabled', () => {
     root = renderSheet({
       entryPoint: 'dashboard',

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, mock, test } from 'bun:test';
+import { afterAll, beforeEach, describe, expect, mock, test } from 'bun:test';
 
 const prisma = {
   class: {
@@ -31,6 +31,12 @@ class AssignmentPromptAttachmentError extends Error {}
 const actualAssignmentPromptAttachment = await import(
   '~/domain/assignments/assignment-prompt-attachment.server'
 );
+// bun's module mocks are global to the test run and mock.restore() does not
+// undo mock.module — restore from the pristine copy test-preload.ts captured
+// before any file could mock.module() this path (see comment there).
+const actualAssignmentTypeAccess = globalThis.__realModules[
+  '~/utils/assignment-type-access.server'
+];
 
 mock.module('~/utils/db.server', () => ({ prisma }));
 mock.module('~/utils/auth.server', () => ({
@@ -41,6 +47,7 @@ mock.module('~/utils/assignment-deployment.server', () => ({
   createAssignmentDeployedToClasses,
 }));
 mock.module('~/utils/assignment-type-access.server', () => ({
+  ...actualAssignmentTypeAccess,
   isAssignmentTypeAvailableForEveryScope,
 }));
 mock.module(
@@ -55,6 +62,14 @@ mock.module(
 );
 
 const { action } = await import('./route');
+
+afterAll(() => {
+  mock.restore();
+  mock.module(
+    '~/utils/assignment-type-access.server',
+    () => actualAssignmentTypeAccess
+  );
+});
 
 function requestFor(body: Record<string, string | string[]>) {
   const form = new FormData();
