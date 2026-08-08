@@ -74,7 +74,7 @@ function headerState(
     gradeBadgeClassName: '',
     hasUnsavedChanges: false,
     hasDraftToReplace: false,
-    hasNumericPercentage: true,
+    hasGrade: true,
     isGenerating: false,
     isAiRetrying: false,
     isBusy: false,
