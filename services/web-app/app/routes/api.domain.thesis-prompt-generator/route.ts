@@ -91,6 +91,16 @@ export async function action({ request }: ActionFunctionArgs) {
       messages: messages.slice(-MAX_GENERATOR_MESSAGES),
       temperature: 0.7,
       maxTokens: MAX_GENERATOR_OUTPUT_TOKENS,
+      // Teacher-typed free text, and teachers name students in it
+      // ("write a prompt for Aiden - he keeps writing summary"). There is
+      // no single subject student to key a redaction mapping on here, so
+      // the names are not redacted; the least we do is refuse to persist
+      // the cleartext turn to LlmLog (renderable indefinitely at
+      // /app/admin/audit) and refuse to cross it to a second provider
+      // during an Anthropic outage. Matches gradingPrivacyOptions in
+      // api.domain.grade-essay-ai/route.ts.
+      allowFallbackProvider: false,
+      logPayload: 'metadata-only',
       metadata: {
         route: '/api/domain/thesis-prompt-generator',
         membershipId: profile.id,

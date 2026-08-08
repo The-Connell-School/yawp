@@ -96,6 +96,13 @@ export async function action({ request }: ActionFunctionArgs) {
       messages: messages.slice(-MAX_GENERATOR_MESSAGES),
       temperature: 0.7,
       maxTokens: MAX_GENERATOR_OUTPUT_TOKENS,
+      // See the identical comment in
+      // api.domain.thesis-prompt-generator/route.ts: teacher-typed free
+      // text that routinely names students, with no single subject student
+      // to key a redaction mapping on. Never persisted in cleartext, never
+      // crossed to a second provider.
+      allowFallbackProvider: false,
+      logPayload: 'metadata-only',
       metadata: {
         route: '/api/domain/daily-pages-prompt-generator',
         membershipId: profile.id,

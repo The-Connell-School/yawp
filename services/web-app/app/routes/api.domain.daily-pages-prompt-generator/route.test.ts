@@ -87,6 +87,24 @@ describe('api.domain.daily-pages-prompt-generator', () => {
     expect(call.maxTokens).toBeGreaterThanOrEqual(1500);
   });
 
+  test('never persists the teacher turn in cleartext or crosses it to a second provider', async () => {
+    // See the identical test in
+    // api.domain.thesis-prompt-generator/route.test.ts.
+    getLLMCompletion.mockResolvedValue(
+      JSON.stringify({ reply: 'ok', options: [] })
+    );
+
+    await action({
+      request: request([
+        { role: 'user', content: 'A prompt for Aiden Reyes about ambition.' },
+      ]),
+    } as never);
+
+    const call = getLLMCompletion.mock.calls[0][0];
+    expect(call.allowFallbackProvider).toBe(false);
+    expect(call.logPayload).toBe('metadata-only');
+  });
+
   test('keeps a draft whose facet tags are outside the vocabulary', async () => {
     getLLMCompletion.mockResolvedValue(
       JSON.stringify({

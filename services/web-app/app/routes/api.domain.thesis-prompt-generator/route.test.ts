@@ -78,6 +78,26 @@ describe('api.domain.thesis-prompt-generator', () => {
     expect(call.maxTokens).toBeGreaterThanOrEqual(4000);
   });
 
+  test('never persists the teacher turn in cleartext or crosses it to a second provider', async () => {
+    // Teachers name students in this box ("write a prompt for Aiden - he
+    // keeps writing summary"). Without these two flags the whole turn was
+    // written to LlmLog in cleartext, renderable indefinitely at
+    // /app/admin/audit, and re-sent to OpenAI during an Anthropic outage.
+    getLLMCompletion.mockResolvedValue(
+      JSON.stringify({ reply: 'ok', options: [] })
+    );
+
+    await action({
+      request: request([
+        { role: 'user', content: 'A prompt for Aiden Reyes about ambition.' },
+      ]),
+    } as never);
+
+    const call = getLLMCompletion.mock.calls[0][0];
+    expect(call.allowFallbackProvider).toBe(false);
+    expect(call.logPayload).toBe('metadata-only');
+  });
+
   test('asks the teacher to retry instead of dumping truncated JSON', async () => {
     // A response cut off mid-object (what caused the glitchy raw-JSON bubble).
     getLLMCompletion.mockResolvedValue(
