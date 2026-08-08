@@ -102,72 +102,34 @@ describe('TeacherGradingPanel', () => {
     root = null;
   });
 
-  it('opens strictness cards and submits the teacher-selected level', async () => {
+  it('does not render the strictness picker for a teacher', async () => {
     ({ root } = renderPanel());
 
     const menu = document.querySelector<HTMLButtonElement>(
       '[data-testid="grading-assistant-strictness-menu"]'
     );
-    expect(menu).not.toBeNull();
+    expect(menu).toBeNull();
 
-    await act(async () => {
-      menu?.click();
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    });
-
-    const beginner = document.querySelector<HTMLButtonElement>(
-      '[data-testid="grading-assistant-strictness-beginner"]'
-    );
-    const advanced = document.querySelector<HTMLButtonElement>(
-      '[data-testid="grading-assistant-strictness-advanced"]'
-    );
     const generate = document.querySelector<HTMLButtonElement>(
       '[data-testid="grading-assistant-generate"]'
     );
-
-    expect(beginner?.getAttribute('aria-pressed')).toBe('true');
-
-    act(() => {
-      advanced?.click();
-    });
-
-    expect(advanced?.getAttribute('aria-pressed')).toBe('true');
-
-    act(() => {
-      generate?.click();
-    });
-
-    expect(submit).toHaveBeenCalledTimes(1);
-    const form = submit.mock.calls[0][0] as FormData;
-    expect(form.get('submissionId')).toBe('submission-1');
-    expect(form.get('gradingAssistantStrictnessLevel')).toBe('advanced');
+    expect(generate).not.toBeNull();
   });
 
-  it('defaults to the assignment strictness level for a grading run', async () => {
+  it('still applies the assignment strictness level to a grading run with the picker hidden', async () => {
     ({ root } = renderPanel({
       initialGradingAssistantStrictnessLevel: 'advanced',
     }));
 
-    const menu = document.querySelector<HTMLButtonElement>(
-      '[data-testid="grading-assistant-strictness-menu"]'
-    );
-    expect(menu?.getAttribute('aria-label')).toBe(
-      'Grading assistant strictness: Advanced'
-    );
+    // The picker is hidden, so a teacher has no way to change the level --
+    // clicking "Generate" is the only available action.
+    expect(
+      document.querySelector('[data-testid="grading-assistant-strictness-menu"]')
+    ).toBeNull();
 
-    await act(async () => {
-      menu?.click();
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    });
-
-    const advanced = document.querySelector<HTMLButtonElement>(
-      '[data-testid="grading-assistant-strictness-advanced"]'
-    );
     const generate = document.querySelector<HTMLButtonElement>(
       '[data-testid="grading-assistant-generate"]'
     );
-
-    expect(advanced?.getAttribute('aria-pressed')).toBe('true');
 
     act(() => {
       generate?.click();
@@ -175,6 +137,9 @@ describe('TeacherGradingPanel', () => {
 
     expect(submit).toHaveBeenCalledTimes(1);
     const form = submit.mock.calls[0][0] as FormData;
+    // The assignment's stored "advanced" strictness (±5 percentage / ±1 ACT
+    // composite, applied server-side) still flows through even though the
+    // teacher never saw or touched a strictness control.
     expect(form.get('gradingAssistantStrictnessLevel')).toBe('advanced');
   });
 });
