@@ -10,6 +10,7 @@ import {
   parseRubric,
   parseScoringScale,
 } from '~/domain/assignment-types/assignment-type-rubric.shared';
+import { hasAssignmentTypeOwnedRubric } from '~/domain/assignment-types/assignment-type-rubric-config';
 
 function parseJsonFormField(formData: FormData, name: string) {
   const value = formData.get(name);
@@ -93,7 +94,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
     const existing = await prisma.assignmentType.findUnique({
       where: { id: assignmentTypeId },
-      select: { id: true },
+      select: { id: true, rubricJson: true },
     });
     if (!existing) {
       throw new Response('Not Found', { status: 404 });
@@ -113,6 +114,27 @@ export async function action({ request, params }: ActionFunctionArgs) {
           gradingAssistantVersion: { increment: 1 },
         }
       : {};
+
+    if (hasGradingConfigFields) {
+      const nextRubricUsable = hasAssignmentTypeOwnedRubric(
+        parseRubric(gradingConfigData.rubricJson)
+      );
+      if (!nextRubricUsable) {
+        // Grandfather assignment types that already fell back to the thesis
+        // default rubric before this edit — don't force an unrelated save
+        // (e.g. a title change) to be blocked on fixing a pre-existing gap.
+        // Only block edits that would newly introduce the fallback.
+        const previouslyUsable = hasAssignmentTypeOwnedRubric(
+          parseRubric((existing as { rubricJson?: unknown }).rubricJson)
+        );
+        if (previouslyUsable) {
+          throw new Response(
+            'Add at least one fully-populated rubric category (key, label, description, and weight) before saving. Otherwise grading silently falls back to the thesis-driven essay rubric.',
+            { status: 400 }
+          );
+        }
+      }
+    }
 
     await prisma.$transaction(async (tx) => {
       if (deleteImage) {
