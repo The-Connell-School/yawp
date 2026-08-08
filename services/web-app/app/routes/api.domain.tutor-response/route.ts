@@ -14,6 +14,8 @@ import {
   buildAiContextAuditMetadata,
   buildAiTextContextAudit,
 } from '~/utils/ai-context-audit.server';
+import { firstNameFromFullName } from '~/domain/grading/personalize';
+import { buildRedactionMapping, redact, rehydrate } from '~/utils/ai-redaction';
 
 const LLM_FAILED = 'Failed to get a response from the tutor. Please try again.';
 
@@ -73,6 +75,7 @@ export async function action({ request }: ActionFunctionArgs) {
           select: {
             id: true,
             text: true,
+            membership: { select: { user: { select: { name: true } } } },
           },
         },
       },
@@ -108,13 +111,35 @@ export async function action({ request }: ActionFunctionArgs) {
       moduleRubricGuidance,
     });
 
+    // The student's real first name never leaves our servers: every prompt
+    // sent to the AI provider below uses `redact()`'d text, and the
+    // model's reply is `rehydrate()`'d back to the real name before it is
+    // persisted or returned. In-memory only for the life of this request -
+    // see app/utils/ai-redaction for the shared primitives (same pattern
+    // used by grading and Reporter).
+    const studentFirstName = firstNameFromFullName(
+      cms.document.membership?.user?.name
+    );
+    const nameMapping = buildRedactionMapping([studentFirstName]);
+
     const documentSource =
       data.content === undefined ? 'db-document-text' : 'client-content';
     const documentText = data.content ?? cms.document.text ?? '';
+    // Audit metadata (length/hash) is computed off the real text on purpose
+    // - it's metadata-only and never leaves the server as prompt content,
+    // and it needs to match what's actually stored so the audit trail is
+    // trustworthy. Only the text handed to the model gets redacted.
     const documentContext = buildAiTextContextAudit({
       documentSource,
       documentId: cms.document.id,
       text: documentText,
+    });
+    // Students write about themselves by name and often sign their work,
+    // so the document body carries the real name just as surely as a name
+    // field would. Prose mode so a student named Will doesn't get every
+    // "will" in their writing mangled - see common-word-names.server.ts.
+    const redactedDocumentText = redact(documentText, nameMapping, {
+      mode: 'prose',
     });
     const moduleRubricRelationships = normalizeModuleRubricAlignment(
       cms.assignmentModule.rubricAlignmentJson,
@@ -130,9 +155,14 @@ export async function action({ request }: ActionFunctionArgs) {
       rubricCategoryKeys: moduleRubric.categories.map((category) => category.key),
     });
 
+    // Prior turns are persisted with the real name (that's what the
+    // student's UI replays on reload) and the student's own new message
+    // routinely contains their own name too ("Amelia here, ..."). Redact
+    // both before they go into the prompt, same prose-mode reasoning as
+    // the document body above.
     const currentMessages = cms.messages.map((m) => ({
       role: m.agent as AgentType,
-      content: m.content,
+      content: redact(m.content, nameMapping, { mode: 'prose' }),
       name: m.agent,
     }));
 
@@ -150,14 +180,14 @@ export async function action({ request }: ActionFunctionArgs) {
         {
           role: AgentType.User,
           content: buildDocumentContextMessage({
-            documentText,
+            documentText: redactedDocumentText,
             source: documentSource,
             sha256: documentContext.documentTextSha256,
           }),
         },
         {
           role: AgentType.User,
-          content: data.response,
+          content: redact(data.response, nameMapping, { mode: 'prose' }),
         },
       ]);
 
@@ -188,6 +218,10 @@ export async function action({ request }: ActionFunctionArgs) {
     } catch (error) {
       return errorResponse(error as any);
     }
+    // The model read redacted text, so any excerpt quoting the student's
+    // name comes back carrying the pseudonym - restore it before this
+    // touches the database or the caller.
+    completion = rehydrate(completion, nameMapping);
 
     await prisma.assignmentModuleSession.update({
       where: { id: cms.id },

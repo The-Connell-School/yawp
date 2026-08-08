@@ -36,7 +36,9 @@ describe('api.domain.tutor-response read-only impersonation', () => {
     prisma.assignmentModuleSession.update.mockReset();
   });
 
-  function mockCms() {
+  function mockCms(
+    overrides: { messages?: unknown[]; documentText?: string } = {}
+  ) {
     prisma.assignmentModuleSession.findUnique.mockResolvedValueOnce({
       id: 'cms-1',
       instructionsCompleted: 0,
@@ -73,10 +75,11 @@ describe('api.domain.tutor-response read-only impersonation', () => {
           },
         ],
       },
-      messages: [],
+      messages: overrides.messages ?? [],
       document: {
         id: 'doc-1',
-        text: 'Original draft',
+        text: overrides.documentText ?? 'Original draft',
+        membership: { user: { name: 'Amelia Chen' } },
       },
     });
   }
@@ -299,5 +302,65 @@ describe('api.domain.tutor-response read-only impersonation', () => {
       agent: 'assistant',
       content: 'Draft a clearer thesis.',
     });
+  });
+
+  test('redacts the student real first name out of the document, prior messages, and current message before they reach the model, then rehydrates the reply', async () => {
+    getLLMCompletion.mockResolvedValue(
+      'Amelia, your thesis is getting sharper.'
+    );
+    mockCms({
+      messages: [
+        {
+          agent: 'user',
+          content: 'Amelia here, can you look at my intro again?',
+        },
+        {
+          agent: 'assistant',
+          content: 'Sure Amelia, walk me through it.',
+        },
+      ],
+      documentText: 'My name is Amelia and this essay argues -- Amelia',
+    });
+    prisma.assignmentModuleSession.findUnique.mockResolvedValueOnce({
+      id: 'cms-1',
+      messages: [],
+      assignmentModule: {
+        instructions: [],
+        assignmentType: { assignmentModules: [] },
+      },
+    });
+
+    const body = new FormData();
+    body.set('response', 'Amelia again, does this work now?');
+    body.set('cmsId', 'cms-1');
+
+    await action({
+      request: new Request('https://example.com/api/domain/tutor-response', {
+        method: 'POST',
+        body,
+      }),
+    } as any);
+
+    const completionArgs = getLLMCompletion.mock.calls[0]?.[0] as any;
+    const outboundText = JSON.stringify(completionArgs.messages);
+
+    // The real first name never reaches the outbound prompt...
+    expect(outboundText).not.toContain('Amelia');
+    // ...but the document context and prior turns are still present, just
+    // with a pseudonym standing in for the real name.
+    expect(outboundText).toContain('student_document_context');
+    expect(outboundText).toContain('can you look at my intro again');
+    expect(outboundText).toContain('walk me through it');
+    expect(outboundText).toContain('does this work now');
+
+    // The persisted turn and the value handed back to the caller are
+    // rehydrated to the real name.
+    const createPayload =
+      prisma.assignmentModuleSession.update.mock.calls[0]?.[0].data.messages
+        .create;
+    expect(createPayload[0].content).toBe('Amelia again, does this work now?');
+    expect(createPayload[1].content).toBe(
+      'Amelia, your thesis is getting sharper.'
+    );
   });
 });
