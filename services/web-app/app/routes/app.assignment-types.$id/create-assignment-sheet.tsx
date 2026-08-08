@@ -22,7 +22,7 @@ import {
 type TeacherClass = {
   id: string;
   grade: string;
-  period: string;
+  period: string | null;
   title: string | null;
 };
 
@@ -42,7 +42,12 @@ type Props = {
 };
 
 function classLabel(klass: TeacherClass) {
-  return klass.title || `Grade ${klass.grade} • Period ${klass.period}`;
+  return (
+    klass.title ||
+    (klass.period
+      ? `Grade ${klass.grade} • Period ${klass.period}`
+      : `Grade ${klass.grade}`)
+  );
 }
 
 export function CreateAssignmentSheet({

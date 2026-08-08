@@ -48,7 +48,7 @@ export type AssignmentCreationClassOption = {
   name?: string;
   title?: string | null;
   grade?: string;
-  period?: string;
+  period?: string | null;
 };
 
 type CreateFetcherData = {
@@ -94,8 +94,10 @@ export function assignmentCreationClassLabel(
 ) {
   if (klass.name?.trim()) return klass.name;
   if (klass.title?.trim()) return klass.title;
-  if (klass.grade?.trim() && klass.period?.trim()) {
-    return `Grade ${klass.grade} - Period ${klass.period}`;
+  if (klass.grade?.trim()) {
+    return klass.period?.trim()
+      ? `Grade ${klass.grade} - Period ${klass.period}`
+      : `Grade ${klass.grade}`;
   }
   return 'Class';
 }

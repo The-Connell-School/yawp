@@ -24,7 +24,7 @@ export type ClassDetailHeaderProps = {
   klass: {
     id: string;
     grade: string | number;
-    period: string | number;
+    period: string | number | null;
     title?: string | null;
     school?: { name: string } | null;
     schoolYear: string;
@@ -46,7 +46,8 @@ export type ClassDetailHeaderProps = {
 function classTitle(klass: ClassDetailHeaderProps['klass']) {
   return (
     <>
-      Grade {klass.grade} • Period {klass.period}
+      Grade {klass.grade}
+      {klass.period ? <> • Period {klass.period}</> : null}
       {klass.title ? ` — ${klass.title}` : ''}
     </>
   );

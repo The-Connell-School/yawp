@@ -460,7 +460,9 @@ export default function OrganizationStudentsRoute() {
     () =>
       classes.map((klass) => ({
         value: klass.id,
-        label: `${klass.school.name} - ${klass.grade} - Period ${klass.period} (${klass.schoolYear})`,
+        label: `${klass.school.name} - ${klass.grade}${
+          klass.period ? ` - Period ${klass.period}` : ''
+        } (${klass.schoolYear})`,
       })),
     [classes]
   );
@@ -869,7 +871,8 @@ function StudentSheet({
                         htmlFor={`class-${cls.id}`}
                         className="text-sm font-normal cursor-pointer flex-1"
                       >
-                        {cls.school.name} - {cls.grade} - Period {cls.period} (
+                        {cls.school.name} - {cls.grade}
+                        {cls.period ? ` - Period ${cls.period}` : ''} (
                         {cls.schoolYear})
                       </Label>
                     </div>

@@ -220,7 +220,9 @@ export default function Route() {
                 { value: '', label: 'Select a class' },
                 ...data.classes.map((klass) => ({
                   value: klass.id,
-                  label: `${klass.school.name} • ${klass.schoolYear} • Grade ${klass.grade} • Period ${klass.period} • ${
+                  label: `${klass.school.name} • ${klass.schoolYear} • Grade ${klass.grade}${
+                    klass.period ? ` • Period ${klass.period}` : ''
+                  } • ${
                     klass.teachers
                       .map((t) => t.user.name)
                       .filter(Boolean)

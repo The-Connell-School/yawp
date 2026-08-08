@@ -357,7 +357,8 @@ export default function AssignmentSubmissionsRoute() {
         <div className="mx-auto w-full max-w-screen-lg p-3 sm:p-5">
           <div className="flex flex-col">
             <h2>
-              Grade {klass.grade} • Period {klass.period}
+              Grade {klass.grade}
+              {klass.period ? <> • Period {klass.period}</> : null}
             </h2>
             {klass.school?.name ? (
               <p className="mt-1 text-muted-foreground">{klass.school.name}</p>

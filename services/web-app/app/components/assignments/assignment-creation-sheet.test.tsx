@@ -11,7 +11,24 @@ try {
 import { afterEach, describe, expect, it } from 'bun:test';
 import { act, type ReactElement, type FormHTMLAttributes } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { AssignmentCreationSheetContent } from './assignment-creation-sheet';
+import {
+  AssignmentCreationSheetContent,
+  assignmentCreationClassLabel,
+} from './assignment-creation-sheet';
+
+describe('assignmentCreationClassLabel', () => {
+  it('shows grade and period when both are present', () => {
+    expect(
+      assignmentCreationClassLabel({ id: 'c1', grade: '9', period: '2' })
+    ).toBe('Grade 9 - Period 2');
+  });
+
+  it('falls back to grade only when period is null', () => {
+    expect(
+      assignmentCreationClassLabel({ id: 'c1', grade: '9', period: null })
+    ).toBe('Grade 9');
+  });
+});
 
 const FetcherForm = ({
   children,
