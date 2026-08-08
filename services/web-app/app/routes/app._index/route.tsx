@@ -292,7 +292,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
       return (
         (a.title ?? '').localeCompare(b.title ?? '') ||
-        a.grade.localeCompare(b.grade) ||
+        (a.grade ?? '').localeCompare(b.grade ?? '') ||
         (a.period ?? '').localeCompare(b.period ?? '')
       );
     });

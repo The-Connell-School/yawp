@@ -43,7 +43,7 @@ export type AssignmentCreationClassOption = {
   id: string;
   name?: string;
   title?: string | null;
-  grade?: string;
+  grade?: string | null;
   period?: string | null;
 };
 
@@ -92,12 +92,14 @@ export function assignmentCreationClassLabel(
 ) {
   if (klass.name?.trim()) return klass.name;
   if (klass.title?.trim()) return klass.title;
-  if (klass.grade?.trim()) {
-    return klass.period?.trim()
-      ? `Grade ${klass.grade} - Period ${klass.period}`
-      : `Grade ${klass.grade}`;
-  }
-  return 'Class';
+
+  const grade = klass.grade?.trim();
+  const period = klass.period?.trim();
+
+  if (grade && period) return `Grade ${grade} - Period ${period}`;
+  if (grade) return `Grade ${grade}`;
+  if (period) return `Period ${period}`;
+  return 'Untitled Class';
 }
 
 function initialAssignmentTypeSelection(

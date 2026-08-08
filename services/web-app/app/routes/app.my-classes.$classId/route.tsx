@@ -18,7 +18,10 @@ import { Link } from 'react-router';
 import { requireMembership, requireUserId } from '~/utils/auth.server.js';
 import { parseAssignmentGradingIntent } from '~/utils/assignment-grading-intent.server';
 import { parseAssignmentTutorEnabled } from '~/utils/assignment-tutor-enabled.server';
-import { formatClassLabel } from '~/utils/class-display';
+import {
+  formatClassLabel,
+  type ClassDisplayFields,
+} from '~/utils/class-display';
 import { prisma } from '~/utils/db.server.js';
 import { getAvailableAssignmentTypesForScopes } from '~/utils/assignment-type-access.server';
 import {
@@ -153,11 +156,7 @@ export function getDraftDisplayTitle(document: {
   return 'Untitled draft';
 }
 
-export function classAssignmentOptionLabel(klass: {
-  grade: string;
-  period: string | null;
-  title: string | null;
-}) {
+export function classAssignmentOptionLabel(klass: ClassDisplayFields) {
   return formatClassLabel(klass);
 }
 

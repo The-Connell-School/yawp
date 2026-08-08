@@ -18,10 +18,11 @@ import {
   SheetHeader,
   SheetTitle,
 } from '~/components/ui/sheet';
+import { formatClassCardTitle } from '~/utils/class-display';
 
 type TeacherClass = {
   id: string;
-  grade: string;
+  grade: string | null;
   period: string | null;
   title: string | null;
 };
@@ -43,12 +44,7 @@ type Props = {
 };
 
 function classLabel(klass: TeacherClass) {
-  return (
-    klass.title ||
-    (klass.period
-      ? `Grade ${klass.grade} • Period ${klass.period}`
-      : `Grade ${klass.grade}`)
-  );
+  return formatClassCardTitle(klass);
 }
 
 export function CreateAssignmentSheet({

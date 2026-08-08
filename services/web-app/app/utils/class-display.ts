@@ -1,7 +1,13 @@
+/**
+ * The subset of class fields the display helpers read. Callers routinely pass a
+ * whole class record (loader payload, Prisma row, card view-model), so extra
+ * properties are permitted rather than forcing every call site to project.
+ */
 export type ClassDisplayFields = {
   grade?: string | number | null;
   period?: string | number | null;
   title?: string | null;
+  [key: string]: unknown;
 };
 
 function formatGradePart(

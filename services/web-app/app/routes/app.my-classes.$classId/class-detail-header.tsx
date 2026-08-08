@@ -34,7 +34,7 @@ export function resolveClassHeaderTab(
 export type ClassDetailHeaderProps = {
   klass: {
     id: string;
-    grade: string | number;
+    grade: string | number | null;
     period: string | number | null;
     title?: string | null;
     school?: { name: string } | null;
