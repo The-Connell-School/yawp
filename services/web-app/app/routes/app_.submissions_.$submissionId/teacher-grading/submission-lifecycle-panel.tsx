@@ -1,5 +1,6 @@
 import { type ComponentProps, useEffect, useRef, useState } from 'react';
 import { ChevronDown, Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -275,13 +276,23 @@ export function SubmissionLifecyclePanel({
 
   const handleSave = async () => {
     if (!headerState || !saveEnabled) return;
-    await headerState.saveDraft();
-    onGradeSaved(headerState.getSavedGradeSnapshot());
-    if (
-      lifecycleState === 'needs_grading' &&
-      headerState.hasNumericPercentage
-    ) {
-      await onMarkGraded();
+    try {
+      await headerState.saveDraft();
+      onGradeSaved(headerState.getSavedGradeSnapshot());
+      if (
+        lifecycleState === 'needs_grading' &&
+        headerState.hasNumericPercentage
+      ) {
+        await onMarkGraded();
+      }
+    } catch (err) {
+      // The server refuses this write (e.g. the student unsubmitted while
+      // this panel was open). Surface exactly why, and kick the teacher
+      // back out of a form that will never save rather than leaving them
+      // stuck retrying it.
+      toast.error(err instanceof Error ? err.message : 'Save failed.');
+      exitEditMode();
+      return;
     }
     exitEditMode();
   };

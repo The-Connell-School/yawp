@@ -723,9 +723,14 @@ export default function SubmissionRoute() {
           markAsGraded: true,
         }),
       });
-      if (res.ok) {
-        setLocalGradedAt(new Date().toISOString());
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        throw new Error(
+          (body as { message?: string } | null)?.message ??
+            'Failed to mark as graded.'
+        );
       }
+      setLocalGradedAt(new Date().toISOString());
     } finally {
       setIsSavingGrade(false);
     }
