@@ -2,6 +2,7 @@ import { BookOpen, ChevronRight, ClipboardList, Compass } from 'lucide-react';
 import {
   Link,
   data as dataResponse,
+  redirect,
   useLoaderData,
   type LoaderFunctionArgs,
 } from 'react-router';
@@ -23,7 +24,11 @@ import {
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
-  await requireMembership(request, userId);
+  const membership = await requireMembership(request, userId);
+
+  if (!membership.organization.writingPracticeEnabled) {
+    throw redirect('/app');
+  }
 
   const groups = getQuickWritingLessonGroups().map((group) => ({
     ...group,
