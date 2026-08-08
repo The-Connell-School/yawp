@@ -1,8 +1,11 @@
 import { describe, expect, test } from 'bun:test';
 import {
+  buildEmptyRubricScores,
   buildScoreOptions,
+  isScored,
   normalizeRubricDisplayConfig,
   normalizeRubricScoresForCategories,
+  unscoredValue,
 } from './rubric-display';
 
 const actCategories = [
@@ -161,5 +164,62 @@ describe('buildScoreOptions', () => {
         { value: 9, label: 'Off the chart' },
       ]).map((option) => option.label)
     ).toEqual(['1', '2']);
+  });
+});
+
+describe('an unscored value on a scale that starts below 1', () => {
+  const engagementCategories = [
+    {
+      key: 'engagement',
+      label: 'Engagement',
+      description: '',
+      weight: 1,
+      scoreLabels: [
+        { value: 0, label: 'Absent' },
+        { value: 3, label: 'All in' },
+      ],
+    },
+  ];
+
+  test('sits one below the scale, so 0 stays a real score', () => {
+    expect(unscoredValue(0)).toBe(-1);
+    expect(isScored(0, 0)).toBe(true);
+    expect(isScored(-1, 0)).toBe(false);
+  });
+
+  test('is still 0 on a scale that starts at 1, exactly as before', () => {
+    expect(unscoredValue(1)).toBe(0);
+    expect(isScored(0, 1)).toBe(false);
+    expect(isScored(1, 1)).toBe(true);
+  });
+
+  test('empty scores start unscored rather than at Absent', () => {
+    expect(buildEmptyRubricScores(engagementCategories, 0)).toEqual({
+      engagement: { score: -1, comment: '' },
+    });
+  });
+
+  test('keeps a stored Absent instead of reading it as unscored', () => {
+    const normalized = normalizeRubricScoresForCategories({
+      raw: { engagement: { score: 0, comment: '', isAi: true } },
+      categories: engagementCategories,
+      minScore: 0,
+      maxScore: 3,
+    });
+
+    expect(normalized.engagement).toEqual({
+      score: 0,
+      comment: '',
+      isAi: true,
+    });
+  });
+
+  test('offers Absent as a pickable option', () => {
+    expect(buildScoreOptions(0, 3, engagementCategories[0].scoreLabels)).toEqual([
+      { value: '0', label: '0 - Absent' },
+      { value: '1', label: '1' },
+      { value: '2', label: '2' },
+      { value: '3', label: '3 - All in' },
+    ]);
   });
 });

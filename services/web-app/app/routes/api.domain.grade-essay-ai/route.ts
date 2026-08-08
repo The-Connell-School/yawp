@@ -9,6 +9,8 @@ import { isLlmFallbackRetrySignal } from '~/utils/getLLMCompletion/llm-provider-
 import {
   formatGrade,
   letterFromPercent,
+  pointsScaleGradeFields,
+  POINTS_SCALE_SCORING_TYPE,
   scoreToPercent,
 } from '~/domain/grading/gradeMath';
 import { firstNameFromFullName } from '~/domain/grading/personalize';
@@ -325,12 +327,18 @@ function computeWeightedPercentageForCategories({
 function computeGradeFields({
   categories,
   scoringType,
+  maxScore,
 }: {
   categories: Array<{ score: number }>;
   scoringType: string;
+  maxScore: number;
 }) {
   const average =
     categories.reduce((sum, item) => sum + item.score, 0) / categories.length;
+
+  if (scoringType === POINTS_SCALE_SCORING_TYPE) {
+    return pointsScaleGradeFields({ categories, maxScore });
+  }
 
   if (scoringType === 'act_writing_2_12') {
     const composite = Math.max(2, Math.min(12, Math.round(average * 2)));
@@ -372,16 +380,19 @@ function buildDynamicGradeFields({
   categories,
   rubricScores,
   scoringType,
+  maxScore,
   rubricCategories,
 }: {
   categories: Array<{ score: number }>;
   rubricScores: Record<string, Prisma.InputJsonValue>;
   scoringType: string;
+  maxScore: number;
   rubricCategories: GradingRubricCategory[];
 }) {
   const nonLegacy = computeGradeFields({
     categories,
     scoringType,
+    maxScore,
   });
   if (nonLegacy) return nonLegacy;
 
@@ -1026,6 +1037,7 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
     categories: parsed.categories,
     rubricScores,
     scoringType,
+    maxScore,
     rubricCategories,
   });
   const { overallScore, numericPercentage, letterGrade, score } =

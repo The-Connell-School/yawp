@@ -1842,6 +1842,17 @@ describe('api.domain.grade-essay-ai', () => {
       );
     });
 
+    test('grades out of 3 points rather than as a percentage', async () => {
+      await gradeDailyPages('sub-daily-pages-grade', 3);
+
+      const stored = prisma.submission.update.mock.calls.at(-1)?.[0].data;
+      expect(stored.score).toBe('3/3');
+      // An engagement judgment is not a percentage grade, so it never becomes
+      // one: 3 of 3 must not come back as the 79% the 1-5 bands would give it.
+      expect(stored.numericPercentage).toBeNull();
+      expect(stored.letterGrade).toBeNull();
+    });
+
     test('grades Absent as a real score rather than a missing one', async () => {
       await gradeDailyPages('sub-daily-pages-absent', 0);
 

@@ -27,6 +27,7 @@ import {
 import {
   buildEmptyRubricScores,
   buildScoreOptions,
+  isScored,
   legacyRubricDisplayConfig,
   normalizeRubricDisplayConfig,
   normalizeRubricScoresForCategories,
@@ -168,7 +169,10 @@ export function TeacherGradingPanel({
   const [activeRubricConfig, setActiveRubricConfig] =
     useState<RubricDisplayConfig>(propRubricConfig);
   const [rubricScores, setRubricScores] = useState<Record<string, RubricScore>>(
-    buildEmptyRubricScores(propRubricConfig.categories)
+    buildEmptyRubricScores(
+      propRubricConfig.categories,
+      propRubricConfig.minScore
+    )
   );
   const [overallComment, setOverallComment] = useState('');
   const [numericPercentage, setNumericPercentage] = useState('');
@@ -288,7 +292,8 @@ export function TeacherGradingPanel({
     let initialOverallComment = '';
     let initialNumericPercentage = '';
     let initialRubricScores = buildEmptyRubricScores(
-      propRubricConfig.categories
+      propRubricConfig.categories,
+      propRubricConfig.minScore
     );
 
     setActiveRubricConfig(propRubricConfig);
@@ -853,10 +858,17 @@ export function TeacherGradingPanel({
                   void saveAll(newRubric);
                 }
               };
-              const configuredScoreLabel = current.score
+              // A scale that starts at 0 makes 0 a real judgment, so
+              // "scored" is the scale's own floor rather than a truthiness
+              // check that would read Absent as blank.
+              const hasScore = isScored(
+                current.score,
+                activeRubricConfig.minScore
+              );
+              const configuredScoreLabel = hasScore
                 ? getCategoryScoreLabel(item, current.score)
                 : null;
-              const scoreLabel = current.score
+              const scoreLabel = hasScore
                 ? configuredScoreLabel
                   ? `${configuredScoreLabel} (${current.score}/${activeRubricConfig.maxScore})`
                   : `${current.score}/${activeRubricConfig.maxScore}`
@@ -888,7 +900,7 @@ export function TeacherGradingPanel({
                       {item.description}
                     </div>
                     <Select
-                      value={current.score ? current.score.toString() : ''}
+                      value={hasScore ? current.score.toString() : ''}
                       disabled={isGenerating}
                       onValueChange={applyScoreChange}
                     >

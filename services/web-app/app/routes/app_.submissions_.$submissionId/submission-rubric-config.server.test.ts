@@ -247,3 +247,126 @@ describe('resolveRubricConfigForSubmission', () => {
     expect(config.categories[0].grammarHighlighting).toBe(false);
   });
 });
+
+describe('a Daily Pages submission graded before Daily Pages had its own rubric', () => {
+  const legacyThesisScores = {
+    thesis_and_content: { score: 4, comment: 'Clear focus.' },
+    organization_and_structure: { score: 3, comment: 'Reasonable order.' },
+    evidence_and_support: { score: 3, comment: 'Some support.' },
+    voice_and_style: { score: 4, comment: 'Honest voice.' },
+    grammar_and_mechanics: { score: 3, comment: 'A few slips.' },
+  };
+
+  test('keeps rendering against the rubric it was actually graded on', async () => {
+    // Live config is now the Daily Pages engagement rubric.
+    resolveAssignmentTypeGradingConfig.mockResolvedValue(
+      resolvedGradingConfig({
+        source: 'daily-pages-default',
+        minScore: 0,
+        maxScore: 3,
+        scoringType: 'points_scale',
+        rubricCategories: [
+          {
+            key: 'engagement',
+            label: 'Engagement',
+            description: 'How fully the student showed up.',
+            weight: 1,
+          },
+        ],
+      })
+    );
+
+    const config = await resolveRubricConfigForSubmission({
+      assignmentTypeId: 'assignment-type-daily-pages',
+      latestGradingRun: {
+        source: 'thesis-default',
+        assignmentTypeRubricSnapshot: {
+          minScore: 1,
+          maxScore: 5,
+          scoringType: 'weighted_1_5',
+          categories: Object.keys(legacyThesisScores).map((key) => ({
+            key,
+            label: key,
+            description: `Frozen ${key}.`,
+            weight: 0.2,
+          })),
+        },
+      },
+      rubricScores: legacyThesisScores,
+    });
+
+    expect(config.source).toBe('thesis-default');
+    expect(config.maxScore).toBe(5);
+    expect(config.categories.map((category) => category.key)).toEqual(
+      Object.keys(legacyThesisScores)
+    );
+  });
+
+  test('falls back to the legacy rubric when there is no snapshot at all', async () => {
+    resolveAssignmentTypeGradingConfig.mockResolvedValue(
+      resolvedGradingConfig({
+        source: 'daily-pages-default',
+        minScore: 0,
+        maxScore: 3,
+        scoringType: 'points_scale',
+        rubricCategories: [
+          {
+            key: 'engagement',
+            label: 'Engagement',
+            description: 'How fully the student showed up.',
+            weight: 1,
+          },
+        ],
+      })
+    );
+
+    const config = await resolveRubricConfigForSubmission({
+      assignmentTypeId: 'assignment-type-daily-pages',
+      latestGradingRun: null,
+      rubricScores: legacyThesisScores,
+    });
+
+    // The stored keys are the legacy thesis ones, which the engagement rubric
+    // cannot display, so the old scores stay readable on the old rubric.
+    expect(config.categories.map((category) => category.key)).toEqual([
+      'thesis_and_content',
+      'organization_and_structure',
+      'evidence_and_support',
+      'voice_and_style',
+      'grammar_and_mechanics',
+    ]);
+    expect(config.maxScore).toBe(5);
+  });
+
+  test('an ungraded Daily Pages submission picks up the engagement rubric', async () => {
+    resolveAssignmentTypeGradingConfig.mockResolvedValue(
+      resolvedGradingConfig({
+        source: 'daily-pages-default',
+        minScore: 0,
+        maxScore: 3,
+        scoringType: 'points_scale',
+        rubricCategories: [
+          {
+            key: 'engagement',
+            label: 'Engagement',
+            description: 'How fully the student showed up.',
+            weight: 1,
+          },
+        ],
+      })
+    );
+
+    const config = await resolveRubricConfigForSubmission({
+      assignmentTypeId: 'assignment-type-daily-pages',
+      latestGradingRun: null,
+      rubricScores: {},
+    });
+
+    expect(config.source).toBe('daily-pages-default');
+    expect(config.categories.map((category) => category.key)).toEqual([
+      'engagement',
+    ]);
+    expect(config.minScore).toBe(0);
+    expect(config.maxScore).toBe(3);
+  });
+});
