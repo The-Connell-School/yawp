@@ -8,6 +8,7 @@ import {
 const PASTE_SHORTCUT = process.platform === 'darwin' ? 'Meta+V' : 'Control+V';
 const SELECT_ALL_SHORTCUT = process.platform === 'darwin' ? 'Meta+A' : 'Control+A';
 const COPY_SHORTCUT = process.platform === 'darwin' ? 'Meta+C' : 'Control+C';
+const CUT_SHORTCUT = process.platform === 'darwin' ? 'Meta+X' : 'Control+X';
 
 async function expectExitControlVisible(page: import('@playwright/test').Page) {
   const exitButton = page.getByRole('button', { name: /^exit$/i });
@@ -443,6 +444,43 @@ test.describe.serial('Document Editor E2E Tests', () => {
     });
 
     await page.keyboard.press(PASTE_SHORTCUT);
+    // Brief pause for any in-flight paste-alert requests to arrive before asserting zero
+    await page.waitForTimeout(500);
+
+    expect(pasteAlertCount).toBe(0);
+  });
+
+  test('does not post paste-alert when cut-then-pasting to reorder a paragraph in the same editor', async ({
+    page,
+    signIn,
+    e2eContext,
+    helpers,
+  }) => {
+    await signIn('jdoe@brock.software', 'johndoe');
+    await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
+
+    await helpers.openDocument(e2eContext.editedDocumentId, { retry: true });
+    const editor = helpers.getEditor();
+    const longText = 'z'.repeat(201);
+
+    await editor.click();
+    await page.keyboard.insertText(longText);
+    await expect(editor).toContainText(longText);
+
+    // Cut the paragraph (as if reordering it), rather than copy.
+    await page.keyboard.press(SELECT_ALL_SHORTCUT);
+    await page.keyboard.press(CUT_SHORTCUT);
+    await expect(editor).not.toContainText(longText);
+
+    let pasteAlertCount = 0;
+    page.on('request', (req) => {
+      if (req.url().includes('/api/paste-alert') && req.method() === 'POST') {
+        pasteAlertCount++;
+      }
+    });
+
+    await page.keyboard.press(PASTE_SHORTCUT);
+    await expect(editor).toContainText(longText);
     // Brief pause for any in-flight paste-alert requests to arrive before asserting zero
     await page.waitForTimeout(500);
 
