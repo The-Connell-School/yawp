@@ -7,9 +7,21 @@ import {
   useRef,
   useState,
 } from 'react';
+import { Check, Copy } from 'lucide-react';
 import { ClassArt } from '~/components/class-art';
 import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+  DialogTrigger,
+} from '~/components/ui/dialog';
+import {
+  formatClassCardSubtitle,
+  formatClassCardTitle,
+} from '~/utils/class-display';
 import { cn } from '~/utils/misc';
 
 export type ClassHeaderTab = 'students' | 'documents' | 'assignments';
@@ -43,13 +55,63 @@ export type ClassDetailHeaderProps = {
   onEdit: () => void;
 };
 
-function classTitle(klass: ClassDetailHeaderProps['klass']) {
+function ClassCodeReveal({ code }: { code: string }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = useCallback(async () => {
+    try {
+      await navigator.clipboard?.writeText(code);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // Clipboard access can be blocked; the code stays selectable on screen.
+    }
+  }, [code]);
+
   return (
-    <>
-      Grade {klass.grade}
-      {klass.period ? <> • Period {klass.period}</> : null}
-      {klass.title ? ` — ${klass.title}` : ''}
-    </>
+    <Dialog>
+      <DialogTrigger asChild>
+        <button
+          type="button"
+          data-testid="class-code-trigger"
+          title="Show class code full screen"
+          className="rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+        >
+          <Badge
+            variant="outline"
+            size="sm"
+            className="font-mono hover:bg-secondary"
+          >
+            {code}
+          </Badge>
+          <span className="sr-only">Show class code full screen</span>
+        </button>
+      </DialogTrigger>
+      <DialogContent className="max-w-3xl gap-6 p-10 text-center">
+        <DialogTitle className="text-base font-medium text-muted-foreground">
+          Class code
+        </DialogTitle>
+        <DialogDescription className="sr-only">
+          Share this code with students so they can join the class.
+        </DialogDescription>
+        <div
+          data-testid="class-code-display"
+          className="select-all break-all font-mono text-7xl font-bold leading-none tracking-[0.15em] sm:text-8xl"
+        >
+          {code}
+        </div>
+        <div className="flex justify-center">
+          <Button type="button" variant="outline" onClick={handleCopy}>
+            {copied ? (
+              <Check className="mr-2 h-4 w-4 text-green-600" />
+            ) : (
+              <Copy className="mr-2 h-4 w-4" />
+            )}
+            {copied ? 'Copied' : 'Copy code'}
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -69,9 +131,7 @@ function ClassMetadata({
     >
       {klass.school?.name ? <span>{klass.school.name}</span> : null}
       <span>{klass.schoolYear}</span>
-      <Badge variant="outline" size="sm" className="font-mono">
-        {klass.code}
-      </Badge>
+      <ClassCodeReveal code={klass.code} />
     </div>
   );
 }
@@ -230,8 +290,13 @@ export function ClassDetailHeader({
           <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div className="min-w-0">
               <h1 className="text-balance text-xl font-semibold tracking-tight sm:text-2xl">
-                {classTitle(props.klass)}
+                {formatClassCardTitle(props.klass)}
               </h1>
+              {formatClassCardSubtitle(props.klass) ? (
+                <p className="mt-0.5 text-base/6 text-muted-foreground sm:text-sm/5">
+                  {formatClassCardSubtitle(props.klass)}
+                </p>
+              ) : null}
               <ClassMetadata klass={props.klass} className="mt-1" />
             </div>
             <EditClassButton onEdit={props.onEdit} />
