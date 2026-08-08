@@ -68,6 +68,7 @@ model AssignmentType {
   apHistoryLibraryEntries            ApHistoryPromptLibraryEntry[]
   savedThesisPrompts                 SavedThesisPrompt[]
   savedDailyPagesPrompts             SavedDailyPagesPrompt[]
+  savedAssignments                   SavedAssignment[]
 
   @@index([ownerOrgId])
   @@index([ownerMembershipId])
@@ -177,6 +178,36 @@ model SavedDailyPagesPrompt {
   // identifier limit and be silently truncated.
   @@unique([membershipId, assignmentTypeId, promptHash], map: "SavedDailyPagesPrompt_membership_type_promptHash_key")
   @@index([membershipId, assignmentTypeId, archivedAt], map: "SavedDailyPagesPrompt_membership_type_archivedAt_idx")
+}
+
+/// An assignment a teacher kept for reuse ("My Saved Assignments"). This is a
+/// configuration, not a deployment: it holds the assignment type, title,
+/// prompt and the grading/tutor settings, and reusing one pre-fills the
+/// creation sheet. Keyed by a hash of the prompt body so saving the same
+/// assignment twice leaves a single row.
+model SavedAssignment {
+  id                              String         @id @default(cuid())
+  createdAt                       DateTime       @default(now()) @db.Timestamptz(6)
+  updatedAt                       DateTime       @default(now()) @updatedAt @db.Timestamptz(6)
+  membershipId                    String
+  membership                      OrgMembership  @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  assignmentTypeId                String
+  assignmentType                  AssignmentType @relation(fields: [assignmentTypeId], references: [id], onDelete: Cascade)
+  title                           String
+  prompt                          String
+  promptHash                      String
+  submitForGrade                  Boolean        @default(true)
+  pointValue                      Int?
+  gradingAssistantStrictnessLevel String         @default("intermediate")
+  tutorEnabled                    Boolean        @default(true)
+  source                          String         @default("creation-sheet")
+  archivedAt                      DateTime?      @db.Timestamptz(6)
+
+  // Named explicitly: the default names would run past Postgres's 63-byte
+  // identifier limit and be silently truncated.
+  @@unique([membershipId, assignmentTypeId, promptHash], map: "SavedAssignment_membership_type_promptHash_key")
+  @@index([membershipId, archivedAt], map: "SavedAssignment_membership_archivedAt_idx")
+  @@index([assignmentTypeId], map: "SavedAssignment_assignmentTypeId_idx")
 }
 
 model ApHistoryPromptLibraryEntry {
@@ -599,6 +630,7 @@ model OrgMembership {
   classAssignmentInsightsGenerated ClassAssignmentInsight[]
   savedThesisPrompts            SavedThesisPrompt[]
   savedDailyPagesPrompts        SavedDailyPagesPrompt[]
+  savedAssignments              SavedAssignment[]
 
   @@unique([userId, organizationId])
   @@unique([id, organizationId])
