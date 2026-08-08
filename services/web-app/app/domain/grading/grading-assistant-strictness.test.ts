@@ -2,7 +2,31 @@ import { describe, expect, test } from 'bun:test';
 import {
   applyGradingAssistantStrictnessToActComposite,
   applyGradingAssistantStrictnessToPercentage,
+  GRADING_ASSISTANT_STRICTNESS_UI_ENABLED,
 } from './grading-assistant-strictness';
+
+describe('GRADING_ASSISTANT_STRICTNESS_UI_ENABLED', () => {
+  test('is off, hiding the picker from teachers pending product review', () => {
+    expect(GRADING_ASSISTANT_STRICTNESS_UI_ENABLED).toBe(false);
+  });
+
+  test('does not affect the stored-value adjustment math', () => {
+    // The flag only gates rendering. Hiding the picker must never change
+    // what a Beginner/Advanced assignment does to a grade.
+    expect(
+      applyGradingAssistantStrictnessToPercentage(77, 'beginner')
+    ).toBe(82);
+    expect(
+      applyGradingAssistantStrictnessToPercentage(77, 'advanced')
+    ).toBe(72);
+    expect(
+      applyGradingAssistantStrictnessToActComposite(10, 'beginner')
+    ).toBe(11);
+    expect(
+      applyGradingAssistantStrictnessToActComposite(10, 'advanced')
+    ).toBe(9);
+  });
+});
 
 describe('applyGradingAssistantStrictnessToPercentage', () => {
   test('leaves intermediate grades unchanged', () => {
