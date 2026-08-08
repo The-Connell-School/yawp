@@ -2,11 +2,30 @@ import { describe, expect, test } from 'bun:test';
 
 import {
   MODULE_RUBRIC_RELATIONSHIPS,
+  classifyAssignmentTypeRubric,
   getThesisDefaultRubricConfig,
   hasAssignmentTypeOwnedRubric,
+  isRubricFullyPopulated,
   normalizeModuleRubricAlignment,
   parseAssignmentTypeRubricConfig,
 } from './assignment-type-rubric-config';
+
+const partiallyFilledRubric = {
+  categories: [
+    {
+      key: 'claim',
+      label: 'Claim',
+      description: 'A clear defensible claim.',
+      weight: 0.5,
+    },
+    {
+      key: 'evidence',
+      label: 'Evidence',
+      description: '',
+      weight: 0.5,
+    },
+  ],
+};
 
 describe('parseAssignmentTypeRubricConfig', () => {
   test('parses assignment-type-owned rubric config with categories intact', () => {
@@ -104,25 +123,13 @@ describe('hasAssignmentTypeOwnedRubric', () => {
     ).toBe(true);
   });
 
-  test('returns false when only some categories are complete (partially-filled rubric)', () => {
-    expect(
-      hasAssignmentTypeOwnedRubric({
-        categories: [
-          {
-            key: 'claim',
-            label: 'Claim',
-            description: 'A clear defensible claim.',
-            weight: 0.5,
-          },
-          {
-            key: 'evidence',
-            label: 'Evidence',
-            description: '',
-            weight: 0.5,
-          },
-        ],
-      })
-    ).toBe(false);
+  test('still owns a partially-filled rubric, so reading never moves it to the thesis default', () => {
+    // Reading is permissive on purpose: a rubric an admin already saved keeps
+    // grading against itself. The incompleteness is surfaced loudly elsewhere
+    // (the save-time block and the grading-time banner) rather than silently
+    // swapping the rubric out from under existing scores.
+    expect(hasAssignmentTypeOwnedRubric(partiallyFilledRubric)).toBe(true);
+    expect(isRubricFullyPopulated(partiallyFilledRubric)).toBe(false);
   });
 
   test('returns true only when every category is fully populated', () => {
@@ -144,6 +151,84 @@ describe('hasAssignmentTypeOwnedRubric', () => {
         ],
       })
     ).toBe(true);
+  });
+});
+
+describe('classifyAssignmentTypeRubric', () => {
+  test('reports none when there is nothing an admin filled in', () => {
+    expect(classifyAssignmentTypeRubric({ categories: [] })).toBe('none');
+    expect(
+      classifyAssignmentTypeRubric({
+        categories: [{ key: '', label: '', description: '', weight: 0 }],
+      })
+    ).toBe('none');
+  });
+
+  test('reports partial when some categories are complete and others are not', () => {
+    expect(classifyAssignmentTypeRubric(partiallyFilledRubric)).toBe('partial');
+  });
+
+  test('reports complete when every category is fully populated', () => {
+    expect(
+      classifyAssignmentTypeRubric({
+        categories: [
+          {
+            key: 'claim',
+            label: 'Claim',
+            description: 'A clear defensible claim.',
+            weight: 1,
+          },
+        ],
+      })
+    ).toBe('complete');
+  });
+});
+
+describe('a partially-filled rubric', () => {
+  test('does not silently fall back to the thesis default', () => {
+    const config = parseAssignmentTypeRubricConfig({
+      rubricJson: partiallyFilledRubric,
+    });
+
+    expect(config.source).toBe('assignment-type');
+    expect(config.rubric.categories.map((category) => category.key)).toEqual([
+      'claim',
+      'evidence',
+    ]);
+  });
+
+  test('is flagged incomplete so the teacher-facing banner can fire', () => {
+    const config = parseAssignmentTypeRubricConfig({
+      rubricJson: partiallyFilledRubric,
+    });
+
+    expect(config.rubricIncomplete).toBe(true);
+  });
+
+  test('a fully populated rubric is not flagged incomplete', () => {
+    const config = parseAssignmentTypeRubricConfig({
+      rubricJson: {
+        categories: [
+          {
+            key: 'claim',
+            label: 'Claim',
+            description: 'A clear defensible claim.',
+            weight: 1,
+          },
+        ],
+      },
+    });
+
+    expect(config.source).toBe('assignment-type');
+    expect(config.rubricIncomplete).toBe(false);
+  });
+
+  test('a default rubric is not flagged incomplete', () => {
+    expect(parseAssignmentTypeRubricConfig({}).rubricIncomplete).toBe(false);
+    expect(
+      parseAssignmentTypeRubricConfig({ assignmentTypeKind: 'daily_pages' })
+        .rubricIncomplete
+    ).toBe(false);
   });
 });
 
