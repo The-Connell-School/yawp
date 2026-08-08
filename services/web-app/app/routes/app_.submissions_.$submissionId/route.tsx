@@ -113,6 +113,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       gradedAt: true,
       gradedByMembershipId: true,
       archivedAt: true,
+      unsubmittedAt: true,
       documentId: true,
       document: {
         select: {
@@ -194,6 +195,17 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       ));
 
   const isAdmin = hasEffectivePlatformAdmin(user?.isAdmin);
+
+  // A teacher unsubmit hides this submission from the student — it's no
+  // different from it never having been turned in. Send them back to the
+  // document, which is untouched and open to a new submission.
+  if (isOwner && submission.unsubmittedAt) {
+    return redirectWithToast(`/app/documents/${submission.documentId}`, {
+      description:
+        'Your teacher unsubmitted this document. You can revise and resubmit it.',
+      type: 'message',
+    });
+  }
 
   if (isOwner && editParam) {
     const next = new URL(request.url);
@@ -697,6 +709,29 @@ export default function SubmissionRoute() {
     }
   }, [submission.id]);
 
+  const [isUnsubmitting, setIsUnsubmitting] = useState(false);
+
+  const handleUnsubmit = useCallback(async () => {
+    setIsUnsubmitting(true);
+    try {
+      const formData = new FormData();
+      formData.append('submissionId', submission.id);
+      const res = await fetch('/api/domain/unsubmit-submission', {
+        method: 'POST',
+        body: formData,
+      });
+      const body = (await res.json().catch(() => null)) as {
+        success?: boolean;
+      } | null;
+      if (res.ok && body?.success) {
+        navigate('/app/documents');
+        return;
+      }
+    } finally {
+      setIsUnsubmitting(false);
+    }
+  }, [submission.id, navigate]);
+
   const [isSavingGrade, setIsSavingGrade] = useState(false);
 
   const handleMarkGraded = useCallback(async () => {
@@ -856,6 +891,9 @@ export default function SubmissionRoute() {
               isSavingGrade={isSavingGrade}
               onRelease={handleReleaseGrade}
               isReleasing={isReleasing}
+              onUnsubmit={handleUnsubmit}
+              isUnsubmitting={isUnsubmitting}
+              isUnsubmitted={Boolean(submission.unsubmittedAt)}
               submissionForView={submissionForView}
               documentId={submission.documentId}
               submissionId={submission.id}

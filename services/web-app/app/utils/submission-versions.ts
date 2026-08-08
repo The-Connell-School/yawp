@@ -1,6 +1,8 @@
 export type SubmissionWithArchive = {
   id: string;
   archivedAt?: Date | string | null;
+  /** Teacher-initiated unsubmit. Treated as inactive, same as archivedAt. */
+  unsubmittedAt?: Date | string | null;
 };
 
 export function partitionSubmissionsByArchive<T extends SubmissionWithArchive>(
@@ -9,7 +11,7 @@ export function partitionSubmissionsByArchive<T extends SubmissionWithArchive>(
   const active: T[] = [];
   const archived: T[] = [];
   for (const s of submissionsNewestFirst) {
-    if (s.archivedAt != null) archived.push(s);
+    if (s.archivedAt != null || s.unsubmittedAt != null) archived.push(s);
     else active.push(s);
   }
   return { active, archived };

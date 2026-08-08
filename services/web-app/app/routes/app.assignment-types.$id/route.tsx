@@ -256,7 +256,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           include: { assignmentModule: true },
         },
         submissions: {
-          where: { archivedAt: null },
+          where: { archivedAt: null, unsubmittedAt: null },
           orderBy: { submittedAt: 'desc' },
           select: {
             id: true,
@@ -287,7 +287,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           include: { assignmentModule: true },
         },
         submissions: {
-          where: { archivedAt: null },
+          where: { archivedAt: null, unsubmittedAt: null },
           orderBy: { submittedAt: 'desc' },
           select: {
             id: true,
