@@ -105,7 +105,9 @@ export function GradingAssistantSplitButton({
           type="button"
           size="sm"
           variant="outline"
-          className="rounded-r-none border-r-0"
+          className={cn(
+            GRADING_ASSISTANT_STRICTNESS_UI_ENABLED && 'rounded-r-none border-r-0'
+          )}
           data-testid="grading-assistant-generate"
           disabled={isBusy || !headerState}
           onClick={() => runWithOptionalConfirm(generateAiSuggestions)}
