@@ -5,7 +5,6 @@ import { z } from 'zod';
 import crypto from 'node:crypto';
 import { prisma } from '~/utils/db.server';
 import { getLLMCompletion } from '~/utils/getLLMCompletion';
-import { isLlmFallbackRetrySignal } from '~/utils/getLLMCompletion/llm-provider-errors.server';
 import {
   formatGrade,
   letterFromPercent,
@@ -15,7 +14,15 @@ import {
   ACT_WRITING_SCORING_TYPE,
   rubricScaleGradeFields,
 } from '~/domain/grading/recorded-grade';
-import { firstNameFromFullName } from '~/domain/grading/personalize';
+import {
+  firstNameFromFullName,
+  restOfNameFromFullName,
+} from '~/domain/grading/personalize';
+import {
+  buildRedactionMapping,
+  redact,
+  rehydrate,
+} from '~/utils/ai-redaction';
 import { parseGrammarIssuesPayload } from '~/domain/grading/grammarIssues';
 import { resolveAssignmentTypeGradingConfig } from '~/domain/assignment-types/assignment-type-grading-config.server';
 import type { RubricCategory as GradingRubricCategory } from '~/domain/assignment-types/assignment-type-rubric.shared';
@@ -64,7 +71,6 @@ const POST = z.object({
   documentId: z.string().optional(),
   submissionId: z.string().optional(),
   gradingAssistantStrictnessLevel: z.string().optional(),
-  llmRetry: z.enum(['fallback']).optional(),
 });
 
 function buildAiSchemas({
@@ -609,17 +615,41 @@ export async function action({ request }: ActionFunctionArgs) {
     source: resolvedGradingConfig.source,
   };
   const templateInstructions = resolvedGradingConfig.instructions;
-  const studentFirstName = firstNameFromFullName(
-    submission.document.membership?.user?.name
-  );
+  const studentFullName = submission.document.membership?.user?.name;
+  const studentFirstName = firstNameFromFullName(studentFullName);
+  // The student's real first name never leaves our servers: every prompt
+  // sent to the AI provider below uses `pseudonymFirstName`, and every
+  // piece of model-authored feedback is rehydrated back to the real name
+  // before it is persisted or returned to the caller. This mapping is
+  // in-memory only for the life of this request - it is never logged or
+  // persisted. Also registers any remaining name parts (e.g. the last
+  // name) so a student who signs their essay with their full name doesn't
+  // leak it through `redactedEssayText` below - only the first name is
+  // ever used in a prompt field, but the essay body is free text and can
+  // contain the whole name.
+  const gradingNameMapping = buildRedactionMapping([
+    studentFirstName,
+    ...restOfNameFromFullName(studentFullName),
+  ]);
+  const pseudonymFirstName = redact(studentFirstName, gradingNameMapping);
+  // Students sign their work and write about themselves by name, so the
+  // essay body carries the real name just as surely as the name field does.
+  // Every prompt below sends `redactedEssayText`, never `submission.text`.
+  // Prose mode so a student named Will doesn't get every "will" in their
+  // own essay rewritten - see common-word-names.server.ts.
+  const redactedEssayText = redact(submission.text, gradingNameMapping, {
+    mode: 'prose',
+  });
   // The prompt is derived from the rubric itself: how many judgments it asks
   // for, which words each score carries, and whether it wants per-category
   // feedback or overall feedback alone. No assignment type is named here.
+  // It is built from the pseudonym, never the real first name, because its
+  // output is the outbound system prompt.
   const promptShape = buildGradingPromptShape({
     categories: rubricCategories,
     minScore,
     maxScore,
-    studentFirstName,
+    studentFirstName: pseudonymFirstName,
   });
   const categoryFeedbackEnabled = promptShape.categoryFeedbackEnabled;
   const { AiCategoriesSchema, AiResponseSchema } = buildAiSchemas({
@@ -631,24 +661,33 @@ export async function action({ request }: ActionFunctionArgs) {
 
   const rubricText = promptShape.rubricText;
 
-  const assignmentPrompt = submission.document.assignment?.prompt?.trim();
+  // Teacher-authored free text. It is not supposed to name a student, but it
+  // is free text going outbound, so it goes through the same mapping as the
+  // essay body rather than being trusted.
+  const assignmentPrompt = redact(
+    submission.document.assignment?.prompt?.trim() ?? '',
+    gradingNameMapping,
+    { mode: 'prose' }
+  );
   const assignmentPromptSection = assignmentPrompt
     ? `Assignment prompt: ${assignmentPrompt}`
     : 'Assignment prompt: No assignment prompt was provided.';
 
   const model = process.env.AI_MODEL ?? 'claude-sonnet-4-6';
-  const forceFallback = data.llmRetry === 'fallback';
-  const llmRetryOptions = {
-    forceFallback,
-    signalFallbackRetry: !forceFallback,
+  // Grading prompts carry student first names and raw essay text; never let
+  // an Anthropic outage silently route them to OpenAI, and never persist
+  // the cleartext payload to LlmLog. With cross-provider fallback disabled
+  // there is no other provider to retry onto, so an Anthropic outage is
+  // just a failure - it no longer signals a client-side retry.
+  const gradingPrivacyOptions = {
+    allowFallbackProvider: false,
+    logPayload: 'metadata-only' as const,
   };
-  const retryResponse = () =>
-    dataResponse({ retrying: true }, { status: 202 });
   const getGradingLlmCompletion = (
     params: Parameters<typeof getLLMCompletion>[0]
   ) =>
     runWithGradingRequestDeadline(gradingDeadlineSignal, (signal) =>
-      getLLMCompletion({ ...params, ...llmRetryOptions, signal })
+      getLLMCompletion({ ...params, ...gradingPrivacyOptions, signal })
     );
   const useE2EFixture = shouldUseE2EGradingFixture();
   const documentContext = buildAiTextContextAudit({
@@ -682,12 +721,12 @@ Grade the APUSH ${apHistorySnapshot.essayType.toUpperCase()} using the supplied 
 Use only evidence from the essay and snapshot.
 For DBQ, score these point keys: ${apHistoryDbqPointKeys.join(', ')}.
 For LEQ, score these point keys: ${apHistoryLeqPointKeys.join(', ')}.
-In overallComment, start with "${studentFirstName}," and continue with concise, actionable AP History feedback.`;
+In overallComment, start with "${pseudonymFirstName}," and continue with concise, actionable AP History feedback.`;
 
     const apUserPrompt = buildApHistoryPrompt({
       snapshot: apHistorySnapshot,
-      essayText: submission.text,
-      studentFirstName,
+      essayText: redactedEssayText,
+      studentFirstName: pseudonymFirstName,
     });
 
     let parsedJson: Record<string, unknown>;
@@ -732,7 +771,6 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
       if (isGradingRequestDeadlineError(error)) {
         return gradingDeadlineResponse();
       }
-      if (isLlmFallbackRetrySignal(error)) return retryResponse();
       return dataResponse(
         {
           success: false,
@@ -773,7 +811,7 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
     const overallComment =
       typeof parsedJson.overallComment === 'string' &&
       parsedJson.overallComment.trim()
-        ? parsedJson.overallComment
+        ? rehydrate(parsedJson.overallComment, gradingNameMapping)
         : `${studentFirstName}, your AP History response has been scored with the ${apHistorySnapshot.rubric.rubricId} rubric.`;
     const grammarIssues = null;
     const now = new Date();
@@ -818,6 +856,8 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
     });
   }
 
+  // Built by `buildGradingPromptShape` from `pseudonymFirstName`, so the
+  // outbound system prompt never carries the real first name.
   const gradingSystemBase = promptShape.systemPrompt;
 
   let system = gradingSystemBase;
@@ -825,7 +865,7 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
 
   if (templateInstructions.mode === 'unified') {
     system = `${gradingSystemBase}\nFollow the grading instructions in the user prompt exactly.`;
-    userPrompt = `Student first name: ${studentFirstName}\n\nAssignment type grading config: ${resolvedGradingConfig.label}\n\nRubric category keys (use these exact keys in categories[].key):\n${rubricText}\n\nGrading instructions:\n${templateInstructions.gradingInstructions}\n\n${assignmentPromptSection}\n\nEssay:\n${submission.text}`;
+    userPrompt = `Student first name: ${pseudonymFirstName}\n\nAssignment type grading config: ${resolvedGradingConfig.label}\n\nRubric category keys (use these exact keys in categories[].key):\n${rubricText}\n\nGrading instructions:\n${templateInstructions.gradingInstructions}\n\n${assignmentPromptSection}\n\nEssay:\n${redactedEssayText}`;
   } else {
     const rubricInstructions =
       templateInstructions.mode === 'legacy-split' ||
@@ -845,7 +885,7 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
       ? `${systemInstructions}\n\n`
       : '';
     system = `${templateSystemInstructions}${gradingSystemBase}\nUse the rubric language, proficiency bands, and category weights from the user prompt exactly.\n${scoreInstructions}`;
-    userPrompt = `Student first name: ${studentFirstName}\n\nAssignment type grading config: ${resolvedGradingConfig.label}\n\nRubric category keys (use these exact keys in categories[].key):\n${rubricText}\n\nRubric Instructions:\n${rubricInstructions}\n\n${assignmentPromptSection}\n\nEssay:\n${submission.text}`;
+    userPrompt = `Student first name: ${pseudonymFirstName}\n\nAssignment type grading config: ${resolvedGradingConfig.label}\n\nRubric category keys (use these exact keys in categories[].key):\n${rubricText}\n\nRubric Instructions:\n${rubricInstructions}\n\n${assignmentPromptSection}\n\nEssay:\n${redactedEssayText}`;
   }
 
   let responseText = '';
@@ -882,7 +922,6 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
       if (isGradingRequestDeadlineError(error)) {
         return gradingDeadlineResponse();
       }
-      if (isLlmFallbackRetrySignal(error)) return retryResponse();
       throw error;
     }
   }
@@ -892,11 +931,11 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
   ) => {
     const overallCommentResponseText = await getGradingLlmCompletion({
       model,
-      system: `You write the overall feedback sentence for a grading assistant. Return ONLY valid JSON with the schema:\n{\n  "overallComment": string\n}\nRules:\n- overallComment must start with "${studentFirstName},".\n- Keep it warm, professional, and cohesive.\n- Do not include markdown or explanation.`,
+      system: `You write the overall feedback sentence for a grading assistant. Return ONLY valid JSON with the schema:\n{\n  "overallComment": string\n}\nRules:\n- overallComment must start with "${pseudonymFirstName},".\n- Keep it warm, professional, and cohesive.\n- Do not include markdown or explanation.`,
       messages: [
         {
           role: 'user',
-          content: `Student first name: ${studentFirstName}\n\nEssay:\n${submission.text}\n\nRubric category feedback:\n${JSON.stringify(categories)}`,
+          content: `Student first name: ${pseudonymFirstName}\n\nEssay:\n${redactedEssayText}\n\nRubric category feedback:\n${JSON.stringify(categories)}`,
         },
       ],
       maxTokens: 300,
@@ -951,7 +990,7 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
       model,
       system: `You repair grading assistant JSON. Return ONLY valid JSON with the schema:\n${buildGradingResponseSchemaText(
         { minScore, maxScore, categoryFeedbackEnabled }
-      )}\nRules:\n- Preserve valid category scores${categoryFeedbackEnabled ? '/comments' : ''} from the original output when possible.\n- Scores must be integers ${minScore}-${maxScore}.\n- Return exactly one category for each rubric key.\n- Use only these rubric keys: ${rubricKeys.join(', ')}.\n- overallComment must start with "${studentFirstName},".\n- Do not include markdown or explanation.`,
+      )}\nRules:\n- Preserve valid category scores${categoryFeedbackEnabled ? '/comments' : ''} from the original output when possible.\n- Scores must be integers ${minScore}-${maxScore}.\n- Return exactly one category for each rubric key.\n- Use only these rubric keys: ${rubricKeys.join(', ')}.\n- overallComment must start with "${pseudonymFirstName},".\n- Do not include markdown or explanation.`,
       messages: [
         {
           role: 'user',
@@ -984,7 +1023,6 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
     if (isGradingRequestDeadlineError(error)) {
       return gradingDeadlineResponse();
     }
-    if (isLlmFallbackRetrySignal(error)) return retryResponse();
     return dataResponse(
       {
         success: false,
@@ -999,13 +1037,16 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
   >((acc, item) => {
     acc[item.key] = {
       score: item.score,
-      comment: item.comment,
+      // Defensive: the model isn't instructed to use the student's name in
+      // per-category comments, but rehydrate here too in case it echoes
+      // the pseudonym from the essay/rubric context anyway.
+      comment: rehydrate(item.comment, gradingNameMapping),
       isAi: true,
     };
     return acc;
   }, {});
 
-  const overallComment = parsed.overallComment;
+  const overallComment = rehydrate(parsed.overallComment, gradingNameMapping);
   const baseGradeFields = buildDynamicGradeFields({
     categories: parsed.categories,
     rubricScores,
@@ -1035,7 +1076,13 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
       ?.score ?? null;
 
   let grammarIssues: Prisma.InputJsonValue | null = null;
-  const parseGrammarIssuesFromResponseText = (responseText: string) => {
+  const parseGrammarIssuesFromResponseText = (rawResponseText: string) => {
+    // The checker read the redacted essay, so any excerpt quoting the
+    // student's name comes back carrying the pseudonym. Rehydrate before
+    // parsing: excerpts are anchored by matching them against the real
+    // `submission.text`, and a pseudonym would simply fail to match and
+    // silently drop the issue.
+    const responseText = rehydrate(rawResponseText, gradingNameMapping);
     try {
       const parsedGrammarJson = parseFirstJsonValue(responseText);
       const parsedFromJson = parseGrammarIssuesPayload(parsedGrammarJson, {
@@ -1094,7 +1141,7 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
     try {
       const grammarSystem = `You are the Grammar/Usage Checker.\nReturn ONLY valid JSON with the schema:\n{\n  \"issues\": [{\n    \"excerpt\": string,\n    \"occurrence\"?: number,\n    \"kind\": \"error\"|\"style\",\n    \"ruleNumber\"?: number,\n    \"rule\"?: string,\n    \"message\": string\n  }]\n}\nRules:\n- Highlight the smallest exact excerpt that demonstrates the issue (max 120 characters).\n- If the excerpt appears multiple times, set occurrence to the 1-based match index.\n- Keep message brief (1-2 sentences). State the rule plainly; do not offer to fix it for the student.\n- Focus on essentials: usage, composition, comma/semicolon rules, and omit needless words.\n\nComma rules:\n(1) In a series of three or more terms with a single conjunction, use a comma after each term except the last.\n(2) Enclose parenthetic expressions between commas.\n(3) Do not join independent clauses with a comma (comma splice); use a semicolon, conjunction, or separate sentences.\nSemicolon rule:\nUse a semicolon to join closely related independent clauses.\n\nStyle:\n(10) Omit needless words.`;
 
-      const grammarUserPrompt = `Essay:\n${submission.text}\n\nReturn up to 15 issues.`;
+      const grammarUserPrompt = `Essay:\n${redactedEssayText}\n\nReturn up to 15 issues.`;
 
       let grammarResponseText = await getGradingLlmCompletion({
         model,
@@ -1122,7 +1169,7 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
           messages: [
             {
               role: 'user',
-              content: `Essay:\n${submission.text}\n\nReturn 8-12 issues using the exact schema. Do not include markdown.`,
+              content: `Essay:\n${redactedEssayText}\n\nReturn 8-12 issues using the exact schema. Do not include markdown.`,
             },
           ],
           maxTokens: 1600,
@@ -1143,7 +1190,6 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
       if (isGradingRequestDeadlineError(error)) {
         return gradingDeadlineResponse();
       }
-      if (isLlmFallbackRetrySignal(error)) return retryResponse();
       grammarIssues = null;
     }
   }

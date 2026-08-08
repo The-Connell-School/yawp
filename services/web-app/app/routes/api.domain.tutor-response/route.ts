@@ -3,7 +3,6 @@ import { parseFormData, validationError } from '@rvf/react-router';
 import { z } from 'zod';
 import { prisma } from '~/utils/db.server';
 import { AgentType, getLLMCompletion } from '~/utils/getLLMCompletion';
-import { isLlmFallbackRetrySignal } from '~/utils/getLLMCompletion/llm-provider-errors.server';
 import { requireMutableRequest } from '~/utils/auth.server';
 import {
   buildModuleRubricGuidance,
@@ -15,6 +14,11 @@ import {
   buildAiContextAuditMetadata,
   buildAiTextContextAudit,
 } from '~/utils/ai-context-audit.server';
+import {
+  firstNameFromFullName,
+  restOfNameFromFullName,
+} from '~/domain/grading/personalize';
+import { buildRedactionMapping, redact, rehydrate } from '~/utils/ai-redaction';
 
 const LLM_FAILED = 'Failed to get a response from the tutor. Please try again.';
 
@@ -22,7 +26,6 @@ const POST = z.object({
   response: z.string().min(1),
   cmsId: z.string().min(1),
   content: z.string().optional(),
-  llmRetry: z.enum(['fallback']).optional(),
 });
 
 const errorResponse = (error: { message: string }) => {
@@ -76,6 +79,7 @@ export async function action({ request }: ActionFunctionArgs) {
             id: true,
             text: true,
             assignment: { select: { tutorEnabled: true } },
+            membership: { select: { user: { select: { name: true } } } },
           },
         },
       },
@@ -118,13 +122,41 @@ export async function action({ request }: ActionFunctionArgs) {
       moduleRubricGuidance,
     });
 
+    // The student's real first name never leaves our servers: every prompt
+    // sent to the AI provider below uses `redact()`'d text, and the
+    // model's reply is `rehydrate()`'d back to the real name before it is
+    // persisted or returned. In-memory only for the life of this request -
+    // see app/utils/ai-redaction for the shared primitives (same pattern
+    // used by grading and Reporter).
+    const studentFullName = cms.document.membership?.user?.name;
+    const studentFirstName = firstNameFromFullName(studentFullName);
+    // Also registers any remaining name parts (e.g. the last name) so a
+    // student who signs their document or mentions their own full name in
+    // chat doesn't leak it - see the identical comment in
+    // api.domain.grade-essay-ai/route.ts.
+    const nameMapping = buildRedactionMapping([
+      studentFirstName,
+      ...restOfNameFromFullName(studentFullName),
+    ]);
+
     const documentSource =
       data.content === undefined ? 'db-document-text' : 'client-content';
     const documentText = data.content ?? cms.document.text ?? '';
+    // Audit metadata (length/hash) is computed off the real text on purpose
+    // - it's metadata-only and never leaves the server as prompt content,
+    // and it needs to match what's actually stored so the audit trail is
+    // trustworthy. Only the text handed to the model gets redacted.
     const documentContext = buildAiTextContextAudit({
       documentSource,
       documentId: cms.document.id,
       text: documentText,
+    });
+    // Students write about themselves by name and often sign their work,
+    // so the document body carries the real name just as surely as a name
+    // field would. Prose mode so a student named Will doesn't get every
+    // "will" in their writing mangled - see common-word-names.server.ts.
+    const redactedDocumentText = redact(documentText, nameMapping, {
+      mode: 'prose',
     });
     const moduleRubricRelationships = normalizeModuleRubricAlignment(
       cms.assignmentModule.rubricAlignmentJson,
@@ -140,9 +172,14 @@ export async function action({ request }: ActionFunctionArgs) {
       rubricCategoryKeys: moduleRubric.categories.map((category) => category.key),
     });
 
+    // Prior turns are persisted with the real name (that's what the
+    // student's UI replays on reload) and the student's own new message
+    // routinely contains their own name too ("Amelia here, ..."). Redact
+    // both before they go into the prompt, same prose-mode reasoning as
+    // the document body above.
     const currentMessages = cms.messages.map((m) => ({
       role: m.agent as AgentType,
-      content: m.content,
+      content: redact(m.content, nameMapping, { mode: 'prose' }),
       name: m.agent,
     }));
 
@@ -160,27 +197,31 @@ export async function action({ request }: ActionFunctionArgs) {
         {
           role: AgentType.User,
           content: buildDocumentContextMessage({
-            documentText,
+            documentText: redactedDocumentText,
             source: documentSource,
             sha256: documentContext.documentTextSha256,
           }),
         },
         {
           role: AgentType.User,
-          content: data.response,
+          content: redact(data.response, nameMapping, { mode: 'prose' }),
         },
       ]);
 
     let completion: string;
-    const forceFallback = data.llmRetry === 'fallback';
     try {
       completion = await getLLMCompletion({
         model: (process.env.AI_MODEL as any) ?? 'claude-sonnet-4-6',
         messages,
         system,
         maxTokens: 500,
-        forceFallback,
-        signalFallbackRetry: !forceFallback,
+        // Tutor prompts carry raw student document text; never let an
+        // Anthropic outage silently route it to OpenAI, and never persist
+        // the cleartext payload to LlmLog. With cross-provider fallback
+        // disabled there is no other provider to retry onto, so an
+        // Anthropic outage is just a failure.
+        allowFallbackProvider: false,
+        logPayload: 'metadata-only',
         metadata: {
           feature: 'tutor',
           kind: 'assignment-module-tutor',
@@ -192,11 +233,12 @@ export async function action({ request }: ActionFunctionArgs) {
         },
       });
     } catch (error) {
-      if (isLlmFallbackRetrySignal(error)) {
-        return dataResponse({ retrying: true }, { status: 202 });
-      }
       return errorResponse(error as any);
     }
+    // The model read redacted text, so any excerpt quoting the student's
+    // name comes back carrying the pseudonym - restore it before this
+    // touches the database or the caller.
+    completion = rehydrate(completion, nameMapping);
 
     await prisma.assignmentModuleSession.update({
       where: { id: cms.id },

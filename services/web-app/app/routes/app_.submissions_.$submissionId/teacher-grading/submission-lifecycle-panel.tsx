@@ -48,7 +48,6 @@ export function GradingAssistantSplitButton({
 }) {
   const isGenerating =
     isPendingStart || headerState?.isGenerating === true;
-  const isAiRetrying = headerState?.isAiRetrying === true;
   const isBusy = isGenerating || headerState?.isBusy === true;
   const hasDraftToReplace = headerState?.hasDraftToReplace === true;
   const gradingAssistantStrictnessLevel =
@@ -65,7 +64,7 @@ export function GradingAssistantSplitButton({
   const buttonLabel = isGenerating ? (
     <span className="flex items-center gap-2">
       <Loader2 className="h-3.5 w-3.5 animate-spin" />
-      {isAiRetrying ? 'Retrying...' : 'Grading...'}
+      Grading...
     </span>
   ) : (
     'Grading Assistant Suggestions'

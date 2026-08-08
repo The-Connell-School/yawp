@@ -37,7 +37,11 @@ describe('api.domain.tutor-response read-only impersonation', () => {
   });
 
   function mockCms(
-    documentOverrides: Record<string, unknown> = {}
+    overrides: {
+      messages?: unknown[];
+      documentText?: string;
+      document?: Record<string, unknown>;
+    } = {}
   ) {
     prisma.assignmentModuleSession.findUnique.mockResolvedValueOnce({
       id: 'cms-1',
@@ -75,12 +79,13 @@ describe('api.domain.tutor-response read-only impersonation', () => {
           },
         ],
       },
-      messages: [],
+      messages: overrides.messages ?? [],
       document: {
         id: 'doc-1',
-        text: 'Original draft',
+        text: overrides.documentText ?? 'Original draft',
         assignment: { tutorEnabled: true },
-        ...documentOverrides,
+        membership: { user: { name: 'Amelia Chen' } },
+        ...(overrides.document ?? {}),
       },
     });
   }
@@ -205,7 +210,42 @@ describe('api.domain.tutor-response read-only impersonation', () => {
     );
   });
 
-  test('returns a retry signal without writing messages when fallback retry is requested', async () => {
+  test('never allows cross-provider fallback and never logs cleartext prompts for tutor calls', async () => {
+    getLLMCompletion.mockResolvedValue('Draft a clearer thesis.');
+    mockCms();
+    prisma.assignmentModuleSession.findUnique.mockResolvedValueOnce({
+      id: 'cms-1',
+      messages: [],
+      assignmentModule: {
+        instructions: [],
+        assignmentType: { assignmentModules: [] },
+      },
+    });
+
+    const body = new FormData();
+    body.set('response', 'Can you review this?');
+    body.set('cmsId', 'cms-1');
+    body.set('content', 'Current draft');
+
+    await action({
+      request: new Request('https://example.com/api/domain/tutor-response', {
+        method: 'POST',
+        body,
+      }),
+    } as any);
+
+    const completionArgs = getLLMCompletion.mock.calls[0]?.[0] as any;
+    expect(completionArgs.allowFallbackProvider).toBe(false);
+    expect(completionArgs.logPayload).toBe('metadata-only');
+  });
+
+  test('an Anthropic outage is a plain failure, not a fallback-retry signal', async () => {
+    // Cross-provider fallback is disabled for tutor (allowFallbackProvider:
+    // false), so getLLMCompletion can never actually throw
+    // LlmFallbackRetrySignal for this call site in production. This proves
+    // the route no longer special-cases it into a 202 "retrying" response
+    // even if it somehow received one - it's handled like any other failed
+    // call, via the generic error response.
     mockCms();
     getLLMCompletion.mockImplementationOnce(() => {
       throw new LlmFallbackRetrySignal({
@@ -227,16 +267,17 @@ describe('api.domain.tutor-response read-only impersonation', () => {
       }),
     } as any);
     const payload = response as {
-      data: { retrying?: boolean };
+      data: { retrying?: boolean; error?: string };
       init?: { status?: number };
     };
 
-    expect(payload.init?.status).toBe(202);
-    expect(payload.data.retrying).toBe(true);
+    expect(payload.init?.status).toBe(500);
+    expect(payload.data.retrying).toBeUndefined();
+    expect(payload.data.error).toContain('Failed to get a response');
     expect(prisma.assignmentModuleSession.update).not.toHaveBeenCalled();
   });
 
-  test('forces fallback model on retry and persists one user and one tutor message', async () => {
+  test('no longer accepts an llmRetry field - there is nothing to retry onto', async () => {
     getLLMCompletion.mockResolvedValue('Draft a clearer thesis.');
     mockCms();
     prisma.assignmentModuleSession.findUnique.mockResolvedValueOnce({
@@ -261,10 +302,10 @@ describe('api.domain.tutor-response read-only impersonation', () => {
       }),
     } as any);
 
-    expect(getLLMCompletion.mock.calls[0]?.[0]).toMatchObject({
-      forceFallback: true,
-      signalFallbackRetry: false,
-    });
+    expect(getLLMCompletion.mock.calls[0]?.[0].forceFallback).toBeUndefined();
+    expect(
+      getLLMCompletion.mock.calls[0]?.[0].signalFallbackRetry
+    ).toBeUndefined();
     const createPayload =
       prisma.assignmentModuleSession.update.mock.calls[0]?.[0].data.messages
         .create;
@@ -280,7 +321,7 @@ describe('api.domain.tutor-response read-only impersonation', () => {
   });
 
   test('blocks the tutor response when the assignment has tutorEnabled=false', async () => {
-    mockCms({ assignment: { tutorEnabled: false } });
+    mockCms({ document: { assignment: { tutorEnabled: false } } });
 
     const body = new FormData();
     body.set('response', 'Can you help?');
@@ -305,7 +346,7 @@ describe('api.domain.tutor-response read-only impersonation', () => {
 
   test('allows the tutor response when the document has no linked assignment', async () => {
     getLLMCompletion.mockResolvedValue('Draft a clearer thesis.');
-    mockCms({ assignment: null });
+    mockCms({ document: { assignment: null } });
 
     const body = new FormData();
     body.set('response', 'Can you help?');
@@ -321,5 +362,111 @@ describe('api.domain.tutor-response read-only impersonation', () => {
 
     expect(payload.init?.status ?? 200).not.toBe(403);
     expect(getLLMCompletion).toHaveBeenCalled();
+  });
+
+  test('redacts the student real first name out of the document, prior messages, and current message before they reach the model, then rehydrates the reply', async () => {
+    getLLMCompletion.mockResolvedValue(
+      'Amelia, your thesis is getting sharper.'
+    );
+    mockCms({
+      messages: [
+        {
+          agent: 'user',
+          content: 'Amelia here, can you look at my intro again?',
+        },
+        {
+          agent: 'assistant',
+          content: 'Sure Amelia, walk me through it.',
+        },
+      ],
+      documentText: 'My name is Amelia and this essay argues -- Amelia',
+    });
+    prisma.assignmentModuleSession.findUnique.mockResolvedValueOnce({
+      id: 'cms-1',
+      messages: [],
+      assignmentModule: {
+        instructions: [],
+        assignmentType: { assignmentModules: [] },
+      },
+    });
+
+    const body = new FormData();
+    body.set('response', 'Amelia again, does this work now?');
+    body.set('cmsId', 'cms-1');
+
+    await action({
+      request: new Request('https://example.com/api/domain/tutor-response', {
+        method: 'POST',
+        body,
+      }),
+    } as any);
+
+    const completionArgs = getLLMCompletion.mock.calls[0]?.[0] as any;
+    const outboundText = JSON.stringify(completionArgs.messages);
+
+    // The real first name never reaches the outbound prompt...
+    expect(outboundText).not.toContain('Amelia');
+    // ...but the document context and prior turns are still present, just
+    // with a pseudonym standing in for the real name.
+    expect(outboundText).toContain('student_document_context');
+    expect(outboundText).toContain('can you look at my intro again');
+    expect(outboundText).toContain('walk me through it');
+    expect(outboundText).toContain('does this work now');
+    // The cacheable system prefix is module-level text with no student name
+    // in it at all, so redaction leaves it byte-identical.
+    expect(JSON.stringify(completionArgs.system)).not.toContain('Amelia');
+
+    // The persisted turn and the value handed back to the caller are
+    // rehydrated to the real name.
+    const createPayload =
+      prisma.assignmentModuleSession.update.mock.calls[0]?.[0].data.messages
+        .create;
+    expect(createPayload[0].content).toBe('Amelia again, does this work now?');
+    expect(createPayload[1].content).toBe(
+      'Amelia, your thesis is getting sharper.'
+    );
+  });
+
+  test('also redacts the student last name out of the document body, not just the first name', async () => {
+    getLLMCompletion.mockResolvedValue('Sounds good.');
+    prisma.assignmentModuleSession.findUnique.mockResolvedValueOnce({
+      id: 'cms-1',
+      instructionsCompleted: 0,
+      assignmentModule: {
+        tutorInstructions: 'Coach the student.',
+        rubricAlignmentJson: {},
+        assignmentType: { id: 'assignment-type-1', rubricJson: { categories: [] } },
+        instructions: [{ id: 'instruction-1', tutorInstructions: '' }],
+      },
+      messages: [],
+      document: {
+        id: 'doc-1',
+        text: 'This essay argues for change.\n\n-- Sophia Marín',
+        assignment: { tutorEnabled: true },
+        membership: { user: { name: 'Sophia Marín' } },
+      },
+    });
+    prisma.assignmentModuleSession.findUnique.mockResolvedValueOnce({
+      id: 'cms-1',
+      messages: [],
+      assignmentModule: {
+        instructions: [],
+        assignmentType: { assignmentModules: [] },
+      },
+    });
+
+    const body = new FormData();
+    body.set('response', 'Can you review this?');
+    body.set('cmsId', 'cms-1');
+
+    await action({
+      request: new Request('https://example.com/api/domain/tutor-response', {
+        method: 'POST',
+        body,
+      }),
+    } as any);
+
+    const completionArgs = getLLMCompletion.mock.calls[0]?.[0] as any;
+    expect(JSON.stringify(completionArgs.messages)).not.toContain('Marín');
   });
 });
