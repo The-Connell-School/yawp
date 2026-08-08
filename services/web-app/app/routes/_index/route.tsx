@@ -22,6 +22,7 @@ export const meta: MetaFunction = () => [
 const loginUrl = '/app';
 const signupUrl = '/auth/inv/signup';
 const infoUrl = '/info';
+const accessibilityUrl = '/accessibility';
 const itemNumber = '[Item #: AP1030]';
 
 export default function IndexRoute() {
@@ -74,8 +75,15 @@ export default function IndexRoute() {
           Learn more
         </a>
 
-        <footer className="yawp-entry-footer" aria-label="Site item number">
-          {itemNumber}
+        <footer
+          className="yawp-entry-footer yawp-footer-meta"
+          aria-label="Site footer details"
+        >
+          <span>{itemNumber}</span>
+          <span className="yawp-footer-divider" aria-hidden="true" />
+          <a className="yawp-footer-meta-link" href={accessibilityUrl}>
+            Accessibility
+          </a>
         </footer>
       </section>
     </main>
