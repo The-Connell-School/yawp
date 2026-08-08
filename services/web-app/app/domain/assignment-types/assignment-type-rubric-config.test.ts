@@ -89,7 +89,7 @@ describe('hasAssignmentTypeOwnedRubric', () => {
     ).toBe(false);
   });
 
-  test('returns true when at least one category is complete', () => {
+  test('returns true when the only category is complete', () => {
     expect(
       hasAssignmentTypeOwnedRubric({
         categories: [
@@ -98,6 +98,48 @@ describe('hasAssignmentTypeOwnedRubric', () => {
             label: 'Claim',
             description: 'A clear defensible claim.',
             weight: 1,
+          },
+        ],
+      })
+    ).toBe(true);
+  });
+
+  test('returns false when only some categories are complete (partially-filled rubric)', () => {
+    expect(
+      hasAssignmentTypeOwnedRubric({
+        categories: [
+          {
+            key: 'claim',
+            label: 'Claim',
+            description: 'A clear defensible claim.',
+            weight: 0.5,
+          },
+          {
+            key: 'evidence',
+            label: 'Evidence',
+            description: '',
+            weight: 0.5,
+          },
+        ],
+      })
+    ).toBe(false);
+  });
+
+  test('returns true only when every category is fully populated', () => {
+    expect(
+      hasAssignmentTypeOwnedRubric({
+        categories: [
+          {
+            key: 'claim',
+            label: 'Claim',
+            description: 'A clear defensible claim.',
+            weight: 0.5,
+          },
+          {
+            key: 'evidence',
+            label: 'Evidence',
+            description: 'Relevant evidence supports the claim.',
+            weight: 0.5,
           },
         ],
       })
