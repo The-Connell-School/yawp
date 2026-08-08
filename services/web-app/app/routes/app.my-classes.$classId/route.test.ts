@@ -579,7 +579,44 @@ describe('class detail loader document visibility', () => {
         submitForGrade: true,
         pointValue: 25,
         gradingAssistantStrictnessLevel: 'advanced',
+        tutorEnabled: true,
       },
+      classIds: ['class-1'],
+    });
+  });
+
+  test('disables the tutor on a new class assignment when the toggle is off', async () => {
+    getAvailableAssignmentTypesForScopes.mockResolvedValue([
+      { id: 'at-1', systemKey: null },
+    ]);
+    prisma.assignmentType.findMany.mockResolvedValue([
+      {
+        id: 'at-1',
+        systemKey: null,
+        organizationAssignments: [{ organizationId: 'org-1' }],
+      },
+    ]);
+
+    const form = new FormData();
+    form.set('intent', 'create-assignment');
+    form.set('assignmentTypeId', 'at-1');
+    form.set('prompt', 'Prompt');
+    form.set('submitForGrade', 'true');
+    form.set('pointValue', '25');
+    form.set('tutorEnabled', 'false');
+
+    const response = await action({
+      request: new Request('https://example.test/app/my-classes/class-1', {
+        method: 'POST',
+        body: form,
+      }),
+      params: { classId: 'class-1' },
+      context: {} as never,
+    });
+
+    expect(response.data).toMatchObject({ success: true });
+    expect(createAssignmentDeployedToClasses).toHaveBeenCalledWith({
+      data: expect.objectContaining({ tutorEnabled: false }),
       classIds: ['class-1'],
     });
   });

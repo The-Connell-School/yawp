@@ -19,6 +19,7 @@ import { createAssignmentDeployedToClasses } from '~/utils/assignment-deployment
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { parseAssignmentGradingIntent } from '~/utils/assignment-grading-intent.server';
+import { parseAssignmentTutorEnabled } from '~/utils/assignment-tutor-enabled.server';
 
 export async function action({ request }: ActionFunctionArgs) {
   const userId = await requireUserId(request);
@@ -86,6 +87,15 @@ export async function action({ request }: ActionFunctionArgs) {
       { status: 400 }
     );
   }
+
+  const tutorEnabledResult = parseAssignmentTutorEnabled(formData);
+  if (!tutorEnabledResult.success) {
+    return dataResponse(
+      { success: false, message: tutorEnabledResult.message },
+      { status: 400 }
+    );
+  }
+  const tutorEnabled = tutorEnabledResult.value;
 
   const classes = await prisma.class.findMany({
     where: {
@@ -163,12 +173,15 @@ export async function action({ request }: ActionFunctionArgs) {
     }
 
     await createAssignmentDeployedToClasses({
-      data: buildAssignmentCreateInputFromApHistoryEntry({
-        assignmentTypeId: assignmentType.id,
-        title,
-        entry,
-        gradingAssistantStrictnessLevel,
-      }),
+      data: {
+        ...buildAssignmentCreateInputFromApHistoryEntry({
+          assignmentTypeId: assignmentType.id,
+          title,
+          entry,
+          gradingAssistantStrictnessLevel,
+        }),
+        tutorEnabled,
+      },
       classIds: deployClassIds,
     });
 
@@ -211,6 +224,7 @@ export async function action({ request }: ActionFunctionArgs) {
         title,
         prompt,
         gradingAssistantStrictnessLevel,
+        tutorEnabled,
         ...promptAttachmentData,
         ...(gradingIntent?.success
           ? {
