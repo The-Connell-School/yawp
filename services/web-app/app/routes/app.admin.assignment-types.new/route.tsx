@@ -12,7 +12,7 @@ import {
   DEFAULT_OUTPUT_SCHEMA_JSON,
   parseRubric,
 } from '~/domain/assignment-types/assignment-type-rubric.shared';
-import { hasAssignmentTypeOwnedRubric } from '~/domain/assignment-types/assignment-type-rubric-config';
+import { isRubricFullyPopulated } from '~/domain/assignment-types/assignment-type-rubric-config';
 
 function parseJsonFormField(formData: FormData, name: string) {
   const value = formData.get(name);
@@ -40,9 +40,9 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 
   const rubricJson = parseJsonFormField(formData, 'rubricJson');
-  if (!hasAssignmentTypeOwnedRubric(parseRubric(rubricJson))) {
+  if (!isRubricFullyPopulated(parseRubric(rubricJson))) {
     throw new Response(
-      'Add at least one fully-populated rubric category (key, label, description, and weight) before creating this assignment type. Otherwise grading silently falls back to the thesis-driven essay rubric.',
+      'Every rubric category needs a key, label, description, and weight before you can create this assignment type. Add at least one, and finish the ones you started.',
       { status: 400 }
     );
   }
