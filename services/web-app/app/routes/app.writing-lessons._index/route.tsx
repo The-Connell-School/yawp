@@ -1,4 +1,4 @@
-import { ChevronRight, Plus, Zap } from 'lucide-react';
+import { CalendarDays, ChevronRight, Plus, Zap } from 'lucide-react';
 import { useState } from 'react';
 import {
   Link,
@@ -12,11 +12,37 @@ import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { Tooltip } from '~/components/ui/tooltip';
 import { WritingPracticeAssignmentSheet } from '~/components/writing-lessons/writing-practice-assignment-sheet';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
+import { formatClassLabel } from '~/utils/class-display';
+import { formatDateOnly } from '~/utils/date-only';
 import { prisma } from '~/utils/db.server';
 import {
+  listWritingPracticeAssignmentsForStudent,
+  listWritingPracticeAssignmentsForTeacher,
+  type WritingPracticeAssignmentSummary,
+} from '~/utils/writing-lessons/practice-assignments.server';
+import {
+  getQuickWritingLessonBySlug,
   getQuickWritingLessonGroups,
   getQuickWritingPracticePrompts,
 } from '~/utils/writing-lessons/static-lessons.server';
+
+function toAssignmentCard(assignment: WritingPracticeAssignmentSummary) {
+  return {
+    id: assignment.id,
+    title: assignment.title,
+    problemCount: assignment.problemCount,
+    dueAt: formatDateOnly(assignment.dueAt),
+    instructions: assignment.instructions,
+    lessons: assignment.lessonSlugs.map((slug) => ({
+      slug,
+      title: getQuickWritingLessonBySlug(slug)?.title ?? slug,
+    })),
+    classes: assignment.classes.map((klass) => ({
+      id: klass.id,
+      label: formatClassLabel(klass),
+    })),
+  };
+}
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
@@ -59,18 +85,31 @@ export async function loader({ request }: LoaderFunctionArgs) {
       })
     : [];
 
+  const assignments = (
+    isTeacher
+      ? await listWritingPracticeAssignmentsForTeacher(membership.id)
+      : await listWritingPracticeAssignmentsForStudent(membership.id)
+  ).map(toAssignmentCard);
+
   return dataResponse({
     groups,
     lessonCount,
     promptCount,
     isTeacher,
     teacherClasses,
+    assignments,
   });
 }
 
 export default function WritingLessonsIndexRoute() {
-  const { groups, lessonCount, promptCount, isTeacher, teacherClasses } =
-    useLoaderData<typeof loader>();
+  const {
+    groups,
+    lessonCount,
+    promptCount,
+    isTeacher,
+    teacherClasses,
+    assignments,
+  } = useLoaderData<typeof loader>();
   const [lessonToAssign, setLessonToAssign] = useState<{
     slug: string;
     title: string;
@@ -133,6 +172,63 @@ export default function WritingLessonsIndexRoute() {
           </div>
         </div>
       </div>
+
+      {/* Assigned practice */}
+      {assignments.length > 0 ? (
+        <div className="mx-auto w-full max-w-screen-lg px-3 pt-8 sm:px-5">
+          <h3 className="text-lg font-semibold tracking-tight">
+            {isTeacher ? 'Practice you assigned' : 'Assigned to you'}
+          </h3>
+          <div
+            data-testid="writing-practice-assignment-list"
+            className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2"
+          >
+            {assignments.map((assignment) => (
+              <div
+                key={assignment.id}
+                data-testid={`writing-practice-assignment-${assignment.id}`}
+                className="rounded-xl border bg-popover p-5 shadow-sm ring-1 ring-black/5"
+              >
+                <p className="text-balance text-base font-semibold">
+                  {assignment.title}
+                </p>
+                <p className="mt-1 text-pretty text-base text-muted-foreground sm:text-sm">
+                  {assignment.classes
+                    .map((klass) => klass.label)
+                    .join(' • ') || 'No active classes'}
+                </p>
+                {assignment.instructions ? (
+                  <p className="mt-2 text-pretty text-base text-muted-foreground sm:text-sm">
+                    {assignment.instructions}
+                  </p>
+                ) : null}
+                <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1 text-base text-muted-foreground sm:text-sm">
+                  <span className="inline-flex items-center gap-1">
+                    <CalendarDays className="size-3.5 shrink-0" />
+                    Due {assignment.dueAt}
+                  </span>
+                  <span className="inline-flex items-center gap-1">
+                    <Zap className="size-3.5 shrink-0" />
+                    {assignment.problemCount} problems
+                  </span>
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {assignment.lessons.map((lesson) => (
+                    <Link
+                      key={lesson.slug}
+                      to={`/app/writing-lessons/${lesson.slug}`}
+                      className="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-base font-medium transition-colors hover:bg-muted sm:text-sm"
+                    >
+                      {lesson.title}
+                      <ChevronRight className="size-3.5 shrink-0" />
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
 
       {/* Flat lesson grid */}
       <div className="mx-auto w-full max-w-screen-lg px-3 py-8 pb-24 sm:px-5">
