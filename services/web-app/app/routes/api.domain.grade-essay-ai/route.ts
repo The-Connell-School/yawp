@@ -600,6 +600,7 @@ export async function action({ request }: ActionFunctionArgs) {
     minScore,
     maxScore,
     scoringType,
+    source: resolvedGradingConfig.source,
   };
   const templateInstructions = resolvedGradingConfig.instructions;
   const { AiCategoriesSchema, AiResponseSchema } = buildAiSchemas({

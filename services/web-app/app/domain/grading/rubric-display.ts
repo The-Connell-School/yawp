@@ -7,12 +7,30 @@ export type RubricDisplayCategory = {
   weight: number;
 };
 
+export type RubricDisplaySource = 'assignment-type' | 'thesis-default';
+
 export type RubricDisplayConfig = {
   categories: RubricDisplayCategory[];
   minScore: number;
   maxScore: number;
   scoringType: string;
+  /**
+   * Which rubric actually produced this config: the assignment type's own
+   * configured rubric, or the legacy thesis-driven-essay default it fell
+   * back to because the assignment type has no fully-populated rubric.
+   * Undefined for rubric configs that predate this distinction (legacy
+   * snapshots, the hardcoded pre-assignment-type display fallback).
+   */
+  source?: RubricDisplaySource;
 };
+
+const rubricDisplaySources = new Set<string>(['assignment-type', 'thesis-default']);
+
+function parseRubricDisplaySource(value: unknown): RubricDisplaySource | undefined {
+  return typeof value === 'string' && rubricDisplaySources.has(value)
+    ? (value as RubricDisplaySource)
+    : undefined;
+}
 
 export type RubricScore = {
   score: number;
@@ -93,6 +111,7 @@ export function normalizeRubricDisplayConfig(
     minScore: Math.min(minScore, maxScore),
     maxScore: Math.max(minScore, maxScore),
     scoringType,
+    source: parseRubricDisplaySource(raw.source),
   };
 }
 

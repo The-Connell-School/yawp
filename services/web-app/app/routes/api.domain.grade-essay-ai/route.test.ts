@@ -255,6 +255,9 @@ describe('api.domain.grade-essay-ai', () => {
       'Jordan, this draft has clear progress and focus.'
     );
     expect(Object.keys(payload.rubricScores ?? {})).toEqual(rubricKeys);
+    expect(
+      (payload.rubricConfig as { source?: string } | undefined)?.source
+    ).toBe('thesis-default');
     expect(prisma.submission.update).toHaveBeenCalledTimes(1);
     expect(prisma.assignmentType.findUnique).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -687,6 +690,9 @@ describe('api.domain.grade-essay-ai', () => {
     expect(prompt).not.toContain('Grading assistant strictness:');
     expect(prompt).toContain('Ideas and Analysis (25%)');
     expect(prompt).not.toContain('Thesis/Content');
+    expect(
+      (payload.rubricConfig as { source?: string } | undefined)?.source
+    ).toBe('assignment-type');
     expect(Object.keys(payload.rubricScores ?? {})).toEqual([
       'ideas_and_analysis',
       'development_and_support',

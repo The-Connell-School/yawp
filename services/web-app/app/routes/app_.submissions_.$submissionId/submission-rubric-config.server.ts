@@ -2,6 +2,7 @@ import { resolveAssignmentTypeGradingConfig } from '~/domain/assignment-types/as
 import {
   legacyRubricDisplayConfig,
   type RubricDisplayConfig,
+  type RubricDisplaySource,
 } from '~/domain/grading/rubric-display';
 
 type RubricSnapshotCategory = {
@@ -13,7 +14,18 @@ type RubricSnapshotCategory = {
 
 export type LatestGradingRunRubricSnapshot = {
   assignmentTypeRubricSnapshot: unknown;
+  source?: string | null;
 };
+
+const rubricDisplaySources = new Set<string>(['assignment-type', 'thesis-default']);
+
+function parseRubricDisplaySource(
+  value: string | null | undefined
+): RubricDisplaySource | undefined {
+  return value && rubricDisplaySources.has(value)
+    ? (value as RubricDisplaySource)
+    : undefined;
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === 'object' && !Array.isArray(value));
@@ -91,7 +103,9 @@ export async function resolveRubricConfigForSubmission({
       )
     : null;
 
-  let activeConfig = snapshotConfig;
+  let activeConfig = snapshotConfig
+    ? { ...snapshotConfig, source: parseRubricDisplaySource(latestGradingRun?.source) }
+    : null;
   if (!activeConfig) {
     const assignmentTypeConfig = await resolveAssignmentTypeGradingConfig({
       assignmentTypeId,
@@ -101,6 +115,7 @@ export async function resolveRubricConfigForSubmission({
       minScore: assignmentTypeConfig.minScore,
       maxScore: assignmentTypeConfig.maxScore,
       scoringType: assignmentTypeConfig.scoringType,
+      source: assignmentTypeConfig.source,
     };
   }
 
