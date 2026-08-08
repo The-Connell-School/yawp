@@ -27,6 +27,8 @@ type Props = {
   serverUpdatedAt: string | Date;
   initialRevision: number;
   isEditable: boolean;
+  /** Teacher-side only — see the Editor prop of the same name. */
+  showPastedSource?: boolean;
   onBridgeReady: (bridge: EditorBridge | null) => void;
   onSyncStatusChange?: (status: SyncStatus) => void;
   onSubmittableContentChange?: (submittable: boolean) => void;
@@ -47,6 +49,7 @@ export function DocumentEditor({
   serverUpdatedAt,
   initialRevision,
   isEditable,
+  showPastedSource,
   onBridgeReady,
   onSyncStatusChange,
   onSubmittableContentChange,
@@ -93,6 +96,7 @@ export function DocumentEditor({
             initialHtml={hydrated.html}
             initialRevision={initialRevision}
             isEditable={isEditable}
+            showPastedSource={showPastedSource}
             onBridgeReady={onBridgeReady}
             onSyncStatusChange={onSyncStatusChange}
             onSubmittableContentChange={onSubmittableContentChange}

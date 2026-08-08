@@ -911,7 +911,11 @@ export default function SubmissionRoute() {
 
         {/* Center: Essay */}
         <div className="flex min-w-0 grow flex-col overflow-hidden bg-white md:h-full">
-          <EssayPanel ref={setEssayRef} html={submission.html ?? ''} />
+          <EssayPanel
+            ref={setEssayRef}
+            html={submission.html ?? ''}
+            showPastedSource={isGradingOther}
+          />
           {isGradingOther && essayElement ? (
             <SelectionToolbar contentRoot={essayElement} />
           ) : null}

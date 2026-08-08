@@ -12,6 +12,13 @@ const PASTE_ALERT_MIN_CHARS = 200;
  * /app layout owns it via useInternalCopyMarker, so copies made on any
  * page count, not only those made while an editor happened to be mounted.
  * See app/utils/internal-copy.ts for the rule and its known gaps.
+ *
+ * The same decision also marks the pasted range in the document, so the
+ * passage can be found again while reading the work rather than only
+ * counted in a list. ProseMirror has already inserted the clipboard
+ * content by the time this listener runs — it is registered on the editor
+ * DOM after ProseMirror's own handler — so the range is available on the
+ * pastedSource plugin's state. See extensions/pasted-source.ts.
  */
 export function usePasteAlert(editor: Editor | null, docId: string) {
   useEffect(() => {
@@ -23,6 +30,8 @@ export function usePasteAlert(editor: Editor | null, docId: string) {
       const copiedFromInsideApp = wasCopiedInsideApp(pastedText);
 
       if (textLength >= PASTE_ALERT_MIN_CHARS && !copiedFromInsideApp) {
+        editor.commands.markLastPasteAsExternal?.();
+
         fetch('/api/paste-alert', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },

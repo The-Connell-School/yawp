@@ -13,6 +13,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { Editor } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
 import { usePasteAlert } from './use-paste-alert';
+import { PastedSource } from './extensions/pasted-source';
 import { useInternalCopyMarker } from '~/hooks/useInternalCopyMarker';
 import { markInternalCopy } from '~/utils/internal-copy';
 
@@ -68,7 +69,10 @@ function firePaste(text: string, target: HTMLElement = editorDom()) {
   Object.defineProperty(event, 'clipboardData', {
     // Only text/plain carries the payload; tiptap also probes for
     // 'vscode-editor-data' and expects JSON or nothing.
-    value: { getData: (type: string) => (type === 'text/plain' ? text : '') },
+    value: {
+      getData: (type: string) => (type === 'text/plain' ? text : ''),
+      types: ['text/plain'],
+    },
   });
   act(() => {
     target.dispatchEvent(event);
@@ -88,7 +92,7 @@ describe('usePasteAlert', () => {
 
   beforeEach(() => {
     editor = new Editor({
-      extensions: [StarterKit],
+      extensions: [StarterKit, PastedSource],
       content: '<p>hello world, this is the editor content</p>',
     });
     localStorage.clear();
@@ -182,7 +186,7 @@ describe('usePasteAlert', () => {
     // backed by a fresh editor, sharing localStorage (as two real tabs
     // would).
     const editorB = new Editor({
-      extensions: [StarterKit],
+      extensions: [StarterKit, PastedSource],
       content: '<p>tab b content</p>',
     });
     const mountedB = mountPasteAlert('doc-2', editorB);
@@ -212,7 +216,7 @@ describe('usePasteAlert', () => {
 
     // Now navigate to a document and paste what was copied.
     const editorAfterNavigation = new Editor({
-      extensions: [StarterKit],
+      extensions: [StarterKit, PastedSource],
       content: '<p>the document they navigated to</p>',
     });
     const mounted = mountPasteAlert('doc-after-navigation', editorAfterNavigation);
@@ -242,5 +246,31 @@ describe('usePasteAlert', () => {
   it('still posts an alert when nothing was ever copied in the app (genuinely external paste)', () => {
     firePaste('x'.repeat(500));
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('marks the pasted range in the document so the passage can be found while reading the work', () => {
+    editor!.commands.focus('end');
+    firePaste('x'.repeat(200));
+
+    const html = editor!.getHTML();
+    expect(html).toContain('data-pasted-source="external"');
+    expect(html).toContain(`>${'x'.repeat(200)}<`);
+  });
+
+  it('does not mark the document when the paste came from inside the app', () => {
+    const passage = 'a passage the student copied from their own outline '.repeat(5);
+    markInternalCopy(passage);
+
+    editor!.commands.focus('end');
+    firePaste(passage);
+
+    expect(editor!.getHTML()).not.toContain('data-pasted-source');
+  });
+
+  it('does not mark the document for a paste under the threshold', () => {
+    editor!.commands.focus('end');
+    firePaste('x'.repeat(199));
+
+    expect(editor!.getHTML()).not.toContain('data-pasted-source');
   });
 });
