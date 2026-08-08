@@ -1,7 +1,14 @@
-import { type LoaderFunctionArgs, redirect } from 'react-router';
-import { Link, useLoaderData } from 'react-router';
+import {
+  type ActionFunctionArgs,
+  type LoaderFunctionArgs,
+  data as dataResponse,
+  redirect,
+} from 'react-router';
+import { Link, useFetcher, useLoaderData } from 'react-router';
 import { useMemo, useState } from 'react';
 import { Search } from 'lucide-react';
+import { AssignmentCreationSheet } from '~/components/assignments/assignment-creation-sheet';
+import { Button } from '~/components/ui/button';
 import { Input } from '~/components/ui/input';
 import {
   Table,
@@ -11,7 +18,15 @@ import {
   TableHeader,
   TableRow,
 } from '~/components/ui/table';
+import { AP_HISTORY_ASSIGNMENT_TYPE_KEY } from '~/domain/ap-history/schema';
+import type { SavedAssignment } from '~/domain/assignments/saved-assignments';
+import {
+  SAVED_ASSIGNMENTS_ENABLED,
+  archiveSavedAssignment,
+  listSavedAssignments,
+} from '~/domain/assignments/saved-assignments.server';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
+import { getAvailableAssignmentTypesForScopes } from '~/utils/assignment-type-access.server';
 import { prisma } from '~/utils/db.server';
 import { formatClassLabel } from '~/utils/teacher-document-work-utils';
 
@@ -59,12 +74,205 @@ export async function loader({ request }: LoaderFunctionArgs) {
     classLabel: formatClassLabel(classAssignment.class),
   }));
 
-  return { assignments };
+  // Everything the page needs to reuse a saved assignment: the saved rows plus
+  // the classes and assignment types the creation sheet offers.
+  const teacherClasses = await prisma.class.findMany({
+    where: { teachers: { some: { id: profile.id } }, isArchived: false },
+    select: {
+      id: true,
+      grade: true,
+      period: true,
+      title: true,
+      school: { select: { id: true, organizationId: true } },
+    },
+  });
+
+  const availableAssignmentTypes =
+    teacherClasses.length > 0
+      ? await getAvailableAssignmentTypesForScopes<{
+          id: string;
+          title: string;
+          systemKey: string | null;
+        }>({
+          scopes: teacherClasses.map((klass) => ({
+            organizationId: klass.school.organizationId,
+            schoolId: klass.school.id,
+            teacherProfileId: profile.id,
+          })),
+          select: { id: true, title: true, systemKey: true },
+          orderBy: { position: 'asc' },
+        })
+      : [];
+
+  const savedAssignments = SAVED_ASSIGNMENTS_ENABLED
+    ? await listSavedAssignments({ membershipId: profile.id })
+    : [];
+
+  return {
+    assignments,
+    savedAssignments,
+    assignmentCreationClasses: teacherClasses.map((klass) => ({
+      id: klass.id,
+      name: formatClassLabel(klass),
+    })),
+    // AP History assignments are built from their own library rather than a
+    // free-text prompt, so they are not offered here.
+    assignmentCreationTypes: availableAssignmentTypes
+      .filter((type) => type.systemKey !== AP_HISTORY_ASSIGNMENT_TYPE_KEY)
+      .map((type) => ({ id: type.id, title: type.title })),
+  };
+}
+
+export async function action({ request }: ActionFunctionArgs) {
+  const userId = await requireUserId(request);
+  const profile = await requireMembership(request, userId);
+
+  if (profile.role !== 'TEACHER') {
+    return dataResponse(
+      { success: false, message: 'Only teachers can do that.' },
+      { status: 403 }
+    );
+  }
+
+  const formData = await request.formData();
+  const intent = formData.get('intent')?.toString();
+
+  if (intent !== 'remove-saved-assignment') {
+    return dataResponse(
+      { success: false, message: 'Unsupported action.' },
+      { status: 400 }
+    );
+  }
+
+  const savedAssignmentId = formData.get('savedAssignmentId')?.toString() ?? '';
+  if (!savedAssignmentId) {
+    return dataResponse(
+      { success: false, message: 'Saved assignment is required.' },
+      { status: 400 }
+    );
+  }
+
+  // Scoped by membership inside the domain call, so an id from someone else's
+  // list simply removes nothing.
+  const removed = await archiveSavedAssignment({
+    membershipId: profile.id,
+    savedAssignmentId,
+  });
+
+  if (!removed) {
+    return dataResponse(
+      { success: false, message: 'That saved assignment is no longer there.' },
+      { status: 404 }
+    );
+  }
+
+  return dataResponse({ success: true });
+}
+
+function SavedAssignmentsPanel({
+  savedAssignments,
+  onReuse,
+}: {
+  savedAssignments: SavedAssignment[];
+  onReuse: (savedAssignment: SavedAssignment) => void;
+}) {
+  const removeFetcher = useFetcher<{ success?: boolean; message?: string }>();
+  const removingId =
+    removeFetcher.state !== 'idle'
+      ? removeFetcher.formData?.get('savedAssignmentId')?.toString()
+      : undefined;
+
+  return (
+    <section className="mb-8" aria-labelledby="saved-assignments-heading">
+      <h2
+        id="saved-assignments-heading"
+        className="mb-2 text-lg font-semibold"
+      >
+        My Saved Assignments
+      </h2>
+      <p className="mb-4 text-base/7 text-muted-foreground sm:text-sm/6">
+        Assignments you kept for reuse. Giving one to a class opens it
+        pre-filled — nothing here has been assigned yet.
+      </p>
+
+      {savedAssignments.length === 0 ? (
+        <div className="flex flex-col items-center justify-center rounded-lg border border-dashed bg-muted/50 p-8 text-center">
+          <span className="text-base/7 text-muted-foreground sm:text-sm/6">
+            Tick &quot;Save to My Saved Assignments&quot; when you create an
+            assignment and it will show up here.
+          </span>
+        </div>
+      ) : (
+        <ul className="divide-y rounded-lg bg-muted/50" data-testid="saved-assignments-list">
+          {savedAssignments.map((savedAssignment) => (
+            <li
+              key={savedAssignment.id}
+              className="flex flex-wrap items-center justify-between gap-3 p-4"
+              data-testid={`saved-assignment-${savedAssignment.id}`}
+            >
+              <div className="min-w-0">
+                <p className="font-medium [overflow-wrap:anywhere]">
+                  {savedAssignment.title}
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  {savedAssignment.assignmentTypeTitle}
+                </p>
+              </div>
+              <div className="flex shrink-0 items-center gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => onReuse(savedAssignment)}
+                  data-testid={`saved-assignment-use-${savedAssignment.id}`}
+                >
+                  Give to a class
+                </Button>
+                <removeFetcher.Form method="post">
+                  <input
+                    type="hidden"
+                    name="intent"
+                    value="remove-saved-assignment"
+                  />
+                  <input
+                    type="hidden"
+                    name="savedAssignmentId"
+                    value={savedAssignment.id}
+                  />
+                  <Button
+                    type="submit"
+                    size="sm"
+                    variant="ghost"
+                    disabled={removingId === savedAssignment.id}
+                    data-testid={`saved-assignment-remove-${savedAssignment.id}`}
+                  >
+                    Remove
+                  </Button>
+                </removeFetcher.Form>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {removeFetcher.data && removeFetcher.data.success === false ? (
+        <p className="mt-2 text-sm text-destructive">
+          {removeFetcher.data.message}
+        </p>
+      ) : null}
+    </section>
+  );
 }
 
 export default function MyAssignmentsRoute() {
-  const { assignments } = useLoaderData<typeof loader>();
+  const {
+    assignments,
+    savedAssignments,
+    assignmentCreationClasses,
+    assignmentCreationTypes,
+  } = useLoaderData<typeof loader>();
   const [searchQuery, setSearchQuery] = useState('');
+  const [reusedAssignment, setReusedAssignment] =
+    useState<SavedAssignment | null>(null);
 
   const collator = useMemo(
     () => new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' }),
@@ -91,6 +299,39 @@ export default function MyAssignmentsRoute() {
   return (
     <div className="mx-auto max-w-5xl px-4 py-8">
       <h1 className="mb-6 text-2xl font-semibold">My Assignments</h1>
+
+      {SAVED_ASSIGNMENTS_ENABLED ? (
+        <SavedAssignmentsPanel
+          savedAssignments={savedAssignments}
+          onReuse={setReusedAssignment}
+        />
+      ) : null}
+
+      {reusedAssignment ? (
+        <AssignmentCreationSheet
+          // Remounting per saved assignment is what re-seeds the sheet's own
+          // state with that assignment's settings.
+          key={reusedAssignment.id}
+          open
+          onOpenChange={(open) => {
+            if (!open) setReusedAssignment(null);
+          }}
+          entryPoint="dashboard"
+          assignmentTypes={assignmentCreationTypes}
+          teacherClasses={assignmentCreationClasses}
+          initialAssignmentTypeId={reusedAssignment.assignmentTypeId}
+          initialTitle={reusedAssignment.title}
+          initialPrompt={reusedAssignment.prompt}
+          initialSubmitForGrade={reusedAssignment.submitForGrade}
+          initialPointValue={reusedAssignment.pointValue}
+          initialTutorEnabled={reusedAssignment.tutorEnabled}
+          initialGradingAssistantStrictnessLevel={
+            reusedAssignment.gradingAssistantStrictnessLevel
+          }
+        />
+      ) : null}
+
+      <h2 className="mb-2 text-lg font-semibold">Assigned</h2>
       <div className="relative mb-4 max-w-sm">
         <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
         <Input
