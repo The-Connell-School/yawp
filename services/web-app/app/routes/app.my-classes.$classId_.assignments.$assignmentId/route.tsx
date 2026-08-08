@@ -26,7 +26,7 @@ import {
 } from '~/utils/class-display';
 import { formatAssignmentGrade } from '~/domain/grading/gradeMath';
 import { Loader2 } from 'lucide-react';
-import { postFormWithFallbackRetry } from '~/utils/llm-retry-ui';
+import { postJsonForm } from '~/utils/llm-retry-ui';
 import {
   ClassInsightsPanel,
   type ClassInsight,
@@ -213,7 +213,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   });
 }
 
-type GradingState = 'grading' | 'retrying' | 'done' | 'error';
+type GradingState = 'grading' | 'done' | 'error';
 
 export default function AssignmentSubmissionsRoute() {
   const data = useLoaderData<typeof loader>();
@@ -240,9 +240,6 @@ export default function AssignmentSubmissionsRoute() {
   const [isGrading, setIsGrading] = useState(false);
   const [releasedIds, setReleasedIds] = useState<Set<string>>(new Set());
   const [isReleasing, setIsReleasing] = useState(false);
-  const hasRetryingSubmission = Object.values(gradingProgress).some(
-    (state) => state === 'retrying'
-  );
 
   const backUrl = `/app/my-classes/${klass.id}?tab=assignments`;
 
@@ -291,14 +288,9 @@ export default function AssignmentSubmissionsRoute() {
       try {
         const form = new FormData();
         form.append('submissionId', submissionId);
-        const { response } = await postFormWithFallbackRetry({
+        const { response } = await postJsonForm({
           action: '/api/domain/grade-essay-ai',
           formData: form,
-          onRetry: () =>
-            setGradingProgress((prev) => ({
-              ...prev,
-              [submissionId]: 'retrying',
-            })),
         });
         if (response.ok) {
           setGradingProgress((prev) => ({ ...prev, [submissionId]: 'done' }));
@@ -432,7 +424,7 @@ export default function AssignmentSubmissionsRoute() {
               {isGrading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  {hasRetryingSubmission ? 'Retrying...' : 'Grading…'}
+                  Grading…
                 </>
               ) : (
                 `Grade with AI${selected.size > 0 ? ` (${selected.size})` : ''}`
@@ -536,9 +528,7 @@ export default function AssignmentSubmissionsRoute() {
                             checked={selected.has(sub.id)}
                             onCheckedChange={() => toggleSelect(sub.id)}
                             disabled={
-                              !isDocumentSubmissionEnabled ||
-                              state === 'grading' ||
-                              state === 'retrying'
+                              !isDocumentSubmissionEnabled || state === 'grading'
                             }
                             aria-label="Select submission"
                           />
@@ -565,11 +555,6 @@ export default function AssignmentSubmissionsRoute() {
                             <span className="flex items-center gap-1 text-sm text-blue-600">
                               <Loader2 className="h-3 w-3 animate-spin" />
                               Grading…
-                            </span>
-                          ) : state === 'retrying' ? (
-                            <span className="flex items-center gap-1 text-sm text-blue-600">
-                              <Loader2 className="h-3 w-3 animate-spin" />
-                              Retrying...
                             </span>
                           ) : state === 'error' ? (
                             <Badge className="bg-red-100 text-red-700 border-red-200">

@@ -32,10 +32,6 @@ import {
 import { buildPersistedGradeSignature } from '~/domain/grading/persisted-grade-signature';
 import { Check, Loader2 } from 'lucide-react';
 import { cn } from '~/utils/misc';
-import {
-  cloneFormDataWithFallbackRetry,
-  isLlmRetryResponse,
-} from '~/utils/llm-retry-ui';
 
 type RubricScore = {
   score: number;
@@ -135,8 +131,6 @@ export function TeacherGradingPanel({
     useState(false);
   const [savedSignature, setSavedSignature] = useState('');
   const pendingSaveSignatureRef = useRef('');
-  const pendingAiFormRef = useRef<FormData | null>(null);
-  const hasRetriedAiFormRef = useRef(false);
   const recalcCompleteTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
     null
   );
@@ -172,9 +166,7 @@ export function TeacherGradingPanel({
   }, [resolvedNumericPercentage]);
   const gradeBadgeClassName =
     'border-purple-300 bg-purple-100 text-purple-800 hover:!bg-purple-100 hover:!text-purple-800 dark:border-purple-800 dark:bg-purple-950/40 dark:text-purple-200 dark:hover:!bg-purple-950/40 dark:hover:!text-purple-200';
-  const [isAiRetrying, setIsAiRetrying] = useState(false);
-  const isAiRequestInFlight = aiFetcher.state !== 'idle';
-  const isGenerating = isAiRequestInFlight || isAiRetrying;
+  const isGenerating = aiFetcher.state !== 'idle';
   const isSaving = saveFetcher.state !== 'idle';
   const isBusy = isGenerating || isSaving;
 
@@ -219,20 +211,6 @@ export function TeacherGradingPanel({
   useEffect(() => {
     if (aiFetcher.state !== 'idle') return;
 
-    if (
-      isLlmRetryResponse(aiFetcher.data) &&
-      pendingAiFormRef.current &&
-      !hasRetriedAiFormRef.current
-    ) {
-      hasRetriedAiFormRef.current = true;
-      setIsAiRetrying(true);
-      aiFetcher.submit(cloneFormDataWithFallbackRetry(pendingAiFormRef.current), {
-        method: 'POST',
-        action: '/api/domain/grade-essay-ai',
-      });
-      return;
-    }
-
     if (aiFetcher.data?.success) {
       const aiRubricScores = normalizeRubricScores(aiFetcher.data.rubricScores);
 
@@ -251,11 +229,6 @@ export function TeacherGradingPanel({
       );
     }
 
-    if (aiFetcher.data && !isLlmRetryResponse(aiFetcher.data)) {
-      pendingAiFormRef.current = null;
-      hasRetriedAiFormRef.current = false;
-      setIsAiRetrying(false);
-    }
   }, [aiFetcher.data, aiFetcher.state, onGrammarIssuesChange]);
 
   const currentSignature = useMemo(
@@ -347,9 +320,6 @@ export function TeacherGradingPanel({
     } else {
       aiForm.append('documentId', documentId);
     }
-    pendingAiFormRef.current = aiForm;
-    hasRetriedAiFormRef.current = false;
-    setIsAiRetrying(false);
     aiFetcher.submit(aiForm, {
       method: 'POST',
       action: '/api/domain/grade-essay-ai',
@@ -382,7 +352,7 @@ export function TeacherGradingPanel({
               {isGenerating ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  {isAiRetrying ? 'Retrying...' : 'Grading...'}
+                  Grading...
                 </>
               ) : (
                 'Grading Assistant Suggestions'

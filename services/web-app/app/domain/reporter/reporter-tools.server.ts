@@ -9,6 +9,7 @@
 import { z } from 'zod';
 import { prisma } from '~/utils/db.server';
 import { formatClassCardTitle } from '~/utils/class-display';
+import { redact, rehydrate, type RedactionSession } from '~/utils/ai-redaction';
 import { parseGrammarIssuesPayload } from '~/domain/grading/grammarIssues';
 import {
   readRubricEntryScore,
@@ -33,6 +34,19 @@ export type ReporterToolContext = {
   organizationId: string;
   /** Model-requested writes staged until the containing LLM turn succeeds. */
   pendingGrowthPlanSaves?: Map<string, PendingReporterGrowthPlan>;
+  /**
+   * Request-scoped real-name <-> pseudonym mapping shared with the route.
+   * Every real student name a tool result surfaces must be registered
+   * through `nameRedaction.registerStudentFullName` (not the bare
+   * `pseudonymFor`) before it reaches the outbound tool-result JSON - the
+   * full-name form also aliases the student's bare first name so stored
+   * feedback text like a grading `overallComment` ("Sophia, you've...")
+   * still gets redacted when it's echoed back into a later prompt. Every
+   * model-supplied `student`/`focus`/`body` field must be rehydrated back
+   * to real names before it touches the database or a DB lookup. Never
+   * persisted or logged.
+   */
+  nameRedaction: RedactionSession;
 };
 
 export type PendingReporterGrowthPlan = {
@@ -350,6 +364,58 @@ function normalizeRubricScores(value: unknown): Record<string, number> | null {
   return Object.keys(out).length > 0 ? out : null;
 }
 
+/**
+ * Every student name that could plausibly appear in this teacher's Reporter
+ * conversation - not just students currently enrolled in one of their
+ * classes, but anyone with a graded submission tied to an assignment in a
+ * class this teacher teaches. A student who changed classes or was later
+ * unenrolled still has grade history a tool can surface, and an earlier
+ * conversation turn may already reference them by name. Call this BEFORE
+ * the first provider call of a turn and seed the redaction session with
+ * the result, so every name already sitting in persisted conversation
+ * history is covered - not just names a tool happens to surface this turn.
+ *
+ * Deterministic order (`orderBy: { id: 'asc' }`) matters: the redaction
+ * session assigns pseudonyms in registration order, and collision
+ * resolution depends on what's already taken. Querying in the same order
+ * every turn keeps a given student's pseudonym stable turn to turn, as
+ * long as they were already in a prior turn's roster - which they always
+ * are for names that already exist in persisted history.
+ */
+export async function listReporterRedactableStudentNames(ctx: {
+  membershipId: string;
+  organizationId: string;
+}): Promise<string[]> {
+  const memberships = await prisma.orgMembership.findMany({
+    where: {
+      organizationId: ctx.organizationId,
+      role: 'STUDENT',
+      OR: [
+        {
+          classesAsStudent: {
+            some: { teachers: { some: { id: ctx.membershipId } } },
+          },
+        },
+        {
+          documents: {
+            some: {
+              classAssignment: {
+                class: { teachers: { some: { id: ctx.membershipId } } },
+              },
+            },
+          },
+        },
+      ],
+    },
+    select: { user: { select: { name: true } } },
+    orderBy: { id: 'asc' },
+  });
+
+  return memberships
+    .map((membership) => membership.user.name)
+    .filter((name): name is string => Boolean(name && name.trim()));
+}
+
 async function listClasses(ctx: ReporterToolContext) {
   const classes = await prisma.class.findMany({
     where: {
@@ -402,7 +468,10 @@ async function getClassGradeReport(ctx: ReporterToolContext, input: unknown) {
     teacherMembershipId: ctx.membershipId,
     classId,
   });
-  const students = summarizeStudentGrades(rows);
+  const students = summarizeStudentGrades(rows).map((student) => ({
+    ...student,
+    studentName: ctx.nameRedaction.registerStudentFullName(student.studentName),
+  }));
   const classAverages = students
     .map((student) => student.averagePercentage)
     .filter((value): value is number => typeof value === 'number');
@@ -467,7 +536,10 @@ async function findAttention(ctx: ReporterToolContext, input: unknown) {
     studentsConsidered,
     flaggedCount: flagged.length,
     truncated: flagged.length > MAX_ATTENTION_STUDENTS,
-    students: flagged.slice(0, MAX_ATTENTION_STUDENTS),
+    students: flagged.slice(0, MAX_ATTENTION_STUDENTS).map((student) => ({
+      ...student,
+      studentName: ctx.nameRedaction.registerStudentFullName(student.studentName),
+    })),
   };
 }
 
@@ -537,7 +609,9 @@ async function resolveStudent(
       error: `More than one student matches "${query}". Ask which one.`,
       ambiguous: byName.map((match) => ({
         studentMembershipId: match.id,
-        studentName: match.user.name ?? 'Unknown student',
+        studentName: ctx.nameRedaction.registerStudentFullName(
+          match.user.name ?? 'Unknown student'
+        ),
       })),
     };
   }
@@ -561,7 +635,10 @@ async function getStudentGradeReport(ctx: ReporterToolContext, input: unknown) {
   const [summary] = summarizeStudentGrades(rows);
 
   return {
-    student: { studentMembershipId: student.id, studentName: student.name },
+    student: {
+      studentMembershipId: student.id,
+      studentName: ctx.nameRedaction.registerStudentFullName(student.name),
+    },
     sourceTruncated,
     sourceLimit,
     sourceWarning: sourceTruncated
@@ -597,7 +674,10 @@ async function getStudentGrowth(ctx: ReporterToolContext, input: unknown) {
   const growth = buildGrowthSeries(rows);
 
   return {
-    student: { studentMembershipId: student.id, studentName: student.name },
+    student: {
+      studentMembershipId: student.id,
+      studentName: ctx.nameRedaction.registerStudentFullName(student.name),
+    },
     sourceTruncated,
     sourceLimit,
     sourceWarning: sourceTruncated
@@ -670,13 +750,22 @@ async function getSubmissionDetail(ctx: ReporterToolContext, input: unknown) {
     };
   }
 
+  // Register this student's pseudonym before scrubbing any free text below,
+  // so a stray mention of their name inside the essay, a margin comment, or
+  // the overall feedback also gets caught, not just the structured field.
+  const realStudentName =
+    submission.document.membership.user.name ?? 'Unknown student';
+  const pseudonymStudentName = ctx.nameRedaction.registerStudentFullName(realStudentName);
+  const scrub = (text: string | null | undefined) =>
+    text == null ? text : redact(text, ctx.nameRedaction.mapping);
+
   const grammarIssues = parseGrammarIssuesPayload(submission.grammarIssues, {
     sourceText: submission.text ?? undefined,
   })
     .slice(0, MAX_GRAMMAR_ISSUES)
     .map((issue) => ({
-      excerpt: issue.excerpt,
-      message: issue.message,
+      excerpt: scrub(issue.excerpt),
+      message: scrub(issue.message),
       kind: issue.kind,
       rule: issue.rule ?? null,
     }));
@@ -686,15 +775,16 @@ async function getSubmissionDetail(ctx: ReporterToolContext, input: unknown) {
   const inlineComments = submission.comments
     .slice(0, MAX_INLINE_COMMENTS)
     .map((comment) => ({
-      excerpt: comment.excerpt ?? null,
-      comment: comment.content.slice(0, MAX_COMMENT_CHARS),
+      excerpt: scrub(comment.excerpt ?? null),
+      comment: scrub(comment.content.slice(0, MAX_COMMENT_CHARS)),
     }));
+
+  const essayExcerpt = buildEssayExcerpt(submission.text);
 
   return {
     submissionId: submission.id,
     student: {
-      studentName:
-        submission.document.membership.user.name ?? 'Unknown student',
+      studentName: pseudonymStudentName,
     },
     assignmentTitle:
       submission.document.classAssignment?.assignment.title ??
@@ -704,12 +794,14 @@ async function getSubmissionDetail(ctx: ReporterToolContext, input: unknown) {
     letterGrade: submission.letterGrade,
     overallScore: submission.overallScore,
     rubricScores: normalizeRubricScores(submission.rubricScores),
-    overallComment: submission.overallComment ?? null,
-    feedback: submission.feedback ?? null,
+    overallComment: scrub(submission.overallComment),
+    feedback: scrub(submission.feedback),
     inlineComments,
     inlineCommentCount: submission.comments.length,
     grammarIssues,
-    essayExcerpt: buildEssayExcerpt(submission.text),
+    essayExcerpt: essayExcerpt
+      ? { ...essayExcerpt, excerpt: scrub(essayExcerpt.excerpt) ?? '' }
+      : null,
   };
 }
 
@@ -811,8 +903,14 @@ async function saveGrowthPlan(ctx: ReporterToolContext, input: unknown) {
     requiresTeacherConfirmation: Boolean(ctx.pendingGrowthPlanSaves),
     pendingCommit: Boolean(ctx.pendingGrowthPlanSaves),
     planId,
-    student: { studentMembershipId: student.id, studentName: student.name },
-    focus: parsed.focus,
+    student: {
+      studentMembershipId: student.id,
+      studentName: ctx.nameRedaction.registerStudentFullName(student.name),
+    },
+    // parsed.focus was rehydrated to the real name for persistence above;
+    // re-redact it here since this echoes back into the model-facing tool
+    // result, not the database.
+    focus: redact(parsed.focus, ctx.nameRedaction.mapping),
     targetSkills: parsed.targetSkills,
     baseline,
     checkInAt: checkInAt?.toISOString() ?? null,
@@ -926,21 +1024,29 @@ async function listGrowthPlans(ctx: ReporterToolContext, input: unknown) {
     const targetSkills = parseTargetSkills(plan.targetSkills);
     const baseline = parsePlanBaseline(plan.baseline);
     const rows = rowsByStudent.get(plan.studentMembershipId) ?? [];
+    // Plan focus/body are stored in the database as real names (rehydrated
+    // when save_growth_plan persisted them) - re-redact before they go back
+    // to the model.
+    const planStudentName = ctx.nameRedaction.registerStudentFullName(
+      plan.student.user.name ?? 'Unknown student'
+    );
     detailed.push({
       planId: plan.id,
       status: plan.status,
-      focus: plan.focus,
+      focus: redact(plan.focus, ctx.nameRedaction.mapping),
       targetSkills,
       checkInAt: plan.checkInAt?.toISOString() ?? null,
       createdAt: plan.createdAt.toISOString(),
       student: {
         studentMembershipId: plan.studentMembershipId,
-        studentName: plan.student.user.name ?? 'Unknown student',
+        studentName: planStudentName,
       },
       progress: baseline
         ? buildPlanProgress(baseline, targetSkills, rows)
         : null,
-      ...(includeBody ? { body: plan.body } : {}),
+      ...(includeBody
+        ? { body: redact(plan.body, ctx.nameRedaction.mapping) }
+        : {}),
     });
   }
 
@@ -961,11 +1067,36 @@ async function listGrowthPlans(ctx: ReporterToolContext, input: unknown) {
  * validation failures are returned as structured errors rather than thrown, so
  * a bad model call degrades gracefully instead of failing the whole request.
  */
+/**
+ * Fields the model fills in from its own memory of earlier tool results
+ * (so they may carry a pseudonym instead of a real name) or composes as
+ * free text that can quote a pseudonym it was given ("student"/"focus"/
+ * "body"). Rehydrate them back to real text before any DB lookup or write,
+ * so the model's redacted view never breaks a name-keyed query and never
+ * writes a pseudonym into a persisted record a teacher will see elsewhere.
+ */
+const REHYDRATE_ON_INPUT_FIELDS = ['student', 'focus', 'body'] as const;
+
+function rehydrateToolInput(
+  input: Record<string, unknown>,
+  session: RedactionSession
+): Record<string, unknown> {
+  const rehydrated: Record<string, unknown> = { ...input };
+  for (const field of REHYDRATE_ON_INPUT_FIELDS) {
+    const value = rehydrated[field];
+    if (typeof value === 'string') {
+      rehydrated[field] = rehydrate(value, session.mapping);
+    }
+  }
+  return rehydrated;
+}
+
 export async function handleReporterToolCall(
   name: string,
-  input: Record<string, unknown>,
+  rawInput: Record<string, unknown>,
   ctx: ReporterToolContext
 ): Promise<string> {
+  const input = rehydrateToolInput(rawInput, ctx.nameRedaction);
   try {
     let result: unknown;
     switch (name) {

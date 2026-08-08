@@ -68,7 +68,6 @@ function headerState(
     hasDraftToReplace: false,
     hasGrade: true,
     isGenerating: false,
-    isAiRetrying: false,
     isBusy: false,
     isSavingDraft: false,
     gradingAssistantStrictnessLevel: 'intermediate',
