@@ -1,14 +1,28 @@
 import { test, expect } from '../test-setup';
 import { createE2EPrismaClient } from '../prisma-client';
 
-test.describe.serial('Teacher unsubmits a document', () => {
-  // There is no teacher-facing "Unsubmit" control anymore — see
-  // submission-lifecycle-panel.tsx. Only students can unsubmit their own
-  // document (a separate flow). The server machinery this test exercises
-  // (Submission.unsubmittedAt / unsubmittedByMembershipId, the "document and
-  // its revisions survive" guarantee, and active-read exclusion) stays in
-  // place for that student-facing flow to build on, so this test still
-  // drives the underlying API directly to keep that coverage.
+const unsubmitViaApi = async (
+  page: import('@playwright/test').Page,
+  submissionId: string
+) =>
+  page.evaluate(async (id) => {
+    const formData = new FormData();
+    formData.append('submissionId', id);
+    const res = await fetch('/api/domain/unsubmit-submission', {
+      method: 'POST',
+      body: formData,
+    });
+    return { status: res.status, body: await res.json() };
+  }, submissionId);
+
+test.describe.serial('Unsubmitting the seeded submission', () => {
+  // Unsubmit is student-only: there is no teacher-facing "Unsubmit" control
+  // (see submission-lifecycle-panel.tsx) and the API refuses teachers and
+  // admins outright. This test pins both halves of that contract — the
+  // teacher is refused, the owning student succeeds — plus the server
+  // machinery the student flow rests on (Submission.unsubmittedAt /
+  // unsubmittedByMembershipId, the "document and its revisions survive"
+  // guarantee, and active-read exclusion).
   test('unsubmitting hides the submission without deleting the document', async ({
     page,
     signIn,
@@ -24,21 +38,31 @@ test.describe.serial('Teacher unsubmits a document', () => {
     expect(before).not.toBeNull();
     expect(before?.deletedAt).toBeNull();
 
+    // A teacher cannot unsubmit for a student, even by calling the API the
+    // way the removed teacher button used to.
     await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
     await page.goto(`/app/submissions/${e2eContext.submittedSubmissionId}`);
     await page.waitForLoadState('networkidle');
 
-    // No teacher-facing entry point exists in the UI; call the (still-live,
-    // still teacher-authorized) API the same way the removed button used to.
-    const result = await page.evaluate(async (submissionId) => {
-      const formData = new FormData();
-      formData.append('submissionId', submissionId);
-      const res = await fetch('/api/domain/unsubmit-submission', {
-        method: 'POST',
-        body: formData,
-      });
-      return { status: res.status, body: await res.json() };
-    }, e2eContext.submittedSubmissionId);
+    const refused = await unsubmitViaApi(
+      page,
+      e2eContext.submittedSubmissionId
+    );
+    expect(refused.status).toBe(403);
+    expect(refused.body.success).toBe(false);
+    expect(
+      await prisma.submission.findUnique({
+        where: { id: e2eContext.submittedSubmissionId },
+        select: { unsubmittedAt: true },
+      })
+    ).toEqual({ unsubmittedAt: null });
+
+    // The owning student withdraws their own submission.
+    await signIn(e2eContext.userEmail, 'johndoe');
+    await page.goto(`/app/documents/${e2eContext.submittedDocumentId}`);
+    await page.waitForLoadState('networkidle');
+
+    const result = await unsubmitViaApi(page, e2eContext.submittedSubmissionId);
     expect(result.status).toBe(200);
     expect(result.body.success).toBe(true);
 
@@ -52,9 +76,7 @@ test.describe.serial('Teacher unsubmits a document', () => {
       },
     });
     expect(submission?.unsubmittedAt).not.toBeNull();
-    expect(submission?.unsubmittedByMembershipId).toBe(
-      e2eContext.teacherMembershipId
-    );
+    expect(submission?.unsubmittedByMembershipId).toBe(e2eContext.membershipId);
     // The submission row itself (its own snapshot html/text) is untouched.
     expect(submission?.html).toContain('importance of reading');
 
