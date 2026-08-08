@@ -80,8 +80,14 @@ export function redactableNamePartsFromFullName(
  * tutor - every caller goes through `buildRedactionMapping`, so gating it
  * here is a single choke point). Defaults ON: only an explicit `'false'`
  * disables it. Flip with `AI_PII_REDACTION_ENABLED=false` if redaction
- * itself is ever suspected of causing a production incident and needs to
- * come out fast, independent of a deploy.
+ * itself is ever suspected of causing a production incident.
+ *
+ * HOW LONG THAT TAKES, honestly: the variable is declared in
+ * `infra/main.tf` (`runtime_environment_variables`), so flipping it in
+ * production is a Terraform apply that rolls the App Runner service —
+ * minutes, not seconds. There is no console-level override that survives
+ * the next apply. Plan incident response around a deploy cycle. The
+ * procedure is in EMERGENCY_RUNBOOK.md.
  */
 export function isPiiRedactionEnabled(): boolean {
   return process.env.AI_PII_REDACTION_ENABLED !== 'false';

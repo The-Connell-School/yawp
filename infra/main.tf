@@ -443,6 +443,13 @@ resource "aws_apprunner_service" "web" {
           NODE_ENV = var.env
           PORT = "8080"
           AI_MODEL = "claude-sonnet-4-6"
+          # Kill switch for the AI PII redaction layer. Only the literal
+          # string "false" disables it. Declared here so the variable
+          # actually exists on the running service and can be flipped in
+          # one place — see EMERGENCY_RUNBOOK.md. Flipping it is still a
+          # Terraform apply, which rolls the service; there is no
+          # deploy-free override.
+          AI_PII_REDACTION_ENABLED = "true"
           EMAIL_PROVIDER = "ses"
           AWS_SES_REGION = var.aws_region
           SES_FROM_EMAIL = var.resend_from_email

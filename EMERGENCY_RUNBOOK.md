@@ -204,6 +204,32 @@ Client should have access to all services below.
 - **Usage**: Fallback AI service, text-to-speech generation
 - **Rate Limits**: Monitor usage in OpenAI dashboard
 
+### Disabling AI PII redaction (kill switch)
+
+Student and teacher names are replaced with pseudonyms before any prompt
+leaves our servers, and restored on the way back
+(`services/web-app/app/utils/ai-redaction/`). If that layer is itself
+suspected of corrupting grading feedback, tutor replies, or Reporter
+answers, it can be turned off.
+
+- **Variable**: `AI_PII_REDACTION_ENABLED`. Only the literal string
+  `false` disables it; anything else (including unset) leaves it ON.
+- **Where it is declared**: `infra/main.tf`, in the App Runner service's
+  `runtime_environment_variables` map.
+- **Procedure**: set it to `"false"` in `infra/main.tf`, then
+  `terraform plan` and `terraform apply`. This replaces the App Runner
+  image configuration and rolls the service.
+- **Expected time to mitigation**: a deploy cycle — minutes, not seconds.
+  There is no console-level override that survives the next
+  `terraform apply`, so do not plan an incident response that assumes an
+  instant flip.
+- **What turning it off does**: prompts go to the provider with real
+  names in them. Nothing else changes — `buildRedactionMapping` returns
+  an empty mapping and every `redact()`/`rehydrate()` call degrades to a
+  pass-through rather than failing.
+- **Turning it back on**: set it back to `"true"` (or remove it) and
+  apply again.
+
 ### 4. PostHog (Analytics & Error Tracking)
 - **Purpose**: User analytics and product insights
 - **Configuration**: API key and host URL in environment
