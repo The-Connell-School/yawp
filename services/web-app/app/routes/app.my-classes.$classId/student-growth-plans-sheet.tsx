@@ -8,6 +8,10 @@ import {
   SheetTitle,
 } from '~/components/ui/sheet';
 import { cn } from '~/utils/misc';
+import {
+  StudentPasteAlertsSection,
+  type StudentPasteAlert,
+} from './student-paste-alerts-section';
 
 export type StudentGrowthPlan = {
   id: string;
@@ -75,6 +79,12 @@ export type StudentGrowthPlansSheetContentProps = {
   student: GrowthPlanSheetStudent | null;
   growthPlans: StudentGrowthPlan[];
   onViewDocuments: () => void;
+  /** Empty when the student has no paste activity — the section renders nothing. */
+  pasteAlerts?: StudentPasteAlert[];
+  /** exitTo target for paste-alert document links, back to the class page. */
+  pasteAlertsExitTo?: string;
+  /** Set false when growth plans aren't shown for this student (e.g. Reporter disabled). */
+  showGrowthPlans?: boolean;
   /**
    * Set false to render the header as plain markup instead of Radix
    * SheetHeader/SheetTitle, which require a Dialog context. Lets tests
@@ -92,17 +102,22 @@ export function StudentGrowthPlansSheetContent({
   student,
   growthPlans,
   onViewDocuments,
+  pasteAlerts = [],
+  pasteAlertsExitTo = '',
+  showGrowthPlans = true,
   renderSheet = true,
 }: StudentGrowthPlansSheetContentProps) {
   const header = renderSheet ? (
     <SheetHeader>
       <SheetTitle>{student?.name ?? 'Student'}</SheetTitle>
-      <SheetDescription>Growth plans from Reporter</SheetDescription>
+      {showGrowthPlans ? (
+        <SheetDescription>Growth plans from Reporter</SheetDescription>
+      ) : null}
     </SheetHeader>
   ) : (
     <div>
       <h2>{student?.name ?? 'Student'}</h2>
-      <p>Growth plans from Reporter</p>
+      {showGrowthPlans ? <p>Growth plans from Reporter</p> : null}
     </div>
   );
 
@@ -125,17 +140,21 @@ export function StudentGrowthPlansSheetContent({
         </button>
       ) : null}
 
-      <div className="mt-4 space-y-3 pb-6">
-        {growthPlans.length === 0 ? (
-          <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed py-10 text-center">
-            <p className="text-sm text-muted-foreground">
-              No growth plans yet for this student.
-            </p>
-          </div>
-        ) : (
-          growthPlans.map((plan) => <GrowthPlanCard key={plan.id} plan={plan} />)
-        )}
-      </div>
+      <StudentPasteAlertsSection alerts={pasteAlerts} exitTo={pasteAlertsExitTo} />
+
+      {showGrowthPlans ? (
+        <div className="mt-4 space-y-3 pb-6">
+          {growthPlans.length === 0 ? (
+            <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed py-10 text-center">
+              <p className="text-sm text-muted-foreground">
+                No growth plans yet for this student.
+              </p>
+            </div>
+          ) : (
+            growthPlans.map((plan) => <GrowthPlanCard key={plan.id} plan={plan} />)
+          )}
+        </div>
+      ) : null}
     </>
   );
 }
@@ -146,12 +165,18 @@ export function StudentGrowthPlansSheet({
   student,
   growthPlans,
   onViewDocuments,
+  pasteAlerts = [],
+  pasteAlertsExitTo = '',
+  showGrowthPlans = true,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   student: GrowthPlanSheetStudent | null;
   growthPlans: StudentGrowthPlan[];
   onViewDocuments: () => void;
+  pasteAlerts?: StudentPasteAlert[];
+  pasteAlertsExitTo?: string;
+  showGrowthPlans?: boolean;
 }) {
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -160,6 +185,9 @@ export function StudentGrowthPlansSheet({
           student={student}
           growthPlans={growthPlans}
           onViewDocuments={onViewDocuments}
+          pasteAlerts={pasteAlerts}
+          pasteAlertsExitTo={pasteAlertsExitTo}
+          showGrowthPlans={showGrowthPlans}
         />
       </SheetContent>
     </Sheet>
