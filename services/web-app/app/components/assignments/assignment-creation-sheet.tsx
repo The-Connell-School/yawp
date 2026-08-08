@@ -1,16 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type * as React from 'react';
 import { useFetcher } from 'react-router';
-import { CircleHelp, FileUp, Loader2 } from 'lucide-react';
+import { FileUp, Loader2 } from 'lucide-react';
 import { Button } from '~/components/ui/button';
 import { Checkbox } from '~/components/ui/checkbox';
 import { Input } from '~/components/ui/input';
 import { Label } from '~/components/ui/label';
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '~/components/ui/popover';
 import {
   Select,
   SelectContent,
@@ -28,7 +23,7 @@ import {
 import { Textarea } from '~/components/ui/textarea';
 import {
   DEFAULT_GRADING_ASSISTANT_STRICTNESS_LEVEL,
-  gradingAssistantStrictnessHelpText,
+  GRADING_ASSISTANT_STRICTNESS_UI_ENABLED,
   gradingAssistantStrictnessOptions,
   type GradingAssistantStrictnessLevel,
 } from '~/domain/grading/grading-assistant-strictness';
@@ -549,62 +544,44 @@ export function AssignmentCreationSheetContent({
                   />
                 </div>
 
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <Label>Grading assistant strictness</Label>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="h-6 w-6 rounded-full"
-                          aria-label="Grading assistant strictness help"
-                          title={gradingAssistantStrictnessHelpText}
-                        >
-                          <CircleHelp className="h-4 w-4" />
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent
-                        align="start"
-                        className="w-80 rounded-md border-slate-200 bg-slate-100 p-3 text-sm text-slate-800 shadow-md"
-                      >
-                        {gradingAssistantStrictnessHelpText}
-                      </PopoverContent>
-                    </Popover>
+                <input
+                  type="hidden"
+                  name="gradingAssistantStrictnessLevel"
+                  value={gradingAssistantStrictnessLevel}
+                />
+                {GRADING_ASSISTANT_STRICTNESS_UI_ENABLED ? (
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <Label>Grading assistant strictness</Label>
+                    </div>
+                    <div className="grid gap-2 sm:grid-cols-3">
+                      {gradingAssistantStrictnessOptions.map((option) => {
+                        const selected =
+                          gradingAssistantStrictnessLevel === option.value;
+                        return (
+                          <button
+                            key={option.value}
+                            type="button"
+                            className={`rounded-md border px-3 py-2 text-left text-sm transition ${
+                              selected
+                                ? 'border-primary bg-primary text-primary-foreground'
+                                : 'border-border bg-background hover:bg-muted'
+                            }`}
+                            aria-pressed={selected}
+                            onClick={() =>
+                              setGradingAssistantStrictnessLevel(option.value)
+                            }
+                            disabled={isSaving}
+                          >
+                            <span className="block font-medium">
+                              {option.label}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
-                  <input
-                    type="hidden"
-                    name="gradingAssistantStrictnessLevel"
-                    value={gradingAssistantStrictnessLevel}
-                  />
-                  <div className="grid gap-2 sm:grid-cols-3">
-                    {gradingAssistantStrictnessOptions.map((option) => {
-                      const selected =
-                        gradingAssistantStrictnessLevel === option.value;
-                      return (
-                        <button
-                          key={option.value}
-                          type="button"
-                          className={`rounded-md border px-3 py-2 text-left text-sm transition ${
-                            selected
-                              ? 'border-primary bg-primary text-primary-foreground'
-                              : 'border-border bg-background hover:bg-muted'
-                          }`}
-                          aria-pressed={selected}
-                          onClick={() =>
-                            setGradingAssistantStrictnessLevel(option.value)
-                          }
-                          disabled={isSaving}
-                        >
-                          <span className="block font-medium">
-                            {option.label}
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
+                ) : null}
               </div>
             </div>
           ) : null}

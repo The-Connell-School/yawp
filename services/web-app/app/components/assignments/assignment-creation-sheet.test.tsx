@@ -181,10 +181,7 @@ describe('AssignmentCreationSheetContent', () => {
       expectText('Extract from PDF');
       expectText('Submit for grade');
       expectText('Point value');
-      expectText('Grading assistant strictness');
-      expectText('Beginner');
-      expectText('Intermediate');
-      expectText('Advanced');
+      expectNoText('Grading assistant strictness');
       expectNoText('Tutor Context');
 
       const form = document.querySelector('form');
@@ -206,13 +203,18 @@ describe('AssignmentCreationSheetContent', () => {
     }
   );
 
-  it('shows grading assistant strictness help text', () => {
+  it('hides the grading assistant strictness picker from teachers', () => {
     root = renderSheet().root;
 
+    expectNoText('Grading assistant strictness');
     expect(
-      buttonByLabel('Grading assistant strictness help').getAttribute('title')
-    ).toBe(
-      'Strictness only adjusts the overall grade number after Grading Assistant suggestions. Use beginner for a slightly higher grade, advanced for a slightly lower grade, and intermediate for no adjustment.'
+      document.querySelector('[aria-label="Grading assistant strictness help"]')
+    ).toBeNull();
+
+    // The control is hidden, not removed: assignments created here still
+    // carry the default strictness level so grading behavior is unchanged.
+    expect(inputByName('gradingAssistantStrictnessLevel').value).toBe(
+      'intermediate'
     );
   });
 
