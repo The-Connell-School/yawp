@@ -634,10 +634,21 @@ async function getStudentGradeReport(ctx: ReporterToolContext, input: unknown) {
   });
   const [summary] = summarizeStudentGrades(rows);
 
+  // Register BEFORE building the payload: overallComment is the one field
+  // in the schema guaranteed to carry the real first name (the grading
+  // prompt requires the comment to open with it, and grade-essay-ai
+  // rehydrates it to the real name before persisting). Returning it raw
+  // put the real name and the pseudonym in the same payload.
+  const studentName = ctx.nameRedaction.registerStudentFullName(student.name);
+  const scrubComment = (comment: string | null | undefined) =>
+    comment
+      ? redact(comment, ctx.nameRedaction.mapping, { mode: 'prose' })
+      : null;
+
   return {
     student: {
       studentMembershipId: student.id,
-      studentName: ctx.nameRedaction.registerStudentFullName(student.name),
+      studentName,
     },
     sourceTruncated,
     sourceLimit,
@@ -654,7 +665,7 @@ async function getStudentGradeReport(ctx: ReporterToolContext, input: unknown) {
       numericPercentage: row.numericPercentage,
       letterGrade: row.letterGrade,
       rubricScores: row.rubricScores ?? null,
-      comment: row.overallComment ?? null,
+      comment: scrubComment(row.overallComment),
     })),
   };
 }
@@ -673,10 +684,18 @@ async function getStudentGrowth(ctx: ReporterToolContext, input: unknown) {
 
   const growth = buildGrowthSeries(rows);
 
+  // Same as get_student_grade_report above: register first, then scrub the
+  // stored overallComment, which always opens with the real first name.
+  const studentName = ctx.nameRedaction.registerStudentFullName(student.name);
+  const scrubComment = (comment: string | null | undefined) =>
+    comment
+      ? redact(comment, ctx.nameRedaction.mapping, { mode: 'prose' })
+      : null;
+
   return {
     student: {
       studentMembershipId: student.id,
-      studentName: ctx.nameRedaction.registerStudentFullName(student.name),
+      studentName,
     },
     sourceTruncated,
     sourceLimit,
@@ -694,7 +713,7 @@ async function getStudentGrowth(ctx: ReporterToolContext, input: unknown) {
       return {
         ...point,
         rubricScores: source?.rubricScores ?? null,
-        comment: source?.overallComment ?? null,
+        comment: scrubComment(source?.overallComment),
       };
     }),
   };
@@ -756,8 +775,19 @@ async function getSubmissionDetail(ctx: ReporterToolContext, input: unknown) {
   const realStudentName =
     submission.document.membership.user.name ?? 'Unknown student';
   const pseudonymStudentName = ctx.nameRedaction.registerStudentFullName(realStudentName);
+  // Prose mode: every field this scrubs is natural language - the essay
+  // excerpt, teacher margin comments, the overall comment, the feedback,
+  // grammar-issue excerpts. Field mode (case-insensitive) mangled it: the
+  // Reporter route seeds the teacher's WHOLE roster into this session, so a
+  // classmate named Will, Hope, Grace, May or Rose turned every ordinary
+  // occurrence of that word into a pseudonym - in text the system prompt
+  // tells the model to quote back to the teacher as the student's verbatim
+  // writing. The structured studentName below is handled separately by
+  // registerStudentFullName and does not depend on this helper.
   const scrub = (text: string | null | undefined) =>
-    text == null ? text : redact(text, ctx.nameRedaction.mapping);
+    text == null
+      ? text
+      : redact(text, ctx.nameRedaction.mapping, { mode: 'prose' });
 
   const grammarIssues = parseGrammarIssuesPayload(submission.grammarIssues, {
     sourceText: submission.text ?? undefined,
@@ -910,7 +940,7 @@ async function saveGrowthPlan(ctx: ReporterToolContext, input: unknown) {
     // parsed.focus was rehydrated to the real name for persistence above;
     // re-redact it here since this echoes back into the model-facing tool
     // result, not the database.
-    focus: redact(parsed.focus, ctx.nameRedaction.mapping),
+    focus: redact(parsed.focus, ctx.nameRedaction.mapping, { mode: 'prose' }),
     targetSkills: parsed.targetSkills,
     baseline,
     checkInAt: checkInAt?.toISOString() ?? null,
@@ -1033,7 +1063,7 @@ async function listGrowthPlans(ctx: ReporterToolContext, input: unknown) {
     detailed.push({
       planId: plan.id,
       status: plan.status,
-      focus: redact(plan.focus, ctx.nameRedaction.mapping),
+      focus: redact(plan.focus, ctx.nameRedaction.mapping, { mode: 'prose' }),
       targetSkills,
       checkInAt: plan.checkInAt?.toISOString() ?? null,
       createdAt: plan.createdAt.toISOString(),
@@ -1045,7 +1075,11 @@ async function listGrowthPlans(ctx: ReporterToolContext, input: unknown) {
         ? buildPlanProgress(baseline, targetSkills, rows)
         : null,
       ...(includeBody
-        ? { body: redact(plan.body, ctx.nameRedaction.mapping) }
+        ? {
+            body: redact(plan.body, ctx.nameRedaction.mapping, {
+              mode: 'prose',
+            }),
+          }
         : {}),
     });
   }

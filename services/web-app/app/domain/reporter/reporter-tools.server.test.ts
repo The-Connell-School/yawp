@@ -217,6 +217,74 @@ describe('get_class_grade_report', () => {
   });
 });
 
+describe('overallComment redaction in the two report tools', () => {
+  // Reproduces the blocker that reverted this work. The grading prompt
+  // hard-requires overallComment to open with the student's real first
+  // name, and grade-essay-ai rehydrates it to the REAL name before
+  // persisting. Returning it raw put the real name and the pseudonym in the
+  // same tool-result payload - strictly worse than no redaction, because it
+  // hands the provider the mapping.
+  const STORED_COMMENT =
+    'Aiden, you have a strong thesis but thin evidence in paragraph three.';
+
+  function mockOneGradedSubmission() {
+    prisma.orgMembership.findFirst.mockResolvedValue(null);
+    prisma.orgMembership.findMany.mockResolvedValue([
+      { id: 'stu-9', user: { name: 'Aiden Reyes' } },
+    ]);
+    prisma.submission.findMany.mockResolvedValue([
+      submissionRow({
+        id: 's1',
+        membershipId: 'stu-9',
+        name: 'Aiden Reyes',
+        pct: 82,
+        overallComment: STORED_COMMENT,
+      }),
+      submissionRow({
+        id: 's2',
+        membershipId: 'stu-9',
+        name: 'Aiden Reyes',
+        pct: 91,
+        submittedAt: new Date('2026-03-01T00:00:00.000Z'),
+        overallComment: STORED_COMMENT,
+      }),
+    ]);
+  }
+
+  test('get_student_grade_report never sends the real first name alongside the pseudonym', async () => {
+    mockOneGradedSubmission();
+
+    const raw = await handleReporterToolCall(
+      'get_student_grade_report',
+      { student: 'Aiden Reyes' },
+      ctx
+    );
+    const result = JSON.parse(raw);
+
+    expect(raw.toLowerCase()).not.toContain('aiden');
+    expect(raw.toLowerCase()).not.toContain('reyes');
+    expect(result.student.studentName).toBe(pseudonymOf('Aiden Reyes'));
+    // The comment still reaches the model - only the name is swapped.
+    expect(result.submissions[0].comment).toContain('strong thesis');
+  });
+
+  test('get_student_growth never sends the real first name alongside the pseudonym', async () => {
+    mockOneGradedSubmission();
+
+    const raw = await handleReporterToolCall(
+      'get_student_growth',
+      { student: 'Aiden Reyes' },
+      ctx
+    );
+    const result = JSON.parse(raw);
+
+    expect(raw.toLowerCase()).not.toContain('aiden');
+    expect(raw.toLowerCase()).not.toContain('reyes');
+    expect(result.student.studentName).toBe(pseudonymOf('Aiden Reyes'));
+    expect(result.points[0].comment).toContain('strong thesis');
+  });
+});
+
 describe('get_student_growth', () => {
   test('refuses a student not in any class the teacher teaches', async () => {
     prisma.orgMembership.findFirst.mockResolvedValue(null);
@@ -589,6 +657,47 @@ describe('get_submission_detail', () => {
     expect(result.student.studentName).toBe(pseudonymOf('Noah'));
   });
 
+  test('does not mangle ordinary English that collides with another roster name', async () => {
+    // Reproduces the reverted defect: `scrub` called redact() with no mode,
+    // so 'field' (case-insensitive) ran over the student's actual prose.
+    // The Reporter route seeds the teacher's WHOLE roster into the session,
+    // so a classmate named Will made every "will" in a different student's
+    // essay a substitution target - and the system prompt tells the model
+    // these are the student's verbatim sentences to quote as evidence.
+    const willPseudonym = nameRedaction.registerStudentFullName('Will Carter');
+
+    const essay =
+      'The narrator will never forgive himself, and the reader will feel that weight.';
+    prisma.submission.findFirst.mockResolvedValue({
+      id: 'sub-4',
+      text: essay,
+      submittedAt: new Date('2026-02-01T00:00:00.000Z'),
+      numericPercentage: 88,
+      letterGrade: 'B+',
+      overallScore: 4,
+      rubricScores: null,
+      overallComment: 'You hold the tone well.',
+      feedback: 'Slow down at the turn.',
+      grammarIssues: null,
+      document: {
+        membership: { user: { name: 'Priya Raman' } },
+        classAssignment: { assignment: { title: 'Scarlet Ibis Analysis' } },
+      },
+      comments: [],
+    });
+
+    const result = JSON.parse(
+      await handleReporterToolCall(
+        'get_submission_detail',
+        { submissionId: 'sub-4' },
+        ctx
+      )
+    );
+
+    expect(result.essayExcerpt.excerpt).toContain(essay);
+    expect(result.essayExcerpt.excerpt).not.toContain(willPseudonym);
+  });
+
   test('truncates a long essay body to a bounded excerpt', async () => {
     const longText = 'A'.repeat(3000);
     prisma.submission.findFirst.mockResolvedValue({
@@ -956,6 +1065,7 @@ function submissionRow({
   pct,
   submittedAt = new Date('2026-01-01T00:00:00.000Z'),
   rubricScores = null,
+  overallComment = null,
 }: {
   id: string;
   membershipId?: string;
@@ -966,6 +1076,7 @@ function submissionRow({
     string,
     number | { score?: number; comment?: string; isAi?: boolean }
   > | null;
+  overallComment?: string | null;
 }) {
   return {
     id,
@@ -973,7 +1084,7 @@ function submissionRow({
     numericPercentage: pct,
     letterGrade: null,
     rubricScores,
-    overallComment: null,
+    overallComment,
     document: {
       membershipId,
       membership: { user: { name } },

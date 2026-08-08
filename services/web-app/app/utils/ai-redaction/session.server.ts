@@ -38,7 +38,22 @@ export function createRedactionSession(
 ): RedactionSession {
   const registeredNames: string[] = [];
   const registeredKeys = new Set<string>();
+  /**
+   * First-name aliases added so far, in the order they were claimed.
+   * `buildRedactionMapping` is pure and rebuilt from scratch on every new
+   * registration, so aliases have to be re-applied afterwards or a later
+   * registration silently wipes every alias added before it - which would
+   * leave bare first names UNREDACTED (a leak), not merely unaliased.
+   */
+  const aliases: { alias: string; canonical: string }[] = [];
   let snapshot = buildRedactionMapping([], pool);
+
+  function rebuild() {
+    snapshot = buildRedactionMapping(registeredNames, pool);
+    for (const { alias, canonical } of aliases) {
+      snapshot = withAliasKey(snapshot, alias, canonical);
+    }
+  }
 
   function pseudonymFor(realNameInput: string | null | undefined): string {
     const realName = realNameInput?.trim();
@@ -47,7 +62,7 @@ export function createRedactionSession(
     if (!registeredKeys.has(key)) {
       registeredKeys.add(key);
       registeredNames.push(realName);
-      snapshot = buildRedactionMapping(registeredNames, pool);
+      rebuild();
     }
     // No entry means redaction is switched off for this process
     // (AI_PII_REDACTION_ENABLED=false makes buildRedactionMapping return an
@@ -65,7 +80,13 @@ export function createRedactionSession(
 
     const firstName = firstNameFromFullName(fullName);
     if (firstName && firstName.toLowerCase() !== fullName.toLowerCase()) {
-      snapshot = withAliasKey(snapshot, firstName, fullName);
+      const alreadyAliased = aliases.some(
+        (entry) => entry.alias.toLowerCase() === firstName.toLowerCase()
+      );
+      if (!alreadyAliased) {
+        aliases.push({ alias: firstName, canonical: fullName });
+      }
+      rebuild();
     }
     return pseudonym;
   }

@@ -110,6 +110,27 @@ describe('createRedactionSession', () => {
     expect(redacted.startsWith(pseudonym)).toBe(true);
   });
 
+  test('a first-name alias survives every later registration', () => {
+    // buildRedactionMapping is pure and gets rebuilt from scratch on each
+    // new name, so aliases added before that rebuild used to be discarded.
+    // The Reporter seeds the teacher's entire roster in a loop, which meant
+    // only the LAST student's bare first name was ever redacted - a leak.
+    const session = createRedactionSession();
+    session.registerStudentFullName('Sophia Martinez');
+    session.registerStudentFullName('Noah Diaz');
+    session.registerStudentFullName('Priya Raman');
+
+    const redacted = redact(
+      'Sophia and Noah both improved; Priya did not.',
+      session.mapping,
+      { mode: 'prose' }
+    );
+
+    expect(redacted).not.toContain('Sophia');
+    expect(redacted).not.toContain('Noah');
+    expect(redacted).not.toContain('Priya');
+  });
+
   test('a first-name-only mention round-trips back to the first name, not the full name', () => {
     // Reproduces the reverted defect: withAliasKey registered the alias in
     // one direction only, so "Sophia, you have a strong thesis." came back

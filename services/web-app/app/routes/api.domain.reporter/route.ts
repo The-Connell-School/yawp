@@ -245,14 +245,23 @@ export async function action({ request }: ActionFunctionArgs) {
   // fully removed from the org with no remaining grade history) can't be
   // caught here and will pass through unredacted - see
   // listReporterRedactableStudentNames for what is and isn't covered.
+  //
+  // Prose mode, because both are unambiguously natural language and the
+  // roster above is the teacher's ENTIRE student list. In field mode a
+  // single student named Hope, Grace, Will, May, Mark, Faith or Rose turned
+  // "Is there any hope of getting evidence scores up?" into a question
+  // about a student - and the same substitution was re-applied to all 20
+  // replayed prior turns, so it compounded across the conversation.
   const messages: { role: AgentType; content: string; name?: string }[] = [
     ...priorMessages.map((message) => ({
       role: message.role as AgentType,
-      content: redact(message.content, nameRedaction.mapping),
+      content: redact(message.content, nameRedaction.mapping, {
+        mode: 'prose',
+      }),
     })),
     {
       role: AgentType.User,
-      content: redact(data.message!, nameRedaction.mapping),
+      content: redact(data.message!, nameRedaction.mapping, { mode: 'prose' }),
     },
   ];
 
