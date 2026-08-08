@@ -125,15 +125,6 @@ describe('TeacherGradingPanel', () => {
       '[data-testid="grading-assistant-generate"]'
     );
 
-    expect(document.body.textContent).toContain(
-      'Adds 5 points to the overall grade percentage.'
-    );
-    expect(document.body.textContent).toContain(
-      'Keeps the overall grade percentage unchanged.'
-    );
-    expect(document.body.textContent).toContain(
-      'Subtracts 5 points from the overall grade percentage.'
-    );
     expect(beginner?.getAttribute('aria-pressed')).toBe('true');
 
     act(() => {

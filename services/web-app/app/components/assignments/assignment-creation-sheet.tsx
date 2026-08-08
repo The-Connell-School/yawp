@@ -600,15 +600,6 @@ export function AssignmentCreationSheetContent({
                           <span className="block font-medium">
                             {option.label}
                           </span>
-                          <span
-                            className={`mt-1 block text-xs ${
-                              selected
-                                ? 'text-primary-foreground/80'
-                                : 'text-muted-foreground'
-                            }`}
-                          >
-                            {option.description}
-                          </span>
                         </button>
                       );
                     })}
