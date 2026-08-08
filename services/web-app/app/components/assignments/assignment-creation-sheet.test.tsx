@@ -474,4 +474,63 @@ describe('AssignmentCreationSheetContent', () => {
     expectNoText('Point value');
     expect(inputByName('pointValue').value).toBe('');
   });
+  it('offers to keep the assignment, off by default, on the bulk-create entry points', () => {
+    root = renderSheet({ entryPoint: 'dashboard' }).root;
+
+    expectText('Save to My Saved Assignments');
+    const control = controlById('assignment-create-save-for-reuse');
+    expect(isChecked(control)).toBe(false);
+    // The hidden field is what the action reads when the box is left alone.
+    expect(allInputsByName('saveForReuse')[0].value).toBe('false');
+
+    act(() => {
+      control.click();
+    });
+
+    expect(isChecked(controlById('assignment-create-save-for-reuse'))).toBe(
+      true
+    );
+    expect(
+      allInputsByName('saveForReuse').map((input) => input.value)
+    ).toContain('true');
+  });
+
+  it('hides the keep-for-reuse option on the class entry point, which cannot save', () => {
+    root = renderSheet({ entryPoint: 'class', fixedClassId: 'class-1' }).root;
+
+    expectNoText('Save to My Saved Assignments');
+  });
+
+  it('pre-fills every setting when reusing a saved assignment', () => {
+    root = renderSheet({
+      entryPoint: 'dashboard',
+      initialAssignmentTypeId: 'type-2',
+      initialTitle: 'Ambition in Macbeth',
+      initialPrompt: 'A prompt kept from last term.',
+      initialSubmitForGrade: false,
+      initialPointValue: 50,
+      initialTutorEnabled: false,
+    }).root;
+
+    expect(inputByName('assignmentTypeId').value).toBe('type-2');
+    expect(inputByName('title').value).toBe('Ambition in Macbeth');
+    expect(textareaByName('prompt').value).toBe('A prompt kept from last term.');
+    expect(isChecked(controlById('assignment-create-submit-for-grade'))).toBe(
+      false
+    );
+    expect(isChecked(controlById('assignment-create-tutor-enabled'))).toBe(
+      false
+    );
+    expectNoText('Point value');
+  });
+
+  it('restores the saved point value when the assignment is graded', () => {
+    root = renderSheet({
+      entryPoint: 'dashboard',
+      initialPrompt: 'A prompt kept from last term.',
+      initialPointValue: 25,
+    }).root;
+
+    expect(inputByName('pointValue').value).toBe('25');
+  });
 });

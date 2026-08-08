@@ -27,6 +27,7 @@ const createAssignmentDeployedToClasses = mock();
 const isAssignmentTypeAvailableForEveryScope = mock();
 const uploadAssignmentPromptAttachment = mock();
 const deleteAssignmentPromptAttachment = mock();
+const saveAssignmentForReuse = mock();
 class AssignmentPromptAttachmentError extends Error {}
 const actualAssignmentPromptAttachment = await import(
   '~/domain/assignments/assignment-prompt-attachment.server'
@@ -60,6 +61,11 @@ mock.module(
     uploadAssignmentPromptAttachment,
   })
 );
+
+mock.module('~/domain/assignments/saved-assignments.server', () => ({
+  SAVED_ASSIGNMENTS_ENABLED: true,
+  saveAssignmentForReuse,
+}));
 
 const { action } = await import('./route');
 
@@ -113,6 +119,7 @@ describe('api.assignments.create', () => {
     isAssignmentTypeAvailableForEveryScope.mockReset();
     uploadAssignmentPromptAttachment.mockReset();
     deleteAssignmentPromptAttachment.mockReset().mockResolvedValue(undefined);
+    saveAssignmentForReuse.mockReset().mockResolvedValue({ id: 'saved-1' });
     requireUserId.mockReset();
     requireMembership.mockReset();
 
@@ -626,5 +633,73 @@ describe('api.assignments.create', () => {
     expect(responseStatus(response)).toBe(400);
     expect(body.message).toBe('AP History library entry is unavailable.');
     expect(createAssignmentDeployedToClasses).not.toHaveBeenCalled();
+  });
+  test('keeps the assignment for reuse when the teacher asked it to be saved', async () => {
+    const response = await action({
+      request: requestFor({
+        intent: 'create-assignment',
+        assignmentTypeId: 'at-1',
+        classIds: ['class-1', 'class-2'],
+        prompt: 'Write the essay.',
+        title: 'Essay',
+        submitForGrade: 'true',
+        pointValue: '50',
+        tutorEnabled: 'false',
+        saveForReuse: 'true',
+      }),
+      params: {},
+    } as any);
+
+    const body = await readBody(response);
+    expect(body.success).toBe(true);
+    expect(saveAssignmentForReuse).toHaveBeenCalledWith({
+      membershipId: 'teacher-1',
+      assignmentTypeId: 'at-1',
+      title: 'Essay',
+      prompt: 'Write the essay.',
+      submitForGrade: true,
+      pointValue: 50,
+      gradingAssistantStrictnessLevel: 'intermediate',
+      tutorEnabled: false,
+    });
+  });
+
+  test('does not keep the assignment when the teacher did not ask', async () => {
+    await action({
+      request: requestFor({
+        intent: 'create-assignment',
+        assignmentTypeId: 'at-1',
+        classIds: ['class-1', 'class-2'],
+        prompt: 'Write the essay.',
+        title: 'Essay',
+      }),
+      params: {},
+    } as any);
+
+    expect(saveAssignmentForReuse).not.toHaveBeenCalled();
+  });
+
+  test('still reports the assignment created when keeping it fails', async () => {
+    // The classes already have the assignment by then; a failed save must not
+    // read as a failed creation.
+    saveAssignmentForReuse.mockRejectedValue(new Error('nope'));
+
+    const response = await action({
+      request: requestFor({
+        intent: 'create-assignment',
+        assignmentTypeId: 'at-1',
+        classIds: ['class-1', 'class-2'],
+        prompt: 'Write the essay.',
+        title: 'Essay',
+        saveForReuse: 'true',
+      }),
+      params: {},
+    } as any);
+
+    const body = await readBody(response);
+    expect(body.success).toBe(true);
+    expect(body.message).toBe(
+      'Assignment created and applied to classes, but it could not be saved for reuse.'
+    );
   });
 });
