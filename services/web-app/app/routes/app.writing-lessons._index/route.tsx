@@ -118,8 +118,11 @@ export default function WritingLessonsIndexRoute() {
   return (
     <section className="no-scrollbar flex h-full w-full flex-col overflow-y-scroll">
       {/* Hero */}
-      <div className="relative overflow-hidden border-b bg-linear-to-br from-background via-background to-primary/5">
-        <div className="mx-auto w-full max-w-screen-lg px-3 py-8 sm:px-5 sm:py-12">
+      <div
+        data-testid="writing-practice-hero"
+        className="relative shrink-0 overflow-hidden border-b bg-linear-to-br from-background via-background to-primary/5"
+      >
+        <div className="mx-auto w-full min-w-0 max-w-screen-lg px-3 py-8 sm:px-5 sm:py-12">
           <h2 className="text-balance text-3xl font-semibold tracking-tight sm:text-4xl">
             Writing practice
           </h2>
@@ -175,7 +178,7 @@ export default function WritingLessonsIndexRoute() {
 
       {/* Assigned practice */}
       {assignments.length > 0 ? (
-        <div className="mx-auto w-full max-w-screen-lg px-3 pt-8 sm:px-5">
+        <div className="mx-auto w-full min-w-0 max-w-screen-lg px-3 pt-8 sm:px-5">
           <h3 className="text-lg font-semibold tracking-tight">
             {isTeacher ? 'Practice you assigned' : 'Assigned to you'}
           </h3>
@@ -231,7 +234,7 @@ export default function WritingLessonsIndexRoute() {
       ) : null}
 
       {/* Flat lesson grid */}
-      <div className="mx-auto w-full max-w-screen-lg px-3 py-8 pb-24 sm:px-5">
+      <div className="mx-auto w-full min-w-0 max-w-screen-lg px-3 py-8 pb-24 sm:px-5">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {groups.flatMap((group) =>
             group.lessons.map((lesson) => (
@@ -247,10 +250,10 @@ export default function WritingLessonsIndexRoute() {
                   <p className="pr-9 font-mono text-[0.6rem] font-medium uppercase tracking-widest text-primary">
                     {group.category}
                   </p>
-                  <p className="mt-1.5 pr-9 text-balance text-base font-semibold">
+                  <p className="mt-1.5 line-clamp-2 pr-9 text-balance text-base font-semibold">
                     {lesson.title}
                   </p>
-                  <p className="mt-1 text-pretty text-base text-muted-foreground sm:text-sm">
+                  <p className="mt-1 line-clamp-2 text-pretty text-base text-muted-foreground sm:text-sm">
                     {lesson.description}
                   </p>
                   <div className="mt-4 flex items-center justify-between text-base text-muted-foreground sm:text-sm">
