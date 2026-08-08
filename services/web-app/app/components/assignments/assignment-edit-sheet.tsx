@@ -42,12 +42,21 @@ export type AssignmentEditFormProps = {
    * the caller can guard against silently discarding in-progress edits when
    * switching modes or rows. */
   onDirtyChange: (dirty: boolean) => void;
+  /**
+   * Set false to render the header as plain markup instead of Radix
+   * SheetHeader/SheetTitle/SheetDescription, which require a Dialog context.
+   * Lets this form render on a plain page (the assignment detail full page)
+   * as well as inside an actual Sheet. Defaults to true to preserve the
+   * original sheet embedding.
+   */
+  renderSheet?: boolean;
 };
 
 /**
  * The assignment edit form — no Sheet/SheetContent wrapper of its own, since
- * it renders as one mode inside the shared assignment sheet (see
- * `class-assignments-tab.tsx`), alongside the view-mode summary content.
+ * it renders as one mode inside the shared assignment detail UI (the class
+ * detail page's assignments table, or the assignment detail full page),
+ * alongside the view-mode summary content.
  */
 export function AssignmentEditForm({
   action,
@@ -57,6 +66,7 @@ export function AssignmentEditForm({
   onSaved,
   onBack,
   onDirtyChange,
+  renderSheet = true,
 }: AssignmentEditFormProps) {
   const fetcher = useFetcher<any>();
   const extractFetcher = useFetcher<any>();
@@ -161,12 +171,23 @@ export function AssignmentEditForm({
       className="flex min-h-0 flex-1 flex-col overflow-hidden"
     >
       <div className={cn(SHEET_SCROLL_BODY_CLASS_NAME, 'space-y-4 px-6 pt-6')}>
-        <SheetHeader>
-          <SheetTitle>Edit Assignment</SheetTitle>
-          <SheetDescription>
-            Configure the assignment prompt, grading, and due date.
-          </SheetDescription>
-        </SheetHeader>
+        {renderSheet ? (
+          <SheetHeader>
+            <SheetTitle>Edit Assignment</SheetTitle>
+            <SheetDescription>
+              Configure the assignment prompt, grading, and due date.
+            </SheetDescription>
+          </SheetHeader>
+        ) : (
+          <div className="space-y-2 text-center sm:text-left">
+            <h2 className="text-lg font-semibold text-foreground">
+              Edit Assignment
+            </h2>
+            <p className="text-sm text-muted-foreground">
+              Configure the assignment prompt, grading, and due date.
+            </p>
+          </div>
+        )}
 
         <input type="hidden" name="intent" value="update-assignment" />
         <input type="hidden" name="assignmentId" value={editingAssignment.id} />
