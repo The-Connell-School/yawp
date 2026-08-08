@@ -39,6 +39,15 @@ mock.module('~/components/ui/popover', () => ({
   ),
 }));
 
+mock.module('~/components/ui/tooltip', () => ({
+  Tooltip: ({ children, text }: { children: ReactNode; text: ReactNode }) => (
+    <>
+      {children}
+      <span>{text}</span>
+    </>
+  ),
+}));
+
 const { TeacherGradingPanel } = await import('./teacher-grading-panel');
 
 function render(element: ReactElement) {
@@ -105,30 +114,49 @@ describe('TeacherGradingPanel', () => {
     root = null;
   });
 
-  it('does not render the strictness picker for a teacher', async () => {
+  it('renders the strictness picker for a teacher', async () => {
     ({ root } = renderPanel());
 
     const menu = document.querySelector<HTMLButtonElement>(
       '[data-testid="grading-assistant-strictness-menu"]'
     );
-    expect(menu).toBeNull();
+    expect(menu).not.toBeNull();
 
-    const generate = document.querySelector<HTMLButtonElement>(
-      '[data-testid="grading-assistant-generate"]'
+    for (const level of ['beginner', 'intermediate', 'advanced']) {
+      expect(
+        document.querySelector(
+          `[data-testid="grading-assistant-strictness-${level}"]`
+        )
+      ).not.toBeNull();
+    }
+
+    const beginner = document.querySelector<HTMLButtonElement>(
+      '[data-testid="grading-assistant-strictness-beginner"]'
     );
-    expect(generate).not.toBeNull();
+    expect(beginner?.getAttribute('aria-pressed')).toBe('true');
   });
 
-  it('still applies the assignment strictness level to a grading run with the picker hidden', async () => {
+  it('explains each level as a reading posture on hover, never as a point adjustment', async () => {
+    ({ root } = renderPanel());
+
+    // The tooltip mock renders its text inline, so the hover copy lands in
+    // the DOM without simulating a pointer.
+    expect(document.body.textContent).toContain(
+      'The assistant reads gently, expecting a writer still learning the fundamentals.'
+    );
+    expect(document.body.textContent).toContain(
+      'The assistant reads at the standard expected for the grade level.'
+    );
+    expect(document.body.textContent).toContain(
+      'The assistant reads demandingly, expecting polished and precise writing.'
+    );
+    expect(document.body.textContent).not.toContain('points');
+  });
+
+  it('applies the assignment strictness level to a grading run', async () => {
     ({ root } = renderPanel({
       initialGradingAssistantStrictnessLevel: 'advanced',
     }));
-
-    // The picker is hidden, so a teacher has no way to change the level --
-    // clicking "Generate" is the only available action.
-    expect(
-      document.querySelector('[data-testid="grading-assistant-strictness-menu"]')
-    ).toBeNull();
 
     const generate = document.querySelector<HTMLButtonElement>(
       '[data-testid="grading-assistant-generate"]'
@@ -140,9 +168,8 @@ describe('TeacherGradingPanel', () => {
 
     expect(submit).toHaveBeenCalledTimes(1);
     const form = submit.mock.calls[0][0] as FormData;
-    // The assignment's stored "advanced" strictness (±5 percentage / ±1 ACT
-    // composite, applied server-side) still flows through even though the
-    // teacher never saw or touched a strictness control.
+    // Restoring the picker and its copy must not disturb the scoring path --
+    // the assignment's stored "advanced" strictness still flows through.
     expect(form.get('gradingAssistantStrictnessLevel')).toBe('advanced');
   });
 

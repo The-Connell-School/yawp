@@ -22,13 +22,13 @@ import {
 } from '~/components/ui/sheet';
 import { Switch } from '~/components/ui/switch';
 import { Textarea } from '~/components/ui/textarea';
+import { Tooltip } from '~/components/ui/tooltip';
 import {
   DEFAULT_SAVED_ASSIGNMENT_POINT_VALUE,
   SAVED_ASSIGNMENTS_ENABLED,
 } from '~/domain/assignments/saved-assignments';
 import {
   DEFAULT_GRADING_ASSISTANT_STRICTNESS_LEVEL,
-  GRADING_ASSISTANT_STRICTNESS_UI_ENABLED,
   gradingAssistantStrictnessOptions,
   type GradingAssistantStrictnessLevel,
 } from '~/domain/grading/grading-assistant-strictness';
@@ -592,18 +592,22 @@ export function AssignmentCreationSheetContent({
                   name="gradingAssistantStrictnessLevel"
                   value={gradingAssistantStrictnessLevel}
                 />
-                {GRADING_ASSISTANT_STRICTNESS_UI_ENABLED ? (
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2">
-                      <Label>Grading assistant strictness</Label>
-                    </div>
-                    <div className="grid gap-2 sm:grid-cols-3">
-                      {gradingAssistantStrictnessOptions.map((option) => {
-                        const selected =
-                          gradingAssistantStrictnessLevel === option.value;
-                        return (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Label>Grading assistant strictness</Label>
+                  </div>
+                  <div className="grid gap-2 sm:grid-cols-3">
+                    {gradingAssistantStrictnessOptions.map((option) => {
+                      const selected =
+                        gradingAssistantStrictnessLevel === option.value;
+                      return (
+                        <Tooltip
+                          key={option.value}
+                          text={option.description}
+                          delayDuration={200}
+                          contentProps={{ side: 'bottom', className: 'max-w-xs' }}
+                        >
                           <button
-                            key={option.value}
                             type="button"
                             className={`rounded-md border px-3 py-2 text-left text-sm transition ${
                               selected
@@ -620,11 +624,11 @@ export function AssignmentCreationSheetContent({
                               {option.label}
                             </span>
                           </button>
-                        );
-                      })}
-                    </div>
+                        </Tooltip>
+                      );
+                    })}
                   </div>
-                ) : null}
+                </div>
               </div>
             </div>
           ) : null}

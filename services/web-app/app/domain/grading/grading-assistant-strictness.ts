@@ -10,14 +10,6 @@ export type GradingAssistantStrictnessLevel =
 export const DEFAULT_GRADING_ASSISTANT_STRICTNESS_LEVEL: GradingAssistantStrictnessLevel =
   'intermediate';
 
-// The Beginner/Intermediate/Advanced picker is hidden from teachers pending
-// product review of the ±5 percentage / ±1 ACT-composite adjustment it
-// applies. This is the single switch every render site consults; flip it
-// back to `true` to re-enable the control. Stored strictness values and the
-// apply-functions below are unaffected by this flag and keep working for any
-// assignment that already carries a non-default level.
-export const GRADING_ASSISTANT_STRICTNESS_UI_ENABLED = false;
-
 const gradingAssistantStrictnessPercentageAdjustments: Record<
   GradingAssistantStrictnessLevel,
   number
@@ -36,21 +28,31 @@ const gradingAssistantStrictnessActCompositeAdjustments: Record<
   advanced: -1,
 };
 
+// The descriptions explain the reading posture the assistant takes at each
+// level -- how demanding it is of the writing in front of it. They must not
+// describe a point adjustment.
 export const gradingAssistantStrictnessOptions: Array<{
   value: GradingAssistantStrictnessLevel;
   label: string;
+  description: string;
 }> = [
   {
     value: 'beginner',
     label: 'Beginner',
+    description:
+      'The assistant reads gently, expecting a writer still learning the fundamentals.',
   },
   {
     value: 'intermediate',
     label: 'Intermediate',
+    description:
+      'The assistant reads at the standard expected for the grade level.',
   },
   {
     value: 'advanced',
     label: 'Advanced',
+    description:
+      'The assistant reads demandingly, expecting polished and precise writing.',
   },
 ];
 

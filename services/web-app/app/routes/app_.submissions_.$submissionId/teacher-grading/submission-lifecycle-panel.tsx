@@ -19,8 +19,8 @@ import {
   DropdownMenuLabel,
   DropdownMenuTrigger,
 } from '~/components/ui/dropdown-menu';
+import { Tooltip } from '~/components/ui/tooltip';
 import {
-  GRADING_ASSISTANT_STRICTNESS_UI_ENABLED,
   gradingAssistantStrictnessOptions,
   type GradingAssistantStrictnessLevel,
 } from '~/domain/grading/grading-assistant-strictness';
@@ -106,9 +106,7 @@ export function GradingAssistantSplitButton({
           type="button"
           size="sm"
           variant="outline"
-          className={cn(
-            GRADING_ASSISTANT_STRICTNESS_UI_ENABLED && 'rounded-r-none border-r-0'
-          )}
+          className="rounded-r-none border-r-0"
           data-testid="grading-assistant-generate"
           disabled={isBusy || !headerState}
           onClick={() => runWithOptionalConfirm(generateAiSuggestions)}
@@ -116,35 +114,39 @@ export function GradingAssistantSplitButton({
           {buttonLabel}
         </Button>
 
-        {GRADING_ASSISTANT_STRICTNESS_UI_ENABLED ? (
-          <DropdownMenu
-            open={strictnessMenuOpen}
-            onOpenChange={setStrictnessMenuOpen}
-          >
-            <DropdownMenuTrigger asChild>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                className="rounded-l-none border-l px-2"
-                aria-label="Choose grading assistant strictness"
-                data-testid="grading-assistant-strictness-menu"
-                disabled={isBusy || !headerState}
-              >
-                <ChevronDown className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56 p-2">
-              <DropdownMenuLabel className="px-1 pb-2 pt-0">
-                Strictness
-              </DropdownMenuLabel>
-              <div className="space-y-1">
-                {gradingAssistantStrictnessOptions.map((option) => {
-                  const selected =
-                    gradingAssistantStrictnessLevel === option.value;
-                  return (
+        <DropdownMenu
+          open={strictnessMenuOpen}
+          onOpenChange={setStrictnessMenuOpen}
+        >
+          <DropdownMenuTrigger asChild>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="rounded-l-none border-l px-2"
+              aria-label="Choose grading assistant strictness"
+              data-testid="grading-assistant-strictness-menu"
+              disabled={isBusy || !headerState}
+            >
+              <ChevronDown className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-56 p-2">
+            <DropdownMenuLabel className="px-1 pb-2 pt-0">
+              Strictness
+            </DropdownMenuLabel>
+            <div className="space-y-1">
+              {gradingAssistantStrictnessOptions.map((option) => {
+                const selected =
+                  gradingAssistantStrictnessLevel === option.value;
+                return (
+                  <Tooltip
+                    key={option.value}
+                    text={option.description}
+                    delayDuration={200}
+                    contentProps={{ side: 'left', className: 'max-w-xs' }}
+                  >
                     <button
-                      key={option.value}
                       type="button"
                       className={cn(
                         'flex w-full items-center gap-2 rounded-md border px-3 py-2 text-left text-sm transition',
@@ -156,16 +158,14 @@ export function GradingAssistantSplitButton({
                       data-testid={`grading-assistant-strictness-${option.value}`}
                       onClick={() => runAtLevel(option.value)}
                     >
-                      <span className="flex-1 font-medium">
-                        {option.label}
-                      </span>
+                      <span className="flex-1 font-medium">{option.label}</span>
                     </button>
-                  );
-                })}
-              </div>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        ) : null}
+                  </Tooltip>
+                );
+              })}
+            </div>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>

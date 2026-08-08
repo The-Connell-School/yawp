@@ -9,9 +9,37 @@ try {
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 
 import { afterEach, describe, expect, it, mock } from 'bun:test';
-import { act, type ReactElement } from 'react';
+import { act, type ReactElement, type ReactNode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { GradingAssistantSplitButton } from './submission-lifecycle-panel';
+
+// Radix renders the dropdown content only once it is open and the tooltip
+// content only on hover. Both are flattened here so the strictness levels and
+// their hover copy land in the DOM without driving a real pointer.
+mock.module('~/components/ui/dropdown-menu', () => ({
+  DropdownMenu: ({ children }: { children: ReactNode }) => <>{children}</>,
+  DropdownMenuTrigger: ({ children }: { children: ReactNode }) => (
+    <>{children}</>
+  ),
+  DropdownMenuContent: ({ children }: { children: ReactNode }) => (
+    <div>{children}</div>
+  ),
+  DropdownMenuLabel: ({ children }: { children: ReactNode }) => (
+    <div>{children}</div>
+  ),
+}));
+
+mock.module('~/components/ui/tooltip', () => ({
+  Tooltip: ({ children, text }: { children: ReactNode; text: ReactNode }) => (
+    <>
+      {children}
+      <span>{text}</span>
+    </>
+  ),
+}));
+
+const { GradingAssistantSplitButton } = await import(
+  './submission-lifecycle-panel'
+);
 import {
   type SavedGradeSnapshot,
   type TeacherGradingPanelHeaderState,
@@ -71,7 +99,7 @@ describe('GradingAssistantSplitButton', () => {
     root = null;
   });
 
-  it('does not render the strictness dropdown for a teacher', () => {
+  it('renders the strictness dropdown alongside the primary button', () => {
     ({ root } = render(
       <GradingAssistantSplitButton
         headerState={headerState()}
@@ -81,15 +109,51 @@ describe('GradingAssistantSplitButton', () => {
       />
     ));
 
+    const generate = document.querySelector<HTMLButtonElement>(
+      '[data-testid="grading-assistant-generate"]'
+    );
+    expect(generate).not.toBeNull();
     expect(
       document.querySelector('[data-testid="grading-assistant-strictness-menu"]')
-    ).toBeNull();
-    expect(
-      document.querySelector('[data-testid="grading-assistant-generate"]')
     ).not.toBeNull();
+
+    // The split-button seam: the primary button drops its right edge only
+    // because the dropdown trigger sits flush against it.
+    expect(generate?.className).toContain('rounded-r-none');
+    expect(generate?.className).toContain('border-r-0');
   });
 
-  it('still runs the grading assistant at the assignment strictness level with the dropdown hidden', () => {
+  it('explains each level as a reading posture on hover, never as a point adjustment', () => {
+    ({ root } = render(
+      <GradingAssistantSplitButton
+        headerState={headerState()}
+        isPendingStart={false}
+        onStart={() => {}}
+        onAbortStart={() => {}}
+      />
+    ));
+
+    for (const level of ['beginner', 'intermediate', 'advanced']) {
+      expect(
+        document.querySelector(
+          `[data-testid="grading-assistant-strictness-${level}"]`
+        )
+      ).not.toBeNull();
+    }
+
+    expect(document.body.textContent).toContain(
+      'The assistant reads gently, expecting a writer still learning the fundamentals.'
+    );
+    expect(document.body.textContent).toContain(
+      'The assistant reads at the standard expected for the grade level.'
+    );
+    expect(document.body.textContent).toContain(
+      'The assistant reads demandingly, expecting polished and precise writing.'
+    );
+    expect(document.body.textContent).not.toContain('points');
+  });
+
+  it('runs the grading assistant at the assignment strictness level', () => {
     const generateAiSuggestions = mock();
     ({ root } = render(
       <GradingAssistantSplitButton
@@ -112,9 +176,31 @@ describe('GradingAssistantSplitButton', () => {
       generate?.click();
     });
 
-    // The teacher never saw a strictness control, but the run still uses
-    // whatever level the assignment carries -- the ±5 percentage / ±1 ACT
-    // composite adjustment is unaffected by hiding the picker.
+    // The primary button runs at whatever level the assignment carries; only
+    // the dropdown switches levels. Restoring the picker changed neither.
     expect(generateAiSuggestions).toHaveBeenCalledTimes(1);
+  });
+
+  it('runs the grading assistant at a level picked from the dropdown', () => {
+    const generateAiSuggestionsAtLevel = mock();
+    ({ root } = render(
+      <GradingAssistantSplitButton
+        headerState={headerState({ generateAiSuggestionsAtLevel })}
+        isPendingStart={false}
+        onStart={() => {}}
+        onAbortStart={() => {}}
+      />
+    ));
+
+    const beginner = document.querySelector<HTMLButtonElement>(
+      '[data-testid="grading-assistant-strictness-beginner"]'
+    );
+
+    act(() => {
+      beginner?.click();
+    });
+
+    expect(generateAiSuggestionsAtLevel).toHaveBeenCalledTimes(1);
+    expect(generateAiSuggestionsAtLevel.mock.calls[0][0]).toBe('beginner');
   });
 });
