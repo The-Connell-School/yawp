@@ -37,7 +37,16 @@ export const SEED_GENERATOR_UNPARSEABLE_MESSAGE =
   'The seed generator could not turn those instructions into a valid graph. Rephrase with a specific class, assignment, and student count.';
 export const SEED_GENERATOR_NO_ASSIGNMENT_TYPES =
   'This organization has no enabled assignment types, so no assignments (and therefore no submissions) can be generated. Enable at least one assignment type for this organization first.';
-export const SEED_GRAPH_REQUEST_DEADLINE_MS = 5_000;
+// Live-reproduced: a single propose_seed_graph call for "a 9th grade English
+// class with 25 students and three assignments" (45 nodes) took 31.2s wall
+// time and 3188 output tokens against claude-sonnet-4-5. The prior budget
+// (5s deadline, 1800 max_tokens) aborted or truncated essentially every
+// non-trivial request before the model could finish the tool call, and the
+// abort was misreported as the model refusing to comply (see
+// classifySeedGeneratorError). These floors leave headroom above the largest
+// realistic single-class request plus one schema-correction retry round.
+export const SEED_GRAPH_REQUEST_DEADLINE_MS = 60_000;
+export const SEED_GRAPH_MAX_TOKENS = 8_000;
 
 function errorStatus(error: unknown) {
   if (!error || typeof error !== 'object') return null;
@@ -187,7 +196,7 @@ export async function proposeSeedGraph(params: {
         })),
         { role: AgentType.User, content: params.instructions },
       ],
-      maxTokens: 1_800,
+      maxTokens: SEED_GRAPH_MAX_TOKENS,
       temperature: 0.2,
       maxToolRounds: 2,
       tools: [SEED_GRAPH_TOOL],
