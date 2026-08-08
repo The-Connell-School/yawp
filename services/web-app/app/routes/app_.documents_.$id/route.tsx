@@ -21,6 +21,7 @@ import {
   ExternalLink,
   Archive,
   ArchiveRestore,
+  RotateCcw,
   Clock,
   EllipsisVertical,
   Printer,
@@ -91,6 +92,8 @@ import { pickLatestReleasedSubmission } from '~/utils/document-link-target';
 
 const SUBMIT_EMPTY_TOOLTIP =
   "You can't submit an empty document. Add text first.";
+const GRADED_UNSUBMIT_TOOLTIP =
+  'This submission has been graded and can no longer be unsubmitted.';
 
 function escapePrintHtml(value: string) {
   return value.replace(/[&<>"']/g, (char) => {
@@ -433,6 +436,10 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     nextCmId,
     shouldSaveVersion,
     hasPreviousCms: currentCmsIdx > 0,
+    canSelfUnsubmit:
+      isOwner &&
+      profile.role === 'STUDENT' &&
+      !hasEffectivePlatformAdmin(user?.isAdmin),
   });
 }
 
@@ -501,6 +508,7 @@ export default function Route() {
   const user = useUser();
   const fetcher = useFetcher();
   const submissionArchiveFetcher = useFetcher();
+  const submissionUnsubmitFetcher = useFetcher();
   const revalidator = useRevalidator();
   const navigate = useNavigate();
   const breakpoint = useBreakpoint();
@@ -509,8 +517,17 @@ export default function Route() {
   const [submissionTitle, setSubmissionTitle] = useState('');
   const [showOldComments, setShowOldComments] = useState(false);
   const [archiveDialogOpen, setArchiveDialogOpen] = useState(false);
+  const [submissionToUnsubmit, setSubmissionToUnsubmit] =
+    useState<SubmissionRow | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [localSubmissions, setLocalSubmissions] = useState<SubmissionRow[]>([]);
+  // This route's own loader never revalidates on fetcher submissions (see
+  // shouldRevalidate below) — server state flows through explicit local
+  // state updates, not revalidator.revalidate(). Track ids the student just
+  // unsubmitted so the submissions list/badge update immediately.
+  const [locallyUnsubmittedIds, setLocallyUnsubmittedIds] = useState<
+    Set<string>
+  >(new Set());
   const isMobile = ['base', 'sm', 'md'].includes(breakpoint ?? '');
   const [searchParams, setSearchParams] = useSearchParams();
   const fallbackCmsIdx = parseInt(searchParams.get('cmsIdx') ?? '0') || 0;
@@ -537,8 +554,14 @@ export default function Route() {
     const serverSubs = (data.submissions ?? []) as SubmissionRow[];
     const serverIds = new Set(serverSubs.map((s) => s.id));
     const newLocal = localSubmissions.filter((s) => !serverIds.has(s.id));
-    return [...newLocal, ...serverSubs];
-  }, [data.submissions, localSubmissions]);
+    const merged = [...newLocal, ...serverSubs];
+    if (locallyUnsubmittedIds.size === 0) return merged;
+    return merged.map((s) =>
+      locallyUnsubmittedIds.has(s.id) && s.unsubmittedAt == null
+        ? { ...s, unsubmittedAt: new Date().toISOString() }
+        : s
+    );
+  }, [data.submissions, localSubmissions, locallyUnsubmittedIds]);
 
   const { active: activeSubmissions, archived: archivedSubmissions } = useMemo(
     () => partitionSubmissionsByArchive(submissions),
@@ -723,6 +746,29 @@ export default function Route() {
     revalidator,
   ]);
 
+  useEffect(() => {
+    if (submissionUnsubmitFetcher.state !== 'idle') return;
+    const body = submissionUnsubmitFetcher.data as
+      | { success?: boolean }
+      | undefined;
+    if (body?.success && submissionToUnsubmit) {
+      // The loader's shouldRevalidate never reruns for this fetcher (see
+      // below), so update local state directly instead of relying on
+      // revalidator.revalidate() to refresh data.submissions.
+      const unsubmittedId = submissionToUnsubmit.id;
+      setLocallyUnsubmittedIds((prev) => {
+        const next = new Set(prev);
+        next.add(unsubmittedId);
+        return next;
+      });
+      setSubmissionToUnsubmit(null);
+    }
+  }, [
+    submissionUnsubmitFetcher.state,
+    submissionUnsubmitFetcher.data,
+    submissionToUnsubmit,
+  ]);
+
   return (
     <>
       <main className="flex h-screen w-screen flex-col overflow-hidden bg-white">
@@ -848,7 +894,47 @@ export default function Route() {
                             </div>
                           </Link>
                           {!isViewingAsTeacher && !isArchived ? (
-                            <div className="flex items-center pr-2">
+                            <div className="flex items-center gap-1 pr-2">
+                              {data.canSelfUnsubmit ? (
+                                s.gradedAt != null || s.releasedAt != null ? (
+                                  <Tooltip
+                                    text={GRADED_UNSUBMIT_TOOLTIP}
+                                    delayDuration={0}
+                                  >
+                                    <span
+                                      className="inline-flex"
+                                      data-testid={`student-unsubmit-disabled-reason-${s.id}`}
+                                    >
+                                      <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-8 w-8 shrink-0 text-muted-foreground"
+                                        aria-label="Cannot unsubmit graded submission"
+                                        data-testid={`student-unsubmit-${s.id}`}
+                                        disabled
+                                      >
+                                        <RotateCcw className="h-4 w-4" />
+                                      </Button>
+                                    </span>
+                                  </Tooltip>
+                                ) : (
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8 shrink-0 text-muted-foreground"
+                                    aria-label="Unsubmit submission"
+                                    data-testid={`student-unsubmit-${s.id}`}
+                                    disabled={
+                                      submissionUnsubmitFetcher.state !== 'idle'
+                                    }
+                                    onClick={() => setSubmissionToUnsubmit(s)}
+                                  >
+                                    <RotateCcw className="h-4 w-4" />
+                                  </Button>
+                                )
+                              ) : null}
                               <Button
                                 type="button"
                                 variant="ghost"
@@ -1165,6 +1251,68 @@ export default function Route() {
               )}
             </DialogFooter>
           </DialogContent>
+      </Dialog>
+      <Dialog
+        open={submissionToUnsubmit != null}
+        onOpenChange={(open) => {
+          if (!open && submissionUnsubmitFetcher.state === 'idle') {
+            setSubmissionToUnsubmit(null);
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Unsubmit this submission?</DialogTitle>
+            <DialogDescription>
+              This withdraws the submission. Your document stays exactly as it
+              is, so you can keep editing and submit it again.
+            </DialogDescription>
+          </DialogHeader>
+          {(
+            submissionUnsubmitFetcher.data as
+              | { success?: boolean; message?: string }
+              | undefined
+          )?.success === false ? (
+            <p role="alert" className="text-sm text-destructive">
+              {(submissionUnsubmitFetcher.data as { message?: string }).message}
+            </p>
+          ) : null}
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={submissionUnsubmitFetcher.state !== 'idle'}
+              onClick={() => setSubmissionToUnsubmit(null)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              disabled={
+                submissionUnsubmitFetcher.state !== 'idle' ||
+                submissionToUnsubmit == null
+              }
+              onClick={() => {
+                if (!submissionToUnsubmit) return;
+                const fd = new FormData();
+                fd.set('submissionId', submissionToUnsubmit.id);
+                submissionUnsubmitFetcher.submit(fd, {
+                  method: 'POST',
+                  action: '/api/domain/unsubmit-submission',
+                });
+              }}
+            >
+              {submissionUnsubmitFetcher.state !== 'idle' ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Unsubmitting...
+                </>
+              ) : (
+                'Unsubmit'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
       </Dialog>
       <Dialog open={archiveDialogOpen} onOpenChange={setArchiveDialogOpen}>
         <DialogContent className="sm:max-w-md">
