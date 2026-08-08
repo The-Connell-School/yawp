@@ -579,6 +579,102 @@ test.describe.serial('Teacher class page redesign', () => {
     }
   });
 
+  test('add student flow joins an existing student to an additional class', async ({
+    page,
+    e2eContext,
+    signIn,
+  }) => {
+    const prisma = createE2EPrismaClient();
+    const suffix = Date.now().toString(36);
+    const studentEmail = `class-join-${suffix}@example.com`;
+    let otherClassId: string | undefined;
+
+    try {
+      const otherClass = await prisma.class.create({
+        data: {
+          code: `JOIN${suffix}`.toUpperCase().slice(0, 12),
+          schoolYear: '2026-2027',
+          grade: '9',
+          period: '7',
+          school: { connect: { id: e2eContext.schoolId } },
+          teachers: { connect: { id: e2eContext.teacherMembershipId } },
+        },
+        select: { id: true },
+      });
+      otherClassId = otherClass.id;
+
+      await prisma.orgMembership.create({
+        data: {
+          user: { create: { email: studentEmail, name: 'Existing Joiner' } },
+          organization: { connect: { id: e2eContext.organizationId } },
+          role: 'STUDENT',
+          classesAsStudent: { connect: { id: otherClass.id } },
+        },
+      });
+
+      await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
+      await page.goto(`/app/my-classes/${e2eContext.classId}`);
+      await page.waitForLoadState('networkidle');
+
+      await page.getByRole('button', { name: /add student/i }).click();
+      await page.getByTestId('add-student-email-input').fill(studentEmail);
+      await page.getByTestId('add-student-next-button').click();
+
+      await expect(
+        page.getByTestId('add-student-confirm-message')
+      ).toContainText('have an account in the system');
+
+      await page.getByTestId('add-student-confirm-button').click();
+
+      await expect
+        .poll(
+          async () => {
+            const membership = await prisma.orgMembership.findFirst({
+              where: { user: { email: studentEmail } },
+              select: { classesAsStudent: { select: { id: true } } },
+            });
+            return (membership?.classesAsStudent ?? [])
+              .map((klass) => klass.id)
+              .sort();
+          },
+          { timeout: 5000, message: 'Student not added to the second class' }
+        )
+        .toEqual([otherClass.id, e2eContext.classId].sort());
+
+      // Adding the same student again is a no-op with a clear message.
+      await page.goto(`/app/my-classes/${e2eContext.classId}`);
+      await page.waitForLoadState('networkidle');
+      await page.getByRole('button', { name: /add student/i }).click();
+      await page.getByTestId('add-student-email-input').fill(studentEmail);
+      await page.getByTestId('add-student-next-button').click();
+
+      await expect(
+        page.getByTestId('add-student-confirm-message')
+      ).toContainText('already in this class');
+      await expect(
+        page.getByTestId('add-student-confirm-button')
+      ).toHaveCount(0);
+
+      const membershipsAfter = await prisma.orgMembership.findMany({
+        where: { user: { email: studentEmail } },
+        select: { classesAsStudent: { select: { id: true } } },
+      });
+      expect(membershipsAfter).toHaveLength(1);
+      expect(membershipsAfter[0]?.classesAsStudent).toHaveLength(2);
+    } finally {
+      await prisma.orgMembership
+        .deleteMany({ where: { user: { email: studentEmail } } })
+        .catch(() => {});
+      await prisma.user
+        .deleteMany({ where: { email: studentEmail } })
+        .catch(() => {});
+      if (otherClassId) {
+        await prisma.class.delete({ where: { id: otherClassId } }).catch(() => {});
+      }
+      await prisma.$disconnect();
+    }
+  });
+
   test('documents filters and grouping persist across reload', async ({
     page,
     e2eContext,
