@@ -11,6 +11,7 @@ import {
 } from '~/domain/lesson-planner/lesson-planner-tools.server';
 import { repairSlideDeck } from '~/domain/lesson-planner/repair-slide-deck.server';
 import { markFailedDecks } from '~/domain/lesson-planner/slide-deck';
+import { markFailedUnitPlans } from '~/domain/lesson-planner/unit-plan';
 import {
   collectToolLinks,
   verifyLessonLinks,
@@ -181,7 +182,7 @@ export async function action({ request }: ActionFunctionArgs) {
       // Replayed history is the model's only account of what it produced. A
       // deck that failed has to read as failed, or it will insist to the
       // teacher that the deck is there.
-      content: markFailedDecks(message.content),
+      content: markFailedUnitPlans(markFailedDecks(message.content)),
     })),
     { role: AgentType.User, content: data.message },
   ];

@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { rubricCategories } from '~/domain/grading/rubric';
 import { SLIDE_LAYOUTS } from '~/domain/lesson-planner/slide-deck';
 import { MATERIAL_KINDS } from '~/domain/lesson-planner/lesson-material';
+import { UNIT_PLAN_FENCE } from '~/domain/lesson-planner/unit-plan';
 import {
   buildLessonPlannerSystemPrompt,
   RECOMMENDED_LESSON_PLANNER_PROMPTS,
@@ -710,5 +711,39 @@ describe('buildLessonPlannerSystemPrompt — a unit is not one long lesson', () 
   test('places the checks before the final piece', () => {
     expect(lower).toContain('which days carry a quick formative check');
     expect(lower).toContain('too late to teach');
+  });
+});
+
+describe('buildLessonPlannerSystemPrompt — the unit map is a board', () => {
+  const prompt = buildLessonPlannerSystemPrompt({
+    teacherName: null,
+    organizationName: 'Connell School',
+  });
+
+  test('teaches the yawp-unit protocol the chat renders', () => {
+    expect(prompt).toContain(UNIT_PLAN_FENCE);
+    expect(prompt).toContain('```yawp-unit');
+    // The fields the schema actually requires.
+    for (const field of ['"day"', '"title"', '"objective"', '"students"']) {
+      expect(prompt).toContain(field);
+    }
+  });
+
+  test('says why the map is structured rather than written out', () => {
+    const lower = prompt.toLowerCase();
+    expect(lower).toContain('build this day');
+    expect(lower).toContain('the way into the lessons');
+  });
+
+  test('forbids describing the days in prose as well', () => {
+    // The board already lists them; saying it twice is what a teacher has to
+    // read around.
+    const lower = prompt.toLowerCase();
+    expect(lower).toContain('never describe the days in prose as well');
+    expect(lower).toContain('never mention json to the teacher');
+  });
+
+  test('keeps the cells to one line each', () => {
+    expect(prompt.toLowerCase()).toContain('one short line per field');
   });
 });

@@ -270,6 +270,69 @@ async function seedUnreadableDeck(e2eContext: {
 }
 
 /** A reply carrying a handout and a sample, neither of them kept yet. */
+async function seedUnitPlan(e2eContext: {
+  teacherMembershipId: string;
+  organizationId: string;
+}) {
+  const prisma = createE2EPrismaClient();
+  const unit = {
+    title: 'Writing the literary analysis paragraph',
+    subtitle: 'English 10 · 3 periods',
+    endsWith: 'One analysis paragraph on a passage they choose',
+    days: [
+      {
+        day: 1,
+        title: 'What a claim is',
+        objective: 'Tell a claim apart from a summary',
+        students: 'Sort ten sentences into claim or summary',
+        check: 'Exit ticket: one claim about the passage',
+        minutes: 50,
+      },
+      {
+        day: 2,
+        title: 'Evidence that earns its place',
+        objective: 'Choose the quote that proves the claim',
+        students: 'Match claims to the strongest of three quotes',
+        minutes: 50,
+      },
+    ],
+  };
+  const content = [
+    'Here is the arc, three periods start to finish.',
+    '',
+    '```yawp-unit',
+    JSON.stringify(unit, null, 2),
+    '```',
+  ].join('\n');
+  try {
+    const conversation = await prisma.lessonPlanConversation.create({
+      data: {
+        membershipId: e2eContext.teacherMembershipId,
+        organizationId: e2eContext.organizationId,
+        title: 'Analysis paragraph unit',
+        messages: {
+          create: [
+            {
+              role: 'user',
+              content: 'Build me a unit plan on the analysis paragraph.',
+              createdAt: new Date('2026-08-04T10:00:00.000Z'),
+            },
+            {
+              role: 'assistant',
+              content,
+              createdAt: new Date('2026-08-04T10:00:01.000Z'),
+            },
+          ],
+        },
+      },
+      select: { id: true },
+    });
+    return { conversationId: conversation.id };
+  } finally {
+    await prisma.$disconnect();
+  }
+}
+
 async function seedLessonWithMaterials(e2eContext: {
   teacherMembershipId: string;
   organizationId: string;
@@ -1388,6 +1451,84 @@ test.describe('YAWP! Lesson Planner', () => {
     expect(file.suggestedFilename()).toContain('Diagnose & Repair');
     const bytes = await readFile(await file.path());
     expect(bytes.subarray(0, 5).toString()).toBe('%PDF-');
+  });
+
+  test('renders a unit map as a board with a way into every day', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    // The map is worth having because it is the way into the lessons, not
+    // because it summarises them — so the JSON must become a board with a
+    // button per day, never a wall of braces.
+    await setLessonPlannerEnabled(e2eContext.organizationId, true);
+    const { conversationId } = await seedUnitPlan(e2eContext);
+    await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+    await page.goto(`/app/lesson-planner?c=${conversationId}`);
+
+    const card = page.getByTestId('unit-plan-card');
+    await expect(card).toBeVisible();
+    await expect(card).toContainText('Writing the literary analysis paragraph');
+    await expect(card).toContainText('3 periods');
+    await expect(card.getByTestId('unit-plan-day')).toHaveCount(2);
+    await expect(card).toContainText('What a claim is');
+    await expect(card).toContainText('Ends with:');
+
+    // The machinery never reaches the teacher.
+    await expect(page.locator('main')).not.toContainText('"days"');
+    await expect(page.locator('main')).not.toContainText('yawp-unit');
+  });
+
+  test('sends the day’s own words when a teacher builds one out', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    await setLessonPlannerEnabled(e2eContext.organizationId, true);
+    const { conversationId } = await seedUnitPlan(e2eContext);
+    await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+    await page.goto(`/app/lesson-planner?c=${conversationId}`);
+
+    await page.getByTestId('unit-build-day').nth(1).click();
+
+    // It goes out as the teacher, carrying the day the teacher pointed at
+    // rather than the planner's recollection of it.
+    const sent = page.locator('[data-role="user"]').last();
+    await expect(sent).toContainText('day 2');
+    await expect(sent).toContainText('Evidence that earns its place');
+    await expect(sent).toContainText('Choose the quote that proves the claim');
+  });
+
+  test('prints the unit map as a table rather than a code fence', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    await setLessonPlannerEnabled(e2eContext.organizationId, true);
+    const { conversationId } = await seedUnitPlan(e2eContext);
+    await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+    await page.goto(`/app/lesson-planner?c=${conversationId}`);
+
+    // Wait for the keep to land: navigating first aborts the fetcher POST and
+    // the packet arrives empty.
+    const save = page.waitForResponse(
+      (response) =>
+        response.url().includes('/api/domain/lesson-planner/packet') &&
+        response.request().method() === 'POST'
+    );
+    await page
+      .locator('[data-role="assistant"]')
+      .first()
+      .getByRole('button', { name: /keep for the lesson/i })
+      .click();
+    await save;
+
+    await page.goto(`/app/lesson-planner/${conversationId}/packet`);
+    const main = page.locator('main');
+    // On paper there is nothing to click, so the board becomes the table.
+    await expect(main).toContainText('What a claim is');
+    await expect(main).toContainText('Students do');
+    await expect(main).not.toContainText('"objective"');
   });
 
   test('prints the student handout without the teacher’s plan', async ({

@@ -13,6 +13,7 @@ import { readLessonMaterials, type LessonMaterial } from './lesson-material';
 import { readLessonAsks } from './lesson-ask';
 import { inlineDailyPagesExercises } from './daily-pages-block';
 import { inlineLessonResources } from './lesson-resource';
+import { inlineUnitPlan } from './unit-plan';
 
 export const PACKET_AUDIENCES = ['teacher', 'student'] as const;
 
@@ -198,7 +199,12 @@ export function buildLessonPacket({
     // A warm-up the planner wrote is lesson content, not machinery: the packet
     // has no button to offer, so the prompt comes back as the blockquote it
     // would have been rather than as a fence printed on the page.
-    const body = inlineLessonResources(inlineDailyPagesExercises(withWarmUps));
+    // A unit map is a board on screen, where each day has a button. On paper
+    // there is nothing to click, so it prints as the table a teacher can read
+    // at a glance and write a date beside.
+    const body = inlineUnitPlan(
+      inlineLessonResources(inlineDailyPagesExercises(withWarmUps))
+    );
     const derivedTitle = deriveSectionTitle(body, index);
     const audience = parsePacketAudience(section.keptAudience);
     return {

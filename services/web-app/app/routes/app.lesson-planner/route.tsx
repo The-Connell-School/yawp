@@ -50,6 +50,8 @@ import {
 import { linkMaterialTitles } from '~/domain/lesson-planner/lesson-material';
 import { LessonResourceCard } from '~/components/ai-chat/lesson-resource-card';
 import { DailyPagesCard } from '~/components/ai-chat/daily-pages-card';
+import { UnitPlanCard } from '~/components/ai-chat/unit-plan-card';
+import { readUnitPlan } from '~/domain/lesson-planner/unit-plan';
 import { findDailyPagesTypeId } from '~/domain/lesson-planner/yawp-catalog.server';
 import {
   looksLikeLessonPlan,
@@ -733,8 +735,12 @@ function MessageBubble({
   // A deck is rendered as a deck. A deck that failed to build still gets its
   // JSON stripped — a teacher should never be shown the machinery.
   const deckOutcome = readSlideDeck(withDeck);
+  const withoutDeck = deckOutcome.kind === 'none' ? withDeck : deckOutcome.body;
+  // A unit map is a board with a way into every day, not a table of prose.
+  // Like a deck, a map that failed the schema still gets its JSON stripped.
+  const unitOutcome = readUnitPlan(withoutDeck);
   const withMaterials =
-    deckOutcome.kind === 'none' ? withDeck : deckOutcome.body;
+    unitOutcome.kind === 'none' ? withoutDeck : unitOutcome.body;
   // A period length and a set of activities are a slider and a checklist, not a
   // sentence the teacher has to type between classes.
   const { asks: requestedAsks, body: withParts } =
@@ -827,6 +833,24 @@ function MessageBubble({
               </div>
             );
           })}
+          {unitOutcome.kind === 'unit' ? (
+            <div className="mt-3">
+              <UnitPlanCard
+                unit={unitOutcome.unit}
+                onBuildDay={onSuggestion}
+                disabled={disabled}
+              />
+            </div>
+          ) : null}
+          {unitOutcome.kind === 'unreadable' ? (
+            <p
+              className={cn('text-sm text-muted-foreground', body && 'mt-3')}
+              data-testid="unit-unreadable"
+            >
+              This unit map didn’t build. Ask for it again — say “write the unit
+              map again, one short line per day” and it usually comes through.
+            </p>
+          ) : null}
           {deckOutcome.kind === 'deck' ? (
             <div className="mt-3">
               <SlideDeckCard
