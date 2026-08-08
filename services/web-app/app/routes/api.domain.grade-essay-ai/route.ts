@@ -4,6 +4,7 @@ import { parseFormData, validationError } from '@rvf/react-router';
 import { z } from 'zod';
 import crypto from 'node:crypto';
 import { prisma } from '~/utils/db.server';
+import { effectiveSubmitterId } from '~/utils/document-access.server';
 import { getLLMCompletion } from '~/utils/getLLMCompletion';
 import { isLlmFallbackRetrySignal } from '~/utils/getLLMCompletion/llm-provider-errors.server';
 import {
@@ -459,6 +460,7 @@ export async function action({ request }: ActionFunctionArgs) {
     text: true,
     html: true,
     gradedAt: true,
+    submittedByMembershipId: true,
     document: {
       select: {
         id: true,
@@ -551,7 +553,10 @@ export async function action({ request }: ActionFunctionArgs) {
   if (
     isGradingOwnDocument(
       actor.membershipId,
-      submission.document.membershipId
+      // Effective submitter, not document owner. On a shared document each group
+      // member's submission is their own; keying this on the owner would let a
+      // student grade a teammate's submission on a document they own.
+      effectiveSubmitterId(submission)
     )
   ) {
     return dataResponse(

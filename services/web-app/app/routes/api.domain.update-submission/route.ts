@@ -1,5 +1,6 @@
 import { type ActionFunctionArgs } from 'react-router';
 import { prisma } from '~/utils/db.server';
+import { effectiveSubmitterId } from '~/utils/document-access.server';
 import { hasRecordedGrade } from '~/domain/grading/recorded-grade';
 import {
   buildTeacherClassWhere,
@@ -48,6 +49,7 @@ export async function action({ request }: ActionFunctionArgs) {
       id: true,
       gradedAt: true,
       gradedByMembershipId: true,
+      submittedByMembershipId: true,
       numericPercentage: true,
       overallScore: true,
       score: true,
@@ -100,7 +102,10 @@ export async function action({ request }: ActionFunctionArgs) {
   if (
     isGradingOwnDocument(
       actor.membershipId,
-      submission.document.membershipId
+      // Effective submitter, not document owner. On a shared document each group
+      // member's submission is their own; keying this on the owner would let a
+      // student grade a teammate's submission on a document they own.
+      effectiveSubmitterId(submission)
     )
   ) {
     return Response.json(

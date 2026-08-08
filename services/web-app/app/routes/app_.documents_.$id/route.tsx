@@ -56,7 +56,10 @@ import { useUser } from '~/hooks/useUser';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { hasEffectivePlatformAdmin } from '~/utils/preview-access.server';
-import { documentReadWhere } from '~/utils/document-access.server';
+import {
+  documentReadWhere,
+  submissionsVisibleToViewerWhere,
+} from '~/utils/document-access.server';
 import { redirectWithToast } from '~/utils/toast.server';
 import { ensureAssignmentModuleSessionsForDocument } from '~/domain/documents.server';
 import { Comments } from './comments';
@@ -255,6 +258,18 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         },
       },
       submissions: {
+        // Scoped to the VIEWER's own submissions, not to the document's.
+        //
+        // Submissions hang off the document, so on a shared document an unscoped list
+        // would put every group member's submittedAt/gradedAt/releasedAt in every other
+        // member's editor -- each of them reading their teammates' grading status off the
+        // page. Teachers and admins still see the whole list, because grading depends on
+        // it; `submissionsVisibleToViewerWhere` returns `{}` for them.
+        where: submissionsVisibleToViewerWhere({
+          profileId: profile.id,
+          role: profile.role,
+          isAdmin: user?.isAdmin,
+        }),
         orderBy: { submittedAt: 'desc' },
         select: {
           id: true,

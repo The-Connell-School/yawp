@@ -1,6 +1,7 @@
 import { type ActionFunctionArgs, data as dataResponse } from 'react-router';
 import { requireMembership, requireUserId } from '~/utils/auth.server.js';
 import { prisma } from '~/utils/db.server.js';
+import { documentGroupWhere } from '~/utils/document-access.server';
 
 export async function action({ request }: ActionFunctionArgs) {
   if (request.method !== 'POST') {
@@ -17,10 +18,16 @@ export async function action({ request }: ActionFunctionArgs) {
     return dataResponse({ error: 'Invalid request' }, { status: 400 });
   }
 
+  // Group-scoped, not owner-scoped. The client fires this and ignores the response
+  // (`.catch(() => {})` in use-paste-alert.ts), so an owner-only gate does not surface an
+  // error to a collaborator — it drops their pastes on the floor and the plagiarism
+  // detector goes dark for exactly the students most likely to be pasting a teammate's
+  // work in. The alert row stamps membershipId as well as documentId, so widening the
+  // gate keeps attribution: the alert still lands under whoever actually pasted.
   const document = await prisma.document.findFirst({
     where: {
       id: documentId,
-      membershipId: membership.id,
+      ...documentGroupWhere({ profileId: membership.id }),
     },
   });
 

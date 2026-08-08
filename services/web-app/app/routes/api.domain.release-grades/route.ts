@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { prisma } from '~/utils/db.server';
 import { redirectWithToast } from '~/utils/toast.server';
 import { canManageGrades, getGradingActor } from '~/utils/grading-auth.server';
+import { effectiveSubmitterWhere } from '~/utils/document-access.server';
 
 const POST = z.object({
   submissionIds: z.preprocess(
@@ -46,7 +47,9 @@ export async function action({ request }: ActionFunctionArgs) {
       const submissions = await tx.submission.findMany({
         where: {
           id: { in: requestedSubmissionIds },
-          document: { is: { membershipId: { not: actor.membershipId } } },
+          // Never release your own work. Keyed on the effective submitter so a
+          // collaborator's submission is theirs, not the document owner's.
+          NOT: effectiveSubmitterWhere(actor.membershipId),
           ...(actor.isAdmin ? {} : { gradedByMembershipId: actor.membershipId }),
           releasedAt: null,
           // A student can unsubmit after a teacher's grade is saved but

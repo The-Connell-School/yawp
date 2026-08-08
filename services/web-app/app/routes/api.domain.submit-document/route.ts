@@ -129,6 +129,10 @@ const actionImpl = async ({ request }: ActionFunctionArgs) => {
         const submission = await tx.submission.create({
           data: {
             documentId: document.id,
+            // Which group member pressed Submit. On an unshared document this is the
+            // owner and matches what document.membershipId already implied; on a shared
+            // one it is the only thing that keeps each member's grade their own.
+            submittedByMembershipId: profile.id,
             title: data.title || (document.title ?? ''),
             html,
             text,

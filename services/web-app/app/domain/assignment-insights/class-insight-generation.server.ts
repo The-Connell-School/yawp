@@ -14,6 +14,7 @@ import {
 } from '~/domain/assignment-insights/differentiate-students';
 import type { ClassInsightSummary } from '~/domain/assignment-insights/class-insight-synthesis';
 import { prisma } from '~/utils/db.server';
+import { unsharedDocumentWhere } from '~/utils/document-access.server';
 import {
   AiRateLimitError,
   reserveAiRequest,
@@ -101,7 +102,15 @@ async function recordClassInsightFailure(input: {
 
 async function loadDifferentiationInputs(classAssignmentId: string) {
   const documents = await prisma.document.findMany({
-    where: { classAssignmentId, deletedAt: null },
+    where: {
+      // Group work is held out of class insights. These prompts carry a student's
+      // name and email alongside their submission text; a shared document counted
+      // once represents several students, skewing the class denominator, and worse,
+      // attributes group prose to one named person inside a model prompt. A slight
+      // undercount is the cheaper error.
+      classAssignmentId, deletedAt: null,
+      ...unsharedDocumentWhere(),
+    },
     select: {
       id: true,
       membership: {

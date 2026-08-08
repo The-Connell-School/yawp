@@ -1,5 +1,11 @@
 import { describe, expect, mock, test } from 'bun:test';
-import { matchesDocumentWhere, type ScopedDocument } from './testing/where-eval';
+import {
+  matchesDocumentWhere,
+  matchesSessionWhere,
+  matchesSubmissionWhere,
+  type ScopedDocument,
+  type ScopedSubmission,
+} from './testing/where-eval';
 
 mock.module('~/utils/db.server', () => ({ prisma: {} }));
 mock.module('./db.server', () => ({ prisma: {} }));
@@ -7,8 +13,15 @@ mock.module('./db.server', () => ({ prisma: {} }));
 const {
   documentReadWhere,
   documentOwnerWhere,
+  documentOwnerAndTeacherWhere,
   documentOwnerSessionWhere,
+  documentGroupWhere,
+  documentGroupSessionWhere,
   documentCommentReadWhere,
+  effectiveSubmitterWhere,
+  effectiveSubmitterId,
+  submissionsVisibleToViewerWhere,
+  unsharedDocumentWhere,
 } = await import('./document-access.server');
 
 /**
@@ -31,6 +44,12 @@ const PLAIN_DOC: ScopedDocument = {
   id: 'doc-plain',
   membershipId: OWNER,
   teacherProfileIds: [TEACHER],
+  // Unshared, but it IS a class-assignment document, so the collaborator arm's
+  // enrollment condition is satisfiable. With no collaborator rows the arm still
+  // cannot match -- which is the point: it proves the arm does not leak sideways.
+  classAssignmentId: 'class-assignment-1',
+  collaboratorMembershipIds: [],
+  enrolledStudentIds: [OWNER],
 };
 
 describe('documentReadWhere — unshared documents behave exactly as before', () => {

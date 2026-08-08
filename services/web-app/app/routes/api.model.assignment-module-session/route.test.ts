@@ -47,6 +47,12 @@ const DOC_B: ScopedDocument = {
   id: 'document-1',
   membershipId: 'student-profile-1',
   teacherProfileIds: ['profile-teacher'],
+  // Unshared, but it IS a class-assignment document, so the collaborator arm's
+  // enrollment condition is satisfiable. With no collaborator rows the arm still
+  // cannot match -- which is the point: it proves the arm does not leak sideways.
+  classAssignmentId: 'class-assignment-1',
+  collaboratorMembershipIds: [],
+  enrolledStudentIds: ['student-profile-1'],
 };
 
 const { action } = await import('./route');

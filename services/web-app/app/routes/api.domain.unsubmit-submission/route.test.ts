@@ -1,4 +1,9 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
+import {
+  matchesSubmissionWhere,
+  type ScopedDocument,
+  type ScopedSubmission,
+} from '~/utils/testing/where-eval';
 
 // Deliberately do NOT stub prisma.document or prisma.documentRevision here.
 // If the unsubmit action ever touches either model, calling an unstubbed
@@ -49,6 +54,53 @@ function ownedSubmission(overrides: Record<string, unknown> = {}) {
   };
 }
 
+const MY_DOC: ScopedDocument = {
+  id: 'doc-1',
+  membershipId: 'student-1',
+  teacherProfileIds: ['teacher-1'],
+  classAssignmentId: 'class-assignment-1',
+  collaboratorMembershipIds: ['student-2'],
+  enrolledStudentIds: ['student-1', 'student-2'],
+};
+
+/** Submitted by me, on my document. */
+const MY_SUBMISSION: ScopedSubmission = {
+  id: 'sub-1',
+  submittedByMembershipId: 'student-1',
+  unsubmittedAt: null,
+  document: MY_DOC,
+};
+
+/** Written before the column existed: NULL means the document's owner, which is me. */
+const MY_LEGACY_SUBMISSION: ScopedSubmission = {
+  id: 'sub-1',
+  submittedByMembershipId: null,
+  unsubmittedAt: null,
+  document: MY_DOC,
+};
+
+/** Someone else's document entirely. */
+const ANOTHER_STUDENTS_SUBMISSION: ScopedSubmission = {
+  id: 'sub-2',
+  submittedByMembershipId: 'student-9',
+  unsubmittedAt: null,
+  document: {
+    ...MY_DOC,
+    id: 'doc-9',
+    membershipId: 'student-9',
+    collaboratorMembershipIds: [],
+    enrolledStudentIds: ['student-9'],
+  },
+};
+
+/** My teammate's submission, made on the document I own. */
+const TEAMMATE_SUBMISSION_ON_MY_DOC: ScopedSubmission = {
+  id: 'sub-2',
+  submittedByMembershipId: 'student-2',
+  unsubmittedAt: null,
+  document: MY_DOC,
+};
+
 type ActionResponse = {
   data: { success?: boolean; message?: string };
   init?: { status?: number };
@@ -78,11 +130,12 @@ describe('api.domain.unsubmit-submission', () => {
     expect(response.data.success).toBe(true);
     expect(prisma.submission.findFirst).toHaveBeenCalledTimes(1);
     const lookup = prisma.submission.findFirst.mock.calls[0][0];
-    expect(lookup.where).toEqual({
-      id: 'sub-1',
-      unsubmittedAt: null,
-      document: { is: { membershipId: 'student-1' } },
-    });
+    // Run the route's own clause against fixture rows rather than asserting its
+    // shape. A shape assertion passes just as happily against a predicate keyed on
+    // document.membershipId, which is precisely the version that lets one group
+    // member withdraw a teammate's submission.
+    expect(matchesSubmissionWhere(lookup.where, MY_SUBMISSION)).toBe(true);
+    expect(matchesSubmissionWhere(lookup.where, MY_LEGACY_SUBMISSION)).toBe(true);
   });
 
   test('refuses a teacher even for a submission in their own class', async () => {
@@ -132,8 +185,14 @@ describe('api.domain.unsubmit-submission', () => {
     expect(response.data.message).toBe(
       'Submission not found, already unsubmitted, or you do not have permission to unsubmit it.'
     );
-    expect(prisma.submission.findFirst.mock.calls[0][0].where.document).toEqual(
-      { is: { membershipId: 'student-1' } }
+    const where = prisma.submission.findFirst.mock.calls[0][0].where;
+    expect(matchesSubmissionWhere(where, ANOTHER_STUDENTS_SUBMISSION)).toBe(
+      false
+    );
+    // The one a collaborator would reach for: a submission a TEAMMATE made on a
+    // document this student owns. Owning the document is not owning the submission.
+    expect(matchesSubmissionWhere(where, TEAMMATE_SUBMISSION_ON_MY_DOC)).toBe(
+      false
     );
     expect(prisma.submission.updateMany).not.toHaveBeenCalled();
   });

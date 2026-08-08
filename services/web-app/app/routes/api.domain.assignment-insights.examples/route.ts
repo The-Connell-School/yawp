@@ -5,6 +5,7 @@ import {
 } from '~/domain/assignment-insights/aggregate-rubric-performance';
 import { rubricKeys } from '~/domain/grading/rubric';
 import { prisma } from '~/utils/db.server';
+import { unsharedDocumentWhere } from '~/utils/document-access.server';
 import { canManageGrades, getGradingActor } from '~/utils/grading-auth.server';
 
 /** How many example snippets to surface per category. */
@@ -125,7 +126,15 @@ export async function loader({ request }: LoaderFunctionArgs) {
   // the student's identity — the teacher owns this data and wants to know who
   // the exemplars are and open their full paper.
   const documents = await prisma.document.findMany({
-    where: { classAssignmentId: classAssignment.id, deletedAt: null },
+    where: {
+      // Group work is held out of class insights. These prompts carry a student's
+      // name and email alongside their submission text; a shared document counted
+      // once represents several students, skewing the class denominator, and worse,
+      // attributes group prose to one named person inside a model prompt. A slight
+      // undercount is the cheaper error.
+      classAssignmentId: classAssignment.id, deletedAt: null,
+      ...unsharedDocumentWhere(),
+    },
     select: {
       id: true,
       membership: {

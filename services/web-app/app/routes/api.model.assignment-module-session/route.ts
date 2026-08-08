@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { requireMembership, requireUserId } from '~/utils/auth.server.js';
 import { prisma } from '~/utils/db.server.js';
 import {
-  documentOwnerWhere,
+  documentGroupWhere,
   documentReadWhere,
   getIsPlatformAdmin,
 } from '~/utils/document-access.server';
@@ -110,7 +110,7 @@ export async function action({ request }: ActionFunctionArgs) {
   const ownedDocument = await prisma.document.findFirst({
     where: {
       id: document.id,
-      ...documentOwnerWhere({ profileId: profile.id, isAdmin }),
+      ...documentGroupWhere({ profileId: profile.id, isAdmin }),
     },
     select: { id: true },
   });

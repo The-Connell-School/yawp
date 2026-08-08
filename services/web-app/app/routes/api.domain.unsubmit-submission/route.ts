@@ -2,6 +2,7 @@ import { data as dataResponse, type ActionFunctionArgs } from 'react-router';
 import { parseFormData, validationError } from '@rvf/react-router';
 import { z } from 'zod';
 import { prisma } from '~/utils/db.server';
+import { effectiveSubmitterWhere } from '~/utils/document-access.server';
 import { getGradingActor } from '~/utils/grading-auth.server';
 
 const POST = z.object({ submissionId: z.string().min(1) });
@@ -37,9 +38,9 @@ export async function action({ request }: ActionFunctionArgs) {
         where: {
           id: data.submissionId,
           unsubmittedAt: null,
-          document: {
-            is: { membershipId: actor.membershipId },
-          },
+          // Your own submission only. On a shared document a collaborator may withdraw
+          // what they submitted and nothing else -- never a teammate's.
+          ...effectiveSubmitterWhere(actor.membershipId),
         },
         select: { id: true, gradedAt: true, releasedAt: true },
       });
