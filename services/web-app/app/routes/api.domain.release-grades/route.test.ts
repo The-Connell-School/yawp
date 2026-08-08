@@ -197,6 +197,40 @@ describe('api.domain.release-grades', () => {
     );
   });
 
+  test('excludes unsubmitted submissions from the eligibility query, closing the grading race on release', async () => {
+    prisma.submission.findMany.mockResolvedValue([
+      {
+        id: 'sub-1',
+        document: {
+          classAssignment: {
+            class: {
+              id: 'class-1',
+              schoolId: 'school-1',
+              school: { organizationId: 'org-1' },
+              teachers: [{ id: 'teacher-1' }],
+            },
+          },
+        },
+      },
+    ]);
+
+    const form = new FormData();
+    form.append('submissionIds', 'sub-1');
+
+    const request = new Request(
+      'https://example.com/api/domain/release-grades',
+      {
+        method: 'POST',
+        body: form,
+      }
+    );
+
+    await action({ request } as any);
+
+    const query = prisma.submission.findMany.mock.calls[0][0];
+    expect(query.where.unsubmittedAt).toBeNull();
+  });
+
   test('rejects non-teachers', async () => {
     canManageGrades.mockReturnValue(false);
 
