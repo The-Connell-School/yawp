@@ -74,12 +74,17 @@ export type CombinedCategory = {
   agreement: 'agreed' | 'split';
   sections: {
     classId: string;
+    classAssignmentId: string;
     label: string;
     status: SectionCategoryStatus;
     submissionCount: number;
     summary: string;
   }[];
-  /** Labels of summarized sections whose summary never mentioned this category. */
+  /**
+   * Labels of summarized sections whose summary never mentioned this category.
+   * One entry per section, so two sections rendering the same label appear
+   * twice rather than collapsing into one.
+   */
   notReportedBy: string[];
 };
 
@@ -87,6 +92,7 @@ export type CombinedNextStep = {
   title: string;
   detail: string;
   rubricCategory: string;
+  /** One entry per section that raised the step, in first-seen order. */
   sectionLabels: string[];
 };
 
@@ -185,6 +191,7 @@ export function combineSectionInsights(
       }
       bucket.entries.push({
         classId: input.classId,
+        classAssignmentId: input.classAssignmentId,
         label: input.label,
         status: category.status,
         submissionCount: input.insight!.submissionCount,
@@ -197,8 +204,12 @@ export function combineSectionInsights(
     const bucket = categoryBuckets.get(key)!;
     const statuses = new Set(bucket.entries.map((entry) => entry.status));
     const agreed = statuses.size === 1;
-    const reportingLabels = new Set(
-      bucket.entries.map((entry) => entry.label)
+    // Identity is the ClassAssignment, never the label: sectionLabel() in the
+    // loader is built from nullable grade/period/title, so two real sections
+    // can render the same string. Keyed on the label, a second "Grade 9"
+    // would be read as already covered and dropped from notReportedBy.
+    const reportingIds = new Set(
+      bucket.entries.map((entry) => entry.classAssignmentId)
     );
     return {
       key,
@@ -209,7 +220,7 @@ export function combineSectionInsights(
       agreement: agreed ? ('agreed' as const) : ('split' as const),
       sections: bucket.entries,
       notReportedBy: reportingSections
-        .filter((section) => !reportingLabels.has(section.label))
+        .filter((section) => !reportingIds.has(section.classAssignmentId))
         .map((section) => section.label),
     };
   });
@@ -217,7 +228,10 @@ export function combineSectionInsights(
   // Next steps, merged on category + title so the same advice raised in two
   // sections reads as one step attributed to both.
   const stepOrder: string[] = [];
-  const stepBuckets = new Map<string, CombinedNextStep>();
+  const stepBuckets = new Map<
+    string,
+    { step: CombinedNextStep; sectionIds: Set<string> }
+  >();
 
   for (const input of readyInputs) {
     for (const step of input.insight!.summary!.nextSteps) {
@@ -227,22 +241,29 @@ export function combineSectionInsights(
       let bucket = stepBuckets.get(stepKey);
       if (!bucket) {
         bucket = {
-          title: step.title,
-          detail: step.detail,
-          rubricCategory: step.rubricCategory,
-          sectionLabels: [],
+          step: {
+            title: step.title,
+            detail: step.detail,
+            rubricCategory: step.rubricCategory,
+            sectionLabels: [],
+          },
+          sectionIds: new Set<string>(),
         };
         stepBuckets.set(stepKey, bucket);
         stepOrder.push(stepKey);
       }
-      if (!bucket.sectionLabels.includes(input.label)) {
-        bucket.sectionLabels.push(input.label);
+      // Deduped on the ClassAssignment, not the label — a step raised in two
+      // sections that happen to share a label is still two sections, and the
+      // count drives both the ordering below and what the teacher reads.
+      if (!bucket.sectionIds.has(input.classAssignmentId)) {
+        bucket.sectionIds.add(input.classAssignmentId);
+        bucket.step.sectionLabels.push(input.label);
       }
     }
   }
 
   const nextSteps = stepOrder
-    .map((stepKey, index) => ({ step: stepBuckets.get(stepKey)!, index }))
+    .map((stepKey, index) => ({ step: stepBuckets.get(stepKey)!.step, index }))
     .sort(
       (a, b) =>
         b.step.sectionLabels.length - a.step.sectionLabels.length ||

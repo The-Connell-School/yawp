@@ -238,7 +238,7 @@ export function AcrossSectionsPanel({
                                   STATUS_META.mixed;
                                 return (
                                   <li
-                                    key={entry.classId}
+                                    key={entry.classAssignmentId}
                                     className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs"
                                   >
                                     <span className="font-medium text-foreground">

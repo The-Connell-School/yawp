@@ -15,6 +15,7 @@ import type {
   SectionInsightInput,
   SectionSummary,
 } from '~/domain/assignment-insights/combine-section-insights';
+import { sectionLabels } from '~/domain/assignment-insights/section-labels';
 import { ClassInsightsPanel } from '../app.my-classes.$classId_.assignments.$assignmentId/class-insights-panel';
 import { buildGradedCountByAssignmentId } from '../app.my-classes.$classId/graded-count';
 import type { loader as classDetailLoader } from '../app.my-classes.$classId/route';
@@ -23,19 +24,6 @@ import { AcrossSectionsPanel } from './across-sections-panel';
 /** Search param that opts the page into the across-sections view. */
 export const ACROSS_SECTIONS_PARAM = 'sections';
 export const ACROSS_SECTIONS_VALUE = 'all';
-
-function sectionLabel(klass: {
-  grade: string | null;
-  period: string | null;
-  title: string | null;
-}): string {
-  const parts = [
-    klass.grade ? `Grade ${klass.grade}` : null,
-    klass.period ? `Period ${klass.period}` : null,
-  ].filter(Boolean);
-  if (parts.length) return parts.join(' · ');
-  return klass.title?.trim() || 'Untitled class';
-}
 
 /**
  * Auth, plus the sections this assignment runs in.
@@ -112,15 +100,22 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     );
   }
 
+  // Two sections can render the same grade/period label; the combined view
+  // keys on classAssignmentId regardless, but the teacher still has to be
+  // able to tell the two rows apart.
+  const labels = sectionLabels(
+    classAssignments.map((classAssignment) => classAssignment.class)
+  );
+
   const sections: SectionInsightInput[] = classAssignments.map(
-    (classAssignment) => {
+    (classAssignment, index) => {
       const insight = classAssignment.insight;
       const isReady =
         insight != null && insight.status === 'ready' && insight.summaryJson;
       return {
         classId: classAssignment.classId,
         classAssignmentId: classAssignment.id,
-        label: sectionLabel(classAssignment.class),
+        label: labels[index],
         gradedCount:
           gradedCountByClassAssignmentId.get(classAssignment.id) ?? 0,
         insight: isReady
