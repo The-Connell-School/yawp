@@ -84,10 +84,27 @@ export default function WritingLessonsIndexRoute() {
           <h2 className="text-balance text-3xl font-semibold tracking-tight sm:text-4xl">
             Writing practice
           </h2>
-          <p className="mt-3 max-w-xl text-pretty text-base text-muted-foreground sm:text-sm">
-            Create and send lessons on grammar, syntax, and revision to hone
-            your students' writing.
-          </p>
+          {isTeacher ? (
+            <p className="mt-3 max-w-xl text-pretty text-base text-muted-foreground sm:text-sm">
+              Create and send lessons on grammar, syntax, and revision to hone
+              your students' writing.
+            </p>
+          ) : (
+            <div
+              data-testid="writing-practice-student-intro"
+              className="mt-3 max-w-xl space-y-2"
+            >
+              <p className="text-pretty text-base text-muted-foreground sm:text-sm">
+                Short lessons on grammar, sentence structure, and revision. This
+                is practice, not graded work.
+              </p>
+              <p className="text-pretty text-base text-muted-foreground sm:text-sm">
+                Pick a lesson below, read the example, then answer the practice
+                prompt. Your answers stay on your screen and are not sent to
+                your teacher.
+              </p>
+            </div>
+          )}
           <div className="mt-6 grid grid-cols-3 gap-px overflow-hidden rounded-xl border bg-border sm:w-fit">
             <div className="flex flex-col gap-0.5 bg-popover px-4 py-3 sm:px-6">
               <p className="text-xl font-semibold tabular-nums">

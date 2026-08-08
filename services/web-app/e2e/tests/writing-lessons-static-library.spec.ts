@@ -34,6 +34,17 @@ test.describe.serial('Writing practice prototype', () => {
       await expect(
         page.getByRole('heading', { name: /writing practice/i })
       ).toBeVisible();
+
+      const studentIntro = page.getByTestId('writing-practice-student-intro');
+      await expect(studentIntro).toBeVisible();
+      await expect(studentIntro).toContainText(
+        'This is practice, not graded work.'
+      );
+      await expect(studentIntro).toContainText(
+        'Pick a lesson below, read the example, then answer the practice prompt.'
+      );
+      await expect(studentIntro).not.toContainText("your students' writing");
+
       await expect(
         page.getByRole('link', { name: /revising for wordiness/i })
       ).toBeVisible();
@@ -94,6 +105,10 @@ test.describe.serial('Writing practice prototype', () => {
 
       await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
       await page.goto('/app/writing-lessons');
+
+      await expect(
+        page.getByTestId('writing-practice-student-intro')
+      ).toHaveCount(0);
 
       const lessonCard = page.getByTestId(
         'writing-lesson-card-revising-for-wordiness'
