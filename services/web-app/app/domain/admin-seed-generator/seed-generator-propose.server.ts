@@ -50,6 +50,16 @@ function errorStatus(error: unknown) {
 export function classifySeedGeneratorError(error: unknown): SeedGeneratorError {
   const status = errorStatus(error);
   const name = error instanceof Error ? error.name : '';
+  // The Anthropic SDK does not throw a DOM AbortError/TimeoutError when our
+  // own AbortSignal.timeout() fires mid-request -- it throws its own
+  // APIUserAbortError (constructor name only; `.name` stays the generic
+  // "Error"), with message "Request was aborted." and no status code. Any
+  // subclass of that name is our own deadline firing, which is transient by
+  // definition -- never misclassify it as the model failing to comply.
+  const constructorName =
+    error && typeof error === 'object'
+      ? (error.constructor?.name ?? '')
+      : '';
   const message =
     error instanceof Error
       ? error.message
@@ -59,10 +69,11 @@ export function classifySeedGeneratorError(error: unknown): SeedGeneratorError {
   if (
     name === 'AbortError' ||
     name === 'TimeoutError' ||
+    constructorName === 'APIUserAbortError' ||
     status === 408 ||
     status === 429 ||
     (status != null && status >= 500) ||
-    /timed?\s*out|timeout|rate.?limit|overload|provider|network|ECONN/i.test(
+    /timed?\s*out|timeout|rate.?limit|overload|provider|network|ECONN|aborted/i.test(
       message
     )
   ) {

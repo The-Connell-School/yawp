@@ -73,4 +73,18 @@ describe('classifySeedGeneratorError', () => {
       classifySeedGeneratorError(new Error('Invalid tool output')).type
     ).toBe('unparseable');
   });
+
+  test('classifies the Anthropic SDK abort-signal error as transient, not unparseable', () => {
+    // Reproduces live behavior: when our own AbortSignal.timeout() fires
+    // mid-request, the Anthropic SDK throws an APIUserAbortError whose
+    // `.name` is the generic "Error" and whose message is "Request was
+    // aborted." -- it carries no status code either. Before this fix that
+    // fell through every transient check and was misreported to the admin
+    // as "could not turn those instructions into a valid graph... be more
+    // precise", which reads as the model refusing when it was actually our
+    // own deadline firing.
+    class APIUserAbortError extends Error {}
+    const error = new APIUserAbortError('Request was aborted.');
+    expect(classifySeedGeneratorError(error).type).toBe('transient');
+  });
 });
