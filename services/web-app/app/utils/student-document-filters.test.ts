@@ -15,19 +15,18 @@ import {
 const history = { id: 'class-history', grade: '9', period: '1', title: 'History' };
 const english = { id: 'class-english', grade: '10', period: '2', title: 'English' };
 
-function doc(
-  overrides: Partial<StudentDocumentFilterRow> & { id: string }
-): StudentDocumentFilterRow {
+type TestDocument = StudentDocumentFilterRow & { id: string };
+
+function doc(overrides: Partial<TestDocument> & { id: string }): TestDocument {
   return {
     classAssignment: null,
     assignment: null,
     submissions: [],
-    createdAt: new Date('2026-01-01'),
     ...overrides,
   };
 }
 
-const documents: StudentDocumentFilterRow[] = [
+const documents: TestDocument[] = [
   doc({ id: 'free-write' }),
   doc({
     id: 'history-draft',
