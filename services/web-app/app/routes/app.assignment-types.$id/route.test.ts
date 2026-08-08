@@ -37,9 +37,12 @@ const createDocumentForAssignmentType = mock();
 const redirectWithToast = mock();
 const getAvailableAssignmentTypesForScopes = mock();
 
-const assignmentTypeAccessActual = await import(
+// bun's module mocks are global to the test run and mock.restore() does not
+// undo mock.module — restore from the pristine copy test-preload.ts captured
+// before any file could mock.module() this path (see comment there).
+const assignmentTypeAccessActual = globalThis.__realModules[
   '~/utils/assignment-type-access.server'
-);
+];
 
 mock.module('~/utils/db.server', () => ({ prisma }));
 mock.module('~/utils/auth.server', () => ({

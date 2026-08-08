@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, mock, test } from 'bun:test';
+import { afterAll, beforeEach, describe, expect, mock, test } from 'bun:test';
 
 const prisma = {
   class: { findFirst: mock(), findMany: mock() },
@@ -46,7 +46,14 @@ mock.module('~/utils/auth.server', () => ({
 mock.module('~/utils/cookies.server', () => ({
   getSubmittedPapersFilter,
 }));
+// bun's module mocks are global to the test run and mock.restore() does not
+// undo mock.module — restore from the pristine copy test-preload.ts captured
+// before any file could mock.module() this path (see comment there).
+const actualAssignmentTypeAccess = globalThis.__realModules[
+  '~/utils/assignment-type-access.server'
+];
 mock.module('~/utils/assignment-type-access.server', () => ({
+  ...actualAssignmentTypeAccess,
   getAvailableAssignmentTypesForScopes,
   isAssignmentTypeAvailableForEveryScope,
 }));
@@ -72,6 +79,14 @@ const {
 } = await import('./route');
 const action = routeAction as any;
 const loader = routeLoader as any;
+
+afterAll(() => {
+  mock.restore();
+  mock.module(
+    '~/utils/assignment-type-access.server',
+    () => actualAssignmentTypeAccess
+  );
+});
 
 describe('class detail loader document visibility', () => {
   beforeEach(() => {

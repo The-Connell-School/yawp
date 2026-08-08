@@ -18,6 +18,12 @@ const getTeacherRecentActiveClassIds = mock();
 const getAvailableAssignmentTypesForScopes = mock();
 const getStudentPreviewState = mock();
 const getStudentEnrolledClasses = mock();
+// bun's module mocks are global to the test run and mock.restore() does not
+// undo mock.module — restore from the pristine copy test-preload.ts captured
+// before any file could mock.module() this path (see comment there).
+const actualAssignmentTypeAccess = globalThis.__realModules[
+  '~/utils/assignment-type-access.server'
+];
 
 mock.module('~/utils/db.server.js', () => ({ prisma }));
 mock.module('~/utils/auth.server.js', () => ({
@@ -34,6 +40,7 @@ mock.module('~/utils/teacher-dashboard-recent-classes.server', () => ({
   getTeacherRecentActiveClassIds,
 }));
 mock.module('~/utils/assignment-type-access.server', () => ({
+  ...actualAssignmentTypeAccess,
   getAvailableAssignmentTypesForScopes,
 }));
 mock.module('~/utils/student-preview.server', () => ({
@@ -51,6 +58,10 @@ const { loader } = await import('./route');
 
 afterAll(() => {
   mock.restore();
+  mock.module(
+    '~/utils/assignment-type-access.server',
+    () => actualAssignmentTypeAccess
+  );
 });
 
 describe('app index loader assignments', () => {
