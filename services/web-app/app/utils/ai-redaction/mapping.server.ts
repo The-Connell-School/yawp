@@ -96,3 +96,47 @@ export function buildRedactionMapping(
 
   return { realToPseudonym, pseudonymToReal };
 }
+
+/**
+ * Adds an extra lookup key (`aliasRealName`) that resolves to the SAME
+ * pseudonym as an already-registered name (`canonicalRealName`).
+ *
+ * Why this exists: callers that register students by full name (so two
+ * students sharing a first name still get distinct, unambiguous pseudonyms
+ * — see `pseudonymFor` in session.server.ts) can end up re-sending
+ * first-name-only text that was authored elsewhere, e.g. a stored grading
+ * `overallComment` that always opens with just the student's first name
+ * ("Sophia, you've written..."). `redact()` only matches keys it knows
+ * about, so without an alias that bare first name sails through untouched.
+ *
+ * Safety: if `aliasRealName` is already registered — under this student's
+ * own pseudonym or, critically, under a DIFFERENT student's pseudonym
+ * because two students share that first name — this is a no-op. A shared
+ * first name is genuinely ambiguous (rehydrate() cannot know which student
+ * a bare "Alex" refers to), so the alias is only added when it is safe,
+ * i.e. the first claimant wins and no later student can steal or overwrite
+ * it. A stray unaliased first-name mention in that narrow, documented edge
+ * case is not redacted — same trade-off the common-word-name guard makes
+ * elsewhere in this module.
+ */
+export function withAliasKey(
+  mapping: RedactionMapping,
+  aliasRealName: string,
+  canonicalRealName: string
+): RedactionMapping {
+  const canonicalKey = canonicalRealName.trim().toLowerCase();
+  const canonicalEntry = mapping.realToPseudonym.get(canonicalKey);
+  if (!canonicalEntry) return mapping;
+
+  const alias = aliasRealName.trim();
+  const aliasKey = alias.toLowerCase();
+  if (!aliasKey) return mapping;
+  if (mapping.realToPseudonym.has(aliasKey)) return mapping;
+
+  const realToPseudonym = new Map(mapping.realToPseudonym);
+  realToPseudonym.set(aliasKey, {
+    pseudonym: canonicalEntry.pseudonym,
+    realName: alias,
+  });
+  return { realToPseudonym, pseudonymToReal: mapping.pseudonymToReal };
+}

@@ -56,4 +56,44 @@ describe('createRedactionSession', () => {
 
     expect(redact('Amelia Brooks', session.mapping)).toBe(pseudonym);
   });
+
+  test('registerStudentFullName() also catches a later first-name-only mention (e.g. a stored overallComment)', () => {
+    // Reporter registers students by full name so two students sharing a
+    // first name still rehydrate unambiguously (see the test above). But
+    // grading always addresses a student by first name only in stored
+    // feedback ("Sophia, you've written..."), and Reporter tool results
+    // echo that stored text back into the outbound prompt. Without this
+    // alias, the bare first name sails through redact() untouched because
+    // only the two-word "Sophia Marín" key was ever registered.
+    const session = createRedactionSession();
+    const pseudonym = session.registerStudentFullName('Sophia Marín');
+
+    const priorFeedback =
+      "Sophia, you've written something rare: an essay that makes silence visible.";
+    const redacted = redact(priorFeedback, session.mapping);
+
+    expect(redacted).not.toContain('Sophia');
+    expect(redacted.startsWith(pseudonym)).toBe(true);
+  });
+
+  test('registerStudentFullName() resolves a shared-first-name alias to whichever student claimed it first, and never lets a second claimant overwrite it', () => {
+    const session = createRedactionSession();
+    const riveraPseudonym = session.registerStudentFullName('Alex Rivera');
+    const chenPseudonym = session.registerStudentFullName('Alex Chen');
+    expect(riveraPseudonym).not.toBe(chenPseudonym);
+
+    // Privacy comes first: a bare "Alex" is still redacted (no real name
+    // ever reaches the prompt), even though - because the alias is
+    // genuinely ambiguous between two students - it always resolves to the
+    // first claimant's pseudonym rather than the correct one for every
+    // mention.
+    const redacted = redact(
+      'Alex turned in strong work this week.',
+      session.mapping
+    );
+    expect(redacted).not.toContain('Alex');
+    expect(
+      redacted.startsWith(riveraPseudonym) || redacted.startsWith(chenPseudonym)
+    ).toBe(true);
+  });
 });

@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { buildRedactionMapping } from './mapping.server';
+import { buildRedactionMapping, withAliasKey } from './mapping.server';
 import { PSEUDONYM_FIRST_NAME_POOL } from './pseudonym-pool.server';
 
 describe('buildRedactionMapping', () => {
@@ -79,5 +79,53 @@ describe('buildRedactionMapping', () => {
         entry.realName
       );
     }
+  });
+});
+
+describe('withAliasKey', () => {
+  test('adds a lookup key that resolves to the same pseudonym as the canonical name', () => {
+    const mapping = buildRedactionMapping(['Sophia Marín']);
+    const canonical = mapping.realToPseudonym.get('sophia marín')!;
+
+    const aliased = withAliasKey(mapping, 'Sophia', 'Sophia Marín');
+
+    expect(aliased.realToPseudonym.get('sophia')?.pseudonym).toBe(
+      canonical.pseudonym
+    );
+  });
+
+  test('does not overwrite an alias key that is already registered under a different pseudonym', () => {
+    // Two different students share the first name "Alex" - the bare first
+    // name is ambiguous between them, so aliasing must not silently pick one.
+    let mapping = buildRedactionMapping(['Alex Rivera', 'Alex Chen']);
+    const riveraPseudonym = mapping.realToPseudonym.get('alex rivera')!
+      .pseudonym;
+
+    mapping = withAliasKey(mapping, 'Alex', 'Alex Rivera');
+    // "alex" was never registered on its own, so the alias attaches to
+    // whichever canonical name asks for it first.
+    expect(mapping.realToPseudonym.get('alex')?.pseudonym).toBe(
+      riveraPseudonym
+    );
+
+    const chenPseudonym = mapping.realToPseudonym.get('alex chen')!.pseudonym;
+    const beforeSecondAlias = mapping.realToPseudonym.get('alex')?.pseudonym;
+    mapping = withAliasKey(mapping, 'Alex', 'Alex Chen');
+
+    // A second, conflicting alias attempt must not clobber the first.
+    expect(mapping.realToPseudonym.get('alex')?.pseudonym).toBe(
+      beforeSecondAlias
+    );
+    expect(mapping.realToPseudonym.get('alex')?.pseudonym).not.toBe(
+      chenPseudonym
+    );
+  });
+
+  test('is a no-op if the canonical name was never registered', () => {
+    const mapping = buildRedactionMapping(['Sophia Marín']);
+
+    const aliased = withAliasKey(mapping, 'Priya', 'Priya Patel');
+
+    expect(aliased.realToPseudonym.get('priya')).toBeUndefined();
   });
 });

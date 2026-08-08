@@ -36,10 +36,14 @@ export type ReporterToolContext = {
   /**
    * Request-scoped real-name <-> pseudonym mapping shared with the route.
    * Every real student name a tool result surfaces must be registered
-   * through `nameRedaction.pseudonymFor` before it reaches the outbound
-   * tool-result JSON, and every model-supplied `student`/`focus`/`body`
-   * field must be rehydrated back to real names before it touches the
-   * database or a DB lookup. Never persisted or logged.
+   * through `nameRedaction.registerStudentFullName` (not the bare
+   * `pseudonymFor`) before it reaches the outbound tool-result JSON - the
+   * full-name form also aliases the student's bare first name so stored
+   * feedback text like a grading `overallComment` ("Sophia, you've...")
+   * still gets redacted when it's echoed back into a later prompt. Every
+   * model-supplied `student`/`focus`/`body` field must be rehydrated back
+   * to real names before it touches the database or a DB lookup. Never
+   * persisted or logged.
    */
   nameRedaction: RedactionSession;
 };
@@ -465,7 +469,7 @@ async function getClassGradeReport(ctx: ReporterToolContext, input: unknown) {
   });
   const students = summarizeStudentGrades(rows).map((student) => ({
     ...student,
-    studentName: ctx.nameRedaction.pseudonymFor(student.studentName),
+    studentName: ctx.nameRedaction.registerStudentFullName(student.studentName),
   }));
   const classAverages = students
     .map((student) => student.averagePercentage)
@@ -533,7 +537,7 @@ async function findAttention(ctx: ReporterToolContext, input: unknown) {
     truncated: flagged.length > MAX_ATTENTION_STUDENTS,
     students: flagged.slice(0, MAX_ATTENTION_STUDENTS).map((student) => ({
       ...student,
-      studentName: ctx.nameRedaction.pseudonymFor(student.studentName),
+      studentName: ctx.nameRedaction.registerStudentFullName(student.studentName),
     })),
   };
 }
@@ -604,7 +608,7 @@ async function resolveStudent(
       error: `More than one student matches "${query}". Ask which one.`,
       ambiguous: byName.map((match) => ({
         studentMembershipId: match.id,
-        studentName: ctx.nameRedaction.pseudonymFor(
+        studentName: ctx.nameRedaction.registerStudentFullName(
           match.user.name ?? 'Unknown student'
         ),
       })),
@@ -632,7 +636,7 @@ async function getStudentGradeReport(ctx: ReporterToolContext, input: unknown) {
   return {
     student: {
       studentMembershipId: student.id,
-      studentName: ctx.nameRedaction.pseudonymFor(student.name),
+      studentName: ctx.nameRedaction.registerStudentFullName(student.name),
     },
     sourceTruncated,
     sourceLimit,
@@ -671,7 +675,7 @@ async function getStudentGrowth(ctx: ReporterToolContext, input: unknown) {
   return {
     student: {
       studentMembershipId: student.id,
-      studentName: ctx.nameRedaction.pseudonymFor(student.name),
+      studentName: ctx.nameRedaction.registerStudentFullName(student.name),
     },
     sourceTruncated,
     sourceLimit,
@@ -750,7 +754,7 @@ async function getSubmissionDetail(ctx: ReporterToolContext, input: unknown) {
   // the overall feedback also gets caught, not just the structured field.
   const realStudentName =
     submission.document.membership.user.name ?? 'Unknown student';
-  const pseudonymStudentName = ctx.nameRedaction.pseudonymFor(realStudentName);
+  const pseudonymStudentName = ctx.nameRedaction.registerStudentFullName(realStudentName);
   const scrub = (text: string | null | undefined) =>
     text == null ? text : redact(text, ctx.nameRedaction.mapping);
 
@@ -900,7 +904,7 @@ async function saveGrowthPlan(ctx: ReporterToolContext, input: unknown) {
     planId,
     student: {
       studentMembershipId: student.id,
-      studentName: ctx.nameRedaction.pseudonymFor(student.name),
+      studentName: ctx.nameRedaction.registerStudentFullName(student.name),
     },
     // parsed.focus was rehydrated to the real name for persistence above;
     // re-redact it here since this echoes back into the model-facing tool
@@ -1022,7 +1026,7 @@ async function listGrowthPlans(ctx: ReporterToolContext, input: unknown) {
     // Plan focus/body are stored in the database as real names (rehydrated
     // when save_growth_plan persisted them) - re-redact before they go back
     // to the model.
-    const planStudentName = ctx.nameRedaction.pseudonymFor(
+    const planStudentName = ctx.nameRedaction.registerStudentFullName(
       plan.student.user.name ?? 'Unknown student'
     );
     detailed.push({
