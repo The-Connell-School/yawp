@@ -25,6 +25,7 @@
     "archive-non-canonical-submissions": "bun ./scripts/archive-non-canonical-submissions.ts",
     "compare-grade-submission-parity": "bun ./scripts/compare-grade-submission-parity.ts",
     "seed-ap-history-library": "bun run scripts/seed-ap-history-library.ts",
+    "seed-college-essay-course": "bun run scripts/seed-college-essay-course.ts",
     "seed-local-dev": "bun run scripts/seed-local-dev.ts",
     "seed-preview-seats": "bun run scripts/seed-preview-seats.ts",
     "ensure-class-insights-local": "bun run scripts/local-dev/ensure-class-insights-enabled.ts",

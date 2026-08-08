@@ -32,6 +32,18 @@ import {
 import { listApHistoryLibraryEntries } from '~/domain/ap-history/library.server';
 import { AP_HISTORY_ASSIGNMENT_TYPE_KEY } from '~/domain/ap-history/schema';
 import {
+  COLLEGE_ESSAY_ASSIGNMENT_TYPE_KEY,
+  COLLEGE_ESSAY_COMMON_APP_PROMPTS,
+  COLLEGE_ESSAY_DIRECTIONS_INTRO,
+  COLLEGE_ESSAY_DIRECTIONS_STEPS,
+  COLLEGE_ESSAY_DIRECTIONS_TITLE,
+  COLLEGE_ESSAY_EXEMPLARS,
+  COLLEGE_ESSAY_EXEMPLARS_INTRO,
+  COLLEGE_ESSAY_EXEMPLARS_TAGLINE,
+  COLLEGE_ESSAY_PROMPTS_NOTE,
+  COLLEGE_ESSAY_PROMPTS_TITLE,
+} from '~/domain/college-essay/course-meta';
+import {
   getAvailableAssignmentTypesForScopes,
   isAssignmentTypeAvailableForAnyScope,
   type AssignmentTypeAccessScope,
@@ -493,6 +505,8 @@ export default function AppAssignmentTypesIdRoute() {
   const showPromptsLibrary = data.promptLibrary != null;
   const isApHistoryAssignmentType =
     data.assignmentType.systemKey === AP_HISTORY_ASSIGNMENT_TYPE_KEY;
+  const isCollegeEssayAssignmentType =
+    data.assignmentType.systemKey === COLLEGE_ESSAY_ASSIGNMENT_TYPE_KEY;
   const canCreateDirectDocument = !isApHistoryAssignmentType;
   const assignmentSheetClasses = isApHistoryAssignmentType
     ? (data.apHistoryLibrary?.teacherClasses ?? [])
@@ -578,24 +592,116 @@ export default function AppAssignmentTypesIdRoute() {
             </p>
           </div>
         </div>
+        {isCollegeEssayAssignmentType ? (
+          <div className="mb-6 rounded-lg border bg-muted/30 p-4">
+            <h2 className="mb-2 font-semibold text-foreground">
+              {COLLEGE_ESSAY_DIRECTIONS_TITLE}
+            </h2>
+            <p className="mb-3 text-sm text-muted-foreground">
+              {COLLEGE_ESSAY_DIRECTIONS_INTRO}
+            </p>
+            <ol className="flex list-decimal flex-col gap-2 pl-5 text-sm text-muted-foreground">
+              {COLLEGE_ESSAY_DIRECTIONS_STEPS.map((step) => (
+                <li key={step}>{step}</li>
+              ))}
+            </ol>
+          </div>
+        ) : null}
         {showPromptsLibrary ? <TeacherDirections /> : null}
         {hasModules ? (
-          <>
-            <h3 className="mb-2 text-foreground/75">Modules</h3>
-            <div className="border-b" />
-            <Accordion type="multiple" className="pb-6">
-              {data.assignmentType.assignmentModules.map((cm) => (
-                <AccordionItem key={cm.id} value={cm.id}>
+          isCollegeEssayAssignmentType ? (
+            <div className="pb-6">
+              <Accordion type="single" collapsible>
+                <AccordionItem value="modules" className="border-none">
                   <AccordionTrigger className="py-2 text-base">
-                    {cm.title}
+                    Modules
                   </AccordionTrigger>
-                  <AccordionContent className="text-muted-foreground">
-                    {cm.description || 'No description.'}
+                  <AccordionContent>
+                    <ol className="flex flex-col gap-4">
+                      {data.assignmentType.assignmentModules.map((cm, index) => (
+                        <li key={cm.id}>
+                          <p className="font-medium text-foreground">
+                            {index + 1}. {cm.title}
+                          </p>
+                          <p className="text-sm text-muted-foreground">
+                            {cm.description || 'No description.'}
+                          </p>
+                        </li>
+                      ))}
+                    </ol>
                   </AccordionContent>
                 </AccordionItem>
-              ))}
+              </Accordion>
+            </div>
+          ) : (
+            <>
+              <h3 className="mb-2 text-foreground/75">Modules</h3>
+              <div className="border-b" />
+              <Accordion type="multiple" className="pb-6">
+                {data.assignmentType.assignmentModules.map((cm) => (
+                  <AccordionItem key={cm.id} value={cm.id}>
+                    <AccordionTrigger className="py-2 text-base">
+                      {cm.title}
+                    </AccordionTrigger>
+                    <AccordionContent className="text-muted-foreground">
+                      {cm.description || 'No description.'}
+                    </AccordionContent>
+                  </AccordionItem>
+                ))}
+              </Accordion>
+            </>
+          )
+        ) : null}
+        {isCollegeEssayAssignmentType ? (
+          <div className="pb-6">
+            <Accordion type="single" collapsible>
+              <AccordionItem value="prompts" className="border-none">
+                <AccordionTrigger className="py-2 text-base">
+                  {COLLEGE_ESSAY_PROMPTS_TITLE}
+                </AccordionTrigger>
+                <AccordionContent className="text-muted-foreground">
+                  <p className="mb-3">{COLLEGE_ESSAY_PROMPTS_NOTE}</p>
+                  <ol className="flex list-decimal flex-col gap-3 pl-5">
+                    {COLLEGE_ESSAY_COMMON_APP_PROMPTS.map((prompt) => (
+                      <li key={prompt}>{prompt}</li>
+                    ))}
+                  </ol>
+                </AccordionContent>
+              </AccordionItem>
             </Accordion>
-          </>
+          </div>
+        ) : null}
+        {isCollegeEssayAssignmentType ? (
+          <div className="pb-6">
+            <Accordion type="single" collapsible>
+              <AccordionItem value="exemplars" className="border-none">
+                <AccordionTrigger className="py-2 text-base">
+                  Examples
+                </AccordionTrigger>
+                <AccordionContent className="text-muted-foreground">
+                  <p className="mb-2 font-medium text-foreground">
+                    {COLLEGE_ESSAY_EXEMPLARS_TAGLINE}
+                  </p>
+                  <p className="mb-3">{COLLEGE_ESSAY_EXEMPLARS_INTRO}</p>
+                  <ul className="flex flex-col gap-2">
+                    {COLLEGE_ESSAY_EXEMPLARS.map((exemplar) => (
+                      <li key={exemplar.href}>
+                        <a
+                          href={exemplar.href}
+                          target="_blank"
+                          rel="noreferrer noopener"
+                          className="font-medium text-foreground underline underline-offset-2"
+                        >
+                          {exemplar.label}
+                        </a>
+                        <span> — {exemplar.blurb}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </AccordionContent>
+              </AccordionItem>
+            </Accordion>
+          </div>
         ) : null}
         {data.promptLibrary ? (
           <div className="pb-6">
