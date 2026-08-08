@@ -25,7 +25,10 @@ test.describe('teacher assignment-level class insights', () => {
     await signIn(TEACHER_EMAIL, TEACHER_PASSWORD);
 
     // Reach the per-assignment page the way a teacher would: from the class
-    // Documents tab scoped to a single assignment, via the summary entry link.
+    // Documents tab scoped to a single assignment, via the summary entry
+    // link — which opens the dedicated class summary full page (nested
+    // under the class detail route), not the old standalone
+    // /assignments/:id page.
     await page.goto(
       `/app/my-classes/${e2eContext.classId}?tab=documents&classAssignmentId=${e2eContext.classAssignmentId}`
     );
@@ -33,7 +36,7 @@ test.describe('teacher assignment-level class insights', () => {
       .getByRole('link', { name: /class performance summary/i })
       .click();
     await expect(page).toHaveURL(
-      new RegExp(`/assignments/${e2eContext.assignmentId}`)
+      new RegExp(`/summary/${e2eContext.assignmentId}`)
     );
 
     // The panel is present but empty until the teacher asks for a summary.

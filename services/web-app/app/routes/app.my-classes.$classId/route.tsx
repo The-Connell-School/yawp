@@ -9,6 +9,7 @@ import {
   useLoaderData,
   useSearchParams,
   useFetcher,
+  useLocation,
   useNavigate,
   useOutlet,
   useRevalidator,
@@ -1115,14 +1116,21 @@ function ClassDetailPage() {
   const data = useLoaderData<typeof loader>();
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const revalidator = useRevalidator();
   const studentFetcher = useFetcher();
-  // Non-null when the nested assignment detail route
-  // (app.my-classes.$classId.assignment.$assignmentId) matches — i.e. the
-  // teacher opened an assignment. That region swaps for the table/search
-  // bar in place, sliding in over the same footprint.
+  // Non-null when a nested detail route matches — either the assignment
+  // detail route (app.my-classes.$classId.assignment.$assignmentId) or the
+  // class summary route (app.my-classes.$classId.summary.$assignmentId).
+  // Either way the teacher drilled into one assignment, and that region
+  // swaps for the table/search bar in place, sliding in over the same
+  // footprint.
   const assignmentDetailOutlet = useOutlet();
   const isAssignmentDetailActive = assignmentDetailOutlet != null;
+  // Only the assignment-detail route forces the header's Assignments tab
+  // active — the summary route is reached from Documents, so the header
+  // should keep reflecting whichever tab got you here.
+  const isSummaryRouteActive = location.pathname.includes('/summary/');
   // Tracks which way we just transitioned so the incoming panel (table or
   // detail) slides in from the correct side — right when opening an
   // assignment, left when returning to the table.
@@ -2243,7 +2251,11 @@ function ClassDetailPage() {
           documentCount={classDocuments.length}
           assignmentCount={data.assignments.length}
           showAssignmentsTab={assignmentsEnabled}
-          activeTab={isAssignmentDetailActive ? 'assignments' : activeHeaderTab}
+          activeTab={
+            isAssignmentDetailActive && !isSummaryRouteActive
+              ? 'assignments'
+              : activeHeaderTab
+          }
           onTabChange={handleHeaderTabChange}
           onEdit={() => setIsClassEditSheetOpen(true)}
         />
@@ -2285,7 +2297,7 @@ function ClassDetailPage() {
                 </p>
                 <Button asChild variant="outline" size="sm">
                   <Link
-                    to={`/app/my-classes/${data.klass.id}/assignments/${selectedClassAssignment.id}`}
+                    to={`/app/my-classes/${data.klass.id}/summary/${selectedClassAssignment.id}?${searchParams.toString()}`}
                   >
                     Class performance summary
                   </Link>
