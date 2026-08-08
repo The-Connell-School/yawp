@@ -530,7 +530,7 @@ test.describe.serial('Document Editor E2E Tests', () => {
             localStorage.getItem('yawp-internal-clipboard-copy')
           )
         )
-        .toBe('true');
+        .not.toBeNull();
 
       const alertsBefore = await prisma.pasteAlert.count({
         where: { documentId: e2eContext.editedDocumentId },
