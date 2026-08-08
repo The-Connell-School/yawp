@@ -16,6 +16,11 @@ const prisma = {
   class: { findMany: mock() },
 };
 
+// Several sibling route test files stub ~/utils/auth.server wholesale, and bun's
+// mock.module is global and irreversible. Restore the real implementations from the
+// preload snapshot before each test so requireOwner actually runs here.
+const realAuth = globalThis.__realModules['~/utils/auth.server'];
+
 const getMembershipId = mock();
 const setMembershipId = mock();
 const getSession = mock();
@@ -92,6 +97,7 @@ describe('app.organization.students authorization', () => {
     for (const model of Object.values(prisma)) {
       for (const fn of Object.values(model)) fn.mockReset();
     }
+    mock.module('~/utils/auth.server', () => realAuth);
     getMembershipId.mockReset();
     getSession.mockReset();
     setMembershipId.mockResolvedValue('membership-id=; Path=/');

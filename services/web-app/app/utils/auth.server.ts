@@ -211,14 +211,28 @@ export async function requireAdmin(request: Request) {
   return user;
 }
 
+/**
+ * Ownership of the organization the request is actually scoped to.
+ *
+ * The organization every caller of this helper goes on to query comes from
+ * `requireMembership`, which resolves the user-switchable `membership-id` cookie. So the
+ * ownership predicate is pinned to that same resolved membership: being an owner of some
+ * other organization does not admit you here. Resolving the membership inside this helper
+ * rather than leaving each route to pair the two calls itself is what keeps them from
+ * drifting apart again.
+ */
 export async function requireOwner(request: Request) {
   const userId = await requireUserId(request);
+  const activeMembership = await requireMembership(request, userId);
   const user = await prisma.user.findFirst({
     select: {
       id: true,
       memberships: { select: { id: true, isOrgOwner: true } },
     },
-    where: { id: userId, memberships: { some: { isOrgOwner: true } } },
+    where: {
+      id: userId,
+      memberships: { some: { id: activeMembership.id, isOrgOwner: true } },
+    },
   });
 
   if (!user) {

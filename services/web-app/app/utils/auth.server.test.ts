@@ -134,12 +134,17 @@ describe('membership auth helpers', () => {
     expect(membership).toEqual(membershipFixture);
   });
 
-  test('requireOwner checks memberships with isOrgOwner', async () => {
+  test('requireOwner checks isOrgOwner on the active membership', async () => {
     getSession.mockResolvedValue({
       get: (key: string) => (key === 'sessionId' ? 'session-1' : undefined),
     });
     prisma.session.findUnique.mockResolvedValue({
       user: { id: 'user-1' },
+    });
+    getMembershipId.mockResolvedValue('membership-1');
+    prisma.orgMembership.findUnique.mockResolvedValue({
+      ...membershipFixture,
+      isOrgOwner: true,
     });
     prisma.user.findFirst.mockResolvedValue({
       id: 'user-1',
@@ -160,7 +165,7 @@ describe('membership auth helpers', () => {
       },
       where: {
         id: 'user-1',
-        memberships: { some: { isOrgOwner: true } },
+        memberships: { some: { id: 'membership-1', isOrgOwner: true } },
       },
     });
     expect(user).toEqual({
