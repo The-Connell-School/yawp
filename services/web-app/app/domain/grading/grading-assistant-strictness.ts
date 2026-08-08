@@ -34,22 +34,18 @@ export const gradingAssistantStrictnessHelpText =
 export const gradingAssistantStrictnessOptions: Array<{
   value: GradingAssistantStrictnessLevel;
   label: string;
-  description: string;
 }> = [
   {
     value: 'beginner',
     label: 'Beginner',
-    description: 'Adds 5 points to the overall grade percentage.',
   },
   {
     value: 'intermediate',
     label: 'Intermediate',
-    description: 'Keeps the overall grade percentage unchanged.',
   },
   {
     value: 'advanced',
     label: 'Advanced',
-    description: 'Subtracts 5 points from the overall grade percentage.',
   },
 ];
 

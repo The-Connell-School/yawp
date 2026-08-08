@@ -1,5 +1,5 @@
 import { type ComponentProps, useEffect, useRef, useState } from 'react';
-import { ChevronDown, Info, Loader2 } from 'lucide-react';
+import { ChevronDown, Loader2 } from 'lucide-react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -18,7 +18,6 @@ import {
   DropdownMenuLabel,
   DropdownMenuTrigger,
 } from '~/components/ui/dropdown-menu';
-import { Tooltip } from '~/components/ui/tooltip';
 import {
   gradingAssistantStrictnessOptions,
   type GradingAssistantStrictnessLevel,
@@ -150,27 +149,6 @@ function GradingAssistantSplitButton({
                     onClick={() => runAtLevel(option.value)}
                   >
                     <span className="flex-1 font-medium">{option.label}</span>
-                    <Tooltip
-                      text={option.description}
-                      delayDuration={200}
-                      contentProps={{ side: 'left', className: 'max-w-xs' }}
-                    >
-                      <span
-                        className="inline-flex shrink-0"
-                        onClick={(event) => event.stopPropagation()}
-                        onKeyDown={(event) => event.stopPropagation()}
-                      >
-                        <Info
-                          className={cn(
-                            'h-4 w-4',
-                            selected
-                              ? 'text-primary-foreground/80'
-                              : 'text-muted-foreground'
-                          )}
-                          aria-label={`About ${option.label} strictness`}
-                        />
-                      </span>
-                    </Tooltip>
                   </button>
                 );
               })}
