@@ -19,6 +19,7 @@ import {
   DropdownMenuTrigger,
 } from '~/components/ui/dropdown-menu';
 import {
+  GRADING_ASSISTANT_STRICTNESS_UI_ENABLED,
   gradingAssistantStrictnessOptions,
   type GradingAssistantStrictnessLevel,
 } from '~/domain/grading/grading-assistant-strictness';
@@ -33,7 +34,7 @@ import {
 } from './teacher-grading-panel';
 import { ViewPanel, type ViewPanelSubmission } from './view-panel';
 
-function GradingAssistantSplitButton({
+export function GradingAssistantSplitButton({
   headerState,
   isPendingStart,
   onStart,
@@ -112,49 +113,56 @@ function GradingAssistantSplitButton({
           {buttonLabel}
         </Button>
 
-        <DropdownMenu open={strictnessMenuOpen} onOpenChange={setStrictnessMenuOpen}>
-          <DropdownMenuTrigger asChild>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              className="rounded-l-none border-l px-2"
-              aria-label="Choose grading assistant strictness"
-              data-testid="grading-assistant-strictness-menu"
-              disabled={isBusy || !headerState}
-            >
-              <ChevronDown className="h-4 w-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-56 p-2">
-            <DropdownMenuLabel className="px-1 pb-2 pt-0">
-              Strictness
-            </DropdownMenuLabel>
-            <div className="space-y-1">
-              {gradingAssistantStrictnessOptions.map((option) => {
-                const selected =
-                  gradingAssistantStrictnessLevel === option.value;
-                return (
-                  <button
-                    key={option.value}
-                    type="button"
-                    className={cn(
-                      'flex w-full items-center gap-2 rounded-md border px-3 py-2 text-left text-sm transition',
-                      selected
-                        ? 'border-primary bg-primary text-primary-foreground'
-                        : 'border-border bg-background hover:bg-muted'
-                    )}
-                    aria-pressed={selected}
-                    data-testid={`grading-assistant-strictness-${option.value}`}
-                    onClick={() => runAtLevel(option.value)}
-                  >
-                    <span className="flex-1 font-medium">{option.label}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        {GRADING_ASSISTANT_STRICTNESS_UI_ENABLED ? (
+          <DropdownMenu
+            open={strictnessMenuOpen}
+            onOpenChange={setStrictnessMenuOpen}
+          >
+            <DropdownMenuTrigger asChild>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="rounded-l-none border-l px-2"
+                aria-label="Choose grading assistant strictness"
+                data-testid="grading-assistant-strictness-menu"
+                disabled={isBusy || !headerState}
+              >
+                <ChevronDown className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56 p-2">
+              <DropdownMenuLabel className="px-1 pb-2 pt-0">
+                Strictness
+              </DropdownMenuLabel>
+              <div className="space-y-1">
+                {gradingAssistantStrictnessOptions.map((option) => {
+                  const selected =
+                    gradingAssistantStrictnessLevel === option.value;
+                  return (
+                    <button
+                      key={option.value}
+                      type="button"
+                      className={cn(
+                        'flex w-full items-center gap-2 rounded-md border px-3 py-2 text-left text-sm transition',
+                        selected
+                          ? 'border-primary bg-primary text-primary-foreground'
+                          : 'border-border bg-background hover:bg-muted'
+                      )}
+                      aria-pressed={selected}
+                      data-testid={`grading-assistant-strictness-${option.value}`}
+                      onClick={() => runAtLevel(option.value)}
+                    >
+                      <span className="flex-1 font-medium">
+                        {option.label}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ) : null}
       </div>
 
       <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
