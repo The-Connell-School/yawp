@@ -75,6 +75,27 @@ export function documentOwnerSessionWhere({
   return { document: { is: { membershipId: profileId } } };
 }
 
+/**
+ * The READ rule expressed against a DocumentComment. A comment thread is readable and
+ * repliable by exactly the people who may read the document it is anchored in — the
+ * owning student and the teachers of that student's classes — because a reply is part
+ * of the same grading conversation the comment itself is.
+ *
+ * Returns `{}` for a platform admin for the same reason as `documentOwnerSessionWhere`:
+ * so no query carries a `document: { is: {} }` no-op.
+ */
+export function documentCommentReadWhere({
+  profileId,
+  isAdmin,
+}: {
+  profileId: string;
+  isAdmin?: boolean | null;
+}): Prisma.DocumentCommentWhereInput {
+  if (hasEffectivePlatformAdmin(isAdmin)) return {};
+
+  return { document: { is: documentReadWhere({ profileId }) } };
+}
+
 export async function getIsPlatformAdmin(userId: string) {
   const user = await prisma.user.findUnique({
     where: { id: userId },
