@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
+import { matchesOwnerWhere } from './testing/where-eval.ts';
 
 const prisma = {
   user: {
@@ -165,6 +166,68 @@ describe('membership auth helpers', () => {
     expect(user).toEqual({
       id: 'user-1',
       memberships: [{ id: 'membership-1', isOrgOwner: true }],
+    });
+  });
+
+  // N5 -- requireOwner asked whether the user owned *an* organization, while the request
+  // was scoped to the organization of the cookie-selected membership. These two tests run
+  // the clause requireOwner builds against a fixture user through matchesOwnerWhere, so a
+  // clause that only proves ownership somewhere really does admit the caller.
+  const twoOrgUser = {
+    id: 'user-1',
+    memberships: [
+      { id: 'membership-a', organizationId: 'org-a', isOrgOwner: true },
+      { id: 'membership-b', organizationId: 'org-b', isOrgOwner: false },
+    ],
+  };
+
+  const arrangeTwoOrgUser = (activeMembershipId: string) => {
+    getSession.mockResolvedValue({
+      get: (key: string) => (key === 'sessionId' ? 'session-1' : undefined),
+    });
+    prisma.session.findUnique.mockResolvedValue({ user: { id: 'user-1' } });
+    getMembershipId.mockResolvedValue(activeMembershipId);
+
+    const active = twoOrgUser.memberships.find(
+      (membership) => membership.id === activeMembershipId
+    )!;
+    prisma.orgMembership.findUnique.mockResolvedValue({
+      id: active.id,
+      role: 'TEACHER' as const,
+      isOrgOwner: active.isOrgOwner,
+      organization: {
+        id: active.organizationId,
+        name: active.organizationId,
+        reporterEnabled: false,
+        classInsightsEnabled: false,
+        writingPracticeEnabled: false,
+      },
+    });
+
+    prisma.user.findFirst.mockImplementation(async ({ where }: any) =>
+      matchesOwnerWhere(where, twoOrgUser) ? twoOrgUser : null
+    );
+  };
+
+  const ownerRequest = () =>
+    new Request('https://example.com/app/organization/students', {
+      method: 'GET',
+      headers: { cookie: 'en_session=signed-cookie' },
+    });
+
+  test('requireOwner admits an owner whose active membership is the owned organization', async () => {
+    arrangeTwoOrgUser('membership-a');
+
+    await expect(requireOwner(ownerRequest())).resolves.toMatchObject({
+      id: 'user-1',
+    });
+  });
+
+  test('requireOwner refuses an owner of another organization whose active membership is not an owner membership', async () => {
+    arrangeTwoOrgUser('membership-b');
+
+    await expect(requireOwner(ownerRequest())).rejects.toMatchObject({
+      init: { status: 403 },
     });
   });
 
