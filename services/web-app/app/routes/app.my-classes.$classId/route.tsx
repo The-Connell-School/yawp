@@ -109,6 +109,8 @@ import {
   type ClassHeaderTab,
   resolveClassHeaderTab,
 } from './class-detail-header';
+import { loadStudentClassDetail } from './student-class-detail.server';
+import { StudentClassDetailView } from './student-class-detail-view';
 import {
   TEACHER_DOCUMENT_STATUSES,
   type TeacherDocumentStatus,
@@ -705,10 +707,24 @@ export async function action({ request, params }: ActionFunctionArgs) {
 export async function loader({ request, params }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
   const profile = await requireMembership(request, userId);
+  const classId = params.classId!;
+
+  // Students get their own read-only view of the same URL. `loadStudentClassDetail`
+  // only resolves classes they are enrolled in, so a student who follows a link
+  // to someone else's class gets a 404 rather than any part of this page.
+  if (profile.role === 'STUDENT') {
+    const studentDetail = await loadStudentClassDetail({
+      membershipId: profile.id,
+      classId,
+    });
+    if (!studentDetail) throw new Response('Class not found', { status: 404 });
+
+    return dataResponse({ role: 'STUDENT' as const, ...studentDetail });
+  }
+
   if (profile.role !== 'TEACHER') {
     return redirect('/app');
   }
-  const classId = params.classId!;
 
   const url = new URL(request.url);
   if (url.searchParams.get('tab') === 'summary') {
@@ -1053,6 +1069,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const pasteAlertsByStudentId = buildPasteAlertsByStudentId(pasteAlerts);
 
   return dataResponse({
+    role: 'TEACHER' as const,
     klass,
     submissions,
     inProgressDocuments,
@@ -1110,12 +1127,22 @@ type ClassDocumentRow = {
 
 type SortDirection = 'asc' | 'desc';
 
+type TeacherClassDetailData = Extract<
+  ReturnType<typeof useLoaderData<typeof loader>>,
+  { role: 'TEACHER' }
+>;
+
 export default function ClassDetailRoute() {
-  return <ClassDetailPage />;
+  const data = useLoaderData<typeof loader>();
+
+  if (data.role === 'STUDENT') {
+    return <StudentClassDetailView data={data} />;
+  }
+
+  return <ClassDetailPage data={data} />;
 }
 
-function ClassDetailPage() {
-  const data = useLoaderData<typeof loader>();
+function ClassDetailPage({ data }: { data: TeacherClassDetailData }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const location = useLocation();

@@ -34,6 +34,7 @@ let editFormProps: any = null;
 let blockerShouldBlock: any = null;
 
 const PARENT_DATA = {
+  role: 'TEACHER',
   klass: { id: 'class-1', grade: '9', period: '2', title: 'History' },
   classInsightsEnabled: true,
   assignmentTypes: [{ id: 'type-1', title: 'DBQ' }],

@@ -123,6 +123,7 @@ beforeEach(() => {
   searchParams = new URLSearchParams('tab=documents&assignmentId=assignment-1');
   loaderData = { sections: [] };
   parentData = {
+    role: 'TEACHER',
     klass: { id: 'class-1', grade: '9', period: '2', title: 'History' },
     classInsightsEnabled: true,
     submissions: [] as any[],

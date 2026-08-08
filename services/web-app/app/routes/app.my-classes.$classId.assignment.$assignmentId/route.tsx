@@ -49,9 +49,13 @@ export default function AssignmentDetailRoute() {
   const classId = params.classId!;
   const assignmentId = params.assignmentId!;
 
-  const parentData = useRouteLoaderData<typeof classDetailLoader>(
+  const parentRouteData = useRouteLoaderData<typeof classDetailLoader>(
     'routes/app.my-classes.$classId'
   );
+  // The parent route serves a student view of the same URL; this teacher-only
+  // surface is never reachable from it, so anything else is treated as absent.
+  const parentData =
+    parentRouteData?.role === 'TEACHER' ? parentRouteData : undefined;
 
   const [mode, setMode] = useState<'view' | 'edit'>('view');
   const [isDirty, setIsDirty] = useState(false);

@@ -12,7 +12,7 @@ export function StudentClassCard({ klass }: { klass: StudentEnrolledClass }) {
 
   return (
     <Link
-      to="/app/my-documents"
+      to={`/app/my-classes/${klass.id}`}
       className="flex min-h-full flex-col overflow-hidden rounded-lg bg-popover shadow-sm ring-1 ring-black/5 transition-shadow hover:shadow-md"
     >
       <div className="h-28 w-full border-b border-black/5">
