@@ -40,18 +40,14 @@ describe('api.paste-alert action', () => {
   test('rejects non-POST methods', async () => {
     const response = await action({
       request: pasteAlertRequest(null, 'GET'),
-      params: {},
-      context: {} as never,
-    });
+    } as any);
     expect(response.init?.status).toBe(405);
   });
 
   test('rejects a request missing documentId or textLength', async () => {
     const response = await action({
       request: pasteAlertRequest({ documentId: 'doc-1' }),
-      params: {},
-      context: {} as never,
-    });
+    } as any);
     expect(response.init?.status).toBe(400);
     expect(prisma.pasteAlert.create).not.toHaveBeenCalled();
   });
@@ -61,9 +57,7 @@ describe('api.paste-alert action', () => {
 
     const response = await action({
       request: pasteAlertRequest({ documentId: 'doc-1', textLength: 250 }),
-      params: {},
-      context: {} as never,
-    });
+    } as any);
 
     expect(response.init?.status).toBe(404);
     expect(prisma.pasteAlert.create).not.toHaveBeenCalled();
@@ -72,9 +66,7 @@ describe('api.paste-alert action', () => {
   test('scopes the document lookup to the requesting membership', async () => {
     await action({
       request: pasteAlertRequest({ documentId: 'doc-1', textLength: 250 }),
-      params: {},
-      context: {} as never,
-    });
+    } as any);
 
     expect(prisma.document.findFirst).toHaveBeenCalledWith({
       where: { id: 'doc-1', membershipId: 'membership-1' },
@@ -88,9 +80,7 @@ describe('api.paste-alert action', () => {
         textLength: 250,
         content: 'pasted content',
       }),
-      params: {},
-      context: {} as never,
-    });
+    } as any);
 
     expect(response.data).toEqual({ success: true });
     expect(prisma.pasteAlert.create).toHaveBeenCalledWith({
@@ -106,9 +96,7 @@ describe('api.paste-alert action', () => {
   test('stores null content when none is submitted', async () => {
     await action({
       request: pasteAlertRequest({ documentId: 'doc-1', textLength: 250 }),
-      params: {},
-      context: {} as never,
-    });
+    } as any);
 
     expect(prisma.pasteAlert.create).toHaveBeenCalledWith({
       data: {

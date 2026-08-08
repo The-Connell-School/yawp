@@ -2147,12 +2147,17 @@ function ClassDetailPage() {
                           .map((sub) => sub.documentId)
                       ).size;
 
+                    const studentHasPasteAlerts =
+                      (data.pasteAlertsByStudentId[s.id]?.length ?? 0) > 0;
+                    const studentSheetAvailable =
+                      reporterEnabled || studentHasPasteAlerts;
+
                     return (
                       <TableRow
                         key={s.id}
-                        className={cn(reporterEnabled && 'cursor-pointer')}
+                        className={cn(studentSheetAvailable && 'cursor-pointer')}
                         onClick={() => {
-                          if (!reporterEnabled) return;
+                          if (!studentSheetAvailable) return;
                           setGrowthPlanStudent({
                             id: s.id,
                             name: s.user.name ?? s.user.email,
@@ -2334,6 +2339,13 @@ function ClassDetailPage() {
           setGrowthPlanStudent(null);
           handleViewStudentDocuments(studentId);
         }}
+        pasteAlerts={
+          growthPlanStudent
+            ? (data.pasteAlertsByStudentId[growthPlanStudent.id] ?? [])
+            : []
+        }
+        pasteAlertsExitTo={classDetailExitTo}
+        showGrowthPlans={reporterEnabled}
       />
     </section>
   );
