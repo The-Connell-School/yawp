@@ -13,7 +13,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { useInternalCopyMarker } from './useInternalCopyMarker';
 import {
   APP_INTERNAL_COPY_KEY,
-  consumeInternalCopyFlag,
+  wasCopiedInsideApp,
 } from '~/utils/internal-copy';
 
 let root: Root | null = null;
@@ -65,24 +65,27 @@ describe('useInternalCopyMarker', () => {
 
     fireCopyOrCut('copy', classPageCell);
 
-    expect(localStorage.getItem(APP_INTERNAL_COPY_KEY)).toBe('true');
+    expect(localStorage.getItem(APP_INTERNAL_COPY_KEY)).not.toBeNull();
+    expect(wasCopiedInsideApp('an assignment prompt on the class page')).toBe(
+      true
+    );
     classPageCell.remove();
   });
 
   it('marks a cut from any surface in the app', () => {
     fireCopyOrCut('cut');
-    expect(localStorage.getItem(APP_INTERNAL_COPY_KEY)).toBe('true');
+    expect(localStorage.getItem(APP_INTERNAL_COPY_KEY)).not.toBeNull();
   });
 
-  it('does not set the flag when nothing was copied', () => {
+  it('records nothing when nothing was copied', () => {
     expect(localStorage.getItem(APP_INTERNAL_COPY_KEY)).toBeNull();
   });
 
-  it('keeps the flag set across a route change (the hook stays mounted in the layout)', () => {
+  it('keeps the record across a route change (the hook stays mounted in the layout)', () => {
     fireCopyOrCut('copy');
-    // No unmount here — the /app layout does not remount between routes, which
-    // is the whole point of hoisting the listeners out of the editor.
-    expect(consumeInternalCopyFlag()).toBe(true);
+    // No unmount here — the root layout does not remount between routes,
+    // which is the whole point of hoisting the listeners out of the editor.
+    expect(wasCopiedInsideApp('whatever was on the clipboard')).toBe(true);
   });
 
   it('survives an editor mounting and unmounting underneath it', () => {
@@ -95,7 +98,7 @@ describe('useInternalCopyMarker', () => {
     nested.container.remove();
 
     fireCopyOrCut('copy');
-    expect(localStorage.getItem(APP_INTERNAL_COPY_KEY)).toBe('true');
+    expect(localStorage.getItem(APP_INTERNAL_COPY_KEY)).not.toBeNull();
   });
 
   it('stops marking once the layout itself unmounts', () => {

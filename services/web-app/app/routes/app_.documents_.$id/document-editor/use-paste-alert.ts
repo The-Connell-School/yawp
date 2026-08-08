@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import type { Editor } from '@tiptap/core';
-import { consumeInternalCopyFlag } from '~/utils/internal-copy';
+import { wasCopiedInsideApp } from '~/utils/internal-copy';
 
 const PASTE_ALERT_MIN_CHARS = 200;
 
@@ -20,7 +20,7 @@ export function usePasteAlert(editor: Editor | null, docId: string) {
     const handlePaste = (event: ClipboardEvent) => {
       const pastedText = event.clipboardData?.getData('text/plain') || '';
       const textLength = pastedText.length;
-      const copiedFromInsideApp = consumeInternalCopyFlag();
+      const copiedFromInsideApp = wasCopiedInsideApp(pastedText);
 
       if (textLength >= PASTE_ALERT_MIN_CHARS && !copiedFromInsideApp) {
         fetch('/api/paste-alert', {

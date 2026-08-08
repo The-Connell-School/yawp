@@ -14,6 +14,7 @@ import { Editor } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
 import { usePasteAlert } from './use-paste-alert';
 import { useInternalCopyMarker } from '~/hooks/useInternalCopyMarker';
+import { markInternalCopy } from '~/utils/internal-copy';
 
 const DOC_ID = 'doc-1';
 
@@ -225,6 +226,17 @@ describe('usePasteAlert', () => {
 
     expect(fetchMock).not.toHaveBeenCalled();
     editorAfterNavigation.destroy();
+  });
+
+  it('does not alarm when the same in-app passage is pasted more than once', () => {
+    const passage = 'a passage the student copied from their outline '.repeat(6);
+    markInternalCopy(passage);
+
+    firePaste(passage);
+    firePaste(passage);
+    firePaste(passage);
+
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it('still posts an alert when nothing was ever copied in the app (genuinely external paste)', () => {

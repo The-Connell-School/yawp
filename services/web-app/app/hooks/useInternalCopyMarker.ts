@@ -16,7 +16,13 @@ export function useInternalCopyMarker() {
     // A per-instance closure rather than the shared function reference, so
     // that a nested mount/unmount removes only its own listener and can't
     // tear down the layout's.
-    const handleCopyOrCut = () => markInternalCopy();
+    //
+    // The selection is read here rather than from event.clipboardData,
+    // which is write-only during a copy. Surfaces that keep their selection
+    // out of window.getSelection() (inputs, textareas) yield an empty
+    // string, which markInternalCopy records as "copied, text unknown".
+    const handleCopyOrCut = () =>
+      markInternalCopy(window.getSelection()?.toString() ?? '');
 
     document.addEventListener('copy', handleCopyOrCut);
     document.addEventListener('cut', handleCopyOrCut);
