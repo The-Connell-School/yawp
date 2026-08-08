@@ -154,6 +154,8 @@ export async function action({ request, params }: ActionFunctionArgs) {
     const reporterEnabled = formData.get('reporterEnabled') === 'true';
     const classInsightsEnabled =
       formData.get('classInsightsEnabled') === 'true';
+    const writingPracticeEnabled =
+      formData.get('writingPracticeEnabled') === 'true';
     const assignmentTypeIds = Array.from(
       new Set(
         formData
@@ -186,6 +188,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
           accessExpiresAt: accessExpiresAt ? new Date(accessExpiresAt) : null,
           reporterEnabled,
           classInsightsEnabled,
+          writingPracticeEnabled,
         },
       }),
       prisma.organizationAssignmentType.deleteMany({
@@ -487,6 +490,23 @@ export default function OrganizationRoute() {
                         </span>
                         <span className="block text-xs text-muted-foreground">
                           Adds Reporter to the teacher sidebar.
+                        </span>
+                      </span>
+                    </label>
+                    <label className="flex min-h-12 items-start gap-3 rounded-md border bg-background px-3 py-2 text-sm">
+                      <input
+                        type="checkbox"
+                        name="writingPracticeEnabled"
+                        value="true"
+                        defaultChecked={organization.writingPracticeEnabled}
+                        className="mt-1 h-4 w-4"
+                      />
+                      <span className="min-w-0">
+                        <span className="block font-medium">
+                          Writing Practice
+                        </span>
+                        <span className="block text-xs text-muted-foreground">
+                          Adds Writing Practice to the student sidebar.
                         </span>
                       </span>
                     </label>
