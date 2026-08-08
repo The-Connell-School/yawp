@@ -256,6 +256,38 @@ function blockedResponse(request: Request) {
 }
 
 /**
+ * Lets a PR-comment link log a tester straight in: `?code=<preview-access-code>`
+ * appended to any in-app URL. Consumes the code through the same validation path
+ * as the POST form, sets the same signed cookie, then 303s to the same URL with
+ * `code` stripped so it never lingers in the address bar, browser history, or a
+ * Referer header. An unknown/invalid code falls through to the normal gate below
+ * exactly as if the param had never been there.
+ */
+async function consumeCodeQueryParam(
+  request: Request,
+  repository: PreviewAccessSeatRepository
+): Promise<Response | null> {
+  if (request.method !== 'GET') return null;
+
+  const url = new URL(request.url);
+  const code = url.searchParams.get('code');
+  if (!code) return null;
+
+  const seat = await findPreviewAccessSeatByCode(code, repository);
+  if (!seat) return null;
+
+  url.searchParams.delete('code');
+  return new Response(null, {
+    status: 303,
+    headers: {
+      'Cache-Control': 'no-store',
+      'set-cookie': await grantPreviewAccessCookie(seat),
+      Location: `${url.pathname}${url.search}`,
+    },
+  });
+}
+
+/**
  * The preview access flag and this request-boundary middleware are the same switch.
  * Therefore PREVIEW_ACCESS_GATE=on cannot expose role-swap without also putting the
  * gate in front of every descendant loader, action, and resource/API route.
@@ -269,7 +301,12 @@ export function createPreviewAccessMiddleware(
 
     const pathname = new URL(request.url).pathname;
     if (OPEN_PATHS.has(pathname)) return next();
+
     const seat = await getPreviewAccessSeat(request, repository);
+    if (!seat) {
+      const oneClickEntry = await consumeCodeQueryParam(request, repository);
+      if (oneClickEntry) return oneClickEntry;
+    }
     if (!seat) return blockedResponse(request);
 
     if (isIsolatedPreviewSeatMode()) {

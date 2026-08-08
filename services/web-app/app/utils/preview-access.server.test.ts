@@ -287,6 +287,103 @@ describe('preview access gate', () => {
 
     expect(await response?.text()).toBe('local');
   });
+
+  describe('one-click ?code= entry', () => {
+    test('a valid code sets the cookie, 303s, and strips the param', async () => {
+      const next = mock(async () => new Response('private'));
+
+      const response = (await previewAccessMiddleware(
+        middlewareArgs(
+          request('/app/classes?code=brave-otter-4193&tab=roster')
+        ),
+        next
+      )) as Response;
+
+      expect(response.status).toBe(303);
+      expect(response.headers.get('location')).toBe('/app/classes?tab=roster');
+      expect(response.headers.get('set-cookie')).toContain(
+        `${PREVIEW_ACCESS_COOKIE_NAME}=`
+      );
+      expect(next).not.toHaveBeenCalled();
+
+      const seat = await getPreviewAccessSeat(
+        request('/app', {
+          headers: {
+            cookie: response.headers.get('set-cookie')!.split(';', 1)[0],
+          },
+        })
+      );
+      expect(seat).toEqual({
+        organizationId: 'local-dev-org',
+        label: 'Master',
+      });
+    });
+
+    test('an unknown code falls through to the normal access screen', async () => {
+      const next = mock(async () => new Response('private'));
+
+      const response = (await previewAccessMiddleware(
+        middlewareArgs(request('/app/classes?code=not-a-real-code-9999')),
+        next
+      )) as Response;
+
+      expect(response.status).toBe(302);
+      expect(response.headers.get('location')).toBe(
+        '/auth/preview-access?returnTo=%2Fapp%2Fclasses%3Fcode%3Dnot-a-real-code-9999'
+      );
+      expect(response.headers.get('set-cookie')).toBeNull();
+      expect(next).not.toHaveBeenCalled();
+    });
+
+    test('is inert while the gate is disabled', async () => {
+      delete process.env.PREVIEW_ACCESS_GATE;
+      const next = mock(async () => new Response('local'));
+
+      const response = await previewAccessMiddleware(
+        middlewareArgs(request('/app?code=brave-otter-4193')),
+        next
+      );
+
+      expect(await response?.text()).toBe('local');
+      expect(response?.headers.get('set-cookie')).toBeNull();
+    });
+
+    test('does not run for POST requests', async () => {
+      const next = mock(async () => new Response('ok'));
+
+      const response = (await previewAccessMiddleware(
+        middlewareArgs(
+          request('/app/classes?code=brave-otter-4193', { method: 'POST' })
+        ),
+        next
+      )) as Response;
+
+      expect(response.status).toBe(401);
+      expect(response.headers.get('set-cookie')).toBeNull();
+      expect(next).not.toHaveBeenCalled();
+    });
+
+    test('an existing seat cookie takes precedence and the code is ignored', async () => {
+      const cookie = (
+        await grantPreviewAccessCookie({
+          organizationId: 'local-dev-org',
+          label: 'Master',
+        })
+      ).split(';', 1)[0];
+      const next = mock(async () => new Response('private'));
+      const middleware = createPreviewAccessMiddleware(async () => null);
+
+      const response = await middleware(
+        middlewareArgs(
+          request('/app?code=calm-panda-8127', { headers: { cookie } })
+        ),
+        next
+      );
+
+      expect(await response?.text()).toBe('private');
+      expect(next).toHaveBeenCalledTimes(1);
+    });
+  });
 });
 
 describe('preview access codes', () => {

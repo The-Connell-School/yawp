@@ -202,7 +202,17 @@ jobs:
           esac
           app="$(curl -skL -o /dev/null -m 15 -w '%{http_code}' -b "$cookie_jar" "$url")"
           test "$app" = "200" || { echo "Code-bearing request returned HTTP $app"; exit 1; }
-          echo "Access gate confirmed: health 200, no-cookie access screen, dev-login 401, code-bearing app 200"
+
+          one_click_jar="$(mktemp)"
+          one_click="$(curl -sk -o /dev/null -m 15 -w '%{http_code}' -c "$one_click_jar" \
+            "$url/?code=$access_code")"
+          test "$one_click" = "303" || {
+            echo "One-click ?code= link returned HTTP $one_click, expected 303" >&2
+            exit 1
+          }
+          one_click_app="$(curl -skL -o /dev/null -m 15 -w '%{http_code}' -b "$one_click_jar" "$url")"
+          test "$one_click_app" = "200" || { echo "One-click cookie request returned HTTP $one_click_app"; exit 1; }
+          echo "Access gate confirmed: health 200, no-cookie access screen, dev-login 401, code-bearing app 200, one-click ?code= 303"
 
       - name: Comment preview URL on PR
         uses: marocchino/sticky-pull-request-comment@v2
@@ -212,7 +222,9 @@ jobs:
           message: |
             **PR preview**
 
+            - **One-click:** ${{ steps.deploy.outputs.url }}/?code=${{ steps.deploy.outputs.access_code }}
             - **URL:** ${{ steps.deploy.outputs.url }}
+            - **Access code:** `${{ steps.deploy.outputs.access_code }}`
             - **Runtime:** Docker Compose on the preview environment host
             - **Data:** seeded local-dev data in an isolated PR database
             - **Deploy elapsed:** `${{ steps.deploy.outputs.elapsed_ms }}ms`
