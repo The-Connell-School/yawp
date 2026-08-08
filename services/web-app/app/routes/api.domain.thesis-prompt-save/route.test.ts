@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, mock, test } from 'bun:test';
+import { afterAll, beforeEach, describe, expect, mock, test } from 'bun:test';
 
 const requireUserId = mock();
 const requireMembership = mock();
@@ -8,11 +8,24 @@ const findMany = mock();
 
 class SavedPromptError extends Error {}
 
+// bun's module mocks are global to the test run and mock.restore() does not
+// undo mock.module — restore from the pristine copies test-preload.ts
+// captured before any file could mock.module() these paths (see comment
+// there).
+const actualAssignmentTypeAccess = globalThis.__realModules[
+  '~/utils/assignment-type-access.server'
+];
+const actualSavedPrompts = globalThis.__realModules[
+  '~/domain/thesis-prompts/saved-prompts.server'
+];
+
 mock.module('~/utils/auth.server', () => ({ requireUserId, requireMembership }));
 mock.module('~/utils/assignment-type-access.server', () => ({
+  ...actualAssignmentTypeAccess,
   isAssignmentTypeAvailableForAnyScope,
 }));
 mock.module('~/domain/thesis-prompts/saved-prompts.server', () => ({
+  ...actualSavedPrompts,
   saveThesisPrompt,
   SavedPromptError,
 }));
@@ -21,6 +34,18 @@ mock.module('~/utils/db.server', () => ({
 }));
 
 const { action } = await import('./route');
+
+afterAll(() => {
+  mock.restore();
+  mock.module(
+    '~/utils/assignment-type-access.server',
+    () => actualAssignmentTypeAccess
+  );
+  mock.module(
+    '~/domain/thesis-prompts/saved-prompts.server',
+    () => actualSavedPrompts
+  );
+});
 
 async function readBody(response: any) {
   return typeof response.json === 'function' ? response.json() : response.data;

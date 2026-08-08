@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, mock, test } from 'bun:test';
+import { afterAll, beforeEach, describe, expect, mock, test } from 'bun:test';
 
 const requireUserId = mock();
 const requireMembership = mock();
@@ -16,6 +16,10 @@ mock.module('~/utils/getLLMCompletion', () => ({
 }));
 
 const { action } = await import('./route');
+
+afterAll(() => {
+  mock.restore();
+});
 
 async function readBody(response: any) {
   return typeof response.json === 'function' ? response.json() : response.data;
