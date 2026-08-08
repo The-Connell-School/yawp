@@ -26,3 +26,18 @@ export function buildPasteAlertsByStudentId(
 
   return byStudentId;
 }
+
+/**
+ * The roll-up cell for one student in the class table, so a teacher can see
+ * at a glance who has paste activity instead of opening every student sheet
+ * one at a time. Returns null when there is nothing to show — an empty cell,
+ * not a zero, keeps the column quiet.
+ */
+export function summarizeStudentPasteActivity(
+  alerts: ClassPasteAlert[] | undefined
+): { count: number; label: string } | null {
+  const count = alerts?.length ?? 0;
+  if (count === 0) return null;
+
+  return { count, label: `${count} ${count === 1 ? 'paste' : 'pastes'}` };
+}
