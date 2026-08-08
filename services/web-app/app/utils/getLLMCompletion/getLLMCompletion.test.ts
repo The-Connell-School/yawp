@@ -39,10 +39,13 @@ const {
 const { LlmFallbackRetrySignal, isLlmFallbackRetrySignal } =
   await import('./llm-provider-errors.server');
 
-function anthropicTextResponse(content: string) {
+function anthropicTextResponse(
+  content: string,
+  usageOverrides: Record<string, number> = {}
+) {
   return {
     content: [{ type: 'text', text: content }],
-    usage: { input_tokens: 11, output_tokens: 7 },
+    usage: { input_tokens: 11, output_tokens: 7, ...usageOverrides },
   };
 }
 
@@ -112,8 +115,148 @@ describe('getLLMCompletion', () => {
           messageTextLengths: [12, 10],
           hasTools: false,
           toolRoundCount: 0,
+          cacheCreationInputTokens: 0,
+          cacheReadInputTokens: 0,
         },
       }),
+    });
+  });
+
+  test('passes structured system blocks with cache_control straight through to Anthropic, tab-stripped', async () => {
+    await getLLMCompletion({
+      model: 'claude-sonnet-4-6',
+      system: [
+        {
+          type: 'text',
+          text: 'Static\tprefix',
+          cache_control: { type: 'ephemeral' },
+        },
+        { type: 'text', text: 'Per-conversation\tsuffix' },
+      ],
+      messages: [{ role: 'user', content: 'Hello' }],
+    });
+
+    expect(anthropicCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        system: [
+          {
+            type: 'text',
+            text: 'Staticprefix',
+            cache_control: { type: 'ephemeral' },
+          },
+          { type: 'text', text: 'Per-conversationsuffix' },
+        ],
+      })
+    );
+    // The flattened log column keeps every block's text so the audit trail
+    // still reads as one prompt.
+    expect(llmLogCreate.mock.calls[0]?.[0].data.systemPrompt).toBe(
+      'Staticprefix\n\nPer-conversationsuffix'
+    );
+  });
+
+  test('logs cache creation and cache read token counts reported by Anthropic', async () => {
+    anthropicCreate.mockResolvedValueOnce(
+      anthropicTextResponse('Cached response', {
+        cache_creation_input_tokens: 812,
+        cache_read_input_tokens: 0,
+      })
+    );
+
+    await getLLMCompletion({
+      model: 'claude-sonnet-4-6',
+      system: [
+        {
+          type: 'text',
+          text: 'A'.repeat(4000),
+          cache_control: { type: 'ephemeral' },
+        },
+      ],
+      messages: [{ role: 'user', content: 'First turn' }],
+    });
+
+    expect(llmLogCreate.mock.calls[0]?.[0].data.metadata).toMatchObject({
+      cacheCreationInputTokens: 812,
+      cacheReadInputTokens: 0,
+    });
+
+    llmLogCreate.mockReset();
+    anthropicCreate.mockResolvedValueOnce(
+      anthropicTextResponse('Cached response 2', {
+        cache_creation_input_tokens: 0,
+        cache_read_input_tokens: 812,
+      })
+    );
+
+    await getLLMCompletion({
+      model: 'claude-sonnet-4-6',
+      system: [
+        {
+          type: 'text',
+          text: 'A'.repeat(4000),
+          cache_control: { type: 'ephemeral' },
+        },
+      ],
+      messages: [{ role: 'user', content: 'Second turn, same prefix' }],
+    });
+
+    expect(llmLogCreate.mock.calls[0]?.[0].data.metadata).toMatchObject({
+      cacheCreationInputTokens: 0,
+      cacheReadInputTokens: 812,
+    });
+  });
+
+  test('sums cache token counts across a multi-round tool-use loop', async () => {
+    anthropicCreate
+      .mockResolvedValueOnce({
+        content: [
+          {
+            type: 'tool_use',
+            id: 'tool-1',
+            name: 'get_student',
+            input: { student: 'Ada Lovelace' },
+          },
+        ],
+        stop_reason: 'tool_use',
+        usage: {
+          input_tokens: 10,
+          output_tokens: 5,
+          cache_creation_input_tokens: 500,
+          cache_read_input_tokens: 0,
+        },
+      })
+      .mockResolvedValueOnce(
+        anthropicTextResponse('Ada needs support.', {
+          cache_creation_input_tokens: 0,
+          cache_read_input_tokens: 500,
+        })
+      );
+
+    await getLLMCompletion({
+      model: 'claude-sonnet-4-6',
+      system: [
+        {
+          type: 'text',
+          text: 'Tool-using system prompt',
+          cache_control: { type: 'ephemeral' },
+        },
+      ],
+      messages: [{ role: 'user', content: 'Tell me about Ada Lovelace.' }],
+      tools: [
+        {
+          name: 'get_student',
+          description: 'Fetches a student.',
+          input_schema: { type: 'object', properties: {} },
+        },
+      ],
+      handleToolCall: mock(async () =>
+        JSON.stringify({ essay: 'Confidential essay text.' })
+      ),
+    });
+
+    expect(llmLogCreate.mock.calls[0]?.[0].data.metadata).toMatchObject({
+      cacheCreationInputTokens: 500,
+      cacheReadInputTokens: 500,
     });
   });
 
