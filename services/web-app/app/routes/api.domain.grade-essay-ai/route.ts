@@ -471,6 +471,7 @@ export async function action({ request }: ActionFunctionArgs) {
             id: true,
             gradingAssistantStrictnessLevel: true,
             apHistorySnapshot: true,
+            prompt: true,
           },
         },
         classAssignment: {
@@ -615,6 +616,11 @@ export async function action({ request }: ActionFunctionArgs) {
         `${item.key}: ${item.label} (${Math.round(item.weight * 100)}%) - ${item.description}`
     )
     .join('\n');
+
+  const assignmentPrompt = submission.document.assignment?.prompt?.trim();
+  const assignmentPromptSection = assignmentPrompt
+    ? `Assignment prompt: ${assignmentPrompt}`
+    : 'Assignment prompt: No assignment prompt was provided.';
 
   const studentFirstName = firstNameFromFullName(
     submission.document.membership?.user?.name
@@ -808,7 +814,7 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
 
   if (templateInstructions.mode === 'unified') {
     system = `${gradingSystemBase}\nFollow the grading instructions in the user prompt exactly.`;
-    userPrompt = `Student first name: ${studentFirstName}\n\nAssignment type grading config: ${resolvedGradingConfig.label}\n\nRubric category keys (use these exact keys in categories[].key):\n${rubricText}\n\nGrading instructions:\n${templateInstructions.gradingInstructions}\n\nEssay:\n${submission.text}`;
+    userPrompt = `Student first name: ${studentFirstName}\n\nAssignment type grading config: ${resolvedGradingConfig.label}\n\nRubric category keys (use these exact keys in categories[].key):\n${rubricText}\n\nGrading instructions:\n${templateInstructions.gradingInstructions}\n\n${assignmentPromptSection}\n\nEssay:\n${submission.text}`;
   } else {
     const rubricInstructions =
       templateInstructions.mode === 'legacy-split' ||
@@ -828,7 +834,7 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
       ? `${systemInstructions}\n\n`
       : '';
     system = `${templateSystemInstructions}${gradingSystemBase}\nUse the rubric language, proficiency bands, and category weights from the user prompt exactly.\n${scoreInstructions}`;
-    userPrompt = `Student first name: ${studentFirstName}\n\nAssignment type grading config: ${resolvedGradingConfig.label}\n\nRubric category keys (use these exact keys in categories[].key):\n${rubricText}\n\nRubric Instructions:\n${rubricInstructions}\n\nEssay:\n${submission.text}`;
+    userPrompt = `Student first name: ${studentFirstName}\n\nAssignment type grading config: ${resolvedGradingConfig.label}\n\nRubric category keys (use these exact keys in categories[].key):\n${rubricText}\n\nRubric Instructions:\n${rubricInstructions}\n\n${assignmentPromptSection}\n\nEssay:\n${submission.text}`;
   }
 
   let responseText = '';
