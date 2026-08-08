@@ -169,6 +169,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         take: 1,
         select: {
           assignmentTypeRubricSnapshot: true,
+          source: true,
         },
       },
     },

@@ -67,12 +67,15 @@ function parseOutputSchema(raw: unknown): Record<string, unknown> {
 }
 
 export function hasAssignmentTypeOwnedRubric(rubric: RubricData) {
-  return rubric.categories.some(
-    (category) =>
-      category.key.trim() &&
-      category.label.trim() &&
-      category.description.trim() &&
-      Number.isFinite(category.weight)
+  return (
+    rubric.categories.length > 0 &&
+    rubric.categories.every(
+      (category) =>
+        category.key.trim() &&
+        category.label.trim() &&
+        category.description.trim() &&
+        Number.isFinite(category.weight)
+    )
   );
 }
 

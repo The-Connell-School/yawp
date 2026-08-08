@@ -116,9 +116,64 @@ describe('resolveRubricConfigForSubmission', () => {
     });
 
     expect(config.categories.map((category) => category.key)).toEqual(['claim']);
+    expect(config.source).toBe('assignment-type');
     expect(resolveAssignmentTypeGradingConfig).toHaveBeenCalledWith({
       assignmentTypeId: 'assignment-type-custom',
     });
+  });
+
+  test('marks the config as a thesis-default fallback when the live assignment type config falls back', async () => {
+    resolveAssignmentTypeGradingConfig.mockResolvedValue(
+      resolvedGradingConfig({
+        source: 'thesis-default',
+        minScore: 1,
+        maxScore: 5,
+        scoringType: 'weighted_1_5',
+        rubricCategories: [
+          {
+            key: 'thesis_and_content',
+            label: 'Thesis/Content',
+            description: 'Thesis quality.',
+            weight: 0.25,
+          },
+        ],
+      })
+    );
+
+    const config = await resolveRubricConfigForSubmission({
+      assignmentTypeId: 'assignment-type-empty',
+      latestGradingRun: null,
+      rubricScores: {},
+    });
+
+    expect(config.source).toBe('thesis-default');
+  });
+
+  test('carries the source recorded on the latest grading run snapshot', async () => {
+    const config = await resolveRubricConfigForSubmission({
+      assignmentTypeId: 'assignment-type-act',
+      latestGradingRun: {
+        source: 'assignment-type',
+        assignmentTypeRubricSnapshot: {
+          minScore: 1,
+          maxScore: 6,
+          scoringType: 'act_writing_2_12',
+          categories: [
+            {
+              key: 'ideas_and_analysis',
+              label: 'Ideas and Analysis',
+              description: 'Generate productive ideas and analyze perspectives.',
+              weight: 0.25,
+            },
+          ],
+        },
+      },
+      rubricScores: {
+        ideas_and_analysis: { score: 5, comment: 'Clear analysis.' },
+      },
+    });
+
+    expect(config.source).toBe('assignment-type');
   });
 
   test('uses legacy display config when old stored score keys do not match current config', async () => {

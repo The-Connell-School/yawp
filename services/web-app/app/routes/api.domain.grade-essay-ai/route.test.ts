@@ -255,6 +255,9 @@ describe('api.domain.grade-essay-ai', () => {
       'Jordan, this draft has clear progress and focus.'
     );
     expect(Object.keys(payload.rubricScores ?? {})).toEqual(rubricKeys);
+    expect(
+      (payload.rubricConfig as { source?: string } | undefined)?.source
+    ).toBe('thesis-default');
     expect(prisma.submission.update).toHaveBeenCalledTimes(1);
     expect(prisma.assignmentType.findUnique).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -560,6 +563,219 @@ describe('api.domain.grade-essay-ai', () => {
     );
   });
 
+  test('includes the assignment prompt in the legacy-split/preset grading prompt, before the essay text', async () => {
+    prisma.submission.findFirst.mockResolvedValue(
+      mockSubmission({
+        id: 'sub-prompt-1',
+        document: {
+          id: 'doc-prompt-1',
+          membershipId: 'student-profile-1',
+          assignmentTypeId: 'assignment-type-legacy',
+          assignmentType: {
+            id: 'assignment-type-legacy',
+            kind: null,
+            title: 'Critical Essay',
+          },
+          assignment: {
+            id: 'assignment-1',
+            gradingAssistantStrictnessLevel: 'intermediate',
+            prompt:
+              'Write a thesis-driven essay analyzing the theme of ambition in Macbeth.',
+          },
+          classAssignment: { class: { schoolId: 'school-1' } },
+          membership: {
+            classesAsStudent: [],
+            user: { name: 'Jordan Student' },
+          },
+        },
+      })
+    );
+
+    const form = new FormData();
+    form.append('submissionId', 'sub-prompt-1');
+
+    await action({
+      request: new Request('https://example.com/api/domain/grade-essay-ai', {
+        method: 'POST',
+        body: form,
+      }),
+    } as any);
+
+    const prompt = getLLMCompletion.mock.calls[0]?.[0]?.messages?.[0]?.content;
+
+    expect(prompt).toContain(
+      'Write a thesis-driven essay analyzing the theme of ambition in Macbeth.'
+    );
+    const promptIndex = prompt.indexOf('Assignment prompt:');
+    const essayIndex = prompt.indexOf('Essay:');
+    expect(promptIndex).toBeGreaterThan(-1);
+    expect(essayIndex).toBeGreaterThan(-1);
+    expect(promptIndex).toBeLessThan(essayIndex);
+  });
+
+  test('pins the exact composed user prompt shape for the legacy-split/preset branch', async () => {
+    prisma.submission.findFirst.mockResolvedValue(
+      mockSubmission({
+        id: 'sub-prompt-pin',
+        document: {
+          id: 'doc-prompt-pin',
+          membershipId: 'student-profile-1',
+          assignmentTypeId: 'assignment-type-legacy',
+          assignmentType: {
+            id: 'assignment-type-legacy',
+            kind: null,
+            title: 'Critical Essay',
+          },
+          assignment: {
+            id: 'assignment-pin',
+            gradingAssistantStrictnessLevel: 'intermediate',
+            prompt: 'Analyze the theme of ambition in Macbeth.',
+          },
+          classAssignment: { class: { schoolId: 'school-1' } },
+          membership: {
+            classesAsStudent: [],
+            user: { name: 'Jordan Student' },
+          },
+        },
+      })
+    );
+
+    const form = new FormData();
+    form.append('submissionId', 'sub-prompt-pin');
+
+    await action({
+      request: new Request('https://example.com/api/domain/grade-essay-ai', {
+        method: 'POST',
+        body: form,
+      }),
+    } as any);
+
+    const prompt = getLLMCompletion.mock.calls[0]?.[0]?.messages?.[0]?.content;
+
+    // Locks the section order so a future edit can't silently drop or
+    // reorder the assignment prompt relative to the essay text.
+    const rubricInstructionsIndex = prompt.indexOf('Rubric Instructions:');
+    const assignmentPromptIndex = prompt.indexOf('Assignment prompt:');
+    const essayIndex = prompt.indexOf('Essay:');
+
+    expect(prompt.startsWith('Student first name: Jordan')).toBe(true);
+    expect(rubricInstructionsIndex).toBeGreaterThan(-1);
+    expect(assignmentPromptIndex).toBeGreaterThan(rubricInstructionsIndex);
+    expect(essayIndex).toBeGreaterThan(assignmentPromptIndex);
+    expect(
+      prompt.slice(assignmentPromptIndex, essayIndex).trim()
+    ).toBe(
+      'Assignment prompt: Analyze the theme of ambition in Macbeth.'
+    );
+    expect(prompt.slice(essayIndex)).toBe('Essay:\nFrozen AI essay text');
+  });
+
+  test('includes the assignment prompt in the unified grading prompt, before the essay text', async () => {
+    prisma.assignmentType.findUnique.mockResolvedValue(
+      mockAssignmentType({
+        gradingPromptConfigJson: {
+          gradingInstructions: 'Grade against this rubric.',
+        },
+        rubricJson: {
+          categories: [
+            {
+              key: 'claim',
+              label: 'Claim',
+              description: 'A clear defensible claim.',
+              weight: 1,
+            },
+          ],
+        },
+      })
+    );
+    prisma.submission.findFirst.mockResolvedValue(
+      mockSubmission({
+        id: 'sub-prompt-2',
+        document: {
+          id: 'doc-prompt-2',
+          membershipId: 'student-profile-1',
+          assignmentTypeId: 'assignment-type-legacy',
+          assignmentType: {
+            id: 'assignment-type-legacy',
+            kind: null,
+            title: 'Critical Essay',
+          },
+          assignment: {
+            id: 'assignment-2',
+            gradingAssistantStrictnessLevel: 'intermediate',
+            prompt: 'Compare and contrast two poems from the unit.',
+          },
+          classAssignment: { class: { schoolId: 'school-1' } },
+          membership: {
+            classesAsStudent: [],
+            user: { name: 'Jordan Student' },
+          },
+        },
+      })
+    );
+
+    const form = new FormData();
+    form.append('submissionId', 'sub-prompt-2');
+
+    await action({
+      request: new Request('https://example.com/api/domain/grade-essay-ai', {
+        method: 'POST',
+        body: form,
+      }),
+    } as any);
+
+    const prompt = getLLMCompletion.mock.calls[0]?.[0]?.messages?.[0]?.content;
+
+    expect(prompt).toContain('Compare and contrast two poems from the unit.');
+    const promptIndex = prompt.indexOf('Assignment prompt:');
+    const essayIndex = prompt.indexOf('Essay:');
+    expect(promptIndex).toBeGreaterThan(-1);
+    expect(essayIndex).toBeGreaterThan(-1);
+    expect(promptIndex).toBeLessThan(essayIndex);
+  });
+
+  test('says explicitly when the assignment has no prompt, instead of an empty section', async () => {
+    prisma.submission.findFirst.mockResolvedValue(
+      mockSubmission({
+        id: 'sub-prompt-3',
+        document: {
+          id: 'doc-prompt-3',
+          membershipId: 'student-profile-1',
+          assignmentTypeId: 'assignment-type-legacy',
+          assignmentType: {
+            id: 'assignment-type-legacy',
+            kind: null,
+            title: 'Critical Essay',
+          },
+          assignment: {
+            id: 'assignment-3',
+            gradingAssistantStrictnessLevel: 'intermediate',
+            prompt: '',
+          },
+          classAssignment: { class: { schoolId: 'school-1' } },
+          membership: {
+            classesAsStudent: [],
+            user: { name: 'Jordan Student' },
+          },
+        },
+      })
+    );
+
+    const form = new FormData();
+    form.append('submissionId', 'sub-prompt-3');
+
+    await action({
+      request: new Request('https://example.com/api/domain/grade-essay-ai', {
+        method: 'POST',
+        body: form,
+      }),
+    } as any);
+
+    const prompt = getLLMCompletion.mock.calls[0]?.[0]?.messages?.[0]?.content;
+
+    expect(prompt).toContain('Assignment prompt: No assignment prompt was provided.');
+  });
+
   test('uses assignment-type-owned ACT Writing grading config and records snapshots', async () => {
     getLLMCompletion.mockReset();
     getLLMCompletion
@@ -687,6 +903,9 @@ describe('api.domain.grade-essay-ai', () => {
     expect(prompt).not.toContain('Grading assistant strictness:');
     expect(prompt).toContain('Ideas and Analysis (25%)');
     expect(prompt).not.toContain('Thesis/Content');
+    expect(
+      (payload.rubricConfig as { source?: string } | undefined)?.source
+    ).toBe('assignment-type');
     expect(Object.keys(payload.rubricScores ?? {})).toEqual([
       'ideas_and_analysis',
       'development_and_support',
