@@ -506,7 +506,8 @@ export default function OrganizationRoute() {
                           Writing Practice
                         </span>
                         <span className="block text-xs text-muted-foreground">
-                          Adds Writing Practice to the student sidebar.
+                          Adds Writing Practice to the teacher and student
+                          sidebars. Off by default while the feature is paused.
                         </span>
                       </span>
                     </label>
