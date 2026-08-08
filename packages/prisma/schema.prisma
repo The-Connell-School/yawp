@@ -30,6 +30,7 @@ model Class {
   schoolId         String
   school           School            @relation(fields: [schoolId], references: [id])
   classAssignments ClassAssignment[]
+  writingPracticeClassAssignments WritingPracticeClassAssignment[]
 
   @@unique([schoolId, code])
   @@index([schoolId, schoolYear, period, grade])
@@ -541,6 +542,7 @@ model OrgMembership {
   assignedTeacherTrainings      TeacherTraining[]              @relation("TeacherTrainingAssignments")
   assignmentTypesCustomized     Boolean                        @default(false)
   assignmentTypeAssignments     TeacherAssignmentType[]
+  writingPracticeAssignmentsCreated WritingPracticeAssignment[] @relation("WritingPracticeAssignmentCreator")
   reporterConversations         ReporterConversation[]
   reporterGrowthPlansOwned      ReporterGrowthPlan[]           @relation("ReporterGrowthPlanOwner")
   reporterGrowthPlansAsStudent  ReporterGrowthPlan[]           @relation("ReporterGrowthPlanStudent")
@@ -693,6 +695,39 @@ model Setting {
   description String?
   value       String
   valueType   String   @default("string")
+}
+
+/// A teacher-authored writing-practice assignment. The lesson slugs remain
+/// separate from regular assignment types so this feature can roll out without
+/// changing the existing essay-assignment data model.
+model WritingPracticeAssignment {
+  id                    String                           @id @default(cuid())
+  createdAt             DateTime                         @default(now()) @db.Timestamptz(6)
+  updatedAt             DateTime                         @default(now()) @updatedAt @db.Timestamptz(6)
+  title                 String
+  lessonSlugs           String[]
+  problemCount          Int                              @default(5)
+  dueAt                 DateTime                         @db.Timestamptz(6)
+  instructions          String?
+  createdByMembershipId String?
+  createdByMembership   OrgMembership?                   @relation("WritingPracticeAssignmentCreator", fields: [createdByMembershipId], references: [id], onDelete: SetNull)
+  classAssignments      WritingPracticeClassAssignment[]
+
+  @@index([createdByMembershipId])
+}
+
+/// Per-class deployment of a writing-practice assignment.
+model WritingPracticeClassAssignment {
+  id           String                    @id @default(cuid())
+  createdAt    DateTime                  @default(now()) @db.Timestamptz(6)
+  updatedAt    DateTime                  @default(now()) @updatedAt @db.Timestamptz(6)
+  assignmentId String
+  assignment   WritingPracticeAssignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  classId      String
+  class        Class                     @relation(fields: [classId], references: [id], onDelete: Cascade)
+
+  @@unique([assignmentId, classId])
+  @@index([classId, createdAt(sort: Desc)])
 }
 
 // Upload table removed. Videos will be stored in S3 and referenced by key.
