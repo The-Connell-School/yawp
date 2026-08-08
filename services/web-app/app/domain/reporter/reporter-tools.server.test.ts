@@ -1,5 +1,4 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
-import { createRedactionSession } from '~/utils/ai-redaction';
 
 const prisma = {
   class: { findMany: mock(), findFirst: mock() },
@@ -14,14 +13,7 @@ mock.module('~/utils/db.server', () => ({ prisma }));
 const { handleReporterToolCall, REPORTER_TOOLS } =
   await import('./reporter-tools.server');
 
-const nameRedaction = createRedactionSession();
-const ctx = {
-  membershipId: 'teacher-1',
-  organizationId: 'org-1',
-  nameRedaction,
-};
-/** The pseudonym a real name deterministically redacts to in this session. */
-const pseudonymOf = (realName: string) => nameRedaction.pseudonymFor(realName);
+const ctx = { membershipId: 'teacher-1', organizationId: 'org-1' };
 
 beforeEach(() => {
   prisma.class.findMany.mockReset();
@@ -169,13 +161,7 @@ describe('get_class_grade_report', () => {
     );
 
     expect(result.gradedSubmissionCount).toBe(3);
-    // The model only ever sees the pseudonym, never the real first name.
-    expect(
-      result.students.some((s: any) => s.studentName === 'Ada')
-    ).toBe(false);
-    const ada = result.students.find(
-      (s: any) => s.studentName === pseudonymOf('Ada')
-    );
+    const ada = result.students.find((s: any) => s.studentName === 'Ada');
     expect(ada.averagePercentage).toBe(80);
     // class average of Ada (80) and Grace (100) = 90
     expect(result.classAveragePercentage).toBe(90);
@@ -272,8 +258,7 @@ describe('get_student_growth', () => {
     });
     expect(nameWhere.classesAsStudent.some.teachers.some.id).toBe('teacher-1');
 
-    expect(result.student.studentName).toBe(pseudonymOf('Ada Lovelace'));
-    expect(result.student.studentName).not.toBe('Ada Lovelace');
+    expect(result.student.studentName).toBe('Ada Lovelace');
     expect(result.student.studentMembershipId).toBe('stu-1');
     expect(result.points.map((p: any) => p.submissionId)).toEqual(['s1', 's2']);
     expect(result.deltaPercentage).toBe(35);
@@ -439,8 +424,7 @@ describe('find_students_needing_attention', () => {
     expect(result.scope).toBe('all_classes');
     expect(result.studentsConsidered).toBe(2);
     expect(result.flaggedCount).toBe(1);
-    expect(result.students[0].studentName).toBe(pseudonymOf('Amelia Brooks'));
-    expect(result.students[0].studentName).not.toBe('Amelia Brooks');
+    expect(result.students[0].studentName).toBe('Amelia Brooks');
     expect(result.averageThreshold).toBe(70);
   });
 
@@ -528,8 +512,7 @@ describe('get_submission_detail', () => {
       )
     );
 
-    expect(result.student.studentName).toBe(pseudonymOf('Amelia Brooks'));
-    expect(result.student.studentName).not.toBe('Amelia Brooks');
+    expect(result.student.studentName).toBe('Amelia Brooks');
     expect(result.assignmentTitle).toBe('Scarlet Ibis Analysis');
     expect(result.numericPercentage).toBe(84);
     expect(result.rubricScores.evidence_and_support).toBe(2);
@@ -547,46 +530,6 @@ describe('get_submission_detail', () => {
     });
     expect(result.essayExcerpt.excerpt).toContain('The ibis was red.');
     expect(result.essayExcerpt.truncated).toBe(false);
-  });
-
-  test('scrubs the student name out of free-text fields too, not just the structured field', async () => {
-    prisma.submission.findFirst.mockResolvedValue({
-      id: 'sub-3',
-      text: "Noah's essay opens strong. Noah then loses the thread.",
-      submittedAt: new Date('2026-02-01T00:00:00.000Z'),
-      numericPercentage: 84,
-      letterGrade: 'B',
-      overallScore: 4,
-      rubricScores: null,
-      overallComment: "Noah, nice control of tone throughout.",
-      feedback: "Ask Noah to slow down in the middle section.",
-      grammarIssues: [
-        {
-          excerpt: "Noah then loses the thread.",
-          message: 'Consider a transition before this sentence.',
-          kind: 'style',
-        },
-      ],
-      document: {
-        membership: { user: { name: 'Noah' } },
-        classAssignment: { assignment: { title: 'Personal Narrative' } },
-      },
-      comments: [
-        { excerpt: "Noah's essay opens strong.", content: 'Great hook, Noah!' },
-      ],
-    });
-
-    const result = JSON.parse(
-      await handleReporterToolCall(
-        'get_submission_detail',
-        { submissionId: 'sub-3' },
-        ctx
-      )
-    );
-
-    const serialized = JSON.stringify(result).toLowerCase();
-    expect(serialized).not.toContain('noah');
-    expect(result.student.studentName).toBe(pseudonymOf('Noah'));
   });
 
   test('truncates a long essay body to a bounded excerpt', async () => {
@@ -682,51 +625,8 @@ describe('save_growth_plan', () => {
 
     expect(result.saved).toBe(true);
     expect(result.planId).toBe('plan-1');
-    expect(result.student.studentName).toBe(pseudonymOf('Amelia Brooks'));
-    expect(result.student.studentName).not.toBe('Amelia Brooks');
+    expect(result.student.studentName).toBe('Amelia Brooks');
     expect(prisma.$transaction).toHaveBeenCalledTimes(1);
-  });
-
-  test('rehydrates a pseudonym the model echoes back in student/focus/body before persisting', async () => {
-    // Simulates the realistic flow: an earlier tool result taught the model
-    // this student's pseudonym, and it composes the plan using only that.
-    const pseudonym = pseudonymOf('Grace Hopper');
-
-    prisma.orgMembership.findFirst.mockResolvedValue(null);
-    prisma.orgMembership.findMany.mockResolvedValue([
-      { id: 'stu-grace', user: { name: 'Grace Hopper' } },
-    ]);
-    prisma.submission.findMany.mockResolvedValue([]);
-    prisma.reporterGrowthPlan.updateMany.mockResolvedValue({ count: 0 });
-    prisma.reporterGrowthPlan.create.mockResolvedValue({ id: 'plan-grace' });
-
-    const result = JSON.parse(
-      await handleReporterToolCall(
-        'save_growth_plan',
-        {
-          student: pseudonym,
-          focus: `Help ${pseudonym} slow down in body paragraphs`,
-          targetSkills: ['evidence_and_support'],
-          body: `${pseudonym} should revise the third paragraph.`,
-        },
-        ctx
-      )
-    );
-
-    // resolveStudent found the real student despite the pseudonym input.
-    expect(result.error).toBeUndefined();
-    const createData = prisma.reporterGrowthPlan.create.mock.calls[0][0].data;
-    expect(createData.studentMembershipId).toBe('stu-grace');
-
-    // The database record - what other parts of the product will render to
-    // the teacher - has the real name, not the pseudonym the model used.
-    expect(createData.focus).toBe('Help Grace Hopper slow down in body paragraphs');
-    expect(createData.body).toBe('Grace Hopper should revise the third paragraph.');
-    expect(createData.focus).not.toContain(pseudonym);
-
-    // What comes back to the model is redacted again.
-    expect(result.focus).not.toContain('Grace Hopper');
-    expect(result.student.studentName).toBe(pseudonym);
   });
 
   test('refuses to save for a student outside the teacher scope', async () => {
@@ -840,46 +740,6 @@ describe('list_growth_plans', () => {
       currentLevel: 3,
       delta: 1,
     });
-  });
-
-  test('re-redacts a real name stored in a plan body before sending it back to the model', async () => {
-    prisma.orgMembership.findFirst.mockResolvedValue(null);
-    prisma.orgMembership.findMany.mockResolvedValue([
-      { id: 'stu-1', user: { name: 'Amelia Brooks' } },
-    ]);
-    prisma.reporterGrowthPlan.findMany.mockResolvedValue([
-      {
-        id: 'plan-1',
-        status: 'active',
-        focus: 'Help Amelia Brooks slow down',
-        targetSkills: ['evidence_and_support'],
-        body: 'Amelia Brooks should revise the third paragraph.',
-        baseline: {
-          averagePercentage: 60,
-          rubricLevels: { evidence_and_support: 2 },
-          capturedAt: '2026-03-01T00:00:00.000Z',
-        },
-        checkInAt: null,
-        createdAt: new Date('2026-03-01T00:00:00.000Z'),
-        studentMembershipId: 'stu-1',
-        student: { user: { name: 'Amelia Brooks' } },
-      },
-    ]);
-    prisma.submission.findMany.mockResolvedValue([]);
-
-    const result = JSON.parse(
-      await handleReporterToolCall(
-        'list_growth_plans',
-        { student: 'Amelia Brooks' },
-        ctx
-      )
-    );
-
-    const serialized = JSON.stringify(result);
-    expect(serialized).not.toContain('Amelia Brooks');
-    expect(result.plans[0].student.studentName).toBe(
-      pseudonymOf('Amelia Brooks')
-    );
   });
 
   test('includes archived plans when asked and omits body for the cross-student list', async () => {

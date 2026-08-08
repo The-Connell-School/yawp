@@ -7,7 +7,6 @@ import { requireMutableRequest } from '~/utils/auth.server';
 import { requireReporterAccess } from '~/utils/reporter/reporter-access.server';
 import {
   handleReporterToolCall,
-  listReporterRedactableStudentNames,
   REPORTER_TOOLS,
 } from '~/domain/reporter/reporter-tools.server';
 import { buildReporterSystemPromptBlocks } from './build-system-prompt';
@@ -15,12 +14,6 @@ import {
   AiRateLimitError,
   reserveAiRequest,
 } from '~/utils/ai-admission.server';
-import {
-  createRedactionSession,
-  ORG_PSEUDONYM_NAME_POOL,
-  redact,
-  rehydrate,
-} from '~/utils/ai-redaction';
 
 const REPORTER_FAILED =
   'The reporter could not put that together. Please try again.';
@@ -105,17 +98,10 @@ export async function action({ request }: ActionFunctionArgs) {
   const { error, data } = await parseFormData(request, POST);
   if (error) return validationError(error);
 
-  // Request-scoped, in-memory only - never persisted or logged. Grows as
-  // tool calls surface new student names; the org-name session is separate
-  // so a school name never gets mistaken for a student pseudonym.
-  const nameRedaction = createRedactionSession();
-  const orgRedaction = createRedactionSession(ORG_PSEUDONYM_NAME_POOL);
-
   const ctx = {
     membershipId: access.membership.id,
     organizationId: access.membership.organization.id,
     pendingGrowthPlanSaves: new Map(),
-    nameRedaction,
   };
 
   // Load an existing conversation (scoped to this teacher) or start a new one.
@@ -158,10 +144,6 @@ export async function action({ request }: ActionFunctionArgs) {
       await handleReporterToolCall('save_growth_plan', proposal, {
         membershipId: ctx.membershipId,
         organizationId: ctx.organizationId,
-        // This confirmation never touches the LLM - the teacher is
-        // confirming a plan already shown to them with real names - so an
-        // empty, unused redaction session is correct here.
-        nameRedaction: ctx.nameRedaction,
       })
     ) as { error?: string; saved?: boolean };
     if (result.error || !result.saved) {
@@ -204,56 +186,17 @@ export async function action({ request }: ActionFunctionArgs) {
   );
   const isNewConversation = !conversation;
 
-  // Seed the redaction mapping from the full set of names that could
-  // possibly appear in this conversation - the class roster PLUS anyone
-  // with grade history in one of the teacher's classes - before the first
-  // provider call. Seeding up front (rather than growing the mapping only
-  // as tool results surface names, as earlier turns did) is what lets us
-  // safely redact prior conversation turns and the teacher's own message
-  // below: a name is only catchable by `redact()` if it was already
-  // registered, and tool results alone don't cover names that only ever
-  // appeared in typed text.
-  //
-  // Uses registerStudentFullName (not the bare pseudonymFor) so a teacher
-  // who types a student's bare first name in chat ("How's Sophia doing?")
-  // is still caught here, before any tool call runs this turn - grading
-  // always addresses a student by first name only in stored feedback, so
-  // teachers commonly do too.
-  const redactableStudentNames = await listReporterRedactableStudentNames({
-    membershipId: ctx.membershipId,
-    organizationId: ctx.organizationId,
-  });
-  for (const name of redactableStudentNames) {
-    nameRedaction.registerStudentFullName(name);
-  }
-
-  // Cacheable-prefix-first block form. The fixed instruction body carries no
-  // names at all, so it is unaffected by redaction and stays byte-identical
-  // across every request; only the short personalized intro after the cache
-  // breakpoint carries the (pseudonymized) org name.
   const system = buildReporterSystemPromptBlocks({
     teacherName: null,
-    organizationName: orgRedaction.pseudonymFor(
-      access.membership.organization.name
-    ),
+    organizationName: access.membership.organization.name,
   });
 
-  // Prior turns are persisted with real names (correct - that's what the
-  // teacher's UI replays on reload) and the teacher's own new message
-  // routinely contains a student's name too. Redact both before they go
-  // into the prompt. A name that isn't in the roster above (e.g. a student
-  // fully removed from the org with no remaining grade history) can't be
-  // caught here and will pass through unredacted - see
-  // listReporterRedactableStudentNames for what is and isn't covered.
   const messages: { role: AgentType; content: string; name?: string }[] = [
     ...priorMessages.map((message) => ({
       role: message.role as AgentType,
-      content: redact(message.content, nameRedaction.mapping),
+      content: message.content,
     })),
-    {
-      role: AgentType.User,
-      content: redact(data.message!, nameRedaction.mapping),
-    },
+    { role: AgentType.User, content: data.message! },
   ];
 
   let reply: string;
@@ -276,12 +219,6 @@ export async function action({ request }: ActionFunctionArgs) {
   } catch (err) {
     return dataResponse({ error: REPORTER_FAILED }, { status: 500 });
   }
-
-  // The model only ever saw pseudonyms for student names and the
-  // organization name; restore the real ones before the teacher's UI or
-  // the database sees this text.
-  reply = rehydrate(reply, nameRedaction.mapping);
-  reply = rehydrate(reply, orgRedaction.mapping);
 
   // Stamp explicit, strictly-increasing timestamps: both rows land in one
   // nested create, so the DB default would give them the same createdAt and

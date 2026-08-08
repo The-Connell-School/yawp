@@ -1,5 +1,5 @@
 import { describe, expect, mock, test } from 'bun:test';
-import { postTutorResponse } from './tutor-response-retry';
+import { postTutorResponseWithFallbackRetry } from './tutor-response-retry';
 
 function formEntries(formData: FormData) {
   return Object.fromEntries([...formData.entries()].map(([key, value]) => [
@@ -8,55 +8,71 @@ function formEntries(formData: FormData) {
   ]));
 }
 
-describe('postTutorResponse', () => {
-  test('posts once and returns the parsed JSON response', async () => {
-    const fetcher = mock().mockResolvedValueOnce(
-      new Response(JSON.stringify({ cms: { id: 'cms-1' } }), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      })
-    );
+describe('postTutorResponseWithFallbackRetry', () => {
+  test('resubmits once with llmRetry=fallback after a 202 retry signal', async () => {
+    const fetcher = mock()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ retrying: true }), {
+          status: 202,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ cms: { id: 'cms-1' } }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      );
+    const onRetry = mock();
     const formData = new FormData();
     formData.set('response', 'Can you review this?');
     formData.set('cmsId', 'cms-1');
     formData.set('content', 'Current draft');
 
-    const result = await postTutorResponse({
+    const result = await postTutorResponseWithFallbackRetry({
       fetcher: fetcher as unknown as typeof fetch,
       formData,
+      onRetry,
     });
 
-    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(onRetry).toHaveBeenCalledTimes(1);
+    expect(fetcher).toHaveBeenCalledTimes(2);
     expect(formEntries(fetcher.mock.calls[0]?.[1]?.body as FormData)).toEqual({
       response: 'Can you review this?',
       cmsId: 'cms-1',
       content: 'Current draft',
     });
+    expect(formEntries(fetcher.mock.calls[1]?.[1]?.body as FormData)).toEqual({
+      response: 'Can you review this?',
+      cmsId: 'cms-1',
+      content: 'Current draft',
+      llmRetry: 'fallback',
+    });
     expect(result.json).toEqual({ cms: { id: 'cms-1' } });
     expect(result.response.status).toBe(200);
   });
 
-  test('never retries - a 202 "retrying" response is just returned as-is', async () => {
-    // The server can no longer emit this response for the tutor
-    // (allowFallbackProvider: false removed the only thing it signaled),
-    // but if it ever did, there is nothing here that would resubmit.
+  test('does not retry normal failures', async () => {
     const fetcher = mock().mockResolvedValueOnce(
-      new Response(JSON.stringify({ retrying: true }), {
-        status: 202,
+      new Response(JSON.stringify({ error: 'Nope' }), {
+        status: 500,
         headers: { 'Content-Type': 'application/json' },
       })
     );
+    const onRetry = mock();
     const formData = new FormData();
     formData.set('response', 'Can you review this?');
     formData.set('cmsId', 'cms-1');
 
-    const result = await postTutorResponse({
+    const result = await postTutorResponseWithFallbackRetry({
       fetcher: fetcher as unknown as typeof fetch,
       formData,
+      onRetry,
     });
 
+    expect(onRetry).not.toHaveBeenCalled();
     expect(fetcher).toHaveBeenCalledTimes(1);
-    expect(result.json).toEqual({ retrying: true });
-    expect(result.response.status).toBe(202);
+    expect(result.json).toEqual({ error: 'Nope' });
+    expect(result.response.status).toBe(500);
   });
 });

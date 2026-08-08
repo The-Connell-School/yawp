@@ -1,15 +1,16 @@
-/**
- * Cross-provider fallback is disabled for the tutor's AI call
- * (allowFallbackProvider: false on its getLLMCompletion call), so the
- * server can no longer signal a 202 "retrying" response asking the client
- * to resubmit onto a fallback model - there is nothing left to retry onto.
- * This is now a plain single POST.
- */
-export async function postTutorResponse({
-  fetcher = fetch,
+function cloneFormData(source: FormData) {
+  const copy = new FormData();
+  for (const [key, value] of source.entries()) {
+    copy.append(key, value);
+  }
+  return copy;
+}
+
+async function postTutorResponse({
+  fetcher,
   formData,
 }: {
-  fetcher?: typeof fetch;
+  fetcher: typeof fetch;
   formData: FormData;
 }) {
   const response = await fetcher('/api/domain/tutor-response', {
@@ -18,4 +19,27 @@ export async function postTutorResponse({
   });
   const json = await response.json();
   return { response, json };
+}
+
+export async function postTutorResponseWithFallbackRetry({
+  fetcher = fetch,
+  formData,
+  onRetry,
+}: {
+  fetcher?: typeof fetch;
+  formData: FormData;
+  onRetry?: () => void;
+}) {
+  const firstAttempt = await postTutorResponse({ fetcher, formData });
+  if (
+    firstAttempt.response.status !== 202 ||
+    firstAttempt.json?.retrying !== true
+  ) {
+    return firstAttempt;
+  }
+
+  onRetry?.();
+  const retryFormData = cloneFormData(formData);
+  retryFormData.set('llmRetry', 'fallback');
+  return postTutorResponse({ fetcher, formData: retryFormData });
 }

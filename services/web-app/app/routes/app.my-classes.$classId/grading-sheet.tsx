@@ -26,6 +26,10 @@ import {
   letterFromPercent,
 } from '~/domain/grading/gradeMath';
 import { rubricCategories as rubric } from '~/domain/grading/rubric';
+import {
+  cloneFormDataWithFallbackRetry,
+  isLlmRetryResponse,
+} from '~/utils/llm-retry-ui';
 
 type Document = {
   id: string;
@@ -146,8 +150,12 @@ export function GradingSheet({
   const [overallComment, setOverallComment] = useState('');
   const [savedSignature, setSavedSignature] = useState('');
   const pendingSaveSignatureRef = useRef('');
+  const pendingAiFormRef = useRef<FormData | null>(null);
+  const hasRetriedAiFormRef = useRef(false);
   const hasProcessedSuccess = useRef(false);
-  const isGenerating = aiFetcher.state !== 'idle';
+  const [isAiRetrying, setIsAiRetrying] = useState(false);
+  const isAiRequestInFlight = aiFetcher.state !== 'idle';
+  const isGenerating = isAiRequestInFlight || isAiRetrying;
 
   const isMultiple = documents.length > 1;
   const existingGrade = !isMultiple
@@ -315,6 +323,9 @@ export function GradingSheet({
   useEffect(() => {
     if (!isOpen) {
       hasProcessedSuccess.current = false;
+      pendingAiFormRef.current = null;
+      hasRetriedAiFormRef.current = false;
+      setIsAiRetrying(false);
       setReleaseImmediately(false);
       setRubricScores(buildEmptyRubric());
       setOverallComment('');
@@ -325,6 +336,20 @@ export function GradingSheet({
 
   useEffect(() => {
     if (aiFetcher.state !== 'idle') return;
+
+    if (
+      isLlmRetryResponse(aiFetcher.data) &&
+      pendingAiFormRef.current &&
+      !hasRetriedAiFormRef.current
+    ) {
+      hasRetriedAiFormRef.current = true;
+      setIsAiRetrying(true);
+      aiFetcher.submit(cloneFormDataWithFallbackRetry(pendingAiFormRef.current), {
+        method: 'POST',
+        action: '/api/domain/grade-essay-ai',
+      });
+      return;
+    }
 
     if (aiFetcher.data?.success) {
       const aiRubricScores = normalizeRubricScores(aiFetcher.data.rubricScores);
@@ -359,6 +384,11 @@ export function GradingSheet({
       }
     }
 
+    if (aiFetcher.data && !isLlmRetryResponse(aiFetcher.data)) {
+      pendingAiFormRef.current = null;
+      hasRetriedAiFormRef.current = false;
+      setIsAiRetrying(false);
+    }
   }, [aiFetcher.data, aiFetcher.state, isEditing]);
 
   useEffect(() => {
@@ -456,6 +486,9 @@ export function GradingSheet({
                   if (!documents[0]) return;
                   const aiForm = new FormData();
                   aiForm.append('documentId', documents[0].id);
+                  pendingAiFormRef.current = aiForm;
+                  hasRetriedAiFormRef.current = false;
+                  setIsAiRetrying(false);
                   aiFetcher.submit(aiForm, {
                     method: 'POST',
                     action: '/api/domain/grade-essay-ai',
@@ -464,7 +497,9 @@ export function GradingSheet({
                 disabled={isMultiple || isGenerating}
               >
                 {isGenerating
-                  ? 'Grading…'
+                  ? isAiRetrying
+                    ? 'Retrying...'
+                    : 'Grading…'
                   : isMultiple
                     ? 'Suggestions unavailable for bulk grading'
                     : 'Grading Assistant Suggestions'}

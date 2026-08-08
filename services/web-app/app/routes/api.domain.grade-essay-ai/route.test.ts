@@ -340,150 +340,6 @@ describe('api.domain.grade-essay-ai', () => {
     });
   });
 
-  test('redacts the student first name from every outbound prompt and rehydrates it in the persisted/returned feedback', async () => {
-    const { buildRedactionMapping, redact } = await import(
-      '~/utils/ai-redaction'
-    );
-    const mapping = buildRedactionMapping(['Jordan']);
-    const pseudonym = redact('Jordan', mapping);
-
-    getLLMCompletion.mockReset();
-    getLLMCompletion
-      .mockResolvedValueOnce(
-        JSON.stringify({
-          categories: rubricKeys.map((key) => ({
-            key,
-            score: 3,
-            comment: `Comment for ${key}`,
-          })),
-          overallComment: `${pseudonym}, this draft has clear progress and focus.`,
-        })
-      )
-      .mockResolvedValueOnce(JSON.stringify({ issues: [] }));
-
-    prisma.submission.findFirst.mockResolvedValue(
-      mockSubmission({ id: 'sub-redact' })
-    );
-
-    const form = new FormData();
-    form.append('submissionId', 'sub-redact');
-
-    const response = await action({
-      request: new Request('https://example.com/api/domain/grade-essay-ai', {
-        method: 'POST',
-        body: form,
-      }),
-    } as any);
-    const payload = (response as { data: Record<string, unknown> }).data;
-
-    // The model only ever saw the pseudonym.
-    for (const call of getLLMCompletion.mock.calls) {
-      const args = call[0];
-      expect(args.system ?? '').not.toContain('Jordan');
-      expect(JSON.stringify(args.messages)).not.toContain('Jordan');
-    }
-
-    // The teacher/student-facing output has the real name back.
-    expect(payload.overallComment).toBe(
-      'Jordan, this draft has clear progress and focus.'
-    );
-    expect(
-      (prisma.submission.update.mock.calls[0]?.[0].data as any).overallComment
-    ).toBe('Jordan, this draft has clear progress and focus.');
-  });
-
-  test('AI_PII_REDACTION_ENABLED=false sends the real name straight through and does not throw', async () => {
-    const ORIGINAL = process.env.AI_PII_REDACTION_ENABLED;
-    process.env.AI_PII_REDACTION_ENABLED = 'false';
-    try {
-      getLLMCompletion.mockReset();
-      getLLMCompletion
-        .mockResolvedValueOnce(
-          JSON.stringify({
-            categories: rubricKeys.map((key) => ({
-              key,
-              score: 3,
-              comment: `Comment for ${key}`,
-            })),
-            overallComment: 'Jordan, this draft has clear progress and focus.',
-          })
-        )
-        .mockResolvedValueOnce(JSON.stringify({ issues: [] }));
-
-      prisma.submission.findFirst.mockResolvedValue(
-        mockSubmission({ id: 'sub-killswitch' })
-      );
-
-      const form = new FormData();
-      form.append('submissionId', 'sub-killswitch');
-
-      const response = await action({
-        request: new Request('https://example.com/api/domain/grade-essay-ai', {
-          method: 'POST',
-          body: form,
-        }),
-      } as any);
-      const payload = (response as { data: Record<string, unknown> }).data;
-
-      // The switch is off, so the real first name goes out unredacted.
-      const firstCall = getLLMCompletion.mock.calls[0]?.[0];
-      expect(JSON.stringify(firstCall.messages)).toContain('Jordan');
-      // ...and rehydration is a no-op, so the output is unaffected.
-      expect(payload.overallComment).toBe(
-        'Jordan, this draft has clear progress and focus.'
-      );
-    } finally {
-      if (ORIGINAL === undefined) delete process.env.AI_PII_REDACTION_ENABLED;
-      else process.env.AI_PII_REDACTION_ENABLED = ORIGINAL;
-    }
-  });
-
-  test('also redacts the student last name out of the essay body, not just the first name', async () => {
-    getLLMCompletion.mockReset();
-    getLLMCompletion
-      .mockResolvedValueOnce(buildRubricResponseJson())
-      .mockResolvedValueOnce(JSON.stringify({ issues: [] }));
-
-    prisma.submission.findFirst.mockResolvedValue(
-      mockSubmission({
-        id: 'sub-lastname',
-        // Students sign their work with their full name, not just first.
-        text: 'This essay argues for change.\n\n-- Sophia Marín',
-        document: {
-          id: 'doc-1',
-          membershipId: 'student-profile-1',
-          assignmentTypeId: 'assignment-type-legacy',
-          assignmentType: {
-            id: 'assignment-type-legacy',
-            kind: null,
-            title: 'Critical Essay',
-          },
-          classAssignment: { class: { schoolId: 'school-1' } },
-          membership: {
-            classesAsStudent: [],
-            user: { name: 'Sophia Marín' },
-          },
-        },
-      })
-    );
-
-    const form = new FormData();
-    form.append('submissionId', 'sub-lastname');
-
-    await action({
-      request: new Request('https://example.com/api/domain/grade-essay-ai', {
-        method: 'POST',
-        body: form,
-      }),
-    } as any);
-
-    for (const call of getLLMCompletion.mock.calls) {
-      const args = call[0];
-      expect(args.system ?? '').not.toContain('Marín');
-      expect(JSON.stringify(args.messages)).not.toContain('Marín');
-    }
-  });
-
   test('starts the grading deadline before request preflight work', async () => {
     const originalTimeout = AbortSignal.timeout;
     const timeout = mock((milliseconds: number) =>
@@ -527,13 +383,7 @@ describe('api.domain.grade-essay-ai', () => {
     }
   });
 
-  test('an Anthropic outage is a plain failure, not a fallback-retry signal', async () => {
-    // Cross-provider fallback is disabled for grading (allowFallbackProvider:
-    // false), so getLLMCompletion can never actually throw
-    // LlmFallbackRetrySignal for this call site in production. This proves
-    // the route no longer special-cases it into a 202 "retrying" response
-    // even if it somehow received one - it's just an unhandled error, like
-    // any other failed call.
+  test('returns a retry signal without persisting when fallback retry is requested', async () => {
     getLLMCompletion.mockReset();
     getLLMCompletion.mockImplementationOnce(() => {
       throw new LlmFallbackRetrySignal({
@@ -549,26 +399,23 @@ describe('api.domain.grade-essay-ai', () => {
     const form = new FormData();
     form.append('submissionId', 'sub-retry');
 
-    let caught: unknown;
-    try {
-      await action({
-        request: new Request(
-          'https://example.com/api/domain/grade-essay-ai',
-          { method: 'POST', body: form }
-        ),
-      } as any);
-    } catch (error) {
-      caught = error;
-    }
+    const response = (await action({
+      request: new Request('https://example.com/api/domain/grade-essay-ai', {
+        method: 'POST',
+        body: form,
+      }),
+    } as any)) as {
+      init?: { status?: number };
+      data: Record<string, unknown>;
+    };
 
-    // The signal propagates as an ordinary unhandled error - nothing
-    // converts it into a 202/retrying response.
-    expect(caught).toBeInstanceOf(LlmFallbackRetrySignal);
+    expect(response.init?.status).toBe(202);
+    expect(response.data.retrying).toBe(true);
     expect(prisma.submission.update).not.toHaveBeenCalled();
     expect(prisma.submissionGradingAssistantRun.create).not.toHaveBeenCalled();
   });
 
-  test('no longer accepts an llmRetry field - there is nothing to retry onto', async () => {
+  test('forces fallback model on retry requests', async () => {
     prisma.submission.findFirst.mockResolvedValue(
       mockSubmission({ id: 'sub-fallback' })
     );
@@ -586,30 +433,10 @@ describe('api.domain.grade-essay-ai', () => {
 
     expect(getLLMCompletion).toHaveBeenCalled();
     for (const call of getLLMCompletion.mock.calls) {
-      expect(call[0].forceFallback).toBeUndefined();
-      expect(call[0].signalFallbackRetry).toBeUndefined();
-    }
-  });
-
-  test('never allows cross-provider fallback and never logs cleartext prompts for grading calls', async () => {
-    prisma.submission.findFirst.mockResolvedValue(
-      mockSubmission({ id: 'sub-privacy' })
-    );
-
-    const form = new FormData();
-    form.append('submissionId', 'sub-privacy');
-
-    await action({
-      request: new Request('https://example.com/api/domain/grade-essay-ai', {
-        method: 'POST',
-        body: form,
-      }),
-    } as any);
-
-    expect(getLLMCompletion).toHaveBeenCalled();
-    for (const call of getLLMCompletion.mock.calls) {
-      expect(call[0].allowFallbackProvider).toBe(false);
-      expect(call[0].logPayload).toBe('metadata-only');
+      expect(call[0]).toMatchObject({
+        forceFallback: true,
+        signalFallbackRetry: false,
+      });
     }
   });
 
@@ -831,10 +658,7 @@ describe('api.domain.grade-essay-ai', () => {
     const assignmentPromptIndex = prompt.indexOf('Assignment prompt:');
     const essayIndex = prompt.indexOf('Essay:');
 
-    // The name field is present and first, but carries a pseudonym - the
-    // real first name never reaches the provider.
-    expect(prompt.startsWith('Student first name: ')).toBe(true);
-    expect(prompt).not.toContain('Jordan');
+    expect(prompt.startsWith('Student first name: Jordan')).toBe(true);
     expect(rubricInstructionsIndex).toBeGreaterThan(-1);
     expect(assignmentPromptIndex).toBeGreaterThan(rubricInstructionsIndex);
     expect(essayIndex).toBeGreaterThan(assignmentPromptIndex);

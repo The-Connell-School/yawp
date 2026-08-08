@@ -8,16 +8,11 @@ const panelPath = path.join(
 );
 
 describe('submission teacher grading panel LLM retry UI', () => {
-  test('does not claim a fallback-retry capability that no longer exists', () => {
-    // Grading now runs with allowFallbackProvider: false and no client-side
-    // retry-onto-fallback wiring - there is no other provider to fall back
-    // to, so this panel must not reference the removed retry helpers or
-    // show "Retrying..." copy that could never actually fire.
+  test('uses the shared retry helper and shows retrying copy during fallback', () => {
     const source = fs.readFileSync(panelPath, 'utf8');
 
-    expect(source).not.toContain('isLlmRetryResponse');
-    expect(source).not.toContain('cloneFormDataWithFallbackRetry');
-    expect(source).not.toContain('isAiRetrying');
-    expect(source).not.toContain('Retrying...');
+    expect(source).toContain('isLlmRetryResponse');
+    expect(source).toContain('cloneFormDataWithFallbackRetry');
+    expect(source).toContain("isAiRetrying ? 'Retrying...' : 'Grading...'");
   });
 });
