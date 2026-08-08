@@ -259,6 +259,9 @@ export async function seedE2E(): Promise<E2EContext> {
   const dailyPagesAssignmentType = await prisma.assignmentType.create({
     data: {
       title: 'Daily Pages',
+      // Matches production, and is what selects the Daily Pages engagement
+      // rubric for a type that has saved no rubric of its own.
+      kind: 'daily_pages',
       description:
         'Low-stakes daily writing assignments that help students build fluency.',
       position: 2,

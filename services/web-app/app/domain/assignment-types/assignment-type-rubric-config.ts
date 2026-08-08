@@ -9,6 +9,12 @@ import {
   type RubricData,
   type ScoringScaleData,
 } from '~/domain/assignment-types/assignment-type-rubric.shared';
+import {
+  DAILY_PAGES_ASSIGNMENT_TYPE_KIND,
+  DAILY_PAGES_PROMPT_CONFIG,
+  DAILY_PAGES_RUBRIC,
+  DAILY_PAGES_SCORING_SCALE,
+} from './daily-pages-rubric';
 
 export const MODULE_RUBRIC_RELATIONSHIPS = [
   'primary',
@@ -22,9 +28,15 @@ export type ModuleRubricRelationship =
 
 export type AssignmentTypeRubricConfigSource =
   | 'assignment-type'
-  | 'thesis-default';
+  | 'thesis-default'
+  | 'daily-pages-default';
 
 export type AssignmentTypeRubricConfigInput = {
+  /**
+   * The assignment type's `kind`, which picks the default rubric an assignment
+   * type falls back to when it has not saved one of its own.
+   */
+  assignmentTypeKind?: string | null;
   scoringScaleJson?: unknown;
   rubricJson?: unknown;
   gradingPromptConfigJson?: unknown;
@@ -39,6 +51,11 @@ export type AssignmentTypeRubricConfig = {
   promptConfig: PromptConfigData;
   outputSchema: Record<string, unknown>;
   calibrationNotes: string | null;
+  /**
+   * What to call this config when it did not come from the assignment type's
+   * own saved rubric. Undefined for `assignment-type`, which uses the title.
+   */
+  defaultLabel?: string;
 };
 
 export type ModuleRubricAlignment = Record<string, ModuleRubricRelationship>;
@@ -57,6 +74,46 @@ const thesisRubric: RubricData = {
 const thesisPromptConfig: PromptConfigData = {
   instructionsPreset: 'legacy_thesis_driven_essay',
 };
+
+const thesisDefaultConfig: AssignmentTypeRubricConfig = {
+  source: 'thesis-default',
+  scoringScale: parseScoringScale(null),
+  rubric: thesisRubric,
+  promptConfig: thesisPromptConfig,
+  outputSchema: { ...DEFAULT_OUTPUT_SCHEMA_JSON },
+  calibrationNotes:
+    'Represents the pre-existing Yawp thesis-driven essay grading assistant path.',
+  defaultLabel: 'Thesis-driven essay grading assistant',
+};
+
+/**
+ * The rubric an assignment type falls back to when it has saved none of its
+ * own, keyed by `AssignmentType.kind`. Every kind that is not listed keeps
+ * falling back to the thesis-driven essay rubric, which is what every
+ * assignment type did before this registry existed.
+ *
+ * A kind listed here needs no data migration: an existing row picks its default
+ * up on the next grading run, and a row that saved its own rubric still wins.
+ */
+const defaultRubricConfigsByKind: Record<string, AssignmentTypeRubricConfig> = {
+  [DAILY_PAGES_ASSIGNMENT_TYPE_KIND]: {
+    source: 'daily-pages-default',
+    scoringScale: DAILY_PAGES_SCORING_SCALE,
+    rubric: DAILY_PAGES_RUBRIC,
+    promptConfig: DAILY_PAGES_PROMPT_CONFIG,
+    outputSchema: { ...DEFAULT_OUTPUT_SCHEMA_JSON },
+    calibrationNotes:
+      'Daily Pages judges engagement only, with overall feedback and no grammar highlighting.',
+    defaultLabel: 'Daily Pages engagement',
+  },
+};
+
+function getDefaultRubricConfig(
+  assignmentTypeKind: string | null | undefined
+): AssignmentTypeRubricConfig {
+  if (!assignmentTypeKind) return thesisDefaultConfig;
+  return defaultRubricConfigsByKind[assignmentTypeKind] ?? thesisDefaultConfig;
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === 'object' && !Array.isArray(value));
@@ -93,15 +150,7 @@ export function parseAssignmentTypeRubricConfig(
   const rubric = parseRubric(input.rubricJson);
 
   if (!hasUsableRubric(rubric)) {
-    return {
-      source: 'thesis-default',
-      scoringScale: parseScoringScale(null),
-      rubric: thesisRubric,
-      promptConfig: thesisPromptConfig,
-      outputSchema: { ...DEFAULT_OUTPUT_SCHEMA_JSON },
-      calibrationNotes:
-        'Represents the pre-existing Yawp thesis-driven essay grading assistant path.',
-    };
+    return getDefaultRubricConfig(input.assignmentTypeKind);
   }
 
   return {

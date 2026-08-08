@@ -158,6 +158,50 @@ describe('getThesisDefaultRubricConfig', () => {
   });
 });
 
+describe('the default rubric config for a Daily Pages assignment type', () => {
+  test('falls back to the Daily Pages rubric, not the thesis default', () => {
+    const config = parseAssignmentTypeRubricConfig({
+      assignmentTypeKind: 'daily_pages',
+    });
+
+    expect(config.source).toBe('daily-pages-default');
+    expect(config.rubric.categories.map((category) => category.key)).toEqual([
+      'engagement',
+    ]);
+    expect(config.scoringScale).toMatchObject({ minScore: 0, maxScore: 3 });
+    expect(config.promptConfig.gradingInstructions).toContain('engagement');
+  });
+
+  test('a Daily Pages type with its own saved rubric keeps that rubric', () => {
+    const config = parseAssignmentTypeRubricConfig({
+      assignmentTypeKind: 'daily_pages',
+      rubricJson: {
+        categories: [
+          {
+            key: 'effort',
+            label: 'Effort',
+            description: 'Did they try?',
+            weight: 1,
+          },
+        ],
+      },
+    });
+
+    expect(config.source).toBe('assignment-type');
+    expect(config.rubric.categories.map((category) => category.key)).toEqual([
+      'effort',
+    ]);
+  });
+
+  test('every other kind still falls back to the thesis default', () => {
+    expect(
+      parseAssignmentTypeRubricConfig({ assignmentTypeKind: 'thesis_essay' })
+        .source
+    ).toBe('thesis-default');
+    expect(parseAssignmentTypeRubricConfig({}).source).toBe('thesis-default');
+  });
+});
+
 describe('normalizeModuleRubricAlignment', () => {
   const categories = [
     {

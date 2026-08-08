@@ -9,6 +9,8 @@ import { isLlmFallbackRetrySignal } from '~/utils/getLLMCompletion/llm-provider-
 import {
   formatGrade,
   letterFromPercent,
+  pointsScaleGradeFields,
+  POINTS_SCALE_SCORING_TYPE,
   scoreToPercent,
 } from '~/domain/grading/gradeMath';
 import { firstNameFromFullName } from '~/domain/grading/personalize';
@@ -19,6 +21,10 @@ import {
   isGrammarHighlightCategory,
   resolveGrammarHighlightingEnabled,
 } from '~/domain/assignment-types/rubric-category-options';
+import {
+  buildGradingPromptShape,
+  buildGradingResponseSchemaText,
+} from '~/domain/grading/grading-prompt-shape';
 import {
   applyGradingAssistantStrictnessToActComposite,
   applyGradingAssistantStrictnessToPercentage,
@@ -63,16 +69,25 @@ function buildAiSchemas({
   rubricKeys,
   minScore,
   maxScore,
+  categoryFeedbackEnabled = true,
 }: {
   rubricKeys: string[];
   minScore: number;
   maxScore: number;
+  /**
+   * When the rubric wants overall feedback only, the model is never asked for a
+   * per-category comment, so one must not be required back. A comment it sends
+   * anyway is still kept.
+   */
+  categoryFeedbackEnabled?: boolean;
 }) {
   const RubricKeySchema = z.enum(rubricKeys as [string, ...string[]]);
   const AiCategorySchema = z.object({
     key: RubricKeySchema,
     score: z.number().int().min(minScore).max(maxScore),
-    comment: z.string().min(1),
+    comment: categoryFeedbackEnabled
+      ? z.string().min(1)
+      : z.string().optional().default(''),
   });
   const AiCategoriesSchema = z
     .array(AiCategorySchema)
@@ -255,11 +270,13 @@ function buildE2EGradingFixtureResponse({
   minScore,
   maxScore,
   studentFirstName,
+  categoryFeedbackEnabled,
 }: {
   rubricCategories: GradingRubricCategory[];
   minScore: number;
   maxScore: number;
   studentFirstName: string;
+  categoryFeedbackEnabled: boolean;
 }) {
   return JSON.stringify({
     categories: rubricCategories.map((category) => {
@@ -270,7 +287,9 @@ function buildE2EGradingFixtureResponse({
       return {
         key: category.key,
         score: Math.max(minScore, Math.min(maxScore, fixture.score)),
-        comment: fixture.comment,
+        // A rubric that wants overall feedback only never gets asked for a
+        // per-category comment, so the fixture must not invent one either.
+        ...(categoryFeedbackEnabled ? { comment: fixture.comment } : {}),
       };
     }),
     overallComment: `${studentFirstName}, these legacy grading assistant suggestions still apply.`,
@@ -308,12 +327,18 @@ function computeWeightedPercentageForCategories({
 function computeGradeFields({
   categories,
   scoringType,
+  maxScore,
 }: {
   categories: Array<{ score: number }>;
   scoringType: string;
+  maxScore: number;
 }) {
   const average =
     categories.reduce((sum, item) => sum + item.score, 0) / categories.length;
+
+  if (scoringType === POINTS_SCALE_SCORING_TYPE) {
+    return pointsScaleGradeFields({ categories, maxScore });
+  }
 
   if (scoringType === 'act_writing_2_12') {
     const composite = Math.max(2, Math.min(12, Math.round(average * 2)));
@@ -355,16 +380,19 @@ function buildDynamicGradeFields({
   categories,
   rubricScores,
   scoringType,
+  maxScore,
   rubricCategories,
 }: {
   categories: Array<{ score: number }>;
   rubricScores: Record<string, Prisma.InputJsonValue>;
   scoringType: string;
+  maxScore: number;
   rubricCategories: GradingRubricCategory[];
 }) {
   const nonLegacy = computeGradeFields({
     categories,
     scoringType,
+    maxScore,
   });
   if (nonLegacy) return nonLegacy;
 
@@ -608,27 +636,33 @@ export async function action({ request }: ActionFunctionArgs) {
     source: resolvedGradingConfig.source,
   };
   const templateInstructions = resolvedGradingConfig.instructions;
+  const studentFirstName = firstNameFromFullName(
+    submission.document.membership?.user?.name
+  );
+  // The prompt is derived from the rubric itself: how many judgments it asks
+  // for, which words each score carries, and whether it wants per-category
+  // feedback or overall feedback alone. No assignment type is named here.
+  const promptShape = buildGradingPromptShape({
+    categories: rubricCategories,
+    minScore,
+    maxScore,
+    studentFirstName,
+  });
+  const categoryFeedbackEnabled = promptShape.categoryFeedbackEnabled;
   const { AiCategoriesSchema, AiResponseSchema } = buildAiSchemas({
     rubricKeys,
     minScore,
     maxScore,
+    categoryFeedbackEnabled,
   });
 
-  const rubricText = rubricCategories
-    .map(
-      (item) =>
-        `${item.key}: ${item.label} (${Math.round(item.weight * 100)}%) - ${item.description}`
-    )
-    .join('\n');
+  const rubricText = promptShape.rubricText;
 
   const assignmentPrompt = submission.document.assignment?.prompt?.trim();
   const assignmentPromptSection = assignmentPrompt
     ? `Assignment prompt: ${assignmentPrompt}`
     : 'Assignment prompt: No assignment prompt was provided.';
 
-  const studentFirstName = firstNameFromFullName(
-    submission.document.membership?.user?.name
-  );
   const model = process.env.AI_MODEL ?? 'claude-sonnet-4-6';
   const forceFallback = data.llmRetry === 'fallback';
   const llmRetryOptions = {
@@ -811,7 +845,7 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
     });
   }
 
-  const gradingSystemBase = `You are a grading assistant. Return ONLY valid JSON with the schema:\n{\n  \"categories\": [{\"key\": string, \"score\": ${minScore}-${maxScore}, \"comment\": string}],\n  \"overallComment\": string\n}\nScores must be integers ${minScore}-${maxScore}.\nReturn exactly one category for each rubric key provided.\nProvide concise, actionable comments.\nIn overallComment, start with \"${studentFirstName},\" and continue with cohesive feedback in a warm but professional tone.\nAfter the name, continue naturally (for example: \"${studentFirstName}, you ...\").\nDo not use fixed lead-ins like \"Overall grade,\" or \"${studentFirstName}, this is your overall feedback.\"`;
+  const gradingSystemBase = promptShape.systemPrompt;
 
   let system = gradingSystemBase;
   let userPrompt = '';
@@ -849,6 +883,7 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
       minScore,
       maxScore,
       studentFirstName,
+      categoryFeedbackEnabled,
     });
   } else {
     try {
@@ -941,7 +976,9 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
 
     const repairedResponseText = await getGradingLlmCompletion({
       model,
-      system: `You repair grading assistant JSON. Return ONLY valid JSON with the schema:\n{\n  "categories": [{"key": string, "score": ${minScore}-${maxScore}, "comment": string}],\n  "overallComment": string\n}\nRules:\n- Preserve valid category scores/comments from the original output when possible.\n- Scores must be integers ${minScore}-${maxScore}.\n- Return exactly one category for each rubric key.\n- Use only these rubric keys: ${rubricKeys.join(', ')}.\n- overallComment must start with "${studentFirstName},".\n- Do not include markdown or explanation.`,
+      system: `You repair grading assistant JSON. Return ONLY valid JSON with the schema:\n${buildGradingResponseSchemaText(
+        { minScore, maxScore, categoryFeedbackEnabled }
+      )}\nRules:\n- Preserve valid category scores${categoryFeedbackEnabled ? '/comments' : ''} from the original output when possible.\n- Scores must be integers ${minScore}-${maxScore}.\n- Return exactly one category for each rubric key.\n- Use only these rubric keys: ${rubricKeys.join(', ')}.\n- overallComment must start with "${studentFirstName},".\n- Do not include markdown or explanation.`,
       messages: [
         {
           role: 'user',
@@ -1000,6 +1037,7 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
     categories: parsed.categories,
     rubricScores,
     scoringType,
+    maxScore,
     rubricCategories,
   });
   const { overallScore, numericPercentage, letterGrade, score } =

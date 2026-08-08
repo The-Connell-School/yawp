@@ -16,7 +16,10 @@ export type RubricDisplayCategory = {
   grammarHighlighting?: boolean;
 };
 
-export type RubricDisplaySource = 'assignment-type' | 'thesis-default';
+export type RubricDisplaySource =
+  | 'assignment-type'
+  | 'thesis-default'
+  | 'daily-pages-default';
 
 export type RubricDisplayConfig = {
   categories: RubricDisplayCategory[];
@@ -33,7 +36,11 @@ export type RubricDisplayConfig = {
   source?: RubricDisplaySource;
 };
 
-const rubricDisplaySources = new Set<string>(['assignment-type', 'thesis-default']);
+const rubricDisplaySources = new Set<string>([
+  'assignment-type',
+  'thesis-default',
+  'daily-pages-default',
+]);
 
 function parseRubricDisplaySource(value: unknown): RubricDisplaySource | undefined {
   return typeof value === 'string' && rubricDisplaySources.has(value)
@@ -141,11 +148,30 @@ export function normalizeRubricDisplayConfig(
   };
 }
 
+/**
+ * The score value that means "nobody has scored this yet".
+ *
+ * Every rubric used to start at 1, so 0 could stand in for unscored. A rubric
+ * whose scale starts at 0 — where 0 is a real judgment, not a blank — needs the
+ * sentinel to move out of the way, so it sits one step below the scale. On a
+ * 1-5 scale that is still 0, exactly as it always was.
+ */
+export function unscoredValue(minScore: number) {
+  return minScore - 1;
+}
+
+/** Whether this value is a real score on this scale rather than a blank. */
+export function isScored(score: number | null | undefined, minScore: number) {
+  return typeof score === 'number' && Number.isFinite(score) && score >= minScore;
+}
+
 export function buildEmptyRubricScores(
-  categories: RubricDisplayCategory[]
+  categories: RubricDisplayCategory[],
+  minScore = 1
 ): Record<string, RubricScore> {
+  const unscored = unscoredValue(minScore);
   return categories.reduce<Record<string, RubricScore>>((acc, item) => {
-    acc[item.key] = { score: 0, comment: '' };
+    acc[item.key] = { score: unscored, comment: '' };
     return acc;
   }, {});
 }
@@ -161,7 +187,8 @@ export function normalizeRubricScoresForCategories({
   minScore: number;
   maxScore: number;
 }): Record<string, RubricScore> {
-  const normalized = buildEmptyRubricScores(categories);
+  const normalized = buildEmptyRubricScores(categories, minScore);
+  const unscored = unscoredValue(minScore);
   if (!isRecord(raw)) return normalized;
 
   for (const item of categories) {
@@ -174,13 +201,12 @@ export function normalizeRubricScoresForCategories({
     const roundedScore =
       typeof scoreValue === 'number' && Number.isFinite(scoreValue)
         ? Math.round(scoreValue)
-        : 0;
+        : unscored;
 
     normalized[item.key] = {
-      score:
-        roundedScore > 0
-          ? Math.max(minScore, Math.min(maxScore, roundedScore))
-          : 0,
+      score: isScored(roundedScore, minScore)
+        ? Math.max(minScore, Math.min(maxScore, roundedScore))
+        : unscored,
       comment: typeof commentValue === 'string' ? commentValue : '',
       isAi: Boolean(candidate.isAi),
     };

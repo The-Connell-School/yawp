@@ -141,6 +141,7 @@ function buildResolvedConfig({
   row: AssignmentTypeGradingRow | null;
 }): ResolvedAssignmentTypeGradingConfig {
   const parsedConfig = parseAssignmentTypeRubricConfig({
+    assignmentTypeKind: row?.kind ?? assignmentTypeKind,
     scoringScaleJson: row?.scoringScaleJson,
     rubricJson: row?.rubricJson,
     gradingPromptConfigJson: row?.gradingPromptConfigJson,
@@ -166,7 +167,7 @@ function buildResolvedConfig({
     label:
       parsedConfig.source === 'assignment-type'
         ? (row?.title ?? assignmentTypeTitle ?? 'Assignment type grading config')
-        : 'Thesis-driven essay grading assistant',
+        : (parsedConfig.defaultLabel ?? 'Thesis-driven essay grading assistant'),
     version:
       parsedConfig.source === 'assignment-type'
         ? (row?.gradingAssistantVersion ?? 1)
