@@ -72,9 +72,27 @@ async function clearInsight(e2eContext: E2EContext) {
   }
 }
 
+async function setClassInsightsEnabled(
+  e2eContext: E2EContext,
+  enabled: boolean
+) {
+  const prisma = createE2EPrismaClient();
+  try {
+    await prisma.organization.update({
+      where: { id: e2eContext.organizationId },
+      data: { classInsightsEnabled: enabled },
+    });
+  } finally {
+    await prisma.$disconnect();
+  }
+}
+
 test.describe('teacher class summary full page', () => {
   test.afterEach(async ({ e2eContext }) => {
     await clearInsight(e2eContext);
+    // Restore the seeded default so a test that turns the org flag off does
+    // not leak into whatever runs next on this worker's data.
+    await setClassInsightsEnabled(e2eContext, true);
   });
 
   test('opens class summary as a full page from the Documents tab, replacing the table with the class header intact', async ({
@@ -222,5 +240,41 @@ test.describe('teacher class summary full page', () => {
     const panel = page.getByTestId('assignment-detail-panel');
     await expect(panel).toBeVisible();
     await expect(panel).toHaveCSS('animation-name', 'none');
+  });
+
+  test('a deep link explains itself instead of rendering a bare title when class insights are off for the org', async ({
+    page,
+    e2eContext,
+    signIn,
+  }) => {
+    await setClassInsightsEnabled(e2eContext, false);
+    await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
+
+    // No entry point on the Documents tab — the link is gated on the same
+    // flag, so the page is only reachable by URL in this state.
+    await page.goto(
+      `/app/my-classes/${e2eContext.classId}?tab=documents&classAssignmentId=${e2eContext.classAssignmentId}`
+    );
+    await page.waitForLoadState('networkidle');
+    await expect(
+      page.getByRole('link', { name: /class performance summary/i })
+    ).toHaveCount(0);
+
+    await page.goto(
+      `/app/my-classes/${e2eContext.classId}/summary/${e2eContext.assignmentId}`
+    );
+    await page.waitForLoadState('networkidle');
+
+    const summaryPage = page.getByTestId('class-summary-page');
+    await expect(summaryPage).toBeVisible();
+    await expect(page.getByTestId('class-detail-header')).toBeVisible();
+    await expect(page.getByTestId('class-summary-page-title')).toBeVisible();
+    await expect(
+      summaryPage.getByTestId('class-summary-insights-disabled')
+    ).toContainText(/not turned on for your organization/i);
+
+    // The teacher is not stranded.
+    await summaryPage.getByRole('link', { name: /back to documents/i }).click();
+    await expect(page.getByTestId('class-detail-table-panel')).toBeVisible();
   });
 });
