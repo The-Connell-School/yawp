@@ -1571,4 +1571,145 @@ describe('api.domain.grade-essay-ai', () => {
       message: 'Grading Assistant returned malformed data. Please try again.',
     });
   });
+
+  describe('per-category grammar highlighting', () => {
+    function customRubricCategory(overrides: Record<string, unknown> = {}) {
+      return {
+        key: 'daily_habit',
+        label: 'Daily Habit',
+        description: 'Did the student write today?',
+        weight: 1,
+        ...overrides,
+      };
+    }
+
+    function mockCustomRubricSubmission(id: string) {
+      return mockSubmission({
+        id,
+        document: {
+          id: `doc-${id}`,
+          membershipId: 'student-profile-1',
+          assignmentTypeId: 'assignment-type-legacy',
+          assignmentType: {
+            id: 'assignment-type-legacy',
+            kind: null,
+            title: 'Daily Pages',
+          },
+          classAssignment: { class: { schoolId: 'school-1' } },
+          membership: {
+            classesAsStudent: [],
+            user: { name: 'Jordan Student' },
+          },
+        },
+      });
+    }
+
+    async function gradeWithCategories(
+      id: string,
+      categories: Record<string, unknown>[]
+    ) {
+      prisma.assignmentType.findUnique.mockResolvedValue(
+        mockAssignmentType({
+          gradingPromptConfigJson: {
+            gradingInstructions: 'Grade against this rubric.',
+          },
+          rubricJson: { categories },
+        })
+      );
+      prisma.submission.findFirst.mockResolvedValue(
+        mockCustomRubricSubmission(id)
+      );
+      getLLMCompletion.mockReset();
+      getLLMCompletion
+        .mockResolvedValueOnce(
+          JSON.stringify({
+            categories: categories.map((category) => ({
+              key: category.key,
+              score: 3,
+              comment: `Comment for ${category.key}`,
+            })),
+            overallComment: 'Jordan, this draft has clear progress.',
+          })
+        )
+        .mockResolvedValue(JSON.stringify({ issues: [] }));
+
+      const form = new FormData();
+      form.append('submissionId', id);
+      await action({
+        request: new Request('https://example.com/api/domain/grade-essay-ai', {
+          method: 'POST',
+          body: form,
+        }),
+      } as any);
+    }
+
+    function grammarCallCount() {
+      return getLLMCompletion.mock.calls.filter(
+        (call: any[]) => call[0]?.metadata?.kind === 'grammar-issues'
+      ).length;
+    }
+
+    test('still runs for a custom rubric that says nothing about grammar highlighting', async () => {
+      await gradeWithCategories('sub-grammar-default', [
+        customRubricCategory(),
+      ]);
+
+      expect(grammarCallCount()).toBe(1);
+      expect(
+        prisma.submission.update.mock.calls.at(-1)?.[0].data.grammarIssues
+      ).not.toBeNull();
+    });
+
+    test('is skipped entirely when every category opts out', async () => {
+      await gradeWithCategories('sub-grammar-off', [
+        customRubricCategory({ grammarHighlighting: false }),
+      ]);
+
+      expect(grammarCallCount()).toBe(0);
+      // An empty issue set, so re-grading clears highlights an earlier run left.
+      expect(
+        prisma.submission.update.mock.calls.at(-1)?.[0].data.grammarIssues
+      ).toEqual({ version: 1, issues: [] });
+    });
+
+    test('still runs when at least one category opts in, and the retry pass finds the custom grammar category', async () => {
+      await gradeWithCategories('sub-grammar-mixed', [
+        customRubricCategory({ weight: 0.5, grammarHighlighting: false }),
+        customRubricCategory({
+          key: 'syntax_and_style',
+          label: 'Syntax and Style',
+          weight: 0.5,
+          grammarHighlighting: true,
+        }),
+      ]);
+
+      // Two calls: the first pass, plus the low-score retry — which only fires
+      // because the flagged category is now found by its flag rather than by a
+      // hardcoded `grammar_and_mechanics` key match.
+      expect(grammarCallCount()).toBe(2);
+    });
+
+    test('records the per-category options in the frozen rubric snapshot', async () => {
+      await gradeWithCategories('sub-grammar-snapshot', [
+        customRubricCategory({
+          grammarHighlighting: false,
+          feedbackEnabled: false,
+          scoreLabels: [{ value: 3, label: 'Showed up' }],
+        }),
+      ]);
+
+      const snapshot = prisma.submissionGradingAssistantRun.create.mock.calls.at(
+        -1
+      )?.[0].data.assignmentTypeRubricSnapshot as {
+        categories: Record<string, unknown>[];
+      };
+
+      expect(snapshot.categories[0]).toMatchObject({
+        key: 'daily_habit',
+        grammarHighlighting: false,
+        feedbackEnabled: false,
+        scoreLabels: [{ value: 3, label: 'Showed up' }],
+      });
+    });
+  });
 });
