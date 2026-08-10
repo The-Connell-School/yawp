@@ -43,9 +43,15 @@ import {
 import {
   Sheet,
   SheetContent,
+  SheetFooter,
   SheetHeader,
   SheetTitle,
+  SHEET_SCROLL_BODY_CLASS_NAME,
+  SHEET_STICKY_FOOTER_CLASS_NAME,
 } from '~/components/ui/sheet';
+import { UnsavedChangesDialog } from '~/components/unsaved-changes-dialog';
+import { useUnsavedChangesGuard } from '~/hooks/useUnsavedChangesGuard';
+import { cn } from '~/utils/misc';
 import {
   DEFAULT_SCORING_SCALE,
   type PromptConfigData,
@@ -54,6 +60,12 @@ import {
   type ScoringScaleData,
 } from '~/domain/assignment-types/assignment-type-rubric.shared';
 import { isGrammarHighlightCategory } from '~/domain/assignment-types/rubric-category-options';
+
+/** SheetContent override that lets the footer pin to the bottom while the
+ * body scrolls — pairs with SHEET_SCROLL_BODY_CLASS_NAME / SHEET_STICKY_FOOTER_CLASS_NAME.
+ * Mirrors ASSIGNMENT_SUMMARY_SHEET_CONTENT_CLASS_NAME. */
+const PINNED_FOOTER_SHEET_CONTENT_CLASS_NAME =
+  'flex h-full w-full flex-col gap-0 overflow-hidden p-0';
 
 const SCORING_SCALE_TYPES = [
   { value: 'weighted_1_5', label: 'Weighted 1–5' },
@@ -415,14 +427,19 @@ function RubricImportPanel({
       </div>
 
       <Sheet open={pasteOpen} onOpenChange={setPasteOpen}>
-        <SheetContent aria-describedby={undefined}>
-          <SheetHeader>
-            <SheetTitle className="flex items-center gap-2">
-              <ClipboardPaste className="size-4 shrink-0" />
-              Paste rubric
-            </SheetTitle>
-          </SheetHeader>
-          <div className="mt-4 space-y-4">
+        <SheetContent
+          aria-describedby={undefined}
+          className={PINNED_FOOTER_SHEET_CONTENT_CLASS_NAME}
+        >
+          <div className="p-6 pb-0">
+            <SheetHeader>
+              <SheetTitle className="flex items-center gap-2">
+                <ClipboardPaste className="size-4 shrink-0" />
+                Paste rubric
+              </SheetTitle>
+            </SheetHeader>
+          </div>
+          <div className={cn(SHEET_SCROLL_BODY_CLASS_NAME, 'space-y-4 p-6')}>
             <Textarea
               id="rubric-import-text"
               rows={12}
@@ -431,6 +448,8 @@ function RubricImportPanel({
               placeholder="Paste rubric categories, weights, and descriptions..."
               disabled={isExtracting}
             />
+          </div>
+          <SheetFooter className={SHEET_STICKY_FOOTER_CLASS_NAME}>
             <Button
               type="button"
               className="w-full"
@@ -446,19 +465,24 @@ function RubricImportPanel({
                 'Extract rubric'
               )}
             </Button>
-          </div>
+          </SheetFooter>
         </SheetContent>
       </Sheet>
 
       <Sheet open={pdfOpen} onOpenChange={setPdfOpen}>
-        <SheetContent aria-describedby={undefined}>
-          <SheetHeader>
-            <SheetTitle className="flex items-center gap-2">
-              <FileUp className="size-4 shrink-0" />
-              Upload PDF
-            </SheetTitle>
-          </SheetHeader>
-          <div className="mt-4 space-y-4">
+        <SheetContent
+          aria-describedby={undefined}
+          className={PINNED_FOOTER_SHEET_CONTENT_CLASS_NAME}
+        >
+          <div className="p-6 pb-0">
+            <SheetHeader>
+              <SheetTitle className="flex items-center gap-2">
+                <FileUp className="size-4 shrink-0" />
+                Upload PDF
+              </SheetTitle>
+            </SheetHeader>
+          </div>
+          <div className={cn(SHEET_SCROLL_BODY_CLASS_NAME, 'space-y-4 p-6')}>
             <div className="space-y-2">
               <Label htmlFor="rubric-import-pdf">Rubric PDF</Label>
               <Input
@@ -483,6 +507,8 @@ function RubricImportPanel({
                 disabled={isExtracting}
               />
             </div>
+          </div>
+          <SheetFooter className={SHEET_STICKY_FOOTER_CLASS_NAME}>
             <Button
               type="button"
               className="w-full"
@@ -498,19 +524,24 @@ function RubricImportPanel({
                 'Extract rubric'
               )}
             </Button>
-          </div>
+          </SheetFooter>
         </SheetContent>
       </Sheet>
 
       <Sheet open={copyOpen} onOpenChange={setCopyOpen}>
-        <SheetContent aria-describedby={undefined}>
-          <SheetHeader>
-            <SheetTitle className="flex items-center gap-2">
-              <Copy className="size-4 shrink-0" />
-              Copy rubric from
-            </SheetTitle>
-          </SheetHeader>
-          <div className="mt-4 space-y-4">
+        <SheetContent
+          aria-describedby={undefined}
+          className={PINNED_FOOTER_SHEET_CONTENT_CLASS_NAME}
+        >
+          <div className="p-6 pb-0">
+            <SheetHeader>
+              <SheetTitle className="flex items-center gap-2">
+                <Copy className="size-4 shrink-0" />
+                Copy rubric from
+              </SheetTitle>
+            </SheetHeader>
+          </div>
+          <div className={cn(SHEET_SCROLL_BODY_CLASS_NAME, 'space-y-4 p-6')}>
             {isLoadingSources ? (
               <p className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Loader2 className="size-4 shrink-0 animate-spin" />
@@ -549,19 +580,250 @@ function RubricImportPanel({
                     and the scoring scale from {selectedSource.title}.
                   </p>
                 ) : null}
-                <Button
-                  type="button"
-                  className="w-full"
-                  onClick={handleCopyRubric}
-                  disabled={!selectedSource}
-                >
-                  Copy rubric
-                </Button>
               </>
             )}
           </div>
+          {!isLoadingSources && !copyLoadError && copySources.length > 0 ? (
+            <SheetFooter className={SHEET_STICKY_FOOTER_CLASS_NAME}>
+              <Button
+                type="button"
+                className="w-full"
+                onClick={handleCopyRubric}
+                disabled={!selectedSource}
+              >
+                Copy rubric
+              </Button>
+            </SheetFooter>
+          ) : null}
         </SheetContent>
       </Sheet>
+    </>
+  );
+}
+
+/**
+ * True when the draft has diverged from the last-saved category. Drives the
+ * unsaved-changes guard — compares every field `onSave` would persist, so a
+ * change to score labels alone (no other field touched) still counts.
+ */
+function categoryDraftIsDirty(
+  saved: RubricCategoryRow,
+  draft: RubricCategoryRow
+) {
+  return (
+    saved.label !== draft.label ||
+    saved.weight !== draft.weight ||
+    saved.description !== draft.description ||
+    saved.feedbackEnabled !== draft.feedbackEnabled ||
+    saved.grammarHighlighting !== draft.grammarHighlighting ||
+    JSON.stringify(saved.scoreLabels ?? []) !==
+      JSON.stringify(draft.scoreLabels ?? [])
+  );
+}
+
+/**
+ * The category editor's body, split out from the `<Sheet>`/`<SheetContent>`
+ * Radix wrapper so it can render (and be tested) without the Dialog portal.
+ * Mirrors `AssignmentSummarySheetContent`.
+ */
+export function CategoryEditSheetContent({
+  category,
+  minScore,
+  maxScore,
+  onSave,
+  onRemove,
+  onDirtyChange,
+  renderSheet = true,
+}: {
+  category: RubricCategoryRow;
+  minScore: number;
+  maxScore: number;
+  onSave: (patch: Partial<RubricCategory>) => void;
+  onRemove: () => void;
+  /** Reports live dirty state up so the wrapper's close guard stays in sync. */
+  onDirtyChange?: (isDirty: boolean) => void;
+  renderSheet?: boolean;
+}) {
+  const [draft, setDraft] = useState<RubricCategoryRow>(category);
+
+  useEffect(() => {
+    setDraft(category);
+  }, [category]);
+
+  const isDirty = categoryDraftIsDirty(category, draft);
+  useEffect(() => {
+    onDirtyChange?.(isDirty);
+  }, [isDirty, onDirtyChange]);
+
+  const scoreValues = Array.from(
+    { length: Math.max(0, maxScore - minScore + 1) },
+    (_, index) => minScore + index
+  );
+
+  function setScoreLabel(value: number, label: string) {
+    setDraft((current) => {
+      const rest = (current.scoreLabels ?? []).filter(
+        (entry) => entry.value !== value
+      );
+      const next = label.trim()
+        ? [...rest, { value, label }].sort((a, b) => a.value - b.value)
+        : rest;
+      return { ...current, scoreLabels: next };
+    });
+  }
+
+  function currentScoreLabel(value: number) {
+    return draft.scoreLabels?.find((entry) => entry.value === value)?.label ?? '';
+  }
+
+  function handleRemove() {
+    onRemove();
+  }
+
+  function handleDone() {
+    onSave({
+      label: draft.label,
+      weight: draft.weight,
+      description: draft.description,
+      scoreLabels: draft.scoreLabels,
+      feedbackEnabled: draft.feedbackEnabled,
+      grammarHighlighting: draft.grammarHighlighting,
+    });
+  }
+
+  const header = renderSheet ? (
+    <SheetHeader>
+      <SheetTitle>Edit category</SheetTitle>
+    </SheetHeader>
+  ) : (
+    <div>
+      <h2>Edit category</h2>
+    </div>
+  );
+
+  return (
+    <>
+      <div className="px-6 pt-6">{header}</div>
+      <div className={cn(SHEET_SCROLL_BODY_CLASS_NAME, 'space-y-4 px-6 py-4')}>
+        <div className="space-y-2">
+          <Label htmlFor="category-edit-label">Label</Label>
+          <Input
+            id="category-edit-label"
+            value={draft.label}
+            placeholder="e.g. Thesis & Content"
+            onChange={(event) =>
+              setDraft((current) => ({ ...current, label: event.target.value }))
+            }
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="category-edit-weight">Weight %</Label>
+          <Input
+            id="category-edit-weight"
+            type="number"
+            min={0}
+            max={100}
+            className="tabular-nums"
+            value={pct(draft.weight)}
+            onChange={(event) =>
+              setDraft((current) => ({
+                ...current,
+                weight: Number(event.target.value) / 100,
+              }))
+            }
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="category-edit-description">Description</Label>
+          <Textarea
+            id="category-edit-description"
+            rows={5}
+            value={draft.description}
+            placeholder="What does good performance look like?"
+            onChange={(event) =>
+              setDraft((current) => ({
+                ...current,
+                description: event.target.value,
+              }))
+            }
+          />
+        </div>
+        <div className="space-y-2">
+          <Label>Score labels</Label>
+          <p className="text-sm text-muted-foreground text-pretty">
+            The word shown for each score in this category. Leave a score blank
+            to keep the shared label.
+          </p>
+          <div className="space-y-2">
+            {scoreValues.map((value) => (
+              <div key={value} className="flex items-center gap-2">
+                <span className="w-6 shrink-0 tabular-nums text-sm text-muted-foreground">
+                  {value}
+                </span>
+                <Input
+                  id={`category-edit-score-label-${value}`}
+                  aria-label={`Score ${value} label`}
+                  value={currentScoreLabel(value)}
+                  placeholder="e.g. Proficient"
+                  onChange={(event) => setScoreLabel(value, event.target.value)}
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <Label htmlFor="category-edit-feedback-enabled">
+              Category feedback
+            </Label>
+            <p className="mt-1 text-sm text-muted-foreground text-pretty">
+              Give this category its own feedback box on the grading panel.
+            </p>
+          </div>
+          <Switch
+            id="category-edit-feedback-enabled"
+            checked={draft.feedbackEnabled !== false}
+            onCheckedChange={(checked) =>
+              setDraft((current) => ({ ...current, feedbackEnabled: checked }))
+            }
+          />
+        </div>
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <Label htmlFor="category-edit-grammar-highlighting">
+              Grammar highlighting
+            </Label>
+            <p className="mt-1 text-sm text-muted-foreground text-pretty">
+              Produce grammar and syntax highlights on the student's essay for
+              this category.
+            </p>
+          </div>
+          <Switch
+            id="category-edit-grammar-highlighting"
+            checked={isGrammarHighlightCategory(draft)}
+            onCheckedChange={(checked) =>
+              setDraft((current) => ({
+                ...current,
+                grammarHighlighting: checked,
+              }))
+            }
+          />
+        </div>
+      </div>
+      <SheetFooter
+        className={cn(
+          SHEET_STICKY_FOOTER_CLASS_NAME,
+          'flex-row items-center justify-between sm:justify-between'
+        )}
+      >
+        <Button type="button" variant="destructive-outline" onClick={handleRemove}>
+          <Trash2 className="mr-2 size-4 shrink-0" />
+          Remove category
+        </Button>
+        <Button type="button" onClick={handleDone}>
+          Done
+        </Button>
+      </SheetFooter>
     </>
   );
 }
@@ -583,193 +845,59 @@ function CategoryEditSheet({
   onSave: (patch: Partial<RubricCategory>) => void;
   onRemove: () => void;
 }) {
-  const [draft, setDraft] = useState<RubricCategoryRow | null>(category);
-
-  useEffect(() => {
-    setDraft(category);
-  }, [category]);
-
-  if (!draft) return null;
-
-  const scoreValues = Array.from(
-    { length: Math.max(0, maxScore - minScore + 1) },
-    (_, index) => minScore + index
-  );
-
-  function setScoreLabel(value: number, label: string) {
-    setDraft((current) => {
-      if (!current) return current;
-      const rest = (current.scoreLabels ?? []).filter(
-        (entry) => entry.value !== value
-      );
-      const next = label.trim()
-        ? [...rest, { value, label }].sort((a, b) => a.value - b.value)
-        : rest;
-      return { ...current, scoreLabels: next };
+  const [isDirty, setIsDirty] = useState(false);
+  const { guardOpen, requestClose, confirmDiscard, cancelDiscard } =
+    useUnsavedChangesGuard({
+      isDirty,
+      onClose: () => onOpenChange(false),
     });
-  }
 
-  function currentScoreLabel(value: number) {
-    return draft?.scoreLabels?.find((entry) => entry.value === value)?.label ?? '';
-  }
+  // A freshly opened (or swapped) category starts clean; the guard only
+  // matters once the draft it renders has actually changed something.
+  useEffect(() => {
+    setIsDirty(false);
+  }, [category?.id]);
+
+  if (!category) return null;
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange} modal={false}>
-      <SheetContent
-        includeOverlay={false}
-        aria-describedby={undefined}
-        onPointerDownOutside={(event) => event.preventDefault()}
-        onInteractOutside={(event) => event.preventDefault()}
+    <>
+      <Sheet
+        open={open}
+        onOpenChange={(next) => {
+          if (!next) requestClose();
+        }}
+        modal={false}
       >
-        <SheetHeader>
-          <SheetTitle>Edit category</SheetTitle>
-        </SheetHeader>
-        <div className="mt-4 space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="category-edit-label">Label</Label>
-            <Input
-              id="category-edit-label"
-              value={draft.label}
-              placeholder="e.g. Thesis & Content"
-              onChange={(event) =>
-                setDraft((current) =>
-                  current ? { ...current, label: event.target.value } : current
-                )
-              }
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="category-edit-weight">Weight %</Label>
-            <Input
-              id="category-edit-weight"
-              type="number"
-              min={0}
-              max={100}
-              className="tabular-nums"
-              value={pct(draft.weight)}
-              onChange={(event) =>
-                setDraft((current) =>
-                  current
-                    ? { ...current, weight: Number(event.target.value) / 100 }
-                    : current
-                )
-              }
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="category-edit-description">Description</Label>
-            <Textarea
-              id="category-edit-description"
-              rows={5}
-              value={draft.description}
-              placeholder="What does good performance look like?"
-              onChange={(event) =>
-                setDraft((current) =>
-                  current
-                    ? { ...current, description: event.target.value }
-                    : current
-                )
-              }
-            />
-          </div>
-          <div className="space-y-2">
-            <Label>Score labels</Label>
-            <p className="text-sm text-muted-foreground text-pretty">
-              The word shown for each score in this category. Leave a score blank
-              to keep the shared label.
-            </p>
-            <div className="space-y-2">
-              {scoreValues.map((value) => (
-                <div key={value} className="flex items-center gap-2">
-                  <span className="w-6 shrink-0 tabular-nums text-sm text-muted-foreground">
-                    {value}
-                  </span>
-                  <Input
-                    id={`category-edit-score-label-${value}`}
-                    aria-label={`Score ${value} label`}
-                    value={currentScoreLabel(value)}
-                    placeholder="e.g. Proficient"
-                    onChange={(event) =>
-                      setScoreLabel(value, event.target.value)
-                    }
-                  />
-                </div>
-              ))}
-            </div>
-          </div>
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <Label htmlFor="category-edit-feedback-enabled">
-                Category feedback
-              </Label>
-              <p className="mt-1 text-sm text-muted-foreground text-pretty">
-                Give this category its own feedback box on the grading panel.
-              </p>
-            </div>
-            <Switch
-              id="category-edit-feedback-enabled"
-              checked={draft.feedbackEnabled !== false}
-              onCheckedChange={(checked) =>
-                setDraft((current) =>
-                  current ? { ...current, feedbackEnabled: checked } : current
-                )
-              }
-            />
-          </div>
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <Label htmlFor="category-edit-grammar-highlighting">
-                Grammar highlighting
-              </Label>
-              <p className="mt-1 text-sm text-muted-foreground text-pretty">
-                Produce grammar and syntax highlights on the student's essay for
-                this category.
-              </p>
-            </div>
-            <Switch
-              id="category-edit-grammar-highlighting"
-              checked={isGrammarHighlightCategory(draft)}
-              onCheckedChange={(checked) =>
-                setDraft((current) =>
-                  current
-                    ? { ...current, grammarHighlighting: checked }
-                    : current
-                )
-              }
-            />
-          </div>
-          <div className="flex items-center justify-between gap-3">
-            <Button
-              type="button"
-              variant="destructive-outline"
-              onClick={() => {
-                onRemove();
-                onOpenChange(false);
-              }}
-            >
-              <Trash2 className="mr-2 size-4 shrink-0" />
-              Remove category
-            </Button>
-            <Button
-              type="button"
-              onClick={() => {
-                onSave({
-                  label: draft.label,
-                  weight: draft.weight,
-                  description: draft.description,
-                  scoreLabels: draft.scoreLabels,
-                  feedbackEnabled: draft.feedbackEnabled,
-                  grammarHighlighting: draft.grammarHighlighting,
-                });
-                onOpenChange(false);
-              }}
-            >
-              Done
-            </Button>
-          </div>
-        </div>
-      </SheetContent>
-    </Sheet>
+        <SheetContent
+          includeOverlay={false}
+          aria-describedby={undefined}
+          className={PINNED_FOOTER_SHEET_CONTENT_CLASS_NAME}
+          onPointerDownOutside={(event) => event.preventDefault()}
+          onInteractOutside={(event) => event.preventDefault()}
+        >
+          <CategoryEditSheetContent
+            category={category}
+            minScore={minScore}
+            maxScore={maxScore}
+            onDirtyChange={setIsDirty}
+            onSave={(patch) => {
+              onSave(patch);
+              onOpenChange(false);
+            }}
+            onRemove={() => {
+              onRemove();
+              onOpenChange(false);
+            }}
+          />
+        </SheetContent>
+      </Sheet>
+      <UnsavedChangesDialog
+        open={guardOpen}
+        onContinueEditing={cancelDiscard}
+        onDiscard={confirmDiscard}
+      />
+    </>
   );
 }
 

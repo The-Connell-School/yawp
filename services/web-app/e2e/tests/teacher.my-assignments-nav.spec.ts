@@ -14,8 +14,11 @@ test.describe('Teacher "My Assignments" sidebar navigation', () => {
     await navLink.click();
 
     await page.waitForURL('**/app/assignments**', { timeout: 15000 });
+    // Exact, because the row's selection checkbox is itself a cell whose
+    // accessible name ("Select assignment E2E Class Assignment") contains the
+    // title, and the default substring match picks up both.
     await expect(
-      page.getByRole('cell', { name: 'E2E Class Assignment' })
+      page.getByRole('cell', { name: 'E2E Class Assignment', exact: true })
     ).toBeVisible();
   });
 
