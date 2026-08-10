@@ -317,6 +317,9 @@ export default function AssignmentDetailRoute() {
   };
 
   const documentCount = assignment.documentCount;
+  const activeClassOption = classes.find(
+    (klass) => klass.id === activeClassId
+  ) ?? { id: activeClassId, name: 'This class' };
 
   return (
     <PageShell>
@@ -430,14 +433,17 @@ export default function AssignmentDetailRoute() {
           </SheetContent>
         </Sheet>
 
+        {/* Same sheet, same props as the class page's "Add assignment", so
+            the form reads identically from either entry point. Duplicate only
+            adds the starting values it copies forward. */}
         <AssignmentCreationSheet
           open={isDuplicateSheetOpen}
           onOpenChange={setIsDuplicateSheetOpen}
           entryPoint="class"
           fixedClassId={activeClassId}
           assignmentTypes={data.assignmentTypes}
-          teacherClasses={classes}
-          fixedAssignmentTypeId={assignment.assignmentTypeId}
+          teacherClasses={[activeClassOption]}
+          initialAssignmentTypeId={assignment.assignmentTypeId}
           initialTitle={`Copy of ${assignment.title?.trim() || 'Untitled Assignment'}`}
           initialPrompt={assignment.prompt}
         />
