@@ -859,3 +859,101 @@ describe('buildLessonPlannerSystemPrompt — building one day of a unit', () => 
     expect(lower).toContain('a finished essay');
   });
 });
+
+describe('buildLessonPlannerSystemPrompt — writing toward a self-chosen thesis', () => {
+  const prompt = buildLessonPlannerSystemPrompt({
+    teacherName: null,
+    organizationName: 'Connell School',
+  });
+  const lower = prompt.toLowerCase();
+
+  test('names it as the default shape for an essay-ending unit, not a fixed-prompt assessment', () => {
+    expect(lower).toContain('writing toward a self-chosen thesis');
+    expect(lower).toContain(
+      'the default shape for a unit that ends in an argument or analysis essay'
+    );
+    expect(lower).toContain(
+      'not for a fixed-prompt assessment like a dbq or leq'
+    );
+  });
+
+  test('teaches the recurring-open-daily-pages route by theme, not by plot', () => {
+    expect(lower).toContain('recurring open daily pages across the unit');
+    expect(lower).toContain("the unit's big themes, not its plot");
+    expect(lower).toContain('how do people gain and lose power');
+  });
+
+  test('requires variety across the cluster rather than the same question five times', () => {
+    expect(lower).toContain(
+      'so several prompts spread across the unit ask genuinely different things'
+    );
+  });
+
+  test('keeps the day cell to one line and defers the full prompt to when the day is built', () => {
+    expect(lower).toContain('the day cell just names it');
+    expect(lower).toContain('the full prompt with its id appears in its own');
+  });
+
+  test('tells the essay day to have students choose from their own writing, not a fresh topic', () => {
+    expect(lower).toContain(
+      'reread their own daily pages entries and choose the one that snagged them'
+    );
+    expect(lower).toContain('which entry are you building on and why');
+    expect(lower).toContain('not a fresh topic assigned that morning');
+  });
+
+  test('teaches the open-single-prompt route with a real test for what makes it open', () => {
+    expect(lower).toContain('an open prompt on the day itself');
+    expect(lower).toContain('more than one defensible thesis fits under it');
+    expect(lower).toContain(
+      'not "the theme of power" floating free of the book'
+    );
+    expect(lower).toContain(
+      'thirty different, defensible answers to actually grade'
+    );
+  });
+
+  test('says the two routes can combine rather than forcing a choice', () => {
+    expect(lower).toContain('a unit can do both');
+  });
+
+  test('cross-references the section from the unit anchor rule and the standalone essay-prompt bullet', () => {
+    expect(lower).toContain(
+      'when that final piece is an argument or analysis essay, see "writing toward a self-chosen thesis" below'
+    );
+    expect(lower).toContain(
+      'an essay or thesis prompt, on its own or as the end of a lesson'
+    );
+  });
+});
+
+describe('buildLessonPlannerSystemPrompt — no bare prompt ids in a unit overview', () => {
+  const prompt = buildLessonPlannerSystemPrompt({
+    teacherName: null,
+    organizationName: 'Connell School',
+  });
+  const lower = prompt.toLowerCase();
+
+  test('forbids a bare id list before any day is built', () => {
+    // The exact failure: "Days 1-4 use FW-001, FW-014, FW-011, FW-172" tells a
+    // teacher nothing about what their students will actually be asked.
+    expect(lower).toContain('never drop bare ids like');
+    expect(lower).toContain(
+      'an id with no words behind it is not a preview, it is a code the teacher has to go look up'
+    );
+  });
+
+  test('requires the cluster preview to bullet id and real text together', () => {
+    expect(lower).toContain('bullet the cluster instead, one line per day');
+    expect(lower).toContain("day 1 — fw-001: 'how do people gain power?'");
+  });
+
+  test('extends the general no-bare-citation rule to a multi-day overview', () => {
+    expect(lower).toContain(
+      'including in a unit overview that mentions several prompts across several days before any one of them is built'
+    );
+    expect(lower).toContain(
+      'a recap that lists five ids with no text is the same failure'
+    );
+  });
+});
