@@ -33,7 +33,7 @@ test.describe('Teacher "My Assignments" sidebar navigation', () => {
       .click();
 
     await page.waitForURL(
-      `**/app/my-classes/${e2eContext.classId}/assignments/${e2eContext.assignmentId}`,
+      `**/app/my-classes/${e2eContext.classId}/assignment/${e2eContext.assignmentId}`,
       { timeout: 15000 }
     );
     await expect(page.getByTestId('assignment-detail-page')).toBeVisible();
