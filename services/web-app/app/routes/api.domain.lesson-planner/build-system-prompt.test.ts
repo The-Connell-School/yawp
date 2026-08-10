@@ -747,3 +747,115 @@ describe('buildLessonPlannerSystemPrompt — the unit map is a board', () => {
     expect(prompt.toLowerCase()).toContain('one short line per field');
   });
 });
+
+describe('buildLessonPlannerSystemPrompt — building one day of a unit', () => {
+  test('says nothing about a unit when there is no context', () => {
+    const prompt = buildLessonPlannerSystemPrompt({
+      teacherName: null,
+      organizationName: 'Connell School',
+    });
+    expect(prompt.toLowerCase()).not.toContain(
+      'building one day out of a unit'
+    );
+  });
+
+  test('hands over the day, its neighbours, and the unit it sits in', () => {
+    const prompt = buildLessonPlannerSystemPrompt({
+      teacherName: null,
+      organizationName: 'Connell School',
+      unitContext: {
+        unitTitle: 'Writing the literary analysis paragraph',
+        endsWith: 'One analysis paragraph on a passage they choose',
+        totalDays: 3,
+        day: {
+          day: 2,
+          title: 'Evidence that earns its place',
+          objective: 'Choose the quote that proves the claim',
+          students: 'Match claims to the strongest of three quotes',
+          check: 'Two quote choices with a reason each',
+          minutes: 50,
+        },
+        previous: {
+          day: 1,
+          title: 'What a claim is',
+          objective: 'Tell a claim apart from a summary',
+          students: 'Sort ten sentences',
+          buildsTo: 'They need a claim before they can support one',
+        },
+        next: {
+          day: 3,
+          title: 'Putting it together',
+          objective: 'Draft the full paragraph',
+          students: 'Draft, then swap',
+        },
+      },
+    });
+    const lower = prompt.toLowerCase();
+
+    expect(lower).toContain('day 2 of 3');
+    expect(lower).toContain('choose the quote that proves the claim');
+    // The day before's own ending, not its objective restated — buildsTo is
+    // what it actually left students able to do.
+    expect(lower).toContain('they need a claim before they can support one');
+    expect(lower).toContain('do not re-teach that from the start');
+    // The day after's assumption, so this day stops short of it.
+    expect(lower).toContain('draft the full paragraph');
+    expect(lower).toContain("is not this day's job");
+    expect(lower).toContain('do not write another day-by-day map');
+    expect(lower).toContain('do not emit a `yawp-unit` block');
+  });
+
+  test('says so when the day is the first, with nothing before it', () => {
+    const prompt = buildLessonPlannerSystemPrompt({
+      teacherName: null,
+      organizationName: 'Connell School',
+      unitContext: {
+        unitTitle: 'A unit',
+        endsWith: null,
+        totalDays: 2,
+        day: {
+          day: 1,
+          title: 'Day one',
+          objective: 'Start',
+          students: 'Begin',
+        },
+        previous: null,
+        next: {
+          day: 2,
+          title: 'Day two',
+          objective: 'Continue',
+          students: 'Keep going',
+        },
+      },
+    });
+    expect(prompt.toLowerCase()).toContain('this is the first day of the unit');
+  });
+
+  test('says so when the day is the last, and names what the unit ends with', () => {
+    const prompt = buildLessonPlannerSystemPrompt({
+      teacherName: null,
+      organizationName: 'Connell School',
+      unitContext: {
+        unitTitle: 'A unit',
+        endsWith: 'A finished essay',
+        totalDays: 2,
+        day: {
+          day: 2,
+          title: 'Day two',
+          objective: 'Finish',
+          students: 'Wrap up',
+        },
+        previous: {
+          day: 1,
+          title: 'Day one',
+          objective: 'Start',
+          students: 'Begin',
+        },
+        next: null,
+      },
+    });
+    const lower = prompt.toLowerCase();
+    expect(lower).toContain('this is the last day of the unit');
+    expect(lower).toContain('a finished essay');
+  });
+});

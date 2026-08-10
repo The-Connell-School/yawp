@@ -19,6 +19,7 @@ const prisma = {
   },
   lessonPlanMessage: {
     create: mock(),
+    findFirst: mock(),
   },
   classAssignment: {
     findFirst: mock(),
@@ -90,6 +91,7 @@ beforeEach(() => {
   prisma.lessonPlanMessage.create
     .mockReset()
     .mockResolvedValue({ id: 'msg-assistant' });
+  prisma.lessonPlanMessage.findFirst.mockReset().mockResolvedValue(null);
   prisma.classAssignment.findFirst.mockReset().mockResolvedValue(null);
   prisma.$transaction.mockReset();
   prisma.$transaction.mockImplementation(
@@ -534,5 +536,137 @@ describe('api.domain.lesson-planner action', () => {
     expect(response.init?.status).toBe(404);
     expect(getLLMCompletion).not.toHaveBeenCalled();
     expect(reserveAiRequest).not.toHaveBeenCalled();
+  });
+});
+
+describe('api.domain.lesson-planner action — building one day of a unit', () => {
+  const unitBlock = [
+    '```yawp-unit',
+    JSON.stringify({
+      title: 'Writing the literary analysis paragraph',
+      endsWith: 'One analysis paragraph on a passage they choose',
+      days: [
+        {
+          day: 1,
+          title: 'What a claim is',
+          objective: 'Tell a claim apart from a summary',
+          students: 'Sort ten sentences',
+          buildsTo: 'They need a claim before they can support one',
+        },
+        {
+          day: 2,
+          title: 'Evidence that earns its place',
+          objective: 'Choose the quote that proves the claim',
+          students: 'Match claims to the strongest of three quotes',
+          minutes: 50,
+        },
+      ],
+    }),
+    '```',
+  ].join('\n');
+
+  test('looks up the map and hands the day’s context to the model', async () => {
+    prisma.lessonPlanConversation.findFirst.mockResolvedValue({
+      id: 'plan-9',
+      messages: [
+        { role: 'assistant', content: `Here is the arc.\n\n${unitBlock}` },
+      ],
+      materials: [],
+    });
+    prisma.lessonPlanMessage.findFirst.mockResolvedValue({
+      content: `Here is the arc.\n\n${unitBlock}`,
+    });
+    getLLMCompletion.mockResolvedValue(
+      '## Evidence that earns its place\n\nHere is the lesson.'
+    );
+    prisma.lessonPlanConversation.update.mockResolvedValue({});
+
+    await action({
+      request: formRequest({
+        message:
+          'Build day 2 of "Writing the literary analysis paragraph" in full: Evidence that earns its place. The objective is: Choose the quote that proves the claim Students: Match claims to the strongest of three quotes I have 50 minutes. Keep it inside the arc of the unit — this day comes after day 1 and has to set up what follows.',
+        conversationId: 'plan-9',
+      }),
+    } as any);
+
+    expect(prisma.lessonPlanMessage.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          conversationId: 'plan-9',
+          role: 'assistant',
+          content: { contains: '```yawp-unit' },
+        }),
+      })
+    );
+
+    const system = getLLMCompletion.mock.calls[0][0].system as string;
+    const lower = system.toLowerCase();
+    expect(lower).toContain('day 2 of 2');
+    expect(lower).toContain('choose the quote that proves the claim');
+    // The day before's own ending, so day 2 is not planned in a vacuum.
+    expect(lower).toContain('they need a claim before they can support one');
+  });
+
+  test('does not query for a map on an ordinary message', async () => {
+    prisma.lessonPlanConversation.findFirst.mockResolvedValue({
+      id: 'plan-9',
+      messages: [],
+      materials: [],
+    });
+    getLLMCompletion.mockResolvedValue('ok');
+    prisma.lessonPlanConversation.update.mockResolvedValue({});
+
+    await action({
+      request: formRequest({
+        message: 'What should the warm-up be?',
+        conversationId: 'plan-9',
+      }),
+    } as any);
+
+    expect(prisma.lessonPlanMessage.findFirst).not.toHaveBeenCalled();
+  });
+
+  test('adds no unit context when the button’s day is not in the map', async () => {
+    prisma.lessonPlanConversation.findFirst.mockResolvedValue({
+      id: 'plan-9',
+      messages: [],
+      materials: [],
+    });
+    prisma.lessonPlanMessage.findFirst.mockResolvedValue({
+      content: `Here is the arc.\n\n${unitBlock}`,
+    });
+    getLLMCompletion.mockResolvedValue('ok');
+    prisma.lessonPlanConversation.update.mockResolvedValue({});
+
+    await action({
+      request: formRequest({
+        message: 'Build day 9 of "Some other unit" in full: Nothing.',
+        conversationId: 'plan-9',
+      }),
+    } as any);
+
+    const system = getLLMCompletion.mock.calls[0][0].system as string;
+    expect(system.toLowerCase()).not.toContain(
+      'building one day out of a unit'
+    );
+  });
+
+  test('does not mistake a teacher’s own message for the button', async () => {
+    prisma.lessonPlanConversation.findFirst.mockResolvedValue({
+      id: 'plan-9',
+      messages: [],
+      materials: [],
+    });
+    getLLMCompletion.mockResolvedValue('ok');
+    prisma.lessonPlanConversation.update.mockResolvedValue({});
+
+    await action({
+      request: formRequest({
+        message: 'Can you build day 2 for me please?',
+        conversationId: 'plan-9',
+      }),
+    } as any);
+
+    expect(prisma.lessonPlanMessage.findFirst).not.toHaveBeenCalled();
   });
 });

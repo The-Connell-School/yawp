@@ -1,9 +1,11 @@
 import { describe, expect, test } from 'bun:test';
 import {
   buildDayRequest,
+  buildUnitContext,
   hasUnitPlan,
   inlineUnitPlan,
   markFailedUnitPlans,
+  parseRequestedDay,
   readUnitPlan,
   validateUnitPlan,
 } from './unit-plan';
@@ -224,5 +226,59 @@ describe('inlineUnitPlan', () => {
   test('leaves a reply with no map alone', () => {
     const reply = '## Warm-up\n\nFour minutes.';
     expect(inlineUnitPlan(reply)).toBe(reply);
+  });
+});
+
+describe('parseRequestedDay', () => {
+  test('reads the day number back out of a real build-day click', () => {
+    const outcome = readUnitPlan(block(threeDays));
+    if (outcome.kind !== 'unit') throw new Error('expected a unit');
+    const message = buildDayRequest(outcome.unit, outcome.unit.days[1]!);
+    expect(parseRequestedDay(message)).toBe(2);
+  });
+
+  test('does not match a teacher’s own free-typed request', () => {
+    // A coincidental "build day 2" from the teacher is not the button, and
+    // guessing at unit context from it would be worse than adding none.
+    expect(parseRequestedDay('Can you build day 2 for me?')).toBeNull();
+    expect(parseRequestedDay('build day 2')).toBeNull();
+  });
+
+  test('is not fooled by the day number alone', () => {
+    expect(parseRequestedDay('Day 2 needs more scaffolding.')).toBeNull();
+  });
+});
+
+describe('buildUnitContext', () => {
+  const outcome = readUnitPlan(block(threeDays));
+  if (outcome.kind !== 'unit') throw new Error('expected a unit');
+  const { unit } = outcome;
+
+  test('gives a middle day both neighbours', () => {
+    const context = buildUnitContext(unit, 2);
+    expect(context).not.toBeNull();
+    expect(context!.day.title).toBe('Evidence that earns its place');
+    expect(context!.previous?.title).toBe('What a claim is');
+    expect(context!.next?.title).toBe('Putting it together');
+    expect(context!.totalDays).toBe(3);
+    expect(context!.endsWith).toBe(
+      'A single analysis paragraph on a passage they choose'
+    );
+  });
+
+  test('day one has no day before it', () => {
+    const context = buildUnitContext(unit, 1);
+    expect(context!.previous).toBeNull();
+    expect(context!.next?.title).toBe('Evidence that earns its place');
+  });
+
+  test('the last day has no day after it', () => {
+    const context = buildUnitContext(unit, 3);
+    expect(context!.next).toBeNull();
+    expect(context!.previous?.title).toBe('Evidence that earns its place');
+  });
+
+  test('a day outside the unit gets no context rather than a guess', () => {
+    expect(buildUnitContext(unit, 9)).toBeNull();
   });
 });

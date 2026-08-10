@@ -281,6 +281,57 @@ export function buildDayRequest(unit: UnitPlan, day: UnitPlanDay): string {
   return parts.join(' ');
 }
 
+/** The exact opening `buildDayRequest` writes — read back to recognise its own button. */
+const BUILD_DAY_REQUEST = /^Build day (\d+) of "/;
+
+/**
+ * Which day a "build this day" click asked for, read back out of the message
+ * it sent.
+ *
+ * Safe to match strictly: the button fires the request as-is with nothing in
+ * between to edit it, so a real click always produces this exact opening. A
+ * teacher who types their own "build day 2" in free text simply does not
+ * match, and gets no unit context rather than a guess built on a coincidence.
+ */
+export function parseRequestedDay(message: string): number | null {
+  const match = BUILD_DAY_REQUEST.exec(message.trim());
+  if (!match) return null;
+  const day = Number(match[1]);
+  return Number.isFinite(day) ? day : null;
+}
+
+/**
+ * What the planner needs to build one day honestly: not just that day's own
+ * row, but where it sits in the arc — otherwise "build day 3" is planned in a
+ * vacuum and the map's promise that each day builds on the last quietly stops
+ * being true the moment a day is actually built.
+ */
+export type UnitContext = {
+  unitTitle: string;
+  endsWith: string | null;
+  totalDays: number;
+  day: UnitPlanDay;
+  previous: UnitPlanDay | null;
+  next: UnitPlanDay | null;
+};
+
+/** `null` when the requested day is not in this unit — the caller falls back to building without unit context rather than guessing. */
+export function buildUnitContext(
+  unit: UnitPlan,
+  requestedDay: number
+): UnitContext | null {
+  const index = unit.days.findIndex((day) => day.day === requestedDay);
+  if (index === -1) return null;
+  return {
+    unitTitle: unit.title,
+    endsWith: unit.endsWith ?? null,
+    totalDays: unit.days.length,
+    day: unit.days[index]!,
+    previous: index > 0 ? unit.days[index - 1]! : null,
+    next: index < unit.days.length - 1 ? unit.days[index + 1]! : null,
+  };
+}
+
 /**
  * The map as Markdown, for the printed packet.
  *

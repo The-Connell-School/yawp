@@ -11,7 +11,13 @@ import {
 } from '~/domain/lesson-planner/lesson-planner-tools.server';
 import { repairSlideDeck } from '~/domain/lesson-planner/repair-slide-deck.server';
 import { markFailedDecks } from '~/domain/lesson-planner/slide-deck';
-import { markFailedUnitPlans } from '~/domain/lesson-planner/unit-plan';
+import {
+  buildUnitContext,
+  markFailedUnitPlans,
+  parseRequestedDay,
+  readUnitPlan,
+  UNIT_PLAN_FENCE,
+} from '~/domain/lesson-planner/unit-plan';
 import {
   collectToolLinks,
   verifyLessonLinks,
@@ -170,10 +176,35 @@ export async function action({ request }: ActionFunctionArgs) {
   );
   const isNewConversation = !conversation;
 
+  // "Build this day" fires this exact opening, so a match means the teacher
+  // clicked the button on a real unit map rather than typed something that
+  // happens to look like it. Only look up the map when it might matter — a
+  // targeted query, because the bounded history above can and does drop the
+  // map once a conversation runs past it building days out one at a time.
+  const requestedDay = parseRequestedDay(data.message);
+  let unitContext = null;
+  if (requestedDay !== null && conversation) {
+    const unitMessage = await prisma.lessonPlanMessage.findFirst({
+      where: {
+        conversationId: conversation.id,
+        role: 'assistant',
+        content: { contains: `\`\`\`${UNIT_PLAN_FENCE}` },
+      },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      select: { content: true },
+    });
+    const outcome = unitMessage ? readUnitPlan(unitMessage.content) : null;
+    unitContext =
+      outcome?.kind === 'unit'
+        ? buildUnitContext(outcome.unit, requestedDay)
+        : null;
+  }
+
   const system = buildLessonPlannerSystemPrompt({
     teacherName: null,
     organizationName: access.membership.organization.name,
     lessonInventory: conversation?.materials ?? [],
+    unitContext,
   });
 
   const messages: { role: AgentType; content: string; name?: string }[] = [

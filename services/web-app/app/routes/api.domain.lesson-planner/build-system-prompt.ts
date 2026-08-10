@@ -1,4 +1,5 @@
 import { rubricCategories } from '~/domain/grading/rubric';
+import type { UnitContext } from '~/domain/lesson-planner/unit-plan';
 
 /**
  * System prompt for the YAWP! Lesson Planner.
@@ -36,14 +37,46 @@ function buildInventorySection(entries: LessonInventoryEntry[]): string[] {
   ];
 }
 
+/**
+ * Where a single day sits inside the unit it came from.
+ *
+ * "Build day 3" without this is a lesson planned in a vacuum: the model has
+ * only its own memory of a map it wrote turns ago, which is exactly the thing
+ * that stops holding once the conversation runs long enough to push that map
+ * out of its context. This hands over the facts instead of hoping they were
+ * remembered — the day before's own ending, the day after's own assumption,
+ * and where the whole unit lands.
+ */
+function buildUnitContextSection(context: UnitContext | null): string[] {
+  if (!context) return [];
+  const { unitTitle, endsWith, totalDays, day, previous, next } = context;
+  return [
+    '',
+    `You are building ONE DAY out of a unit map the teacher already has and can see: day ${day.day} of ${totalDays} in "${unitTitle}".`,
+    `- THIS day's objective: ${day.objective}`,
+    `- THIS day, students: ${day.students}`,
+    day.check ? `- THIS day's check: ${day.check}` : null,
+    day.minutes ? `- THIS day is ${day.minutes} minutes.` : null,
+    previous
+      ? `- The day before it (day ${previous.day}, "${previous.title}") ends with students able to: ${previous.buildsTo ?? previous.objective}. Do not re-teach that from the start — this day builds on it.`
+      : `- This is the first day of the unit. There is no prior day to build on.`,
+    next
+      ? `- The day after it (day ${next.day}, "${next.title}") assumes: ${next.objective}. Stop short of teaching that — it is not this day's job.`
+      : `- This is the LAST day of the unit.${endsWith ? ` The unit ends with: ${endsWith}. This day should get students to it.` : ''}`,
+    '- Build a full, ordinary lesson for THIS day only — objective, timed sequence, materials, a check for understanding, everything a single lesson normally gets. Do not write another day-by-day map here, and do not emit a `yawp-unit` block — the teacher already has the map; what they asked for now is the lesson.',
+  ].filter((line): line is string => line !== null);
+}
+
 export function buildLessonPlannerSystemPrompt({
   teacherName,
   organizationName,
   lessonInventory = [],
+  unitContext = null,
 }: {
   teacherName: string | null;
   organizationName: string;
   lessonInventory?: LessonInventoryEntry[];
+  unitContext?: UnitContext | null;
 }): string {
   const who = teacherName ? `${teacherName}, a teacher` : 'a teacher';
   // The actual grading rubric, verbatim, so a lesson targets Yawp's own skill
@@ -274,6 +307,7 @@ export function buildLessonPlannerSystemPrompt({
     '- Skip the block only when there is genuinely nothing to predict.',
     '- After delivering a lesson plan, the app itself pins "Build the slide deck for this lesson" and "Build the student handout for this lesson" as the first options, so do not write your own version of either. Spend your options on what only you know — a version for another class, a differentiation layer, a shorter period.',
     ...buildInventorySection(lessonInventory),
+    ...buildUnitContextSection(unitContext),
   ].join('\n');
 }
 
