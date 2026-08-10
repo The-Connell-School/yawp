@@ -4,7 +4,6 @@ import { ClassArt } from '~/components/class-art';
 import { DocumentLink } from '~/components/document-link';
 import { NoDataPlaceholder } from '~/components/no-data-placeholder';
 import { StudentAssignmentCard } from '~/components/student-assignment-card';
-import { StudentWriteSomethingNew } from '~/components/student-write-something-new';
 import { getClassCardHeading } from '~/utils/class-display';
 import type { StudentClassDetail } from './student-class-detail.server';
 
@@ -23,7 +22,7 @@ export function StudentClassDetailView({
 }: {
   data: StudentClassDetail & { role: 'STUDENT' };
 }) {
-  const { klass, assignments, assignmentTypes, documents } = data;
+  const { klass, assignments, documents } = data;
   const { title, subtitle } = getClassCardHeading(klass);
 
   return (
@@ -68,7 +67,6 @@ export function StudentClassDetailView({
                 ) : null}
               </div>
             </div>
-            <StudentWriteSomethingNew assignmentTypes={assignmentTypes} />
           </div>
         </div>
       </div>

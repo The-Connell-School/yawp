@@ -19,7 +19,7 @@ test.describe('Teacher "My Assignments" sidebar navigation', () => {
     ).toBeVisible();
   });
 
-  test('clicking an assignment row navigates to its class assignments tab', async ({
+  test('clicking an assignment row opens that assignment detail page', async ({
     page,
     signIn,
     e2eContext,
@@ -33,9 +33,10 @@ test.describe('Teacher "My Assignments" sidebar navigation', () => {
       .click();
 
     await page.waitForURL(
-      `**/app/my-classes/${e2eContext.classId}**`,
+      `**/app/my-classes/${e2eContext.classId}/assignments/${e2eContext.assignmentId}`,
       { timeout: 15000 }
     );
+    await expect(page.getByTestId('assignment-detail-page')).toBeVisible();
   });
 
   test('student does not see My Assignments in the sidebar', async ({
