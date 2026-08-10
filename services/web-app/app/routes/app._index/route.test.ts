@@ -117,20 +117,46 @@ describe('app index loader assignments', () => {
     prisma.submission.findMany.mockResolvedValue([]);
   });
 
-  test('fetches student dashboard assignments for all student classes', async () => {
+  test('offers a student only the assignment types their own teachers can assign', async () => {
+    await loader({
+      request: new Request('https://example.test/app'),
+      params: {},
+      context: {} as never,
+    } as any);
+
+    // One scope per teacher of each class the student is enrolled in: a type a teacher
+    // cannot assign must not be offered to that teacher's students either.
+    expect(getAvailableAssignmentTypesForScopes).toHaveBeenCalledWith(
+      expect.objectContaining({
+        scopes: [
+          {
+            organizationId: 'org-1',
+            schoolId: 'school-1',
+            teacherProfileId: 'teacher-1',
+          },
+          {
+            organizationId: 'org-1',
+            schoolId: 'school-1',
+            teacherProfileId: 'teacher-2',
+          },
+        ],
+      })
+    );
+  });
+
+  test('does not load documents or assignments for the student dashboard', async () => {
     const response = await loader({
-      request: new Request('https://example.test/app?tab=assignments'),
+      request: new Request('https://example.test/app'),
       params: {},
       context: {} as never,
     } as any);
     const data = (response as { data: any }).data;
 
-    expect(data.assignmentsEnabled).toBe(true);
-    expect(prisma.classAssignment.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { classId: { in: ['class-1', 'class-2'] } },
-      })
-    );
+    expect(prisma.document.findMany).not.toHaveBeenCalled();
+    expect(prisma.classAssignment.findMany).not.toHaveBeenCalled();
+    expect(data).not.toHaveProperty('documents');
+    expect(data).not.toHaveProperty('archivedDocuments');
+    expect(data).not.toHaveProperty('assignments');
   });
 
   test('loads the classes a student is enrolled in for the dashboard Classes section', async () => {
@@ -157,64 +183,6 @@ describe('app index loader assignments', () => {
     expect(getStudentEnrolledClasses).toHaveBeenCalledWith('profile-1');
     expect(data.enrolledClasses).toHaveLength(1);
     expect(data.enrolledClasses[0].id).toBe('class-1');
-  });
-
-  test('orders each student document tile by the current tutor module instead of the last module', async () => {
-    const createdAt = new Date('2026-06-01T12:00:00.000Z');
-    prisma.document.findMany.mockImplementation(async (args: any) => {
-      if (args.where?.archivedAt?.not === null) return [];
-
-      return [
-        {
-          id: 'doc-1',
-          title: 'Essay Draft',
-          html: '<p>Started</p>',
-          text: 'Started',
-          createdAt,
-          updatedAt: createdAt,
-          assignmentModuleSessions: [
-            {
-              id: 'cms-review',
-              createdAt,
-              updatedAt: createdAt,
-              instructionsCompleted: 0,
-              assignmentModuleId: 'module-review',
-              assignmentModule: {
-                id: 'module-review',
-                position: 4,
-                title: 'Review my Essay',
-                instructions: [{ id: 'review-instruction' }],
-              },
-            },
-            {
-              id: 'cms-prewriting',
-              createdAt,
-              updatedAt: createdAt,
-              instructionsCompleted: 0,
-              assignmentModuleId: 'module-prewriting',
-              assignmentModule: {
-                id: 'module-prewriting',
-                position: 1,
-                title: 'Pre-Writing',
-                instructions: [{ id: 'prewriting-instruction' }],
-              },
-            },
-          ],
-          submissions: [],
-        },
-      ];
-    });
-
-    const response = await loader({
-      request: new Request('https://example.test/app'),
-      params: {},
-      context: {} as never,
-    } as any);
-    const data = (response as { data: any }).data;
-
-    expect(
-      data.documents[0].assignmentModuleSessions[0].assignmentModule.title
-    ).toBe('Pre-Writing');
   });
 
   test('does not load writing practice state for the dashboard', async () => {

@@ -8,7 +8,6 @@ import { useState } from 'react';
 import type { Route as RootRoute } from '../../+types/root';
 import { AssignmentCreationSheet } from '~/components/assignments/assignment-creation-sheet';
 import { Button } from '~/components/ui/button';
-import { DocumentLink } from '~/components/document-link.js';
 import { NoDataPlaceholder } from '~/components/no-data-placeholder.js';
 import { useUser } from '~/hooks/useUser.js';
 import { requireMembership, requireUserId } from '~/utils/auth.server.js';
@@ -19,23 +18,12 @@ import {
 import { prisma } from '~/utils/db.server.js';
 import { getAvailableAssignmentTypesForScopes } from '~/utils/assignment-type-access.server';
 import { AP_HISTORY_ASSIGNMENT_TYPE_KEY } from '~/domain/ap-history/schema';
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from '~/components/ui/accordion';
 import type { TeacherClassCardData } from '~/components/teacher-class-card';
 import { StudentClassCard } from '~/components/student-class-card';
-import { StudentAssignmentCard } from '~/components/student-assignment-card';
 import { StudentWriteSomethingNew } from '~/components/student-write-something-new';
 import { getTeacherClassCardStats } from '~/utils/teacher-class-card-stats.server';
 import { getTeacherRecentActiveClassIds } from '~/utils/teacher-dashboard-recent-classes.server';
 import { getStudentEnrolledClasses } from '~/utils/student-classes.server';
-import {
-  orderAssignmentModuleSessionsForCurrentStep,
-  type AssignmentModuleSessionResumeCandidate,
-} from '~/utils/assignment-module-session-resume';
 import { AssignmentsAtAGlance } from './components/assignments-at-a-glance';
 import { ClassesAtAGlance } from './components/classes-at-a-glance';
 import { TeacherGradingAtAGlance } from './components/teacher-grading-at-a-glance';
@@ -49,17 +37,6 @@ export type AssignmentTypeRow = {
   systemKey?: string | null;
   image?: { id: string } | null;
 };
-
-function orderDocumentTileModuleSessions<
-  T extends { assignmentModuleSessions: AssignmentModuleSessionResumeCandidate[] },
->(documents: T[]) {
-  return documents.map((document) => ({
-    ...document,
-    assignmentModuleSessions: orderAssignmentModuleSessionsForCurrentStep(
-      document.assignmentModuleSessions
-    ),
-  }));
-}
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
@@ -89,16 +66,34 @@ export async function loader({ request }: LoaderFunctionArgs) {
     return redirect('/enter-code');
   }
 
-  // Determine which class IDs this student belongs to (for assignment fetching).
+  // A student may only start the assignment types their own teachers can assign, so the
+  // scopes are built per teacher of each class the student is in — the same scope shape the
+  // teacher-side dashboard uses, just resolved through enrollment instead of ownership.
   let studentAssignmentClassIds: string[] = [];
+  let studentAssignmentTypeScopes: {
+    organizationId: string;
+    schoolId: string;
+    teacherProfileId: string;
+  }[] = [];
   if (useStudentExperience) {
     const studentClasses = await prisma.class.findMany({
       where: {
         students: { some: { id: profile.id } },
       },
-      select: { id: true },
+      select: {
+        id: true,
+        school: { select: { id: true, organizationId: true } },
+        teachers: { select: { id: true } },
+      },
     });
     studentAssignmentClassIds = studentClasses.map((klass) => klass.id);
+    studentAssignmentTypeScopes = studentClasses.flatMap((klass) =>
+      klass.teachers.map((teacher) => ({
+        organizationId: klass.school.organizationId,
+        schoolId: klass.school.id,
+        teacherProfileId: teacher.id,
+      }))
+    );
   }
 
   const teacherAssignmentClassScopes = !useStudentExperience
@@ -131,81 +126,19 @@ export async function loader({ request }: LoaderFunctionArgs) {
     ? await getStudentEnrolledClasses(profile.id)
     : [];
 
-  const [assignmentTypes, documents, archivedDocuments, teacherClasses, assignments] =
-    await Promise.all([
-    !useStudentExperience
+  const [assignmentTypes, teacherClasses] = await Promise.all([
+    !useStudentExperience || studentAssignmentTypeScopes.length === 0
       ? ([] as AssignmentTypeRow[])
-      : prisma.assignmentType.findMany({
-          where: {
-            archivedAt: null,
-            organizationAssignments: {
-              some: { organizationId: profile.organization.id },
-            },
-          },
+      : getAvailableAssignmentTypesForScopes<AssignmentTypeRow>({
+          scopes: studentAssignmentTypeScopes,
           select: {
-            image: { select: { id: true } },
             id: true,
             title: true,
             systemKey: true,
+            image: { select: { id: true } },
           },
           orderBy: { position: 'asc' },
         }),
-    prisma.document.findMany({
-      orderBy: { createdAt: 'desc' },
-      where: { membershipId: profile.id, deletedAt: null, archivedAt: null },
-      include: {
-        assignmentModuleSessions: {
-          include: {
-            assignmentModule: {
-              include: {
-                instructions: { select: { id: true } },
-              },
-            },
-          },
-          orderBy: { assignmentModule: { position: 'desc' } },
-        },
-        submissions: {
-          where: { archivedAt: null, unsubmittedAt: null },
-          orderBy: { submittedAt: 'desc' },
-          select: {
-            id: true,
-            title: true,
-            releasedAt: true,
-            submittedAt: true,
-          },
-        },
-      },
-    }),
-    prisma.document.findMany({
-      orderBy: { archivedAt: 'desc' },
-      where: {
-        membershipId: profile.id,
-        deletedAt: null,
-        archivedAt: { not: null },
-      },
-      include: {
-        assignmentModuleSessions: {
-          include: {
-            assignmentModule: {
-              include: {
-                instructions: { select: { id: true } },
-              },
-            },
-          },
-          orderBy: { assignmentModule: { position: 'desc' } },
-        },
-        submissions: {
-          where: { archivedAt: null, unsubmittedAt: null },
-          orderBy: { submittedAt: 'desc' },
-          select: {
-            id: true,
-            title: true,
-            releasedAt: true,
-            submittedAt: true,
-          },
-        },
-      },
-    }),
     // Teacher classes and recent ordering
     !useStudentExperience
       ? prisma.class.findMany({
@@ -225,38 +158,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
               select: { students: true, teachers: true, classAssignments: true },
             },
           },
-        })
-      : [],
-    useStudentExperience && assignmentsEnabled
-      ? prisma.classAssignment.findMany({
-          where: {
-            classId: { in: studentAssignmentClassIds },
-          },
-          select: {
-            id: true,
-            assignment: {
-              select: {
-                id: true,
-                title: true,
-                prompt: true,
-                assignmentType: {
-                  select: {
-                    id: true,
-                    title: true,
-                  },
-                },
-              },
-            },
-            class: {
-              select: {
-                id: true,
-                grade: true,
-                period: true,
-                title: true,
-              },
-            },
-          },
-          orderBy: [{ createdAt: 'desc' }],
         })
       : [],
   ]);
@@ -375,10 +276,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   return dataResponse({
     assignmentTypes,
     enrolledClasses,
-    documents: orderDocumentTileModuleSessions(documents),
-    archivedDocuments: orderDocumentTileModuleSessions(archivedDocuments),
     teacherClasses: teacherClassesOrdered,
-    assignments,
     assignmentsEnabled,
     teacherClassCards,
     totalTeacherClassCount: teacherClasses.length,
@@ -508,71 +406,6 @@ export default function AppRoute() {
               title="No classes yet"
               subtitle="When your teacher adds you to a class, it will appear here."
             />
-          )}
-        </div>
-        {assignmentsEnabled ? (
-          <div className="mt-8 flex flex-col">
-            <p className="my-2 text-foreground/60">Assignments</p>
-            {data.assignments.length > 0 ? (
-              <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
-                {data.assignments.map((classAssignment) => (
-                  <StudentAssignmentCard
-                    key={classAssignment.id}
-                    classAssignment={classAssignment}
-                    classLabel={formatClassLabel(classAssignment.class)}
-                  />
-                ))}
-              </div>
-            ) : (
-              <NoDataPlaceholder
-                title="No assignments"
-                subtitle="When your teacher posts assignments, they will appear here."
-              />
-            )}
-          </div>
-        ) : null}
-        <div className="mt-8 flex flex-col">
-          <p className="my-2 text-foreground/60">Documents</p>
-          {data.documents.length ? (
-            <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
-              {data.documents.map((doc) => (
-                <DocumentLink
-                  key={doc.id}
-                  doc={doc}
-                  exitTo="/app"
-                  isStudentView
-                />
-              ))}
-            </div>
-          ) : (
-            <NoDataPlaceholder
-              title="No documents"
-              subtitle="Use Write something new above to get started."
-            />
-          )}
-          {data.archivedDocuments.length > 0 && (
-            <div className="mt-6">
-              <Accordion type="single" collapsible>
-                <AccordionItem value="archived" className="border-none">
-                  <AccordionTrigger className="text-sm text-muted-foreground hover:no-underline py-2">
-                    View archived documents ({data.archivedDocuments.length})
-                  </AccordionTrigger>
-                  <AccordionContent>
-                    <div className="grid grid-cols-2 gap-2 md:grid-cols-4 pt-2">
-                      {data.archivedDocuments.map((doc) => (
-                        <DocumentLink
-                          key={doc.id}
-                          doc={doc}
-                          exitTo="/app"
-                          isArchived
-                          isStudentView
-                        />
-                      ))}
-                    </div>
-                  </AccordionContent>
-                </AccordionItem>
-              </Accordion>
-            </div>
           )}
         </div>
       </div>

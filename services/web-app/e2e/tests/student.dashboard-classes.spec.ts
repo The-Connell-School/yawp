@@ -20,6 +20,14 @@ test.describe.serial('Student dashboard: Classes, not Courses', () => {
 
     // The old Courses/Assignments tab switcher is gone.
     await expect(page.getByRole('tab', { name: /^Courses/ })).toHaveCount(0);
+
+    // The dashboard is classes plus Write something new, nothing else: documents live
+    // under My Documents and assignments under each class.
+    await expect(
+      page.getByRole('button', { name: /write something new/i })
+    ).toBeVisible();
+    await expect(page.getByText('Documents', { exact: true })).toHaveCount(0);
+    await expect(page.getByText('Assignments', { exact: true })).toHaveCount(0);
   });
 
   test('My Classes sidebar entry returns the student to their enrolled classes', async ({
