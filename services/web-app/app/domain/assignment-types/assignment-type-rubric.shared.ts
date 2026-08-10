@@ -2,6 +2,7 @@ import {
   parseOptionalBoolean,
   parseRubricScoreLabels,
 } from './rubric-category-options';
+import { normalizeScoreStep } from './score-scale-steps';
 
 export const DEFAULT_OUTPUT_SCHEMA_JSON = {
   responseShape: 'categories_overall_comment',
@@ -12,6 +13,12 @@ export type ScoringScaleData = {
   type: string;
   minScore: number;
   maxScore: number;
+  /**
+   * The gap between one allowed score and the next: 0-30 by tens is four
+   * tiers, not thirty-one. Absent means 1, which is how every scale behaved
+   * before this existed, so no stored rubric changes meaning.
+   */
+  step?: number;
   compositeMin?: number;
   compositeMax?: number;
 };
@@ -66,6 +73,7 @@ export function parseScoringScale(raw: unknown): ScoringScaleData {
     type: d?.type ?? 'weighted_1_5',
     minScore: d?.minScore ?? 1,
     maxScore: d?.maxScore ?? 5,
+    step: normalizeScoreStep(d?.step),
     compositeMin: d?.compositeMin,
     compositeMax: d?.compositeMax,
   };

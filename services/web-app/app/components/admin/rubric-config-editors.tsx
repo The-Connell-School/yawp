@@ -60,6 +60,12 @@ import {
   type ScoringScaleData,
 } from '~/domain/assignment-types/assignment-type-rubric.shared';
 import { isGrammarHighlightCategory } from '~/domain/assignment-types/rubric-category-options';
+import {
+  DEFAULT_SCORE_STEP,
+  buildScoreScaleValues,
+  describeScoreScale,
+  validateScoreScale,
+} from '~/domain/assignment-types/score-scale-steps';
 
 /** SheetContent override that lets the footer pin to the bottom while the
  * body scrolls — pairs with SHEET_SCROLL_BODY_CLASS_NAME / SHEET_STICKY_FOOTER_CLASS_NAME.
@@ -165,6 +171,8 @@ export function ScoringScaleEditor({
     }
   };
   const isAct = scale.type === 'act_writing_2_12';
+  const scoreScaleDescription = describeScoreScale(scale);
+  const scoreScaleError = validateScoreScale(scale);
 
   return (
     <div className="space-y-3">
@@ -212,6 +220,31 @@ export function ScoringScaleEditor({
             }
           />
         </div>
+      </div>
+
+      <div className="space-y-1.5">
+        <Label htmlFor={`${namePrefix}scoreStep`}>Step</Label>
+        <Input
+          id={`${namePrefix}scoreStep`}
+          type="number"
+          min={1}
+          value={scale.step ?? DEFAULT_SCORE_STEP}
+          data-testid="rubric-score-step"
+          onChange={(e) =>
+            setScale((s) => ({ ...s, step: Number(e.target.value) }))
+          }
+        />
+        <p className="text-sm text-muted-foreground">
+          Scores go up in steps of this size. {scoreScaleDescription}
+        </p>
+        {scoreScaleError ? (
+          <p
+            className="text-sm text-destructive"
+            data-testid="rubric-score-step-error"
+          >
+            {scoreScaleError}
+          </p>
+        ) : null}
       </div>
 
       {isAct && (
@@ -630,6 +663,7 @@ export function CategoryEditSheetContent({
   category,
   minScore,
   maxScore,
+  step,
   onSave,
   onRemove,
   onDirtyChange,
@@ -638,6 +672,7 @@ export function CategoryEditSheetContent({
   category: RubricCategoryRow;
   minScore: number;
   maxScore: number;
+  step?: number;
   onSave: (patch: Partial<RubricCategory>) => void;
   onRemove: () => void;
   /** Reports live dirty state up so the wrapper's close guard stays in sync. */
@@ -655,10 +690,7 @@ export function CategoryEditSheetContent({
     onDirtyChange?.(isDirty);
   }, [isDirty, onDirtyChange]);
 
-  const scoreValues = Array.from(
-    { length: Math.max(0, maxScore - minScore + 1) },
-    (_, index) => minScore + index
-  );
+  const scoreValues = buildScoreScaleValues({ minScore, maxScore, step });
 
   function setScoreLabel(value: number, label: string) {
     setDraft((current) => {
@@ -832,6 +864,7 @@ function CategoryEditSheet({
   category,
   minScore,
   maxScore,
+  step,
   open,
   onOpenChange,
   onSave,
@@ -840,6 +873,7 @@ function CategoryEditSheet({
   category: RubricCategoryRow | null;
   minScore: number;
   maxScore: number;
+  step?: number;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSave: (patch: Partial<RubricCategory>) => void;
@@ -890,6 +924,7 @@ function CategoryEditSheet({
             category={category}
             minScore={minScore}
             maxScore={maxScore}
+            step={step}
             onDirtyChange={setIsDirty}
             onSave={(patch) => {
               onSave(patch);
@@ -987,6 +1022,7 @@ export function RubricEditor({
   namePrefix = '',
   minScore = DEFAULT_SCORING_SCALE.minScore,
   maxScore = DEFAULT_SCORING_SCALE.maxScore,
+  step = DEFAULT_SCORE_STEP,
 }: {
   initial?: RubricData;
   categories?: RubricCategoryRow[];
@@ -995,6 +1031,8 @@ export function RubricEditor({
   /** Score range the per-category score labels are collected for. */
   minScore?: number;
   maxScore?: number;
+  /** Gap between the score-label rows; 1 collects a label for every value. */
+  step?: number;
 }) {
   const [internalCats, setInternalCats] = useState<RubricCategoryRow[]>(() =>
     rowsFromCategories(initial?.categories ?? [])
@@ -1125,6 +1163,7 @@ export function RubricEditor({
         category={editingCategory}
         minScore={minScore}
         maxScore={maxScore}
+        step={step}
         open={Boolean(editingCategory)}
         onOpenChange={(open) => {
           if (!open) setEditingCategoryId(null);
@@ -1237,6 +1276,7 @@ export function RubricConfigurationEditor({
         namePrefix={namePrefix}
         minScore={scoringScale.minScore}
         maxScore={scoringScale.maxScore}
+        step={scoringScale.step}
       />
     </div>
   );

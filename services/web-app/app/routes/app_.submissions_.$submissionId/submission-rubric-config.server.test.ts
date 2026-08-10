@@ -23,6 +23,7 @@ function resolvedGradingConfig(
     scoringType: 'weighted_1_5',
     minScore: 1,
     maxScore: 5,
+    step: 1,
     rubricCategories: [],
     instructions: {
       mode: 'legacy-split' as const,
@@ -78,6 +79,7 @@ describe('resolveRubricConfigForSubmission', () => {
     expect(config).toEqual({
       minScore: 1,
       maxScore: 6,
+      step: 1,
       scoringType: 'act_writing_2_12',
       categories: [
         {

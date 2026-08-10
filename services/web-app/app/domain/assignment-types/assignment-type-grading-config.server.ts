@@ -8,6 +8,7 @@ import {
   type AssignmentTypeRubricConfigSource,
 } from './assignment-type-rubric-config';
 import type { RubricCategory } from '~/domain/assignment-types/assignment-type-rubric.shared';
+import { normalizeScoreStep } from './score-scale-steps';
 
 export type AssignmentTypeGradingInstructions =
   | {
@@ -42,6 +43,8 @@ export type ResolvedAssignmentTypeGradingConfig = {
   scoringType: string;
   minScore: number;
   maxScore: number;
+  /** Gap between allowed scores; 1 means every value in the range. */
+  step: number;
   rubricCategories: RubricCategory[];
   instructions: AssignmentTypeGradingInstructions;
   rubricSnapshot: Record<string, unknown>;
@@ -162,6 +165,7 @@ function buildResolvedConfig({
         )
       : (parsedConfig.promptConfig as Record<string, unknown>);
   const { minScore, maxScore } = getScoreBounds(parsedConfig.scoringScale);
+  const step = normalizeScoreStep(parsedConfig.scoringScale.step);
   const scoringType = getScoringType(parsedConfig.scoringScale);
   const rubricCategories = parsedConfig.rubric.categories;
 
@@ -182,9 +186,16 @@ function buildResolvedConfig({
     scoringType,
     minScore,
     maxScore,
+    step,
     rubricCategories,
     instructions: getAssignmentTypeGradingInstructions(promptConfigSnapshot),
-    rubricSnapshot: { categories: rubricCategories, minScore, maxScore, scoringType },
+    rubricSnapshot: {
+      categories: rubricCategories,
+      minScore,
+      maxScore,
+      step,
+      scoringType,
+    },
     promptConfigSnapshot,
     outputSchemaSnapshot: parsedConfig.outputSchema,
     calibrationNotes: parsedConfig.calibrationNotes,

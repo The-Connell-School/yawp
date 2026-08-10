@@ -5,6 +5,10 @@ import {
   parseRubricScoreLabels,
 } from '~/domain/assignment-types/rubric-category-options';
 import type { RubricScoreLabel } from '~/domain/assignment-types/assignment-type-rubric.shared';
+import {
+  buildScoreScaleValues,
+  normalizeScoreStep,
+} from '~/domain/assignment-types/score-scale-steps';
 
 export type RubricDisplayCategory = {
   key: string;
@@ -25,6 +29,8 @@ export type RubricDisplayConfig = {
   categories: RubricDisplayCategory[];
   minScore: number;
   maxScore: number;
+  /** Gap between allowed scores; absent or 1 means every value in the range. */
+  step?: number;
   scoringType: string;
   /**
    * Which rubric actually produced this config: the assignment type's own
@@ -81,6 +87,7 @@ export const legacyRubricDisplayConfig: RubricDisplayConfig = {
   })),
   minScore: 1,
   maxScore: 5,
+  step: 1,
   scoringType: 'weighted_1_5',
 };
 
@@ -152,6 +159,9 @@ export function normalizeRubricDisplayConfig(
     typeof raw.maxScore === 'number' && Number.isFinite(raw.maxScore)
       ? Math.round(raw.maxScore)
       : legacyRubricDisplayConfig.maxScore;
+  const step = normalizeScoreStep(
+    typeof raw.step === 'number' ? raw.step : undefined
+  );
   const scoringType =
     typeof raw.scoringType === 'string'
       ? raw.scoringType
@@ -161,6 +171,7 @@ export function normalizeRubricDisplayConfig(
     categories,
     minScore: Math.min(minScore, maxScore),
     maxScore: Math.max(minScore, maxScore),
+    step,
     scoringType,
     source: parseRubricDisplaySource(raw.source),
     rubricIncomplete: raw.rubricIncomplete === true,
@@ -274,12 +285,12 @@ export function normalizeRubricScoresForCategories({
 export function buildScoreOptions(
   minScore: number,
   maxScore: number,
-  scoreLabels?: RubricScoreLabel[]
+  scoreLabels?: RubricScoreLabel[],
+  step?: number
 ) {
-  return Array.from(
-    { length: Math.max(0, maxScore - minScore + 1) },
-    (_, index) => minScore + index
-  ).map((score) => {
+  // Same grid the rubric editor lays its label rows out on, so the teacher is
+  // never offered a score the rubric has no label for.
+  return buildScoreScaleValues({ minScore, maxScore, step }).map((score) => {
     const configured = scoreLabels
       ? getCategoryScoreLabel({ scoreLabels }, score)
       : null;

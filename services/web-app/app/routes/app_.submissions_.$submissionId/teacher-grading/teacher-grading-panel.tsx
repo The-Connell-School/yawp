@@ -1010,7 +1010,8 @@ export function TeacherGradingPanel({
               const scoreOptions = buildScoreOptions(
                 activeRubricConfig.minScore,
                 activeRubricConfig.maxScore,
-                item.scoreLabels
+                item.scoreLabels,
+                activeRubricConfig.step
               );
 
               return (

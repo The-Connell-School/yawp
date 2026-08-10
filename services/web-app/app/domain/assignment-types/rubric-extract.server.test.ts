@@ -34,6 +34,7 @@ describe('normalizeExtractedRubric', () => {
       type: 'weighted_1_5',
       minScore: 1,
       maxScore: 6,
+      step: 1,
       compositeMin: undefined,
       compositeMax: undefined,
     });

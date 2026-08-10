@@ -9,6 +9,7 @@ import {
   parseOptionalBoolean,
   parseRubricScoreLabels,
 } from '~/domain/assignment-types/rubric-category-options';
+import { normalizeScoreStep } from '~/domain/assignment-types/score-scale-steps';
 
 type RubricSnapshotCategory = RubricDisplayCategory;
 
@@ -98,6 +99,9 @@ export function buildRubricConfigFromSnapshot(
       Number.isFinite(snapshot.maxScore)
         ? snapshot.maxScore
         : 5,
+    step: normalizeScoreStep(
+      typeof snapshot.step === 'number' ? snapshot.step : undefined
+    ),
     scoringType:
       typeof snapshot.scoringType === 'string'
         ? snapshot.scoringType
@@ -131,6 +135,7 @@ export async function resolveRubricConfigForSubmission({
       categories: assignmentTypeConfig.rubricCategories,
       minScore: assignmentTypeConfig.minScore,
       maxScore: assignmentTypeConfig.maxScore,
+      step: assignmentTypeConfig.step,
       scoringType: assignmentTypeConfig.scoringType,
       source: assignmentTypeConfig.source,
       rubricIncomplete: assignmentTypeConfig.rubricIncomplete,
