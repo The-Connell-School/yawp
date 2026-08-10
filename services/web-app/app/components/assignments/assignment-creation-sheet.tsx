@@ -20,7 +20,6 @@ import {
   SheetHeader,
   SheetTitle,
 } from '~/components/ui/sheet';
-import { Switch } from '~/components/ui/switch';
 import { Textarea } from '~/components/ui/textarea';
 import { Tooltip } from '~/components/ui/tooltip';
 import {
@@ -636,29 +635,28 @@ export function AssignmentCreationSheetContent({
 
         <div className="pt-6">
           <input type="hidden" name="tutorEnabled" value="false" />
-          <div className="rounded-md border bg-muted/40 p-3">
-            <p className="text-base font-semibold text-foreground sm:text-sm">
-              Turning the tutor off will remove the tutor from the
-              student&apos;s documents.
-            </p>
-            <div className="mt-3 flex items-start justify-between gap-4">
-              <Label
-                htmlFor="assignment-create-tutor-enabled"
-                className="min-w-0 flex-1 cursor-pointer text-base/7 font-normal text-muted-foreground sm:text-sm/6"
-              >
-                Do this if you want to test the student&apos;s ability to write
-                a paper independently of tutor guidance.
-              </Label>
-              <Switch
-                id="assignment-create-tutor-enabled"
-                name="tutorEnabled"
-                value="true"
-                checked={tutorEnabled}
-                onCheckedChange={setTutorEnabled}
-                disabled={isSaving}
-              />
-            </div>
+          <div className="flex items-center gap-2.5">
+            <Checkbox
+              id="assignment-create-tutor-enabled"
+              name="tutorEnabled"
+              value="true"
+              checked={tutorEnabled}
+              onCheckedChange={(checked) => setTutorEnabled(checked === true)}
+              disabled={isSaving}
+              className="size-4 shrink-0"
+            />
+            <Label
+              htmlFor="assignment-create-tutor-enabled"
+              className="cursor-pointer font-normal leading-none"
+            >
+              Tutor enabled
+            </Label>
           </div>
+          <p className="mt-1 pl-[calc(1rem+0.625rem)] text-sm text-muted-foreground">
+            Turning the tutor off removes it from students&apos; documents. Do
+            this to test a student&apos;s ability to write a paper independently
+            of tutor guidance.
+          </p>
         </div>
 
         {SAVED_ASSIGNMENTS_ENABLED && usesBulkCreateApi ? (
