@@ -195,45 +195,48 @@ export function ScoringScaleEditor({
         </Select>
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
-        <div className="space-y-1.5">
-          <Label htmlFor={`${namePrefix}minScore`}>Min score</Label>
-          <Input
-            id={`${namePrefix}minScore`}
-            type="number"
-            value={scale.minScore}
-            min={0}
-            onChange={(e) =>
-              setScale((s) => ({ ...s, minScore: Number(e.target.value) }))
-            }
-          />
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor={`${namePrefix}maxScore`}>Max score</Label>
-          <Input
-            id={`${namePrefix}maxScore`}
-            type="number"
-            value={scale.maxScore}
-            min={1}
-            onChange={(e) =>
-              setScale((s) => ({ ...s, maxScore: Number(e.target.value) }))
-            }
-          />
-        </div>
-      </div>
-
+      {/* Three short numbers that describe one scale, so they read as one
+          row rather than three stacked fields the width of the sheet. */}
       <div className="space-y-1.5">
-        <Label htmlFor={`${namePrefix}scoreStep`}>Step</Label>
-        <Input
-          id={`${namePrefix}scoreStep`}
-          type="number"
-          min={1}
-          value={scale.step ?? DEFAULT_SCORE_STEP}
-          data-testid="rubric-score-step"
-          onChange={(e) =>
-            setScale((s) => ({ ...s, step: Number(e.target.value) }))
-          }
-        />
+        <div className="flex flex-wrap items-end gap-3">
+          <div className="w-24 space-y-1.5">
+            <Label htmlFor={`${namePrefix}minScore`}>Min score</Label>
+            <Input
+              id={`${namePrefix}minScore`}
+              type="number"
+              value={scale.minScore}
+              min={0}
+              onChange={(e) =>
+                setScale((s) => ({ ...s, minScore: Number(e.target.value) }))
+              }
+            />
+          </div>
+          <div className="w-24 space-y-1.5">
+            <Label htmlFor={`${namePrefix}maxScore`}>Max score</Label>
+            <Input
+              id={`${namePrefix}maxScore`}
+              type="number"
+              value={scale.maxScore}
+              min={1}
+              onChange={(e) =>
+                setScale((s) => ({ ...s, maxScore: Number(e.target.value) }))
+              }
+            />
+          </div>
+          <div className="w-24 space-y-1.5">
+            <Label htmlFor={`${namePrefix}scoreStep`}>Step</Label>
+            <Input
+              id={`${namePrefix}scoreStep`}
+              type="number"
+              min={1}
+              value={scale.step ?? DEFAULT_SCORE_STEP}
+              data-testid="rubric-score-step"
+              onChange={(e) =>
+                setScale((s) => ({ ...s, step: Number(e.target.value) }))
+              }
+            />
+          </div>
+        </div>
         <p className="text-sm text-muted-foreground">
           Scores go up in steps of this size. {scoreScaleDescription}
         </p>
