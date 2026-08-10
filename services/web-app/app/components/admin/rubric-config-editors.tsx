@@ -862,6 +862,10 @@ function CategoryEditSheet({
 
   return (
     <>
+      {/* Non-modal on purpose: the assignment-type form behind this sheet has
+          to stay usable, and saving with the sheet still open must keep the
+          in-flight category (see the creator e2e spec). The overlay therefore
+          dims without swallowing clicks. */}
       <Sheet
         open={open}
         onOpenChange={(next) => {
@@ -869,12 +873,18 @@ function CategoryEditSheet({
         }}
         modal={false}
       >
+        {/* Clicking the dimmed page is how most people dismiss a sheet, so it
+            routes through the same guard as Escape and the X rather than being
+            swallowed — which read as the sheet being stuck. */}
         <SheetContent
           includeOverlay={false}
+          dimBehind
           aria-describedby={undefined}
           className={PINNED_FOOTER_SHEET_CONTENT_CLASS_NAME}
-          onPointerDownOutside={(event) => event.preventDefault()}
-          onInteractOutside={(event) => event.preventDefault()}
+          onInteractOutside={(event) => {
+            event.preventDefault();
+            requestClose();
+          }}
         >
           <CategoryEditSheetContent
             category={category}
