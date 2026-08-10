@@ -3,11 +3,12 @@ import { createE2EPrismaClient } from '../prisma-client';
 import type { Page } from '@playwright/test';
 
 const CLASS_LABEL = /Grade 9th .* Period 1st/;
-// The creation sheet renders the warning as a heading paragraph and the guidance as the
-// switch's <Label htmlFor>, so only the second sentence is the control's accessible name.
-// Both sentences are asserted as visible text in expectStandardizedAssignmentForm below.
-const TUTOR_TOGGLE_LABEL =
-  "Do this if you want to test the student's ability to write a paper independently of tutor guidance.";
+// The creation sheet renders the tutor control as a standard checkbox field: a short
+// <Label htmlFor> is the accessible name and the guidance sits in a sibling paragraph,
+// which is asserted as visible text in expectStandardizedAssignmentForm below.
+const TUTOR_TOGGLE_LABEL = 'Tutor enabled';
+const TUTOR_TOGGLE_HELP =
+  "Turning the tutor off removes it from students' documents. Do this to test a student's ability to write a paper independently of tutor guidance.";
 
 async function expectStandardizedAssignmentForm(page: Page) {
   const dialog = page.getByRole('dialog');
@@ -28,19 +29,10 @@ async function expectStandardizedAssignmentForm(page: Page) {
   ).toBeChecked();
   await expect(dialog.getByLabel(/point value/i)).toHaveValue('100');
   await expect(
-    dialog.getByText(
-      "Turning the tutor off will remove the tutor from the student's documents.",
-      { exact: true }
-    )
+    dialog.getByText(TUTOR_TOGGLE_HELP, { exact: true })
   ).toBeVisible();
   await expect(
-    dialog.getByText(
-      "Do this if you want to test the student's ability to write a paper independently of tutor guidance.",
-      { exact: true }
-    )
-  ).toBeVisible();
-  await expect(
-    dialog.getByRole('switch', { name: TUTOR_TOGGLE_LABEL })
+    dialog.getByRole('checkbox', { name: TUTOR_TOGGLE_LABEL, exact: true })
   ).toBeChecked();
 }
 
@@ -325,8 +317,9 @@ test.describe.serial('Teacher dashboard workspace', () => {
       await page.getByLabel('Title (optional)').fill(title);
       await page.getByLabel('Prompt', { exact: true }).fill(prompt);
       await page.getByLabel(/point value/i).fill('25');
-      const tutorToggle = page.getByRole('switch', {
+      const tutorToggle = page.getByRole('checkbox', {
         name: TUTOR_TOGGLE_LABEL,
+        exact: true,
       });
       await tutorToggle.click();
       await expect(tutorToggle).not.toBeChecked();
