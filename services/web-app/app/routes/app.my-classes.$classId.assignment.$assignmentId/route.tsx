@@ -11,6 +11,7 @@ import {
 import { Copy, Pencil } from 'lucide-react';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { Button } from '~/components/ui/button';
+import { Badge } from '~/components/ui/badge';
 import { CaretLeftIcon } from '~/components/icons';
 import { AP_HISTORY_ASSIGNMENT_TYPE_KEY } from '~/domain/ap-history/schema';
 import { AssignmentCreationSheet } from '~/components/assignments/assignment-creation-sheet';
@@ -97,7 +98,9 @@ export default function AssignmentDetailRoute() {
             </Link>
           </Button>
         </div>
-        <p className="text-sm text-muted-foreground">Assignment not found.</p>
+        <div className="rounded-xl bg-card p-6 text-center ring-1 ring-border">
+          <p className="text-sm text-muted-foreground">Assignment not found.</p>
+        </div>
       </div>
     );
   }
@@ -136,6 +139,8 @@ export default function AssignmentDetailRoute() {
     name: classAssignmentOptionLabel(parentData.klass),
   };
 
+  const documentCount = assignmentForContent.documentCount;
+
   return (
     <div className="text-foreground" data-testid="assignment-detail-page">
       <div className="mb-4">
@@ -148,50 +153,79 @@ export default function AssignmentDetailRoute() {
 
       {mode === 'view' ? (
         <>
+          <div className="mb-6 overflow-hidden rounded-xl bg-card ring-1 ring-border">
+            <div className="flex flex-wrap items-start justify-between gap-4 p-4 sm:p-5">
+              <div className="min-w-0 flex-1">
+                <h1 className="text-balance text-xl font-semibold tracking-tight sm:text-2xl">
+                  {classAssignment.title?.trim() || 'Untitled Assignment'}
+                </h1>
+                <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-base/6 text-muted-foreground sm:text-sm/5">
+                  {classAssignment.assignmentType ? (
+                    <Badge variant="outline" size="sm">
+                      {classAssignment.assignmentType.title}
+                    </Badge>
+                  ) : null}
+                  <span>
+                    {classAssignment.submitForGrade
+                      ? `${classAssignment.pointValue ?? 100} points`
+                      : 'View only'}
+                  </span>
+                  <span>
+                    {documentCount}{' '}
+                    {documentCount === 1 ? 'document' : 'documents'}
+                  </span>
+                </div>
+              </div>
+              {canEdit ? (
+                <div
+                  className="flex shrink-0 items-center gap-2"
+                  data-testid="assignment-detail-actions"
+                >
+                  <Button type="button" variant="ghost" onClick={handleDuplicate}>
+                    <Copy className="mr-2 h-4 w-4" />
+                    Duplicate
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setMode('edit')}
+                  >
+                    <Pencil className="mr-2 h-4 w-4" />
+                    Edit
+                  </Button>
+                </div>
+              ) : null}
+            </div>
+          </div>
+
           <AssignmentSummarySheetContent
             assignment={assignmentForContent}
             classInsightsEnabled={parentData.classInsightsEnabled === true}
             onViewDocuments={handleViewDocuments}
             renderSheet={false}
+            hideHeader
           />
-          {canEdit ? (
-            <div
-              className="mt-6 flex items-center justify-between gap-3 border-t pt-4"
-              data-testid="assignment-detail-actions"
-            >
-              <Button type="button" variant="ghost" onClick={handleDuplicate}>
-                <Copy className="mr-2 h-4 w-4" />
-                Duplicate
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setMode('edit')}
-              >
-                <Pencil className="mr-2 h-4 w-4" />
-                Edit
-              </Button>
-            </div>
-          ) : null}
         </>
       ) : (
-        <AssignmentEditForm
-          action={`/app/my-classes/${classId}`}
-          pdfClassId={classId}
-          allowedAssignmentTypes={parentData.assignmentTypes}
-          editingAssignment={classAssignment}
-          onSaved={() => {
-            setMode('view');
-            setIsDirty(false);
-          }}
-          onBack={() => {
-            if (isDirty && !window.confirm(DISCARD_CONFIRM_MESSAGE)) return;
-            setMode('view');
-            setIsDirty(false);
-          }}
-          onDirtyChange={setIsDirty}
-          renderSheet={false}
-        />
+        <div className="rounded-xl bg-card p-4 ring-1 ring-border sm:p-5">
+          <AssignmentEditForm
+            action={`/app/my-classes/${classId}`}
+            pdfClassId={classId}
+            allowedAssignmentTypes={parentData.assignmentTypes}
+            editingAssignment={classAssignment}
+            onSaved={() => {
+              setMode('view');
+              setIsDirty(false);
+            }}
+            onBack={() => {
+              if (isDirty && !window.confirm(DISCARD_CONFIRM_MESSAGE)) return;
+              setMode('view');
+              setIsDirty(false);
+            }}
+            onDirtyChange={setIsDirty}
+            renderSheet={false}
+          />
+        </div>
       )}
 
       <AssignmentCreationSheet

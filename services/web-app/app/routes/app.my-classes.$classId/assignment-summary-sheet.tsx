@@ -38,6 +38,13 @@ export type AssignmentSummarySheetContentProps = {
    * render this content directly without the Sheet portal.
    */
   renderSheet?: boolean;
+  /**
+   * Set true to skip rendering the built-in title header entirely. Used by
+   * the dedicated assignment detail page, which renders its own page-level
+   * heading and passes this content in as the body of a content card below
+   * it — rendering both would produce two headings with the same name.
+   */
+  hideHeader?: boolean;
 };
 
 export function assignmentSummaryLayoutClassName(renderSheet: boolean) {
@@ -164,10 +171,11 @@ export function AssignmentSummarySheetContent({
   classInsightsEnabled,
   onViewDocuments,
   renderSheet = true,
+  hideHeader = false,
 }: AssignmentSummarySheetContentProps) {
   const title = assignment?.title ?? 'Assignment';
 
-  const header = renderSheet ? (
+  const header = hideHeader ? null : renderSheet ? (
     <SheetHeader>
       <SheetTitle>{title}</SheetTitle>
     </SheetHeader>
