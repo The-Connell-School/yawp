@@ -3,7 +3,6 @@ import {
   type LoaderFunctionArgs,
   Link,
   redirect,
-  useBlocker,
   useLoaderData,
   useNavigate,
   useSearchParams,
@@ -23,19 +22,15 @@ import {
 } from '~/components/ui/select';
 import { AP_HISTORY_ASSIGNMENT_TYPE_KEY } from '~/domain/ap-history/schema';
 import { AssignmentCreationSheet } from '~/components/assignments/assignment-creation-sheet';
-import { AssignmentEditForm } from '~/components/assignments/assignment-edit-sheet';
+import type { GradingAssistantStrictnessLevel } from '~/domain/grading/grading-assistant-strictness';
 import { formatClassLabel } from '~/utils/class-display';
 import { getAvailableAssignmentTypesForScopes } from '~/utils/assignment-type-access.server';
-import { Sheet, SheetContent } from '~/components/ui/sheet';
 import {
-  ASSIGNMENT_SUMMARY_SHEET_CONTENT_CLASS_NAME,
   AssignmentSummarySheetContent,
   type AssignmentSummarySheetAssignment,
 } from '../app.my-classes.$classId/assignment-summary-sheet';
 import { mergeClassDocumentsViewPreferences } from '../app.my-classes.$classId/class-documents-view-preferences';
 import type { ClassInsightSummary } from '~/domain/assignment-insights/class-insight-synthesis';
-
-const DISCARD_CONFIRM_MESSAGE = 'Discard your changes to this assignment?';
 
 /**
  * Page chrome the class route used to provide while this page was nested
@@ -107,6 +102,8 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           promptAttachmentName: true,
           submitForGrade: true,
           pointValue: true,
+          tutorEnabled: true,
+          gradingAssistantStrictnessLevel: true,
           assignmentTypeId: true,
           assignmentType: {
             select: { id: true, title: true, systemKey: true },
@@ -194,6 +191,9 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       promptAttachmentName: active.assignment.promptAttachmentName,
       submitForGrade: active.assignment.submitForGrade,
       pointValue: active.assignment.pointValue,
+      tutorEnabled: active.assignment.tutorEnabled,
+      gradingAssistantStrictnessLevel: active.assignment
+        .gradingAssistantStrictnessLevel as GradingAssistantStrictnessLevel,
       assignmentTypeId: active.assignment.assignmentTypeId,
       assignmentType: active.assignment.assignmentType,
       documentCount: active._count.documents,
@@ -209,37 +209,11 @@ export default function AssignmentDetailRoute() {
   const [searchParams, setSearchParams] = useSearchParams();
 
   const [isEditSheetOpen, setIsEditSheetOpen] = useState(false);
-  const [isDirty, setIsDirty] = useState(false);
   const [isDuplicateSheetOpen, setIsDuplicateSheetOpen] = useState(false);
 
-  const closeEditSheet = () => {
-    setIsEditSheetOpen(false);
-    setIsDirty(false);
-  };
-
   const handleEditSheetOpenChange = (open: boolean) => {
-    if (!open && isDirty && !window.confirm(DISCARD_CONFIRM_MESSAGE)) return;
-    if (!open) {
-      closeEditSheet();
-      return;
-    }
-    setIsEditSheetOpen(true);
+    setIsEditSheetOpen(open);
   };
-
-  const blocker = useBlocker(
-    ({ currentLocation, nextLocation }) =>
-      isEditSheetOpen &&
-      isDirty &&
-      currentLocation.pathname !== nextLocation.pathname
-  );
-
-  if (blocker.state === 'blocked') {
-    if (window.confirm(DISCARD_CONFIRM_MESSAGE)) {
-      blocker.proceed();
-    } else {
-      blocker.reset();
-    }
-  }
 
   if (!data.found) {
     return (
@@ -309,8 +283,7 @@ export default function AssignmentDetailRoute() {
   };
 
   const handleClassChange = (classId: string) => {
-    if (isDirty && !window.confirm(DISCARD_CONFIRM_MESSAGE)) return;
-    closeEditSheet();
+    setIsEditSheetOpen(false);
     const next = new URLSearchParams(searchParams);
     next.set('classId', classId);
     setSearchParams(next, { replace: true });
@@ -414,24 +387,29 @@ export default function AssignmentDetailRoute() {
           />
         </>
 
-        {/* Editing happens in the same sheet the rest of the app edits
-            assignments in — the page behind it stays put. */}
-        <Sheet open={isEditSheetOpen} onOpenChange={handleEditSheetOpenChange}>
-          <SheetContent className={ASSIGNMENT_SUMMARY_SHEET_CONTENT_CLASS_NAME}>
-            <AssignmentEditForm
-              action={`/app/my-classes/${activeClassId}`}
-              pdfClassId={activeClassId}
-              allowedAssignmentTypes={data.assignmentTypes}
-              editingAssignment={assignment}
-              onSaved={closeEditSheet}
-              onBack={() => {
-                if (isDirty && !window.confirm(DISCARD_CONFIRM_MESSAGE)) return;
-                closeEditSheet();
-              }}
-              onDirtyChange={setIsDirty}
-            />
-          </SheetContent>
-        </Sheet>
+        {/* Editing uses the same sheet as creating — one form, one layout,
+            with the settings that cannot change after creation frozen. */}
+        <AssignmentCreationSheet
+          open={isEditSheetOpen}
+          onOpenChange={handleEditSheetOpenChange}
+          entryPoint="class"
+          fixedClassId={activeClassId}
+          assignmentTypes={data.assignmentTypes}
+          teacherClasses={[activeClassOption]}
+          editingAssignment={{
+            id: assignment.id,
+            promptAttachmentName: assignment.promptAttachmentName,
+          }}
+          initialAssignmentTypeId={assignment.assignmentTypeId}
+          initialTitle={assignment.title ?? ''}
+          initialPrompt={assignment.prompt}
+          initialSubmitForGrade={assignment.submitForGrade}
+          initialPointValue={assignment.pointValue}
+          initialTutorEnabled={assignment.tutorEnabled}
+          initialGradingAssistantStrictnessLevel={
+            assignment.gradingAssistantStrictnessLevel
+          }
+        />
 
         {/* Same sheet, same props as the class page's "Add assignment", so
             the form reads identically from either entry point. Duplicate only

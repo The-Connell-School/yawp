@@ -508,6 +508,15 @@ export async function action({ request, params }: ActionFunctionArgs) {
           prompt,
           submitForGrade: gradingIntent.data.submitForGrade,
           pointValue: gradingIntent.data.pointValue,
+          // Both controls now live on the edit form as well as the create
+          // form. Only write them when the form actually sent them, so an
+          // older caller that omits them leaves the stored value alone.
+          ...(gradingAssistantStrictnessLevel
+            ? { gradingAssistantStrictnessLevel }
+            : {}),
+          ...(formData.has('tutorEnabled')
+            ? { tutorEnabled: tutorEnabledResult.value }
+            : {}),
           ...promptAttachmentData,
         },
       });
