@@ -16,6 +16,7 @@ import type { Block, TextRun } from './markdown-blocks';
 import { markdownBlocks } from './markdown-blocks';
 import type { LessonPacket } from './lesson-packet';
 import { buildStudentHandout } from './student-handout';
+import { deckDurationMinutes, type Slide, type SlideDeck } from './slide-deck';
 
 /** Yawp's print colour, matched to the packet page's header rule. */
 const BRAND = '#c05a3e';
@@ -263,6 +264,111 @@ function drawMarkdown(doc: Doc, markdown: string): void {
   blocks.forEach((block, index) => drawBlock(doc, block, blocks[index - 1]));
 }
 
+/**
+ * What is actually on one slide, as blocks — not counting the notes.
+ *
+ * Each layout gets the shape it was written in: a compare slide keeps both
+ * labels beside their columns, bullets stay a list, a quote keeps whoever said
+ * it. Anything the layout did not fill is simply absent.
+ */
+function slideFaceBlocks(slide: Slide): Block[] {
+  const blocks: Block[] = [];
+
+  if (slide.subtitle) {
+    blocks.push({
+      kind: 'paragraph',
+      runs: [{ text: slide.subtitle, italic: true }],
+    });
+  }
+  if (slide.body) {
+    blocks.push({ kind: 'paragraph', runs: [{ text: slide.body }] });
+  }
+  for (const bullet of slide.bullets ?? []) {
+    blocks.push({
+      kind: 'listItem',
+      depth: 0,
+      marker: '•',
+      runs: [{ text: bullet }],
+    });
+  }
+  for (const column of [slide.left, slide.right]) {
+    if (!column) continue;
+    blocks.push({
+      kind: 'paragraph',
+      runs: [
+        { text: `${column.label} — `, bold: true },
+        { text: column.text },
+      ],
+    });
+  }
+  if (slide.attribution) {
+    blocks.push({
+      kind: 'paragraph',
+      runs: [{ text: `— ${slide.attribution}`, italic: true }],
+    });
+  }
+
+  return blocks;
+}
+
+/** "· 5 min", or nothing when the slide never claimed a length. */
+function slideTiming(slide: Slide): string {
+  return slide.minutes ? ` · ${slide.minutes} min` : '';
+}
+
+/**
+ * A deck, printed the way a teacher uses one on paper.
+ *
+ * Not one boxed slide per page: that looks like a deck and wastes twenty
+ * near-empty sheets. The useful paper artifact is the notes view — each slide,
+ * what is on it, and what the teacher planned to say — which is what they read
+ * at 7am and what they leave for a substitute. Notes are set as a quote so the
+ * bar down the margin tells them apart at a glance from what students see.
+ */
+function drawSlideDeck(doc: Doc, deck: SlideDeck): void {
+  const minutes = deckDurationMinutes(deck);
+  const summary = [
+    `${deck.slides.length} slide${deck.slides.length === 1 ? '' : 's'}`,
+    minutes > 0 ? `${minutes} min` : null,
+    deck.subtitle,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+
+  drawBlock(doc, { kind: 'rule' });
+  drawBlock(doc, {
+    kind: 'heading',
+    level: 3,
+    runs: [{ text: `Slides — ${summary}`, bold: true }],
+  });
+
+  deck.slides.forEach((slide, index) => {
+    // A slide split across a page break is the one thing this layout must not
+    // do — the notes belong with the slide they are notes for.
+    ensureRoom(doc, 96);
+    const blocks: Block[] = [
+      {
+        kind: 'heading',
+        level: 2,
+        runs: [
+          { text: `${index + 1}. ${slide.title}${slideTiming(slide)}` },
+        ],
+      },
+      ...slideFaceBlocks(slide),
+      {
+        kind: 'quote',
+        runs: [
+          { text: 'Notes: ', bold: true },
+          { text: slide.speakerNotes },
+        ],
+      },
+    ];
+    blocks.forEach((block, position) =>
+      drawBlock(doc, block, blocks[position - 1])
+    );
+  });
+}
+
 function drawTitle(
   doc: Doc,
   { title, subtitle }: { title: string; subtitle: string | null }
@@ -347,6 +453,7 @@ export async function renderPacketPdf(
       runs: [{ text: section.title, bold: true }],
     });
     drawMarkdown(doc, section.content);
+    if (section.deck) drawSlideDeck(doc, section.deck);
 
     for (const material of section.materials) {
       drawBlock(doc, {

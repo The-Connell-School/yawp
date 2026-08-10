@@ -367,3 +367,135 @@ describe('printsForStudents', () => {
     ).toBe(false);
   });
 });
+
+/**
+ * A deck on paper.
+ *
+ * The packet hands the PDF a parsed deck, and until it did, this renderer
+ * passed the raw `yawp-slides` fence to the Markdown drawer — so "save as PDF"
+ * on a lesson with slides produced pages of Courier-set JSON. What a teacher
+ * wants on paper is the notes view: each slide, what is on it, and what they
+ * planned to say.
+ */
+describe('renderPacketPdf — a section that carries a deck', () => {
+  const DECK_REPLY = `## Beyond the Quote
+
+Here's the deck for tomorrow.
+
+\`\`\`yawp-slides
+${JSON.stringify(
+  {
+    title: 'Beyond the Quote',
+    subtitle: 'English 11 · Analysis that argues',
+    slides: [
+      {
+        layout: 'title',
+        title: 'Beyond the Quote',
+        subtitle: 'Writing analysis that actually argues',
+        speakerNotes: 'Let the title sit for a beat before you say anything.',
+        minutes: 1,
+      },
+      {
+        layout: 'compare',
+        title: "What's the difference?",
+        left: { label: 'Version A', text: 'The door slammed.' },
+        right: { label: 'Version B', text: 'When the door slams, she is done.' },
+        speakerNotes: 'Three silent minutes of writing before anyone speaks.',
+        minutes: 5,
+      },
+      {
+        layout: 'bullets',
+        title: 'The three moves',
+        bullets: ['Interpret', 'Connect', 'Push further'],
+        speakerNotes: 'Name each move, then show it in the model paragraph.',
+        minutes: 6,
+      },
+      {
+        layout: 'quote',
+        title: 'Read it again',
+        body: 'This shows that the door slammed.',
+        attribution: 'a paragraph that stops too early',
+        speakerNotes: 'Ask what that sentence added. Wait them out.',
+      },
+    ],
+  },
+  null,
+  2
+)}
+\`\`\``;
+
+  async function deckPdfText() {
+    return pdfText(
+      await renderPacketPdf(packetWith([{ id: 's1', content: DECK_REPLY }]))
+    );
+  }
+
+  test('never prints the JSON', async () => {
+    const text = await deckPdfText();
+
+    expect(text).not.toContain('yawp-slides');
+    expect(text).not.toContain('"layout"');
+    expect(text).not.toContain('speakerNotes');
+    expect(text).not.toContain('{');
+  });
+
+  test('keeps the prose that came with the deck', async () => {
+    expect(await deckPdfText()).toContain("Here's the deck for tomorrow.");
+  });
+
+  test('prints every slide, numbered and in order', async () => {
+    const text = await deckPdfText();
+
+    expect(text).toContain('Beyond the Quote');
+    expect(text).toContain("What's the difference?");
+    expect(text).toContain('The three moves');
+    expect(text).toContain('Read it again');
+    expect(text.indexOf('The three moves')).toBeGreaterThan(
+      text.indexOf("What's the difference?")
+    );
+  });
+
+  test('prints what is actually on each slide', async () => {
+    const text = await deckPdfText();
+
+    // Both columns of a compare, both labels.
+    expect(text).toContain('Version A');
+    expect(text).toContain('The door slammed.');
+    expect(text).toContain('Version B');
+    // Bullets, the subtitle of a title slide, a quote and its attribution.
+    expect(text).toContain('Interpret');
+    expect(text).toContain('Push further');
+    expect(text).toContain('Writing analysis that actually argues');
+    expect(text).toContain('a paragraph that stops too early');
+  });
+
+  // The reason a teacher prints a deck at all: the notes are the lesson.
+  test('prints the speaker notes', async () => {
+    const text = await deckPdfText();
+
+    expect(text).toContain('Let the title sit for a beat');
+    expect(text).toContain('Three silent minutes of writing');
+    expect(text).toContain('Wait them out.');
+  });
+
+  test('carries each slide’s timing', async () => {
+    expect(await deckPdfText()).toContain('5 min');
+  });
+
+  test('a deck that failed to validate prints its prose, not its braces', async () => {
+    const text = pdfText(
+      await renderPacketPdf(
+        packetWith([
+          {
+            id: 's1',
+            content:
+              '## Broken\n\nThe lesson still stands.\n\n```yawp-slides\n{ "title": "Nope", "slides": [] }\n```',
+          },
+        ])
+      )
+    );
+
+    expect(text).toContain('The lesson still stands.');
+    expect(text).not.toContain('"slides"');
+  });
+});
