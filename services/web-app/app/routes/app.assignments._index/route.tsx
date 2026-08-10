@@ -4,12 +4,17 @@ import {
   data as dataResponse,
   redirect,
 } from 'react-router';
-import { Link, useFetcher, useLoaderData } from 'react-router';
-import { useMemo, useState } from 'react';
-import { Search } from 'lucide-react';
+import { Form, Link, useFetcher, useLoaderData } from 'react-router';
+import { useEffect, useMemo, useState } from 'react';
+import { ArrowDown, ArrowUp, Plus, Search, Trash2 } from 'lucide-react';
 import { AssignmentCreationSheet } from '~/components/assignments/assignment-creation-sheet';
 import { Button } from '~/components/ui/button';
+import { Checkbox } from '~/components/ui/checkbox';
 import { Input } from '~/components/ui/input';
+import { Tooltip } from '~/components/ui/tooltip';
+import { Pagination } from '~/components/table/pagination';
+import { useTable } from '~/hooks/useTable';
+import { clampAssignmentPaginationSkip } from '../app.my-classes.$classId/class-assignments-tab';
 import { AssignmentClasses } from './assignment-classes';
 import {
   Table,
@@ -34,6 +39,7 @@ import {
   listSavedAssignments,
 } from '~/domain/assignments/saved-assignments.server';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
+import { deleteClassAssignmentDeployment } from '~/utils/assignment-deployment.server';
 import { getAvailableAssignmentTypesForScopes } from '~/utils/assignment-type-access.server';
 import { prisma } from '~/utils/db.server';
 import { formatClassLabel } from '~/utils/teacher-document-work-utils';
@@ -182,6 +188,55 @@ export async function action({ request }: ActionFunctionArgs) {
   const formData = await request.formData();
   const intent = formData.get('intent')?.toString();
 
+  if (intent === 'delete-assignments') {
+    const assignmentIds = [
+      ...new Set(formData.getAll('assignmentIds').map(String)),
+    ];
+
+    if (!assignmentIds.length) {
+      return dataResponse(
+        { success: false, message: 'Select at least one assignment.' },
+        { status: 400 }
+      );
+    }
+
+    // Only the deployments in this teacher's own classes: an assignment shared
+    // with a class someone else teaches must not disappear from under them.
+    // The assignment row itself is removed once its last deployment goes.
+    const deployments = await prisma.classAssignment.findMany({
+      where: {
+        assignmentId: { in: assignmentIds },
+        class: { teachers: { some: { id: profile.id } }, isArchived: false },
+      },
+      select: { assignmentId: true, classId: true },
+    });
+
+    const reachable = new Set(
+      deployments.map((deployment) => deployment.assignmentId)
+    );
+    if (reachable.size !== assignmentIds.length) {
+      return dataResponse(
+        { success: false, message: 'Some assignments were not found.' },
+        { status: 404 }
+      );
+    }
+
+    for (const deployment of deployments) {
+      await deleteClassAssignmentDeployment({
+        assignmentId: deployment.assignmentId,
+        classId: deployment.classId,
+      });
+    }
+
+    return dataResponse({
+      success: true,
+      message:
+        assignmentIds.length === 1
+          ? 'Assignment deleted.'
+          : `Deleted ${assignmentIds.length} assignments.`,
+    });
+  }
+
   if (intent !== 'remove-saved-assignment') {
     return dataResponse(
       { success: false, message: 'Unsupported action.' },
@@ -316,6 +371,9 @@ export default function MyAssignmentsRoute() {
     assignmentCreationTypes,
   } = useLoaderData<typeof loader>();
   const [searchQuery, setSearchQuery] = useState('');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+  const [pagination, setPagination] = useState({ skip: 0, take: 20 });
+  const [isCreateSheetOpen, setIsCreateSheetOpen] = useState(false);
   const [reusedAssignment, setReusedAssignment] =
     useState<SavedAssignment | null>(null);
 
@@ -324,11 +382,12 @@ export default function MyAssignmentsRoute() {
     []
   );
 
-  const sortedAssignments = useMemo(
-    () =>
-      [...assignments].sort((a, b) => collator.compare(a.title, b.title)),
-    [assignments, collator]
-  );
+  const sortedAssignments = useMemo(() => {
+    const direction = sortDirection === 'asc' ? 1 : -1;
+    return [...assignments].sort(
+      (a, b) => collator.compare(a.title, b.title) * direction
+    );
+  }, [assignments, collator, sortDirection]);
 
   const filteredAssignments = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
@@ -340,6 +399,52 @@ export default function MyAssignmentsRoute() {
         assignment.assignmentTypeTitle.toLowerCase().includes(query)
     );
   }, [sortedAssignments, searchQuery]);
+
+  const paginatedAssignments = filteredAssignments.slice(
+    pagination.skip,
+    pagination.skip + pagination.take
+  );
+
+  const {
+    selected: selectedAssignmentIds,
+    setSelected: setSelectedAssignmentIds,
+    handleSelectAll,
+    handleSelect,
+  } = useTable({
+    rows: useMemo(
+      () => filteredAssignments.map(({ assignmentId }) => ({ id: assignmentId })),
+      [filteredAssignments]
+    ),
+  });
+
+  useEffect(() => {
+    setPagination((current) => ({ ...current, skip: 0 }));
+  }, [searchQuery, sortDirection]);
+
+  useEffect(() => {
+    setPagination((current) => {
+      const skip = clampAssignmentPaginationSkip(
+        current.skip,
+        current.take,
+        filteredAssignments.length
+      );
+      return skip === current.skip ? current : { ...current, skip };
+    });
+  }, [filteredAssignments.length]);
+
+  // A row that search or a delete took away must not stay selected, or the
+  // bulk bar acts on assignments the teacher can no longer see.
+  useEffect(() => {
+    const visibleIds = new Set(
+      filteredAssignments.map(({ assignmentId }) => assignmentId)
+    );
+    setSelectedAssignmentIds((current) => {
+      const next = current.filter((id) => visibleIds.has(id));
+      return next.length === current.length ? current : next;
+    });
+  }, [filteredAssignments, setSelectedAssignmentIds]);
+
+  const hasSelection = selectedAssignmentIds.length > 0;
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-8">
@@ -377,17 +482,69 @@ export default function MyAssignmentsRoute() {
       ) : null}
 
       <h2 className="mb-2 text-lg font-semibold">Assigned</h2>
-      <div className="relative mb-4 max-w-sm">
-        <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          name="my-assignments-search"
-          value={searchQuery}
-          onChange={(event) => setSearchQuery(event.target.value)}
-          placeholder="Search assignments"
-          className="h-9 rounded-md border-0 bg-background pl-9 shadow-none ring-1 ring-black/5 focus-visible:ring-2 focus-visible:ring-ring"
-          aria-label="Search assignments"
-          data-testid="my-assignments-search"
-        />
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <div className="relative min-w-0 w-full max-w-sm flex-1">
+          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            name="my-assignments-search"
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            placeholder="Search assignments"
+            className="h-9 rounded-md border-0 bg-background pl-9 shadow-none ring-1 ring-black/5 focus-visible:ring-2 focus-visible:ring-ring"
+            aria-label="Search assignments"
+            data-testid="my-assignments-search"
+          />
+        </div>
+        <div className="ml-auto flex w-full shrink-0 items-center justify-end gap-2 sm:w-auto">
+          {hasSelection ? (
+            <Form
+              method="post"
+              className="inline"
+              onSubmit={(event) => {
+                const count = selectedAssignmentIds.length;
+                if (
+                  !window.confirm(
+                    count === 1
+                      ? 'Delete this assignment from your classes? Existing student documents will remain, but they will no longer be linked to this assignment.'
+                      : `Delete ${count} assignments from your classes? Existing student documents will remain, but they will no longer be linked to these assignments.`
+                  )
+                ) {
+                  event.preventDefault();
+                  return;
+                }
+                setSelectedAssignmentIds([]);
+              }}
+            >
+              <input type="hidden" name="intent" value="delete-assignments" />
+              {selectedAssignmentIds.map((id) => (
+                <input key={id} type="hidden" name="assignmentIds" value={id} />
+              ))}
+              <Tooltip
+                text={`Delete ${selectedAssignmentIds.length} assignment(s)`}
+              >
+                <Button
+                  type="submit"
+                  size="icon-sm"
+                  variant="outline"
+                  aria-label={`Delete ${selectedAssignmentIds.length} assignment(s)`}
+                  data-testid="my-assignments-delete-selected"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </Tooltip>
+            </Form>
+          ) : null}
+          <Button
+            type="button"
+            size="sm"
+            className="shrink-0"
+            data-testid="my-assignments-new-assignment"
+            onClick={() => setIsCreateSheetOpen(true)}
+          >
+            <Plus className="mr-2 h-4 w-4" />
+            New Assignment
+          </Button>
+        </div>
       </div>
 
       {assignments.length === 0 ? (
@@ -409,8 +566,39 @@ export default function MyAssignmentsRoute() {
           <Table aria-label="My Assignments">
             <TableHeader className="rounded-t-lg">
               <TableRow className="rounded-t-lg bg-muted/50">
-                <TableHead className="rounded-tl-lg pl-4">
-                  Assignment
+                <TableHead className="w-[50px] rounded-tl-lg pl-4">
+                  <Checkbox
+                    aria-label="Select all assignments"
+                    checked={
+                      filteredAssignments.length > 0 &&
+                      selectedAssignmentIds.length ===
+                        filteredAssignments.length
+                    }
+                    onCheckedChange={handleSelectAll}
+                  />
+                </TableHead>
+                <TableHead>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="-ml-2 h-8 gap-2 px-2"
+                    aria-label={`Sort assignments by title ${
+                      sortDirection === 'asc' ? 'descending' : 'ascending'
+                    }`}
+                    onClick={() =>
+                      setSortDirection((current) =>
+                        current === 'asc' ? 'desc' : 'asc'
+                      )
+                    }
+                  >
+                    Assignment
+                    {sortDirection === 'asc' ? (
+                      <ArrowUp className="h-4 w-4" />
+                    ) : (
+                      <ArrowDown className="h-4 w-4" />
+                    )}
+                  </Button>
                 </TableHead>
                 <TableHead className="whitespace-nowrap">Classes</TableHead>
                 <TableHead className="whitespace-nowrap">Type</TableHead>
@@ -420,9 +608,27 @@ export default function MyAssignmentsRoute() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredAssignments.map((assignment) => (
-                <TableRow key={assignment.assignmentId}>
-                  <TableCell className="pl-4 font-medium">
+              {paginatedAssignments.map((assignment) => (
+                <TableRow
+                  key={assignment.assignmentId}
+                  data-state={
+                    selectedAssignmentIds.includes(assignment.assignmentId)
+                      ? 'selected'
+                      : undefined
+                  }
+                >
+                  <TableCell className="max-h-[37px] pl-4">
+                    <Checkbox
+                      aria-label={`Select assignment ${assignment.title}`}
+                      checked={selectedAssignmentIds.includes(
+                        assignment.assignmentId
+                      )}
+                      onCheckedChange={() =>
+                        handleSelect(assignment.assignmentId)
+                      }
+                    />
+                  </TableCell>
+                  <TableCell className="font-medium">
                     <Link
                       to={assignment.href}
                       className="[overflow-wrap:anywhere] hover:underline"
@@ -446,6 +652,26 @@ export default function MyAssignmentsRoute() {
           </Table>
         </div>
       )}
+
+      {filteredAssignments.length > 0 ? (
+        <Pagination
+          totalCount={filteredAssignments.length}
+          skip={pagination.skip}
+          take={pagination.take}
+          onChange={(skip, take) => setPagination({ skip, take })}
+        />
+      ) : null}
+
+      {/* Creating from here spans classes, so the sheet takes the teacher's
+          whole class list rather than being fixed to one. Editing uses this
+          same sheet from the assignment detail page a row links to. */}
+      <AssignmentCreationSheet
+        open={isCreateSheetOpen}
+        onOpenChange={setIsCreateSheetOpen}
+        entryPoint="dashboard"
+        assignmentTypes={assignmentCreationTypes}
+        teacherClasses={assignmentCreationClasses}
+      />
     </div>
   );
 }

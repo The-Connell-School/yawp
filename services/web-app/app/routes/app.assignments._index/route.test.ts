@@ -6,6 +6,7 @@ const prisma = {
 };
 const requireUserId = mock();
 const requireMembership = mock();
+const deleteClassAssignmentDeployment = mock();
 const listSavedAssignments = mock();
 const archiveSavedAssignment = mock();
 const getAvailableAssignmentTypesForScopes = mock();
@@ -17,6 +18,9 @@ const actualAssignmentTypeAccess = globalThis.__realModules[
 ];
 
 mock.module('~/utils/db.server', () => ({ prisma }));
+mock.module('~/utils/assignment-deployment.server', () => ({
+  deleteClassAssignmentDeployment,
+}));
 mock.module('~/utils/auth.server', () => ({ requireUserId, requireMembership }));
 mock.module('~/utils/assignment-type-access.server', () => ({
   ...actualAssignmentTypeAccess,
@@ -322,8 +326,103 @@ describe('My Assignments loader', () => {
 describe('My Assignments action', () => {
   beforeEach(() => {
     archiveSavedAssignment.mockReset().mockResolvedValue(true);
+    deleteClassAssignmentDeployment.mockReset().mockResolvedValue('ca-1');
+    prisma.classAssignment.findMany.mockReset().mockResolvedValue([]);
     requireUserId.mockReset().mockResolvedValue('user-1');
     requireMembership.mockReset();
+  });
+
+  describe('deleting assignments', () => {
+    function deleteRequest(assignmentIds: string[]) {
+      const form = new FormData();
+      form.append('intent', 'delete-assignments');
+      for (const id of assignmentIds) form.append('assignmentIds', id);
+      return new Request('https://example.test/app/assignments', {
+        method: 'POST',
+        body: form,
+      });
+    }
+
+    test('removes every deployment of the assignment in this teacher\'s classes', async () => {
+      requireMembership.mockResolvedValue({ id: 'profile-1', role: 'TEACHER' });
+      prisma.classAssignment.findMany.mockResolvedValue([
+        { assignmentId: 'assignment-1', classId: 'class-1' },
+        { assignmentId: 'assignment-1', classId: 'class-2' },
+      ]);
+
+      const response = (await action({
+        request: deleteRequest(['assignment-1']),
+        params: {},
+        context: {},
+      } as any)) as any;
+
+      // Scoped to classes the teacher teaches, so an assignment shared with
+      // someone else's class keeps its other deployments.
+      expect(prisma.classAssignment.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            assignmentId: { in: ['assignment-1'] },
+            class: {
+              teachers: { some: { id: 'profile-1' } },
+              isArchived: false,
+            },
+          },
+        })
+      );
+      expect(deleteClassAssignmentDeployment).toHaveBeenCalledTimes(2);
+      expect(deleteClassAssignmentDeployment).toHaveBeenCalledWith({
+        assignmentId: 'assignment-1',
+        classId: 'class-1',
+      });
+      expect(deleteClassAssignmentDeployment).toHaveBeenCalledWith({
+        assignmentId: 'assignment-1',
+        classId: 'class-2',
+      });
+      expect(response.success ?? response.data?.success).toBe(true);
+    });
+
+    test('deletes nothing when one of the ids is outside the teacher\'s classes', async () => {
+      requireMembership.mockResolvedValue({ id: 'profile-1', role: 'TEACHER' });
+      prisma.classAssignment.findMany.mockResolvedValue([
+        { assignmentId: 'assignment-1', classId: 'class-1' },
+      ]);
+
+      const response = (await action({
+        request: deleteRequest(['assignment-1', 'someone-elses-assignment']),
+        params: {},
+        context: {},
+      } as any)) as any;
+
+      expect(deleteClassAssignmentDeployment).not.toHaveBeenCalled();
+      expect(response.init?.status ?? response.status).toBe(404);
+    });
+
+    test('refuses a non-teacher', async () => {
+      requireMembership.mockResolvedValue({ id: 'profile-1', role: 'STUDENT' });
+
+      const response = (await action({
+        request: deleteRequest(['assignment-1']),
+        params: {},
+        context: {},
+      } as any)) as any;
+
+      expect(prisma.classAssignment.findMany).not.toHaveBeenCalled();
+      expect(deleteClassAssignmentDeployment).not.toHaveBeenCalled();
+      expect(response.init?.status ?? response.status).toBe(403);
+    });
+
+    test('rejects an empty selection', async () => {
+      requireMembership.mockResolvedValue({ id: 'profile-1', role: 'TEACHER' });
+
+      const response = (await action({
+        request: deleteRequest([]),
+        params: {},
+        context: {},
+      } as any)) as any;
+
+      expect(deleteClassAssignmentDeployment).not.toHaveBeenCalled();
+      expect(response.init?.status ?? response.status).toBe(400);
+    });
   });
 
   test('removes a saved assignment for the teacher who owns it', async () => {
