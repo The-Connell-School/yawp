@@ -130,6 +130,10 @@ describe('admin assignment type detail action', () => {
             label: 'Ideas and Analysis',
             description: 'Generate productive ideas and analyze perspectives.',
             weight: 0.25,
+            scoreLabels: [
+              { value: 1, label: 'Needs work' },
+              { value: 6, label: 'Exceptional' },
+            ],
           },
         ],
       })
@@ -161,6 +165,8 @@ describe('admin assignment type detail action', () => {
           minScore: 1,
           maxScore: 6,
         },
+        // Score labels are part of what this save must persist — not just
+        // the fields already required for a "complete" category.
         rubricJson: {
           categories: [
             {
@@ -169,6 +175,10 @@ describe('admin assignment type detail action', () => {
               description:
                 'Generate productive ideas and analyze perspectives.',
               weight: 0.25,
+              scoreLabels: [
+                { value: 1, label: 'Needs work' },
+                { value: 6, label: 'Exceptional' },
+              ],
             },
           ],
         },
