@@ -281,25 +281,6 @@ export function buildDayRequest(unit: UnitPlan, day: UnitPlanDay): string {
   return parts.join(' ');
 }
 
-/** The exact opening `buildDayRequest` writes — read back to recognise its own button. */
-const BUILD_DAY_REQUEST = /^Build day (\d+) of "/;
-
-/**
- * Which day a "build this day" click asked for, read back out of the message
- * it sent.
- *
- * Safe to match strictly: the button fires the request as-is with nothing in
- * between to edit it, so a real click always produces this exact opening. A
- * teacher who types their own "build day 2" in free text simply does not
- * match, and gets no unit context rather than a guess built on a coincidence.
- */
-export function parseRequestedDay(message: string): number | null {
-  const match = BUILD_DAY_REQUEST.exec(message.trim());
-  if (!match) return null;
-  const day = Number(match[1]);
-  return Number.isFinite(day) ? day : null;
-}
-
 /**
  * What the planner needs to build one day honestly: not just that day's own
  * row, but where it sits in the arc — otherwise "build day 3" is planned in a

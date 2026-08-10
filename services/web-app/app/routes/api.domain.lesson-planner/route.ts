@@ -14,10 +14,13 @@ import { markFailedDecks } from '~/domain/lesson-planner/slide-deck';
 import {
   buildUnitContext,
   markFailedUnitPlans,
-  parseRequestedDay,
-  readUnitPlan,
-  UNIT_PLAN_FENCE,
 } from '~/domain/lesson-planner/unit-plan';
+import {
+  createUnitDayConversation,
+  createUnitFromMap,
+  loadUnitMap,
+  resolveUnitDay,
+} from '~/domain/lesson-planner/lesson-unit.server';
 import {
   collectToolLinks,
   verifyLessonLinks,
@@ -69,6 +72,13 @@ const POST = z
     conversationId: z.string().optional(),
     /** The Class Summary next step this session was opened from, if any. */
     originClassAssignmentId: z.string().optional(),
+    /**
+     * Set by "Build this day": which day of the unit the teacher asked for.
+     * The lesson is written into that day's own conversation, not the map's.
+     */
+    unitDay: z.coerce.number().int().min(1).max(60).optional(),
+    /** The day's title from the map, so the new lesson is named before it exists. */
+    unitDayTitle: z.string().trim().max(120).optional(),
   })
   .strict();
 
@@ -171,33 +181,57 @@ export async function action({ request }: ActionFunctionArgs) {
     );
   }
 
-  const priorMessages = boundedHistory(
-    [...(conversation?.messages ?? [])].reverse()
-  );
-  const isNewConversation = !conversation;
+  // "Build this day" writes into that day's OWN conversation, not the map's.
+  // A day is a whole lesson, and appending eight of them to the thread that
+  // wrote the map is what made a unit's packet unteachable. Resolved read-only
+  // here — the row is created at persist time, so a failed model call does not
+  // leave an empty day the board would advertise as built.
+  const dayTarget =
+    data.unitDay !== undefined && conversation
+      ? await resolveUnitDay({
+          db: prisma,
+          ctx,
+          fromConversationId: conversation.id,
+          day: data.unitDay,
+        })
+      : null;
 
-  // "Build this day" fires this exact opening, so a match means the teacher
-  // clicked the button on a real unit map rather than typed something that
-  // happens to look like it. Only look up the map when it might matter — a
-  // targeted query, because the bounded history above can and does drop the
-  // map once a conversation runs past it building days out one at a time.
-  const requestedDay = parseRequestedDay(data.message);
+  // An existing day carries the turns already spent on it; a new one carries
+  // none. Neither inherits the map conversation's transcript.
+  const dayConversation = dayTarget?.conversationId
+    ? await prisma.lessonPlanConversation.findFirst({
+        where: { id: dayTarget.conversationId, deletedAt: null },
+        include: {
+          messages: {
+            orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+            take: MAX_HISTORY_MESSAGES,
+          },
+          materials: {
+            orderBy: [{ sourceCreatedAt: 'asc' }, { blockKey: 'asc' }],
+            select: { slot: true, kind: true, title: true },
+          },
+        },
+      })
+    : null;
+
+  const activeConversation =
+    dayConversation ?? (dayTarget ? null : conversation);
+  const priorMessages = boundedHistory(
+    [...(activeConversation?.messages ?? [])].reverse()
+  );
+  const isNewConversation = !activeConversation;
+
+  // Where this day sits in the arc. Found through the unit rather than by
+  // scanning one transcript: a day lives in its own conversation now and
+  // cannot look at its own history to discover the map.
   let unitContext = null;
-  if (requestedDay !== null && conversation) {
-    const unitMessage = await prisma.lessonPlanMessage.findFirst({
-      where: {
-        conversationId: conversation.id,
-        role: 'assistant',
-        content: { contains: `\`\`\`${UNIT_PLAN_FENCE}` },
-      },
-      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-      select: { content: true },
-    });
-    const outcome = unitMessage ? readUnitPlan(unitMessage.content) : null;
-    unitContext =
-      outcome?.kind === 'unit'
-        ? buildUnitContext(outcome.unit, requestedDay)
-        : null;
+  const unitId = dayTarget?.unitId ?? activeConversation?.unitId ?? null;
+  const activeDay = dayTarget
+    ? data.unitDay!
+    : (activeConversation?.unitDay ?? null);
+  if (unitId && activeDay != null) {
+    const map = await loadUnitMap({ db: prisma, unitId });
+    unitContext = map ? buildUnitContext(map, activeDay) : null;
   }
 
   const system = buildLessonPlannerSystemPrompt({
@@ -286,7 +320,7 @@ export async function action({ request }: ActionFunctionArgs) {
     priorReplies: priorMessages
       .filter((message) => message.role === AgentType.Assistant)
       .map((message) => message.content),
-    teacherNamedIt: Boolean(conversation?.packetTitle?.trim()),
+    teacherNamedIt: Boolean(activeConversation?.packetTitle?.trim()),
   });
 
   // Stamp explicit, strictly-increasing timestamps: both rows land in one
@@ -296,19 +330,30 @@ export async function action({ request }: ActionFunctionArgs) {
   const answeredAt = new Date(askedAt.getTime() + 1);
   let assistantMessageId: string;
   let conversationId: string;
+  let unitIdForClient: string | null = null;
   try {
     const written = await prisma.$transaction(async (transaction) => {
       const persistedConversation =
-        conversation ??
-        (await transaction.lessonPlanConversation.create({
-          data: {
-            membershipId: ctx.membershipId,
-            organizationId: ctx.organizationId,
-            title: deriveTitle(data.message),
-            originClassAssignmentId,
-          },
-          select: { id: true },
-        }));
+        activeConversation ??
+        // A day that did not exist a moment ago is created here, with a lesson
+        // ready to go into it.
+        (dayTarget
+          ? await createUnitDayConversation({
+              db: transaction,
+              ctx,
+              unitId: dayTarget.unitId,
+              day: data.unitDay!,
+              title: data.unitDayTitle || `Day ${data.unitDay}`,
+            })
+          : await transaction.lessonPlanConversation.create({
+              data: {
+                membershipId: ctx.membershipId,
+                organizationId: ctx.organizationId,
+                title: deriveTitle(data.message),
+                originClassAssignmentId,
+              },
+              select: { id: true },
+            }));
 
       await transaction.lessonPlanMessage.create({
         data: {
@@ -335,14 +380,32 @@ export async function action({ request }: ActionFunctionArgs) {
         where: { id: persistedConversation.id },
         data: {
           updatedAt: new Date(),
-          ...(lessonName ? { title: lessonName } : {}),
+          // A day is named after its place in the unit, which the map already
+          // decided; renaming it after whatever the lesson turned out to be
+          // would break the one-to-one with the board.
+          ...(lessonName && dayTarget === null ? { title: lessonName } : {}),
         },
       });
 
-      return { conversation: persistedConversation, assistantMessage };
+      // A reply that lays out a map turns this conversation into a unit, so
+      // the days built from it have somewhere to live.
+      const createdUnitId = await createUnitFromMap({
+        db: transaction,
+        conversationId: persistedConversation.id,
+        reply,
+        ctx,
+        alreadyInUnit: Boolean(activeConversation?.unitId),
+      });
+
+      return {
+        conversation: persistedConversation,
+        assistantMessage,
+        createdUnitId,
+      };
     });
     conversationId = written.conversation.id;
     assistantMessageId = written.assistantMessage.id;
+    unitIdForClient = written.createdUnitId ?? unitId;
   } catch {
     return dataResponse({ error: PLANNER_FAILED }, { status: 500 });
   }
@@ -352,5 +415,14 @@ export async function action({ request }: ActionFunctionArgs) {
     messageId: assistantMessageId,
     reply,
     isNewConversation,
+    unitId: unitIdForClient,
+    // Set when the turn was a "build this day" click, so the client knows to
+    // move the teacher into that day's own lesson rather than staying on the
+    // map and showing them a reply that landed somewhere else.
+    unitDay: dayTarget
+      ? (data.unitDay ?? null)
+      : (activeConversation?.unitDay ?? null),
+    /** True when this click opened a day that did not exist a moment ago. */
+    openedNewDay: Boolean(dayTarget && !dayTarget.conversationId),
   });
 }

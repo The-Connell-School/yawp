@@ -399,6 +399,7 @@ model Organization {
   reporterConversations      ReporterConversation[]
   reporterGrowthPlans        ReporterGrowthPlan[]
   lessonPlanConversations    LessonPlanConversation[]
+  lessonPlanUnits            LessonPlanUnit[]
   aiRequestReservations      AiRequestReservation[]
 }
 
@@ -443,6 +444,7 @@ model OrgMembership {
   assignmentTypeAssignments     TeacherAssignmentType[]
   reporterConversations         ReporterConversation[]
   lessonPlanConversations       LessonPlanConversation[]
+  lessonPlanUnits               LessonPlanUnit[]
   reporterGrowthPlansOwned      ReporterGrowthPlan[]           @relation("ReporterGrowthPlanOwner")
   reporterGrowthPlansAsStudent  ReporterGrowthPlan[]           @relation("ReporterGrowthPlanStudent")
   aiRequestReservations         AiRequestReservation[]
@@ -503,10 +505,38 @@ model ReporterMessage {
   @@index([conversationId, createdAt])
 }
 
+/// A multi-day unit: one map, and one lesson per day that gets built out of it.
+///
+/// A unit exists because a day is a whole lesson — its own plan, packet, deck
+/// and handouts — and stacking eight of those into the conversation that wrote
+/// the map produces a packet nobody can teach from. The unit is the thing that
+/// holds them together, so a teacher can come back on Tuesday and open Tuesday.
+model LessonPlanUnit {
+  id             String                   @id @default(cuid())
+  createdAt      DateTime                 @default(now()) @db.Timestamptz(6)
+  updatedAt      DateTime                 @default(now()) @updatedAt @db.Timestamptz(6)
+  deletedAt      DateTime?                @db.Timestamptz(6)
+  /// Copied off the map when the unit is created, so the library can list a
+  /// unit without parsing a message to find out what it is called.
+  title          String                   @default("New unit")
+  membershipId   String
+  membership     OrgMembership            @relation(fields: [membershipId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  organizationId String
+  organization   Organization             @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  conversations  LessonPlanConversation[]
+
+  @@index([membershipId, updatedAt(sort: Desc)])
+  @@index([organizationId])
+}
+
 /// A YAWP! Lesson Planner chat session. Owned by a teacher (OrgMembership) and
 /// scoped to their organization. Holds an ordered transcript of planner
 /// messages. `originClassAssignmentId` records the Class Summary next step the
 /// session was opened from, when the teacher came in through that seam.
+///
+/// `unitId` links a session to the unit it belongs to; `unitDay` says which
+/// part it is. A null `unitDay` on a unit-linked session means the map itself,
+/// and a number means that day's lesson.
 model LessonPlanConversation {
   id                      String              @id @default(cuid())
   createdAt               DateTime            @default(now()) @db.Timestamptz(6)
@@ -524,6 +554,13 @@ model LessonPlanConversation {
   organization            Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   originClassAssignmentId String?
   originClassAssignment   ClassAssignment?    @relation(fields: [originClassAssignmentId], references: [id], onDelete: SetNull)
+  /// The unit this session belongs to, if any. Deleting a unit leaves its
+  /// lessons standing on their own rather than destroying a teacher's work.
+  unitId                  String?
+  unit                    LessonPlanUnit?     @relation(fields: [unitId], references: [id], onDelete: SetNull)
+  /// Which day of the unit this is. Null on a unit-linked session means the
+  /// map; a number means that day's lesson.
+  unitDay                 Int?
   messages                LessonPlanMessage[]
   materials               LessonPlanMaterial[]
 
@@ -531,6 +568,7 @@ model LessonPlanConversation {
   @@index([membershipId, starredAt(sort: Desc)])
   @@index([organizationId])
   @@index([originClassAssignmentId])
+  @@index([unitId, unitDay])
 }
 
 /// A single turn in a Lesson Planner conversation. `role` is 'user' or

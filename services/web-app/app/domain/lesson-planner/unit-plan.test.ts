@@ -5,7 +5,6 @@ import {
   hasUnitPlan,
   inlineUnitPlan,
   markFailedUnitPlans,
-  parseRequestedDay,
   readUnitPlan,
   validateUnitPlan,
 } from './unit-plan';
@@ -226,26 +225,6 @@ describe('inlineUnitPlan', () => {
   test('leaves a reply with no map alone', () => {
     const reply = '## Warm-up\n\nFour minutes.';
     expect(inlineUnitPlan(reply)).toBe(reply);
-  });
-});
-
-describe('parseRequestedDay', () => {
-  test('reads the day number back out of a real build-day click', () => {
-    const outcome = readUnitPlan(block(threeDays));
-    if (outcome.kind !== 'unit') throw new Error('expected a unit');
-    const message = buildDayRequest(outcome.unit, outcome.unit.days[1]!);
-    expect(parseRequestedDay(message)).toBe(2);
-  });
-
-  test('does not match a teacher’s own free-typed request', () => {
-    // A coincidental "build day 2" from the teacher is not the button, and
-    // guessing at unit context from it would be worse than adding none.
-    expect(parseRequestedDay('Can you build day 2 for me?')).toBeNull();
-    expect(parseRequestedDay('build day 2')).toBeNull();
-  });
-
-  test('is not fooled by the day number alone', () => {
-    expect(parseRequestedDay('Day 2 needs more scaffolding.')).toBeNull();
   });
 });
 

@@ -107,6 +107,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
           select: {
             id: true,
             title: true,
+            unitId: true,
+            unitDay: true,
             messages: {
               orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
               select: {
@@ -134,6 +136,22 @@ export async function loader({ request }: LoaderFunctionArgs) {
         stepIndex: url.searchParams.get('step'),
       });
 
+  // Which days of this unit already have a lesson, so the board offers a way
+  // back into a built day rather than building it a second time — and where
+  // the map itself lives, so a day has a way home.
+  const builtDays: Record<number, string> = {};
+  let unitMapConversation: string | null = null;
+  if (selected?.unitId) {
+    const siblings = await prisma.lessonPlanConversation.findMany({
+      where: { unitId: selected.unitId, deletedAt: null },
+      select: { id: true, unitDay: true },
+    });
+    for (const sibling of siblings) {
+      if (sibling.unitDay === null) unitMapConversation = sibling.id;
+      else builtDays[sibling.unitDay] = sibling.id;
+    }
+  }
+
   // Needed to turn a warm-up the planner wrote into a real assignment. Null
   // for an org without Daily Pages, which just means no button.
   const dailyPagesTypeId = await findDailyPagesTypeId({
@@ -148,10 +166,14 @@ export async function loader({ request }: LoaderFunctionArgs) {
       title: conversation.packetTitle?.trim() || conversation.title,
       starred: Boolean(conversation.starredAt),
     })),
+    builtDays,
+    unitMapConversation,
     selectedConversation: selected
       ? {
           id: selected.id,
           title: selected.title,
+          unitId: selected.unitId,
+          unitDay: selected.unitDay,
           messages: selected.messages as ChatMessage[],
           // "<messageId>:<blockKey>" for every material already in the packet,
           // so each card knows whether it has been added.
@@ -181,6 +203,10 @@ type LessonPlannerActionData = {
   reply?: string;
   isNewConversation?: boolean;
   error?: string;
+  unitId?: string | null;
+  /** Set when the turn was a "build this day" click. */
+  unitDay?: number | null;
+  openedNewDay?: boolean;
 };
 
 export default function LessonPlannerRoute() {
@@ -190,6 +216,8 @@ export default function LessonPlannerRoute() {
     recommendedPrompts,
     seed,
     dailyPagesTypeId,
+    builtDays,
+    unitMapConversation,
   } = useLoaderData<typeof loader>();
   const [searchParams, setSearchParams] = useSearchParams();
   const fetcher = useFetcher<LessonPlannerActionData>();
@@ -259,6 +287,20 @@ export default function LessonPlannerRoute() {
       return;
     }
     if (fetcher.data.reply) {
+      // A "build this day" turn is written into that day's own conversation.
+      // Move the teacher into it rather than appending a reply that belongs to
+      // a different lesson — the map thread stays the map.
+      const landedElsewhere =
+        fetcher.data.unitDay != null &&
+        fetcher.data.conversationId &&
+        fetcher.data.conversationId !== conversationId;
+      if (landedElsewhere) {
+        const next = new URLSearchParams(searchParams);
+        next.set('c', fetcher.data.conversationId!);
+        setPendingConversationId(null);
+        setSearchParams(next);
+        return;
+      }
       // If the teacher switched conversations while this turn was in flight,
       // don't append the reply here — the turn is persisted and will be there
       // when they reopen that lesson.
@@ -376,7 +418,14 @@ export default function LessonPlannerRoute() {
     messages.filter((message) => message.keptAudience).length +
     addedMaterials.size;
 
-  function send(message: string) {
+  function send(
+    message: string,
+    /**
+     * Set by "Build this day". The lesson is written into that day's own
+     * conversation, so the reply comes back from somewhere other than here.
+     */
+    unitDay?: { day: number; title: string }
+  ) {
     const trimmed = message.trim();
     if (!trimmed || isSending) return;
     setMessages((prev) => [...prev, { role: 'user', content: trimmed }]);
@@ -389,6 +438,12 @@ export default function LessonPlannerRoute() {
         ...(conversationId ? { conversationId } : {}),
         ...(!conversationId && seed
           ? { originClassAssignmentId: seed.classAssignmentId }
+          : {}),
+        ...(unitDay
+          ? {
+              unitDay: String(unitDay.day),
+              unitDayTitle: unitDay.title,
+            }
           : {}),
       },
       { method: 'post', action: '/api/domain/lesson-planner' }
@@ -482,9 +537,33 @@ export default function LessonPlannerRoute() {
               <h2 className="text-lg font-semibold leading-none">
                 YAWP! Lesson Planner
               </h2>
-              <p className="hidden text-sm text-muted-foreground sm:block">
-                Talk through a lesson for your actual students.
-              </p>
+              {/* A day opened out of a unit is one lesson inside a larger arc,
+                  and the way back to the map has to be visible from inside it —
+                  otherwise a teacher lands in day 3 with no way home. */}
+              {selectedConversation?.unitDay != null && unitMapConversation ? (
+                <p
+                  className="truncate text-sm text-muted-foreground"
+                  data-testid="unit-day-breadcrumb"
+                >
+                  Day {selectedConversation.unitDay} ·{' '}
+                  <button
+                    type="button"
+                    data-testid="back-to-unit-map"
+                    onClick={() => {
+                      const next = new URLSearchParams(searchParams);
+                      next.set('c', unitMapConversation);
+                      setSearchParams(next);
+                    }}
+                    className="underline hover:text-primary"
+                  >
+                    Back to the unit map
+                  </button>
+                </p>
+              ) : (
+                <p className="hidden text-sm text-muted-foreground sm:block">
+                  Talk through a lesson for your actual students.
+                </p>
+              )}
             </div>
             <div className="flex shrink-0 items-center gap-2 md:hidden">
               <label
@@ -552,6 +631,7 @@ export default function LessonPlannerRoute() {
                   lessonHas={selectedConversation?.lessonHas ?? {}}
                   dailyPagesTypeId={dailyPagesTypeId}
                   conversationId={conversationId}
+                  builtDays={builtDays}
                   onSuggestion={send}
                   onKeep={setKept}
                   disabled={isSending}
@@ -699,6 +779,7 @@ function MessageBubble({
   lessonHas,
   dailyPagesTypeId,
   conversationId,
+  builtDays,
   onSuggestion,
   onKeep,
   disabled,
@@ -716,7 +797,12 @@ function MessageBubble({
   /** Where a written warm-up becomes a real assignment; null without the type. */
   dailyPagesTypeId: string | null;
   conversationId: string | null;
-  onSuggestion: (text: string) => void;
+  /** Day number → the conversation each already-built day lives in. */
+  builtDays: Record<number, string>;
+  onSuggestion: (
+    text: string,
+    unitDay?: { day: number; title: string }
+  ) => void;
   onKeep: (messageId: string, audience: PacketAudience | null) => void;
   disabled: boolean;
 }) {
@@ -838,6 +924,7 @@ function MessageBubble({
               <UnitPlanCard
                 unit={unitOutcome.unit}
                 onBuildDay={onSuggestion}
+                builtDays={builtDays}
                 disabled={disabled}
               />
             </div>

@@ -21,6 +21,9 @@ const prisma = {
     create: mock(),
     findFirst: mock(),
   },
+  lessonPlanUnit: {
+    create: mock(),
+  },
   classAssignment: {
     findFirst: mock(),
   },
@@ -92,6 +95,7 @@ beforeEach(() => {
     .mockReset()
     .mockResolvedValue({ id: 'msg-assistant' });
   prisma.lessonPlanMessage.findFirst.mockReset().mockResolvedValue(null);
+  prisma.lessonPlanUnit.create.mockReset().mockResolvedValue({ id: 'unit-1' });
   prisma.classAssignment.findFirst.mockReset().mockResolvedValue(null);
   prisma.$transaction.mockReset();
   prisma.$transaction.mockImplementation(
@@ -565,51 +569,147 @@ describe('api.domain.lesson-planner action — building one day of a unit', () =
     '```',
   ].join('\n');
 
-  test('looks up the map and hands the day’s context to the model', async () => {
-    prisma.lessonPlanConversation.findFirst.mockResolvedValue({
-      id: 'plan-9',
-      messages: [
-        { role: 'assistant', content: `Here is the arc.\n\n${unitBlock}` },
-      ],
-      materials: [],
-    });
-    prisma.lessonPlanMessage.findFirst.mockResolvedValue({
-      content: `Here is the arc.\n\n${unitBlock}`,
-    });
-    getLLMCompletion.mockResolvedValue(
-      '## Evidence that earns its place\n\nHere is the lesson.'
+  /**
+   * The conversation lookups the action makes, dispatched on the shape of the
+   * where clause rather than on call order — the order is an implementation
+   * detail and asserting on it makes the test break for the wrong reasons.
+   */
+  function stubConversations({
+    mapConversation = { id: 'map-conv', unitId: 'unit-1' },
+    existingDay = null,
+  }: {
+    mapConversation?: { id: string; unitId: string | null } | null;
+    existingDay?: { id: string } | null;
+  } = {}) {
+    prisma.lessonPlanConversation.findFirst.mockImplementation(
+      async (args: any) => {
+        const where = args?.where ?? {};
+        // The map's own conversation, loaded at the top of the action and
+        // again by openUnitDay to find the unit.
+        if (where.id === 'map-conv') {
+          return mapConversation
+            ? { ...mapConversation, messages: [], materials: [] }
+            : null;
+        }
+        // openUnitDay looking for an already-built day.
+        if (where.unitDay !== undefined && where.unitDay !== null) {
+          return existingDay;
+        }
+        // loadUnitMap: the map conversation, found through the unit.
+        if (where.unitId && where.unitDay === null) {
+          return {
+            messages: [{ content: `Here is the arc.\n\n${unitBlock}` }],
+          };
+        }
+        // The day's own conversation, reloaded so its history is its own.
+        if (where.id === 'day-2') {
+          return {
+            id: 'day-2',
+            unitId: 'unit-1',
+            unitDay: 2,
+            messages: [],
+            materials: [],
+          };
+        }
+        return null;
+      }
     );
+  }
+
+  test('writes the day into its own conversation, not the map thread', async () => {
+    // A day is a whole lesson; stacking eight of them onto the map's thread is
+    // what made a unit's packet unteachable.
+    stubConversations();
+    prisma.lessonPlanConversation.create.mockResolvedValue({ id: 'day-2' });
+    getLLMCompletion.mockResolvedValue('## Evidence that earns its place');
+    prisma.lessonPlanConversation.update.mockResolvedValue({});
+
+    const response = await action({
+      request: formRequest({
+        message: 'Build day 2 in full.',
+        conversationId: 'map-conv',
+        unitDay: '2',
+        unitDayTitle: 'Evidence that earns its place',
+      }),
+    } as any);
+    const body = (await response.data) as any;
+
+    expect(
+      prisma.lessonPlanConversation.create.mock.calls[0][0].data
+    ).toMatchObject({ unitId: 'unit-1', unitDay: 2 });
+    // The client needs to move the teacher into the day it actually landed in.
+    expect(body.conversationId).toBe('day-2');
+    expect(body.unitDay).toBe(2);
+    expect(body.openedNewDay).toBe(true);
+  });
+
+  test('hands the day’s place in the arc to the model', async () => {
+    stubConversations();
+    prisma.lessonPlanConversation.create.mockResolvedValue({ id: 'day-2' });
+    getLLMCompletion.mockResolvedValue('## Evidence that earns its place');
     prisma.lessonPlanConversation.update.mockResolvedValue({});
 
     await action({
       request: formRequest({
-        message:
-          'Build day 2 of "Writing the literary analysis paragraph" in full: Evidence that earns its place. The objective is: Choose the quote that proves the claim Students: Match claims to the strongest of three quotes I have 50 minutes. Keep it inside the arc of the unit — this day comes after day 1 and has to set up what follows.',
-        conversationId: 'plan-9',
+        message: 'Build day 2 in full.',
+        conversationId: 'map-conv',
+        unitDay: '2',
+        unitDayTitle: 'Evidence that earns its place',
       }),
     } as any);
-
-    expect(prisma.lessonPlanMessage.findFirst).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: expect.objectContaining({
-          conversationId: 'plan-9',
-          role: 'assistant',
-          content: { contains: '```yawp-unit' },
-        }),
-      })
-    );
 
     const system = getLLMCompletion.mock.calls[0][0].system as string;
     const lower = system.toLowerCase();
     expect(lower).toContain('day 2 of 2');
     expect(lower).toContain('choose the quote that proves the claim');
-    // The day before's own ending, so day 2 is not planned in a vacuum.
+    // The day before's own ending, found through the unit rather than by
+    // scanning a transcript this conversation does not have.
     expect(lower).toContain('they need a claim before they can support one');
   });
 
-  test('does not query for a map on an ordinary message', async () => {
+  test('reopens a built day instead of building a second copy', async () => {
+    stubConversations({ existingDay: { id: 'day-2' } });
+    getLLMCompletion.mockResolvedValue('More on day 2.');
+    prisma.lessonPlanConversation.update.mockResolvedValue({});
+
+    const response = await action({
+      request: formRequest({
+        message: 'Build day 2 in full.',
+        conversationId: 'map-conv',
+        unitDay: '2',
+        unitDayTitle: 'Evidence that earns its place',
+      }),
+    } as any);
+    const body = (await response.data) as any;
+
+    expect(prisma.lessonPlanConversation.create).not.toHaveBeenCalled();
+    expect(body.conversationId).toBe('day-2');
+    expect(body.openedNewDay).toBe(false);
+  });
+
+  test('creates a unit when a reply lays out a map', async () => {
+    prisma.lessonPlanConversation.findFirst.mockResolvedValue(null);
+    prisma.lessonPlanConversation.create.mockResolvedValue({ id: 'plan-1' });
+    getLLMCompletion.mockResolvedValue(`Here is the arc.\n\n${unitBlock}`);
+    prisma.lessonPlanConversation.update.mockResolvedValue({});
+
+    const response = await action({
+      request: formRequest({ message: 'Build me a unit plan.' }),
+    } as any);
+    const body = (await response.data) as any;
+
+    expect(prisma.lessonPlanUnit.create.mock.calls[0][0].data).toMatchObject({
+      membershipId: 'teacher-1',
+      title: 'Writing the literary analysis paragraph',
+    });
+    expect(body.unitId).toBe('unit-1');
+  });
+
+  test('adds no unit context to an ordinary lesson', async () => {
     prisma.lessonPlanConversation.findFirst.mockResolvedValue({
       id: 'plan-9',
+      unitId: null,
+      unitDay: null,
       messages: [],
       materials: [],
     });
@@ -623,50 +723,32 @@ describe('api.domain.lesson-planner action — building one day of a unit', () =
       }),
     } as any);
 
-    expect(prisma.lessonPlanMessage.findFirst).not.toHaveBeenCalled();
-  });
-
-  test('adds no unit context when the button’s day is not in the map', async () => {
-    prisma.lessonPlanConversation.findFirst.mockResolvedValue({
-      id: 'plan-9',
-      messages: [],
-      materials: [],
-    });
-    prisma.lessonPlanMessage.findFirst.mockResolvedValue({
-      content: `Here is the arc.\n\n${unitBlock}`,
-    });
-    getLLMCompletion.mockResolvedValue('ok');
-    prisma.lessonPlanConversation.update.mockResolvedValue({});
-
-    await action({
-      request: formRequest({
-        message: 'Build day 9 of "Some other unit" in full: Nothing.',
-        conversationId: 'plan-9',
-      }),
-    } as any);
-
     const system = getLLMCompletion.mock.calls[0][0].system as string;
     expect(system.toLowerCase()).not.toContain(
       'building one day out of a unit'
     );
+    expect(prisma.lessonPlanUnit.create).not.toHaveBeenCalled();
   });
 
-  test('does not mistake a teacher’s own message for the button', async () => {
-    prisma.lessonPlanConversation.findFirst.mockResolvedValue({
-      id: 'plan-9',
-      messages: [],
-      materials: [],
-    });
+  test('falls back to ordinary behaviour when the day has no unit to live in', async () => {
+    // A conversation that never produced a map cannot place a day, and the
+    // action should carry on rather than invent a container.
+    stubConversations({ mapConversation: { id: 'map-conv', unitId: null } });
     getLLMCompletion.mockResolvedValue('ok');
     prisma.lessonPlanConversation.update.mockResolvedValue({});
 
-    await action({
+    const response = await action({
       request: formRequest({
-        message: 'Can you build day 2 for me please?',
-        conversationId: 'plan-9',
+        message: 'Build day 2 in full.',
+        conversationId: 'map-conv',
+        unitDay: '2',
+        unitDayTitle: 'A day',
       }),
     } as any);
+    const body = (await response.data) as any;
 
-    expect(prisma.lessonPlanMessage.findFirst).not.toHaveBeenCalled();
+    expect(prisma.lessonPlanConversation.create).not.toHaveBeenCalled();
+    expect(body.conversationId).toBe('map-conv');
+    expect(body.unitDay).toBeNull();
   });
 });

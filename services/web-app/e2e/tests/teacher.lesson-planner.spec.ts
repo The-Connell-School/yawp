@@ -270,12 +270,15 @@ async function seedUnreadableDeck(e2eContext: {
 }
 
 /** A reply carrying a handout and a sample, neither of them kept yet. */
-async function seedUnitPlan(e2eContext: {
-  teacherMembershipId: string;
-  organizationId: string;
-}) {
+async function seedUnitPlan(
+  e2eContext: {
+    teacherMembershipId: string;
+    organizationId: string;
+  },
+  { buildDay }: { buildDay?: number } = {}
+) {
   const prisma = createE2EPrismaClient();
-  const unit = {
+  const unit_ = {
     title: 'Writing the literary analysis paragraph',
     subtitle: 'English 10 · 3 periods',
     endsWith: 'One analysis paragraph on a passage they choose',
@@ -301,7 +304,7 @@ async function seedUnitPlan(e2eContext: {
     'Here is the arc, three periods start to finish.',
     '',
     '```yawp-unit',
-    JSON.stringify(unit, null, 2),
+    JSON.stringify(unit_, null, 2),
     '```',
   ].join('\n');
   try {
@@ -327,7 +330,57 @@ async function seedUnitPlan(e2eContext: {
       },
       select: { id: true },
     });
-    return { conversationId: conversation.id };
+
+    // A unit is a container: the map is one conversation, and each built day
+    // is its own lesson hanging off the same unit.
+    const unit = await prisma.lessonPlanUnit.create({
+      data: {
+        membershipId: e2eContext.teacherMembershipId,
+        organizationId: e2eContext.organizationId,
+        title: unit_.title,
+      },
+      select: { id: true },
+    });
+    await prisma.lessonPlanConversation.update({
+      where: { id: conversation.id },
+      data: { unitId: unit.id, unitDay: null },
+    });
+
+    let dayConversationId: string | null = null;
+    if (buildDay) {
+      const day = unit_.days.find((entry) => entry.day === buildDay)!;
+      const built = await prisma.lessonPlanConversation.create({
+        data: {
+          membershipId: e2eContext.teacherMembershipId,
+          organizationId: e2eContext.organizationId,
+          title: `Day ${day.day} — ${day.title}`,
+          unitId: unit.id,
+          unitDay: day.day,
+          messages: {
+            create: [
+              {
+                role: 'user',
+                content: `Build day ${day.day} in full.`,
+                createdAt: new Date('2026-08-04T11:00:00.000Z'),
+              },
+              {
+                role: 'assistant',
+                content: `## ${day.title}\n\nHere is the lesson for day ${day.day}.`,
+                createdAt: new Date('2026-08-04T11:00:01.000Z'),
+              },
+            ],
+          },
+        },
+        select: { id: true },
+      });
+      dayConversationId = built.id;
+    }
+
+    return {
+      conversationId: conversation.id,
+      unitId: unit.id,
+      dayConversationId,
+    };
   } finally {
     await prisma.$disconnect();
   }
@@ -1497,6 +1550,48 @@ test.describe('YAWP! Lesson Planner', () => {
     await expect(sent).toContainText('day 2');
     await expect(sent).toContainText('Evidence that earns its place');
     await expect(sent).toContainText('Choose the quote that proves the claim');
+  });
+
+  test('a built day is its own lesson, with a way in and a way back', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    // A day is a whole lesson — plan, packet, deck, handouts — so it lives in
+    // its own conversation rather than stacked onto the map's thread. The map
+    // is where a teacher comes back to reach it.
+    await setLessonPlannerEnabled(e2eContext.organizationId, true);
+    const { conversationId, dayConversationId } = await seedUnitPlan(
+      e2eContext,
+      { buildDay: 2 }
+    );
+    await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+    await page.goto(`/app/lesson-planner?c=${conversationId}`);
+
+    // Day 2 is built, so it offers a way in rather than a second build.
+    const days = page.getByTestId('unit-plan-day');
+    await expect(days.nth(1).getByTestId('unit-open-day')).toBeVisible();
+    await expect(days.nth(1).getByTestId('unit-build-day')).toHaveCount(0);
+    // Day 1 was never built, so it still offers to build.
+    await expect(days.first().getByTestId('unit-build-day')).toBeVisible();
+    await expect(days.first().getByTestId('unit-open-day')).toHaveCount(0);
+
+    // Opening day 2 lands in its own lesson, not the map.
+    await days.nth(1).getByTestId('unit-open-day').click();
+    await expect(page).toHaveURL(new RegExp(`c=${dayConversationId}`));
+    await expect(page.getByTestId('unit-day-breadcrumb')).toContainText(
+      'Day 2'
+    );
+    await expect(page.locator('main')).toContainText(
+      'Here is the lesson for day 2'
+    );
+    // The map's own transcript is not dragged along with it.
+    await expect(page.locator('main')).not.toContainText('Here is the arc');
+
+    // And there is a way home from inside the day.
+    await page.getByTestId('back-to-unit-map').click();
+    await expect(page).toHaveURL(new RegExp(`c=${conversationId}`));
+    await expect(page.getByTestId('unit-plan-card')).toBeVisible();
   });
 
   test('prints the unit map as a table rather than a code fence', async ({

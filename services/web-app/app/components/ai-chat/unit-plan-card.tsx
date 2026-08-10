@@ -6,7 +6,8 @@
  * Sunday and day 4 on Wednesday, and the map is where they come back to do it,
  * so the build button is the loudest thing on each row.
  */
-import { CalendarRange, Hammer, Flag } from 'lucide-react';
+import { CalendarRange, Hammer, Flag, ArrowRight } from 'lucide-react';
+import { Link } from 'react-router';
 import {
   buildDayRequest,
   type UnitPlan,
@@ -15,6 +16,7 @@ import {
 export function UnitPlanCard({
   unit,
   onBuildDay,
+  builtDays,
   disabled,
 }: {
   unit: UnitPlan;
@@ -22,7 +24,14 @@ export function UnitPlanCard({
    * Sends the day's build request as the teacher. Absent in the printed
    * packet, where there is nothing to click.
    */
-  onBuildDay?: ((message: string) => void) | null;
+  onBuildDay?:
+    | ((message: string, day: { day: number; title: string }) => void)
+    | null;
+  /**
+   * Day number → the conversation that day's lesson already lives in. A built
+   * day offers a way back into it rather than a second build.
+   */
+  builtDays?: Record<number, string>;
   disabled?: boolean;
 }) {
   const periods = unit.days.length;
@@ -75,11 +84,25 @@ export function UnitPlanCard({
                 </p>
               ) : null}
             </div>
-            {onBuildDay ? (
+            {builtDays?.[day.day] ? (
+              <Link
+                to={`/app/lesson-planner?c=${builtDays[day.day]}`}
+                data-testid="unit-open-day"
+                className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-primary/30 bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary transition hover:bg-primary/20"
+              >
+                Open this day
+                <ArrowRight size={12} />
+              </Link>
+            ) : onBuildDay ? (
               <button
                 type="button"
                 data-testid="unit-build-day"
-                onClick={() => onBuildDay(buildDayRequest(unit, day))}
+                onClick={() =>
+                  onBuildDay(buildDayRequest(unit, day), {
+                    day: day.day,
+                    title: day.title,
+                  })
+                }
                 disabled={disabled}
                 className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-primary/30 bg-background px-2.5 py-1 text-xs font-medium text-primary transition hover:bg-primary/10 disabled:opacity-50"
               >
