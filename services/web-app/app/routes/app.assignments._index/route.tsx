@@ -19,9 +19,16 @@ import {
   TableRow,
 } from '~/components/ui/table';
 import { AP_HISTORY_ASSIGNMENT_TYPE_KEY } from '~/domain/ap-history/schema';
-import type { SavedAssignment } from '~/domain/assignments/saved-assignments';
+// The flag is read by the component, so it has to come from the client-safe module.
+// Importing it through saved-assignments.server (which merely re-exports it) makes the
+// component depend on server-only code, and React Router can only strip server code from
+// loader/action/middleware/headers — the route's client module then fails to build, and
+// clicking the sidebar link does nothing at all.
 import {
   SAVED_ASSIGNMENTS_ENABLED,
+  type SavedAssignment,
+} from '~/domain/assignments/saved-assignments';
+import {
   archiveSavedAssignment,
   listSavedAssignments,
 } from '~/domain/assignments/saved-assignments.server';
