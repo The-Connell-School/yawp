@@ -1,4 +1,7 @@
-import { POINTS_SCALE_SCORING_TYPE, pointsScaleGradeFields } from './gradeMath';
+import {
+  isPointsScaleScoringType,
+  pointsScaleGradeFields,
+} from './gradeMath';
 import { isScored, type RubricDisplayCategory } from './rubric-display';
 
 /** The ACT writing scale, which reports a 2-12 composite rather than a percent. */
@@ -56,7 +59,7 @@ export function rubricScaleGradeFields({
 }): ScaleGradeFields | null {
   if (categories.length === 0) return null;
 
-  if (scoringType === POINTS_SCALE_SCORING_TYPE) {
+  if (isPointsScaleScoringType(scoringType)) {
     return pointsScaleGradeFields({ categories, maxScore });
   }
 

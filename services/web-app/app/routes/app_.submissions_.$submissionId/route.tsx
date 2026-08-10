@@ -912,6 +912,7 @@ export default function SubmissionRoute() {
               rubricConfig={
                 teacherGradeUi?.rubricConfig ?? submission.rubricConfig
               }
+              pointValue={submission.document.assignment?.pointValue ?? null}
               initialGradingAssistantStrictnessLevel={
                 submission.document.assignment?.gradingAssistantStrictnessLevel
               }

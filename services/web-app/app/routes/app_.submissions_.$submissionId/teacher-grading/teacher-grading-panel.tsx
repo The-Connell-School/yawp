@@ -46,6 +46,7 @@ import {
   formatGrade,
   letterFromPercent,
 } from '~/domain/grading/gradeMath';
+import { buildGradeBreakdown } from '~/domain/grading/grade-breakdown';
 import {
   type GrammarIssue,
   parseGrammarIssuesPayload,
@@ -123,6 +124,7 @@ export function TeacherGradingPanel({
   onGrammarIssuesChange,
   onAiGradingComplete,
   rubricConfig,
+  pointValue,
   initialGradingAssistantStrictnessLevel,
   hideHeader = false,
   onHeaderStateChange,
@@ -156,6 +158,8 @@ export function TeacherGradingPanel({
     rubricConfig?: RubricDisplayConfig | null;
   }) => void;
   rubricConfig?: RubricDisplayConfig | null;
+  /** The assignment's point total, used to show what the percentage is worth. */
+  pointValue?: number | null;
   initialGradingAssistantStrictnessLevel?: string | null;
   hideHeader?: boolean;
   onHeaderStateChange?: (state: TeacherGradingPanelHeaderState) => void;
@@ -200,6 +204,20 @@ export function TeacherGradingPanel({
       activeRubricConfig.categories
     );
   }, [activeRubricConfig, rubricScores]);
+
+  /**
+   * The same percentage, broken into the steps that produced it. Shown rather
+   * than used: a score of 4 reading as 89% instead of 80%, and points coming
+   * off the percentage rather than the rubric, are otherwise invisible.
+   */
+  const gradeBreakdown = useMemo(() => {
+    if (activeRubricConfig.scoringType !== 'weighted_1_5') return null;
+    return buildGradeBreakdown({
+      rubricScores: rubricScores as unknown as Record<string, unknown>,
+      categories: activeRubricConfig.categories,
+      pointValue,
+    });
+  }, [activeRubricConfig, rubricScores, pointValue]);
 
   /**
    * The grade this rubric produces on a scale that reports raw points rather
@@ -841,6 +859,37 @@ export function TeacherGradingPanel({
               }
             }}
           />
+          {gradeBreakdown ? (
+            <div
+              className="rounded-md bg-muted/50 p-3 text-xs"
+              data-testid="grading-breakdown"
+            >
+              <p className="mb-2 font-medium">How this adds up</p>
+              <ul className="space-y-1">
+                {gradeBreakdown.rows.map((row) => (
+                  <li key={row.key} className="flex justify-between gap-3">
+                    <span className="min-w-0 truncate text-muted-foreground">
+                      {row.label}
+                    </span>
+                    <span className="shrink-0 tabular-nums text-muted-foreground">
+                      {row.score} of {activeRubricConfig.maxScore} ·{' '}
+                      {row.percent}% · weight {row.weightShare}%
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              <div className="mt-2 flex justify-between gap-3 border-t pt-2 font-medium tabular-nums">
+                <span>Weighted total</span>
+                <span>
+                  {gradeBreakdown.weightedPercent}%
+                  {gradeBreakdown.earnedPoints !== null
+                    ? ` · ${gradeBreakdown.earnedPoints} of ${gradeBreakdown.pointValue} points`
+                    : ''}
+                </span>
+              </div>
+            </div>
+          ) : null}
+
           {computedNumericPercentage !== null ? (
             <div>
               <Button

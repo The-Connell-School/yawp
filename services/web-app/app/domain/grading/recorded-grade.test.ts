@@ -63,6 +63,24 @@ describe('rubricScaleGradeFields', () => {
     });
   });
 
+  // The admin editor's "Rubric points" option writes `rubric_points` while
+  // Daily Pages writes `points_scale`. Only the latter used to be recognised,
+  // so a rubric configured through the editor recorded no overall grade.
+  test('treats the editor\'s rubric_points as the same raw-points scale', () => {
+    expect(
+      rubricScaleGradeFields({
+        categories: [{ score: 2 }, { score: 3 }],
+        scoringType: 'rubric_points',
+        maxScore: 3,
+      })
+    ).toMatchObject({
+      overallScore: 3,
+      score: '3/3',
+      numericPercentage: null,
+      letterGrade: null,
+    });
+  });
+
   test('reports an ACT composite on the ACT scale', () => {
     expect(
       rubricScaleGradeFields({

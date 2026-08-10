@@ -75,6 +75,21 @@ export function formatAssignmentGrade({
  */
 export const POINTS_SCALE_SCORING_TYPE = 'points_scale';
 
+/**
+ * The same scale under the name the admin editor and the rubric extractor
+ * write. Daily Pages stores `points_scale`; anything configured through the
+ * editor's "Rubric points" option stores `rubric_points`. Both mean raw
+ * points, and a rubric that matched neither recorded no overall grade at all.
+ */
+export const RUBRIC_POINTS_SCORING_TYPE = 'rubric_points';
+
+export function isPointsScaleScoringType(scoringType: string) {
+  return (
+    scoringType === POINTS_SCALE_SCORING_TYPE ||
+    scoringType === RUBRIC_POINTS_SCORING_TYPE
+  );
+}
+
 export function pointsScaleGradeFields({
   categories,
   maxScore,
