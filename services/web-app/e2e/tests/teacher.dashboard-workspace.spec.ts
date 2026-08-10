@@ -3,8 +3,11 @@ import { createE2EPrismaClient } from '../prisma-client';
 import type { Page } from '@playwright/test';
 
 const CLASS_LABEL = /Grade 9th .* Period 1st/;
+// The creation sheet renders the warning as a heading paragraph and the guidance as the
+// switch's <Label htmlFor>, so only the second sentence is the control's accessible name.
+// Both sentences are asserted as visible text in expectStandardizedAssignmentForm below.
 const TUTOR_TOGGLE_LABEL =
-  "Turning the tutor off will remove the tutor from the student's documents. Do this if you want to test the student's ability to write a paper independently of tutor guidance.";
+  "Do this if you want to test the student's ability to write a paper independently of tutor guidance.";
 
 async function expectStandardizedAssignmentForm(page: Page) {
   const dialog = page.getByRole('dialog');

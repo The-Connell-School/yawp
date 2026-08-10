@@ -59,10 +59,10 @@ test.describe('teacher assignment-level class insights', () => {
     await expect(page.getByText(/suggested next steps/i)).toBeVisible();
     await expect(page.getByText(/based on \d+ submissions/i)).toBeVisible();
 
-    // A fresh summary starts the regeneration cooldown, so the action is
-    // replaced with the reason it cannot run yet.
+    // A fresh summary starts the regeneration cooldown, so the action is hidden
+    // and the subtitle carries the reason it cannot run yet.
     await expect(
-      page.getByTestId('class-insight-generate-unavailable-reason')
+      page.getByTestId('class-insight-panel-subtitle')
     ).toContainText(/regenerate in \d+ (hours|minutes)/i);
     await expect(page.getByRole('button', { name: /regenerate/i })).toHaveCount(
       0
@@ -93,7 +93,7 @@ test.describe('teacher assignment-level class insights', () => {
     await expect(page.getByText(/how the class did/i)).toBeVisible();
     await expect(page.getByText(/suggested next steps/i)).toBeVisible();
     await expect(
-      page.getByTestId('class-insight-generate-unavailable-reason')
+      page.getByTestId('class-insight-panel-subtitle')
     ).toContainText(/regenerate in \d+ (hours|minutes)/i);
   });
 });

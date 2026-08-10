@@ -299,8 +299,10 @@ test.describe.serial('Teacher class page redesign', () => {
       timeout: 15000,
     });
     await expect(detail.getByText(/suggested next steps/i)).toBeVisible();
+    // The cooldown now reads out of the panel subtitle rather than a separate
+    // paragraph beside the button, which the panel hides while it is on cooldown.
     await expect(
-      detail.getByTestId('class-insight-generate-unavailable-reason')
+      detail.getByTestId('class-insight-panel-subtitle')
     ).toContainText(/regenerate in \d+ (hours|minutes)/i);
 
     // Edit is reachable explicitly, and switches the same page to the form,
