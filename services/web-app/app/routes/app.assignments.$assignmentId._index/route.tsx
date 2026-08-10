@@ -1,4 +1,4 @@
-import { useState, type MouseEvent } from 'react';
+import { useState, type MouseEvent, type ReactNode } from 'react';
 import {
   type LoaderFunctionArgs,
   Link,
@@ -34,6 +34,22 @@ import { mergeClassDocumentsViewPreferences } from '../app.my-classes.$classId/c
 import type { ClassInsightSummary } from '~/domain/assignment-insights/class-insight-synthesis';
 
 const DISCARD_CONFIRM_MESSAGE = 'Discard your changes to this assignment?';
+
+/**
+ * Page chrome the class route used to provide while this page was nested
+ * inside it: the scroll container and the centered, padded column. Kept
+ * identical to `app.my-classes.$classId` so drilling in doesn't shift the
+ * content's width or gutters.
+ */
+function PageShell({ children }: { children: ReactNode }) {
+  return (
+    <section className="no-scrollbar flex h-full w-full flex-col overflow-y-scroll">
+      <div className="mx-auto w-full max-w-screen-xl px-3 py-3 pb-24 sm:px-5">
+        {children}
+      </div>
+    </section>
+  );
+}
 
 /**
  * Standalone assignment detail page. Deliberately not nested under the class
@@ -211,19 +227,23 @@ export default function AssignmentDetailRoute() {
 
   if (!data.found) {
     return (
-      <div className="text-foreground" data-testid="assignment-detail-page">
-        <div className="mb-4">
-          <Button asChild variant="outline" size="sm">
-            <Link to="/app/assignments">
-              <CaretLeftIcon className="mr-1 h-4 w-4" /> Back to assignments
-            </Link>
-          </Button>
-        </div>
+      <PageShell>
+        <div className="text-foreground" data-testid="assignment-detail-page">
+          <div className="mb-4">
+            <Button asChild variant="ghost" size="sm">
+              <Link to="/app/assignments" className="w-fit">
+                <CaretLeftIcon className="mr-1 h-4 w-4" /> Back to assignments
+              </Link>
+            </Button>
+          </div>
 
-        <div className="rounded-xl bg-card p-6 text-center ring-1 ring-border">
-          <p className="text-sm text-muted-foreground">Assignment not found.</p>
+          <div className="rounded-xl bg-card p-6 text-center ring-1 ring-border">
+            <p className="text-sm text-muted-foreground">
+              Assignment not found.
+            </p>
+          </div>
         </div>
-      </div>
+      </PageShell>
     );
   }
 
@@ -284,130 +304,132 @@ export default function AssignmentDetailRoute() {
   const documentCount = assignment.documentCount;
 
   return (
-    <div className="text-foreground" data-testid="assignment-detail-page">
-      <div className="mb-4">
-        <Button asChild variant="outline" size="sm">
-          <Link to={backHref} onClick={handleBack}>
-            <CaretLeftIcon className="mr-1 h-4 w-4" /> Back to assignments
-          </Link>
-        </Button>
-      </div>
+    <PageShell>
+      <div className="text-foreground" data-testid="assignment-detail-page">
+        <div className="mb-4">
+          <Button asChild variant="ghost" size="sm">
+            <Link to={backHref} onClick={handleBack} className="w-fit">
+              <CaretLeftIcon className="mr-1 h-4 w-4" /> Back to assignments
+            </Link>
+          </Button>
+        </div>
 
-      {mode === 'view' ? (
-        <>
-          <div className="mb-6 overflow-hidden rounded-xl bg-card ring-1 ring-border">
-            <div className="flex flex-wrap items-start justify-between gap-4 p-4 sm:p-5">
-              <div className="min-w-0 flex-1">
-                <h1 className="text-balance text-xl font-semibold tracking-tight sm:text-2xl">
-                  {assignment.title?.trim() || 'Untitled Assignment'}
-                </h1>
-                <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-base/6 text-muted-foreground sm:text-sm/5">
-                  {assignment.assignmentType ? (
-                    <Badge variant="outline" size="sm">
-                      {assignment.assignmentType.title}
-                    </Badge>
+        {mode === 'view' ? (
+          <>
+            <div className="mb-6 overflow-hidden rounded-xl bg-card ring-1 ring-border">
+              <div className="flex flex-wrap items-start justify-between gap-4 p-4 sm:p-5">
+                <div className="min-w-0 flex-1">
+                  <h1 className="text-balance text-xl font-semibold tracking-tight sm:text-2xl">
+                    {assignment.title?.trim() || 'Untitled Assignment'}
+                  </h1>
+                  <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-base/6 text-muted-foreground sm:text-sm/5">
+                    {assignment.assignmentType ? (
+                      <Badge variant="outline" size="sm">
+                        {assignment.assignmentType.title}
+                      </Badge>
+                    ) : null}
+                    <span>
+                      {assignment.submitForGrade
+                        ? `${assignment.pointValue ?? 100} points`
+                        : 'View only'}
+                    </span>
+                    <span>
+                      {documentCount}{' '}
+                      {documentCount === 1 ? 'document' : 'documents'}
+                    </span>
+                  </div>
+                </div>
+                <div
+                  className="flex shrink-0 items-center gap-2"
+                  data-testid="assignment-detail-actions"
+                >
+                  {classes.length > 1 ? (
+                    <Select
+                      value={activeClassId}
+                      onValueChange={handleClassChange}
+                    >
+                      <SelectTrigger
+                        className="w-[200px]"
+                        aria-label="Class"
+                        data-testid="assignment-detail-class-picker"
+                      >
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {classes.map((klass) => (
+                          <SelectItem key={klass.id} value={klass.id}>
+                            {klass.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   ) : null}
-                  <span>
-                    {assignment.submitForGrade
-                      ? `${assignment.pointValue ?? 100} points`
-                      : 'View only'}
-                  </span>
-                  <span>
-                    {documentCount}{' '}
-                    {documentCount === 1 ? 'document' : 'documents'}
-                  </span>
+                  {canEdit ? (
+                    <>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        onClick={() => setIsDuplicateSheetOpen(true)}
+                      >
+                        <Copy className="mr-2 h-4 w-4" />
+                        Duplicate
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => setMode('edit')}
+                      >
+                        <Pencil className="mr-2 h-4 w-4" />
+                        Edit
+                      </Button>
+                    </>
+                  ) : null}
                 </div>
               </div>
-              <div
-                className="flex shrink-0 items-center gap-2"
-                data-testid="assignment-detail-actions"
-              >
-                {classes.length > 1 ? (
-                  <Select
-                    value={activeClassId}
-                    onValueChange={handleClassChange}
-                  >
-                    <SelectTrigger
-                      className="w-[200px]"
-                      aria-label="Class"
-                      data-testid="assignment-detail-class-picker"
-                    >
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {classes.map((klass) => (
-                        <SelectItem key={klass.id} value={klass.id}>
-                          {klass.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                ) : null}
-                {canEdit ? (
-                  <>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      onClick={() => setIsDuplicateSheetOpen(true)}
-                    >
-                      <Copy className="mr-2 h-4 w-4" />
-                      Duplicate
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => setMode('edit')}
-                    >
-                      <Pencil className="mr-2 h-4 w-4" />
-                      Edit
-                    </Button>
-                  </>
-                ) : null}
-              </div>
             </div>
+
+            <AssignmentSummarySheetContent
+              assignment={assignmentForContent}
+              classInsightsEnabled={data.classInsightsEnabled}
+              onViewDocuments={handleViewDocuments}
+              renderSheet={false}
+              hideHeader
+            />
+          </>
+        ) : (
+          <div className="rounded-xl bg-card p-4 ring-1 ring-border sm:p-5">
+            <AssignmentEditForm
+              action={`/app/my-classes/${activeClassId}`}
+              pdfClassId={activeClassId}
+              allowedAssignmentTypes={data.assignmentTypes}
+              editingAssignment={assignment}
+              onSaved={() => {
+                setMode('view');
+                setIsDirty(false);
+              }}
+              onBack={() => {
+                if (isDirty && !window.confirm(DISCARD_CONFIRM_MESSAGE)) return;
+                setMode('view');
+                setIsDirty(false);
+              }}
+              onDirtyChange={setIsDirty}
+              renderSheet={false}
+            />
           </div>
+        )}
 
-          <AssignmentSummarySheetContent
-            assignment={assignmentForContent}
-            classInsightsEnabled={data.classInsightsEnabled}
-            onViewDocuments={handleViewDocuments}
-            renderSheet={false}
-            hideHeader
-          />
-        </>
-      ) : (
-        <div className="rounded-xl bg-card p-4 ring-1 ring-border sm:p-5">
-          <AssignmentEditForm
-            action={`/app/my-classes/${activeClassId}`}
-            pdfClassId={activeClassId}
-            allowedAssignmentTypes={data.assignmentTypes}
-            editingAssignment={assignment}
-            onSaved={() => {
-              setMode('view');
-              setIsDirty(false);
-            }}
-            onBack={() => {
-              if (isDirty && !window.confirm(DISCARD_CONFIRM_MESSAGE)) return;
-              setMode('view');
-              setIsDirty(false);
-            }}
-            onDirtyChange={setIsDirty}
-            renderSheet={false}
-          />
-        </div>
-      )}
-
-      <AssignmentCreationSheet
-        open={isDuplicateSheetOpen}
-        onOpenChange={setIsDuplicateSheetOpen}
-        entryPoint="class"
-        fixedClassId={activeClassId}
-        assignmentTypes={data.assignmentTypes}
-        teacherClasses={classes}
-        fixedAssignmentTypeId={assignment.assignmentTypeId}
-        initialTitle={`Copy of ${assignment.title?.trim() || 'Untitled Assignment'}`}
-        initialPrompt={assignment.prompt}
-      />
-    </div>
+        <AssignmentCreationSheet
+          open={isDuplicateSheetOpen}
+          onOpenChange={setIsDuplicateSheetOpen}
+          entryPoint="class"
+          fixedClassId={activeClassId}
+          assignmentTypes={data.assignmentTypes}
+          teacherClasses={classes}
+          fixedAssignmentTypeId={assignment.assignmentTypeId}
+          initialTitle={`Copy of ${assignment.title?.trim() || 'Untitled Assignment'}`}
+          initialPrompt={assignment.prompt}
+        />
+      </div>
+    </PageShell>
   );
 }
