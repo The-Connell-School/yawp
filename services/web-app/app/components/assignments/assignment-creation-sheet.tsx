@@ -21,7 +21,6 @@ import {
   SheetTitle,
 } from '~/components/ui/sheet';
 import { Textarea } from '~/components/ui/textarea';
-import { Tooltip } from '~/components/ui/tooltip';
 import {
   DEFAULT_SAVED_ASSIGNMENT_POINT_VALUE,
   SAVED_ASSIGNMENTS_ENABLED,
@@ -600,30 +599,33 @@ export function AssignmentCreationSheetContent({
                       const selected =
                         gradingAssistantStrictnessLevel === option.value;
                       return (
-                        <Tooltip
+                        <button
                           key={option.value}
-                          text={option.description}
-                          delayDuration={200}
-                          contentProps={{ side: 'bottom', className: 'max-w-xs' }}
+                          type="button"
+                          className={`h-full rounded-md border px-3 py-2 text-left text-sm transition ${
+                            selected
+                              ? 'border-primary bg-primary text-primary-foreground'
+                              : 'border-border bg-background hover:bg-muted'
+                          }`}
+                          aria-pressed={selected}
+                          onClick={() =>
+                            setGradingAssistantStrictnessLevel(option.value)
+                          }
+                          disabled={isSaving}
                         >
-                          <button
-                            type="button"
-                            className={`rounded-md border px-3 py-2 text-left text-sm transition ${
+                          <span className="block font-medium">
+                            {option.label}
+                          </span>
+                          <span
+                            className={`mt-1 block text-xs ${
                               selected
-                                ? 'border-primary bg-primary text-primary-foreground'
-                                : 'border-border bg-background hover:bg-muted'
+                                ? 'text-primary-foreground/80'
+                                : 'text-muted-foreground'
                             }`}
-                            aria-pressed={selected}
-                            onClick={() =>
-                              setGradingAssistantStrictnessLevel(option.value)
-                            }
-                            disabled={isSaving}
                           >
-                            <span className="block font-medium">
-                              {option.label}
-                            </span>
-                          </button>
-                        </Tooltip>
+                            {option.description}
+                          </span>
+                        </button>
                       );
                     })}
                   </div>
