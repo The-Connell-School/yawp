@@ -252,9 +252,8 @@ test.describe.serial('Teacher class page redesign', () => {
     // Summary button was removed and the row started opening straight into
     // edit — clicking a row must land on a read/view mode that surfaces the
     // class performance summary (and lets the teacher generate it), not the
-    // edit form. It used to open in a sheet; now it's an embedded full page
-    // that replaces the table/search region in place, with the class header
-    // staying put above it.
+    // edit form. It used to open in a sheet, then as a page nested inside the
+    // class route; it now opens as its own page at /app/assignments/:id.
     const prisma = createE2EPrismaClient();
     try {
       await prisma.classAssignmentInsight.deleteMany({
@@ -272,14 +271,13 @@ test.describe.serial('Teacher class page redesign', () => {
 
     // Forward navigation changes the URL — linkable, not a sheet toggle.
     await page.waitForURL(
-      `/app/my-classes/${e2eContext.classId}/assignment/${e2eContext.assignmentId}`
+      `/app/assignments/${e2eContext.assignmentId}?classId=${e2eContext.classId}`
     );
 
-    // No dialog/sheet — this is embedded page content.
+    // No dialog/sheet — this is page content.
     await expect(page.getByRole('dialog')).toHaveCount(0);
-    // The class header stays at the top, above the detail content.
-    await expect(page.getByTestId('class-detail-header')).toBeVisible();
-    // The table and its search bar are gone, replaced by the detail panel.
+    // The page stands alone: no class shell, no assignments table behind it.
+    await expect(page.getByTestId('class-detail-header')).toHaveCount(0);
     await expect(page.getByTestId('class-assignments-search')).toHaveCount(0);
     const detail = page.getByTestId('assignment-detail-page');
     await expect(detail).toBeVisible();
@@ -310,7 +308,7 @@ test.describe.serial('Teacher class page redesign', () => {
     await detail.getByRole('button', { name: /^edit$/i }).click();
     await expect(detail.getByLabel('Title (optional)')).toBeVisible();
     await expect(page).toHaveURL(
-      `/app/my-classes/${e2eContext.classId}/assignment/${e2eContext.assignmentId}`
+      `/app/assignments/${e2eContext.assignmentId}?classId=${e2eContext.classId}`
     );
 
     // Back returns to view mode in place — the URL still doesn't change.
@@ -332,7 +330,7 @@ test.describe.serial('Teacher class page redesign', () => {
 
     await page.getByText('E2E Class Assignment', { exact: true }).click();
     await page.waitForURL(
-      `/app/my-classes/${e2eContext.classId}/assignment/${e2eContext.assignmentId}`
+      `/app/assignments/${e2eContext.assignmentId}?classId=${e2eContext.classId}`
     );
     await expect(page.getByTestId('assignment-detail-page')).toBeVisible();
 
@@ -351,7 +349,7 @@ test.describe.serial('Teacher class page redesign', () => {
     await expect(page.getByTestId('assignment-detail-page')).toBeVisible();
   });
 
-  test('a deep link straight to an assignment lands on the detail page with the class header in place', async ({
+  test('a deep link straight to an assignment lands on the standalone detail page', async ({
     page,
     e2eContext,
     signIn,
@@ -361,47 +359,39 @@ test.describe.serial('Teacher class page redesign', () => {
     // Fresh navigation directly to the detail URL — no prior click, no
     // client-side history to fall back on.
     await page.goto(
-      `/app/my-classes/${e2eContext.classId}/assignment/${e2eContext.assignmentId}`
+      `/app/assignments/${e2eContext.assignmentId}?classId=${e2eContext.classId}`
     );
     await page.waitForLoadState('networkidle');
-
-    const header = page.getByTestId('class-detail-header');
-    await expect(header).toBeVisible();
-    // The Assignments tab reads as active even though the URL has no ?tab=.
-    await expect(
-      header.getByRole('tab', { name: /assignments/i })
-    ).toHaveAttribute('data-state', 'active');
 
     const detail = page.getByTestId('assignment-detail-page');
     await expect(detail).toBeVisible();
     await expect(
       detail.getByRole('heading', { name: 'E2E Class Assignment' })
     ).toBeVisible();
+    // Standalone: the class shell is not rendered around it.
+    await expect(page.getByTestId('class-detail-header')).toHaveCount(0);
     await expect(page.getByTestId('class-assignments-search')).toHaveCount(0);
 
-    // Back to assignments returns to the table.
+    // Back to assignments returns to the class's assignments table.
     await detail.getByRole('link', { name: /back to assignments/i }).click();
     await expect(page.getByTestId('class-assignments-search')).toBeVisible();
   });
 
-  test('the assignment detail panel swaps in instantly, without a slide animation, when the user prefers reduced motion', async ({
+  test('the old nested assignment URL redirects to the standalone page', async ({
     page,
     e2eContext,
     signIn,
   }) => {
-    await page.emulateMedia({ reducedMotion: 'reduce' });
     await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
-    await page.goto(`/app/my-classes/${e2eContext.classId}?tab=assignments`);
-    await page.waitForLoadState('networkidle');
 
-    await page.getByText('E2E Class Assignment', { exact: true }).click();
-    await page.waitForURL(
+    await page.goto(
       `/app/my-classes/${e2eContext.classId}/assignment/${e2eContext.assignmentId}`
     );
 
-    const panel = page.getByTestId('assignment-detail-panel');
-    await expect(panel).toBeVisible();
-    await expect(panel).toHaveCSS('animation-name', 'none');
+    await page.waitForURL(
+      `/app/assignments/${e2eContext.assignmentId}?classId=${e2eContext.classId}`
+    );
+    await expect(page.getByTestId('assignment-detail-page')).toBeVisible();
   });
 
   test('documents tab rows open details by document state using the shared table', async ({

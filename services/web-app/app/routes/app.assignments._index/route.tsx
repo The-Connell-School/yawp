@@ -386,7 +386,7 @@ export default function MyAssignmentsRoute() {
                 <TableRow key={assignment.classAssignmentId}>
                   <TableCell className="pl-4 font-medium">
                     <Link
-                      to={`/app/my-classes/${assignment.classId}/assignment/${assignment.assignmentId}`}
+                      to={`/app/assignments/${assignment.assignmentId}?classId=${assignment.classId}`}
                       className="[overflow-wrap:anywhere] hover:underline"
                       data-testid={`my-assignment-open-${assignment.classAssignmentId}`}
                     >

@@ -1834,7 +1834,9 @@ function ClassDetailPage({ data }: { data: TeacherClassDetailData }) {
           classInsightsEnabled={classInsightsEnabled}
           onViewDocuments={handleViewAssignmentDocuments}
           onSelectAssignment={(assignmentId) =>
-            navigate(`/app/my-classes/${data.klass.id}/assignment/${assignmentId}`)
+            navigate(
+              `/app/assignments/${assignmentId}?classId=${data.klass.id}`
+            )
           }
         />
       );
