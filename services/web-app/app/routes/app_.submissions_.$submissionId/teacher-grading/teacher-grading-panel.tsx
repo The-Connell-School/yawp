@@ -979,9 +979,6 @@ export function TeacherGradingPanel({
                     </div>
                   </AccordionTrigger>
                   <AccordionContent className="space-y-2 pb-3">
-                    <div className="text-xs text-muted-foreground">
-                      {item.description}
-                    </div>
                     <Select
                       value={hasScore ? current.score.toString() : ''}
                       disabled={isGenerating}
