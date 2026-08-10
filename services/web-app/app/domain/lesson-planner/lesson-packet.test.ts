@@ -3,8 +3,10 @@ import {
   buildLessonPacket,
   deriveSectionKind,
   deriveSectionTitle,
+  findDeckSection,
   parsePacketAudience,
   PACKET_AUDIENCES,
+  type LessonPacket,
 } from './lesson-packet';
 
 describe('deriveSectionTitle', () => {
@@ -512,5 +514,64 @@ describe('buildLessonPacket — a kept reply that carries a deck', () => {
     expect(packet.sections[0]!.deck).toBeNull();
     expect(packet.sections[0]!.deckFailed).toBe(false);
     expect(packet.sections[0]!.content).toContain('Sort the sentences.');
+  });
+});
+
+describe('findDeckSection', () => {
+  function packetOf(
+    sections: Array<{ id: string; content: string }>
+  ): LessonPacket {
+    return buildLessonPacket({
+      title: 'Lesson',
+      className: null,
+      sections: sections.map((section) => ({
+        ...section,
+        keptAudience: 'teacher',
+        origin: 'reply' as const,
+      })),
+    });
+  }
+
+  const plan = { id: 'plan-1', content: '## Warm-up\n\nSort the sentences.' };
+  const deck = { id: 'deck-1', content: replyWithDeck('## Slides') };
+  const second = {
+    id: 'deck-2',
+    content: replyWithDeck('## A second deck').replace(
+      'Beyond the Quote',
+      'Second deck'
+    ),
+  };
+
+  test('finds the section asked for by id', () => {
+    const found = findDeckSection(packetOf([plan, deck]), 'deck-1');
+
+    expect(found?.section.id).toBe('deck-1');
+    expect(found?.deck.title).toBe('Beyond the Quote');
+  });
+
+  test('falls back to the only deck in the packet', () => {
+    const found = findDeckSection(packetOf([plan, deck]), null);
+
+    expect(found?.section.id).toBe('deck-1');
+  });
+
+  test('takes the first deck when a packet holds several', () => {
+    const found = findDeckSection(packetOf([plan, deck, second]), null);
+
+    expect(found?.section.id).toBe('deck-1');
+  });
+
+  test('is nothing when the packet has no deck at all', () => {
+    expect(findDeckSection(packetOf([plan]), null)).toBeNull();
+  });
+
+  // A hand-edited URL pointing at the lesson plan should 404, not quietly hand
+  // back some other section's slides.
+  test('is nothing when the named section is not a deck', () => {
+    expect(findDeckSection(packetOf([plan, deck]), 'plan-1')).toBeNull();
+  });
+
+  test('is nothing when the named section does not exist', () => {
+    expect(findDeckSection(packetOf([plan, deck]), 'nope')).toBeNull();
   });
 });

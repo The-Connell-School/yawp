@@ -1719,6 +1719,49 @@ test.describe('YAWP! Lesson Planner', () => {
     expect(bytes.length).toBeGreaterThan(2000);
   });
 
+  /**
+   * The deck has to be able to leave Yawp: the classroom desktop nobody is
+   * logged into, the substitute who needs Tuesday's slides, the colleague who
+   * wants to borrow the lesson.
+   */
+  test('downloads a filed deck as a real PowerPoint file', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    await setLessonPlannerEnabled(e2eContext.organizationId, true);
+    const { conversationId } = await seedSlideDeck(e2eContext);
+    await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+    await page.goto(`/app/lesson-planner/${conversationId}/packet`);
+
+    const download = page.waitForEvent('download');
+    await page.getByTestId('section-save-pptx').first().click();
+    const file = await download;
+
+    expect(file.suggestedFilename()).toBe('Evidence that earns its place.pptx');
+    const bytes = await readFile(await file.path());
+    // Every Office Open XML file is a zip, and every zip starts "PK".
+    expect(bytes.subarray(0, 2).toString()).toBe('PK');
+    expect(bytes.length).toBeGreaterThan(5000);
+  });
+
+  // A lesson plan is not a deck, and its section must not offer the button.
+  test('offers PowerPoint only on the sections that carry a deck', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    await setLessonPlannerEnabled(e2eContext.organizationId, true);
+    const { conversationId } = await seedLessonPlan(e2eContext, {
+      keepFirst: true,
+    });
+    await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+    await page.goto(`/app/lesson-planner/${conversationId}/packet`);
+
+    await expect(page.getByTestId('section-save-pdf').first()).toBeVisible();
+    await expect(page.getByTestId('section-save-pptx')).toHaveCount(0);
+  });
+
   test('downloads the student handout when that is what is on screen', async ({
     page,
     signIn,
