@@ -82,8 +82,8 @@ test.describe.serial('ACT Writing Ready advancement', () => {
       });
 
       await signIn(e2eContext.userEmail, 'johndoe');
-      await page.goto('/app?tab=assignments');
-      await expect(page.getByTestId('app._index')).toBeVisible();
+      await page.goto(`/app/my-classes/${e2eContext.classId}`);
+      await expect(page.getByTestId('student-class-detail')).toBeVisible();
 
       await page
         .getByRole('button', { name: `ACT Writing Ready E2E ${suffix}` })
