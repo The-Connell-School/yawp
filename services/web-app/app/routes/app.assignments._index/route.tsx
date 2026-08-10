@@ -10,6 +10,7 @@ import { Search } from 'lucide-react';
 import { AssignmentCreationSheet } from '~/components/assignments/assignment-creation-sheet';
 import { Button } from '~/components/ui/button';
 import { Input } from '~/components/ui/input';
+import { AssignmentClasses } from './assignment-classes';
 import {
   Table,
   TableBody,
@@ -106,6 +107,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   const assignments = [...assignmentsById.values()].map((entry) => ({
     ...entry,
+    // Search index rather than display text: the table renders one chip per
+    // class, but searching a class the chips collapsed still finds the row.
     classLabel: entry.classes.map((klass) => klass.label).join(', '),
     // The detail page is class-scoped. Hand it the class when there is only
     // one; with several it falls back to the first deployment and shows its
@@ -429,7 +432,7 @@ export default function MyAssignmentsRoute() {
                     </Link>
                   </TableCell>
                   <TableCell className="text-muted-foreground">
-                    {assignment.classLabel}
+                    <AssignmentClasses classes={assignment.classes} />
                   </TableCell>
                   <TableCell className="text-muted-foreground">
                     {assignment.assignmentTypeTitle}
