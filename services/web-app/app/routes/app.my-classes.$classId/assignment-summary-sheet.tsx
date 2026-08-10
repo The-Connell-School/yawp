@@ -98,7 +98,7 @@ function AssignmentMetadataSection({
 
   return (
     <section
-      className="overflow-hidden rounded-xl border text-sm"
+      className="overflow-hidden rounded-xl border bg-white text-sm dark:bg-card"
       aria-label="Assignment details"
       data-testid="assignment-metadata-section"
     >

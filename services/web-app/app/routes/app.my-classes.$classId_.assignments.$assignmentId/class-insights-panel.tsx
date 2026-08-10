@@ -559,7 +559,7 @@ export function ClassInsightsPanel({
   };
 
   return (
-    <section className="@container overflow-hidden rounded-xl border bg-card shadow-sm dark:shadow-none">
+    <section className="@container overflow-hidden rounded-xl border bg-white shadow-sm dark:bg-card dark:shadow-none">
       {/* Header band */}
       <div className="flex flex-col items-stretch gap-3 border-b bg-gradient-to-r from-primary/[0.07] to-transparent p-4 @xl:flex-row @xl:items-start @xl:justify-between">
         <div className="flex min-w-0 gap-3">
@@ -614,7 +614,7 @@ export function ClassInsightsPanel({
 
         {!hasInsight && !isWorking && (
           <div
-            className="flex flex-col items-center justify-center rounded-lg border border-dashed bg-muted/20 px-6 py-10"
+            className="flex flex-col items-center justify-center rounded-lg bg-muted/20 px-6 py-10"
             data-testid="class-summary-placeholder"
             aria-hidden
           >

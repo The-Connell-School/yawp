@@ -26,7 +26,9 @@ import { AssignmentCreationSheet } from '~/components/assignments/assignment-cre
 import { AssignmentEditForm } from '~/components/assignments/assignment-edit-sheet';
 import { formatClassLabel } from '~/utils/class-display';
 import { getAvailableAssignmentTypesForScopes } from '~/utils/assignment-type-access.server';
+import { Sheet, SheetContent } from '~/components/ui/sheet';
 import {
+  ASSIGNMENT_SUMMARY_SHEET_CONTENT_CLASS_NAME,
   AssignmentSummarySheetContent,
   type AssignmentSummarySheetAssignment,
 } from '../app.my-classes.$classId/assignment-summary-sheet';
@@ -206,13 +208,27 @@ export default function AssignmentDetailRoute() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
 
-  const [mode, setMode] = useState<'view' | 'edit'>('view');
+  const [isEditSheetOpen, setIsEditSheetOpen] = useState(false);
   const [isDirty, setIsDirty] = useState(false);
   const [isDuplicateSheetOpen, setIsDuplicateSheetOpen] = useState(false);
 
+  const closeEditSheet = () => {
+    setIsEditSheetOpen(false);
+    setIsDirty(false);
+  };
+
+  const handleEditSheetOpenChange = (open: boolean) => {
+    if (!open && isDirty && !window.confirm(DISCARD_CONFIRM_MESSAGE)) return;
+    if (!open) {
+      closeEditSheet();
+      return;
+    }
+    setIsEditSheetOpen(true);
+  };
+
   const blocker = useBlocker(
     ({ currentLocation, nextLocation }) =>
-      mode === 'edit' &&
+      isEditSheetOpen &&
       isDirty &&
       currentLocation.pathname !== nextLocation.pathname
   );
@@ -294,8 +310,7 @@ export default function AssignmentDetailRoute() {
 
   const handleClassChange = (classId: string) => {
     if (isDirty && !window.confirm(DISCARD_CONFIRM_MESSAGE)) return;
-    setMode('view');
-    setIsDirty(false);
+    closeEditSheet();
     const next = new URLSearchParams(searchParams);
     next.set('classId', classId);
     setSearchParams(next, { replace: true });
@@ -314,109 +329,106 @@ export default function AssignmentDetailRoute() {
           </Button>
         </div>
 
-        {mode === 'view' ? (
-          <>
-            <div className="mb-6 overflow-hidden rounded-xl bg-card ring-1 ring-border">
-              <div className="flex flex-wrap items-start justify-between gap-4 p-4 sm:p-5">
-                <div className="min-w-0 flex-1">
-                  <h1 className="text-balance text-xl font-semibold tracking-tight sm:text-2xl">
-                    {assignment.title?.trim() || 'Untitled Assignment'}
-                  </h1>
-                  <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-base/6 text-muted-foreground sm:text-sm/5">
-                    {assignment.assignmentType ? (
-                      <Badge variant="outline" size="sm">
-                        {assignment.assignmentType.title}
-                      </Badge>
-                    ) : null}
-                    <span>
-                      {assignment.submitForGrade
-                        ? `${assignment.pointValue ?? 100} points`
-                        : 'View only'}
-                    </span>
-                    <span>
-                      {documentCount}{' '}
-                      {documentCount === 1 ? 'document' : 'documents'}
-                    </span>
-                  </div>
-                </div>
-                <div
-                  className="flex shrink-0 items-center gap-2"
-                  data-testid="assignment-detail-actions"
-                >
-                  {classes.length > 1 ? (
-                    <Select
-                      value={activeClassId}
-                      onValueChange={handleClassChange}
-                    >
-                      <SelectTrigger
-                        className="w-[200px]"
-                        aria-label="Class"
-                        data-testid="assignment-detail-class-picker"
-                      >
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {classes.map((klass) => (
-                          <SelectItem key={klass.id} value={klass.id}>
-                            {klass.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+        <>
+          <div className="mb-6 overflow-hidden rounded-xl border bg-white dark:bg-card">
+            <div className="flex flex-wrap items-start justify-between gap-4 p-4 sm:p-5">
+              <div className="min-w-0 flex-1">
+                <h1 className="text-balance text-xl font-semibold tracking-tight sm:text-2xl">
+                  {assignment.title?.trim() || 'Untitled Assignment'}
+                </h1>
+                <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-base/6 text-muted-foreground sm:text-sm/5">
+                  {assignment.assignmentType ? (
+                    <Badge variant="outline" size="sm">
+                      {assignment.assignmentType.title}
+                    </Badge>
                   ) : null}
-                  {canEdit ? (
-                    <>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        onClick={() => setIsDuplicateSheetOpen(true)}
-                      >
-                        <Copy className="mr-2 h-4 w-4" />
-                        Duplicate
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() => setMode('edit')}
-                      >
-                        <Pencil className="mr-2 h-4 w-4" />
-                        Edit
-                      </Button>
-                    </>
-                  ) : null}
+                  <span>
+                    {assignment.submitForGrade
+                      ? `${assignment.pointValue ?? 100} points`
+                      : 'View only'}
+                  </span>
+                  <span>
+                    {documentCount}{' '}
+                    {documentCount === 1 ? 'document' : 'documents'}
+                  </span>
                 </div>
               </div>
+              <div
+                className="flex shrink-0 items-center gap-2"
+                data-testid="assignment-detail-actions"
+              >
+                {classes.length > 1 ? (
+                  <Select
+                    value={activeClassId}
+                    onValueChange={handleClassChange}
+                  >
+                    <SelectTrigger
+                      className="w-[200px]"
+                      aria-label="Class"
+                      data-testid="assignment-detail-class-picker"
+                    >
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {classes.map((klass) => (
+                        <SelectItem key={klass.id} value={klass.id}>
+                          {klass.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : null}
+                {canEdit ? (
+                  <>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      onClick={() => setIsDuplicateSheetOpen(true)}
+                    >
+                      <Copy className="mr-2 h-4 w-4" />
+                      Duplicate
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setIsEditSheetOpen(true)}
+                    >
+                      <Pencil className="mr-2 h-4 w-4" />
+                      Edit
+                    </Button>
+                  </>
+                ) : null}
+              </div>
             </div>
+          </div>
 
-            <AssignmentSummarySheetContent
-              assignment={assignmentForContent}
-              classInsightsEnabled={data.classInsightsEnabled}
-              onViewDocuments={handleViewDocuments}
-              renderSheet={false}
-              hideHeader
-            />
-          </>
-        ) : (
-          <div className="rounded-xl bg-card p-4 ring-1 ring-border sm:p-5">
+          <AssignmentSummarySheetContent
+            assignment={assignmentForContent}
+            classInsightsEnabled={data.classInsightsEnabled}
+            onViewDocuments={handleViewDocuments}
+            renderSheet={false}
+            hideHeader
+          />
+        </>
+
+        {/* Editing happens in the same sheet the rest of the app edits
+            assignments in — the page behind it stays put. */}
+        <Sheet open={isEditSheetOpen} onOpenChange={handleEditSheetOpenChange}>
+          <SheetContent className={ASSIGNMENT_SUMMARY_SHEET_CONTENT_CLASS_NAME}>
             <AssignmentEditForm
               action={`/app/my-classes/${activeClassId}`}
               pdfClassId={activeClassId}
               allowedAssignmentTypes={data.assignmentTypes}
               editingAssignment={assignment}
-              onSaved={() => {
-                setMode('view');
-                setIsDirty(false);
-              }}
+              onSaved={closeEditSheet}
               onBack={() => {
                 if (isDirty && !window.confirm(DISCARD_CONFIRM_MESSAGE)) return;
-                setMode('view');
-                setIsDirty(false);
+                closeEditSheet();
               }}
               onDirtyChange={setIsDirty}
-              renderSheet={false}
             />
-          </div>
-        )}
+          </SheetContent>
+        </Sheet>
 
         <AssignmentCreationSheet
           open={isDuplicateSheetOpen}
