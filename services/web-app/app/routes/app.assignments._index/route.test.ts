@@ -88,8 +88,8 @@ describe('My Assignments loader', () => {
           id: 'assignment-1',
           title: 'Essay One',
           assignmentType: { title: 'Essay' },
-          _count: { documents: 3 },
         },
+        _count: { documents: 3 },
       },
     ]);
 
@@ -112,16 +112,85 @@ describe('My Assignments loader', () => {
     expect(result).toMatchObject({
       assignments: [
         {
-          classAssignmentId: 'ca-1',
           assignmentId: 'assignment-1',
           title: 'Essay One',
           assignmentTypeTitle: 'Essay',
           documentCount: 3,
-          classId: 'class-1',
           classLabel: 'Grade 9th • Period 1st',
+          classes: [{ id: 'class-1', label: 'Grade 9th • Period 1st' }],
+          href: '/app/assignments/assignment-1?classId=class-1',
         },
       ],
     });
+  });
+
+  // One Assignment deployed to several classes is one assignment, not several.
+  // The old list rendered a ClassAssignment per row, so it repeated the same
+  // assignment once per class and printed the cross-class document total on
+  // every one of those rows.
+  test('collapses one assignment deployed to several classes into a single row', async () => {
+    requireMembership.mockResolvedValue({ id: 'profile-1', role: 'TEACHER' });
+    const assignment = {
+      id: 'assignment-1',
+      title: 'Essay One',
+      assignmentType: { title: 'Essay' },
+    };
+    prisma.classAssignment.findMany.mockResolvedValue([
+      {
+        id: 'ca-1',
+        class: { id: 'class-1', grade: '9th', period: '1st', title: null },
+        assignment,
+        _count: { documents: 3 },
+      },
+      {
+        id: 'ca-2',
+        class: { id: 'class-2', grade: '9th', period: '2nd', title: null },
+        assignment,
+        _count: { documents: 4 },
+      },
+    ]);
+
+    const result = (await loader({
+      request: makeRequest(),
+      params: {},
+      context: {},
+    } as any)) as any;
+
+    expect(result.assignments).toHaveLength(1);
+    expect(result.assignments[0]).toMatchObject({
+      assignmentId: 'assignment-1',
+      documentCount: 7,
+      classLabel: 'Grade 9th • Period 1st, Grade 9th • Period 2nd',
+      classes: [
+        { id: 'class-1', label: 'Grade 9th • Period 1st' },
+        { id: 'class-2', label: 'Grade 9th • Period 2nd' },
+      ],
+    });
+    // With more than one class there is no single class to scope the detail
+    // page to; it picks the first deployment and offers its own class picker.
+    expect(result.assignments[0].href).toBe('/app/assignments/assignment-1');
+  });
+
+  test('counts documents per class deployment rather than across the assignment', async () => {
+    requireMembership.mockResolvedValue({ id: 'profile-1', role: 'TEACHER' });
+    prisma.classAssignment.findMany.mockResolvedValue([
+      {
+        id: 'ca-1',
+        class: { id: 'class-1', grade: '9th', period: '1st', title: null },
+        assignment: {
+          id: 'assignment-1',
+          title: 'Essay One',
+          assignmentType: { title: 'Essay' },
+        },
+        _count: { documents: 2 },
+      },
+    ]);
+
+    await loader({ request: makeRequest(), params: {}, context: {} } as any);
+
+    const [args] = prisma.classAssignment.findMany.mock.calls[0];
+    expect(args.select._count).toEqual({ select: { documents: true } });
+    expect(args.select.assignment.select._count).toBeUndefined();
   });
 
   test('falls back to "Untitled Assignment" when the title is blank', async () => {
@@ -134,8 +203,8 @@ describe('My Assignments loader', () => {
           id: 'assignment-2',
           title: '   ',
           assignmentType: { title: 'Prompt' },
-          _count: { documents: 0 },
         },
+        _count: { documents: 0 },
       },
     ]);
 

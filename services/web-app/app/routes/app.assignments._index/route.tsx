@@ -64,21 +64,56 @@ export async function loader({ request }: LoaderFunctionArgs) {
           id: true,
           title: true,
           assignmentType: { select: { title: true } },
-          _count: { select: { documents: true } },
         },
       },
+      // Counted per deployment, not per assignment: the assignment-level count
+      // is the cross-class total, which is the wrong number for a single class
+      // and gets summed below for the row that spans several.
+      _count: { select: { documents: true } },
     },
     orderBy: [{ assignment: { createdAt: 'desc' } }],
   });
 
-  const assignments = classAssignments.map((classAssignment) => ({
-    classAssignmentId: classAssignment.id,
-    assignmentId: classAssignment.assignment.id,
-    title: classAssignment.assignment.title?.trim() || 'Untitled Assignment',
-    assignmentTypeTitle: classAssignment.assignment.assignmentType.title,
-    documentCount: classAssignment.assignment._count.documents,
-    classId: classAssignment.class.id,
-    classLabel: formatClassLabel(classAssignment.class),
+  // An Assignment is one assignment however many classes it is deployed to, so
+  // the list collapses its ClassAssignment rows into one entry that names them.
+  const assignmentsById = new Map<
+    string,
+    {
+      assignmentId: string;
+      title: string;
+      assignmentTypeTitle: string;
+      documentCount: number;
+      classes: { id: string; label: string }[];
+    }
+  >();
+
+  for (const classAssignment of classAssignments) {
+    const existing = assignmentsById.get(classAssignment.assignment.id);
+    const entry = existing ?? {
+      assignmentId: classAssignment.assignment.id,
+      title: classAssignment.assignment.title?.trim() || 'Untitled Assignment',
+      assignmentTypeTitle: classAssignment.assignment.assignmentType.title,
+      documentCount: 0,
+      classes: [],
+    };
+    entry.documentCount += classAssignment._count.documents;
+    entry.classes.push({
+      id: classAssignment.class.id,
+      label: formatClassLabel(classAssignment.class),
+    });
+    if (!existing) assignmentsById.set(entry.assignmentId, entry);
+  }
+
+  const assignments = [...assignmentsById.values()].map((entry) => ({
+    ...entry,
+    classLabel: entry.classes.map((klass) => klass.label).join(', '),
+    // The detail page is class-scoped. Hand it the class when there is only
+    // one; with several it falls back to the first deployment and shows its
+    // own class picker, so pinning one here would be a guess.
+    href:
+      entry.classes.length === 1
+        ? `/app/assignments/${entry.assignmentId}?classId=${entry.classes[0].id}`
+        : `/app/assignments/${entry.assignmentId}`,
   }));
 
   // Everything the page needs to reuse a saved assignment: the saved rows plus
@@ -374,7 +409,7 @@ export default function MyAssignmentsRoute() {
                 <TableHead className="rounded-tl-lg pl-4">
                   Assignment
                 </TableHead>
-                <TableHead className="whitespace-nowrap">Class</TableHead>
+                <TableHead className="whitespace-nowrap">Classes</TableHead>
                 <TableHead className="whitespace-nowrap">Type</TableHead>
                 <TableHead className="whitespace-nowrap rounded-tr-lg pr-4">
                   Documents
@@ -383,12 +418,12 @@ export default function MyAssignmentsRoute() {
             </TableHeader>
             <TableBody>
               {filteredAssignments.map((assignment) => (
-                <TableRow key={assignment.classAssignmentId}>
+                <TableRow key={assignment.assignmentId}>
                   <TableCell className="pl-4 font-medium">
                     <Link
-                      to={`/app/assignments/${assignment.assignmentId}?classId=${assignment.classId}`}
+                      to={assignment.href}
                       className="[overflow-wrap:anywhere] hover:underline"
-                      data-testid={`my-assignment-open-${assignment.classAssignmentId}`}
+                      data-testid={`my-assignment-open-${assignment.assignmentId}`}
                     >
                       {assignment.title}
                     </Link>
