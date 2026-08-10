@@ -11,7 +11,6 @@ import {
   FileText,
   Lightbulb,
   ListTree,
-  Presentation,
   Rows,
   Star,
 } from 'lucide-react';
@@ -89,16 +88,6 @@ export default function LessonPacketRoute() {
   function handoutPieceHref(pieceId: string) {
     const params = new URLSearchParams({ piece: pieceId });
     return `/app/lesson-planner/${conversationId}/packet.pdf?${params}`;
-  }
-
-  /**
-   * The deck as a file the teacher can take somewhere else — the classroom
-   * desktop that is not logged in, the substitute, the colleague who wants to
-   * borrow it. Only offered on a section that actually has one.
-   */
-  function pptxHref(sectionId: string) {
-    const params = new URLSearchParams({ section: sectionId });
-    return `/app/lesson-planner/${conversationId}/packet.pptx?${params}`;
   }
 
   function jumpTo(anchor: string) {
@@ -473,17 +462,6 @@ export default function LessonPacketRoute() {
                         <FileDown size={13} />
                         Save this as PDF
                       </a>
-                      {section.deck ? (
-                        <a
-                          href={pptxHref(section.id)}
-                          download
-                          data-testid="section-save-pptx"
-                          className="inline-flex shrink-0 items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-muted-foreground transition hover:bg-foreground/5 hover:text-foreground print:hidden"
-                        >
-                          <Presentation size={13} />
-                          PowerPoint
-                        </a>
-                      ) : null}
                     </div>
                     <SectionContent
                       section={section}
@@ -534,6 +512,7 @@ function SectionContent({
           <SlideDeckCard
             deck={section.deck}
             presentHref={`/present/${conversationId}/${section.id}`}
+            downloadHref={`/present/${conversationId}/${section.id}.pptx`}
           />
         </div>
       ) : null}

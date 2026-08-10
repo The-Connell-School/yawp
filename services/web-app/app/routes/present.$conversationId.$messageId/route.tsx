@@ -14,51 +14,25 @@ import {
   StickyNote,
   X,
 } from 'lucide-react';
-import { prisma } from '~/utils/db.server';
-import { getLessonPlannerAccess } from '~/utils/lesson-planner/lesson-planner-access.server';
-import {
-  deckDurationMinutes,
-  parseSlideDeck,
-} from '~/domain/lesson-planner/slide-deck';
+import { deckDurationMinutes } from '~/domain/lesson-planner/slide-deck';
+import { loadLessonDeck } from '~/domain/lesson-planner/load-deck.server';
 import { cn } from '~/utils/misc';
 import { SlideCanvas } from './slide-canvas';
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
-  const access = await getLessonPlannerAccess(request);
-  if (!access.allowed) throw redirect('/app');
-
-  const owned = {
-    id: params.conversationId,
-    membershipId: access.membership.id,
-    deletedAt: null,
-  };
-  const conversationSelect = {
-    select: { id: true, title: true, packetTitle: true },
-  };
-
-  // The id is a reply for a deck still in the transcript, or a filed artifact
-  // for the one in the teacher's packet — both are decks they can project.
-  const source =
-    (await prisma.lessonPlanMessage.findFirst({
-      where: { id: params.messageId, role: 'assistant', conversation: owned },
-      select: { content: true, conversation: conversationSelect },
-    })) ??
-    (await prisma.lessonPlanMaterial.findFirst({
-      where: { id: params.messageId, conversation: owned },
-      select: { content: true, conversation: conversationSelect },
-    }));
-  if (!source) throw new Response('Not Found', { status: 404 });
-
-  const message = source;
-  const parsed = parseSlideDeck(message.content);
-  if (!parsed) throw new Response('Not Found', { status: 404 });
+  // The same lookup the PowerPoint download uses: a deck a teacher can project
+  // is a deck they can take with them.
+  const { conversationId, lessonTitle, deck } = await loadLessonDeck({
+    request,
+    conversationId: params.conversationId,
+    deckId: params.messageId,
+  });
 
   return {
-    conversationId: message.conversation.id,
-    lessonTitle:
-      message.conversation.packetTitle?.trim() || message.conversation.title,
-    deck: parsed.deck,
-    durationMinutes: deckDurationMinutes(parsed.deck),
+    conversationId,
+    lessonTitle,
+    deck,
+    durationMinutes: deckDurationMinutes(deck),
   };
 }
 

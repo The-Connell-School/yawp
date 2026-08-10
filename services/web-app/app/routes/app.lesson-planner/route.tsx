@@ -957,6 +957,11 @@ function MessageBubble({
                     ? `/present/${conversationId}/${message.id}`
                     : null
                 }
+                downloadHref={
+                  message.id && conversationId
+                    ? `/present/${conversationId}/${message.id}.pptx`
+                    : null
+                }
               />
             </div>
           ) : null}

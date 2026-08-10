@@ -1,33 +1,31 @@
 /**
- * A lesson's slide deck as a PowerPoint download.
+ * A deck as a PowerPoint download.
  *
- * A resource route with no component, and a sibling of `packet.pdf`: same
- * loader, so the same access check, ordering and titles decide what comes back.
- * `?section=` names which deck when a lesson holds more than one; without it,
- * the packet's first deck is what "the slides" means.
+ * A resource route with no component, sitting beside the presenter and reached
+ * by the same id — so anything a teacher can project, they can also take with
+ * them, whether or not it has been filed in a packet yet.
+ *
+ * Yawp projects decks perfectly well; this is for when the deck has to leave.
+ * The classroom desktop nobody is logged into, the substitute who needs
+ * Tuesday's slides, the colleague borrowing the lesson, the teacher who wants
+ * to add two slides of their own.
  */
 import type { LoaderFunctionArgs } from 'react-router';
-import { loadLessonPacket } from '~/domain/lesson-planner/load-lesson-packet.server';
-import { findDeckSection } from '~/domain/lesson-planner/lesson-packet';
+import { loadLessonDeck } from '~/domain/lesson-planner/load-deck.server';
 import {
   pptxFilename,
   renderDeckPptx,
 } from '~/domain/lesson-planner/lesson-pptx.server';
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
-  const { packet } = await loadLessonPacket({
+  const { deck, lessonTitle } = await loadLessonDeck({
     request,
     conversationId: params.conversationId,
+    deckId: params.messageId,
   });
 
-  const url = new URL(request.url);
-  const found = findDeckSection(packet, url.searchParams.get('section'));
-  // No deck to hand over, or a section that is not one. Either way there is no
-  // file here — better a 404 than an empty presentation.
-  if (!found) throw new Response('Not Found', { status: 404 });
-
-  const pptx = await renderDeckPptx(found.deck);
-  const filename = pptxFilename(found.deck.title || found.section.title);
+  const pptx = await renderDeckPptx(deck);
+  const filename = pptxFilename(deck.title || lessonTitle);
 
   return new Response(pptx as unknown as BodyInit, {
     headers: {

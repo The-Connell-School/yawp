@@ -1724,7 +1724,7 @@ test.describe('YAWP! Lesson Planner', () => {
    * logged into, the substitute who needs Tuesday's slides, the colleague who
    * wants to borrow the lesson.
    */
-  test('downloads a filed deck as a real PowerPoint file', async ({
+  test('downloads a deck as a real PowerPoint file from the packet', async ({
     page,
     signIn,
     e2eContext,
@@ -1735,7 +1735,11 @@ test.describe('YAWP! Lesson Planner', () => {
     await page.goto(`/app/lesson-planner/${conversationId}/packet`);
 
     const download = page.waitForEvent('download');
-    await page.getByTestId('section-save-pptx').first().click();
+    await page
+      .getByTestId('slide-deck-card')
+      .last()
+      .getByTestId('deck-download-pptx')
+      .click();
     const file = await download;
 
     expect(file.suggestedFilename()).toBe('Evidence that earns its place.pptx');
@@ -1745,8 +1749,32 @@ test.describe('YAWP! Lesson Planner', () => {
     expect(bytes.length).toBeGreaterThan(5000);
   });
 
-  // A lesson plan is not a deck, and its section must not offer the button.
-  test('offers PowerPoint only on the sections that carry a deck', async ({
+  /**
+   * And before it is filed, too. A teacher who wants the deck on the classroom
+   * machine should not have to add it to a packet first.
+   */
+  test('downloads a deck straight from the conversation', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    await setLessonPlannerEnabled(e2eContext.organizationId, true);
+    const { conversationId } = await seedSlideDeck(e2eContext);
+    await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+    await page.goto(`/app/lesson-planner?c=${conversationId}`);
+
+    const download = page.waitForEvent('download');
+    await page.getByTestId('deck-download-pptx').first().click();
+    const file = await download;
+
+    expect(file.suggestedFilename()).toBe('Evidence that earns its place.pptx');
+    expect((await readFile(await file.path())).subarray(0, 2).toString()).toBe(
+      'PK'
+    );
+  });
+
+  // A lesson plan is not a deck, so its section must not offer the button.
+  test('offers PowerPoint only where there is a deck', async ({
     page,
     signIn,
     e2eContext,
@@ -1759,7 +1787,7 @@ test.describe('YAWP! Lesson Planner', () => {
     await page.goto(`/app/lesson-planner/${conversationId}/packet`);
 
     await expect(page.getByTestId('section-save-pdf').first()).toBeVisible();
-    await expect(page.getByTestId('section-save-pptx')).toHaveCount(0);
+    await expect(page.getByTestId('deck-download-pptx')).toHaveCount(0);
   });
 
   test('downloads the student handout when that is what is on screen', async ({

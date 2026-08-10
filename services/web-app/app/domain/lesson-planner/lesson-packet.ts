@@ -198,26 +198,6 @@ export type LessonPacket = {
   totalMinutes: number;
 };
 
-/**
- * The deck a download is asking for.
- *
- * Named by id when the teacher clicked a particular section's button, and
- * otherwise the packet's first deck — a hand-typed URL with no section on it
- * means "the slides", and most lessons have exactly one set. A section that
- * exists but carries no deck is nothing, not a fallback: pointing at the lesson
- * plan should fail rather than quietly hand back somebody else's slides.
- */
-export function findDeckSection(
-  packet: LessonPacket,
-  sectionId: string | null | undefined
-): { section: PacketSection; deck: SlideDeck } | null {
-  const section = sectionId
-    ? packet.sections.find((candidate) => candidate.id === sectionId)
-    : packet.sections.find((candidate) => candidate.deck);
-
-  return section?.deck ? { section, deck: section.deck } : null;
-}
-
 export function buildLessonPacket({
   title,
   className,

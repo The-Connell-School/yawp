@@ -5,7 +5,7 @@
  * thing on the card.
  */
 import { Link } from 'react-router';
-import { Check, Play, Plus, Presentation } from 'lucide-react';
+import { Check, Download, Play, Plus, Presentation } from 'lucide-react';
 import { cn } from '~/utils/misc';
 import {
   deckDurationMinutes,
@@ -15,6 +15,7 @@ import {
 export function SlideDeckCard({
   deck,
   presentHref,
+  downloadHref,
   added,
   onToggle,
   disabled,
@@ -22,6 +23,12 @@ export function SlideDeckCard({
   deck: SlideDeck;
   /** Absent while the reply is still unsaved and has no id to present by. */
   presentHref: string | null;
+  /**
+   * The deck as a .pptx. Offered wherever the deck can be presented, because a
+   * teacher who can project it should be able to take it to the classroom
+   * machine that is not logged into Yawp — or leave it for a substitute.
+   */
+  downloadHref?: string | null;
   /** Whether this deck is the one currently filed in the lesson packet. */
   added?: boolean;
   /** Absent in the packet itself, where the deck is already filed. */
@@ -68,6 +75,17 @@ export function SlideDeckCard({
             {added ? <Check size={14} /> : <Plus size={14} />}
             {added ? 'In the packet' : 'Add to packet'}
           </button>
+        ) : null}
+        {downloadHref ? (
+          <a
+            href={downloadHref}
+            download
+            data-testid="deck-download-pptx"
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-medium text-muted-foreground transition hover:bg-foreground/5 hover:text-foreground"
+          >
+            <Download size={14} />
+            PowerPoint
+          </a>
         ) : null}
         {presentHref ? (
           <Link
