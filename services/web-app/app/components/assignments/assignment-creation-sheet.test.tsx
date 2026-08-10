@@ -30,6 +30,9 @@ mock.module('~/components/ui/tooltip', () => ({
 
 const { AssignmentCreationSheetContent, assignmentCreationClassLabel } =
   await import('./assignment-creation-sheet');
+const { SAVED_ASSIGNMENTS_ENABLED } = await import(
+  '~/domain/assignments/saved-assignments'
+);
 
 describe('assignmentCreationClassLabel', () => {
   it('shows grade and period when both are present', () => {
@@ -498,7 +501,19 @@ describe('AssignmentCreationSheetContent', () => {
     expectNoText('Point value');
     expect(inputByName('pointValue').value).toBe('');
   });
-  it('offers to keep the assignment, off by default, on the bulk-create entry points', () => {
+  // Both halves of the feature switch are asserted here rather than one being
+  // deleted, so flipping SAVED_ASSIGNMENTS_ENABLED back on restores the
+  // original expectation instead of quietly leaving it untested.
+  it.skipIf(SAVED_ASSIGNMENTS_ENABLED)(
+    'keeps the save-for-reuse option out of the sheet while My Saved Assignments is off',
+    () => {
+      root = renderSheet({ entryPoint: 'dashboard' }).root;
+
+      expectNoText('Save to My Saved Assignments');
+    }
+  );
+
+  it.skipIf(!SAVED_ASSIGNMENTS_ENABLED)('offers to keep the assignment, off by default, on the bulk-create entry points', () => {
     root = renderSheet({ entryPoint: 'dashboard' }).root;
 
     expectText('Save to My Saved Assignments');

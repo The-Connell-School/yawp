@@ -29,6 +29,12 @@ mock.module('~/domain/assignments/saved-assignments.server', () => ({
 }));
 
 const { action, loader } = await import('./route');
+// The loader reads the feature switch from the client-safe module, which is
+// deliberately not mocked here: these expectations follow the real flag rather
+// than a stand-in, so switching the feature changes the suite honestly.
+const { SAVED_ASSIGNMENTS_ENABLED } = await import(
+  '~/domain/assignments/saved-assignments'
+);
 
 afterAll(() => {
   mock.restore();
@@ -219,7 +225,7 @@ describe('My Assignments loader', () => {
       'Honors · Grade 10th • Period 2nd'
     );
   });
-  test('hands the page this teacher\'s saved assignments and what it takes to reuse one', async () => {
+  test.skipIf(!SAVED_ASSIGNMENTS_ENABLED)('hands the page this teacher\'s saved assignments and what it takes to reuse one', async () => {
     requireMembership.mockResolvedValue({ id: 'profile-1', role: 'TEACHER' });
     prisma.classAssignment.findMany.mockResolvedValue([]);
     prisma.class.findMany.mockResolvedValue([
@@ -264,6 +270,41 @@ describe('My Assignments loader', () => {
       { id: 'at-1', title: 'Essay' },
     ]);
   });
+
+  test.skipIf(SAVED_ASSIGNMENTS_ENABLED)(
+    'reads no saved assignments while the feature is switched off, but still arms the creation sheet',
+    async () => {
+      requireMembership.mockResolvedValue({ id: 'profile-1', role: 'TEACHER' });
+      prisma.classAssignment.findMany.mockResolvedValue([]);
+      prisma.class.findMany.mockResolvedValue([
+        {
+          id: 'class-1',
+          grade: '9th',
+          period: '1st',
+          title: null,
+          school: { id: 'school-1', organizationId: 'org-1' },
+        },
+      ]);
+      getAvailableAssignmentTypesForScopes.mockResolvedValue([
+        { id: 'at-1', title: 'Essay', systemKey: null },
+      ]);
+
+      const result = (await loader({
+        request: makeRequest(),
+        params: {},
+        context: {},
+      } as any)) as any;
+
+      expect(listSavedAssignments).not.toHaveBeenCalled();
+      expect(result.savedAssignments).toEqual([]);
+      expect(result.assignmentCreationClasses).toEqual([
+        { id: 'class-1', name: 'Grade 9th • Period 1st' },
+      ]);
+      expect(result.assignmentCreationTypes).toEqual([
+        { id: 'at-1', title: 'Essay' },
+      ]);
+    }
+  );
 
   test('does not read saved assignments for a non-teacher', async () => {
     requireMembership.mockResolvedValue({ id: 'profile-1', role: 'STUDENT' });

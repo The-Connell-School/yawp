@@ -9,7 +9,7 @@ import type { GradingAssistantStrictnessLevel } from '~/domain/grading/grading-a
  * consults this, so turning it off hides "My Saved Assignments" everywhere
  * without touching rows already stored.
  */
-export const SAVED_ASSIGNMENTS_ENABLED = true;
+export const SAVED_ASSIGNMENTS_ENABLED = false;
 
 /**
  * What the creation sheet starts a graded assignment at. Kept here rather than

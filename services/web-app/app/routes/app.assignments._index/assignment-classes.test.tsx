@@ -54,11 +54,11 @@ describe('AssignmentClasses', () => {
     expect(el.textContent).not.toContain('Period 1st, Grade');
   });
 
-  test('collapses the classes past the first two into a +N control', () => {
+  test('collapses the classes past the first two into a +N more pill', () => {
     const el = render(<AssignmentClasses classes={classes} />);
 
     const more = el.querySelector('button');
-    expect(more?.textContent).toBe('+1');
+    expect(more?.textContent).toBe('+1 more');
     // Screen readers never see the tooltip, so the collapsed classes have to
     // ride on the control itself.
     expect(more?.getAttribute('aria-label')).toBe(

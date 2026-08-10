@@ -1,5 +1,6 @@
 import { test, expect } from '../test-setup';
 import { createE2EPrismaClient } from '../prisma-client';
+import { SAVED_ASSIGNMENTS_ENABLED } from '../../app/domain/assignments/saved-assignments';
 
 const CLASS_LABEL = /Grade 9th .* Period 1st/;
 
@@ -19,6 +20,14 @@ async function deleteSavedAssignmentsAndAssignments(params: {
 }
 
 test.describe.serial('My Saved Assignments', () => {
+  // The feature is switched off for the pre-school-start release. Skipping off
+  // the flag rather than deleting the specs means turning it back on restores
+  // the coverage in the same commit.
+  test.skip(
+    !SAVED_ASSIGNMENTS_ENABLED,
+    'My Saved Assignments is switched off (SAVED_ASSIGNMENTS_ENABLED)'
+  );
+
   test('teacher keeps an assignment, reuses it pre-filled, then removes it', async ({
     page,
     e2eContext,

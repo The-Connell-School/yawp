@@ -39,15 +39,16 @@ export function AssignmentClasses({ classes }: { classes: AssignmentClass[] }) {
         >
           {/* A real button so the collapsed classes are reachable by keyboard,
               not by hover alone. The label carries them for screen readers,
-              which never see the tooltip. */}
+              which never see the tooltip. Styled as a pill to sit with the
+              class chips rather than read as loose text beside them. */}
           <button
             type="button"
-            className="rounded-full px-1.5 py-0.5 text-xs text-muted-foreground underline decoration-dotted underline-offset-2 focus:outline-none focus:ring-2 focus:ring-ring"
+            className="inline-flex items-center whitespace-nowrap rounded-full border border-dashed border-muted-foreground/40 px-1.5 py-0.5 text-xs font-normal text-muted-foreground transition-colors hover:bg-secondary hover:text-secondary-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
             aria-label={`Also assigned to ${hidden
               .map((klass) => klass.label)
               .join(', ')}`}
           >
-            +{hidden.length}
+            +{hidden.length} more
           </button>
         </Tooltip>
       ) : null}
