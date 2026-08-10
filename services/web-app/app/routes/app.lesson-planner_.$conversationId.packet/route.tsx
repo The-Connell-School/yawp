@@ -24,7 +24,7 @@ import { Button } from '~/components/ui/button';
 import { cn } from '~/utils/misc';
 import { MarkdownContent } from '~/components/ai-chat/assistant-markdown';
 import { SlideDeckCard } from '~/components/ai-chat/slide-deck-card';
-import { readSlideDeck } from '~/domain/lesson-planner/slide-deck';
+import type { SlideDeck } from '~/domain/lesson-planner/slide-deck';
 import { buildStudentHandout } from '~/domain/lesson-planner/student-handout';
 import { loadLessonPacket } from '~/domain/lesson-planner/load-lesson-packet.server';
 import {
@@ -491,11 +491,14 @@ function SectionContent({
     content: string;
     audience: 'teacher' | 'student';
     materials: LessonMaterial[];
+    deck: SlideDeck | null;
+    deckFailed: boolean;
   };
   conversationId: string;
 }) {
-  const deckOutcome = readSlideDeck(section.content);
-  const body = deckOutcome.kind === 'none' ? section.content : deckOutcome.body;
+  // The packet already took the deck out of the prose and parsed it, so there
+  // is nothing left to pull apart here.
+  const body = section.content;
 
   return (
     <div
@@ -504,15 +507,15 @@ function SectionContent({
       )}
     >
       {body ? <MarkdownContent content={body} /> : null}
-      {deckOutcome.kind === 'deck' ? (
+      {section.deck ? (
         <div className={cn(body && 'mt-3')}>
           <SlideDeckCard
-            deck={deckOutcome.deck}
+            deck={section.deck}
             presentHref={`/present/${conversationId}/${section.id}`}
           />
         </div>
       ) : null}
-      {deckOutcome.kind === 'unreadable' ? (
+      {section.deckFailed ? (
         <p className={cn('text-sm text-muted-foreground', body && 'mt-3')}>
           This deck didn’t build. Ask the planner to rebuild it, shorter.
         </p>

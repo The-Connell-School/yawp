@@ -389,3 +389,128 @@ describe('buildLessonPacket — a kept reply that asked with controls', () => {
     expect(packet.sections[0]!.content).toContain('Which class is this for?');
   });
 });
+
+const DECK = {
+  title: 'Beyond the Quote',
+  subtitle: 'English 11 · Writing analysis that argues',
+  slides: [
+    {
+      layout: 'title',
+      title: 'Beyond the Quote',
+      subtitle: 'Writing analysis that actually argues',
+      speakerNotes: 'Let the title sit for a beat before you say anything.',
+      minutes: 1,
+    },
+    {
+      layout: 'bullets',
+      title: 'The three moves',
+      bullets: ['Interpret', 'Connect', 'Push'],
+      speakerNotes: 'Name each move, then show it.',
+      minutes: 6,
+    },
+  ],
+};
+
+function replyWithDeck(prose: string): string {
+  return `${prose}\n\n\`\`\`yawp-slides\n${JSON.stringify(DECK, null, 2)}\n\`\`\``;
+}
+
+describe('buildLessonPacket — a kept reply that carries a deck', () => {
+  function packetWithDeck(prose = "## Beyond the Quote\n\nHere's the deck.") {
+    return buildLessonPacket({
+      title: 'Lesson',
+      className: null,
+      sections: [
+        { id: 'msg-1', content: replyWithDeck(prose), keptAudience: 'teacher' },
+      ],
+    });
+  }
+
+  test('parses the deck once, into the section', () => {
+    const section = packetWithDeck().sections[0]!;
+
+    expect(section.deck?.title).toBe('Beyond the Quote');
+    expect(section.deck?.slides).toHaveLength(2);
+  });
+
+  // The bug this whole change exists for: every renderer used to re-parse the
+  // raw fence, and the PDF forgot to, so a teacher downloaded four pages of
+  // JSON.
+  test('takes the JSON out of the printable content', () => {
+    const section = packetWithDeck().sections[0]!;
+
+    expect(section.content).not.toContain('yawp-slides');
+    expect(section.content).not.toContain('"layout"');
+    expect(section.content).not.toContain('speakerNotes');
+    expect(section.content).toContain("Here's the deck.");
+  });
+
+  test('is still a slides section once the fence is gone', () => {
+    expect(packetWithDeck().sections[0]!.kind).toBe('slides');
+    expect(packetWithDeck().outline[0]!.kind).toBe('slides');
+  });
+
+  test('names a deck-only reply after the deck, not after its fence', () => {
+    const section = packetWithDeck('').sections[0]!;
+
+    expect(section.title).toBe('Beyond the Quote');
+    expect(section.content).toBe('');
+  });
+
+  test('a teacher-supplied name still wins over the deck title', () => {
+    const packet = buildLessonPacket({
+      title: 'Lesson',
+      className: null,
+      sections: [
+        {
+          id: 'msg-1',
+          content: replyWithDeck(''),
+          keptAudience: 'teacher',
+          keptTitle: 'Tuesday opener',
+        },
+      ],
+    });
+
+    expect(packet.sections[0]!.title).toBe('Tuesday opener');
+  });
+
+  test('a deck the schema rejected leaves no JSON behind either', () => {
+    const packet = buildLessonPacket({
+      title: 'Lesson',
+      className: null,
+      sections: [
+        {
+          id: 'msg-1',
+          content:
+            '## Broken\n\nHere.\n\n```yawp-slides\n{ "title": "No slides at all", "slides": [] }\n```',
+          keptAudience: 'teacher',
+        },
+      ],
+    });
+
+    const section = packet.sections[0]!;
+    expect(section.deck).toBeNull();
+    // Told apart from "no deck at all", so the page can say it didn't build.
+    expect(section.deckFailed).toBe(true);
+    expect(section.content).not.toContain('"slides"');
+    expect(section.content).toContain('Here.');
+  });
+
+  test('a reply with no deck is untouched', () => {
+    const packet = buildLessonPacket({
+      title: 'Lesson',
+      className: null,
+      sections: [
+        {
+          id: 'msg-1',
+          content: '## Warm-up (5 min)\n\nSort the sentences.',
+          keptAudience: 'teacher',
+        },
+      ],
+    });
+
+    expect(packet.sections[0]!.deck).toBeNull();
+    expect(packet.sections[0]!.deckFailed).toBe(false);
+    expect(packet.sections[0]!.content).toContain('Sort the sentences.');
+  });
+});

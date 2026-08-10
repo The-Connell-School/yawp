@@ -8,7 +8,7 @@
  * with room to write.
  */
 import { parseAssistantMessage } from '~/components/ai-chat/parse-assistant-message';
-import { hasSlideDeck } from './slide-deck';
+import { hasSlideDeck, readSlideDeck, type SlideDeck } from './slide-deck';
 import { readLessonMaterials, type LessonMaterial } from './lesson-material';
 import { readLessonAsks } from './lesson-ask';
 import { inlineDailyPagesExercises } from './daily-pages-block';
@@ -155,6 +155,28 @@ export type PacketSection = {
    * section instead of being dropped or shown as a fence.
    */
   materials: LessonMaterial[];
+  /**
+   * The deck this section hands over, parsed once here rather than at each
+   * point of render.
+   *
+   * Every renderer used to pull the `yawp-slides` fence out of `content`
+   * itself, which worked until one of them forgot: the PDF passed the fence
+   * straight to the Markdown drawer and a teacher downloaded four pages of raw
+   * JSON. The packet is the one place that knows what a section is, so it is
+   * the place to answer the question — `content` is prose by the time anyone
+   * sees it, and the deck is here for whoever can render one.
+   *
+   * Null when the section has no deck, and also when it had one the schema
+   * turned down: the JSON comes out of `content` either way, because a wall of
+   * braces is the worst of the available outcomes.
+   */
+  deck: SlideDeck | null;
+  /**
+   * This section meant to carry a deck and the schema turned it down. Kept
+   * apart from a plain absence so the page can say so quietly instead of
+   * showing a gap where a deck was supposed to be.
+   */
+  deckFailed: boolean;
   /** Stable id for jump links from the contents index. */
   anchor: string;
 };
@@ -205,7 +227,18 @@ export function buildLessonPacket({
     const body = inlineUnitPlan(
       inlineLessonResources(inlineDailyPagesExercises(withWarmUps))
     );
-    const derivedTitle = deriveSectionTitle(body, index);
+    // The deck comes out of the prose and is carried as structure. Read from
+    // `body` rather than the stripped text below, so a section is still slides
+    // once its JSON is gone — including a deck that failed to validate, which
+    // is slides the teacher meant to have.
+    const deckOutcome = readSlideDeck(body);
+    const prose = deckOutcome.kind === 'none' ? body : deckOutcome.body;
+    const deck = deckOutcome.kind === 'deck' ? deckOutcome.deck : null;
+    // A reply that was nothing but a deck has no prose to be named after, and
+    // "Section 3" tells a teacher browsing their packet nothing. The deck came
+    // with a title; use it.
+    const derivedTitle =
+      prose.trim() || !deck ? deriveSectionTitle(prose, index) : deck.title;
     const audience = parsePacketAudience(section.keptAudience);
     return {
       id: section.id,
@@ -213,11 +246,13 @@ export function buildLessonPacket({
       // Timing lives in the lesson's own heading, so a rename must not lose
       // it — the outline reads minutes from the derived title.
       derivedTitle,
-      content: stripDuplicateTitleHeading(body.trim(), derivedTitle),
+      content: stripDuplicateTitleHeading(prose.trim(), derivedTitle),
       audience,
       kind: section.kind ?? deriveSectionKind(body, audience),
       origin: section.origin ?? 'reply',
       materials,
+      deck,
+      deckFailed: deckOutcome.kind === 'unreadable',
       anchor: `resource-${section.id}`,
     };
   });
