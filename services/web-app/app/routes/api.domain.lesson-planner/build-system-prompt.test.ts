@@ -329,6 +329,28 @@ describe('buildLessonPlannerSystemPrompt — slide decks', () => {
     expect(lower).toContain('must be a plain number');
   });
 
+  /**
+   * The bug: a lesson plan that told the teacher to "project the first slide of
+   * the deck below" when no deck was in the reply and none was in the packet.
+   * The plan and the deck are separate turns by design — the app pins "Build
+   * the slide deck for this lesson" — so the plan must never point forward at
+   * one.
+   */
+  test('forbids pointing at a deck it has not built', () => {
+    const lower = prompt.toLowerCase();
+
+    expect(lower).toContain('never point at a deck you have not built');
+    // The exact phrasings it reached for.
+    expect(lower).toContain('the deck below');
+    expect(lower).toContain('stands on its own');
+  });
+
+  test('says a deck that does exist is named, not placed', () => {
+    // "Below" is a lie once the deck is a card of its own or a page in the
+    // packet, which is everywhere the teacher actually meets it.
+    expect(prompt.toLowerCase()).toContain('name it, never place it');
+  });
+
   test('forbids claiming a deck rendered, because it cannot see the screen', () => {
     const lower = prompt.toLowerCase();
     // What actually happened: the deck failed validation, and the planner told
@@ -379,6 +401,13 @@ describe('buildLessonPlannerSystemPrompt — handing over real material', () => 
     );
     expect(lower).toContain('never search once and give up');
   });
+  test('scopes "below" to the reply that carries the block', () => {
+    // The house style for pointing at material is "the two drafts below",
+    // which the planner generalised into pointing at things that were not
+    // there at all.
+    expect(prompt.toLowerCase()).toContain('only true for a block in this reply');
+  });
+
 });
 
 describe('buildLessonPlannerSystemPrompt — what the lesson already has', () => {
