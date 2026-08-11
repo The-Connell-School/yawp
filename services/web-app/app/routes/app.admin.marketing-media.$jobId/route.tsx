@@ -29,6 +29,7 @@ import {
   MAX_RENDER_ATTEMPTS,
   RENDER_LOCK_TIMEOUT_MS,
   TERMINAL_JOB_STATUSES,
+  diffStoryboards,
   estimateRenderSeconds,
   safeParseStoryboard,
   type MarketingJobStatus,
@@ -67,8 +68,16 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       startedAt: true,
       finishedAt: true,
       parentJobId: true,
+      revisionFeedback: true,
+      // The take this one was revised from, so the page can show what moved.
+      parent: { select: { id: true, storyboard: true } },
       revisions: {
-        select: { id: true, status: true, createdAt: true },
+        select: {
+          id: true,
+          status: true,
+          createdAt: true,
+          revisionFeedback: true,
+        },
         orderBy: { createdAt: 'desc' },
       },
       createdBy: { select: { email: true, name: true } },
@@ -148,6 +157,11 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       })),
     },
     outputs: signedOutputs,
+    // Null on a first take — there is nothing to have changed from. An empty
+    // array is a different statement: this revision moved nothing at all.
+    changes: job.parent
+      ? diffStoryboards(job.parent.storyboard, job.storyboard)
+      : null,
     storyboard: parsedStoryboard?.success ? parsedStoryboard.data : null,
     estimatedSeconds: parsedStoryboard?.success
       ? estimateRenderSeconds(parsedStoryboard.data)
@@ -233,6 +247,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
         subjectLabel: job.subjectLabel,
         targetUrl: job.targetUrl,
         parentJobId: job.id,
+        revisionFeedback: feedback,
       },
       select: { id: true },
     });
@@ -314,6 +329,7 @@ export default function Route() {
   const {
     job,
     outputs,
+    changes,
     storyboard,
     estimatedSeconds,
     queueStalled,
@@ -391,6 +407,58 @@ export default function Route() {
           </Form>
         </div>
       </div>
+
+      {job.revisionFeedback ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>What this take was asked to change</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-3">
+            <blockquote
+              data-testid="marketing-revision-feedback"
+              className="border-l-2 pl-3 text-sm italic text-muted-foreground"
+            >
+              {job.revisionFeedback}
+            </blockquote>
+
+            {changes === null ? null : changes.length === 0 ? (
+              <p
+                data-testid="marketing-revision-unchanged"
+                className="text-sm text-amber-700"
+              >
+                Nothing changed. This storyboard is identical to the one it was
+                revised from, so this take will render exactly the same. Say
+                which scene is wrong and what should happen instead, then try
+                again.
+              </p>
+            ) : (
+              <div>
+                <p className="mb-1 text-sm font-medium">
+                  What changed from the previous take
+                </p>
+                <ul
+                  data-testid="marketing-revision-changes"
+                  className="flex flex-col gap-1 text-sm"
+                >
+                  {changes.map((change) => (
+                    <li
+                      key={`${change.scene ?? 'storyboard'}-${change.field}`}
+                      className="text-muted-foreground"
+                    >
+                      <span className="font-medium text-foreground">
+                        {change.scene ? `${change.scene} · ` : ''}
+                        {change.field}
+                      </span>{' '}
+                      <span className="line-through">{change.before}</span> →{' '}
+                      <span className="text-foreground">{change.after}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      ) : null}
 
       {waitingForTurn ? (
         <Card className="border-sky-300">
@@ -564,15 +632,20 @@ export default function Route() {
                   {job.revisions.map((revision) => (
                     <li
                       key={revision.id}
-                      className="flex items-center gap-2 text-muted-foreground"
+                      className="flex items-baseline gap-2 text-muted-foreground"
                     >
                       <JobStatusBadge status={revision.status} />
                       <Link
-                        className="underline"
+                        className="shrink-0 underline"
                         to={`/app/admin/marketing-media/${revision.id}`}
                       >
                         {new Date(revision.createdAt).toLocaleString()}
                       </Link>
+                      {revision.revisionFeedback ? (
+                        <span className="truncate italic">
+                          “{revision.revisionFeedback}”
+                        </span>
+                      ) : null}
                     </li>
                   ))}
                 </ul>

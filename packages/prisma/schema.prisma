@@ -854,6 +854,11 @@ model MarketingMediaJob {
   /// Set when this job was written by revising another render's storyboard
   /// from operator feedback. Deleting the parent keeps the revision.
   parentJobId  String?
+  /// What the operator asked to change about the parent take. Kept so the job
+  /// page can show the request next to what the revision actually changed —
+  /// without it there is no way to tell a revision that ignored the notes from
+  /// one that followed them.
+  revisionFeedback String?
   parent       MarketingMediaJob?  @relation("MarketingMediaJobRevisions", fields: [parentJobId], references: [id], onDelete: SetNull)
   revisions    MarketingMediaJob[] @relation("MarketingMediaJobRevisions")
 

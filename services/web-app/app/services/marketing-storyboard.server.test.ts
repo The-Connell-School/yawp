@@ -324,8 +324,20 @@ describe('reviseStoryboard', () => {
     };
   }
 
+  /** The previous storyboard with one real edit, so it is not a no-op revision. */
+  const REVISED_STORYBOARD = {
+    ...VALID_STORYBOARD,
+    scenes: [
+      VALID_STORYBOARD.scenes[0],
+      {
+        ...VALID_STORYBOARD.scenes[1],
+        steps: [{ action: 'scroll', y: 520, seconds: 3.5 }],
+      },
+    ],
+  };
+
   test('sends the previous storyboard and the feedback to the model', async () => {
-    getLLMCompletion.mockResolvedValueOnce(JSON.stringify(VALID_STORYBOARD));
+    getLLMCompletion.mockResolvedValueOnce(JSON.stringify(REVISED_STORYBOARD));
 
     const result = await reviseStoryboard(revision());
 
@@ -337,6 +349,103 @@ describe('reviseStoryboard', () => {
     expect(userMessage).toContain('Show a teacher reviewing submitted essays.');
   });
 
+  // The system prompt is written for "you write storyboards from a brief". Told
+  // only that, a model re-imagines the brief instead of editing the take, and
+  // the result reads as arbitrary rather than responsive — the operator sees a
+  // different clip, not the one they asked for with one thing fixed.
+  test('tells the model it is editing an existing storyboard, not writing a new one', async () => {
+    getLLMCompletion.mockResolvedValueOnce(JSON.stringify(REVISED_STORYBOARD));
+
+    await reviseStoryboard(revision());
+
+    const system = getLLMCompletion.mock.calls[0][0].system as string;
+    expect(system.toLowerCase()).toContain('editing');
+    expect(system).toContain('scene ids');
+    // Still the same grounded prompt: a revision may not invent routes either.
+    expect(system).toContain('Prompt Library');
+  });
+
+  // The feedback is what the whole call is about, so it goes last, next to the
+  // instruction, rather than above a wall of storyboard JSON.
+  test('puts the feedback after the storyboard it is about', async () => {
+    getLLMCompletion.mockResolvedValueOnce(JSON.stringify(REVISED_STORYBOARD));
+
+    await reviseStoryboard(revision());
+
+    const userMessage = getLLMCompletion.mock.calls[0][0].messages[0]
+      .content as string;
+    expect(userMessage.indexOf('barely visible')).toBeGreaterThan(
+      userMessage.indexOf('"slug"')
+    );
+  });
+
+  // The failure the operator actually reported: a "new take" that renders
+  // identically to the old one. A model that echoes its input has not revised
+  // anything, and queueing that render wastes a worker slot and tells the
+  // operator their feedback was ignored — which it was.
+  test('sends an unchanged storyboard back rather than queueing the same take', async () => {
+    getLLMCompletion
+      .mockResolvedValueOnce(JSON.stringify(VALID_STORYBOARD))
+      .mockResolvedValueOnce(JSON.stringify(REVISED_STORYBOARD));
+
+    const result = await reviseStoryboard(revision());
+
+    expect(result.storyboard.scenes[1].steps).toHaveLength(1);
+    expect(getLLMCompletion).toHaveBeenCalledTimes(2);
+    expect(JSON.stringify(getLLMCompletion.mock.calls[1][0].messages)).toContain(
+      'unchanged'
+    );
+  });
+
+  test('fails loudly when the model will not change anything', async () => {
+    getLLMCompletion.mockResolvedValue(JSON.stringify(VALID_STORYBOARD));
+
+    let thrown: unknown;
+    try {
+      await reviseStoryboard(revision());
+    } catch (err) {
+      thrown = err;
+    }
+
+    expect(thrown).toBeInstanceOf(StoryboardGenerationError);
+    expect((thrown as Error).message).toContain('unchanged');
+    expect(getLLMCompletion).toHaveBeenCalledTimes(2);
+  });
+
+  // Only revisions get this check. A first take has nothing to be unchanged
+  // from, and two briefs that happen to produce the same storyboard are fine.
+  test('does not apply the unchanged check to a first generation', async () => {
+    getLLMCompletion.mockResolvedValueOnce(JSON.stringify(VALID_STORYBOARD));
+
+    const result = await generateStoryboard(brief());
+
+    expect(result.storyboard.slug).toBe('teacher-loop');
+    expect(getLLMCompletion).toHaveBeenCalledTimes(1);
+  });
+
+  // Feedback most often asks for more time on something. If that pushes the
+  // clip over the cap, the shortening pass must not cut the thing that was
+  // just asked for — which is what a bare "cut scenes, holds, and waits" does.
+  test('protects the feedback when a revised clip has to be shortened', async () => {
+    const longClip = {
+      ...VALID_STORYBOARD,
+      scenes: [
+        { id: 'one', goto: '/app', waitFor: 'main', hold: 20 },
+        { id: 'two', goto: '/app/my-classes', waitFor: 'main', hold: 20 },
+      ],
+    };
+    getLLMCompletion
+      .mockResolvedValueOnce(JSON.stringify(longClip))
+      .mockResolvedValueOnce(JSON.stringify(REVISED_STORYBOARD));
+
+    await reviseStoryboard(revision());
+
+    const messages = getLLMCompletion.mock.calls[1][0].messages;
+    const shortenInstruction = messages[messages.length - 1].content as string;
+    expect(shortenInstruction).toContain('too long');
+    expect(shortenInstruction).toContain('feedback');
+  });
+
   test('revisions keep the page guide and validation', async () => {
     getLLMCompletion
       .mockResolvedValueOnce(
@@ -345,7 +454,7 @@ describe('reviseStoryboard', () => {
           scenes: [{ id: 'admin', goto: '/app/admin/organizations' }],
         })
       )
-      .mockResolvedValueOnce(JSON.stringify(VALID_STORYBOARD));
+      .mockResolvedValueOnce(JSON.stringify(REVISED_STORYBOARD));
 
     const result = await reviseStoryboard(revision());
 

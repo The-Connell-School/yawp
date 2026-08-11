@@ -6,6 +6,7 @@ import {
   MAX_SCENES,
   describeRoutesForPrompt,
   describeStoryboardError,
+  diffStoryboards,
   estimateRenderSeconds,
   safeParseStoryboard,
   type MarketingJobKind,
@@ -47,7 +48,36 @@ export type GenerateStoryboardResult = {
   raw: string;
 };
 
-function buildSystemPrompt(kind: MarketingJobKind): string {
+/**
+ * Appended when the call is a revision rather than a first take.
+ *
+ * Everything else in the system prompt is written for "you write storyboards
+ * from a brief". Told only that, a model re-imagines the brief and returns a
+ * different clip — one that may be fine on its own terms but is not the take
+ * the operator watched with the one thing they complained about fixed. That
+ * reads, correctly, as feedback being ignored. This says the job is an edit.
+ */
+const REVISION_INSTRUCTIONS = [
+  '',
+  'THIS CALL IS A REVISION. You are editing a storyboard that has already been',
+  'filmed, not writing a new one. The operator watched that take and said what',
+  'to change.',
+  '',
+  '- Start from the storyboard you are given and apply the smallest set of',
+  '  changes that satisfies the feedback.',
+  '- Keep the slug, the title, and the scene ids. Keep every scene, step,',
+  '  overlay, hold, and focus the feedback does not question — reusing an id is',
+  '  how the operator sees that a scene survived rather than being replaced.',
+  '- Do not rewrite copy, reorder scenes, or "improve" anything you were not',
+  '  asked about. A revision that changes more than it was asked to is worse',
+  '  than one that changes too little.',
+  '- Returning the storyboard unchanged is not an option. If the feedback seems',
+  '  already satisfied, find what the operator is actually seeing — a hold too',
+  '  short to read, a scroll that never happens, a focus aimed at the wrong',
+  '  element — and change that.',
+].join('\n');
+
+function buildSystemPrompt(kind: MarketingJobKind, revising = false): string {
   const shape =
     kind === 'CLIP'
       ? [
@@ -158,6 +188,7 @@ function buildSystemPrompt(kind: MarketingJobKind): string {
     '- Use a "login" step to switch personas mid-storyboard, for example teacher to student.',
     '- Show the product doing real work. Do not stage empty states or loading screens.',
     '- Every scene must be something a prospective school would care about seeing.',
+    ...(revising ? [REVISION_INSTRUCTIONS] : []),
   ].join('\n');
 }
 
@@ -279,17 +310,22 @@ export async function reviseStoryboard(
     ...(params.audience?.trim() ? [`Audience: ${params.audience.trim()}`] : []),
     '',
     'This storyboard was rendered, and the operator watched the result:',
-    JSON.stringify(params.previousStoryboard),
+    // Indented, and ahead of the feedback on purpose. The feedback is what the
+    // call is about, so it reads last, next to the instruction, rather than
+    // above a wall of JSON the model has to scroll back through.
+    JSON.stringify(params.previousStoryboard, null, 2),
     '',
     'Operator feedback on that take:',
     params.feedback.trim(),
     '',
-    'Revise the storyboard to address the feedback. Keep what the feedback does not question. Return only the revised storyboard JSON.',
+    'Apply that feedback to the storyboard above and return the result. Change',
+    'only what the feedback calls for. Return only the storyboard JSON.',
   ];
   return runStoryboardGeneration({
     kind: params.kind,
     model: params.model,
     initialUserMessage: lines.join('\n'),
+    previousStoryboard: params.previousStoryboard,
   });
 }
 
@@ -297,15 +333,20 @@ async function runStoryboardGeneration(params: {
   kind: MarketingJobKind;
   model?: string;
   initialUserMessage: string;
+  /** Set on a revision. Its presence is what makes this call an edit. */
+  previousStoryboard?: unknown;
 }): Promise<GenerateStoryboardResult> {
   const model = params.model || STORYBOARD_MODEL;
-  const system = buildSystemPrompt(params.kind);
+  const revising = params.previousStoryboard !== undefined;
+  const system = buildSystemPrompt(params.kind, revising);
   const messages: { role: 'user' | 'assistant'; content: string }[] = [
     { role: AgentType.User, content: params.initialUserMessage },
   ];
 
   let lastRaw = '';
   let lastProblem = '';
+  /** The revision failed because nothing moved, not because the JSON was bad. */
+  let unrevised = false;
 
   for (let attempt = 1; attempt <= 2; attempt += 1) {
     const raw = String(
@@ -351,11 +392,52 @@ async function runStoryboardGeneration(params: {
           { role: AgentType.Assistant, content: JSON.stringify(candidate) },
           {
             role: AgentType.User,
-            content: `That storyboard is too long: ${lastProblem}\nReturn the shortened storyboard JSON only.`,
+            content: [
+              `That storyboard is too long: ${lastProblem}`,
+              // Feedback usually asks for MORE time on something. Told only to
+              // cut, the model cuts the thing it was just asked to add, and the
+              // revision lands looking like it ignored the note.
+              ...(revising
+                ? [
+                    'Cut somewhere else: whatever the feedback asked for stays, at the length it asked for.',
+                  ]
+                : []),
+              'Return the shortened storyboard JSON only.',
+            ].join('\n'),
           }
         );
         continue;
       }
+
+      // A revision that comes back byte-identical has not revised anything.
+      // Queueing it burns a worker slot to re-film the take the operator was
+      // complaining about, and hands them a "new" render that is the old one.
+      if (
+        revising &&
+        diffStoryboards(params.previousStoryboard, result.data).length === 0
+      ) {
+        unrevised = true;
+        lastProblem =
+          'the model handed back the previous storyboard unchanged, twice. Try saying which scene is wrong and what should happen instead.';
+        if (attempt === 2) break;
+        messages.push(
+          { role: AgentType.Assistant, content: JSON.stringify(candidate) },
+          {
+            role: AgentType.User,
+            content: [
+              'That is the storyboard you were given, unchanged. Nothing in it',
+              'moved, so the feedback has not been applied.',
+              '',
+              'Find the specific field the operator is describing — a hold too',
+              'short to read, a missing or unpaced scroll, a focus aimed at the',
+              'wrong element, a scene that ends before the thing appears — and',
+              'change it. Return only the revised storyboard JSON.',
+            ].join('\n'),
+          }
+        );
+        continue;
+      }
+
       return { storyboard: result.data, model, raw };
     }
 
@@ -377,7 +459,9 @@ async function runStoryboardGeneration(params: {
   }
 
   throw new StoryboardGenerationError(
-    `The generated storyboard was not valid: ${lastProblem}`,
+    unrevised
+      ? `The revision changed nothing: ${lastProblem}`
+      : `The generated storyboard was not valid: ${lastProblem}`,
     lastRaw
   );
 }

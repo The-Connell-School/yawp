@@ -80,6 +80,8 @@ function job(overrides: Record<string, unknown> = {}) {
     startedAt: null,
     finishedAt: null,
     parentJobId: null,
+    revisionFeedback: null,
+    parent: null,
     revisions: [],
     createdBy: { email: 'admin@yawp.test', name: 'Admin' },
     ...overrides,
@@ -225,9 +227,11 @@ describe('marketing media job page', () => {
     const where = prisma.marketingMediaJob.findFirst.mock.calls[0][0].where;
     expect(where.status).toBe('RENDERING');
     expect(where.lockedAt.gte).toBeInstanceOf(Date);
-    expect(Date.now() - where.lockedAt.gte.getTime()).toBe(
-      RENDER_LOCK_TIMEOUT_MS
-    );
+    // The cutoff is one timeout back from when the loader ran, not from now:
+    // asserting exact equality fails whenever a millisecond ticks in between.
+    const age = Date.now() - where.lockedAt.gte.getTime();
+    expect(age).toBeGreaterThanOrEqual(RENDER_LOCK_TIMEOUT_MS);
+    expect(age).toBeLessThan(RENDER_LOCK_TIMEOUT_MS + 1000);
   });
 
   test('does not cry stalled while a renderer could still claim the job', async () => {
@@ -330,6 +334,61 @@ describe('marketing media job page', () => {
     }
   });
 
+  // "It didn't incorporate my feedback" is unanswerable while the only
+  // evidence is two storyboards nobody wants to read side by side. The page
+  // has to say what the revision actually moved.
+  test('reports what a revision changed against the take it came from', async () => {
+    prisma.marketingMediaJob.findUnique.mockResolvedValue(
+      job({
+        status: 'SUCCEEDED',
+        parentJobId: 'job-0',
+        revisionFeedback: 'Hold on the dashboard longer.',
+        parent: { id: 'job-0', storyboard: STORYBOARD },
+        storyboard: {
+          ...STORYBOARD,
+          scenes: [{ ...STORYBOARD.scenes[0], hold: 4 }],
+        },
+      })
+    );
+
+    const result = await loader(args(new Request('http://localhost/x')));
+
+    expect(result.data.job.revisionFeedback).toBe(
+      'Hold on the dashboard longer.'
+    );
+    expect(result.data.changes).toContainEqual({
+      scene: 'dashboard',
+      field: 'hold',
+      before: '1.5',
+      after: '4',
+    });
+  });
+
+  // The revision that prompted all this: a model handing back what it was
+  // given. An empty change list is the page saying so out loud.
+  test('reports no changes when a revision changed nothing', async () => {
+    prisma.marketingMediaJob.findUnique.mockResolvedValue(
+      job({
+        status: 'SUCCEEDED',
+        parentJobId: 'job-0',
+        revisionFeedback: 'Hold longer.',
+        parent: { id: 'job-0', storyboard: STORYBOARD },
+      })
+    );
+
+    const result = await loader(args(new Request('http://localhost/x')));
+
+    expect(result.data.changes).toEqual([]);
+  });
+
+  test('has no change list on a first take', async () => {
+    prisma.marketingMediaJob.findUnique.mockResolvedValue(job());
+
+    const result = await loader(args(new Request('http://localhost/x')));
+
+    expect(result.data.changes).toBeNull();
+  });
+
   test('rejects an unknown intent', async () => {
     prisma.marketingMediaJob.findUnique.mockResolvedValue(job());
 
@@ -380,6 +439,34 @@ describe('marketing media job page', () => {
     expect(
       response instanceof Response && response.headers.get('location')
     ).toBe('/app/admin/marketing-media/job-2');
+  });
+
+  // Without the request stored beside the result there is no way to judge a
+  // revision: the operator sees a new storyboard and has to remember what they
+  // asked for. It is also what a revision of a revision needs to stay honest.
+  test('stores what the operator asked for on the revision', async () => {
+    prisma.marketingMediaJob.findUnique.mockResolvedValue(
+      job({ status: 'SUCCEEDED' })
+    );
+    prisma.marketingMediaJob.create.mockResolvedValue({ id: 'job-2' });
+    reviseStoryboard.mockResolvedValue({
+      storyboard: STORYBOARD,
+      model: 'claude-sonnet-4-6',
+      raw: '{}',
+    });
+
+    await action(
+      args(
+        request({
+          intent: 'refine',
+          feedback: 'Scroll to the prompt library and hold on it.',
+        })
+      )
+    );
+
+    expect(prisma.marketingMediaJob.create.mock.calls[0][0].data).toMatchObject(
+      { revisionFeedback: 'Scroll to the prompt library and hold on it.' }
+    );
   });
 
   test('refuses to refine without feedback or without a storyboard', async () => {
