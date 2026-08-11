@@ -1,5 +1,7 @@
 import { afterAll, beforeEach, describe, expect, mock, test } from 'bun:test';
 
+import { PLANNING_PROGRESS_LABELS } from './planning-progress';
+
 const handleReporterToolCall = mock();
 const listLoungeMaterials = mock();
 const listAssignableTypes = mock();
@@ -289,5 +291,16 @@ describe('read_lounge_material', () => {
     );
 
     expect(result.note).toMatch(/say nothing about what is inside/i);
+  });
+});
+
+describe('every tool the planner can call has something to say about it', () => {
+  test('no allowlisted tool falls back to its own function name', () => {
+    // The progress bar names the tool in the teacher's words. A tool added to
+    // the allowlist without a line written for it would show the fallback,
+    // which is honest but says nothing about what is being looked up.
+    for (const name of LESSON_PLANNER_TOOL_NAMES) {
+      expect(PLANNING_PROGRESS_LABELS[name]).toBeTruthy();
+    }
   });
 });
