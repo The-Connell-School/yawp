@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { execFileSync } from 'child_process';
-import { readdirSync, readFileSync, statSync } from 'fs';
+import { existsSync, readdirSync, readFileSync, statSync } from 'fs';
 import { join } from 'path';
 
 const repoRoot = join(import.meta.dir, '..');
@@ -317,6 +317,17 @@ describe('PR preview deployment contract', () => {
     expect(previewWorkflow).not.toContain('terraform');
     expect(previewWorkflow).not.toContain('docker push');
     expect(previewWorkflow).not.toMatch(/(^|\s)\/preview(\s|$)/);
+  });
+
+  test('retired App Runner preview infrastructure cannot be redeployed from this repo', () => {
+    const ciWorkflow = readRepoFile('.github/workflows/ci.yml');
+
+    const infraPrFiles = existsSync(join(repoRoot, 'infra-pr'))
+      ? listRepoFiles('infra-pr')
+      : [];
+    expect(infraPrFiles).toEqual([]);
+    expect(ciWorkflow).not.toContain('validate-terraform-infra-pr');
+    expect(ciWorkflow).not.toContain('terraform -chdir=infra-pr');
   });
 
   test('preview deploy preserves existing seed databases unless reset is explicit', () => {

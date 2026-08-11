@@ -16,17 +16,6 @@ permissions:
   contents: read
 
 jobs:
-  validate-terraform-infra-pr:
-    name: Terraform validate (infra-pr)
-    runs-on: ubuntu-22.04
-    steps:
-      - uses: actions/checkout@v4
-      - uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: 1.8.5
-      - name: Terraform validate
-        run: terraform -chdir=infra-pr init -backend=false && terraform -chdir=infra-pr validate
-
   # CI names every test file it runs, so a test file that is merely present never executes.
   # scripts/preview/*.test.js sat unrun for exactly that reason. It matters most here:
   # enforce-cap.sh removes trees as root before every deploy, and the ownership case it
