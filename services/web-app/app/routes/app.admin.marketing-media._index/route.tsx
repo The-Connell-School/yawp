@@ -1,3 +1,5 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import { useState } from 'react';
 import {
   Form,
@@ -5,12 +7,14 @@ import {
   data as dataResponse,
   redirect,
   useActionData,
+  useFetcher,
   useLoaderData,
   useNavigation,
   type ActionFunctionArgs,
   type LoaderFunctionArgs,
 } from 'react-router';
 import { z } from 'zod';
+import { ConfirmationDialog } from '~/components/confirmation-dialog';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { JobStatusBadge } from '~/components/marketing/job-status-badge';
 import { Button } from '~/components/ui/button';
@@ -28,7 +32,9 @@ import {
 } from '~/components/ui/table';
 import { requireAdmin, requireMutableRequest } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
+import { deleteSmallObject } from '~/services/s3.server';
 import {
+  getMarketingMediaDir,
   getMarketingRenderTarget,
   requireMarketingStudioEnabled,
 } from '~/utils/marketing-studio.server';
@@ -42,10 +48,40 @@ import {
   describeStoryboardError,
   safeParseStoryboard,
   type MarketingJobKind,
+  type MarketingOutput,
 } from '../../../../../packages/marketing-media';
 import { type BreadcrumbHandle } from '~/utils/breadcrumb';
 
 export const handle: BreadcrumbHandle = { breadcrumb: 'Marketing Studio' };
+
+/**
+ * Remove the files a render produced, wherever this environment keeps them.
+ *
+ * Best effort on purpose. A bucket that has already lost an object, or a
+ * preview whose disk was reclaimed, must not strand a row in a list the
+ * operator is trying to clear: orphaned media costs storage, an undeletable
+ * job is a broken screen. The row goes either way.
+ */
+async function removeStoredMedia(rawOutputs: unknown): Promise<void> {
+  const outputs = (
+    Array.isArray(rawOutputs) ? rawOutputs : []
+  ) as MarketingOutput[];
+  if (outputs.length === 0) return;
+
+  const mediaDir = getMarketingMediaDir();
+
+  for (const output of outputs) {
+    try {
+      if (mediaDir) {
+        fs.rmSync(path.join(mediaDir, output.key), { force: true });
+      } else {
+        await deleteSmallObject(output.key);
+      }
+    } catch {
+      // Deliberately swallowed; see the note above.
+    }
+  }
+}
 
 const CreateJobSchema = z.object({
   brief: z
@@ -112,6 +148,40 @@ export async function action({ request }: ActionFunctionArgs) {
   await requireMutableRequest(request);
 
   const formData = await request.formData();
+
+  if (formData.get('intent') === 'delete') {
+    const jobId = String(formData.get('jobId') ?? '');
+    const job = await prisma.marketingMediaJob.findUnique({
+      where: { id: jobId },
+      select: { id: true, status: true, outputs: true },
+    });
+
+    if (!job) {
+      return dataResponse(
+        { error: 'That render no longer exists.' },
+        { status: 404 }
+      );
+    }
+
+    // The renderer claims a job for the length of a take. Deleting the row out
+    // from under it strands the worker mid-film and orphans whatever it
+    // uploads next, so this waits rather than racing it.
+    if (job.status === 'RENDERING') {
+      return dataResponse(
+        {
+          error:
+            'That render is being filmed right now. Wait for it to finish, then delete it.',
+        },
+        { status: 409 }
+      );
+    }
+
+    await removeStoredMedia(job.outputs);
+    // Revisions written from this job survive: the relation is onDelete
+    // SetNull, so deleting a take never takes its follow-ups with it.
+    await prisma.marketingMediaJob.delete({ where: { id: job.id } });
+    return redirect('/app/admin/marketing-media');
+  }
 
   // The library path: a hand-verified storyboard rendered as-is, with no
   // model in the loop. This is the reliable one-click route to media.
@@ -256,6 +326,61 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 
   return redirect(`/app/admin/marketing-media/${job.id}`);
+}
+
+/**
+ * Open / Delete for one row of the render list.
+ *
+ * The delete posts through its own fetcher rather than the page form so a
+ * refusal ("that one is being filmed right now") lands next to the row it is
+ * about, instead of surfacing as an error on the New render card far above.
+ */
+function JobRowActions({ jobId, title }: { jobId: string; title: string }) {
+  const fetcher = useFetcher<{ error?: string }>();
+  const deleting = fetcher.state !== 'idle';
+  const error = fetcher.data?.error;
+
+  return (
+    <>
+      <div className="flex items-center justify-end gap-3">
+        <Link
+          className="text-sm underline"
+          to={`/app/admin/marketing-media/${jobId}`}
+        >
+          Open
+        </Link>
+        <ConfirmationDialog
+          title="Delete this render?"
+          description={`“${title}” and any files it produced will be removed. This cannot be undone.`}
+          confirmText="Delete"
+          cancelText="Keep"
+          variant="destructive"
+          onConfirm={() =>
+            fetcher.submit({ intent: 'delete', jobId }, { method: 'post' })
+          }
+        >
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            className="text-destructive hover:text-destructive"
+            data-testid="marketing-job-delete"
+            disabled={deleting}
+          >
+            {deleting ? 'Deleting…' : 'Delete'}
+          </Button>
+        </ConfirmationDialog>
+      </div>
+      {error ? (
+        <p
+          data-testid="marketing-job-delete-error"
+          className="mt-1 text-right text-xs text-red-600"
+        >
+          {error}
+        </p>
+      ) : null}
+    </>
+  );
 }
 
 export default function Route() {
@@ -470,12 +595,10 @@ export default function Route() {
                       {new Date(job.createdAt).toLocaleString()}
                     </TableCell>
                     <TableCell>
-                      <Link
-                        className="text-sm underline"
-                        to={`/app/admin/marketing-media/${job.id}`}
-                      >
-                        Open
-                      </Link>
+                      <JobRowActions
+                        jobId={job.id}
+                        title={job.title ?? 'Untitled'}
+                      />
                     </TableCell>
                   </TableRow>
                 ))}

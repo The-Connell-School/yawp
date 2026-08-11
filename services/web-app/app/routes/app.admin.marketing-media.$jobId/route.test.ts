@@ -22,7 +22,11 @@ mock.module('~/utils/auth.server', () => ({
   requireMutableRequest,
 }));
 mock.module('~/utils/db.server', () => ({ prisma }));
-mock.module('~/services/s3.server', () => ({ getSignedGetUrl }));
+// Union again: the index route imports deleteSmallObject from this module.
+mock.module('~/services/s3.server', () => ({
+  getSignedGetUrl,
+  deleteSmallObject: mock(),
+}));
 // Exports the union of what any route imports from this module — module
 // mocks are process-global in bun and an incomplete one poisons other suites.
 mock.module('~/services/marketing-storyboard.server', () => ({

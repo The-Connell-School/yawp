@@ -8,10 +8,25 @@ const getMarketingRenderTarget = mock();
 
 class StoryboardGenerationError extends Error {}
 
+const deleteSmallObject = mock();
+
 const prisma = {
-  marketingMediaJob: { create: mock(), update: mock(), findMany: mock() },
+  marketingMediaJob: {
+    create: mock(),
+    update: mock(),
+    findMany: mock(),
+    findUnique: mock(),
+    delete: mock(),
+  },
   assignmentType: { findMany: mock(), findUnique: mock() },
 };
+
+// Union again: the $jobId route imports getSignedGetUrl from this module, and
+// a mock missing it makes that suite fail to import at all.
+mock.module('~/services/s3.server', () => ({
+  deleteSmallObject,
+  getSignedGetUrl: mock(),
+}));
 
 mock.module('~/utils/auth.server', () => ({
   requireAdmin,
@@ -253,5 +268,87 @@ describe('marketing media job creation', () => {
     expect(generateStoryboard.mock.calls[0][0].subject).toMatchObject({
       label: 'Argumentative Essay',
     });
+  });
+});
+
+describe('deleting a render', () => {
+  beforeEach(() => {
+    requireAdmin.mockReset();
+    requireMutableRequest.mockReset();
+    requireMarketingStudioEnabled.mockReset();
+    deleteSmallObject.mockReset();
+    prisma.marketingMediaJob.findUnique.mockReset();
+    prisma.marketingMediaJob.delete.mockReset();
+
+    requireAdmin.mockResolvedValue({ id: 'admin-1' });
+    requireMutableRequest.mockResolvedValue(undefined);
+    deleteSmallObject.mockResolvedValue(undefined);
+    prisma.marketingMediaJob.delete.mockResolvedValue({ id: 'job-1' });
+  });
+
+  test('removes the job and the media it produced', async () => {
+    prisma.marketingMediaJob.findUnique.mockResolvedValue({
+      id: 'job-1',
+      status: 'SUCCEEDED',
+      outputs: [
+        { key: 'marketing/job-1/clip.mp4', contentType: 'video/mp4' },
+        { key: 'marketing/job-1/still.png', contentType: 'image/png' },
+      ],
+    });
+
+    await runAction({ intent: 'delete', jobId: 'job-1' });
+
+    expect(prisma.marketingMediaJob.delete).toHaveBeenCalledWith({
+      where: { id: 'job-1' },
+    });
+    expect(deleteSmallObject.mock.calls.map((call: any[]) => call[0])).toEqual([
+      'marketing/job-1/clip.mp4',
+      'marketing/job-1/still.png',
+    ]);
+  });
+
+  // The renderer holds a claim on a job it is filming. Deleting the row out
+  // from under it strands the worker mid-take and orphans whatever it uploads
+  // next, so the delete waits rather than racing it.
+  test('refuses while the renderer is filming it', async () => {
+    prisma.marketingMediaJob.findUnique.mockResolvedValue({
+      id: 'job-1',
+      status: 'RENDERING',
+      outputs: [],
+    });
+
+    const response = await runAction({ intent: 'delete', jobId: 'job-1' });
+
+    expect(responseStatus(response)).toBe(409);
+    expect(readData(response).error).toContain('being filmed');
+    expect(prisma.marketingMediaJob.delete).not.toHaveBeenCalled();
+    expect(deleteSmallObject).not.toHaveBeenCalled();
+  });
+
+  // A bucket that already lost the object must not strand a row in a list the
+  // operator is trying to clear. Orphaned media costs storage; an undeletable
+  // job is a broken screen.
+  test('still deletes the job when its media has already gone', async () => {
+    prisma.marketingMediaJob.findUnique.mockResolvedValue({
+      id: 'job-1',
+      status: 'FAILED',
+      outputs: [{ key: 'marketing/job-1/clip.mp4', contentType: 'video/mp4' }],
+    });
+    deleteSmallObject.mockRejectedValue(new Error('NoSuchKey'));
+
+    await runAction({ intent: 'delete', jobId: 'job-1' });
+
+    expect(prisma.marketingMediaJob.delete).toHaveBeenCalledWith({
+      where: { id: 'job-1' },
+    });
+  });
+
+  test('reports a render that is already gone', async () => {
+    prisma.marketingMediaJob.findUnique.mockResolvedValue(null);
+
+    const response = await runAction({ intent: 'delete', jobId: 'job-1' });
+
+    expect(responseStatus(response)).toBe(404);
+    expect(prisma.marketingMediaJob.delete).not.toHaveBeenCalled();
   });
 });
