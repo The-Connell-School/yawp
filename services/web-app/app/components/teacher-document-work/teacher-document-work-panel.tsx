@@ -79,17 +79,23 @@ import { timeAgo } from '~/utils/timeAgo';
 
 const DOCUMENT_TABLE_ROW_CLASSES = {
   table: 'w-full table-fixed text-sm',
-  head: 'h-9 whitespace-nowrap px-2 py-1.5 text-sm',
+  // Two-word headers ("Submitted at") wrap rather than run past their cell:
+  // the table is fixed-layout, so a nowrap label in a narrow column overflows
+  // into its neighbour instead of being clipped.
+  head: 'min-h-9 overflow-hidden whitespace-normal px-2 py-1.5 text-sm leading-tight',
   cell: 'max-w-0 truncate whitespace-nowrap px-2 py-2 text-sm',
   dateCell: 'text-sm text-muted-foreground',
   badgeSize: 'default' as const,
   columnWidths: {
     student: 'w-[10%]',
-    document: 'w-[18%]',
+    document: 'w-[15%]',
     class: 'w-[14%]',
     assignment: 'w-[14%]',
-    status: 'w-[20%]',
-    date: 'w-[8%]',
+    // The three date columns each carry a two-word header ("Submitted at")
+    // that does not wrap, so at 8% of a table-fixed row the labels overran
+    // their cells and ran into each other.
+    status: 'w-[14%]',
+    date: 'w-[11%]',
   },
 };
 
@@ -384,7 +390,7 @@ export function TeacherDocumentWorkPanel({
           type="button"
           variant="ghost"
           size="sm"
-          className="-ml-2 h-8 gap-2 px-2"
+          className="-ml-1 h-auto min-h-8 gap-1 whitespace-normal px-1 py-1 text-left"
           aria-label={`Sort by ${label} ${
             isActive && sort.direction === 'asc' ? 'descending' : 'ascending'
           }`}
