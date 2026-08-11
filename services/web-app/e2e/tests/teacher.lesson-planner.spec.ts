@@ -808,39 +808,37 @@ test.describe('YAWP! Lesson Planner', () => {
     await setLessonPlannerEnabled(e2eContext.organizationId, true);
     await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
 
-    // Progress only: the turn never finishes, so the bar stays on screen to be
-    // looked at.
-    await page.route('**/api/domain/lesson-planner', async (route) => {
-      await route.fulfill({
-        status: 200,
-        headers: { 'content-type': 'application/x-ndjson; charset=utf-8' },
-        body:
-          [
-            JSON.stringify({
-              type: 'progress',
-              label: 'Thinking about your lesson',
-              fraction: 0.08,
-            }),
-            JSON.stringify({
-              type: 'progress',
-              label: 'Reading how the class scored',
-              fraction: 0.3,
-            }),
-          ].join('\n') + '\n',
-      });
+    // The turn is held open and never answered, which is exactly the state a
+    // teacher used to spend ninety seconds in. `route.fulfill` cannot help
+    // here: it delivers the whole body and closes, and a stream that ends
+    // without its final line is a dropped connection, which the composer is
+    // right to treat as a failure.
+    await page.route('**/api/domain/lesson-planner', () => {
+      // Deliberately never fulfilled.
     });
 
     await page.goto('/app/lesson-planner');
+    // Wait for hydration before typing: a fill that lands first sets the DOM
+    // value and is then wiped by React's first render, leaving the composer
+    // empty and Send disabled.
+    await page.waitForLoadState('networkidle');
     await page
       .getByLabel('Message the Lesson Planner')
       .fill('Plan a lesson on conclusions');
+    await expect(
+      page.getByRole('button', { name: 'Send message' })
+    ).toBeEnabled();
     await page.getByRole('button', { name: 'Send message' }).click();
 
     const bar = page.getByTestId('planning-progress');
     await expect(bar).toBeVisible();
-    // The milestone is named in the teacher's words, never the tool's.
-    await expect(bar).toContainText('Reading how the class scored');
+    // Named in the teacher's words, never a tool's. (Which line goes with
+    // which tool is asserted in the route's own tests, where a real stream can
+    // be read a chunk at a time.)
+    await expect(bar).toContainText('Thinking about your lesson');
     await expect(bar).not.toContainText('_');
+    // The spinner it replaced is gone.
+    await expect(page.getByText('Planning the lesson…')).toHaveCount(0);
     // And it is a real progress bar to anything reading the page aloud.
     const meter = bar.getByRole('progressbar');
     await expect(meter).toHaveAttribute('aria-valuenow', /\d+/);
@@ -880,9 +878,16 @@ test.describe('YAWP! Lesson Planner', () => {
     });
 
     await page.goto('/app/lesson-planner');
+    // Wait for hydration before typing: a fill that lands first sets the DOM
+    // value and is then wiped by React's first render, leaving the composer
+    // empty and Send disabled.
+    await page.waitForLoadState('networkidle');
     await page
       .getByLabel('Message the Lesson Planner')
       .fill('Plan a lesson on conclusions');
+    await expect(
+      page.getByRole('button', { name: 'Send message' })
+    ).toBeEnabled();
     await page.getByRole('button', { name: 'Send message' }).click();
 
     await expect(page.getByText('Four minutes of writing.')).toBeVisible();
