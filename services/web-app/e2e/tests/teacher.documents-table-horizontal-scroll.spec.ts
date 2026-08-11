@@ -72,13 +72,12 @@ test.describe.serial('Documents table horizontal scroll', () => {
       await expect(statusCell).toBeVisible();
 
       const statusClipped = await statusCell.evaluate((element) => {
-        const badge = element.querySelector('span, div');
+        const cell = element as HTMLElement;
+        const badge = cell.querySelector('span, div');
         return {
-          cell: element.scrollWidth > element.clientWidth + 1,
-          badge: badge
-            ? badge.scrollWidth > badge.clientWidth + 1
-            : false,
-          label: element.innerText.trim(),
+          cell: cell.scrollWidth > cell.clientWidth + 1,
+          badge: badge ? badge.scrollWidth > badge.clientWidth + 1 : false,
+          label: cell.innerText.trim(),
         };
       });
       expect(statusClipped.cell).toBe(false);
