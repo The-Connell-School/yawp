@@ -149,7 +149,11 @@ describe('TeacherGradingPanel on a points scale', () => {
     submit.mockReset();
   });
 
-  it("sends the teacher's own score as the recorded grade, not the assistant's stale one", () => {
+  // A recorded total that disagrees with the category scores is the teacher's
+  // own: saving always writes the two together, so the only way they diverge
+  // is somebody typing a total. Reopening the form keeps it rather than
+  // quietly recomputing one.
+  it('keeps a recorded total that the category scores no longer add up to', () => {
     ({ root } = renderPanel({
       rubricConfig: dailyPagesConfig,
       existingGrade: {
@@ -160,7 +164,7 @@ describe('TeacherGradingPanel on a points scale', () => {
 
     saveViaOverallFeedback('Nice work.');
 
-    expect(lastPayload()).toMatchObject({ score: '1/3', overallScore: 1 });
+    expect(lastPayload()).toMatchObject({ score: '3/3', overallScore: 3 });
   });
 
   it('records a grade even when the assistant never graded the submission first', () => {
@@ -232,7 +236,10 @@ describe('TeacherGradingPanel on the ACT writing scale', () => {
     submit.mockReset();
   });
 
-  it('recomputes the composite from the teacher\'s scores', () => {
+  // Same rule as the points scale: a recorded composite that the categories no
+  // longer add up to is one somebody entered, so reopening keeps it. Rescoring
+  // a category in the panel is what returns the total to the categories.
+  it('keeps a recorded composite the category scores no longer add up to', () => {
     ({ root } = renderPanel({
       rubricConfig: actConfig,
       existingGrade: {
@@ -246,6 +253,6 @@ describe('TeacherGradingPanel on the ACT writing scale', () => {
 
     saveViaOverallFeedback('Solid argument.');
 
-    expect(lastPayload()).toMatchObject({ score: '9/12', overallScore: 9 });
+    expect(lastPayload()).toMatchObject({ score: '6/12', overallScore: 6 });
   });
 });
