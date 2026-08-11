@@ -40,12 +40,54 @@ function resolvedGradingConfig(
   };
 }
 
-const { resolveRubricConfigForSubmission } = await import(
-  './submission-rubric-config.server'
-);
+const { buildRubricConfigFromSnapshot, resolveRubricConfigForSubmission } =
+  await import('./submission-rubric-config.server');
 
 afterAll(() => {
   resolveAssignmentTypeGradingConfig.mockRestore();
+});
+
+describe('buildRubricConfigFromSnapshot — stepped scales', () => {
+  const tieredSnapshot = {
+    minScore: 0,
+    maxScore: 30,
+    scoringType: 'rubric_points',
+    categories: [
+      {
+        key: 'engagement',
+        label: 'Engagement',
+        description: 'Willingness to put real thoughts on the page.',
+        weight: 1,
+        scoreLabels: [
+          { value: 0, label: 'NOT HANDED IN' },
+          { value: 10, label: 'HARDLY THERE' },
+          { value: 20, label: 'SHOWED UP' },
+          { value: 30, label: 'ALL IN' },
+        ],
+      },
+    ],
+  };
+
+  // Snapshots written before scales carried a step still list their tiers, and
+  // without this the teacher is offered all thirty-one values of a 0-30 scale.
+  test('infers the step from the tiers when the snapshot predates steps', () => {
+    expect(buildRubricConfigFromSnapshot(tieredSnapshot)?.step).toBe(10);
+  });
+
+  test('prefers a step the snapshot records', () => {
+    expect(
+      buildRubricConfigFromSnapshot({ ...tieredSnapshot, step: 5 })?.step
+    ).toBe(5);
+  });
+
+  test('leaves an untiered snapshot stepping by one', () => {
+    expect(
+      buildRubricConfigFromSnapshot({
+        ...tieredSnapshot,
+        categories: [{ ...tieredSnapshot.categories[0], scoreLabels: [] }],
+      })?.step
+    ).toBe(1);
+  });
 });
 
 describe('resolveRubricConfigForSubmission', () => {

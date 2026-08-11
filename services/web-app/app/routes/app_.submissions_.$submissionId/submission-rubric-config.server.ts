@@ -9,7 +9,10 @@ import {
   parseOptionalBoolean,
   parseRubricScoreLabels,
 } from '~/domain/assignment-types/rubric-category-options';
-import { normalizeScoreStep } from '~/domain/assignment-types/score-scale-steps';
+import {
+  inferStepFromScoreValues,
+  normalizeScoreStep,
+} from '~/domain/assignment-types/score-scale-steps';
 
 type RubricSnapshotCategory = RubricDisplayCategory;
 
@@ -87,21 +90,34 @@ export function buildRubricConfigFromSnapshot(
     );
   if (categories.length === 0) return null;
 
+  const minScore =
+    typeof snapshot.minScore === 'number' && Number.isFinite(snapshot.minScore)
+      ? snapshot.minScore
+      : 1;
+  const maxScore =
+    typeof snapshot.maxScore === 'number' && Number.isFinite(snapshot.maxScore)
+      ? snapshot.maxScore
+      : 5;
+  // Snapshots taken before scales had a step record only their tiers, so the
+  // tier values stand in for it. Without this a 0-30 rubric scored in tens
+  // offers the teacher all thirty-one values, only four of which are named.
+  const step =
+    typeof snapshot.step === 'number'
+      ? normalizeScoreStep(snapshot.step)
+      : normalizeScoreStep(
+          inferStepFromScoreValues(
+            categories.flatMap((category) =>
+              (category.scoreLabels ?? []).map((entry) => entry.value)
+            ),
+            minScore
+          ) ?? undefined
+        );
+
   return {
     categories,
-    minScore:
-      typeof snapshot.minScore === 'number' &&
-      Number.isFinite(snapshot.minScore)
-        ? snapshot.minScore
-        : 1,
-    maxScore:
-      typeof snapshot.maxScore === 'number' &&
-      Number.isFinite(snapshot.maxScore)
-        ? snapshot.maxScore
-        : 5,
-    step: normalizeScoreStep(
-      typeof snapshot.step === 'number' ? snapshot.step : undefined
-    ),
+    minScore,
+    maxScore,
+    step,
     scoringType:
       typeof snapshot.scoringType === 'string'
         ? snapshot.scoringType

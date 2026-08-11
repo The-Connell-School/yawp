@@ -9,6 +9,7 @@ import {
   DEFAULT_SCORE_STEP,
   buildScoreScaleValues,
   buildStepOptions,
+  inferStepFromScoreValues,
 } from './score-scale-steps';
 
 const SCORING_SCALE_TYPES = [
@@ -65,33 +66,6 @@ function normalizeWeight(weight: number) {
   return weight;
 }
 
-function greatestCommonDivisor(a: number, b: number): number {
-  return b === 0 ? Math.abs(a) : greatestCommonDivisor(b, a % b);
-}
-
-/**
- * The step a set of tier values implies.
- *
- * A rubric that names fixed tiers — 30 / 20 / 10 / 0 — is a stepped scale
- * whether or not the model said so. The gap they all sit on is the largest
- * step that lands on every one of them, which is the GCD of their distances
- * from the minimum.
- */
-function inferStepFromScoreLabels(
-  values: number[],
-  minScore: number
-): number | null {
-  const offsets = values
-    .map((value) => Math.abs(value - minScore))
-    .filter((offset) => offset > 0);
-  if (offsets.length === 0) return null;
-
-  const step = offsets.reduce((acc, offset) =>
-    greatestCommonDivisor(acc, offset)
-  );
-  return step >= 1 ? step : null;
-}
-
 export function normalizeExtractedRubric(payload: ExtractedRubricPayload): {
   scoringScale: ScoringScaleData;
   rubric: RubricData;
@@ -111,7 +85,7 @@ export function normalizeExtractedRubric(payload: ExtractedRubricPayload): {
   const candidateStep =
     reportedStep !== undefined && reportedStep > 1
       ? reportedStep
-      : (inferStepFromScoreLabels(labelValues, minScore) ??
+      : (inferStepFromScoreValues(labelValues, minScore) ??
         reportedStep ??
         undefined);
   const allowedSteps = buildStepOptions({ minScore, maxScore });

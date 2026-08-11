@@ -837,6 +837,24 @@ export function TeacherGradingPanel({
       ) : null}
 
       <div className="no-scrollbar flex-1 overflow-y-auto p-3 space-y-4">
+        {/* A points scale records earned points and has no percentage at all,
+            so showing it an empty percentage box reads as a missing grade.
+            It gets the grade its own scale produces instead. */}
+        {rubricScaleGrade ? (
+          <div className="space-y-2">
+            <Label>Overall score</Label>
+            <div
+              className="rounded-md bg-muted/50 px-3 py-2 text-sm font-medium tabular-nums"
+              data-testid="grading-overall-scale-score"
+            >
+              {rubricScaleGrade.score}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              This rubric scores in points, not a percentage. The score follows
+              the category scores below.
+            </p>
+          </div>
+        ) : (
         <div className="space-y-2">
           <div className="flex items-center gap-2">
             <Label htmlFor="pct">Overall Percentage</Label>
@@ -912,6 +930,7 @@ export function TeacherGradingPanel({
             </div>
           ) : null}
         </div>
+        )}
 
         <div className="space-y-2">
           <Label htmlFor="overall-comment">Overall Feedback</Label>

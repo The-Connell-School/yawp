@@ -31,6 +31,7 @@ import {
   type GrammarIssue,
   parseGrammarIssuesPayload,
 } from '~/domain/grading/grammarIssues';
+import { resolveGrammarHighlightingEnabled } from '~/domain/assignment-types/rubric-category-options';
 import { findExcerptRange } from '~/utils/excerpt-position';
 import {
   readLastNonDocumentRoute,
@@ -445,12 +446,34 @@ export default function SubmissionRoute() {
     null
   );
 
+  /**
+   * Grammar marks stored on the submission are only shown while the rubric
+   * still asks for them. Turning the category's grammar highlighting off used
+   * to leave every mark from an earlier grading run on the page, so the
+   * setting looked ignored.
+   */
+  const grammarHighlightingEnabled = useMemo(
+    () =>
+      resolveGrammarHighlightingEnabled(
+        (teacherGradeUi?.rubricConfig ?? submission.rubricConfig)?.categories ??
+          []
+      ),
+    [teacherGradeUi?.rubricConfig, submission.rubricConfig]
+  );
+
   const persistedGrammarIssues = useMemo(
     () =>
-      parseGrammarIssuesPayload(submission.grammarIssues, {
-        sourceText: submission.text ?? '',
-      }),
-    [submission.text, submission.id, submission.grammarIssues]
+      grammarHighlightingEnabled
+        ? parseGrammarIssuesPayload(submission.grammarIssues, {
+            sourceText: submission.text ?? '',
+          })
+        : [],
+    [
+      grammarHighlightingEnabled,
+      submission.text,
+      submission.id,
+      submission.grammarIssues,
+    ]
   );
   const [grammarIssues, setGrammarIssues] = useState<GrammarIssue[]>(
     persistedGrammarIssues

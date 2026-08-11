@@ -109,6 +109,33 @@ export function buildStepOptions({
   return options.length > 0 ? options : [DEFAULT_SCORE_STEP];
 }
 
+function greatestCommonDivisor(a: number, b: number): number {
+  return b === 0 ? Math.abs(a) : greatestCommonDivisor(b, a % b);
+}
+
+/**
+ * The step a set of score values implies: the largest interval that lands on
+ * every one of them.
+ *
+ * Tier values are often the only record of a stepped scale — a rubric snapshot
+ * taken before steps existed still lists its tiers, and an extraction reports
+ * them more reliably than it reports the interval itself.
+ */
+export function inferStepFromScoreValues(
+  values: number[],
+  minScore: number
+): number | null {
+  const offsets = values
+    .map((value) => Math.abs(value - minScore))
+    .filter((offset) => offset > 0);
+  if (offsets.length === 0) return null;
+
+  const step = offsets.reduce((acc, offset) =>
+    greatestCommonDivisor(acc, offset)
+  );
+  return step >= 1 ? step : null;
+}
+
 /** Human-readable preview of the grid, for helper text beside the inputs. */
 export function describeScoreScale(shape: ScoreScaleShape): string {
   const values = buildScoreScaleValues(shape);
