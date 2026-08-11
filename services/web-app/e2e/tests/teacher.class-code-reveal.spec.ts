@@ -25,10 +25,49 @@ test.describe('Class code reveal', () => {
     );
     expect(fontSize).toBeGreaterThan(60);
 
+    // Nothing behind the display is readable: the panel covers the whole
+    // viewport and is fully opaque, so class data cannot be projected to
+    // students by accident.
+    const panel = page.getByTestId('class-code-panel');
+    const coverage = await panel.evaluate((el) => {
+      const rect = el.getBoundingClientRect();
+      const style = getComputedStyle(el);
+      return {
+        width: rect.width,
+        height: rect.height,
+        left: rect.left,
+        top: rect.top,
+        viewportWidth: window.innerWidth,
+        viewportHeight: window.innerHeight,
+        backgroundColor: style.backgroundColor,
+      };
+    });
+
+    expect(coverage.left).toBeLessThanOrEqual(0);
+    expect(coverage.top).toBeLessThanOrEqual(0);
+    expect(coverage.width).toBeGreaterThanOrEqual(coverage.viewportWidth);
+    expect(coverage.height).toBeGreaterThanOrEqual(coverage.viewportHeight);
+    expect(coverage.backgroundColor).not.toMatch(/rgba\([^)]*,\s*0?\.\d+\)/);
+
+    // Only the eyebrow, the code, the copy button and the close button.
+    await expect(page.getByTestId('class-code-panel')).toContainText(
+      'Class code'
+    );
+    await expect(
+      panel.getByRole('button', { name: /copy code/i })
+    ).toBeVisible();
+    await expect(panel.getByRole('button', { name: /close/i })).toBeVisible();
+
     await page.getByRole('button', { name: 'Copy code' }).click();
     await expect(page.getByText('Copied', { exact: false })).toBeVisible();
 
-    await page.keyboard.press('Escape');
+    // The X button closes it.
+    await panel.getByRole('button', { name: /close/i }).click();
     await expect(display).toHaveCount(0);
+
+    await trigger.click();
+    await expect(page.getByTestId('class-code-display')).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page.getByTestId('class-code-display')).toHaveCount(0);
   });
 });

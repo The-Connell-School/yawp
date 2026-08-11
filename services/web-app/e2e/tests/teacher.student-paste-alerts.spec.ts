@@ -86,10 +86,10 @@ test.describe('Teacher student paste alerts', () => {
       // No sheet opens — the row isn't a trigger for a student with nothing to show.
       await expect(page.getByRole('dialog')).toHaveCount(0);
 
-      // And the roll-up column stays empty rather than showing a zero.
+      // Paste activity is not a table column at all — it lives in the sheet.
       await expect(
-        page.getByTestId(`student-paste-activity-${e2eContext.membershipId}`)
-      ).toHaveText('');
+        page.getByRole('columnheader', { name: 'Pasted text' })
+      ).toHaveCount(0);
     } finally {
       await prisma.$disconnect();
     }
@@ -125,21 +125,20 @@ test.describe('Teacher student paste alerts', () => {
       await page.goto(`/app/my-classes/${e2eContext.classId}?tab=students`);
       await page.waitForLoadState('networkidle');
 
+      // The class table stays lean: no paste column, no per-row roll-up.
       await expect(
         page.getByRole('columnheader', { name: 'Pasted text' })
-      ).toBeVisible();
-
-      const activityCell = page.getByTestId(
-        `student-paste-activity-${e2eContext.membershipId}`
-      );
-      await expect(activityCell).toHaveText('2 pastes');
+      ).toHaveCount(0);
+      await expect(
+        page.getByTestId(`student-paste-activity-${e2eContext.membershipId}`)
+      ).toHaveCount(0);
 
       // Still informational, not an accusation.
       await expect(
         page.getByText(/flagged|plagiar|cheat/i)
       ).toHaveCount(0);
 
-      // The roll-up is the way in: the row still opens the student's detail.
+      // The row is the way in: paste detail is in the student sheet.
       await page
         .getByRole('row')
         .filter({ hasText: e2eContext.userEmail })
