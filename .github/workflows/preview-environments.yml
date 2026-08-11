@@ -103,8 +103,8 @@ jobs:
             -e "ssh -i ~/.ssh/preview_key" \
             ./ "$ssh_target:$remote_source/"
 
-      - name: Enforce preview capacity
-        id: capacity
+      - name: Admit and deploy preview
+        id: deploy
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -123,6 +123,8 @@ jobs:
           ssh_target="${PREVIEW_SSH_USER}@${PREVIEW_HOST}"
           remote_source="${PREVIEW_ROOT}/sources/pr-${PR_NUMBER}"
           remote_env=(
+            "PR_NUMBER=$(shell_quote "$PR_NUMBER")"
+            "PREVIEW_DOMAIN=$(shell_quote "$PREVIEW_DOMAIN")"
             "PREVIEW_ROOT=$(shell_quote "$PREVIEW_ROOT")"
             "PREVIEW_MODE=admit"
             "PREVIEW_MAX_RESIDENT=$(shell_quote "$PREVIEW_MAX_RESIDENT")"
@@ -133,45 +135,6 @@ jobs:
             "KEEP_PR=$(shell_quote "$PR_NUMBER")"
             "OPEN_PR_NUMBERS=$(shell_quote "$open_numbers")"
             "PR_ACTIVITY=$(shell_quote "$activity")"
-          )
-          ssh -i ~/.ssh/preview_key "$ssh_target" \
-            "cd $(shell_quote "$remote_source") && ${remote_env[*]} bash scripts/preview/enforce-cap.sh" \
-            | tee /tmp/capacity.log
-
-          evicted="$(awk -F= '/^CAP_EVICTED=/{print $2}' /tmp/capacity.log | tail -1)"
-          slept="$(awk -F= '/^CAP_SLEPT=/{print $2}' /tmp/capacity.log | tail -1)"
-          result="$(awk -F= '/^CAP_RESULT=/{print $2}' /tmp/capacity.log | tail -1)"
-          reason="$(awk -F= '/^CAP_REASON=/{print $2}' /tmp/capacity.log | tail -1)"
-          resident="$(awk -F= '/^CAP_RESIDENT=/{print $2}' /tmp/capacity.log | tail -1)"
-          running="$(awk -F= '/^CAP_RUNNING=/{print $2}' /tmp/capacity.log | tail -1)"
-          echo "evicted=$evicted" >> "$GITHUB_OUTPUT"
-
-          for pr in $slept; do
-            gh pr comment "$pr" --body "Preview sleeping after inactivity. State and access code remain intact. Push a commit, mark the PR ready for review, or add the \`preview:keep-awake\` label to wake it." || true
-          done
-          for pr in $evicted; do
-            gh pr comment "$pr" --body "Preview reclaimed at the ${PREVIEW_MAX_RESIDENT}-resident cap. Preview-local database and access state were deleted; push a commit or add \`preview:keep-awake\` to rebuild it." || true
-          done
-
-          if [ "$result" = "full" ]; then
-            echo "::error::Preview host is full at ${reason}; pinned and incoming PRs could not be displaced."
-            exit 1
-          fi
-          echo "Preview capacity OK: ${running}/${PREVIEW_MAX_RUNNING} running, ${resident}/${PREVIEW_MAX_RESIDENT} resident."
-
-      - name: Deploy preview
-        id: deploy
-        run: |
-          set -euo pipefail
-          shell_quote() {
-            printf '%q' "$1"
-          }
-          ssh_target="${PREVIEW_SSH_USER}@${PREVIEW_HOST}"
-          remote_source="${PREVIEW_ROOT}/sources/pr-${PR_NUMBER}"
-          remote_env=(
-            "PR_NUMBER=$(shell_quote "$PR_NUMBER")"
-            "PREVIEW_DOMAIN=$(shell_quote "$PREVIEW_DOMAIN")"
-            "PREVIEW_ROOT=$(shell_quote "$PREVIEW_ROOT")"
             "PREVIEW_TLS=$(shell_quote "$PREVIEW_TLS")"
             "PREVIEW_RUNTIME=$(shell_quote "$PREVIEW_RUNTIME")"
             "PREVIEW_DATA_MODE=$(shell_quote "$PREVIEW_DATA_MODE")"
@@ -185,14 +148,42 @@ jobs:
             "PREVIEW_LOGIN_PASSWORD=$(shell_quote "$PREVIEW_LOGIN_PASSWORD")"
             "SOURCE_DIR=$(shell_quote "$remote_source")"
           )
+          set +e
           ssh -i ~/.ssh/preview_key "$ssh_target" \
-            "cd $(shell_quote "$remote_source") && ${remote_env[*]} bash scripts/preview/deploy.sh" \
+            "cd $(shell_quote "$remote_source") && ${remote_env[*]} bash scripts/preview/admit-and-deploy.sh" \
             | tee /tmp/preview-deploy.log
+          remote_status="${PIPESTATUS[0]}"
+          set -e
+
+          evicted="$(awk -F= '/^CAP_EVICTED=/{print $2}' /tmp/preview-deploy.log | tail -1)"
+          slept="$(awk -F= '/^CAP_SLEPT=/{print $2}' /tmp/preview-deploy.log | tail -1)"
+          result="$(awk -F= '/^CAP_RESULT=/{print $2}' /tmp/preview-deploy.log | tail -1)"
+          reason="$(awk -F= '/^CAP_REASON=/{print $2}' /tmp/preview-deploy.log | tail -1)"
+          resident="$(awk -F= '/^CAP_RESIDENT=/{print $2}' /tmp/preview-deploy.log | tail -1)"
+          running="$(awk -F= '/^CAP_RUNNING=/{print $2}' /tmp/preview-deploy.log | tail -1)"
+
+          for pr in $slept; do
+            gh pr comment "$pr" --body "Preview sleeping after inactivity. State and access code remain intact. Push a commit, mark the PR ready for review, or add the \`preview:keep-awake\` label to wake it." || true
+          done
+          for pr in $evicted; do
+            gh pr comment "$pr" --body "Preview reclaimed at the ${PREVIEW_MAX_RESIDENT}-resident cap. Preview-local database and access state were deleted; push a commit or add \`preview:keep-awake\` to rebuild it." || true
+          done
+
+          if [[ "$result" == "full" ]]; then
+            echo "::error::Preview host is full at ${reason}; pinned and incoming PRs could not be displaced."
+            exit 1
+          fi
+          if [[ "$remote_status" -ne 0 ]]; then
+            echo "::error::Remote preview admission/deploy failed with status ${remote_status}."
+            exit "$remote_status"
+          fi
+
           preview_url="$(awk -F= '/^PREVIEW_URL=/{print $2}' /tmp/preview-deploy.log | tail -1)"
           access_code="$(awk -F= '/^PREVIEW_ACCESS_CODE=/{print $2}' /tmp/preview-deploy.log | tail -1)"
           elapsed_ms="$(awk -F= '/^PREVIEW_ELAPSED_MS=/{print $2}' /tmp/preview-deploy.log | tail -1)"
           test -n "$preview_url" || { echo "Deploy script did not print PREVIEW_URL"; exit 1; }
           test -n "$access_code" || { echo "Deploy script did not print PREVIEW_ACCESS_CODE"; exit 1; }
+          echo "Preview capacity OK: ${running}/${PREVIEW_MAX_RUNNING} running before deploy, ${resident}/${PREVIEW_MAX_RESIDENT} resident."
           {
             echo "url=$preview_url"
             echo "access_code=$access_code"

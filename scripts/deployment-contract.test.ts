@@ -296,7 +296,9 @@ describe('PR preview deployment contract', () => {
     expect(previewWorkflow).toContain(
       'github.event.pull_request.head.repo.full_name == github.repository'
     );
-    expect(previewWorkflow).toContain('scripts/preview/deploy.sh');
+    expect(previewWorkflow).toContain(
+      'scripts/preview/admit-and-deploy.sh'
+    );
     expect(previewWorkflow).toContain(
       'scripts/preview/remove-preview-path.sh scripts/preview/cleanup.sh'
     );
@@ -487,6 +489,20 @@ describe('PR preview deployment contract', () => {
     expect(previewWorkflow).toContain('preview:keep-awake');
     expect(previewWorkflow).toContain('PREVIEW_MODE=reconcile');
     expect(previewWorkflow).toContain('CAP_SLEPT');
+  });
+
+  test('preview admission and deploy share one host lock', () => {
+    const previewWorkflow = readRepoFile(
+      '.github/workflows/preview-environments.yml'
+    );
+    const wrapper = readRepoFile('scripts/preview/admit-and-deploy.sh');
+
+    expect(previewWorkflow).toContain('scripts/preview/admit-and-deploy.sh');
+    expect(wrapper).toContain('preview-host.lock');
+    expect(wrapper).toContain('flock -w');
+    expect(wrapper.indexOf('enforce-cap.sh')).toBeLessThan(
+      wrapper.indexOf('deploy.sh')
+    );
   });
 
   test('preview workflow passes seeded preview mode to remote deploy', () => {
