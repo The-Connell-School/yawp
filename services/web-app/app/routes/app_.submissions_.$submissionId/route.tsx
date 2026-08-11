@@ -976,7 +976,6 @@ export default function SubmissionRoute() {
           <EssayPanel
             ref={setEssayRef}
             html={submission.html ?? ''}
-            showPastedSource={isGradingOther}
           />
           {isGradingOther && essayElement ? (
             <SelectionToolbar contentRoot={essayElement} />

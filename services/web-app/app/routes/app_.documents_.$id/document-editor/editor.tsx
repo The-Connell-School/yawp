@@ -14,10 +14,7 @@ import { EmDash } from './extensions/em-dash';
 import { LineHeight } from './extensions/line-height';
 import { TabIndent } from './extensions/tab-indent';
 import { SourceTracker } from './extensions/source-tracker';
-import {
-  PastedSource,
-  PASTED_SOURCE_VISIBLE_CLASS,
-} from './extensions/pasted-source';
+import { PastedSource } from './extensions/pasted-source';
 import { usePmTripwire } from './use-pm-tripwire';
 import { useEditorSync, type EditorBridge } from './use-editor-sync';
 import { usePasteAlert } from './use-paste-alert';
@@ -54,11 +51,6 @@ type Props = {
   initialHtml: string;
   initialRevision: number;
   isEditable: boolean;
-  /**
-   * Paint the "pasted from outside the app" marks. Teacher-side only —
-   * see the note on the surface div below.
-   */
-  showPastedSource?: boolean;
   onBridgeReady: (bridge: EditorBridge | null) => void;
   onSyncStatusChange?: (status: SyncStatus) => void;
   onSubmittableContentChange?: (submittable: boolean) => void;
@@ -71,7 +63,6 @@ export function Editor({
   initialHtml,
   initialRevision,
   isEditable,
-  showPastedSource = false,
   onBridgeReady,
   onSyncStatusChange,
   onSubmittableContentChange,
@@ -213,17 +204,8 @@ export function Editor({
           key={`${docId}-editor`}
           onMouseDown={focusEditorFromPaneClick}
         >
-          {/*
-            The pasted-from-outside marks are in the saved HTML for every
-            reader; this class is what makes them paint. It is set only for
-            a teacher reading a student's document, so the student writing
-            keeps a clean page — the record is for the conversation the
-            teacher chooses to have, not a live judgement on the writer.
-          */}
           <div
-            className={`mx-auto w-full min-h-full max-w-[920px] cursor-text font-times${
-              showPastedSource ? ` ${PASTED_SOURCE_VISIBLE_CLASS}` : ''
-            }`}
+            className="mx-auto w-full min-h-full max-w-[920px] cursor-text font-times"
             data-testid="document-editor-surface"
           >
             <EditorContent

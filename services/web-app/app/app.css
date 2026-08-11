@@ -285,27 +285,12 @@ code {
   border-bottom: 2px dotted #3b82f6;
 }
 /*
- * Text that arrived in the document from outside the app. The mark is
- * always in the saved HTML; it only paints inside a container that opts in
- * (.pasted-source-visible), which is how the student's own view stays
- * clean while a teacher reading the same document can see the passage.
- *
- * Deliberately quiet: a flat, cool tint and no border, no icon, no red. It
- * says "this came from somewhere else", not "this student cheated".
+ * Text that arrived in the document from outside the app. The mark stays in
+ * the saved HTML so the paste record survives, but it never paints: neither
+ * the student nor the teacher sees which passages were pasted.
  */
 .pasted-source-mark {
   background-color: transparent;
-}
-.pasted-source-visible .pasted-source-mark {
-  background-color: rgba(148, 163, 184, 0.22);
-  box-shadow: inset 0 -1px 0 rgba(100, 116, 139, 0.35);
-  border-radius: 2px;
-  box-decoration-break: clone;
-  -webkit-box-decoration-break: clone;
-}
-.dark .pasted-source-visible .pasted-source-mark {
-  background-color: rgba(148, 163, 184, 0.18);
-  box-shadow: inset 0 -1px 0 rgba(203, 213, 225, 0.28);
 }
 
 .grammar-issue-mark {

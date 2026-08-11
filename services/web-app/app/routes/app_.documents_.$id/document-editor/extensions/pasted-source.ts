@@ -3,13 +3,6 @@ import { Plugin, PluginKey, type Transaction } from 'prosemirror-state';
 
 export const PASTED_SOURCE_CLASS = 'pasted-source-mark';
 
-/**
- * Container class that makes the marks visible. Without it the mark is in
- * the document but paints nothing — see app.css. That is how the same
- * saved HTML can be quiet for the student and legible for the teacher.
- */
-export const PASTED_SOURCE_VISIBLE_CLASS = 'pasted-source-visible';
-
 const pastedSourceKey = new PluginKey<PastedSourceState>('pastedSource');
 
 /** Flags the plugin's own clean-up transaction so it is not re-processed. */
