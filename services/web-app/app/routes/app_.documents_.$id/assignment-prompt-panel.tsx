@@ -19,7 +19,7 @@ export function AssignmentPromptPanel({
 
   return (
     <div
-      className="flex w-full flex-col border-r bg-muted/30 pb-2 md:w-3/5"
+      className="flex w-full flex-col border-r bg-amber-50 pb-2 md:w-3/5"
       data-testid="assignment-prompt-side-panel"
     >
       <div className="flex items-center justify-between gap-8 border-b py-1 pl-4 pr-2">
@@ -32,7 +32,7 @@ export function AssignmentPromptPanel({
           </span>
         </div>
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
+      <div className="min-h-0 flex-1 overflow-y-auto pb-4 pl-4 pr-4 pt-3">
         <div className="whitespace-pre-wrap text-sm text-foreground/90">
           {prompt}
         </div>
