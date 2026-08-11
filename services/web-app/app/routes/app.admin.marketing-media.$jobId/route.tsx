@@ -362,9 +362,13 @@ export default function Route() {
             ) : null}
             {job.model ? (
               <span>via {job.model}</span>
-            ) : (
+            ) : storyboard ? (
+              // Only a job that actually has a storyboard nobody generated was
+              // hand-written. A generation that failed has neither a model nor
+              // a storyboard, and calling that "hand-written" sends whoever is
+              // debugging it looking at the wrong half of the pipeline.
               <span>hand-written storyboard</span>
-            )}
+            ) : null}
           </div>
         </div>
         <div className="flex gap-2">

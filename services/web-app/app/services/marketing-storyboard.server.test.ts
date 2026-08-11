@@ -96,6 +96,70 @@ describe('generateStoryboard', () => {
     expect(system).toContain('OMIT "goto"');
   });
 
+  // A hand-run job died on "scenes.1.focus: focus needs a selector, a role, or
+  // text to aim at", twice in a row, because the prompt described the field as
+  // `"focus": { target, "scale": ... }`. There is no `target` key in the
+  // schema, so the model emitted one, it was stripped as unknown, and what was
+  // left was a zoom aimed at nothing. The prompt has to name the real keys.
+  test('describes focus with the keys the schema actually accepts', async () => {
+    getLLMCompletion.mockResolvedValueOnce(JSON.stringify(VALID_STORYBOARD));
+
+    await generateStoryboard(brief());
+
+    const system = getLLMCompletion.mock.calls[0][0].system as string;
+    const focusLine = system
+      .split('\n')
+      .find((line) => line.includes('"focus"'));
+
+    expect(focusLine).toBeDefined();
+    expect(focusLine).not.toContain('{ target,');
+    // A worked example using real field names, so the shape is unambiguous.
+    expect(system).toContain('"focus": { "role": "button", "name":');
+    expect(system).toContain('"scale"');
+  });
+
+  // focus is polish — it aims a push-in during framing and can never drive the
+  // browser. Failing an entire generation over it wastes two model calls and
+  // hands the admin a dead job for a zoom we could simply leave out.
+  test('drops a focus that has nothing to aim at instead of failing the job', async () => {
+    const withBadFocus = {
+      ...VALID_STORYBOARD,
+      scenes: [
+        VALID_STORYBOARD.scenes[0],
+        { ...VALID_STORYBOARD.scenes[1], focus: { scale: 1.5 } },
+      ],
+    };
+    getLLMCompletion.mockResolvedValueOnce(JSON.stringify(withBadFocus));
+
+    const result = await generateStoryboard(brief());
+
+    expect(result.storyboard.scenes[1].focus).toBeUndefined();
+    expect(result.storyboard.scenes).toHaveLength(2);
+    // Repaired in place: no retry burned on a field we can just drop.
+    expect(getLLMCompletion).toHaveBeenCalledTimes(1);
+  });
+
+  // Only the unaimable focus is dropped. A focus that names a target is the
+  // whole reason product text is legible at feed size and must survive.
+  test('keeps a focus that names a target', async () => {
+    const withGoodFocus = {
+      ...VALID_STORYBOARD,
+      scenes: [
+        VALID_STORYBOARD.scenes[0],
+        {
+          ...VALID_STORYBOARD.scenes[1],
+          focus: { text: 'Overall Feedback', scale: 1.6 },
+        },
+      ],
+    };
+    getLLMCompletion.mockResolvedValueOnce(JSON.stringify(withGoodFocus));
+
+    const result = await generateStoryboard(brief());
+
+    expect(result.storyboard.scenes[1].focus?.text).toBe('Overall Feedback');
+    expect(result.storyboard.scenes[1].focus?.scale).toBe(1.6);
+  });
+
   test('passes the brief, audience, and subject to the model', async () => {
     getLLMCompletion.mockResolvedValueOnce(JSON.stringify(VALID_STORYBOARD));
 

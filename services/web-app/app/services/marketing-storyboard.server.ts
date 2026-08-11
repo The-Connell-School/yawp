@@ -87,7 +87,9 @@ function buildSystemPrompt(kind: MarketingJobKind): string {
     '      "hold": seconds to linger,',
     '      "screenshot": true,',
     '      "caption": "what a viewer is looking at",',
-    '      "overlay": "short line burned onto the clip while this scene plays"',
+    '      "overlay": "short line burned onto the clip while this scene plays",',
+    '      "startsClip": true on the one scene the clip should open on,',
+    '      "focus": { "role": "button", "name": "Prompt Library", "scale": 1.5 }',
     '    }',
     '  ]',
     '}',
@@ -99,12 +101,20 @@ function buildSystemPrompt(kind: MarketingJobKind): string {
     'Do not narrate the cursor. "Teacher clicks the Daily Pages card" is a',
     'caption, not an overlay, and reads like a test log on screen.',
     '',
-    'A scene may also carry a "focus": { target, "scale": 1.2-2 }. The clip',
-    'plays the interaction at full width and then pushes in on that element',
-    'for the scene\'s hold, which is the only reason product text is legible',
-    'once the clip is playing at feed size. Aim it at the thing the scene is',
-    'about — the expanded panel, the graded feedback, the editor — not at a',
-    'button that was already clicked. Target it the same way a step does.',
+    'A scene may also carry a "focus". The clip plays the interaction at full',
+    'width and then pushes in on that element for the scene\'s hold, which is',
+    'the only reason product text is legible once the clip is playing at feed',
+    'size. Aim it at the thing the scene is about — the expanded panel, the',
+    'graded feedback, the editor — not at a button that was already clicked.',
+    '',
+    'A focus is aimed exactly like a step: give it "selector", or "role" plus',
+    '"name", or "text" — plus a "scale" between 1.2 and 2. There is no',
+    '"target" key. All three of these are valid:',
+    '  "focus": { "role": "button", "name": "Prompt Library", "scale": 1.5 }',
+    '  "focus": { "text": "Overall Feedback", "scale": 1.6 }',
+    '  "focus": { "selector": ".ProseMirror", "scale": 1.4 }',
+    'A focus with only a "scale" and nothing to aim at is dropped. Omit the',
+    'whole field when no single element is worth pushing in on.',
     '',
     'Detail pages — a graded submission, a class, a document — have no route',
     'of their own here; reach them by clicking from a list. When the clip is',
@@ -178,6 +188,42 @@ function extractJson(raw: string): unknown {
       raw
     );
   }
+}
+
+/**
+ * Drop a "focus" that has nothing to aim at.
+ *
+ * Unlike a step, a focus never drives the browser — it only aims the push-in
+ * the framing stage animates. So an unaimable one is not a safety question,
+ * it is a missing polish pass, and failing the whole storyboard over it burns
+ * two model calls and hands the admin a dead job for a zoom we could simply
+ * leave out. Everything else is still validated exactly as strictly.
+ */
+function dropUnaimableFocus(candidate: unknown): unknown {
+  if (!candidate || typeof candidate !== 'object') return candidate;
+  const storyboard = candidate as { scenes?: unknown };
+  if (!Array.isArray(storyboard.scenes)) return candidate;
+
+  return {
+    ...storyboard,
+    scenes: storyboard.scenes.map((scene) => {
+      if (!scene || typeof scene !== 'object' || Array.isArray(scene))
+        return scene;
+      const fields = scene as Record<string, unknown>;
+      if (fields.focus === undefined || fields.focus === null) return scene;
+
+      const aim = fields.focus as Record<string, unknown>;
+      // Mirrors the schema's hasTarget: a name on its own aims at nothing.
+      const aimed =
+        typeof aim === 'object' &&
+        !Array.isArray(aim) &&
+        Boolean(aim.selector || aim.role || aim.text);
+      if (aimed) return scene;
+
+      const { focus: _dropped, ...withoutFocus } = fields;
+      return withoutFocus;
+    }),
+  };
 }
 
 /**
@@ -285,7 +331,7 @@ async function runStoryboardGeneration(params: {
       continue;
     }
 
-    const result = safeParseStoryboard(candidate);
+    const result = safeParseStoryboard(dropUnaimableFocus(candidate));
     if (result.success) {
       const estimate = estimateRenderSeconds(result.data);
       if (params.kind === 'CLIP' && estimate > MAX_CLIP_SECONDS) {
