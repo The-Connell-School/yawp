@@ -86,6 +86,7 @@ import {
   type ApHistorySnapshot,
 } from '~/domain/ap-history/schema';
 import { ApHistoryAssignmentPanel } from './ap-history-assignment-panel';
+import { AssignmentPromptPanel } from './assignment-prompt-panel';
 import { pickLatestReleasedSubmission } from '~/utils/document-link-target';
 
 const SUBMIT_EMPTY_TOOLTIP =
@@ -1043,6 +1044,9 @@ export default function Route() {
         </Tabs>
         <CommentsSelectionProvider>
           <div className="mx-auto flex min-h-0 flex-1 w-full max-w-screen-2xl overflow-hidden">
+            {!tutorEnabled && !(isMobile && tab !== 'editor') ? (
+              <AssignmentPromptPanel assignment={editorAssignmentPrompt} />
+            ) : null}
             {!tutorEnabled || (isMobile && tab !== 'tutor') ? null : (
               <Tutor
                 docId={data.doc.id}
@@ -1063,7 +1067,9 @@ export default function Route() {
             {isMobile && tab !== 'editor' ? null : (
               <DocumentEditor
                 docId={data.doc.id}
-                assignment={editorAssignmentPrompt}
+                // With the tutor off the prompt has its own column, so the
+                // banner over the document would only repeat it.
+                assignment={tutorEnabled ? editorAssignmentPrompt : null}
                 serverHtml={editorServerHtml}
                 serverText={editorServerText}
                 serverUpdatedAt={data.doc.updatedAt}

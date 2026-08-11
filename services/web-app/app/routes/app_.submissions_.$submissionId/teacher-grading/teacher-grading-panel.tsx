@@ -315,9 +315,17 @@ export function TeacherGradingPanel({
         rubricScores,
         overallComment,
         numericPercentage,
+        overallScore: hasManualScoreOverride ? overallScoreInput : '',
         grammarIssues,
       }),
-    [grammarIssues, numericPercentage, overallComment, rubricScores]
+    [
+      grammarIssues,
+      hasManualScoreOverride,
+      numericPercentage,
+      overallComment,
+      overallScoreInput,
+      rubricScores,
+    ]
   );
 
   const hasUnsavedChanges =
@@ -390,6 +398,7 @@ export function TeacherGradingPanel({
     setOverallComment(initialOverallComment);
     setNumericPercentage(initialNumericPercentage);
     setRubricScores(initialRubricScores);
+    setHasManualScoreOverride(false);
     setSavedSnapshot(
       buildGradingFormSnapshot({
         rubricScores: initialRubricScores,
@@ -589,6 +598,7 @@ export function TeacherGradingPanel({
           rubricScores: effectiveRubric,
           overallComment: effectiveComment,
           numericPercentage: effectivePercentStr,
+          overallScore: hasManualScoreOverride ? overallScoreInput : '',
           grammarIssues: effectiveGrammarIssues,
         })
       );

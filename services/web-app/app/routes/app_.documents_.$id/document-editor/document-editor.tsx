@@ -11,7 +11,7 @@ import type { EditorBridge } from './use-editor-sync';
 
 const PROMPT_EXPANDED_MAX_HEIGHT = 'calc(50vh - 28px)';
 
-type AssignmentPrompt = {
+export type AssignmentPrompt = {
   id: string;
   title: string | null;
   prompt: string | null;
@@ -133,8 +133,8 @@ function AssignmentPromptBanner({
       >
         <div className="flex h-[32px] w-full min-w-0 items-center gap-1">
           <div className="flex min-w-0 flex-grow items-center gap-2">
-            <span className="inline-flex h-8 shrink-0 items-center rounded-full border border-yellow-300 bg-yellow-100 px-3 text-sm font-bold leading-none text-yellow-900">
-              Assignment Prompt
+            <span className="shrink-0 text-sm text-muted-foreground">
+              Assignment prompt
             </span>
             <span className="min-w-0 truncate text-sm font-bold text-foreground/80">
               {assignment.title?.trim() || 'Untitled Assignment'}
