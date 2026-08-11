@@ -83,6 +83,32 @@ export function validateScoreScale({
   return null;
 }
 
+/**
+ * The steps a given range can actually use.
+ *
+ * A step has to divide the range evenly or the max is unreachable — 0-3 by
+ * twos stops at 2, so full marks cannot be earned. It also has to leave at
+ * least three tiers: a step equal to half the range or more collapses the
+ * scale to two values, which is a narrower range rather than a step of this
+ * one. A step of 1 is always offered, since every range supports it.
+ *
+ * Offering only these makes the invalid cases unpickable instead of typeable,
+ * which is why the editor uses a select rather than a number input.
+ */
+export function buildStepOptions({
+  minScore,
+  maxScore,
+}: Pick<ScoreScaleShape, 'minScore' | 'maxScore'>): number[] {
+  const span = maxScore - minScore;
+  if (!Number.isFinite(span) || span <= 0) return [DEFAULT_SCORE_STEP];
+
+  const options: number[] = [];
+  for (let step = 1; step <= span / 2; step++) {
+    if (span % step === 0) options.push(step);
+  }
+  return options.length > 0 ? options : [DEFAULT_SCORE_STEP];
+}
+
 /** Human-readable preview of the grid, for helper text beside the inputs. */
 export function describeScoreScale(shape: ScoreScaleShape): string {
   const values = buildScoreScaleValues(shape);

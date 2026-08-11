@@ -63,6 +63,7 @@ import { isGrammarHighlightCategory } from '~/domain/assignment-types/rubric-cat
 import {
   DEFAULT_SCORE_STEP,
   buildScoreScaleValues,
+  buildStepOptions,
   describeScoreScale,
   validateScoreScale,
 } from '~/domain/assignment-types/score-scale-steps';
@@ -171,8 +172,32 @@ export function ScoringScaleEditor({
     }
   };
   const isAct = scale.type === 'act_writing_2_12';
-  const scoreScaleDescription = describeScoreScale(scale);
-  const scoreScaleError = validateScoreScale(scale);
+  const stepOptions = buildStepOptions(scale);
+  /**
+   * Changing min or max can strip the configured step of its meaning — 10 is
+   * fine over 0-30 and impossible over 0-6. Rather than leave an unreachable
+   * max configured, the scale falls back to every value until the teacher
+   * picks a step the new range supports.
+   */
+  const effectiveStep = stepOptions.includes(scale.step ?? DEFAULT_SCORE_STEP)
+    ? (scale.step ?? DEFAULT_SCORE_STEP)
+    : DEFAULT_SCORE_STEP;
+  const scoreScaleDescription = describeScoreScale({
+    ...scale,
+    step: effectiveStep,
+  });
+  const scoreScaleError = validateScoreScale({
+    ...scale,
+    step: effectiveStep,
+  });
+
+  useEffect(() => {
+    if ((scale.step ?? DEFAULT_SCORE_STEP) !== effectiveStep) {
+      setScale((s) => ({ ...s, step: effectiveStep }));
+    }
+    // Only the mismatch matters; setScale is stable enough for this guard.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [effectiveStep, scale.step]);
 
   return (
     <div className="space-y-3">
@@ -225,16 +250,35 @@ export function ScoringScaleEditor({
           </div>
           <div className="w-24 space-y-1.5">
             <Label htmlFor={`${namePrefix}scoreStep`}>Step</Label>
-            <Input
-              id={`${namePrefix}scoreStep`}
-              type="number"
-              min={1}
-              value={scale.step ?? DEFAULT_SCORE_STEP}
-              data-testid="rubric-score-step"
-              onChange={(e) =>
-                setScale((s) => ({ ...s, step: Number(e.target.value) }))
-              }
-            />
+            {/* A select rather than a number input: only steps that divide the
+                range evenly can reach the max, so the invalid ones should be
+                unpickable rather than typeable-then-rejected. */}
+            <Select
+              value={String(effectiveStep)}
+              onValueChange={(v) => {
+                // Radix reports an empty value when it clears a selection whose
+                // option list no longer holds it, and Number('') is 0. Ignoring
+                // that is what keeps an imported step from being wiped in the
+                // render before its range arrives.
+                const next = Number(v);
+                if (!Number.isFinite(next) || next < 1) return;
+                setScale((s) => ({ ...s, step: next }));
+              }}
+            >
+              <SelectTrigger
+                id={`${namePrefix}scoreStep`}
+                data-testid="rubric-score-step"
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {stepOptions.map((option) => (
+                  <SelectItem key={option} value={String(option)}>
+                    {option}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         </div>
         <p className="text-sm text-muted-foreground">

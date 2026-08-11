@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import {
   DEFAULT_SCORE_STEP,
   buildScoreScaleValues,
+  buildStepOptions,
   describeScoreScale,
   validateScoreScale,
 } from './score-scale-steps';
@@ -83,6 +84,35 @@ describe('validateScoreScale', () => {
     expect(validateScoreScale({ minScore: 5, maxScore: 5, step: 1 })).toBe(
       'The max score must be greater than the min score.'
     );
+  });
+});
+
+describe('buildStepOptions', () => {
+  // Only steps that divide the range evenly can reach the max, and a step that
+  // leaves fewer than three tiers is a range of its own, not a step of this one.
+  test('offers the divisors of the range that leave at least three tiers', () => {
+    expect(buildStepOptions({ minScore: 0, maxScore: 6 })).toEqual([1, 2, 3]);
+  });
+
+  test('rules out a step that overshoots the max', () => {
+    // 0-3 by twos would give 0 and 2, never 3.
+    expect(buildStepOptions({ minScore: 0, maxScore: 3 })).toEqual([1]);
+  });
+
+  test('offers the tens on a 0-30 scale', () => {
+    expect(buildStepOptions({ minScore: 0, maxScore: 30 })).toEqual([
+      1, 2, 3, 5, 6, 10, 15,
+    ]);
+  });
+
+  test('always offers a step of one, even on the narrowest range', () => {
+    expect(buildStepOptions({ minScore: 0, maxScore: 1 })).toEqual([1]);
+    expect(buildStepOptions({ minScore: 1, maxScore: 5 })).toEqual([1, 2]);
+  });
+
+  test('offers only one for a range that is not a range', () => {
+    expect(buildStepOptions({ minScore: 5, maxScore: 5 })).toEqual([1]);
+    expect(buildStepOptions({ minScore: 9, maxScore: 2 })).toEqual([1]);
   });
 });
 
