@@ -19,6 +19,10 @@ function makeFixture() {
   for (const pr of [11, 12, 13]) {
     mkdirSync(path.join(root, 'previews', `pr-${pr}`), { recursive: true });
   }
+  // Source-only deploys count toward disk residency, while a matching source and
+  // preview directory still represent one environment.
+  mkdirSync(path.join(root, 'sources', 'pr-11'), { recursive: true });
+  mkdirSync(path.join(root, 'sources', 'pr-14'), { recursive: true });
 
   const meminfo = path.join(root, 'meminfo');
   writeFileSync(
@@ -93,11 +97,11 @@ describe('publish-host-metrics.sh', () => {
     expect(call).toContain('DiskUsedPercent');
     expect(call).toContain('"Value":50');
     expect(call).toContain('ResidentPreviews');
-    expect(call).toContain('"Value":3');
+    expect(call).toContain('"Value":4');
     expect(call).toContain('RunningPreviews');
     expect(call).toContain('"Value":2');
     expect(call).toContain('SleepingPreviews');
-    expect(call).toContain('"Value":1');
+    expect(call).toContain('"Value":2');
     expect(call).toContain('InstanceId');
     expect(call).toContain('i-test123');
     expect(call).not.toContain('pr-11');

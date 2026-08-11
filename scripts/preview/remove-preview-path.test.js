@@ -45,7 +45,7 @@ function runRemove(root, target, env = {}) {
     cmd: [
       'bash',
       '-lc',
-      `source ${JSON.stringify(script)}; preview_remove_path "$TARGET"`,
+      `source ${JSON.stringify(script)}; preview_remove_path "$TARGET" "\${EXPECTED_LEAF:-}"`,
     ],
     env: {
       ...process.env,
@@ -86,6 +86,25 @@ describe('preview_remove_path', () => {
     const result = runRemove(root, target);
 
     expect(result.exitCode).toBe(0);
+  });
+
+  test('removes an explicitly named environment without broadening the allowlist', () => {
+    const { root, target } = makeTree('demo');
+
+    const result = runRemove(root, target, { EXPECTED_LEAF: 'demo' });
+
+    expect(result.exitCode).toBe(0);
+    expect(existsSync(target)).toBe(false);
+  });
+
+  test('refuses a named environment unless the caller supplies the exact slug', () => {
+    const { root, target } = makeTree('demo');
+
+    const result = runRemove(root, target, { EXPECTED_LEAF: 'staging' });
+
+    expect(result.exitCode).toBe(1);
+    expect(stderrOf(result)).toContain('Refusing');
+    expect(existsSync(target)).toBe(true);
   });
 
   test('falls back to a root container when plain removal fails', () => {

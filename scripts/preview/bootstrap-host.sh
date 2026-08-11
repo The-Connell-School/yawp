@@ -7,12 +7,12 @@ POSTGRES_PROJECT="${PREVIEW_POSTGRES_PROJECT:-yawp-preview-db}"
 METRICS_USER="${PREVIEW_METRICS_USER:-$USER}"
 
 if command -v dnf >/dev/null 2>&1; then
-  sudo dnf install -y docker git rsync nodejs awscli || sudo dnf install -y docker git rsync nodejs awscli2
+  sudo dnf install -y docker git rsync nodejs jq awscli || sudo dnf install -y docker git rsync nodejs jq awscli2
 elif command -v yum >/dev/null 2>&1; then
-  sudo yum install -y docker git rsync nodejs awscli
+  sudo yum install -y docker git rsync nodejs jq awscli
 elif command -v apt-get >/dev/null 2>&1; then
   sudo apt-get update -y
-  sudo apt-get install -y docker.io docker-compose-plugin git rsync nodejs ca-certificates curl awscli
+  sudo apt-get install -y docker.io docker-compose-plugin git rsync nodejs jq ca-certificates curl awscli
 else
   echo "Install Docker, Docker Compose v2, git, rsync, Node, and AWS CLI before running this script." >&2
   exit 1

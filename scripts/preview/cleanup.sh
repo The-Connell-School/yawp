@@ -7,6 +7,7 @@ OPEN_PR_NUMBERS="${OPEN_PR_NUMBERS:-}"
 PREVIEW_TTL_HOURS="${PREVIEW_TTL_HOURS:-72}"
 TARGET_PR="${TARGET_PR:-}"
 POSTGRES_CONTAINER="${PREVIEW_POSTGRES_CONTAINER:-preview-postgres}"
+INFLIGHT_TTL_SECONDS="${PREVIEW_INFLIGHT_TTL_SECONDS:-3600}"
 now_epoch="$(date +%s)"
 cleanup_failed=0
 
@@ -18,6 +19,27 @@ fi
 
 is_positive_integer() {
   [[ "$1" =~ ^[1-9][0-9]*$ ]]
+}
+
+if [[ ! "$INFLIGHT_TTL_SECONDS" =~ ^[0-9]+$ ]]; then
+  echo "PREVIEW_INFLIGHT_TTL_SECONDS must be a nonnegative integer" >&2
+  exit 1
+fi
+
+is_inflight() {
+  local pr_number="$1"
+  local marker leaf modified
+  for marker in "$ROOT/inflight/pr-${pr_number}"/*; do
+    [[ -f "$marker" ]] || continue
+    leaf="$(basename "$marker")"
+    [[ "$leaf" =~ ^[0-9]+-[0-9]+$ ]] || continue
+    modified="$(stat -c %Y "$marker" 2>/dev/null || stat -f %m "$marker")" || continue
+    [[ "$modified" =~ ^[0-9]+$ ]] || continue
+    if (( modified > now_epoch || now_epoch - modified < INFLIGHT_TTL_SECONDS )); then
+      return 0
+    fi
+  done
+  return 1
 }
 
 if [[ -n "$TARGET_PR" ]] && ! is_positive_integer "$TARGET_PR"; then
@@ -103,6 +125,10 @@ cleanup_previews() {
     if ! matches_target "$pr_number"; then
       continue
     fi
+    if is_inflight "$pr_number"; then
+      echo "Skipping preview pr-${pr_number}: deployment is in flight"
+      continue
+    fi
     if is_open_pr "$pr_number"; then
       continue
     fi
@@ -131,6 +157,10 @@ cleanup_sources() {
       continue
     fi
     if ! matches_target "$pr_number"; then
+      continue
+    fi
+    if is_inflight "$pr_number"; then
+      echo "Skipping source pr-${pr_number}: deployment is in flight"
       continue
     fi
     if is_open_pr "$pr_number"; then

@@ -2,8 +2,9 @@
 # Reconcile preview residency and running capacity on the shared host.
 #
 # Resident previews keep source, database, access code, and volumes on disk. Running
-# previews have a live web container. Sleeping stops only that web container, so the next
-# deploy wakes the same environment without deleting preview-local state.
+# previews have a live web container. Sleeping stops every PR-scoped service without
+# removing containers or volumes, so the next deploy wakes the same environment without
+# deleting preview-local state.
 set -euo pipefail
 
 ROOT="${PREVIEW_ROOT:-/srv/yawp-preview}"
@@ -21,6 +22,12 @@ READY_IDLE_HOURS="${PREVIEW_READY_IDLE_HOURS:-72}"
 NOW_EPOCH="${PREVIEW_NOW_EPOCH:-$(date +%s)}"
 DOCKER="${PREVIEW_DOCKER:-docker}"
 LOCK_WAIT_SECONDS="${PREVIEW_LOCK_WAIT_SECONDS:-900}"
+INFLIGHT_TTL_SECONDS="${PREVIEW_INFLIGHT_TTL_SECONDS:-3600}"
+GITHUB_REPOSITORY="${PREVIEW_GITHUB_REPOSITORY:-}"
+GITHUB_TOKEN="${PREVIEW_GITHUB_TOKEN:-}"
+GITHUB_API_URL="${PREVIEW_GITHUB_API_URL:-https://api.github.com}"
+CURL="${PREVIEW_CURL:-curl}"
+JQ="${PREVIEW_JQ:-jq}"
 
 previews_dir="$ROOT/previews"
 
@@ -45,7 +52,7 @@ esac
 for value in "$RESIDENT_CAP" "$RUNNING_CAP"; do
   is_positive_integer "$value" || { echo "Preview caps must be positive integers" >&2; exit 1; }
 done
-for value in "$DRAFT_IDLE_HOURS" "$READY_IDLE_HOURS" "$NOW_EPOCH" "$LOCK_WAIT_SECONDS"; do
+for value in "$DRAFT_IDLE_HOURS" "$READY_IDLE_HOURS" "$NOW_EPOCH" "$LOCK_WAIT_SECONDS" "$INFLIGHT_TTL_SECONDS"; do
   is_nonnegative_integer "$value" || { echo "Preview timing values must be nonnegative integers" >&2; exit 1; }
 done
 case "$SLEEP_ENABLED" in
@@ -67,16 +74,114 @@ acquire_host_lock() {
   flock -w "$LOCK_WAIT_SECONDS" 9
 }
 
-resident_env_numbers() {
-  [[ -d "$previews_dir" ]] || return 0
-  for path in "$previews_dir"/pr-*; do
-    [[ -d "$path" ]] || continue
-    local slug pr
-    slug="$(basename "$path")"
-    pr="${slug#pr-}"
-    is_positive_integer "$pr" || continue
-    printf '%s\n' "$pr"
+refresh_pr_state() {
+  if [[ -z "$GITHUB_REPOSITORY" && -z "$GITHUB_TOKEN" ]]; then
+    return 0
+  fi
+  if [[ -z "$GITHUB_REPOSITORY" || -z "$GITHUB_TOKEN" ]]; then
+    echo "PREVIEW_GITHUB_REPOSITORY and PREVIEW_GITHUB_TOKEN must be set together" >&2
+    return 1
+  fi
+  [[ "$GITHUB_REPOSITORY" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]] || {
+    echo "PREVIEW_GITHUB_REPOSITORY must be owner/repository" >&2
+    return 1
+  }
+
+  local page=1 response count page_numbers page_activity
+  OPEN_PR_NUMBERS=""
+  PR_ACTIVITY=""
+  while (( page <= 10 )); do
+    response="$(
+      "$CURL" --fail --silent --show-error --location \
+        --connect-timeout 5 --max-time 20 --retry 2 --retry-delay 1 --retry-all-errors \
+        -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+        -H "Accept: application/vnd.github+json" \
+        -H "X-GitHub-Api-Version: 2022-11-28" \
+        "${GITHUB_API_URL%/}/repos/${GITHUB_REPOSITORY}/pulls?state=open&per_page=100&page=${page}"
+    )"
+    "$JQ" -e 'type == "array"' >/dev/null <<<"$response"
+    count="$("$JQ" -r 'length' <<<"$response")"
+    is_nonnegative_integer "$count" || {
+      echo "GitHub returned an invalid pull request count" >&2
+      return 1
+    }
+    page_numbers="$("$JQ" -r '[.[].number] | join(" ")' <<<"$response")"
+    page_activity="$(
+      "$JQ" -r '.[] | "\(.number) \(.updated_at | fromdateiso8601) \(if .draft then 1 else 0 end) \(if any(.labels[]?; .name == "preview:keep-awake") then 1 else 0 end)"' \
+        <<<"$response"
+    )"
+    if [[ -n "$page_numbers" ]]; then
+      OPEN_PR_NUMBERS="${OPEN_PR_NUMBERS:+${OPEN_PR_NUMBERS} }${page_numbers}"
+    fi
+    if [[ -n "$page_activity" ]]; then
+      PR_ACTIVITY="${PR_ACTIVITY:+${PR_ACTIVITY}$'\n'}${page_activity}"
+    fi
+    (( count < 100 )) && break
+    page=$((page + 1))
   done
+  if (( page > 10 )); then
+    echo "More than 1,000 open pull requests; refusing to reconcile from a partial snapshot" >&2
+    return 1
+  fi
+}
+
+marker_mtime() {
+  stat -c %Y "$1" 2>/dev/null || stat -f %m "$1"
+}
+
+inflight_marker_is_fresh() {
+  local marker="$1"
+  local modified
+  modified="$(marker_mtime "$marker")" || return 1
+  is_nonnegative_integer "$modified" || return 1
+  (( modified > NOW_EPOCH || NOW_EPOCH - modified < INFLIGHT_TTL_SECONDS ))
+}
+
+is_inflight() {
+  local pr="$1"
+  local marker leaf
+  for marker in "$ROOT/inflight/pr-${pr}"/*; do
+    [[ -f "$marker" ]] || continue
+    leaf="$(basename "$marker")"
+    [[ "$leaf" =~ ^[0-9]+-[0-9]+$ ]] || continue
+    inflight_marker_is_fresh "$marker" && return 0
+  done
+  return 1
+}
+
+prune_stale_inflight_markers() {
+  local pr_dir marker leaf
+  [[ -d "$ROOT/inflight" ]] || return 0
+  for pr_dir in "$ROOT"/inflight/pr-*; do
+    [[ -d "$pr_dir" ]] || continue
+    [[ "$(basename "$pr_dir")" =~ ^pr-[1-9][0-9]*$ ]] || continue
+    for marker in "$pr_dir"/*; do
+      [[ -f "$marker" ]] || continue
+      leaf="$(basename "$marker")"
+      [[ "$leaf" =~ ^[0-9]+-[0-9]+$ ]] || continue
+      inflight_marker_is_fresh "$marker" || rm -f -- "$marker"
+    done
+    rmdir "$pr_dir" 2>/dev/null || true
+  done
+}
+
+resident_env_numbers() {
+  local parent path slug pr
+  for parent in "$previews_dir" "$ROOT/sources"; do
+    [[ -d "$parent" ]] || continue
+    for path in "$parent"/pr-*; do
+      [[ -d "$path" ]] || continue
+      slug="$(basename "$path")"
+      pr="${slug#pr-}"
+      is_positive_integer "$pr" || continue
+      printf '%s\n' "$pr"
+    done
+  done | sort -un
+}
+
+is_resident() {
+  local pr="$1"
+  [[ -d "$previews_dir/pr-${pr}" || -d "$ROOT/sources/pr-${pr}" ]]
 }
 
 is_open_pr() {
@@ -150,8 +255,8 @@ stop_env() {
     echo "::error::cannot sleep pr-${pr}; compose file missing"
     return 1
   }
-  if ! "$DOCKER" compose -p "$project" -f "$compose_file" stop web; then
-    echo "::error::failed to stop pr-${pr} web container"
+  if ! "$DOCKER" compose -p "$project" -f "$compose_file" stop; then
+    echo "::error::failed to stop pr-${pr} services"
     return 1
   fi
   if is_running "$pr"; then
@@ -163,11 +268,18 @@ stop_env() {
 rank_candidates() {
   local scope="$1"
   local keep="$2"
-  local candidates
+  local candidates=""
+  local pr
   if [[ "$scope" == "running" ]]; then
-    candidates="$(running_env_numbers | tr '\n' ' ')"
+    while IFS= read -r pr; do
+      [[ -n "$pr" ]] || continue
+      is_inflight "$pr" || candidates="${candidates:+${candidates} }${pr}"
+    done < <(running_env_numbers)
   else
-    candidates="$(resident_env_numbers | tr '\n' ' ')"
+    while IFS= read -r pr; do
+      [[ -n "$pr" ]] || continue
+      is_inflight "$pr" || candidates="${candidates:+${candidates} }${pr}"
+    done < <(resident_env_numbers)
   fi
 
   printf '%s\n' "$PR_ACTIVITY" | awk -v keep="$keep" -v candidates=" $candidates " '
@@ -186,7 +298,7 @@ append_number() {
 }
 
 incoming_resident_slots() {
-  if [[ "$MODE" == "admit" && -n "$KEEP_PR" && ! -d "$previews_dir/pr-${KEEP_PR}" ]]; then
+  if [[ "$MODE" == "admit" && -n "$KEEP_PR" ]] && ! is_resident "$KEEP_PR"; then
     echo 1
   else
     echo 0
@@ -202,6 +314,8 @@ incoming_running_slots() {
 }
 
 acquire_host_lock
+prune_stale_inflight_markers
+refresh_pr_state
 
 reclaimed=0
 evicted=""
@@ -210,6 +324,10 @@ slept=""
 # Closed or merged PRs never retain host resources.
 while IFS= read -r pr; do
   [[ -n "$pr" ]] || continue
+  if is_inflight "$pr"; then
+    echo "keep pr-${pr}: deployment is in flight"
+    continue
+  fi
   if ! is_open_pr "$pr"; then
     echo "reclaim pr-${pr}: pull request is closed or merged"
     if destroy_env "$pr"; then
@@ -218,10 +336,11 @@ while IFS= read -r pr; do
   fi
 done < <(resident_env_numbers)
 
-# Idle leases stop web only. State stays resident and any new deploy wakes it.
+# Idle leases stop every PR-scoped service. State stays resident and any new deploy wakes it.
 if [[ "$SLEEP_ENABLED" == "true" ]]; then
   while IFS= read -r pr; do
     [[ -n "$pr" ]] || continue
+    is_inflight "$pr" && continue
     record="$(activity_record "$pr")"
     [[ -n "$record" ]] || continue
     read -r _ updated draft pinned <<<"$record"
@@ -245,6 +364,7 @@ if (( resident_needed > RESIDENT_CAP )); then
   while IFS= read -r pr; do
     [[ -n "$pr" ]] || continue
     (( resident_needed > RESIDENT_CAP )) || break
+    is_inflight "$pr" && continue
     echo "evict pr-${pr}: resident cap ${RESIDENT_CAP}, least active candidate"
     if destroy_env "$pr"; then
       evicted="$(append_number "$evicted" "$pr")"
@@ -260,6 +380,7 @@ if (( running_needed > RUNNING_CAP )); then
   while IFS= read -r pr; do
     [[ -n "$pr" ]] || continue
     (( running_needed > RUNNING_CAP )) || break
+    is_inflight "$pr" && continue
     echo "sleep pr-${pr}: running cap ${RUNNING_CAP}, least active candidate"
     if stop_env "$pr"; then
       slept="$(append_number "$slept" "$pr")"

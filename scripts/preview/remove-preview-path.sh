@@ -3,12 +3,17 @@
 
 preview_remove_path_is_safe() {
   local target="${1:-}"
+  local expected_leaf="${2:-}"
   local root="${PREVIEW_ROOT:-/srv/yawp-preview}"
   local leaf root_abs parent_abs
 
   [[ -n "$target" ]] || return 1
   leaf="$(basename "$target")"
-  [[ "$leaf" =~ ^pr-[1-9][0-9]*$ ]] || return 1
+  if [[ ! "$leaf" =~ ^pr-[1-9][0-9]*$ ]]; then
+    [[ -n "$expected_leaf" ]] || return 1
+    [[ "$expected_leaf" =~ ^[a-z0-9][a-z0-9-]{0,62}$ ]] || return 1
+    [[ "$leaf" == "$expected_leaf" ]] || return 1
+  fi
 
   root_abs="$(cd "$root" 2>/dev/null && pwd -P)" || return 1
   parent_abs="$(cd "$(dirname "$target")" 2>/dev/null && pwd -P)" || return 1
@@ -17,12 +22,13 @@ preview_remove_path_is_safe() {
 
 preview_remove_path() {
   local target="${1:-}"
+  local expected_leaf="${2:-}"
   local rm_cmd="${PREVIEW_REMOVE_RM:-rm}"
   local docker_cmd="${PREVIEW_REMOVE_DOCKER:-docker}"
   local image="${PREVIEW_REMOVE_IMAGE:-oven/bun:1.3.1}"
   local parent leaf
 
-  if ! preview_remove_path_is_safe "$target"; then
+  if ! preview_remove_path_is_safe "$target" "$expected_leaf"; then
     echo "Refusing to remove unsafe preview path: ${target:-<empty>}" >&2
     return 1
   fi

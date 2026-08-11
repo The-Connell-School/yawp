@@ -507,13 +507,22 @@ describe('PR preview deployment contract', () => {
       '.github/workflows/preview-environments.yml'
     );
     const wrapper = readRepoFile('scripts/preview/admit-and-deploy.sh');
+    const enforcer = readRepoFile('scripts/preview/enforce-cap.sh');
 
     expect(previewWorkflow).toContain('scripts/preview/admit-and-deploy.sh');
+    expect(previewWorkflow).toContain('PREVIEW_GITHUB_TOKEN');
+    expect(previewWorkflow).not.toContain('gh pr list --state open');
     expect(wrapper).toContain('preview-host.lock');
     expect(wrapper).toContain('flock -w');
     expect(wrapper.indexOf('enforce-cap.sh')).toBeLessThan(
       wrapper.indexOf('deploy.sh')
     );
+    expect(enforcer).toContain(
+      'acquire_host_lock\nprune_stale_inflight_markers\nrefresh_pr_state'
+    );
+    expect(enforcer).toContain('"$previews_dir" "$ROOT/sources"');
+    expect(previewWorkflow).toContain('PREVIEW_INFLIGHT_MARKER');
+    expect(enforcer).toContain('is_inflight');
   });
 
   test('preview bootstrap installs aggregate host metrics timer', () => {

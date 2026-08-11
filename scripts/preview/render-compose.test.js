@@ -31,8 +31,15 @@ function renderCompose(overrides = {}) {
 describe('renderPreviewCompose', () => {
   test('renders the fast full-stack preview runtime by default', () => {
     const compose = renderCompose();
+    const parsed = Bun.YAML.parse(compose);
 
     expect(compose).toContain('services:');
+    expect(parsed.services.web.healthcheck.test).toEqual([
+      'CMD',
+      'bun',
+      '-e',
+      "fetch('http://127.0.0.1:8080/api/healthcheck').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))",
+    ]);
     expect(compose).not.toContain('\n  postgres:\n');
     expect(compose).not.toContain('image: postgres:16');
     expect(compose).toContain('toolbox:');

@@ -30,23 +30,29 @@ disk_used_percent="$(
     | awk 'NR == 2 {gsub(/%/, "", $5); print $5 + 0}'
 )"
 
-resident_count=0
 running_count=0
-if [[ -d "$ROOT/previews" ]]; then
-  for preview_path in "$ROOT"/previews/pr-*; do
-    [[ -d "$preview_path" ]] || continue
-    slug="$(basename "$preview_path")"
-    pr="${slug#pr-}"
-    [[ "$pr" =~ ^[1-9][0-9]*$ ]] || continue
-    resident_count=$((resident_count + 1))
-    if "$DOCKER" ps \
-      --filter "label=com.docker.compose.project=yawp-pr-${pr}" \
-      --filter "label=com.docker.compose.service=web" \
-      --filter status=running -q 2>/dev/null | grep -q .; then
-      running_count=$((running_count + 1))
-    fi
-  done
-fi
+resident_numbers="$(
+  for resident_parent in "$ROOT/previews" "$ROOT/sources"; do
+    [[ -d "$resident_parent" ]] || continue
+    for resident_path in "$resident_parent"/pr-*; do
+      [[ -d "$resident_path" ]] || continue
+      slug="$(basename "$resident_path")"
+      pr="${slug#pr-}"
+      [[ "$pr" =~ ^[1-9][0-9]*$ ]] || continue
+      printf '%s\n' "$pr"
+    done
+  done | sort -un
+)"
+resident_count="$(printf '%s\n' "$resident_numbers" | awk 'NF {count++} END {print count + 0}')"
+while IFS= read -r pr; do
+  [[ -n "$pr" ]] || continue
+  if "$DOCKER" ps \
+    --filter "label=com.docker.compose.project=yawp-pr-${pr}" \
+    --filter "label=com.docker.compose.service=web" \
+    --filter status=running -q 2>/dev/null | grep -q .; then
+    running_count=$((running_count + 1))
+  fi
+done <<<"$resident_numbers"
 sleeping_count=$((resident_count - running_count))
 (( sleeping_count >= 0 )) || sleeping_count=0
 

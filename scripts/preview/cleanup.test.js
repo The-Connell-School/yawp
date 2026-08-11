@@ -130,6 +130,23 @@ describe('preview cleanup', () => {
     expect(existsSync(path.join(root, 'sources/pr-12'))).toBe(true);
   });
 
+  test('targeted cleanup defers while a deploy marker is fresh', () => {
+    const { root, bin } = makePreviewRoot([11]);
+    const marker = path.join(root, 'inflight', 'pr-11', '1000-1');
+    mkdirSync(path.dirname(marker), { recursive: true });
+    writeFileSync(marker, '');
+
+    const result = runCleanup(root, bin, {
+      TARGET_PR: '11',
+      PREVIEW_INFLIGHT_TTL_SECONDS: '3600',
+    });
+
+    expect(result.exitCode).toBe(0);
+    expect(existsSync(path.join(root, 'previews/pr-11'))).toBe(true);
+    expect(existsSync(path.join(root, 'sources/pr-11'))).toBe(true);
+    expect(textOf(result.stdout)).toContain('deployment is in flight');
+  });
+
   test('rejects a malformed target PR', () => {
     const { root, bin } = makePreviewRoot([11]);
 

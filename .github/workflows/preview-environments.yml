@@ -40,6 +40,7 @@ jobs:
       PREVIEW_SLEEP_ENABLED: ${{ vars.PREVIEW_SLEEP_ENABLED || 'false' }}
       PREVIEW_DRAFT_IDLE_HOURS: ${{ vars.PREVIEW_DRAFT_IDLE_HOURS || '24' }}
       PREVIEW_READY_IDLE_HOURS: ${{ vars.PREVIEW_READY_IDLE_HOURS || '72' }}
+      PREVIEW_INFLIGHT_TTL_SECONDS: ${{ vars.PREVIEW_INFLIGHT_TTL_SECONDS || '3600' }}
       PREVIEW_DATA_MODE: ${{ vars.PREVIEW_DATA_MODE || 'seed' }}
       PREVIEW_SEAT_COUNT: ${{ vars.PREVIEW_SEAT_COUNT || '1' }}
       PREVIEW_AI_MODEL: ${{ vars.PREVIEW_AI_MODEL || 'claude-sonnet-4-6' }}
@@ -89,9 +90,20 @@ jobs:
       - name: Sync source to preview host
         run: |
           set -euo pipefail
+          shell_quote() {
+            printf '%q' "$1"
+          }
           remote_source="${PREVIEW_ROOT}/sources/pr-${PR_NUMBER}"
+          inflight_dir="${PREVIEW_ROOT}/inflight/pr-${PR_NUMBER}"
+          inflight_marker="${inflight_dir}/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          lock_file="${PREVIEW_ROOT}/preview-host.lock"
           ssh_target="${PREVIEW_SSH_USER}@${PREVIEW_HOST}"
-          ssh -i ~/.ssh/preview_key "$ssh_target" "mkdir -p '$remote_source'"
+          # Publish the marker before the source path. Capacity reconciliation ignores
+          # fresh markers, so it cannot evict a tree while rsync or lock admission runs.
+          printf -v setup_command 'mkdir -p %q && touch %q && mkdir -p %q' \
+            "$inflight_dir" "$inflight_marker" "$remote_source"
+          ssh -i ~/.ssh/preview_key "$ssh_target" \
+            "flock -w 900 $(shell_quote "$lock_file") bash -lc $(shell_quote "$setup_command")"
           rsync -az --delete \
             --exclude '.git' \
             --exclude 'node_modules' \
@@ -114,14 +126,11 @@ jobs:
           }
           # The host is a fixed-size box. Reclaim closed-PR environments, then evict the
           # least active, before adding one more. Without this the box fills until it
-          # wedges and takes every preview down at once.
-          gh pr list --state open --limit 1000 \
-            --json number,updatedAt,isDraft,labels > /tmp/open-prs.json
-          open_numbers="$(jq -r '[.[].number] | join(" ")' /tmp/open-prs.json)"
-          activity="$(jq -r '.[] | "\(.number) \(.updatedAt | fromdateiso8601) \(if .isDraft then 1 else 0 end) \(if any(.labels[]?; .name == "preview:keep-awake") then 1 else 0 end)"' /tmp/open-prs.json)"
-
+          # wedges and takes every preview down at once. The host fetches PR state only
+          # after it holds the mutation lock, so a queued deploy cannot act on old data.
           ssh_target="${PREVIEW_SSH_USER}@${PREVIEW_HOST}"
           remote_source="${PREVIEW_ROOT}/sources/pr-${PR_NUMBER}"
+          inflight_marker="${PREVIEW_ROOT}/inflight/pr-${PR_NUMBER}/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           remote_env=(
             "PR_NUMBER=$(shell_quote "$PR_NUMBER")"
             "PREVIEW_DOMAIN=$(shell_quote "$PREVIEW_DOMAIN")"
@@ -132,9 +141,12 @@ jobs:
             "PREVIEW_SLEEP_ENABLED=$(shell_quote "$PREVIEW_SLEEP_ENABLED")"
             "PREVIEW_DRAFT_IDLE_HOURS=$(shell_quote "$PREVIEW_DRAFT_IDLE_HOURS")"
             "PREVIEW_READY_IDLE_HOURS=$(shell_quote "$PREVIEW_READY_IDLE_HOURS")"
+            "PREVIEW_INFLIGHT_TTL_SECONDS=$(shell_quote "$PREVIEW_INFLIGHT_TTL_SECONDS")"
+            "PREVIEW_INFLIGHT_MARKER=$(shell_quote "$inflight_marker")"
             "KEEP_PR=$(shell_quote "$PR_NUMBER")"
-            "OPEN_PR_NUMBERS=$(shell_quote "$open_numbers")"
-            "PR_ACTIVITY=$(shell_quote "$activity")"
+            "PREVIEW_GITHUB_REPOSITORY=$(shell_quote "$GITHUB_REPOSITORY")"
+            "PREVIEW_GITHUB_API_URL=$(shell_quote "$GITHUB_API_URL")"
+            "PREVIEW_GITHUB_TOKEN=$(shell_quote "$GH_TOKEN")"
             "PREVIEW_TLS=$(shell_quote "$PREVIEW_TLS")"
             "PREVIEW_RUNTIME=$(shell_quote "$PREVIEW_RUNTIME")"
             "PREVIEW_DATA_MODE=$(shell_quote "$PREVIEW_DATA_MODE")"
@@ -316,6 +328,7 @@ jobs:
       PREVIEW_SLEEP_ENABLED: ${{ vars.PREVIEW_SLEEP_ENABLED || 'false' }}
       PREVIEW_DRAFT_IDLE_HOURS: ${{ vars.PREVIEW_DRAFT_IDLE_HOURS || '24' }}
       PREVIEW_READY_IDLE_HOURS: ${{ vars.PREVIEW_READY_IDLE_HOURS || '72' }}
+      PREVIEW_INFLIGHT_TTL_SECONDS: ${{ vars.PREVIEW_INFLIGHT_TTL_SECONDS || '3600' }}
     steps:
       - name: Check preview cleanup configuration
         env:
@@ -347,10 +360,6 @@ jobs:
           shell_quote() {
             printf '%q' "$1"
           }
-          gh pr list --state open --limit 1000 \
-            --json number,updatedAt,isDraft,labels > /tmp/open-prs.json
-          open_pr_numbers="$(jq -r '[.[].number] | join(" ")' /tmp/open-prs.json)"
-          activity="$(jq -r '.[] | "\(.number) \(.updatedAt | fromdateiso8601) \(if .isDraft then 1 else 0 end) \(if any(.labels[]?; .name == "preview:keep-awake") then 1 else 0 end)"' /tmp/open-prs.json)"
           ssh_target="${PREVIEW_SSH_USER}@${PREVIEW_HOST}"
           remote_env=(
             "PREVIEW_ROOT=$(shell_quote "$PREVIEW_ROOT")"
@@ -360,8 +369,10 @@ jobs:
             "PREVIEW_SLEEP_ENABLED=$(shell_quote "$PREVIEW_SLEEP_ENABLED")"
             "PREVIEW_DRAFT_IDLE_HOURS=$(shell_quote "$PREVIEW_DRAFT_IDLE_HOURS")"
             "PREVIEW_READY_IDLE_HOURS=$(shell_quote "$PREVIEW_READY_IDLE_HOURS")"
-            "OPEN_PR_NUMBERS=$(shell_quote "$open_pr_numbers")"
-            "PR_ACTIVITY=$(shell_quote "$activity")"
+            "PREVIEW_INFLIGHT_TTL_SECONDS=$(shell_quote "$PREVIEW_INFLIGHT_TTL_SECONDS")"
+            "PREVIEW_GITHUB_REPOSITORY=$(shell_quote "$GITHUB_REPOSITORY")"
+            "PREVIEW_GITHUB_API_URL=$(shell_quote "$GITHUB_API_URL")"
+            "PREVIEW_GITHUB_TOKEN=$(shell_quote "$GH_TOKEN")"
           )
           cat scripts/preview/remove-preview-path.sh scripts/preview/enforce-cap.sh \
             | ssh -i ~/.ssh/preview_key "$ssh_target" "${remote_env[*]} bash -s" \

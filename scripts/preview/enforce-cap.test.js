@@ -122,7 +122,7 @@ if [[ "$1" == "ps" ]]; then
   fi
   exit 0
 fi
-if [[ "$1" == "compose" && "$*" == *" stop web"* ]]; then
+if [[ "$1" == "compose" && "$*" == *" stop"* ]]; then
   if [[ "$*" =~ -p[[:space:]]+yawp-pr-([0-9]+) ]]; then
     pr="\${BASH_REMATCH[1]}"
     if [[ "\${PREVIEW_DOCKER_FAIL_STOP_PR:-}" == "$pr" ]]; then
@@ -139,6 +139,29 @@ exit 0
   );
   chmodSync(stub, 0o755);
   return { stub, state, log };
+}
+
+function makeGithubCurlStub(root, response, exitCode = 0) {
+  const stub = path.join(root, 'github-curl-stub.sh');
+  const log = path.join(root, 'github-curl.log');
+  const fixture = path.join(root, 'github-response.json');
+  writeFileSync(fixture, JSON.stringify(response));
+  writeFileSync(
+    stub,
+    `#!/usr/bin/env bash
+printf '%s\n' "$*" >> ${JSON.stringify(log)}
+${exitCode === 0 ? `cat ${JSON.stringify(fixture)}` : `exit ${exitCode}`}
+`
+  );
+  chmodSync(stub, 0o755);
+  return { stub, log };
+}
+
+function markInflight(root, pr, marker = '1000-1') {
+  const pathToMarker = path.join(root, 'inflight', `pr-${pr}`, marker);
+  mkdirSync(path.dirname(pathToMarker), { recursive: true });
+  writeFileSync(pathToMarker, '');
+  return pathToMarker;
 }
 
 function run(root, env = {}) {
@@ -190,6 +213,27 @@ describe('enforce-cap.sh', () => {
     expect(existsSync(sourceDir)).toBe(false);
   });
 
+  test('reclaims a closed PR source tree even when deploy never created an environment', () => {
+    const root = makeRoot();
+    const { previewDir, sourceDir } = makeEnv(root, 232);
+    rmSync(previewDir, { recursive: true });
+    makeEnv(root, 233);
+
+    const result = run(root, {
+      OPEN_PR_NUMBERS: '233',
+      PREVIEW_MODE: 'reconcile',
+      PREVIEW_MAX_RESIDENT: '30',
+    });
+
+    expect(result.status).toBe(0);
+    expect(parse(result.stdout)).toMatchObject({
+      CAP_RECLAIMED: '1',
+      CAP_RESIDENT: '1',
+      CAP_RESULT: 'ok',
+    });
+    expect(existsSync(sourceDir)).toBe(false);
+  });
+
   test('leaves open pull requests alone', () => {
     const root = makeRoot();
     const { previewDir } = makeEnv(root, 233);
@@ -199,6 +243,62 @@ describe('enforce-cap.sh', () => {
     expect(result.status).toBe(0);
     expect(parse(result.stdout).CAP_RECLAIMED).toBe('0');
     expect(existsSync(previewDir)).toBe(true);
+  });
+
+  test('refreshes PR state after locking instead of trusting a queued snapshot', () => {
+    const root = makeRoot();
+    const first = makeEnv(root, 232);
+    makeEnv(root, 233);
+    const github = makeGithubCurlStub(root, [
+      {
+        number: 232,
+        updated_at: '2026-08-11T10:00:00Z',
+        draft: false,
+        labels: [],
+      },
+      {
+        number: 233,
+        updated_at: '2026-08-11T11:00:00Z',
+        draft: true,
+        labels: [{ name: 'preview:keep-awake' }],
+      },
+    ]);
+
+    const result = run(root, {
+      // This intentionally stale caller snapshot would delete 232 without refresh.
+      OPEN_PR_NUMBERS: '233',
+      PR_ACTIVITY: '233 1 1 0',
+      PREVIEW_MODE: 'reconcile',
+      PREVIEW_GITHUB_REPOSITORY: 'The-Connell-School/yawp-2.0',
+      PREVIEW_GITHUB_TOKEN: 'test-token',
+      PREVIEW_CURL: github.stub,
+    });
+
+    expect(result.status).toBe(0);
+    expect(parse(result.stdout).CAP_RECLAIMED).toBe('0');
+    expect(existsSync(first.previewDir)).toBe(true);
+    expect(readFileSync(github.log, 'utf8')).toContain(
+      '/repos/The-Connell-School/yawp-2.0/pulls?state=open'
+    );
+  });
+
+  test('fails closed before mutation when fresh GitHub state is unavailable', () => {
+    const root = makeRoot();
+    const first = makeEnv(root, 232);
+    makeEnv(root, 233);
+    const github = makeGithubCurlStub(root, [], 22);
+
+    const result = run(root, {
+      OPEN_PR_NUMBERS: '233',
+      PREVIEW_MODE: 'reconcile',
+      PREVIEW_GITHUB_REPOSITORY: 'The-Connell-School/yawp-2.0',
+      PREVIEW_GITHUB_TOKEN: 'test-token',
+      PREVIEW_CURL: github.stub,
+    });
+
+    expect(result.status).not.toBe(0);
+    expect(existsSync(first.previewDir)).toBe(true);
+    expect(existsSync(first.sourceDir)).toBe(true);
   });
 
   test('evicts the least active environment when the cap is reached', () => {
@@ -220,6 +320,32 @@ describe('enforce-cap.sh', () => {
     expect(parse(result.stdout)).toMatchObject({ CAP_EVICTED: '101', CAP_RESULT: 'ok' });
     expect(existsSync(path.join(root, 'previews/pr-101'))).toBe(false);
     expect(existsSync(path.join(root, 'previews/pr-100'))).toBe(true);
+  });
+
+  test('never evicts a source tree while its deploy is in flight', () => {
+    const root = makeRoot();
+    const inflight = makeEnv(root, 100);
+    rmSync(inflight.previewDir, { recursive: true });
+    makeEnv(root, 101);
+    markInflight(root, 100);
+    const now = Math.floor(Date.now() / 1000) + 1;
+
+    const result = run(root, {
+      OPEN_PR_NUMBERS: '100 101',
+      PR_ACTIVITY: '100 1 1 0\n101 2 0 0',
+      PREVIEW_MODE: 'reconcile',
+      PREVIEW_MAX_RESIDENT: '1',
+      PREVIEW_NOW_EPOCH: String(now),
+      PREVIEW_INFLIGHT_TTL_SECONDS: '3600',
+    });
+
+    expect(result.status).toBe(0);
+    expect(parse(result.stdout)).toMatchObject({
+      CAP_EVICTED: '101',
+      CAP_RESIDENT: '1',
+      CAP_RESULT: 'ok',
+    });
+    expect(existsSync(inflight.sourceDir)).toBe(true);
   });
 
   test('never evicts the incoming pull request', () => {
@@ -330,7 +456,7 @@ describe('enforce-cap.sh', () => {
     expect(existsSync(env.sourceDir)).toBe(true);
     expect(existsSync(path.join(env.previewDir, '.preview-access-code'))).toBe(true);
     expect(existsSync(path.join(env.previewDir, '.database-marker'))).toBe(true);
-    expect(readFileSync(docker.log, 'utf8')).toContain('stop web');
+    expect(readFileSync(docker.log, 'utf8')).toContain(' stop');
     expect(readFileSync(docker.log, 'utf8')).not.toContain(' down ');
   });
 

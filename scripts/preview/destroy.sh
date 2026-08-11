@@ -19,8 +19,8 @@ if docker inspect preview-postgres >/dev/null 2>&1; then
 fi
 
 docker volume rm "${COMPOSE_PROJECT}_${COMPOSE_PROJECT}-postgres-data" >/dev/null 2>&1 || true
-preview_remove_path "$PREVIEW_DIR"
+preview_remove_path "$PREVIEW_DIR" "$SLUG"
 if [[ -n "${SOURCE_DIR:-}" ]]; then
-  preview_remove_path "$SOURCE_DIR"
+  preview_remove_path "$SOURCE_DIR" "$SLUG"
 fi
 echo "Destroyed $SLUG"
