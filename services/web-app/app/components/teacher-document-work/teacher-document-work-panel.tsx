@@ -78,48 +78,24 @@ import { cn } from '~/utils/misc';
 import { timeAgo } from '~/utils/timeAgo';
 
 const DOCUMENT_TABLE_ROW_CLASSES = {
-  table: 'w-full table-fixed text-sm',
-  // Two-word headers ("Submitted at") wrap rather than run past their cell:
-  // the table is fixed-layout, so a nowrap label in a narrow column overflows
-  // into its neighbour instead of being clipped.
-  head: 'min-h-9 overflow-hidden whitespace-normal px-2 py-1.5 text-sm leading-tight',
-  cell: 'max-w-0 truncate whitespace-nowrap px-2 py-2 text-sm',
+  // Auto layout sized to content, never narrower than its container: the
+  // surrounding container scrolls horizontally when the columns do not fit
+  // rather than squeezing every column down to the viewport width.
+  table: 'w-max min-w-full text-sm',
+  head: 'h-9 whitespace-nowrap px-2 py-1.5 text-sm',
+  cell: 'whitespace-nowrap px-2 py-2 text-sm',
+  // Free-text columns still get a ceiling so one long title cannot push the
+  // row out to several screens' width; the full value stays in the title
+  // attribute. Status and dates are never capped — they must read in full.
+  textCell: 'max-w-[18rem] truncate',
   dateCell: 'text-sm text-muted-foreground',
   badgeSize: 'default' as const,
-  columnWidths: {
-    student: 'w-[10%]',
-    document: 'w-[15%]',
-    class: 'w-[14%]',
-    assignment: 'w-[14%]',
-    // The three date columns each carry a two-word header ("Submitted at")
-    // that does not wrap, so at 8% of a table-fixed row the labels overran
-    // their cells and ran into each other.
-    status: 'w-[14%]',
-    date: 'w-[11%]',
-  },
 };
 
-function compactHeadClassName(
-  field: DocumentWorkSortField,
-  compactRows: boolean,
-  extra?: string
-) {
+function compactHeadClassName(compactRows: boolean, extra?: string) {
   if (!compactRows) return extra;
 
-  const width =
-    field === 'student'
-      ? DOCUMENT_TABLE_ROW_CLASSES.columnWidths.student
-      : field === 'document'
-        ? DOCUMENT_TABLE_ROW_CLASSES.columnWidths.document
-        : field === 'class'
-          ? DOCUMENT_TABLE_ROW_CLASSES.columnWidths.class
-          : field === 'assignment'
-            ? DOCUMENT_TABLE_ROW_CLASSES.columnWidths.assignment
-            : field === 'status'
-              ? DOCUMENT_TABLE_ROW_CLASSES.columnWidths.status
-              : DOCUMENT_TABLE_ROW_CLASSES.columnWidths.date;
-
-  return cn(DOCUMENT_TABLE_ROW_CLASSES.head, width, extra);
+  return cn(DOCUMENT_TABLE_ROW_CLASSES.head, extra);
 }
 
 export type TeacherDocumentWorkFilters = {
@@ -447,7 +423,11 @@ export function TeacherDocumentWorkPanel({
         >
           {showStudentColumn ? (
             <TableCell
-              className={cn('pl-4 font-medium', rowClasses?.cell)}
+              className={cn(
+                'pl-4 font-medium',
+                rowClasses?.cell,
+                rowClasses?.textCell
+              )}
               title={
                 document.membership.user.name || document.membership.user.email
               }
@@ -455,7 +435,10 @@ export function TeacherDocumentWorkPanel({
               {document.membership.user.name || document.membership.user.email}
             </TableCell>
           ) : null}
-          <TableCell className={rowClasses?.cell} title={displayTitle}>
+          <TableCell
+            className={cn(rowClasses?.cell, rowClasses?.textCell)}
+            title={displayTitle}
+          >
             {clickableRows ? (
               <span className="flex min-w-0 items-center gap-1">
                 <span className="min-w-0 truncate group-hover:underline">
@@ -472,7 +455,11 @@ export function TeacherDocumentWorkPanel({
           </TableCell>
           {showClassColumn ? (
             <TableCell
-              className={cn('text-muted-foreground', rowClasses?.cell)}
+              className={cn(
+                'text-muted-foreground',
+                rowClasses?.cell,
+                rowClasses?.textCell
+              )}
               title={
                 document.resolvedClass
                   ? formatClassLabel(document.resolvedClass)
@@ -486,19 +473,26 @@ export function TeacherDocumentWorkPanel({
           ) : null}
           {showAssignmentColumn ? (
             <TableCell
-              className={cn('text-muted-foreground', rowClasses?.cell)}
+              className={cn(
+                'text-muted-foreground',
+                rowClasses?.cell,
+                rowClasses?.textCell
+              )}
               title={document.assignment?.title || undefined}
             >
               {document.assignment?.title || '—'}
             </TableCell>
           ) : null}
           {showStatusColumn ? (
-            <TableCell className={rowClasses?.cell}>
-              <div className="flex min-w-0 items-center gap-1.5">
+            <TableCell
+              className={rowClasses?.cell}
+              data-testid="document-status-cell"
+            >
+              <div className="flex items-center gap-1.5">
                 <Badge
                   variant="secondary"
                   size={rowClasses?.badgeSize}
-                  className={cn(status.badgeClassName, 'max-w-full truncate')}
+                  className={cn(status.badgeClassName, 'whitespace-nowrap')}
                   title={status.label}
                 >
                   {status.label}
@@ -566,9 +560,12 @@ export function TeacherDocumentWorkPanel({
   ) => (
     <Table
       aria-label={tableLabel}
-      containerClassName={
-        nested ? 'rounded-none border-0 shadow-none' : undefined
-      }
+      containerClassName={cn(
+        // The columns can run wider than the viewport, so the horizontal
+        // scrollbar has to be visible for the overflow to be discoverable.
+        'show-scrollbar overflow-x-auto',
+        nested && 'rounded-none border-0 shadow-none'
+      )}
       className={cn(
         nested ? undefined : 'rounded-lg bg-muted/50',
         compactRows && DOCUMENT_TABLE_ROW_CLASSES.table
@@ -580,49 +577,49 @@ export function TeacherDocumentWorkPanel({
             ? renderSortableHead(
                 'Student',
                 'student',
-                compactHeadClassName('student', compactRows, 'pl-4')
+                compactHeadClassName(compactRows, 'pl-4')
               )
             : null}
           {renderSortableHead(
             'Document',
             'document',
-            compactHeadClassName('document', compactRows)
+            compactHeadClassName(compactRows)
           )}
           {showClassColumn
             ? renderSortableHead(
                 'Class',
                 'class',
-                compactHeadClassName('class', compactRows)
+                compactHeadClassName(compactRows)
               )
             : null}
           {showAssignmentColumn
             ? renderSortableHead(
                 'Assignment',
                 'assignment',
-                compactHeadClassName('assignment', compactRows)
+                compactHeadClassName(compactRows)
               )
             : null}
           {showStatusColumn
             ? renderSortableHead(
                 'Status',
                 'status',
-                compactHeadClassName('status', compactRows)
+                compactHeadClassName(compactRows)
               )
             : null}
           {renderSortableHead(
             'Submitted at',
             'submittedAt',
-            compactHeadClassName('submittedAt', compactRows)
+            compactHeadClassName(compactRows)
           )}
           {renderSortableHead(
             'Graded at',
             'gradedAt',
-            compactHeadClassName('gradedAt', compactRows)
+            compactHeadClassName(compactRows)
           )}
           {renderSortableHead(
             'Last edited',
             'lastEdited',
-            compactHeadClassName('lastEdited', compactRows)
+            compactHeadClassName(compactRows)
           )}
           {clickableRows ? null : (
             <TableHead className="pr-4">Action</TableHead>

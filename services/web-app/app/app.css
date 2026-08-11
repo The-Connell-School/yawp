@@ -135,6 +135,15 @@
     -ms-overflow-style: none; /* IE and Edge */
     scrollbar-width: none; /* Firefox */
   }
+  /* Opt back in where the overflow has to be discoverable (scrolling tables) */
+  .show-scrollbar::-webkit-scrollbar {
+    display: block;
+    height: 8px;
+  }
+  .show-scrollbar {
+    -ms-overflow-style: auto;
+    scrollbar-width: thin;
+  }
 }
 /* Typography */
 

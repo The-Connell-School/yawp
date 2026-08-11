@@ -86,29 +86,54 @@ function ClassCodeReveal({ code }: { code: string }) {
           <span className="sr-only">Show class code full screen</span>
         </button>
       </DialogTrigger>
-      <DialogContent className="max-w-3xl gap-6 p-10 text-center">
-        <DialogTitle className="text-base font-medium text-muted-foreground">
+      {/*
+        This gets projected to a class, so nothing behind it may show through:
+        the panel fills the viewport and is opaque. Only the eyebrow, the code,
+        the copy button and the close button are on screen.
+      */}
+      <DialogContent
+        data-testid="class-code-panel"
+        className={cn(
+          // inset-0 with auto width/height pins all four edges to the
+          // viewport; a fixed 100vw/100dvh would miss by the scrollbar width.
+          'inset-0 flex h-auto w-auto max-w-none translate-x-0 translate-y-0 flex-col items-center justify-center gap-10 rounded-none border-0 bg-background p-10 text-center sm:rounded-none',
+          // The shared dialog zooms and slides in from the centre. A panel
+          // that covers the screen must not do either — while it travelled it
+          // would leave the page showing around its edges.
+          '!animate-none',
+          // The close button is the only way out of a full-screen panel, so
+          // size it to be findable from across a classroom.
+          '[&>button:last-child]:right-6 [&>button:last-child]:top-6 [&>button:last-child>svg]:h-7 [&>button:last-child>svg]:w-7'
+        )}
+      >
+        <DialogTitle className="text-lg font-medium uppercase tracking-[0.25em] text-muted-foreground">
           Class code
         </DialogTitle>
         <DialogDescription className="sr-only">
           Share this code with students so they can join the class.
         </DialogDescription>
+        {/*
+          Sized from the code's own length so it always lands on one line and
+          fills the screen: monospace glyphs plus the tracking run about
+          0.75em wide, so 110/length vw keeps it inside the viewport.
+        */}
         <div
           data-testid="class-code-display"
-          className="select-all break-all font-mono text-7xl font-bold leading-none tracking-[0.15em] sm:text-8xl"
+          className="select-all whitespace-nowrap font-mono font-bold leading-none tracking-[0.15em]"
+          style={{
+            fontSize: `min(22vh, ${(110 / Math.max(code.length, 1)).toFixed(2)}vw)`,
+          }}
         >
           {code}
         </div>
-        <div className="flex justify-center">
-          <Button type="button" variant="outline" onClick={handleCopy}>
-            {copied ? (
-              <Check className="mr-2 h-4 w-4 text-green-600" />
-            ) : (
-              <Copy className="mr-2 h-4 w-4" />
-            )}
-            {copied ? 'Copied' : 'Copy code'}
-          </Button>
-        </div>
+        <Button type="button" variant="outline" size="lg" onClick={handleCopy}>
+          {copied ? (
+            <Check className="mr-2 h-4 w-4 text-green-600" />
+          ) : (
+            <Copy className="mr-2 h-4 w-4" />
+          )}
+          {copied ? 'Copied' : 'Copy code'}
+        </Button>
       </DialogContent>
     </Dialog>
   );
