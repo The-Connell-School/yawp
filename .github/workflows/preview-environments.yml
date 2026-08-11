@@ -13,6 +13,10 @@ on:
         description: 'PR number — queue a known-good demo clip on that preview and wait for its renderer to film it end-to-end'
         required: false
         default: ''
+      deploy_pr:
+        description: 'PR number — rebuild that preview from this workflow ref. Recovery path when a preview is stopped or a push did not trigger a deploy.'
+        required: false
+        default: ''
   schedule:
     - cron: '17 */6 * * *'
 
@@ -26,16 +30,22 @@ permissions:
 
 jobs:
   preview-deploy:
+    # A preview can also need rebuilding when no pull_request event is coming:
+    # the stack was stopped on the host, or a push landed without triggering a
+    # workflow. Without a dispatch path the only recovery is asking a human to
+    # push, which is not a recovery path at all when the thing that broke is
+    # push-triggered deploys.
     if: >-
-      github.event_name == 'pull_request' &&
+      (github.event_name == 'pull_request' &&
       github.event.action != 'closed' &&
       github.event.pull_request.head.repo.full_name == github.repository &&
       contains(github.event.pull_request.title, '[skip preview]') == false &&
       contains(github.event.pull_request.body, '[skip preview]') == false &&
-      contains(github.event.pull_request.head.ref, '[skip preview]') == false
+      contains(github.event.pull_request.head.ref, '[skip preview]') == false) ||
+      (github.event_name == 'workflow_dispatch' && inputs.deploy_pr != '')
     runs-on: ubuntu-22.04
     env:
-      PR_NUMBER: ${{ github.event.pull_request.number }}
+      PR_NUMBER: ${{ github.event.pull_request.number || inputs.deploy_pr }}
       PREVIEW_HOST: ${{ vars.PREVIEW_HOST }}
       PREVIEW_DOMAIN: ${{ vars.PREVIEW_DOMAIN }}
       PREVIEW_ROOT: ${{ vars.PREVIEW_ROOT || '/srv/yawp-preview' }}
@@ -411,7 +421,7 @@ jobs:
   preview-cleanup:
     if: >-
       github.event_name == 'schedule' ||
-      (github.event_name == 'workflow_dispatch' && inputs.diagnose_pr == '' && inputs.demo_render_pr == '')
+      (github.event_name == 'workflow_dispatch' && inputs.diagnose_pr == '' && inputs.demo_render_pr == '' && inputs.deploy_pr == '')
     runs-on: ubuntu-22.04
     env:
       PREVIEW_HOST: ${{ vars.PREVIEW_HOST }}
