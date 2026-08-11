@@ -667,6 +667,7 @@ test.describe('YAWP! Lesson Planner', () => {
     // The planner appears in the sidebar and opens.
     await page.getByRole('link', { name: 'Lesson Planner' }).click();
     await expect(page).toHaveURL(/\/app\/lesson-planner/);
+    await page.waitForLoadState('networkidle');
 
     // Empty state with the recommended starter prompts.
     await expect(
@@ -681,7 +682,9 @@ test.describe('YAWP! Lesson Planner', () => {
       .getByRole('button', { name: /same topic, two very different/i })
       .click();
     await expect(page.locator('[data-role="user"]').first()).toBeVisible();
-    await expect(page.getByText(/planning the lesson/i)).toBeVisible();
+    // The turn reports what it is doing now, rather than sitting behind a
+    // spinner that said "Planning the lesson…" for up to two minutes.
+    await expect(page.getByTestId('planning-progress')).toBeVisible();
   });
 
   test('supports typing a lesson request', async ({
