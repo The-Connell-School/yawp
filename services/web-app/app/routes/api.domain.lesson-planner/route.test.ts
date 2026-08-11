@@ -60,6 +60,17 @@ afterAll(() => {
   mock.restore();
 });
 
+/**
+ * The plain (unstreamed) turn's body. The action's return type now also covers
+ * the streamed Response, which has no `.data` on it.
+ */
+function jsonResult(response: unknown) {
+  return response as {
+    data: any;
+    init?: { status?: number; headers?: Record<string, string> };
+  };
+}
+
 function formRequest(fields: Record<string, string>) {
   const body = new URLSearchParams(fields);
   return new Request('http://localhost/api/domain/lesson-planner', {
@@ -115,7 +126,7 @@ describe('api.domain.lesson-planner action', () => {
     const response = await action({
       request: formRequest({ message: 'Lesson on conclusion paragraphs' }),
     } as any);
-    const body = (await response.data) as any;
+    const body = jsonResult(response).data;
 
     expect(body.conversationId).toBe('plan-1');
     expect(body.reply).toBe('Here is your lesson.');
@@ -158,7 +169,7 @@ describe('api.domain.lesson-planner action', () => {
       request: formRequest({ message: 'hi' }),
     } as any);
 
-    expect((response.data as any).messageId).toBe('msg-assistant');
+    expect(jsonResult(response).data.messageId).toBe('msg-assistant');
   });
 
   test('passes the planner tool allowlist and a teacher-scoped context to the LLM', async () => {
@@ -228,7 +239,7 @@ describe('api.domain.lesson-planner action', () => {
         conversationId: 'plan-9',
       }),
     } as any);
-    const body = (await response.data) as any;
+    const body = jsonResult(response).data;
 
     expect(body.isNewConversation).toBe(false);
     expect(prisma.lessonPlanConversation.create).not.toHaveBeenCalled();
@@ -336,7 +347,7 @@ describe('api.domain.lesson-planner action', () => {
       request: formRequest({ message: 'x'.repeat(6_001) }),
     } as any);
 
-    expect(response.init?.status).toBe(422);
+    expect(jsonResult(response).init?.status).toBe(422);
     expect(getLLMCompletion).not.toHaveBeenCalled();
   });
 
@@ -347,8 +358,10 @@ describe('api.domain.lesson-planner action', () => {
       request: formRequest({ message: 'one more' }),
     } as any);
 
-    expect(response.init?.status).toBe(429);
-    expect(response.init?.headers).toMatchObject({ 'Retry-After': '60' });
+    expect(jsonResult(response).init?.status).toBe(429);
+    expect(jsonResult(response).init?.headers).toMatchObject({
+      'Retry-After': '60',
+    });
     expect(getLLMCompletion).not.toHaveBeenCalled();
   });
 
@@ -361,8 +374,10 @@ describe('api.domain.lesson-planner action', () => {
       request: formRequest({ message: 'hi' }),
     } as any);
 
-    expect(response.init?.status).toBe(500);
-    expect(JSON.stringify(response.data)).not.toContain('provider-secret');
+    expect(jsonResult(response).init?.status).toBe(500);
+    expect(JSON.stringify(jsonResult(response).data)).not.toContain(
+      'provider-secret'
+    );
     expect(prisma.lessonPlanConversation.create).not.toHaveBeenCalled();
   });
 
@@ -371,7 +386,7 @@ describe('api.domain.lesson-planner action', () => {
       request: formRequest({ message: 'hi', llmRetry: 'fallback' }),
     } as any);
 
-    expect(response.init?.status).toBe(422);
+    expect(jsonResult(response).init?.status).toBe(422);
     expect(getLLMCompletion).not.toHaveBeenCalled();
   });
 
@@ -434,7 +449,7 @@ describe('api.domain.lesson-planner action', () => {
     const response = await action({
       request: formRequest({ message: 'make me a deck' }),
     } as any);
-    const body = (await response.data) as any;
+    const body = jsonResult(response).data;
 
     expect(getLLMCompletion).toHaveBeenCalledTimes(2);
     // The repair pass is a plain completion — no tools, no catalog rounds.
@@ -488,8 +503,8 @@ describe('api.domain.lesson-planner action', () => {
       request: formRequest({ message: 'deck please' }),
     } as any);
 
-    expect(response.init?.status).toBeUndefined();
-    expect((response.data as any).reply).toBe(reply);
+    expect(jsonResult(response).init?.status).toBeUndefined();
+    expect(jsonResult(response).data.reply).toBe(reply);
   });
 
   test('strips a link the catalog never handed back', async () => {
@@ -522,7 +537,7 @@ describe('api.domain.lesson-planner action', () => {
     const expected =
       'Project [Body Paragraphs](/app/teacher-trainings/t1) for the mini-lesson.\n' +
       'Hand out Citing & Integrating Quotations.';
-    expect((response.data as any).reply).toBe(expected);
+    expect(jsonResult(response).data.reply).toBe(expected);
     // The dead link never enters the conversation's history either.
     const stored = prisma.lessonPlanMessage.create.mock.calls.map(
       (call: any) => call[0].data
@@ -537,7 +552,7 @@ describe('api.domain.lesson-planner action', () => {
       request: formRequest({ message: 'hi', conversationId: 'not-mine' }),
     } as any);
 
-    expect(response.init?.status).toBe(404);
+    expect(jsonResult(response).init?.status).toBe(404);
     expect(getLLMCompletion).not.toHaveBeenCalled();
     expect(reserveAiRequest).not.toHaveBeenCalled();
   });
@@ -632,7 +647,7 @@ describe('api.domain.lesson-planner action — building one day of a unit', () =
         unitDayTitle: 'Evidence that earns its place',
       }),
     } as any);
-    const body = (await response.data) as any;
+    const body = jsonResult(response).data;
 
     expect(
       prisma.lessonPlanConversation.create.mock.calls[0][0].data
@@ -680,7 +695,7 @@ describe('api.domain.lesson-planner action — building one day of a unit', () =
         unitDayTitle: 'Evidence that earns its place',
       }),
     } as any);
-    const body = (await response.data) as any;
+    const body = jsonResult(response).data;
 
     expect(prisma.lessonPlanConversation.create).not.toHaveBeenCalled();
     expect(body.conversationId).toBe('day-2');
@@ -696,7 +711,7 @@ describe('api.domain.lesson-planner action — building one day of a unit', () =
     const response = await action({
       request: formRequest({ message: 'Build me a unit plan.' }),
     } as any);
-    const body = (await response.data) as any;
+    const body = jsonResult(response).data;
 
     expect(prisma.lessonPlanUnit.create.mock.calls[0][0].data).toMatchObject({
       membershipId: 'teacher-1',
@@ -745,10 +760,168 @@ describe('api.domain.lesson-planner action — building one day of a unit', () =
         unitDayTitle: 'A day',
       }),
     } as any);
-    const body = (await response.data) as any;
+    const body = jsonResult(response).data;
 
     expect(prisma.lessonPlanConversation.create).not.toHaveBeenCalled();
     expect(body.conversationId).toBe('map-conv');
     expect(body.unitDay).toBeNull();
+  });
+});
+
+/**
+ * The progress stream.
+ *
+ * A lesson takes up to two minutes behind one spinner, which teachers read as
+ * a hung page. The turn now reports what it is doing as it does it — but only
+ * when asked, so the plain path stays exactly as it was.
+ */
+describe('api.domain.lesson-planner action — the progress stream', () => {
+  async function streamEvents(fields: Record<string, string>) {
+    const response = (await action({
+      request: formRequest({ ...fields, stream: '1' }),
+    } as any)) as Response;
+
+    const text = await response.text();
+    return {
+      response,
+      events: text
+        .split('\n')
+        .filter(Boolean)
+        .map((line) => JSON.parse(line) as Record<string, any>),
+    };
+  }
+
+  test('answers with a stream rather than one JSON body', async () => {
+    getLLMCompletion.mockResolvedValue('## A lesson\n\nDo the thing.');
+    prisma.lessonPlanConversation.create.mockResolvedValue({
+      id: 'plan-1',
+      messages: [],
+    });
+    prisma.lessonPlanConversation.update.mockResolvedValue({});
+
+    const { response, events } = await streamEvents({ message: 'plan it' });
+
+    expect(response.headers.get('content-type')).toContain(
+      'application/x-ndjson'
+    );
+    expect(events.length).toBeGreaterThan(1);
+  });
+
+  test('says something before the model has answered anything', async () => {
+    getLLMCompletion.mockResolvedValue('## A lesson\n\nDo the thing.');
+    prisma.lessonPlanConversation.create.mockResolvedValue({
+      id: 'plan-1',
+      messages: [],
+    });
+    prisma.lessonPlanConversation.update.mockResolvedValue({});
+
+    const { events } = await streamEvents({ message: 'plan it' });
+
+    expect(events[0]).toMatchObject({ type: 'progress' });
+    expect(events[0]!.label.length).toBeGreaterThan(0);
+    expect(events[0]!.fraction).toBeGreaterThan(0);
+  });
+
+  test('ends with the same payload the plain path returns', async () => {
+    getLLMCompletion.mockResolvedValue('## A lesson\n\nDo the thing.');
+    prisma.lessonPlanConversation.create.mockResolvedValue({
+      id: 'plan-1',
+      messages: [],
+    });
+    prisma.lessonPlanConversation.update.mockResolvedValue({});
+
+    const { events } = await streamEvents({ message: 'plan it' });
+    const done = events.at(-1)!;
+
+    expect(done.type).toBe('done');
+    expect(done.status).toBe(200);
+    expect(done.payload.reply).toContain('Do the thing.');
+    expect(done.payload.conversationId).toBe('plan-1');
+  });
+
+  test('reports each lookup as the model makes it', async () => {
+    handleLessonPlannerToolCall.mockResolvedValue(JSON.stringify({ ok: true }));
+    // Two rounds of looking things up, then the lesson.
+    getLLMCompletion.mockImplementation(async (params: any) => {
+      await params.handleToolCall('list_classes', {});
+      await params.handleToolCall('read_lounge_material', {});
+      return '## A lesson\n\nDo the thing.';
+    });
+    prisma.lessonPlanConversation.create.mockResolvedValue({
+      id: 'plan-1',
+      messages: [],
+    });
+    prisma.lessonPlanConversation.update.mockResolvedValue({});
+
+    const { events } = await streamEvents({ message: 'plan it' });
+    const labels = events
+      .filter((event) => event.type === 'progress')
+      .map((event) => event.label);
+
+    expect(labels).toContain('Looking at your classes');
+    expect(labels).toContain('Reading a Lounge deck');
+    // And the long stretch after the last lookup gets its own line.
+    expect(labels.at(-1)).toBe('Writing the lesson');
+  });
+
+  test('the bar only ever moves forward', async () => {
+    handleLessonPlannerToolCall.mockResolvedValue(JSON.stringify({ ok: true }));
+    getLLMCompletion.mockImplementation(async (params: any) => {
+      await params.handleToolCall('list_classes', {});
+      await params.handleToolCall('get_class_grade_report', {});
+      await params.handleToolCall('list_lounge_materials', {});
+      return '## A lesson\n\nDo the thing.';
+    });
+    prisma.lessonPlanConversation.create.mockResolvedValue({
+      id: 'plan-1',
+      messages: [],
+    });
+    prisma.lessonPlanConversation.update.mockResolvedValue({});
+
+    const { events } = await streamEvents({ message: 'plan it' });
+    const fractions = events
+      .filter((event) => event.type === 'progress')
+      .map((event) => event.fraction as number);
+
+    for (let index = 1; index < fractions.length; index += 1) {
+      expect(fractions[index]!).toBeGreaterThanOrEqual(fractions[index - 1]!);
+    }
+    // Nothing before the reply is allowed to look finished.
+    expect(Math.max(...fractions)).toBeLessThan(1);
+  });
+
+  /**
+   * Headers are long gone by the time a streamed turn fails, so the failure
+   * cannot be a 500. It travels in the last line instead, shaped like the
+   * error the client already knows how to show.
+   */
+  test('carries a failure in the last line rather than dropping the stream', async () => {
+    getLLMCompletion.mockRejectedValue(new Error('provider-secret timeout'));
+
+    const { events } = await streamEvents({ message: 'plan it' });
+    const done = events.at(-1)!;
+
+    expect(done.type).toBe('done');
+    expect(done.status).toBe(500);
+    expect(done.payload.error).toBeTruthy();
+    // The provider's words never reach a teacher.
+    expect(JSON.stringify(events)).not.toContain('provider-secret');
+  });
+
+  test('never asks the model anything when the stream was not requested', async () => {
+    getLLMCompletion.mockResolvedValue('## A lesson\n\nDo the thing.');
+    prisma.lessonPlanConversation.create.mockResolvedValue({
+      id: 'plan-1',
+      messages: [],
+    });
+    prisma.lessonPlanConversation.update.mockResolvedValue({});
+
+    const response = await action({
+      request: formRequest({ message: 'plan it' }),
+    } as any);
+
+    // Still one JSON body, not a stream.
+    expect(response instanceof Response).toBe(false);
+    expect(jsonResult(response).data.reply).toContain('Do the thing.');
   });
 });

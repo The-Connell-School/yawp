@@ -32,6 +32,12 @@ import {
   AiRateLimitError,
   reserveAiRequest,
 } from '~/utils/ai-admission.server';
+import {
+  PLANNING_PROGRESS_START,
+  planningProgressForTool,
+  planningProgressWriting,
+  type PlanningProgress,
+} from '~/domain/lesson-planner/planning-progress';
 
 const PLANNER_FAILED =
   'The lesson planner could not put that together. Please try again.';
@@ -79,8 +85,68 @@ const POST = z
     unitDay: z.coerce.number().int().min(1).max(60).optional(),
     /** The day's title from the map, so the new lesson is named before it exists. */
     unitDayTitle: z.string().trim().max(120).optional(),
+    /**
+     * Opt in to the progress stream. Absent, the turn answers with one JSON
+     * body exactly as it always has — so the streaming path can be turned off
+     * at the client without touching the server.
+     */
+    stream: z.enum(['1']).optional(),
   })
   .strict();
+
+/**
+ * The turn's outcome, held as data rather than a Response.
+ *
+ * A streamed turn has already sent its headers by the time it knows whether it
+ * worked, so a failure cannot become a 500 — it travels in the last line of the
+ * stream instead, and the client reads `error` exactly as it does today.
+ */
+type TurnOutcome = { status: number; payload: Record<string, unknown> };
+
+/** Newline-delimited JSON: one event per line, read as it arrives. */
+function progressStream(
+  run: (report: (progress: PlanningProgress) => void) => Promise<TurnOutcome>
+): Response {
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      let open = true;
+      const write = (event: Record<string, unknown>) => {
+        if (!open) return;
+        controller.enqueue(encoder.encode(`${JSON.stringify(event)}\n`));
+      };
+
+      write({ type: 'progress', ...PLANNING_PROGRESS_START });
+      try {
+        const outcome = await run((progress) =>
+          write({ type: 'progress', ...progress })
+        );
+        write({ type: 'done', ...outcome });
+      } catch {
+        // The turn threw somewhere it was not expected to. The teacher still
+        // gets an answer rather than a stream that simply stops.
+        write({
+          type: 'done',
+          status: 500,
+          payload: { error: PLANNER_FAILED },
+        });
+      } finally {
+        open = false;
+        controller.close();
+      }
+    },
+  });
+
+  return new Response(stream, {
+    headers: {
+      'Content-Type': 'application/x-ndjson; charset=utf-8',
+      'Cache-Control': 'no-store',
+      // Tell nginx not to sit on the events until the body is complete, which
+      // would make the whole exercise pointless.
+      'X-Accel-Buffering': 'no',
+    },
+  });
+}
 
 function deriveTitle(message: string): string {
   const trimmed = message.trim().replace(/\s+/g, ' ');
@@ -108,6 +174,9 @@ export async function action({ request }: ActionFunctionArgs) {
 
   const { error, data } = await parseFormData(request, POST);
   if (error) return validationError(error);
+  // Bound once here, where the guard above is still in view: the turn itself
+  // runs inside a closure, and TypeScript cannot carry the narrowing into it.
+  const turn = data;
 
   const ctx = {
     membershipId: access.membership.id,
@@ -115,10 +184,10 @@ export async function action({ request }: ActionFunctionArgs) {
   };
 
   // Load an existing conversation (scoped to this teacher) or start a new one.
-  const conversation = data.conversationId
+  const conversation = turn.conversationId
     ? await prisma.lessonPlanConversation.findFirst({
         where: {
-          id: data.conversationId,
+          id: turn.conversationId,
           membershipId: ctx.membershipId,
           deletedAt: null,
         },
@@ -140,17 +209,17 @@ export async function action({ request }: ActionFunctionArgs) {
       })
     : null;
 
-  if (data.conversationId && !conversation) {
+  if (turn.conversationId && !conversation) {
     return dataResponse({ error: 'Conversation not found.' }, { status: 404 });
   }
 
   // The origin id arrives from the client, so re-check it against the
   // teacher's own classes before storing it.
   let originClassAssignmentId: string | null = null;
-  if (!conversation && data.originClassAssignmentId) {
+  if (!conversation && turn.originClassAssignmentId) {
     const owned = await prisma.classAssignment.findFirst({
       where: {
-        id: data.originClassAssignmentId,
+        id: turn.originClassAssignmentId,
         class: { teachers: { some: { id: ctx.membershipId } } },
       },
       select: { id: true },
@@ -187,12 +256,12 @@ export async function action({ request }: ActionFunctionArgs) {
   // here — the row is created at persist time, so a failed model call does not
   // leave an empty day the board would advertise as built.
   const dayTarget =
-    data.unitDay !== undefined && conversation
+    turn.unitDay !== undefined && conversation
       ? await resolveUnitDay({
           db: prisma,
           ctx,
           fromConversationId: conversation.id,
-          day: data.unitDay,
+          day: turn.unitDay,
         })
       : null;
 
@@ -227,7 +296,7 @@ export async function action({ request }: ActionFunctionArgs) {
   let unitContext = null;
   const unitId = dayTarget?.unitId ?? activeConversation?.unitId ?? null;
   const activeDay = dayTarget
-    ? data.unitDay!
+    ? turn.unitDay!
     : (activeConversation?.unitDay ?? null);
   if (unitId && activeDay != null) {
     const map = await loadUnitMap({ db: prisma, unitId });
@@ -249,180 +318,216 @@ export async function action({ request }: ActionFunctionArgs) {
       // teacher that the deck is there.
       content: markFailedUnitPlans(markFailedDecks(message.content)),
     })),
-    { role: AgentType.User, content: data.message },
+    { role: AgentType.User, content: turn.message },
   ];
 
   // Every link the reply is allowed to contain came back from a tool on this
   // request. Anything else it writes, it made up.
   const toolLinks = new Set<string>();
 
-  let reply: string;
-  try {
-    reply = await getLLMCompletion({
-      model: (process.env.AI_MODEL as any) ?? 'claude-sonnet-4-6',
-      system,
-      messages,
-      maxTokens: PLANNER_MAX_TOKENS,
-      maxToolRounds: PLANNER_MAX_TOOL_ROUNDS,
-      tools: LESSON_PLANNER_TOOLS,
-      handleToolCall: async (name, input) => {
-        const result = await handleLessonPlannerToolCall(name, input, ctx);
-        for (const link of collectToolLinks(result)) toolLinks.add(link);
-        return result;
-      },
-      allowFallbackProvider: false,
-      signal: AbortSignal.timeout(PLANNER_REQUEST_DEADLINE_MS),
-      logPayload: 'metadata-only',
-      metadata: {
-        feature: 'lesson-planner',
-      },
-    });
-  } catch {
-    return dataResponse({ error: PLANNER_FAILED }, { status: 500 });
-  }
-
-  // The model writes its deck blind — nothing in the reply tells it whether the
-  // JSON validated. Give a rejected deck the errors and one more pass before
-  // the teacher ever sees the reply; a failed repair changes nothing.
-  const repaired = await repairSlideDeck({
-    reply,
-    repair: ({ instruction, reason }) =>
-      getLLMCompletion({
+  /**
+   * Everything from the model call onwards, as one closure over the setup
+   * above — so the streamed and the plain path run identical code and cannot
+   * drift. `report` is where the progress bar's milestones come from; on the
+   * plain path it is a no-op.
+   */
+  async function runTurn(
+    report: (progress: PlanningProgress) => void
+  ): Promise<TurnOutcome> {
+    let reply: string;
+    let toolRound = 0;
+    try {
+      reply = await getLLMCompletion({
         model: (process.env.AI_MODEL as any) ?? 'claude-sonnet-4-6',
-        system: DECK_REPAIR_SYSTEM,
-        messages: [{ role: AgentType.User, content: instruction }],
-        maxTokens: DECK_REPAIR_MAX_TOKENS,
+        system,
+        messages,
+        maxTokens: PLANNER_MAX_TOKENS,
+        maxToolRounds: PLANNER_MAX_TOOL_ROUNDS,
+        tools: LESSON_PLANNER_TOOLS,
+        handleToolCall: async (name, input) => {
+          // Reported before the call, not after: the teacher should see what is
+          // being looked up while it is being looked up.
+          toolRound += 1;
+          report(planningProgressForTool(name, input, toolRound));
+          const result = await handleLessonPlannerToolCall(name, input, ctx);
+          for (const link of collectToolLinks(result)) toolLinks.add(link);
+          return result;
+        },
         allowFallbackProvider: false,
-        signal: AbortSignal.timeout(DECK_REPAIR_DEADLINE_MS),
+        signal: AbortSignal.timeout(PLANNER_REQUEST_DEADLINE_MS),
         logPayload: 'metadata-only',
-        // Schema vocabulary only — field paths and rules, never the teacher's
-        // words — so it survives redaction and makes the failure observable.
-        metadata: { feature: 'lesson-planner', deckFailure: reason },
-      }),
-  });
-  reply = repaired.reply;
-
-  // A link the catalog never handed back goes nowhere, and a teacher finds that
-  // out in front of a class. Strip the href and keep the words. Done before the
-  // reply is stored, so the dead link never enters the conversation's history
-  // either.
-  reply = verifyLessonLinks(reply, toolLinks).reply;
-  // A card promising material is a louder claim than a sentence, so the same
-  // rule applies harder: no block survives whose address a tool never returned.
-  reply = verifyLessonResources(reply, toolLinks).reply;
-
-  // A lesson is named after the plan it turned out to be, not after the
-  // sentence that started it — otherwise every lesson opened from the pinned
-  // suggestion is called "Look at my classes and tell me what they need work
-  // on", and the history is unreadable.
-  const lessonName = shouldRenameLesson({
-    reply,
-    priorReplies: priorMessages
-      .filter((message) => message.role === AgentType.Assistant)
-      .map((message) => message.content),
-    teacherNamedIt: Boolean(activeConversation?.packetTitle?.trim()),
-  });
-
-  // Stamp explicit, strictly-increasing timestamps: both rows land in one
-  // nested create, so the DB default would give them the same createdAt and
-  // leave the question/answer order ambiguous on replay.
-  const askedAt = new Date();
-  const answeredAt = new Date(askedAt.getTime() + 1);
-  let assistantMessageId: string;
-  let conversationId: string;
-  let unitIdForClient: string | null = null;
-  try {
-    const written = await prisma.$transaction(async (transaction) => {
-      const persistedConversation =
-        activeConversation ??
-        // A day that did not exist a moment ago is created here, with a lesson
-        // ready to go into it.
-        (dayTarget
-          ? await createUnitDayConversation({
-              db: transaction,
-              ctx,
-              unitId: dayTarget.unitId,
-              day: data.unitDay!,
-              title: data.unitDayTitle || `Day ${data.unitDay}`,
-            })
-          : await transaction.lessonPlanConversation.create({
-              data: {
-                membershipId: ctx.membershipId,
-                organizationId: ctx.organizationId,
-                title: deriveTitle(data.message),
-                originClassAssignmentId,
-              },
-              select: { id: true },
-            }));
-
-      await transaction.lessonPlanMessage.create({
-        data: {
-          conversationId: persistedConversation.id,
-          role: AgentType.User,
-          content: data.message,
-          createdAt: askedAt,
+        metadata: {
+          feature: 'lesson-planner',
         },
       });
-      // Created on its own rather than as a nested write so its id can go back
-      // to the client: the teacher needs it to keep this reply in the packet
-      // without waiting for a reload.
-      const assistantMessage = await transaction.lessonPlanMessage.create({
-        data: {
-          conversationId: persistedConversation.id,
-          role: AgentType.Assistant,
-          content: reply,
-          createdAt: answeredAt,
-        },
-        select: { id: true },
-      });
+    } catch {
+      return { status: 500, payload: { error: PLANNER_FAILED } };
+    }
 
-      await transaction.lessonPlanConversation.update({
-        where: { id: persistedConversation.id },
-        data: {
-          updatedAt: new Date(),
-          // A day is named after its place in the unit, which the map already
-          // decided; renaming it after whatever the lesson turned out to be
-          // would break the one-to-one with the board.
-          ...(lessonName && dayTarget === null ? { title: lessonName } : {}),
-        },
-      });
+    // Every tool has returned and the model is writing. This is the long stretch
+    // — a lesson with a deck is thousands of tokens — so it gets its own line
+    // rather than leaving the last lookup on screen for a minute.
+    report(planningProgressWriting());
 
-      // A reply that lays out a map turns this conversation into a unit, so
-      // the days built from it have somewhere to live.
-      const createdUnitId = await createUnitFromMap({
-        db: transaction,
-        conversationId: persistedConversation.id,
-        reply,
-        ctx,
-        alreadyInUnit: Boolean(activeConversation?.unitId),
-      });
-
-      return {
-        conversation: persistedConversation,
-        assistantMessage,
-        createdUnitId,
-      };
+    // The model writes its deck blind — nothing in the reply tells it whether the
+    // JSON validated. Give a rejected deck the errors and one more pass before
+    // the teacher ever sees the reply; a failed repair changes nothing.
+    const repaired = await repairSlideDeck({
+      reply,
+      repair: ({ instruction, reason }) =>
+        getLLMCompletion({
+          model: (process.env.AI_MODEL as any) ?? 'claude-sonnet-4-6',
+          system: DECK_REPAIR_SYSTEM,
+          messages: [{ role: AgentType.User, content: instruction }],
+          maxTokens: DECK_REPAIR_MAX_TOKENS,
+          allowFallbackProvider: false,
+          signal: AbortSignal.timeout(DECK_REPAIR_DEADLINE_MS),
+          logPayload: 'metadata-only',
+          // Schema vocabulary only — field paths and rules, never the teacher's
+          // words — so it survives redaction and makes the failure observable.
+          metadata: { feature: 'lesson-planner', deckFailure: reason },
+        }),
     });
-    conversationId = written.conversation.id;
-    assistantMessageId = written.assistantMessage.id;
-    unitIdForClient = written.createdUnitId ?? unitId;
-  } catch {
-    return dataResponse({ error: PLANNER_FAILED }, { status: 500 });
+    reply = repaired.reply;
+
+    // A link the catalog never handed back goes nowhere, and a teacher finds that
+    // out in front of a class. Strip the href and keep the words. Done before the
+    // reply is stored, so the dead link never enters the conversation's history
+    // either.
+    reply = verifyLessonLinks(reply, toolLinks).reply;
+    // A card promising material is a louder claim than a sentence, so the same
+    // rule applies harder: no block survives whose address a tool never returned.
+    reply = verifyLessonResources(reply, toolLinks).reply;
+
+    // A lesson is named after the plan it turned out to be, not after the
+    // sentence that started it — otherwise every lesson opened from the pinned
+    // suggestion is called "Look at my classes and tell me what they need work
+    // on", and the history is unreadable.
+    const lessonName = shouldRenameLesson({
+      reply,
+      priorReplies: priorMessages
+        .filter((message) => message.role === AgentType.Assistant)
+        .map((message) => message.content),
+      teacherNamedIt: Boolean(activeConversation?.packetTitle?.trim()),
+    });
+
+    // Stamp explicit, strictly-increasing timestamps: both rows land in one
+    // nested create, so the DB default would give them the same createdAt and
+    // leave the question/answer order ambiguous on replay.
+    const askedAt = new Date();
+    const answeredAt = new Date(askedAt.getTime() + 1);
+    let assistantMessageId: string;
+    let conversationId: string;
+    let unitIdForClient: string | null = null;
+    try {
+      const written = await prisma.$transaction(async (transaction) => {
+        const persistedConversation =
+          activeConversation ??
+          // A day that did not exist a moment ago is created here, with a lesson
+          // ready to go into it.
+          (dayTarget
+            ? await createUnitDayConversation({
+                db: transaction,
+                ctx,
+                unitId: dayTarget.unitId,
+                day: turn.unitDay!,
+                title: turn.unitDayTitle || `Day ${turn.unitDay}`,
+              })
+            : await transaction.lessonPlanConversation.create({
+                data: {
+                  membershipId: ctx.membershipId,
+                  organizationId: ctx.organizationId,
+                  title: deriveTitle(turn.message),
+                  originClassAssignmentId,
+                },
+                select: { id: true },
+              }));
+
+        await transaction.lessonPlanMessage.create({
+          data: {
+            conversationId: persistedConversation.id,
+            role: AgentType.User,
+            content: turn.message,
+            createdAt: askedAt,
+          },
+        });
+        // Created on its own rather than as a nested write so its id can go back
+        // to the client: the teacher needs it to keep this reply in the packet
+        // without waiting for a reload.
+        const assistantMessage = await transaction.lessonPlanMessage.create({
+          data: {
+            conversationId: persistedConversation.id,
+            role: AgentType.Assistant,
+            content: reply,
+            createdAt: answeredAt,
+          },
+          select: { id: true },
+        });
+
+        await transaction.lessonPlanConversation.update({
+          where: { id: persistedConversation.id },
+          data: {
+            updatedAt: new Date(),
+            // A day is named after its place in the unit, which the map already
+            // decided; renaming it after whatever the lesson turned out to be
+            // would break the one-to-one with the board.
+            ...(lessonName && dayTarget === null ? { title: lessonName } : {}),
+          },
+        });
+
+        // A reply that lays out a map turns this conversation into a unit, so
+        // the days built from it have somewhere to live.
+        const createdUnitId = await createUnitFromMap({
+          db: transaction,
+          conversationId: persistedConversation.id,
+          reply,
+          ctx,
+          alreadyInUnit: Boolean(activeConversation?.unitId),
+        });
+
+        return {
+          conversation: persistedConversation,
+          assistantMessage,
+          createdUnitId,
+        };
+      });
+      conversationId = written.conversation.id;
+      assistantMessageId = written.assistantMessage.id;
+      unitIdForClient = written.createdUnitId ?? unitId;
+    } catch {
+      return { status: 500, payload: { error: PLANNER_FAILED } };
+    }
+
+    return {
+      status: 200,
+      payload: {
+        conversationId,
+        messageId: assistantMessageId,
+        reply,
+        isNewConversation,
+        unitId: unitIdForClient,
+        // Set when the turn was a "build this day" click, so the client knows to
+        // move the teacher into that day's own lesson rather than staying on the
+        // map and showing them a reply that landed somewhere else.
+        unitDay: dayTarget
+          ? (turn.unitDay ?? null)
+          : (activeConversation?.unitDay ?? null),
+        /** True when this click opened a day that did not exist a moment ago. */
+        openedNewDay: Boolean(dayTarget && !dayTarget.conversationId),
+      },
+    };
   }
 
-  return dataResponse({
-    conversationId,
-    messageId: assistantMessageId,
-    reply,
-    isNewConversation,
-    unitId: unitIdForClient,
-    // Set when the turn was a "build this day" click, so the client knows to
-    // move the teacher into that day's own lesson rather than staying on the
-    // map and showing them a reply that landed somewhere else.
-    unitDay: dayTarget
-      ? (data.unitDay ?? null)
-      : (activeConversation?.unitDay ?? null),
-    /** True when this click opened a day that did not exist a moment ago. */
-    openedNewDay: Boolean(dayTarget && !dayTarget.conversationId),
-  });
+  // A streamed turn reports its milestones and carries its own failures in the
+  // last line; the plain turn is byte-for-byte what it always was, so the
+  // client can stop asking for the stream at any time.
+  if (turn.stream === '1') return progressStream(runTurn);
+
+  const outcome = await runTurn(() => {});
+  // Left unset on success, exactly as before — an explicit 200 is the same
+  // response over the wire but not the same object, and this path is supposed
+  // to be unchanged.
+  return outcome.status === 200
+    ? dataResponse(outcome.payload)
+    : dataResponse(outcome.payload, { status: outcome.status });
 }
