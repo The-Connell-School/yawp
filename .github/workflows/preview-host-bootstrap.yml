@@ -65,7 +65,8 @@ jobs:
             "mkdir -p ${PREVIEW_ROOT}/bootstrap/scripts/preview"
           scp -i ~/.ssh/preview_key \
             scripts/preview/bootstrap-host.sh \
-            "${PREVIEW_SSH_USER}@${PREVIEW_HOST}:${PREVIEW_ROOT}/bootstrap/scripts/preview/bootstrap-host.sh"
+            scripts/preview/publish-host-metrics.sh \
+            "${PREVIEW_SSH_USER}@${PREVIEW_HOST}:${PREVIEW_ROOT}/bootstrap/scripts/preview/"
 
       - name: Run bootstrap
         run: |

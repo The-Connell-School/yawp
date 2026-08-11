@@ -505,6 +505,24 @@ describe('PR preview deployment contract', () => {
     );
   });
 
+  test('preview bootstrap installs aggregate host metrics timer', () => {
+    const bootstrapWorkflow = readRepoFile(
+      '.github/workflows/preview-host-bootstrap.yml'
+    );
+    const bootstrap = readRepoFile('scripts/preview/bootstrap-host.sh');
+    const metrics = readRepoFile(
+      'scripts/preview/publish-host-metrics.sh'
+    );
+
+    expect(bootstrapWorkflow).toContain('publish-host-metrics.sh');
+    expect(bootstrap).toContain('yawp-preview-metrics.timer');
+    expect(bootstrap).toContain('OnUnitActiveSec=60');
+    expect(metrics).toContain('Yawp/PreviewHost');
+    expect(metrics).toContain('MemoryUsedPercent');
+    expect(metrics).toContain('RunningPreviews');
+    expect(metrics).not.toContain('PullRequest');
+  });
+
   test('preview workflow passes seeded preview mode to remote deploy', () => {
     const previewWorkflow = readRepoFile(
       '.github/workflows/preview-environments.yml'

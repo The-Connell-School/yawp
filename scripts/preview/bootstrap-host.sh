@@ -4,6 +4,7 @@ set -euo pipefail
 ROOT="${PREVIEW_ROOT:-/srv/yawp-preview}"
 ACME_EMAIL="${PREVIEW_ACME_EMAIL:-}"
 POSTGRES_PROJECT="${PREVIEW_POSTGRES_PROJECT:-yawp-preview-db}"
+METRICS_USER="${PREVIEW_METRICS_USER:-$USER}"
 
 if command -v dnf >/dev/null 2>&1; then
   sudo dnf install -y docker git rsync nodejs awscli || sudo dnf install -y docker git rsync nodejs awscli2
@@ -116,5 +117,43 @@ YAML
 
 docker compose -f "$ROOT/traefik/docker-compose.yml" up -d
 connect_container_to_preview_network traefik-traefik-1
+
+metrics_script="$ROOT/bootstrap/scripts/preview/publish-host-metrics.sh"
+if [[ -f "$metrics_script" ]]; then
+  chmod +x "$metrics_script"
+  sudo tee /etc/systemd/system/yawp-preview-metrics.service >/dev/null <<UNIT
+[Unit]
+Description=Publish Yawp preview host capacity metrics
+After=docker.service network-online.target
+
+[Service]
+Type=oneshot
+User=$METRICS_USER
+Environment=PREVIEW_ROOT=$ROOT
+Environment=PREVIEW_AWS_REGION=${PREVIEW_AWS_REGION:-us-east-1}
+ExecStart=/usr/bin/env bash $metrics_script
+UNIT
+
+  sudo tee /etc/systemd/system/yawp-preview-metrics.timer >/dev/null <<'UNIT'
+[Unit]
+Description=Publish Yawp preview host metrics every minute
+
+[Timer]
+OnBootSec=60
+OnUnitActiveSec=60
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+UNIT
+
+  sudo systemctl daemon-reload
+  sudo systemctl enable --now yawp-preview-metrics.timer
+  if ! bash "$metrics_script"; then
+    echo "Warning: initial preview metric publish failed; timer remains installed." >&2
+  fi
+else
+  echo "Warning: $metrics_script missing; host metrics timer not installed." >&2
+fi
 
 echo "Preview environment host ready at $ROOT"
