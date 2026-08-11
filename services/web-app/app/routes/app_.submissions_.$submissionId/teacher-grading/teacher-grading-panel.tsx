@@ -69,6 +69,23 @@ import {
   isLlmRetryResponse,
 } from '~/utils/llm-retry-ui';
 
+/**
+ * The nearest score the scale actually offers. A typed 17 on a 0-30 rubric
+ * scored in tens becomes 20; anything outside the range is pulled to its
+ * nearest end.
+ */
+function snapToScaleValue(
+  value: number,
+  bounds: { min: number; max: number; step: number } | null,
+  fallbackMax: number
+): number {
+  if (!bounds) return Math.max(0, Math.min(fallbackMax, Math.round(value)));
+
+  const clamped = Math.max(bounds.min, Math.min(bounds.max, value));
+  const steps = Math.round((clamped - bounds.min) / bounds.step);
+  return Math.min(bounds.max, bounds.min + steps * bounds.step);
+}
+
 function normalizePercentage(value: unknown): number | null {
   if (typeof value !== 'number' || !Number.isFinite(value)) return null;
   return Math.max(0, Math.min(100, Math.round(value)));
@@ -185,6 +202,13 @@ export function TeacherGradingPanel({
   const [numericPercentage, setNumericPercentage] = useState('');
   const [hasManualPercentOverride, setHasManualPercentOverride] =
     useState(false);
+  /**
+   * The points-scale equivalent of the overall percentage: editable at all
+   * times, seeded from what the category scores add up to, and left alone once
+   * the teacher types their own number.
+   */
+  const [overallScoreInput, setOverallScoreInput] = useState('');
+  const [hasManualScoreOverride, setHasManualScoreOverride] = useState(false);
   const pendingAiFormRef = useRef<FormData | null>(null);
   const hasRetriedAiFormRef = useRef(false);
   const lastInitializationKeyRef = useRef<string | null>(null);
@@ -530,10 +554,28 @@ export function TeacherGradingPanel({
       ),
       grammarIssues: effectiveGrammarIssues,
     };
+    // A points scale has no percentage, so a score the teacher typed is the
+    // grade, the same way the overall percentage wins on a weighted rubric.
+    // Only their own edit counts: left alone, the field mirrors the categories
+    // and must not freeze that value in place.
+    const typedScore = Number(overallScoreInput.trim());
+    const scaleDenominator = Number(scaleGrade?.score?.split('/')[1]);
+    const manualScaleScore =
+      scaleGrade &&
+      hasManualScoreOverride &&
+      overallScoreInput.trim() !== '' &&
+      Number.isFinite(typedScore) &&
+      Number.isFinite(scaleDenominator)
+        ? snapToScaleValue(typedScore, totalPointsBounds, scaleDenominator)
+        : null;
+
     if (percent !== null) {
       payload.numericPercentage = percent;
       if (letter) payload.letterGrade = letter;
       payload.score = formatGrade(percent, letter) ?? '';
+    } else if (manualScaleScore !== null) {
+      payload.overallScore = manualScaleScore;
+      payload.score = `${manualScaleScore}/${scaleDenominator}`;
     } else if (scaleGrade) {
       payload.overallScore = scaleGrade.overallScore;
       payload.score = scaleGrade.score;
@@ -560,7 +602,38 @@ export function TeacherGradingPanel({
    * field edit in this panel, the change is staged until the teacher clicks
    * Save (or discarded via Cancel).
    */
+  useEffect(() => {
+    if (hasManualScoreOverride) return;
+    if (!rubricScaleGrade) return;
+    setOverallScoreInput(String(rubricScaleGrade.overallScore));
+  }, [rubricScaleGrade, hasManualScoreOverride]);
+
+  const scaleScoreOutOf = useMemo(() => {
+    const denominator = Number(rubricScaleGrade?.score?.split('/')[1]);
+    return Number.isFinite(denominator) ? denominator : null;
+  }, [rubricScaleGrade]);
+
+  /**
+   * What the total-points field accepts: the rubric's own range and step when
+   * the grade is scored out of that range, so a 0-30 rubric scored in tens
+   * moves 0, 10, 20, 30 and refuses everything between.
+   */
+  const totalPointsBounds = useMemo(() => {
+    if (scaleScoreOutOf === null) return null;
+    const isRubricRange = scaleScoreOutOf === activeRubricConfig.maxScore;
+    return {
+      min: isRubricRange ? activeRubricConfig.minScore : 0,
+      max: scaleScoreOutOf,
+      step: isRubricRange ? (activeRubricConfig.step ?? 1) : 1,
+    };
+  }, [scaleScoreOutOf, activeRubricConfig]);
+
   const handleRecalculateFromRubric = () => {
+    if (rubricScaleGrade) {
+      setOverallScoreInput(String(rubricScaleGrade.overallScore));
+      setHasManualScoreOverride(false);
+      return;
+    }
     if (computedNumericPercentage === null) return;
     setNumericPercentage(computedNumericPercentage.toString());
     setHasManualPercentOverride(false);
@@ -842,17 +915,59 @@ export function TeacherGradingPanel({
             It gets the grade its own scale produces instead. */}
         {rubricScaleGrade ? (
           <div className="space-y-2">
-            <Label>Overall score</Label>
-            <div
-              className="rounded-md bg-muted/50 px-3 py-2 text-sm font-medium tabular-nums"
+            <Label htmlFor="overall-score">
+              Total points{scaleScoreOutOf === null ? '' : ` (out of ${scaleScoreOutOf})`}
+            </Label>
+            <Input
+              id="overall-score"
               data-testid="grading-overall-scale-score"
-            >
-              {rubricScaleGrade.score}
+              type="number"
+              min={totalPointsBounds?.min ?? 0}
+              max={totalPointsBounds?.max ?? undefined}
+              step={totalPointsBounds?.step ?? 1}
+              value={overallScoreInput}
+              disabled={isGenerating}
+              onChange={(e) => {
+                setOverallScoreInput(e.target.value);
+                setHasManualScoreOverride(true);
+              }}
+              onBlur={(e) => {
+                // Typing is unrestricted; leaving the field is where an
+                // out-of-range or off-step number is pulled onto the scale.
+                const typed = Number(e.currentTarget.value.trim());
+                if (e.currentTarget.value.trim() !== '' && Number.isFinite(typed)) {
+                  setOverallScoreInput(
+                    String(
+                      snapToScaleValue(
+                        typed,
+                        totalPointsBounds,
+                        scaleScoreOutOf ?? 0
+                      )
+                    )
+                  );
+                }
+                if (!hideHeader) {
+                  void saveAll();
+                }
+              }}
+            />
+            <div>
+              <Button
+                type="button"
+                variant="link"
+                size="sm"
+                className="h-auto p-0 text-xs"
+                data-testid="grading-recalculate-from-rubric"
+                disabled={isGenerating}
+                onClick={handleRecalculateFromRubric}
+              >
+                Recalculate from rubric scores
+              </Button>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                Sets the total above to what the category scores add up to (
+                {rubricScaleGrade.score}). Nothing saves until you click Save.
+              </p>
             </div>
-            <p className="text-xs text-muted-foreground">
-              This rubric scores in points, not a percentage. The score follows
-              the category scores below.
-            </p>
           </div>
         ) : (
         <div className="space-y-2">
@@ -950,7 +1065,7 @@ export function TeacherGradingPanel({
           />
         </div>
 
-        <div className="space-y-3">
+        <div className="space-y-2 border-t pt-4">
           <div className="text-sm font-medium">Rubric</div>
           {activeRubricConfig.source === 'thesis-default' ? (
             <div

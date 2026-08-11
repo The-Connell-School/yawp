@@ -600,11 +600,15 @@ export async function action({ request }: ActionFunctionArgs) {
     DEFAULT_GRADING_ASSISTANT_STRICTNESS_LEVEL;
   const rubricCategories = resolvedGradingConfig.rubricCategories;
   const rubricKeys = rubricCategories.map((category) => category.key);
-  const { minScore, maxScore, scoringType } = resolvedGradingConfig;
+  const { minScore, maxScore, step, scoringType } = resolvedGradingConfig;
   const rubricConfig = {
     categories: rubricCategories,
     minScore,
     maxScore,
+    // Without the step the panel rebuilds its score picker from the raw range,
+    // so a 0-30 scale scored in tens offers all thirty-one values the moment
+    // the grading assistant returns.
+    step,
     scoringType,
     source: resolvedGradingConfig.source,
   };

@@ -46,7 +46,10 @@ import { GradeSummaryReleasedLabel } from './teacher-grading/grade-summary-relea
 import { ViewPanel } from './teacher-grading/view-panel';
 import { resolveSubmissionGradeMode } from './submission-grade-mode';
 import { resolveSubmissionLifecycleState } from './submission-lifecycle-state';
-import { resolveRubricConfigForSubmission } from './submission-rubric-config.server';
+import {
+  resolveGrammarHighlightingForAssignmentType,
+  resolveRubricConfigForSubmission,
+} from './submission-rubric-config.server';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === 'object' && !Array.isArray(value));
@@ -218,11 +221,16 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     throw redirect(`${next.pathname}${next.search}${next.hash}`);
   }
 
-  const rubricConfig = await resolveRubricConfigForSubmission({
-    assignmentTypeId: submission.document.assignmentTypeId,
-    latestGradingRun: submission.gradingAssistantRuns[0] ?? null,
-    rubricScores: submission.rubricScores,
-  });
+  const [rubricConfig, grammarHighlightingEnabled] = await Promise.all([
+    resolveRubricConfigForSubmission({
+      assignmentTypeId: submission.document.assignmentTypeId,
+      latestGradingRun: submission.gradingAssistantRuns[0] ?? null,
+      rubricScores: submission.rubricScores,
+    }),
+    resolveGrammarHighlightingForAssignmentType(
+      submission.document.assignmentTypeId
+    ),
+  ]);
 
   // Sort comments by document location
   const sortedComments = [...submission.comments].sort((a, b) => {
@@ -250,6 +258,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       ...submission,
       comments: sortedComments,
       rubricConfig,
+      grammarHighlightingEnabled,
     },
     isOwner,
     isTeacher: isTeacher || isAdmin,
@@ -452,14 +461,20 @@ export default function SubmissionRoute() {
    * to leave every mark from an earlier grading run on the page, so the
    * setting looked ignored.
    */
-  const grammarHighlightingEnabled = useMemo(
-    () =>
-      resolveGrammarHighlightingEnabled(
-        (teacherGradeUi?.rubricConfig ?? submission.rubricConfig)?.categories ??
-          []
-      ),
-    [teacherGradeUi?.rubricConfig, submission.rubricConfig]
-  );
+  const grammarHighlightingEnabled = useMemo(() => {
+    // The assignment type's own setting wins: switching highlighting off is
+    // expected to clear marks a previous grading run left behind.
+    if (typeof submission.grammarHighlightingEnabled === 'boolean') {
+      return submission.grammarHighlightingEnabled;
+    }
+    return resolveGrammarHighlightingEnabled(
+      (teacherGradeUi?.rubricConfig ?? submission.rubricConfig)?.categories ?? []
+    );
+  }, [
+    submission.grammarHighlightingEnabled,
+    teacherGradeUi?.rubricConfig,
+    submission.rubricConfig,
+  ]);
 
   const persistedGrammarIssues = useMemo(
     () =>

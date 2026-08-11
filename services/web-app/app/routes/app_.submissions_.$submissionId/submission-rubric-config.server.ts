@@ -8,6 +8,7 @@ import {
 import {
   parseOptionalBoolean,
   parseRubricScoreLabels,
+  resolveGrammarHighlightingEnabled,
 } from '~/domain/assignment-types/rubric-category-options';
 import {
   inferStepFromScoreValues,
@@ -123,6 +124,21 @@ export function buildRubricConfigFromSnapshot(
         ? snapshot.scoringType
         : 'weighted_1_5',
   };
+}
+
+/**
+ * Whether the assignment type's rubric currently asks for grammar highlighting.
+ *
+ * Read separately from the graded snapshot on purpose: the snapshot records
+ * what the rubric said at grading time, and a teacher who switches
+ * highlighting off afterwards expects the marks to disappear, not to persist
+ * because an older run had it on.
+ */
+export async function resolveGrammarHighlightingForAssignmentType(
+  assignmentTypeId: string
+): Promise<boolean> {
+  const config = await resolveAssignmentTypeGradingConfig({ assignmentTypeId });
+  return resolveGrammarHighlightingEnabled(config.rubricCategories);
 }
 
 export async function resolveRubricConfigForSubmission({

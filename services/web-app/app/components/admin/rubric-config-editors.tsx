@@ -59,7 +59,7 @@ import {
   type RubricData,
   type ScoringScaleData,
 } from '~/domain/assignment-types/assignment-type-rubric.shared';
-import { isGrammarHighlightCategory } from '~/domain/assignment-types/rubric-category-options';
+import { resolveGrammarHighlightingEnabled } from '~/domain/assignment-types/rubric-category-options';
 import {
   DEFAULT_SCORE_STEP,
   buildScoreScaleValues,
@@ -867,27 +867,6 @@ export function CategoryEditSheetContent({
             }
           />
         </div>
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <Label htmlFor="category-edit-grammar-highlighting">
-              Grammar highlighting
-            </Label>
-            <p className="mt-1 text-sm text-muted-foreground text-pretty">
-              Produce grammar and syntax highlights on the student's essay for
-              this category.
-            </p>
-          </div>
-          <Switch
-            id="category-edit-grammar-highlighting"
-            checked={isGrammarHighlightCategory(draft)}
-            onCheckedChange={(checked) =>
-              setDraft((current) => ({
-                ...current,
-                grammarHighlighting: checked,
-              }))
-            }
-          />
-        </div>
       </div>
       <SheetFooter
         className={cn(
@@ -1205,6 +1184,34 @@ export function RubricEditor({
         <Plus className="mr-1.5 size-4 shrink-0" />
         Add category
       </Button>
+
+      {/* Grammar highlighting marks the essay as a whole rather than any one
+          category, so it is set once for the rubric. It is still written onto
+          every category, which is where every reader of it already looks. */}
+      <div className="flex items-start justify-between gap-3 border-t pt-4">
+        <div className="min-w-0">
+          <Label htmlFor={`${namePrefix}rubric-grammar-highlighting`}>
+            Grammar highlighting
+          </Label>
+          <p className="mt-1 text-sm text-muted-foreground text-pretty">
+            Produce grammar and syntax highlights on the student's essay. This
+            applies to the whole rubric, not one category.
+          </p>
+        </div>
+        <Switch
+          id={`${namePrefix}rubric-grammar-highlighting`}
+          data-testid="rubric-grammar-highlighting"
+          checked={resolveGrammarHighlightingEnabled(cats)}
+          onCheckedChange={(checked) =>
+            setCats((current) =>
+              current.map((category) => ({
+                ...category,
+                grammarHighlighting: checked,
+              }))
+            )
+          }
+        />
+      </div>
 
       <CategoryEditSheet
         category={editingCategory}
