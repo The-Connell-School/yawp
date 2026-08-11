@@ -188,6 +188,16 @@ const pressStep = z.object({
 const scrollStep = z.object({
   action: z.literal('scroll'),
   y: z.number().int().min(-2000).max(2000).default(400),
+  /**
+   * Spread the scroll over this many seconds instead of jumping.
+   *
+   * A jump tells a viewer nothing: one frame the list is at the top, the next
+   * it is somewhere else, and at feed size that reads as a cut. A paced scroll
+   * is how a clip shows that a panel *has* more in it — which is the whole
+   * claim a feature clip is making. Zero keeps the original instant behaviour,
+   * so storyboards written before this still render exactly as they did.
+   */
+  seconds: z.number().min(0).max(MAX_WAIT_SECONDS).default(0),
 });
 
 const waitStep = z.object({
@@ -394,6 +404,11 @@ export function estimateRenderSeconds(
       switch (step.action) {
         case 'wait':
           seconds += step.seconds;
+          break;
+        case 'scroll':
+          // A paced scroll occupies the clip for its whole duration; an
+          // instant one costs about what any other step does.
+          seconds += step.seconds > 0 ? step.seconds : 0.5;
           break;
         case 'type':
           seconds += step.value.length * TYPING_SECONDS_PER_CHARACTER;

@@ -379,7 +379,7 @@ async function runStep(
       }
       break;
     case 'scroll':
-      await page.mouse.wheel(0, step.y);
+      await scrollBy(page, step.y, step.seconds);
       break;
     case 'wait':
       await page.waitForTimeout(Math.round(step.seconds * 1000));
@@ -408,6 +408,39 @@ async function runStep(
       const exhaustive: never = step;
       throw new Error(`Unsupported step: ${JSON.stringify(exhaustive)}`);
     }
+  }
+}
+
+/** Wheel ticks per second while pacing a scroll. Matches capture frame rate
+ * closely enough that the movement reads as continuous rather than stepped. */
+const SCROLL_TICKS_PER_SECOND = 25;
+
+/**
+ * Scroll the page, optionally spreading the movement over `seconds`.
+ *
+ * Deliberately mouse wheel rather than window.scrollTo: the surfaces worth
+ * revealing in a demo — an opened prompt library, a feedback panel, a dialog —
+ * are their own scroll containers, and scrolling the window would leave them
+ * exactly where they were. The wheel goes to whatever is under the cursor,
+ * which the storyboard has already moved onto the thing it is showing.
+ */
+async function scrollBy(
+  page: Page,
+  y: number,
+  seconds: number
+): Promise<void> {
+  if (seconds <= 0) {
+    await page.mouse.wheel(0, y);
+    return;
+  }
+
+  const ticks = Math.max(1, Math.round(seconds * SCROLL_TICKS_PER_SECOND));
+  const perTick = y / ticks;
+  const tickMs = (seconds * 1000) / ticks;
+
+  for (let tick = 0; tick < ticks; tick += 1) {
+    await page.mouse.wheel(0, perTick);
+    await page.waitForTimeout(tickMs);
   }
 }
 

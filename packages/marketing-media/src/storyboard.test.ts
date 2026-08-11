@@ -27,6 +27,47 @@ function storyboard(overrides: Record<string, unknown> = {}) {
   };
 }
 
+// Opening a panel is not the same as showing it. A clip that clicks into the
+// prompt library and holds still shows half of the first prompt before it
+// ends; the list has to move for a viewer to learn there is a list.
+describe('scroll pacing', () => {
+  test('a scroll can be paced over seconds instead of jumping', () => {
+    const parsed = parseStoryboard(
+      storyboard({
+        scenes: [scene({ steps: [{ action: 'scroll', y: 600, seconds: 3 }] })],
+      })
+    );
+
+    const step = parsed.scenes[0].steps[0];
+    expect(step).toMatchObject({ action: 'scroll', y: 600, seconds: 3 });
+  });
+
+  test('a scroll without seconds still jumps, as it always did', () => {
+    const parsed = parseStoryboard(
+      storyboard({ scenes: [scene({ steps: [{ action: 'scroll', y: 400 }] })] })
+    );
+
+    const step = parsed.scenes[0].steps[0];
+    expect(step.action).toBe('scroll');
+    if (step.action === 'scroll') expect(step.seconds).toBe(0);
+  });
+
+  // A three-second reveal costs three seconds of clip. Estimating it at the
+  // flat per-step guess would let a storyboard sail past the render cap.
+  test('a paced scroll is charged its own duration in the estimate', () => {
+    const estimate = (steps: unknown[]) =>
+      estimateRenderSeconds(
+        parseStoryboard(storyboard({ scenes: [scene({ steps })] }))
+      );
+
+    // Measured against a scene with no steps, so the assertion is about the
+    // four seconds being counted rather than about what a step costs.
+    expect(
+      estimate([{ action: 'scroll', y: 600, seconds: 4 }]) - estimate([])
+    ).toBeCloseTo(4, 1);
+  });
+});
+
 describe('parseStoryboard', () => {
   test('accepts a minimal valid storyboard and applies defaults', () => {
     const parsed = parseStoryboard(storyboard());

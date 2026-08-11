@@ -50,14 +50,24 @@ export const MARKETING_LIBRARY: MarketingLibraryEntry[] = [
         {
           id: 'prompt-library-open',
           overlay: 'A prompt library ready to assign',
-          focus: { role: 'button', name: 'Prompt Library', scale: 1.5 },
+          // No focus here on purpose. The point of this scene is that the
+          // library is *long* — pushing in on any one prompt makes the same
+          // claim as a screenshot. The paced scroll is what shows there is
+          // more, so the panel stays full width while it moves.
+          //
+          // The previous focus aimed at the "Prompt Library" button, which is
+          // the control that was just clicked rather than anything it opened,
+          // so the clip zoomed a button while the list it revealed went unseen.
           settle: 0.8,
-          hold: 2,
+          hold: 1.5,
           screenshot: true,
           steps: [
             { action: 'waitFor', role: 'button', name: 'Prompt Library' },
             { action: 'click', role: 'button', name: 'Prompt Library' },
-            { action: 'wait', seconds: 0.6 },
+            // Let the panel finish expanding before moving, or the scroll
+            // races the animation and lands somewhere arbitrary.
+            { action: 'wait', seconds: 0.8 },
+            { action: 'scroll', y: 520, seconds: 3.5 },
           ],
         },
         {
