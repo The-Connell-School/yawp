@@ -21,9 +21,25 @@ export enum AgentType {
 
 export type Message = { role: AgentType; content: string; name?: string };
 
+/**
+ * A system-prompt content block that can carry an Anthropic prompt-caching
+ * breakpoint. Pass an array instead of a plain string to `system` when part
+ * of the prompt is stable across calls (a fixed instruction constant, a
+ * module-level rubric) and part varies per conversation — put
+ * `cache_control` on the last block of the stable prefix and leave the
+ * variable tail unmarked. See `shared/prompt-caching.md` for placement
+ * rules; only the Anthropic path uses this — OpenAI fallback calls flatten
+ * blocks into a plain string.
+ */
+export interface CacheableSystemBlock {
+  type: 'text';
+  text: string;
+  cache_control?: { type: 'ephemeral' };
+}
+
 interface Params {
   messages: { role: 'user' | 'assistant'; content: string; name?: string }[];
-  system?: string;
+  system?: string | CacheableSystemBlock[];
   temperature?: number;
   maxTokens?: number;
   model: string;
@@ -115,6 +131,37 @@ function stripTabs(value: string | undefined) {
   return value?.replace(/\t/g, '');
 }
 
+/**
+ * Tab-strips a `system` param while preserving its shape: a plain string
+ * stays a string (existing behavior, byte-for-byte); an array of
+ * `CacheableSystemBlock`s stays an array with `cache_control` untouched, so
+ * the Anthropic request keeps its cache breakpoint.
+ */
+function stripTabsFromSystem(
+  system: string | CacheableSystemBlock[] | undefined
+): string | CacheableSystemBlock[] | undefined {
+  if (system === undefined) return undefined;
+  if (typeof system === 'string') return stripTabs(system);
+  return system.map((block) => ({
+    ...block,
+    text: stripTabs(block.text) ?? block.text,
+  }));
+}
+
+/**
+ * Flattens `system` to a single string for the `LlmLog.systemPrompt` column
+ * and for providers (OpenAI fallback) that only take a plain system string.
+ * Blocks join on a blank line so the logged prompt reads the same as the
+ * pre-caching single-string prompt did.
+ */
+function systemToPlainString(
+  system: string | CacheableSystemBlock[] | undefined
+): string | undefined {
+  if (system === undefined) return undefined;
+  if (typeof system === 'string') return system;
+  return system.map((block) => block.text).join('\n\n');
+}
+
 function fallbackReasonFor(error: unknown) {
   const status = getAnthropicRetryableStatus(error);
   return status ? `status:${status}` : 'overloaded_error';
@@ -158,7 +205,11 @@ function buildLogMetadata({
 }
 
 async function runAnthropicCompletion(params: Params, startTime: number) {
-  const system = stripTabs(params.system);
+  // Preserve the system param's shape (string vs. cacheable block array) so
+  // any `cache_control` breakpoint the caller set survives tab-stripping.
+  // The flattened string form is only used for the LlmLog audit column.
+  const system = stripTabsFromSystem(params.system);
+  const systemForLog = systemToPlainString(system);
   const messages: Array<{
     role: 'user' | 'assistant';
     content: string | Array<Record<string, unknown>>;
@@ -172,6 +223,11 @@ async function runAnthropicCompletion(params: Params, startTime: number) {
   let totalInputTokens = 0;
   let totalOutputTokens = 0;
   let toolRoundCount = 0;
+  // Prompt-caching savings are only verifiable from the API's own usage
+  // report — track both across every round of a tool-use loop so a single
+  // logged call reflects the full turn, not just its final round.
+  let totalCacheCreationInputTokens = 0;
+  let totalCacheReadInputTokens = 0;
 
   try {
     for (let round = 0; round <= maxRounds; round++) {
@@ -189,6 +245,9 @@ async function runAnthropicCompletion(params: Params, startTime: number) {
 
       totalInputTokens += message.usage?.input_tokens ?? 0;
       totalOutputTokens += message.usage?.output_tokens ?? 0;
+      totalCacheCreationInputTokens +=
+        message.usage?.cache_creation_input_tokens ?? 0;
+      totalCacheReadInputTokens += message.usage?.cache_read_input_tokens ?? 0;
 
       if (
         message.stop_reason === 'tool_use' &&
@@ -228,19 +287,26 @@ async function runAnthropicCompletion(params: Params, startTime: number) {
       await logLlmCall({
         model: params.model,
         provider: 'anthropic',
-        systemPrompt: system,
+        systemPrompt: systemForLog,
         messages,
         response: responseText,
         inputTokens: totalInputTokens,
         outputTokens: totalOutputTokens,
         totalTokens: totalInputTokens + totalOutputTokens,
         durationMs,
-        metadata: buildLogMetadata({
-          metadata: params.metadata,
-          messages,
-          hasTools,
-          toolRoundCount,
-        }),
+        metadata: {
+          ...buildLogMetadata({
+            metadata: params.metadata,
+            messages,
+            hasTools,
+            toolRoundCount,
+          }),
+          // Verifies the cache saving actually happened rather than assuming
+          // it did: 0 cache_read + >0 cache_creation means this call wrote
+          // the cache; >0 cache_read means a later call read it back cheap.
+          cacheCreationInputTokens: totalCacheCreationInputTokens,
+          cacheReadInputTokens: totalCacheReadInputTokens,
+        },
         logPayload: params.logPayload,
       });
 
@@ -253,16 +319,20 @@ async function runAnthropicCompletion(params: Params, startTime: number) {
     await logLlmCall({
       model: params.model,
       provider: 'anthropic',
-      systemPrompt: system,
+      systemPrompt: systemForLog,
       messages,
       error: err instanceof Error ? err.message : String(err),
       durationMs,
-      metadata: buildLogMetadata({
-        metadata: params.metadata,
-        messages,
-        hasTools,
-        toolRoundCount,
-      }),
+      metadata: {
+        ...buildLogMetadata({
+          metadata: params.metadata,
+          messages,
+          hasTools,
+          toolRoundCount,
+        }),
+        cacheCreationInputTokens: totalCacheCreationInputTokens,
+        cacheReadInputTokens: totalCacheReadInputTokens,
+      },
       logPayload: params.logPayload,
     });
     throw err;
@@ -301,7 +371,7 @@ async function runOpenAiCompletion({
       ? [
           {
             role: 'system' as const,
-            content: stripTabs(params.system),
+            content: stripTabs(systemToPlainString(params.system)),
           },
         ]
       : []),
@@ -378,7 +448,7 @@ async function runOpenAiCompletion({
       await logLlmCall({
         model,
         provider: 'openai',
-        systemPrompt: stripTabs(params.system),
+        systemPrompt: stripTabs(systemToPlainString(params.system)),
         messages: formattedMessages,
         response: responseText,
         inputTokens: totalInputTokens,
@@ -403,7 +473,7 @@ async function runOpenAiCompletion({
     await logLlmCall({
       model,
       provider: 'openai',
-      systemPrompt: stripTabs(params.system),
+      systemPrompt: stripTabs(systemToPlainString(params.system)),
       messages: formattedMessages,
       error: err instanceof Error ? err.message : String(err),
       durationMs,

@@ -8,10 +8,68 @@ try {
 
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 
-import { afterEach, describe, expect, it } from 'bun:test';
-import { act, type ReactElement, type FormHTMLAttributes } from 'react';
+import { afterEach, describe, expect, it, mock } from 'bun:test';
+import {
+  act,
+  type ReactElement,
+  type ReactNode,
+  type FormHTMLAttributes,
+} from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { AssignmentCreationSheetContent } from './assignment-creation-sheet';
+
+// Radix only renders tooltip content on hover. Flattening it puts the
+// per-level hover copy in the DOM without driving a real pointer.
+mock.module('~/components/ui/tooltip', () => ({
+  Tooltip: ({ children, text }: { children: ReactNode; text: ReactNode }) => (
+    <>
+      {children}
+      <span>{text}</span>
+    </>
+  ),
+}));
+
+const { AssignmentCreationSheetContent, assignmentCreationClassLabel } =
+  await import('./assignment-creation-sheet');
+const { SAVED_ASSIGNMENTS_ENABLED } = await import(
+  '~/domain/assignments/saved-assignments'
+);
+
+describe('assignmentCreationClassLabel', () => {
+  it('shows grade and period when both are present', () => {
+    expect(
+      assignmentCreationClassLabel({ id: 'c1', grade: '9', period: '2' })
+    ).toBe('Grade 9 - Period 2');
+  });
+
+  it('falls back to grade only when period is null', () => {
+    expect(
+      assignmentCreationClassLabel({ id: 'c1', grade: '9', period: null })
+    ).toBe('Grade 9');
+  });
+
+  it('falls back to period only when grade is null', () => {
+    expect(
+      assignmentCreationClassLabel({ id: 'c1', grade: null, period: '2' })
+    ).toBe('Period 2');
+  });
+
+  it('falls back to a usable label when grade and period are both null', () => {
+    expect(
+      assignmentCreationClassLabel({ id: 'c1', grade: null, period: null })
+    ).toBe('Untitled Class');
+  });
+
+  it('prefers the class title when grade and period are both null', () => {
+    expect(
+      assignmentCreationClassLabel({
+        id: 'c1',
+        grade: null,
+        period: null,
+        title: 'Honors',
+      })
+    ).toBe('Honors');
+  });
+});
 
 const FetcherForm = ({
   children,
@@ -181,10 +239,11 @@ describe('AssignmentCreationSheetContent', () => {
       expectText('Extract from PDF');
       expectText('Submit for grade');
       expectText('Point value');
+      expectText('Tutor enabled');
+      expectText(
+        "Turning the tutor off removes it from students' documents. Do this to test a student's ability to write a paper independently of tutor guidance."
+      );
       expectText('Grading assistant strictness');
-      expectText('Beginner');
-      expectText('Intermediate');
-      expectText('Advanced');
       expectNoText('Tutor Context');
 
       const form = document.querySelector('form');
@@ -203,16 +262,51 @@ describe('AssignmentCreationSheetContent', () => {
       expect(inputByName('gradingAssistantStrictnessLevel').value).toBe(
         'intermediate'
       );
+
+      // Tutor defaults to enabled, preserving today's behavior.
+      expect(inputByName('tutorEnabled').value).toBe('false');
+      const tutorEnabled = controlById('assignment-create-tutor-enabled');
+      expect(tutorEnabled.getAttribute('role')).toBe('checkbox');
+      expect(isChecked(tutorEnabled)).toBe(true);
     }
   );
 
-  it('shows grading assistant strictness help text', () => {
+  it('submits tutorEnabled=false when the tutor toggle is turned off', () => {
     root = renderSheet().root;
 
-    expect(
-      buttonByLabel('Grading assistant strictness help').getAttribute('title')
-    ).toBe(
-      'Strictness only adjusts the overall grade number after Grading Assistant suggestions. Use beginner for a slightly higher grade, advanced for a slightly lower grade, and intermediate for no adjustment.'
+    act(() => {
+      controlById('assignment-create-tutor-enabled').click();
+    });
+
+    expect(isChecked(controlById('assignment-create-tutor-enabled'))).toBe(
+      false
+    );
+    expect(inputByName('tutorEnabled').value).toBe('false');
+  });
+
+  it('shows the grading assistant strictness picker to teachers', () => {
+    root = renderSheet().root;
+
+    expectText('Grading assistant strictness');
+    expectText('Beginner');
+    expectText('Intermediate');
+    expectText('Advanced');
+
+    // Each level explains its reading posture on hover -- never a point
+    // adjustment, which is the framing Brian Connell objected to.
+    expectText(
+      'The assistant reads gently, expecting a writer still learning the fundamentals.'
+    );
+    expectText(
+      'The assistant reads at the standard expected for the grade level.'
+    );
+    expectText(
+      'The assistant reads demandingly, expecting polished and precise writing.'
+    );
+    expectNoText('points');
+
+    expect(inputByName('gradingAssistantStrictnessLevel').value).toBe(
+      'intermediate'
     );
   });
 
@@ -344,6 +438,57 @@ describe('AssignmentCreationSheetContent', () => {
     expect((classControl as HTMLButtonElement).disabled).toBe(true);
   });
 
+  it('marks the title required and blocks submit while it is empty when titleRequired is set', () => {
+    root = renderSheet({
+      entryPoint: 'class',
+      fixedClassId: 'class-1',
+      initialPrompt: 'A prompt from the library.',
+      titleRequired: true,
+    }).root;
+
+    expectText('Title');
+    expectNoText('Title (optional)');
+    expect(inputByName('title').required).toBe(true);
+
+    // Everything else is satisfied (class, prompt, point value), so an empty
+    // title is the only thing blocking submit.
+    expect(
+      document.querySelector<HTMLButtonElement>('button[type="submit"]')!
+        .disabled
+    ).toBe(true);
+  });
+
+  it('allows submit once a required title is present', () => {
+    root = renderSheet({
+      entryPoint: 'class',
+      fixedClassId: 'class-1',
+      initialPrompt: 'A prompt from the library.',
+      initialTitle: 'Ambition in Macbeth',
+      titleRequired: true,
+    }).root;
+
+    expect(inputByName('title').value).toBe('Ambition in Macbeth');
+    expect(
+      document.querySelector<HTMLButtonElement>('button[type="submit"]')!
+        .disabled
+    ).toBe(false);
+  });
+
+  it('keeps the title optional by default', () => {
+    root = renderSheet({
+      entryPoint: 'class',
+      fixedClassId: 'class-1',
+      initialPrompt: 'A prompt from the library.',
+    }).root;
+
+    expectText('Title (optional)');
+    expect(inputByName('title').required).toBe(false);
+    expect(
+      document.querySelector<HTMLButtonElement>('button[type="submit"]')!
+        .disabled
+    ).toBe(false);
+  });
+
   it('clears the point value when submit for grade is disabled', () => {
     root = renderSheet({
       entryPoint: 'dashboard',
@@ -355,5 +500,76 @@ describe('AssignmentCreationSheetContent', () => {
 
     expectNoText('Point value');
     expect(inputByName('pointValue').value).toBe('');
+  });
+  // Both halves of the feature switch are asserted here rather than one being
+  // deleted, so flipping SAVED_ASSIGNMENTS_ENABLED back on restores the
+  // original expectation instead of quietly leaving it untested.
+  it.skipIf(SAVED_ASSIGNMENTS_ENABLED)(
+    'keeps the save-for-reuse option out of the sheet while My Saved Assignments is off',
+    () => {
+      root = renderSheet({ entryPoint: 'dashboard' }).root;
+
+      expectNoText('Save to My Saved Assignments');
+    }
+  );
+
+  it.skipIf(!SAVED_ASSIGNMENTS_ENABLED)('offers to keep the assignment, off by default, on the bulk-create entry points', () => {
+    root = renderSheet({ entryPoint: 'dashboard' }).root;
+
+    expectText('Save to My Saved Assignments');
+    const control = controlById('assignment-create-save-for-reuse');
+    expect(isChecked(control)).toBe(false);
+    // The hidden field is what the action reads when the box is left alone.
+    expect(allInputsByName('saveForReuse')[0].value).toBe('false');
+
+    act(() => {
+      control.click();
+    });
+
+    expect(isChecked(controlById('assignment-create-save-for-reuse'))).toBe(
+      true
+    );
+    expect(
+      allInputsByName('saveForReuse').map((input) => input.value)
+    ).toContain('true');
+  });
+
+  it('hides the keep-for-reuse option on the class entry point, which cannot save', () => {
+    root = renderSheet({ entryPoint: 'class', fixedClassId: 'class-1' }).root;
+
+    expectNoText('Save to My Saved Assignments');
+  });
+
+  it('pre-fills every setting when reusing a saved assignment', () => {
+    root = renderSheet({
+      entryPoint: 'dashboard',
+      initialAssignmentTypeId: 'type-2',
+      initialTitle: 'Ambition in Macbeth',
+      initialPrompt: 'A prompt kept from last term.',
+      initialSubmitForGrade: false,
+      initialPointValue: 50,
+      initialTutorEnabled: false,
+    }).root;
+
+    expect(inputByName('assignmentTypeId').value).toBe('type-2');
+    expect(inputByName('title').value).toBe('Ambition in Macbeth');
+    expect(textareaByName('prompt').value).toBe('A prompt kept from last term.');
+    expect(isChecked(controlById('assignment-create-submit-for-grade'))).toBe(
+      false
+    );
+    expect(isChecked(controlById('assignment-create-tutor-enabled'))).toBe(
+      false
+    );
+    expectNoText('Point value');
+  });
+
+  it('restores the saved point value when the assignment is graded', () => {
+    root = renderSheet({
+      entryPoint: 'dashboard',
+      initialPrompt: 'A prompt kept from last term.',
+      initialPointValue: 25,
+    }).root;
+
+    expect(inputByName('pointValue').value).toBe('25');
   });
 });

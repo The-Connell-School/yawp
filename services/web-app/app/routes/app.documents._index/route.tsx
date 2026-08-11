@@ -191,6 +191,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
         },
       },
       submissions: {
+        where: { unsubmittedAt: null },
         orderBy: { submittedAt: 'desc' },
         select: {
           id: true,

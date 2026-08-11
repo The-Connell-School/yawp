@@ -49,6 +49,10 @@ export async function action({ request }: ActionFunctionArgs) {
           document: { is: { membershipId: { not: actor.membershipId } } },
           ...(actor.isAdmin ? {} : { gradedByMembershipId: actor.membershipId }),
           releasedAt: null,
+          // A student can unsubmit after a teacher's grade is saved but
+          // before it's released. Exclude it from eligibility so it fails
+          // the same way any other no-longer-eligible submission does.
+          unsubmittedAt: null,
         },
         select: {
           id: true,

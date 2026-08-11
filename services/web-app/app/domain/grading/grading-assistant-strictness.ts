@@ -28,9 +28,9 @@ const gradingAssistantStrictnessActCompositeAdjustments: Record<
   advanced: -1,
 };
 
-export const gradingAssistantStrictnessHelpText =
-  'Strictness only adjusts the overall grade number after Grading Assistant suggestions. Use beginner for a slightly higher grade, advanced for a slightly lower grade, and intermediate for no adjustment.';
-
+// The descriptions explain the reading posture the assistant takes at each
+// level -- how demanding it is of the writing in front of it. They must not
+// describe a point adjustment.
 export const gradingAssistantStrictnessOptions: Array<{
   value: GradingAssistantStrictnessLevel;
   label: string;
@@ -39,17 +39,20 @@ export const gradingAssistantStrictnessOptions: Array<{
   {
     value: 'beginner',
     label: 'Beginner',
-    description: 'Adds 5 points to the overall grade percentage.',
+    description:
+      'The assistant reads gently, expecting a writer still learning the fundamentals.',
   },
   {
     value: 'intermediate',
     label: 'Intermediate',
-    description: 'Keeps the overall grade percentage unchanged.',
+    description:
+      'The assistant reads at the standard expected for the grade level.',
   },
   {
     value: 'advanced',
     label: 'Advanced',
-    description: 'Subtracts 5 points from the overall grade percentage.',
+    description:
+      'The assistant reads demandingly, expecting polished and precise writing.',
   },
 ];
 

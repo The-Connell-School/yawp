@@ -233,8 +233,43 @@ export async function seedSyntheticLocalDevData(
   const thesisModules = await prisma.assignmentModule.findMany({
     where: { assignmentTypeId: thesisAssignmentTypeId, deletedAt: null },
     orderBy: { position: 'asc' },
-    select: { id: true, position: true },
+    select: {
+      id: true,
+      position: true,
+      instructions: {
+        orderBy: { position: 'asc' },
+        select: { id: true, prompt: true },
+      },
+    },
   });
+
+  // Mirrors createDocumentForAssignmentType (services/web-app/app/domain/documents.server.ts):
+  // every document needs one AssignmentModuleSession per module in its
+  // AssignmentType, or opening it hits "No assignment module session found."
+  // Kept in sync by hand because this script runs outside the web-app's `~/`
+  // alias resolution and can't import that helper directly.
+  function buildModuleSessionsCreateData(modules: typeof thesisModules) {
+    return modules.map((assignmentModule) => {
+      const firstInstruction = assignmentModule.instructions[0];
+      return {
+        instructionsCompleted: 0,
+        assignmentModuleId: assignmentModule.id,
+        ...(firstInstruction
+          ? {
+              messages: {
+                create: [
+                  {
+                    content: firstInstruction.prompt,
+                    agent: 'assistant',
+                    instructionId: firstInstruction.id,
+                  },
+                ],
+              },
+            }
+          : {}),
+      };
+    });
+  }
 
   const thesisAssignment = await prisma.assignment.create({
     data: {
@@ -300,6 +335,9 @@ export async function seedSyntheticLocalDevData(
       assignmentTypeId: thesisAssignmentTypeId,
       assignmentId: thesisAssignment.id,
       classAssignmentId: thesisClassAssignment.id,
+      assignmentModuleSessions: {
+        create: buildModuleSessionsCreateData(thesisModules),
+      },
     },
   });
 
@@ -324,9 +362,10 @@ export async function seedSyntheticLocalDevData(
                 title: 'Practice essay draft session',
                 instructionsCompleted: 1,
               },
+              ...buildModuleSessionsCreateData(thesisModules.slice(1)),
             ],
           }
-        : undefined,
+        : { create: buildModuleSessionsCreateData(thesisModules) },
     },
   });
   await prisma.documentRevision.createMany({
@@ -359,6 +398,9 @@ export async function seedSyntheticLocalDevData(
       assignmentTypeId: thesisAssignmentTypeId,
       assignmentId: thesisAssignment.id,
       classAssignmentId: thesisClassAssignment.id,
+      assignmentModuleSessions: {
+        create: buildModuleSessionsCreateData(thesisModules),
+      },
     },
   });
   await prisma.submission.create({
@@ -384,6 +426,9 @@ export async function seedSyntheticLocalDevData(
       assignmentTypeId: thesisAssignmentTypeId,
       assignmentId: thesisAssignment.id,
       classAssignmentId: thesisClassAssignment.id,
+      assignmentModuleSessions: {
+        create: buildModuleSessionsCreateData(thesisModules),
+      },
     },
   });
   const gradedSubmission = await prisma.submission.create({
@@ -431,6 +476,9 @@ export async function seedSyntheticLocalDevData(
       assignmentTypeId: thesisAssignmentTypeId,
       assignmentId: thesisAssignment.id,
       classAssignmentId: thesisClassAssignment.id,
+      assignmentModuleSessions: {
+        create: buildModuleSessionsCreateData(thesisModules),
+      },
     },
   });
   const unreleasedSubmission = await prisma.submission.create({

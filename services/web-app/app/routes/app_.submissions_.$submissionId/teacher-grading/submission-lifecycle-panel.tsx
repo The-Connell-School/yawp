@@ -1,5 +1,6 @@
 import { type ComponentProps, useEffect, useRef, useState } from 'react';
-import { ChevronDown, Info, Loader2 } from 'lucide-react';
+import { ChevronDown, Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -34,7 +35,7 @@ import {
 } from './teacher-grading-panel';
 import { ViewPanel, type ViewPanelSubmission } from './view-panel';
 
-function GradingAssistantSplitButton({
+export function GradingAssistantSplitButton({
   headerState,
   isPendingStart,
   onStart,
@@ -113,7 +114,10 @@ function GradingAssistantSplitButton({
           {buttonLabel}
         </Button>
 
-        <DropdownMenu open={strictnessMenuOpen} onOpenChange={setStrictnessMenuOpen}>
+        <DropdownMenu
+          open={strictnessMenuOpen}
+          onOpenChange={setStrictnessMenuOpen}
+        >
           <DropdownMenuTrigger asChild>
             <Button
               type="button"
@@ -136,42 +140,27 @@ function GradingAssistantSplitButton({
                 const selected =
                   gradingAssistantStrictnessLevel === option.value;
                 return (
-                  <button
+                  <Tooltip
                     key={option.value}
-                    type="button"
-                    className={cn(
-                      'flex w-full items-center gap-2 rounded-md border px-3 py-2 text-left text-sm transition',
-                      selected
-                        ? 'border-primary bg-primary text-primary-foreground'
-                        : 'border-border bg-background hover:bg-muted'
-                    )}
-                    aria-pressed={selected}
-                    data-testid={`grading-assistant-strictness-${option.value}`}
-                    onClick={() => runAtLevel(option.value)}
+                    text={option.description}
+                    delayDuration={200}
+                    contentProps={{ side: 'left', className: 'max-w-xs' }}
                   >
-                    <span className="flex-1 font-medium">{option.label}</span>
-                    <Tooltip
-                      text={option.description}
-                      delayDuration={200}
-                      contentProps={{ side: 'left', className: 'max-w-xs' }}
+                    <button
+                      type="button"
+                      className={cn(
+                        'flex w-full items-center gap-2 rounded-md border px-3 py-2 text-left text-sm transition',
+                        selected
+                          ? 'border-primary bg-primary text-primary-foreground'
+                          : 'border-border bg-background hover:bg-muted'
+                      )}
+                      aria-pressed={selected}
+                      data-testid={`grading-assistant-strictness-${option.value}`}
+                      onClick={() => runAtLevel(option.value)}
                     >
-                      <span
-                        className="inline-flex shrink-0"
-                        onClick={(event) => event.stopPropagation()}
-                        onKeyDown={(event) => event.stopPropagation()}
-                      >
-                        <Info
-                          className={cn(
-                            'h-4 w-4',
-                            selected
-                              ? 'text-primary-foreground/80'
-                              : 'text-muted-foreground'
-                          )}
-                          aria-label={`About ${option.label} strictness`}
-                        />
-                      </span>
-                    </Tooltip>
-                  </button>
+                      <span className="flex-1 font-medium">{option.label}</span>
+                    </button>
+                  </Tooltip>
                 );
               })}
             </div>
@@ -277,7 +266,7 @@ export function SubmissionLifecyclePanel({
         lifecycleState,
         hasDraftToReplace: headerState.hasDraftToReplace,
         hasUnsavedChanges: headerState.hasUnsavedChanges,
-        hasNumericPercentage: headerState.hasNumericPercentage,
+        hasGrade: headerState.hasGrade,
       })
     : false;
 
@@ -287,13 +276,23 @@ export function SubmissionLifecyclePanel({
 
   const handleSave = async () => {
     if (!headerState || !saveEnabled) return;
-    await headerState.saveDraft();
-    onGradeSaved(headerState.getSavedGradeSnapshot());
-    if (
-      lifecycleState === 'needs_grading' &&
-      headerState.hasNumericPercentage
-    ) {
-      await onMarkGraded();
+    try {
+      await headerState.saveDraft();
+      onGradeSaved(headerState.getSavedGradeSnapshot());
+      if (
+        lifecycleState === 'needs_grading' &&
+        headerState.hasGrade
+      ) {
+        await onMarkGraded();
+      }
+    } catch (err) {
+      // The server refuses this write (e.g. the student unsubmitted while
+      // this panel was open). Surface exactly why, and kick the teacher
+      // back out of a form that will never save rather than leaving them
+      // stuck retrying it.
+      toast.error(err instanceof Error ? err.message : 'Save failed.');
+      exitEditMode();
+      return;
     }
     exitEditMode();
   };
@@ -317,45 +316,53 @@ export function SubmissionLifecyclePanel({
       <div className="shrink-0 border-b px-4 py-2.5">
         <div className="flex items-center justify-between gap-2">
           <span className="text-sm font-semibold">{label}</span>
-          {lifecycleState === 'released' ? (
-            <GradeSummaryReleasedLabel />
-          ) : null}
-          {isReadyToRelease ? (
-            <div className="flex flex-wrap items-center justify-end gap-2">
-              <ConfirmationDialog
-                title="Release Grade?"
-                description="This will make the grade and all feedback visible to the student. This action cannot be undone."
-                confirmText="Release"
-                cancelText="Cancel"
-                onConfirm={() => void onRelease()}
-              >
-                <Button
-                  size="sm"
-                  data-testid="submission-lifecycle-release"
-                  disabled={isReleasing}
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            {lifecycleState === 'released' ? (
+              <GradeSummaryReleasedLabel />
+            ) : null}
+            {isReadyToRelease ? (
+              <>
+                <ConfirmationDialog
+                  title="Release Grade?"
+                  description="This will make the grade and all feedback visible to the student. This action cannot be undone."
+                  confirmText="Release"
+                  cancelText="Cancel"
+                  onConfirm={() => void onRelease()}
                 >
-                  {isReleasing ? 'Releasing...' : 'Release Grade'}
+                  <Button
+                    size="sm"
+                    data-testid="submission-lifecycle-release"
+                    disabled={isReleasing}
+                  >
+                    {isReleasing ? 'Releasing...' : 'Release Grade'}
+                  </Button>
+                </ConfirmationDialog>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  data-testid="submission-lifecycle-edit"
+                  onClick={() => onEditingGradeChange(true)}
+                >
+                  Edit
                 </Button>
-              </ConfirmationDialog>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                data-testid="submission-lifecycle-edit"
-                onClick={() => onEditingGradeChange(true)}
-              >
-                Edit
-              </Button>
-            </div>
-          ) : null}
-          {showEditingForm ? (
-            <GradingAssistantSplitButton
-              headerState={headerState}
-              isPendingStart={isGradingAssistantPending}
-              onStart={() => setIsGradingAssistantPending(true)}
-              onAbortStart={() => setIsGradingAssistantPending(false)}
-            />
-          ) : null}
+              </>
+            ) : null}
+            {showEditingForm ? (
+              <GradingAssistantSplitButton
+                headerState={headerState}
+                isPendingStart={isGradingAssistantPending}
+                onStart={() => setIsGradingAssistantPending(true)}
+                onAbortStart={() => setIsGradingAssistantPending(false)}
+              />
+            ) : null}
+            {/* Teachers can no longer unsubmit a document from here — only
+                the student who owns it can. The unsubmit machinery
+                (Submission.unsubmittedAt/unsubmittedByMembershipId, the
+                /api/domain/unsubmit-submission endpoint, and its
+                exclusion from active reads) is unchanged; only this
+                teacher-facing entry point was removed. */}
+          </div>
         </div>
       </div>
 

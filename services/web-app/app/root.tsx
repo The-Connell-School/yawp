@@ -16,6 +16,7 @@ import { GeneralErrorBoundary } from './components/error-boundary.tsx';
 import { GlobalLoading } from './components/global-loading.tsx';
 import { Toaster } from './components/toaster.tsx';
 import { useNonce } from './contexts/nonce.ts';
+import { useInternalCopyMarker } from './hooks/useInternalCopyMarker.ts';
 import { authSessionStorage } from './cookie-session-storages/authentication.server.ts';
 import {
   type NavState,
@@ -161,6 +162,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
                       name: true,
                       reporterEnabled: true,
                       classInsightsEnabled: true,
+                      writingPracticeEnabled: true,
                     },
                   },
                 },
@@ -297,6 +299,14 @@ function Document({
 export default function App({ loaderData: data }: Route.ComponentProps) {
   const nonce = useNonce();
   const contrastPreference = useContrastPreference();
+
+  // Copy/cut provenance for the paste alert. It has to live at the root,
+  // not in the /app layout: the document editor is an `app_.documents_.$id`
+  // route, which opts out of that layout. Mounted here, a copy made on any
+  // page — class detail, an assignment prompt, writing lessons, another
+  // document — is recognized when the student later pastes into an editor,
+  // instead of reading as an external paste and raising a false alarm.
+  useInternalCopyMarker();
 
   useEffect(() => {
     function createSecureLoginMethod() {

@@ -9,12 +9,19 @@ import {
   useLoaderData,
   useSearchParams,
   useFetcher,
+  useLocation,
   useNavigate,
+  useOutlet,
   useRevalidator,
 } from 'react-router';
 import { Link } from 'react-router';
 import { requireMembership, requireUserId } from '~/utils/auth.server.js';
 import { parseAssignmentGradingIntent } from '~/utils/assignment-grading-intent.server';
+import { parseAssignmentTutorEnabled } from '~/utils/assignment-tutor-enabled.server';
+import {
+  formatClassLabel,
+  type ClassDisplayFields,
+} from '~/utils/class-display';
 import { prisma } from '~/utils/db.server.js';
 import { getAvailableAssignmentTypesForScopes } from '~/utils/assignment-type-access.server';
 import {
@@ -102,6 +109,8 @@ import {
   type ClassHeaderTab,
   resolveClassHeaderTab,
 } from './class-detail-header';
+import { loadStudentClassDetail } from './student-class-detail.server';
+import { StudentClassDetailView } from './student-class-detail-view';
 import {
   TEACHER_DOCUMENT_STATUSES,
   type TeacherDocumentStatus,
@@ -133,6 +142,11 @@ import {
   type ClassAssignmentsTabAssignment,
 } from './class-assignments-tab';
 import type { ClassInsightSummary } from '../app.my-classes.$classId_.assignments.$assignmentId/class-insights-panel';
+import { buildGradedCountByAssignmentId } from './graded-count';
+import {
+  buildPasteAlertsByStudentId,
+  summarizeStudentPasteActivity,
+} from './class-paste-alerts';
 
 export function getDraftDisplayTitle(document: {
   title?: string | null;
@@ -147,13 +161,8 @@ export function getDraftDisplayTitle(document: {
   return 'Untitled draft';
 }
 
-function classAssignmentOptionLabel(klass: {
-  grade: string;
-  period: string;
-  title: string | null;
-}) {
-  const base = `Grade ${klass.grade} • Period ${klass.period}`;
-  return klass.title ? `${base} — ${klass.title}` : base;
+export function classAssignmentOptionLabel(klass: ClassDisplayFields) {
+  return formatClassLabel(klass);
 }
 
 async function getClassStudentMemberships(
@@ -451,6 +460,14 @@ export async function action({ request, params }: ActionFunctionArgs) {
       }
     }
 
+    const tutorEnabledResult = parseAssignmentTutorEnabled(formData);
+    if (!tutorEnabledResult.success) {
+      return dataResponse(
+        { success: false, message: tutorEnabledResult.message },
+        { status: 400 }
+      );
+    }
+
     if (intent === 'create-assignment') {
       try {
         await createAssignmentDeployedToClasses({
@@ -462,6 +479,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
             pointValue: gradingIntent.data.pointValue,
             gradingAssistantStrictnessLevel:
               gradingAssistantStrictnessLevel!,
+            tutorEnabled: tutorEnabledResult.value,
             ...promptAttachmentData,
           },
           classIds: [classId],
@@ -490,6 +508,15 @@ export async function action({ request, params }: ActionFunctionArgs) {
           prompt,
           submitForGrade: gradingIntent.data.submitForGrade,
           pointValue: gradingIntent.data.pointValue,
+          // Both controls now live on the edit form as well as the create
+          // form. Only write them when the form actually sent them, so an
+          // older caller that omits them leaves the stored value alone.
+          ...(gradingAssistantStrictnessLevel
+            ? { gradingAssistantStrictnessLevel }
+            : {}),
+          ...(formData.has('tutorEnabled')
+            ? { tutorEnabled: tutorEnabledResult.value }
+            : {}),
           ...promptAttachmentData,
         },
       });
@@ -689,10 +716,24 @@ export async function action({ request, params }: ActionFunctionArgs) {
 export async function loader({ request, params }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
   const profile = await requireMembership(request, userId);
+  const classId = params.classId!;
+
+  // Students get their own read-only view of the same URL. `loadStudentClassDetail`
+  // only resolves classes they are enrolled in, so a student who follows a link
+  // to someone else's class gets a 404 rather than any part of this page.
+  if (profile.role === 'STUDENT') {
+    const studentDetail = await loadStudentClassDetail({
+      membershipId: profile.id,
+      classId,
+    });
+    if (!studentDetail) throw new Response('Class not found', { status: 404 });
+
+    return dataResponse({ role: 'STUDENT' as const, ...studentDetail });
+  }
+
   if (profile.role !== 'TEACHER') {
     return redirect('/app');
   }
-  const classId = params.classId!;
 
   const url = new URL(request.url);
   if (url.searchParams.get('tab') === 'summary') {
@@ -783,6 +824,9 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           deletedAt: null,
         },
       },
+      // A teacher-unsubmitted submission is withdrawn, not just archived —
+      // exclude it from the class's document/grading views entirely.
+      unsubmittedAt: null,
     },
     select: {
       id: true,
@@ -1015,7 +1059,26 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     return acc;
   }, {});
 
+  // Paste alerts, per student, for the student sheet on this page. One
+  // query for the whole class (scoped to this class's enrolled students, so
+  // it can't leak another teacher's data) rather than one per student.
+  const pasteAlerts = klass.students.length
+    ? await prisma.pasteAlert.findMany({
+        where: { membershipId: { in: klass.students.map((s) => s.id) } },
+        select: {
+          id: true,
+          documentId: true,
+          membershipId: true,
+          textLength: true,
+          createdAt: true,
+        },
+        orderBy: { createdAt: 'desc' },
+      })
+    : [];
+  const pasteAlertsByStudentId = buildPasteAlertsByStudentId(pasteAlerts);
+
   return dataResponse({
+    role: 'TEACHER' as const,
     klass,
     submissions,
     inProgressDocuments,
@@ -1032,6 +1095,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     classInsightsEnabled,
     reporterEnabled,
     growthPlansByStudentId,
+    pasteAlertsByStudentId,
   });
 }
 
@@ -1072,16 +1136,50 @@ type ClassDocumentRow = {
 
 type SortDirection = 'asc' | 'desc';
 
+type TeacherClassDetailData = Extract<
+  ReturnType<typeof useLoaderData<typeof loader>>,
+  { role: 'TEACHER' }
+>;
+
 export default function ClassDetailRoute() {
-  return <ClassDetailPage />;
+  const data = useLoaderData<typeof loader>();
+
+  if (data.role === 'STUDENT') {
+    return <StudentClassDetailView data={data} />;
+  }
+
+  return <ClassDetailPage data={data} />;
 }
 
-function ClassDetailPage() {
-  const data = useLoaderData<typeof loader>();
+function ClassDetailPage({ data }: { data: TeacherClassDetailData }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const revalidator = useRevalidator();
   const studentFetcher = useFetcher();
+  // Non-null when a nested detail route matches — either the assignment
+  // detail route (app.my-classes.$classId.assignment.$assignmentId) or the
+  // class summary route (app.my-classes.$classId.summary.$assignmentId).
+  // Either way the teacher drilled into one assignment, and that region
+  // swaps for the table/search bar in place, sliding in over the same
+  // footprint.
+  const assignmentDetailOutlet = useOutlet();
+  const isAssignmentDetailActive = assignmentDetailOutlet != null;
+  // Only the assignment-detail route forces the header's Assignments tab
+  // active — the summary route is reached from Documents, so the header
+  // should keep reflecting whichever tab got you here.
+  const isSummaryRouteActive = location.pathname.includes('/summary/');
+  // Tracks which way we just transitioned so the incoming panel (table or
+  // detail) slides in from the correct side — right when opening an
+  // assignment, left when returning to the table.
+  const wasAssignmentDetailActive = useRef(isAssignmentDetailActive);
+  const enteringAssignmentDetail =
+    isAssignmentDetailActive && !wasAssignmentDetailActive.current;
+  const leavingAssignmentDetail =
+    !isAssignmentDetailActive && wasAssignmentDetailActive.current;
+  useEffect(() => {
+    wasAssignmentDetailActive.current = isAssignmentDetailActive;
+  }, [isAssignmentDetailActive]);
   const [isClassEditSheetOpen, setIsClassEditSheetOpen] = useState(false);
   const [isAddStudentSheetOpen, setIsAddStudentSheetOpen] = useState(false);
   const [addStudentStep, setAddStudentStep] = useState<'email' | 'confirm'>(
@@ -1320,16 +1418,12 @@ function ClassDetailPage() {
   );
 
   // Graded counts per assignment, derived from the same submissions already
-  // loaded for the Documents tab — no second query.
-  const gradedCountByAssignmentId = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const submission of allSubmissions) {
-      const assignmentId = submission.document.assignment?.id;
-      if (!assignmentId || !submission.gradedAt) continue;
-      counts.set(assignmentId, (counts.get(assignmentId) ?? 0) + 1);
-    }
-    return counts;
-  }, [allSubmissions]);
+  // loaded for the Documents tab — no second query. Shared with the
+  // assignment detail page so both read the same computation.
+  const gradedCountByAssignmentId = useMemo(
+    () => buildGradedCountByAssignmentId(allSubmissions),
+    [allSubmissions]
+  );
 
   const managedAssignments = useMemo(
     (): ClassAssignmentsTabAssignment[] =>
@@ -1748,6 +1842,11 @@ function ClassDetailPage() {
           assignmentTypes={data.assignmentTypes}
           classInsightsEnabled={classInsightsEnabled}
           onViewDocuments={handleViewAssignmentDocuments}
+          onSelectAssignment={(assignmentId) =>
+            navigate(
+              `/app/assignments/${assignmentId}?classId=${data.klass.id}`
+            )
+          }
         />
       );
     }
@@ -1995,9 +2094,12 @@ function ClassDetailPage() {
                   >
                     {data.teacherClasses.map((klass) => (
                       <option key={klass.id} value={klass.id}>
-                        {klass.school.name} — Grade {klass.grade}, Period{' '}
-                        {klass.period}
-                        {klass.title ? ` — ${klass.title}` : ''}
+                        {klass.school.name} —{' '}
+                        {formatClassLabel({
+                          grade: klass.grade,
+                          period: klass.period,
+                          title: klass.title,
+                        })}
                       </option>
                     ))}
                   </select>
@@ -2077,6 +2179,9 @@ function ClassDetailPage() {
                       </Button>
                     </TableHead>
                     <TableHead className="whitespace-nowrap">Email</TableHead>
+                    <TableHead className="whitespace-nowrap">
+                      Pasted text
+                    </TableHead>
                     <TableHead className="whitespace-nowrap pr-4">
                       Documents
                     </TableHead>
@@ -2094,12 +2199,18 @@ function ClassDetailPage() {
                           .map((sub) => sub.documentId)
                       ).size;
 
+                    const pasteActivity = summarizeStudentPasteActivity(
+                      data.pasteAlertsByStudentId[s.id]
+                    );
+                    const studentSheetAvailable =
+                      reporterEnabled || pasteActivity !== null;
+
                     return (
                       <TableRow
                         key={s.id}
-                        className={cn(reporterEnabled && 'cursor-pointer')}
+                        className={cn(studentSheetAvailable && 'cursor-pointer')}
                         onClick={() => {
-                          if (!reporterEnabled) return;
+                          if (!studentSheetAvailable) return;
                           setGrowthPlanStudent({
                             id: s.id,
                             name: s.user.name ?? s.user.email,
@@ -2121,6 +2232,17 @@ function ClassDetailPage() {
                         </TableCell>
                         <TableCell className="text-muted-foreground">
                           {s.user.email}
+                        </TableCell>
+                        {/* Roll-up of this student's paste activity, so a
+                            teacher can scan the class instead of opening
+                            every sheet. Informational, not an alert: plain
+                            muted text, and nothing at all when there is
+                            none. */}
+                        <TableCell
+                          className="whitespace-nowrap text-muted-foreground"
+                          data-testid={`student-paste-activity-${s.id}`}
+                        >
+                          {pasteActivity ? pasteActivity.label : ''}
                         </TableCell>
                         <TableCell className="pr-4">
                           <button
@@ -2184,47 +2306,72 @@ function ClassDetailPage() {
           documentCount={classDocuments.length}
           assignmentCount={data.assignments.length}
           showAssignmentsTab={assignmentsEnabled}
-          activeTab={activeHeaderTab}
+          activeTab={
+            isAssignmentDetailActive && !isSummaryRouteActive
+              ? 'assignments'
+              : activeHeaderTab
+          }
           onTabChange={handleHeaderTabChange}
           onEdit={() => setIsClassEditSheetOpen(true)}
         />
 
-        <div
-          key={activeHeaderTab}
-          className="animate-in fade-in-0 slide-in-from-right-2 duration-300"
-        >
-          {activeTab === 'documents' &&
-          classInsightsEnabled &&
-          selectedClassAssignment ? (
-            <div className="mb-4 flex items-center justify-between gap-3 rounded-lg border bg-muted/30 p-3">
-              <p className="text-sm text-muted-foreground">
-                See how the whole class did on{' '}
-                <span className="font-medium text-foreground">
-                  {selectedClassAssignment.title ?? 'this assignment'}
-                </span>
-                .
-              </p>
-              <Button asChild variant="outline" size="sm">
-                <Link
-                  to={`/app/my-classes/${data.klass.id}/assignments/${selectedClassAssignment.id}`}
-                >
-                  Class performance summary
-                </Link>
-              </Button>
-            </div>
-          ) : null}
-          <div>{renderTable()}</div>
-          {activeTab === 'students' && currentTabData.length > 0 ? (
-            <div className="mt-4">
-              <Pagination
-                totalCount={currentTabData.length}
-                skip={pagination.skip}
-                take={pagination.take}
-                onChange={handlePaginationChange}
-              />
-            </div>
-          ) : null}
-        </div>
+        {isAssignmentDetailActive ? (
+          <div
+            key="assignment-detail"
+            data-testid="assignment-detail-panel"
+            className={cn(
+              'motion-reduce:animate-none',
+              'animate-in fade-in-0 duration-300',
+              enteringAssignmentDetail && 'slide-in-from-right-8'
+            )}
+          >
+            {assignmentDetailOutlet}
+          </div>
+        ) : (
+          <div
+            key={activeHeaderTab}
+            data-testid="class-detail-table-panel"
+            className={cn(
+              'motion-reduce:animate-none',
+              'animate-in fade-in-0 duration-300',
+              leavingAssignmentDetail
+                ? 'slide-in-from-left-8'
+                : 'slide-in-from-right-2'
+            )}
+          >
+            {activeTab === 'documents' &&
+            classInsightsEnabled &&
+            selectedClassAssignment ? (
+              <div className="mb-4 flex items-center justify-between gap-3 rounded-lg border bg-muted/30 p-3">
+                <p className="text-sm text-muted-foreground">
+                  See how the whole class did on{' '}
+                  <span className="font-medium text-foreground">
+                    {selectedClassAssignment.title ?? 'this assignment'}
+                  </span>
+                  .
+                </p>
+                <Button asChild variant="outline" size="sm">
+                  <Link
+                    to={`/app/my-classes/${data.klass.id}/summary/${selectedClassAssignment.id}?${searchParams.toString()}`}
+                  >
+                    Class performance summary
+                  </Link>
+                </Button>
+              </div>
+            ) : null}
+            <div>{renderTable()}</div>
+            {activeTab === 'students' && currentTabData.length > 0 ? (
+              <div className="mt-4">
+                <Pagination
+                  totalCount={currentTabData.length}
+                  skip={pagination.skip}
+                  take={pagination.take}
+                  onChange={handlePaginationChange}
+                />
+              </div>
+            ) : null}
+          </div>
+        )}
       </div>
 
       <ClassManageSheet
@@ -2260,6 +2407,13 @@ function ClassDetailPage() {
           setGrowthPlanStudent(null);
           handleViewStudentDocuments(studentId);
         }}
+        pasteAlerts={
+          growthPlanStudent
+            ? (data.pasteAlertsByStudentId[growthPlanStudent.id] ?? [])
+            : []
+        }
+        pasteAlertsExitTo={classDetailExitTo}
+        showGrowthPlans={reporterEnabled}
       />
     </section>
   );

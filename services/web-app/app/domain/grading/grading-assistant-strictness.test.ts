@@ -2,7 +2,23 @@ import { describe, expect, test } from 'bun:test';
 import {
   applyGradingAssistantStrictnessToActComposite,
   applyGradingAssistantStrictnessToPercentage,
+  gradingAssistantStrictnessOptions,
 } from './grading-assistant-strictness';
+
+describe('gradingAssistantStrictnessOptions', () => {
+  test('keeps the Beginner/Intermediate/Advanced labels', () => {
+    expect(gradingAssistantStrictnessOptions.map((option) => option.label)).toEqual(
+      ['Beginner', 'Intermediate', 'Advanced']
+    );
+  });
+
+  test('describes each level as a reading posture, never a point adjustment', () => {
+    for (const option of gradingAssistantStrictnessOptions) {
+      expect(option.description.length).toBeGreaterThan(0);
+      expect(option.description).not.toMatch(/point|percentage|grade percentage|\d/i);
+    }
+  });
+});
 
 describe('applyGradingAssistantStrictnessToPercentage', () => {
   test('leaves intermediate grades unchanged', () => {

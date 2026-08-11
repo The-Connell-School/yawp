@@ -284,6 +284,15 @@ code {
   background-color: #93c5fd44;
   border-bottom: 2px dotted #3b82f6;
 }
+/*
+ * Text that arrived in the document from outside the app. The mark stays in
+ * the saved HTML so the paste record survives, but it never paints: neither
+ * the student nor the teacher sees which passages were pasted.
+ */
+.pasted-source-mark {
+  background-color: transparent;
+}
+
 .grammar-issue-mark {
   background-color: #d8b4fe50;
   border-bottom: 2px wavy #a855f7;

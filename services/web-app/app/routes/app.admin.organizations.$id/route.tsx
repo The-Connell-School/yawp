@@ -154,6 +154,8 @@ export async function action({ request, params }: ActionFunctionArgs) {
     const reporterEnabled = formData.get('reporterEnabled') === 'true';
     const classInsightsEnabled =
       formData.get('classInsightsEnabled') === 'true';
+    const writingPracticeEnabled =
+      formData.get('writingPracticeEnabled') === 'true';
     const assignmentTypeIds = Array.from(
       new Set(
         formData
@@ -186,6 +188,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
           accessExpiresAt: accessExpiresAt ? new Date(accessExpiresAt) : null,
           reporterEnabled,
           classInsightsEnabled,
+          writingPracticeEnabled,
         },
       }),
       prisma.organizationAssignmentType.deleteMany({
@@ -393,7 +396,7 @@ export default function OrganizationRoute() {
                 Edit Organization
               </Button>
             </SheetTrigger>
-            <SheetContent className="sm:max-w-md">
+            <SheetContent className="w-full overflow-x-hidden sm:max-w-md">
               <SheetHeader>
                 <SheetTitle>Edit Organization</SheetTitle>
               </SheetHeader>
@@ -490,11 +493,29 @@ export default function OrganizationRoute() {
                         </span>
                       </span>
                     </label>
+                    <label className="flex min-h-12 items-start gap-3 rounded-md border bg-background px-3 py-2 text-sm">
+                      <input
+                        type="checkbox"
+                        name="writingPracticeEnabled"
+                        value="true"
+                        defaultChecked={organization.writingPracticeEnabled}
+                        className="mt-1 h-4 w-4"
+                      />
+                      <span className="min-w-0">
+                        <span className="block font-medium">
+                          Writing Practice
+                        </span>
+                        <span className="block text-xs text-muted-foreground">
+                          Adds Writing Practice to the teacher and student
+                          sidebars. Off by default while the feature is paused.
+                        </span>
+                      </span>
+                    </label>
                   </div>
                 </div>
 
                 <div
-                  className="border-t pt-5"
+                  className="min-w-0 border-t pt-5"
                   data-testid="organization-assignment-types-manager"
                 >
                   <div className="space-y-1">
@@ -511,11 +532,11 @@ export default function OrganizationRoute() {
                       No assignment types exist yet.
                     </div>
                   ) : (
-                    <div className="mt-3 grid gap-2">
+                    <div className="mt-3 grid min-w-0 gap-2">
                       {assignmentTypes.map((assignmentType) => (
                         <label
                           key={assignmentType.id}
-                          className="flex min-h-12 items-start gap-3 rounded-md border bg-background px-3 py-2 text-sm"
+                          className="flex min-h-12 min-w-0 items-start gap-3 rounded-md border bg-background px-3 py-2 text-sm"
                         >
                           <input
                             type="checkbox"
@@ -524,14 +545,14 @@ export default function OrganizationRoute() {
                             defaultChecked={assignedAssignmentTypeIds.has(
                               assignmentType.id
                             )}
-                            className="mt-1 h-4 w-4"
+                            className="mt-1 h-4 w-4 shrink-0"
                           />
-                          <span className="min-w-0">
-                            <span className="block truncate font-medium">
+                          <span className="min-w-0 flex-1">
+                            <span className="block break-words font-medium">
                               {assignmentType.title}
                             </span>
                             {assignmentType.description ? (
-                              <span className="block truncate text-xs text-muted-foreground">
+                              <span className="block break-words text-xs text-muted-foreground">
                                 {assignmentType.description}
                               </span>
                             ) : null}

@@ -1,16 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type * as React from 'react';
 import { useFetcher } from 'react-router';
-import { CircleHelp, FileUp, Loader2 } from 'lucide-react';
+import { FileUp, Loader2 } from 'lucide-react';
 import { Button } from '~/components/ui/button';
 import { Checkbox } from '~/components/ui/checkbox';
 import { Input } from '~/components/ui/input';
 import { Label } from '~/components/ui/label';
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '~/components/ui/popover';
 import {
   Select,
   SelectContent,
@@ -27,28 +22,34 @@ import {
 } from '~/components/ui/sheet';
 import { Textarea } from '~/components/ui/textarea';
 import {
+  DEFAULT_SAVED_ASSIGNMENT_POINT_VALUE,
+  SAVED_ASSIGNMENTS_ENABLED,
+} from '~/domain/assignments/saved-assignments';
+import {
   DEFAULT_GRADING_ASSISTANT_STRICTNESS_LEVEL,
-  gradingAssistantStrictnessHelpText,
   gradingAssistantStrictnessOptions,
   type GradingAssistantStrictnessLevel,
 } from '~/domain/grading/grading-assistant-strictness';
 
 export type AssignmentCreationEntryPoint =
-  | 'dashboard'
-  | 'assignment-type'
-  | 'class';
+  'dashboard' | 'assignment-type' | 'class';
 
 export type AssignmentCreationAssignmentType = {
   id: string;
   title: string;
 };
 
+export type AssignmentCreationEditingAssignment = {
+  id: string;
+  promptAttachmentName?: string | null;
+};
+
 export type AssignmentCreationClassOption = {
   id: string;
   name?: string;
   title?: string | null;
-  grade?: string;
-  period?: string;
+  grade?: string | null;
+  period?: string | null;
 };
 
 type CreateFetcherData = {
@@ -78,9 +79,26 @@ export type AssignmentCreationSheetProps = {
   fixedAssignmentTypeId?: string;
   initialAssignmentTypeId?: string;
   fixedClassId?: string;
+  /**
+   * Present when this sheet is editing an existing assignment rather than
+   * creating one. Same form either way — it swaps the intent, drops the
+   * class picker (the assignment is already deployed), and freezes the
+   * settings that cannot change once students have documents.
+   */
+  editingAssignment?: AssignmentCreationEditingAssignment;
   initialTitle?: string;
   initialPrompt?: string;
   emptyClassesMessage?: string;
+  /** When true, a title must be entered before the assignment can be created. */
+  titleRequired?: boolean;
+  /**
+   * Grading and tutor settings to start from. Reusing a saved assignment
+   * carries its whole configuration back into the sheet, not just its prompt.
+   */
+  initialSubmitForGrade?: boolean;
+  initialPointValue?: number | null;
+  initialTutorEnabled?: boolean;
+  initialGradingAssistantStrictnessLevel?: GradingAssistantStrictnessLevel;
 };
 
 type AssignmentCreationSheetContentProps = AssignmentCreationSheetProps & {
@@ -94,10 +112,14 @@ export function assignmentCreationClassLabel(
 ) {
   if (klass.name?.trim()) return klass.name;
   if (klass.title?.trim()) return klass.title;
-  if (klass.grade?.trim() && klass.period?.trim()) {
-    return `Grade ${klass.grade} - Period ${klass.period}`;
-  }
-  return 'Class';
+
+  const grade = klass.grade?.trim();
+  const period = klass.period?.trim();
+
+  if (grade && period) return `Grade ${grade} - Period ${period}`;
+  if (grade) return `Grade ${grade}`;
+  if (period) return `Period ${period}`;
+  return 'Untitled Class';
 }
 
 function initialAssignmentTypeSelection(
@@ -115,6 +137,13 @@ function initialAssignmentTypeSelection(
 
 function initialClassIds(fixedClassId?: string) {
   return fixedClassId ? [fixedClassId] : [];
+}
+
+/** The point-value input is a string; a saved assignment may carry none. */
+function pointValueFieldValue(pointValue: number | null | undefined) {
+  return pointValue === null || pointValue === undefined
+    ? ''
+    : String(pointValue);
 }
 
 export function AssignmentCreationSheet({
@@ -141,9 +170,15 @@ export function AssignmentCreationSheetContent({
   fixedAssignmentTypeId,
   initialAssignmentTypeId,
   fixedClassId,
+  editingAssignment,
   initialTitle = '',
   initialPrompt = '',
   emptyClassesMessage = "You don't have any assignment-enabled classes yet.",
+  titleRequired = false,
+  initialSubmitForGrade = true,
+  initialPointValue = DEFAULT_SAVED_ASSIGNMENT_POINT_VALUE,
+  initialTutorEnabled = true,
+  initialGradingAssistantStrictnessLevel = DEFAULT_GRADING_ASSISTANT_STRICTNESS_LEVEL,
   createFetcher,
   extractFetcher,
   renderSheet = true,
@@ -163,17 +198,24 @@ export function AssignmentCreationSheetContent({
   );
   const [title, setTitle] = useState('');
   const [prompt, setPrompt] = useState(initialPrompt);
-  const [submitForGrade, setSubmitForGrade] = useState(true);
-  const [pointValue, setPointValue] = useState('100');
+  const [submitForGrade, setSubmitForGrade] = useState(initialSubmitForGrade);
+  const [pointValue, setPointValue] = useState(
+    pointValueFieldValue(initialPointValue)
+  );
+  const [tutorEnabled, setTutorEnabled] = useState(initialTutorEnabled);
+  const [saveForReuse, setSaveForReuse] = useState(false);
   const [gradingAssistantStrictnessLevel, setGradingAssistantStrictnessLevel] =
     useState<GradingAssistantStrictnessLevel>(
-      DEFAULT_GRADING_ASSISTANT_STRICTNESS_LEVEL
+      initialGradingAssistantStrictnessLevel
     );
   const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
   const [extractionTruncated, setExtractionTruncated] = useState(false);
   const attachmentInputRef = useRef<HTMLInputElement>(null);
   const extractFileInputRef = useRef<HTMLInputElement>(null);
   const wasOpenRef = useRef(false);
+
+  const isEditing = Boolean(editingAssignment);
+  const [removeAttachment, setRemoveAttachment] = useState(false);
 
   const CreateForm = createFetcher.Form;
   const isSaving = createFetcher.state !== 'idle';
@@ -228,12 +270,13 @@ export function AssignmentCreationSheetContent({
     setSelectedClassIds(initialClassIds(fixedClassId));
     setTitle(initialTitle);
     setPrompt(initialPrompt);
-    setSubmitForGrade(true);
-    setPointValue('100');
-    setGradingAssistantStrictnessLevel(
-      DEFAULT_GRADING_ASSISTANT_STRICTNESS_LEVEL
-    );
+    setSubmitForGrade(initialSubmitForGrade);
+    setPointValue(pointValueFieldValue(initialPointValue));
+    setTutorEnabled(initialTutorEnabled);
+    setSaveForReuse(false);
+    setGradingAssistantStrictnessLevel(initialGradingAssistantStrictnessLevel);
     setAttachmentFile(null);
+    setRemoveAttachment(false);
     setExtractionTruncated(false);
     if (attachmentInputRef.current) attachmentInputRef.current.value = '';
     if (extractFileInputRef.current) extractFileInputRef.current.value = '';
@@ -244,6 +287,10 @@ export function AssignmentCreationSheetContent({
     fixedClassId,
     initialPrompt,
     initialTitle,
+    initialSubmitForGrade,
+    initialPointValue,
+    initialTutorEnabled,
+    initialGradingAssistantStrictnessLevel,
     open,
     teacherClasses,
   ]);
@@ -292,21 +339,25 @@ export function AssignmentCreationSheetContent({
     isSaving ||
     isExtracting ||
     !assignmentTypeId ||
-    selectedClassCount === 0 ||
+    (!isEditing && selectedClassCount === 0) ||
     !prompt.trim() ||
+    (titleRequired && !title.trim()) ||
     (submitForGrade && !pointValue.trim());
+
+  const headingText = isEditing ? 'Edit Assignment' : 'New Assignment';
+  const headingDescription = isEditing
+    ? 'Update this assignment. Students keep the documents they have already started.'
+    : 'Create an assignment for one or more of your classes.';
 
   const header = renderSheet ? (
     <SheetHeader>
-      <SheetTitle>New Assignment</SheetTitle>
-      <SheetDescription>
-        Create an assignment for one or more of your classes.
-      </SheetDescription>
+      <SheetTitle>{headingText}</SheetTitle>
+      <SheetDescription>{headingDescription}</SheetDescription>
     </SheetHeader>
   ) : (
     <div>
-      <h2>New Assignment</h2>
-      <p>Create an assignment for one or more of your classes.</p>
+      <h2>{headingText}</h2>
+      <p>{headingDescription}</p>
     </div>
   );
 
@@ -320,10 +371,20 @@ export function AssignmentCreationSheetContent({
         encType="multipart/form-data"
         className="mt-6 space-y-4"
       >
-        <input type="hidden" name="intent" value="create-assignment" />
+        <input
+          type="hidden"
+          name="intent"
+          value={isEditing ? 'update-assignment' : 'create-assignment'}
+        />
         <input type="hidden" name="assignmentTypeId" value={assignmentTypeId} />
 
-        {hasFixedClass ? (
+        {editingAssignment ? (
+          <input
+            type="hidden"
+            name="assignmentId"
+            value={editingAssignment.id}
+          />
+        ) : hasFixedClass ? (
           <input type="hidden" name="classId" value={fixedClassId} />
         ) : (
           selectedClassIds.map((id) => (
@@ -351,42 +412,44 @@ export function AssignmentCreationSheetContent({
           </Select>
         </div>
 
-        <div className="space-y-2">
+        <div className={isEditing ? 'hidden' : 'space-y-2'}>
           <Label>Assign to</Label>
           <div className="space-y-2.5 rounded-md border p-3">
-              {teacherClasses.length === 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  {emptyClassesMessage}
-                </p>
-              ) : (
-                teacherClasses.map((klass) => {
-                  const checked = hasFixedClass
-                    ? klass.id === fixedClassId
-                    : selectedClassIds.includes(klass.id);
+            {teacherClasses.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                {emptyClassesMessage}
+              </p>
+            ) : (
+              teacherClasses.map((klass) => {
+                const checked = hasFixedClass
+                  ? klass.id === fixedClassId
+                  : selectedClassIds.includes(klass.id);
 
-                  return (
-                    <div key={klass.id} className="flex items-center gap-2.5">
-                      <Checkbox
-                        id={`assignment-create-class-${klass.id}`}
-                        checked={checked}
-                        onCheckedChange={() => toggleClass(klass.id)}
-                        disabled={isSaving || hasFixedClass}
-                      />
-                      <Label
-                        htmlFor={`assignment-create-class-${klass.id}`}
-                        className="cursor-pointer font-normal"
-                      >
-                        {assignmentCreationClassLabel(klass)}
-                      </Label>
-                    </div>
-                  );
-                })
-              )}
-            </div>
+                return (
+                  <div key={klass.id} className="flex items-center gap-2.5">
+                    <Checkbox
+                      id={`assignment-create-class-${klass.id}`}
+                      checked={checked}
+                      onCheckedChange={() => toggleClass(klass.id)}
+                      disabled={isSaving || hasFixedClass}
+                    />
+                    <Label
+                      htmlFor={`assignment-create-class-${klass.id}`}
+                      className="cursor-pointer font-normal"
+                    >
+                      {assignmentCreationClassLabel(klass)}
+                    </Label>
+                  </div>
+                );
+              })
+            )}
+          </div>
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="assignment-create-title">Title (optional)</Label>
+          <Label htmlFor="assignment-create-title">
+            {titleRequired ? 'Title' : 'Title (optional)'}
+          </Label>
           <Input
             id="assignment-create-title"
             name="title"
@@ -394,6 +457,7 @@ export function AssignmentCreationSheetContent({
             onChange={(event) => setTitle(event.target.value)}
             placeholder="e.g., Rhetorical Analysis Essay"
             disabled={isSaving}
+            required={titleRequired}
           />
         </div>
 
@@ -403,9 +467,28 @@ export function AssignmentCreationSheetContent({
           </Label>
           <p className="text-sm text-muted-foreground">
             Any documents uploaded here will be attached to the prompt and
-            available to be viewed by students as they&apos;re working on
-            their document.
+            available to be viewed by students as they&apos;re working on their
+            document.
           </p>
+          {editingAssignment?.promptAttachmentName && !removeAttachment ? (
+            <div className="flex items-center justify-between gap-3 rounded-md border p-3 text-sm">
+              <span className="truncate">
+                {editingAssignment.promptAttachmentName}
+              </span>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                onClick={() => setRemoveAttachment(true)}
+                disabled={isSaving}
+              >
+                Remove
+              </Button>
+            </div>
+          ) : null}
+          {removeAttachment ? (
+            <input type="hidden" name="removePromptAttachment" value="true" />
+          ) : null}
           <Input
             id="assignment-create-attachment"
             ref={attachmentInputRef}
@@ -507,9 +590,7 @@ export function AssignmentCreationSheetContent({
               name="submitForGrade"
               value="true"
               checked={submitForGrade}
-              onCheckedChange={(checked) =>
-                setSubmitForGrade(checked === true)
-              }
+              onCheckedChange={(checked) => setSubmitForGrade(checked === true)}
               disabled={isSaving}
               className="size-4 shrink-0"
             />
@@ -549,35 +630,15 @@ export function AssignmentCreationSheetContent({
                   />
                 </div>
 
+                <input
+                  type="hidden"
+                  name="gradingAssistantStrictnessLevel"
+                  value={gradingAssistantStrictnessLevel}
+                />
                 <div className="space-y-2">
                   <div className="flex items-center gap-2">
                     <Label>Grading assistant strictness</Label>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="h-6 w-6 rounded-full"
-                          aria-label="Grading assistant strictness help"
-                          title={gradingAssistantStrictnessHelpText}
-                        >
-                          <CircleHelp className="h-4 w-4" />
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent
-                        align="start"
-                        className="w-80 rounded-md border-slate-200 bg-slate-100 p-3 text-sm text-slate-800 shadow-md"
-                      >
-                        {gradingAssistantStrictnessHelpText}
-                      </PopoverContent>
-                    </Popover>
                   </div>
-                  <input
-                    type="hidden"
-                    name="gradingAssistantStrictnessLevel"
-                    value={gradingAssistantStrictnessLevel}
-                  />
                   <div className="grid gap-2 sm:grid-cols-3">
                     {gradingAssistantStrictnessOptions.map((option) => {
                       const selected =
@@ -586,7 +647,7 @@ export function AssignmentCreationSheetContent({
                         <button
                           key={option.value}
                           type="button"
-                          className={`rounded-md border px-3 py-2 text-left text-sm transition ${
+                          className={`h-full rounded-md border px-3 py-2 text-left text-sm transition ${
                             selected
                               ? 'border-primary bg-primary text-primary-foreground'
                               : 'border-border bg-background hover:bg-muted'
@@ -619,7 +680,73 @@ export function AssignmentCreationSheetContent({
           ) : null}
         </div>
 
-        {!submitForGrade ? <input type="hidden" name="pointValue" value="" /> : null}
+        {/* Frozen once the assignment exists: students may already have
+            documents and tutor sessions built around this setting, so it is
+            shown read-only rather than hidden. Nothing named tutorEnabled is
+            submitted while editing, which is what tells the server to leave
+            the stored value alone. */}
+        <div className="pt-6">
+          {isEditing ? null : (
+            <input type="hidden" name="tutorEnabled" value="false" />
+          )}
+          <div className="flex items-center gap-2.5">
+            <Checkbox
+              id="assignment-create-tutor-enabled"
+              name={isEditing ? undefined : 'tutorEnabled'}
+              value="true"
+              checked={tutorEnabled}
+              onCheckedChange={(checked) => setTutorEnabled(checked === true)}
+              disabled={isSaving || isEditing}
+              className="size-4 shrink-0"
+            />
+            <Label
+              htmlFor="assignment-create-tutor-enabled"
+              className={
+                isEditing
+                  ? 'font-normal leading-none text-muted-foreground'
+                  : 'cursor-pointer font-normal leading-none'
+              }
+            >
+              Tutor enabled
+            </Label>
+          </div>
+          <p className="mt-1 pl-[calc(1rem+0.625rem)] text-sm text-muted-foreground">
+            {isEditing
+              ? 'The tutor cannot be switched on or off after an assignment is created — students may already be working with it. Duplicate the assignment to give a class a version with the other setting.'
+              : "Turning the tutor off removes it from students' documents. Do this to test a student's ability to write a paper independently of tutor guidance."}
+          </p>
+        </div>
+
+        {SAVED_ASSIGNMENTS_ENABLED && usesBulkCreateApi && !isEditing ? (
+          <div className="pt-6">
+            <input type="hidden" name="saveForReuse" value="false" />
+            <div className="flex items-center gap-2.5">
+              <Checkbox
+                id="assignment-create-save-for-reuse"
+                name="saveForReuse"
+                value="true"
+                checked={saveForReuse}
+                onCheckedChange={(checked) => setSaveForReuse(checked === true)}
+                disabled={isSaving}
+                className="size-4 shrink-0"
+              />
+              <Label
+                htmlFor="assignment-create-save-for-reuse"
+                className="cursor-pointer font-normal leading-none"
+              >
+                Save to My Saved Assignments
+              </Label>
+            </div>
+            <p className="mt-1 pl-[calc(1rem+0.625rem)] text-sm text-muted-foreground">
+              Keep this assignment so you can give it to another class later
+              without setting it up again.
+            </p>
+          </div>
+        ) : null}
+
+        {!submitForGrade ? (
+          <input type="hidden" name="pointValue" value="" />
+        ) : null}
 
         {formError ? (
           <p className="text-sm text-destructive">{formError}</p>
@@ -635,7 +762,13 @@ export function AssignmentCreationSheetContent({
             Cancel
           </Button>
           <Button type="submit" disabled={isSubmitDisabled}>
-            {isSaving ? 'Creating...' : 'Create Assignment'}
+            {isEditing
+              ? isSaving
+                ? 'Saving...'
+                : 'Save Changes'
+              : isSaving
+                ? 'Creating...'
+                : 'Create Assignment'}
           </Button>
         </div>
       </CreateForm>

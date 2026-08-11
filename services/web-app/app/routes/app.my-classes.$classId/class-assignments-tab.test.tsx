@@ -12,24 +12,7 @@ import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
 import { act, type ReactElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 
-const submit = mock();
-const load = mock();
-// A single fetcher stub shared by every useFetcher() call in the tree —
-// the edit form, and the real ClassInsightsPanel/CategoryCard rendered
-// through the unmocked AssignmentSummarySheetContent.
-const fetcher: {
-  state: string;
-  data: unknown;
-  submit: typeof submit;
-  load: typeof load;
-} = {
-  state: 'idle',
-  data: null,
-  submit,
-  load,
-};
 let creationProps: any = null;
-let editFormProps: any = null;
 
 const actualReactRouter = await import('react-router');
 mock.module('react-router', () => ({
@@ -37,7 +20,6 @@ mock.module('react-router', () => ({
   Form: ({ children, method: _method, ...props }: any) => (
     <form {...props}>{children}</form>
   ),
-  useFetcher: () => fetcher,
 }));
 
 mock.module('~/components/assignments/assignment-creation-sheet', () => ({
@@ -45,36 +27,6 @@ mock.module('~/components/assignments/assignment-creation-sheet', () => ({
     creationProps = props;
     return props.open ? <div data-testid="creation-sheet" /> : null;
   },
-}));
-
-mock.module('~/components/assignments/assignment-edit-sheet', () => ({
-  AssignmentEditForm: (props: any) => {
-    editFormProps = props;
-    return <div data-testid="edit-form">Editing {props.editingAssignment.id}</div>;
-  },
-}));
-
-// The real Sheet/SheetContent wrap Radix's Dialog.Title/Description, which
-// need a live Dialog context to avoid warnings. Swap in plain markup — this
-// also flows through to assignment-summary-sheet.tsx's unmocked import of
-// the same module, so its header renders as ordinary elements too.
-mock.module('~/components/ui/sheet', () => ({
-  Sheet: ({ children, open }: any) => (open ? <>{children}</> : null),
-  SheetContent: ({ children, className }: any) => (
-    <div data-testid="assignment-sheet" className={className}>
-      {children}
-    </div>
-  ),
-  SheetHeader: ({ children }: any) => <div>{children}</div>,
-  SheetTitle: ({ children }: any) => <h2>{children}</h2>,
-  SheetDescription: ({ children }: any) => <p>{children}</p>,
-  SheetFooter: ({ children, className, ...props }: any) => (
-    <div data-testid="assignment-sheet-footer" className={className} {...props}>
-      {children}
-    </div>
-  ),
-  SHEET_SCROLL_BODY_CLASS_NAME: 'sheet-scroll-body',
-  SHEET_STICKY_FOOTER_CLASS_NAME: 'border-t bg-background',
 }));
 
 const { MemoryRouter } = actualReactRouter;
@@ -139,11 +91,12 @@ function render(element: ReactElement) {
 function renderTab(overrides: Record<string, unknown> = {}) {
   return render(
     <ClassAssignmentsTab
-      classOption={{ id: 'class-1', name: 'Grade 9 • Period 2 — History' }}
+      classOption={{ id: 'class-1', name: 'History · Grade 9 • Period 2' }}
       assignments={ASSIGNMENTS}
       assignmentTypes={[{ id: 'type-1', title: 'DBQ' }]}
       classInsightsEnabled
       onViewDocuments={() => {}}
+      onSelectAssignment={() => {}}
       {...overrides}
     />
   );
@@ -158,12 +111,7 @@ function clickRow(el: HTMLElement, testId: string) {
 }
 
 beforeEach(() => {
-  submit.mockReset();
-  load.mockReset();
-  fetcher.state = 'idle';
-  fetcher.data = null;
   creationProps = null;
-  editFormProps = null;
 });
 
 afterEach(() => {
@@ -191,140 +139,46 @@ describe('ClassAssignmentsTab', () => {
       entryPoint: 'class',
       fixedClassId: 'class-1',
       teacherClasses: [
-        { id: 'class-1', name: 'Grade 9 • Period 2 — History' },
+        { id: 'class-1', name: 'History · Grade 9 • Period 2' },
       ],
     });
   });
 
-  it('clicking a row opens the sheet in view mode, not edit', () => {
-    const el = renderTab();
+  it('clicking a row calls onSelectAssignment with the assignment id — the detail is a full page now, not a sheet in place', () => {
+    const onSelectAssignment = mock();
+    const el = renderTab({ onSelectAssignment });
     clickRow(el, 'assignment-open-assignment-1');
 
-    expect(el.querySelector('[data-testid="assignment-sheet"]')).toBeTruthy();
-    expect(el.querySelector('[data-testid="edit-form"]')).toBeFalsy();
-    // View mode identity content, from the real AssignmentSummarySheetContent.
-    expect(el.textContent).toContain('The Gilded Age DBQ');
-    expect(el.textContent).toContain('Class performance summary');
+    expect(onSelectAssignment).toHaveBeenCalledWith('assignment-1');
+    // No sheet/dialog opens in place — the row click is a plain navigation.
+    expect(el.querySelector('[role="dialog"]')).toBeFalsy();
   });
 
-  it('pins Duplicate and Edit in a bordered footer when viewing an assignment', () => {
-    const el = renderTab();
-    clickRow(el, 'assignment-open-assignment-1');
-
-    const footer = el.querySelector('[data-testid="assignment-sheet-footer"]');
-    expect(footer).toBeTruthy();
-    expect(footer?.className).toContain('border-t');
-    expect(footer?.textContent).toContain('Duplicate');
-    expect(footer?.textContent).toContain('Edit');
-  });
-
-  it('the Edit button transitions view mode to edit mode', () => {
-    const el = renderTab();
-    clickRow(el, 'assignment-open-assignment-1');
-
-    const editButton = Array.from(el.querySelectorAll('button')).find(
-      (button) => button.textContent?.trim() === 'Edit'
-    )!;
-    expect(editButton).toBeDefined();
-    act(() => editButton.click());
-
-    expect(el.querySelector('[data-testid="edit-form"]')).toBeTruthy();
-    expect(editFormProps.editingAssignment.id).toBe('assignment-1');
-    expect(editFormProps.pdfClassId).toBe('class-1');
-  });
-
-  it('does not show an Edit button for AP History rows, only view mode', () => {
-    const el = renderTab();
+  it('clicking any row (including AP History rows) calls onSelectAssignment — edit-eligibility is decided on the detail page', () => {
+    const onSelectAssignment = mock();
+    const el = renderTab({ onSelectAssignment });
     clickRow(el, 'assignment-open-assignment-2');
 
-    expect(el.querySelector('[data-testid="assignment-sheet"]')).toBeTruthy();
-    const editButton = Array.from(el.querySelectorAll('button')).find(
-      (button) => button.textContent?.trim() === 'Edit'
-    );
-    expect(editButton).toBeUndefined();
-    const duplicateButton = Array.from(el.querySelectorAll('button')).find(
-      (button) => button.textContent?.trim().includes('Duplicate')
-    );
-    expect(duplicateButton).toBeUndefined();
+    expect(onSelectAssignment).toHaveBeenCalledWith('assignment-2');
   });
 
-  it('the class performance summary is reachable and generatable from view mode', () => {
-    const el = renderTab();
-    clickRow(el, 'assignment-open-assignment-1');
-
-    const generateButton = Array.from(el.querySelectorAll('button')).find(
-      (button) => /summarize class performance/i.test(button.textContent ?? '')
-    )!;
-    expect(generateButton).toBeDefined();
-
-    act(() => generateButton.click());
-
-    // Same generation path as the full-page assignment route: POST to
-    // /api/domain/assignment-insights with the classAssignmentId.
-    expect(submit).toHaveBeenCalledWith(
-      { classAssignmentId: 'class-assignment-1' },
-      { method: 'post', action: '/api/domain/assignment-insights' }
-    );
-  });
-
-  it('prefills class-scoped creation when duplicating from view mode', () => {
-    const el = renderTab();
-    clickRow(el, 'assignment-open-assignment-1');
-
-    const duplicateButton = Array.from(el.querySelectorAll('button')).find(
-      (button) => button.textContent?.trim().includes('Duplicate')
-    )!;
-    act(() => duplicateButton.click());
-
-    // Duplicating closes the sheet and opens creation prefilled.
-    expect(el.querySelector('[data-testid="assignment-sheet"]')).toBeFalsy();
-    expect(el.querySelector('[data-testid="creation-sheet"]')).toBeTruthy();
-    expect(creationProps).toMatchObject({
-      entryPoint: 'class',
-      fixedClassId: 'class-1',
-      fixedAssignmentTypeId: 'type-1',
-      initialTitle: 'Copy of The Gilded Age DBQ',
-      initialPrompt: 'Analyze the effects of industrialization.',
-    });
-  });
-
-  it('clicking a different row while mid-edit confirms before discarding', () => {
-    const confirmSpy = mock(() => false);
-    window.confirm = confirmSpy;
-
-    const el = renderTab();
-    clickRow(el, 'assignment-open-assignment-1');
-    const editButton = Array.from(el.querySelectorAll('button')).find(
-      (button) => button.textContent?.trim() === 'Edit'
-    )!;
-    act(() => editButton.click());
-    // Simulate the form reporting unsaved changes.
-    act(() => editFormProps.onDirtyChange(true));
-
-    clickRow(el, 'assignment-open-assignment-2');
-
-    expect(confirmSpy).toHaveBeenCalled();
-    // User declined to discard — still editing assignment-1.
-    expect(el.querySelector('[data-testid="edit-form"]')).toBeTruthy();
-    expect(editFormProps.editingAssignment.id).toBe('assignment-1');
-  });
-
-  it('the row is entirely clickable — checkbox and Docs pill stop propagation', () => {
+  it('the row is entirely clickable — checkbox and Docs pill stop propagation and do not select the row', () => {
     const onViewDocuments = mock();
-    const el = renderTab({ onViewDocuments });
+    const onSelectAssignment = mock();
+    const el = renderTab({ onViewDocuments, onSelectAssignment });
 
     const checkbox = el.querySelector(
       '[aria-label="Select assignment The Gilded Age DBQ"]'
     ) as HTMLButtonElement;
     act(() => checkbox.click());
-    expect(el.querySelector('[data-testid="assignment-sheet"]')).toBeFalsy();
+    expect(onSelectAssignment).not.toHaveBeenCalled();
 
     const docsPill = el.querySelector(
       '[aria-label="View documents for The Gilded Age DBQ"]'
     ) as HTMLButtonElement;
     act(() => docsPill.click());
     expect(onViewDocuments).toHaveBeenCalledWith('assignment-1');
-    expect(el.querySelector('[data-testid="assignment-sheet"]')).toBeFalsy();
+    expect(onSelectAssignment).not.toHaveBeenCalled();
   });
 
   it('matches the Students table row hover/selected classes exactly', () => {

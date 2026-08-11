@@ -263,13 +263,13 @@ export async function action({ request }: ActionFunctionArgs) {
   if (intent === 'create-class') {
     const schoolId = formData.get('schoolId') as string;
     const schoolYear = formData.get('schoolYear') as string;
-    const grade = formData.get('grade') as string;
-    const period = formData.get('period') as string;
+    const grade = (formData.get('grade') as string)?.trim() || null;
+    const period = (formData.get('period') as string)?.trim() || null;
     const title = (formData.get('title') as string)?.trim() || null;
     let code = (formData.get('code') as string)?.trim().toUpperCase() || '';
     const teacherIds = formData.getAll('teacherIds') as string[];
 
-    if (!schoolId || !schoolYear || !grade || !period) {
+    if (!schoolId || !schoolYear) {
       return dataResponse(
         { error: 'All fields are required' },
         { status: 400 }
@@ -287,14 +287,6 @@ export async function action({ request }: ActionFunctionArgs) {
     // Generate code if not provided
     if (!code) {
       code = generateClassCode();
-    }
-
-    // Validate code format (alphanumeric, 3-10 chars)
-    if (!/^[A-Z0-9]{3,10}$/.test(code)) {
-      return dataResponse(
-        { error: 'Code must be 3-10 alphanumeric characters' },
-        { status: 400 }
-      );
     }
 
     // Verify school belongs to organization
@@ -352,13 +344,13 @@ export async function action({ request }: ActionFunctionArgs) {
     const classId = formData.get('classId') as string;
     const schoolId = formData.get('schoolId') as string;
     const schoolYear = formData.get('schoolYear') as string;
-    const grade = formData.get('grade') as string;
-    const period = formData.get('period') as string;
+    const grade = (formData.get('grade') as string)?.trim() || null;
+    const period = (formData.get('period') as string)?.trim() || null;
     const title = (formData.get('title') as string)?.trim() || null;
     const code = (formData.get('code') as string)?.trim().toUpperCase() || '';
     const teacherIds = formData.getAll('teacherIds') as string[];
 
-    if (!classId || !schoolId || !schoolYear || !grade || !period || !code) {
+    if (!classId || !schoolId || !schoolYear || !code) {
       return dataResponse(
         { error: 'All fields are required' },
         { status: 400 }
@@ -369,14 +361,6 @@ export async function action({ request }: ActionFunctionArgs) {
     if (!/^\d{4}-\d{4}$/.test(schoolYear)) {
       return dataResponse(
         { error: 'School year must be in format YYYY-YYYY' },
-        { status: 400 }
-      );
-    }
-
-    // Validate code format (alphanumeric, 3-10 chars)
-    if (!/^[A-Z0-9]{3,10}$/.test(code)) {
-      return dataResponse(
-        { error: 'Code must be 3-10 alphanumeric characters' },
         { status: 400 }
       );
     }
@@ -924,8 +908,8 @@ export default function OrganizationClassesRoute() {
                           </div>
                         </TableCell>
                         <TableCell>{cls.schoolYear}</TableCell>
-                        <TableCell>{cls.grade}</TableCell>
-                        <TableCell>{cls.period}</TableCell>
+                        <TableCell>{cls.grade ?? '—'}</TableCell>
+                        <TableCell>{cls.period ?? '—'}</TableCell>
                         <TableCell>
                           <Badge variant="secondary">
                             {cls._count.students}
@@ -1120,12 +1104,11 @@ function ClassSheet({
               placeholder="A3B9X2"
               value={code}
               onChange={(e) => setCode(e.target.value.toUpperCase())}
-              maxLength={10}
               required
               className="font-mono"
             />
             <p className="text-xs text-muted-foreground">
-              Short code (3-10 characters, letters and numbers)
+              Class code students use to join
             </p>
           </div>
 
@@ -1144,12 +1127,18 @@ function ClassSheet({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="grade">Grade</Label>
-            <Select value={grade} onValueChange={setGrade} required>
+            <Label htmlFor="grade">Grade (Optional)</Label>
+            <Select
+              value={grade || NO_GRADE_VALUE}
+              onValueChange={(value) =>
+                setGrade(value === NO_GRADE_VALUE ? '' : value)
+              }
+            >
               <SelectTrigger>
                 <SelectValue placeholder="Select a grade" />
               </SelectTrigger>
               <SelectContent>
+                <SelectItem value={NO_GRADE_VALUE}>No grade</SelectItem>
                 <SelectItem value="K">K</SelectItem>
                 <SelectItem value="1">1</SelectItem>
                 <SelectItem value="2">2</SelectItem>
@@ -1168,12 +1157,18 @@ function ClassSheet({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="period">Period</Label>
-            <Select value={period} onValueChange={setPeriod} required>
+            <Label htmlFor="period">Period (Optional)</Label>
+            <Select
+              value={period || NO_PERIOD_VALUE}
+              onValueChange={(value) =>
+                setPeriod(value === NO_PERIOD_VALUE ? '' : value)
+              }
+            >
               <SelectTrigger>
                 <SelectValue placeholder="Select a period" />
               </SelectTrigger>
               <SelectContent>
+                <SelectItem value={NO_PERIOD_VALUE}>No period</SelectItem>
                 <SelectItem value="1">1</SelectItem>
                 <SelectItem value="2">2</SelectItem>
                 <SelectItem value="3">3</SelectItem>
@@ -1270,6 +1265,8 @@ function ClassSheet({
 }
 
 const BULK_SCHOOL_UNCHANGED = '__unchanged__';
+const NO_GRADE_VALUE = '__none__';
+const NO_PERIOD_VALUE = '__none__';
 
 function BulkEditClassSheet({
   open,

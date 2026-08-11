@@ -8,7 +8,7 @@ describe('resolveSubmissionLifecycleState', () => {
       resolveSubmissionLifecycleState({
         isGraded: false,
         isReleased: false,
-        hasNumericGrade: false,
+        hasGrade: false,
       })
     ).toBe('needs_grading');
   });
@@ -18,19 +18,29 @@ describe('resolveSubmissionLifecycleState', () => {
       resolveSubmissionLifecycleState({
         isGraded: true,
         isReleased: false,
-        hasNumericGrade: true,
+        hasGrade: true,
       })
     ).toBe('graded');
   });
 
-  test('stays needs_grading when gradedAt is set without an overall percentage', () => {
+  test('stays needs_grading when gradedAt is set without any recorded grade', () => {
     expect(
       resolveSubmissionLifecycleState({
         isGraded: true,
         isReleased: false,
-        hasNumericGrade: false,
+        hasGrade: false,
       })
     ).toBe('needs_grading');
+  });
+
+  test('is graded on a points scale, which records raw points and no percentage', () => {
+    expect(
+      resolveSubmissionLifecycleState({
+        isGraded: true,
+        isReleased: false,
+        hasGrade: true,
+      })
+    ).toBe('graded');
   });
 
   test('is released once the grade has been released', () => {
@@ -38,7 +48,7 @@ describe('resolveSubmissionLifecycleState', () => {
       resolveSubmissionLifecycleState({
         isGraded: true,
         isReleased: true,
-        hasNumericGrade: true,
+        hasGrade: true,
       })
     ).toBe('released');
   });
@@ -49,7 +59,7 @@ describe('resolveSubmissionLifecycleState', () => {
       resolveSubmissionLifecycleState({
         isGraded: false,
         isReleased: true,
-        hasNumericGrade: false,
+        hasGrade: false,
       })
     ).toBe('released');
   });

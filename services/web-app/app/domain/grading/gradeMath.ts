@@ -65,6 +65,50 @@ export function formatAssignmentGrade({
   );
 }
 
+/**
+ * The scoring scale that reports raw points rather than a percentage.
+ *
+ * The 1-5 scales map each score to a percentage band, which only makes sense
+ * when every score is passing. A scale whose floor is a zero — Daily Pages
+ * engagement, where Absent is a real judgment — would turn a top score into a
+ * C, so it reports earned points and leaves the percentage and letter alone.
+ */
+export const POINTS_SCALE_SCORING_TYPE = 'points_scale';
+
+/**
+ * The same scale under the name the admin editor and the rubric extractor
+ * write. Daily Pages stores `points_scale`; anything configured through the
+ * editor's "Rubric points" option stores `rubric_points`. Both mean raw
+ * points, and a rubric that matched neither recorded no overall grade at all.
+ */
+export const RUBRIC_POINTS_SCORING_TYPE = 'rubric_points';
+
+export function isPointsScaleScoringType(scoringType: string) {
+  return (
+    scoringType === POINTS_SCALE_SCORING_TYPE ||
+    scoringType === RUBRIC_POINTS_SCORING_TYPE
+  );
+}
+
+export function pointsScaleGradeFields({
+  categories,
+  maxScore,
+}: {
+  categories: Array<{ score: number }>;
+  maxScore: number;
+}) {
+  const average =
+    categories.reduce((sum, item) => sum + item.score, 0) / categories.length;
+  const earned = Math.max(0, Math.min(maxScore, Math.round(average)));
+
+  return {
+    overallScore: earned,
+    numericPercentage: null,
+    letterGrade: null,
+    score: `${earned}/${maxScore}`,
+  };
+}
+
 type RubricScoreValue = {
   score: number;
   comment?: string;

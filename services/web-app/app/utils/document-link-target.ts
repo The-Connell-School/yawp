@@ -2,6 +2,8 @@ export type DocumentLinkSubmission = {
   id: string;
   releasedAt: Date | string | null;
   archivedAt?: Date | string | null;
+  /** Teacher-initiated unsubmit. Excluded the same as archivedAt. */
+  unsubmittedAt?: Date | string | null;
   submittedAt?: Date | string | null;
 };
 
@@ -16,7 +18,9 @@ export function pickLatestReleasedSubmission<T extends DocumentLinkSubmission>(
 ): T | null {
   const released = submissions.filter(
     (submission) =>
-      submission.archivedAt == null && submission.releasedAt != null
+      submission.archivedAt == null &&
+      submission.unsubmittedAt == null &&
+      submission.releasedAt != null
   );
 
   if (released.length === 0) {

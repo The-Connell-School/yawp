@@ -1,62 +1,37 @@
 import { useEffect } from 'react';
 import type { Editor } from '@tiptap/core';
+import { wasCopiedInsideApp } from '~/utils/internal-copy';
 
 const PASTE_ALERT_MIN_CHARS = 200;
 
 /**
- * Detects pastes of 200+ characters that did NOT originate from the same
- * document editor, and POSTs a PasteAlert record to the server.
+ * Detects pastes of 200+ characters that did NOT originate from inside
+ * YAWP, and POSTs a PasteAlert record to the server.
  *
- * Copy-origin tracking: when the user copies text from inside this editor,
- * a sessionStorage flag is set for 5 seconds. If a paste arrives while the
- * flag is set, it's treated as a same-document paste and ignored.
+ * The "came from inside YAWP" half of the rule is not tracked here — the
+ * /app layout owns it via useInternalCopyMarker, so copies made on any
+ * page count, not only those made while an editor happened to be mounted.
+ * See app/utils/internal-copy.ts for the rule and its known gaps.
+ *
+ * The same decision also marks the pasted range in the document, so the
+ * passage can be found again while reading the work rather than only
+ * counted in a list. ProseMirror has already inserted the clipboard
+ * content by the time this listener runs — it is registered on the editor
+ * DOM after ProseMirror's own handler — so the range is available on the
+ * pastedSource plugin's state. See extensions/pasted-source.ts.
  */
 export function usePasteAlert(editor: Editor | null, docId: string) {
   useEffect(() => {
     if (!editor) return;
 
-    const sameDocCopyKey = `same-doc-copy-${docId}`;
-    let copyTimeout: ReturnType<typeof setTimeout> | null = null;
-
-    const handleCopy = () => {
-      const selection = window.getSelection();
-      if (!selection || selection.rangeCount === 0) return;
-
-      const range = selection.getRangeAt(0);
-      const container = range.commonAncestorContainer;
-      const element =
-        container.nodeType === Node.TEXT_NODE
-          ? container.parentElement
-          : (container as Element);
-
-      const inEditor = Boolean(element && editor.view.dom.contains(element));
-
-      if (copyTimeout) {
-        clearTimeout(copyTimeout);
-        copyTimeout = null;
-      }
-
-      if (inEditor) {
-        sessionStorage.setItem(sameDocCopyKey, 'true');
-        copyTimeout = setTimeout(() => {
-          sessionStorage.removeItem(sameDocCopyKey);
-          copyTimeout = null;
-        }, 5000);
-      } else {
-        sessionStorage.removeItem(sameDocCopyKey);
-      }
-    };
-
     const handlePaste = (event: ClipboardEvent) => {
       const pastedText = event.clipboardData?.getData('text/plain') || '';
       const textLength = pastedText.length;
+      const copiedFromInsideApp = wasCopiedInsideApp(pastedText);
 
-      const copiedFromSameDoc = sessionStorage.getItem(sameDocCopyKey) === 'true';
-      if (copiedFromSameDoc) {
-        sessionStorage.removeItem(sameDocCopyKey);
-      }
+      if (textLength >= PASTE_ALERT_MIN_CHARS && !copiedFromInsideApp) {
+        editor.commands.markLastPasteAsExternal?.();
 
-      if (textLength >= PASTE_ALERT_MIN_CHARS && !copiedFromSameDoc) {
         fetch('/api/paste-alert', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -65,14 +40,10 @@ export function usePasteAlert(editor: Editor | null, docId: string) {
       }
     };
 
-    document.addEventListener('copy', handleCopy);
     editor.view.dom.addEventListener('paste', handlePaste);
 
     return () => {
-      document.removeEventListener('copy', handleCopy);
       editor.view.dom.removeEventListener('paste', handlePaste);
-      if (copyTimeout) clearTimeout(copyTimeout);
-      sessionStorage.removeItem(sameDocCopyKey);
     };
   }, [editor, docId]);
 }

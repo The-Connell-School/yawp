@@ -243,7 +243,7 @@ test.describe.serial('Teacher class page redesign', () => {
     ).toBeVisible();
   });
 
-  test('clicking an assignment row opens the class performance summary in view mode', async ({
+  test('clicking an assignment row opens the assignment detail as a full page, in view mode, with the class header intact', async ({
     page,
     e2eContext,
     signIn,
@@ -252,7 +252,8 @@ test.describe.serial('Teacher class page redesign', () => {
     // Summary button was removed and the row started opening straight into
     // edit — clicking a row must land on a read/view mode that surfaces the
     // class performance summary (and lets the teacher generate it), not the
-    // edit form.
+    // edit form. It used to open in a sheet, then as a page nested inside the
+    // class route; it now opens as its own page at /app/assignments/:id.
     const prisma = createE2EPrismaClient();
     try {
       await prisma.classAssignmentInsight.deleteMany({
@@ -268,29 +269,137 @@ test.describe.serial('Teacher class page redesign', () => {
 
     await page.getByText('E2E Class Assignment', { exact: true }).click();
 
-    const sheet = page.getByRole('dialog');
+    // Forward navigation changes the URL — linkable, not a sheet toggle.
+    await page.waitForURL(
+      `/app/assignments/${e2eContext.assignmentId}?classId=${e2eContext.classId}`
+    );
+
+    // No dialog/sheet — this is page content.
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    // The page stands alone: no class shell, no assignments table behind it.
+    await expect(page.getByTestId('class-detail-header')).toHaveCount(0);
+    await expect(page.getByTestId('class-assignments-search')).toHaveCount(0);
+    const detail = page.getByTestId('assignment-detail-page');
+    await expect(detail).toBeVisible();
+
     await expect(
-      sheet.getByRole('heading', { name: /class performance summary/i })
+      detail.getByRole('heading', { name: 'E2E Class Assignment' })
     ).toBeVisible();
     // View mode, not edit — no prompt/title form fields.
-    await expect(sheet.getByLabel('Title (optional)')).toHaveCount(0);
+    await expect(detail.getByLabel('Title (optional)')).toHaveCount(0);
 
-    const generateButton = sheet.getByRole('button', {
+    const generateButton = detail.getByRole('button', {
       name: /summarize class performance|regenerate/i,
     });
     await expect(generateButton).toBeVisible();
     await generateButton.click();
-    await expect(sheet.getByText(/how the class did/i)).toBeVisible({
+    await expect(detail.getByText(/how the class did/i)).toBeVisible({
       timeout: 15000,
     });
-    await expect(sheet.getByText(/suggested next steps/i)).toBeVisible();
+    await expect(detail.getByText(/suggested next steps/i)).toBeVisible();
+    // The cooldown now reads out of the panel subtitle rather than a separate
+    // paragraph beside the button, which the panel hides while it is on cooldown.
     await expect(
-      sheet.getByTestId('class-insight-generate-unavailable-reason')
+      detail.getByTestId('class-insight-panel-subtitle')
     ).toContainText(/regenerate in \d+ (hours|minutes)/i);
 
-    // Edit is reachable explicitly, and switches the same sheet to the form.
-    await sheet.getByRole('button', { name: /^edit$/i }).click();
-    await expect(sheet.getByLabel('Title (optional)')).toBeVisible();
+    // Edit is reachable explicitly and opens the same sheet used to create an
+    // assignment, so the form lives in a dialog rather than replacing the page.
+    // The URL does not change either way.
+    await detail.getByRole('button', { name: /^edit$/i }).click();
+    const editSheet = page.getByRole('dialog');
+    await expect(editSheet).toBeVisible();
+    await expect(editSheet.getByLabel('Title (optional)')).toBeVisible();
+    await expect(page).toHaveURL(
+      `/app/assignments/${e2eContext.assignmentId}?classId=${e2eContext.classId}`
+    );
+
+    // Closing the sheet returns to view mode in place — no form left behind on
+    // the page, and the URL still doesn't change.
+    await editSheet.getByRole('button', { name: 'Cancel' }).click();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    await expect(detail.getByLabel('Title (optional)')).toHaveCount(0);
+    await expect(
+      detail.getByRole('heading', { name: 'E2E Class Assignment' })
+    ).toBeVisible();
+    await expect(page).toHaveURL(
+      `/app/assignments/${e2eContext.assignmentId}?classId=${e2eContext.classId}`
+    );
+  });
+
+  test('browser back returns from the assignment detail page to the assignments table', async ({
+    page,
+    e2eContext,
+    signIn,
+  }) => {
+    await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
+    await page.goto(`/app/my-classes/${e2eContext.classId}?tab=assignments`);
+    await page.waitForLoadState('networkidle');
+
+    await page.getByText('E2E Class Assignment', { exact: true }).click();
+    await page.waitForURL(
+      `/app/assignments/${e2eContext.assignmentId}?classId=${e2eContext.classId}`
+    );
+    await expect(page.getByTestId('assignment-detail-page')).toBeVisible();
+
+    await page.goBack();
+
+    await expect(page).toHaveURL(
+      new RegExp(`/app/my-classes/${e2eContext.classId}\\?tab=assignments`)
+    );
+    await expect(page.getByTestId('class-assignments-search')).toBeVisible();
+    await expect(page.getByTestId('assignment-detail-page')).toHaveCount(0);
+    // The class header never left.
+    await expect(page.getByTestId('class-detail-header')).toBeVisible();
+
+    // ...and forward returns to the detail page again.
+    await page.goForward();
+    await expect(page.getByTestId('assignment-detail-page')).toBeVisible();
+  });
+
+  test('a deep link straight to an assignment lands on the standalone detail page', async ({
+    page,
+    e2eContext,
+    signIn,
+  }) => {
+    await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
+
+    // Fresh navigation directly to the detail URL — no prior click, no
+    // client-side history to fall back on.
+    await page.goto(
+      `/app/assignments/${e2eContext.assignmentId}?classId=${e2eContext.classId}`
+    );
+    await page.waitForLoadState('networkidle');
+
+    const detail = page.getByTestId('assignment-detail-page');
+    await expect(detail).toBeVisible();
+    await expect(
+      detail.getByRole('heading', { name: 'E2E Class Assignment' })
+    ).toBeVisible();
+    // Standalone: the class shell is not rendered around it.
+    await expect(page.getByTestId('class-detail-header')).toHaveCount(0);
+    await expect(page.getByTestId('class-assignments-search')).toHaveCount(0);
+
+    // Back to assignments returns to the class's assignments table.
+    await detail.getByRole('link', { name: /back to assignments/i }).click();
+    await expect(page.getByTestId('class-assignments-search')).toBeVisible();
+  });
+
+  test('the old nested assignment URL redirects to the standalone page', async ({
+    page,
+    e2eContext,
+    signIn,
+  }) => {
+    await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
+
+    await page.goto(
+      `/app/my-classes/${e2eContext.classId}/assignment/${e2eContext.assignmentId}`
+    );
+
+    await page.waitForURL(
+      `/app/assignments/${e2eContext.assignmentId}?classId=${e2eContext.classId}`
+    );
+    await expect(page.getByTestId('assignment-detail-page')).toBeVisible();
   });
 
   test('documents tab rows open details by document state using the shared table', async ({
@@ -466,6 +575,102 @@ test.describe.serial('Teacher class page redesign', () => {
       await prisma.invitation
         .deleteMany({ where: { target: studentEmail } })
         .catch(() => {});
+      await prisma.$disconnect();
+    }
+  });
+
+  test('add student flow joins an existing student to an additional class', async ({
+    page,
+    e2eContext,
+    signIn,
+  }) => {
+    const prisma = createE2EPrismaClient();
+    const suffix = Date.now().toString(36);
+    const studentEmail = `class-join-${suffix}@example.com`;
+    let otherClassId: string | undefined;
+
+    try {
+      const otherClass = await prisma.class.create({
+        data: {
+          code: `JOIN${suffix}`.toUpperCase().slice(0, 12),
+          schoolYear: '2026-2027',
+          grade: '9',
+          period: '7',
+          school: { connect: { id: e2eContext.schoolId } },
+          teachers: { connect: { id: e2eContext.teacherMembershipId } },
+        },
+        select: { id: true },
+      });
+      otherClassId = otherClass.id;
+
+      await prisma.orgMembership.create({
+        data: {
+          user: { create: { email: studentEmail, name: 'Existing Joiner' } },
+          organization: { connect: { id: e2eContext.organizationId } },
+          role: 'STUDENT',
+          classesAsStudent: { connect: { id: otherClass.id } },
+        },
+      });
+
+      await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
+      await page.goto(`/app/my-classes/${e2eContext.classId}`);
+      await page.waitForLoadState('networkidle');
+
+      await page.getByRole('button', { name: /add student/i }).click();
+      await page.getByTestId('add-student-email-input').fill(studentEmail);
+      await page.getByTestId('add-student-next-button').click();
+
+      await expect(
+        page.getByTestId('add-student-confirm-message')
+      ).toContainText('have an account in the system');
+
+      await page.getByTestId('add-student-confirm-button').click();
+
+      await expect
+        .poll(
+          async () => {
+            const membership = await prisma.orgMembership.findFirst({
+              where: { user: { email: studentEmail } },
+              select: { classesAsStudent: { select: { id: true } } },
+            });
+            return (membership?.classesAsStudent ?? [])
+              .map((klass) => klass.id)
+              .sort();
+          },
+          { timeout: 5000, message: 'Student not added to the second class' }
+        )
+        .toEqual([otherClass.id, e2eContext.classId].sort());
+
+      // Adding the same student again is a no-op with a clear message.
+      await page.goto(`/app/my-classes/${e2eContext.classId}`);
+      await page.waitForLoadState('networkidle');
+      await page.getByRole('button', { name: /add student/i }).click();
+      await page.getByTestId('add-student-email-input').fill(studentEmail);
+      await page.getByTestId('add-student-next-button').click();
+
+      await expect(
+        page.getByTestId('add-student-confirm-message')
+      ).toContainText('already in this class');
+      await expect(
+        page.getByTestId('add-student-confirm-button')
+      ).toHaveCount(0);
+
+      const membershipsAfter = await prisma.orgMembership.findMany({
+        where: { user: { email: studentEmail } },
+        select: { classesAsStudent: { select: { id: true } } },
+      });
+      expect(membershipsAfter).toHaveLength(1);
+      expect(membershipsAfter[0]?.classesAsStudent).toHaveLength(2);
+    } finally {
+      await prisma.orgMembership
+        .deleteMany({ where: { user: { email: studentEmail } } })
+        .catch(() => {});
+      await prisma.user
+        .deleteMany({ where: { email: studentEmail } })
+        .catch(() => {});
+      if (otherClassId) {
+        await prisma.class.delete({ where: { id: otherClassId } }).catch(() => {});
+      }
       await prisma.$disconnect();
     }
   });

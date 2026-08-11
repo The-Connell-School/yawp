@@ -3,6 +3,12 @@ import { createE2EPrismaClient } from '../prisma-client';
 import type { Page } from '@playwright/test';
 
 const CLASS_LABEL = /Grade 9th .* Period 1st/;
+// The creation sheet renders the tutor control as a standard checkbox field: a short
+// <Label htmlFor> is the accessible name and the guidance sits in a sibling paragraph,
+// which is asserted as visible text in expectStandardizedAssignmentForm below.
+const TUTOR_TOGGLE_LABEL = 'Tutor enabled';
+const TUTOR_TOGGLE_HELP =
+  "Turning the tutor off removes it from students' documents. Do this to test a student's ability to write a paper independently of tutor guidance.";
 
 async function expectStandardizedAssignmentForm(page: Page) {
   const dialog = page.getByRole('dialog');
@@ -22,6 +28,12 @@ async function expectStandardizedAssignmentForm(page: Page) {
     dialog.getByRole('checkbox', { name: /submit for grade/i })
   ).toBeChecked();
   await expect(dialog.getByLabel(/point value/i)).toHaveValue('100');
+  await expect(
+    dialog.getByText(TUTOR_TOGGLE_HELP, { exact: true })
+  ).toBeVisible();
+  await expect(
+    dialog.getByRole('checkbox', { name: TUTOR_TOGGLE_LABEL, exact: true })
+  ).toBeChecked();
 }
 
 async function expectCreatedAssignment(params: {
@@ -30,6 +42,7 @@ async function expectCreatedAssignment(params: {
   prompt: string;
   title: string;
   pointValue: number;
+  tutorEnabled?: boolean;
 }) {
   const prisma = createE2EPrismaClient();
   try {
@@ -49,6 +62,7 @@ async function expectCreatedAssignment(params: {
             title: true,
             submitForGrade: true,
             pointValue: true,
+            tutorEnabled: true,
           },
         },
       },
@@ -56,6 +70,9 @@ async function expectCreatedAssignment(params: {
     expect(created?.assignment.title).toBe(params.title);
     expect(created?.assignment.submitForGrade).toBe(true);
     expect(created?.assignment.pointValue).toBe(params.pointValue);
+    if (params.tutorEnabled !== undefined) {
+      expect(created?.assignment.tutorEnabled).toBe(params.tutorEnabled);
+    }
   } finally {
     await prisma.$disconnect();
   }
@@ -151,6 +168,39 @@ async function deleteAssignmentsByTitle(title: string) {
 }
 
 test.describe.serial('Teacher dashboard workspace', () => {
+  test('shows Writing Practice in the teacher sidebar when enabled for the organization', async ({
+    page,
+    e2eContext,
+    signIn,
+  }) => {
+    const prisma = createE2EPrismaClient();
+    try {
+      await prisma.organization.update({
+        where: { id: e2eContext.organizationId },
+        data: { writingPracticeEnabled: true },
+      });
+
+      await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
+      await page.goto('/app');
+
+      const writingPracticeLink = page.getByRole('link', {
+        name: 'Writing Practice',
+      });
+      await expect(writingPracticeLink).toBeVisible();
+      await writingPracticeLink.click();
+      await page.waitForURL('**/app/writing-lessons**');
+      await expect(
+        page.getByRole('heading', { name: 'Writing practice' })
+      ).toBeVisible();
+    } finally {
+      await prisma.organization.update({
+        where: { id: e2eContext.organizationId },
+        data: { writingPracticeEnabled: false },
+      });
+      await prisma.$disconnect();
+    }
+  });
+
   test('presents classes first with Assignments and Grading entry points', async ({
     page,
     e2eContext,
@@ -267,6 +317,12 @@ test.describe.serial('Teacher dashboard workspace', () => {
       await page.getByLabel('Title (optional)').fill(title);
       await page.getByLabel('Prompt', { exact: true }).fill(prompt);
       await page.getByLabel(/point value/i).fill('25');
+      const tutorToggle = page.getByRole('checkbox', {
+        name: TUTOR_TOGGLE_LABEL,
+        exact: true,
+      });
+      await tutorToggle.click();
+      await expect(tutorToggle).not.toBeChecked();
       await page.getByRole('button', { name: 'Create Assignment' }).click();
 
       await expect(page).toHaveURL(
@@ -284,6 +340,7 @@ test.describe.serial('Teacher dashboard workspace', () => {
         prompt,
         title,
         pointValue: 25,
+        tutorEnabled: false,
       });
     } finally {
       await deleteAssignmentsByTitle(title);
