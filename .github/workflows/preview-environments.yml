@@ -234,19 +234,13 @@ jobs:
     if: >-
       github.event_name == 'pull_request' &&
       github.event.action == 'closed' &&
-      github.event.pull_request.head.repo.full_name == github.repository &&
-      contains(github.event.pull_request.title, '[skip preview]') == false &&
-      contains(github.event.pull_request.body, '[skip preview]') == false &&
-      contains(github.event.pull_request.head.ref, '[skip preview]') == false
+      github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-22.04
     env:
       PR_NUMBER: ${{ github.event.pull_request.number }}
       PREVIEW_HOST: ${{ vars.PREVIEW_HOST }}
-      PREVIEW_DOMAIN: ${{ vars.PREVIEW_DOMAIN }}
       PREVIEW_ROOT: ${{ vars.PREVIEW_ROOT || '/srv/yawp-preview' }}
       PREVIEW_SSH_USER: ${{ vars.PREVIEW_SSH_USER || 'ec2-user' }}
-      PREVIEW_TLS: ${{ vars.PREVIEW_TLS || 'true' }}
-      PREVIEW_RUNTIME: ${{ vars.PREVIEW_RUNTIME || 'fast' }}
     steps:
       - name: Check preview environment configuration
         env:
@@ -254,7 +248,6 @@ jobs:
         run: |
           set -euo pipefail
           test -n "$PREVIEW_HOST" || { echo "Missing repository variable PREVIEW_HOST"; exit 1; }
-          test -n "$PREVIEW_DOMAIN" || { echo "Missing repository variable PREVIEW_DOMAIN"; exit 1; }
           test -n "$PREVIEW_SSH_PRIVATE_KEY" || { echo "Missing repository secret PREVIEW_SSH_PRIVATE_KEY"; exit 1; }
 
       - name: Prepare SSH
@@ -268,18 +261,26 @@ jobs:
           chmod 600 ~/.ssh/preview_key
           ssh-keyscan -H "$PREVIEW_HOST" >> ~/.ssh/known_hosts
 
+      - name: Checkout current cleanup implementation
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+
       - name: Destroy preview
         run: |
           set -euo pipefail
+          shell_quote() {
+            printf '%q' "$1"
+          }
           ssh_target="${PREVIEW_SSH_USER}@${PREVIEW_HOST}"
-          remote_source="${PREVIEW_ROOT}/sources/pr-${PR_NUMBER}"
-          ssh -i ~/.ssh/preview_key "$ssh_target" "\
-            if test -x '$remote_source/scripts/preview/destroy.sh'; then \
-              cd '$remote_source' && PR_NUMBER='$PR_NUMBER' PREVIEW_DOMAIN='$PREVIEW_DOMAIN' PREVIEW_ROOT='$PREVIEW_ROOT' PREVIEW_TLS='$PREVIEW_TLS' PREVIEW_RUNTIME='$PREVIEW_RUNTIME' bash scripts/preview/destroy.sh; \
-            else \
-              docker compose -p 'yawp-pr-${PR_NUMBER}' -f '${PREVIEW_ROOT}/previews/pr-${PR_NUMBER}/docker-compose.yml' down -v --remove-orphans || true; \
-              rm -rf '${PREVIEW_ROOT}/previews/pr-${PR_NUMBER}'; \
-            fi"
+          remote_env=(
+            "PREVIEW_ROOT=$(shell_quote "$PREVIEW_ROOT")"
+            "PREVIEW_TTL_HOURS=0"
+            "OPEN_PR_NUMBERS=''"
+            "TARGET_PR=$(shell_quote "$PR_NUMBER")"
+          )
+          cat scripts/preview/remove-preview-path.sh scripts/preview/cleanup.sh \
+            | ssh -i ~/.ssh/preview_key "$ssh_target" "${remote_env[*]} bash -s"
 
   preview-cleanup:
     if: >-
@@ -328,5 +329,5 @@ jobs:
             "PREVIEW_TTL_HOURS=$(shell_quote "$PREVIEW_TTL_HOURS")"
             "OPEN_PR_NUMBERS=$(shell_quote "$open_pr_numbers")"
           )
-          # Keep the cleanup script as a local redirect: bash -s < scripts/preview/cleanup.sh
-          ssh -i ~/.ssh/preview_key "$ssh_target" "${remote_env[*]} bash -s" < scripts/preview/cleanup.sh
+          cat scripts/preview/remove-preview-path.sh scripts/preview/cleanup.sh \
+            | ssh -i ~/.ssh/preview_key "$ssh_target" "${remote_env[*]} bash -s"

@@ -2,13 +2,31 @@
 set -euo pipefail
 
 ROOT="${PREVIEW_ROOT:-/srv/yawp-preview}"
+export PREVIEW_ROOT="$ROOT"
 OPEN_PR_NUMBERS="${OPEN_PR_NUMBERS:-}"
 PREVIEW_TTL_HOURS="${PREVIEW_TTL_HOURS:-72}"
+TARGET_PR="${TARGET_PR:-}"
 POSTGRES_CONTAINER="${PREVIEW_POSTGRES_CONTAINER:-preview-postgres}"
 now_epoch="$(date +%s)"
+cleanup_failed=0
+
+if ! declare -F preview_remove_path >/dev/null 2>&1; then
+  SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  # shellcheck source=remove-preview-path.sh
+  source "$SCRIPT_DIR/remove-preview-path.sh"
+fi
 
 is_positive_integer() {
   [[ "$1" =~ ^[1-9][0-9]*$ ]]
+}
+
+if [[ -n "$TARGET_PR" ]] && ! is_positive_integer "$TARGET_PR"; then
+  echo "TARGET_PR must be a positive integer" >&2
+  exit 1
+fi
+
+matches_target() {
+  [[ -z "$TARGET_PR" || "$1" == "$TARGET_PR" ]]
 }
 
 is_open_pr() {
@@ -55,7 +73,16 @@ destroy_preview_path() {
 
   drop_preview_database "$pr_number"
   remove_legacy_postgres_volume "$project"
-  rm -rf "$preview_path" "$ROOT/sources/pr-${pr_number}"
+  local remove_failed=0
+  if ! preview_remove_path "$preview_path"; then
+    remove_failed=1
+  fi
+  if ! preview_remove_path "$ROOT/sources/pr-${pr_number}"; then
+    remove_failed=1
+  fi
+  if [[ "$remove_failed" -ne 0 ]]; then
+    return 1
+  fi
   echo "Cleaned preview pr-${pr_number}"
 }
 
@@ -73,14 +100,19 @@ cleanup_previews() {
     if ! is_positive_integer "$pr_number"; then
       continue
     fi
+    if ! matches_target "$pr_number"; then
+      continue
+    fi
     if is_open_pr "$pr_number"; then
       continue
     fi
-    if ! is_expired_path "$preview_path"; then
+    if [[ -z "$TARGET_PR" ]] && ! is_expired_path "$preview_path"; then
       continue
     fi
 
-    destroy_preview_path "$preview_path" "$pr_number"
+    if ! destroy_preview_path "$preview_path" "$pr_number"; then
+      cleanup_failed=1
+    fi
   done
 }
 
@@ -98,17 +130,24 @@ cleanup_sources() {
     if ! is_positive_integer "$pr_number"; then
       continue
     fi
+    if ! matches_target "$pr_number"; then
+      continue
+    fi
     if is_open_pr "$pr_number"; then
       continue
     fi
-    if ! is_expired_path "$source_path"; then
+    if [[ -z "$TARGET_PR" ]] && ! is_expired_path "$source_path"; then
       continue
     fi
 
-    rm -rf "$source_path"
-    echo "Cleaned source pr-${pr_number}"
+    if preview_remove_path "$source_path"; then
+      echo "Cleaned source pr-${pr_number}"
+    else
+      cleanup_failed=1
+    fi
   done
 }
 
 cleanup_previews
 cleanup_sources
+exit "$cleanup_failed"

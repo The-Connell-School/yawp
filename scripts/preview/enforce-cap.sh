@@ -28,6 +28,7 @@
 set -euo pipefail
 
 ROOT="${PREVIEW_ROOT:-/srv/yawp-preview}"
+export PREVIEW_ROOT="$ROOT"
 CAP="${PREVIEW_MAX_ENVS:-30}"
 KEEP_PR="${KEEP_PR:-}"
 OPEN_PR_NUMBERS="${OPEN_PR_NUMBERS:-}"
@@ -35,6 +36,9 @@ PR_ACTIVITY="${PR_ACTIVITY:-}"
 POSTGRES_CONTAINER="${PREVIEW_POSTGRES_CONTAINER:-preview-postgres}"
 
 previews_dir="$ROOT/previews"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=remove-preview-path.sh
+source "$SCRIPT_DIR/remove-preview-path.sh"
 
 live_env_numbers() {
   [[ -d "$previews_dir" ]] || return 0
@@ -52,36 +56,7 @@ is_open_pr() {
   [[ " ${OPEN_PR_NUMBERS} " == *" ${1} "* ]]
 }
 
-# Remove a path that may contain files the host user does not own.
-#
-# The preview compose bind-mounts the source tree into the container (sourceDir:/app), and
-# the in-container build writes generated files there as root — .react-router/types/** is
-# the usual culprit. Those land on the host owned by root, so a plain `rm -rf` as the
-# deploy user fails with "Permission denied" on every one of them. Under `set -e` that
-# aborted cap enforcement before any deploy could run, which is how reclaiming closed
-# pr-232 broke every preview deploy on this branch.
-#
-# There is no sudo on the deploy path, so the fallback deletes from inside a container
-# running as root, bind-mounting the PARENT and removing the leaf by name. The image is
-# the same one every preview already runs, so this never needs a network pull.
-force_rm() {
-  local target="$1"
-  [[ -e "$target" ]] || return 0
-
-  rm -rf "$target" 2>/dev/null || true
-  [[ -e "$target" ]] || return 0
-
-  local parent leaf
-  parent="$(dirname "$target")"
-  leaf="$(basename "$target")"
-  docker run --rm --user 0:0 --entrypoint /bin/sh \
-    -v "${parent}:/target" oven/bun:1.3.1 \
-    -c 'rm -rf "/target/$1"' _ "$leaf" >/dev/null 2>&1 || true
-
-  [[ ! -e "$target" ]]
-}
-
-# Same teardown cleanup.sh performs, inline so this script needs nothing but bash+docker.
+# Same teardown cleanup.sh performs, using the shared safe-removal helper.
 destroy_env() {
   local pr="$1"
   # This function removes trees as root. Callers pass validated numbers, but the guard
@@ -106,11 +81,11 @@ destroy_env() {
   # counted against the cap: reporting it reclaimed would make the cap silently
   # unenforceable, which is the failure this whole script exists to prevent. A surviving
   # sources/pr-N only leaks disk, so it warns and lets the deploy proceed.
-  if ! force_rm "$path"; then
+  if ! preview_remove_path "$path"; then
     echo "::error::could not remove ${path}; it still counts against the cap"
     return 1
   fi
-  if ! force_rm "$ROOT/sources/pr-${pr}"; then
+  if ! preview_remove_path "$ROOT/sources/pr-${pr}"; then
     echo "::warning::left ${ROOT}/sources/pr-${pr} on disk; environment is gone but the source tree leaked"
   fi
 }

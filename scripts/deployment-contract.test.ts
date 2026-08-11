@@ -297,7 +297,9 @@ describe('PR preview deployment contract', () => {
       'github.event.pull_request.head.repo.full_name == github.repository'
     );
     expect(previewWorkflow).toContain('scripts/preview/deploy.sh');
-    expect(previewWorkflow).toContain('scripts/preview/destroy.sh');
+    expect(previewWorkflow).toContain(
+      'scripts/preview/remove-preview-path.sh scripts/preview/cleanup.sh'
+    );
     expect(previewWorkflow).not.toContain(deprecatedPreviewBrand);
     expect(previewWorkflow).not.toContain(`${deprecatedPreviewEnvPrefix}_`);
     expect(previewWorkflow).not.toContain(deprecatedPreviewSlug);
@@ -452,6 +454,9 @@ describe('PR preview deployment contract', () => {
 
   test('preview cleanup removes closed PR resources and is scheduled', () => {
     const cleanupScript = readRepoFile('scripts/preview/cleanup.sh');
+    const removeScript = readRepoFile(
+      'scripts/preview/remove-preview-path.sh'
+    );
     const previewWorkflow = readRepoFile(
       '.github/workflows/preview-environments.yml'
     );
@@ -464,8 +469,18 @@ describe('PR preview deployment contract', () => {
     expect(cleanupScript).toContain(
       'docker volume rm "${project}_${project}-postgres-data"'
     );
+    expect(cleanupScript).toContain('preview_remove_path');
+    expect(removeScript).toContain('preview_remove_path_is_safe');
     expect(previewWorkflow).toContain('schedule:');
-    expect(previewWorkflow).toContain('bash -s < scripts/preview/cleanup.sh');
+    expect(previewWorkflow).toContain(
+      'cat scripts/preview/remove-preview-path.sh scripts/preview/cleanup.sh'
+    );
+    expect(previewWorkflow).toContain(
+      'TARGET_PR=$(shell_quote "$PR_NUMBER")'
+    );
+    expect(previewWorkflow).not.toMatch(
+      /preview-destroy:[\s\S]*?contains\(github\.event\.pull_request\.(title|body)/
+    );
   });
 
   test('preview workflow passes seeded preview mode to remote deploy', () => {
