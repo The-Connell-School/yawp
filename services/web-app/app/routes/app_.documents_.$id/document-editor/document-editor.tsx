@@ -159,7 +159,9 @@ function AssignmentPromptBanner({
         </Button>
       </div>
       {!isCollapsed ? (
-        <div className="px-6 pb-2">
+        // Same gutter as the header above it, so the assignment title and the
+        // prompt text start on one line.
+        <div className="pb-2 pl-4 pr-4">
           <div
             className="overflow-y-auto whitespace-pre-wrap text-sm text-foreground/90"
             style={{ maxHeight: PROMPT_EXPANDED_MAX_HEIGHT }}
