@@ -794,6 +794,102 @@ test.describe('YAWP! Lesson Planner', () => {
     expect(pageErrors).toEqual([]);
   });
 
+  /**
+   * A lesson takes up to two minutes to write. Behind one spinner that reads
+   * as a hung page, so the turn reports what it is doing and the bar is drawn
+   * from those milestones. Served here as canned events — the point under test
+   * is the reading of them, not the model.
+   */
+  test('shows what it is doing while the lesson is being written', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    await setLessonPlannerEnabled(e2eContext.organizationId, true);
+    await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+
+    // Progress only: the turn never finishes, so the bar stays on screen to be
+    // looked at.
+    await page.route('**/api/domain/lesson-planner', async (route) => {
+      await route.fulfill({
+        status: 200,
+        headers: { 'content-type': 'application/x-ndjson; charset=utf-8' },
+        body:
+          [
+            JSON.stringify({
+              type: 'progress',
+              label: 'Thinking about your lesson',
+              fraction: 0.08,
+            }),
+            JSON.stringify({
+              type: 'progress',
+              label: 'Reading how the class scored',
+              fraction: 0.3,
+            }),
+          ].join('\n') + '\n',
+      });
+    });
+
+    await page.goto('/app/lesson-planner');
+    await page
+      .getByLabel('Message the Lesson Planner')
+      .fill('Plan a lesson on conclusions');
+    await page.getByRole('button', { name: 'Send message' }).click();
+
+    const bar = page.getByTestId('planning-progress');
+    await expect(bar).toBeVisible();
+    // The milestone is named in the teacher's words, never the tool's.
+    await expect(bar).toContainText('Reading how the class scored');
+    await expect(bar).not.toContainText('_');
+    // And it is a real progress bar to anything reading the page aloud.
+    const meter = bar.getByRole('progressbar');
+    await expect(meter).toHaveAttribute('aria-valuenow', /\d+/);
+  });
+
+  test('lands the lesson once the stream finishes', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    await setLessonPlannerEnabled(e2eContext.organizationId, true);
+    await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+
+    await page.route('**/api/domain/lesson-planner', async (route) => {
+      await route.fulfill({
+        status: 200,
+        headers: { 'content-type': 'application/x-ndjson; charset=utf-8' },
+        body:
+          [
+            JSON.stringify({
+              type: 'progress',
+              label: 'Looking at your classes',
+              fraction: 0.2,
+            }),
+            JSON.stringify({
+              type: 'done',
+              status: 200,
+              payload: {
+                conversationId: 'streamed-1',
+                messageId: 'streamed-msg-1',
+                reply: '## Conclusions that land\n\nFour minutes of writing.',
+                isNewConversation: true,
+              },
+            }),
+          ].join('\n') + '\n',
+      });
+    });
+
+    await page.goto('/app/lesson-planner');
+    await page
+      .getByLabel('Message the Lesson Planner')
+      .fill('Plan a lesson on conclusions');
+    await page.getByRole('button', { name: 'Send message' }).click();
+
+    await expect(page.getByText('Four minutes of writing.')).toBeVisible();
+    // The bar goes when the lesson arrives.
+    await expect(page.getByTestId('planning-progress')).toHaveCount(0);
+  });
+
   test('keeps replies and turns them into a printable lesson packet', async ({
     page,
     signIn,

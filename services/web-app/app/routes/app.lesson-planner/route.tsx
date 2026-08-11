@@ -4,6 +4,7 @@ import {
   redirect,
   useFetcher,
   useLoaderData,
+  useRevalidator,
   useSearchParams,
   type LoaderFunctionArgs,
 } from 'react-router';
@@ -59,8 +60,17 @@ import {
   withStandardSuggestions,
 } from '~/domain/lesson-planner/suggestions';
 import { loadLessonSeed } from '~/domain/lesson-planner/lesson-seed.server';
+import {
+  PlanningProgressBar,
+  type PlanningProgressState,
+} from '~/components/ai-chat/planning-progress-bar';
+import { PLANNING_PROGRESS_START } from '~/domain/lesson-planner/planning-progress';
 
 type PacketAudience = 'teacher' | 'student';
+
+/** Shown when the turn never made it back — distinct from one the server refused. */
+const PLANNER_UNREACHABLE =
+  'That lesson did not come back. Please check your connection and try again.';
 
 type ChatMessage = {
   /** Absent only for an optimistic user turn that has not been written yet. */
@@ -221,6 +231,14 @@ export default function LessonPlannerRoute() {
   } = useLoaderData<typeof loader>();
   const [searchParams, setSearchParams] = useSearchParams();
   const fetcher = useFetcher<LessonPlannerActionData>();
+  const revalidator = useRevalidator();
+  // The streamed turn's result and its milestones. The turn is sent with a raw
+  // fetch rather than the fetcher, because a fetcher cannot read a response as
+  // it arrives.
+  const [streamed, setStreamed] = useState<LessonPlannerActionData | null>(
+    null
+  );
+  const [progress, setProgress] = useState<PlanningProgressState | null>(null);
 
   const [messages, setMessages] = useState<ChatMessage[]>(
     selectedConversation?.messages ?? []
@@ -249,7 +267,10 @@ export default function LessonPlannerRoute() {
   // re-runs this effect with the same stale data) can't re-append a reply.
   const processedData = useRef<LessonPlannerActionData | null>(null);
 
-  const isSending = fetcher.state !== 'idle';
+  // A streamed turn is in flight exactly while there is a bar to draw.
+  const isSending = fetcher.state !== 'idle' || progress !== null;
+  // Whichever path answered. Only one runs per turn.
+  const result = streamed ?? (fetcher.state === 'idle' ? fetcher.data : null);
 
   // Reset the local transcript when switching between saved conversations.
   useEffect(() => {
@@ -270,33 +291,33 @@ export default function LessonPlannerRoute() {
 
   // Merge the assistant reply back in once the action resolves.
   useEffect(() => {
-    if (fetcher.state !== 'idle' || !fetcher.data) return;
-    if (processedData.current === fetcher.data) return;
-    processedData.current = fetcher.data;
+    if (!result) return;
+    if (processedData.current === result) return;
+    processedData.current = result;
     const submission = pendingSubmission;
     const submittedHere = submission?.conversationKey === conversationKey;
     setPendingSubmission(null);
 
-    if (fetcher.data.error) {
+    if (result.error) {
       if (submittedHere) {
         setMessages((prev) => [
           ...prev,
-          { role: 'assistant', content: fetcher.data!.error! },
+          { role: 'assistant', content: result!.error! },
         ]);
       }
       return;
     }
-    if (fetcher.data.reply) {
+    if (result.reply) {
       // A "build this day" turn is written into that day's own conversation.
       // Move the teacher into it rather than appending a reply that belongs to
       // a different lesson — the map thread stays the map.
       const landedElsewhere =
-        fetcher.data.unitDay != null &&
-        fetcher.data.conversationId &&
-        fetcher.data.conversationId !== conversationId;
+        result.unitDay != null &&
+        result.conversationId &&
+        result.conversationId !== conversationId;
       if (landedElsewhere) {
         const next = new URLSearchParams(searchParams);
-        next.set('c', fetcher.data.conversationId!);
+        next.set('c', result.conversationId!);
         setPendingConversationId(null);
         setSearchParams(next);
         return;
@@ -308,15 +329,15 @@ export default function LessonPlannerRoute() {
       setMessages((prev) => [
         ...prev,
         {
-          id: fetcher.data!.messageId,
+          id: result!.messageId,
           role: 'assistant',
-          content: fetcher.data!.reply!,
+          content: result!.reply!,
         },
       ]);
-      if (fetcher.data.conversationId && !conversationId) {
-        setPendingConversationId(fetcher.data.conversationId);
+      if (result.conversationId && !conversationId) {
+        setPendingConversationId(result.conversationId);
         const next = new URLSearchParams(searchParams);
-        next.set('c', fetcher.data.conversationId);
+        next.set('c', result.conversationId);
         // The seed has been consumed by the first turn; drop it from the URL so
         // a refresh doesn't re-prefill the composer.
         next.delete('from');
@@ -326,7 +347,7 @@ export default function LessonPlannerRoute() {
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fetcher.state, fetcher.data]);
+  }, [result]);
 
   useEffect(() => {
     transcriptRef.current?.scrollTo({
@@ -431,23 +452,83 @@ export default function LessonPlannerRoute() {
     setMessages((prev) => [...prev, { role: 'user', content: trimmed }]);
     setPendingSubmission({ message: trimmed, conversationKey });
     setInput('');
-    fetcher.submit(
-      {
-        intent: 'chat',
-        message: trimmed,
-        ...(conversationId ? { conversationId } : {}),
-        ...(!conversationId && seed
-          ? { originClassAssignmentId: seed.classAssignmentId }
-          : {}),
-        ...(unitDay
-          ? {
-              unitDay: String(unitDay.day),
-              unitDayTitle: unitDay.title,
-            }
-          : {}),
-      },
-      { method: 'post', action: '/api/domain/lesson-planner' }
-    );
+    setStreamed(null);
+    void sendStreaming(trimmed, unitDay);
+  }
+
+  /**
+   * Send the turn and read the answer as it arrives.
+   *
+   * A raw fetch rather than the fetcher, because a fetcher resolves once and
+   * cannot surface the milestones that arrive in between — which is the whole
+   * point. The cost is that react-router no longer revalidates the loader for
+   * us, so the turn does it itself once the lesson has landed.
+   */
+  async function sendStreaming(
+    message: string,
+    unitDay?: { day: number; title: string }
+  ) {
+    const body = new URLSearchParams({
+      intent: 'chat',
+      message,
+      stream: '1',
+      ...(conversationId ? { conversationId } : {}),
+      ...(!conversationId && seed
+        ? { originClassAssignmentId: seed.classAssignmentId }
+        : {}),
+      ...(unitDay
+        ? { unitDay: String(unitDay.day), unitDayTitle: unitDay.title }
+        : {}),
+    });
+
+    setProgress(PLANNING_PROGRESS_START);
+    let landed: LessonPlannerActionData | null = null;
+    try {
+      const response = await fetch('/api/domain/lesson-planner', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: body.toString(),
+      });
+      if (!response.body) throw new Error('no stream');
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffered = '';
+      // Events are newline-delimited, and a chunk boundary can land anywhere —
+      // including mid-line — so only whole lines are parsed.
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffered += decoder.decode(value, { stream: true });
+        const lines = buffered.split('\n');
+        buffered = lines.pop() ?? '';
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          let event: any;
+          try {
+            event = JSON.parse(line);
+          } catch {
+            continue;
+          }
+          if (event.type === 'progress') {
+            setProgress({ label: event.label, fraction: event.fraction });
+          } else if (event.type === 'done') {
+            landed = event.payload as LessonPlannerActionData;
+          }
+        }
+      }
+    } catch {
+      // A dropped connection, a proxy timeout, a closed laptop. The teacher
+      // gets a sentence rather than a bar that never finishes.
+      landed = { error: PLANNER_UNREACHABLE };
+    } finally {
+      setProgress(null);
+    }
+
+    setStreamed(landed ?? { error: PLANNER_UNREACHABLE });
+    // The loader owns the lesson list and which unit days are built, and the
+    // fetcher would have refreshed both for us.
+    if (landed?.reply) revalidator.revalidate();
   }
 
   const hasMessages = messages.length > 0;
@@ -640,14 +721,18 @@ export default function LessonPlannerRoute() {
             )}
             {isSending &&
             pendingSubmission?.conversationKey === conversationKey ? (
-              <div
-                className="flex items-center gap-2 text-sm text-muted-foreground"
-                role="status"
-                aria-live="polite"
-              >
-                <Loader2 size={16} className="animate-spin" />
-                Planning the lesson…
-              </div>
+              progress ? (
+                <PlanningProgressBar progress={progress} />
+              ) : (
+                <div
+                  className="flex items-center gap-2 text-sm text-muted-foreground"
+                  role="status"
+                  aria-live="polite"
+                >
+                  <Loader2 size={16} className="animate-spin" />
+                  Planning the lesson…
+                </div>
+              )
             ) : null}
           </div>
         </div>
