@@ -1,53 +1,80 @@
 #!/usr/bin/env bash
-# Keep the number of live preview environments at or under a hard cap.
+# Reconcile preview residency and running capacity on the shared host.
 #
-# Runs ON THE PREVIEW HOST, before a deploy. The host is a fixed-size box; without a
-# ceiling, one more PR is always "just one more" until the box runs out of memory and
-# wedges — which is exactly what happened on 2026-07-28, taking every preview down and
-# with it a client demo.
-#
-# Order of reclamation, cheapest and least surprising first:
-#   1. Environments whose PR is closed or merged. Nobody wants these.
-#   2. If still at the cap, the least active environment: drafts before ready-for-review,
-#      then oldest PR activity. The incoming PR is never evicted.
-#
-# Eviction removes the ENVIRONMENT, never the pull request. A PR is shared state and
-# other people's work; a preview is a derived artifact that any push rebuilds. Evicted
-# PRs get a comment from the workflow saying how to get theirs back.
-#
-# Required env:
-#   OPEN_PR_NUMBERS  space-separated PR numbers currently open
-#   PR_ACTIVITY      one "<number> <epoch-seconds> <draft:0|1>" per line, for ranking
-# Optional env:
-#   PREVIEW_ROOT      default /srv/yawp-preview
-#   PREVIEW_MAX_ENVS  default 30
-#   KEEP_PR           PR number being deployed; never evicted
-#
-# Prints machine-readable results for the workflow:
-#   CAP_RECLAIMED=<n>  CAP_EVICTED=<numbers>  CAP_LIVE=<n>  CAP_RESULT=ok|full
+# Resident previews keep source, database, access code, and volumes on disk. Running
+# previews have a live web container. Sleeping stops only that web container, so the next
+# deploy wakes the same environment without deleting preview-local state.
 set -euo pipefail
 
 ROOT="${PREVIEW_ROOT:-/srv/yawp-preview}"
 export PREVIEW_ROOT="$ROOT"
-CAP="${PREVIEW_MAX_ENVS:-30}"
+MODE="${PREVIEW_MODE:-admit}"
+RESIDENT_CAP="${PREVIEW_MAX_RESIDENT:-${PREVIEW_MAX_ENVS:-30}}"
+RUNNING_CAP="${PREVIEW_MAX_RUNNING:-$RESIDENT_CAP}"
 KEEP_PR="${KEEP_PR:-}"
 OPEN_PR_NUMBERS="${OPEN_PR_NUMBERS:-}"
 PR_ACTIVITY="${PR_ACTIVITY:-}"
 POSTGRES_CONTAINER="${PREVIEW_POSTGRES_CONTAINER:-preview-postgres}"
+SLEEP_ENABLED="${PREVIEW_SLEEP_ENABLED:-false}"
+DRAFT_IDLE_HOURS="${PREVIEW_DRAFT_IDLE_HOURS:-24}"
+READY_IDLE_HOURS="${PREVIEW_READY_IDLE_HOURS:-72}"
+NOW_EPOCH="${PREVIEW_NOW_EPOCH:-$(date +%s)}"
+DOCKER="${PREVIEW_DOCKER:-docker}"
+LOCK_WAIT_SECONDS="${PREVIEW_LOCK_WAIT_SECONDS:-900}"
 
 previews_dir="$ROOT/previews"
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=remove-preview-path.sh
-source "$SCRIPT_DIR/remove-preview-path.sh"
 
-live_env_numbers() {
+if ! declare -F preview_remove_path >/dev/null 2>&1; then
+  SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  # shellcheck source=remove-preview-path.sh
+  source "$SCRIPT_DIR/remove-preview-path.sh"
+fi
+
+is_positive_integer() {
+  [[ "$1" =~ ^[1-9][0-9]*$ ]]
+}
+
+is_nonnegative_integer() {
+  [[ "$1" =~ ^[0-9]+$ ]]
+}
+
+case "$MODE" in
+  admit|reconcile) ;;
+  *) echo "PREVIEW_MODE must be admit or reconcile" >&2; exit 1 ;;
+esac
+for value in "$RESIDENT_CAP" "$RUNNING_CAP"; do
+  is_positive_integer "$value" || { echo "Preview caps must be positive integers" >&2; exit 1; }
+done
+for value in "$DRAFT_IDLE_HOURS" "$READY_IDLE_HOURS" "$NOW_EPOCH" "$LOCK_WAIT_SECONDS"; do
+  is_nonnegative_integer "$value" || { echo "Preview timing values must be nonnegative integers" >&2; exit 1; }
+done
+case "$SLEEP_ENABLED" in
+  true|false) ;;
+  *) echo "PREVIEW_SLEEP_ENABLED must be true or false" >&2; exit 1 ;;
+esac
+if [[ "$MODE" == "reconcile" ]]; then
+  KEEP_PR=""
+elif [[ -n "$KEEP_PR" ]] && ! is_positive_integer "$KEEP_PR"; then
+  echo "KEEP_PR must be a positive integer" >&2
+  exit 1
+fi
+
+acquire_host_lock() {
+  [[ "${PREVIEW_LOCK_HELD:-false}" == "true" ]] && return 0
+  command -v flock >/dev/null 2>&1 || return 0
+  mkdir -p "$ROOT"
+  exec 9>"$ROOT/preview-host.lock"
+  flock -w "$LOCK_WAIT_SECONDS" 9
+}
+
+resident_env_numbers() {
   [[ -d "$previews_dir" ]] || return 0
   for path in "$previews_dir"/pr-*; do
     [[ -d "$path" ]] || continue
     local slug pr
     slug="$(basename "$path")"
     pr="${slug#pr-}"
-    [[ "$pr" =~ ^[1-9][0-9]*$ ]] || continue
+    is_positive_integer "$pr" || continue
     printf '%s\n' "$pr"
   done
 }
@@ -56,101 +83,215 @@ is_open_pr() {
   [[ " ${OPEN_PR_NUMBERS} " == *" ${1} "* ]]
 }
 
-# Same teardown cleanup.sh performs, using the shared safe-removal helper.
+activity_record() {
+  local target="$1"
+  printf '%s\n' "$PR_ACTIVITY" | awk -v target="$target" '
+    $1 == target && NF >= 3 {
+      pinned = (NF >= 4 && $4 == "1") ? 1 : 0
+      print $1, $2, $3, pinned
+      exit
+    }'
+}
+
+is_running() {
+  local pr="$1"
+  "$DOCKER" ps \
+    --filter "label=com.docker.compose.project=yawp-pr-${pr}" \
+    --filter "label=com.docker.compose.service=web" \
+    --filter status=running -q 2>/dev/null | grep -q .
+}
+
+running_env_numbers() {
+  local pr
+  while IFS= read -r pr; do
+    [[ -n "$pr" ]] || continue
+    is_running "$pr" && printf '%s\n' "$pr"
+  done < <(resident_env_numbers)
+  return 0
+}
+
 destroy_env() {
   local pr="$1"
-  # This function removes trees as root. Callers pass validated numbers, but the guard
-  # stays local to the dangerous operation rather than relying on every call site.
-  [[ "$pr" =~ ^[1-9][0-9]*$ ]] || { echo "::error::refusing to destroy malformed env id '${pr}'"; return 1; }
+  is_positive_integer "$pr" || {
+    echo "::error::refusing to destroy malformed env id '${pr}'"
+    return 1
+  }
+
   local path="$previews_dir/pr-${pr}"
   local project="yawp-pr-${pr}"
   local compose_file="$path/docker-compose.yml"
 
   if [[ -f "$compose_file" ]]; then
-    docker compose -p "$project" -f "$compose_file" down -v --remove-orphans || true
+    "$DOCKER" compose -p "$project" -f "$compose_file" down -v --remove-orphans || true
   else
-    docker compose -p "$project" down -v --remove-orphans || true
+    "$DOCKER" compose -p "$project" down -v --remove-orphans || true
   fi
-  if docker inspect "$POSTGRES_CONTAINER" >/dev/null 2>&1; then
-    docker exec "$POSTGRES_CONTAINER" dropdb -U postgres --if-exists "yawp_pr_${pr}" || true
+  if "$DOCKER" inspect "$POSTGRES_CONTAINER" >/dev/null 2>&1; then
+    "$DOCKER" exec "$POSTGRES_CONTAINER" dropdb -U postgres --if-exists "yawp_pr_${pr}" || true
   fi
-  docker volume rm "${project}_${project}-postgres-data" >/dev/null 2>&1 || true
+  "$DOCKER" volume rm "${project}_${project}-postgres-data" >/dev/null 2>&1 || true
 
-  # The two paths fail differently and must not be collapsed. live_env_numbers() counts
-  # directories under previews/, so a surviving previews/pr-N means this env is still
-  # counted against the cap: reporting it reclaimed would make the cap silently
-  # unenforceable, which is the failure this whole script exists to prevent. A surviving
-  # sources/pr-N only leaks disk, so it warns and lets the deploy proceed.
   if ! preview_remove_path "$path"; then
-    echo "::error::could not remove ${path}; it still counts against the cap"
+    echo "::error::could not remove ${path}; it still counts against the resident cap"
     return 1
   fi
   if ! preview_remove_path "$ROOT/sources/pr-${pr}"; then
-    echo "::warning::left ${ROOT}/sources/pr-${pr} on disk; environment is gone but the source tree leaked"
+    echo "::warning::left ${ROOT}/sources/pr-${pr} on disk; environment is gone but source leaked"
   fi
 }
 
-# --- 1. reclaim environments whose PR is no longer open -----------------------------
-# A single stuck environment must not abort the pass: the others are still reclaimable,
-# and the cap math below recounts the filesystem rather than trusting this counter, so a
-# failure here simply leaves that environment in the live set and lets eviction — or the
-# final `full` result — deal with it honestly.
+stop_env() {
+  local pr="$1"
+  local path="$previews_dir/pr-${pr}"
+  local compose_file="$path/docker-compose.yml"
+  local project="yawp-pr-${pr}"
+
+  [[ -f "$compose_file" ]] || {
+    echo "::error::cannot sleep pr-${pr}; compose file missing"
+    return 1
+  }
+  if ! "$DOCKER" compose -p "$project" -f "$compose_file" stop web; then
+    echo "::error::failed to stop pr-${pr} web container"
+    return 1
+  fi
+  if is_running "$pr"; then
+    echo "::error::pr-${pr} web container still running after stop"
+    return 1
+  fi
+}
+
+rank_candidates() {
+  local scope="$1"
+  local keep="$2"
+  local candidates
+  if [[ "$scope" == "running" ]]; then
+    candidates="$(running_env_numbers | tr '\n' ' ')"
+  else
+    candidates="$(resident_env_numbers | tr '\n' ' ')"
+  fi
+
+  printf '%s\n' "$PR_ACTIVITY" | awk -v keep="$keep" -v candidates=" $candidates " '
+    NF >= 3 {
+      pr = $1; updated = $2; draft = $3; pinned = (NF >= 4 ? $4 : 0)
+      if (pr == keep || pinned == 1) next
+      if (index(candidates, " " pr " ") == 0) next
+      printf "%d %d %s\n", (draft == "1" ? 0 : 1), updated, pr
+    }' | sort -k1,1n -k2,2n | awk '{print $3}'
+}
+
+append_number() {
+  local current="$1"
+  local number="$2"
+  [[ " $current " == *" $number "* ]] && printf '%s' "$current" || printf '%s' "${current:+$current }$number"
+}
+
+incoming_resident_slots() {
+  if [[ "$MODE" == "admit" && -n "$KEEP_PR" && ! -d "$previews_dir/pr-${KEEP_PR}" ]]; then
+    echo 1
+  else
+    echo 0
+  fi
+}
+
+incoming_running_slots() {
+  if [[ "$MODE" == "admit" && -n "$KEEP_PR" ]] && ! is_running "$KEEP_PR"; then
+    echo 1
+  else
+    echo 0
+  fi
+}
+
+acquire_host_lock
+
 reclaimed=0
-for pr in $(live_env_numbers); do
+evicted=""
+slept=""
+
+# Closed or merged PRs never retain host resources.
+while IFS= read -r pr; do
+  [[ -n "$pr" ]] || continue
   if ! is_open_pr "$pr"; then
     echo "reclaim pr-${pr}: pull request is closed or merged"
     if destroy_env "$pr"; then
       reclaimed=$((reclaimed + 1))
     fi
   fi
-done
+done < <(resident_env_numbers)
 
-# --- 2. evict the least active until the incoming deploy fits ------------------------
-# Rank: drafts before ready-for-review, then oldest activity first. A draft nobody has
-# touched in weeks is the cheapest thing on the box to take away.
-rank_candidates() {
-  local keep="$1"
-  local live_list
-  live_list="$(live_env_numbers | tr '\n' ' ')"
-  printf '%s\n' "$PR_ACTIVITY" | awk -v keep="$keep" -v live=" $live_list " '
-    NF >= 3 {
-      pr = $1; updated = $2; draft = $3
-      if (pr == keep) next
-      if (index(live, " " pr " ") == 0) next
-      # drafts sort first (0), then oldest activity first
-      printf "%d %d %s\n", (draft == "1" ? 0 : 1), updated, pr
-    }' | sort -k1,1n -k2,2n | awk '{print $3}'
-}
-
-evicted=""
-live_count="$(live_env_numbers | wc -l | tr -d ' ')"
-incoming_present=0
-if [[ -n "$KEEP_PR" ]] && [[ -d "$previews_dir/pr-${KEEP_PR}" ]]; then
-  incoming_present=1
-fi
-# A redeploy of an environment that already exists does not consume a new slot.
-needed=$((live_count + (incoming_present == 1 ? 0 : 1)))
-
-if [[ "$needed" -gt "$CAP" ]]; then
-  for pr in $(rank_candidates "$KEEP_PR"); do
-    [[ "$needed" -gt "$CAP" ]] || break
-    echo "evict pr-${pr}: at the cap of ${CAP} environments, least active candidate"
-    # Only a removal that actually happened frees a slot. Decrementing on a failed evict
-    # would let the deploy proceed over the cap — the memory exhaustion this guards
-    # against — and would comment "your preview was reclaimed" on a PR still holding one.
-    if destroy_env "$pr"; then
-      evicted="${evicted} ${pr}"
-      needed=$((needed - 1))
+# Idle leases stop web only. State stays resident and any new deploy wakes it.
+if [[ "$SLEEP_ENABLED" == "true" ]]; then
+  while IFS= read -r pr; do
+    [[ -n "$pr" ]] || continue
+    record="$(activity_record "$pr")"
+    [[ -n "$record" ]] || continue
+    read -r _ updated draft pinned <<<"$record"
+    is_nonnegative_integer "$updated" || continue
+    [[ "$pinned" == "1" ]] && continue
+    idle_hours="$READY_IDLE_HOURS"
+    [[ "$draft" == "1" ]] && idle_hours="$DRAFT_IDLE_HOURS"
+    if (( NOW_EPOCH - updated >= idle_hours * 3600 )); then
+      echo "sleep pr-${pr}: idle lease expired"
+      if stop_env "$pr"; then
+        slept="$(append_number "$slept" "$pr")"
+      fi
     fi
-  done
+  done < <(rank_candidates running "$KEEP_PR")
 fi
 
-live_count="$(live_env_numbers | wc -l | tr -d ' ')"
+# Resident pressure deletes derived environments, drafts then oldest activity.
+resident_count="$(resident_env_numbers | wc -l | tr -d ' ')"
+resident_needed=$((resident_count + $(incoming_resident_slots)))
+if (( resident_needed > RESIDENT_CAP )); then
+  while IFS= read -r pr; do
+    [[ -n "$pr" ]] || continue
+    (( resident_needed > RESIDENT_CAP )) || break
+    echo "evict pr-${pr}: resident cap ${RESIDENT_CAP}, least active candidate"
+    if destroy_env "$pr"; then
+      evicted="$(append_number "$evicted" "$pr")"
+      resident_needed=$((resident_needed - 1))
+    fi
+  done < <(rank_candidates resident "$KEEP_PR")
+fi
+
+# Running pressure sleeps; it never destroys state.
+running_count="$(running_env_numbers | wc -l | tr -d ' ')"
+running_needed=$((running_count + $(incoming_running_slots)))
+if (( running_needed > RUNNING_CAP )); then
+  while IFS= read -r pr; do
+    [[ -n "$pr" ]] || continue
+    (( running_needed > RUNNING_CAP )) || break
+    echo "sleep pr-${pr}: running cap ${RUNNING_CAP}, least active candidate"
+    if stop_env "$pr"; then
+      slept="$(append_number "$slept" "$pr")"
+      running_needed=$((running_needed - 1))
+    fi
+  done < <(rank_candidates running "$KEEP_PR")
+fi
+
+# Recount truth after every operation. Failed deletes/stops never free phantom capacity.
+resident_count="$(resident_env_numbers | wc -l | tr -d ' ')"
+running_count="$(running_env_numbers | wc -l | tr -d ' ')"
+resident_needed=$((resident_count + $(incoming_resident_slots)))
+running_needed=$((running_count + $(incoming_running_slots)))
 result="ok"
-[[ "$needed" -gt "$CAP" ]] && result="full"
+reason=""
+if (( resident_needed > RESIDENT_CAP )); then
+  result="full"
+  reason="resident-cap"
+elif (( running_needed > RUNNING_CAP )); then
+  result="full"
+  reason="running-cap"
+fi
 
 echo "CAP_RECLAIMED=${reclaimed}"
-echo "CAP_EVICTED=$(printf '%s' "${evicted# }")"
-echo "CAP_LIVE=${live_count}"
-echo "CAP_MAX=${CAP}"
+echo "CAP_EVICTED=${evicted}"
+echo "CAP_SLEPT=${slept}"
+echo "CAP_RESIDENT=${resident_count}"
+echo "CAP_RUNNING=${running_count}"
+echo "CAP_MAX_RESIDENT=${RESIDENT_CAP}"
+echo "CAP_MAX_RUNNING=${RUNNING_CAP}"
+echo "CAP_LIVE=${resident_count}"
+echo "CAP_MAX=${RESIDENT_CAP}"
 echo "CAP_RESULT=${result}"
+echo "CAP_REASON=${reason}"
+echo "CAP_MODE=${MODE}"

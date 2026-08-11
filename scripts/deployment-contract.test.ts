@@ -291,7 +291,7 @@ describe('PR preview deployment contract', () => {
     expect(previewWorkflow).toContain('name: PR preview');
     expect(previewWorkflow).toContain('pull_request');
     expect(previewWorkflow).toContain(
-      'types: [opened, synchronize, reopened, closed]'
+      'types: [opened, synchronize, reopened, ready_for_review, labeled, closed]'
     );
     expect(previewWorkflow).toContain(
       'github.event.pull_request.head.repo.full_name == github.repository'
@@ -481,6 +481,12 @@ describe('PR preview deployment contract', () => {
     expect(previewWorkflow).not.toMatch(
       /preview-destroy:[\s\S]*?contains\(github\.event\.pull_request\.(title|body)/
     );
+    expect(previewWorkflow).toContain('PREVIEW_MAX_RUNNING');
+    expect(previewWorkflow).toContain('PREVIEW_MAX_RESIDENT');
+    expect(previewWorkflow).toContain('PREVIEW_SLEEP_ENABLED');
+    expect(previewWorkflow).toContain('preview:keep-awake');
+    expect(previewWorkflow).toContain('PREVIEW_MODE=reconcile');
+    expect(previewWorkflow).toContain('CAP_SLEPT');
   });
 
   test('preview workflow passes seeded preview mode to remote deploy', () => {

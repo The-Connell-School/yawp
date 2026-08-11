@@ -48,6 +48,9 @@ describe('renderPreviewCompose', () => {
     expect(compose).not.toContain('bun prisma generate');
     expect(compose).not.toContain('bun run --cwd services/web-app dev');
     expect(compose).toContain('web:');
+    expect(compose).toContain('restart: unless-stopped');
+    expect(compose).toContain('healthcheck:');
+    expect(compose).toContain('/api/healthcheck');
     expect(compose).toContain('PORT: "8080"');
     expect(compose).toContain(
       'DATABASE_URL: "postgresql://postgres:postgres@preview-postgres:5432/yawp_pr_142"'

@@ -2,7 +2,7 @@ name: PR preview
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened, closed]
+    types: [opened, synchronize, reopened, ready_for_review, labeled, closed]
   workflow_dispatch:
   schedule:
     - cron: '17 */6 * * *'
@@ -20,6 +20,7 @@ jobs:
     if: >-
       github.event_name == 'pull_request' &&
       github.event.action != 'closed' &&
+      (github.event.action != 'labeled' || github.event.label.name == 'preview:keep-awake') &&
       github.event.pull_request.head.repo.full_name == github.repository &&
       contains(github.event.pull_request.title, '[skip preview]') == false &&
       contains(github.event.pull_request.body, '[skip preview]') == false &&
@@ -34,6 +35,11 @@ jobs:
       PREVIEW_TLS: ${{ vars.PREVIEW_TLS || 'true' }}
       PREVIEW_RUNTIME: ${{ vars.PREVIEW_RUNTIME || 'fast' }}
       PREVIEW_MAX_ENVS: ${{ vars.PREVIEW_MAX_ENVS || '30' }}
+      PREVIEW_MAX_RESIDENT: ${{ vars.PREVIEW_MAX_RESIDENT || vars.PREVIEW_MAX_ENVS || '20' }}
+      PREVIEW_MAX_RUNNING: ${{ vars.PREVIEW_MAX_RUNNING || '8' }}
+      PREVIEW_SLEEP_ENABLED: ${{ vars.PREVIEW_SLEEP_ENABLED || 'false' }}
+      PREVIEW_DRAFT_IDLE_HOURS: ${{ vars.PREVIEW_DRAFT_IDLE_HOURS || '24' }}
+      PREVIEW_READY_IDLE_HOURS: ${{ vars.PREVIEW_READY_IDLE_HOURS || '72' }}
       PREVIEW_DATA_MODE: ${{ vars.PREVIEW_DATA_MODE || 'seed' }}
       PREVIEW_SEAT_COUNT: ${{ vars.PREVIEW_SEAT_COUNT || '1' }}
       PREVIEW_AI_MODEL: ${{ vars.PREVIEW_AI_MODEL || 'claude-sonnet-4-6' }}
@@ -103,35 +109,55 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
+          shell_quote() {
+            printf '%q' "$1"
+          }
           # The host is a fixed-size box. Reclaim closed-PR environments, then evict the
           # least active, before adding one more. Without this the box fills until it
           # wedges and takes every preview down at once.
-          gh pr list --state open --limit 200 \
-            --json number,updatedAt,isDraft > /tmp/open-prs.json
+          gh pr list --state open --limit 1000 \
+            --json number,updatedAt,isDraft,labels > /tmp/open-prs.json
           open_numbers="$(jq -r '[.[].number] | join(" ")' /tmp/open-prs.json)"
-          activity="$(jq -r '.[] | "\(.number) \(.updatedAt | fromdateiso8601) \(if .isDraft then 1 else 0 end)"' /tmp/open-prs.json)"
+          activity="$(jq -r '.[] | "\(.number) \(.updatedAt | fromdateiso8601) \(if .isDraft then 1 else 0 end) \(if any(.labels[]?; .name == "preview:keep-awake") then 1 else 0 end)"' /tmp/open-prs.json)"
 
           ssh_target="${PREVIEW_SSH_USER}@${PREVIEW_HOST}"
           remote_source="${PREVIEW_ROOT}/sources/pr-${PR_NUMBER}"
+          remote_env=(
+            "PREVIEW_ROOT=$(shell_quote "$PREVIEW_ROOT")"
+            "PREVIEW_MODE=admit"
+            "PREVIEW_MAX_RESIDENT=$(shell_quote "$PREVIEW_MAX_RESIDENT")"
+            "PREVIEW_MAX_RUNNING=$(shell_quote "$PREVIEW_MAX_RUNNING")"
+            "PREVIEW_SLEEP_ENABLED=$(shell_quote "$PREVIEW_SLEEP_ENABLED")"
+            "PREVIEW_DRAFT_IDLE_HOURS=$(shell_quote "$PREVIEW_DRAFT_IDLE_HOURS")"
+            "PREVIEW_READY_IDLE_HOURS=$(shell_quote "$PREVIEW_READY_IDLE_HOURS")"
+            "KEEP_PR=$(shell_quote "$PR_NUMBER")"
+            "OPEN_PR_NUMBERS=$(shell_quote "$open_numbers")"
+            "PR_ACTIVITY=$(shell_quote "$activity")"
+          )
           ssh -i ~/.ssh/preview_key "$ssh_target" \
-            "cd '$remote_source' && PREVIEW_ROOT='$PREVIEW_ROOT' PREVIEW_MAX_ENVS='$PREVIEW_MAX_ENVS' KEEP_PR='$PR_NUMBER' OPEN_PR_NUMBERS='$open_numbers' PR_ACTIVITY='$activity' bash scripts/preview/enforce-cap.sh" \
+            "cd $(shell_quote "$remote_source") && ${remote_env[*]} bash scripts/preview/enforce-cap.sh" \
             | tee /tmp/capacity.log
 
           evicted="$(awk -F= '/^CAP_EVICTED=/{print $2}' /tmp/capacity.log | tail -1)"
+          slept="$(awk -F= '/^CAP_SLEPT=/{print $2}' /tmp/capacity.log | tail -1)"
           result="$(awk -F= '/^CAP_RESULT=/{print $2}' /tmp/capacity.log | tail -1)"
-          live="$(awk -F= '/^CAP_LIVE=/{print $2}' /tmp/capacity.log | tail -1)"
+          reason="$(awk -F= '/^CAP_REASON=/{print $2}' /tmp/capacity.log | tail -1)"
+          resident="$(awk -F= '/^CAP_RESIDENT=/{print $2}' /tmp/capacity.log | tail -1)"
+          running="$(awk -F= '/^CAP_RUNNING=/{print $2}' /tmp/capacity.log | tail -1)"
           echo "evicted=$evicted" >> "$GITHUB_OUTPUT"
 
-          # Tell anyone whose preview was reclaimed, so it is never a silent disappearance.
+          for pr in $slept; do
+            gh pr comment "$pr" --body "Preview sleeping after inactivity. State and access code remain intact. Push a commit, mark the PR ready for review, or add the \`preview:keep-awake\` label to wake it." || true
+          done
           for pr in $evicted; do
-            gh pr comment "$pr" --body "This PR's preview environment was reclaimed to stay under the ${PREVIEW_MAX_ENVS}-environment cap (it was among the least recently active). Nothing was lost — push any commit, or re-run the PR preview workflow, and it rebuilds." || true
+            gh pr comment "$pr" --body "Preview reclaimed at the ${PREVIEW_MAX_RESIDENT}-resident cap. Preview-local database and access state were deleted; push a commit or add \`preview:keep-awake\` to rebuild it." || true
           done
 
           if [ "$result" = "full" ]; then
-            echo "::error::All ${PREVIEW_MAX_ENVS} preview slots are in use by active pull requests and none could be reclaimed. Close a PR or raise PREVIEW_MAX_ENVS."
+            echo "::error::Preview host is full at ${reason}; pinned and incoming PRs could not be displaced."
             exit 1
           fi
-          echo "Preview capacity OK: ${live}/${PREVIEW_MAX_ENVS} in use."
+          echo "Preview capacity OK: ${running}/${PREVIEW_MAX_RUNNING} running, ${resident}/${PREVIEW_MAX_RESIDENT} resident."
 
       - name: Deploy preview
         id: deploy
@@ -167,9 +193,11 @@ jobs:
           elapsed_ms="$(awk -F= '/^PREVIEW_ELAPSED_MS=/{print $2}' /tmp/preview-deploy.log | tail -1)"
           test -n "$preview_url" || { echo "Deploy script did not print PREVIEW_URL"; exit 1; }
           test -n "$access_code" || { echo "Deploy script did not print PREVIEW_ACCESS_CODE"; exit 1; }
-          echo "url=$preview_url" >> "$GITHUB_OUTPUT"
-          echo "access_code=$access_code" >> "$GITHUB_OUTPUT"
-          echo "elapsed_ms=${elapsed_ms:-unknown}" >> "$GITHUB_OUTPUT"
+          {
+            echo "url=$preview_url"
+            echo "access_code=$access_code"
+            echo "elapsed_ms=${elapsed_ms:-unknown}"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Verify preview access gate
         run: |
@@ -279,8 +307,10 @@ jobs:
             "OPEN_PR_NUMBERS=''"
             "TARGET_PR=$(shell_quote "$PR_NUMBER")"
           )
+          lock_file="$(shell_quote "$PREVIEW_ROOT/preview-host.lock")"
           cat scripts/preview/remove-preview-path.sh scripts/preview/cleanup.sh \
-            | ssh -i ~/.ssh/preview_key "$ssh_target" "${remote_env[*]} bash -s"
+            | ssh -i ~/.ssh/preview_key "$ssh_target" \
+              "flock -w 900 $lock_file env ${remote_env[*]} bash -s"
 
   preview-cleanup:
     if: >-
@@ -290,7 +320,11 @@ jobs:
       PREVIEW_HOST: ${{ vars.PREVIEW_HOST }}
       PREVIEW_ROOT: ${{ vars.PREVIEW_ROOT || '/srv/yawp-preview' }}
       PREVIEW_SSH_USER: ${{ vars.PREVIEW_SSH_USER || 'ec2-user' }}
-      PREVIEW_TTL_HOURS: ${{ vars.PREVIEW_TTL_HOURS || '72' }}
+      PREVIEW_MAX_RESIDENT: ${{ vars.PREVIEW_MAX_RESIDENT || vars.PREVIEW_MAX_ENVS || '20' }}
+      PREVIEW_MAX_RUNNING: ${{ vars.PREVIEW_MAX_RUNNING || '8' }}
+      PREVIEW_SLEEP_ENABLED: ${{ vars.PREVIEW_SLEEP_ENABLED || 'false' }}
+      PREVIEW_DRAFT_IDLE_HOURS: ${{ vars.PREVIEW_DRAFT_IDLE_HOURS || '24' }}
+      PREVIEW_READY_IDLE_HOURS: ${{ vars.PREVIEW_READY_IDLE_HOURS || '72' }}
     steps:
       - name: Check preview cleanup configuration
         env:
@@ -314,7 +348,7 @@ jobs:
           chmod 600 ~/.ssh/preview_key
           ssh-keyscan -H "$PREVIEW_HOST" >> ~/.ssh/known_hosts
 
-      - name: Clean stale previews
+      - name: Reconcile preview capacity
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -322,12 +356,41 @@ jobs:
           shell_quote() {
             printf '%q' "$1"
           }
-          open_pr_numbers="$(gh pr list --state open --limit 200 --json number --jq '.[].number' | tr '\n' ' ')"
+          gh pr list --state open --limit 1000 \
+            --json number,updatedAt,isDraft,labels > /tmp/open-prs.json
+          open_pr_numbers="$(jq -r '[.[].number] | join(" ")' /tmp/open-prs.json)"
+          activity="$(jq -r '.[] | "\(.number) \(.updatedAt | fromdateiso8601) \(if .isDraft then 1 else 0 end) \(if any(.labels[]?; .name == "preview:keep-awake") then 1 else 0 end)"' /tmp/open-prs.json)"
           ssh_target="${PREVIEW_SSH_USER}@${PREVIEW_HOST}"
           remote_env=(
             "PREVIEW_ROOT=$(shell_quote "$PREVIEW_ROOT")"
-            "PREVIEW_TTL_HOURS=$(shell_quote "$PREVIEW_TTL_HOURS")"
+            "PREVIEW_MODE=reconcile"
+            "PREVIEW_MAX_RESIDENT=$(shell_quote "$PREVIEW_MAX_RESIDENT")"
+            "PREVIEW_MAX_RUNNING=$(shell_quote "$PREVIEW_MAX_RUNNING")"
+            "PREVIEW_SLEEP_ENABLED=$(shell_quote "$PREVIEW_SLEEP_ENABLED")"
+            "PREVIEW_DRAFT_IDLE_HOURS=$(shell_quote "$PREVIEW_DRAFT_IDLE_HOURS")"
+            "PREVIEW_READY_IDLE_HOURS=$(shell_quote "$PREVIEW_READY_IDLE_HOURS")"
             "OPEN_PR_NUMBERS=$(shell_quote "$open_pr_numbers")"
+            "PR_ACTIVITY=$(shell_quote "$activity")"
           )
-          cat scripts/preview/remove-preview-path.sh scripts/preview/cleanup.sh \
-            | ssh -i ~/.ssh/preview_key "$ssh_target" "${remote_env[*]} bash -s"
+          cat scripts/preview/remove-preview-path.sh scripts/preview/enforce-cap.sh \
+            | ssh -i ~/.ssh/preview_key "$ssh_target" "${remote_env[*]} bash -s" \
+            | tee /tmp/reconcile.log
+
+          slept="$(awk -F= '/^CAP_SLEPT=/{print $2}' /tmp/reconcile.log | tail -1)"
+          evicted="$(awk -F= '/^CAP_EVICTED=/{print $2}' /tmp/reconcile.log | tail -1)"
+          result="$(awk -F= '/^CAP_RESULT=/{print $2}' /tmp/reconcile.log | tail -1)"
+          reason="$(awk -F= '/^CAP_REASON=/{print $2}' /tmp/reconcile.log | tail -1)"
+          running="$(awk -F= '/^CAP_RUNNING=/{print $2}' /tmp/reconcile.log | tail -1)"
+          resident="$(awk -F= '/^CAP_RESIDENT=/{print $2}' /tmp/reconcile.log | tail -1)"
+
+          for pr in $slept; do
+            gh pr comment "$pr" --body "Preview sleeping after inactivity. State and access code remain intact. Push a commit, mark the PR ready for review, or add the \`preview:keep-awake\` label to wake it." || true
+          done
+          for pr in $evicted; do
+            gh pr comment "$pr" --body "Preview reclaimed at the ${PREVIEW_MAX_RESIDENT}-resident cap. Preview-local database and access state were deleted; push a commit or add \`preview:keep-awake\` to rebuild it." || true
+          done
+          if [ "$result" = "full" ]; then
+            echo "::error::Preview reconciliation remains full at ${reason}."
+            exit 1
+          fi
+          echo "Preview reconcile OK: ${running}/${PREVIEW_MAX_RUNNING} running, ${resident}/${PREVIEW_MAX_RESIDENT} resident."
