@@ -23,11 +23,10 @@ function userWith({
   } as any;
 }
 
-function destinationsFor(user: any, studentPreviewActive = false) {
+function destinationsFor(user: any) {
   return getVisibleSidebarSections(
     FLAT_SIDEBAR_SECTIONS,
-    user,
-    studentPreviewActive
+    user
   ).flatMap((section) => section.links.map((link) => link.to));
 }
 
@@ -92,21 +91,5 @@ describe('Writing Practice sidebar gating', () => {
     ).not.toContain('/app/writing-lessons');
   });
 
-  test('visible for a teacher previewing as a student when the org flag is on', () => {
-    expect(
-      destinationsFor(
-        userWith({ role: 'TEACHER', writingPracticeEnabled: true }),
-        true
-      )
-    ).toContain('/app/writing-lessons');
-  });
 
-  test('hidden for a teacher previewing as a student when the org flag is off', () => {
-    expect(
-      destinationsFor(
-        userWith({ role: 'TEACHER', writingPracticeEnabled: false }),
-        true
-      )
-    ).not.toContain('/app/writing-lessons');
-  });
 });

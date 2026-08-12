@@ -123,8 +123,6 @@ export function createDevLoginAction({
     authSession.set(sessionKey, session.id);
     authSession.unset('impersonationMode');
     authSession.unset('impersonatorUserId');
-    authSession.unset('studentPreviewMode');
-    authSession.unset('studentPreviewOrgId');
 
     return redirectResponse(
       combineHeaders(

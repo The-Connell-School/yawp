@@ -14,8 +14,6 @@ import { Button } from '~/components/ui/button';
 import { FormInput } from '~/components/rvf-forms/form-input';
 import { FormSelect } from '~/components/rvf-forms/form-select';
 import { redirectWithToast } from '~/utils/toast.server';
-import { getStudentPreviewState } from '~/utils/student-preview.server';
-import { EnterCodeEscapeActions } from './escape-actions';
 import { formatClassGradePeriod } from '~/utils/class-display';
 
 const CodeSchema = z.object({
@@ -58,7 +56,6 @@ async function connectMembershipToClass(membershipId: string, classId: string) {
 export async function loader({ request }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
   const membership = await requireMembership(request, userId);
-  const preview = await getStudentPreviewState(request);
   const url = new URL(request.url);
   const code = url.searchParams.get('code');
 
@@ -67,7 +64,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
       membership,
       classes: [],
       code: null,
-      studentPreviewActive: preview.active,
     });
   }
 
@@ -97,7 +93,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
     membership,
     classes,
     code,
-    studentPreviewActive: preview.active,
   });
 }
 
@@ -214,9 +209,6 @@ export default function Route() {
               Continue
             </Button>
           </Form>
-          <EnterCodeEscapeActions
-            studentPreviewActive={data.studentPreviewActive}
-          />
         </div>
       </div>
     );
@@ -266,7 +258,6 @@ export default function Route() {
             Join Class
           </Button>
         </Form>
-        <EnterCodeEscapeActions studentPreviewActive={data.studentPreviewActive} />
       </div>
     </div>
   );

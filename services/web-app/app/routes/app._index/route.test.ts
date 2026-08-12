@@ -43,14 +43,6 @@ mock.module('~/utils/assignment-type-access.server', () => ({
   ...actualAssignmentTypeAccess,
   getAvailableAssignmentTypesForScopes,
 }));
-mock.module('~/utils/student-preview.server', () => ({
-  getStudentPreviewState,
-  studentPreviewModeKey: 'studentPreviewMode',
-  studentPreviewOrgIdKey: 'studentPreviewOrgId',
-  shouldUseStudentExperience: (
-    args: { membershipRole: string; previewActive: boolean }
-  ) => args.membershipRole === 'STUDENT' || args.previewActive,
-}));
 mock.module('~/utils/student-classes.server', () => ({
   getStudentEnrolledClasses,
 }));

@@ -29,16 +29,12 @@ mock.module('~/utils/auth.server', () => ({
   requireMembership: mock(),
 }));
 mock.module('~/utils/toast.server', () => ({ redirectWithToast: mock() }));
-mock.module('~/utils/student-preview.server', () => ({
-  getStudentPreviewState: mock(),
-}));
 
 const Route = (await import('./route')).default;
 
 const loaderData = {
   membership: { id: 'membership-a' },
   code: 'AMBIG',
-  studentPreviewActive: false,
   classes: [
     {
       id: 'class-a1',

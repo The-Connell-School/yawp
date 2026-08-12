@@ -56,11 +56,10 @@ function pausedUser(role: 'TEACHER' | 'STUDENT') {
   } as any;
 }
 
-function destinationsFor(user: any, studentPreviewActive = false) {
+function destinationsFor(user: any) {
   return getVisibleSidebarSections(
     FLAT_SIDEBAR_SECTIONS,
-    user,
-    studentPreviewActive
+    user
   ).flatMap((section) => section.links.map((link) => link.to));
 }
 
@@ -83,11 +82,6 @@ describe('Writing Practice is invisible while paused', () => {
     ).toBe(false);
   });
 
-  test('a teacher previewing as a student gets no Writing Practice navigation entry', () => {
-    expect(destinationsFor(pausedUser('TEACHER'), true)).not.toContain(
-      '/app/writing-lessons'
-    );
-  });
 });
 
 describe('Writing Practice routes refuse while paused', () => {

@@ -11,10 +11,6 @@ import { Button } from '~/components/ui/button';
 import { NoDataPlaceholder } from '~/components/no-data-placeholder.js';
 import { useUser } from '~/hooks/useUser.js';
 import { requireMembership, requireUserId } from '~/utils/auth.server.js';
-import {
-  getStudentPreviewState,
-  shouldUseStudentExperience,
-} from '~/utils/student-preview.server';
 import { prisma } from '~/utils/db.server.js';
 import { getAvailableAssignmentTypesForScopes } from '~/utils/assignment-type-access.server';
 import { AP_HISTORY_ASSIGNMENT_TYPE_KEY } from '~/domain/ap-history/schema';
@@ -41,11 +37,7 @@ export type AssignmentTypeRow = {
 export async function loader({ request }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
   const profile = await requireMembership(request, userId);
-  const preview = await getStudentPreviewState(request);
-  const useStudentExperience = shouldUseStudentExperience({
-    membershipRole: profile.role,
-    previewActive: preview.active,
-  });
+  const useStudentExperience = profile.role === 'STUDENT';
 
   const studentClassCount =
     useStudentExperience
@@ -299,9 +291,7 @@ export default function AppRoute() {
   const [createAssignmentTypeId, setCreateAssignmentTypeId] = useState<
     string | undefined
   >();
-  const studentPreviewActive = rootData?.studentPreview?.active ?? false;
-  const isTeacher =
-    user.selectedMembership?.role === 'TEACHER' && !studentPreviewActive;
+  const isTeacher = user.selectedMembership?.role === 'TEACHER';
   const assignmentsEnabled = data.assignmentsEnabled ?? false;
 
   if (isTeacher) {

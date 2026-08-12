@@ -23,18 +23,17 @@ function userWith({
   } as any;
 }
 
-function reporterVisible(user: any, studentPreviewActive = false) {
+function reporterVisible(user: any) {
   return getVisibleSidebarSections(
     FLAT_SIDEBAR_SECTIONS,
-    user,
-    studentPreviewActive
+    user
   )
     .flatMap((section) => section.links)
     .some((link) => link.to === '/app/reporter');
 }
 
 function allDestinations(user: any) {
-  return getVisibleSidebarSections(FLAT_SIDEBAR_SECTIONS, user, false).flatMap(
+  return getVisibleSidebarSections(FLAT_SIDEBAR_SECTIONS, user).flatMap(
     (section) => section.links.map((link) => link.to)
   );
 }
@@ -57,15 +56,6 @@ describe('Reporter sidebar gating', () => {
       reporterVisible(userWith({ role: 'STUDENT', reporterEnabled: true }))
     ).toBe(false);
   });
-
-  test('hidden while previewing as a student', () => {
-    expect(
-      reporterVisible(
-        userWith({ role: 'TEACHER', reporterEnabled: true }),
-        true
-      )
-    ).toBe(false);
-  });
 });
 
 describe('My Assignments navigation', () => {
@@ -79,18 +69,6 @@ describe('My Assignments navigation', () => {
     expect(
       allDestinations(userWith({ role: 'STUDENT', reporterEnabled: true }))
     ).not.toContain('/app/assignments');
-  });
-
-  test('hidden while previewing as a student', () => {
-    expect(
-      getVisibleSidebarSections(
-        FLAT_SIDEBAR_SECTIONS,
-        userWith({ role: 'TEACHER', reporterEnabled: true }),
-        true
-      )
-        .flatMap((section) => section.links)
-        .some((link) => link.to === '/app/assignments')
-    ).toBe(false);
   });
 
   test('labeled "My Assignments"', () => {
