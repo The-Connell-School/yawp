@@ -1204,6 +1204,20 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
       model,
       status: 'succeeded',
       metadata: {
+        // The suggestions exactly as the assistant produced them. A teacher
+        // edits the submission itself afterwards, so this is the only record
+        // of what was suggested — it is what "reset to the suggestions"
+        // restores, including after a reload.
+        output: {
+          rubricScores,
+          overallScore,
+          overallComment,
+          numericPercentage,
+          letterGrade,
+          score,
+          grammarIssues,
+          gradingAssistantStrictnessLevel,
+        },
         assignmentTypeGradingLabel: resolvedGradingConfig.label,
         assignmentTypeRubricSource: resolvedGradingConfig.source,
         assignmentTypeSourceTemplateId: resolvedGradingConfig.sourceTemplateId,
