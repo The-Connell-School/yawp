@@ -3,6 +3,7 @@ import {
   gradingAssistantRubricInstructions,
   gradingAssistantScoreScaleInstructions,
 } from '~/domain/grading/rubric-instructions';
+import { parseRubricSchema } from '~/domain/rubrics/rubric-schema';
 import {
   parseAssignmentTypeRubricConfig,
   type AssignmentTypeRubricConfigSource,
@@ -138,6 +139,24 @@ export function getAssignmentTypeGradingInstructions(
   };
 }
 
+function withLibraryRubric<
+  T extends AssignmentTypeGradingRow & { rubric?: { schemaJson: unknown } | null },
+>(row: T | null): AssignmentTypeGradingRow | null {
+  if (!row?.rubric) return row;
+
+  const parsed = parseRubricSchema(row.rubric.schemaJson);
+  if (!parsed.ok) return row;
+
+  return {
+    ...row,
+    scoringScaleJson: parsed.schema.scoringScale as never,
+    rubricJson: parsed.schema.rubric as never,
+    gradingPromptConfigJson: parsed.schema.promptConfig as never,
+    gradingOutputSchemaJson: parsed.schema.outputSchema as never,
+    gradingCalibrationNotes: parsed.schema.calibrationNotes,
+  };
+}
+
 function buildResolvedConfig({
   assignmentTypeId,
   assignmentTypeKind,
@@ -233,6 +252,7 @@ export async function resolveAssignmentTypeGradingConfig({
       gradingAssistantVersion: true,
       gradingAssistantSourceTemplateId: true,
       gradingAssistantSourceTemplateSlug: true,
+      rubric: { select: { schemaJson: true } },
     },
   });
 
@@ -240,6 +260,9 @@ export async function resolveAssignmentTypeGradingConfig({
     assignmentTypeId,
     assignmentTypeKind,
     assignmentTypeTitle,
-    row: assignmentType,
+    // A rubric chosen from the library replaces the assignment type's own
+    // columns wholesale. Everything downstream reads the same shape either
+    // way, so nothing else in grading has to know where the rubric came from.
+    row: withLibraryRubric(assignmentType),
   });
 }

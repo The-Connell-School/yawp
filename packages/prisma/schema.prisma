@@ -36,6 +36,24 @@ model Class {
   @@index([schoolId, schoolYear, period, grade])
 }
 
+/// A whole grading rubric as one portable object: scale, categories, prompt
+/// configuration, output schema and calibration notes together. Rubrics are
+/// written elsewhere and pasted in, which is what makes them movable between
+/// environments — the JSON is the transfer format.
+model Rubric {
+  id              String           @id @default(cuid())
+  createdAt       DateTime         @default(now()) @db.Timestamptz(6)
+  updatedAt       DateTime         @default(now()) @updatedAt @db.Timestamptz(6)
+  /// Stable identifier used to match the same rubric across environments.
+  name            String           @unique
+  /// What an admin sees in the picker.
+  title           String
+  schemaJson      Json
+  assignmentTypes AssignmentType[]
+
+  @@index([title])
+}
+
 model AssignmentType {
   id                                 String                        @id @default(cuid())
   createdAt                          DateTime                      @default(now()) @db.Timestamptz(6)
@@ -50,6 +68,11 @@ model AssignmentType {
   ownerOrg                           Organization?                 @relation(fields: [ownerOrgId], references: [id], onDelete: Cascade)
   ownerMembershipId                  String?
   ownerMembership                    OrgMembership?                @relation("AssignmentTypeOwner", fields: [ownerMembershipId], references: [id], onDelete: Cascade)
+  /// The rubric this assignment type grades with, chosen from the shared
+  /// library. Null keeps the older behaviour: its own JSON columns below, or
+  /// the built-in default for its kind.
+  rubricId                           String?
+  rubric                             Rubric?                       @relation(fields: [rubricId], references: [id])
   scoringScaleJson                   Json?
   rubricJson                         Json?
   gradingPromptConfigJson            Json?
