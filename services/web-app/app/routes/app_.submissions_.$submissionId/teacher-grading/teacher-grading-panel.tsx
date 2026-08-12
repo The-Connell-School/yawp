@@ -57,7 +57,7 @@ import {
   parseGradingAssistantStrictnessLevel,
   type GradingAssistantStrictnessLevel,
 } from '~/domain/grading/grading-assistant-strictness';
-import { AlertTriangle, Info, Loader2, TrendingUp } from 'lucide-react';
+import { AlertTriangle, Loader2, TrendingUp } from 'lucide-react';
 import { Tooltip } from '~/components/ui/tooltip';
 import { cn } from '~/utils/misc';
 import { useUpdateSubmission } from './use-update-submission';
@@ -1063,24 +1063,6 @@ export function TeacherGradingPanel({
 
         <div className="space-y-2 border-t pt-4">
           <div className="text-sm font-medium">Rubric</div>
-          {activeRubricConfig.source === 'thesis-default' ? (
-            <div
-              data-testid="teacher-grading-rubric-source-warning"
-              className="flex items-start gap-3 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3"
-            >
-              <Info className="mt-0.5 size-5 shrink-0 text-blue-600" />
-              <div>
-                <p className="text-sm font-medium">
-                  Using the default thesis rubric
-                </p>
-                <p className="mt-0.5 text-sm text-muted-foreground text-pretty">
-                  This assignment type has no rubric of its own configured, so
-                  the thesis-driven essay grading assistant rubric was applied
-                  instead.
-                </p>
-              </div>
-            </div>
-          ) : null}
           {activeRubricConfig.rubricIncomplete ? (
             <div
               data-testid="teacher-grading-rubric-incomplete-warning"

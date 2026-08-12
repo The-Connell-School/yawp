@@ -173,55 +173,6 @@ describe('TeacherGradingPanel', () => {
     expect(form.get('gradingAssistantStrictnessLevel')).toBe('advanced');
   });
 
-  it('warns the teacher when the thesis-driven-essay rubric is applied instead of this assignment type\'s own', async () => {
-    ({ root } = renderPanel({
-      rubricConfig: {
-        source: 'thesis-default',
-        minScore: 1,
-        maxScore: 5,
-        scoringType: 'weighted_1_5',
-        categories: [
-          {
-            key: 'thesis_and_content',
-            label: 'Thesis/Content',
-            description: 'Thesis quality.',
-            weight: 0.25,
-          },
-        ],
-      },
-    }));
-
-    const banner = document.querySelector(
-      '[data-testid="teacher-grading-rubric-source-warning"]'
-    );
-    expect(banner).not.toBeNull();
-    expect(banner?.textContent).toContain('thesis-driven essay');
-  });
-
-  it('does not show the fallback warning when the assignment type owns its rubric', async () => {
-    ({ root } = renderPanel({
-      rubricConfig: {
-        source: 'assignment-type',
-        minScore: 1,
-        maxScore: 5,
-        scoringType: 'weighted_1_5',
-        categories: [
-          {
-            key: 'claim',
-            label: 'Claim',
-            description: 'A clear defensible claim.',
-            weight: 1,
-          },
-        ],
-      },
-    }));
-
-    const banner = document.querySelector(
-      '[data-testid="teacher-grading-rubric-source-warning"]'
-    );
-    expect(banner).toBeNull();
-  });
-
   it('warns the teacher when the assignment type rubric has incomplete categories', async () => {
     ({ root } = renderPanel({
       rubricConfig: {
@@ -252,12 +203,5 @@ describe('TeacherGradingPanel', () => {
     );
     expect(banner).not.toBeNull();
     expect(banner?.textContent).toContain('incomplete');
-    // It is still this assignment type's own rubric -- the thesis fallback
-    // banner must not claim the rubric was swapped out.
-    expect(
-      document.querySelector(
-        '[data-testid="teacher-grading-rubric-source-warning"]'
-      )
-    ).toBeNull();
   });
 });
