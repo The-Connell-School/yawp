@@ -20,6 +20,10 @@ import { StudentWriteSomethingNew } from '~/components/student-write-something-n
 import { getTeacherClassCardStats } from '~/utils/teacher-class-card-stats.server';
 import { getTeacherRecentActiveClassIds } from '~/utils/teacher-dashboard-recent-classes.server';
 import { getStudentEnrolledClasses } from '~/utils/student-classes.server';
+import {
+  resolveSchoolYearScopeForMembership,
+  schoolYearWhere,
+} from '~/utils/school-year-scope.server';
 import { AssignmentsAtAGlance } from './components/assignments-at-a-glance';
 import { ClassesAtAGlance } from './components/classes-at-a-glance';
 import { TeacherGradingAtAGlance } from './components/teacher-grading-at-a-glance';
@@ -38,6 +42,12 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
   const profile = await requireMembership(request, userId);
   const useStudentExperience = profile.role === 'STUDENT';
+  // The dashboard is the first thing either role sees, so it has to obey the
+  // same school year everything else does.
+  const schoolYearScope = await resolveSchoolYearScopeForMembership(
+    request,
+    profile
+  );
 
   const studentClassCount =
     useStudentExperience
@@ -71,6 +81,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     const studentClasses = await prisma.class.findMany({
       where: {
         students: { some: { id: profile.id } },
+        ...schoolYearWhere(schoolYearScope),
       },
       select: {
         id: true,
@@ -115,7 +126,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       : teacherAssignmentClassScopes.length > 0;
 
   const enrolledClasses = useStudentExperience
-    ? await getStudentEnrolledClasses(profile.id)
+    ? await getStudentEnrolledClasses(profile.id, schoolYearScope)
     : [];
 
   const [assignmentTypes, teacherClasses] = await Promise.all([
@@ -137,6 +148,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
           where: {
             teachers: { some: { id: profile.id } },
             isArchived: false,
+            ...schoolYearWhere(schoolYearScope),
           },
           select: {
             id: true,

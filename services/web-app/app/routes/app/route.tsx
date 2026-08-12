@@ -61,9 +61,10 @@ import {
   writeLastNonDocumentRoute,
 } from '~/utils/document-exit';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
-import { prisma } from '~/utils/db.server';
-import { getSchoolYearScope } from '~/cookies/school-year.server';
-import { schoolYearOptions } from '~/utils/school-year';
+import {
+  resolveSchoolYearScopeForMembership,
+  schoolYearsForMembership,
+} from '~/utils/school-year-scope.server';
 import { SchoolYearScopeSwitcher } from './school-year-scope';
 import type { Route as RootRoute } from '../../+types/root';
 import {
@@ -82,24 +83,18 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
   const profile = await requireMembership(request, userId);
 
-  if (profile.role !== 'TEACHER') {
+  const [selected, options] = await Promise.all([
+    resolveSchoolYearScopeForMembership(request, profile),
+    schoolYearsForMembership(profile),
+  ]);
+
+  // A student with a single year has nothing to choose between; the scope is
+  // resolved for them and the control would only be noise.
+  if (profile.role === 'STUDENT' && options.length < 2) {
     return data({ schoolYearScope: null });
   }
 
-  // Offer the years this teacher actually has classes in, plus the current
-  // one, so the list is short and every entry leads somewhere.
-  const taught = await prisma.class.findMany({
-    where: { teachers: { some: { id: profile.id } } },
-    select: { schoolYear: true },
-    distinct: ['schoolYear'],
-  });
-
-  return data({
-    schoolYearScope: {
-      selected: await getSchoolYearScope(request),
-      options: schoolYearOptions({ years: taught.map((c) => c.schoolYear) }),
-    },
-  });
+  return data({ schoolYearScope: { selected, options } });
 }
 
 const EditNameSchema = z.object({

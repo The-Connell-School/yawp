@@ -2,7 +2,7 @@ import { afterAll, beforeEach, describe, expect, mock, test } from 'bun:test';
 
 const prisma = {
   classAssignment: { findMany: mock() },
-  class: { findMany: mock() },
+  class: { findMany: mock(), findFirst: mock() },
 };
 const requireUserId = mock();
 const requireMembership = mock();
@@ -115,6 +115,8 @@ describe('My Assignments loader', () => {
           class: {
             teachers: { some: { id: 'profile-1' } },
             isArchived: false,
+            // Scoped to the teacher's school year, like every other surface.
+            schoolYear: expect.any(String),
           },
         },
       })

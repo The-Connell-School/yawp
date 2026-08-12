@@ -3,7 +3,7 @@ import { afterAll, beforeEach, describe, expect, mock, test } from 'bun:test';
 const prisma = {
   classAssignment: { findMany: mock() },
   assignmentType: { findMany: mock() },
-  class: { findMany: mock() },
+  class: { findMany: mock(), findFirst: mock() },
   document: { findMany: mock(), count: mock() },
   orgMembership: { findUnique: mock() },
   teacherTraining: { findMany: mock() },
@@ -172,7 +172,10 @@ describe('app index loader assignments', () => {
     } as any);
     const data = (response as { data: any }).data;
 
-    expect(getStudentEnrolledClasses).toHaveBeenCalledWith('profile-1');
+    expect(getStudentEnrolledClasses).toHaveBeenCalledWith(
+      'profile-1',
+      expect.any(String)
+    );
     expect(data.enrolledClasses).toHaveLength(1);
     expect(data.enrolledClasses[0].id).toBe('class-1');
   });

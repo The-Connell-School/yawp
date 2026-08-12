@@ -46,7 +46,7 @@ import {
   stripStudentWorkResetParam,
   STUDENT_WORK_RESET_PARAM,
 } from './student-work-view-preferences';
-import { getSchoolYearScope } from '~/cookies/school-year.server';
+import { resolveTeacherSchoolYearScope } from '~/utils/school-year-scope.server';
 import { ALL_SCHOOL_YEARS } from '~/utils/school-year';
 
 export const handle = { breadcrumb: 'Documents' };
@@ -112,7 +112,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   // Everything on this page hangs off the teacher's classes, so scoping them
   // to the school year chosen in the sidebar scopes the whole grading queue —
   // and keeps it agreeing with what My Classes shows.
-  const schoolYearScope = await getSchoolYearScope(request);
+  const schoolYearScope = await resolveTeacherSchoolYearScope(request);
 
   const classes = await prisma.class.findMany({
     where: {

@@ -33,7 +33,8 @@ import { getTeacherClassCardStats } from '~/utils/teacher-class-card-stats.serve
 import { pickClassArtKeyForOrganization } from '~/utils/class-art-assignment.server';
 import { getStudentEnrolledClasses } from '~/utils/student-classes.server';
 import { ALL_SCHOOL_YEARS } from '~/utils/school-year';
-import { getSchoolYearScope } from '~/cookies/school-year.server';
+import { resolveTeacherSchoolYearScope } from '~/utils/school-year-scope.server';
+import { resolveStudentSchoolYearScope } from '~/utils/school-year-scope.server';
 
 async function getTeacherSchoolIds(membershipId: string) {
   const teacher = await prisma.orgMembership.findUnique({
@@ -48,7 +49,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const profile = await requireMembership(request, userId);
 
   if (profile.role === 'STUDENT') {
-    const studentClasses = await getStudentEnrolledClasses(profile.id);
+    const studentClasses = await getStudentEnrolledClasses(
+      profile.id,
+      await resolveStudentSchoolYearScope(request, profile.id)
+    );
     return dataResponse({ role: 'STUDENT' as const, studentClasses });
   }
 
@@ -60,7 +64,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   // honoured everywhere. Earlier years are still there behind that control —
   // nothing is archived to get them out of the way, because archiving would
   // take the work away from students too.
-  const selectedSchoolYear = await getSchoolYearScope(request);
+  const selectedSchoolYear = await resolveTeacherSchoolYearScope(request);
 
   const [classes, teacherSchools] = await Promise.all([
     prisma.class.findMany({

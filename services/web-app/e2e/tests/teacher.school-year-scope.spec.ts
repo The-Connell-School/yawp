@@ -56,6 +56,13 @@ test.describe('School year scope', () => {
         page.locator(`a[href="/app/my-classes/${lastYearClass.id}"]`)
       ).toHaveCount(0);
 
+      // The dashboard is where a teacher lands, so it obeys the scope too.
+      await page.goto('/app');
+      await expect(
+        page.locator(`a[href="/app/my-classes/${lastYearClass.id}"]`)
+      ).toHaveCount(0);
+      await page.goto('/app/my-classes');
+
       // Switching the scope brings the older class back — nothing was archived.
       await openSettings();
       await scope.click();
@@ -97,7 +104,7 @@ test.describe('School year scope', () => {
     }
   });
 
-  test('a student still sees a class from a previous year', async ({
+  test('a student lands on their latest year and can still reach the last one', async ({
     page,
     e2eContext,
     signIn,
@@ -125,9 +132,29 @@ test.describe('School year scope', () => {
       await signIn(e2eContext.userEmail, 'johndoe');
       await page.goto('/app/my-classes');
 
-      // The year scope is a teacher tool; a student's own work never moves.
+      // No choice was made and none was asked for: this year's class shows.
+      await expect(
+        page.locator(`a[href="/app/my-classes/${e2eContext.classId}"]`)
+      ).toBeVisible();
+      await expect(
+        page.locator(`a[href="/app/my-classes/${lastYearClass.id}"]`)
+      ).toHaveCount(0);
+
+      // Last year is still there for a student who goes looking.
       await page.getByText('Settings', { exact: true }).click();
-      await expect(page.getByTestId('school-year-scope')).toHaveCount(0);
+      const scope = page.getByTestId('school-year-scope');
+      await expect(scope).toBeVisible();
+      await scope.click();
+      await Promise.all([
+        page.waitForResponse(
+          (response) =>
+            response.url().includes('/api/school-year') &&
+            response.status() < 400
+        ),
+        page.getByRole('option', { name: priorYear.replace('-', '–') }).click(),
+      ]);
+
+      await page.goto('/app/my-classes');
       await expect(
         page.locator(`a[href="/app/my-classes/${lastYearClass.id}"]`)
       ).toBeVisible();

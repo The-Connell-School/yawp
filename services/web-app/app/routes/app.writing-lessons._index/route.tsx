@@ -16,6 +16,10 @@ import { formatClassLabel } from '~/utils/class-display';
 import { formatDateOnly } from '~/utils/date-only';
 import { prisma } from '~/utils/db.server';
 import {
+  resolveTeacherSchoolYearScope,
+  schoolYearWhere,
+} from '~/utils/school-year-scope.server';
+import {
   listWritingPracticeAssignmentsForStudent,
   listWritingPracticeAssignmentsForTeacher,
   type WritingPracticeAssignmentSummary,
@@ -79,6 +83,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
         where: {
           teachers: { some: { id: membership.id } },
           isArchived: false,
+          ...schoolYearWhere(
+            await resolveTeacherSchoolYearScope(request)
+          ),
         },
         orderBy: [{ title: 'asc' }, { grade: 'asc' }, { period: 'asc' }],
         select: { id: true, title: true, grade: true, period: true },

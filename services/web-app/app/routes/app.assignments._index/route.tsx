@@ -42,6 +42,10 @@ import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { deleteClassAssignmentDeployment } from '~/utils/assignment-deployment.server';
 import { getAvailableAssignmentTypesForScopes } from '~/utils/assignment-type-access.server';
 import { prisma } from '~/utils/db.server';
+import {
+  resolveTeacherSchoolYearScope,
+  schoolYearWhere,
+} from '~/utils/school-year-scope.server';
 import { formatClassLabel } from '~/utils/teacher-document-work-utils';
 
 export const handle = { breadcrumb: 'My Assignments' };
@@ -54,11 +58,14 @@ export async function loader({ request }: LoaderFunctionArgs) {
     return redirect('/app');
   }
 
+  const schoolYearScope = await resolveTeacherSchoolYearScope(request);
+
   const classAssignments = await prisma.classAssignment.findMany({
     where: {
       class: {
         teachers: { some: { id: profile.id } },
         isArchived: false,
+        ...schoolYearWhere(schoolYearScope),
       },
     },
     select: {
@@ -128,7 +135,11 @@ export async function loader({ request }: LoaderFunctionArgs) {
   // Everything the page needs to reuse a saved assignment: the saved rows plus
   // the classes and assignment types the creation sheet offers.
   const teacherClasses = await prisma.class.findMany({
-    where: { teachers: { some: { id: profile.id } }, isArchived: false },
+    where: {
+      teachers: { some: { id: profile.id } },
+      isArchived: false,
+      ...schoolYearWhere(schoolYearScope),
+    },
     select: {
       id: true,
       grade: true,
