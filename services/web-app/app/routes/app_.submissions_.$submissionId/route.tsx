@@ -31,6 +31,7 @@ import {
   type GrammarIssue,
   parseGrammarIssuesPayload,
 } from '~/domain/grading/grammarIssues';
+import { parseAssistantSuggestion } from '~/domain/grading/assistant-suggestion';
 import { resolveGrammarHighlightingEnabled } from '~/domain/assignment-types/rubric-category-options';
 import { findExcerptRange } from '~/utils/excerpt-position';
 import {
@@ -175,6 +176,8 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         select: {
           assignmentTypeRubricSnapshot: true,
           source: true,
+          status: true,
+          metadata: true,
         },
       },
     },
@@ -259,6 +262,11 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       comments: sortedComments,
       rubricConfig,
       grammarHighlightingEnabled,
+      // What the Grading Assistant last suggested, so a teacher who has since
+      // edited the grade can put the suggestions back.
+      assistantSuggestion: parseAssistantSuggestion(
+        submission.gradingAssistantRuns[0] ?? null
+      ),
     },
     isOwner,
     isTeacher: isTeacher || isAdmin,
@@ -950,6 +958,7 @@ export default function SubmissionRoute() {
               rubricConfig={
                 teacherGradeUi?.rubricConfig ?? submission.rubricConfig
               }
+              assistantSuggestion={submission.assistantSuggestion}
               initialGradingAssistantStrictnessLevel={
                 submission.document.assignment?.gradingAssistantStrictnessLevel
               }

@@ -75,24 +75,30 @@ function cleanup(root: Root | null) {
 function renderPanel({
   initialGradingAssistantStrictnessLevel = 'beginner',
   rubricConfig,
+  assistantSuggestion,
+  existingGrade,
 }: {
   initialGradingAssistantStrictnessLevel?: string | null;
   rubricConfig?: Record<string, unknown>;
+  assistantSuggestion?: Record<string, unknown> | null;
+  existingGrade?: Record<string, unknown>;
 } = {}) {
   return render(
     <TeacherGradingPanel
       documentId="doc-1"
       submissionId="submission-1"
-      existingGrade={{
-        id: 'submission-1',
-        score: null,
-        feedback: null,
-        rubricScores: null,
-        overallComment: null,
-        numericPercentage: null,
-        letterGrade: null,
-        releasedAt: null,
-      }}
+      existingGrade={
+        (existingGrade ?? {
+          id: 'submission-1',
+          score: null,
+          feedback: null,
+          rubricScores: null,
+          overallComment: null,
+          numericPercentage: null,
+          letterGrade: null,
+          releasedAt: null,
+        }) as any
+      }
       grammarIssues={[]}
       hiddenGrammarIssueIds={[]}
       onToggleGrammarIssue={() => {}}
@@ -102,6 +108,7 @@ function renderPanel({
         initialGradingAssistantStrictnessLevel
       }
       rubricConfig={rubricConfig as any}
+      assistantSuggestion={assistantSuggestion as any}
     />
   );
 }
@@ -203,5 +210,79 @@ describe('TeacherGradingPanel', () => {
     );
     expect(banner).not.toBeNull();
     expect(banner?.textContent).toContain('incomplete');
+  });
+
+  it('offers no reset when the assistant has never run on this submission', async () => {
+    ({ root } = renderPanel());
+
+    expect(
+      document.querySelector(
+        '[data-testid="grading-reset-to-assistant-suggestions"]'
+      )
+    ).toBeNull();
+  });
+
+  it('puts the assistant suggestions back over a teacher edit', async () => {
+    ({ root } = renderPanel({
+      existingGrade: {
+        id: 'submission-1',
+        score: null,
+        feedback: null,
+        rubricScores: { claim: { score: 2, comment: 'Teacher rewrote this.' } },
+        overallComment: 'Teacher wrote their own feedback.',
+        numericPercentage: 55,
+        letterGrade: 'F',
+        releasedAt: null,
+      },
+      rubricConfig: {
+        source: 'assignment-type',
+        minScore: 1,
+        maxScore: 5,
+        scoringType: 'weighted_1_5',
+        categories: [
+          {
+            key: 'claim',
+            label: 'Claim',
+            description: 'A clear defensible claim.',
+            weight: 1,
+          },
+        ],
+      },
+      assistantSuggestion: {
+        rubricScores: { claim: { score: 5, comment: 'Assistant said this.' } },
+        overallComment: 'Assistant feedback.',
+        // The assistant's percentage follows its own rubric scores, which is
+        // why the restored total tracks the restored categories.
+        numericPercentage: 100,
+        score: null,
+        letterGrade: 'A',
+        grammarIssues: null,
+      },
+    }));
+
+    const percentage = document.querySelector<HTMLInputElement>(
+      '[data-testid="grading-overall-percentage"]'
+    );
+    expect(percentage?.value).toBe('55');
+
+    const reset = document.querySelector<HTMLButtonElement>(
+      '[data-testid="grading-reset-to-assistant-suggestions"]'
+    );
+    expect(reset).not.toBeNull();
+
+    act(() => {
+      reset?.click();
+    });
+
+    expect(
+      document.querySelector<HTMLInputElement>(
+        '[data-testid="grading-overall-percentage"]'
+      )?.value
+    ).toBe('100');
+    expect(
+      document.querySelector<HTMLTextAreaElement>(
+        '[data-testid="grading-overall-comment"]'
+      )?.value
+    ).toBe('Assistant feedback.');
   });
 });
