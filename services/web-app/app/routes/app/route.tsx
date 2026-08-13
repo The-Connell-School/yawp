@@ -65,6 +65,7 @@ import {
   resolveSchoolYearScopeForMembership,
   schoolYearsForMembership,
 } from '~/utils/school-year-scope.server';
+import { ALL_SCHOOL_YEARS } from '~/utils/school-year';
 import { SchoolYearScopeSwitcher } from './school-year-scope';
 import type { Route as RootRoute } from '../../+types/root';
 import {
@@ -88,13 +89,21 @@ export async function loader({ request }: LoaderFunctionArgs) {
     schoolYearsForMembership(profile),
   ]);
 
-  // A student with a single year has nothing to choose between; the scope is
-  // resolved for them and the control would only be noise.
-  if (profile.role === 'STUDENT' && options.length < 2) {
-    return data({ schoolYearScope: null });
-  }
+  // The selected year always has to be on the list, or the control renders
+  // blank and a student who landed on a year through the shared cookie has no
+  // way to read what they are looking at, let alone change it.
+  const selectableOptions =
+    selected === ALL_SCHOOL_YEARS || options.includes(selected)
+      ? options
+      : [selected, ...options].sort((a, b) => b.localeCompare(a));
 
-  return data({ schoolYearScope: { selected, options } });
+  return data({
+    schoolYearScope: {
+      selected,
+      options: selectableOptions,
+      isStudent: profile.role === 'STUDENT',
+    },
+  });
 }
 
 const EditNameSchema = z.object({
@@ -333,8 +342,9 @@ export default function Route() {
                   </p>
                   <SchoolYearScopeSwitcher scope={schoolYearScope} />
                   <p className="text-xs text-muted-foreground">
-                    Scopes your classes and grading queue. Students always keep
-                    their earlier work.
+                    {schoolYearScope.isStudent
+                      ? 'Shows the classes and work from this year. Switch back any time — nothing is ever removed.'
+                      : 'Scopes your classes and grading queue. Students always keep their earlier work.'}
                   </p>
                 </div>
               ) : null}

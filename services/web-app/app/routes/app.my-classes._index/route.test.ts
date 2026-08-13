@@ -47,6 +47,8 @@ describe('my classes route (student branch)', () => {
 
     requireUserId.mockResolvedValue('user-1');
     pickClassArtKeyForOrganization.mockResolvedValue('art-key-1');
+    // Resolving a student's school year reads the years they are enrolled in.
+    prisma.class.findMany.mockResolvedValue([]);
   });
 
   test('a student sees their enrolled classes instead of being redirected', async () => {

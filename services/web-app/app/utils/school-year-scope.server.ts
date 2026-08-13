@@ -42,25 +42,43 @@ export async function resolveTeacherSchoolYearScope(request: Request) {
   return getSchoolYearScope(request);
 }
 
+/** The years this student actually has classes in, newest first. */
+async function studentSchoolYears(membershipId: string) {
+  const rows = await prisma.class.findMany({
+    where: { students: { some: { id: membershipId } }, isArchived: false },
+    select: { schoolYear: true },
+    distinct: ['schoolYear'],
+  });
+
+  return rows
+    .map((row) => row.schoolYear)
+    .filter(isSchoolYear)
+    .sort((a, b) => b.localeCompare(a));
+}
+
 /**
  * Students default to the newest year they are actually enrolled in. A
  * student who comes back in September before joining this year's classes
  * should see last year's work, not an empty page they have no way to fix.
+ *
+ * A stored year the student has no classes in is ignored for the same reason.
+ * The cookie is one value for the whole browser, so it can hold a year chosen
+ * somewhere else entirely — a teacher planning next year, or this student's own
+ * choice from a year they have since left. Honouring it would show a student an
+ * empty app with no clue why, which is the one outcome the scope must not
+ * produce. An explicit "all years" is always honoured: it can never be empty.
  */
 export async function resolveStudentSchoolYearScope(
   request: Request,
   membershipId: string
 ) {
   const chosen = await storedScope(request);
-  if (chosen) return chosen;
+  if (chosen === ALL_SCHOOL_YEARS) return chosen;
 
-  const latest = await prisma.class.findFirst({
-    where: { students: { some: { id: membershipId } }, isArchived: false },
-    select: { schoolYear: true },
-    orderBy: { schoolYear: 'desc' },
-  });
+  const years = await studentSchoolYears(membershipId);
+  if (chosen && years.includes(chosen)) return chosen;
 
-  return latest?.schoolYear ?? currentSchoolYear();
+  return years[0] ?? currentSchoolYear();
 }
 
 export async function resolveSchoolYearScopeForMembership(
@@ -76,26 +94,24 @@ export async function resolveSchoolYearScopeForMembership(
  * The years to offer this person, newest first: the ones they have classes in,
  * plus — for teachers — the current year, so a teacher starting a new year can
  * select it before creating anything.
+ *
+ * A student is offered only the years they have classes in. Offering a year
+ * they were never enrolled in would let them select their way into an empty
+ * app, and there is nothing there for them to find.
  */
 export async function schoolYearsForMembership(membership: {
   id: string;
   role: string;
 }) {
-  const isStudent = membership.role === 'STUDENT';
+  if (membership.role === 'STUDENT') {
+    return studentSchoolYears(membership.id);
+  }
 
   const rows = await prisma.class.findMany({
-    where: isStudent
-      ? { students: { some: { id: membership.id } }, isArchived: false }
-      : { teachers: { some: { id: membership.id } } },
+    where: { teachers: { some: { id: membership.id } } },
     select: { schoolYear: true },
     distinct: ['schoolYear'],
   });
 
-  const years = rows.map((row) => row.schoolYear);
-
-  if (isStudent) {
-    return years.filter(isSchoolYear).sort((a, b) => b.localeCompare(a));
-  }
-
-  return schoolYearOptions({ years });
+  return schoolYearOptions({ years: rows.map((row) => row.schoolYear) });
 }
