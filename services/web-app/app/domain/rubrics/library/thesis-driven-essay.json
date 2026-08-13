@@ -1,0 +1,52 @@
+{
+  "name": "thesis-driven-essay",
+  "title": "Thesis-driven essay",
+  "scoringScale": {
+    "type": "weighted_1_5",
+    "minScore": 1,
+    "maxScore": 5,
+    "step": 1
+  },
+  "rubric": {
+    "categories": [
+      {
+        "key": "thesis_and_content",
+        "label": "Thesis/Content",
+        "description": "Original, defensible thesis with sustained critical thinking and meaningful deductions.",
+        "weight": 0.25
+      },
+      {
+        "key": "organization_and_structure",
+        "label": "Organization/Structure",
+        "description": "Purposeful structure with strong progression, clear transitions, and a conclusion that extends thinking.",
+        "weight": 0.25
+      },
+      {
+        "key": "evidence_and_support",
+        "label": "Evidence/Support",
+        "description": "Precise, well-integrated evidence that deepens analysis and builds authority.",
+        "weight": 0.2
+      },
+      {
+        "key": "voice_and_style",
+        "label": "Voice/Style",
+        "description": "Authentic voice with engaging, precise language and consistent tone.",
+        "weight": 0.2
+      },
+      {
+        "key": "grammar_and_mechanics",
+        "label": "Grammar/Syntax/Formatting",
+        "description": "Technical correctness and polished presentation that support clarity.",
+        "weight": 0.1
+      }
+    ]
+  },
+  "promptConfig": {
+    "gradingInstructions": "Philosophy Note\nThis rubric prioritizes what makes writing truly excellent: original thinking, intellectual courage, genuine discovery, and the ability to guide a reader through complex ideas with clarity and style.\nTechnical perfection without compelling content earns a lower grade than bold thinking with minor technical flaws.\nWe are looking for essays that make readers think differently, not just essays that follow the rules.\n\nCategory Weights\n- Thesis/Content: 25%\n- Organization/Structure: 25%\n- Evidence/Support: 20%\n- Voice/Style: 20%\n- Grammar/Syntax/Formatting: 10%\n\nDetailed Rubric\n1. THESIS/CONTENT (25%)\nExemplary (90-100%)\nTHESIS: Combines sharp observation with sophisticated, multi-layered analysis; takes intellectual risks; demonstrates genuine discovery through pre-writing; language is precise and concise; each element is complex enough to require thoughtful exploration.\nCONTENT: Body paragraphs deliver on the thesis promise with depth and originality; ideas build and evolve; sustained critical thinking appears throughout; deep engagement with source material is evident; insights feel discovered; connections are sophisticated and unexpected; conclusions offer earned deductions that make readers reconsider the subject.\nProficient (80-89%)\nTHESIS: Clearly combines observation with analysis; position is defensible and thoughtful; language is mostly concise; elements provide clear essay direction.\nCONTENT: Body paragraphs develop thesis elements; ideas are coherent and support the argument; analysis usually goes beyond surface-level; conclusion offers reasonable deductions.\nDeveloping (70-79%)\nTHESIS: Present but simplistic or obvious; analysis can be predictable; language may be wordy; position lacks complexity.\nCONTENT: Support is inconsistent; some paragraphs repeat or drift; analysis mixes depth with obvious claims; conclusion tends to restate rather than deduce.\nStruggling (Below 70%)\nTHESIS: Absent, unclear, descriptive, or summary-based; no clear argument.\nCONTENT: Paragraphs do not develop a clear thesis; little critical thinking; essay wanders; conclusion is absent or repetitive.\n\n2. ORGANIZATION/STRUCTURE (25%)\nExemplary (90-100%)\nIntroduction builds compellingly to thesis; opening strategy enhances discussion; body paragraphs directly support distinct thesis elements; transitions are organic; conclusion adds new insight and deductions; progression feels purposeful.\nProficient (80-89%)\nIntroduction prepares the reader; opening strategy is clear; body paragraphs connect to thesis; organization is logical; conclusion draws reasonable deductions.\nDeveloping (70-79%)\nIntroduction may be abrupt or generic; opening strategy can feel forced; paragraphs may drift or repeat; transitions can feel mechanical; conclusion mostly restates.\nStruggling (Below 70%)\nIntroduction missing/confusing/generic; no clear opening strategy; paragraphs wander; progression is hard to follow; conclusion is absent or repetitive.\n\n3. EVIDENCE/SUPPORT (20%)\nExemplary (90-100%)\nEvidence is selected precisely and integrated seamlessly; sources build authority; evidence illuminates claims; writer creates dialogue with sources; analysis remains primary.\nProficient (80-89%)\nEvidence supports main points, is integrated and cited correctly, and generally balances with analysis.\nDeveloping (70-79%)\nEvidence is present but loosely connected; integration may be mechanical; quote choice may be weak; analysis is thin or uneven.\nStruggling (Below 70%)\nLittle/no relevant evidence; weak or inaccurate quoting; weak argument connection; citation/plagiarism concerns may appear.\n\n4. VOICE/STYLE (20%)\nExemplary (90-100%)\nVoice is authentic, confident, engaging, and memorable; language takes creative risks while staying academically credible; wording is precise and economical; rhythm and flow are compelling.\nProficient (80-89%)\nVoice is clear and appropriate; tone is consistent; language is mostly precise and readable.\nDeveloping (70-79%)\nVoice is inconsistent or generic; phrasing may be awkward; filler or repetition appears.\nStruggling (Below 70%)\nVoice is unclear or robotic; tone is inappropriate or inconsistent; language is confusing and difficult to read.\n\n5. GRAMMAR/SYNTAX/FORMATTING (10%)\nExemplary (90-100%)\nGrammar/syntax errors are rare and non-distracting; sentence variety and punctuation enhance clarity.\nFormatting/presentation is polished and consistent; title is thoughtful; no draft artifacts remain; style guidelines are followed.\nProficient (80-89%)\nFew grammar/syntax errors; formatting is clean and consistent; title is appropriate; only minor style inconsistencies.\nDeveloping (70-79%)\nMultiple grammar/syntax errors with mostly clear meaning; formatting inconsistencies or minor draft artifacts; title may be generic/missing.\nStruggling (Below 70%)\nFrequent grammar/syntax errors that interfere with meaning; sloppy formatting; visible draft artifacts; missing/generic title; style guidelines ignored.\n\nGrade Calculation\nTo calculate final grade, multiply each category score by its weight and sum the results.\nCategory | Weight | Score | Weighted Score\nThesis/Content | 25% | ___ | ___ x 0.25 = ___\nOrganization/Structure | 25% | ___ | ___ x 0.25 = ___\nEvidence/Support | 20% | ___ | ___ x 0.20 = ___\nVoice/Style | 20% | ___ | ___ x 0.20 = ___\nGrammar/Syntax/Formatting | 10% | ___ | ___ x 0.10 = ___\nFINAL GRADE: ________%\n\nScore mapping for the JSON schema in this app:\n- 5 = Exemplary (90-100%)\n- 4 = Proficient (80-89%)\n- 3 = Developing (70-79%)\n- 2 = Struggling (below 70%, closer to developing)\n- 1 = Struggling (below 70%, severe gaps)"
+  },
+  "outputSchema": {
+    "responseShape": "categories_overall_comment",
+    "schemaVersion": 1
+  },
+  "calibrationNotes": "The rubric the Grading Assistant has always used for thesis-driven essays."
+}
