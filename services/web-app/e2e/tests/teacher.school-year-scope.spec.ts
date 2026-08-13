@@ -128,6 +128,26 @@ test.describe('School year scope', () => {
       select: { id: true },
     });
 
+    // A piece of the student's work that belongs to last year's class, so the
+    // documents page can be checked for the same scoping the class list has.
+    const lastYearAssignment = await prisma.classAssignment.create({
+      data: {
+        classId: lastYearClass.id,
+        assignmentId: e2eContext.assignmentId,
+      },
+      select: { id: true },
+    });
+    const lastYearDocument = await prisma.document.create({
+      data: {
+        title: 'Last year essay',
+        membership: { connect: { id: e2eContext.membershipId } },
+        assignment: { connect: { id: e2eContext.assignmentId } },
+        assignmentType: { connect: { id: e2eContext.assignmentTypeId } },
+        classAssignment: { connect: { id: lastYearAssignment.id } },
+      },
+      select: { id: true },
+    });
+
     try {
       await signIn(e2eContext.userEmail, 'johndoe');
       await page.goto('/app/my-classes');
@@ -139,6 +159,10 @@ test.describe('School year scope', () => {
       await expect(
         page.locator(`a[href="/app/my-classes/${lastYearClass.id}"]`)
       ).toHaveCount(0);
+
+      // The student's work is scoped the same way their classes are.
+      await page.goto('/app/my-documents');
+      await expect(page.getByText('Last year essay')).toHaveCount(0);
 
       // Last year is still there for a student who goes looking.
       await page.getByText('Settings', { exact: true }).click();
@@ -158,7 +182,15 @@ test.describe('School year scope', () => {
       await expect(
         page.locator(`a[href="/app/my-classes/${lastYearClass.id}"]`)
       ).toBeVisible();
+
+      // And last year's work comes back with it.
+      await page.goto('/app/my-documents');
+      await expect(page.getByText('Last year essay')).toBeVisible();
     } finally {
+      await prisma.document.delete({ where: { id: lastYearDocument.id } });
+      await prisma.classAssignment.delete({
+        where: { id: lastYearAssignment.id },
+      });
       await prisma.class.delete({ where: { id: lastYearClass.id } });
       await prisma.$disconnect();
     }
