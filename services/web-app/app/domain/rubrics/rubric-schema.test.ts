@@ -79,18 +79,29 @@ describe('rubric schema', () => {
     }
   });
 
-  test('the starter rubrics are the ones the app already grades with', () => {
+  test('the starter rubrics are the ones production already grades with', () => {
     const names = STARTER_RUBRICS.map((rubric) => rubric.name);
     expect(names).toEqual(['thesis-driven-essay', 'daily-pages-engagement']);
 
     const thesis = STARTER_RUBRICS[0];
     expect(thesis.rubric.categories).toHaveLength(5);
-    expect(thesis.promptConfig.instructionsPreset).toBe(
-      'legacy_thesis_driven_essay'
-    );
+    expect(thesis.scoringScale).toMatchObject({ minScore: 1, maxScore: 5 });
 
+    // Production scores Daily Pages out of 30 in steps of ten, which is not
+    // what the built-in Daily Pages default does.
     const dailyPages = STARTER_RUBRICS[1];
-    expect(dailyPages.scoringScale.minScore).toBe(0);
+    expect(dailyPages.scoringScale).toMatchObject({
+      minScore: 0,
+      maxScore: 30,
+      step: 10,
+    });
+    expect(dailyPages.rubric.categories[0].key).toBe('engagement_with_prompt');
+    expect(dailyPages.rubric.categories[0].scoreLabels).toEqual([
+      { value: 0, label: 'NOT HANDED IN' },
+      { value: 10, label: 'HARDLY THERE' },
+      { value: 20, label: 'SHOWED UP' },
+      { value: 30, label: 'ALL IN' },
+    ]);
     expect(dailyPages.rubric.categories[0].grammarHighlighting).toBe(false);
   });
 });

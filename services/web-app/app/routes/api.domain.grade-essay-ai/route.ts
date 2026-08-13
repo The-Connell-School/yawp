@@ -27,6 +27,7 @@ import {
   buildGradingPromptShape,
   buildGradingResponseSchemaText,
 } from '~/domain/grading/grading-prompt-shape';
+import { buildGradingRequest } from '~/domain/grading/grading-request';
 import {
   applyGradingAssistantStrictnessToActComposite,
   applyGradingAssistantStrictnessToPercentage,
@@ -633,12 +634,7 @@ export async function action({ request }: ActionFunctionArgs) {
     categoryFeedbackEnabled,
   });
 
-  const rubricText = promptShape.rubricText;
-
   const assignmentPrompt = submission.document.assignment?.prompt?.trim();
-  const assignmentPromptSection = assignmentPrompt
-    ? `Assignment prompt: ${assignmentPrompt}`
-    : 'Assignment prompt: No assignment prompt was provided.';
 
   const model = process.env.AI_MODEL ?? 'claude-sonnet-4-6';
   const forceFallback = data.llmRetry === 'fallback';
@@ -822,35 +818,14 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
     });
   }
 
-  const gradingSystemBase = promptShape.systemPrompt;
-
-  let system = gradingSystemBase;
-  let userPrompt = '';
-
-  if (templateInstructions.mode === 'unified') {
-    system = `${gradingSystemBase}\nFollow the grading instructions in the user prompt exactly.`;
-    userPrompt = `Student first name: ${studentFirstName}\n\nAssignment type grading config: ${resolvedGradingConfig.label}\n\nRubric category keys (use these exact keys in categories[].key):\n${rubricText}\n\nGrading instructions:\n${templateInstructions.gradingInstructions}\n\n${assignmentPromptSection}\n\nEssay:\n${submission.text}`;
-  } else {
-    const rubricInstructions =
-      templateInstructions.mode === 'legacy-split' ||
-      templateInstructions.mode === 'preset'
-        ? templateInstructions.rubricInstructions
-        : '';
-    const scoreInstructions =
-      templateInstructions.mode === 'legacy-split' ||
-      templateInstructions.mode === 'preset'
-        ? templateInstructions.scoreInstructions
-        : '';
-    const systemInstructions =
-      templateInstructions.mode === 'legacy-split'
-        ? templateInstructions.systemInstructions
-        : undefined;
-    const templateSystemInstructions = systemInstructions
-      ? `${systemInstructions}\n\n`
-      : '';
-    system = `${templateSystemInstructions}${gradingSystemBase}\nUse the rubric language, proficiency bands, and category weights from the user prompt exactly.\n${scoreInstructions}`;
-    userPrompt = `Student first name: ${studentFirstName}\n\nAssignment type grading config: ${resolvedGradingConfig.label}\n\nRubric category keys (use these exact keys in categories[].key):\n${rubricText}\n\nRubric Instructions:\n${rubricInstructions}\n\n${assignmentPromptSection}\n\nEssay:\n${submission.text}`;
-  }
+  const { system, userPrompt } = buildGradingRequest({
+    promptShape,
+    instructions: templateInstructions,
+    label: resolvedGradingConfig.label,
+    studentFirstName,
+    assignmentPrompt,
+    essayText: submission.text,
+  });
 
   let responseText = '';
 
