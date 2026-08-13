@@ -1,10 +1,6 @@
-import { rubricCategories } from '~/domain/grading/rubric';
-import {
-  gradingAssistantRubricInstructions,
-  gradingAssistantScoreScaleInstructions,
-} from '~/domain/grading/rubric-instructions';
 import { DEFAULT_OUTPUT_SCHEMA_JSON } from '~/domain/assignment-types/assignment-type-rubric.shared';
 import type { RubricSchema } from './rubric-schema';
+import { THESIS_DRIVEN_ESSAY } from './thesis-driven-essay';
 
 /**
  * The two rubrics the library starts with, taken from what production actually
@@ -20,33 +16,6 @@ import type { RubricSchema } from './rubric-schema';
 
 export const THESIS_DRIVEN_ESSAY_RUBRIC_NAME = 'thesis-driven-essay';
 export const DAILY_PAGES_RUBRIC_NAME = 'daily-pages-engagement';
-
-/**
- * What production's "The Thesis-Driven Essay" grades with today. Its assignment
- * type stores no rubric of its own, so grading falls through to the built-in
- * thesis default; this is that default written out whole, with the instruction
- * text that lived behind `instructionsPreset: 'legacy_thesis_driven_essay'`
- * inlined so the object stands alone.
- */
-const thesisDrivenEssay: RubricSchema = {
-  name: THESIS_DRIVEN_ESSAY_RUBRIC_NAME,
-  title: 'Thesis-driven essay',
-  scoringScale: { type: 'weighted_1_5', minScore: 1, maxScore: 5, step: 1 },
-  rubric: {
-    categories: rubricCategories.map((category) => ({
-      key: category.key,
-      label: category.label,
-      description: category.description,
-      weight: category.weight,
-    })),
-  },
-  promptConfig: {
-    gradingInstructions: `${gradingAssistantRubricInstructions}\n\n${gradingAssistantScoreScaleInstructions}`,
-  },
-  outputSchema: { ...DEFAULT_OUTPUT_SCHEMA_JSON },
-  calibrationNotes:
-    'The rubric the Grading Assistant has always used for thesis-driven essays.',
-};
 
 /**
  * Production's Daily Pages rubric, copied from the assignment type row rather
@@ -93,6 +62,6 @@ const dailyPagesEngagement: RubricSchema = {
 };
 
 export const STARTER_RUBRICS: RubricSchema[] = [
-  thesisDrivenEssay,
+  THESIS_DRIVEN_ESSAY,
   dailyPagesEngagement,
 ];

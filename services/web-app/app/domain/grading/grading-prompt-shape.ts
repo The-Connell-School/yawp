@@ -1,5 +1,8 @@
 import type { RubricCategory } from '~/domain/assignment-types/assignment-type-rubric.shared';
-import { isCategoryFeedbackEnabled } from '~/domain/assignment-types/rubric-category-options';
+import {
+  isBandScoredRubric,
+  isCategoryFeedbackEnabled,
+} from '~/domain/assignment-types/rubric-category-options';
 
 /**
  * How much of a category the grading prompt needs. Kept structural so stored
@@ -9,11 +12,16 @@ export type GradingPromptCategory = Pick<
   RubricCategory,
   'key' | 'label' | 'weight' | 'description'
 > &
-  Partial<Pick<RubricCategory, 'scoreLabels' | 'feedbackEnabled'>>;
+  Partial<Pick<RubricCategory, 'scoreLabels' | 'bands' | 'feedbackEnabled'>>;
 
 export type GradingPromptShape = {
   /** Whether the model is asked to comment on each category individually. */
   categoryFeedbackEnabled: boolean;
+  /**
+   * Whether every category declares bands, so scores are read on the scale the
+   * bands are written in rather than converted from a coarser one.
+   */
+  bandScored: boolean;
   /** The full system prompt for the rubric evaluation pass. */
   systemPrompt: string;
   /** The rubric block dropped into the user prompt. */
@@ -61,6 +69,23 @@ export function buildGradingRubricText(categories: GradingPromptCategory[]) {
       const line = `${category.key}: ${category.label} (${Math.round(
         category.weight * 100
       )}%) - ${category.description}`;
+
+      // Bands carry the words and what earns them, so a category that has them
+      // needs nothing from the rubric's instruction text to be scored.
+      if (category.bands?.length) {
+        const bands = category.bands
+          .slice()
+          .sort((a, b) => b.min - a.min)
+          .map(
+            (band) =>
+              `  ${band.min}-${band.max} ${band.label}${
+                band.description ? `: ${band.description}` : ''
+              }`
+          )
+          .join('\n');
+        return `${line}\n${bands}`;
+      }
+
       if (!category.scoreLabels?.length) return line;
 
       const meanings = category.scoreLabels
@@ -90,6 +115,7 @@ export function buildGradingPromptShape({
   studentFirstName: string;
 }): GradingPromptShape {
   const categoryFeedbackEnabled = resolveCategoryFeedbackEnabled(categories);
+  const bandScored = isBandScoredRubric(categories);
   const schemaText = buildGradingResponseSchemaText({
     minScore,
     maxScore,
@@ -105,9 +131,15 @@ export function buildGradingPromptShape({
       ? `Make one judgment: ${categories[0].label}. Judge it in depth.`
       : 'Return exactly one category for each rubric key provided.';
 
+  // Picking the band first is what keeps a wide scale consistent: the band is
+  // a judgment the rubric defines, and the score is only a position inside it.
+  const scoringRule = bandScored
+    ? `For each category, first decide which band the writing falls in from the band descriptions, then choose an integer inside that band's range. Do not score outside the band you chose.`
+    : `Scores must be integers ${minScore}-${maxScore}.`;
+
   const systemPrompt = [
     `You are a grading assistant. Return ONLY valid JSON with the schema:\n${schemaText}`,
-    `Scores must be integers ${minScore}-${maxScore}.`,
+    scoringRule,
     judgmentRule,
     feedbackRule,
     `In overallComment, start with "${studentFirstName}," and continue with cohesive feedback in a warm but professional tone.`,
@@ -117,6 +149,7 @@ export function buildGradingPromptShape({
 
   return {
     categoryFeedbackEnabled,
+    bandScored,
     systemPrompt,
     rubricText: buildGradingRubricText(categories),
   };
