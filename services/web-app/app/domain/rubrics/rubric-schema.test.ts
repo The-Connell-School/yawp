@@ -85,7 +85,11 @@ describe('rubric schema', () => {
 
     const thesis = STARTER_RUBRICS[0];
     expect(thesis.rubric.categories).toHaveLength(5);
-    expect(thesis.scoringScale).toMatchObject({ minScore: 1, maxScore: 5 });
+    expect(thesis.scoringScale).toMatchObject({
+      type: 'weighted_percent',
+      minScore: 0,
+      maxScore: 100,
+    });
 
     // Production scores Daily Pages out of 30 in steps of ten, which is not
     // what the built-in Daily Pages default does.

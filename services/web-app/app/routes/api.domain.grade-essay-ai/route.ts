@@ -7,6 +7,7 @@ import { prisma } from '~/utils/db.server';
 import { getLLMCompletion } from '~/utils/getLLMCompletion';
 import { isLlmFallbackRetrySignal } from '~/utils/getLLMCompletion/llm-provider-errors.server';
 import {
+  computeWeightedBandPercentage,
   formatGrade,
   letterFromPercent,
   scoreToPercent,
@@ -350,19 +351,58 @@ function computeLegacyGradeFields({
   return { overallScore, numericPercentage, letterGrade, score };
 }
 
+/**
+ * The overall grade for a rubric whose categories declare their own bands.
+ *
+ * Nothing is converted: the categories are scored inside the bands the rubric
+ * writes, so the weighted average of those scores is the grade.
+ */
+function computeBandScoredGradeFields({
+  rubricScores,
+  rubricCategories,
+}: {
+  rubricScores: Record<string, Prisma.InputJsonValue>;
+  rubricCategories: GradingRubricCategory[];
+}) {
+  const numericPercentage = computeWeightedBandPercentage(
+    rubricScores as unknown as Record<string, unknown>,
+    rubricCategories
+  );
+  if (numericPercentage === null) return null;
+
+  const letterGrade = letterFromPercent(numericPercentage);
+
+  return {
+    overallScore: numericPercentage,
+    numericPercentage,
+    letterGrade,
+    score: formatGrade(numericPercentage, letterGrade) ?? '',
+  };
+}
+
 function buildDynamicGradeFields({
   categories,
   rubricScores,
   scoringType,
   maxScore,
   rubricCategories,
+  bandScored,
 }: {
   categories: Array<{ score: number }>;
   rubricScores: Record<string, Prisma.InputJsonValue>;
   scoringType: string;
   maxScore: number;
   rubricCategories: GradingRubricCategory[];
+  bandScored: boolean;
 }) {
+  if (bandScored) {
+    const banded = computeBandScoredGradeFields({
+      rubricScores,
+      rubricCategories,
+    });
+    if (banded) return banded;
+  }
+
   const nonLegacy = rubricScaleGradeFields({
     categories,
     scoringType,
@@ -991,6 +1031,7 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
     scoringType,
     maxScore,
     rubricCategories,
+    bandScored: promptShape.bandScored,
   });
   const { overallScore, numericPercentage, letterGrade, score } =
     applyStrictnessToGradeFields({

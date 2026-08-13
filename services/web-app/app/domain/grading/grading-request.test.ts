@@ -90,51 +90,88 @@ describe('grading request', () => {
   });
 
   /**
-   * The library rubric replaces a code path with data, so what it sends has to
-   * be checked against what the code path sent — not assumed. Everything that
-   * decides a score is identical; the only difference is which side of the
-   * request the score mapping rides on, because a self-contained rubric keeps
-   * its instructions in one field instead of two.
+   * The built-in thesis path is still what an assignment type falls back to
+   * when it has been pointed at no rubric, so it has to keep working exactly as
+   * it did: a 1-5 scale with the band language in the instruction text.
    */
-  test('the library thesis rubric sends what the built-in thesis path sends', () => {
+  test('the built-in thesis path still sends its 1-5 scale and rubric text', () => {
     const builtIn = getThesisDefaultRubricConfig();
-    const library = STARTER_RUBRICS[0];
-
-    expect(library.rubric.categories).toEqual(builtIn.rubric.categories);
-    expect(library.scoringScale.minScore).toBe(builtIn.scoringScale.minScore);
-    expect(library.scoringScale.maxScore).toBe(builtIn.scoringScale.maxScore);
-
-    const label = 'Thesis-driven essay grading assistant';
-    const shared = {
+    const request = requestFor({
       categories: builtIn.rubric.categories,
       minScore: builtIn.scoringScale.minScore,
       maxScore: builtIn.scoringScale.maxScore,
-      label,
-    };
-    const fromCode = requestFor({
-      ...shared,
       promptConfig: builtIn.promptConfig as Record<string, unknown>,
-    });
-    const fromLibrary = requestFor({
-      ...shared,
-      promptConfig: library.promptConfig as Record<string, unknown>,
+      label: 'Thesis-driven essay grading assistant',
     });
 
-    // Both send the whole rubric text and the whole score mapping.
-    for (const request of [fromCode, fromLibrary]) {
-      const whole = `${request.system}\n${request.userPrompt}`;
-      expect(whole).toContain(gradingAssistantRubricInstructions);
-      expect(whole).toContain(gradingAssistantScoreScaleInstructions);
-      expect(whole).toContain('thesis_and_content: Thesis/Content (25%)');
-      expect(whole).toContain(`Essay:\n${ESSAY}`);
-    }
-
-    // The code path puts the score mapping in the system prompt; the library
-    // rubric puts it with the rest of its instructions in the user prompt.
-    expect(fromCode.system).toContain(gradingAssistantScoreScaleInstructions);
-    expect(fromLibrary.userPrompt).toContain(
-      gradingAssistantScoreScaleInstructions
+    expect(request.system).toContain('Scores must be integers 1-5.');
+    expect(request.system).toContain(gradingAssistantScoreScaleInstructions);
+    expect(request.userPrompt).toContain(gradingAssistantRubricInstructions);
+    expect(request.userPrompt).toContain(
+      'thesis_and_content: Thesis/Content (25%)'
     );
+  });
+
+  test('a banded rubric asks for a band first, then a score inside it', () => {
+    const thesis = STARTER_RUBRICS[0];
+    const request = requestFor({
+      categories: thesis.rubric.categories,
+      minScore: thesis.scoringScale.minScore,
+      maxScore: thesis.scoringScale.maxScore,
+      promptConfig: thesis.promptConfig as Record<string, unknown>,
+      label: 'Thesis-driven essay',
+    });
+
+    expect(request.system).toContain('"score": 0-100');
+    expect(request.system).toContain(
+      'first decide which band the writing falls in'
+    );
+    expect(request.system).not.toContain('Scores must be integers 0-100.');
+
+    // Every band the rubric defines reaches the model attached to its category.
+    expect(request.userPrompt).toContain(
+      'thesis_and_content: Thesis/Content (25%)'
+    );
+    expect(request.userPrompt).toContain('  90-100 Exemplary:');
+    expect(request.userPrompt).toContain('  80-89 Proficient:');
+    expect(request.userPrompt).toContain('  70-79 Developing:');
+    expect(request.userPrompt).toContain('  0-69 Struggling:');
+  });
+
+  test('the cleaned thesis rubric keeps every judgment it always made', () => {
+    const thesis = STARTER_RUBRICS[0];
+    const keys = thesis.rubric.categories.map((category) => category.key);
+
+    expect(keys).toEqual([
+      'thesis_and_content',
+      'organization_and_structure',
+      'evidence_and_support',
+      'voice_and_style',
+      'grammar_and_mechanics',
+    ]);
+    expect(
+      thesis.rubric.categories.map((category) => category.weight)
+    ).toEqual([0.25, 0.25, 0.2, 0.2, 0.1]);
+
+    // Every category is judged against the same four bands, and they cover the
+    // whole scale with no gap a score could fall into.
+    for (const category of thesis.rubric.categories) {
+      const bands = (category.bands ?? [])
+        .slice()
+        .sort((a, b) => a.min - b.min);
+
+      expect(bands.map((band) => band.label)).toEqual([
+        'Struggling',
+        'Developing',
+        'Proficient',
+        'Exemplary',
+      ]);
+      expect(bands[0].min).toBe(0);
+      expect(bands.at(-1)?.max).toBe(100);
+      for (const [index, band] of bands.slice(1).entries()) {
+        expect(band.min).toBe(bands[index].max + 1);
+      }
+    }
   });
 
   test('no starter rubric depends on code to supply its instructions', () => {
