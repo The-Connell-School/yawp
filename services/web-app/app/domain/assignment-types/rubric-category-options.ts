@@ -1,4 +1,7 @@
-import type { RubricScoreLabel } from './assignment-type-rubric.shared';
+import type {
+  RubricScoreBand,
+  RubricScoreLabel,
+} from './assignment-type-rubric.shared';
 
 /**
  * Category keys that produced grammar/syntax highlighting before highlighting
@@ -18,6 +21,7 @@ export const LEGACY_GRAMMAR_CATEGORY_KEYS = [
 export type RubricCategoryOptions = {
   key: string;
   scoreLabels?: RubricScoreLabel[];
+  bands?: RubricScoreBand[];
   feedbackEnabled?: boolean;
   grammarHighlighting?: boolean;
 };
@@ -48,6 +52,66 @@ export function parseRubricScoreLabels(
     .filter((entry): entry is RubricScoreLabel => entry !== null);
 
   return labels.length > 0 ? labels : undefined;
+}
+
+/**
+ * Parses the optional per-category proficiency bands. Returns undefined rather
+ * than an empty array so a category that never declared bands stays exactly as
+ * it was stored, and sorts ascending so the bands read low to high wherever
+ * they are shown.
+ */
+export function parseRubricScoreBands(
+  raw: unknown
+): RubricScoreBand[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+
+  const bands = raw
+    .map((entry) => {
+      if (!isRecord(entry)) return null;
+      const { min, max, label, description } = entry;
+      if (typeof min !== 'number' || !Number.isFinite(min)) return null;
+      if (typeof max !== 'number' || !Number.isFinite(max)) return null;
+      if (max < min) return null;
+      if (typeof label !== 'string' || !label.trim()) return null;
+      return {
+        min,
+        max,
+        label: label.trim(),
+        description:
+          typeof description === 'string' ? description.trim() : '',
+      };
+    })
+    .filter((entry): entry is RubricScoreBand => entry !== null)
+    .sort((a, b) => a.min - b.min);
+
+  return bands.length > 0 ? bands : undefined;
+}
+
+/** The band a score falls in, if the category declares bands covering it. */
+export function getCategoryScoreBand(
+  category: Partial<RubricCategoryOptions>,
+  score: number
+) {
+  return (
+    category.bands?.find((band) => score >= band.min && score <= band.max) ??
+    null
+  );
+}
+
+/**
+ * Whether this rubric is scored directly on the scale its bands are written in.
+ *
+ * Every category has to declare bands for that to hold: a rubric where only
+ * some do cannot be scored consistently across its categories, so it keeps the
+ * older path rather than scoring half one way and half the other.
+ */
+export function isBandScoredRubric(
+  categories: Partial<RubricCategoryOptions>[]
+) {
+  return (
+    categories.length > 0 &&
+    categories.every((category) => (category.bands?.length ?? 0) > 0)
+  );
 }
 
 export function parseOptionalBoolean(raw: unknown): boolean | undefined {

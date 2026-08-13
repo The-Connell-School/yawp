@@ -38,10 +38,12 @@ import {
 import { rubricScaleGradeFieldsFromScores } from '~/domain/grading/recorded-grade';
 import {
   getCategoryScoreLabel,
+  isBandScoredRubric,
   isCategoryFeedbackEnabled,
   isGrammarHighlightCategory,
 } from '~/domain/assignment-types/rubric-category-options';
 import {
+  computeWeightedBandPercentage,
   computeWeightedPercentageForCategories,
   formatGrade,
   letterFromPercent,
@@ -266,6 +268,15 @@ export function TeacherGradingPanel({
     );
   const [savedSnapshot, setSavedSnapshot] = useState<string | null>(null);
   const computedNumericPercentage = useMemo(() => {
+    // A rubric whose categories declare bands is already scored as a
+    // percentage, so its overall grade is the weighted average with nothing
+    // converted. Everything else keeps the 1-5 mapping.
+    if (isBandScoredRubric(activeRubricConfig.categories)) {
+      return computeWeightedBandPercentage(
+        rubricScores as unknown as Record<string, unknown>,
+        activeRubricConfig.categories
+      );
+    }
     if (activeRubricConfig.scoringType !== 'weighted_1_5') return null;
     return computeWeightedPercentageForCategories(
       rubricScores as unknown as Record<string, unknown>,
