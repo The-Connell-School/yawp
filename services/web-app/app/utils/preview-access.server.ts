@@ -29,7 +29,7 @@ export type PreviewAccessSeat = {
 
 type ConfiguredPreviewAccessSeat = PreviewAccessSeat & { code: string };
 
-const MASTER_ORGANIZATION_ID = 'local-dev-org';
+const DEFAULT_MASTER_ORGANIZATION_ID = 'local-dev-org';
 const MASTER_SEAT_LABEL = 'Master';
 
 function legacyConfiguredMasterSeat(): ConfiguredPreviewAccessSeat | null {
@@ -40,7 +40,7 @@ function legacyConfiguredMasterSeat(): ConfiguredPreviewAccessSeat | null {
   return code && ACCESS_CODE_PATTERN.test(code)
     ? {
         code,
-        organizationId: MASTER_ORGANIZATION_ID,
+        organizationId: DEFAULT_MASTER_ORGANIZATION_ID,
         label: MASTER_SEAT_LABEL,
       }
     : null;
@@ -53,13 +53,20 @@ function configuredMasterSeat(): ConfiguredPreviewAccessSeat | null {
   try {
     const parsed = JSON.parse(raw) as unknown;
     if (!Array.isArray(parsed)) return null;
+    const configuredMasterOrganizationId =
+      process.env.PREVIEW_DATA_MODE === 'sanitized-production'
+        ? String(
+            (parsed[0] as Record<string, unknown> | undefined)
+              ?.organizationId ?? ''
+          ).trim()
+        : DEFAULT_MASTER_ORGANIZATION_ID;
     const master = parsed.find(
       (value) =>
         value &&
         typeof value === 'object' &&
         String(
           (value as Record<string, unknown>).organizationId ?? ''
-        ).trim() === MASTER_ORGANIZATION_ID
+        ).trim() === configuredMasterOrganizationId
     );
     if (!master || typeof master !== 'object') return null;
     const code = normalizeCode(
@@ -68,8 +75,10 @@ function configuredMasterSeat(): ConfiguredPreviewAccessSeat | null {
     return ACCESS_CODE_PATTERN.test(code)
       ? {
           code,
-          organizationId: MASTER_ORGANIZATION_ID,
-          label: MASTER_SEAT_LABEL,
+          organizationId: configuredMasterOrganizationId,
+          label:
+            String((master as Record<string, unknown>).label ?? '').trim() ||
+            MASTER_SEAT_LABEL,
         }
       : null;
   } catch {
@@ -90,7 +99,10 @@ export function isPreviewAccessGateEnabled() {
 
 export function isIsolatedPreviewSeatMode() {
   return (
-    isPreviewAccessGateEnabled() && process.env.PREVIEW_DATA_MODE === 'seed'
+    isPreviewAccessGateEnabled() &&
+    ['seed', 'sanitized-production'].includes(
+      process.env.PREVIEW_DATA_MODE ?? ''
+    )
   );
 }
 
@@ -217,8 +229,9 @@ export async function getPreviewAccessSeat(
     return null;
   }
   const organizationId = value.slice(ACCESS_SEAT_VALUE_PREFIX.length);
-  if (organizationId === MASTER_ORGANIZATION_ID) {
-    return { organizationId, label: MASTER_SEAT_LABEL };
+  const master = configuredMasterSeat();
+  if (organizationId === master?.organizationId) {
+    return { organizationId, label: master.label };
   }
   const seat = await repository.findById(organizationId);
   return seat?.previewSeatCode !== null && seat?.previewSeatCode !== undefined

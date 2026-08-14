@@ -26,7 +26,7 @@ function request(url, { method = 'GET', body, headers = {} } = {}) {
             body: Buffer.concat(chunks).toString('utf8'),
           });
         });
-      },
+      }
     );
     req.setTimeout(15_000, () => req.destroy(new Error(`Timed out: ${url}`)));
     req.on('error', reject);
@@ -46,7 +46,10 @@ function appendPath(baseUrl, pathname) {
 function getCookies(headers) {
   const raw = headers['set-cookie'];
   const values = Array.isArray(raw) ? raw : raw ? [raw] : [];
-  return values.map((value) => value.split(';')[0]).filter(Boolean).join('; ');
+  return values
+    .map((value) => value.split(';')[0])
+    .filter(Boolean)
+    .join('; ');
 }
 
 function resolveRedirect(baseUrl, location) {
@@ -56,7 +59,7 @@ function resolveRedirect(baseUrl, location) {
 
 async function getWithRedirects(
   url,
-  { cookie, maxRedirects = 3, requestFn = request } = {},
+  { cookie, maxRedirects = 3, requestFn = request } = {}
 ) {
   let currentUrl = url;
   const allowedOrigin = new URL(url).origin;
@@ -74,7 +77,7 @@ async function getWithRedirects(
     if (!nextUrl) return response;
     if (new URL(nextUrl).origin !== allowedOrigin) {
       throw new Error(
-        `Refusing cross-origin redirect during preview smoke: ${nextUrl}`,
+        `Refusing cross-origin redirect during preview smoke: ${nextUrl}`
       );
     }
     currentUrl = nextUrl;
@@ -96,11 +99,11 @@ export async function enterPreviewAccess({
     anonymousPage.status < 300 ||
     anonymousPage.status >= 400 ||
     !String(anonymousPage.headers.location || '').startsWith(
-      '/auth/preview-access',
+      '/auth/preview-access'
     )
   ) {
     throw new Error(
-      `Expected anonymous app request to redirect to the access screen, got HTTP ${anonymousPage.status}`,
+      `Expected anonymous app request to redirect to the access screen, got HTTP ${anonymousPage.status}`
     );
   }
 
@@ -115,25 +118,25 @@ export async function enterPreviewAccess({
       headers: {
         'content-type': 'application/x-www-form-urlencoded',
       },
-    },
+    }
   );
   if (blockedDevLogin.status !== 401) {
     throw new Error(
-      `Expected anonymous POST /auth/dev-login to return HTTP 401, got ${blockedDevLogin.status}`,
+      `Expected anonymous POST /auth/dev-login to return HTTP 401, got ${blockedDevLogin.status}`
     );
   }
 
-  const form = new URLSearchParams({ code: accessCode, returnTo: '/' }).toString();
-  const access = await requestFn(
-    appendPath(baseUrl, '/auth/preview-access'),
-    {
-      method: 'POST',
-      body: form,
-      headers: {
-        'content-type': 'application/x-www-form-urlencoded',
-      },
+  const form = new URLSearchParams({
+    code: accessCode,
+    returnTo: '/',
+  }).toString();
+  const access = await requestFn(appendPath(baseUrl, '/auth/preview-access'), {
+    method: 'POST',
+    body: form,
+    headers: {
+      'content-type': 'application/x-www-form-urlencoded',
     },
-  );
+  });
   if (access.status < 300 || access.status >= 400) {
     throw new Error(`Expected access-code redirect, got HTTP ${access.status}`);
   }
@@ -191,7 +194,9 @@ export async function runLoginSmoke({
   });
 
   if (app.status !== 200) {
-    throw new Error(`Expected /app to return HTTP 200 after login, got ${app.status}`);
+    throw new Error(
+      `Expected /app to return HTTP 200 after login, got ${app.status}`
+    );
   }
 
   return { ok: true, status: app.status };
@@ -241,7 +246,9 @@ export async function runDevLoginSmoke({
   });
 
   if (app.status !== 200) {
-    throw new Error(`Expected /app to return HTTP 200 after dev login, got ${app.status}`);
+    throw new Error(
+      `Expected /app to return HTTP 200 after dev login, got ${app.status}`
+    );
   }
 
   return { ok: true, status: app.status };
@@ -253,7 +260,10 @@ export async function runDevLoginSmoke({
  * NODE_ENV === 'development' and a local DATABASE_URL) and returns 403.
  */
 export function shouldUseDevLogin({ dataMode, runtime } = {}) {
-  return (dataMode ?? 'seed') === 'seed' && (runtime ?? 'fast') !== 'production';
+  return (
+    ['seed', 'sanitized-production'].includes(dataMode ?? 'seed') &&
+    (runtime ?? 'fast') !== 'production'
+  );
 }
 
 async function main() {

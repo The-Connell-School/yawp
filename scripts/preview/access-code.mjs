@@ -23,9 +23,18 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
       ? JSON.parse(process.env.PREVIEW_EXISTING_ACCESS_SEATS)
       : [];
     const count = Number(process.env.PREVIEW_SEAT_COUNT ?? 1);
+    const masterOrganizationId =
+      process.env.PREVIEW_ACCESS_MASTER_ORGANIZATION_ID || 'local-dev-org';
+    const masterLabel = process.env.PREVIEW_ACCESS_MASTER_LABEL || 'Master';
     process.stdout.write(
       `${JSON.stringify(
-        generatePreviewAccessSeats({ count, existingCodes, existingSeats })
+        generatePreviewAccessSeats({
+          count,
+          existingCodes,
+          existingSeats,
+          masterOrganizationId,
+          masterLabel,
+        })
       )}\n`
     );
   } else {

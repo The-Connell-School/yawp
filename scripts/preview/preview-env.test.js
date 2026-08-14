@@ -94,6 +94,16 @@ describe('buildPreviewEnv', () => {
     expect(env.dataMode).toBe('production-dump');
   });
 
+  test('supports scrubbed production data as a distinct gated mode', () => {
+    const env = buildPreviewEnv({
+      prNumber: '142',
+      domain: 'preview.yawp.school',
+      dataMode: 'sanitized-production',
+    });
+
+    expect(env.dataMode).toBe('sanitized-production');
+  });
+
   test('rejects unsupported data modes', () => {
     expect(() =>
       buildPreviewEnv({
@@ -101,7 +111,9 @@ describe('buildPreviewEnv', () => {
         domain: 'preview.yawp.school',
         dataMode: 'prod',
       })
-    ).toThrow('PREVIEW_DATA_MODE must be seed or production-dump');
+    ).toThrow(
+      'PREVIEW_DATA_MODE must be seed, production-dump, or sanitized-production'
+    );
   });
 
   test('accepts one or more memorable access codes', () => {
@@ -228,6 +240,29 @@ describe('buildPreviewEnv', () => {
     expect(deploy).not.toContain(deprecatedTransportAuth);
     expect(deploy).not.toContain('www-authenticate');
     expect(githubConfig).not.toContain(deprecatedTransportAuth);
+  });
+
+  test('opts labeled PRs into versioned scrubbed production data', () => {
+    const workflow = readFileSync(
+      new URL(
+        '../../.github/workflows/preview-environments.yml',
+        import.meta.url
+      ),
+      'utf8'
+    );
+    const deploy = readFileSync(
+      new URL('./deploy.sh', import.meta.url),
+      'utf8'
+    );
+
+    expect(workflow).toContain('sanitized-production-data');
+    expect(workflow).toContain('PREVIEW_SANITIZED_DUMP_VERSION');
+    expect(workflow).toContain('PREVIEW_DB_DUMP_VERSION');
+    expect(workflow).toContain('PREVIEW_ACCESS_MASTER_ORGANIZATION_ID');
+    expect(workflow).toContain('labeled');
+    expect(deploy).toContain('DATA_SOURCE_FINGERPRINT_FILE');
+    expect(deploy).toContain('PREVIEW_DB_DUMP_VERSION');
+    expect(deploy).toContain('reset_preview_database_for_data_source_change');
   });
 });
 

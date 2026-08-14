@@ -268,6 +268,30 @@ describe('preview access gate', () => {
     expect(sessionGuard).not.toHaveBeenCalled();
   });
 
+  test('binds sanitized production access to its configured production organization', async () => {
+    process.env.PREVIEW_DATA_MODE = 'sanitized-production';
+    process.env.PREVIEW_ACCESS_SEATS = JSON.stringify([
+      {
+        code: 'brave-otter-4193',
+        organizationId: 'default-org',
+        label: 'Production rehearsal',
+      },
+    ]);
+    const seat = await findPreviewAccessSeatByCode('brave-otter-4193');
+    expect(seat).toEqual({
+      organizationId: 'default-org',
+      label: 'Production rehearsal',
+    });
+
+    const cookie = (await grantPreviewAccessCookie(seat!)).split(';', 1)[0];
+    expect(
+      await getPreviewAccessSeat(
+        request('/app', { headers: { cookie } }),
+        repository()
+      )
+    ).toEqual(seat);
+  });
+
   test('clears the signed access cookie for re-entry', async () => {
     const serialized = await clearPreviewAccessCookie();
 

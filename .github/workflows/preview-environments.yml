@@ -2,7 +2,7 @@ name: PR preview
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened, closed]
+    types: [opened, synchronize, reopened, labeled, closed]
   workflow_dispatch:
   schedule:
     - cron: '17 */6 * * *'
@@ -34,11 +34,13 @@ jobs:
       PREVIEW_TLS: ${{ vars.PREVIEW_TLS || 'true' }}
       PREVIEW_RUNTIME: ${{ vars.PREVIEW_RUNTIME || 'fast' }}
       PREVIEW_MAX_ENVS: ${{ vars.PREVIEW_MAX_ENVS || '30' }}
-      PREVIEW_DATA_MODE: ${{ vars.PREVIEW_DATA_MODE || 'seed' }}
+      PREVIEW_DATA_MODE: ${{ contains(github.event.pull_request.labels.*.name, 'sanitized-production-data') && 'sanitized-production' || vars.PREVIEW_DATA_MODE || 'seed' }}
       PREVIEW_SEAT_COUNT: ${{ vars.PREVIEW_SEAT_COUNT || '1' }}
       PREVIEW_AI_MODEL: ${{ vars.PREVIEW_AI_MODEL || 'claude-sonnet-4-6' }}
       PREVIEW_ANTHROPIC_API_KEY: ${{ secrets.PREVIEW_ANTHROPIC_API_KEY || secrets.ANTHROPIC_API_KEY }}
       PREVIEW_DB_DUMP_S3_URI: ${{ vars.PREVIEW_DB_DUMP_S3_URI || 's3://yawp-preview-videos/production.dump' }}
+      PREVIEW_DB_DUMP_VERSION: ${{ contains(github.event.pull_request.labels.*.name, 'sanitized-production-data') && vars.PREVIEW_SANITIZED_DUMP_VERSION || vars.PREVIEW_DB_DUMP_VERSION || 'unversioned' }}
+      PREVIEW_ACCESS_MASTER_ORGANIZATION_ID: ${{ contains(github.event.pull_request.labels.*.name, 'sanitized-production-data') && 'default-org' || 'local-dev-org' }}
       PREVIEW_DB_PASSWORD: ${{ secrets.PREVIEW_DB_PASSWORD }}
       PREVIEW_DEV_LOGIN_EMAIL: ${{ vars.PREVIEW_DEV_LOGIN_EMAIL || 'dev.teacher@yawp.local' }}
       PREVIEW_LOGIN_EMAIL: ${{ secrets.PREVIEW_LOGIN_EMAIL }}
@@ -60,8 +62,12 @@ jobs:
               [[ -n "$PREVIEW_LOGIN_EMAIL" ]] || { echo "Missing repository secret PREVIEW_LOGIN_EMAIL"; exit 1; }
               [[ -n "$PREVIEW_LOGIN_PASSWORD" ]] || { echo "Missing repository secret PREVIEW_LOGIN_PASSWORD"; exit 1; }
               ;;
+            sanitized-production)
+              [[ -n "$PREVIEW_DB_DUMP_S3_URI" ]] || { echo "Missing repository variable PREVIEW_DB_DUMP_S3_URI"; exit 1; }
+              [[ -n "$PREVIEW_DB_DUMP_VERSION" && "$PREVIEW_DB_DUMP_VERSION" != "unversioned" ]] || { echo "Missing repository variable PREVIEW_SANITIZED_DUMP_VERSION"; exit 1; }
+              ;;
             *)
-              echo "PREVIEW_DATA_MODE must be seed or production-dump"
+              echo "PREVIEW_DATA_MODE must be seed, production-dump, or sanitized-production"
               exit 1
               ;;
           esac
@@ -153,6 +159,8 @@ jobs:
             "PREVIEW_AI_MODEL=$(shell_quote "$PREVIEW_AI_MODEL")"
             "PREVIEW_ANTHROPIC_API_KEY=$(shell_quote "$PREVIEW_ANTHROPIC_API_KEY")"
             "PREVIEW_DB_DUMP_S3_URI=$(shell_quote "$PREVIEW_DB_DUMP_S3_URI")"
+            "PREVIEW_DB_DUMP_VERSION=$(shell_quote "$PREVIEW_DB_DUMP_VERSION")"
+            "PREVIEW_ACCESS_MASTER_ORGANIZATION_ID=$(shell_quote "$PREVIEW_ACCESS_MASTER_ORGANIZATION_ID")"
             "PREVIEW_DB_PASSWORD=$(shell_quote "$PREVIEW_DB_PASSWORD")"
             "PREVIEW_DEV_LOGIN_EMAIL=$(shell_quote "$PREVIEW_DEV_LOGIN_EMAIL")"
             "PREVIEW_LOGIN_EMAIL=$(shell_quote "$PREVIEW_LOGIN_EMAIL")"
@@ -226,7 +234,7 @@ jobs:
             - **URL:** ${{ steps.deploy.outputs.url }}
             - **Access code:** `${{ steps.deploy.outputs.access_code }}`
             - **Runtime:** Docker Compose on the preview environment host
-            - **Data:** seeded local-dev data in an isolated PR database
+            - **Data:** `${{ env.PREVIEW_DATA_MODE }}` in an isolated PR database
             - **Deploy elapsed:** `${{ steps.deploy.outputs.elapsed_ms }}ms`
             - **Smoke:** in-app access gate + dev login
 

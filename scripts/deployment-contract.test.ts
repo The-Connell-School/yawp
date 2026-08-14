@@ -264,21 +264,31 @@ describe('worktree local setup contract', () => {
     expect(variables).toContain('variable "production_domain_name"');
     expect(infra).toContain('production_edge_enabled');
     expect(infra).toContain('var.env == "production"');
-    expect(infra).toContain('resource "aws_cloudfront_distribution" "web_edge"');
+    expect(infra).toContain(
+      'resource "aws_cloudfront_distribution" "web_edge"'
+    );
     expect(infra).toContain('aliases');
     expect(infra).toContain('[var.production_domain_name]');
     expect(infra).toContain('domain_name = local.apprunner_origin_domain');
     expect(infra).toContain('origin_protocol_policy = "https-only"');
     expect(infra).toContain('"Managed-AllViewer"');
-    expect(infra).not.toContain('resource "aws_cloudfront_function" "forward_viewer_host"');
+    expect(infra).not.toContain(
+      'resource "aws_cloudfront_function" "forward_viewer_host"'
+    );
     expect(infra).not.toContain('FunctionValidationError');
     expect(infra).toContain('minimum_protocol_version = "TLSv1.2_2021"');
     expect(infra).not.toContain('minimum_protocol_version = "TLSv1.3_2025"');
     expect(infra).toContain('ssl_support_method');
     expect(infra).toContain('"sni-only"');
-    expect(infra).toContain('resource "aws_route53_record" "production_domain_a"');
-    expect(infra).toContain('name                   = aws_cloudfront_distribution.web_edge[0].domain_name');
-    expect(infra).toContain('zone_id                = aws_cloudfront_distribution.web_edge[0].hosted_zone_id');
+    expect(infra).toContain(
+      'resource "aws_route53_record" "production_domain_a"'
+    );
+    expect(infra).toContain(
+      'name                   = aws_cloudfront_distribution.web_edge[0].domain_name'
+    );
+    expect(infra).toContain(
+      'zone_id                = aws_cloudfront_distribution.web_edge[0].hosted_zone_id'
+    );
   });
 });
 
@@ -291,7 +301,7 @@ describe('PR preview deployment contract', () => {
     expect(previewWorkflow).toContain('name: PR preview');
     expect(previewWorkflow).toContain('pull_request');
     expect(previewWorkflow).toContain(
-      'types: [opened, synchronize, reopened, closed]'
+      'types: [opened, synchronize, reopened, labeled, closed]'
     );
     expect(previewWorkflow).toContain(
       'github.event.pull_request.head.repo.full_name == github.repository'
@@ -319,7 +329,8 @@ describe('PR preview deployment contract', () => {
     const deployScript = readRepoFile('scripts/preview/deploy.sh');
     const resetIndex = deployScript.indexOf('reset_seed_preview_database');
     const dropIndex = deployScript.indexOf(
-      'dropdb -U postgres --force --if-exists "$DATABASE_NAME"'
+      'dropdb -U postgres --force --if-exists "$DATABASE_NAME"',
+      resetIndex
     );
     const generateIndex = deployScript.indexOf('bun prisma generate');
     const migrateIndex = deployScript.indexOf('bun prisma migrate deploy');
@@ -391,7 +402,7 @@ describe('PR preview deployment contract', () => {
     expect(deployScript).toContain(
       'Preview database $DATABASE_NAME already exists; skipping clone.'
     );
-    expect(deployScript).toContain('production-dump)');
+    expect(deployScript).toContain('production-dump|sanitized-production)');
     expect(deployScript).toContain(
       'createdb -U postgres -T "$TEMPLATE_DB" "$DATABASE_NAME"'
     );
@@ -468,13 +479,13 @@ describe('PR preview deployment contract', () => {
     expect(previewWorkflow).toContain('bash -s < scripts/preview/cleanup.sh');
   });
 
-  test('preview workflow passes seeded preview mode to remote deploy', () => {
+  test('preview workflow passes selected preview mode to remote deploy', () => {
     const previewWorkflow = readRepoFile(
       '.github/workflows/preview-environments.yml'
     );
 
     expect(previewWorkflow).toContain(
-      "PREVIEW_DATA_MODE: ${{ vars.PREVIEW_DATA_MODE || 'seed' }}"
+      "contains(github.event.pull_request.labels.*.name, 'sanitized-production-data') && 'sanitized-production'"
     );
     expect(previewWorkflow).toContain(
       "PREVIEW_SEAT_COUNT: ${{ vars.PREVIEW_SEAT_COUNT || '1' }}"
@@ -509,12 +520,21 @@ describe('PR preview deployment contract', () => {
       'PREVIEW_DB_DUMP_S3_URI=$(shell_quote "$PREVIEW_DB_DUMP_S3_URI")'
     );
     expect(previewWorkflow).toContain(
+      'PREVIEW_DB_DUMP_VERSION=$(shell_quote "$PREVIEW_DB_DUMP_VERSION")'
+    );
+    expect(previewWorkflow).toContain(
+      'PREVIEW_ACCESS_MASTER_ORGANIZATION_ID=$(shell_quote "$PREVIEW_ACCESS_MASTER_ORGANIZATION_ID")'
+    );
+    expect(previewWorkflow).toContain(
       'PREVIEW_DB_PASSWORD=$(shell_quote "$PREVIEW_DB_PASSWORD")'
     );
     expect(previewWorkflow).not.toContain(deprecatedPreviewBasicAuth);
     expect(previewWorkflow).toContain('test -n "$PREVIEW_ANTHROPIC_API_KEY"');
-    expect(previewWorkflow).not.toContain('test -n "$PREVIEW_LOGIN_EMAIL"');
-    expect(previewWorkflow).not.toContain('test -n "$PREVIEW_LOGIN_PASSWORD"');
+    expect(previewWorkflow).toContain('production-dump)');
+    expect(previewWorkflow).toContain('[[ -n "$PREVIEW_LOGIN_EMAIL" ]]');
+    expect(previewWorkflow).toContain('[[ -n "$PREVIEW_LOGIN_PASSWORD" ]]');
+    expect(previewWorkflow).toContain('sanitized-production)');
+    expect(previewWorkflow).toContain('PREVIEW_SANITIZED_DUMP_VERSION');
   });
 
   test('preview workflow does not require runner AWS credentials for dump restores', () => {
@@ -687,13 +707,13 @@ describe('PR preview deployment contract', () => {
     }
   });
 
-  test('preview comment describes seeded data and dev-login smoke', () => {
+  test('preview comment describes selected data and dev-login smoke', () => {
     const previewWorkflow = readRepoFile(
       '.github/workflows/preview-environments.yml'
     );
 
     expect(previewWorkflow).toContain(
-      '- **Data:** seeded local-dev data in an isolated PR database'
+      '- **Data:** `${{ env.PREVIEW_DATA_MODE }}` in an isolated PR database'
     );
     expect(previewWorkflow).toContain(
       '- **Smoke:** in-app access gate + dev login'

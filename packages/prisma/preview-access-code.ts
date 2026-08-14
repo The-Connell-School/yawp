@@ -82,10 +82,15 @@ export type GeneratedPreviewAccessSeat = {
   label: string;
 };
 
-function previewSeatIdentity(number: number) {
+function previewSeatIdentity(
+  number: number,
+  masterOrganizationId: string,
+  masterLabel: string
+) {
   return {
-    organizationId: number === 1 ? 'local-dev-org' : `preview-seat-${number}`,
-    label: number === 1 ? 'Master' : `Seat ${number}`,
+    organizationId:
+      number === 1 ? masterOrganizationId : `preview-seat-${number}`,
+    label: number === 1 ? masterLabel : `Seat ${number}`,
   };
 }
 
@@ -93,10 +98,14 @@ export function generatePreviewAccessSeats({
   count = 1,
   existingCodes = [],
   existingSeats = [],
+  masterOrganizationId = 'local-dev-org',
+  masterLabel = 'Master',
 }: {
   count?: number;
   existingCodes?: string[];
   existingSeats?: GeneratedPreviewAccessSeat[];
+  masterOrganizationId?: string;
+  masterLabel?: string;
 } = {}): GeneratedPreviewAccessSeat[] {
   if (!Number.isSafeInteger(count) || count < 1) {
     throw new Error('Preview seat count must be a positive integer');
@@ -107,7 +116,9 @@ export function generatePreviewAccessSeats({
   );
   const retainedCount = existingSeats.reduce((maximum, seat) => {
     const match = /^preview-seat-([1-9][0-9]*)$/.exec(seat.organizationId);
-    if (seat.organizationId === 'local-dev-org') return Math.max(maximum, 1);
+    if (seat.organizationId === masterOrganizationId) {
+      return Math.max(maximum, 1);
+    }
     return match ? Math.max(maximum, Number(match[1])) : maximum;
   }, existingSeats.length);
   const effectiveCount = Math.max(count, retainedCount);
@@ -118,7 +129,11 @@ export function generatePreviewAccessSeats({
   );
 
   return Array.from({ length: effectiveCount }, (_, index) => {
-    const identity = previewSeatIdentity(index + 1);
+    const identity = previewSeatIdentity(
+      index + 1,
+      masterOrganizationId,
+      masterLabel
+    );
     const existing = byOrganization.get(identity.organizationId);
     const legacyCode = existingCodes[index];
     const code =

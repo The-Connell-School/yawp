@@ -7,6 +7,7 @@
 #
 # Set PREVIEW_SSH_PRIVATE_KEY to also update the SSH secret.
 # Set PREVIEW_DATA_MODE=production-dump to opt back into production-copy preview data.
+# Set PREVIEW_SANITIZED_DUMP_VERSION after uploading a new scrubbed rehearsal dump.
 # Set PREVIEW_DEV_LOGIN_EMAIL to choose the seeded dev persona used by smoke tests.
 # Set PREVIEW_SEAT_COUNT to pre-seed more than the default Master seat (default 1).
 # Set PREVIEW_AI_MODEL to choose the Anthropic model used by preview app containers.
@@ -59,6 +60,10 @@ gh_var PREVIEW_SEAT_COUNT "${PREVIEW_SEAT_COUNT:-1}"
 gh_var PREVIEW_DEV_LOGIN_EMAIL "${PREVIEW_DEV_LOGIN_EMAIL:-dev.teacher@yawp.local}"
 gh_var PREVIEW_AI_MODEL "${PREVIEW_AI_MODEL:-claude-sonnet-4-6}"
 gh_var PREVIEW_DB_DUMP_S3_URI "${PREVIEW_DB_DUMP_S3_URI:-s3://yawp-preview-videos/production.dump}"
+
+if [[ -n "${PREVIEW_SANITIZED_DUMP_VERSION:-}" ]]; then
+  gh_var PREVIEW_SANITIZED_DUMP_VERSION "$PREVIEW_SANITIZED_DUMP_VERSION"
+fi
 
 if [[ -n "${PREVIEW_SSH_PRIVATE_KEY:-}" ]]; then
   gh_sec PREVIEW_SSH_PRIVATE_KEY "$PREVIEW_SSH_PRIVATE_KEY"

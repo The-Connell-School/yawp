@@ -18,12 +18,30 @@ eval "$(node "$SCRIPT_DIR/preview-env.mjs" --shell)"
 # string rather than left unset, did it silently instead of failing under `set -u`.
 : "${DATABASE_NAME:?preview-env.mjs did not export DATABASE_NAME}"
 DUMP_URI="${PREVIEW_DB_DUMP_S3_URI:-s3://yawp-preview-videos/production.dump}"
+DUMP_VERSION="${PREVIEW_DB_DUMP_VERSION:-unversioned}"
 POSTGRES_CONTAINER="${PREVIEW_POSTGRES_CONTAINER:-preview-postgres}"
 POSTGRES_PROJECT="${PREVIEW_POSTGRES_PROJECT:-yawp-preview-db}"
-TEMPLATE_DB="${PREVIEW_DB_TEMPLATE_DB:-${TEMPLATE_DATABASE_NAME:-yawp_template}}"
+if [[ ! "$DUMP_VERSION" =~ ^[A-Za-z0-9._-]+$ ]]; then
+  echo "PREVIEW_DB_DUMP_VERSION contains unsupported characters" >&2
+  exit 1
+fi
+if [[ "$DATA_MODE" == "sanitized-production" && "$DUMP_VERSION" == "unversioned" ]]; then
+  echo "PREVIEW_DB_DUMP_VERSION is required for sanitized production previews" >&2
+  exit 1
+fi
+safe_dump_version="$(printf '%s' "$DUMP_VERSION" | tr '.-' '__' | cut -c1-28)"
+if [[ "$DATA_MODE" == "sanitized-production" ]]; then
+  default_template_database="yawp_template_sanitized_${safe_dump_version}"
+else
+  default_template_database="yawp_template"
+fi
+TEMPLATE_DB="${PREVIEW_DB_TEMPLATE_DB:-${TEMPLATE_DATABASE_NAME:-$default_template_database}}"
 DB_COMPOSE_DIR="$ROOT/postgres"
 DB_COMPOSE_FILE="$DB_COMPOSE_DIR/docker-compose.yml"
 TOOLING_FINGERPRINT_FILE="$PREVIEW_DIR/tooling.sha256"
+DATA_SOURCE_FINGERPRINT_FILE="$PREVIEW_DIR/data-source"
+DATA_SOURCE_FINGERPRINT="${DATA_MODE}:${DUMP_URI}:${DUMP_VERSION}"
+DATA_SOURCE_CHANGED=1
 TOOLING_CHANGED=1
 DATABASE_CREATED=0
 
@@ -33,6 +51,19 @@ ACCESS_SEATS_FILE="$PREVIEW_DIR/access-seats.json"
 ACCESS_SECRET_FILE="$PREVIEW_DIR/access-secret"
 SESSION_SECRET_FILE="$PREVIEW_DIR/session-secret"
 export PREVIEW_SEAT_COUNT="${PREVIEW_SEAT_COUNT:-1}"
+if [[ "$DATA_MODE" == "sanitized-production" ]]; then
+  export PREVIEW_ACCESS_MASTER_ORGANIZATION_ID="${PREVIEW_ACCESS_MASTER_ORGANIZATION_ID:-default-org}"
+  export PREVIEW_ACCESS_MASTER_LABEL="${PREVIEW_ACCESS_MASTER_LABEL:-Production rehearsal}"
+else
+  export PREVIEW_ACCESS_MASTER_ORGANIZATION_ID="${PREVIEW_ACCESS_MASTER_ORGANIZATION_ID:-local-dev-org}"
+  export PREVIEW_ACCESS_MASTER_LABEL="${PREVIEW_ACCESS_MASTER_LABEL:-Master}"
+fi
+
+if [[ -f "$DATA_SOURCE_FINGERPRINT_FILE" && "$(<"$DATA_SOURCE_FINGERPRINT_FILE")" == "$DATA_SOURCE_FINGERPRINT" ]]; then
+  DATA_SOURCE_CHANGED=0
+else
+  rm -f "$ACCESS_CODE_FILE" "$ACCESS_SEATS_FILE"
+fi
 
 load_or_create_access_config() {
   umask 077
@@ -47,6 +78,8 @@ load_or_create_access_config() {
     PREVIEW_ACCESS_SEATS="$(
       docker run --rm \
         -e PREVIEW_SEAT_COUNT="$PREVIEW_SEAT_COUNT" \
+        -e PREVIEW_ACCESS_MASTER_ORGANIZATION_ID="$PREVIEW_ACCESS_MASTER_ORGANIZATION_ID" \
+        -e PREVIEW_ACCESS_MASTER_LABEL="$PREVIEW_ACCESS_MASTER_LABEL" \
         -e PREVIEW_EXISTING_ACCESS_SEATS="$existing_seats" \
         -e PREVIEW_ACCESS_CODES="$legacy_codes" \
         -v "$SOURCE_DIR:/app:ro" \
@@ -218,6 +251,17 @@ ensure_production_dump_preview_database() {
   DATABASE_CREATED=1
 }
 
+reset_preview_database_for_data_source_change() {
+  if [[ "$DATA_SOURCE_CHANGED" != "1" ]] || ! database_exists "$DATABASE_NAME"; then
+    return 0
+  fi
+
+  echo "Preview data source changed; replacing database $DATABASE_NAME..."
+  "${compose[@]}" down --remove-orphans >/dev/null 2>&1 || true
+  docker exec "$POSTGRES_CONTAINER" dropdb -U postgres --force --if-exists "$DATABASE_NAME"
+  rm -f "$TOOLING_FINGERPRINT_FILE"
+}
+
 reset_seed_preview_database() {
   validate_database_name "$DATABASE_NAME"
   echo "Resetting preview database $DATABASE_NAME for seeded local-dev data..."
@@ -245,7 +289,7 @@ ensure_preview_database() {
         create_seed_preview_database
       fi
       ;;
-    production-dump)
+    production-dump|sanitized-production)
       ensure_template_database
       ensure_production_dump_preview_database
       ;;
@@ -347,7 +391,7 @@ run_tooling_if_needed() {
       fi
       tooling_command+=' && bun run scripts/assignment-type-release-gate.ts --require-data'
       ;;
-    production-dump)
+    production-dump|sanitized-production)
       tooling_command='bun install --ignore-scripts && bun prisma generate && cd packages/prisma && bun prisma migrate deploy && bun run scripts/backfill-class-art-key.ts && bun run scripts/assignment-type-release-gate.ts --require-data'
       ;;
   esac
@@ -375,6 +419,7 @@ refresh_web_container_if_needed() {
 }
 
 ensure_shared_postgres
+reset_preview_database_for_data_source_change
 ensure_preview_database
 run_tooling_if_needed
 ensure_preview_seats
@@ -412,6 +457,7 @@ for attempt in $(seq 1 90); do
       }
     '
     echo "PREVIEW_ELAPSED_MS=$elapsed_ms"
+    printf '%s\n' "$DATA_SOURCE_FINGERPRINT" > "$DATA_SOURCE_FINGERPRINT_FILE"
     exit 0
   fi
   echo "Waiting for preview healthcheck ($attempt/90): $health_url"
