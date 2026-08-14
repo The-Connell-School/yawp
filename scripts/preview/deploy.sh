@@ -35,7 +35,15 @@ if [[ "$DATA_MODE" == "sanitized-production" ]]; then
 else
   default_template_database="yawp_template"
 fi
-TEMPLATE_DB="${PREVIEW_DB_TEMPLATE_DB:-${TEMPLATE_DATABASE_NAME:-$default_template_database}}"
+if [[ -n "${PREVIEW_DB_TEMPLATE_DB:-}" ]]; then
+  TEMPLATE_DB="$PREVIEW_DB_TEMPLATE_DB"
+elif [[ "$DATA_MODE" == "sanitized-production" ]]; then
+  # preview-env.mjs exports TEMPLATE_DATABASE_NAME=yawp_template for backward
+  # compatibility. Sanitized snapshots must not inherit that unversioned cache.
+  TEMPLATE_DB="$default_template_database"
+else
+  TEMPLATE_DB="${TEMPLATE_DATABASE_NAME:-$default_template_database}"
+fi
 DB_COMPOSE_DIR="$ROOT/postgres"
 DB_COMPOSE_FILE="$DB_COMPOSE_DIR/docker-compose.yml"
 TOOLING_FINGERPRINT_FILE="$PREVIEW_DIR/tooling.sha256"

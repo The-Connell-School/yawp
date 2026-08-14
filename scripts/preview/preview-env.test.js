@@ -263,6 +263,12 @@ describe('buildPreviewEnv', () => {
     expect(deploy).toContain('DATA_SOURCE_FINGERPRINT_FILE');
     expect(deploy).toContain('PREVIEW_DB_DUMP_VERSION');
     expect(deploy).toContain('reset_preview_database_for_data_source_change');
+    expect(deploy).toContain(
+      'TEMPLATE_DB="$default_template_database"'
+    );
+    expect(deploy).not.toContain(
+      'PREVIEW_DB_TEMPLATE_DB:-${TEMPLATE_DATABASE_NAME'
+    );
   });
 });
 
