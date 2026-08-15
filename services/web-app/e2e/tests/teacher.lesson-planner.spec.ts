@@ -1474,7 +1474,7 @@ test.describe('YAWP! Lesson Planner', () => {
     await handout.getByTestId('material-toggle').click();
     await save;
     await expect(handout.getByTestId('material-toggle')).toContainText(
-      'In the packet'
+      'In the stack'
     );
 
     await page.goto(`/app/lesson-planner/${conversationId}/packet`);
@@ -1511,11 +1511,11 @@ test.describe('YAWP! Lesson Planner', () => {
     await page.reload();
     await expect(
       page.getByTestId('material-card').first().getByTestId('material-toggle')
-    ).toContainText('In the packet');
+    ).toContainText('In the stack');
     // The one beside it is untouched.
     await expect(
       page.getByTestId('material-card').nth(1).getByTestId('material-toggle')
-    ).toContainText('Add to packet');
+    ).toContainText('Add to stack');
   });
 
   test('combines the student pieces into one handout to lead a class through', async ({
@@ -1969,10 +1969,10 @@ test.describe('YAWP! Lesson Planner', () => {
 
     // The original stops claiming to be filed — there is one handout, not two.
     await expect(cards.nth(0).getByTestId('material-toggle')).toContainText(
-      'Add to packet'
+      'Add to stack'
     );
     await expect(cards.nth(1).getByTestId('material-toggle')).toContainText(
-      'In the packet'
+      'In the stack'
     );
 
     await page.goto(`/app/lesson-planner/${conversationId}/packet`);
@@ -1998,7 +1998,7 @@ test.describe('YAWP! Lesson Planner', () => {
     await page.getByTestId('deck-toggle').click();
     await save;
     await expect(page.getByTestId('deck-toggle')).toContainText(
-      'In the packet'
+      'In the stack'
     );
 
     await page.goto(`/app/lesson-planner/${conversationId}/packet`);

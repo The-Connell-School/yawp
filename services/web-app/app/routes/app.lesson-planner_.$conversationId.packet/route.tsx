@@ -299,9 +299,9 @@ export default function LessonPacketRoute() {
 
             {packet.sections.length === 0 ? (
               <p className="text-sm text-muted-foreground print:hidden">
-                Nothing kept yet. Back in the planner, use{' '}
-                <strong>Keep for the lesson</strong> on the parts you want, and
-                they will assemble here.
+                Nothing in this stack yet. Back in the planner, use{' '}
+                <strong>Add to stack</strong> on the pieces you want, and they
+                will assemble here.
               </p>
             ) : view === 'handout' ? (
               <div data-testid="student-handout">

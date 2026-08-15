@@ -1,7 +1,7 @@
 /**
  * A piece of teaching material, as a thing rather than as text to copy out.
  *
- * The teacher's next move is almost always the same — put it in the packet so
+ * The teacher's next move is almost always the same — put it in the stack so
  * it prints — so that button is the loudest part of the card. The material
  * itself is collapsed by default: a lesson with a handout, a sample paragraph
  * and an exit ticket should still read as a lesson.
@@ -101,7 +101,7 @@ export function MaterialCard({
             )}
           >
             {added ? <Check size={14} /> : <Plus size={14} />}
-            {added ? 'In the packet' : 'Add to packet'}
+            {added ? 'In the stack' : 'Add to stack'}
           </button>
         ) : null}
       </div>

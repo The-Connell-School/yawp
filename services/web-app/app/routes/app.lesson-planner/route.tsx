@@ -746,15 +746,15 @@ export default function LessonPlannerRoute() {
               <FileText size={16} className="shrink-0 text-primary" />
               <p className="text-sm">
                 <strong>
-                  {keptCount} {keptCount === 1 ? 'resource' : 'resources'}
+                  {keptCount} {keptCount === 1 ? 'piece' : 'pieces'}
                 </strong>{' '}
-                in this lesson
+                in this lesson's stack
               </p>
               <Link
                 to={`/app/lesson-planner/${conversationId}/packet`}
                 className="ml-auto text-sm font-medium text-primary hover:underline"
               >
-                Open lesson packet
+                Open the stack
               </Link>
             </div>
           </div>
@@ -1067,15 +1067,15 @@ function MessageBubble({
                 <span className="inline-flex items-center gap-1.5 rounded-md bg-primary/10 px-2 py-1 text-xs font-medium text-primary">
                   <BookmarkCheck size={13} />
                   {message.keptAudience === 'student'
-                    ? 'Kept as a handout'
-                    : 'Kept in the lesson'}
+                    ? 'In the stack · handout'
+                    : 'In the stack'}
                 </span>
                 <button
                   type="button"
                   onClick={() => onKeep(message.id!, null)}
                   className="rounded-md px-2 py-1 text-xs font-medium text-muted-foreground transition hover:bg-foreground/5 hover:text-foreground"
                 >
-                  Remove
+                  Remove from stack
                 </button>
               </>
             ) : (
@@ -1086,14 +1086,14 @@ function MessageBubble({
                   className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-muted-foreground transition hover:bg-foreground/5 hover:text-foreground"
                 >
                   <BookmarkPlus size={13} />
-                  Keep for the lesson
+                  Add to stack
                 </button>
                 <button
                   type="button"
                   onClick={() => onKeep(message.id!, 'student')}
                   className="rounded-md px-2 py-1 text-xs font-medium text-muted-foreground transition hover:bg-foreground/5 hover:text-foreground"
                 >
-                  Keep as a handout
+                  Add as a handout
                 </button>
               </>
             )

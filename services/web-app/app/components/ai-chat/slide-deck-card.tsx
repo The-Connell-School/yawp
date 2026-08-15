@@ -29,9 +29,9 @@ export function SlideDeckCard({
    * machine that is not logged into Yawp — or leave it for a substitute.
    */
   downloadHref?: string | null;
-  /** Whether this deck is the one currently filed in the lesson packet. */
+  /** Whether this deck is the one currently filed in the lesson stack. */
   added?: boolean;
-  /** Absent in the packet itself, where the deck is already filed. */
+  /** Absent in the stack itself, where the deck is already filed. */
   onToggle?: ((added: boolean) => void) | null;
   disabled?: boolean;
 }) {
@@ -73,7 +73,7 @@ export function SlideDeckCard({
             )}
           >
             {added ? <Check size={14} /> : <Plus size={14} />}
-            {added ? 'In the packet' : 'Add to packet'}
+            {added ? 'In the stack' : 'Add to stack'}
           </button>
         ) : null}
         {downloadHref ? (
@@ -97,7 +97,7 @@ export function SlideDeckCard({
           </Link>
         ) : (
           <span className="shrink-0 text-xs text-muted-foreground">
-            Keep this reply to present it
+            Add this to the stack to present it
           </span>
         )}
       </div>

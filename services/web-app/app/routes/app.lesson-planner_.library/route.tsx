@@ -124,7 +124,7 @@ function LessonRow({ lesson }: { lesson: LibraryLesson }) {
             <Badge variant="outline" size="sm">
               <FileText size={12} className="mr-1" />
               {lesson.sectionCount}{' '}
-              {lesson.sectionCount === 1 ? 'resource' : 'resources'}
+              {lesson.sectionCount === 1 ? 'piece' : 'pieces'}
             </Badge>
           ) : (
             <Badge variant="outline" size="sm">
@@ -139,7 +139,7 @@ function LessonRow({ lesson }: { lesson: LibraryLesson }) {
           ) : null}
           {lesson.sectionCount > 0 ? (
             <Button variant="outline" size="sm" asChild>
-              <Link to={`/app/lesson-planner/${lesson.id}/packet`}>Packet</Link>
+              <Link to={`/app/lesson-planner/${lesson.id}/packet`}>Stack</Link>
             </Button>
           ) : null}
           <button
