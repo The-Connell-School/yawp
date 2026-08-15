@@ -19,7 +19,6 @@ import {
   Plus,
   Printer,
   Send,
-  BookMarked,
 } from 'lucide-react';
 import { Button } from '~/components/ui/button';
 import { Textarea } from '~/components/ui/textarea';
@@ -60,6 +59,7 @@ import {
   withStandardSuggestions,
 } from '~/domain/lesson-planner/suggestions';
 import { loadLessonSeed } from '~/domain/lesson-planner/lesson-seed.server';
+import { LessonRail } from './lesson-rail';
 import {
   PlanningProgressBar,
   type PlanningProgressState,
@@ -545,68 +545,18 @@ export default function LessonPlannerRoute() {
 
   return (
     <section className="flex h-full w-full">
-      {/* Lesson history */}
-      <aside className="hidden w-64 shrink-0 flex-col border-r bg-secondary/40 md:flex">
-        <div className="p-3">
-          <Button
-            variant="outline"
-            className="w-full justify-start gap-2"
-            onClick={startNewLesson}
-          >
-            <Plus size={16} /> New lesson
-          </Button>
-        </div>
-        <div className="px-3 pb-2">
-          <Link
-            to="/app/lesson-planner/library"
-            className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-primary"
-          >
-            <FileText size={14} />
-            All your lessons
-          </Link>
-        </div>
-        <div className="no-scrollbar flex-1 overflow-y-auto px-2 pb-3">
-          {conversations.length === 0 ? (
-            <p className="px-2 py-4 text-sm text-muted-foreground">
-              Lessons you plan will show up here.
-            </p>
-          ) : (
-            <ul className="flex flex-col gap-1">
-              {conversations.map((conversation) => (
-                <li key={conversation.id}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const next = new URLSearchParams(searchParams);
-                      next.set('c', conversation.id);
-                      next.delete('from');
-                      next.delete('step');
-                      setSearchParams(next);
-                    }}
-                    className={cn(
-                      'w-full rounded-lg px-3 py-2 text-left text-sm text-muted-foreground hover:bg-foreground/5 hover:text-foreground',
-                      {
-                        'bg-primary/10 text-primary hover:bg-primary/10':
-                          conversation.id === conversationId,
-                      }
-                    )}
-                  >
-                    <span className="flex items-center gap-1.5">
-                      {conversation.published ? (
-                        <BookMarked
-                          size={12}
-                          className="shrink-0 text-primary"
-                        />
-                      ) : null}
-                      <span className="truncate">{conversation.title}</span>
-                    </span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      </aside>
+      <LessonRail
+        lessons={conversations}
+        activeId={conversationId ?? null}
+        onNewLesson={startNewLesson}
+        onSelect={(id) => {
+          const next = new URLSearchParams(searchParams);
+          next.set('c', id);
+          next.delete('from');
+          next.delete('step');
+          setSearchParams(next);
+        }}
+      />
 
       {/* Chat */}
       <div className="flex h-full min-w-0 flex-1 flex-col">

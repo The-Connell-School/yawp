@@ -898,6 +898,91 @@ test.describe('YAWP! Lesson Planner', () => {
     await expect(page.getByTestId('planning-progress')).toHaveCount(0);
   });
 
+  /**
+   * Brian's note: the planner read as a chat client, and the loudest reason was
+   * a permanent list of every conversation sitting beside the workspace. It
+   * collapses now, and the history it shows is split the way a teacher's
+   * lessons are.
+   */
+  test('keeps the lesson history out of the way until it is asked for', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    await setLessonPlannerEnabled(e2eContext.organizationId, true);
+    const draft = await seedLessonPlan(e2eContext);
+    await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+    await page.goto('/app/lesson-planner');
+    await page.waitForLoadState('networkidle');
+
+    const rail = page.getByTestId('lesson-rail');
+    await expect(rail).toHaveAttribute('data-expanded', 'false');
+    // Collapsed, but never trapped: starting a new lesson stays one click away.
+    await expect(
+      rail.getByRole('button', { name: 'New lesson' })
+    ).toBeVisible();
+    await expect(page.getByTestId('lesson-rail-tab-drafts')).toHaveCount(0);
+
+    await page.getByTestId('lesson-rail-toggle').click();
+    await expect(rail).toHaveAttribute('data-expanded', 'true');
+    await expect(page.getByTestId('lesson-rail-tab-drafts')).toBeVisible();
+    await expect(page.getByTestId('lesson-rail-tab-library')).toBeVisible();
+
+    // The draft is in the drafts tab, and opening it works from here.
+    await expect(rail).toContainText('Conclusions lesson');
+    await rail.getByRole('button', { name: /conclusions lesson/i }).click();
+    await expect(page).toHaveURL(new RegExp(`c=${draft.conversationId}`));
+
+    // And the choice is remembered, so a teacher who wants it open keeps it.
+    await page.reload();
+    await page.waitForLoadState('networkidle');
+    await expect(page.getByTestId('lesson-rail')).toHaveAttribute(
+      'data-expanded',
+      'true'
+    );
+  });
+
+  test('splits the rail into drafts and a published library', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    await setLessonPlannerEnabled(e2eContext.organizationId, true);
+    const toPublish = await seedLessonPlan(e2eContext, { keepFirst: true });
+    await seedLessonPlan(e2eContext);
+    await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+
+    // Publish one of them from its stack.
+    await page.goto(`/app/lesson-planner/${toPublish.conversationId}/packet`);
+    const saved = page.waitForResponse(
+      (response) =>
+        response.url().includes('/api/domain/lesson-planner/packet') &&
+        response.request().method() === 'POST'
+    );
+    await page.getByTestId('packet-publish').click();
+    await saved;
+
+    await page.goto(`/app/lesson-planner?c=${toPublish.conversationId}`);
+    await page.waitForLoadState('networkidle');
+    await page.getByTestId('lesson-rail-toggle').click();
+
+    // The open lesson is published, so the rail opens on the list holding it
+    // rather than on the tab that does not.
+    await expect(page.getByTestId('lesson-rail-tab-library')).toHaveAttribute(
+      'aria-pressed',
+      'true'
+    );
+    const rail = page.getByTestId('lesson-rail');
+    await expect(rail).toContainText('Conclusions lesson');
+
+    // The unpublished one is a draft, and lives in the other tab.
+    await page.getByTestId('lesson-rail-tab-drafts').click();
+    await expect(page.getByTestId('lesson-rail-tab-drafts')).toHaveAttribute(
+      'aria-pressed',
+      'true'
+    );
+  });
+
   test('keeps replies and turns them into a printable lesson packet', async ({
     page,
     signIn,
