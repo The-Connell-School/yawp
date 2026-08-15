@@ -19,7 +19,7 @@ import {
   Plus,
   Printer,
   Send,
-  Star,
+  BookMarked,
 } from 'lucide-react';
 import { Button } from '~/components/ui/button';
 import { Textarea } from '~/components/ui/textarea';
@@ -100,9 +100,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
       title: true,
       packetTitle: true,
       updatedAt: true,
-      starredAt: true,
+      publishedAt: true,
     },
-    orderBy: [{ starredAt: 'desc' }, { updatedAt: 'desc' }],
+    orderBy: [{ publishedAt: 'desc' }, { updatedAt: 'desc' }],
     take: 30,
   });
 
@@ -174,7 +174,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     conversations: conversations.map((conversation) => ({
       id: conversation.id,
       title: conversation.packetTitle?.trim() || conversation.title,
-      starred: Boolean(conversation.starredAt),
+      published: Boolean(conversation.publishedAt),
     })),
     builtDays,
     unitMapConversation,
@@ -592,11 +592,10 @@ export default function LessonPlannerRoute() {
                     )}
                   >
                     <span className="flex items-center gap-1.5">
-                      {conversation.starred ? (
-                        <Star
+                      {conversation.published ? (
+                        <BookMarked
                           size={12}
                           className="shrink-0 text-primary"
-                          fill="currentColor"
                         />
                       ) : null}
                       <span className="truncate">{conversation.title}</span>

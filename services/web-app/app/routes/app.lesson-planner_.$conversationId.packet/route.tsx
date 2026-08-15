@@ -12,7 +12,7 @@ import {
   Lightbulb,
   ListTree,
   Rows,
-  Star,
+  BookMarked,
 } from 'lucide-react';
 import {
   KIND_LABEL,
@@ -40,7 +40,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 }
 
 export default function LessonPacketRoute() {
-  const { conversationId, packet, packetTitleValue, starred } =
+  const { conversationId, packet, packetTitleValue, published } =
     useLoaderData<typeof loader>();
   const fetcher = useFetcher();
   const [view, setView] = useState<'full' | 'outline' | 'handout'>('full');
@@ -52,11 +52,11 @@ export default function LessonPacketRoute() {
 
   // Answer the click straight away; waiting on the round trip reads as a
   // button that did not work.
-  const pendingStar = fetcher.formData?.get('intent');
-  const isStarred =
-    pendingStar === 'star' || pendingStar === 'unstar'
-      ? pendingStar === 'star'
-      : starred;
+  const pendingPublish = fetcher.formData?.get('intent');
+  const isPublished =
+    pendingPublish === 'publish' || pendingPublish === 'unpublish'
+      ? pendingPublish === 'publish'
+      : published;
 
   /**
    * The file behind every print control on this page.
@@ -159,30 +159,26 @@ export default function LessonPacketRoute() {
           <Button variant="ghost" size="sm" asChild>
             <Link to="/app/lesson-planner/library">All your lessons</Link>
           </Button>
-          {/* The moment a teacher knows a lesson was worth keeping is the
-              moment they are looking at the finished thing. */}
+          {/* The moment a teacher knows a lesson is finished is the moment
+              they are looking at the finished thing. */}
           <Button
             type="button"
-            variant={isStarred ? 'default' : 'outline'}
+            variant={isPublished ? 'default' : 'outline'}
             size="sm"
-            data-testid="packet-star"
-            aria-pressed={isStarred}
+            data-testid="packet-publish"
+            aria-pressed={isPublished}
             onClick={() =>
               fetcher.submit(
                 {
-                  intent: isStarred ? 'unstar' : 'star',
+                  intent: isPublished ? 'unpublish' : 'publish',
                   conversationId,
                 },
                 { method: 'post', action: '/api/domain/lesson-planner/packet' }
               )
             }
           >
-            <Star
-              size={15}
-              className="mr-1.5"
-              fill={isStarred ? 'currentColor' : 'none'}
-            />
-            {isStarred ? 'Starred' : 'Star this lesson'}
+            <BookMarked size={15} className="mr-1.5" />
+            {isPublished ? 'In your library' : 'Publish to my library'}
           </Button>
           <div className="ml-auto flex items-center gap-2">
             <div className="flex rounded-lg border p-0.5">

@@ -1020,14 +1020,14 @@ test.describe('YAWP! Lesson Planner', () => {
     ).toContainText(/1 piece/i);
   });
 
-  test('stars a lesson and lifts it to the top of the history', async ({
+  test('publishes a lesson into the library and back out again', async ({
     page,
     signIn,
     e2eContext,
   }) => {
     await setLessonPlannerEnabled(e2eContext.organizationId, true);
     const older = await seedLessonPlan(e2eContext, { keepFirst: true });
-    // Seeded second, so without a star it sorts above the first.
+    // Seeded second, so while both are drafts it sorts above the first.
     await seedLessonPlan(e2eContext, { keepFirst: true });
     await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
     await page.goto('/app/lesson-planner/library');
@@ -1037,34 +1037,38 @@ test.describe('YAWP! Lesson Planner', () => {
         `a[href="/app/lesson-planner?c=${older.conversationId}"]`
       ),
     });
-    const starred = page.waitForResponse(
+    const publishedWrite = page.waitForResponse(
       (response) =>
         response.url().includes('/api/domain/lesson-planner/packet') &&
         response.request().method() === 'POST'
     );
-    await olderRow.getByTestId('history-star').click();
-    await starred;
+    await olderRow.getByTestId('history-publish').click();
+    await publishedWrite;
 
-    // Starred lessons get their own group, above everything else.
-    await expect(page.getByText('Starred', { exact: true })).toBeVisible();
+    // Published lessons get their own group, above the drafts.
+    await expect(
+      page.getByText('My lesson library', { exact: true })
+    ).toBeVisible();
     await page.reload();
     const rows = page.getByTestId('history-lesson');
     await expect(rows.first()).toContainText('Conclusions lesson');
-    await expect(rows.first().getByTestId('history-star')).toHaveAttribute(
+    await expect(rows.first().getByTestId('history-publish')).toHaveAttribute(
       'aria-pressed',
       'true'
     );
 
     // And it is reversible — the old library had no way out.
-    const unstarred = page.waitForResponse(
+    const unpublished = page.waitForResponse(
       (response) =>
         response.url().includes('/api/domain/lesson-planner/packet') &&
         response.request().method() === 'POST'
     );
-    await rows.first().getByTestId('history-star').click();
-    await unstarred;
+    await rows.first().getByTestId('history-publish').click();
+    await unpublished;
     await page.reload();
-    await expect(page.getByText('Starred', { exact: true })).toHaveCount(0);
+    await expect(
+      page.getByText('My lesson library', { exact: true })
+    ).toHaveCount(0);
   });
 
   test('deletes a lesson out of the history', async ({
@@ -1096,7 +1100,7 @@ test.describe('YAWP! Lesson Planner', () => {
     ).toHaveCount(0);
   });
 
-  test('stars a lesson from its packet', async ({
+  test('publishes a lesson from its stack', async ({
     page,
     signIn,
     e2eContext,
@@ -1108,8 +1112,8 @@ test.describe('YAWP! Lesson Planner', () => {
     await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
     await page.goto(`/app/lesson-planner/${conversationId}/packet`);
 
-    const star = page.getByTestId('packet-star');
-    await expect(star).toContainText(/star this lesson/i);
+    const publish = page.getByTestId('packet-publish');
+    await expect(publish).toContainText(/publish to my library/i);
 
     // The button answers optimistically, so wait for the write itself before
     // reloading — otherwise the assertion passes against the local guess.
@@ -1118,18 +1122,20 @@ test.describe('YAWP! Lesson Planner', () => {
         response.url().includes('/api/domain/lesson-planner/packet') &&
         response.request().method() === 'POST'
     );
-    await star.click();
-    await expect(star).toContainText(/starred/i);
+    await publish.click();
+    await expect(publish).toContainText(/in your library/i);
     await saved;
 
     // It survives the round trip, and the history agrees.
     await page.reload();
-    await expect(page.getByTestId('packet-star')).toHaveAttribute(
+    await expect(page.getByTestId('packet-publish')).toHaveAttribute(
       'aria-pressed',
       'true'
     );
     await page.goto('/app/lesson-planner/library');
-    await expect(page.getByText('Starred', { exact: true })).toBeVisible();
+    await expect(
+      page.getByText('My lesson library', { exact: true })
+    ).toBeVisible();
   });
 
   test('scrolls the whole packet when a handout runs past the viewport', async ({
@@ -1997,9 +2003,7 @@ test.describe('YAWP! Lesson Planner', () => {
     );
     await page.getByTestId('deck-toggle').click();
     await save;
-    await expect(page.getByTestId('deck-toggle')).toContainText(
-      'In the stack'
-    );
+    await expect(page.getByTestId('deck-toggle')).toContainText('In the stack');
 
     await page.goto(`/app/lesson-planner/${conversationId}/packet`);
     // The seeded reply is kept too, so the filed deck is the later card.

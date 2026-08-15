@@ -20,8 +20,8 @@ export type LoadedLessonPacket = {
    * field falls back rather than saving the conversation title as a real name.
    */
   packetTitleValue: string;
-  /** Whether the teacher has starred this lesson as worth teaching again. */
-  starred: boolean;
+  /** Whether the teacher has published this lesson to their library. */
+  published: boolean;
 };
 
 export async function loadLessonPacket({
@@ -44,7 +44,7 @@ export async function loadLessonPacket({
       id: true,
       title: true,
       packetTitle: true,
-      starredAt: true,
+      publishedAt: true,
       originClassAssignment: {
         select: {
           class: { select: { title: true, grade: true, period: true } },
@@ -125,6 +125,6 @@ export async function loadLessonPacket({
       sections,
     }),
     packetTitleValue: conversation.packetTitle ?? '',
-    starred: Boolean(conversation.starredAt),
+    published: Boolean(conversation.publishedAt),
   };
 }

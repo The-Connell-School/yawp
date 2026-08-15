@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import {
   buildLessonLibrary,
   classDisplayName,
-  groupLessonHistory,
+  splitDraftsAndLibrary,
 } from './lesson-library';
 
 function lesson(overrides: Record<string, unknown> = {}) {
@@ -11,7 +11,7 @@ function lesson(overrides: Record<string, unknown> = {}) {
     title: 'Plan a lesson on conclusions',
     packetTitle: 'Conclusions, period 3',
     updatedAt: new Date('2026-08-04T10:00:00.000Z'),
-    starredAt: null,
+    publishedAt: null,
     messages: [
       { keptAudience: 'teacher' },
       { keptAudience: 'student' },
@@ -91,12 +91,12 @@ describe('buildLessonLibrary', () => {
     expect(rows.every((row) => row.sectionCount === 0)).toBe(true);
   });
 
-  test('reports whether the teacher starred it', () => {
-    expect(buildLessonLibrary([lesson()])[0]!.starred).toBe(false);
+  test('reports whether the teacher published it', () => {
+    expect(buildLessonLibrary([lesson()])[0]!.published).toBe(false);
     expect(
       buildLessonLibrary([
-        lesson({ starredAt: new Date('2026-08-05T00:00:00.000Z') }),
-      ])[0]!.starred
+        lesson({ publishedAt: new Date('2026-08-05T00:00:00.000Z') }),
+      ])[0]!.published
     ).toBe(true);
   });
 
@@ -112,25 +112,42 @@ describe('buildLessonLibrary', () => {
   });
 });
 
-describe('groupLessonHistory', () => {
-  test('lifts the starred lessons above the rest', () => {
-    const rows = buildLessonLibrary([
-      lesson({ id: 'a', packetTitle: 'Unstarred' }),
-      lesson({
-        id: 'b',
-        packetTitle: 'Starred',
-        starredAt: new Date('2026-08-05T00:00:00.000Z'),
-      }),
-    ]);
-    const { starred, recent } = groupLessonHistory(rows);
-    expect(starred.map((row) => row.title)).toEqual(['Starred']);
-    expect(recent.map((row) => row.title)).toEqual(['Unstarred']);
+describe('splitDraftsAndLibrary', () => {
+  test('a lesson starts as a draft', () => {
+    const [row] = buildLessonLibrary([lesson()]);
+    expect(row!.published).toBe(false);
+
+    const { drafts, library } = splitDraftsAndLibrary([row!]);
+    expect(drafts).toHaveLength(1);
+    expect(library).toHaveLength(0);
   });
 
-  test('copes with a history that is all one or the other', () => {
-    expect(groupLessonHistory([])).toEqual({ starred: [], recent: [] });
-    const none = buildLessonLibrary([lesson()]);
-    expect(groupLessonHistory(none).starred).toEqual([]);
-    expect(groupLessonHistory(none).recent).toHaveLength(1);
+  test('publishing moves it out of the drafts and into the library', () => {
+    const [row] = buildLessonLibrary([
+      lesson({ publishedAt: new Date('2026-08-05T10:00:00.000Z') }),
+    ]);
+    expect(row!.published).toBe(true);
+
+    const { drafts, library } = splitDraftsAndLibrary([row!]);
+    expect(drafts).toHaveLength(0);
+    expect(library).toHaveLength(1);
+  });
+
+  /**
+   * The two lists are the whole point: a half-finished lesson and one taught
+   * for three years should never sit in the same place. Every lesson is in
+   * exactly one of them.
+   */
+  test('every lesson lands in exactly one list', () => {
+    const rows = buildLessonLibrary([
+      lesson({ id: 'a' }),
+      lesson({ id: 'b', publishedAt: new Date('2026-08-05T10:00:00.000Z') }),
+      lesson({ id: 'c' }),
+    ]);
+
+    const { drafts, library } = splitDraftsAndLibrary(rows);
+    expect(drafts.map((row) => row.id)).toEqual(['a', 'c']);
+    expect(library.map((row) => row.id)).toEqual(['b']);
+    expect(drafts.length + library.length).toBe(rows.length);
   });
 });

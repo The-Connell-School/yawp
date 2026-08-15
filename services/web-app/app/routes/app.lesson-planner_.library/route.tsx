@@ -4,8 +4,9 @@
  * Previously this page showed a filtered subset — lessons that happened to
  * have something kept — while the planner's rail showed everything under the
  * heading "Saved lessons". Two lists, both claiming to be the saved ones, and
- * no way to put a lesson in either on purpose. Now: one history, starred
- * lessons on top, and the star is a decision the teacher makes and can undo.
+ * no way to put a lesson in either on purpose. Now there are two again, but
+ * the difference between them is a decision the teacher makes: drafts they are
+ * still working on, and the lessons they published to their library.
  */
 import {
   Link,
@@ -14,7 +15,14 @@ import {
   useLoaderData,
   type LoaderFunctionArgs,
 } from 'react-router';
-import { ChevronLeft, FileText, Lightbulb, Star, Trash2 } from 'lucide-react';
+import {
+  BookMarked,
+  ChevronLeft,
+  FileText,
+  Lightbulb,
+  PenLine,
+  Trash2,
+} from 'lucide-react';
 import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
 import { cn } from '~/utils/misc';
@@ -22,7 +30,7 @@ import { prisma } from '~/utils/db.server';
 import { getLessonPlannerAccess } from '~/utils/lesson-planner/lesson-planner-access.server';
 import {
   buildLessonLibrary,
-  groupLessonHistory,
+  splitDraftsAndLibrary,
   type LibraryLesson,
 } from '~/domain/lesson-planner/lesson-library';
 import { timeAgo } from '~/utils/timeAgo';
@@ -33,16 +41,16 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   const lessons = await prisma.lessonPlanConversation.findMany({
     where: { membershipId: access.membership.id, deletedAt: null },
-    // Starred first, then by recency, so a lesson taught every year does not
+    // Published first, then by recency, so a lesson taught every year does not
     // sink under this week's drafts.
-    orderBy: [{ starredAt: 'desc' }, { updatedAt: 'desc' }],
+    orderBy: [{ publishedAt: 'desc' }, { updatedAt: 'desc' }],
     take: 200,
     select: {
       id: true,
       title: true,
       packetTitle: true,
       updatedAt: true,
-      starredAt: true,
+      publishedAt: true,
       messages: {
         where: { keptAt: { not: null } },
         select: { keptAudience: true },
@@ -61,16 +69,16 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
 function LessonRow({ lesson }: { lesson: LibraryLesson }) {
   const fetcher = useFetcher();
-  // Answer the click immediately rather than after the round trip: a star that
+  // Answer the click immediately rather than after the round trip: a button that
   // lags feels broken even when it works.
-  const starred = fetcher.formData
-    ? fetcher.formData.get('intent') === 'star'
-    : lesson.starred;
+  const published = fetcher.formData
+    ? fetcher.formData.get('intent') === 'publish'
+    : lesson.published;
   const deleting = fetcher.formData?.get('intent') === 'delete';
 
   if (deleting) return null;
 
-  function send(intent: 'star' | 'unstar' | 'delete') {
+  function send(intent: 'publish' | 'unpublish' | 'delete') {
     fetcher.submit(
       { intent, conversationId: lesson.id },
       { method: 'post', action: '/api/domain/lesson-planner/packet' }
@@ -85,20 +93,22 @@ function LessonRow({ lesson }: { lesson: LibraryLesson }) {
       >
         <button
           type="button"
-          onClick={() => send(starred ? 'unstar' : 'star')}
-          aria-pressed={starred}
+          onClick={() => send(published ? 'unpublish' : 'publish')}
+          aria-pressed={published}
           aria-label={
-            starred ? `Unstar ${lesson.title}` : `Star ${lesson.title}`
+            published
+              ? `Move ${lesson.title} back to drafts`
+              : `Publish ${lesson.title} to my library`
           }
-          data-testid="history-star"
+          data-testid="history-publish"
           className={cn(
             'shrink-0 rounded-md p-1.5 transition',
-            starred
+            published
               ? 'text-primary hover:bg-primary/10'
               : 'text-muted-foreground/50 hover:bg-foreground/5 hover:text-foreground'
           )}
         >
-          <Star size={16} fill={starred ? 'currentColor' : 'none'} />
+          {published ? <BookMarked size={16} /> : <PenLine size={16} />}
         </button>
 
         <div className="min-w-0 flex-1">
@@ -159,7 +169,7 @@ function LessonRow({ lesson }: { lesson: LibraryLesson }) {
 
 export default function LessonHistoryRoute() {
   const { lessons } = useLoaderData<typeof loader>();
-  const { starred, recent } = groupLessonHistory(lessons);
+  const { drafts, library } = splitDraftsAndLibrary(lessons);
 
   return (
     // Own the scroll: the app shell is a fixed-height, overflow-hidden frame.
@@ -175,7 +185,8 @@ export default function LessonHistoryRoute() {
           <div className="min-w-0">
             <h1 className="text-xl font-semibold leading-none">Your lessons</h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              Everything you have planned. Star the ones worth teaching again.
+              Drafts you are still working on, and the lessons you have
+              published to your library.
             </p>
           </div>
         </div>
@@ -193,29 +204,28 @@ export default function LessonHistoryRoute() {
           </div>
         ) : (
           <div className="flex flex-col gap-6">
-            {starred.length ? (
+            {library.length ? (
               <div>
                 <h2 className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                  <Star size={12} className="text-primary" />
-                  Starred
+                  <BookMarked size={12} className="text-primary" />
+                  My lesson library
                 </h2>
                 <ul className="flex flex-col gap-2">
-                  {starred.map((lesson) => (
+                  {library.map((lesson) => (
                     <LessonRow key={lesson.id} lesson={lesson} />
                   ))}
                 </ul>
               </div>
             ) : null}
 
-            {recent.length ? (
+            {drafts.length ? (
               <div>
-                {starred.length ? (
-                  <h2 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                    Everything else
-                  </h2>
-                ) : null}
+                <h2 className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  <PenLine size={12} />
+                  Drafts
+                </h2>
                 <ul className="flex flex-col gap-2">
-                  {recent.map((lesson) => (
+                  {drafts.map((lesson) => (
                     <LessonRow key={lesson.id} lesson={lesson} />
                   ))}
                 </ul>

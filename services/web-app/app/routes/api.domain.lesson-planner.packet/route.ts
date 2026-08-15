@@ -40,8 +40,8 @@ const POST = z
       'add-material',
       'remove-material',
       'rename-material',
-      'star',
-      'unstar',
+      'publish',
+      'unpublish',
       'delete',
     ]),
     conversationId: z.string().min(1),
@@ -99,16 +99,17 @@ export async function action({ request }: ActionFunctionArgs) {
     return dataResponse({ error: 'Conversation not found.' }, { status: 404 });
   }
 
-  // Starring is the teacher's own judgement about what is worth finding again,
-  // and it is reversible — unlike the old library, which a lesson entered as a
-  // side effect of keeping a reply and could never leave.
-  if (data.intent === 'star' || data.intent === 'unstar') {
-    const starredAt = data.intent === 'star' ? new Date() : null;
+  // Publishing is the teacher saying this one is finished and worth finding
+  // again — the decision that moves a lesson out of their drafts and into their
+  // library. Reversible, unlike the old library a lesson entered as a side
+  // effect of keeping a reply and could never leave.
+  if (data.intent === 'publish' || data.intent === 'unpublish') {
+    const publishedAt = data.intent === 'publish' ? new Date() : null;
     await prisma.lessonPlanConversation.update({
       where: { id: conversation.id },
-      data: { starredAt },
+      data: { publishedAt },
     });
-    return dataResponse({ starredAt: starredAt?.toISOString() ?? null });
+    return dataResponse({ publishedAt: publishedAt?.toISOString() ?? null });
   }
 
   // Soft delete: every read already filters on deletedAt, and a teacher who

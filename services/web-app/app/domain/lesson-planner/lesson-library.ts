@@ -8,15 +8,18 @@
  * own rail listed everything under the heading "Saved lessons", so two lists
  * disagreed about what "saved" meant.
  *
- * Now there is one list. Everything you planned is in it, newest first, and
- * starring is a decision you make and can undo.
+ * Now there are two, and which one a lesson is in is a decision the teacher
+ * makes: drafts they are still working on, and the lessons they have published
+ * to their library. Starring tried to do this job and could not — it ranked one
+ * list rather than dividing it, so a half-finished lesson and one taught for
+ * three years sat in the same place.
  */
 export type LibraryLessonInput = {
   id: string;
   title: string;
   packetTitle: string | null;
   updatedAt: Date | string;
-  starredAt: Date | string | null;
+  publishedAt: Date | string | null;
   messages: Array<{ keptAudience: string | null }>;
   originClassAssignment?: {
     class: {
@@ -35,7 +38,7 @@ export type LibraryLesson = {
   assignmentTitle: string | null;
   sectionCount: number;
   handoutCount: number;
-  starred: boolean;
+  published: boolean;
   updatedAt: string;
 };
 
@@ -77,24 +80,25 @@ export function buildLessonLibrary(
       sectionCount: kept.length,
       handoutCount: kept.filter((message) => message.keptAudience === 'student')
         .length,
-      starred: Boolean(lesson.starredAt),
+      published: Boolean(lesson.publishedAt),
       updatedAt: asIsoString(lesson.updatedAt),
     };
   });
 }
 
 /**
- * The history in two groups: what the teacher starred, then everything else.
+ * The history, split in two.
  *
- * Starred lessons are the ones taught again next year, so they sit at the top
- * rather than sinking as newer drafts push them down.
+ * Every lesson is in exactly one list. A draft is simply one the teacher has
+ * not published yet, which is where all of them start — publishing is the
+ * decision, and it can be undone.
  */
-export function groupLessonHistory(lessons: LibraryLesson[]): {
-  starred: LibraryLesson[];
-  recent: LibraryLesson[];
+export function splitDraftsAndLibrary(lessons: LibraryLesson[]): {
+  drafts: LibraryLesson[];
+  library: LibraryLesson[];
 } {
   return {
-    starred: lessons.filter((lesson) => lesson.starred),
-    recent: lessons.filter((lesson) => !lesson.starred),
+    drafts: lessons.filter((lesson) => !lesson.published),
+    library: lessons.filter((lesson) => lesson.published),
   };
 }

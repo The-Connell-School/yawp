@@ -544,7 +544,12 @@ model LessonPlanConversation {
   deletedAt               DateTime?           @db.Timestamptz(6)
   /// Set when the teacher stars the lesson as worth finding again. Starring is
   /// a decision they make, separate from keeping a reply in the packet.
+  /// Left from starring, which publishing replaced. Unread — see the
+  /// 20260811120000 migration.
   starredAt               DateTime?           @db.Timestamptz(6)
+  /// Set when the teacher publishes this lesson to their library. Null is a
+  /// draft, which is where every lesson starts.
+  publishedAt             DateTime?           @db.Timestamptz(6)
   title                   String              @default("New lesson")
   /// The name the teacher gave the printable packet; falls back to `title`.
   packetTitle             String?
@@ -566,6 +571,7 @@ model LessonPlanConversation {
 
   @@index([membershipId, updatedAt(sort: Desc)])
   @@index([membershipId, starredAt(sort: Desc)])
+  @@index([membershipId, publishedAt(sort: Desc)])
   @@index([organizationId])
   @@index([originClassAssignmentId])
   @@index([unitId, unitDay])
