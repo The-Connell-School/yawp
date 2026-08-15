@@ -1353,8 +1353,11 @@ test.describe('YAWP! Lesson Planner', () => {
     await nameField.blur();
     await saved;
 
-    // The planner rail and the library both follow the packet's name.
+    // The planner rail and the library both follow the packet's name. The rail
+    // starts collapsed, so open it before looking for the lesson in it.
     await page.goto(`/app/lesson-planner?c=${conversationId}`);
+    await page.waitForLoadState('networkidle');
+    await page.getByTestId('lesson-rail-toggle').click();
     await expect(
       page.getByRole('button', { name: 'Conclusions, period 3' })
     ).toBeVisible();

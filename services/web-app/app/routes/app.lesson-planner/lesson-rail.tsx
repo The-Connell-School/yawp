@@ -21,6 +21,7 @@ import {
   BookMarked,
   ChevronLeft,
   ChevronRight,
+  Library,
   PenLine,
   Plus,
 } from 'lucide-react';
@@ -127,6 +128,15 @@ export function LessonRail({
         >
           <ChevronRight size={16} />
         </button>
+        {/* Collapsed must not mean cut off: the full list is still one click
+            away, under the same name it has when the rail is open. */}
+        <Link
+          to="/app/lesson-planner/library"
+          aria-label="All your lessons"
+          className="flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition hover:bg-foreground/5 hover:text-foreground"
+        >
+          <Library size={16} />
+        </Link>
       </aside>
     );
   }
