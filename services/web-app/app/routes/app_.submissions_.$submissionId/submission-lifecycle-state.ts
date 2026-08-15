@@ -8,13 +8,19 @@ export type SubmissionLifecycleState = 'needs_grading' | 'graded' | 'released';
 export function resolveSubmissionLifecycleState({
   isGraded,
   isReleased,
-  hasNumericGrade,
+  hasGrade,
 }: {
   isGraded: boolean;
   isReleased: boolean;
-  hasNumericGrade: boolean;
+  /**
+   * Whether an overall grade has been recorded, on whatever scale this rubric
+   * uses. A points scale records raw points and no percentage, so asking for a
+   * percentage here left every Daily Pages submission stuck in needs_grading
+   * and hid the Release Grade button.
+   */
+  hasGrade: boolean;
 }): SubmissionLifecycleState {
   if (isReleased) return 'released';
-  if (isGraded && hasNumericGrade) return 'graded';
+  if (isGraded && hasGrade) return 'graded';
   return 'needs_grading';
 }

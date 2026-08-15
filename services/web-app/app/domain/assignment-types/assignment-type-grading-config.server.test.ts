@@ -70,6 +70,8 @@ describe('resolveAssignmentTypeGradingConfig', () => {
       categories: config.rubricCategories,
       minScore: 1,
       maxScore: 6,
+      // Absent from the stored scale, so it falls back to every value.
+      step: 1,
       scoringType: 'act_writing_2_12',
     });
     expect(config.promptConfigSnapshot).toEqual({

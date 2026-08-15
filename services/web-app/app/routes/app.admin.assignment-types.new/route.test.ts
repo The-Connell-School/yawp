@@ -98,4 +98,69 @@ describe('admin assignment type new action', () => {
       '/app/admin/assignment-types/at-new'
     );
   });
+
+  test('blocks creating an assignment type whose rubric would silently fall back to the thesis default', async () => {
+    const form = new FormData();
+    form.set('title', 'New assignment type');
+    form.set(
+      'scoringScale',
+      JSON.stringify({ type: 'weighted_1_5', minScore: 1, maxScore: 5 })
+    );
+    form.set('rubricJson', JSON.stringify({ categories: [] }));
+    form.set('promptConfigJson', JSON.stringify({ gradingInstructions: '' }));
+
+    let thrown: unknown;
+    try {
+      await action({
+        request: new Request('https://example.test/app/admin/assignment-types/new', {
+          method: 'POST',
+          body: form,
+        }),
+        params: {},
+        context: {} as never,
+      } as never);
+    } catch (error) {
+      thrown = error;
+    }
+
+    expect(thrown).toBeInstanceOf(Response);
+    expect((thrown as Response).status).toBe(400);
+    expect(prisma.assignmentType.create).not.toHaveBeenCalled();
+  });
+
+  test('blocks creating an assignment type with a partially-filled rubric category', async () => {
+    const form = new FormData();
+    form.set('title', 'New assignment type');
+    form.set(
+      'scoringScale',
+      JSON.stringify({ type: 'weighted_1_5', minScore: 1, maxScore: 5 })
+    );
+    form.set(
+      'rubricJson',
+      JSON.stringify({
+        categories: [
+          { key: 'claim', label: 'Claim', description: '', weight: 1 },
+        ],
+      })
+    );
+    form.set('promptConfigJson', JSON.stringify({ gradingInstructions: '' }));
+
+    let thrown: unknown;
+    try {
+      await action({
+        request: new Request('https://example.test/app/admin/assignment-types/new', {
+          method: 'POST',
+          body: form,
+        }),
+        params: {},
+        context: {} as never,
+      } as never);
+    } catch (error) {
+      thrown = error;
+    }
+
+    expect(thrown).toBeInstanceOf(Response);
+    expect((thrown as Response).status).toBe(400);
+    expect(prisma.assignmentType.create).not.toHaveBeenCalled();
+  });
 });

@@ -8,6 +8,7 @@
  */
 import { z } from 'zod';
 import { prisma } from '~/utils/db.server';
+import { formatClassCardTitle } from '~/utils/class-display';
 import { parseGrammarIssuesPayload } from '~/domain/grading/grammarIssues';
 import {
   readRubricEntryScore,
@@ -371,7 +372,7 @@ async function listClasses(ctx: ReporterToolContext) {
   return {
     classes: classes.map((klass) => ({
       classId: klass.id,
-      title: klass.title ?? `${klass.grade} · Period ${klass.period}`,
+      title: formatClassCardTitle(klass),
       grade: klass.grade,
       period: klass.period,
       schoolYear: klass.schoolYear,
@@ -416,7 +417,7 @@ async function getClassGradeReport(ctx: ReporterToolContext, input: unknown) {
   return {
     class: {
       classId: klass.id,
-      title: klass.title ?? `${klass.grade} · Period ${klass.period}`,
+      title: formatClassCardTitle(klass),
       grade: klass.grade,
       period: klass.period,
     },

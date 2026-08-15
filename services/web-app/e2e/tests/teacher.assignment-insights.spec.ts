@@ -25,7 +25,10 @@ test.describe('teacher assignment-level class insights', () => {
     await signIn(TEACHER_EMAIL, TEACHER_PASSWORD);
 
     // Reach the per-assignment page the way a teacher would: from the class
-    // Documents tab scoped to a single assignment, via the summary entry link.
+    // Documents tab scoped to a single assignment, via the summary entry
+    // link — which opens the dedicated class summary full page (nested
+    // under the class detail route), not the old standalone
+    // /assignments/:id page.
     await page.goto(
       `/app/my-classes/${e2eContext.classId}?tab=documents&classAssignmentId=${e2eContext.classAssignmentId}`
     );
@@ -33,7 +36,7 @@ test.describe('teacher assignment-level class insights', () => {
       .getByRole('link', { name: /class performance summary/i })
       .click();
     await expect(page).toHaveURL(
-      new RegExp(`/assignments/${e2eContext.assignmentId}`)
+      new RegExp(`/summary/${e2eContext.assignmentId}`)
     );
 
     // The panel is present but empty until the teacher asks for a summary.
@@ -56,10 +59,10 @@ test.describe('teacher assignment-level class insights', () => {
     await expect(page.getByText(/suggested next steps/i)).toBeVisible();
     await expect(page.getByText(/based on \d+ submissions/i)).toBeVisible();
 
-    // A fresh summary starts the regeneration cooldown, so the action is
-    // replaced with the reason it cannot run yet.
+    // A fresh summary starts the regeneration cooldown, so the action is hidden
+    // and the subtitle carries the reason it cannot run yet.
     await expect(
-      page.getByTestId('class-insight-generate-unavailable-reason')
+      page.getByTestId('class-insight-panel-subtitle')
     ).toContainText(/regenerate in \d+ (hours|minutes)/i);
     await expect(page.getByRole('button', { name: /regenerate/i })).toHaveCount(
       0
@@ -90,7 +93,7 @@ test.describe('teacher assignment-level class insights', () => {
     await expect(page.getByText(/how the class did/i)).toBeVisible();
     await expect(page.getByText(/suggested next steps/i)).toBeVisible();
     await expect(
-      page.getByTestId('class-insight-generate-unavailable-reason')
+      page.getByTestId('class-insight-panel-subtitle')
     ).toContainText(/regenerate in \d+ (hours|minutes)/i);
   });
 });

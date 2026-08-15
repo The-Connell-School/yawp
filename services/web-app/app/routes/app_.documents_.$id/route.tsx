@@ -9,7 +9,6 @@ import {
   useFetcher,
   useLoaderData,
   useNavigate,
-  useRevalidator,
   useSearchParams,
   Link,
 } from 'react-router';
@@ -20,7 +19,7 @@ import {
   FileText,
   ExternalLink,
   Archive,
-  ArchiveRestore,
+  RotateCcw,
   Clock,
   EllipsisVertical,
   Printer,
@@ -58,6 +57,7 @@ import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { hasEffectivePlatformAdmin } from '~/utils/preview-access.server';
 import { redirectWithToast } from '~/utils/toast.server';
+import { ensureAssignmentModuleSessionsForDocument } from '~/domain/documents.server';
 import { Comments } from './comments';
 import { CommentsSelectionProvider } from './comments/selection-context';
 import { DocumentEditor } from './document-editor/document-editor';
@@ -86,10 +86,13 @@ import {
   type ApHistorySnapshot,
 } from '~/domain/ap-history/schema';
 import { ApHistoryAssignmentPanel } from './ap-history-assignment-panel';
+import { AssignmentPromptPanel } from './assignment-prompt-panel';
 import { pickLatestReleasedSubmission } from '~/utils/document-link-target';
 
 const SUBMIT_EMPTY_TOOLTIP =
   "You can't submit an empty document. Add text first.";
+const GRADED_UNSUBMIT_TOOLTIP =
+  'This submission has been graded and can no longer be unsubmitted.';
 
 function escapePrintHtml(value: string) {
   return value.replace(/[&<>"']/g, (char) => {
@@ -146,6 +149,39 @@ function sortDocumentCommentsByMarkupOrder<
     return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
   });
 }
+
+// Shared with the post-backfill refetch below so a session created on demand
+// comes back in the same shape as one loaded on the initial document query.
+const assignmentModuleSessionsOrderBy = [
+  { assignmentModule: { position: 'asc' as const } },
+  { createdAt: 'desc' as const },
+];
+
+const assignmentModuleSessionsInclude = {
+  assignmentModule: {
+    include: {
+      instructions: {
+        orderBy: { position: 'asc' as const },
+        include: {
+          buttons: {
+            orderBy: { position: 'asc' as const },
+          },
+        },
+      },
+      assignmentType: {
+        select: {
+          assignmentModules: {
+            select: { id: true, position: true },
+            orderBy: { position: 'asc' as const },
+          },
+        },
+      },
+    },
+  },
+  messages: {
+    orderBy: [{ createdAt: 'asc' as const }, { id: 'asc' as const }],
+  },
+};
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   invariant(params.id, 'No document id found');
@@ -207,6 +243,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           prompt: true,
           promptAttachmentName: true,
           apHistorySnapshot: true,
+          tutorEnabled: true,
         },
       },
       classAssignment: {
@@ -245,39 +282,13 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           gradedAt: true,
           releasedAt: true,
           archivedAt: true,
+          unsubmittedAt: true,
         },
       },
       revisions: { orderBy: { createdAt: 'desc' } },
       assignmentModuleSessions: {
-        orderBy: [
-          { assignmentModule: { position: 'asc' } },
-          { createdAt: 'desc' },
-        ],
-        include: {
-          assignmentModule: {
-            include: {
-              instructions: {
-                orderBy: { position: 'asc' },
-                include: {
-                  buttons: {
-                    orderBy: { position: 'asc' },
-                  },
-                },
-              },
-              assignmentType: {
-                select: {
-                  assignmentModules: {
-                    select: { id: true, position: true },
-                    orderBy: { position: 'asc' },
-                  },
-                },
-              },
-            },
-          },
-          messages: {
-            orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
-          },
-        },
+        orderBy: assignmentModuleSessionsOrderBy,
+        include: assignmentModuleSessionsInclude,
       },
       comments: {
         include: {
@@ -343,11 +354,35 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     }
   }
 
+  // A document should always have a session per AssignmentModule — they're
+  // created together in createDocumentForAssignmentType. If none exist here,
+  // the document reached that state some other way (hand-written seed/import
+  // data, or a module added after the document was created). Recover on the
+  // spot rather than dead-ending the student/teacher: back-fill the missing
+  // sessions and re-read them.
+  let assignmentModuleSessions = doc.assignmentModuleSessions;
+  if (assignmentModuleSessions.length === 0 && doc.assignmentType?.id) {
+    const created = await ensureAssignmentModuleSessionsForDocument(
+      doc.id,
+      doc.assignmentType.id,
+      []
+    );
+    if (created) {
+      assignmentModuleSessions = await prisma.assignmentModuleSession.findMany(
+        {
+          where: { documentId: doc.id, deletedAt: null },
+          orderBy: assignmentModuleSessionsOrderBy,
+          include: assignmentModuleSessionsInclude,
+        }
+      );
+    }
+  }
+
   const moduleSessionsByModuleId = new Map<
     string,
-    (typeof doc.assignmentModuleSessions)[number]
+    (typeof assignmentModuleSessions)[number]
   >();
-  for (const session of doc.assignmentModuleSessions) {
+  for (const session of assignmentModuleSessions) {
     if (!moduleSessionsByModuleId.has(session.assignmentModuleId)) {
       moduleSessionsByModuleId.set(session.assignmentModuleId, session);
     }
@@ -360,8 +395,12 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   );
 
   if (!currentCms) {
+    // The AssignmentType backing this document has no active modules to
+    // create sessions from — a data problem the student/teacher can't fix
+    // themselves, unlike an ordinary missing-session case above.
     return redirectWithToast('/app', {
-      description: 'No assignment module session found.',
+      description:
+        "This document's assignment has no active steps to open. Contact support.",
       type: 'error',
     });
   }
@@ -377,6 +416,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       : assignmentModules.find(
           (cm) => cm.position === currentCms.assignmentModule.position + 1
         )?.id;
+
 
   const sortedComments = sortDocumentCommentsByMarkupOrder(
     doc.comments,
@@ -395,6 +435,10 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     nextCmId,
     shouldSaveVersion,
     hasPreviousCms: currentCmsIdx > 0,
+    canSelfUnsubmit:
+      isOwner &&
+      profile.role === 'STUDENT' &&
+      !hasEffectivePlatformAdmin(user?.isAdmin),
   });
 }
 
@@ -416,6 +460,7 @@ type SubmissionRow = {
   gradedAt: string | null;
   releasedAt: string | null;
   archivedAt: string | Date | null;
+  unsubmittedAt?: string | Date | null;
 };
 
 type AssignmentWithApHistorySnapshot = {
@@ -445,12 +490,23 @@ export function getGenericAssignmentPromptForEditor<T>(
     : null;
 }
 
+/**
+ * Whether the tutor affordance (tab + panel) should be shown for a document.
+ * A document with no linked assignment (e.g. free writing) keeps today's
+ * behavior of always showing the tutor. Defaults to enabled when the flag
+ * is missing, which preserves current behavior for existing assignments.
+ */
+export function isTutorEnabledForAssignment(
+  assignment: { tutorEnabled?: boolean } | null | undefined
+): boolean {
+  return assignment?.tutorEnabled !== false;
+}
+
 export default function Route() {
   const data = useLoaderData<typeof loader>();
   const user = useUser();
   const fetcher = useFetcher();
-  const submissionArchiveFetcher = useFetcher();
-  const revalidator = useRevalidator();
+  const submissionUnsubmitFetcher = useFetcher();
   const navigate = useNavigate();
   const breakpoint = useBreakpoint();
   const [syncStatus, setSyncStatus] = useState<SyncStatus>('synced');
@@ -458,8 +514,17 @@ export default function Route() {
   const [submissionTitle, setSubmissionTitle] = useState('');
   const [showOldComments, setShowOldComments] = useState(false);
   const [archiveDialogOpen, setArchiveDialogOpen] = useState(false);
+  const [submissionToUnsubmit, setSubmissionToUnsubmit] =
+    useState<SubmissionRow | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [localSubmissions, setLocalSubmissions] = useState<SubmissionRow[]>([]);
+  // This route's own loader never revalidates on fetcher submissions (see
+  // shouldRevalidate below) — server state flows through explicit local
+  // state updates, not revalidator.revalidate(). Track ids the student just
+  // unsubmitted so the submissions list/badge update immediately.
+  const [locallyUnsubmittedIds, setLocallyUnsubmittedIds] = useState<
+    Set<string>
+  >(new Set());
   const isMobile = ['base', 'sm', 'md'].includes(breakpoint ?? '');
   const [searchParams, setSearchParams] = useSearchParams();
   const fallbackCmsIdx = parseInt(searchParams.get('cmsIdx') ?? '0') || 0;
@@ -468,9 +533,10 @@ export default function Route() {
       ? data.currentCmsIdx
       : fallbackCmsIdx;
   const explicitExitTarget = sanitizeExitTarget(searchParams.get('exitTo'));
-  const tab = searchParams.get('tab') ?? 'tutor';
-  const isViewingAsTeacher =
-    data.doc && user.id !== data.doc?.membership.userId;
+  const tutorEnabled = isTutorEnabledForAssignment(data.doc.assignment);
+  const tab =
+    searchParams.get('tab') ?? (tutorEnabled ? 'tutor' : 'editor');
+  const isViewingAsTeacher = data.doc && user.id !== data.doc?.membership.userId;
   // Owner or class teacher (loader); api.model.document allows both to persist edits.
   const isDocumentEditable = true;
   const assignment = data.doc.assignment;
@@ -485,8 +551,14 @@ export default function Route() {
     const serverSubs = (data.submissions ?? []) as SubmissionRow[];
     const serverIds = new Set(serverSubs.map((s) => s.id));
     const newLocal = localSubmissions.filter((s) => !serverIds.has(s.id));
-    return [...newLocal, ...serverSubs];
-  }, [data.submissions, localSubmissions]);
+    const merged = [...newLocal, ...serverSubs];
+    if (locallyUnsubmittedIds.size === 0) return merged;
+    return merged.map((s) =>
+      locallyUnsubmittedIds.has(s.id) && s.unsubmittedAt == null
+        ? { ...s, unsubmittedAt: new Date().toISOString() }
+        : s
+    );
+  }, [data.submissions, localSubmissions, locallyUnsubmittedIds]);
 
   const { active: activeSubmissions, archived: archivedSubmissions } = useMemo(
     () => partitionSubmissionsByArchive(submissions),
@@ -573,8 +645,7 @@ export default function Route() {
       ? allComments
       : activeComments
     : activeComments;
-  const studentName =
-    data.doc.membership.user.name?.trim() || 'Unknown student';
+  const studentName = data.doc.membership.user.name?.trim() || 'Unknown student';
   const cannotSubmitEmpty = !editorSubmittable;
   const isSubmitting = submit.isSubmitting;
   const submitActionDisabled = isSubmitting || cannotSubmitEmpty;
@@ -659,17 +730,26 @@ export default function Route() {
   }, [data.doc.html, getLiveDocumentTitle, studentName]);
 
   useEffect(() => {
-    if (submissionArchiveFetcher.state !== 'idle') return;
-    const body = submissionArchiveFetcher.data as
+    if (submissionUnsubmitFetcher.state !== 'idle') return;
+    const body = submissionUnsubmitFetcher.data as
       | { success?: boolean }
       | undefined;
-    if (body?.success) {
-      revalidator.revalidate();
+    if (body?.success && submissionToUnsubmit) {
+      // The loader's shouldRevalidate never reruns for this fetcher (see
+      // below), so update local state directly instead of relying on
+      // revalidator.revalidate() to refresh data.submissions.
+      const unsubmittedId = submissionToUnsubmit.id;
+      setLocallyUnsubmittedIds((prev) => {
+        const next = new Set(prev);
+        next.add(unsubmittedId);
+        return next;
+      });
+      setSubmissionToUnsubmit(null);
     }
   }, [
-    submissionArchiveFetcher.state,
-    submissionArchiveFetcher.data,
-    revalidator,
+    submissionUnsubmitFetcher.state,
+    submissionUnsubmitFetcher.data,
+    submissionToUnsubmit,
   ]);
 
   return (
@@ -797,27 +877,47 @@ export default function Route() {
                             </div>
                           </Link>
                           {!isViewingAsTeacher && !isArchived ? (
-                            <div className="flex items-center pr-2">
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8 shrink-0 text-muted-foreground"
-                                aria-label="Archive submission"
-                                disabled={
-                                  submissionArchiveFetcher.state !== 'idle'
-                                }
-                                onClick={() => {
-                                  const fd = new FormData();
-                                  fd.set('intent', 'archive');
-                                  submissionArchiveFetcher.submit(fd, {
-                                    method: 'POST',
-                                    action: `/api/model/submission/${s.id}`,
-                                  });
-                                }}
-                              >
-                                <Archive className="h-4 w-4" />
-                              </Button>
+                            <div className="flex items-center gap-1 pr-2">
+                              {data.canSelfUnsubmit ? (
+                                s.gradedAt != null || s.releasedAt != null ? (
+                                  <Tooltip
+                                    text={GRADED_UNSUBMIT_TOOLTIP}
+                                    delayDuration={0}
+                                  >
+                                    <span
+                                      className="inline-flex"
+                                      data-testid={`student-unsubmit-disabled-reason-${s.id}`}
+                                    >
+                                      <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-8 w-8 shrink-0 text-muted-foreground"
+                                        aria-label="Cannot unsubmit graded submission"
+                                        data-testid={`student-unsubmit-${s.id}`}
+                                        disabled
+                                      >
+                                        <RotateCcw className="h-4 w-4" />
+                                      </Button>
+                                    </span>
+                                  </Tooltip>
+                                ) : (
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8 shrink-0 text-muted-foreground"
+                                    aria-label="Unsubmit submission"
+                                    data-testid={`student-unsubmit-${s.id}`}
+                                    disabled={
+                                      submissionUnsubmitFetcher.state !== 'idle'
+                                    }
+                                    onClick={() => setSubmissionToUnsubmit(s)}
+                                  >
+                                    <RotateCcw className="h-4 w-4" />
+                                  </Button>
+                                )
+                              ) : null}
                             </div>
                           ) : null}
                         </div>
@@ -929,9 +1029,11 @@ export default function Route() {
         </nav>
         <Tabs onValueChange={changeTab} value={tab} className="md:hidden">
           <TabsList className="w-full rounded-none border-b px-3">
-            <TabsTrigger value="tutor" className="w-full">
-              Tutor
-            </TabsTrigger>
+            {tutorEnabled ? (
+              <TabsTrigger value="tutor" className="w-full">
+                Tutor
+              </TabsTrigger>
+            ) : null}
             <TabsTrigger value="editor" className="w-full">
               Editor
             </TabsTrigger>
@@ -942,7 +1044,10 @@ export default function Route() {
         </Tabs>
         <CommentsSelectionProvider>
           <div className="mx-auto flex min-h-0 flex-1 w-full max-w-screen-2xl overflow-hidden">
-            {isMobile && tab !== 'tutor' ? null : (
+            {!tutorEnabled && !(isMobile && tab !== 'editor') ? (
+              <AssignmentPromptPanel assignment={editorAssignmentPrompt} />
+            ) : null}
+            {!tutorEnabled || (isMobile && tab !== 'tutor') ? null : (
               <Tutor
                 docId={data.doc.id}
                 cms={(tutor.cms ?? data.currentCms) as any}
@@ -962,7 +1067,9 @@ export default function Route() {
             {isMobile && tab !== 'editor' ? null : (
               <DocumentEditor
                 docId={data.doc.id}
-                assignment={editorAssignmentPrompt}
+                // With the tutor off the prompt has its own column, so the
+                // banner over the document would only repeat it.
+                assignment={tutorEnabled ? editorAssignmentPrompt : null}
                 serverHtml={editorServerHtml}
                 serverText={editorServerText}
                 serverUpdatedAt={data.doc.updatedAt}
@@ -993,123 +1100,185 @@ export default function Route() {
         open={isFinalizeDialogOpen}
         onOpenChange={setIsFinalizeDialogOpen}
       >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <AlertCircle className="h-5 w-5 text-yellow-600" />
-              Submit Version {versionNumber}
-            </DialogTitle>
-            <DialogDescription asChild>
-              <div className="space-y-4 pt-2">
-                <div className="space-y-2">
-                  <label
-                    htmlFor="submission-title"
-                    className="text-sm font-medium text-foreground"
-                  >
-                    Submission Title
-                  </label>
-                  <Input
-                    id="submission-title"
-                    value={submissionTitle}
-                    onChange={(e) => setSubmissionTitle(e.target.value)}
-                    placeholder="Enter a title for this submission"
-                  />
-                </div>
-                <ul className="list-disc space-y-1.5 pl-5 text-sm">
-                  <li>
-                    Submitting creates a snapshot of your essay for your teacher
-                    to grade.
-                  </li>
-                  <li>You can keep editing and submit again after this.</li>
-                </ul>
-                {activeSubmissions.length > 0 && (
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <AlertCircle className="h-5 w-5 text-yellow-600" />
+                Submit Version {versionNumber}
+              </DialogTitle>
+              <DialogDescription asChild>
+                <div className="space-y-4 pt-2">
                   <div className="space-y-2">
-                    <p className="text-sm font-medium text-foreground">
-                      Previous submissions
-                    </p>
-                    <div className="max-h-32 overflow-y-auto rounded-md border">
-                      {activeSubmissions.map((s) => {
-                        const v = versionLabelForActiveSubmission(
-                          activeSubmissions,
-                          s.id
-                        );
-                        const isGraded = s.releasedAt != null;
-                        const label = displaySubmissionTitle(
-                          s.title,
-                          v,
-                          'Untitled submission'
-                        );
-                        return (
-                          <a
-                            key={s.id}
-                            href={`/app/submissions/${s.id}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="flex items-center justify-between gap-2 border-b px-3 py-2 text-sm hover:bg-muted/50 last:border-0"
-                          >
-                            <div className="flex min-w-0 items-center gap-2">
-                              <span className="truncate">{label}</span>
-                              <ExternalLink className="h-3 w-3 shrink-0 text-muted-foreground" />
-                            </div>
-                            <Badge
-                              variant={isGraded ? 'success' : 'secondary'}
-                              className="shrink-0 text-[10px]"
-                            >
-                              {isGraded ? 'Graded' : 'Submitted'}
-                            </Badge>
-                          </a>
-                        );
-                      })}
-                    </div>
+                    <label
+                      htmlFor="submission-title"
+                      className="text-sm font-medium text-foreground"
+                    >
+                      Submission Title
+                    </label>
+                    <Input
+                      id="submission-title"
+                      value={submissionTitle}
+                      onChange={(e) => setSubmissionTitle(e.target.value)}
+                      placeholder="Enter a title for this submission"
+                    />
                   </div>
-                )}
-              </div>
+                  <ul className="list-disc space-y-1.5 pl-5 text-sm">
+                    <li>
+                      Submitting creates a snapshot of your essay for your
+                      teacher to grade.
+                    </li>
+                    <li>You can keep editing and submit again after this.</li>
+                  </ul>
+                  {activeSubmissions.length > 0 && (
+                    <div className="space-y-2">
+                      <p className="text-sm font-medium text-foreground">
+                        Previous submissions
+                      </p>
+                      <div className="max-h-32 overflow-y-auto rounded-md border">
+                        {activeSubmissions.map((s) => {
+                          const v = versionLabelForActiveSubmission(
+                            activeSubmissions,
+                            s.id
+                          );
+                          const isGraded = s.releasedAt != null;
+                          const label = displaySubmissionTitle(
+                            s.title,
+                            v,
+                            'Untitled submission'
+                          );
+                          return (
+                            <a
+                              key={s.id}
+                              href={`/app/submissions/${s.id}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex items-center justify-between gap-2 border-b px-3 py-2 text-sm hover:bg-muted/50 last:border-0"
+                            >
+                              <div className="flex min-w-0 items-center gap-2">
+                                <span className="truncate">{label}</span>
+                                <ExternalLink className="h-3 w-3 shrink-0 text-muted-foreground" />
+                              </div>
+                              <Badge
+                                variant={isGraded ? 'success' : 'secondary'}
+                                className="shrink-0 text-[10px]"
+                              >
+                                {isGraded ? 'Graded' : 'Submitted'}
+                              </Badge>
+                            </a>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setIsFinalizeDialogOpen(false)}
+                disabled={isSubmitting}
+              >
+                Cancel
+              </Button>
+              {cannotSubmitEmpty && !isSubmitting ? (
+                <Tooltip text={SUBMIT_EMPTY_TOOLTIP} delayDuration={0}>
+                  <span
+                    className="inline-flex"
+                    data-testid="document-finalize-submit-empty-trigger"
+                  >
+                    <Button
+                      variant="default"
+                      data-testid="document-finalize-submit"
+                      disabled
+                    >
+                      {`Submit Version ${versionNumber}`}
+                    </Button>
+                  </span>
+                </Tooltip>
+              ) : (
+                <Button
+                  variant="default"
+                  data-testid="document-finalize-submit"
+                  onClick={() => {
+                    const resolved =
+                      submissionTitle.trim() || getLiveDocumentTitle().trim();
+                    void submit.submitNow(resolved);
+                  }}
+                  disabled={submitActionDisabled}
+                >
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Submitting...
+                    </>
+                  ) : (
+                    `Submit Version ${versionNumber}`
+                  )}
+                </Button>
+              )}
+            </DialogFooter>
+          </DialogContent>
+      </Dialog>
+      <Dialog
+        open={submissionToUnsubmit != null}
+        onOpenChange={(open) => {
+          if (!open && submissionUnsubmitFetcher.state === 'idle') {
+            setSubmissionToUnsubmit(null);
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Unsubmit this submission?</DialogTitle>
+            <DialogDescription>
+              This withdraws the submission. Your document stays exactly as it
+              is, so you can keep editing and submit it again.
             </DialogDescription>
           </DialogHeader>
+          {(
+            submissionUnsubmitFetcher.data as
+              | { success?: boolean; message?: string }
+              | undefined
+          )?.success === false ? (
+            <p role="alert" className="text-sm text-destructive">
+              {(submissionUnsubmitFetcher.data as { message?: string }).message}
+            </p>
+          ) : null}
           <DialogFooter>
             <Button
+              type="button"
               variant="outline"
-              onClick={() => setIsFinalizeDialogOpen(false)}
-              disabled={isSubmitting}
+              disabled={submissionUnsubmitFetcher.state !== 'idle'}
+              onClick={() => setSubmissionToUnsubmit(null)}
             >
               Cancel
             </Button>
-            {cannotSubmitEmpty && !isSubmitting ? (
-              <Tooltip text={SUBMIT_EMPTY_TOOLTIP} delayDuration={0}>
-                <span
-                  className="inline-flex"
-                  data-testid="document-finalize-submit-empty-trigger"
-                >
-                  <Button
-                    variant="default"
-                    data-testid="document-finalize-submit"
-                    disabled
-                  >
-                    {`Submit Version ${versionNumber}`}
-                  </Button>
-                </span>
-              </Tooltip>
-            ) : (
-              <Button
-                variant="default"
-                data-testid="document-finalize-submit"
-                onClick={() => {
-                  const resolved =
-                    submissionTitle.trim() || getLiveDocumentTitle().trim();
-                  void submit.submitNow(resolved);
-                }}
-                disabled={submitActionDisabled}
-              >
-                {isSubmitting ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Submitting...
-                  </>
-                ) : (
-                  `Submit Version ${versionNumber}`
-                )}
-              </Button>
-            )}
+            <Button
+              type="button"
+              disabled={
+                submissionUnsubmitFetcher.state !== 'idle' ||
+                submissionToUnsubmit == null
+              }
+              onClick={() => {
+                if (!submissionToUnsubmit) return;
+                const fd = new FormData();
+                fd.set('submissionId', submissionToUnsubmit.id);
+                submissionUnsubmitFetcher.submit(fd, {
+                  method: 'POST',
+                  action: '/api/domain/unsubmit-submission',
+                });
+              }}
+            >
+              {submissionUnsubmitFetcher.state !== 'idle' ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Unsubmitting...
+                </>
+              ) : (
+                'Unsubmit'
+              )}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -1119,7 +1288,8 @@ export default function Route() {
             <DialogTitle>Archived submissions</DialogTitle>
             <DialogDescription>
               Hidden from your main list. Your teacher can still view and grade
-              them.
+              them. These are read-only — archiving is retired, so this list
+              only shows submissions archived before that change.
             </DialogDescription>
           </DialogHeader>
           <div className="max-h-72 space-y-2 overflow-y-auto">
@@ -1148,24 +1318,6 @@ export default function Route() {
                   >
                     {isGraded ? 'Graded' : 'Submitted'}
                   </Badge>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="shrink-0 gap-1"
-                    disabled={submissionArchiveFetcher.state !== 'idle'}
-                    onClick={() => {
-                      const fd = new FormData();
-                      fd.set('intent', 'unarchive');
-                      submissionArchiveFetcher.submit(fd, {
-                        method: 'POST',
-                        action: `/api/model/submission/${s.id}`,
-                      });
-                    }}
-                  >
-                    <ArchiveRestore className="h-3.5 w-3.5" />
-                    Restore
-                  </Button>
                 </div>
               );
             })}

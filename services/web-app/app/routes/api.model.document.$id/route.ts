@@ -5,6 +5,7 @@ import { parseFormData, validationError } from '@rvf/react-router';
 import { z } from 'zod';
 import { requireMembership, requireUserId } from '~/utils/auth.server.js';
 import { prisma } from '~/utils/db.server.js';
+import { documentReadWhere } from '~/utils/document-access.server';
 import { hasEffectivePlatformAdmin } from '~/utils/preview-access.server';
 
 const PUT = z.object({
@@ -72,15 +73,32 @@ const actionImpl = async ({ request, params }: ActionFunctionArgs) => {
   const fd = formData ?? (await request.formData());
   const { error, data } = await parseFormData(fd, PUT);
   if (error) return validationError(error);
-  const [user, document] = await Promise.all([
-    prisma.user.findUniqueOrThrow({
-      where: { id: userId },
-      select: { isAdmin: true },
-    }),
-    prisma.document.findUniqueOrThrow({
-      where: { id: params.id },
-    }),
-  ]);
+  const user = await prisma.user.findUniqueOrThrow({
+    where: { id: userId },
+    select: { isAdmin: true },
+  });
+
+  // Resolve the document through the access predicate BEFORE anything is written.
+  //
+  // This used to be a bare `findUniqueOrThrow({ where: { id: params.id } })`, and
+  // the only scoped query was the `document.update` at the very end. That ordering
+  // refused the write while having already performed two others against a document
+  // the caller has no claim on: a `documentWriteJournal` row stamped with the
+  // caller's userId/membershipId but carrying the victim's current html and text
+  // (`resolvedHtml` falls back to `document.html` when the body sends no content),
+  // and a `documentRevision` appended to the victim's history. The final update
+  // then threw P2025, which the catch below only handles on the stale-baseRevision
+  // path, so the request 500'd and left the journal row `pending` forever.
+  const document = await prisma.document.findFirst({
+    where: {
+      id: params.id,
+      ...documentReadWhere({ profileId: profile.id, isAdmin: user.isAdmin }),
+    },
+  });
+
+  if (!document) {
+    return new Response(null, { status: 404 });
+  }
 
   const source = new URL(request.url).searchParams.get('from') ?? 'unknown';
   const hasBodyMutation = data.html !== undefined || data.text !== undefined;
@@ -280,20 +298,12 @@ const actionImpl = async ({ request, params }: ActionFunctionArgs) => {
     update = await prisma.document.update({
       where: {
         id: document.id,
-        ...(hasEffectivePlatformAdmin(user.isAdmin)
-          ? {}
-          : {
-              OR: [
-                { membershipId: profile.id },
-                {
-                  membership: {
-                    classesAsStudent: {
-                      some: { teachers: { some: { id: profile.id } } },
-                    },
-                  },
-                },
-              ],
-            }),
+        // Redundant now that the resolve above is scoped, and deliberately kept:
+        // the predicate is what refuses the write, and it should not depend on a
+        // lookup fifty lines earlier staying scoped.
+        AND: [
+          documentReadWhere({ profileId: profile.id, isAdmin: user.isAdmin }),
+        ],
         ...(hasBodyMutation && data.baseRevision !== undefined
           ? { revision: data.baseRevision }
           : {}),

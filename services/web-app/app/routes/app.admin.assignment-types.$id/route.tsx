@@ -10,6 +10,7 @@ import {
   parseRubric,
   parseScoringScale,
 } from '~/domain/assignment-types/assignment-type-rubric.shared';
+import { isRubricFullyPopulated } from '~/domain/assignment-types/assignment-type-rubric-config';
 
 function parseJsonFormField(formData: FormData, name: string) {
   const value = formData.get(name);
@@ -93,7 +94,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
     const existing = await prisma.assignmentType.findUnique({
       where: { id: assignmentTypeId },
-      select: { id: true },
+      select: { id: true, rubricJson: true },
     });
     if (!existing) {
       throw new Response('Not Found', { status: 404 });
@@ -113,6 +114,26 @@ export async function action({ request, params }: ActionFunctionArgs) {
           gradingAssistantVersion: { increment: 1 },
         }
       : {};
+
+    if (hasGradingConfigFields) {
+      const nextRubric = parseRubric(gradingConfigData.rubricJson);
+      const nextRubricComplete = isRubricFullyPopulated(nextRubric);
+      if (nextRubric.categories.length > 0 && !nextRubricComplete) {
+        // Grandfather assignment types whose rubric was already incomplete
+        // before this edit — don't force an unrelated save (e.g. a title
+        // change) to be blocked on fixing a pre-existing gap. Only block edits
+        // that would newly break a rubric that was whole.
+        const previouslyComplete = isRubricFullyPopulated(
+          parseRubric((existing as { rubricJson?: unknown }).rubricJson)
+        );
+        if (previouslyComplete) {
+          throw new Response(
+            'Every rubric category needs a key, label, description, and weight before saving. Finish the categories you started, or remove them.',
+            { status: 400 }
+          );
+        }
+      }
+    }
 
     await prisma.$transaction(async (tx) => {
       if (deleteImage) {

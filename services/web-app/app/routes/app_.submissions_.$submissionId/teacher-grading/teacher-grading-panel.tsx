@@ -34,12 +34,20 @@ import {
 import {
   buildEmptyRubricScores,
   buildScoreOptions,
+  isScored,
   legacyRubricDisplayConfig,
   normalizeRubricDisplayConfig,
   normalizeRubricScoresForCategories,
+  toPersistedRubricScores,
   type RubricDisplayConfig,
   type RubricScore,
 } from '~/domain/grading/rubric-display';
+import { rubricScaleGradeFieldsFromScores } from '~/domain/grading/recorded-grade';
+import {
+  getCategoryScoreLabel,
+  isCategoryFeedbackEnabled,
+  isGrammarHighlightCategory,
+} from '~/domain/assignment-types/rubric-category-options';
 import {
   computeWeightedPercentageForCategories,
   formatGrade,
@@ -56,7 +64,8 @@ import {
   parseGradingAssistantStrictnessLevel,
   type GradingAssistantStrictnessLevel,
 } from '~/domain/grading/grading-assistant-strictness';
-import { Loader2, TrendingUp } from 'lucide-react';
+import { AlertTriangle, Info, Loader2, TrendingUp } from 'lucide-react';
+import { Tooltip } from '~/components/ui/tooltip';
 import { cn } from '~/utils/misc';
 import { useUpdateSubmission } from './use-update-submission';
 import { hasGradingDraftToReplace } from './has-grading-draft-to-replace';
@@ -65,6 +74,23 @@ import {
   cloneFormDataWithFallbackRetry,
   isLlmRetryResponse,
 } from '~/utils/llm-retry-ui';
+
+/**
+ * The nearest score the scale actually offers. A typed 17 on a 0-30 rubric
+ * scored in tens becomes 20; anything outside the range is pulled to its
+ * nearest end.
+ */
+function snapToScaleValue(
+  value: number,
+  bounds: { min: number; max: number; step: number } | null,
+  fallbackMax: number
+): number {
+  if (!bounds) return Math.max(0, Math.min(fallbackMax, Math.round(value)));
+
+  const clamped = Math.max(bounds.min, Math.min(bounds.max, value));
+  const steps = Math.round((clamped - bounds.min) / bounds.step);
+  return Math.min(bounds.max, bounds.min + steps * bounds.step);
+}
 
 function normalizePercentage(value: unknown): number | null {
   if (typeof value !== 'number' || !Number.isFinite(value)) return null;
@@ -80,6 +106,7 @@ function formatExcerpt(excerpt: string, maxChars = 90) {
 export type SavedGradeSnapshot = {
   numericPercentage: number | null;
   letterGrade: string | null;
+  overallScore: number | null;
   score: string | null;
   overallComment: string | null;
   rubricScores: unknown;
@@ -90,7 +117,7 @@ export type TeacherGradingPanelHeaderState = {
   gradeBadgeClassName: string;
   hasUnsavedChanges: boolean;
   hasDraftToReplace: boolean;
-  hasNumericPercentage: boolean;
+  hasGrade: boolean;
   isGenerating: boolean;
   isAiRetrying: boolean;
   isBusy: boolean;
@@ -169,12 +196,22 @@ export function TeacherGradingPanel({
   const [activeRubricConfig, setActiveRubricConfig] =
     useState<RubricDisplayConfig>(propRubricConfig);
   const [rubricScores, setRubricScores] = useState<Record<string, RubricScore>>(
-    buildEmptyRubricScores(propRubricConfig.categories)
+    buildEmptyRubricScores(
+      propRubricConfig.categories,
+      propRubricConfig.minScore
+    )
   );
   const [overallComment, setOverallComment] = useState('');
   const [numericPercentage, setNumericPercentage] = useState('');
   const [hasManualPercentOverride, setHasManualPercentOverride] =
     useState(false);
+  /**
+   * The points-scale equivalent of the overall percentage: editable at all
+   * times, seeded from what the category scores add up to, and left alone once
+   * the teacher types their own number.
+   */
+  const [overallScoreInput, setOverallScoreInput] = useState('');
+  const [hasManualScoreOverride, setHasManualScoreOverride] = useState(false);
   const pendingAiFormRef = useRef<FormData | null>(null);
   const hasRetriedAiFormRef = useRef(false);
   const lastInitializationKeyRef = useRef<string | null>(null);
@@ -187,15 +224,6 @@ export function TeacherGradingPanel({
       ) ?? DEFAULT_GRADING_ASSISTANT_STRICTNESS_LEVEL
     );
   const [savedSnapshot, setSavedSnapshot] = useState<string | null>(null);
-  const scoreOptions = useMemo(
-    () =>
-      buildScoreOptions(
-        activeRubricConfig.minScore,
-        activeRubricConfig.maxScore
-      ),
-    [activeRubricConfig.maxScore, activeRubricConfig.minScore]
-  );
-
   const computedNumericPercentage = useMemo(() => {
     if (activeRubricConfig.scoringType !== 'weighted_1_5') return null;
     return computeWeightedPercentageForCategories(
@@ -203,6 +231,24 @@ export function TeacherGradingPanel({
       activeRubricConfig.categories
     );
   }, [activeRubricConfig, rubricScores]);
+
+
+  /**
+   * The grade this rubric produces on a scale that reports raw points rather
+   * than a percentage (Daily Pages, ACT writing). Null on percentage scales,
+   * whose grade comes from the overall percentage field.
+   */
+  const rubricScaleGrade = useMemo(
+    () =>
+      rubricScaleGradeFieldsFromScores({
+        rubricScores,
+        categories: activeRubricConfig.categories,
+        minScore: activeRubricConfig.minScore,
+        maxScore: activeRubricConfig.maxScore,
+        scoringType: activeRubricConfig.scoringType,
+      }),
+    [activeRubricConfig, rubricScores]
+  );
 
   const resolvedNumericPercentage = useMemo(() => {
     if (numericPercentage === '') return null;
@@ -220,10 +266,11 @@ export function TeacherGradingPanel({
           ? null
           : letterFromPercent(resolvedNumericPercentage)
       ) ||
+      rubricScaleGrade?.score ||
       existingGrade?.score ||
       '—'
     );
-  }, [existingGrade?.score, resolvedNumericPercentage]);
+  }, [existingGrade?.score, resolvedNumericPercentage, rubricScaleGrade]);
   const gradingAssistantStrictnessLabel = useMemo(
     () => getGradingAssistantStrictnessLabel(gradingAssistantStrictnessLevel),
     [gradingAssistantStrictnessLevel]
@@ -240,9 +287,16 @@ export function TeacherGradingPanel({
         rubricScores,
         overallComment,
         numericPercentage,
-        grammarIssues.length
+        grammarIssues.length,
+        activeRubricConfig.minScore
       ),
-    [rubricScores, overallComment, numericPercentage, grammarIssues.length]
+    [
+      activeRubricConfig.minScore,
+      rubricScores,
+      overallComment,
+      numericPercentage,
+      grammarIssues.length,
+    ]
   );
 
   const currentSnapshot = useMemo(
@@ -251,9 +305,17 @@ export function TeacherGradingPanel({
         rubricScores,
         overallComment,
         numericPercentage,
+        overallScore: hasManualScoreOverride ? overallScoreInput : '',
         grammarIssues,
       }),
-    [grammarIssues, numericPercentage, overallComment, rubricScores]
+    [
+      grammarIssues,
+      hasManualScoreOverride,
+      numericPercentage,
+      overallComment,
+      overallScoreInput,
+      rubricScores,
+    ]
   );
 
   const hasUnsavedChanges =
@@ -297,8 +359,10 @@ export function TeacherGradingPanel({
 
     let initialOverallComment = '';
     let initialNumericPercentage = '';
+    let initialOverallScore = '';
     let initialRubricScores = buildEmptyRubricScores(
-      propRubricConfig.categories
+      propRubricConfig.categories,
+      propRubricConfig.minScore
     );
 
     setActiveRubricConfig(propRubricConfig);
@@ -314,6 +378,15 @@ export function TeacherGradingPanel({
         initialNumericPercentage = initialNormalizedPercent.toString();
         setHasManualPercentOverride(true);
       }
+      // A points-scale grade is stored as "20/30". Reading it back is what
+      // makes reopening the form show the total that was saved rather than
+      // recomputing one from the category scores.
+      const savedScaleScore = /^\s*(\d+)\s*\/\s*\d+\s*$/.exec(
+        existingGrade.score ?? ''
+      );
+      if (savedScaleScore) {
+        initialOverallScore = savedScaleScore[1];
+      }
       initialRubricScores = normalizeRubricScoresForCategories({
         raw: existingGrade.rubricScores,
         categories: propRubricConfig.categories,
@@ -325,9 +398,12 @@ export function TeacherGradingPanel({
     setOverallComment(initialOverallComment);
     setNumericPercentage(initialNumericPercentage);
     setRubricScores(initialRubricScores);
+    setOverallScoreInput(initialOverallScore);
+    setHasManualScoreOverride(initialOverallScore !== '');
     setSavedSnapshot(
       buildGradingFormSnapshot({
         rubricScores: initialRubricScores,
+        overallScore: initialOverallScore,
         overallComment: initialOverallComment,
         numericPercentage: initialNumericPercentage,
         grammarIssues,
@@ -471,16 +547,40 @@ export function TeacherGradingPanel({
         : null;
     const letter = percent === null ? null : letterFromPercent(percent);
 
+    // What the teacher's own scores are worth on this rubric's scale. On a
+    // percentage scale this is null and the overall percentage below is the
+    // grade; on a raw-points scale it *is* the grade, and nothing else will
+    // compute it -- the assistant only runs its own grading route.
+    const scaleGrade = rubricScaleGradeFieldsFromScores({
+      rubricScores: effectiveRubric,
+      categories: activeRubricConfig.categories,
+      minScore: activeRubricConfig.minScore,
+      maxScore: activeRubricConfig.maxScore,
+      scoringType: activeRubricConfig.scoringType,
+    });
+
     const payload: Record<string, unknown> = {
       feedback: effectiveComment,
       overallComment: effectiveComment,
-      rubricScores: effectiveRubric,
+      rubricScores: toPersistedRubricScores(
+        effectiveRubric,
+        activeRubricConfig.minScore
+      ),
       grammarIssues: effectiveGrammarIssues,
     };
-    if (percent !== null) payload.numericPercentage = percent;
-    if (letter) payload.letterGrade = letter;
-    if (percent !== null) payload.score = formatGrade(percent, letter) ?? '';
-    if (percent === null && existingGrade?.score) {
+    const scaleDenominator = Number(scaleGrade?.score?.split('/')[1]);
+
+    if (percent !== null) {
+      payload.numericPercentage = percent;
+      if (letter) payload.letterGrade = letter;
+      payload.score = formatGrade(percent, letter) ?? '';
+    } else if (scaleGrade && manualScaleScore !== null) {
+      payload.overallScore = manualScaleScore;
+      payload.score = `${manualScaleScore}/${scaleDenominator}`;
+    } else if (scaleGrade) {
+      payload.overallScore = scaleGrade.overallScore;
+      payload.score = scaleGrade.score;
+    } else if (existingGrade?.score) {
       payload.score = existingGrade.score;
     }
 
@@ -490,10 +590,82 @@ export function TeacherGradingPanel({
           rubricScores: effectiveRubric,
           overallComment: effectiveComment,
           numericPercentage: effectivePercentStr,
+          overallScore: hasManualScoreOverride ? overallScoreInput : '',
           grammarIssues: effectiveGrammarIssues,
         })
       );
     });
+  };
+
+  /**
+   * Overwrite the overall percentage with the total computed from the
+   * current rubric category scores. Does not touch rubric scores, rubric
+   * comments, or overall feedback, and does not save — like every other
+   * field edit in this panel, the change is staged until the teacher clicks
+   * Save (or discarded via Cancel).
+   */
+  useEffect(() => {
+    if (hasManualScoreOverride) return;
+    if (!rubricScaleGrade) return;
+    setOverallScoreInput(String(rubricScaleGrade.overallScore));
+  }, [rubricScaleGrade, hasManualScoreOverride]);
+
+  const scaleScoreOutOf = useMemo(() => {
+    const denominator = Number(rubricScaleGrade?.score?.split('/')[1]);
+    return Number.isFinite(denominator) ? denominator : null;
+  }, [rubricScaleGrade]);
+
+  /**
+   * What the total-points field accepts: the rubric's own range and step when
+   * the grade is scored out of that range, so a 0-30 rubric scored in tens
+   * moves 0, 10, 20, 30 and refuses everything between.
+   */
+  const totalPointsBounds = useMemo(() => {
+    if (scaleScoreOutOf === null) return null;
+    const isRubricRange = scaleScoreOutOf === activeRubricConfig.maxScore;
+    return {
+      min: isRubricRange ? activeRubricConfig.minScore : 0,
+      max: scaleScoreOutOf,
+      step: isRubricRange ? (activeRubricConfig.step ?? 1) : 1,
+    };
+  }, [scaleScoreOutOf, activeRubricConfig]);
+
+  /**
+   * The total the teacher typed, snapped onto the scale — null while the field
+   * is still mirroring the category scores. Saving and the view-mode grade both
+   * read this, so the number on screen after Save is the number that was
+   * written.
+   */
+  const manualScaleScore = useMemo(() => {
+    const typed = Number(overallScoreInput.trim());
+    if (
+      !rubricScaleGrade ||
+      !hasManualScoreOverride ||
+      overallScoreInput.trim() === '' ||
+      !Number.isFinite(typed) ||
+      scaleScoreOutOf === null
+    ) {
+      return null;
+    }
+    return snapToScaleValue(typed, totalPointsBounds, scaleScoreOutOf);
+  }, [
+    hasManualScoreOverride,
+    overallScoreInput,
+    rubricScaleGrade,
+    scaleScoreOutOf,
+    totalPointsBounds,
+  ]);
+
+
+  const handleRecalculateFromRubric = () => {
+    if (rubricScaleGrade) {
+      setOverallScoreInput(String(rubricScaleGrade.overallScore));
+      setHasManualScoreOverride(false);
+      return;
+    }
+    if (computedNumericPercentage === null) return;
+    setNumericPercentage(computedNumericPercentage.toString());
+    setHasManualPercentOverride(false);
   };
 
   const generateAiSuggestionsAtLevel = useCallback(
@@ -528,11 +700,22 @@ export function TeacherGradingPanel({
       resolvedNumericPercentage === null
         ? null
         : letterFromPercent(resolvedNumericPercentage);
+    // What view mode shows the moment Save returns. It has to agree with what
+    // the save wrote, so a total the teacher typed wins over the one the
+    // category scores imply -- otherwise the grade reverts on screen until the
+    // page is reloaded.
+    const scaleScore = manualScaleScore ?? rubricScaleGrade?.overallScore ?? null;
+    const scaleScoreText =
+      manualScaleScore !== null && scaleScoreOutOf !== null
+        ? `${manualScaleScore}/${scaleScoreOutOf}`
+        : (rubricScaleGrade?.score ?? '');
     return {
       numericPercentage: resolvedNumericPercentage,
       letterGrade: letter,
+      overallScore: resolvedNumericPercentage === null ? scaleScore : null,
       score:
         formatGrade(resolvedNumericPercentage, letter) ||
+        scaleScoreText ||
         existingGrade?.score ||
         '',
       overallComment,
@@ -540,9 +723,12 @@ export function TeacherGradingPanel({
     };
   }, [
     existingGrade?.score,
+    manualScaleScore,
     overallComment,
     resolvedNumericPercentage,
+    rubricScaleGrade,
     rubricScores,
+    scaleScoreOutOf,
   ]);
 
   const discardDraft = useCallback(() => {
@@ -590,7 +776,9 @@ export function TeacherGradingPanel({
       gradeBadgeClassName,
       hasUnsavedChanges,
       hasDraftToReplace,
-      hasNumericPercentage: resolvedNumericPercentage !== null,
+      // A grade exists when this rubric's own scale has produced one --
+      // a percentage, or the raw points a points scale reports instead.
+      hasGrade: resolvedNumericPercentage !== null || rubricScaleGrade !== null,
       isGenerating,
       isAiRetrying,
       isBusy,
@@ -610,6 +798,7 @@ export function TeacherGradingPanel({
       isBusy,
       isGenerating,
       resolvedNumericPercentage,
+      rubricScaleGrade,
     ]
   );
 
@@ -650,7 +839,11 @@ export function TeacherGradingPanel({
             ) : null}
           </div>
           <div className="flex items-center justify-between gap-2">
-            <Badge variant="secondary" className={gradeBadgeClassName}>
+            <Badge
+              variant="secondary"
+              className={gradeBadgeClassName}
+              data-testid="grading-grade-badge"
+            >
               {gradeDisplay}
             </Badge>
             <div className="flex items-center gap-2">
@@ -676,34 +869,31 @@ export function TeacherGradingPanel({
                       const selected =
                         gradingAssistantStrictnessLevel === option.value;
                       return (
-                        <button
+                        <Tooltip
                           key={option.value}
-                          type="button"
-                          className={`flex h-full flex-col items-start justify-start rounded-md border px-3 py-2 text-left text-sm transition ${
-                            selected
-                              ? 'border-primary bg-primary text-primary-foreground'
-                              : 'border-border bg-background hover:bg-muted'
-                          }`}
-                          aria-pressed={selected}
-                          data-testid={`grading-assistant-strictness-${option.value}`}
-                          onClick={() =>
-                            setGradingAssistantStrictnessLevel(option.value)
-                          }
-                          disabled={isGenerating}
+                          text={option.description}
+                          delayDuration={200}
+                          contentProps={{ side: 'bottom', className: 'max-w-xs' }}
                         >
-                          <span className="block font-medium">
-                            {option.label}
-                          </span>
-                          <span
-                            className={`mt-1 block text-xs ${
+                          <button
+                            type="button"
+                            className={`flex h-full flex-col items-start justify-start rounded-md border px-3 py-2 text-left text-sm transition ${
                               selected
-                                ? 'text-primary-foreground/80'
-                                : 'text-muted-foreground'
+                                ? 'border-primary bg-primary text-primary-foreground'
+                                : 'border-border bg-background hover:bg-muted'
                             }`}
+                            aria-pressed={selected}
+                            data-testid={`grading-assistant-strictness-${option.value}`}
+                            onClick={() =>
+                              setGradingAssistantStrictnessLevel(option.value)
+                            }
+                            disabled={isGenerating}
                           >
-                            {option.description}
-                          </span>
-                        </button>
+                            <span className="block font-medium">
+                              {option.label}
+                            </span>
+                          </button>
+                        </Tooltip>
                       );
                     })}
                   </div>
@@ -757,6 +947,66 @@ export function TeacherGradingPanel({
       ) : null}
 
       <div className="no-scrollbar flex-1 overflow-y-auto p-3 space-y-4">
+        {/* A points scale records earned points and has no percentage at all,
+            so showing it an empty percentage box reads as a missing grade.
+            It gets the grade its own scale produces instead. */}
+        {rubricScaleGrade ? (
+          <div className="space-y-2">
+            <Label htmlFor="overall-score">
+              Total points{scaleScoreOutOf === null ? '' : ` (out of ${scaleScoreOutOf})`}
+            </Label>
+            <Input
+              id="overall-score"
+              data-testid="grading-overall-scale-score"
+              type="number"
+              min={totalPointsBounds?.min ?? 0}
+              max={totalPointsBounds?.max ?? undefined}
+              step={totalPointsBounds?.step ?? 1}
+              value={overallScoreInput}
+              disabled={isGenerating}
+              onChange={(e) => {
+                setOverallScoreInput(e.target.value);
+                setHasManualScoreOverride(true);
+              }}
+              onBlur={(e) => {
+                // Typing is unrestricted; leaving the field is where an
+                // out-of-range or off-step number is pulled onto the scale.
+                const typed = Number(e.currentTarget.value.trim());
+                if (e.currentTarget.value.trim() !== '' && Number.isFinite(typed)) {
+                  setOverallScoreInput(
+                    String(
+                      snapToScaleValue(
+                        typed,
+                        totalPointsBounds,
+                        scaleScoreOutOf ?? 0
+                      )
+                    )
+                  );
+                }
+                if (!hideHeader) {
+                  void saveAll();
+                }
+              }}
+            />
+            <div>
+              <Button
+                type="button"
+                variant="link"
+                size="sm"
+                className="h-auto p-0 text-xs"
+                data-testid="grading-recalculate-from-rubric"
+                disabled={isGenerating}
+                onClick={handleRecalculateFromRubric}
+              >
+                Recalculate from rubric scores
+              </Button>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                Sets the total above to what the category scores add up to (
+                {rubricScaleGrade.score}). Nothing saves until you click Save.
+              </p>
+            </div>
+          </div>
+        ) : (
         <div className="space-y-2">
           <div className="flex items-center gap-2">
             <Label htmlFor="pct">Overall Percentage</Label>
@@ -779,7 +1029,29 @@ export function TeacherGradingPanel({
               }
             }}
           />
+          {computedNumericPercentage !== null ? (
+            <div>
+              <Button
+                type="button"
+                variant="link"
+                size="sm"
+                className="h-auto p-0 text-xs"
+                data-testid="grading-recalculate-from-rubric"
+                disabled={isGenerating}
+                onClick={handleRecalculateFromRubric}
+              >
+                Recalculate from rubric scores
+              </Button>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                Sets the overall percentage above to match the rubric scores
+                below ({computedNumericPercentage}%). Rubric scores and
+                comments aren't changed, and nothing saves until you click
+                Save.
+              </p>
+            </div>
+          ) : null}
         </div>
+        )}
 
         <div className="space-y-2">
           <Label htmlFor="overall-comment">Overall Feedback</Label>
@@ -799,8 +1071,45 @@ export function TeacherGradingPanel({
           />
         </div>
 
-        <div className="space-y-3">
+        <div className="space-y-2 border-t pt-4">
           <div className="text-sm font-medium">Rubric</div>
+          {activeRubricConfig.source === 'thesis-default' ? (
+            <div
+              data-testid="teacher-grading-rubric-source-warning"
+              className="flex items-start gap-3 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3"
+            >
+              <Info className="mt-0.5 size-5 shrink-0 text-blue-600" />
+              <div>
+                <p className="text-sm font-medium">
+                  Using the default thesis rubric
+                </p>
+                <p className="mt-0.5 text-sm text-muted-foreground text-pretty">
+                  This assignment type has no rubric of its own configured, so
+                  the thesis-driven essay grading assistant rubric was applied
+                  instead.
+                </p>
+              </div>
+            </div>
+          ) : null}
+          {activeRubricConfig.rubricIncomplete ? (
+            <div
+              data-testid="teacher-grading-rubric-incomplete-warning"
+              className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3"
+            >
+              <AlertTriangle className="mt-0.5 size-5 shrink-0 text-amber-600" />
+              <div>
+                <p className="text-sm font-medium">
+                  This rubric is incomplete
+                </p>
+                <p className="mt-0.5 text-sm text-muted-foreground text-pretty">
+                  Some categories on this assignment type are missing a name,
+                  description, or weight. Grading still uses this rubric as
+                  saved. Ask an admin to finish or remove the unfinished
+                  categories.
+                </p>
+              </div>
+            </div>
+          ) : null}
           <Accordion type="multiple" className="w-full rounded-lg bg-white">
             {activeRubricConfig.categories.map((item) => {
               const current = rubricScores[item.key] || {
@@ -817,16 +1126,37 @@ export function TeacherGradingPanel({
                   },
                 };
                 setRubricScores(newRubric);
+                // Scoring a category hands the total back to the categories,
+                // which is also what clears a stale total recorded before
+                // these scores were touched.
+                setHasManualScoreOverride(false);
                 if (!hideHeader) {
                   void saveAll(newRubric);
                 }
               };
-              const scoreLabel = current.score
-                ? `${current.score}/${activeRubricConfig.maxScore}`
+              // A scale that starts at 0 makes 0 a real judgment, so
+              // "scored" is the scale's own floor rather than a truthiness
+              // check that would read Absent as blank.
+              const hasScore = isScored(
+                current.score,
+                activeRubricConfig.minScore
+              );
+              const configuredScoreLabel = hasScore
+                ? getCategoryScoreLabel(item, current.score)
+                : null;
+              const scoreLabel = hasScore
+                ? configuredScoreLabel
+                  ? `${configuredScoreLabel} (${current.score}/${activeRubricConfig.maxScore})`
+                  : `${current.score}/${activeRubricConfig.maxScore}`
                 : 'Not scored';
-              const isGrammarCategory =
-                item.key === 'grammar_and_mechanics' ||
-                item.key === 'language_use_and_conventions';
+              const isGrammarCategory = isGrammarHighlightCategory(item);
+              const showFeedback = isCategoryFeedbackEnabled(item);
+              const scoreOptions = buildScoreOptions(
+                activeRubricConfig.minScore,
+                activeRubricConfig.maxScore,
+                item.scoreLabels,
+                activeRubricConfig.step
+              );
 
               return (
                 <AccordionItem
@@ -843,11 +1173,8 @@ export function TeacherGradingPanel({
                     </div>
                   </AccordionTrigger>
                   <AccordionContent className="space-y-2 pb-3">
-                    <div className="text-xs text-muted-foreground">
-                      {item.description}
-                    </div>
                     <Select
-                      value={current.score ? current.score.toString() : ''}
+                      value={hasScore ? current.score.toString() : ''}
                       disabled={isGenerating}
                       onValueChange={applyScoreChange}
                     >
@@ -865,37 +1192,39 @@ export function TeacherGradingPanel({
                         ))}
                       </SelectContent>
                     </Select>
-                    <Textarea
-                      data-testid={`grading-rubric-comment-${item.key}`}
-                      value={current.comment}
-                      disabled={isGenerating}
-                      onChange={(e) =>
-                        setRubricScores((prev) => ({
-                          ...prev,
-                          [item.key]: {
-                            ...prev[item.key],
-                            comment: e.target.value,
-                            isAi: false,
-                          },
-                        }))
-                      }
-                      onBlur={(e) => {
-                        const newRubric = {
-                          ...rubricScores,
-                          [item.key]: {
-                            ...rubricScores[item.key],
-                            comment: e.currentTarget.value,
-                            isAi: false,
-                          },
-                        };
-                        setRubricScores(newRubric);
-                        if (!hideHeader) {
-                          void saveAll(newRubric);
+                    {showFeedback ? (
+                      <Textarea
+                        data-testid={`grading-rubric-comment-${item.key}`}
+                        value={current.comment}
+                        disabled={isGenerating}
+                        onChange={(e) =>
+                          setRubricScores((prev) => ({
+                            ...prev,
+                            [item.key]: {
+                              ...prev[item.key],
+                              comment: e.target.value,
+                              isAi: false,
+                            },
+                          }))
                         }
-                      }}
-                      placeholder="Enter category feedback..."
-                      rows={4}
-                    />
+                        onBlur={(e) => {
+                          const newRubric = {
+                            ...rubricScores,
+                            [item.key]: {
+                              ...rubricScores[item.key],
+                              comment: e.currentTarget.value,
+                              isAi: false,
+                            },
+                          };
+                          setRubricScores(newRubric);
+                          if (!hideHeader) {
+                            void saveAll(newRubric);
+                          }
+                        }}
+                        placeholder="Enter category feedback..."
+                        rows={4}
+                      />
+                    ) : null}
                     {isGrammarCategory ? (
                       <div className="space-y-2">
                         <p className="text-xs text-muted-foreground">

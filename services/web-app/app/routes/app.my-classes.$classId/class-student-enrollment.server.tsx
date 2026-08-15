@@ -20,16 +20,24 @@ export type StudentInviteResult =
   | { status: 'invited'; email: string }
   | { status: 'error'; error: string };
 
-async function findStudentUserByEmail(email: string) {
-  return prisma.user.findUnique({
-    where: { email },
+const STAFF_ACCOUNT_ERROR =
+  'This email belongs to a staff account, not a student account.';
+const OTHER_ORGANIZATION_ERROR = 'This user belongs to another organization.';
+
+// Stored emails are not guaranteed to be lower-cased — accounts created before
+// email normalization keep their original casing — so every lookup here matches
+// case-insensitively. An exact match would report an existing student as new and
+// send them a second invite.
+async function findUserByEmail(email: string) {
+  return prisma.user.findFirst({
+    where: { email: { equals: email, mode: 'insensitive' } },
     select: {
       id: true,
       memberships: {
-        where: { role: 'STUDENT' },
         select: {
           id: true,
           organizationId: true,
+          role: true,
           classesAsStudent: {
             select: { id: true },
           },
@@ -37,6 +45,34 @@ async function findStudentUserByEmail(email: string) {
       },
     },
   });
+}
+
+type StudentMembershipLookup =
+  | { status: 'ok'; membership: { id: string; classesAsStudent: { id: string }[] } }
+  | { status: 'error'; error: string };
+
+function resolveStudentMembership(
+  memberships: {
+    id: string;
+    organizationId: string;
+    role: string;
+    classesAsStudent: { id: string }[];
+  }[],
+  organizationId: string
+): StudentMembershipLookup {
+  const orgMembership = memberships.find(
+    (membership) => membership.organizationId === organizationId
+  );
+
+  if (!orgMembership) {
+    return { status: 'error', error: OTHER_ORGANIZATION_ERROR };
+  }
+
+  if (orgMembership.role !== 'STUDENT') {
+    return { status: 'error', error: STAFF_ACCOUNT_ERROR };
+  }
+
+  return { status: 'ok', membership: orgMembership };
 }
 
 export async function lookupStudentEmailForClass({
@@ -54,24 +90,22 @@ export async function lookupStudentEmailForClass({
     return { status: 'error', error: 'Email is required.' };
   }
 
-  const existingUser = await findStudentUserByEmail(email);
+  const existingUser = await findUserByEmail(email);
 
   if (!existingUser) {
     return { status: 'needs_invite', email };
   }
 
-  const orgMembership = existingUser.memberships.find(
-    (membership) => membership.organizationId === organizationId
+  const membershipLookup = resolveStudentMembership(
+    existingUser.memberships,
+    organizationId
   );
 
-  if (!orgMembership) {
-    return {
-      status: 'error',
-      error: 'This user belongs to another organization.',
-    };
+  if (membershipLookup.status === 'error') {
+    return { status: 'error', error: membershipLookup.error };
   }
 
-  const alreadyEnrolled = orgMembership.classesAsStudent.some(
+  const alreadyEnrolled = membershipLookup.membership.classesAsStudent.some(
     (klass) => klass.id === classId
   );
 
@@ -101,7 +135,7 @@ export async function enrollExistingStudentInClass({
     return { status: 'error', error: 'Email is required.' };
   }
 
-  const existingUser = await findStudentUserByEmail(email);
+  const existingUser = await findUserByEmail(email);
 
   if (!existingUser) {
     return {
@@ -110,21 +144,23 @@ export async function enrollExistingStudentInClass({
     };
   }
 
-  const orgMembership = existingUser.memberships.find(
-    (membership) => membership.organizationId === organizationId
+  const membershipLookup = resolveStudentMembership(
+    existingUser.memberships,
+    organizationId
   );
 
-  if (!orgMembership) {
-    return {
-      status: 'error',
-      error: 'This user belongs to another organization.',
-    };
+  if (membershipLookup.status === 'error') {
+    return { status: 'error', error: membershipLookup.error };
   }
+
+  const orgMembership = membershipLookup.membership;
 
   const alreadyEnrolled = orgMembership.classesAsStudent.some(
     (klass) => klass.id === classId
   );
 
+  // Joining an additional class must never displace the student's other
+  // classes, so this connects the new class instead of setting the list.
   if (alreadyEnrolled) {
     return {
       status: 'enrolled',
@@ -190,8 +226,8 @@ export async function sendStudentClassInvite({
     return { status: 'error', error: 'Email is required.' };
   }
 
-  const existingUser = await prisma.user.findUnique({
-    where: { email },
+  const existingUser = await prisma.user.findFirst({
+    where: { email: { equals: email, mode: 'insensitive' } },
     select: { id: true },
   });
 

@@ -184,7 +184,7 @@ test.describe.serial('Teacher onboarding and grading lifecycle', () => {
           .fill(`Manual rubric note for ${key}.`);
       }
 
-      await page.getByRole('button', { name: /^recalculate$/i }).click();
+      await page.getByTestId('grading-recalculate-from-rubric').click();
       await expect
         .poll(
           async () =>

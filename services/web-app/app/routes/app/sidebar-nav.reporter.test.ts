@@ -68,10 +68,35 @@ describe('Reporter sidebar gating', () => {
   });
 });
 
-describe('retired assignment management navigation', () => {
-  test('does not link teachers to the removed standalone assignments page', () => {
+describe('My Assignments navigation', () => {
+  test('links teachers to the cross-class assignments page', () => {
     expect(
       allDestinations(userWith({ role: 'TEACHER', reporterEnabled: true }))
+    ).toContain('/app/assignments');
+  });
+
+  test('hidden for a student', () => {
+    expect(
+      allDestinations(userWith({ role: 'STUDENT', reporterEnabled: true }))
     ).not.toContain('/app/assignments');
+  });
+
+  test('hidden while previewing as a student', () => {
+    expect(
+      getVisibleSidebarSections(
+        FLAT_SIDEBAR_SECTIONS,
+        userWith({ role: 'TEACHER', reporterEnabled: true }),
+        true
+      )
+        .flatMap((section) => section.links)
+        .some((link) => link.to === '/app/assignments')
+    ).toBe(false);
+  });
+
+  test('labeled "My Assignments"', () => {
+    const link = FLAT_SIDEBAR_SECTIONS.flatMap((section) => section.links).find(
+      (l) => l.to === '/app/assignments'
+    );
+    expect(link?.label).toBe('My Assignments');
   });
 });

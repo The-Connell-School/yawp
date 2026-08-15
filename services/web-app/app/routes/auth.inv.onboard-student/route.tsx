@@ -26,6 +26,7 @@ import { FormInput } from '~/components/rvf-forms/form-input.tsx';
 import { FormSelect } from '~/components/rvf-forms/form-select.tsx';
 import { setMembershipId } from '~/cookies/membership-id.server.ts';
 import { normalizeEmail } from '~/utils/normalize-email';
+import { formatClassGradePeriod } from '~/utils/class-display';
 
 export const Schema = z
   .object({
@@ -227,7 +228,11 @@ export default function Route() {
                 { value: '', label: 'Select a class' },
                 ...data.classes.map((klass) => ({
                   value: klass.id,
-                  label: `${klass.school.name} • ${klass.schoolYear} • Grade ${klass.grade} • Period ${klass.period} • ${
+                  label: `${klass.school.name} • ${klass.schoolYear}${
+                    formatClassGradePeriod(klass)
+                      ? ` • ${formatClassGradePeriod(klass)}`
+                      : ''
+                  } • ${
                     klass.teachers
                       .map((t) => t.user.name)
                       .filter(Boolean)

@@ -1,8 +1,15 @@
-import { ArrowLeft, CheckCircle2, RotateCcw } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import {
+  AlertCircle,
+  ArrowLeft,
+  Check,
+  CheckCircle2,
+  RotateCcw,
+} from 'lucide-react';
+import { useState } from 'react';
 import {
   Link,
   data as dataResponse,
+  redirect,
   useLoaderData,
   type LoaderFunctionArgs,
 } from 'react-router';
@@ -14,13 +21,21 @@ import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
 import { Textarea } from '~/components/ui/textarea';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import {
+  getPracticeSelfCheck,
+  type PracticeSelfCheck,
+} from '~/utils/writing-lessons/practice-self-check';
+import {
   getQuickWritingLessonBySlug,
   getQuickWritingPracticePrompts,
 } from '~/utils/writing-lessons/static-lessons.server';
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
-  await requireMembership(request, userId);
+  const membership = await requireMembership(request, userId);
+
+  if (!membership.organization.writingPracticeEnabled) {
+    throw redirect('/app');
+  }
 
   const lesson = getQuickWritingLessonBySlug(params.lessonSlug);
   if (!lesson) {
@@ -37,25 +52,20 @@ export default function WritingLessonDetailRoute() {
   const { lesson, practicePrompts } = useLoaderData<typeof loader>();
   const [promptIndex, setPromptIndex] = useState(0);
   const [response, setResponse] = useState('');
-  const [score, setScore] = useState<number | null>(null);
+  const [selfCheck, setSelfCheck] = useState<PracticeSelfCheck | null>(null);
   const activePrompt = practicePrompts[promptIndex] ?? null;
   const responseReady = response.trim().length > 0;
-  const scoreLabel = useMemo(() => {
-    if (score === null) return null;
-    if (score >= 80) return 'Ready for tutor review';
-    if (score >= 55) return 'Good start';
-    return 'Add more revision';
-  }, [score]);
 
   function checkResponse() {
-    setScore(getPrototypeScore(response));
+    if (!activePrompt) return;
+    setSelfCheck(getPracticeSelfCheck(response, activePrompt.exercise));
   }
 
   function showNextPrompt() {
     if (practicePrompts.length === 0) return;
     setPromptIndex((current) => (current + 1) % practicePrompts.length);
     setResponse('');
-    setScore(null);
+    setSelfCheck(null);
   }
 
   return (
@@ -120,7 +130,7 @@ export default function WritingLessonDetailRoute() {
                       value={response}
                       onChange={(event) => {
                         setResponse(event.currentTarget.value);
-                        setScore(null);
+                        setSelfCheck(null);
                       }}
                       placeholder="Rewrite the sentence here."
                       className="min-h-28 text-base sm:text-sm"
@@ -148,24 +158,36 @@ export default function WritingLessonDetailRoute() {
                     </Button>
                   </div>
 
-                  {score !== null ? (
+                  {selfCheck ? (
                     <div className="rounded-lg border bg-card p-3">
                       <div className="flex items-center justify-between gap-3">
                         <p className="text-base font-medium sm:text-sm">
-                          Score preview
+                          Self-check
                         </p>
-                        <p className="text-2xl font-semibold text-primary">
-                          {score}
-                        </p>
+                        <Badge variant="secondary" size="sm">
+                          {selfCheck.wordCount}{' '}
+                          {selfCheck.wordCount === 1 ? 'word' : 'words'}
+                        </Badge>
                       </div>
-                      <div className="mt-3 h-2 rounded-full bg-secondary">
-                        <div
-                          className="h-2 rounded-full bg-primary"
-                          style={{ width: `${score}%` }}
-                        />
-                      </div>
-                      <p className="mt-3 text-base text-muted-foreground sm:text-sm">
-                        {scoreLabel}
+                      <ul className="mt-3 space-y-2">
+                        {selfCheck.checks.map((check) => (
+                          <li
+                            key={check.id}
+                            className="flex items-start gap-2 text-base text-muted-foreground sm:text-sm"
+                          >
+                            {check.status === 'ok' ? (
+                              <Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                            ) : (
+                              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                            )}
+                            <span>{check.label}</span>
+                          </li>
+                        ))}
+                      </ul>
+                      <p className="mt-3 border-t pt-3 text-base text-muted-foreground sm:text-sm">
+                        This check looks at punctuation and word choice only. It
+                        is not a grade, and it does not tell you whether your
+                        writing is correct.
                       </p>
                     </div>
                   ) : null}
@@ -228,28 +250,6 @@ function MarkdownLesson({ content }: { content: string }) {
 
 function cleanMarkdown(value: string) {
   return value.replace(/\*\*/g, '').replace(/`/g, '').replace(/\*/g, '');
-}
-
-function getPrototypeScore(response: string) {
-  const trimmed = response.trim();
-  if (!trimmed) return 0;
-
-  const wordCount = trimmed.split(/\s+/).filter(Boolean).length;
-  const hasEndingPunctuation = /[.!?]$/.test(trimmed);
-  const isConcise = wordCount <= 14;
-  const hasRevisionShape =
-    !/\b(at this point in time|has the ability to|in order to)\b/i.test(
-      trimmed
-    );
-
-  return Math.min(
-    100,
-    35 +
-      Math.min(wordCount, 10) * 4 +
-      (hasEndingPunctuation ? 15 : 0) +
-      (isConcise ? 10 : 0) +
-      (hasRevisionShape ? 12 : 0)
-  );
 }
 
 export function ErrorBoundary() {

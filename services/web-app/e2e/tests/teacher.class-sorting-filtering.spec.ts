@@ -87,7 +87,8 @@ test.describe.serial('Teacher class sorting and filtering', () => {
 
       const studentsTable = page.getByRole('table', { name: 'Students' });
       const studentHeaders = studentsTable.locator('thead th');
-      await expect(studentHeaders).toHaveCount(4);
+      // Checkbox, Student Name, Email, Pasted text, Documents.
+      await expect(studentHeaders).toHaveCount(5);
       for (const header of await studentHeaders.all()) {
         await expect(header).toHaveCSS('white-space', 'nowrap');
       }

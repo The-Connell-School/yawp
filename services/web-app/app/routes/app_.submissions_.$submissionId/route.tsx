@@ -25,11 +25,13 @@ import { prisma } from '~/utils/db.server';
 import { hasEffectivePlatformAdmin } from '~/utils/preview-access.server';
 import { redirectWithToast } from '~/utils/toast.server';
 import { formatAssignmentGrade } from '~/domain/grading/gradeMath';
+import { hasRecordedGrade } from '~/domain/grading/recorded-grade';
 import { type RubricDisplayConfig } from '~/domain/grading/rubric-display';
 import {
   type GrammarIssue,
   parseGrammarIssuesPayload,
 } from '~/domain/grading/grammarIssues';
+import { resolveGrammarHighlightingEnabled } from '~/domain/assignment-types/rubric-category-options';
 import { findExcerptRange } from '~/utils/excerpt-position';
 import {
   readLastNonDocumentRoute,
@@ -44,7 +46,10 @@ import { GradeSummaryReleasedLabel } from './teacher-grading/grade-summary-relea
 import { ViewPanel } from './teacher-grading/view-panel';
 import { resolveSubmissionGradeMode } from './submission-grade-mode';
 import { resolveSubmissionLifecycleState } from './submission-lifecycle-state';
-import { resolveRubricConfigForSubmission } from './submission-rubric-config.server';
+import {
+  resolveGrammarHighlightingForAssignmentType,
+  resolveRubricConfigForSubmission,
+} from './submission-rubric-config.server';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === 'object' && !Array.isArray(value));
@@ -113,6 +118,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       gradedAt: true,
       gradedByMembershipId: true,
       archivedAt: true,
+      unsubmittedAt: true,
       documentId: true,
       document: {
         select: {
@@ -168,6 +174,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         take: 1,
         select: {
           assignmentTypeRubricSnapshot: true,
+          source: true,
         },
       },
     },
@@ -195,17 +202,35 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
   const isAdmin = hasEffectivePlatformAdmin(user?.isAdmin);
 
+  // Unsubmitting is student-initiated and owner-only — /api/domain/unsubmit-
+  // submission refuses teachers and admins — so the only way an owner reaches
+  // an unsubmitted submission is that they withdrew it themselves. Once
+  // withdrawn it stops counting as turned in, so send them back to the
+  // document, which is untouched and open to a new submission.
+  if (isOwner && submission.unsubmittedAt) {
+    return redirectWithToast(`/app/documents/${submission.documentId}`, {
+      description:
+        'You unsubmitted this document. You can revise and resubmit it.',
+      type: 'message',
+    });
+  }
+
   if (isOwner && editParam) {
     const next = new URL(request.url);
     next.searchParams.delete('edit');
     throw redirect(`${next.pathname}${next.search}${next.hash}`);
   }
 
-  const rubricConfig = await resolveRubricConfigForSubmission({
-    assignmentTypeId: submission.document.assignmentTypeId,
-    latestGradingRun: submission.gradingAssistantRuns[0] ?? null,
-    rubricScores: submission.rubricScores,
-  });
+  const [rubricConfig, grammarHighlightingEnabled] = await Promise.all([
+    resolveRubricConfigForSubmission({
+      assignmentTypeId: submission.document.assignmentTypeId,
+      latestGradingRun: submission.gradingAssistantRuns[0] ?? null,
+      rubricScores: submission.rubricScores,
+    }),
+    resolveGrammarHighlightingForAssignmentType(
+      submission.document.assignmentTypeId
+    ),
+  ]);
 
   // Sort comments by document location
   const sortedComments = [...submission.comments].sort((a, b) => {
@@ -233,6 +258,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       ...submission,
       comments: sortedComments,
       rubricConfig,
+      grammarHighlightingEnabled,
     },
     isOwner,
     isTeacher: isTeacher || isAdmin,
@@ -255,11 +281,19 @@ export default function SubmissionRoute() {
   const [isEditingGrade, setIsEditingGrade] = useState(
     () =>
       !submission.releasedAt &&
-      !(submission.gradedAt && submission.numericPercentage != null)
+      !(
+        submission.gradedAt &&
+        hasRecordedGrade({
+          numericPercentage: submission.numericPercentage,
+          overallScore: submission.overallScore,
+          score: submission.score,
+        })
+      )
   );
   const [teacherGradeUi, setTeacherGradeUi] = useState<{
     numericPercentage: number | null;
     letterGrade: string | null;
+    overallScore: number | null;
     score: string | null;
     overallComment: string | null;
     rubricScores: unknown;
@@ -270,7 +304,14 @@ export default function SubmissionRoute() {
     setTeacherGradeUi(null);
     setIsEditingGrade(
       !submission.releasedAt &&
-        !(submission.gradedAt && submission.numericPercentage != null)
+        !(
+          submission.gradedAt &&
+          hasRecordedGrade({
+            numericPercentage: submission.numericPercentage,
+            overallScore: submission.overallScore,
+            score: submission.score,
+          })
+        )
     );
   }, [submission.id]);
 
@@ -286,11 +327,17 @@ export default function SubmissionRoute() {
   const isReleased = !!effectiveReleasedAt;
   const effectiveNumericPct =
     teacherGradeUi?.numericPercentage ?? submission.numericPercentage ?? null;
-  const hasNumericGrade = effectiveNumericPct != null;
+  const effectiveOverallScore =
+    teacherGradeUi?.overallScore ?? submission.overallScore ?? null;
+  const effectiveScore = teacherGradeUi?.score ?? submission.score ?? null;
   const lifecycleState = resolveSubmissionLifecycleState({
     isGraded,
     isReleased,
-    hasNumericGrade,
+    hasGrade: hasRecordedGrade({
+      numericPercentage: effectiveNumericPct,
+      overallScore: effectiveOverallScore,
+      score: effectiveScore,
+    }),
   });
   const isGradeMode = resolveSubmissionGradeMode({
     isGradingOther,
@@ -327,10 +374,10 @@ export default function SubmissionRoute() {
       numericPercentage: effectiveNumericPct,
       letterGrade: effectiveLetterGrade,
       pointValue: submission.document.assignment?.pointValue ?? null,
-      score: teacherGradeUi?.score ?? submission.score,
+      score: effectiveScore,
     }) ||
-    (assignmentIsSubmittedForGrade && submission.overallScore
-      ? `${submission.overallScore}/5`
+    (assignmentIsSubmittedForGrade && effectiveOverallScore != null
+      ? `${effectiveOverallScore}/${submission.rubricConfig?.maxScore ?? 5}`
       : null);
 
   // ── Status badge (reflects optimistic save / release) ─────────────
@@ -408,12 +455,40 @@ export default function SubmissionRoute() {
     null
   );
 
+  /**
+   * Grammar marks stored on the submission are only shown while the rubric
+   * still asks for them. Turning the category's grammar highlighting off used
+   * to leave every mark from an earlier grading run on the page, so the
+   * setting looked ignored.
+   */
+  const grammarHighlightingEnabled = useMemo(() => {
+    // The assignment type's own setting wins: switching highlighting off is
+    // expected to clear marks a previous grading run left behind.
+    if (typeof submission.grammarHighlightingEnabled === 'boolean') {
+      return submission.grammarHighlightingEnabled;
+    }
+    return resolveGrammarHighlightingEnabled(
+      (teacherGradeUi?.rubricConfig ?? submission.rubricConfig)?.categories ?? []
+    );
+  }, [
+    submission.grammarHighlightingEnabled,
+    teacherGradeUi?.rubricConfig,
+    submission.rubricConfig,
+  ]);
+
   const persistedGrammarIssues = useMemo(
     () =>
-      parseGrammarIssuesPayload(submission.grammarIssues, {
-        sourceText: submission.text ?? '',
-      }),
-    [submission.text, submission.id, submission.grammarIssues]
+      grammarHighlightingEnabled
+        ? parseGrammarIssuesPayload(submission.grammarIssues, {
+            sourceText: submission.text ?? '',
+          })
+        : [],
+    [
+      grammarHighlightingEnabled,
+      submission.text,
+      submission.id,
+      submission.grammarIssues,
+    ]
   );
   const [grammarIssues, setGrammarIssues] = useState<GrammarIssue[]>(
     persistedGrammarIssues
@@ -552,12 +627,13 @@ export default function SubmissionRoute() {
     (payload: {
       numericPercentage: number | null;
       letterGrade: string | null;
+      overallScore?: number | null;
       score: string | null;
       overallComment: string | null;
       rubricScores: unknown;
       rubricConfig?: RubricDisplayConfig | null;
     }) => {
-      setTeacherGradeUi(payload);
+      setTeacherGradeUi({ overallScore: null, ...payload });
     },
     []
   );
@@ -566,6 +642,7 @@ export default function SubmissionRoute() {
     (snapshot: {
       numericPercentage: number | null;
       letterGrade: string | null;
+      overallScore: number | null;
       score: string | null;
       overallComment: string | null;
       rubricScores: unknown;
@@ -573,6 +650,7 @@ export default function SubmissionRoute() {
       setTeacherGradeUi((prev) => ({
         numericPercentage: snapshot.numericPercentage,
         letterGrade: snapshot.letterGrade,
+        overallScore: snapshot.overallScore,
         score: snapshot.score,
         overallComment: snapshot.overallComment,
         rubricScores: snapshot.rubricScores,
@@ -614,7 +692,9 @@ export default function SubmissionRoute() {
       numericPercentage:
         teacherGradeUi?.numericPercentage ?? submission.numericPercentage,
       letterGrade: teacherGradeUi?.letterGrade ?? submission.letterGrade,
+      overallScore: teacherGradeUi?.overallScore ?? submission.overallScore,
       score: teacherGradeUi?.score ?? submission.score,
+      rubricConfig: teacherGradeUi?.rubricConfig ?? submission.rubricConfig,
       overallComment:
         teacherGradeUi?.overallComment ?? submission.overallComment,
       rubricScores: teacherGradeUi?.rubricScores ?? submission.rubricScores,
@@ -706,9 +786,14 @@ export default function SubmissionRoute() {
           markAsGraded: true,
         }),
       });
-      if (res.ok) {
-        setLocalGradedAt(new Date().toISOString());
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        throw new Error(
+          (body as { message?: string } | null)?.message ??
+            'Failed to mark as graded.'
+        );
       }
+      setLocalGradedAt(new Date().toISOString());
     } finally {
       setIsSavingGrade(false);
     }
@@ -888,7 +973,10 @@ export default function SubmissionRoute() {
 
         {/* Center: Essay */}
         <div className="flex min-w-0 grow flex-col overflow-hidden bg-white md:h-full">
-          <EssayPanel ref={setEssayRef} html={submission.html ?? ''} />
+          <EssayPanel
+            ref={setEssayRef}
+            html={submission.html ?? ''}
+          />
           {isGradingOther && essayElement ? (
             <SelectionToolbar contentRoot={essayElement} />
           ) : null}

@@ -1,30 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Form } from 'react-router';
-import {
-  ArrowDown,
-  ArrowUp,
-  Copy,
-  Pencil,
-  Plus,
-  Search,
-  Trash2,
-} from 'lucide-react';
+import { ArrowDown, ArrowUp, Plus, Search, Trash2 } from 'lucide-react';
 import { AssignmentCreationSheet } from '~/components/assignments/assignment-creation-sheet';
-import {
-  AssignmentEditForm,
-  type AssignmentEditRecord,
-} from '~/components/assignments/assignment-edit-sheet';
+import type { AssignmentEditRecord } from '~/components/assignments/assignment-edit-sheet';
 import { AssignmentDocumentsPill } from './assignment-documents-pill';
 import { Button } from '~/components/ui/button';
 import { Checkbox } from '~/components/ui/checkbox';
 import { Input } from '~/components/ui/input';
-import {
-  Sheet,
-  SheetContent,
-  SheetFooter,
-  SHEET_SCROLL_BODY_CLASS_NAME,
-  SHEET_STICKY_FOOTER_CLASS_NAME,
-} from '~/components/ui/sheet';
 import {
   Table,
   TableBody,
@@ -35,14 +17,8 @@ import {
 } from '~/components/ui/table';
 import { Pagination } from '~/components/table/pagination';
 import { Tooltip } from '~/components/ui/tooltip';
-import { AP_HISTORY_ASSIGNMENT_TYPE_KEY } from '~/domain/ap-history/schema';
 import { useTable } from '~/hooks/useTable';
-import { cn } from '~/utils/misc';
 import { filterClassAssignmentsByQuery } from './class-assignments-search';
-import {
-  AssignmentSummarySheetContent,
-  ASSIGNMENT_SUMMARY_SHEET_CONTENT_CLASS_NAME,
-} from './assignment-summary-sheet';
 import type { ClassInsight } from '../app.my-classes.$classId_.assignments.$assignmentId/class-insights-panel';
 
 export type ClassAssignmentsTabAssignment = AssignmentEditRecord & {
@@ -56,8 +32,6 @@ export type ClassAssignmentsTabAssignment = AssignmentEditRecord & {
   insight: ClassInsight | null;
 };
 
-const DISCARD_CONFIRM_MESSAGE = 'Discard your changes to this assignment?';
-
 type ClassAssignmentsTabProps = {
   classOption: { id: string; name: string };
   assignments: ClassAssignmentsTabAssignment[];
@@ -65,6 +39,12 @@ type ClassAssignmentsTabProps = {
   /** Gated on the organization's classInsightsEnabled flag. */
   classInsightsEnabled: boolean;
   onViewDocuments: (assignmentId: string) => void;
+  /**
+   * Selecting a row navigates to the assignment detail full page (see
+   * `app.my-classes.$classId.assignment.$assignmentId`) instead of opening a
+   * sheet in place.
+   */
+  onSelectAssignment: (assignmentId: string) => void;
 };
 
 function assignmentTitle(assignment: ClassAssignmentsTabAssignment) {
@@ -87,23 +67,12 @@ export function ClassAssignmentsTab({
   assignmentTypes,
   classInsightsEnabled,
   onViewDocuments,
+  onSelectAssignment,
 }: ClassAssignmentsTabProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
   const [pagination, setPagination] = useState({ skip: 0, take: 20 });
   const [isCreateSheetOpen, setIsCreateSheetOpen] = useState(false);
-  const [duplicateAssignment, setDuplicateAssignment] =
-    useState<ClassAssignmentsTabAssignment | null>(null);
-  // The assignment sheet: which assignment is open, in which mode. View is
-  // the default (identity + the class performance summary); Edit is only
-  // reached explicitly. isSheetEditDirty is reported up by the edit form so
-  // every way out of edit mode — Back, closing the sheet, clicking a
-  // different row — can guard against silently discarding it.
-  const [activeAssignmentId, setActiveAssignmentId] = useState<string | null>(
-    null
-  );
-  const [sheetMode, setSheetMode] = useState<'view' | 'edit'>('view');
-  const [isSheetEditDirty, setIsSheetEditDirty] = useState(false);
 
   const collator = useMemo(
     () => new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' }),
@@ -155,64 +124,10 @@ export function ClassAssignmentsTab({
     });
   }, [filteredAssignments, setSelectedAssignmentIds]);
 
-  const activeAssignment = useMemo(
-    () =>
-      assignments.find((assignment) => assignment.id === activeAssignmentId) ??
-      null,
-    [assignments, activeAssignmentId]
-  );
-  const canEditActive =
-    activeAssignment != null &&
-    activeAssignment.assignmentType.systemKey !==
-      AP_HISTORY_ASSIGNMENT_TYPE_KEY;
   const hasSelection = selectedAssignmentIds.length > 0;
   const handleCreateSheetOpenChange = useCallback((open: boolean) => {
     setIsCreateSheetOpen(open);
-    if (!open) setDuplicateAssignment(null);
   }, []);
-
-  const confirmDiscardIfDirty = useCallback(() => {
-    if (sheetMode !== 'edit' || !isSheetEditDirty) return true;
-    return window.confirm(DISCARD_CONFIRM_MESSAGE);
-  }, [sheetMode, isSheetEditDirty]);
-
-  const openAssignmentSheet = useCallback(
-    (assignmentId: string) => {
-      if (activeAssignmentId && activeAssignmentId !== assignmentId) {
-        if (!confirmDiscardIfDirty()) return;
-      }
-      setActiveAssignmentId(assignmentId);
-      setSheetMode('view');
-      setIsSheetEditDirty(false);
-    },
-    [activeAssignmentId, confirmDiscardIfDirty]
-  );
-
-  const handleSheetOpenChange = useCallback(
-    (open: boolean) => {
-      if (open) return;
-      if (!confirmDiscardIfDirty()) return;
-      setActiveAssignmentId(null);
-      setSheetMode('view');
-      setIsSheetEditDirty(false);
-    },
-    [confirmDiscardIfDirty]
-  );
-
-  const handleBackToView = useCallback(() => {
-    if (!confirmDiscardIfDirty()) return;
-    setSheetMode('view');
-    setIsSheetEditDirty(false);
-  }, [confirmDiscardIfDirty]);
-
-  const handleDuplicateFromView = useCallback(() => {
-    if (!activeAssignment) return;
-    setDuplicateAssignment(activeAssignment);
-    setActiveAssignmentId(null);
-    setSheetMode('view');
-    setIsSheetEditDirty(false);
-    setIsCreateSheetOpen(true);
-  }, [activeAssignment]);
 
   return (
     <div className="space-y-4 text-foreground">
@@ -251,7 +166,12 @@ export function ClassAssignmentsTab({
             >
               <input type="hidden" name="intent" value="delete-assignments" />
               {selectedAssignmentIds.map((id) => (
-                <input key={id} type="hidden" name="assignmentIds" value={id} />
+                <input
+                  key={id}
+                  type="hidden"
+                  name="assignmentIds"
+                  value={id}
+                />
               ))}
               <Tooltip
                 text={`Delete ${selectedAssignmentIds.length} assignment(s)`}
@@ -272,10 +192,7 @@ export function ClassAssignmentsTab({
             size="sm"
             className="shrink-0"
             data-testid="new-assignment-button"
-            onClick={() => {
-              setDuplicateAssignment(null);
-              setIsCreateSheetOpen(true);
-            }}
+            onClick={() => setIsCreateSheetOpen(true)}
           >
             <Plus className="mr-2 h-4 w-4" />
             New Assignment
@@ -356,7 +273,7 @@ export function ClassAssignmentsTab({
                         ? 'selected'
                         : undefined
                     }
-                    onClick={() => openAssignmentSheet(assignment.id)}
+                    onClick={() => onSelectAssignment(assignment.id)}
                   >
                     <TableCell
                       className="max-h-[37px] pl-4"
@@ -416,74 +333,7 @@ export function ClassAssignmentsTab({
         fixedClassId={classOption.id}
         assignmentTypes={assignmentTypes}
         teacherClasses={[classOption]}
-        fixedAssignmentTypeId={duplicateAssignment?.assignmentTypeId}
-        initialTitle={
-          duplicateAssignment
-            ? `Copy of ${assignmentTitle(duplicateAssignment)}`
-            : undefined
-        }
-        initialPrompt={duplicateAssignment?.prompt}
       />
-
-      {activeAssignment ? (
-        <Sheet open onOpenChange={handleSheetOpenChange}>
-          <SheetContent className={ASSIGNMENT_SUMMARY_SHEET_CONTENT_CLASS_NAME}>
-            {sheetMode === 'view' ? (
-              <>
-                <div className={cn(SHEET_SCROLL_BODY_CLASS_NAME, 'px-6 pt-6')}>
-                  <AssignmentSummarySheetContent
-                    assignment={activeAssignment}
-                    classInsightsEnabled={classInsightsEnabled}
-                    onViewDocuments={() => {
-                      const assignmentId = activeAssignment.id;
-                      setActiveAssignmentId(null);
-                      onViewDocuments(assignmentId);
-                    }}
-                  />
-                </div>
-                {canEditActive ? (
-                  <SheetFooter
-                    className={cn(
-                      SHEET_STICKY_FOOTER_CLASS_NAME,
-                      'flex-row items-center justify-between sm:justify-between'
-                    )}
-                    data-testid="assignment-sheet-footer"
-                  >
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      onClick={handleDuplicateFromView}
-                    >
-                      <Copy className="mr-2 h-4 w-4" />
-                      Duplicate
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => setSheetMode('edit')}
-                    >
-                      <Pencil className="mr-2 h-4 w-4" />
-                      Edit
-                    </Button>
-                  </SheetFooter>
-                ) : null}
-              </>
-            ) : (
-              <AssignmentEditForm
-                pdfClassId={classOption.id}
-                allowedAssignmentTypes={assignmentTypes}
-                editingAssignment={activeAssignment}
-                onSaved={() => {
-                  setSheetMode('view');
-                  setIsSheetEditDirty(false);
-                }}
-                onBack={handleBackToView}
-                onDirtyChange={setIsSheetEditDirty}
-              />
-            )}
-          </SheetContent>
-        </Sheet>
-      ) : null}
     </div>
   );
 }

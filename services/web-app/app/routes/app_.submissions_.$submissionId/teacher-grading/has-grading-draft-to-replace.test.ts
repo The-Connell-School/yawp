@@ -39,4 +39,16 @@ describe('hasGradingDraftToReplace', () => {
   test('is true when grammar issues exist', () => {
     expect(hasGradingDraftToReplace(emptyRubric(), '', '', 1)).toBe(true);
   });
+
+  test('reads a deliberate zero on a 0-floor scale as a draft to replace', () => {
+    // Daily Pages scores 0-3, where 0 is "Absent" — a real judgment the
+    // Grading Assistant must ask before overwriting.
+    const r = { engagement: { score: 0, comment: '' } };
+    expect(hasGradingDraftToReplace(r, '', '', 0, 0)).toBe(true);
+  });
+
+  test('reads the not-yet-scored sentinel on a 0-floor scale as no draft', () => {
+    const r = { engagement: { score: -1, comment: '' } };
+    expect(hasGradingDraftToReplace(r, '', '', 0, 0)).toBe(false);
+  });
 });

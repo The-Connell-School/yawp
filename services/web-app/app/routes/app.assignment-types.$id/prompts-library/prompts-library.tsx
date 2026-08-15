@@ -19,10 +19,12 @@ import {
 import {
   COGNITIVE_MOVE_LABEL,
   type CognitiveMove,
+  COLLECTION_LABEL,
   FACET_KEYS,
   type FacetValues,
-  type LibraryPrompt,
+  type LibraryEntry,
   type OptionCounts,
+  type PromptCollection,
   PROMPT_TYPE_LABEL,
   type PromptSeriousness,
   type PromptType,
@@ -30,7 +32,7 @@ import {
 } from './data';
 
 type Props = {
-  prompts: LibraryPrompt[];
+  prompts: LibraryEntry[];
   facets: FacetValues;
   optionCounts: OptionCounts;
   totalCount: number;
@@ -45,6 +47,12 @@ type FacetSpec = {
 };
 
 const FACET_SECTIONS: FacetSpec[] = [
+  {
+    facetKey: 'collections',
+    paramKey: FACET_KEYS.collections,
+    title: 'Collection',
+    renderLabel: (v) => COLLECTION_LABEL[v as PromptCollection],
+  },
   {
     facetKey: 'textsOrUnits',
     paramKey: FACET_KEYS.textsOrUnits,
@@ -182,6 +190,10 @@ export function PromptsLibrary({
     />
   );
 
+  const selectedCollections = readSelected(FACET_KEYS.collections);
+  const showingOnlyMine =
+    selectedCollections.has('mine') && !selectedCollections.has('library');
+
   const countLabel =
     prompts.length === totalCount
       ? `${totalCount} prompts`
@@ -246,7 +258,9 @@ export function PromptsLibrary({
 
               {prompts.length === 0 ? (
                 <p className="py-12 text-center text-sm text-muted-foreground">
-                  No prompts match the current filters.
+                  {showingOnlyMine
+                    ? 'You haven’t saved any prompts yet. Use New → Generate a prompt, then “Save prompt” (or “Use this prompt”) to keep one here.'
+                    : 'No prompts match the current filters.'}
                 </p>
               ) : (
                 <ul className="divide-y divide-border/40">
@@ -271,7 +285,7 @@ function PromptRow({
   prompt,
   onSelect,
 }: {
-  prompt: LibraryPrompt;
+  prompt: LibraryEntry;
   onSelect: () => void;
 }) {
   const textOrUnit = prompt.textsOrUnits[0];
@@ -284,9 +298,16 @@ function PromptRow({
         onClick={onSelect}
         className="group/card block w-full cursor-pointer rounded-md py-5 text-left transition-colors hover:bg-foreground/[0.03] focus-visible:bg-foreground/[0.03] focus-visible:outline-none"
       >
-        <p className="px-2 text-[17px] leading-relaxed text-foreground">
-          {prompt.prompt}
-        </p>
+        <div className="flex items-start justify-between gap-3 px-2">
+          <p className="text-[17px] leading-relaxed text-foreground">
+            {prompt.prompt}
+          </p>
+          {prompt.collection === 'mine' ? (
+            <span className="mt-1 shrink-0 rounded-full bg-foreground/[0.06] px-2 py-0.5 text-[11px] leading-5 text-muted-foreground">
+              {COLLECTION_LABEL.mine}
+            </span>
+          ) : null}
+        </div>
 
         <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 px-2 text-xs text-muted-foreground">
           {textOrUnit ? <span>{textOrUnit}</span> : null}
@@ -302,12 +323,14 @@ function PromptRow({
   );
 }
 
-function ExtraTags({ prompt }: { prompt: LibraryPrompt }) {
+function ExtraTags({ prompt }: { prompt: LibraryEntry }) {
   return (
     <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground/80">
-      <span>{PROMPT_TYPE_LABEL[prompt.type]}</span>
-      <span aria-hidden>·</span>
-      <span>{SERIOUSNESS_LABEL[prompt.seriousness]}</span>
+      {prompt.type ? <span>{PROMPT_TYPE_LABEL[prompt.type]}</span> : null}
+      {prompt.type && prompt.seriousness ? <span aria-hidden>·</span> : null}
+      {prompt.seriousness ? (
+        <span>{SERIOUSNESS_LABEL[prompt.seriousness]}</span>
+      ) : null}
       {prompt.themes.length > 0 ? (
         <>
           <span aria-hidden>·</span>
@@ -374,7 +397,12 @@ function FilterPanel({
         ) : null}
       </div>
 
-      <Accordion type="multiple" className="border-none">
+      {/* The collection section starts open so "My prompts" is discoverable. */}
+      <Accordion
+        type="multiple"
+        defaultValue={['collections']}
+        className="border-none"
+      >
         {FACET_SECTIONS.map((f) => {
           const values = facets[f.facetKey] as string[];
           if (!values || values.length === 0) return null;

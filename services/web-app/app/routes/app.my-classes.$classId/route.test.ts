@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, mock, test } from 'bun:test';
+import { afterAll, beforeEach, describe, expect, mock, test } from 'bun:test';
 
 const prisma = {
   class: { findFirst: mock(), findMany: mock() },
@@ -45,7 +45,14 @@ mock.module('~/utils/auth.server', () => ({
 mock.module('~/utils/cookies.server', () => ({
   getSubmittedPapersFilter,
 }));
+// bun's module mocks are global to the test run and mock.restore() does not
+// undo mock.module — restore from the pristine copy test-preload.ts captured
+// before any file could mock.module() this path (see comment there).
+const actualAssignmentTypeAccess = globalThis.__realModules[
+  '~/utils/assignment-type-access.server'
+];
 mock.module('~/utils/assignment-type-access.server', () => ({
+  ...actualAssignmentTypeAccess,
   getAvailableAssignmentTypesForScopes,
   isAssignmentTypeAvailableForEveryScope,
 }));
@@ -68,6 +75,14 @@ const {
 } = await import('./route');
 const action = routeAction as any;
 const loader = routeLoader as any;
+
+afterAll(() => {
+  mock.restore();
+  mock.module(
+    '~/utils/assignment-type-access.server',
+    () => actualAssignmentTypeAccess
+  );
+});
 
 describe('class detail loader document visibility', () => {
   beforeEach(() => {
@@ -157,6 +172,9 @@ describe('class detail loader document visibility', () => {
         deletedAt: null,
       },
     });
+    expect(prisma.submission.findMany.mock.calls[0][0].where.unsubmittedAt).toBe(
+      null
+    );
     expect(prisma.document.findMany.mock.calls[0][0].where).toEqual({
       ...expectedScope,
       deletedAt: null,
@@ -247,6 +265,64 @@ describe('class detail loader document visibility', () => {
     );
     expect(Object.keys(data.growthPlansByStudentId)).toEqual(['student-1']);
     expect(data.growthPlansByStudentId['student-1']).toHaveLength(1);
+  });
+
+  test('skips the paste alert query when the class has no students', async () => {
+    const response = await loader({
+      request: new Request('https://example.test/app/my-classes/class-1'),
+      params: { classId: 'class-1' },
+      context: {} as never,
+    });
+    const data = (response as { data: any }).data;
+
+    expect(data.pasteAlertsByStudentId).toEqual({});
+    expect(prisma.pasteAlert.findMany).not.toHaveBeenCalled();
+  });
+
+  test('scopes the paste alert query to this class’s enrolled students and groups by student', async () => {
+    prisma.class.findFirst.mockResolvedValue({
+      id: 'class-1',
+      grade: '9',
+      period: '2',
+      title: 'World History',
+      school: {
+        id: 'school-1',
+        name: 'Tallassee High School',
+        organizationId: 'org-1',
+        organization: { classInsightsEnabled: false, reporterEnabled: false },
+      },
+      students: [
+        { id: 'student-1', user: { name: 'Ada Lovelace', email: 'ada@x.test' } },
+        { id: 'student-2', user: { name: 'Grace Hopper', email: 'grace@x.test' } },
+      ],
+    });
+    prisma.pasteAlert.findMany.mockResolvedValue([
+      {
+        id: 'alert-1',
+        documentId: 'doc-1',
+        membershipId: 'student-1',
+        textLength: 250,
+        createdAt: new Date('2026-07-01T00:00:00.000Z'),
+      },
+    ]);
+
+    const response = await loader({
+      request: new Request('https://example.test/app/my-classes/class-1'),
+      params: { classId: 'class-1' },
+      context: {} as never,
+    });
+    const data = (response as { data: any }).data;
+
+    expect(prisma.pasteAlert.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { membershipId: { in: ['student-1', 'student-2'] } },
+      })
+    );
+    expect(Object.keys(data.pasteAlertsByStudentId)).toEqual(['student-1']);
+    expect(data.pasteAlertsByStudentId['student-1']).toHaveLength(1);
+    expect(data.pasteAlertsByStudentId['student-1'][0].documentId).toBe(
+      'doc-1'
+    );
   });
 
   test('redirects the legacy summary tab to assignments and preserves other search params', async () => {
@@ -578,7 +654,44 @@ describe('class detail loader document visibility', () => {
         submitForGrade: true,
         pointValue: 25,
         gradingAssistantStrictnessLevel: 'advanced',
+        tutorEnabled: true,
       },
+      classIds: ['class-1'],
+    });
+  });
+
+  test('disables the tutor on a new class assignment when the toggle is off', async () => {
+    getAvailableAssignmentTypesForScopes.mockResolvedValue([
+      { id: 'at-1', systemKey: null },
+    ]);
+    prisma.assignmentType.findMany.mockResolvedValue([
+      {
+        id: 'at-1',
+        systemKey: null,
+        organizationAssignments: [{ organizationId: 'org-1' }],
+      },
+    ]);
+
+    const form = new FormData();
+    form.set('intent', 'create-assignment');
+    form.set('assignmentTypeId', 'at-1');
+    form.set('prompt', 'Prompt');
+    form.set('submitForGrade', 'true');
+    form.set('pointValue', '25');
+    form.set('tutorEnabled', 'false');
+
+    const response = await action({
+      request: new Request('https://example.test/app/my-classes/class-1', {
+        method: 'POST',
+        body: form,
+      }),
+      params: { classId: 'class-1' },
+      context: {} as never,
+    });
+
+    expect(response.data).toMatchObject({ success: true });
+    expect(createAssignmentDeployedToClasses).toHaveBeenCalledWith({
+      data: expect.objectContaining({ tutorEnabled: false }),
       classIds: ['class-1'],
     });
   });
@@ -732,5 +845,119 @@ describe('class detail loader document visibility', () => {
         assignment: null,
       })
     ).toBe('Untitled draft');
+  });
+});
+
+describe('class detail loader for students', () => {
+  beforeEach(() => {
+    for (const model of Object.values(prisma)) {
+      for (const fn of Object.values(model)) {
+        fn.mockReset();
+      }
+    }
+    requireUserId.mockReset();
+    requireMembership.mockReset();
+    getAvailableAssignmentTypesForScopes.mockReset();
+
+    requireUserId.mockResolvedValue('user-2');
+    requireMembership.mockResolvedValue({
+      id: 'student-1',
+      role: 'STUDENT',
+      organization: { id: 'org-1', name: 'Org' },
+    });
+    prisma.class.findFirst.mockResolvedValue({
+      id: 'class-1',
+      grade: '9',
+      period: '2',
+      title: 'World History',
+      classArtIndex: 3,
+      classArtKey: 'art-key',
+      school: {
+        id: 'school-1',
+        name: 'Tallassee High',
+        organizationId: 'org-1',
+      },
+      teachers: [{ id: 'teacher-1', user: { name: 'Ms. Frizzle' } }],
+    });
+    prisma.classAssignment.findMany.mockResolvedValue([
+      {
+        id: 'ca-1',
+        assignment: {
+          id: 'assignment-1',
+          title: 'Thesis practice',
+          prompt: 'Write a thesis.',
+          assignmentType: { id: 'type-1', title: 'Thesis Builder' },
+        },
+      },
+    ]);
+    prisma.document.findMany.mockResolvedValue([]);
+    getAvailableAssignmentTypesForScopes.mockResolvedValue([
+      { id: 'type-1', title: 'Thesis Builder' },
+    ]);
+  });
+
+  test('serves the class a student is enrolled in', async () => {
+    const response = await loader({
+      request: new Request('https://example.test/app/my-classes/class-1'),
+      params: { classId: 'class-1' },
+      context: {} as never,
+    });
+    const data = (response as { data: any }).data;
+
+    expect(data.role).toBe('STUDENT');
+    expect(data.klass.id).toBe('class-1');
+    expect(data.klass.teacherNames).toEqual(['Ms. Frizzle']);
+    expect(data.assignments).toHaveLength(1);
+    expect(data.assignmentTypes).toEqual([
+      { id: 'type-1', title: 'Thesis Builder' },
+    ]);
+    expect(prisma.class.findFirst.mock.calls[0][0].where).toEqual({
+      id: 'class-1',
+      isArchived: false,
+      students: { some: { id: 'student-1' } },
+    });
+  });
+
+  test('refuses a class the student is not enrolled in', async () => {
+    // A student enrolled in a different section: the enrollment predicate in
+    // the query means this class never matches for them.
+    prisma.class.findFirst.mockResolvedValue(null);
+
+    let thrown: unknown;
+    try {
+      await loader({
+        request: new Request('https://example.test/app/my-classes/class-2'),
+        params: { classId: 'class-2' },
+        context: {} as never,
+      });
+    } catch (error) {
+      thrown = error;
+    }
+
+    expect(thrown).toBeInstanceOf(Response);
+    expect((thrown as Response).status).toBe(404);
+  });
+
+  test('never reads the roster, other students work, or paste alerts', async () => {
+    await loader({
+      request: new Request('https://example.test/app/my-classes/class-1'),
+      params: { classId: 'class-1' },
+      context: {} as never,
+    });
+
+    expect(prisma.pasteAlert.findMany).not.toHaveBeenCalled();
+    expect(prisma.submission.findMany).not.toHaveBeenCalled();
+    expect(prisma.reporterGrowthPlan.findMany).not.toHaveBeenCalled();
+    expect(
+      prisma.class.findFirst.mock.calls[0][0].select.students
+    ).toBeUndefined();
+    expect(prisma.document.findMany.mock.calls[0][0].where).toEqual({
+      deletedAt: null,
+      archivedAt: null,
+      OR: [
+        { classAssignment: { classId: 'class-1' }, membershipId: 'student-1' },
+        { classAssignmentId: null, membershipId: 'student-1' },
+      ],
+    });
   });
 });

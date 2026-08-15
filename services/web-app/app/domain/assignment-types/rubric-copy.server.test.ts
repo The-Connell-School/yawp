@@ -63,6 +63,10 @@ describe('rubric-copy.server', () => {
                     label: 'Argument',
                     weight: 0.5,
                     description: 'Clear claim.',
+                    scoreLabels: [
+                      { value: 1, label: 'Weak' },
+                      { value: 5, label: 'Strong' },
+                    ],
                   },
                   {
                     key: 'evidence',
@@ -96,5 +100,12 @@ describe('rubric-copy.server', () => {
     expect(sources[0]?.title).toBe('AP History');
     expect(sources[0]?.categoryCount).toBe(2);
     expect(sources[0]?.rubric.categories[0]?.label).toBe('Argument');
+    // Score labels are part of what "copy from" hands the new assignment
+    // type — they must not be silently dropped between the source's stored
+    // rubricJson and the sources listing the copy sheet renders from.
+    expect(sources[0]?.rubric.categories[0]?.scoreLabels).toEqual([
+      { value: 1, label: 'Weak' },
+      { value: 5, label: 'Strong' },
+    ]);
   });
 });

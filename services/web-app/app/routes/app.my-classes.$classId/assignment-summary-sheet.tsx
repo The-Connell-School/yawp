@@ -38,7 +38,20 @@ export type AssignmentSummarySheetContentProps = {
    * render this content directly without the Sheet portal.
    */
   renderSheet?: boolean;
+  /**
+   * Set true to skip rendering the built-in title header entirely. Used by
+   * the dedicated assignment detail page, which renders its own page-level
+   * heading and passes this content in as the body of a content card below
+   * it — rendering both would produce two headings with the same name.
+   */
+  hideHeader?: boolean;
 };
+
+export function assignmentSummaryLayoutClassName(renderSheet: boolean) {
+  return renderSheet
+    ? 'mt-4 space-y-6'
+    : 'mt-4 grid gap-6 lg:grid-cols-2 lg:items-start';
+}
 
 export const ASSIGNMENT_SUMMARY_SHEET_CONTENT_CLASS_NAME =
   'flex h-full w-full flex-col gap-0 overflow-hidden p-0 text-foreground dark:bg-card sm:max-w-xl';
@@ -87,7 +100,7 @@ function AssignmentMetadataSection({
 
   return (
     <section
-      className="overflow-hidden rounded-xl border text-sm"
+      className="overflow-hidden rounded-xl border bg-white text-sm dark:bg-card"
       aria-label="Assignment details"
       data-testid="assignment-metadata-section"
     >
@@ -164,10 +177,11 @@ export function AssignmentSummarySheetContent({
   classInsightsEnabled,
   onViewDocuments,
   renderSheet = true,
+  hideHeader = false,
 }: AssignmentSummarySheetContentProps) {
   const title = assignment?.title ?? 'Assignment';
 
-  const header = renderSheet ? (
+  const header = hideHeader ? null : renderSheet ? (
     <SheetHeader>
       <SheetTitle>{title}</SheetTitle>
     </SheetHeader>
@@ -182,7 +196,10 @@ export function AssignmentSummarySheetContent({
       {header}
 
       {assignment ? (
-        <div className="mt-4 space-y-6">
+        <div
+          className={assignmentSummaryLayoutClassName(renderSheet)}
+          data-testid="assignment-summary-layout"
+        >
           <AssignmentMetadataSection
             assignment={assignment}
             onViewDocuments={onViewDocuments}

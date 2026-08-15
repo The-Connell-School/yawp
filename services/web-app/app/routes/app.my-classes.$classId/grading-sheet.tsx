@@ -597,14 +597,7 @@ export function GradingSheet({
                       className="rounded-lg border bg-muted p-3 space-y-2"
                     >
                       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                        <div>
-                          <div className="text-sm font-medium">
-                            {item.label}
-                          </div>
-                          <div className="text-xs text-muted-foreground">
-                            {item.description}
-                          </div>
-                        </div>
+                        <div className="text-sm font-medium">{item.label}</div>
                         <Select
                           value={current.score ? current.score.toString() : ''}
                           disabled={isGenerating}

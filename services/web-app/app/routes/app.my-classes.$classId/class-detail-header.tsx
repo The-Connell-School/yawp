@@ -7,9 +7,20 @@ import {
   useRef,
   useState,
 } from 'react';
+import { Check, Copy } from 'lucide-react';
 import { ClassArt } from '~/components/class-art';
 import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+  DialogTrigger,
+} from '~/components/ui/dialog';
+import {
+  getClassCardHeading,
+} from '~/utils/class-display';
 import { cn } from '~/utils/misc';
 
 export type ClassHeaderTab = 'students' | 'documents' | 'assignments';
@@ -23,8 +34,8 @@ export function resolveClassHeaderTab(
 export type ClassDetailHeaderProps = {
   klass: {
     id: string;
-    grade: string | number;
-    period: string | number;
+    grade: string | number | null;
+    period: string | number | null;
     title?: string | null;
     school?: { name: string } | null;
     schoolYear: string;
@@ -43,12 +54,88 @@ export type ClassDetailHeaderProps = {
   onEdit: () => void;
 };
 
-function classTitle(klass: ClassDetailHeaderProps['klass']) {
+function ClassCodeReveal({ code }: { code: string }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = useCallback(async () => {
+    try {
+      await navigator.clipboard?.writeText(code);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // Clipboard access can be blocked; the code stays selectable on screen.
+    }
+  }, [code]);
+
   return (
-    <>
-      Grade {klass.grade} • Period {klass.period}
-      {klass.title ? ` — ${klass.title}` : ''}
-    </>
+    <Dialog>
+      <DialogTrigger asChild>
+        <button
+          type="button"
+          data-testid="class-code-trigger"
+          title="Show class code full screen"
+          className="rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+        >
+          <Badge
+            variant="outline"
+            size="sm"
+            className="font-mono hover:bg-secondary"
+          >
+            {code}
+          </Badge>
+          <span className="sr-only">Show class code full screen</span>
+        </button>
+      </DialogTrigger>
+      {/*
+        This gets projected to a class, so nothing behind it may show through:
+        the panel fills the viewport and is opaque. Only the eyebrow, the code,
+        the copy button and the close button are on screen.
+      */}
+      <DialogContent
+        data-testid="class-code-panel"
+        className={cn(
+          // inset-0 with auto width/height pins all four edges to the
+          // viewport; a fixed 100vw/100dvh would miss by the scrollbar width.
+          'inset-0 flex h-auto w-auto max-w-none translate-x-0 translate-y-0 flex-col items-center justify-center gap-10 rounded-none border-0 bg-background p-10 text-center sm:rounded-none',
+          // The shared dialog zooms and slides in from the centre. A panel
+          // that covers the screen must not do either — while it travelled it
+          // would leave the page showing around its edges.
+          '!animate-none',
+          // The close button is the only way out of a full-screen panel, so
+          // size it to be findable from across a classroom.
+          '[&>button:last-child]:right-6 [&>button:last-child]:top-6 [&>button:last-child>svg]:h-7 [&>button:last-child>svg]:w-7'
+        )}
+      >
+        <DialogTitle className="text-lg font-medium uppercase tracking-[0.25em] text-muted-foreground">
+          Class code
+        </DialogTitle>
+        <DialogDescription className="sr-only">
+          Share this code with students so they can join the class.
+        </DialogDescription>
+        {/*
+          Sized from the code's own length so it always lands on one line and
+          fills the screen: monospace glyphs plus the tracking run about
+          0.75em wide, so 110/length vw keeps it inside the viewport.
+        */}
+        <div
+          data-testid="class-code-display"
+          className="select-all whitespace-nowrap font-mono font-bold leading-none tracking-[0.15em]"
+          style={{
+            fontSize: `min(22vh, ${(110 / Math.max(code.length, 1)).toFixed(2)}vw)`,
+          }}
+        >
+          {code}
+        </div>
+        <Button type="button" variant="outline" size="lg" onClick={handleCopy}>
+          {copied ? (
+            <Check className="mr-2 h-4 w-4 text-green-600" />
+          ) : (
+            <Copy className="mr-2 h-4 w-4" />
+          )}
+          {copied ? 'Copied' : 'Copy code'}
+        </Button>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -68,9 +155,7 @@ function ClassMetadata({
     >
       {klass.school?.name ? <span>{klass.school.name}</span> : null}
       <span>{klass.schoolYear}</span>
-      <Badge variant="outline" size="sm" className="font-mono">
-        {klass.code}
-      </Badge>
+      <ClassCodeReveal code={klass.code} />
     </div>
   );
 }
@@ -211,6 +296,7 @@ export function ClassDetailHeader({
     }
     return base;
   }, [studentCount, documentCount, assignmentCount, showAssignmentsTab]);
+  const { title, subtitle } = getClassCardHeading(props.klass);
 
   return (
     <div
@@ -229,8 +315,13 @@ export function ClassDetailHeader({
           <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div className="min-w-0">
               <h1 className="text-balance text-xl font-semibold tracking-tight sm:text-2xl">
-                {classTitle(props.klass)}
+                {title}
               </h1>
+              {subtitle ? (
+                <p className="mt-0.5 text-base/6 text-muted-foreground sm:text-sm/5">
+                  {subtitle}
+                </p>
+              ) : null}
               <ClassMetadata klass={props.klass} className="mt-1" />
             </div>
             <EditClassButton onEdit={props.onEdit} />

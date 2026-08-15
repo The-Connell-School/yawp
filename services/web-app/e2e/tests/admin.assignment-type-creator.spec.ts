@@ -1,7 +1,32 @@
 import { test, expect } from '../test-setup';
 import { createE2EPrismaClient } from '../prisma-client';
+import type { Page } from '@playwright/test';
 
 const OOPS = /Oops! Something didn't work quite right/i;
+
+// Creating an assignment type now requires a rubric whose every category is complete:
+// an empty rubric would silently fall back to the thesis default, and a half-filled one
+// would grade against a rubric nobody finished. Both are rejected at save time, so the
+// creator flow has to fill one category end to end before it can save.
+async function addCompleteRubricCategory(page: Page, label: string) {
+  await page.getByTestId('rubric-add-category').click();
+  await page.getByTestId('rubric-category-row-0').click();
+  await expect(
+    page.getByRole('heading', { name: 'Edit category' })
+  ).toBeVisible();
+
+  // Target the sheet's fields by id: the page behind it has its own Description field,
+  // and the sheet is deliberately non-modal, so a by-label lookup would be ambiguous.
+  await page.locator('#category-edit-label').fill(label);
+  await page.locator('#category-edit-weight').fill('100');
+  await page
+    .locator('#category-edit-description')
+    .fill('What good performance looks like for this category.');
+  await page.getByRole('button', { name: 'Done' }).click();
+  await expect(
+    page.getByRole('heading', { name: 'Edit category' })
+  ).toHaveCount(0);
+}
 
 test.describe('Admin assignment type creator', () => {
   test('create page renders without oops', async ({ page, signIn }) => {
@@ -33,6 +58,7 @@ test.describe('Admin assignment type creator', () => {
       await page
         .getByLabel('Description')
         .fill('Minimal assignment type creator QA test.');
+      await addCompleteRubricCategory(page, 'Thesis & Content');
 
       await Promise.all([
         page.waitForURL(
@@ -227,7 +253,10 @@ test.describe('Admin assignment type creator', () => {
       await signIn('admin.e2e@yawp.test', 'admin-e2e-password');
       await page.goto('/app/admin/assignment-types/new');
       await page.getByLabel('Title').fill(title);
-      await page.getByTestId('rubric-add-category').click();
+      await addCompleteRubricCategory(page, 'Thesis & Content');
+
+      // Reopen the sheet and leave it open across the save — the regression this test
+      // guards is the editor dropping its in-flight category state on submit.
       await page.getByTestId('rubric-category-row-0').click();
       await expect(
         page.getByRole('heading', { name: 'Edit category' })

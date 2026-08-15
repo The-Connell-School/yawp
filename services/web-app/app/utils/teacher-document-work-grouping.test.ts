@@ -13,8 +13,7 @@ const collator = new Intl.Collator(undefined, {
 });
 
 function row(
-  overrides: Partial<TeacherDocumentWorkRow> &
-    Pick<TeacherDocumentWorkRow, 'id'>
+  overrides: Partial<TeacherDocumentWorkRow> & Pick<TeacherDocumentWorkRow, 'id'>
 ): TeacherDocumentWorkRow {
   return {
     title: null,
@@ -43,11 +42,7 @@ describe('buildTeacherDocumentWorkGroups', () => {
       documents: [
         row({
           id: 'doc-released',
-          latestSubmission: {
-            id: 'sub-1',
-            releasedAt: new Date(),
-            gradedAt: new Date(),
-          },
+          latestSubmission: { id: 'sub-1', releasedAt: new Date(), gradedAt: new Date() },
         }),
         row({
           id: 'doc-in-progress',
@@ -100,9 +95,10 @@ describe('buildTeacherDocumentWorkGroups', () => {
       collator,
     });
 
-    expect(
-      groups.map((group: TeacherDocumentWorkGroup) => group.label)
-    ).toEqual(['Grade 9th • Period 1st', 'Grade 10th • Period 2nd — Honors']);
+    expect(groups.map((group: TeacherDocumentWorkGroup) => group.label)).toEqual([
+      'Grade 9th • Period 1st',
+      'Honors · Grade 10th • Period 2nd',
+    ]);
   });
 });
 

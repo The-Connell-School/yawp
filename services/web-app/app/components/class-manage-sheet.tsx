@@ -23,8 +23,8 @@ export type ClassManageRow = {
   id: string;
   schoolId: string;
   schoolYear: string;
-  grade: string;
-  period: string;
+  grade: string | null;
+  period: string | null;
   title: string | null;
   code: string;
 };
@@ -34,6 +34,9 @@ function defaultSchoolYear() {
   const year = now.getMonth() >= 6 ? now.getFullYear() : now.getFullYear() - 1;
   return `${year}-${year + 1}`;
 }
+
+const NO_PERIOD_VALUE = '__none__';
+const NO_GRADE_VALUE = '__none__';
 
 export function ClassManageSheet({
   open,
@@ -64,8 +67,8 @@ export function ClassManageSheet({
     if (editingClass) {
       setSchoolId(editingClass.schoolId);
       setSchoolYear(editingClass.schoolYear);
-      setGrade(editingClass.grade);
-      setPeriod(editingClass.period);
+      setGrade(editingClass.grade ?? '');
+      setPeriod(editingClass.period ?? '');
       setTitle(editingClass.title || '');
       setCode(editingClass.code);
       return;
@@ -104,9 +107,7 @@ export function ClassManageSheet({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent>
         <SheetHeader>
-          <SheetTitle>
-            {editingClass ? 'Edit Class' : 'Create Class'}
-          </SheetTitle>
+          <SheetTitle>{editingClass ? 'Edit Class' : 'Create Class'}</SheetTitle>
           <SheetDescription>
             {editingClass
               ? 'Update class details for your roster.'
@@ -142,7 +143,6 @@ export function ClassManageSheet({
             <Input
               value={code}
               onChange={(e) => setCode(e.target.value.toUpperCase())}
-              maxLength={10}
               required
               className="font-mono"
             />
@@ -160,41 +160,41 @@ export function ClassManageSheet({
 
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-2">
-              <Label>Grade</Label>
-              <Select value={grade} onValueChange={setGrade} required>
+              <Label>Grade (optional)</Label>
+              <Select
+                value={grade || NO_GRADE_VALUE}
+                onValueChange={(value) =>
+                  setGrade(value === NO_GRADE_VALUE ? '' : value)
+                }
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="Grade" />
                 </SelectTrigger>
                 <SelectContent>
-                  {[
-                    'K',
-                    '1',
-                    '2',
-                    '3',
-                    '4',
-                    '5',
-                    '6',
-                    '7',
-                    '8',
-                    '9',
-                    '10',
-                    '11',
-                    '12',
-                  ].map((value) => (
-                    <SelectItem key={value} value={value}>
-                      {value}
-                    </SelectItem>
-                  ))}
+                  <SelectItem value={NO_GRADE_VALUE}>No grade</SelectItem>
+                  {['K', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12'].map(
+                    (value) => (
+                      <SelectItem key={value} value={value}>
+                        {value}
+                      </SelectItem>
+                    )
+                  )}
                 </SelectContent>
               </Select>
             </div>
             <div className="space-y-2">
-              <Label>Period</Label>
-              <Select value={period} onValueChange={setPeriod} required>
+              <Label>Period (optional)</Label>
+              <Select
+                value={period || NO_PERIOD_VALUE}
+                onValueChange={(value) =>
+                  setPeriod(value === NO_PERIOD_VALUE ? '' : value)
+                }
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="Period" />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value={NO_PERIOD_VALUE}>No period</SelectItem>
                   {['1', '2', '3', '4', '5', '6', '7', '8'].map((value) => (
                     <SelectItem key={value} value={value}>
                       {value}
@@ -222,11 +222,7 @@ export function ClassManageSheet({
                   ? 'Update Class'
                   : 'Create Class'}
             </Button>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => onOpenChange(false)}
-            >
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
           </div>

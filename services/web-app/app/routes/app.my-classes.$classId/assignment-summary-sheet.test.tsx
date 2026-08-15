@@ -37,8 +37,10 @@ const { MemoryRouter } = actualReactRouter;
 const {
   ASSIGNMENT_SUMMARY_SHEET_CONTENT_CLASS_NAME,
   AssignmentSummarySheetContent,
-}: typeof import('./assignment-summary-sheet') =
-  await import('./assignment-summary-sheet');
+  assignmentSummaryLayoutClassName,
+}: typeof import('./assignment-summary-sheet') = await import(
+  './assignment-summary-sheet'
+);
 type AssignmentSummarySheetAssignment =
   import('./assignment-summary-sheet').AssignmentSummarySheetAssignment;
 
@@ -111,8 +113,7 @@ describe('AssignmentSummarySheetContent', () => {
       el.querySelector('[data-testid="assignment-metadata-section"]')?.className
     ).toContain('rounded-xl');
     expect(
-      el.querySelector('[data-testid="assignment-metadata-section"] dl')
-        ?.className
+      el.querySelector('[data-testid="assignment-metadata-section"] dl')?.className
     ).toContain('divide-y');
     expect(el.textContent).toContain('Type');
     expect(el.textContent).toContain('DBQ');
@@ -121,9 +122,7 @@ describe('AssignmentSummarySheetContent', () => {
     expect(el.textContent).toContain('Point value');
     expect(el.textContent).toContain('View only');
     expect(el.textContent).toContain('Prompt');
-    expect(el.textContent).toContain(
-      'Analyze the effects of industrialization'
-    );
+    expect(el.textContent).toContain('Analyze the effects of industrialization');
     expect(el.textContent).not.toMatch(/5 graded/);
     expect(el.textContent).not.toContain('Docs');
   });
@@ -209,9 +208,7 @@ describe('AssignmentSummarySheetContent', () => {
         onViewDocuments={() => {}}
       />
     );
-    expect(
-      el.querySelector('[data-testid="class-summary-placeholder"]')
-    ).toBeFalsy();
+    expect(el.querySelector('[data-testid="class-summary-placeholder"]')).toBeFalsy();
     expect(
       el.querySelector('[data-testid="class-insight-generate-button"]')
     ).toBeFalsy();
@@ -231,6 +228,7 @@ describe('AssignmentSummarySheetContent', () => {
     expect(
       el.querySelector('[data-testid="class-insight-generate-button"]')
     ).toBeFalsy();
+    expect(el.querySelector('[data-testid="class-summary-placeholder"]')).toBeTruthy();
     expect(el.textContent).toMatch(
       /grade a few submissions first, then generate class insights/i
     );
@@ -245,11 +243,31 @@ describe('AssignmentSummarySheetContent', () => {
         onViewDocuments={() => {}}
       />
     );
-    expect(
-      el.querySelector('[data-testid="class-summary-placeholder"]')
-    ).toBeFalsy();
+    expect(el.querySelector('[data-testid="class-summary-placeholder"]')).toBeTruthy();
     expect(el.textContent).toContain('Class performance summary');
     expect(el.textContent).toMatch(/summarize class performance/i);
+    expect(
+      el.querySelector('[data-testid="class-insight-generate-button"]')
+    ).toBeTruthy();
+  });
+
+  it('lays out metadata and class summary side by side on large screens in the full page', () => {
+    const el = render(
+      <AssignmentSummarySheetContent
+        renderSheet={false}
+        assignment={ASSIGNMENT}
+        classInsightsEnabled={true}
+        onViewDocuments={() => {}}
+      />
+    );
+    const layout = el.querySelector('[data-testid="assignment-summary-layout"]');
+    expect(layout?.className).toContain('lg:grid-cols-2');
+    expect(layout?.className).toContain('lg:items-start');
+  });
+
+  it('keeps metadata and class summary stacked in the narrow assignment sheet', () => {
+    expect(assignmentSummaryLayoutClassName(true)).toContain('space-y-6');
+    expect(assignmentSummaryLayoutClassName(true)).not.toContain('lg:grid-cols-2');
   });
 
   it('renders nothing assignment-specific when no assignment is selected', () => {
@@ -261,8 +279,6 @@ describe('AssignmentSummarySheetContent', () => {
         onViewDocuments={() => {}}
       />
     );
-    expect(
-      el.querySelector('[data-testid="assignment-metadata-section"]')
-    ).toBeFalsy();
+    expect(el.querySelector('[data-testid="assignment-metadata-section"]')).toBeFalsy();
   });
 });

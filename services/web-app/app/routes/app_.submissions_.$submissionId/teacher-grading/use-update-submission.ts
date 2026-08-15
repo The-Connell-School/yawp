@@ -6,26 +6,26 @@ export function useUpdateSubmission(submissionId: string) {
   const [status, setStatus] = useState<UpdateStatus>('idle');
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const save = useCallback(
-    async (fields: Record<string, unknown>) => {
-      setStatus('saving');
-      try {
-        const res = await fetch('/api/domain/update-submission', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ submissionId, ...fields }),
-        });
-        if (!res.ok) throw new Error('Save failed');
-        setStatus('saved');
-        if (timeoutRef.current) clearTimeout(timeoutRef.current);
-        timeoutRef.current = setTimeout(() => setStatus('idle'), 2000);
-      } catch {
-        setStatus('error');
-        throw new Error('Save failed');
+  const save = useCallback(async (fields: Record<string, unknown>) => {
+    setStatus('saving');
+    try {
+      const res = await fetch('/api/domain/update-submission', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ submissionId, ...fields }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        throw new Error((body as { message?: string } | null)?.message ?? 'Save failed');
       }
-    },
-    [submissionId]
-  );
+      setStatus('saved');
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+      timeoutRef.current = setTimeout(() => setStatus('idle'), 2000);
+    } catch (err) {
+      setStatus('error');
+      throw err instanceof Error ? err : new Error('Save failed');
+    }
+  }, [submissionId]);
 
   return { save, status };
 }

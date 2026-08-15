@@ -135,6 +135,101 @@ describe('app.organization.classes action', () => {
     });
   });
 
+  test('create-class allows a missing period (schools without traditional periods)', async () => {
+    const body = new URLSearchParams();
+    body.set('intent', 'create-class');
+    body.set('schoolId', 'school-1');
+    body.set('schoolYear', '2025-2026');
+    body.set('grade', '10');
+    body.set('code', 'ABC123');
+
+    const request = new Request('https://example.com/app/organization/classes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body,
+    });
+
+    const result = (await action({ request } as any)) as {
+      data: { success: boolean };
+    };
+    expect(result.data.success).toBe(true);
+    expect(prisma.class.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ period: null }),
+      })
+    );
+  });
+
+  test('create-class allows a missing grade', async () => {
+    const body = new URLSearchParams();
+    body.set('intent', 'create-class');
+    body.set('schoolId', 'school-1');
+    body.set('schoolYear', '2025-2026');
+    body.set('code', 'ABC123');
+
+    const request = new Request('https://example.com/app/organization/classes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body,
+    });
+
+    const result = (await action({ request } as any)) as {
+      data: { success: boolean };
+    };
+    expect(result.data.success).toBe(true);
+    expect(prisma.class.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ grade: null }),
+      })
+    );
+  });
+
+  test('create-class still requires school year', async () => {
+    const body = new URLSearchParams();
+    body.set('intent', 'create-class');
+    body.set('schoolId', 'school-1');
+    body.set('code', 'ABC123');
+
+    const request = new Request('https://example.com/app/organization/classes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body,
+    });
+
+    const result = (await action({ request } as any)) as {
+      data: { error: string };
+      init: { status: number };
+    };
+    expect(result.init.status).toBe(400);
+    expect(prisma.class.create).not.toHaveBeenCalled();
+  });
+
+  test('edit-class allows clearing the period to null', async () => {
+    const body = new URLSearchParams();
+    body.set('intent', 'edit-class');
+    body.set('classId', 'c1');
+    body.set('schoolId', 'school-1');
+    body.set('schoolYear', '2025-2026');
+    body.set('grade', '10');
+    body.set('code', 'ABC123');
+
+    const request = new Request('https://example.com/app/organization/classes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body,
+    });
+
+    const result = (await action({ request } as any)) as {
+      data: { success: boolean };
+    };
+    expect(result.data.success).toBe(true);
+    expect(prisma.class.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ period: null }),
+      })
+    );
+  });
+
   test('bulk-edit-classes rejects when no classes selected', async () => {
     const body = new URLSearchParams();
     body.set('intent', 'bulk-edit-classes');

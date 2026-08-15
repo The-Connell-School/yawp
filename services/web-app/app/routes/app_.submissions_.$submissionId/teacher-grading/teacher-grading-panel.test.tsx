@@ -39,6 +39,15 @@ mock.module('~/components/ui/popover', () => ({
   ),
 }));
 
+mock.module('~/components/ui/tooltip', () => ({
+  Tooltip: ({ children, text }: { children: ReactNode; text: ReactNode }) => (
+    <>
+      {children}
+      <span>{text}</span>
+    </>
+  ),
+}));
+
 const { TeacherGradingPanel } = await import('./teacher-grading-panel');
 
 function render(element: ReactElement) {
@@ -65,8 +74,10 @@ function cleanup(root: Root | null) {
 
 function renderPanel({
   initialGradingAssistantStrictnessLevel = 'beginner',
+  rubricConfig,
 }: {
   initialGradingAssistantStrictnessLevel?: string | null;
+  rubricConfig?: Record<string, unknown>;
 } = {}) {
   return render(
     <TeacherGradingPanel
@@ -90,6 +101,7 @@ function renderPanel({
       initialGradingAssistantStrictnessLevel={
         initialGradingAssistantStrictnessLevel
       }
+      rubricConfig={rubricConfig as any}
     />
   );
 }
@@ -102,7 +114,7 @@ describe('TeacherGradingPanel', () => {
     root = null;
   });
 
-  it('opens strictness cards and submits the teacher-selected level', async () => {
+  it('renders the strictness picker for a teacher', async () => {
     ({ root } = renderPanel());
 
     const menu = document.querySelector<HTMLButtonElement>(
@@ -110,73 +122,45 @@ describe('TeacherGradingPanel', () => {
     );
     expect(menu).not.toBeNull();
 
-    await act(async () => {
-      menu?.click();
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    });
+    for (const level of ['beginner', 'intermediate', 'advanced']) {
+      expect(
+        document.querySelector(
+          `[data-testid="grading-assistant-strictness-${level}"]`
+        )
+      ).not.toBeNull();
+    }
 
     const beginner = document.querySelector<HTMLButtonElement>(
       '[data-testid="grading-assistant-strictness-beginner"]'
     );
-    const advanced = document.querySelector<HTMLButtonElement>(
-      '[data-testid="grading-assistant-strictness-advanced"]'
-    );
-    const generate = document.querySelector<HTMLButtonElement>(
-      '[data-testid="grading-assistant-generate"]'
-    );
-
-    expect(document.body.textContent).toContain(
-      'Adds 5 points to the overall grade percentage.'
-    );
-    expect(document.body.textContent).toContain(
-      'Keeps the overall grade percentage unchanged.'
-    );
-    expect(document.body.textContent).toContain(
-      'Subtracts 5 points from the overall grade percentage.'
-    );
     expect(beginner?.getAttribute('aria-pressed')).toBe('true');
-
-    act(() => {
-      advanced?.click();
-    });
-
-    expect(advanced?.getAttribute('aria-pressed')).toBe('true');
-
-    act(() => {
-      generate?.click();
-    });
-
-    expect(submit).toHaveBeenCalledTimes(1);
-    const form = submit.mock.calls[0][0] as FormData;
-    expect(form.get('submissionId')).toBe('submission-1');
-    expect(form.get('gradingAssistantStrictnessLevel')).toBe('advanced');
   });
 
-  it('defaults to the assignment strictness level for a grading run', async () => {
+  it('explains each level as a reading posture on hover, never as a point adjustment', async () => {
+    ({ root } = renderPanel());
+
+    // The tooltip mock renders its text inline, so the hover copy lands in
+    // the DOM without simulating a pointer.
+    expect(document.body.textContent).toContain(
+      'The assistant reads gently, expecting a writer still learning the fundamentals.'
+    );
+    expect(document.body.textContent).toContain(
+      'The assistant reads at the standard expected for the grade level.'
+    );
+    expect(document.body.textContent).toContain(
+      'The assistant reads demandingly, expecting polished and precise writing.'
+    );
+    expect(document.body.textContent).not.toContain('points');
+  });
+
+  it('applies the assignment strictness level to a grading run', async () => {
     ({ root } = renderPanel({
       initialGradingAssistantStrictnessLevel: 'advanced',
     }));
 
-    const menu = document.querySelector<HTMLButtonElement>(
-      '[data-testid="grading-assistant-strictness-menu"]'
-    );
-    expect(menu?.getAttribute('aria-label')).toBe(
-      'Grading assistant strictness: Advanced'
-    );
-
-    await act(async () => {
-      menu?.click();
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    });
-
-    const advanced = document.querySelector<HTMLButtonElement>(
-      '[data-testid="grading-assistant-strictness-advanced"]'
-    );
     const generate = document.querySelector<HTMLButtonElement>(
       '[data-testid="grading-assistant-generate"]'
     );
-
-    expect(advanced?.getAttribute('aria-pressed')).toBe('true');
 
     act(() => {
       generate?.click();
@@ -184,6 +168,96 @@ describe('TeacherGradingPanel', () => {
 
     expect(submit).toHaveBeenCalledTimes(1);
     const form = submit.mock.calls[0][0] as FormData;
+    // Restoring the picker and its copy must not disturb the scoring path --
+    // the assignment's stored "advanced" strictness still flows through.
     expect(form.get('gradingAssistantStrictnessLevel')).toBe('advanced');
+  });
+
+  it('warns the teacher when the thesis-driven-essay rubric is applied instead of this assignment type\'s own', async () => {
+    ({ root } = renderPanel({
+      rubricConfig: {
+        source: 'thesis-default',
+        minScore: 1,
+        maxScore: 5,
+        scoringType: 'weighted_1_5',
+        categories: [
+          {
+            key: 'thesis_and_content',
+            label: 'Thesis/Content',
+            description: 'Thesis quality.',
+            weight: 0.25,
+          },
+        ],
+      },
+    }));
+
+    const banner = document.querySelector(
+      '[data-testid="teacher-grading-rubric-source-warning"]'
+    );
+    expect(banner).not.toBeNull();
+    expect(banner?.textContent).toContain('thesis-driven essay');
+  });
+
+  it('does not show the fallback warning when the assignment type owns its rubric', async () => {
+    ({ root } = renderPanel({
+      rubricConfig: {
+        source: 'assignment-type',
+        minScore: 1,
+        maxScore: 5,
+        scoringType: 'weighted_1_5',
+        categories: [
+          {
+            key: 'claim',
+            label: 'Claim',
+            description: 'A clear defensible claim.',
+            weight: 1,
+          },
+        ],
+      },
+    }));
+
+    const banner = document.querySelector(
+      '[data-testid="teacher-grading-rubric-source-warning"]'
+    );
+    expect(banner).toBeNull();
+  });
+
+  it('warns the teacher when the assignment type rubric has incomplete categories', async () => {
+    ({ root } = renderPanel({
+      rubricConfig: {
+        source: 'assignment-type',
+        rubricIncomplete: true,
+        minScore: 1,
+        maxScore: 5,
+        scoringType: 'weighted_1_5',
+        categories: [
+          {
+            key: 'claim',
+            label: 'Claim',
+            description: 'A clear defensible claim.',
+            weight: 0.5,
+          },
+          {
+            key: 'evidence',
+            label: 'Evidence',
+            description: '',
+            weight: 0.5,
+          },
+        ],
+      },
+    }));
+
+    const banner = document.querySelector(
+      '[data-testid="teacher-grading-rubric-incomplete-warning"]'
+    );
+    expect(banner).not.toBeNull();
+    expect(banner?.textContent).toContain('incomplete');
+    // It is still this assignment type's own rubric -- the thesis fallback
+    // banner must not claim the rubric was swapped out.
+    expect(
+      document.querySelector(
+        '[data-testid="teacher-grading-rubric-source-warning"]'
+      )
+    ).toBeNull();
   });
 });

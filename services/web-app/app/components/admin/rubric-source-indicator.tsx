@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Info } from 'lucide-react';
+import { AlertTriangle, Info } from 'lucide-react';
 import { Button } from '~/components/ui/button';
 import { Card, CardContent } from '~/components/ui/card';
 import {
@@ -10,8 +10,8 @@ import {
   SheetTitle,
 } from '~/components/ui/sheet';
 import {
+  classifyAssignmentTypeRubric,
   getThesisDefaultRubricConfig,
-  hasAssignmentTypeOwnedRubric,
 } from '~/domain/assignment-types/assignment-type-rubric-config';
 import type { RubricData } from '~/domain/assignment-types/assignment-type-rubric.shared';
 
@@ -93,11 +93,48 @@ function DefaultRubricPreviewSheet({
   );
 }
 
+function IncompleteRubricBanner({ rubric }: { rubric: RubricData }) {
+  const unfinished = rubric.categories
+    .filter(
+      (category) =>
+        !(
+          category.key.trim() &&
+          category.label.trim() &&
+          category.description.trim() &&
+          Number.isFinite(category.weight)
+        )
+    )
+    .map((category, index) => category.label.trim() || `Category ${index + 1}`);
+
+  return (
+    <div
+      data-testid="rubric-source-incomplete"
+      className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3"
+    >
+      <AlertTriangle className="mt-0.5 size-5 shrink-0 text-amber-600" />
+      <div>
+        <p className="text-sm font-medium">Some categories are unfinished</p>
+        <p className="mt-0.5 text-sm text-muted-foreground text-pretty">
+          Grading uses this rubric exactly as saved, unfinished categories
+          included. Give every category a key, label, description, and weight,
+          or remove the ones you are not using. Unfinished:{' '}
+          {unfinished.join(', ')}.
+        </p>
+      </div>
+    </div>
+  );
+}
+
 export function RubricSourceBanner({ rubric }: { rubric: RubricData }) {
   const [previewOpen, setPreviewOpen] = useState(false);
+  const completeness = classifyAssignmentTypeRubric(rubric);
 
-  if (hasAssignmentTypeOwnedRubric(rubric)) {
+  if (completeness === 'complete') {
     return null;
+  }
+
+  if (completeness === 'partial') {
+    return <IncompleteRubricBanner rubric={rubric} />;
   }
 
   return (

@@ -1,11 +1,17 @@
 import { type ActionFunctionArgs } from 'react-router';
 import { prisma } from '~/utils/db.server';
+import { hasRecordedGrade } from '~/domain/grading/recorded-grade';
 import {
   buildTeacherClassWhere,
   canManageGrades,
   getGradingActor,
   isGradingOwnDocument,
 } from '~/utils/grading-auth.server';
+
+const UNSUBMITTED_BEFORE_GRADED_MESSAGE =
+  'This submission was unsubmitted before you could grade it. Please refresh the page.';
+
+class GradeSaveConflictError extends Error {}
 
 export async function action({ request }: ActionFunctionArgs) {
   const body = await request.json();
@@ -43,6 +49,9 @@ export async function action({ request }: ActionFunctionArgs) {
       gradedAt: true,
       gradedByMembershipId: true,
       numericPercentage: true,
+      overallScore: true,
+      score: true,
+      unsubmittedAt: true,
       document: {
         select: {
           membershipId: true,
@@ -89,11 +98,24 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 
   if (
-    isGradingOwnDocument(actor.membershipId, submission.document.membershipId)
+    isGradingOwnDocument(
+      actor.membershipId,
+      submission.document.membershipId
+    )
   ) {
     return Response.json(
       { success: false, message: 'You cannot grade your own submission.' },
       { status: 403 }
+    );
+  }
+
+  // A student can unsubmit while a teacher has the grading screen open. If
+  // that happened before this save reaches the database, refuse the write
+  // rather than saving a grade onto a withdrawn submission.
+  if (submission.unsubmittedAt != null) {
+    return Response.json(
+      { success: false, message: UNSUBMITTED_BEFORE_GRADED_MESSAGE },
+      { status: 409 }
     );
   }
 
@@ -125,21 +147,26 @@ export async function action({ request }: ActionFunctionArgs) {
 
   // Explicitly mark as graded when requested
   if (fields.markAsGraded) {
-    const incomingNumericPercentage =
-      typeof fields.numericPercentage === 'number' &&
-      Number.isFinite(fields.numericPercentage)
-        ? fields.numericPercentage
-        : undefined;
-    const hasNumericGrade =
-      incomingNumericPercentage !== undefined ||
-      submission.numericPercentage != null;
+    // A grade counts when it exists on the rubric's own scale, whether that
+    // is a percentage or the raw points a points scale reports instead.
+    // Grade fields arriving in this same request count too.
+    const isGraded =
+      hasRecordedGrade({
+        numericPercentage: data.numericPercentage as number | undefined,
+        overallScore: data.overallScore as number | undefined,
+        score: data.score as string | undefined,
+      }) ||
+      hasRecordedGrade({
+        numericPercentage: submission.numericPercentage,
+        overallScore: submission.overallScore,
+        score: submission.score,
+      });
 
-    if (!hasNumericGrade) {
+    if (!isGraded) {
       return Response.json(
         {
           success: false,
-          message:
-            'An overall percentage is required before marking as graded.',
+          message: 'An overall grade is required before marking as graded.',
         },
         { status: 400 }
       );
@@ -153,10 +180,32 @@ export async function action({ request }: ActionFunctionArgs) {
 
   data.updatedAt = new Date();
 
-  const updatedSubmission = await prisma.submission.update({
-    where: { id: submission.id },
-    data,
-  });
+  // Keep unsubmittedAt in the write predicate (same style as unsubmit's own
+  // optimistic-concurrency guard) so a student's unsubmit that lands between
+  // the read above and this write cannot silently win the race.
+  try {
+    await prisma.$transaction(async (tx) => {
+      const updateResult = await tx.submission.updateMany({
+        where: { id: submission.id, unsubmittedAt: null },
+        data,
+      });
 
-  return Response.json({ success: true, submission: updatedSubmission });
+      if (updateResult.count !== 1) {
+        throw new GradeSaveConflictError();
+      }
+    });
+  } catch (err) {
+    if (err instanceof GradeSaveConflictError) {
+      return Response.json(
+        { success: false, message: UNSUBMITTED_BEFORE_GRADED_MESSAGE },
+        { status: 409 }
+      );
+    }
+    throw err;
+  }
+
+  return Response.json({
+    success: true,
+    submission: { id: submission.id, ...data },
+  });
 }

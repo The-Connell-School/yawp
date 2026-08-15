@@ -1,4 +1,8 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
+import {
+  matchesDocumentWhere,
+  type ScopedDocument,
+} from '~/utils/testing/where-eval';
 
 const existingCms = {
   id: 'cms-existing',
@@ -11,7 +15,11 @@ const existingCms = {
 };
 
 const prisma = {
+  user: {
+    findUnique: mock(),
+  },
   document: {
+    findFirst: mock(),
     findUnique: mock(),
   },
   assignmentModule: {
@@ -26,11 +34,20 @@ const prisma = {
 };
 
 const requireUserId = mock();
+const requireMembership = mock();
 
 mock.module('~/utils/db.server', () => ({ prisma }));
 mock.module('~/utils/auth.server.js', () => ({
   requireUserId,
+  requireMembership,
 }));
+
+// Student B owns document-1. Teacher T teaches a class B is enrolled in.
+const DOC_B: ScopedDocument = {
+  id: 'document-1',
+  membershipId: 'student-profile-1',
+  teacherProfileIds: ['profile-teacher'],
+};
 
 const { action } = await import('./route');
 
@@ -54,6 +71,8 @@ async function readBody(response: any) {
 
 describe('api.model.assignment-module-session', () => {
   beforeEach(() => {
+    prisma.user.findUnique.mockReset();
+    prisma.document.findFirst.mockReset();
     prisma.document.findUnique.mockReset();
     prisma.assignmentModule.findUnique.mockReset();
     prisma.assignmentModuleSession.findFirst.mockReset();
@@ -61,11 +80,22 @@ describe('api.model.assignment-module-session', () => {
     prisma.assignmentModuleSession.update.mockReset();
     prisma.assignmentModuleSession.findUnique.mockReset();
     requireUserId.mockReset();
+    requireMembership.mockReset();
 
     requireUserId.mockResolvedValue('user-1');
-    prisma.document.findUnique.mockResolvedValue({
-      membershipId: 'student-profile-1',
+    requireMembership.mockResolvedValue({
+      id: 'student-profile-1',
+      role: 'STUDENT',
     });
+    prisma.user.findUnique.mockResolvedValue({ isAdmin: false });
+    // Stands in for the database: the row comes back only when the query's own where
+    // clause selects it.
+    const findDocument = async ({ where }: any) =>
+      matchesDocumentWhere(where, DOC_B)
+        ? { id: DOC_B.id, membershipId: DOC_B.membershipId }
+        : null;
+    prisma.document.findFirst.mockImplementation(findDocument);
+    prisma.document.findUnique.mockImplementation(findDocument);
     prisma.assignmentModule.findUnique.mockResolvedValue({
       id: 'module-1',
       instructions: [{ id: 'instruction-1', prompt: 'Prompt' }],
@@ -180,6 +210,125 @@ describe('api.model.assignment-module-session', () => {
         instructionsCompleted: 0,
         updatedAt: expect.any(Date),
       }),
+    });
+  });
+
+  describe('authorization', () => {
+    test("refuses to hand back a session on another student's document", async () => {
+      requireUserId.mockResolvedValue('user-a');
+      requireMembership.mockResolvedValue({
+        id: 'profile-a',
+        role: 'STUDENT',
+      });
+      prisma.assignmentModuleSession.findFirst.mockResolvedValue({
+        id: 'cms-existing',
+      });
+      prisma.assignmentModuleSession.findUnique.mockResolvedValue(existingCms);
+
+      const response = await action({
+        request: requestFor({
+          documentId: 'document-1',
+          assignmentModuleId: 'module-1',
+        }),
+        params: {},
+      } as any);
+
+      const body = await readBody(response);
+      expect(response.init?.status).toBe(404);
+      // The cms id is the cmsId the tutor endpoint keys on -- leaking it is the
+      // pivot from this endpoint into someone else's tutor session.
+      expect(JSON.stringify(body)).not.toContain('cms-existing');
+      expect(JSON.stringify(body)).not.toContain('Existing feedback');
+      expect(prisma.assignmentModuleSession.create).not.toHaveBeenCalled();
+    });
+
+    test("refuses to seed a new session onto another student's document", async () => {
+      requireUserId.mockResolvedValue('user-a');
+      requireMembership.mockResolvedValue({
+        id: 'profile-a',
+        role: 'STUDENT',
+      });
+      prisma.assignmentModuleSession.findFirst.mockResolvedValue(null);
+
+      const response = await action({
+        request: requestFor({
+          documentId: 'document-1',
+          assignmentModuleId: 'module-1',
+        }),
+        params: {},
+      } as any);
+
+      expect(response.init?.status).toBe(404);
+      expect(prisma.assignmentModuleSession.create).not.toHaveBeenCalled();
+    });
+
+    test('lets the student who owns the document get or create the session', async () => {
+      prisma.assignmentModuleSession.findFirst.mockResolvedValue(null);
+      prisma.assignmentModuleSession.create.mockResolvedValue({
+        id: 'cms-created',
+      });
+      prisma.assignmentModuleSession.findUnique.mockResolvedValue({
+        ...existingCms,
+        id: 'cms-created',
+      });
+
+      const response = await action({
+        request: requestFor({
+          documentId: 'document-1',
+          assignmentModuleId: 'module-1',
+        }),
+        params: {},
+      } as any);
+
+      const body = await readBody(response);
+      expect(body.cms.id).toBe('cms-created');
+      expect(prisma.assignmentModuleSession.create).toHaveBeenCalledTimes(1);
+    });
+
+    test("lets a teacher read the student's existing session", async () => {
+      requireUserId.mockResolvedValue('user-teacher');
+      requireMembership.mockResolvedValue({
+        id: 'profile-teacher',
+        role: 'TEACHER',
+      });
+      prisma.assignmentModuleSession.findFirst.mockResolvedValue({
+        id: 'cms-existing',
+      });
+      prisma.assignmentModuleSession.findUnique.mockResolvedValue(existingCms);
+
+      const response = await action({
+        request: requestFor({
+          documentId: 'document-1',
+          assignmentModuleId: 'module-1',
+        }),
+        params: {},
+      } as any);
+
+      const body = await readBody(response);
+      expect(body.cms.id).toBe('cms-existing');
+      expect(prisma.assignmentModuleSession.create).not.toHaveBeenCalled();
+    });
+
+    test("refuses to let a teacher seed a session onto a student's document", async () => {
+      // Reading student work is grading. Creating a tutor session with a seeded
+      // assistant message puts dialogue in the student's editor they never started.
+      requireUserId.mockResolvedValue('user-teacher');
+      requireMembership.mockResolvedValue({
+        id: 'profile-teacher',
+        role: 'TEACHER',
+      });
+      prisma.assignmentModuleSession.findFirst.mockResolvedValue(null);
+
+      const response = await action({
+        request: requestFor({
+          documentId: 'document-1',
+          assignmentModuleId: 'module-1',
+        }),
+        params: {},
+      } as any);
+
+      expect(response.init?.status).toBe(403);
+      expect(prisma.assignmentModuleSession.create).not.toHaveBeenCalled();
     });
   });
 });

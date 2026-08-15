@@ -3,6 +3,7 @@ import {
   computeWeightedPercentage,
   formatAssignmentGrade,
   formatPointGrade,
+  pointsScaleGradeFields,
 } from './gradeMath';
 
 describe('computeWeightedPercentage', () => {
@@ -73,5 +74,58 @@ describe('formatAssignmentGrade', () => {
         score: '4/5',
       })
     ).toBe('4/5');
+  });
+});
+
+describe('pointsScaleGradeFields', () => {
+  test('reports the earned points out of the top of the scale', () => {
+    expect(
+      pointsScaleGradeFields({ categories: [{ score: 2 }], maxScore: 3 })
+    ).toEqual({
+      overallScore: 2,
+      numericPercentage: null,
+      letterGrade: null,
+      score: '2/3',
+    });
+  });
+
+  test('reports a top score', () => {
+    expect(
+      pointsScaleGradeFields({ categories: [{ score: 3 }], maxScore: 3 })
+    ).toMatchObject({ overallScore: 3, score: '3/3' });
+  });
+
+  test('reports a zero score as earned points, not as a missing grade', () => {
+    expect(
+      pointsScaleGradeFields({ categories: [{ score: 0 }], maxScore: 3 })
+    ).toMatchObject({ overallScore: 0, score: '0/3' });
+  });
+
+  test('never invents a percentage or a letter for a points scale', () => {
+    const fields = pointsScaleGradeFields({
+      categories: [{ score: 3 }],
+      maxScore: 3,
+    });
+
+    expect(fields.numericPercentage).toBeNull();
+    expect(fields.letterGrade).toBeNull();
+  });
+
+  test('averages and rounds across several categories', () => {
+    expect(
+      pointsScaleGradeFields({
+        categories: [{ score: 3 }, { score: 2 }],
+        maxScore: 3,
+      })
+    ).toMatchObject({ overallScore: 3, score: '3/3' });
+  });
+
+  test('clamps a score that landed outside the scale', () => {
+    expect(
+      pointsScaleGradeFields({ categories: [{ score: 9 }], maxScore: 3 })
+    ).toMatchObject({ overallScore: 3, score: '3/3' });
+    expect(
+      pointsScaleGradeFields({ categories: [{ score: -4 }], maxScore: 3 })
+    ).toMatchObject({ overallScore: 0, score: '0/3' });
   });
 });

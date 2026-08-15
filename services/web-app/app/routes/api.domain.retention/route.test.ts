@@ -34,6 +34,23 @@ describe('api.domain.retention', () => {
     expect(prisma.documentWriteJournal.deleteMany).not.toHaveBeenCalled();
   });
 
+  test('refuses the token in the query string', async () => {
+    // Query strings are recorded by access logs, proxies, and browser history.
+    // A destructive deleteMany must never be reachable with a credential that
+    // has been written to a log line. The only production caller — the
+    // EventBridge API destination in infra/main.tf — already sends the header.
+    const request = new Request(
+      'https://example.com/api/domain/retention?token=retention-token',
+      { method: 'POST' }
+    );
+
+    const response = (await loader({ request } as any)) as Response;
+
+    expect(response.status).toBe(401);
+    expect(prisma.documentRevision.deleteMany).not.toHaveBeenCalled();
+    expect(prisma.documentWriteJournal.deleteMany).not.toHaveBeenCalled();
+  });
+
   test('cleans up versions and write journals', async () => {
     prisma.documentRevision.deleteMany.mockResolvedValue({ count: 9 });
     prisma.documentWriteJournal.deleteMany.mockResolvedValue({ count: 2 });

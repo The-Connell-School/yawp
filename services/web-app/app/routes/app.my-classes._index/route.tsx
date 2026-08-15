@@ -9,14 +9,21 @@ import { Link, useLoaderData, useSearchParams } from 'react-router';
 import { useState } from 'react';
 import { Tabs, TabsList, TabsTrigger } from '~/components/ui/tabs';
 import { Button } from '~/components/ui/button';
-import { ClassManageSheet } from '~/components/class-manage-sheet';
-import { TeacherClassCard } from '~/components/teacher-class-card';
+import {
+  ClassManageSheet,
+} from '~/components/class-manage-sheet';
+import {
+  TeacherClassCard,
+} from '~/components/teacher-class-card';
+import { StudentClassCard } from '~/components/student-class-card';
+import { NoDataPlaceholder } from '~/components/no-data-placeholder.js';
 import { requireMembership, requireUserId } from '~/utils/auth.server.js';
 import { prisma } from '~/utils/db.server.js';
 import { generateClassCode } from '~/utils/class';
 import { generateClassCardGradientKey } from '~/utils/class-card-gradient';
 import { getTeacherClassCardStats } from '~/utils/teacher-class-card-stats.server';
 import { pickClassArtKeyForOrganization } from '~/utils/class-art-assignment.server';
+import { getStudentEnrolledClasses } from '~/utils/student-classes.server';
 
 async function getTeacherSchoolIds(membershipId: string) {
   const teacher = await prisma.orgMembership.findUnique({
@@ -30,8 +37,13 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
   const profile = await requireMembership(request, userId);
 
-  if (profile.role !== 'TEACHER') {
-    return redirect('/app');
+  if (profile.role === 'STUDENT') {
+    const studentClasses = await getStudentEnrolledClasses(profile.id);
+    return dataResponse({ role: 'STUDENT' as const, studentClasses });
+  }
+
+  if (profile.role !== "TEACHER") {
+    throw redirect('/app');
   }
 
   const [classes, teacherSchools] = await Promise.all([
@@ -100,6 +112,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   });
 
   return dataResponse({
+    role: 'TEACHER' as const,
     classes: classesWithStats,
     teacherSchoolCount: teacherSchools?.schools.length ?? 0,
     schools,
@@ -111,11 +124,8 @@ export async function action({ request }: ActionFunctionArgs) {
   const userId = await requireUserId(request);
   const profile = await requireMembership(request, userId);
 
-  if (profile.role !== 'TEACHER') {
-    return dataResponse(
-      { error: 'Only teachers can manage classes.' },
-      { status: 403 }
-    );
+  if (profile.role !== "TEACHER") {
+    return dataResponse({ error: 'Only teachers can manage classes.' }, { status: 403 });
   }
 
   const formData = await request.formData();
@@ -125,40 +135,24 @@ export async function action({ request }: ActionFunctionArgs) {
   if (intent === 'create-class') {
     const schoolId = formData.get('schoolId') as string;
     const schoolYear = formData.get('schoolYear') as string;
-    const grade = formData.get('grade') as string;
-    const period = formData.get('period') as string;
+    const grade = (formData.get('grade') as string)?.trim() || null;
+    const period = (formData.get('period') as string)?.trim() || null;
     const title = (formData.get('title') as string)?.trim() || null;
     let code = (formData.get('code') as string)?.trim().toUpperCase() || '';
 
-    if (!schoolId || !schoolYear || !grade || !period) {
-      return dataResponse(
-        { error: 'All required fields must be filled.' },
-        { status: 400 }
-      );
+    if (!schoolId || !schoolYear) {
+      return dataResponse({ error: 'All required fields must be filled.' }, { status: 400 });
     }
 
     if (!allowedSchoolIds.has(schoolId)) {
-      return dataResponse(
-        { error: 'Invalid school for your account.' },
-        { status: 400 }
-      );
+      return dataResponse({ error: 'Invalid school for your account.' }, { status: 400 });
     }
 
     if (!/^\d{4}-\d{4}$/.test(schoolYear)) {
-      return dataResponse(
-        { error: 'School year must be YYYY-YYYY.' },
-        { status: 400 }
-      );
+      return dataResponse({ error: 'School year must be YYYY-YYYY.' }, { status: 400 });
     }
 
     if (!code) code = generateClassCode();
-
-    if (!/^[A-Z0-9]{3,10}$/.test(code)) {
-      return dataResponse(
-        { error: 'Code must be 3-10 alphanumeric characters.' },
-        { status: 400 }
-      );
-    }
 
     try {
       await prisma.class.create({
@@ -192,37 +186,21 @@ export async function action({ request }: ActionFunctionArgs) {
     const classId = formData.get('classId') as string;
     const schoolId = formData.get('schoolId') as string;
     const schoolYear = formData.get('schoolYear') as string;
-    const grade = formData.get('grade') as string;
-    const period = formData.get('period') as string;
+    const grade = (formData.get('grade') as string)?.trim() || null;
+    const period = (formData.get('period') as string)?.trim() || null;
     const title = (formData.get('title') as string)?.trim() || null;
     const code = (formData.get('code') as string)?.trim().toUpperCase() || '';
 
-    if (!classId || !schoolId || !schoolYear || !grade || !period || !code) {
-      return dataResponse(
-        { error: 'All required fields must be filled.' },
-        { status: 400 }
-      );
+    if (!classId || !schoolId || !schoolYear || !code) {
+      return dataResponse({ error: 'All required fields must be filled.' }, { status: 400 });
     }
 
     if (!allowedSchoolIds.has(schoolId)) {
-      return dataResponse(
-        { error: 'Invalid school for your account.' },
-        { status: 400 }
-      );
+      return dataResponse({ error: 'Invalid school for your account.' }, { status: 400 });
     }
 
     if (!/^\d{4}-\d{4}$/.test(schoolYear)) {
-      return dataResponse(
-        { error: 'School year must be YYYY-YYYY.' },
-        { status: 400 }
-      );
-    }
-
-    if (!/^[A-Z0-9]{3,10}$/.test(code)) {
-      return dataResponse(
-        { error: 'Code must be 3-10 alphanumeric characters.' },
-        { status: 400 }
-      );
+      return dataResponse({ error: 'School year must be YYYY-YYYY.' }, { status: 400 });
     }
 
     const existingClass = await prisma.class.findFirst({
@@ -269,8 +247,60 @@ export async function action({ request }: ActionFunctionArgs) {
   return dataResponse({ error: 'Unknown action.' }, { status: 400 });
 }
 
+function StudentMyClassesView({
+  studentClasses,
+}: {
+  studentClasses: Array<Parameters<typeof StudentClassCard>[0]['klass']>;
+}) {
+  return (
+    <section className="no-scrollbar flex h-full w-full flex-col overflow-y-scroll">
+      <div className="flex w-full justify-between border-b bg-secondary">
+        <div className="mx-auto w-full max-w-screen-lg p-3 sm:p-5">
+          <div className="flex flex-col">
+            <h2>My Classes</h2>
+            <p className="mt-3 max-w-full text-muted-foreground sm:max-w-[460px]">
+              The classes you&apos;re enrolled in.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div className="mx-auto w-full min-w-0 max-w-screen-lg px-3 py-4 pb-24 sm:px-5">
+        {studentClasses.length ? (
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {studentClasses.map((klass) => (
+              <StudentClassCard key={klass.id} klass={klass} />
+            ))}
+          </div>
+        ) : (
+          <NoDataPlaceholder
+            title="No classes yet"
+            subtitle="When your teacher adds you to a class, it will appear here."
+          />
+        )}
+      </div>
+    </section>
+  );
+}
+
 export default function MyClassesRoute() {
   const data = useLoaderData<typeof loader>();
+
+  if (data.role === 'STUDENT') {
+    return <StudentMyClassesView studentClasses={data.studentClasses} />;
+  }
+
+  return <TeacherMyClassesView data={data} />;
+}
+
+function TeacherMyClassesView({
+  data,
+}: {
+  data: Extract<
+    ReturnType<typeof useLoaderData<typeof loader>>,
+    { role: 'TEACHER' }
+  >;
+}) {
   const [searchParams, setSearchParams] = useSearchParams();
   const selectedSchoolId = searchParams.get('school') ?? 'all';
   const [sheetOpen, setSheetOpen] = useState(false);

@@ -8,6 +8,7 @@ import {
   type AssignmentTypeRubricConfigSource,
 } from './assignment-type-rubric-config';
 import type { RubricCategory } from '~/domain/assignment-types/assignment-type-rubric.shared';
+import { normalizeScoreStep } from './score-scale-steps';
 
 export type AssignmentTypeGradingInstructions =
   | {
@@ -28,6 +29,12 @@ export type AssignmentTypeGradingInstructions =
 
 export type ResolvedAssignmentTypeGradingConfig = {
   source: AssignmentTypeRubricConfigSource;
+  /**
+   * The assignment type's own rubric is in use but some categories are not
+   * fully filled in. Grading still uses it; the flag exists so the gap is
+   * shown rather than silently swapping in a default rubric.
+   */
+  rubricIncomplete: boolean;
   assignmentTypeId: string;
   assignmentTypeKind: string | null;
   assignmentTypeTitle: string | null;
@@ -36,6 +43,8 @@ export type ResolvedAssignmentTypeGradingConfig = {
   scoringType: string;
   minScore: number;
   maxScore: number;
+  /** Gap between allowed scores; 1 means every value in the range. */
+  step: number;
   rubricCategories: RubricCategory[];
   instructions: AssignmentTypeGradingInstructions;
   rubricSnapshot: Record<string, unknown>;
@@ -141,6 +150,7 @@ function buildResolvedConfig({
   row: AssignmentTypeGradingRow | null;
 }): ResolvedAssignmentTypeGradingConfig {
   const parsedConfig = parseAssignmentTypeRubricConfig({
+    assignmentTypeKind: row?.kind ?? assignmentTypeKind,
     scoringScaleJson: row?.scoringScaleJson,
     rubricJson: row?.rubricJson,
     gradingPromptConfigJson: row?.gradingPromptConfigJson,
@@ -155,20 +165,20 @@ function buildResolvedConfig({
         )
       : (parsedConfig.promptConfig as Record<string, unknown>);
   const { minScore, maxScore } = getScoreBounds(parsedConfig.scoringScale);
+  const step = normalizeScoreStep(parsedConfig.scoringScale.step);
   const scoringType = getScoringType(parsedConfig.scoringScale);
   const rubricCategories = parsedConfig.rubric.categories;
 
   return {
     source: parsedConfig.source,
+    rubricIncomplete: parsedConfig.rubricIncomplete,
     assignmentTypeId,
     assignmentTypeKind: row?.kind ?? assignmentTypeKind,
     assignmentTypeTitle: row?.title ?? assignmentTypeTitle,
     label:
       parsedConfig.source === 'assignment-type'
-        ? (row?.title ??
-          assignmentTypeTitle ??
-          'Assignment type grading config')
-        : 'Thesis-driven essay grading assistant',
+        ? (row?.title ?? assignmentTypeTitle ?? 'Assignment type grading config')
+        : (parsedConfig.defaultLabel ?? 'Thesis-driven essay grading assistant'),
     version:
       parsedConfig.source === 'assignment-type'
         ? (row?.gradingAssistantVersion ?? 1)
@@ -176,12 +186,14 @@ function buildResolvedConfig({
     scoringType,
     minScore,
     maxScore,
+    step,
     rubricCategories,
     instructions: getAssignmentTypeGradingInstructions(promptConfigSnapshot),
     rubricSnapshot: {
       categories: rubricCategories,
       minScore,
       maxScore,
+      step,
       scoringType,
     },
     promptConfigSnapshot,

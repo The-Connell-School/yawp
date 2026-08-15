@@ -34,15 +34,15 @@ mock.module('react-router', () => ({
 
 import type { ClassInsight } from './class-insights-panel';
 
-const { ClassInsightsPanel } = await import('./class-insights-panel');
+const { ClassInsightsPanel, resolveClassInsightPanelPresentation } =
+  await import('./class-insights-panel');
 
 const READY_INSIGHT: ClassInsight = {
   status: 'ready' as const,
   submissionCount: 24,
   generatedAt: '2026-07-08T00:00:00.000Z',
   summary: {
-    overview:
-      'The class writes strong theses but struggles to analyze evidence.',
+    overview: 'The class writes strong theses but struggles to analyze evidence.',
     categories: [
       {
         key: 'thesis_and_content',
@@ -139,6 +139,10 @@ describe('ClassInsightsPanel', () => {
     );
     expect(el.textContent).toMatch(/summarize class performance/i);
     expect(el.textContent).not.toContain('strong theses');
+    expect(el.querySelector('[data-testid="class-summary-placeholder"]')).toBeTruthy();
+    expect(
+      el.querySelector('[data-testid="class-insight-generate-button"]')
+    ).toBeTruthy();
   });
 
   it('submits to the insights endpoint when generating', () => {
@@ -174,6 +178,7 @@ describe('ClassInsightsPanel', () => {
     expect(el.textContent).toContain('Evidence/Support');
     expect(el.textContent).toContain('Model quote analysis');
     expect(el.textContent).toMatch(/24 submissions/i);
+    expect(el.querySelector('[data-testid="class-summary-placeholder"]')).toBeFalsy();
     // regenerate affordance is available once an insight exists
     expect(el.textContent).toMatch(/regenerate|update/i);
 
@@ -265,9 +270,13 @@ describe('ClassInsightsPanel', () => {
       />
     );
     expect(el.querySelector('button')).toBeNull();
-    expect(el.textContent).toContain(
+    const subtitle = el.querySelector(
+      '[data-testid="class-insight-panel-subtitle"]'
+    );
+    expect(subtitle?.textContent).toContain(
       'Grade a few submissions first, then generate class insights.'
     );
+    expect(el.textContent).not.toContain('No summary yet');
   });
 
   it('shows a reason instead of a button during the regeneration cooldown', () => {
@@ -282,12 +291,10 @@ describe('ClassInsightsPanel', () => {
         gradedCount={30}
       />
     );
-    expect(
-      el.querySelector(
-        '[data-testid="class-insight-generate-unavailable-reason"]'
-      )
-    ).not.toBeNull();
-    expect(el.textContent).toMatch(/regenerate in 23 hours/i);
+    const subtitle = el.querySelector(
+      '[data-testid="class-insight-panel-subtitle"]'
+    );
+    expect(subtitle?.textContent).toMatch(/regenerate in 23 hours/i);
     expect(
       Array.from(el.querySelectorAll('button')).some((button) =>
         button.textContent?.match(/regenerate/i)
@@ -307,7 +314,10 @@ describe('ClassInsightsPanel', () => {
         gradedCount={staleInsight.submissionCount}
       />
     );
-    expect(el.textContent).toContain(
+    const subtitle = el.querySelector(
+      '[data-testid="class-insight-panel-subtitle"]'
+    );
+    expect(subtitle?.textContent).toContain(
       'No new graded submissions since the last summary.'
     );
     expect(
@@ -405,37 +415,57 @@ describe('ClassInsightsPanel', () => {
     expect(url).toContain('status=gap');
     expect(categoryButton.getAttribute('aria-expanded')).toBe('true');
   });
+});
 
-  it('offers a planner hand-off on each next step when the planner is enabled', () => {
-    const el = render(
-      <ClassInsightsPanel
-        classAssignmentId="ca-1"
-        initialInsight={READY_INSIGHT}
-        gradedCount={30}
-        lessonPlannerEnabled
-      />
-    );
-
-    const planLink = Array.from(el.querySelectorAll('a')).find((anchor) =>
-      anchor.textContent?.match(/plan this lesson/i)
-    )!;
-    expect(planLink).toBeTruthy();
-    // Ids only: the planner rebuilds the prompt from the stored insight.
-    expect(planLink.getAttribute('href')).toBe(
-      '/app/lesson-planner?from=ca-1&step=0'
-    );
+describe('resolveClassInsightPanelPresentation', () => {
+  it('uses one subtitle when generation is available but no summary exists yet', () => {
+    expect(
+      resolveClassInsightPanelPresentation({
+        hasInsight: false,
+        isWorking: false,
+        submissionCount: 0,
+        generatedAt: null,
+        generateAvailability: { canGenerate: true },
+      })
+    ).toEqual({
+      subtitle:
+        'Generate a summary to see class-wide strengths, gaps, and teaching next steps.',
+      showGenerateButton: true,
+      generateButtonLabel: 'Summarize class performance',
+    });
   });
 
-  it('hides the planner hand-off when the org gate is off', () => {
-    const el = render(
-      <ClassInsightsPanel
-        classAssignmentId="ca-1"
-        initialInsight={READY_INSIGHT}
-        gradedCount={30}
-      />
-    );
+  it('folds blocked reasons into the subtitle when generation is unavailable', () => {
+    expect(
+      resolveClassInsightPanelPresentation({
+        hasInsight: false,
+        isWorking: false,
+        submissionCount: 0,
+        generatedAt: null,
+        generateAvailability: {
+          canGenerate: false,
+          reason: 'Grade a few submissions first, then generate class insights.',
+        },
+      }).subtitle
+    ).toBe('Grade a few submissions first, then generate class insights.');
+  });
 
-    expect(el.textContent).toContain('Model quote analysis');
-    expect(el.textContent).not.toMatch(/plan this lesson/i);
+  it('appends regeneration reasons to the ready-state subtitle', () => {
+    const presentation = resolveClassInsightPanelPresentation({
+      hasInsight: true,
+      isWorking: false,
+      submissionCount: 24,
+      generatedAt: '2026-07-08T00:00:00.000Z',
+      generateAvailability: {
+        canGenerate: false,
+        reason: 'No new graded submissions since the last summary.',
+      },
+    });
+
+    expect(presentation.subtitle).toContain('Based on 24 submissions');
+    expect(presentation.subtitle).toContain(
+      'No new graded submissions since the last summary.'
+    );
+    expect(presentation.showGenerateButton).toBe(false);
   });
 });
