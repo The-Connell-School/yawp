@@ -986,3 +986,73 @@ describe('buildLessonPlannerSystemPrompt — no bare prompt ids in a unit overvi
     );
   });
 });
+
+describe('RECOMMENDED_LESSON_PLANNER_PROMPTS — the way in', () => {
+  const byId = new Map(
+    RECOMMENDED_LESSON_PLANNER_PROMPTS.map((prompt) => [prompt.id, prompt])
+  );
+
+  test('offers a plain "plan a lesson" for a teacher who has not narrowed it down', () => {
+    expect(byId.get('plan-a-lesson')?.label).toBe('Plan a lesson');
+  });
+
+  test('keeps skill and standard as separate ways in', () => {
+    // A teacher working from a standards document and a teacher working from
+    // what their class is bad at are starting from different places.
+    expect(byId.get('plan-a-skill')?.label).toBe('Plan a lesson on a skill');
+    expect(byId.get('plan-a-standard')?.label).toBe(
+      'Plan a lesson on a standard'
+    );
+  });
+
+  test('asks the teacher to paste the standard rather than name a code', () => {
+    // They already have the document open; a code would have to be resolved
+    // against a catalog Yawp does not hold.
+    expect(byId.get('plan-a-standard')?.prompt.toLowerCase()).toContain(
+      'paste'
+    );
+  });
+
+  test('every starter prompt is a whole message a teacher could send', () => {
+    for (const prompt of RECOMMENDED_LESSON_PLANNER_PROMPTS) {
+      expect(prompt.label.length).toBeGreaterThan(0);
+      expect(prompt.prompt.length).toBeGreaterThan(20);
+      expect(prompt.id).toMatch(/^[a-z0-9-]+$/);
+    }
+    const ids = RECOMMENDED_LESSON_PLANNER_PROMPTS.map((p) => p.id);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+});
+
+describe('buildLessonPlannerSystemPrompt — handing back several pieces at once', () => {
+  const prompt = buildLessonPlannerSystemPrompt({
+    teacherName: null,
+    organizationName: 'Connell School',
+  });
+
+  test('says what it built, at the top', () => {
+    expect(prompt.toLowerCase()).toContain('say so at the top');
+  });
+
+  test('names each piece by the title on its card', () => {
+    // "the handout" gives a teacher nothing to match against later.
+    expect(prompt).toContain('Name each piece by its own title');
+  });
+
+  /**
+   * The confusion from the demo: a plan that points somewhere instead of
+   * saying what a thing is. It cannot see the screen, so a location is a guess
+   * dressed as an instruction.
+   */
+  test('describes pieces rather than pointing at where they sit', () => {
+    const lower = prompt.toLowerCase();
+    expect(lower).toContain('do not tell the teacher where to look');
+    expect(lower).toContain('on the right');
+    expect(lower).toContain('in the sidebar');
+  });
+
+  test('talks about the stack, which is what the teacher sees', () => {
+    expect(prompt).toContain('stack');
+    expect(prompt).not.toContain('packet');
+  });
+});

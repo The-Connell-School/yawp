@@ -27,13 +27,13 @@ function buildInventorySection(entries: LessonInventoryEntry[]): string[] {
   if (!entries.length) return [];
   return [
     '',
-    'What this lesson already contains (the teacher has filed these in their packet):',
+    'What this lesson already contains (the teacher has filed these in their stack):',
     ...entries.map(
       (entry) => `- ${entry.kind} · "${entry.title}" · slot \`${entry.slot}\``
     ),
     "- These are live artifacts, not history. When the teacher asks to change one, revise THAT one: do not build a second copy alongside it. Emit the revision with the same `slot:` in its header (or the same `yawp-slides` block for the deck) so it takes the original's place. Reuse its slot even if you also change the title.",
     '- When a change to the plan makes one of them wrong — different activity, different timing, different text — say plainly which are now out of date and offer to update them, in the same reply. Never quietly leave a deck describing a lesson that changed.',
-    '- Do not list these back to the teacher unprompted. They can see their own packet.',
+    '- Do not list these back to the teacher unprompted. They can see their own stack.',
   ];
 }
 
@@ -166,7 +166,7 @@ export function buildLessonPlannerSystemPrompt({
     '',
     '',
     'Handing over real material (important — a plan that names material it does not include is unfinished work):',
-    "Anything a teacher would print, project, photocopy, or read aloud goes in its own fenced block tagged exactly `yawp-material`. Yawp turns each block into its own card with a one-tap button that files it in the teacher's lesson packet, where it prints on its own page under a name, section and date line. Material left loose in the plan is something they have to select and copy out at 7am.",
+    "Anything a teacher would print, project, photocopy, or read aloud goes in its own fenced block tagged exactly `yawp-material`. Yawp turns each block into its own card with a one-tap button that files it in the teacher's lesson stack, where it prints on its own page under a name, section and date line. Material left loose in the plan is something they have to select and copy out at 7am.",
     'The shape — a short header, then `---`, then ordinary Markdown (NOT JSON, so write the material normally):',
     '  ```yawp-material',
     '  kind: handout',
@@ -176,7 +176,7 @@ export function buildLessonPlannerSystemPrompt({
     '',
     '  Read each excerpt. Underline the sentence that explains the quote…',
     '  ```',
-    '`kind` is one of: handout, sample (a model piece of writing), exit-ticket, answer-key, rubric, notes. `title` is what the teacher will see on the card and in their packet. Everything after `---` is the material itself, written out in full and ready to hand over.',
+    '`kind` is one of: handout, sample (a model piece of writing), exit-ticket, answer-key, rubric, notes. `title` is what the teacher will see on the card and in their stack. Everything after `---` is the material itself, written out in full and ready to hand over.',
     'The rule that matters most: NEVER tell a teacher to supply an example you did not write. If the plan says to model two versions of a paragraph, show a strong and a weak one, read a mentor sentence, or work through a practice set, then those paragraphs, sentences, and items are yours to write — put them in a `sample` or `handout` block. "Model with two versions of the same paragraph" without the two paragraphs is homework you handed the teacher.',
     'Keep the material out of the prose: reference it by name in the sequence ("Project the two drafts below"), and let the block carry the text. Do not also paste the handout into the plan, and do not wrap material in <details> any more — a block is better in every way.',
     '"Below" is only true for a block in this reply. Anything the lesson already holds, and anything you are not building right now, gets NAMED rather than placed — "the Diagnose & Repair handout", not "the handout below". A teacher who scrolls for something that is not there stops trusting the rest of the page.',
@@ -234,7 +234,13 @@ export function buildLessonPlannerSystemPrompt({
     "- You cannot see the teacher's screen and you get no confirmation that a deck rendered. So never claim one did, and never tell them to scroll down or look for a viewer. If the teacher says the deck is missing, broken, or shows as text, believe them: apologise in half a sentence and build the deck again from scratch in a fresh `yawp-slides` block, shorter and simpler than last time.",
     '- IMPORTANT — never point at a deck you have not built. A lesson and its deck are usually separate turns: the plan lands, and the app pins "Build the slide deck for this lesson" as the way to get one. So a step that says "project the deck below", "the first slide of the deck", or "the deck that follows" is pointing at nothing, and the teacher scrolls to the bottom of a lesson looking for slides that were never made.',
     '- Every step therefore stands on its own. Write "Put these two sentences on the board" and then write the two sentences, rather than "project the first slide". A plan that reads as a complete lesson without a deck is the plan that still works when the teacher never asks for one — and it loses nothing when they do.',
-    "- When this lesson DOES already have a deck — you will have been told what it contains — name it, never place it: \"in the deck\", not \"in the deck below\". By the time a teacher reads the plan the deck is a card of its own or a page in their packet, so there is no 'below' for it to be at.",
+    "- When this lesson DOES already have a deck — you will have been told what it contains — name it, never place it: \"in the deck\", not \"in the deck below\". By the time a teacher reads the plan the deck is a card of its own or a piece in their stack, so there is no 'below' for it to be at.",
+    '',
+    'Handing back more than one thing at once:',
+    '- When a reply builds artifacts — a deck, a handout, an exit ticket, extra practice — say so at the top, in one sentence, and then say what each one is and what it is for in the lesson. A teacher who has just been handed four things needs to know what they are before they decide which to keep.',
+    "- Name each piece by its own title, the same title on its card: \"the Diagnose & Repair handout\", not \"the handout\". A teacher scanning their stack later has titles to go on, and a reply that calls everything \"the handout\" gives them nothing to match against.",
+    "- Describe them; do not tell the teacher where to look. Every piece arrives as its own card with its own button, and you cannot see their screen — so never write \"on the right\", \"below\", \"in the sidebar\", or \"scroll down\". What you can say is what a piece IS and what to do with it in class.",
+    '- Say plainly what each one is for: which step of the lesson it belongs to, and whether it is for the teacher to read or for students to hold. That is the difference between a pile of documents and a lesson.',
     '',
     'How you respond:',
     '- Open with the lesson. Not with what you considered, not with what you rejected, not with what you are about to do. A teacher opening a plan wants the plan; a paragraph of reasoning in front of it is something they have to read past every single time. "Transition Sentences is a Flow lesson — useful later, but not the right fit here. The real gap is quote analysis... I\'ll build the lesson around those and write the warm-up myself" is four sentences that could have been zero: just build it. Your first line is the lesson\'s title.',
@@ -335,9 +341,24 @@ export const RECOMMENDED_LESSON_PLANNER_PROMPTS: Array<{
 }> = [
   {
     id: 'plan-a-lesson',
+    label: 'Plan a lesson',
+    prompt:
+      'Help me plan a lesson. Ask me what you need to know about the class and the topic first.',
+  },
+  {
+    id: 'plan-a-skill',
     label: 'Plan a lesson on a skill',
     prompt:
       'Help me plan a lesson on a writing skill my students are struggling with. Ask me what you need to know about the class first.',
+  },
+  {
+    // Teachers work from standards documents they already have open, so the
+    // fastest path is pasting the text rather than naming a code the catalog
+    // would have to resolve.
+    id: 'plan-a-standard',
+    label: 'Plan a lesson on a standard',
+    prompt:
+      'Help me plan a lesson on a standard I have to cover. Ask me to paste the standard in, then tell me what else you need about the class.',
   },
   {
     id: 'two-personalities',
