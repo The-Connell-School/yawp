@@ -915,20 +915,20 @@ test.describe('YAWP! Lesson Planner', () => {
     const replies = page.locator('[data-role="assistant"]');
     await replies
       .nth(0)
-      .getByRole('button', { name: /keep for the lesson/i })
+      .getByRole('button', { name: /add all of this/i })
       .click();
 
     const bar = page.getByTestId('lesson-packet-bar');
-    await expect(bar).toContainText(/1 resource/i);
+    await expect(bar).toContainText(/1 piece/i);
 
     // The second reply is a handout, so it is kept for students.
     await replies
       .nth(1)
-      .getByRole('button', { name: /keep as a handout/i })
+      .getByRole('button', { name: /add all as a handout/i })
       .click();
-    await expect(bar).toContainText(/2 resources/i);
+    await expect(bar).toContainText(/2 pieces/i);
 
-    await bar.getByRole('link', { name: /open lesson packet/i }).click();
+    await bar.getByRole('link', { name: /open the stack/i }).click();
     await expect(page).toHaveURL(
       new RegExp(`/app/lesson-planner/${conversationId}/packet`)
     );
@@ -1017,7 +1017,7 @@ test.describe('YAWP! Lesson Planner', () => {
     ).toContainText(/draft/i);
     await expect(
       page.getByRole('listitem').filter({ has: keptRow })
-    ).toContainText(/1 resource/i);
+    ).toContainText(/1 piece/i);
   });
 
   test('stars a lesson and lifts it to the top of the history', async ({
@@ -1411,8 +1411,8 @@ test.describe('YAWP! Lesson Planner', () => {
     // Filing a handout puts something in the packet, so there has to be a way
     // to get to it — without keeping the whole lesson plan first.
     const bar = page.getByTestId('lesson-packet-bar');
-    await expect(bar).toContainText(/1 resource/i);
-    await bar.getByRole('link', { name: /open lesson packet/i }).click();
+    await expect(bar).toContainText(/1 piece/i);
+    await bar.getByRole('link', { name: /open the stack/i }).click();
     await expect(page).toHaveURL(
       new RegExp(`/app/lesson-planner/${conversationId}/packet`)
     );
@@ -1436,7 +1436,7 @@ test.describe('YAWP! Lesson Planner', () => {
     await page
       .locator('[data-role="assistant"]')
       .first()
-      .getByRole('button', { name: /keep for the lesson/i })
+      .getByRole('button', { name: /add all of this/i })
       .click();
     await keep;
 
@@ -1718,7 +1718,7 @@ test.describe('YAWP! Lesson Planner', () => {
     await page
       .locator('[data-role="assistant"]')
       .first()
-      .getByRole('button', { name: /keep for the lesson/i })
+      .getByRole('button', { name: /add all of this/i })
       .click();
     await save;
 
