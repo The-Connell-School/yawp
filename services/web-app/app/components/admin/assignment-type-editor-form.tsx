@@ -321,16 +321,24 @@ export function AssignmentTypeEditorForm({
 
         <Section
           title="Rubric"
-          description="Pick the rubric this assignment type grades with, or paste in a new one."
+          description="Keep using this assignment type's existing rubric, or choose a portable rubric from the shared library."
         >
-          {/*
-            The field-by-field rubric builder and the grading-assistant prompt
-            editor used to live here. Rubrics are now written elsewhere and
-            pasted in whole, so both are intentionally out of the UI rather
-            than deleted — the editors and the columns they wrote to are still
-            in the codebase, and an assignment type with no library rubric
-            still grades from them.
+          {assignmentTypeId ? (
+            <RubricLibrarySection
+              assignmentTypeId={assignmentTypeId}
+              rubrics={rubrics}
+              selectedRubricId={selectedRubricId}
+            />
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              Shared rubrics become available after this assignment type is
+              saved. The existing rubric editor remains available below.
+            </p>
+          )}
 
+          <div
+            className={assignmentTypeId ? 'space-y-4 border-t pt-6' : 'space-y-4'}
+          >
             <RubricSourceBanner rubric={rubricState} />
             <RubricConfigurationEditor
               key={`rubric-editor-${editorGeneration}`}
@@ -347,18 +355,7 @@ export function AssignmentTypeEditorForm({
               namePrefix="assignmentType"
               onChange={setPromptConfigState}
             />
-          */}
-          {assignmentTypeId ? (
-            <RubricLibrarySection
-              assignmentTypeId={assignmentTypeId}
-              rubrics={rubrics}
-              selectedRubricId={selectedRubricId}
-            />
-          ) : (
-            <p className="text-sm text-muted-foreground">
-              Choose a rubric once this assignment type exists.
-            </p>
-          )}
+          </div>
         </Section>
 
         {!isEdit ? (
