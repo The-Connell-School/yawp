@@ -247,11 +247,15 @@ describe('enforce-cap.sh', () => {
     const { previewDir, sourceDir } = makeEnv(root, 232);
     rmSync(previewDir, { recursive: true });
     makeEnv(root, 233);
+    const docker = makeDockerStub(root);
 
     const result = run(root, {
       OPEN_PR_NUMBERS: '233',
       PREVIEW_MODE: 'reconcile',
       PREVIEW_MAX_RESIDENT: '30',
+      PREVIEW_DOCKER: docker.stub,
+      PREVIEW_DOCKER_STATE: docker.state,
+      PREVIEW_DOCKER_LOG: docker.log,
     });
 
     expect(result.status).toBe(0);
@@ -261,6 +265,32 @@ describe('enforce-cap.sh', () => {
       CAP_RESULT: 'ok',
     });
     expect(existsSync(sourceDir)).toBe(false);
+    expect(readFileSync(docker.log, 'utf8')).not.toContain('compose -p');
+  });
+
+  test('fails closed when a source-only resident still has Compose resources', () => {
+    const root = makeRoot();
+    const { previewDir, sourceDir } = makeEnv(root, 232);
+    rmSync(previewDir, { recursive: true });
+    makeEnv(root, 233);
+    const docker = makeDockerStub(root, [232]);
+
+    const result = run(root, {
+      OPEN_PR_NUMBERS: '233',
+      PREVIEW_MODE: 'reconcile',
+      PREVIEW_MAX_RESIDENT: '30',
+      PREVIEW_DOCKER: docker.stub,
+      PREVIEW_DOCKER_STATE: docker.state,
+      PREVIEW_DOCKER_LOG: docker.log,
+    });
+
+    expect(result.status).toBe(0);
+    expect(parse(result.stdout)).toMatchObject({
+      CAP_RESULT: 'error',
+      CAP_REASON: 'cleanup-failed',
+    });
+    expect(existsSync(sourceDir)).toBe(true);
+    expect(result.stderr).toContain('Compose resources exist');
   });
 
   test('leaves open pull requests alone', () => {

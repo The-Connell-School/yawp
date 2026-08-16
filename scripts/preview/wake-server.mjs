@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process';
-import { timingSafeEqual } from 'node:crypto';
-import { mkdir, open, rename, writeFile } from 'node:fs/promises';
+import { createHmac, timingSafeEqual } from 'node:crypto';
+import { mkdir, open, readFile, rename, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
@@ -29,6 +29,73 @@ export function parsePreviewPr(host, domain) {
   return Number.isSafeInteger(pr) ? pr : null;
 }
 
+function nonnegativeInteger(value, fallback, name) {
+  const parsed = Number(value ?? fallback);
+  if (!Number.isSafeInteger(parsed) || parsed < 0) {
+    throw new Error(`${name} must be a nonnegative integer`);
+  }
+  return parsed;
+}
+
+export function wakeCommandTimeoutMs(env = process.env) {
+  const lockSeconds = nonnegativeInteger(env.PREVIEW_LOCK_WAIT_SECONDS, 900, 'PREVIEW_LOCK_WAIT_SECONDS');
+  const healthAttempts = nonnegativeInteger(env.PREVIEW_WAKE_HEALTH_ATTEMPTS, 60, 'PREVIEW_WAKE_HEALTH_ATTEMPTS');
+  const healthInterval = nonnegativeInteger(
+    env.PREVIEW_WAKE_HEALTH_INTERVAL_SECONDS,
+    1,
+    'PREVIEW_WAKE_HEALTH_INTERVAL_SECONDS',
+  );
+  // Shell owns the bounded lock and health phases. A failed target can consume one
+  // complete health window before rollback consumes another restoring displacement.
+  // Keep the parent alive through both, plus cleanup time.
+  return (lockSeconds + (2 * healthAttempts * healthInterval) + 60) * 1000;
+}
+
+function signedAccessCookieIsValid(cookieHeader, secret) {
+  try {
+    const raw = String(cookieHeader || '')
+      .split(';')
+      .map((part) => part.trim())
+      .find((part) => part.startsWith('__yawp_preview_access='));
+    if (!raw) return false;
+    const cookie = decodeURIComponent(raw.slice(raw.indexOf('=') + 1));
+    const separator = cookie.lastIndexOf('.');
+    if (separator < 1) return false;
+    const value = cookie.slice(0, separator);
+    const signature = cookie.slice(separator + 1);
+    const expected = createHmac('sha256', secret).update(value).digest('base64').replace(/=+$/, '');
+    if (!safeSecretEqual(signature, expected)) return false;
+    const decoded = JSON.parse(Buffer.from(value, 'base64').toString('utf8'));
+    return typeof decoded === 'string' && decoded.startsWith('seat-v1:');
+  } catch {
+    return false;
+  }
+}
+
+export async function hasMatchingPreviewAccessCredential({ root, pr, uri, cookieHeader }) {
+  try {
+    const url = new URL(trustedUri(uri), 'https://preview.invalid');
+    const candidate = String(url.searchParams.get('code') || '').trim().toLowerCase();
+    if (/^[a-z]+-[a-z]+-[1-9][0-9]{3}$/.test(candidate)) {
+      const seats = JSON.parse(await readFile(
+        path.join(root, 'previews', `pr-${pr}`, 'access-seats.json'),
+        'utf8',
+      ));
+      if (
+        Array.isArray(seats)
+        && seats.some((seat) => safeSecretEqual(candidate, String(seat?.code || '').trim().toLowerCase()))
+      ) return true;
+    }
+    const secret = (await readFile(
+      path.join(root, 'previews', `pr-${pr}`, 'access-secret'),
+      'utf8',
+    )).trim();
+    return secret.length >= 32 && signedAccessCookieIsValid(cookieHeader, secret);
+  } catch {
+    return false;
+  }
+}
+
 function trustedUri(value) {
   if (typeof value !== 'string' || !value.startsWith('/') || /[\r\n]/.test(value)) return '/';
   return value;
@@ -45,6 +112,7 @@ export function createWakeHandler({
   secret,
   ensureRunning,
   recordAccess,
+  authorizeWake = async () => false,
   maxConcurrentWakes = 2,
   redirectUrl = ({ hostname, uri }) => `https://${hostname}${uri}`,
 }) {
@@ -54,7 +122,7 @@ export function createWakeHandler({
   }
   const inFlight = new Map();
 
-  function wake(pr) {
+  function wake(pr, options) {
     if (!inFlight.has(pr)) {
       if (inFlight.size >= maxConcurrentWakes) {
         const error = new Error('Preview wake concurrency is full');
@@ -62,7 +130,7 @@ export function createWakeHandler({
         throw error;
       }
       const operation = Promise.resolve()
-        .then(() => ensureRunning(pr))
+        .then(() => ensureRunning(pr, options))
         .finally(() => inFlight.delete(pr));
       inFlight.set(pr, operation);
     }
@@ -86,18 +154,24 @@ export function createWakeHandler({
       return;
     }
 
+    const forwardedUri = Array.isArray(request.headers['x-forwarded-uri'])
+      ? request.headers['x-forwarded-uri'][0]
+      : request.headers['x-forwarded-uri'];
+    const uri = trustedUri(forwardedUri || request.url);
+
     try {
-      await wake(pr);
+      const authorized = await authorizeWake(pr, uri, request);
+      if (!authorized) {
+        send(response, 401, 'Open this sleeping preview with its one-click access URL.\n');
+        return;
+      }
+      await wake(pr, { allowDisplacement: true });
       try {
         await recordAccess(pr);
       } catch (error) {
         console.error('Preview activity recording failed', error);
       }
       const hostname = `pr-${pr}.${domain.toLowerCase()}`;
-      const forwardedUri = Array.isArray(request.headers['x-forwarded-uri'])
-        ? request.headers['x-forwarded-uri'][0]
-        : request.headers['x-forwarded-uri'];
-      const uri = trustedUri(forwardedUri || request.url);
       response.statusCode = 307;
       response.setHeader('location', redirectUrl({ hostname, uri }));
       response.end();
@@ -162,7 +236,17 @@ export function startAccessLogFollower({
         try {
           const entry = JSON.parse(line);
           const pr = parsePreviewPr(entry.RequestHost, domain);
-          if (pr !== null) prs.add(pr);
+          const method = String(entry.RequestMethod || 'GET').toUpperCase();
+          const requestPath = String(entry.RequestPath || entry.RequestUri || '/').split('?')[0];
+          const status = Number(entry.DownstreamStatus || entry.OriginStatus || 200);
+          if (
+            pr !== null
+            && method !== 'HEAD'
+            && method !== 'OPTIONS'
+            && requestPath !== '/api/healthcheck'
+            && Number.isFinite(status)
+            && status < 400
+          ) prs.add(pr);
         } catch {
           // Ignore partial or malformed access-log entries; request routing is unaffected.
         }
@@ -207,25 +291,39 @@ function classifyWakeError(error) {
   return error;
 }
 
-export function createDefaultWakeOperations({ root, wakeScript, maxRunning }) {
+export function createDefaultWakeOperations({
+  root,
+  wakeScript,
+  maxRunning,
+  commandTimeoutMs = wakeCommandTimeoutMs(),
+}) {
   const recentAccess = new Map();
   const accessWrites = new Map();
   return {
-    async ensureRunning(pr) {
+    async ensureRunning(pr, { allowDisplacement = false } = {}) {
       try {
         const { stdout } = await execFileAsync('bash', [wakeScript, String(pr)], {
           env: {
             ...process.env,
             PREVIEW_ROOT: root,
             PREVIEW_MAX_RUNNING: String(maxRunning),
+            PREVIEW_WAKE_ALLOW_DISPLACEMENT: allowDisplacement ? 'true' : 'false',
           },
-          timeout: 180_000,
+          timeout: commandTimeoutMs,
           maxBuffer: 1024 * 1024,
         });
         return { result: stdout };
       } catch (error) {
         throw classifyWakeError(error);
       }
+    },
+    async authorizeWake(pr, uri, request) {
+      return hasMatchingPreviewAccessCredential({
+        root,
+        pr,
+        uri,
+        cookieHeader: request?.headers?.cookie,
+      });
     },
     async recordAccess(pr) {
       const now = Math.floor(Date.now() / 1000);
