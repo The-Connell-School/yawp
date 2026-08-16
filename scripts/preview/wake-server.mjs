@@ -46,6 +46,7 @@ export function createWakeHandler({
   ensureRunning,
   recordAccess,
   maxConcurrentWakes = 2,
+  redirectUrl = ({ hostname, uri }) => `https://${hostname}${uri}`,
 }) {
   if (!domain || !secret) throw new Error('preview wake domain and secret are required');
   if (!Number.isSafeInteger(maxConcurrentWakes) || maxConcurrentWakes < 1) {
@@ -96,8 +97,9 @@ export function createWakeHandler({
       const forwardedUri = Array.isArray(request.headers['x-forwarded-uri'])
         ? request.headers['x-forwarded-uri'][0]
         : request.headers['x-forwarded-uri'];
+      const uri = trustedUri(forwardedUri || request.url);
       response.statusCode = 307;
-      response.setHeader('location', `https://${hostname}${trustedUri(forwardedUri || request.url)}`);
+      response.setHeader('location', redirectUrl({ hostname, uri }));
       response.end();
     } catch (error) {
       if (error?.code === 'capacity-full') {

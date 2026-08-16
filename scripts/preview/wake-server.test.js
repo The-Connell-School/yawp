@@ -197,6 +197,45 @@ describe('preview wake server', () => {
     );
   });
 
+  test('preserves method, body, path, and query through the wake redirect', async () => {
+    let received;
+    const upstream = await listen(async (request, response) => {
+      const chunks = [];
+      for await (const chunk of request) chunks.push(chunk);
+      received = {
+        method: request.method,
+        url: request.url,
+        body: Buffer.concat(chunks).toString('utf8'),
+      };
+      response.statusCode = 204;
+      response.end();
+    });
+    const wake = await listen(createWakeHandler({
+      domain: 'preview.yawp.school',
+      secret: 'wake-secret',
+      ensureRunning: async () => ({ result: 'woken' }),
+      recordAccess: async () => {},
+      redirectUrl: ({ uri }) => `${upstream}${uri}`,
+    }));
+
+    const response = await fetch(`${wake}/api/assignments?class=9`, {
+      method: 'POST',
+      body: JSON.stringify({ title: 'First request survives' }),
+      headers: {
+        'content-type': 'application/json',
+        'x-preview-wake-secret': 'wake-secret',
+        'x-forwarded-host': 'pr-241.preview.yawp.school',
+      },
+    });
+
+    expect(response.status).toBe(204);
+    expect(received).toEqual({
+      method: 'POST',
+      url: '/api/assignments?class=9',
+      body: JSON.stringify({ title: 'First request survives' }),
+    });
+  });
+
   test('serves the wake redirect even when activity persistence fails', async () => {
     const originalError = console.error;
     console.error = () => {};

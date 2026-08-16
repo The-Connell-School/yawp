@@ -548,6 +548,7 @@ describe('PR preview deployment contract', () => {
     const bootstrap = readRepoFile('scripts/preview/bootstrap-host.sh');
     const wakeServer = readRepoFile('scripts/preview/wake-server.mjs');
     const wakeScript = readRepoFile('scripts/preview/wake-preview.sh');
+    const wakeProof = readRepoFile('scripts/preview/prove-wake.sh');
 
     expect(workflow).toContain('scripts/preview/wake-server.mjs');
     expect(workflow).toContain('scripts/preview/wake-preview.sh');
@@ -566,6 +567,9 @@ describe('PR preview deployment contract', () => {
     expect(wakeScript).toContain(' start');
     expect(wakeScript).not.toContain(' up ');
     expect(wakeScript).not.toContain(' down ');
+    expect(wakeProof).toContain('PROOF_RESULT=pass');
+    expect(wakeProof).toContain('PROOF_CONTAINER_BEFORE');
+    expect(wakeProof).toContain('PROOF_CONTAINER_AFTER');
   });
 
   test('preview idle defaults are two days and comments promise URL wake', () => {
