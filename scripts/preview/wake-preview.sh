@@ -5,6 +5,7 @@ set -euo pipefail
 
 ROOT="${PREVIEW_ROOT:-/srv/yawp-preview}"
 DOCKER="${PREVIEW_DOCKER:-docker}"
+CURL="${PREVIEW_CURL:-curl}"
 RUNNING_CAP="${PREVIEW_MAX_RUNNING:-8}"
 LOCK_WAIT_SECONDS="${PREVIEW_LOCK_WAIT_SECONDS:-900}"
 HEALTH_ATTEMPTS="${PREVIEW_WAKE_HEALTH_ATTEMPTS:-60}"
@@ -13,6 +14,7 @@ ACCESS_DIR="${PREVIEW_ACCESS_DIR:-$ROOT/wake/access}"
 FIXED_NOW_EPOCH="${PREVIEW_NOW_EPOCH:-}"
 NOW_EPOCH=0
 WAKE_LEASE_SECONDS="${PREVIEW_WAKE_LEASE_SECONDS:-120}"
+LEGACY_HEALTH_PORT="${PREVIEW_LEGACY_HEALTH_PORT:-8080}"
 PR_NUMBER="${1:-}"
 
 is_positive_integer() {
@@ -51,6 +53,10 @@ is_nonnegative_integer "$WAKE_LEASE_SECONDS" || {
   echo "PREVIEW_WAKE_LEASE_SECONDS must be a nonnegative integer" >&2
   exit 2
 }
+if ! is_positive_integer "$LEGACY_HEALTH_PORT" || (( LEGACY_HEALTH_PORT > 65535 )); then
+  echo "PREVIEW_LEGACY_HEALTH_PORT must be a valid TCP port" >&2
+  exit 2
+fi
 
 preview_dir="$ROOT/previews/pr-${PR_NUMBER}"
 compose_file="$preview_dir/docker-compose.yml"
@@ -183,6 +189,17 @@ wait_for_project_health() {
   for (( attempt = 1; attempt <= HEALTH_ATTEMPTS; attempt++ )); do
     status="$($DOCKER inspect --format '{{.State.Health.Status}}' "$container_id" 2>/dev/null || true)"
     [[ "$status" == "healthy" ]] && return 0
+    if [[ -z "$status" ]]; then
+      local container_ip
+      container_ip="$($DOCKER inspect \
+        --format '{{with index .NetworkSettings.Networks "preview"}}{{.IPAddress}}{{end}}' \
+        "$container_id" 2>/dev/null || true)"
+      if [[ "$container_ip" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]] && \
+        "$CURL" --fail --silent --show-error --max-time 2 \
+          "http://${container_ip}:${LEGACY_HEALTH_PORT}/api/healthcheck" >/dev/null; then
+        return 0
+      fi
+    fi
     (( attempt < HEALTH_ATTEMPTS )) && sleep "$HEALTH_INTERVAL_SECONDS"
   done
   return 1

@@ -53,7 +53,19 @@ sudo mkdir -p \
   "$ROOT/previews" \
   "$ROOT/sources" \
   "$ROOT/wake/access"
-sudo chown -R "$USER":"$USER" "$ROOT"
+# Preview deploy and teardown jobs create/remove descendants concurrently. Only repair
+# ownership on the stable directories bootstrap itself must write; recursively walking
+# the whole root races with teardown and makes a harmless disappearing PR path fatal.
+sudo chown "$USER":"$USER" \
+  "$ROOT" \
+  "$ROOT/traefik" \
+  "$ROOT/traefik/letsencrypt" \
+  "$ROOT/traefik/dynamic" \
+  "$ROOT/traefik/logs" \
+  "$ROOT/previews" \
+  "$ROOT/sources" \
+  "$ROOT/wake" \
+  "$ROOT/wake/access"
 docker network inspect preview >/dev/null 2>&1 || docker network create preview >/dev/null
 
 connect_container_to_preview_network() {
