@@ -31,8 +31,15 @@ function renderCompose(overrides = {}) {
 describe('renderPreviewCompose', () => {
   test('renders the fast full-stack preview runtime by default', () => {
     const compose = renderCompose();
+    const parsed = Bun.YAML.parse(compose);
 
     expect(compose).toContain('services:');
+    expect(parsed.services.web.healthcheck.test).toEqual([
+      'CMD',
+      'bun',
+      '-e',
+      "fetch('http://127.0.0.1:8080/api/healthcheck').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))",
+    ]);
     expect(compose).not.toContain('\n  postgres:\n');
     expect(compose).not.toContain('image: postgres:16');
     expect(compose).toContain('toolbox:');
@@ -48,6 +55,9 @@ describe('renderPreviewCompose', () => {
     expect(compose).not.toContain('bun prisma generate');
     expect(compose).not.toContain('bun run --cwd services/web-app dev');
     expect(compose).toContain('web:');
+    expect(compose).toContain('restart: unless-stopped');
+    expect(compose).toContain('healthcheck:');
+    expect(compose).toContain('/api/healthcheck');
     expect(compose).toContain('PORT: "8080"');
     expect(compose).toContain(
       'DATABASE_URL: "postgresql://postgres:postgres@preview-postgres:5432/yawp_pr_142"'
@@ -81,7 +91,7 @@ describe('renderPreviewCompose', () => {
     expect(compose).not.toContain(deprecatedPreviewSlug);
   });
 
-  test('leaves Traefik routing open for the app-owned access gate', () => {
+  test('leaves running preview traffic independent of the wake service', () => {
     const compose = renderCompose();
 
     expect(compose).not.toContain('basicauth');
@@ -98,7 +108,7 @@ describe('renderPreviewCompose', () => {
 
     expect(source).not.toContain(deprecatedTransportAuth);
     expect(compose).not.toContain('basicauth');
-    expect(compose).not.toContain('.middlewares=');
+    expect(compose).not.toContain('preview-wake-request@file');
   });
 
   // PREVIEW_ACCESS_GATE is the same switch read by the root route middleware. Requiring

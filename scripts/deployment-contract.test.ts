@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { execFileSync } from 'child_process';
-import { readdirSync, readFileSync, statSync } from 'fs';
+import { existsSync, readdirSync, readFileSync, statSync } from 'fs';
 import { join } from 'path';
 
 const repoRoot = join(import.meta.dir, '..');
@@ -301,13 +301,17 @@ describe('PR preview deployment contract', () => {
     expect(previewWorkflow).toContain('name: PR preview');
     expect(previewWorkflow).toContain('pull_request');
     expect(previewWorkflow).toContain(
-      'types: [opened, synchronize, reopened, labeled, closed]'
+      'types: [opened, synchronize, reopened, ready_for_review, labeled, unlabeled, closed]'
     );
     expect(previewWorkflow).toContain(
       'github.event.pull_request.head.repo.full_name == github.repository'
     );
-    expect(previewWorkflow).toContain('scripts/preview/deploy.sh');
-    expect(previewWorkflow).toContain('scripts/preview/destroy.sh');
+    expect(previewWorkflow).toContain(
+      'scripts/preview/admit-and-deploy.sh'
+    );
+    expect(previewWorkflow).toContain(
+      'scripts/preview/remove-preview-path.sh scripts/preview/cleanup.sh'
+    );
     expect(previewWorkflow).not.toContain(deprecatedPreviewBrand);
     expect(previewWorkflow).not.toContain(`${deprecatedPreviewEnvPrefix}_`);
     expect(previewWorkflow).not.toContain(deprecatedPreviewSlug);
@@ -323,6 +327,17 @@ describe('PR preview deployment contract', () => {
     expect(previewWorkflow).not.toContain('terraform');
     expect(previewWorkflow).not.toContain('docker push');
     expect(previewWorkflow).not.toMatch(/(^|\s)\/preview(\s|$)/);
+  });
+
+  test('retired App Runner preview infrastructure cannot be redeployed from this repo', () => {
+    const ciWorkflow = readRepoFile('.github/workflows/ci.yml');
+
+    const infraPrFiles = existsSync(join(repoRoot, 'infra-pr'))
+      ? listRepoFiles('infra-pr')
+      : [];
+    expect(infraPrFiles).toEqual([]);
+    expect(ciWorkflow).not.toContain('validate-terraform-infra-pr');
+    expect(ciWorkflow).not.toContain('terraform -chdir=infra-pr');
   });
 
   test('preview deploy preserves existing seed databases unless reset is explicit', () => {
@@ -463,6 +478,9 @@ describe('PR preview deployment contract', () => {
 
   test('preview cleanup removes closed PR resources and is scheduled', () => {
     const cleanupScript = readRepoFile('scripts/preview/cleanup.sh');
+    const removeScript = readRepoFile(
+      'scripts/preview/remove-preview-path.sh'
+    );
     const previewWorkflow = readRepoFile(
       '.github/workflows/preview-environments.yml'
     );
@@ -475,8 +493,119 @@ describe('PR preview deployment contract', () => {
     expect(cleanupScript).toContain(
       'docker volume rm "${project}_${project}-postgres-data"'
     );
+    expect(cleanupScript).toContain('preview_remove_path');
+    expect(removeScript).toContain('preview_remove_path_is_safe');
     expect(previewWorkflow).toContain('schedule:');
-    expect(previewWorkflow).toContain('bash -s < scripts/preview/cleanup.sh');
+    expect(previewWorkflow).toContain(
+      'cat scripts/preview/remove-preview-path.sh scripts/preview/cleanup.sh'
+    );
+    expect(previewWorkflow).toContain(
+      'TARGET_PR=$(shell_quote "$PR_NUMBER")'
+    );
+    expect(previewWorkflow).not.toMatch(
+      /preview-destroy:[\s\S]*?contains\(github\.event\.pull_request\.(title|body)/
+    );
+    expect(previewWorkflow).toContain('PREVIEW_MAX_RUNNING');
+    expect(previewWorkflow).toContain('PREVIEW_MAX_RESIDENT');
+    expect(previewWorkflow).toContain('PREVIEW_SLEEP_ENABLED');
+    expect(previewWorkflow).toContain('preview:keep-awake');
+    expect(previewWorkflow).toContain('PREVIEW_MODE=reconcile');
+    expect(previewWorkflow).toContain('CAP_SLEPT');
+  });
+
+  test('preview admission and deploy share one host lock', () => {
+    const previewWorkflow = readRepoFile(
+      '.github/workflows/preview-environments.yml'
+    );
+    const wrapper = readRepoFile('scripts/preview/admit-and-deploy.sh');
+    const enforcer = readRepoFile('scripts/preview/enforce-cap.sh');
+
+    expect(previewWorkflow).toContain('scripts/preview/admit-and-deploy.sh');
+    expect(previewWorkflow).toContain('PREVIEW_GITHUB_TOKEN');
+    expect(previewWorkflow).not.toContain('gh pr list --state open');
+    expect(wrapper).toContain('preview-host.lock');
+    expect(wrapper).toContain('flock -w');
+    expect(wrapper.indexOf('enforce-cap.sh')).toBeLessThan(
+      wrapper.indexOf('deploy.sh')
+    );
+    expect(enforcer).toContain(
+      'acquire_host_lock\nprune_stale_inflight_markers\nrefresh_pr_state'
+    );
+    expect(enforcer).toContain('"$previews_dir" "$ROOT/sources"');
+    expect(previewWorkflow).toContain('PREVIEW_INFLIGHT_MARKER');
+    expect(enforcer).toContain('is_inflight');
+  });
+
+  test('preview bootstrap installs aggregate host metrics timer', () => {
+    const bootstrapWorkflow = readRepoFile(
+      '.github/workflows/preview-host-bootstrap.yml'
+    );
+    const bootstrap = readRepoFile('scripts/preview/bootstrap-host.sh');
+    const metrics = readRepoFile(
+      'scripts/preview/publish-host-metrics.sh'
+    );
+
+    expect(bootstrapWorkflow).toContain('publish-host-metrics.sh');
+    expect(bootstrap).toContain('yawp-preview-metrics.timer');
+    expect(bootstrap).toContain('OnUnitActiveSec=60');
+    expect(metrics).toContain('Yawp/PreviewHost');
+    expect(metrics).toContain('MemoryUsedPercent');
+    expect(metrics).toContain('RunningPreviews');
+    expect(metrics).not.toContain('PullRequest');
+  });
+
+  test('preview bootstrap installs a secret-protected first-request wake path', () => {
+    const workflow = readRepoFile('.github/workflows/preview-host-bootstrap.yml');
+    const bootstrap = readRepoFile('scripts/preview/bootstrap-host.sh');
+    const wakeServer = readRepoFile('scripts/preview/wake-server.mjs');
+    const wakeScript = readRepoFile('scripts/preview/wake-preview.sh');
+    const wakeProof = readRepoFile('scripts/preview/prove-wake.sh');
+
+    expect(workflow).toContain('scripts/preview/wake-server.mjs');
+    expect(workflow).toContain('scripts/preview/wake-preview.sh');
+    expect(workflow).toContain('PREVIEW_MAX_RUNNING');
+    expect(workflow).toContain('PREVIEW_DOMAIN');
+    expect(bootstrap).toContain('yawp-preview-wake.service');
+    expect(bootstrap).toContain('--accesslog.filepath=/logs/access.json');
+    expect(bootstrap).toContain('rateLimit');
+    expect(bootstrap).toContain('preview-wake-fallback');
+    expect(bootstrap).toContain('X-Preview-Wake-Secret');
+    expect(bootstrap).toContain('HostRegexp(`^pr-[1-9][0-9]*\\\\.');
+    expect(bootstrap).not.toContain('/var/run/docker.sock:/var/run/docker.sock:rw');
+    expect(wakeServer).toContain('timingSafeEqual');
+    expect(wakeServer).toContain('startAccessLogFollower');
+    expect(wakeScript).toContain('docker compose');
+    expect(wakeScript).toContain(' start');
+    expect(wakeScript).not.toContain(' up ');
+    expect(wakeScript).not.toContain(' down ');
+    expect(wakeProof).toContain('PROOF_RESULT=pass');
+    expect(wakeProof).toContain('PROOF_CONTAINER_BEFORE');
+    expect(wakeProof).toContain('PROOF_CONTAINER_AFTER');
+  });
+
+  test('preview idle defaults are two days and comments promise URL wake', () => {
+    const workflow = readRepoFile('.github/workflows/preview-environments.yml');
+
+    expect(workflow).toContain(
+      "PREVIEW_DRAFT_IDLE_HOURS: ${{ vars.PREVIEW_DRAFT_IDLE_HOURS || '48' }}"
+    );
+    expect(workflow).toContain(
+      "PREVIEW_READY_IDLE_HOURS: ${{ vars.PREVIEW_READY_IDLE_HOURS || '48' }}"
+    );
+    expect(workflow).toContain(
+      "PREVIEW_SLEEP_ENABLED: ${{ vars.PREVIEW_SLEEP_ENABLED || 'true' }}"
+    );
+    expect(workflow).toContain('Open its preview URL to wake it automatically');
+  });
+
+  test('preview host bootstrap runs only reviewed default-branch code', () => {
+    const workflow = readRepoFile('.github/workflows/preview-host-bootstrap.yml');
+
+    expect(workflow).toContain(
+      "if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)"
+    );
+    expect(workflow).toContain('ref: ${{ github.sha }}');
+    expect(workflow).not.toContain('${{ inputs.ref }}');
   });
 
   test('preview workflow passes selected preview mode to remote deploy', () => {
