@@ -1,8 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import {
-  computeWeightedBandPercentage,
   computeWeightedPercentage,
-  computeWeightedPercentageForCategories,
   formatAssignmentGrade,
   formatPointGrade,
   pointsScaleGradeFields,
@@ -129,47 +127,5 @@ describe('pointsScaleGradeFields', () => {
     expect(
       pointsScaleGradeFields({ categories: [{ score: -4 }], maxScore: 3 })
     ).toMatchObject({ overallScore: 0, score: '0/3' });
-  });
-});
-
-describe('computeWeightedBandPercentage', () => {
-  const categories = [
-    { key: 'a', weight: 0.5 },
-    { key: 'b', weight: 0.5 },
-  ];
-
-  test('weights the category percentages with nothing converted', () => {
-    expect(
-      computeWeightedBandPercentage(
-        { a: { score: 92 }, b: { score: 84 } },
-        categories
-      )
-    ).toBe(88);
-  });
-
-  /**
-   * The reason banded scoring exists: on the 1-5 path a score of 4 in every
-   * category could only ever produce 89, because each score was mapped to the
-   * ceiling of its band before being averaged.
-   */
-  test('a mid-band score no longer snaps to the band ceiling', () => {
-    expect(
-      computeWeightedBandPercentage(
-        { a: { score: 84 }, b: { score: 84 } },
-        categories
-      )
-    ).toBe(84);
-    expect(
-      computeWeightedPercentageForCategories({ a: { score: 4 }, b: { score: 4 } }, [
-        { key: 'a', label: 'A', weight: 0.5, description: '' },
-        { key: 'b', label: 'B', weight: 0.5, description: '' },
-      ])
-    ).toBe(89);
-  });
-
-  test('an unscored category produces no grade rather than a partial one', () => {
-    expect(
-      computeWeightedBandPercentage({ a: { score: 92 } }, categories)
-    ).toBeNull();
   });
 });

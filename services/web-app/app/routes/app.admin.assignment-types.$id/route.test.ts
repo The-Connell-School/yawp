@@ -10,12 +10,6 @@ const prisma = {
     findMany: mock(),
     findUnique: mock(),
   },
-  // The editor lists the shared rubric library and seeds the built-in
-  // rubrics on first sight.
-  rubric: {
-    findMany: mock(() => Promise.resolve([])),
-    create: mock(),
-  },
 };
 
 const requireAdmin = mock();

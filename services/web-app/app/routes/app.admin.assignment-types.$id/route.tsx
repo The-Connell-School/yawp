@@ -11,10 +11,6 @@ import {
   parseScoringScale,
 } from '~/domain/assignment-types/assignment-type-rubric.shared';
 import { isRubricFullyPopulated } from '~/domain/assignment-types/assignment-type-rubric-config';
-import {
-  listRubrics,
-  seedStarterRubrics,
-} from '~/domain/rubrics/rubric-library.server';
 
 function parseJsonFormField(formData: FormData, name: string) {
   const value = formData.get(name);
@@ -50,20 +46,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     throw new Response('Not Found', { status: 404 });
   }
 
-  // The built-in rubrics are put in the library on first sight, so every
-  // environment offers the same starting set without a deploy step.
-  await seedStarterRubrics();
-  const rubrics = await listRubrics();
-
-  return dataResponse({
-    course,
-    rubrics: rubrics.map((rubric) => ({
-      id: rubric.id,
-      name: rubric.name,
-      title: rubric.title,
-      json: rubric.json,
-    })),
-  });
+  return dataResponse({ course });
 }
 
 export async function action({ request, params }: ActionFunctionArgs) {
@@ -234,7 +217,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
 }
 
 export default function AssignmentTypeRoute() {
-  const { course, rubrics } = useLoaderData<typeof loader>();
+  const { course } = useLoaderData<typeof loader>();
 
   return (
     <AssignmentTypeEditorForm
@@ -248,8 +231,6 @@ export default function AssignmentTypeRoute() {
       archivedAt={course.archivedAt}
       imageId={course.image?.id ?? null}
       modules={course.assignmentModules}
-      rubrics={rubrics}
-      selectedRubricId={course.rubricId ?? null}
     />
   );
 }

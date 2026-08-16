@@ -1,6 +1,5 @@
 import {
   parseOptionalBoolean,
-  parseRubricScoreBands,
   parseRubricScoreLabels,
 } from './rubric-category-options';
 import { normalizeScoreStep } from './score-scale-steps';
@@ -30,22 +29,6 @@ export type RubricScoreLabel = {
   label: string;
 };
 
-/**
- * One proficiency band inside one rubric category: a range of scores, the word
- * for it, and what earns it.
- *
- * A rubric that writes its bands out this way can be scored directly on the
- * scale the bands are written in, rather than judged on a coarse scale and
- * converted back afterwards. The band is what keeps that consistent: the model
- * picks a band from its description first, then a score inside it.
- */
-export type RubricScoreBand = {
-  min: number;
-  max: number;
-  label: string;
-  description: string;
-};
-
 export type RubricCategory = {
   key: string;
   label: string;
@@ -56,12 +39,6 @@ export type RubricCategory = {
    * shared score labels, which is how every rubric behaved before this existed.
    */
   scoreLabels?: RubricScoreLabel[];
-  /**
-   * The proficiency bands this category is judged against. Present only on a
-   * rubric that writes its bands out; absent keeps the older behaviour, where
-   * band language lives in the rubric's instruction text instead.
-   */
-  bands?: RubricScoreBand[];
   /** Whether this category gets its own feedback textarea. Absent means yes. */
   feedbackEnabled?: boolean;
   /**
@@ -131,14 +108,12 @@ export function withRubricCategoryOptions<T extends { key: string }>(
 ): T {
   const source = (raw ?? {}) as Partial<RubricCategory>;
   const scoreLabels = parseRubricScoreLabels(source.scoreLabels);
-  const bands = parseRubricScoreBands(source.bands);
   const feedbackEnabled = parseOptionalBoolean(source.feedbackEnabled);
   const grammarHighlighting = parseOptionalBoolean(source.grammarHighlighting);
 
   return {
     ...category,
     ...(scoreLabels ? { scoreLabels } : {}),
-    ...(bands ? { bands } : {}),
     ...(feedbackEnabled === undefined ? {} : { feedbackEnabled }),
     ...(grammarHighlighting === undefined ? {} : { grammarHighlighting }),
   };

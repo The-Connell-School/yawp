@@ -115,38 +115,6 @@ type RubricScoreValue = {
   isAi?: boolean;
 };
 
-/**
- * The weighted percentage for a rubric whose categories are already scored as
- * percentages, so there is nothing to convert.
- *
- * The 1-5 path maps each score onto a band ceiling and averages those, which is
- * lossy in both directions: four categories of "Proficient" can only ever come
- * out at 89. A rubric that declares its bands is scored inside them directly,
- * so the weighted average is just the weighted average.
- */
-export function computeWeightedBandPercentage(
-  rubricScores: Record<string, unknown> | null | undefined,
-  categories: readonly { key: string; weight: number }[]
-) {
-  if (!rubricScores || typeof rubricScores !== 'object') return null;
-
-  let totalWeight = 0;
-  let weightedSum = 0;
-
-  for (const category of categories) {
-    const value = (rubricScores as Record<string, RubricScoreValue>)[
-      category.key
-    ];
-    const score = value?.score;
-    if (typeof score !== 'number' || !Number.isFinite(score)) return null;
-    totalWeight += category.weight;
-    weightedSum += score * category.weight;
-  }
-
-  if (totalWeight <= 0) return null;
-  return Math.round(weightedSum / totalWeight);
-}
-
 export function computeWeightedPercentage(
   rubricScores: Record<string, unknown> | null | undefined
 ) {
