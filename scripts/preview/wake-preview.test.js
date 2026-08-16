@@ -57,6 +57,15 @@ fi
   pr="\${BASH_REMATCH[1]}"
   if [[ "$*" == *" stop"* ]]; then
     [[ "\${PREVIEW_DOCKER_FAIL_STOP_PR:-}" == "$pr" ]] && exit 1
+    if [[ "\${PREVIEW_DOCKER_BLOCK_STOP_PR:-}" == "$pr" ]]; then
+      touch "$PREVIEW_DOCKER_STOP_STARTED"
+      attempts=0
+      while [[ ! -f "$PREVIEW_DOCKER_STOP_RELEASE" && "$attempts" -lt 500 ]]; do
+        sleep 0.01
+        attempts=$((attempts + 1))
+      done
+      [[ -f "$PREVIEW_DOCKER_STOP_RELEASE" ]] || exit 1
+    fi
     awk -v pr="$pr" '$0 != pr' "$PREVIEW_DOCKER_STATE" > "$PREVIEW_DOCKER_STATE.next"
     mv "$PREVIEW_DOCKER_STATE.next" "$PREVIEW_DOCKER_STATE"
     exit 0
@@ -360,6 +369,47 @@ printf 'OK\\n'
     child.kill('SIGTERM');
     expect(await child.exited).not.toBe(0);
     expect(readFileSync(docker.state, 'utf8').trim().split('\n').sort()).toEqual(['100', '101']);
+  });
+
+  test('signal cancellation during victim stop restores the displaced preview', async () => {
+    const root = makeRoot();
+    makePreview(root, 100, { access: 10, pinned: true });
+    makePreview(root, 101, { access: 20 });
+    makePreview(root, 102, { access: 30 });
+    const docker = makeDockerStub(root, [100, 101]);
+    const stopStarted = path.join(root, 'stop-started');
+    const stopRelease = path.join(root, 'stop-release');
+    const child = Bun.spawn(['bash', script, '102'], {
+      env: {
+        ...process.env,
+        PREVIEW_ROOT: root,
+        PREVIEW_DOCKER: docker.stub,
+        PREVIEW_DOCKER_STATE: docker.state,
+        PREVIEW_DOCKER_LOG: docker.log,
+        PREVIEW_DOCKER_BLOCK_STOP_PR: '101',
+        PREVIEW_DOCKER_STOP_STARTED: stopStarted,
+        PREVIEW_DOCKER_STOP_RELEASE: stopRelease,
+        PREVIEW_MAX_RUNNING: '2',
+        PREVIEW_WAKE_SKIP_FLOCK: 'true',
+        PREVIEW_WAKE_HEALTH_ATTEMPTS: '2',
+        PREVIEW_WAKE_HEALTH_INTERVAL_SECONDS: '0',
+      },
+      stdout: 'pipe',
+      stderr: 'pipe',
+    });
+
+    for (let attempt = 0; attempt < 100 && !existsSync(stopStarted); attempt += 1) {
+      await Bun.sleep(20);
+    }
+    expect(existsSync(stopStarted)).toBe(true);
+    child.kill('SIGTERM');
+    writeFileSync(stopRelease, 'continue\n');
+
+    expect(await child.exited).not.toBe(0);
+    expect(readFileSync(docker.state, 'utf8').trim().split('\n').sort()).toEqual(['100', '101']);
+    const log = readFileSync(docker.log, 'utf8');
+    expect(log).toContain('compose -p yawp-pr-101');
+    expect(log).not.toContain('compose -p yawp-pr-102');
   });
 
   test('protects a newly awakened preview from immediate capacity ping-pong', () => {

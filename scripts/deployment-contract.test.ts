@@ -585,6 +585,13 @@ describe('PR preview deployment contract', () => {
 
   test('preview idle defaults are two days and comments promise authorized URL wake', () => {
     const workflow = readRepoFile('.github/workflows/preview-environments.yml');
+    const bootstrapWorkflow = readRepoFile(
+      '.github/workflows/preview-host-bootstrap.yml'
+    );
+    const bootstrapScript = readRepoFile('scripts/preview/bootstrap-host.sh');
+    const enforceCap = readRepoFile('scripts/preview/enforce-cap.sh');
+    const wakePreview = readRepoFile('scripts/preview/wake-preview.sh');
+    const wakeServer = readRepoFile('scripts/preview/wake-server.mjs');
 
     expect(workflow).toContain(
       "PREVIEW_DRAFT_IDLE_HOURS: ${{ vars.PREVIEW_DRAFT_IDLE_HOURS || '48' }}"
@@ -592,8 +599,33 @@ describe('PR preview deployment contract', () => {
     expect(workflow).toContain(
       "PREVIEW_READY_IDLE_HOURS: ${{ vars.PREVIEW_READY_IDLE_HOURS || '48' }}"
     );
-    expect(workflow).toContain(
-      "PREVIEW_SLEEP_ENABLED: ${{ vars.PREVIEW_SLEEP_ENABLED || 'true' }}"
+    expect(
+      workflow.match(
+        /PREVIEW_SLEEP_ENABLED: \$\{\{ vars\.PREVIEW_SLEEP_ENABLED \|\| 'true' \}\}/g
+      )
+    ).toHaveLength(2);
+    expect(
+      workflow.match(
+        /PREVIEW_MAX_RUNNING: \$\{\{ vars\.PREVIEW_MAX_RUNNING \|\| '4' \}\}/g
+      )
+    ).toHaveLength(2);
+    expect(bootstrapWorkflow).toContain(
+      "PREVIEW_MAX_RUNNING: ${{ vars.PREVIEW_MAX_RUNNING || '4' }}"
+    );
+    expect(bootstrapScript).toContain(
+      'RUNNING_CAP="${PREVIEW_MAX_RUNNING:-4}"'
+    );
+    expect(enforceCap).toContain(
+      'RUNNING_CAP="${PREVIEW_MAX_RUNNING:-4}"'
+    );
+    expect(enforceCap).toContain(
+      'SLEEP_ENABLED="${PREVIEW_SLEEP_ENABLED:-true}"'
+    );
+    expect(wakePreview).toContain(
+      'RUNNING_CAP="${PREVIEW_MAX_RUNNING:-4}"'
+    );
+    expect(wakeServer).toContain(
+      "process.env.PREVIEW_MAX_RUNNING || '4'"
     );
     expect(workflow).toContain(
       'Open its one-click URL, or revisit from an already authorized browser, to wake it automatically'

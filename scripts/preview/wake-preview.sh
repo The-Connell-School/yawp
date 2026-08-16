@@ -6,7 +6,7 @@ set -euo pipefail
 ROOT="${PREVIEW_ROOT:-/srv/yawp-preview}"
 DOCKER="${PREVIEW_DOCKER:-docker}"
 CURL="${PREVIEW_CURL:-curl}"
-RUNNING_CAP="${PREVIEW_MAX_RUNNING:-8}"
+RUNNING_CAP="${PREVIEW_MAX_RUNNING:-4}"
 SLEEP_ENABLED="${PREVIEW_SLEEP_ENABLED:-true}"
 ALLOW_DISPLACEMENT="${PREVIEW_WAKE_ALLOW_DISPLACEMENT:-true}"
 LOCK_WAIT_SECONDS="${PREVIEW_LOCK_WAIT_SECONDS:-900}"
@@ -178,14 +178,18 @@ sleep_lru_candidate() {
     return 1
   }
 
-  local candidate_dir="$ROOT/previews/pr-${oldest_pr}"
-  "$DOCKER" compose -p "yawp-pr-${oldest_pr}" \
-    -f "$candidate_dir/docker-compose.yml" stop >&2
-  is_running "$oldest_pr" && {
+  slept="$oldest_pr"
+  local candidate_dir="$ROOT/previews/pr-${slept}"
+  if ! "$DOCKER" compose -p "yawp-pr-${slept}" \
+    -f "$candidate_dir/docker-compose.yml" stop >&2; then
+    echo "Preview running capacity stop failed" >&2
+    return 1
+  fi
+  is_running "$slept" && {
     echo "Preview running capacity could not be reclaimed" >&2
     return 1
   }
-  printf '%s\n' "$oldest_pr"
+  return 0
 }
 
 wait_for_project_health() {
@@ -235,32 +239,36 @@ ensure_target_stopped() {
 fail_wake() {
   local message="$1"
   local code="$2"
-  if ! ensure_target_stopped; then
-    echo "Preview pr-${PR_NUMBER} wake failed and the target could not be stopped; refusing to restore another preview above the running cap" >&2
-    echo "$message" >&2
-    exit "$code"
-  fi
-  if ! restore_displaced; then
-    echo "Preview pr-${PR_NUMBER} wake failed and displaced pr-${slept} could not be restored" >&2
-  fi
   echo "$message" >&2
   exit "$code"
 }
 
+wake_committed=false
+displacement_started=false
 wake_started=false
-handle_signal() {
-  local signal="$1"
-  trap - TERM INT
+handle_exit() {
+  local code="$1"
+  trap - EXIT TERM INT
+  if (( code == 0 )) || [[ "$wake_committed" == "true" ]]; then
+    return 0
+  fi
   if [[ "$wake_started" == "true" ]]; then
     if ensure_target_stopped; then
       restore_displaced || echo "Interrupted wake could not restore displaced pr-${slept}" >&2
     else
       echo "Interrupted wake could not stop pr-${PR_NUMBER}; refusing to restore another preview above the running cap" >&2
     fi
+  elif [[ "$displacement_started" == "true" ]]; then
+    restore_displaced || echo "Interrupted displacement could not restore pr-${slept}" >&2
   fi
+}
+handle_signal() {
+  local signal="$1"
+  trap - TERM INT
   echo "Preview pr-${PR_NUMBER} wake interrupted by ${signal}" >&2
   exit 10
 }
+trap 'handle_exit $?' EXIT
 trap 'handle_signal TERM' TERM
 trap 'handle_signal INT' INT
 
@@ -283,7 +291,8 @@ if (( running_count >= RUNNING_CAP )); then
     echo "Preview running capacity is full and displacement is disabled" >&2
     exit 6
   fi
-  slept="$(sleep_lru_candidate)" || exit 6
+  displacement_started=true
+  sleep_lru_candidate || exit 6
 fi
 
 wake_started=true
@@ -296,6 +305,7 @@ fi
 if ! record_access "$PR_NUMBER"; then
   fail_wake "Preview pr-${PR_NUMBER} could not record its wake lease" 9
 fi
+wake_committed=true
 
 echo "WAKE_RESULT=woken"
 echo "WAKE_SLEPT=${slept}"
