@@ -20,7 +20,7 @@ The target behavior is:
 
 Provision an EC2 instance with enough CPU and disk for concurrent Docker builds. Start with at least `t3.large` or `c7i.large` and 120 GB gp3. The first host can live in the default VPC because the app stack is self-contained.
 
-Attach an IAM instance profile that can read the configured production dump object and publish aggregate host metrics. The current host uses `yawp-preview-forge-host`, scoped to `s3:GetObject` on `arn:aws:s3:::yawp-preview-videos/production.dump` plus `s3:GetBucketLocation` and prefix-scoped `s3:ListBucket` on the bucket. Its separate metrics policy allows `cloudwatch:PutMetricData` only for the `Yawp/PreviewHost` namespace. The deploy script restores through the host AWS CLI when the shared template database does not exist. Preview app containers set `AWS_EC2_METADATA_DISABLED=true`, and host bootstrap adds Docker egress blocks for EC2 metadata addresses so app code cannot borrow the host role.
+Attach an IAM instance profile that can read the configured production dump object and publish aggregate host metrics. Scope dump access to `s3:GetObject` on `arn:aws:s3:::yawp-preview-videos/production.dump` plus `s3:GetBucketLocation` and prefix-scoped `s3:ListBucket` on the bucket. Its separate metrics policy should allow `cloudwatch:PutMetricData` only for the `Yawp/PreviewHost` namespace. The deploy script restores through the host AWS CLI when the shared template database does not exist. Preview app containers set `AWS_EC2_METADATA_DISABLED=true`, and host bootstrap adds Docker egress blocks for EC2 metadata addresses so app code cannot borrow the host role.
 
 Open inbound ports:
 
