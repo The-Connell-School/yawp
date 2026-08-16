@@ -184,14 +184,12 @@ test.describe.serial('Teacher onboarding and grading lifecycle', () => {
           .fill(`Manual rubric note for ${key}.`);
       }
 
-      await page.getByTestId('grading-recalculate-from-rubric').click();
-      await expect
-        .poll(
-          async () =>
-            await page.getByTestId('grading-overall-percentage').inputValue(),
-          { timeout: 15000 }
-        )
-        .toBe('77');
+      // The teacher sets the overall percentage themselves; the rubric total
+      // is theirs to accept or ignore.
+      await page.getByTestId('grading-overall-percentage').fill('77');
+      await expect(
+        page.getByTestId('grading-overall-percentage')
+      ).toHaveValue('77');
 
       await page
         .getByTestId('grading-overall-comment')

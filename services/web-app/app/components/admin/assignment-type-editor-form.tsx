@@ -15,6 +15,10 @@ import {
   type ScoringScaleData,
 } from '~/domain/assignment-types/assignment-type-rubric.shared';
 import {
+  RubricLibrarySection,
+  type RubricOption,
+} from '~/components/admin/rubric-library-section';
+import {
   PromptConfigEditor,
   promptConfigSnapshot,
   RubricConfigurationEditor,
@@ -28,6 +32,10 @@ import {
 import { RubricSourceBanner } from './rubric-source-indicator';
 
 type AssignmentTypeEditorFormProps = {
+  /** Every rubric in the shared library, for the picker. */
+  rubrics?: RubricOption[];
+  /** The rubric this assignment type grades with, if one was chosen. */
+  selectedRubricId?: string | null;
   mode: 'create' | 'edit';
   assignmentTypeId?: string;
   titleDefaultValue?: string;
@@ -113,6 +121,8 @@ export function AssignmentTypeEditorForm({
   archivedAt = null,
   imageId = null,
   modules = [],
+  rubrics = [],
+  selectedRubricId = null,
 }: AssignmentTypeEditorFormProps) {
   const fetcher = useFetcher();
   const imageFileInputRef = useRef<HTMLInputElement>(null);
@@ -311,30 +321,41 @@ export function AssignmentTypeEditorForm({
 
         <Section
           title="Rubric"
-          description="The source of truth shared by grading and tutor guidance."
+          description="Keep using this assignment type's existing rubric, or choose a portable rubric from the shared library."
         >
-          <RubricSourceBanner rubric={rubricState} />
-          <RubricConfigurationEditor
-            key={`rubric-editor-${editorGeneration}`}
-            initialScoringScale={scoringScaleState}
-            initialRubric={rubricState}
-            namePrefix="assignmentType"
-            excludeAssignmentTypeId={assignmentTypeId ?? null}
-            onScoringScaleChange={setScoringScaleState}
-            onRubricChange={setRubricState}
-          />
-        </Section>
+          {assignmentTypeId ? (
+            <RubricLibrarySection
+              assignmentTypeId={assignmentTypeId}
+              rubrics={rubrics}
+              selectedRubricId={selectedRubricId}
+            />
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              Shared rubrics become available after this assignment type is
+              saved. The existing rubric editor remains available below.
+            </p>
+          )}
 
-        <Section
-          title="Grading assistant"
-          description="Instructions for applying this rubric during submission review."
-        >
-          <PromptConfigEditor
-            key={`prompt-editor-${editorGeneration}`}
-            initial={promptConfigState}
-            namePrefix="assignmentType"
-            onChange={setPromptConfigState}
-          />
+          <div
+            className={assignmentTypeId ? 'space-y-4 border-t pt-6' : 'space-y-4'}
+          >
+            <RubricSourceBanner rubric={rubricState} />
+            <RubricConfigurationEditor
+              key={`rubric-editor-${editorGeneration}`}
+              initialScoringScale={scoringScaleState}
+              initialRubric={rubricState}
+              namePrefix="assignmentType"
+              excludeAssignmentTypeId={assignmentTypeId ?? null}
+              onScoringScaleChange={setScoringScaleState}
+              onRubricChange={setRubricState}
+            />
+            <PromptConfigEditor
+              key={`prompt-editor-${editorGeneration}`}
+              initial={promptConfigState}
+              namePrefix="assignmentType"
+              onChange={setPromptConfigState}
+            />
+          </div>
         </Section>
 
         {!isEdit ? (
