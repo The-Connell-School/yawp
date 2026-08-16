@@ -91,7 +91,7 @@ describe('renderPreviewCompose', () => {
     expect(compose).not.toContain(deprecatedPreviewSlug);
   });
 
-  test('leaves Traefik routing open for the app-owned access gate', () => {
+  test('leaves running preview traffic independent of the wake service', () => {
     const compose = renderCompose();
 
     expect(compose).not.toContain('basicauth');
@@ -108,7 +108,7 @@ describe('renderPreviewCompose', () => {
 
     expect(source).not.toContain(deprecatedTransportAuth);
     expect(compose).not.toContain('basicauth');
-    expect(compose).not.toContain('.middlewares=');
+    expect(compose).not.toContain('preview-wake-request@file');
   });
 
   // PREVIEW_ACCESS_GATE is the same switch read by the root route middleware. Requiring

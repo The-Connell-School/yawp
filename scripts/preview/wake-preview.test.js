@@ -1,0 +1,216 @@
+import { afterEach, describe, expect, test } from 'bun:test';
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { spawnSync } from 'node:child_process';
+
+const script = path.join(import.meta.dir, 'wake-preview.sh');
+const roots = [];
+
+function makeRoot() {
+  const root = mkdtempSync(path.join(tmpdir(), 'preview-wake-'));
+  roots.push(root);
+  mkdirSync(path.join(root, 'previews'), { recursive: true });
+  mkdirSync(path.join(root, 'wake', 'access'), { recursive: true });
+  return root;
+}
+
+function makePreview(root, pr, { access = 0, pinned = false } = {}) {
+  const preview = path.join(root, 'previews', `pr-${pr}`);
+  mkdirSync(preview, { recursive: true });
+  writeFileSync(path.join(preview, 'docker-compose.yml'), 'services:\n  web: {}\n');
+  writeFileSync(path.join(preview, 'state-marker'), `state-${pr}\n`);
+  if (pinned) writeFileSync(path.join(preview, 'keep-awake'), 'true\n');
+  if (access > 0) {
+    writeFileSync(path.join(root, 'wake', 'access', `pr-${pr}`), `${access}\n`);
+  }
+  return preview;
+}
+
+function makeDockerStub(root, runningPrs = [], healthy = true) {
+  const state = path.join(root, 'running-prs.txt');
+  const log = path.join(root, 'docker.log');
+  const stub = path.join(root, 'docker-stub.sh');
+  writeFileSync(state, `${runningPrs.join('\n')}${runningPrs.length ? '\n' : ''}`);
+  writeFileSync(log, '');
+  writeFileSync(stub, `#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\\n' "$*" >> "$PREVIEW_DOCKER_LOG"
+if [[ "$1" == "ps" && "$*" == *"--format"* ]]; then
+  cat "$PREVIEW_DOCKER_STATE"
+  exit 0
+fi
+if [[ "$1" == "ps" && "$*" =~ com.docker.compose.project=yawp-pr-([0-9]+) ]]; then
+  pr="\${BASH_REMATCH[1]}"
+  grep -qx "$pr" "$PREVIEW_DOCKER_STATE" 2>/dev/null && echo "container-$pr"
+  exit 0
+fi
+if [[ "$1" == "compose" && "$*" =~ -p[[:space:]]+yawp-pr-([0-9]+) ]]; then
+  pr="\${BASH_REMATCH[1]}"
+  if [[ "$*" == *" stop"* ]]; then
+    awk -v pr="$pr" '$0 != pr' "$PREVIEW_DOCKER_STATE" > "$PREVIEW_DOCKER_STATE.next"
+    mv "$PREVIEW_DOCKER_STATE.next" "$PREVIEW_DOCKER_STATE"
+    exit 0
+  fi
+  if [[ "$*" == *" start"* ]]; then
+    grep -qx "$pr" "$PREVIEW_DOCKER_STATE" 2>/dev/null || echo "$pr" >> "$PREVIEW_DOCKER_STATE"
+    exit 0
+  fi
+  if [[ "$*" == *" ps -q web"* ]]; then
+    echo "container-$pr"
+    exit 0
+  fi
+fi
+if [[ "$1" == "inspect" ]]; then
+  ${typeof healthy === 'number' ? `[[ "$*" == *"container-${healthy}"* ]] && echo unhealthy || echo healthy` : healthy ? 'echo healthy' : 'echo unhealthy'}
+  exit 0
+fi
+exit 0
+`);
+  chmodSync(stub, 0o755);
+  return { stub, state, log };
+}
+
+function run(root, pr, docker, env = {}) {
+  return spawnSync('bash', [script, String(pr)], {
+    encoding: 'utf8',
+    env: {
+      ...process.env,
+      PREVIEW_ROOT: root,
+      PREVIEW_DOCKER: docker.stub,
+      PREVIEW_DOCKER_STATE: docker.state,
+      PREVIEW_DOCKER_LOG: docker.log,
+      PREVIEW_MAX_RUNNING: '2',
+      PREVIEW_WAKE_SKIP_FLOCK: 'true',
+      PREVIEW_WAKE_HEALTH_ATTEMPTS: '2',
+      PREVIEW_WAKE_HEALTH_INTERVAL_SECONDS: '0',
+      ...env,
+    },
+  });
+}
+
+afterEach(() => {
+  for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
+});
+
+describe('wake-preview.sh', () => {
+  test('returns immediately when the requested preview is already running', () => {
+    const root = makeRoot();
+    makePreview(root, 241);
+    const docker = makeDockerStub(root, [241]);
+
+    const result = run(root, 241, docker);
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain('WAKE_RESULT=already-running');
+    expect(readFileSync(docker.log, 'utf8')).not.toContain(' start');
+    expect(readFileSync(docker.log, 'utf8')).not.toContain(' stop');
+  });
+
+  test('starts an existing sleeping Compose project without rebuilding or deleting state', () => {
+    const root = makeRoot();
+    const preview = makePreview(root, 241);
+    const docker = makeDockerStub(root, [100]);
+
+    const result = run(root, 241, docker);
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain('WAKE_RESULT=woken');
+    expect(readFileSync(docker.log, 'utf8')).toContain('compose -p yawp-pr-241');
+    expect(readFileSync(docker.log, 'utf8')).toContain(' start');
+    expect(readFileSync(docker.log, 'utf8')).not.toContain(' up ');
+    expect(readFileSync(docker.log, 'utf8')).not.toContain(' down ');
+    expect(readFileSync(path.join(preview, 'state-marker'), 'utf8')).toBe('state-241\n');
+  });
+
+  test('at the running cap sleeps the least recently accessed unpinned preview', () => {
+    const root = makeRoot();
+    makePreview(root, 100, { access: 10, pinned: true });
+    makePreview(root, 101, { access: 20 });
+    makePreview(root, 102, { access: 30 });
+    const docker = makeDockerStub(root, [100, 101]);
+
+    const result = run(root, 102, docker);
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain('WAKE_SLEPT=101');
+    expect(readFileSync(docker.state, 'utf8').trim().split('\n').sort()).toEqual(['100', '102']);
+    const log = readFileSync(docker.log, 'utf8');
+    expect(log).toContain('compose -p yawp-pr-101');
+    expect(log).toContain(' stop');
+    expect(log).not.toContain('compose -p yawp-pr-100');
+  });
+
+  test('fails closed when every running preview is pinned', () => {
+    const root = makeRoot();
+    makePreview(root, 100, { pinned: true });
+    makePreview(root, 101, { pinned: true });
+    makePreview(root, 102);
+    const docker = makeDockerStub(root, [100, 101]);
+
+    const result = run(root, 102, docker);
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain('capacity');
+    expect(readFileSync(docker.state, 'utf8').trim().split('\n').sort()).toEqual(['100', '101']);
+    expect(readFileSync(docker.log, 'utf8')).not.toContain(' start');
+  });
+
+  test('rejects malformed PR identifiers before calling Docker', () => {
+    const root = makeRoot();
+    const docker = makeDockerStub(root);
+
+    const result = run(root, '../241', docker);
+
+    expect(result.status).not.toBe(0);
+    expect(readFileSync(docker.log, 'utf8')).toBe('');
+  });
+
+  test('does not create a missing or reclaimed environment', () => {
+    const root = makeRoot();
+    const docker = makeDockerStub(root);
+
+    const result = run(root, 999, docker);
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain('not resident');
+    expect(existsSync(path.join(root, 'previews', 'pr-999'))).toBe(false);
+    expect(readFileSync(docker.log, 'utf8')).toBe('');
+  });
+
+  test('fails when the restarted web container does not become healthy', () => {
+    const root = makeRoot();
+    makePreview(root, 241);
+    const docker = makeDockerStub(root, [], false);
+
+    const result = run(root, 241, docker);
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain('healthy');
+  });
+
+  test('restores the displaced preview when the requested wake is unhealthy', () => {
+    const root = makeRoot();
+    makePreview(root, 100, { access: 10, pinned: true });
+    makePreview(root, 101, { access: 20 });
+    makePreview(root, 102, { access: 30 });
+    const docker = makeDockerStub(root, [100, 101], 102);
+
+    const result = run(root, 102, docker);
+
+    expect(result.status).not.toBe(0);
+    expect(readFileSync(docker.state, 'utf8').trim().split('\n').sort()).toEqual(['100', '101']);
+    const log = readFileSync(docker.log, 'utf8');
+    expect(log).toContain('compose -p yawp-pr-102');
+    expect(log).toContain('compose -p yawp-pr-101');
+    expect(log.match(/ start/g)?.length).toBe(2);
+  });
+});

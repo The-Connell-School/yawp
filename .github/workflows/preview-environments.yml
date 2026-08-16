@@ -2,7 +2,7 @@ name: PR preview
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened, ready_for_review, labeled, closed]
+    types: [opened, synchronize, reopened, ready_for_review, labeled, unlabeled, closed]
   workflow_dispatch:
   schedule:
     - cron: '17 */6 * * *'
@@ -20,7 +20,7 @@ jobs:
     if: >-
       github.event_name == 'pull_request' &&
       github.event.action != 'closed' &&
-      (github.event.action != 'labeled' || github.event.label.name == 'preview:keep-awake') &&
+      ((github.event.action != 'labeled' && github.event.action != 'unlabeled') || github.event.label.name == 'preview:keep-awake') &&
       github.event.pull_request.head.repo.full_name == github.repository &&
       contains(github.event.pull_request.title, '[skip preview]') == false &&
       contains(github.event.pull_request.body, '[skip preview]') == false &&
@@ -37,9 +37,10 @@ jobs:
       PREVIEW_MAX_ENVS: ${{ vars.PREVIEW_MAX_ENVS || '30' }}
       PREVIEW_MAX_RESIDENT: ${{ vars.PREVIEW_MAX_RESIDENT || vars.PREVIEW_MAX_ENVS || '20' }}
       PREVIEW_MAX_RUNNING: ${{ vars.PREVIEW_MAX_RUNNING || '8' }}
-      PREVIEW_SLEEP_ENABLED: ${{ vars.PREVIEW_SLEEP_ENABLED || 'false' }}
-      PREVIEW_DRAFT_IDLE_HOURS: ${{ vars.PREVIEW_DRAFT_IDLE_HOURS || '24' }}
-      PREVIEW_READY_IDLE_HOURS: ${{ vars.PREVIEW_READY_IDLE_HOURS || '72' }}
+      PREVIEW_SLEEP_ENABLED: ${{ vars.PREVIEW_SLEEP_ENABLED || 'true' }}
+      PREVIEW_DRAFT_IDLE_HOURS: ${{ vars.PREVIEW_DRAFT_IDLE_HOURS || '48' }}
+      PREVIEW_READY_IDLE_HOURS: ${{ vars.PREVIEW_READY_IDLE_HOURS || '48' }}
+      PREVIEW_KEEP_AWAKE: ${{ contains(github.event.pull_request.labels.*.name, 'preview:keep-awake') }}
       PREVIEW_INFLIGHT_TTL_SECONDS: ${{ vars.PREVIEW_INFLIGHT_TTL_SECONDS || '3600' }}
       PREVIEW_DATA_MODE: ${{ vars.PREVIEW_DATA_MODE || 'seed' }}
       PREVIEW_SEAT_COUNT: ${{ vars.PREVIEW_SEAT_COUNT || '1' }}
@@ -141,6 +142,7 @@ jobs:
             "PREVIEW_SLEEP_ENABLED=$(shell_quote "$PREVIEW_SLEEP_ENABLED")"
             "PREVIEW_DRAFT_IDLE_HOURS=$(shell_quote "$PREVIEW_DRAFT_IDLE_HOURS")"
             "PREVIEW_READY_IDLE_HOURS=$(shell_quote "$PREVIEW_READY_IDLE_HOURS")"
+            "PREVIEW_KEEP_AWAKE=$(shell_quote "$PREVIEW_KEEP_AWAKE")"
             "PREVIEW_INFLIGHT_TTL_SECONDS=$(shell_quote "$PREVIEW_INFLIGHT_TTL_SECONDS")"
             "PREVIEW_INFLIGHT_MARKER=$(shell_quote "$inflight_marker")"
             "KEEP_PR=$(shell_quote "$PR_NUMBER")"
@@ -175,7 +177,7 @@ jobs:
           running="$(awk -F= '/^CAP_RUNNING=/{print $2}' /tmp/preview-deploy.log | tail -1)"
 
           for pr in $slept; do
-            gh pr comment "$pr" --body "Preview sleeping after inactivity. State and access code remain intact. Push a commit, mark the PR ready for review, or add the \`preview:keep-awake\` label to wake it." || true
+            gh pr comment "$pr" --body "Preview sleeping after 48 hours of inactivity. State and access code remain intact. Open its preview URL to wake it automatically; the first request can take a minute." || true
           done
           for pr in $evicted; do
             gh pr comment "$pr" --body "Preview reclaimed at the ${PREVIEW_MAX_RESIDENT}-resident cap. Preview-local database and access state were deleted; push a commit or add \`preview:keep-awake\` to rebuild it." || true
@@ -325,9 +327,9 @@ jobs:
       PREVIEW_SSH_USER: ${{ vars.PREVIEW_SSH_USER || 'ec2-user' }}
       PREVIEW_MAX_RESIDENT: ${{ vars.PREVIEW_MAX_RESIDENT || vars.PREVIEW_MAX_ENVS || '20' }}
       PREVIEW_MAX_RUNNING: ${{ vars.PREVIEW_MAX_RUNNING || '8' }}
-      PREVIEW_SLEEP_ENABLED: ${{ vars.PREVIEW_SLEEP_ENABLED || 'false' }}
-      PREVIEW_DRAFT_IDLE_HOURS: ${{ vars.PREVIEW_DRAFT_IDLE_HOURS || '24' }}
-      PREVIEW_READY_IDLE_HOURS: ${{ vars.PREVIEW_READY_IDLE_HOURS || '72' }}
+      PREVIEW_SLEEP_ENABLED: ${{ vars.PREVIEW_SLEEP_ENABLED || 'true' }}
+      PREVIEW_DRAFT_IDLE_HOURS: ${{ vars.PREVIEW_DRAFT_IDLE_HOURS || '48' }}
+      PREVIEW_READY_IDLE_HOURS: ${{ vars.PREVIEW_READY_IDLE_HOURS || '48' }}
       PREVIEW_INFLIGHT_TTL_SECONDS: ${{ vars.PREVIEW_INFLIGHT_TTL_SECONDS || '3600' }}
     steps:
       - name: Check preview cleanup configuration
@@ -386,7 +388,7 @@ jobs:
           resident="$(awk -F= '/^CAP_RESIDENT=/{print $2}' /tmp/reconcile.log | tail -1)"
 
           for pr in $slept; do
-            gh pr comment "$pr" --body "Preview sleeping after inactivity. State and access code remain intact. Push a commit, mark the PR ready for review, or add the \`preview:keep-awake\` label to wake it." || true
+            gh pr comment "$pr" --body "Preview sleeping after 48 hours of inactivity. State and access code remain intact. Open its preview URL to wake it automatically; the first request can take a minute." || true
           done
           for pr in $evicted; do
             gh pr comment "$pr" --body "Preview reclaimed at the ${PREVIEW_MAX_RESIDENT}-resident cap. Preview-local database and access state were deleted; push a commit or add \`preview:keep-awake\` to rebuild it." || true

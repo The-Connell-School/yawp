@@ -1,0 +1,254 @@
+import { execFile } from 'node:child_process';
+import { timingSafeEqual } from 'node:crypto';
+import { mkdir, open, rename, writeFile } from 'node:fs/promises';
+import { createServer } from 'node:http';
+import { fileURLToPath } from 'node:url';
+import path from 'node:path';
+import { promisify } from 'node:util';
+
+const execFileAsync = promisify(execFile);
+
+function safeSecretEqual(actual, expected) {
+  const actualBuffer = Buffer.from(String(actual || ''));
+  const expectedBuffer = Buffer.from(String(expected || ''));
+  return actualBuffer.length === expectedBuffer.length
+    && actualBuffer.length > 0
+    && timingSafeEqual(actualBuffer, expectedBuffer);
+}
+
+function escapeRegex(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+export function parsePreviewPr(host, domain) {
+  if (typeof host !== 'string' || typeof domain !== 'string' || !domain) return null;
+  const hostname = host.toLowerCase().replace(/:\d+$/, '');
+  const match = hostname.match(new RegExp(`^pr-([1-9][0-9]*)\\.${escapeRegex(domain.toLowerCase())}$`));
+  if (!match) return null;
+  const pr = Number(match[1]);
+  return Number.isSafeInteger(pr) ? pr : null;
+}
+
+function trustedUri(value) {
+  if (typeof value !== 'string' || !value.startsWith('/') || /[\r\n]/.test(value)) return '/';
+  return value;
+}
+
+function send(response, status, body = '') {
+  response.statusCode = status;
+  response.setHeader('content-type', 'text/plain; charset=utf-8');
+  response.end(body);
+}
+
+export function createWakeHandler({ domain, secret, ensureRunning, recordAccess }) {
+  if (!domain || !secret) throw new Error('preview wake domain and secret are required');
+  const inFlight = new Map();
+
+  function wake(pr) {
+    if (!inFlight.has(pr)) {
+      const operation = Promise.resolve()
+        .then(() => ensureRunning(pr))
+        .finally(() => inFlight.delete(pr));
+      inFlight.set(pr, operation);
+    }
+    return inFlight.get(pr);
+  }
+
+  return async (request, response) => {
+    if (!safeSecretEqual(request.headers['x-preview-wake-secret'], secret)) {
+      send(response, 403, 'Forbidden\n');
+      return;
+    }
+
+    const forwardedHost = Array.isArray(request.headers['x-forwarded-host'])
+      ? request.headers['x-forwarded-host'][0]
+      : request.headers['x-forwarded-host'];
+    const rawHost = forwardedHost || request.headers.host || '';
+    const pr = parsePreviewPr(rawHost, domain);
+    if (pr === null) {
+      response.statusCode = 204;
+      response.end();
+      return;
+    }
+
+    try {
+      await wake(pr);
+      await recordAccess(pr);
+      const hostname = `pr-${pr}.${domain.toLowerCase()}`;
+      const forwardedUri = Array.isArray(request.headers['x-forwarded-uri'])
+        ? request.headers['x-forwarded-uri'][0]
+        : request.headers['x-forwarded-uri'];
+      response.statusCode = 307;
+      response.setHeader('location', `https://${hostname}${trustedUri(forwardedUri || request.url)}`);
+      response.end();
+    } catch (error) {
+      if (error?.code === 'capacity-full') {
+        response.setHeader('retry-after', '30');
+        send(response, 503, 'Preview capacity is full; retry shortly.\n');
+      } else if (error?.code === 'not-resident') {
+        send(response, 404, 'Preview is no longer resident.\n');
+      } else {
+        console.error('Preview wake failed', error);
+        send(response, 500, 'Preview wake failed.\n');
+      }
+    }
+  };
+}
+
+export function startAccessLogFollower({
+  accessLog,
+  domain,
+  recordAccess,
+  pollMs = 5000,
+  maxBytes = 50 * 1024 * 1024,
+}) {
+  let initialized = false;
+  let inode = null;
+  let offset = 0;
+  let scanning = false;
+  let stopped = false;
+
+  async function scan() {
+    if (scanning || stopped) return;
+    scanning = true;
+    let handle;
+    try {
+      handle = await open(accessLog, 'r');
+      const info = await handle.stat();
+      if (!initialized) {
+        initialized = true;
+        inode = info.ino;
+        offset = info.size;
+        return;
+      }
+      if (inode !== info.ino || info.size < offset) {
+        inode = info.ino;
+        offset = 0;
+      }
+      if (info.size === offset) return;
+
+      const buffer = Buffer.alloc(info.size - offset);
+      const { bytesRead } = await handle.read(buffer, 0, buffer.length, offset);
+      const received = buffer.subarray(0, bytesRead);
+      const lastNewline = received.lastIndexOf(0x0a);
+      if (lastNewline < 0) return;
+      offset += lastNewline + 1;
+
+      const prs = new Set();
+      for (const line of received.subarray(0, lastNewline).toString('utf8').split('\n')) {
+        try {
+          const entry = JSON.parse(line);
+          const pr = parsePreviewPr(entry.RequestHost, domain);
+          if (pr !== null) prs.add(pr);
+        } catch {
+          // Ignore partial or malformed access-log entries; request routing is unaffected.
+        }
+      }
+      const results = await Promise.allSettled([...prs].map((pr) => recordAccess(pr)));
+      for (const result of results) {
+        if (result.status === 'rejected') console.error('Preview activity recording failed', result.reason);
+      }
+      if (info.size > maxBytes && offset === info.size) {
+        await writeFile(accessLog, '');
+        offset = 0;
+      }
+    } catch (error) {
+      if (error?.code === 'ENOENT') {
+        initialized = true;
+        inode = null;
+        offset = 0;
+      } else {
+        console.error('Preview access-log scan failed', error);
+      }
+    } finally {
+      await handle?.close().catch(() => {});
+      scanning = false;
+    }
+  }
+
+  void scan();
+  const timer = setInterval(() => void scan(), pollMs);
+  timer.unref?.();
+  return {
+    stop() {
+      stopped = true;
+      clearInterval(timer);
+    },
+  };
+}
+
+function classifyWakeError(error) {
+  const message = `${error?.stderr || ''}\n${error?.message || ''}`;
+  if (/capacity/i.test(message)) error.code = 'capacity-full';
+  else if (/not resident/i.test(message)) error.code = 'not-resident';
+  return error;
+}
+
+export function createDefaultWakeOperations({ root, wakeScript, maxRunning }) {
+  const recentAccess = new Map();
+  const accessWrites = new Map();
+  return {
+    async ensureRunning(pr) {
+      try {
+        const { stdout } = await execFileAsync('bash', [wakeScript, String(pr)], {
+          env: {
+            ...process.env,
+            PREVIEW_ROOT: root,
+            PREVIEW_MAX_RUNNING: String(maxRunning),
+          },
+          timeout: 180_000,
+          maxBuffer: 1024 * 1024,
+        });
+        return { result: stdout };
+      } catch (error) {
+        throw classifyWakeError(error);
+      }
+    },
+    async recordAccess(pr) {
+      const now = Math.floor(Date.now() / 1000);
+      if (now - (recentAccess.get(pr) || 0) < 30) return;
+      if (accessWrites.has(pr)) return accessWrites.get(pr);
+      const operation = (async () => {
+        const accessDir = path.join(root, 'wake', 'access');
+        await mkdir(accessDir, { recursive: true, mode: 0o700 });
+        const target = path.join(accessDir, `pr-${pr}`);
+        const temporary = `${target}.${process.pid}.${now}.tmp`;
+        await writeFile(temporary, `${now}\n`, { mode: 0o600 });
+        await rename(temporary, target);
+        recentAccess.set(pr, now);
+      })().finally(() => accessWrites.delete(pr));
+      accessWrites.set(pr, operation);
+      return operation;
+    },
+  };
+}
+
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  const domain = process.env.PREVIEW_DOMAIN || '';
+  const secret = process.env.PREVIEW_WAKE_SECRET || '';
+  const root = process.env.PREVIEW_ROOT || '/srv/yawp-preview';
+  const maxRunning = process.env.PREVIEW_MAX_RUNNING || '8';
+  const wakeScript = process.env.PREVIEW_WAKE_SCRIPT
+    || path.join(root, 'bootstrap', 'scripts', 'preview', 'wake-preview.sh');
+  const accessLog = process.env.PREVIEW_ACCESS_LOG
+    || path.join(root, 'traefik', 'logs', 'access.json');
+  const accessLogMaxBytes = Number(process.env.PREVIEW_ACCESS_LOG_MAX_BYTES || 50 * 1024 * 1024);
+  const port = Number(process.env.PREVIEW_WAKE_PORT || '9876');
+  const bind = process.env.PREVIEW_WAKE_BIND || '0.0.0.0';
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    throw new Error('PREVIEW_WAKE_PORT must be a valid TCP port');
+  }
+  if (!Number.isSafeInteger(accessLogMaxBytes) || accessLogMaxBytes < 1) {
+    throw new Error('PREVIEW_ACCESS_LOG_MAX_BYTES must be a positive integer');
+  }
+  const operations = createDefaultWakeOperations({ root, wakeScript, maxRunning });
+  startAccessLogFollower({
+    accessLog,
+    domain,
+    recordAccess: operations.recordAccess,
+    maxBytes: accessLogMaxBytes,
+  });
+  createServer(createWakeHandler({ domain, secret, ...operations })).listen(port, bind, () => {
+    console.log(`Yawp preview wake service listening on ${bind}:${port}`);
+  });
+}

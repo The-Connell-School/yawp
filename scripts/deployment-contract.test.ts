@@ -291,7 +291,7 @@ describe('PR preview deployment contract', () => {
     expect(previewWorkflow).toContain('name: PR preview');
     expect(previewWorkflow).toContain('pull_request');
     expect(previewWorkflow).toContain(
-      'types: [opened, synchronize, reopened, ready_for_review, labeled, closed]'
+      'types: [opened, synchronize, reopened, ready_for_review, labeled, unlabeled, closed]'
     );
     expect(previewWorkflow).toContain(
       'github.event.pull_request.head.repo.full_name == github.repository'
@@ -541,6 +541,52 @@ describe('PR preview deployment contract', () => {
     expect(metrics).toContain('MemoryUsedPercent');
     expect(metrics).toContain('RunningPreviews');
     expect(metrics).not.toContain('PullRequest');
+  });
+
+  test('preview bootstrap installs a secret-protected first-request wake path', () => {
+    const workflow = readRepoFile('.github/workflows/preview-host-bootstrap.yml');
+    const bootstrap = readRepoFile('scripts/preview/bootstrap-host.sh');
+    const wakeServer = readRepoFile('scripts/preview/wake-server.mjs');
+    const wakeScript = readRepoFile('scripts/preview/wake-preview.sh');
+
+    expect(workflow).toContain('scripts/preview/wake-server.mjs');
+    expect(workflow).toContain('scripts/preview/wake-preview.sh');
+    expect(workflow).toContain('PREVIEW_MAX_RUNNING');
+    expect(workflow).toContain('PREVIEW_DOMAIN');
+    expect(bootstrap).toContain('yawp-preview-wake.service');
+    expect(bootstrap).toContain('--accesslog.filepath=/logs/access.json');
+    expect(bootstrap).toContain('preview-wake-fallback');
+    expect(bootstrap).toContain('X-Preview-Wake-Secret');
+    expect(bootstrap).toContain('HostRegexp(`^pr-[1-9][0-9]*\\\\.');
+    expect(bootstrap).not.toContain('/var/run/docker.sock:/var/run/docker.sock:rw');
+    expect(wakeServer).toContain('timingSafeEqual');
+    expect(wakeServer).toContain('startAccessLogFollower');
+    expect(wakeScript).toContain('docker compose');
+    expect(wakeScript).toContain(' start');
+    expect(wakeScript).not.toContain(' up ');
+    expect(wakeScript).not.toContain(' down ');
+  });
+
+  test('preview idle defaults are two days and comments promise URL wake', () => {
+    const workflow = readRepoFile('.github/workflows/preview-environments.yml');
+
+    expect(workflow).toContain(
+      "PREVIEW_DRAFT_IDLE_HOURS: ${{ vars.PREVIEW_DRAFT_IDLE_HOURS || '48' }}"
+    );
+    expect(workflow).toContain(
+      "PREVIEW_READY_IDLE_HOURS: ${{ vars.PREVIEW_READY_IDLE_HOURS || '48' }}"
+    );
+    expect(workflow).toContain(
+      "PREVIEW_SLEEP_ENABLED: ${{ vars.PREVIEW_SLEEP_ENABLED || 'true' }}"
+    );
+    expect(workflow).toContain('Open its preview URL to wake it automatically');
+  });
+
+  test('preview host bootstrap runs only reviewed default-branch code', () => {
+    const workflow = readRepoFile('.github/workflows/preview-host-bootstrap.yml');
+
+    expect(workflow).toContain('ref: ${{ github.event.repository.default_branch }}');
+    expect(workflow).not.toContain('${{ inputs.ref }}');
   });
 
   test('preview workflow passes seeded preview mode to remote deploy', () => {

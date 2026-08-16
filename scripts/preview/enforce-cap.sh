@@ -16,9 +16,9 @@ KEEP_PR="${KEEP_PR:-}"
 OPEN_PR_NUMBERS="${OPEN_PR_NUMBERS:-}"
 PR_ACTIVITY="${PR_ACTIVITY:-}"
 POSTGRES_CONTAINER="${PREVIEW_POSTGRES_CONTAINER:-preview-postgres}"
-SLEEP_ENABLED="${PREVIEW_SLEEP_ENABLED:-false}"
-DRAFT_IDLE_HOURS="${PREVIEW_DRAFT_IDLE_HOURS:-24}"
-READY_IDLE_HOURS="${PREVIEW_READY_IDLE_HOURS:-72}"
+SLEEP_ENABLED="${PREVIEW_SLEEP_ENABLED:-true}"
+DRAFT_IDLE_HOURS="${PREVIEW_DRAFT_IDLE_HOURS:-48}"
+READY_IDLE_HOURS="${PREVIEW_READY_IDLE_HOURS:-48}"
 NOW_EPOCH="${PREVIEW_NOW_EPOCH:-$(date +%s)}"
 DOCKER="${PREVIEW_DOCKER:-docker}"
 LOCK_WAIT_SECONDS="${PREVIEW_LOCK_WAIT_SECONDS:-900}"
@@ -30,6 +30,7 @@ CURL="${PREVIEW_CURL:-curl}"
 JQ="${PREVIEW_JQ:-jq}"
 
 previews_dir="$ROOT/previews"
+ACCESS_DIR="${PREVIEW_ACCESS_DIR:-$ROOT/wake/access}"
 
 if ! declare -F preview_remove_path >/dev/null 2>&1; then
   SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -198,6 +199,43 @@ activity_record() {
     }'
 }
 
+access_epoch() {
+  local pr="$1"
+  local value=""
+  local access_file="$ACCESS_DIR/pr-${pr}"
+  [[ -f "$access_file" ]] || { echo 0; return 0; }
+  IFS= read -r value < "$access_file" || true
+  is_nonnegative_integer "$value" && printf '%s\n' "$value" || echo 0
+}
+
+effective_activity_epoch() {
+  local pr="$1"
+  local github_epoch="$2"
+  local url_epoch
+  url_epoch="$(access_epoch "$pr")"
+  if is_nonnegative_integer "$url_epoch" && (( url_epoch > github_epoch )); then
+    printf '%s\n' "$url_epoch"
+  else
+    printf '%s\n' "$github_epoch"
+  fi
+}
+
+sync_keep_awake_markers() {
+  local pr record pinned marker
+  while IFS= read -r pr; do
+    [[ -d "$previews_dir/pr-${pr}" ]] || continue
+    record="$(activity_record "$pr")"
+    [[ -n "$record" ]] || continue
+    read -r _ _ _ pinned <<<"$record"
+    marker="$previews_dir/pr-${pr}/keep-awake"
+    if [[ "$pinned" == "1" ]]; then
+      printf 'true\n' > "$marker"
+    else
+      rm -f -- "$marker"
+    fi
+  done < <(resident_env_numbers)
+}
+
 is_running() {
   local pr="$1"
   "$DOCKER" ps \
@@ -243,6 +281,7 @@ destroy_env() {
   if ! preview_remove_path "$ROOT/sources/pr-${pr}"; then
     echo "::warning::left ${ROOT}/sources/pr-${pr} on disk; environment is gone but source leaked"
   fi
+  rm -f -- "$ACCESS_DIR/pr-${pr}"
 }
 
 stop_env() {
@@ -282,13 +321,16 @@ rank_candidates() {
     done < <(resident_env_numbers)
   fi
 
-  printf '%s\n' "$PR_ACTIVITY" | awk -v keep="$keep" -v candidates=" $candidates " '
-    NF >= 3 {
-      pr = $1; updated = $2; draft = $3; pinned = (NF >= 4 ? $4 : 0)
-      if (pr == keep || pinned == 1) next
-      if (index(candidates, " " pr " ") == 0) next
-      printf "%d %d %s\n", (draft == "1" ? 0 : 1), updated, pr
-    }' | sort -k1,1n -k2,2n | awk '{print $3}'
+  local updated draft pinned effective
+  while read -r pr updated draft pinned; do
+    [[ -n "$pr" ]] || continue
+    pinned="${pinned:-0}"
+    [[ "$pr" != "$keep" && "$pinned" != "1" ]] || continue
+    [[ " $candidates " == *" $pr "* ]] || continue
+    is_nonnegative_integer "$updated" || continue
+    effective="$(effective_activity_epoch "$pr" "$updated")"
+    printf '%d %d %s\n' "$([[ "$draft" == "1" ]] && echo 0 || echo 1)" "$effective" "$pr"
+  done <<<"$PR_ACTIVITY" | sort -k1,1n -k2,2n | awk '{print $3}'
 }
 
 append_number() {
@@ -316,6 +358,7 @@ incoming_running_slots() {
 acquire_host_lock
 prune_stale_inflight_markers
 refresh_pr_state
+sync_keep_awake_markers
 
 reclaimed=0
 evicted=""
@@ -345,6 +388,7 @@ if [[ "$SLEEP_ENABLED" == "true" ]]; then
     [[ -n "$record" ]] || continue
     read -r _ updated draft pinned <<<"$record"
     is_nonnegative_integer "$updated" || continue
+    updated="$(effective_activity_epoch "$pr" "$updated")"
     [[ "$pinned" == "1" ]] && continue
     idle_hours="$READY_IDLE_HOURS"
     [[ "$draft" == "1" ]] && idle_hours="$DRAFT_IDLE_HOURS"

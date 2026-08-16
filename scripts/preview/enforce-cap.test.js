@@ -460,6 +460,31 @@ describe('enforce-cap.sh', () => {
     expect(readFileSync(docker.log, 'utf8')).not.toContain(' down ');
   });
 
+  test('sleeps after 48 hours when sleep settings are not configured', () => {
+    const root = makeRoot();
+    makeEnv(root, 104, { withCompose: true });
+    const docker = makeDockerStub(root, [104]);
+    const now = 400_000;
+
+    const result = run(root, {
+      OPEN_PR_NUMBERS: '104',
+      PR_ACTIVITY: `104 ${now - 49 * 3600} 0 0`,
+      PREVIEW_MODE: 'reconcile',
+      PREVIEW_DOCKER: docker.stub,
+      PREVIEW_DOCKER_STATE: docker.state,
+      PREVIEW_DOCKER_LOG: docker.log,
+      PREVIEW_NOW_EPOCH: String(now),
+      PREVIEW_MAX_RESIDENT: '20',
+      PREVIEW_MAX_RUNNING: '8',
+    });
+
+    expect(parse(result.stdout)).toMatchObject({
+      CAP_SLEPT: '104',
+      CAP_RUNNING: '0',
+      CAP_RESULT: 'ok',
+    });
+  });
+
   test('keeps a recently active ready PR running', () => {
     const root = makeRoot();
     makeEnv(root, 102, { withCompose: true });
@@ -468,7 +493,7 @@ describe('enforce-cap.sh', () => {
 
     const result = run(root, {
       OPEN_PR_NUMBERS: '102',
-      PR_ACTIVITY: `102 ${now - 48 * 3600} 0 0`,
+      PR_ACTIVITY: `102 ${now - 47 * 3600} 0 0`,
       PREVIEW_MODE: 'reconcile',
       PREVIEW_DOCKER: docker.stub,
       PREVIEW_DOCKER_STATE: docker.state,
@@ -482,6 +507,63 @@ describe('enforce-cap.sh', () => {
     expect(parse(result.stdout)).toMatchObject({
       CAP_SLEPT: '',
       CAP_RUNNING: '1',
+      CAP_RESULT: 'ok',
+    });
+  });
+
+  test('keeps a stale PR running when its preview URL was recently used', () => {
+    const root = makeRoot();
+    makeEnv(root, 103, { withCompose: true });
+    mkdirSync(path.join(root, 'wake', 'access'), { recursive: true });
+    writeFileSync(path.join(root, 'wake', 'access', 'pr-103'), '396400\n');
+    const docker = makeDockerStub(root, [103]);
+
+    const result = run(root, {
+      OPEN_PR_NUMBERS: '103',
+      PR_ACTIVITY: '103 1 0 0',
+      PREVIEW_MODE: 'reconcile',
+      PREVIEW_DOCKER: docker.stub,
+      PREVIEW_DOCKER_STATE: docker.state,
+      PREVIEW_DOCKER_LOG: docker.log,
+      PREVIEW_SLEEP_ENABLED: 'true',
+      PREVIEW_DRAFT_IDLE_HOURS: '48',
+      PREVIEW_READY_IDLE_HOURS: '48',
+      PREVIEW_NOW_EPOCH: '400000',
+      PREVIEW_MAX_RESIDENT: '20',
+      PREVIEW_MAX_RUNNING: '8',
+    });
+
+    expect(parse(result.stdout)).toMatchObject({
+      CAP_SLEPT: '',
+      CAP_RUNNING: '1',
+      CAP_RESULT: 'ok',
+    });
+  });
+
+  test('running pressure prefers sleeping the least recently used URL', () => {
+    const root = makeRoot();
+    for (const pr of [100, 101, 102]) makeEnv(root, pr, { withCompose: true });
+    mkdirSync(path.join(root, 'wake', 'access'), { recursive: true });
+    writeFileSync(path.join(root, 'wake', 'access', 'pr-100'), '9000\n');
+    writeFileSync(path.join(root, 'wake', 'access', 'pr-101'), '1000\n');
+    writeFileSync(path.join(root, 'wake', 'access', 'pr-102'), '2000\n');
+    const docker = makeDockerStub(root, [100, 101, 102]);
+
+    const result = run(root, {
+      OPEN_PR_NUMBERS: '100 101 102',
+      PR_ACTIVITY: '100 100 0 0\n101 200 0 0\n102 300 0 0',
+      PREVIEW_MODE: 'reconcile',
+      PREVIEW_DOCKER: docker.stub,
+      PREVIEW_DOCKER_STATE: docker.state,
+      PREVIEW_DOCKER_LOG: docker.log,
+      PREVIEW_SLEEP_ENABLED: 'false',
+      PREVIEW_MAX_RESIDENT: '20',
+      PREVIEW_MAX_RUNNING: '2',
+    });
+
+    expect(parse(result.stdout)).toMatchObject({
+      CAP_SLEPT: '101',
+      CAP_RUNNING: '2',
       CAP_RESULT: 'ok',
     });
   });

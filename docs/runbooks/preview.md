@@ -6,6 +6,9 @@ The target behavior is:
 
 - Every same-repository PR deploys automatically on `opened`, `synchronize`, and `reopened`.
 - Closed PRs are destroyed automatically with `docker compose down -v`, and stale previews are swept by the scheduled cleanup workflow.
+- Open previews sleep after 48 hours without PR or preview-URL activity. Sleep uses `docker compose stop`, preserving containers, database, volumes, source, and access codes.
+- Opening a sleeping preview URL wakes that same Compose project automatically. The first request can take up to a minute while the app becomes healthy; no manual workflow or rebuild is required.
+- Traefik records URL activity asynchronously, so a wake-service outage cannot take already-running previews offline. The bounded access log is truncated after 50 MiB.
 - Each PR gets its own app container and database inside the shared preview Postgres container.
 - The shared template database restores the configured production database dump from S3 once; new PR databases clone that template, then apply newer Prisma migrations.
 - Deploys avoid ECR pushes and Terraform applies on the hot path.
@@ -28,6 +31,8 @@ Then run:
 
 ```bash
 PREVIEW_ROOT=/srv/yawp-preview \
+PREVIEW_DOMAIN=preview.yawp.school \
+PREVIEW_MAX_RUNNING=4 \
 PREVIEW_ACME_EMAIL=ops@yawp.school \
 bash scripts/preview/bootstrap-host.sh
 ```
@@ -61,6 +66,10 @@ Required repository settings:
 - Variable `PREVIEW_SSH_USER`
 - Variable `PREVIEW_TLS`
 - Variable `PREVIEW_RUNTIME`
+- Variable `PREVIEW_MAX_RESIDENT` (defaults to `20`; disk/state limit)
+- Variable `PREVIEW_MAX_RUNNING` (defaults to `8`; memory limit)
+- Variable `PREVIEW_SLEEP_ENABLED` (`true` enables idle sleeping)
+- Variables `PREVIEW_DRAFT_IDLE_HOURS` and `PREVIEW_READY_IDLE_HOURS` (both default to `48`)
 - Variable `PREVIEW_SEAT_COUNT` (optional; defaults to `6`)
 - Variable `PREVIEW_AI_MODEL`
 - Variable `PREVIEW_DB_DUMP_S3_URI`
@@ -125,4 +134,6 @@ Production-dump app-login smoke credentials come from `PREVIEW_LOGIN_EMAIL` and 
 
 The hot path deliberately keeps state on the host: Docker layer cache, Bun dependency volumes, the shared restored template database, and PR-scoped Postgres databases. The first build on a cold host is slower because it creates the shared Postgres container and restores the production dump. Subsequent PR creates clone the template database locally, and warm PR updates skip tooling work when package, Prisma, and migration inputs are unchanged. In `fast` runtime, the web container still restarts by default; the speedup comes from removing package install, Prisma generate, migration, dump restore, and cloud control-plane work from the warm path.
 
-Scheduled cleanup runs every six hours. It keeps open PRs, removes closed/stale preview directories after `PREVIEW_TTL_HOURS` hours, drops the matching `yawp_pr_<number>` database, and removes legacy per-PR Postgres volumes left by older previews.
+Scheduled reconciliation runs every six hours. It destroys closed PR environments, sleeps open previews after their idle lease, and enforces separate resident and running caps. URL requests update the activity lease. When waking at the running cap, the host sleeps the least recently used unpinned preview first; `preview:keep-awake` excludes a PR from sleep. Only resident-cap eviction or PR closure deletes preview-local state.
+
+The host-bootstrap workflow always checks out the protected default branch. It cannot execute an arbitrary PR ref with shared-host credentials.
