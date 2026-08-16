@@ -61,7 +61,7 @@ describe('preview wake server', () => {
     })).toBe(86_000);
   });
 
-  test('authorizes a sleeping preview with a matching one-click code or signed access cookie', async () => {
+  test('authorizes a sleeping preview only with a current one-click code or unexpired current-seat cookie', async () => {
     const root = mkdtempSync(path.join(tmpdir(), 'preview-code-'));
     roots.push(root);
     const preview = path.join(root, 'previews', 'pr-241');
@@ -84,17 +84,36 @@ describe('preview wake server', () => {
     })).toBe(false);
     expect(await hasMatchingPreviewAccessCredential({ root, pr: 241, uri: '/app' })).toBe(false);
 
-    const value = Buffer.from(JSON.stringify('seat-v1:local-dev-org')).toString('base64');
-    const signature = createHmac('sha256', secret)
-      .update(value)
-      .digest('base64')
-      .replace(/=+$/, '');
+    const signedCookie = (seat, issuedAt) => {
+      const value = Buffer.from(JSON.stringify(`seat-v2:${issuedAt}:${seat}`)).toString('base64');
+      const signature = createHmac('sha256', secret)
+        .update(value)
+        .digest('base64')
+        .replace(/=+$/, '');
+      return `__yawp_preview_access=${encodeURIComponent(`${value}.${signature}`)}`;
+    };
+    const nowSeconds = 1_800_000_000;
     expect(await hasMatchingPreviewAccessCredential({
       root,
       pr: 241,
       uri: '/app',
-      cookieHeader: `__yawp_preview_access=${encodeURIComponent(`${value}.${signature}`)}`,
+      cookieHeader: signedCookie('local-dev-org', nowSeconds - 60),
+      nowSeconds,
     })).toBe(true);
+    expect(await hasMatchingPreviewAccessCredential({
+      root,
+      pr: 241,
+      uri: '/app',
+      cookieHeader: signedCookie('revoked-org', nowSeconds - 60),
+      nowSeconds,
+    })).toBe(false);
+    expect(await hasMatchingPreviewAccessCredential({
+      root,
+      pr: 241,
+      uri: '/app',
+      cookieHeader: signedCookie('local-dev-org', nowSeconds - (31 * 24 * 60 * 60)),
+      nowSeconds,
+    })).toBe(false);
   });
 
   test('requires access authorization before waking a sleeping preview', async () => {
@@ -389,14 +408,14 @@ describe('preview wake server', () => {
     await Bun.sleep(20);
 
     appendFileSync(accessLog, [
-      JSON.stringify({ RequestHost: 'pr-241.preview.yawp.school', RequestMethod: 'GET', RequestPath: '/app', DownstreamStatus: 200, 'origin_X-Yawp-Preview-Authorized': '1' }),
-      JSON.stringify({ RequestHost: 'pr-242.preview.yawp.school', RequestMethod: 'GET', RequestPath: '/app', DownstreamStatus: 302 }),
-      JSON.stringify({ RequestHost: 'pr-243.preview.yawp.school', RequestMethod: 'GET', RequestPath: '/auth/preview-access', DownstreamStatus: 200 }),
-      JSON.stringify({ RequestHost: 'pr-244.preview.yawp.school', RequestMethod: 'GET', RequestPath: '/app', DownstreamStatus: 401 }),
-      JSON.stringify({ RequestHost: 'pr-245.preview.yawp.school', RequestMethod: 'GET', RequestPath: '/assets/app.js', DownstreamStatus: 200 }),
-      JSON.stringify({ RequestHost: 'pr-246.preview.yawp.school', RequestMethod: 'HEAD', RequestPath: '/app', DownstreamStatus: 200, 'downstream_X-Yawp-Preview-Authorized': '1' }),
-      JSON.stringify({ RequestHost: 'pr-247.preview.yawp.school', RequestMethod: 'GET', RequestPath: '/api/healthcheck', DownstreamStatus: 200, 'downstream_X-Yawp-Preview-Authorized': '1' }),
-      JSON.stringify({ RequestHost: 'pr-248.preview.yawp.school', RequestMethod: 'GET', RequestPath: '/app', DownstreamStatus: 302, 'downstream_X-Yawp-Preview-Authorized': '1' }),
+      JSON.stringify({ RequestHost: 'pr-241.preview.yawp.school', RequestMethod: 'GET', DownstreamStatus: 200, 'origin_X-Yawp-Preview-Authorized': '1' }),
+      JSON.stringify({ RequestHost: 'pr-242.preview.yawp.school', RequestMethod: 'GET', DownstreamStatus: 302 }),
+      JSON.stringify({ RequestHost: 'pr-243.preview.yawp.school', RequestMethod: 'GET', DownstreamStatus: 200 }),
+      JSON.stringify({ RequestHost: 'pr-244.preview.yawp.school', RequestMethod: 'GET', DownstreamStatus: 401 }),
+      JSON.stringify({ RequestHost: 'pr-245.preview.yawp.school', RequestMethod: 'GET', DownstreamStatus: 200 }),
+      JSON.stringify({ RequestHost: 'pr-246.preview.yawp.school', RequestMethod: 'HEAD', DownstreamStatus: 200, 'downstream_X-Yawp-Preview-Authorized': '1' }),
+      JSON.stringify({ RequestHost: 'pr-247.preview.yawp.school', RequestMethod: 'OPTIONS', DownstreamStatus: 200, 'downstream_X-Yawp-Preview-Authorized': '1' }),
+      JSON.stringify({ RequestHost: 'pr-248.preview.yawp.school', RequestMethod: 'GET', DownstreamStatus: 302, 'downstream_X-Yawp-Preview-Authorized': '1' }),
       JSON.stringify({ RequestHost: 'demo.preview.yawp.school' }),
       '{malformed',
       '',

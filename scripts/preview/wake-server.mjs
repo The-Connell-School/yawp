@@ -7,6 +7,9 @@ import path from 'node:path';
 import { promisify } from 'node:util';
 
 const execFileAsync = promisify(execFile);
+const ACCESS_SEAT_VALUE_PREFIX = 'seat-v2:';
+const ACCESS_COOKIE_MAX_AGE_SECONDS = 30 * 24 * 60 * 60;
+const ACCESS_COOKIE_CLOCK_SKEW_SECONDS = 5 * 60;
 
 function safeSecretEqual(actual, expected) {
   const actualBuffer = Buffer.from(String(actual || ''));
@@ -51,46 +54,82 @@ export function wakeCommandTimeoutMs(env = process.env) {
   return (lockSeconds + (2 * healthAttempts * healthInterval) + 60) * 1000;
 }
 
-function signedAccessCookieIsValid(cookieHeader, secret) {
+function signedAccessCookieSeat(cookieHeader, secret, nowSeconds) {
   try {
     const raw = String(cookieHeader || '')
       .split(';')
       .map((part) => part.trim())
       .find((part) => part.startsWith('__yawp_preview_access='));
-    if (!raw) return false;
+    if (!raw) return null;
     const cookie = decodeURIComponent(raw.slice(raw.indexOf('=') + 1));
     const separator = cookie.lastIndexOf('.');
-    if (separator < 1) return false;
+    if (separator < 1) return null;
     const value = cookie.slice(0, separator);
     const signature = cookie.slice(separator + 1);
-    const expected = createHmac('sha256', secret).update(value).digest('base64').replace(/=+$/, '');
-    if (!safeSecretEqual(signature, expected)) return false;
+    const expected = createHmac('sha256', secret)
+      .update(value)
+      .digest('base64')
+      .replace(/=+$/, '');
+    if (!safeSecretEqual(signature, expected)) return null;
     const decoded = JSON.parse(Buffer.from(value, 'base64').toString('utf8'));
-    return typeof decoded === 'string' && decoded.startsWith('seat-v1:');
+    if (
+      typeof decoded !== 'string'
+      || !decoded.startsWith(ACCESS_SEAT_VALUE_PREFIX)
+    ) return null;
+    const payload = decoded.slice(ACCESS_SEAT_VALUE_PREFIX.length);
+    const payloadSeparator = payload.indexOf(':');
+    if (payloadSeparator < 1) return null;
+    const issuedAtValue = payload.slice(0, payloadSeparator);
+    if (!/^[1-9][0-9]*$/.test(issuedAtValue)) return null;
+    const issuedAt = Number(issuedAtValue);
+    if (
+      !Number.isSafeInteger(issuedAt)
+      || issuedAt > nowSeconds + ACCESS_COOKIE_CLOCK_SKEW_SECONDS
+      || nowSeconds - issuedAt > ACCESS_COOKIE_MAX_AGE_SECONDS
+    ) {
+      return null;
+    }
+    const organizationId = payload.slice(payloadSeparator + 1);
+    return /^[a-z0-9][a-z0-9-]{0,127}$/.test(organizationId)
+      ? organizationId
+      : null;
   } catch {
-    return false;
+    return null;
   }
 }
 
-export async function hasMatchingPreviewAccessCredential({ root, pr, uri, cookieHeader }) {
+export async function hasMatchingPreviewAccessCredential({
+  root,
+  pr,
+  uri,
+  cookieHeader,
+  nowSeconds = Math.floor(Date.now() / 1000),
+}) {
   try {
+    const seats = JSON.parse(await readFile(
+      path.join(root, 'previews', `pr-${pr}`, 'access-seats.json'),
+      'utf8',
+    ));
+    if (!Array.isArray(seats)) return false;
     const url = new URL(trustedUri(uri), 'https://preview.invalid');
     const candidate = String(url.searchParams.get('code') || '').trim().toLowerCase();
     if (/^[a-z]+-[a-z]+-[1-9][0-9]{3}$/.test(candidate)) {
-      const seats = JSON.parse(await readFile(
-        path.join(root, 'previews', `pr-${pr}`, 'access-seats.json'),
-        'utf8',
-      ));
       if (
-        Array.isArray(seats)
-        && seats.some((seat) => safeSecretEqual(candidate, String(seat?.code || '').trim().toLowerCase()))
+        seats.some((seat) => safeSecretEqual(
+          candidate,
+          String(seat?.code || '').trim().toLowerCase(),
+        ))
       ) return true;
     }
     const secret = (await readFile(
       path.join(root, 'previews', `pr-${pr}`, 'access-secret'),
       'utf8',
     )).trim();
-    return secret.length >= 32 && signedAccessCookieIsValid(cookieHeader, secret);
+    if (secret.length < 32) return false;
+    const organizationId = signedAccessCookieSeat(cookieHeader, secret, nowSeconds);
+    return organizationId !== null && seats.some(
+      (seat) => String(seat?.organizationId || '').trim() === organizationId,
+    );
   } catch {
     return false;
   }
@@ -237,7 +276,6 @@ export function startAccessLogFollower({
           const entry = JSON.parse(line);
           const pr = parsePreviewPr(entry.RequestHost, domain);
           const method = String(entry.RequestMethod || 'GET').toUpperCase();
-          const requestPath = String(entry.RequestPath || entry.RequestUri || '/').split('?')[0];
           const status = Number(entry.DownstreamStatus || entry.OriginStatus || 200);
           const authorized = String(
             entry['origin_X-Yawp-Preview-Authorized']
@@ -249,7 +287,6 @@ export function startAccessLogFollower({
             && authorized
             && method !== 'HEAD'
             && method !== 'OPTIONS'
-            && requestPath !== '/api/healthcheck'
             && Number.isFinite(status)
             && status < 400
           ) prs.add(pr);

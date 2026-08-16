@@ -197,6 +197,12 @@ services:
       - --accesslog=true
       - --accesslog.filepath=/logs/access.json
       - --accesslog.format=json
+      - --accesslog.fields.defaultmode=drop
+      - --accesslog.fields.names.RequestHost=keep
+      - --accesslog.fields.names.RequestMethod=keep
+      - --accesslog.fields.names.DownstreamStatus=keep
+      - --accesslog.fields.names.OriginStatus=keep
+      - --accesslog.fields.names.RequestPath=drop
       - --accesslog.fields.headers.defaultmode=drop
       - --accesslog.fields.headers.names.X-Yawp-Preview-Authorized=keep
       - --entrypoints.web.address=:80
@@ -250,7 +256,8 @@ Environment=PREVIEW_ACCESS_LOG_MAX_BYTES=52428800
 ExecStart=$node_path $wake_server
 Restart=always
 RestartSec=2
-TimeoutStopSec=10
+KillMode=control-group
+TimeoutStopSec=1200
 UMask=0077
 NoNewPrivileges=true
 PrivateTmp=true

@@ -12,7 +12,8 @@ export const PREVIEW_ACCESS_MAX_AGE = 60 * 60 * 24 * 30;
 export const PREVIEW_AUTHORIZED_ACTIVITY_HEADER =
   'X-Yawp-Preview-Authorized';
 
-const ACCESS_SEAT_VALUE_PREFIX = 'seat-v1:';
+const ACCESS_SEAT_VALUE_PREFIX = 'seat-v2:';
+const ACCESS_COOKIE_CLOCK_SKEW_SECONDS = 5 * 60;
 const ACCESS_CODE_PATTERN = /^[a-z]+-[a-z]+-[1-9][0-9]{3}$/;
 const OPEN_PATHS = new Set([
   '/api/healthcheck',
@@ -205,8 +206,9 @@ export async function grantPreviewAccessCookie(seat: PreviewAccessSeat) {
   if (!/^[a-z0-9][a-z0-9-]{0,127}$/.test(seat.organizationId)) {
     throw new Error('Preview access seat has an invalid organization.');
   }
+  const issuedAt = Math.floor(Date.now() / 1000);
   return createPreviewAccessCookie().serialize(
-    `${ACCESS_SEAT_VALUE_PREFIX}${seat.organizationId}`
+    `${ACCESS_SEAT_VALUE_PREFIX}${issuedAt}:${seat.organizationId}`
   );
 }
 
@@ -228,7 +230,22 @@ export async function getPreviewAccessSeat(
   ) {
     return null;
   }
-  const organizationId = value.slice(ACCESS_SEAT_VALUE_PREFIX.length);
+  const payload = value.slice(ACCESS_SEAT_VALUE_PREFIX.length);
+  const separator = payload.indexOf(':');
+  if (separator < 1) return null;
+  const issuedAtValue = payload.slice(0, separator);
+  if (!/^[1-9][0-9]*$/.test(issuedAtValue)) return null;
+  const issuedAt = Number(issuedAtValue);
+  const now = Math.floor(Date.now() / 1000);
+  if (
+    !Number.isSafeInteger(issuedAt) ||
+    issuedAt > now + ACCESS_COOKIE_CLOCK_SKEW_SECONDS ||
+    now - issuedAt > PREVIEW_ACCESS_MAX_AGE
+  ) {
+    return null;
+  }
+  const organizationId = payload.slice(separator + 1);
+  if (!/^[a-z0-9][a-z0-9-]{0,127}$/.test(organizationId)) return null;
   const master = configuredMasterSeat();
   if (organizationId === master?.organizationId) {
     return { organizationId, label: master.label };
