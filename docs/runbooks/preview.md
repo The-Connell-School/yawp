@@ -4,13 +4,13 @@ PR preview environments replace per-PR App Runner services with one long-lived E
 
 The target behavior is:
 
-- Every same-repository PR deploys automatically on `opened`, `synchronize`, and `reopened`.
+- Every same-repository PR deploys automatically on `opened`, `synchronize`, `reopened`, and `labeled`.
 - Closed PRs are destroyed automatically with `docker compose down -v`, and stale previews are swept by the scheduled cleanup workflow.
 - Open previews sleep after 48 hours without PR or preview-URL activity. Sleep uses `docker compose stop`, preserving containers, database, volumes, source, and access codes.
 - Opening a sleeping preview URL wakes that same Compose project automatically. The first request can take up to a minute while the app becomes healthy; no manual workflow or rebuild is required.
 - Traefik records URL activity asynchronously, so a wake-service outage cannot take already-running previews offline. The bounded access log is truncated after 50 MiB.
 - Each PR gets its own app container and database inside the shared preview Postgres container.
-- The shared template database restores the configured production database dump from S3 once; new PR databases clone that template, then apply newer Prisma migrations.
+- The shared template database restores the configured preview-safe database dump from S3 once; new PR databases clone that template, then apply newer Prisma migrations.
 - Deploys avoid ECR pushes and Terraform applies on the hot path.
 - The preview URL is `https://pr-<number>.$PREVIEW_DOMAIN` when TLS is enabled.
 - The React Router app protects every loader, action, and API route with a signed-cookie access gate. `/api/healthcheck` is the only exception. Deploys generate a memorable code and fail closed if no code reaches the app.
@@ -73,6 +73,7 @@ Required repository settings:
 - Variable `PREVIEW_SEAT_COUNT` (optional; defaults to `6`)
 - Variable `PREVIEW_AI_MODEL`
 - Variable `PREVIEW_DB_DUMP_S3_URI`
+- Variable `PREVIEW_SANITIZED_DUMP_VERSION` when using sanitized production rehearsals
 - Secret `PREVIEW_SSH_PRIVATE_KEY`
 - Secret `PREVIEW_ANTHROPIC_API_KEY` or repository secret `ANTHROPIC_API_KEY`
 - Secret `PREVIEW_DB_PASSWORD` if the shared preview Postgres password is not the default
@@ -105,6 +106,33 @@ The access screen is the only application page reachable without an in-app acces
 
 The signed-cookie access gate in the app is the preview and demo host's only access gate. Deploy tooling and workflow self-verification make anonymous requests to prove the access screen renders and that `POST /auth/dev-login` returns `401` without a code. They then submit a valid access code and verify it establishes the signed access cookie before continuing with login checks.
 
+### Sanitized production rehearsal
+
+Add the `sanitized-production-data` label to an internal PR to replace its seed database with the current scrubbed production snapshot. This mode is deliberately separate from raw `production-dump` mode: it keeps the in-app access gate and enables the dev-login role switcher only after the gate cookie is established.
+
+Refresh the snapshot with the fail-closed orchestration command:
+
+```bash
+bun run db:refresh-sanitized-preview-data --dry-run
+bun run db:refresh-sanitized-preview-data --yes
+```
+
+The command reads production access from the ignored `scripts/production-sync.env` by default. Start from `scripts/production-sync.env.example`; configure the bastion and database values, `AWS_PROFILE`, `PREVIEW_DB_DUMP_S3_URI`, and `YAWP_GITHUB_REPOSITORY`. If `YAWP_PROD_BASTION_INSTANCE_ID` is configured, the command starts the instance only when it was stopped, discovers its current public IP, and stops it again during cleanup. `--env-file PATH` selects another ignored configuration file. Trusted non-interactive automation may use `YAWP_CONFIRM_SANITIZED_PREVIEW_REFRESH=yes` instead of `--yes`.
+
+The refresh runs a temporary Postgres 17 container and streams `pg_dump` from the production bastion directly into it. It never writes the raw production dump to disk. It then runs `packages/prisma/scripts/sanitize-preview-production-data.ts` against that localhost-only database, requires the sanitizer's count and fingerprint parity report, creates a compressed dump only after sanitization succeeds, streams its scrubbed plain SQL to the configured S3 object, verifies the object is readable, and updates the repository variable `PREVIEW_SANITIZED_DUMP_VERSION`. A trap removes the temporary container, sanitized dump, report, SSH host-key file, and working directory on success, failure, or interruption. A bastion started by the command is also stopped; a bastion that was already running is left running.
+
+The sanitizer deterministically replaces:
+
+- Every `User.name` and `User.email`, while reserving `dev.admin@yawp.local`, `dev.teacher@yawp.local`, and `dev.student@yawp.local` inside `default-org`.
+- Legacy `schoolTeacher` display values in membership and forensic tables.
+- Email-shaped invitation targets.
+
+The sanitizer aborts unless all public-table row counts, user/membership/class IDs, and complete `Document` rows are unchanged. The orchestration command cannot reach S3 until that check succeeds. Never upload an unsanitized dump to the preview object manually.
+
+The deploy uses the published version in its template name and replaces any existing PR database when the mode, object URI, or version changes. Refreshing the snapshot does not itself redeploy an open PR; rerun its preview workflow or synchronize the PR after the command completes.
+
+Removing the label is intentionally not an automatic deployment event. Close the rehearsal PR when finished; its environment and PR database will be destroyed by the normal preview cleanup path.
+
 ## Local Smoke
 
 Run the same preview deployment path locally with a direct port. It intentionally keeps the access-gate requirement because it exercises preview publishing; ordinary non-preview local Compose and `bun dev` workflows are unchanged.
@@ -128,7 +156,7 @@ PREVIEW_ROOT=/tmp/yawp-preview \
 bash scripts/preview/destroy.sh
 ```
 
-Production-dump app-login smoke credentials come from `PREVIEW_LOGIN_EMAIL` and `PREVIEW_LOGIN_PASSWORD`. Seeded fast previews use the dev-login route only after the in-app access code has established the gate cookie. `PREVIEW_DATA_MODE=production-dump` continues to disable role-swap regardless of gate state.
+Production-dump app-login smoke credentials come from `PREVIEW_LOGIN_EMAIL` and `PREVIEW_LOGIN_PASSWORD`. Seeded and sanitized-production fast previews use the dev-login route only after the in-app access code has established the gate cookie. `PREVIEW_DATA_MODE=production-dump` continues to disable role-swap regardless of gate state.
 
 ## Performance Notes
 
