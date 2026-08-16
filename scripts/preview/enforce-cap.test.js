@@ -274,6 +274,28 @@ describe('enforce-cap.sh', () => {
     expect(existsSync(previewDir)).toBe(true);
   });
 
+  test('atomically refreshes a read-only keep-awake marker', () => {
+    const root = makeRoot();
+    const { previewDir } = makeEnv(root, 252);
+    const marker = path.join(previewDir, 'keep-awake');
+    writeFileSync(marker, 'stale\n');
+    chmodSync(marker, 0o444);
+    const docker = makeDockerStub(root);
+
+    const result = run(root, {
+      OPEN_PR_NUMBERS: '252',
+      PR_ACTIVITY: '252 1 0 1',
+      PREVIEW_MODE: 'reconcile',
+      PREVIEW_MAX_RESIDENT: '30',
+      PREVIEW_DOCKER: docker.stub,
+      PREVIEW_DOCKER_STATE: docker.state,
+      PREVIEW_DOCKER_LOG: docker.log,
+    });
+
+    expect(result.status).toBe(0);
+    expect(readFileSync(marker, 'utf8')).toBe('true\n');
+  });
+
   test('refreshes PR state after locking instead of trusting a queued snapshot', () => {
     const root = makeRoot();
     const first = makeEnv(root, 232);
