@@ -6,6 +6,7 @@ import {
   findPreviewAccessSeatByCode,
   getPreviewAccessSeat,
   grantPreviewAccessCookie,
+  isIsolatedPreviewSeatMode,
   isPreviewAccessConfigured,
   previewAccessMiddleware,
   type PreviewAccessSeatRepository,
@@ -290,6 +291,7 @@ describe('preview access gate', () => {
         repository()
       )
     ).toEqual(seat);
+    expect(isIsolatedPreviewSeatMode()).toBe(false);
   });
 
   test('clears the signed access cookie for re-entry', async () => {

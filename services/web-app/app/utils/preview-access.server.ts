@@ -100,9 +100,7 @@ export function isPreviewAccessGateEnabled() {
 export function isIsolatedPreviewSeatMode() {
   return (
     isPreviewAccessGateEnabled() &&
-    ['seed', 'sanitized-production'].includes(
-      process.env.PREVIEW_DATA_MODE ?? ''
-    )
+    process.env.PREVIEW_DATA_MODE === 'seed'
   );
 }
 
