@@ -1,12 +1,80 @@
 import { test, expect } from '../test-setup';
 import { createE2EPrismaClient } from '../prisma-client';
 import { currentSchoolYear } from '../../app/utils/school-year';
+import bcrypt from 'bcryptjs';
+
+function createPassword(password: string) {
+  return { hash: bcrypt.hashSync(password, 10) };
+}
 
 /**
  * A returning teacher starts the year clean without anything being archived:
  * the school year scopes what teachers see, and students keep their old work.
  */
 test.describe('School year scope', () => {
+  test('a returning teacher with no current-year class lands on their newest class year', async ({
+    page,
+    e2eContext,
+    signIn,
+  }) => {
+    const prisma = createE2EPrismaClient();
+    const suffix = Date.now().toString().slice(-8);
+    const email = `returning-teacher-${suffix}@yawp.test`;
+    const password = 'returning-teacher-password';
+    const priorYear = (() => {
+      const start = Number(currentSchoolYear().slice(0, 4)) - 1;
+      return `${start}-${start + 1}`;
+    })();
+
+    const teacher = await prisma.user.create({
+      data: {
+        email,
+        name: 'Returning Teacher',
+        password: { create: createPassword(password) },
+        memberships: {
+          create: {
+            organizationId: e2eContext.organizationId,
+            role: 'TEACHER',
+            schools: { connect: { id: e2eContext.schoolId } },
+          },
+        },
+      },
+      include: { memberships: true },
+    });
+    const membership = teacher.memberships[0]!;
+    const priorClass = await prisma.class.create({
+      data: {
+        code: `RT${suffix}`.slice(0, 12),
+        schoolYear: priorYear,
+        period: '2nd',
+        grade: '10th',
+        title: 'Returning Teacher Class',
+        schoolId: e2eContext.schoolId,
+        teachers: { connect: { id: membership.id } },
+      },
+      select: { id: true },
+    });
+
+    try {
+      await signIn(email, password);
+      await page.goto('/app/my-classes');
+
+      await expect(
+        page.locator(`a[href="/app/my-classes/${priorClass.id}"]`)
+      ).toBeVisible();
+
+      await page.getByText('Settings', { exact: true }).click();
+      await expect(page.getByTestId('school-year-scope')).toContainText(
+        priorYear.replace('-', '–')
+      );
+    } finally {
+      await prisma.class.delete({ where: { id: priorClass.id } });
+      await prisma.orgMembership.delete({ where: { id: membership.id } });
+      await prisma.user.delete({ where: { id: teacher.id } });
+      await prisma.$disconnect();
+    }
+  });
+
   test('scopes teacher surfaces to the chosen year and leaves the student alone', async ({
     page,
     e2eContext,

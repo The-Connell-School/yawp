@@ -1,5 +1,4 @@
 import { prisma } from '~/utils/db.server';
-import { getSchoolYearScope } from '~/cookies/school-year.server';
 import {
   ALL_SCHOOL_YEARS,
   currentSchoolYear,
@@ -34,12 +33,35 @@ async function storedScope(request: Request) {
 }
 
 /**
- * Teachers default to the year we are *in*, not the year they last taught —
- * a returning teacher opening the app in August should see a clean slate for
- * the year about to start, which is the whole point of the scope.
+ * Teachers with classes in the current year land there. Returning teachers
+ * who have not yet been attached to a current-year class land on their newest
+ * non-archived class year instead of an unexplained empty app.
+ *
+ * An explicit selection is always honoured, including a future empty year a
+ * teacher selected so they can create its first class.
  */
-export async function resolveTeacherSchoolYearScope(request: Request) {
-  return getSchoolYearScope(request);
+export async function resolveTeacherSchoolYearScope(
+  request: Request,
+  membershipId: string
+) {
+  const chosen = await storedScope(request);
+  if (chosen) return chosen;
+
+  const current = currentSchoolYear();
+  const rows = await prisma.class.findMany({
+    where: {
+      teachers: { some: { id: membershipId } },
+      isArchived: false,
+    },
+    select: { schoolYear: true },
+    distinct: ['schoolYear'],
+  });
+  const years = rows
+    .map((row) => row.schoolYear)
+    .filter(isSchoolYear)
+    .sort((a, b) => b.localeCompare(a));
+
+  return years.includes(current) ? current : (years[0] ?? current);
 }
 
 /** The years this student actually has classes in, newest first. */
@@ -87,7 +109,7 @@ export async function resolveSchoolYearScopeForMembership(
 ) {
   return membership.role === 'STUDENT'
     ? resolveStudentSchoolYearScope(request, membership.id)
-    : resolveTeacherSchoolYearScope(request);
+    : resolveTeacherSchoolYearScope(request, membership.id);
 }
 
 /**

@@ -64,7 +64,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
   // honoured everywhere. Earlier years are still there behind that control —
   // nothing is archived to get them out of the way, because archiving would
   // take the work away from students too.
-  const selectedSchoolYear = await resolveTeacherSchoolYearScope(request);
+  const selectedSchoolYear = await resolveTeacherSchoolYearScope(
+    request,
+    profile.id
+  );
 
   const [classes, teacherSchools] = await Promise.all([
     prisma.class.findMany({

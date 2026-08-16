@@ -84,7 +84,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
           teachers: { some: { id: membership.id } },
           isArchived: false,
           ...schoolYearWhere(
-            await resolveTeacherSchoolYearScope(request)
+            await resolveTeacherSchoolYearScope(request, membership.id)
           ),
         },
         orderBy: [{ title: 'asc' }, { grade: 'asc' }, { period: 'asc' }],

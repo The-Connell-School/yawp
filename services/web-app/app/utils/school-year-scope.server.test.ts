@@ -9,10 +9,12 @@ mock.module('~/utils/db.server', () => ({
 }));
 
 const {
+  resolveTeacherSchoolYearScope,
   resolveStudentSchoolYearScope,
   schoolYearsForMembership,
 } = await import('./school-year-scope.server');
 const { schoolYearCookie } = await import('~/cookies/school-year.server');
+const { currentSchoolYear } = await import('~/utils/school-year');
 
 async function requestWithScope(scope: string | null) {
   if (scope === null) return new Request('https://yawp.test/app');
@@ -28,6 +30,49 @@ function enrolledIn(years: string[]) {
     Promise.resolve(years.map((schoolYear) => ({ schoolYear })))
   );
 }
+
+describe('resolveTeacherSchoolYearScope', () => {
+  beforeEach(() => {
+    findMany.mockClear();
+  });
+
+  test('defaults to the current year when the teacher has classes there', async () => {
+    const current = currentSchoolYear();
+    enrolledIn(['2025-2026', current]);
+
+    expect(
+      await resolveTeacherSchoolYearScope(await requestWithScope(null), 'm1')
+    ).toBe(current);
+  });
+
+  test('falls back to the newest class year instead of an empty current year', async () => {
+    enrolledIn(['2024-2025', '2025-2026']);
+
+    expect(
+      await resolveTeacherSchoolYearScope(await requestWithScope(null), 'm1')
+    ).toBe('2025-2026');
+  });
+
+  test('honours a year the teacher explicitly selected', async () => {
+    enrolledIn(['2025-2026']);
+
+    expect(
+      await resolveTeacherSchoolYearScope(
+        await requestWithScope('2026-2027'),
+        'm1'
+      )
+    ).toBe('2026-2027');
+    expect(findMany).not.toHaveBeenCalled();
+  });
+
+  test('falls back to the current year when the teacher has no classes', async () => {
+    enrolledIn([]);
+
+    expect(
+      await resolveTeacherSchoolYearScope(await requestWithScope(null), 'm1')
+    ).toBe(currentSchoolYear());
+  });
+});
 
 describe('resolveStudentSchoolYearScope', () => {
   beforeEach(() => {

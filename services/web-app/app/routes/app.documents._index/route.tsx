@@ -112,7 +112,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
   // Everything on this page hangs off the teacher's classes, so scoping them
   // to the school year chosen in the sidebar scopes the whole grading queue —
   // and keeps it agreeing with what My Classes shows.
-  const schoolYearScope = await resolveTeacherSchoolYearScope(request);
+  const schoolYearScope = await resolveTeacherSchoolYearScope(
+    request,
+    profile.id
+  );
 
   const classes = await prisma.class.findMany({
     where: {

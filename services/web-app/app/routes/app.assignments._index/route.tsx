@@ -58,7 +58,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
     return redirect('/app');
   }
 
-  const schoolYearScope = await resolveTeacherSchoolYearScope(request);
+  const schoolYearScope = await resolveTeacherSchoolYearScope(
+    request,
+    profile.id
+  );
 
   const classAssignments = await prisma.classAssignment.findMany({
     where: {
