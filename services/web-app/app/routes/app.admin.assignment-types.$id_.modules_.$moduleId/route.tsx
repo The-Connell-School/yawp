@@ -64,6 +64,7 @@ import {
   type ModuleRubricRelationship,
 } from '~/domain/assignment-types/assignment-type-rubric-config';
 import { ModuleRubricAlignmentEditor } from '~/components/admin/module-rubric-alignment-editor';
+import { parseRubricSchema } from '~/domain/rubrics/rubric-schema';
 
 const moduleRubricRelationshipSet = new Set<string>(
   MODULE_RUBRIC_RELATIONSHIPS
@@ -128,6 +129,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const [courseRecord, module] = await Promise.all([
     prisma.assignmentType.findUnique({
       where: { id: params.id },
+      include: { rubric: { select: { schemaJson: true } } },
     }),
     prisma.assignmentModule.findFirst({
       where: {
@@ -152,10 +154,16 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     throw new Response('Not Found', { status: 404 });
   }
 
+  const selectedLibraryRubric = courseRecord.rubric
+    ? parseRubricSchema(courseRecord.rubric.schemaJson)
+    : null;
   const course = {
     id: courseRecord.id,
     title: courseRecord.title,
-    rubricJson: (courseRecord as { rubricJson?: unknown }).rubricJson ?? null,
+    rubricJson:
+      selectedLibraryRubric?.ok === true
+        ? selectedLibraryRubric.schema.rubric
+        : ((courseRecord as { rubricJson?: unknown }).rubricJson ?? null),
   };
 
   return dataResponse({ course, module });
