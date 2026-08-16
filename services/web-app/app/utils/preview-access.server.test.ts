@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 import {
   PREVIEW_ACCESS_COOKIE_NAME,
+  PREVIEW_AUTHORIZED_ACTIVITY_HEADER,
   clearPreviewAccessCookie,
   createPreviewAccessMiddleware,
   findPreviewAccessSeatByCode,
@@ -150,6 +151,9 @@ describe('preview access gate', () => {
         next
       );
       expect(await response?.text()).toBe('ok');
+      expect(
+        response?.headers.get(PREVIEW_AUTHORIZED_ACTIVITY_HEADER)
+      ).toBeNull();
     }
 
     expect(next).toHaveBeenCalledTimes(3);
@@ -192,6 +196,9 @@ describe('preview access gate', () => {
       next
     );
     expect(await authenticated?.text()).toBe('private');
+    expect(
+      authenticated?.headers.get(PREVIEW_AUTHORIZED_ACTIVITY_HEADER)
+    ).toBe('1');
 
     const tampered = `${cookiePair.slice(0, -1)}x`;
     const rejected = await middleware(
@@ -199,12 +206,38 @@ describe('preview access gate', () => {
       next
     );
     expect((rejected as Response).status).toBe(302);
+    expect(
+      (rejected as Response).headers.get(PREVIEW_AUTHORIZED_ACTIVITY_HEADER)
+    ).toBeNull();
     expect(next).toHaveBeenCalledTimes(1);
 
     const parsedSeat = await getPreviewAccessSeat(
       request('/app', { headers: { cookie: cookiePair } })
     );
     expect(parsedSeat).toEqual(seat);
+  });
+
+  test('does not mark a stale runtime-seat cookie as authorized activity', async () => {
+    const cookie = (
+      await grantPreviewAccessCookie({
+        organizationId: 'preview-seat-2',
+        label: 'Removed seat',
+      })
+    ).split(';', 1)[0];
+    const next = mock(async () => new Response('private'));
+    const middleware = createPreviewAccessMiddleware(
+      async () => null,
+      repository({ byId: { 'preview-seat-2': null } })
+    );
+
+    const response = (await middleware(
+      middlewareArgs(request('/app', { headers: { cookie } })),
+      next
+    )) as Response;
+
+    expect(response.status).toBe(302);
+    expect(response.headers.get(PREVIEW_AUTHORIZED_ACTIVITY_HEADER)).toBeNull();
+    expect(next).not.toHaveBeenCalled();
   });
 
   test('rejects an authenticated session that is bound outside the signed seat', async () => {

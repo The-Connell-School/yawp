@@ -239,8 +239,14 @@ export function startAccessLogFollower({
           const method = String(entry.RequestMethod || 'GET').toUpperCase();
           const requestPath = String(entry.RequestPath || entry.RequestUri || '/').split('?')[0];
           const status = Number(entry.DownstreamStatus || entry.OriginStatus || 200);
+          const authorized = String(
+            entry['origin_X-Yawp-Preview-Authorized']
+            || entry['downstream_X-Yawp-Preview-Authorized']
+            || '',
+          ) === '1';
           if (
             pr !== null
+            && authorized
             && method !== 'HEAD'
             && method !== 'OPTIONS'
             && requestPath !== '/api/healthcheck'
@@ -348,7 +354,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const domain = process.env.PREVIEW_DOMAIN || '';
   const secret = process.env.PREVIEW_WAKE_SECRET || '';
   const root = process.env.PREVIEW_ROOT || '/srv/yawp-preview';
-  const maxRunning = process.env.PREVIEW_MAX_RUNNING || '8';
+  const maxRunning = process.env.PREVIEW_MAX_RUNNING || '4';
   const wakeScript = process.env.PREVIEW_WAKE_SCRIPT
     || path.join(root, 'bootstrap', 'scripts', 'preview', 'wake-preview.sh');
   const accessLog = process.env.PREVIEW_ACCESS_LOG

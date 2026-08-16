@@ -21,4 +21,11 @@ describe('bootstrap-host.sh', () => {
     expect(workflow).toContain("PREVIEW_SLEEP_ENABLED: ${{ vars.PREVIEW_SLEEP_ENABLED || 'true' }}");
     expect(workflow).toContain('PREVIEW_SLEEP_ENABLED=$(shell_quote "$PREVIEW_SLEEP_ENABLED")');
   });
+
+  test('logs only the non-secret authorization marker needed for activity leases', () => {
+    expect(script).toContain('--accesslog.fields.headers.defaultmode=drop');
+    expect(script).toContain(
+      '--accesslog.fields.headers.names.X-Yawp-Preview-Authorized=keep'
+    );
+  });
 });

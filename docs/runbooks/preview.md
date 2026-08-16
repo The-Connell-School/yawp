@@ -6,9 +6,9 @@ The target behavior is:
 
 - Every same-repository PR deploys automatically on `opened`, `synchronize`, `reopened`, and `labeled`.
 - Closed PRs are destroyed automatically with `docker compose down -v`, and stale previews are swept by the scheduled cleanup workflow.
-- Open previews sleep after 48 hours without PR or preview-URL activity. Sleep uses `docker compose stop`, preserving containers, database, volumes, source, and access codes.
+- Open previews sleep after 48 hours without PR or authorized preview-URL activity. Sleep uses `docker compose stop`, preserving containers, database, volumes, source, and access codes.
 - Opening a sleeping preview with its one-click URL or an already authorized browser wakes that same Compose project automatically. The first request can take up to a minute while the app becomes healthy; no manual workflow or rebuild is required.
-- Traefik records URL activity asynchronously, so a wake-service outage cannot take already-running previews offline. The bounded access log is truncated after 50 MiB.
+- The app adds a non-secret response marker only after validating the signed preview seat. Traefik retains only that response header and records authorized URL activity asynchronously, so anonymous redirects, the access screen, stale cookies, and static assets cannot renew leases. A wake-service outage cannot take already-running previews offline. The bounded access log is truncated after 50 MiB.
 - Each PR gets its own app container and database inside the shared preview Postgres container.
 - The shared template database restores the configured preview-safe database dump from S3 once; new PR databases clone that template, then apply newer Prisma migrations.
 - Deploys avoid ECR pushes and Terraform applies on the hot path.
@@ -67,7 +67,7 @@ Required repository settings:
 - Variable `PREVIEW_TLS`
 - Variable `PREVIEW_RUNTIME`
 - Variable `PREVIEW_MAX_RESIDENT` (defaults to `20`; disk/state limit)
-- Variable `PREVIEW_MAX_RUNNING` (defaults to `8`; memory limit)
+- Variable `PREVIEW_MAX_RUNNING` (defaults to `4`; memory limit)
 - Variable `PREVIEW_SLEEP_ENABLED` (`true` enables idle sleeping)
 - Variables `PREVIEW_DRAFT_IDLE_HOURS` and `PREVIEW_READY_IDLE_HOURS` (both default to `48`)
 - Variable `PREVIEW_SEAT_COUNT` (optional; defaults to `6`)
@@ -162,7 +162,7 @@ Production-dump app-login smoke credentials come from `PREVIEW_LOGIN_EMAIL` and 
 
 The hot path deliberately keeps state on the host: Docker layer cache, Bun dependency volumes, the shared restored template database, and PR-scoped Postgres databases. The first build on a cold host is slower because it creates the shared Postgres container and restores the production dump. Subsequent PR creates clone the template database locally, and warm PR updates skip tooling work when package, Prisma, and migration inputs are unchanged. In `fast` runtime, the web container still restarts by default; the speedup comes from removing package install, Prisma generate, migration, dump restore, and cloud control-plane work from the warm path.
 
-Scheduled reconciliation runs every six hours. It destroys closed PR environments, sleeps open previews after their idle lease, and enforces separate resident and running caps. Successful non-health traffic intentionally updates the activity lease; HEAD, healthcheck, and error responses do not. The resident cap (20), running cap (4), Traefik rate limit (2 requests/minute with burst 3), and wake concurrency limit (2) bound resource use. A sleeping preview wakes automatically when the request carries either its one-click `code` or a valid signed access cookie from an earlier visit. Bare anonymous requests remain asleep and receive `401`, preventing bots and public probes from churning host memory. An authorized wake at the running cap may sleep the least recently used unpinned preview first. `preview:keep-awake` excludes a PR from sleep. Only resident-cap eviction or PR closure deletes preview-local state.
+Scheduled reconciliation runs every six hours. It destroys closed PR environments, sleeps open previews after their idle lease, and enforces separate resident and running caps. Only traffic whose app response carries the non-secret authorization marker updates the activity lease; HEAD, healthcheck, anonymous redirect, access-screen, static-asset, stale-cookie, and error traffic do not. The resident cap (20), running cap (4), Traefik rate limit (2 requests/minute with burst 3), and wake concurrency limit (2) bound resource use. A sleeping preview wakes automatically when the request carries either its one-click `code` or a valid signed access cookie from an earlier visit. Bare anonymous requests remain asleep and receive `401`, preventing bots and public probes from churning host memory. An authorized wake at the running cap may sleep the least recently used unpinned preview first. `preview:keep-awake` excludes a PR from sleep. Only resident-cap eviction or PR closure deletes preview-local state.
 
 The host-bootstrap workflow runs only when dispatched from the default branch and checks out that dispatch's immutable commit SHA. It cannot execute an arbitrary PR ref with shared-host credentials.
 
