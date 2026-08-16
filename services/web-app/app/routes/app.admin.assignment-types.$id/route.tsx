@@ -116,10 +116,9 @@ export async function action({ request, params }: ActionFunctionArgs) {
       : {};
 
     if (hasGradingConfigFields) {
-      const nextRubricComplete = isRubricFullyPopulated(
-        parseRubric(gradingConfigData.rubricJson)
-      );
-      if (!nextRubricComplete) {
+      const nextRubric = parseRubric(gradingConfigData.rubricJson);
+      const nextRubricComplete = isRubricFullyPopulated(nextRubric);
+      if (nextRubric.categories.length > 0 && !nextRubricComplete) {
         // Grandfather assignment types whose rubric was already incomplete
         // before this edit — don't force an unrelated save (e.g. a title
         // change) to be blocked on fixing a pre-existing gap. Only block edits
