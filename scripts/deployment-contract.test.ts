@@ -572,7 +572,7 @@ describe('PR preview deployment contract', () => {
     expect(wakeProof).toContain('PROOF_CONTAINER_AFTER');
   });
 
-  test('preview idle defaults are two days and comments promise URL wake', () => {
+  test('preview idle defaults are two days and comments promise authorized URL wake', () => {
     const workflow = readRepoFile('.github/workflows/preview-environments.yml');
 
     expect(workflow).toContain(
@@ -584,7 +584,9 @@ describe('PR preview deployment contract', () => {
     expect(workflow).toContain(
       "PREVIEW_SLEEP_ENABLED: ${{ vars.PREVIEW_SLEEP_ENABLED || 'true' }}"
     );
-    expect(workflow).toContain('Open its preview URL to wake it automatically');
+    expect(workflow).toContain(
+      'Open its one-click URL, or revisit from an already authorized browser, to wake it automatically'
+    );
   });
 
   test('preview host bootstrap runs only reviewed default-branch code', () => {
