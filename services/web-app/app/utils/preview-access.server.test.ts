@@ -3,6 +3,7 @@ import {
   PREVIEW_ACCESS_COOKIE_NAME,
   PREVIEW_AUTHORIZED_ACTIVITY_HEADER,
   clearPreviewAccessCookie,
+  createPreviewAccessCookie,
   createPreviewAccessMiddleware,
   findPreviewAccessSeatByCode,
   getPreviewAccessSeat,
@@ -215,6 +216,28 @@ describe('preview access gate', () => {
       request('/app', { headers: { cookie: cookiePair } })
     );
     expect(parsedSeat).toEqual(seat);
+  });
+
+  test('rejects signed access cookies after their embedded preview-access lifetime', async () => {
+    const expiredAt = Math.floor(Date.now() / 1000) - 31 * 24 * 60 * 60;
+    const expiredValue = `seat-v2:${expiredAt}:local-dev-org`;
+    const serialized = await createPreviewAccessCookie().serialize(expiredValue);
+    const cookie = serialized.split(';', 1)[0];
+
+    expect(
+      await getPreviewAccessSeat(request('/app', { headers: { cookie } }))
+    ).toBeNull();
+  });
+
+  test('rejects legacy signed access cookies that have no embedded lifetime', async () => {
+    const serialized = await createPreviewAccessCookie().serialize(
+      'seat-v1:local-dev-org'
+    );
+    const cookie = serialized.split(';', 1)[0];
+
+    expect(
+      await getPreviewAccessSeat(request('/app', { headers: { cookie } }))
+    ).toBeNull();
   });
 
   test('does not mark a stale runtime-seat cookie as authorized activity', async () => {
