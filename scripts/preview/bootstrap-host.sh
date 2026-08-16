@@ -5,6 +5,7 @@ ROOT="${PREVIEW_ROOT:-/srv/yawp-preview}"
 ACME_EMAIL="${PREVIEW_ACME_EMAIL:-}"
 DOMAIN="${PREVIEW_DOMAIN:-}"
 RUNNING_CAP="${PREVIEW_MAX_RUNNING:-8}"
+SLEEP_ENABLED="${PREVIEW_SLEEP_ENABLED:-true}"
 WAKE_PORT="${PREVIEW_WAKE_PORT:-9876}"
 WAKE_USER="${PREVIEW_WAKE_USER:-$USER}"
 POSTGRES_PROJECT="${PREVIEW_POSTGRES_PROJECT:-yawp-preview-db}"
@@ -18,6 +19,10 @@ METRICS_USER="${PREVIEW_METRICS_USER:-$USER}"
   echo "PREVIEW_MAX_RUNNING must be a positive integer" >&2
   exit 1
 }
+case "$SLEEP_ENABLED" in
+  true|false) ;;
+  *) echo "PREVIEW_SLEEP_ENABLED must be true or false" >&2; exit 1 ;;
+esac
 if ! [[ "$WAKE_PORT" =~ ^[1-9][0-9]*$ ]] || (( WAKE_PORT > 65535 )); then
   echo "PREVIEW_WAKE_PORT must be a valid TCP port" >&2
   exit 1
@@ -235,6 +240,7 @@ EnvironmentFile=$wake_env
 Environment=PREVIEW_ROOT=$ROOT
 Environment=PREVIEW_DOMAIN=$DOMAIN
 Environment=PREVIEW_MAX_RUNNING=$RUNNING_CAP
+Environment=PREVIEW_SLEEP_ENABLED=$SLEEP_ENABLED
 Environment=PREVIEW_WAKE_PORT=$WAKE_PORT
 Environment=PREVIEW_WAKE_SCRIPT=$wake_script
 Environment=PREVIEW_ACCESS_LOG=$ROOT/traefik/logs/access.json

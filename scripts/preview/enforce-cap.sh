@@ -276,6 +276,17 @@ running_env_numbers() {
   return 0
 }
 
+assert_project_resources_absent() {
+  local project="$1"
+  local resources
+  resources="$("$DOCKER" ps -aq --filter "label=com.docker.compose.project=${project}" 2>/dev/null)" || return 1
+  [[ -z "$resources" ]] || return 1
+  resources="$("$DOCKER" volume ls -q --filter "label=com.docker.compose.project=${project}" 2>/dev/null)" || return 1
+  [[ -z "$resources" ]] || return 1
+  resources="$("$DOCKER" network ls -q --filter "label=com.docker.compose.project=${project}" 2>/dev/null)" || return 1
+  [[ -z "$resources" ]]
+}
+
 destroy_env() {
   local pr="$1"
   is_positive_integer "$pr" || {
@@ -289,8 +300,9 @@ destroy_env() {
 
   if [[ -f "$compose_file" ]]; then
     "$DOCKER" compose -p "$project" -f "$compose_file" down -v --remove-orphans || return 1
-  else
-    "$DOCKER" compose -p "$project" down -v --remove-orphans || return 1
+  elif ! assert_project_resources_absent "$project"; then
+    echo "::error::refusing source-only cleanup for pr-${pr}; Compose resources exist or could not be ruled out without ${compose_file}" >&2
+    return 1
   fi
   if "$DOCKER" inspect "$POSTGRES_CONTAINER" >/dev/null 2>&1; then
     "$DOCKER" exec "$POSTGRES_CONTAINER" dropdb -U postgres --if-exists "yawp_pr_${pr}" || return 1
