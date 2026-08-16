@@ -135,6 +135,13 @@ ${webService}    labels:
       - ${q(`traefik.http.routers.${routerBase}-http.service=${routerBase}`)}
 ${tlsLabels}
       - ${q(`traefik.http.services.${routerBase}.loadbalancer.server.port=8080`)}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "bun", "-e", "fetch('http://127.0.0.1:8080/api/healthcheck').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+      start_period: 90s
     networks:
       - default
       - preview${directPortBlock}

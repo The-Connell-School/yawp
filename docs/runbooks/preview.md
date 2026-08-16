@@ -6,6 +6,9 @@ The target behavior is:
 
 - Every same-repository PR deploys automatically on `opened`, `synchronize`, and `reopened`.
 - Closed PRs are destroyed automatically with `docker compose down -v`, and stale previews are swept by the scheduled cleanup workflow.
+- Open previews sleep after 48 hours without PR or preview-URL activity. Sleep uses `docker compose stop`, preserving containers, database, volumes, source, and access codes.
+- Opening a sleeping preview URL wakes that same Compose project automatically. The first request can take up to a minute while the app becomes healthy; no manual workflow or rebuild is required.
+- Traefik records URL activity asynchronously, so a wake-service outage cannot take already-running previews offline. The bounded access log is truncated after 50 MiB.
 - Each PR gets its own app container and database inside the shared preview Postgres container.
 - The shared template database restores the configured production database dump from S3 once; new PR databases clone that template, then apply newer Prisma migrations.
 - Deploys avoid ECR pushes and Terraform applies on the hot path.
@@ -17,7 +20,7 @@ The target behavior is:
 
 Provision an EC2 instance with enough CPU and disk for concurrent Docker builds. Start with at least `t3.large` or `c7i.large` and 120 GB gp3. The first host can live in the default VPC because the app stack is self-contained.
 
-Attach an IAM instance profile that can read the configured production dump object. The current host uses `yawp-preview-host`, scoped to `s3:GetObject` on `arn:aws:s3:::yawp-preview-videos/production.dump` plus `s3:GetBucketLocation` and prefix-scoped `s3:ListBucket` on the bucket. The deploy script restores through the host AWS CLI when the shared template database does not exist. Preview app containers set `AWS_EC2_METADATA_DISABLED=true`, and host bootstrap adds Docker egress blocks for EC2 metadata addresses so app code cannot borrow the host role.
+Attach an IAM instance profile that can read the configured production dump object and publish aggregate host metrics. Scope dump access to `s3:GetObject` on `arn:aws:s3:::yawp-preview-videos/production.dump` plus `s3:GetBucketLocation` and prefix-scoped `s3:ListBucket` on the bucket. Its separate metrics policy should allow `cloudwatch:PutMetricData` only for the `Yawp/PreviewHost` namespace. The deploy script restores through the host AWS CLI when the shared template database does not exist. Preview app containers set `AWS_EC2_METADATA_DISABLED=true`, and host bootstrap adds Docker egress blocks for EC2 metadata addresses so app code cannot borrow the host role.
 
 Open inbound ports:
 
@@ -28,6 +31,8 @@ Then run:
 
 ```bash
 PREVIEW_ROOT=/srv/yawp-preview \
+PREVIEW_DOMAIN=preview.yawp.school \
+PREVIEW_MAX_RUNNING=4 \
 PREVIEW_ACME_EMAIL=ops@yawp.school \
 bash scripts/preview/bootstrap-host.sh
 ```
@@ -61,6 +66,10 @@ Required repository settings:
 - Variable `PREVIEW_SSH_USER`
 - Variable `PREVIEW_TLS`
 - Variable `PREVIEW_RUNTIME`
+- Variable `PREVIEW_MAX_RESIDENT` (defaults to `20`; disk/state limit)
+- Variable `PREVIEW_MAX_RUNNING` (defaults to `8`; memory limit)
+- Variable `PREVIEW_SLEEP_ENABLED` (`true` enables idle sleeping)
+- Variables `PREVIEW_DRAFT_IDLE_HOURS` and `PREVIEW_READY_IDLE_HOURS` (both default to `48`)
 - Variable `PREVIEW_SEAT_COUNT` (optional; defaults to `6`)
 - Variable `PREVIEW_AI_MODEL`
 - Variable `PREVIEW_DB_DUMP_S3_URI`
@@ -125,4 +134,14 @@ Production-dump app-login smoke credentials come from `PREVIEW_LOGIN_EMAIL` and 
 
 The hot path deliberately keeps state on the host: Docker layer cache, Bun dependency volumes, the shared restored template database, and PR-scoped Postgres databases. The first build on a cold host is slower because it creates the shared Postgres container and restores the production dump. Subsequent PR creates clone the template database locally, and warm PR updates skip tooling work when package, Prisma, and migration inputs are unchanged. In `fast` runtime, the web container still restarts by default; the speedup comes from removing package install, Prisma generate, migration, dump restore, and cloud control-plane work from the warm path.
 
-Scheduled cleanup runs every six hours. It keeps open PRs, removes closed/stale preview directories after `PREVIEW_TTL_HOURS` hours, drops the matching `yawp_pr_<number>` database, and removes legacy per-PR Postgres volumes left by older previews.
+Scheduled reconciliation runs every six hours. It destroys closed PR environments, sleeps open previews after their idle lease, and enforces separate resident and running caps. Public URL requests intentionally update the activity lease, including the first request before the in-app access gate; the resident/running caps and wake rate/concurrency limits bound resource use even if a public probe renews a lease. When waking at the running cap, the host sleeps the least recently used unpinned preview first; `preview:keep-awake` excludes a PR from sleep. Only resident-cap eviction or PR closure deletes preview-local state.
+
+The host-bootstrap workflow runs only when dispatched from the default branch and checks out that dispatch's immutable commit SHA. It cannot execute an arbitrary PR ref with shared-host credentials.
+
+### Sleep/wake rollout and rollback
+
+Keep `PREVIEW_SLEEP_ENABLED=false` during the cutover. Merge the reviewed code, run the default-branch host-bootstrap workflow, and verify `yawp-preview-wake.service` plus the Traefik fallback before enabling sleep. Use a disposable seeded PR preview as the canary: preserve its access code and a state marker, stop it, open its URL, wait for health, then confirm the same Compose project and state returned. Set both idle variables to `48` and enable sleeping only after that canary passes.
+
+For rollback, set `PREVIEW_SLEEP_ENABLED=false` first, start each resident PR Compose project, and restore the prior default-branch bootstrap configuration. Already-running previews never depend on the wake service, so disabling or removing the fallback does not interrupt them.
+
+Run `scripts/preview/prove-wake.sh` for a disposable real-Compose proof. It creates an isolated fixture project, stops it, wakes it through the production wake script, and verifies the container identity, state marker, and fixture access-code hash are unchanged before cleaning itself up.
