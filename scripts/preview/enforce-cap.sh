@@ -15,6 +15,7 @@ RUNNING_CAP="${PREVIEW_MAX_RUNNING:-$RESIDENT_CAP}"
 KEEP_PR="${KEEP_PR:-}"
 OPEN_PR_NUMBERS="${OPEN_PR_NUMBERS:-}"
 PR_ACTIVITY="${PR_ACTIVITY:-}"
+PR_STATE_AUTHORITATIVE="${PREVIEW_PR_STATE_AUTHORITATIVE:-false}"
 POSTGRES_CONTAINER="${PREVIEW_POSTGRES_CONTAINER:-preview-postgres}"
 SLEEP_ENABLED="${PREVIEW_SLEEP_ENABLED:-true}"
 DRAFT_IDLE_HOURS="${PREVIEW_DRAFT_IDLE_HOURS:-48}"
@@ -60,6 +61,10 @@ case "$SLEEP_ENABLED" in
   true|false) ;;
   *) echo "PREVIEW_SLEEP_ENABLED must be true or false" >&2; exit 1 ;;
 esac
+case "$PR_STATE_AUTHORITATIVE" in
+  true|false) ;;
+  *) echo "PREVIEW_PR_STATE_AUTHORITATIVE must be true or false" >&2; exit 1 ;;
+esac
 if [[ "$MODE" == "reconcile" ]]; then
   KEEP_PR=""
 elif [[ -n "$KEEP_PR" ]] && ! is_positive_integer "$KEEP_PR"; then
@@ -77,7 +82,11 @@ acquire_host_lock() {
 
 refresh_pr_state() {
   if [[ -z "$GITHUB_REPOSITORY" && -z "$GITHUB_TOKEN" ]]; then
-    return 0
+    if [[ "$PR_STATE_AUTHORITATIVE" == "true" ]]; then
+      return 0
+    fi
+    echo "Authoritative pull-request state or GitHub credentials are required before reconciliation" >&2
+    return 1
   fi
   if [[ -z "$GITHUB_REPOSITORY" || -z "$GITHUB_TOKEN" ]]; then
     echo "PREVIEW_GITHUB_REPOSITORY and PREVIEW_GITHUB_TOKEN must be set together" >&2
@@ -265,14 +274,16 @@ destroy_env() {
   local compose_file="$path/docker-compose.yml"
 
   if [[ -f "$compose_file" ]]; then
-    "$DOCKER" compose -p "$project" -f "$compose_file" down -v --remove-orphans || true
+    "$DOCKER" compose -p "$project" -f "$compose_file" down -v --remove-orphans || return 1
   else
-    "$DOCKER" compose -p "$project" down -v --remove-orphans || true
+    "$DOCKER" compose -p "$project" down -v --remove-orphans || return 1
   fi
   if "$DOCKER" inspect "$POSTGRES_CONTAINER" >/dev/null 2>&1; then
-    "$DOCKER" exec "$POSTGRES_CONTAINER" dropdb -U postgres --if-exists "yawp_pr_${pr}" || true
+    "$DOCKER" exec "$POSTGRES_CONTAINER" dropdb -U postgres --if-exists "yawp_pr_${pr}" || return 1
   fi
-  "$DOCKER" volume rm "${project}_${project}-postgres-data" >/dev/null 2>&1 || true
+  if "$DOCKER" volume inspect "${project}_${project}-postgres-data" >/dev/null 2>&1; then
+    "$DOCKER" volume rm "${project}_${project}-postgres-data" >/dev/null || return 1
+  fi
 
   if ! preview_remove_path "$path"; then
     echo "::error::could not remove ${path}; it still counts against the resident cap"
@@ -363,6 +374,7 @@ sync_keep_awake_markers
 reclaimed=0
 evicted=""
 slept=""
+cleanup_failed=0
 
 # Closed or merged PRs never retain host resources.
 while IFS= read -r pr; do
@@ -375,6 +387,9 @@ while IFS= read -r pr; do
     echo "reclaim pr-${pr}: pull request is closed or merged"
     if destroy_env "$pr"; then
       reclaimed=$((reclaimed + 1))
+    else
+      cleanup_failed=1
+      echo "::error::failed to reclaim pr-${pr}; metadata retained for retry"
     fi
   fi
 done < <(resident_env_numbers)
@@ -420,7 +435,7 @@ fi
 # Running pressure sleeps; it never destroys state.
 running_count="$(running_env_numbers | wc -l | tr -d ' ')"
 running_needed=$((running_count + $(incoming_running_slots)))
-if (( running_needed > RUNNING_CAP )); then
+if (( running_needed > RUNNING_CAP )) && [[ "$SLEEP_ENABLED" == "true" ]]; then
   while IFS= read -r pr; do
     [[ -n "$pr" ]] || continue
     (( running_needed > RUNNING_CAP )) || break
@@ -440,7 +455,10 @@ resident_needed=$((resident_count + $(incoming_resident_slots)))
 running_needed=$((running_count + $(incoming_running_slots)))
 result="ok"
 reason=""
-if (( resident_needed > RESIDENT_CAP )); then
+if (( cleanup_failed != 0 )); then
+  result="error"
+  reason="cleanup-failed"
+elif (( resident_needed > RESIDENT_CAP )); then
   result="full"
   reason="resident-cap"
 elif (( running_needed > RUNNING_CAP )); then

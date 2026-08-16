@@ -112,6 +112,35 @@ describe('preview wake server', () => {
     expect(calls).toBe(1);
   });
 
+  test('bounds concurrent wakes across different preview projects', async () => {
+    let release;
+    const waiting = new Promise((resolve) => { release = resolve; });
+    const url = await listen(createWakeHandler({
+      domain: 'preview.yawp.school',
+      secret: 'wake-secret',
+      maxConcurrentWakes: 2,
+      ensureRunning: async () => waiting,
+      recordAccess: async () => {},
+    }));
+    const request = (pr) => fetch(`${url}/`, {
+      redirect: 'manual',
+      headers: {
+        'x-preview-wake-secret': 'wake-secret',
+        'x-forwarded-host': `pr-${pr}.preview.yawp.school`,
+      },
+    });
+
+    const first = request(241);
+    const second = request(242);
+    await Bun.sleep(20);
+    const third = await request(243);
+    release();
+
+    expect(third.status).toBe(503);
+    expect((await first).status).toBe(307);
+    expect((await second).status).toBe(307);
+  });
+
   test('fallback router redirects to the same validated host after wake', async () => {
     const wakes = [];
     const url = await listen(createWakeHandler({

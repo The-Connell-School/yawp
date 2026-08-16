@@ -22,6 +22,7 @@ permissions:
 
 jobs:
   bootstrap:
+    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
     runs-on: ubuntu-22.04
     environment: preview-host
     env:
@@ -42,10 +43,10 @@ jobs:
           test -n "$PREVIEW_DOMAIN" || { echo "Missing repository variable PREVIEW_DOMAIN"; exit 1; }
           test -n "$PREVIEW_SSH_PRIVATE_KEY" || { echo "Missing repository secret PREVIEW_SSH_PRIVATE_KEY"; exit 1; }
 
-      - name: Checkout reviewed default branch
+      - name: Checkout dispatched default-branch commit
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.repository.default_branch }}
+          ref: ${{ github.sha }}
 
       - name: Prepare SSH
         env:

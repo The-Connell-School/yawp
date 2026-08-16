@@ -144,6 +144,33 @@ describe('wake-preview.sh', () => {
     expect(readFileSync(path.join(preview, 'state-marker'), 'utf8')).toBe('state-241\n');
   });
 
+  test('records the wake lease from the completed wake instead of process startup', () => {
+    const root = makeRoot();
+    makePreview(root, 241);
+    const docker = makeDockerStub(root);
+    const calls = path.join(root, 'date-calls');
+    const fakeDate = path.join(root, 'date');
+    writeFileSync(calls, '0\n');
+    writeFileSync(fakeDate, `#!/usr/bin/env bash
+count="$(head -1 "$PREVIEW_DATE_CALLS")"
+if [[ "$count" == "0" ]]; then
+  printf '1\n' > "$PREVIEW_DATE_CALLS"
+  printf '1000\n'
+else
+  printf '1121\n'
+fi
+`);
+    chmodSync(fakeDate, 0o755);
+
+    const result = run(root, 241, docker, {
+      PATH: `${root}:${process.env.PATH}`,
+      PREVIEW_DATE_CALLS: calls,
+    });
+
+    expect(result.status).toBe(0);
+    expect(readFileSync(path.join(root, 'wake', 'access', 'pr-241'), 'utf8')).toBe('1121\n');
+  });
+
   test('at the running cap sleeps the least recently accessed unpinned preview', () => {
     const root = makeRoot();
     makePreview(root, 100, { access: 10, pinned: true });

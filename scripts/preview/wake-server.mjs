@@ -40,12 +40,26 @@ function send(response, status, body = '') {
   response.end(body);
 }
 
-export function createWakeHandler({ domain, secret, ensureRunning, recordAccess }) {
+export function createWakeHandler({
+  domain,
+  secret,
+  ensureRunning,
+  recordAccess,
+  maxConcurrentWakes = 2,
+}) {
   if (!domain || !secret) throw new Error('preview wake domain and secret are required');
+  if (!Number.isSafeInteger(maxConcurrentWakes) || maxConcurrentWakes < 1) {
+    throw new Error('maxConcurrentWakes must be a positive integer');
+  }
   const inFlight = new Map();
 
   function wake(pr) {
     if (!inFlight.has(pr)) {
+      if (inFlight.size >= maxConcurrentWakes) {
+        const error = new Error('Preview wake concurrency is full');
+        error.code = 'capacity-full';
+        throw error;
+      }
       const operation = Promise.resolve()
         .then(() => ensureRunning(pr))
         .finally(() => inFlight.delete(pr));
@@ -240,6 +254,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const accessLog = process.env.PREVIEW_ACCESS_LOG
     || path.join(root, 'traefik', 'logs', 'access.json');
   const accessLogMaxBytes = Number(process.env.PREVIEW_ACCESS_LOG_MAX_BYTES || 50 * 1024 * 1024);
+  const maxConcurrentWakes = Number(process.env.PREVIEW_MAX_CONCURRENT_WAKES || '2');
   const port = Number(process.env.PREVIEW_WAKE_PORT || '9876');
   const bind = process.env.PREVIEW_WAKE_BIND || '0.0.0.0';
   if (!Number.isInteger(port) || port < 1 || port > 65535) {
@@ -248,6 +263,9 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   if (!Number.isSafeInteger(accessLogMaxBytes) || accessLogMaxBytes < 1) {
     throw new Error('PREVIEW_ACCESS_LOG_MAX_BYTES must be a positive integer');
   }
+  if (!Number.isSafeInteger(maxConcurrentWakes) || maxConcurrentWakes < 1) {
+    throw new Error('PREVIEW_MAX_CONCURRENT_WAKES must be a positive integer');
+  }
   const operations = createDefaultWakeOperations({ root, wakeScript, maxRunning });
   startAccessLogFollower({
     accessLog,
@@ -255,7 +273,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     recordAccess: operations.recordAccess,
     maxBytes: accessLogMaxBytes,
   });
-  createServer(createWakeHandler({ domain, secret, ...operations })).listen(port, bind, () => {
+  createServer(createWakeHandler({ domain, secret, maxConcurrentWakes, ...operations })).listen(port, bind, () => {
     console.log(`Yawp preview wake service listening on ${bind}:${port}`);
   });
 }

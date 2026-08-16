@@ -586,7 +586,10 @@ describe('PR preview deployment contract', () => {
   test('preview host bootstrap runs only reviewed default-branch code', () => {
     const workflow = readRepoFile('.github/workflows/preview-host-bootstrap.yml');
 
-    expect(workflow).toContain('ref: ${{ github.event.repository.default_branch }}');
+    expect(workflow).toContain(
+      "if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)"
+    );
+    expect(workflow).toContain('ref: ${{ github.sha }}');
     expect(workflow).not.toContain('${{ inputs.ref }}');
   });
 

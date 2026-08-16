@@ -71,14 +71,16 @@ drop_preview_database() {
   local database_name="yawp_pr_${pr_number}"
 
   if docker inspect "$POSTGRES_CONTAINER" >/dev/null 2>&1; then
-    docker exec "$POSTGRES_CONTAINER" dropdb -U postgres --if-exists "$database_name" || true
+    docker exec "$POSTGRES_CONTAINER" dropdb -U postgres --if-exists "$database_name"
   fi
 }
 
 remove_legacy_postgres_volume() {
   local project="$1"
 
-  docker volume rm "${project}_${project}-postgres-data" >/dev/null 2>&1 || true
+  if docker volume inspect "${project}_${project}-postgres-data" >/dev/null 2>&1; then
+    docker volume rm "${project}_${project}-postgres-data" >/dev/null
+  fi
 }
 
 destroy_preview_path() {
@@ -88,13 +90,13 @@ destroy_preview_path() {
   local compose_file="$preview_path/docker-compose.yml"
 
   if [[ -f "$compose_file" ]]; then
-    docker compose -p "$project" -f "$compose_file" down -v --remove-orphans || true
+    docker compose -p "$project" -f "$compose_file" down -v --remove-orphans || return 1
   else
-    docker compose -p "$project" down -v --remove-orphans || true
+    docker compose -p "$project" down -v --remove-orphans || return 1
   fi
 
-  drop_preview_database "$pr_number"
-  remove_legacy_postgres_volume "$project"
+  drop_preview_database "$pr_number" || return 1
+  remove_legacy_postgres_volume "$project" || return 1
   local remove_failed=0
   if ! preview_remove_path "$preview_path"; then
     remove_failed=1
@@ -164,6 +166,10 @@ cleanup_sources() {
       continue
     fi
     if is_open_pr "$pr_number"; then
+      continue
+    fi
+    if [[ -d "$ROOT/previews/pr-${pr_number}" ]]; then
+      echo "Skipping source pr-${pr_number}: preview teardown is incomplete"
       continue
     fi
     if [[ -z "$TARGET_PR" ]] && ! is_expired_path "$source_path"; then

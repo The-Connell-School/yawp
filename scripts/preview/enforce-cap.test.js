@@ -133,6 +133,13 @@ if [[ "$1" == "compose" && "$*" == *" stop"* ]]; then
   fi
   exit 0
 fi
+if [[ "$1" == "compose" && "$*" == *" down"* ]]; then
+  if [[ "$*" =~ -p[[:space:]]+yawp-pr-([0-9]+) ]]; then
+    pr="\${BASH_REMATCH[1]}"
+    [[ "\${PREVIEW_DOCKER_FAIL_DOWN_PR:-}" == "$pr" ]] && exit 1
+  fi
+  exit 0
+fi
 if [[ "$1" == "inspect" ]]; then exit 1; fi
 exit 0
 `
@@ -167,7 +174,12 @@ function markInflight(root, pr, marker = '1000-1') {
 function run(root, env = {}) {
   return spawnSync('bash', [script], {
     encoding: 'utf8',
-    env: { ...process.env, PREVIEW_ROOT: root, ...env },
+    env: {
+      ...process.env,
+      PREVIEW_ROOT: root,
+      PREVIEW_PR_STATE_AUTHORITATIVE: 'true',
+      ...env,
+    },
   });
 }
 
@@ -196,6 +208,23 @@ afterEach(() => {
 });
 
 describe('enforce-cap.sh', () => {
+  test('fails closed without an authoritative pull-request state source', () => {
+    const root = makeRoot();
+    makeEnv(root, 100, { withCompose: true });
+    const docker = makeDockerStub(root, [100]);
+
+    const result = run(root, {
+      PREVIEW_PR_STATE_AUTHORITATIVE: 'false',
+      PREVIEW_MODE: 'reconcile',
+      PREVIEW_DOCKER: docker.stub,
+      PREVIEW_DOCKER_STATE: docker.state,
+      PREVIEW_DOCKER_LOG: docker.log,
+    });
+
+    expect(result.status).not.toBe(0);
+    expect(existsSync(path.join(root, 'previews/pr-100'))).toBe(true);
+    expect(existsSync(docker.log) ? readFileSync(docker.log, 'utf8') : '').not.toContain(' down');
+  });
   test('reclaims an environment whose PR is closed', () => {
     const root = makeRoot();
     const { previewDir, sourceDir } = makeEnv(root, 232);
@@ -556,7 +585,9 @@ describe('enforce-cap.sh', () => {
       PREVIEW_DOCKER: docker.stub,
       PREVIEW_DOCKER_STATE: docker.state,
       PREVIEW_DOCKER_LOG: docker.log,
-      PREVIEW_SLEEP_ENABLED: 'false',
+      PREVIEW_SLEEP_ENABLED: 'true',
+      PREVIEW_DRAFT_IDLE_HOURS: '999999',
+      PREVIEW_READY_IDLE_HOURS: '999999',
       PREVIEW_MAX_RESIDENT: '20',
       PREVIEW_MAX_RUNNING: '2',
     });
@@ -580,7 +611,9 @@ describe('enforce-cap.sh', () => {
       PREVIEW_DOCKER: docker.stub,
       PREVIEW_DOCKER_STATE: docker.state,
       PREVIEW_DOCKER_LOG: docker.log,
-      PREVIEW_SLEEP_ENABLED: 'false',
+      PREVIEW_SLEEP_ENABLED: 'true',
+      PREVIEW_DRAFT_IDLE_HOURS: '999999',
+      PREVIEW_READY_IDLE_HOURS: '999999',
       PREVIEW_MAX_RESIDENT: '20',
       PREVIEW_MAX_RUNNING: '2',
     });
@@ -670,5 +703,57 @@ describe('enforce-cap.sh', () => {
       CAP_RESULT: 'full',
       CAP_REASON: 'running-cap',
     });
+  });
+
+  test('sleep disable flag prevents every automatic stop', () => {
+    const root = makeRoot();
+    makeEnv(root, 100, { withCompose: true });
+    makeEnv(root, 101, { withCompose: true });
+    const docker = makeDockerStub(root, [100, 101]);
+
+    const result = run(root, {
+      OPEN_PR_NUMBERS: '100 101',
+      PR_ACTIVITY: '100 1 0 0\n101 2 0 0',
+      PREVIEW_MODE: 'reconcile',
+      PREVIEW_DOCKER: docker.stub,
+      PREVIEW_DOCKER_STATE: docker.state,
+      PREVIEW_DOCKER_LOG: docker.log,
+      PREVIEW_SLEEP_ENABLED: 'false',
+      PREVIEW_MAX_RESIDENT: '20',
+      PREVIEW_MAX_RUNNING: '1',
+    });
+
+    expect(parse(result.stdout)).toMatchObject({
+      CAP_SLEPT: '',
+      CAP_RUNNING: '2',
+      CAP_RESULT: 'full',
+      CAP_REASON: 'running-cap',
+    });
+    expect(readFileSync(docker.log, 'utf8')).not.toContain(' stop');
+  });
+
+  test('failed environment teardown preserves metadata and reports an error', () => {
+    const root = makeRoot();
+    makeEnv(root, 100, { withCompose: true });
+    const docker = makeDockerStub(root);
+
+    const result = run(root, {
+      OPEN_PR_NUMBERS: '',
+      PR_ACTIVITY: '',
+      PREVIEW_MODE: 'reconcile',
+      PREVIEW_DOCKER: docker.stub,
+      PREVIEW_DOCKER_STATE: docker.state,
+      PREVIEW_DOCKER_LOG: docker.log,
+      PREVIEW_DOCKER_FAIL_DOWN_PR: '100',
+      PREVIEW_MAX_RESIDENT: '20',
+      PREVIEW_MAX_RUNNING: '8',
+    });
+
+    expect(parse(result.stdout)).toMatchObject({
+      CAP_RESULT: 'error',
+      CAP_REASON: 'cleanup-failed',
+    });
+    expect(existsSync(path.join(root, 'previews/pr-100'))).toBe(true);
+    expect(existsSync(path.join(root, 'sources/pr-100'))).toBe(true);
   });
 });

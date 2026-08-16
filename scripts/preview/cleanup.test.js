@@ -34,9 +34,16 @@ function makePreviewRoot(prNumbers) {
   const bin = path.join(root, 'bin');
   mkdirSync(bin, { recursive: true });
   const docker = path.join(bin, 'docker');
-  writeFileSync(docker, '#!/usr/bin/env bash\nexit 0\n');
+  const dockerLog = path.join(root, 'docker.log');
+  writeFileSync(dockerLog, '');
+  writeFileSync(docker, `#!/usr/bin/env bash
+printf '%s\\n' "$*" >> "$PREVIEW_DOCKER_LOG"
+if [[ "$1" == "compose" && "\${PREVIEW_DOCKER_FAIL_DOWN:-false}" == "true" ]]; then exit 1; fi
+if [[ "$1" == "exec" && "\${PREVIEW_DOCKER_FAIL_DROPDB:-false}" == "true" ]]; then exit 1; fi
+exit 0
+`);
   chmodSync(docker, 0o755);
-  return { root, bin };
+  return { root, bin, dockerLog };
 }
 
 function makeSelectiveRm(root, refusedSlug) {
@@ -59,6 +66,7 @@ function runCleanup(root, bin, env = {}) {
       PREVIEW_TTL_HOURS: '0',
       OPEN_PR_NUMBERS: '',
       PREVIEW_REMOVE_DOCKER: 'false',
+      PREVIEW_DOCKER_LOG: path.join(root, 'docker.log'),
       ...env,
     },
     stdout: 'pipe',
@@ -154,5 +162,25 @@ describe('preview cleanup', () => {
 
     expect(result.exitCode).toBe(1);
     expect(existsSync(path.join(root, 'previews/pr-11'))).toBe(true);
+  });
+
+  test('keeps retry metadata when Compose teardown fails', () => {
+    const { root, bin } = makePreviewRoot([11]);
+
+    const result = runCleanup(root, bin, { PREVIEW_DOCKER_FAIL_DOWN: 'true' });
+
+    expect(result.exitCode).toBe(1);
+    expect(existsSync(path.join(root, 'previews/pr-11'))).toBe(true);
+    expect(existsSync(path.join(root, 'sources/pr-11'))).toBe(true);
+  });
+
+  test('keeps retry metadata when database teardown fails', () => {
+    const { root, bin } = makePreviewRoot([11]);
+
+    const result = runCleanup(root, bin, { PREVIEW_DOCKER_FAIL_DROPDB: 'true' });
+
+    expect(result.exitCode).toBe(1);
+    expect(existsSync(path.join(root, 'previews/pr-11'))).toBe(true);
+    expect(existsSync(path.join(root, 'sources/pr-11'))).toBe(true);
   });
 });

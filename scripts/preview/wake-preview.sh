@@ -10,7 +10,8 @@ LOCK_WAIT_SECONDS="${PREVIEW_LOCK_WAIT_SECONDS:-900}"
 HEALTH_ATTEMPTS="${PREVIEW_WAKE_HEALTH_ATTEMPTS:-60}"
 HEALTH_INTERVAL_SECONDS="${PREVIEW_WAKE_HEALTH_INTERVAL_SECONDS:-1}"
 ACCESS_DIR="${PREVIEW_ACCESS_DIR:-$ROOT/wake/access}"
-NOW_EPOCH="${PREVIEW_NOW_EPOCH:-$(date +%s)}"
+FIXED_NOW_EPOCH="${PREVIEW_NOW_EPOCH:-}"
+NOW_EPOCH=0
 WAKE_LEASE_SECONDS="${PREVIEW_WAKE_LEASE_SECONDS:-120}"
 PR_NUMBER="${1:-}"
 
@@ -42,7 +43,7 @@ is_nonnegative_integer "$HEALTH_INTERVAL_SECONDS" || {
   echo "PREVIEW_WAKE_HEALTH_INTERVAL_SECONDS must be a nonnegative integer" >&2
   exit 2
 }
-is_nonnegative_integer "$NOW_EPOCH" || {
+[[ -z "$FIXED_NOW_EPOCH" ]] || is_nonnegative_integer "$FIXED_NOW_EPOCH" || {
   echo "PREVIEW_NOW_EPOCH must be a nonnegative integer" >&2
   exit 2
 }
@@ -67,6 +68,22 @@ fi
 [[ -f "$compose_file" ]] || {
   echo "Preview pr-${PR_NUMBER} is not resident" >&2
   exit 4
+}
+
+current_epoch() {
+  if [[ -n "$FIXED_NOW_EPOCH" ]]; then
+    printf '%s\n' "$FIXED_NOW_EPOCH"
+  else
+    date +%s
+  fi
+}
+
+# The shared lock may queue for minutes. Start lease decisions from lock acquisition,
+# not process creation, so an otherwise new wake cannot immediately displace itself.
+NOW_EPOCH="$(current_epoch)"
+is_nonnegative_integer "$NOW_EPOCH" || {
+  echo "Preview clock returned an invalid epoch" >&2
+  exit 2
 }
 
 is_running() {
@@ -114,10 +131,12 @@ access_epoch() {
 
 record_access() {
   local pr="$1"
-  local temporary
+  local temporary recorded_epoch
+  recorded_epoch="$(current_epoch)"
+  is_nonnegative_integer "$recorded_epoch" || return 1
   mkdir -p "$ACCESS_DIR"
   temporary="$ACCESS_DIR/pr-${pr}.$$.tmp"
-  printf '%s\n' "$NOW_EPOCH" > "$temporary"
+  printf '%s\n' "$recorded_epoch" > "$temporary"
   mv -f -- "$temporary" "$ACCESS_DIR/pr-${pr}"
 }
 
