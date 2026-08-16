@@ -86,6 +86,21 @@ describe('production deployment contract', () => {
     expect(releaseGateIndex).toBeGreaterThan(backfillIndex);
   });
 
+  test('CI installs only Chromium while full local tests retain Firefox', () => {
+    const ciWorkflow = readRepoFile('.github/workflows/ci.yml');
+    const playwrightConfig = readRepoFile(
+      'services/web-app/playwright.config.ts'
+    );
+    const playwrightInstallCommand = ciWorkflow.match(
+      /^\s*run: .*playwright install.*$/m
+    )?.[0];
+
+    expect(playwrightInstallCommand).toBeDefined();
+    expect(playwrightInstallCommand).toContain('chromium');
+    expect(playwrightInstallCommand).not.toContain('firefox');
+    expect(playwrightConfig).toContain("name: 'firefox'");
+  });
+
   test('Prisma package keeps both migration release gates available', () => {
     const prismaPackage = JSON.parse(
       readRepoFile('packages/prisma/package.json')
