@@ -185,7 +185,7 @@ jobs:
           running="$(awk -F= '/^CAP_RUNNING=/{print $2}' /tmp/preview-deploy.log | tail -1)"
 
           for pr in $slept; do
-            gh pr comment "$pr" --body "Preview sleeping after 48 hours of inactivity. State and access code remain intact. Open its preview URL to wake it automatically; the first request can take a minute." || true
+            gh pr comment "$pr" --body "Preview sleeping after 48 hours of inactivity. State and access code remain intact. Open its one-click URL, or revisit from an already authorized browser, to wake it automatically; the first request can take a minute." || true
           done
           for pr in $evicted; do
             gh pr comment "$pr" --body "Preview reclaimed at the ${PREVIEW_MAX_RESIDENT}-resident cap. Preview-local database and access state were deleted; push a commit or add \`preview:keep-awake\` to rebuild it." || true
@@ -400,7 +400,7 @@ jobs:
           resident="$(awk -F= '/^CAP_RESIDENT=/{print $2}' /tmp/reconcile.log | tail -1)"
 
           for pr in $slept; do
-            gh pr comment "$pr" --body "Preview sleeping after 48 hours of inactivity. State and access code remain intact. Open its preview URL to wake it automatically; the first request can take a minute." || true
+            gh pr comment "$pr" --body "Preview sleeping after 48 hours of inactivity. State and access code remain intact. Open its one-click URL, or revisit from an already authorized browser, to wake it automatically; the first request can take a minute." || true
           done
           for pr in $evicted; do
             gh pr comment "$pr" --body "Preview reclaimed at the ${PREVIEW_MAX_RESIDENT}-resident cap. Preview-local database and access state were deleted; push a commit or add \`preview:keep-awake\` to rebuild it." || true

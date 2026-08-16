@@ -1,12 +1,30 @@
 import { afterEach, describe, expect, test } from 'bun:test';
+import { createHmac } from 'node:crypto';
 import { createServer } from 'node:http';
-import { appendFileSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  appendFileSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { createWakeHandler, parsePreviewPr, startAccessLogFollower } from './wake-server.mjs';
+import {
+  createWakeHandler as createRawWakeHandler,
+  hasMatchingPreviewAccessCredential,
+  parsePreviewPr,
+  startAccessLogFollower,
+  wakeCommandTimeoutMs,
+} from './wake-server.mjs';
 
 const servers = [];
 const roots = [];
+
+function createWakeHandler(options) {
+  return createRawWakeHandler({ authorizeWake: async () => true, ...options });
+}
 
 async function listen(handler) {
   const server = createServer(handler);
@@ -32,6 +50,74 @@ describe('preview wake server', () => {
     expect(parsePreviewPr('pr-241.preview.yawp.school.evil.test', 'preview.yawp.school')).toBeNull();
     expect(parsePreviewPr('pr-241.evil.test', 'preview.yawp.school')).toBeNull();
     expect(parsePreviewPr('pr-241.preview.yawp.school:443', 'preview.yawp.school')).toBe(241);
+  });
+
+  test('keeps the parent wake timeout beyond lock, health, and rollback phases', () => {
+    expect(wakeCommandTimeoutMs({})).toBe(1_080_000);
+    expect(wakeCommandTimeoutMs({
+      PREVIEW_LOCK_WAIT_SECONDS: '10',
+      PREVIEW_WAKE_HEALTH_ATTEMPTS: '4',
+      PREVIEW_WAKE_HEALTH_INTERVAL_SECONDS: '2',
+    })).toBe(86_000);
+  });
+
+  test('authorizes a sleeping preview with a matching one-click code or signed access cookie', async () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'preview-code-'));
+    roots.push(root);
+    const preview = path.join(root, 'previews', 'pr-241');
+    mkdirSync(preview, { recursive: true });
+    const secret = 'a'.repeat(64);
+    writeFileSync(path.join(preview, 'access-seats.json'), JSON.stringify([
+      { code: 'brisk-otter-4321', organizationId: 'local-dev-org', label: 'Master' },
+    ]));
+    writeFileSync(path.join(preview, 'access-secret'), `${secret}\n`);
+
+    expect(await hasMatchingPreviewAccessCredential({
+      root,
+      pr: 241,
+      uri: '/app?code=brisk-otter-4321',
+    })).toBe(true);
+    expect(await hasMatchingPreviewAccessCredential({
+      root,
+      pr: 241,
+      uri: '/app?code=wrong-otter-4321',
+    })).toBe(false);
+    expect(await hasMatchingPreviewAccessCredential({ root, pr: 241, uri: '/app' })).toBe(false);
+
+    const value = Buffer.from(JSON.stringify('seat-v1:local-dev-org')).toString('base64');
+    const signature = createHmac('sha256', secret)
+      .update(value)
+      .digest('base64')
+      .replace(/=+$/, '');
+    expect(await hasMatchingPreviewAccessCredential({
+      root,
+      pr: 241,
+      uri: '/app',
+      cookieHeader: `__yawp_preview_access=${encodeURIComponent(`${value}.${signature}`)}`,
+    })).toBe(true);
+  });
+
+  test('requires access authorization before waking a sleeping preview', async () => {
+    const options = [];
+    const url = await listen(createWakeHandler({
+      domain: 'preview.yawp.school',
+      secret: 'wake-secret',
+      authorizeWake: async (_pr, uri) => uri.includes('code=brisk-otter-4321'),
+      ensureRunning: async (_pr, wakeOptions) => options.push(wakeOptions),
+      recordAccess: async () => {},
+    }));
+    const request = (uri) => fetch(`${url}${uri}`, {
+      redirect: 'manual',
+      headers: {
+        'x-preview-wake-secret': 'wake-secret',
+        'x-forwarded-host': 'pr-241.preview.yawp.school',
+        'x-forwarded-uri': uri,
+      },
+    });
+
+    expect((await request('/app')).status).toBe(401);
+    expect((await request('/app?code=brisk-otter-4321')).status).toBe(307);
+    expect(options).toEqual([{ allowDisplacement: true }]);
   });
 
   test('rejects requests that do not carry the bootstrap secret', async () => {
@@ -244,6 +330,7 @@ describe('preview wake server', () => {
         domain: 'preview.yawp.school',
         secret: 'wake-secret',
         ensureRunning: async () => ({ result: 'woken' }),
+        authorizeWake: async () => true,
         recordAccess: async () => { throw new Error('disk unavailable'); },
       }));
 
@@ -302,7 +389,10 @@ describe('preview wake server', () => {
     await Bun.sleep(20);
 
     appendFileSync(accessLog, [
-      JSON.stringify({ RequestHost: 'pr-241.preview.yawp.school' }),
+      JSON.stringify({ RequestHost: 'pr-241.preview.yawp.school', RequestMethod: 'GET', RequestPath: '/app', DownstreamStatus: 200 }),
+      JSON.stringify({ RequestHost: 'pr-242.preview.yawp.school', RequestMethod: 'HEAD', RequestPath: '/', DownstreamStatus: 200 }),
+      JSON.stringify({ RequestHost: 'pr-243.preview.yawp.school', RequestMethod: 'GET', RequestPath: '/api/healthcheck', DownstreamStatus: 200 }),
+      JSON.stringify({ RequestHost: 'pr-244.preview.yawp.school', RequestMethod: 'GET', RequestPath: '/app', DownstreamStatus: 401 }),
       JSON.stringify({ RequestHost: 'demo.preview.yawp.school' }),
       '{malformed',
       '',

@@ -7,6 +7,8 @@ ROOT="${PREVIEW_ROOT:-/srv/yawp-preview}"
 DOCKER="${PREVIEW_DOCKER:-docker}"
 CURL="${PREVIEW_CURL:-curl}"
 RUNNING_CAP="${PREVIEW_MAX_RUNNING:-8}"
+SLEEP_ENABLED="${PREVIEW_SLEEP_ENABLED:-true}"
+ALLOW_DISPLACEMENT="${PREVIEW_WAKE_ALLOW_DISPLACEMENT:-true}"
 LOCK_WAIT_SECONDS="${PREVIEW_LOCK_WAIT_SECONDS:-900}"
 HEALTH_ATTEMPTS="${PREVIEW_WAKE_HEALTH_ATTEMPTS:-60}"
 HEALTH_INTERVAL_SECONDS="${PREVIEW_WAKE_HEALTH_INTERVAL_SECONDS:-1}"
@@ -33,6 +35,14 @@ is_positive_integer "$RUNNING_CAP" || {
   echo "PREVIEW_MAX_RUNNING must be a positive integer" >&2
   exit 2
 }
+case "$SLEEP_ENABLED" in
+  true|false) ;;
+  *) echo "PREVIEW_SLEEP_ENABLED must be true or false" >&2; exit 2 ;;
+esac
+case "$ALLOW_DISPLACEMENT" in
+  true|false) ;;
+  *) echo "PREVIEW_WAKE_ALLOW_DISPLACEMENT must be true or false" >&2; exit 2 ;;
+esac
 is_nonnegative_integer "$LOCK_WAIT_SECONDS" || {
   echo "PREVIEW_LOCK_WAIT_SECONDS must be a nonnegative integer" >&2
   exit 2
@@ -214,16 +224,45 @@ restore_displaced() {
   wait_for_project_health "$slept"
 }
 
+ensure_target_stopped() {
+  is_running "$PR_NUMBER" || return 0
+  if ! "$DOCKER" compose -p "$project" -f "$compose_file" stop >/dev/null 2>&1; then
+    is_running "$PR_NUMBER" && return 1
+  fi
+  ! is_running "$PR_NUMBER"
+}
+
 fail_wake() {
   local message="$1"
   local code="$2"
-  "$DOCKER" compose -p "$project" -f "$compose_file" stop >/dev/null 2>&1 || true
+  if ! ensure_target_stopped; then
+    echo "Preview pr-${PR_NUMBER} wake failed and the target could not be stopped; refusing to restore another preview above the running cap" >&2
+    echo "$message" >&2
+    exit "$code"
+  fi
   if ! restore_displaced; then
     echo "Preview pr-${PR_NUMBER} wake failed and displaced pr-${slept} could not be restored" >&2
   fi
   echo "$message" >&2
   exit "$code"
 }
+
+wake_started=false
+handle_signal() {
+  local signal="$1"
+  trap - TERM INT
+  if [[ "$wake_started" == "true" ]]; then
+    if ensure_target_stopped; then
+      restore_displaced || echo "Interrupted wake could not restore displaced pr-${slept}" >&2
+    else
+      echo "Interrupted wake could not stop pr-${PR_NUMBER}; refusing to restore another preview above the running cap" >&2
+    fi
+  fi
+  echo "Preview pr-${PR_NUMBER} wake interrupted by ${signal}" >&2
+  exit 10
+}
+trap 'handle_signal TERM' TERM
+trap 'handle_signal INT' INT
 
 if is_running "$PR_NUMBER"; then
   wait_for_project_health "$PR_NUMBER" || {
@@ -240,9 +279,14 @@ running_count="$(running_env_numbers | wc -l | tr -d ' ')"
 is_nonnegative_integer "$running_count" || running_count=0
 slept=""
 if (( running_count >= RUNNING_CAP )); then
+  if [[ "$SLEEP_ENABLED" != "true" || "$ALLOW_DISPLACEMENT" != "true" ]]; then
+    echo "Preview running capacity is full and displacement is disabled" >&2
+    exit 6
+  fi
   slept="$(sleep_lru_candidate)" || exit 6
 fi
 
+wake_started=true
 if ! "$DOCKER" compose -p "$project" -f "$compose_file" start; then
   fail_wake "Preview pr-${PR_NUMBER} could not start" 7
 fi

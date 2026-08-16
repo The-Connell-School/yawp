@@ -53,9 +53,10 @@ if [[ "$1" == "ps" && "$*" =~ com.docker.compose.project=yawp-pr-([0-9]+) ]]; th
   grep -qx "$pr" "$PREVIEW_DOCKER_STATE" 2>/dev/null && echo "container-$pr"
   exit 0
 fi
-if [[ "$1" == "compose" && "$*" =~ -p[[:space:]]+yawp-pr-([0-9]+) ]]; then
+  if [[ "$1" == "compose" && "$*" =~ -p[[:space:]]+yawp-pr-([0-9]+) ]]; then
   pr="\${BASH_REMATCH[1]}"
   if [[ "$*" == *" stop"* ]]; then
+    [[ "\${PREVIEW_DOCKER_FAIL_STOP_PR:-}" == "$pr" ]] && exit 1
     awk -v pr="$pr" '$0 != pr' "$PREVIEW_DOCKER_STATE" > "$PREVIEW_DOCKER_STATE.next"
     mv "$PREVIEW_DOCKER_STATE.next" "$PREVIEW_DOCKER_STATE"
     exit 0
@@ -233,6 +234,37 @@ printf 'OK\\n'
     expect(readFileSync(docker.log, 'utf8')).not.toContain(' start');
   });
 
+  test('sleep kill switch prevents capacity displacement during wake', () => {
+    const root = makeRoot();
+    makePreview(root, 100, { access: 10 });
+    makePreview(root, 101, { access: 20 });
+    makePreview(root, 102);
+    const docker = makeDockerStub(root, [100, 101]);
+
+    const result = run(root, 102, docker, { PREVIEW_SLEEP_ENABLED: 'false' });
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain('capacity');
+    expect(readFileSync(docker.state, 'utf8').trim().split('\n').sort()).toEqual(['100', '101']);
+    const log = readFileSync(docker.log, 'utf8');
+    expect(log).not.toContain(' stop');
+    expect(log).not.toContain(' start');
+  });
+
+  test('unauthorized wake cannot displace another preview at capacity', () => {
+    const root = makeRoot();
+    makePreview(root, 100, { access: 10 });
+    makePreview(root, 101, { access: 20 });
+    makePreview(root, 102);
+    const docker = makeDockerStub(root, [100, 101]);
+
+    const result = run(root, 102, docker, { PREVIEW_WAKE_ALLOW_DISPLACEMENT: 'false' });
+
+    expect(result.status).not.toBe(0);
+    expect(readFileSync(docker.state, 'utf8').trim().split('\n').sort()).toEqual(['100', '101']);
+    expect(readFileSync(docker.log, 'utf8')).not.toContain(' stop');
+  });
+
   test('rejects malformed PR identifiers before calling Docker', () => {
     const root = makeRoot();
     const docker = makeDockerStub(root);
@@ -281,6 +313,53 @@ printf 'OK\\n'
     expect(log).toContain('compose -p yawp-pr-102');
     expect(log).toContain('compose -p yawp-pr-101');
     expect(log.match(/ start/g)?.length).toBe(2);
+  });
+
+  test('does not restore a displaced preview until a failed target is confirmed stopped', () => {
+    const root = makeRoot();
+    makePreview(root, 100, { access: 10, pinned: true });
+    makePreview(root, 101, { access: 20 });
+    makePreview(root, 102, { access: 30 });
+    const docker = makeDockerStub(root, [100, 101], 102);
+
+    const result = run(root, 102, docker, { PREVIEW_DOCKER_FAIL_STOP_PR: '102' });
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain('refusing to restore');
+    expect(readFileSync(docker.state, 'utf8').trim().split('\n').sort()).toEqual(['100', '102']);
+    const log = readFileSync(docker.log, 'utf8');
+    expect(log.match(/ start/g)?.length).toBe(1);
+  });
+
+  test('signal cancellation rolls back the target before restoring displacement', async () => {
+    const root = makeRoot();
+    makePreview(root, 100, { access: 10, pinned: true });
+    makePreview(root, 101, { access: 20 });
+    makePreview(root, 102, { access: 30 });
+    const docker = makeDockerStub(root, [100, 101], 102);
+    const child = Bun.spawn(['bash', script, '102'], {
+      env: {
+        ...process.env,
+        PREVIEW_ROOT: root,
+        PREVIEW_DOCKER: docker.stub,
+        PREVIEW_DOCKER_STATE: docker.state,
+        PREVIEW_DOCKER_LOG: docker.log,
+        PREVIEW_MAX_RUNNING: '2',
+        PREVIEW_WAKE_SKIP_FLOCK: 'true',
+        PREVIEW_WAKE_HEALTH_ATTEMPTS: '60',
+        PREVIEW_WAKE_HEALTH_INTERVAL_SECONDS: '1',
+      },
+      stdout: 'pipe',
+      stderr: 'pipe',
+    });
+
+    for (let attempt = 0; attempt < 100; attempt += 1) {
+      if (readFileSync(docker.state, 'utf8').split('\n').includes('102')) break;
+      await Bun.sleep(20);
+    }
+    child.kill('SIGTERM');
+    expect(await child.exited).not.toBe(0);
+    expect(readFileSync(docker.state, 'utf8').trim().split('\n').sort()).toEqual(['100', '101']);
   });
 
   test('protects a newly awakened preview from immediate capacity ping-pong', () => {
