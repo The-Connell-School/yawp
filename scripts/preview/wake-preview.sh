@@ -10,6 +10,8 @@ LOCK_WAIT_SECONDS="${PREVIEW_LOCK_WAIT_SECONDS:-900}"
 HEALTH_ATTEMPTS="${PREVIEW_WAKE_HEALTH_ATTEMPTS:-60}"
 HEALTH_INTERVAL_SECONDS="${PREVIEW_WAKE_HEALTH_INTERVAL_SECONDS:-1}"
 ACCESS_DIR="${PREVIEW_ACCESS_DIR:-$ROOT/wake/access}"
+NOW_EPOCH="${PREVIEW_NOW_EPOCH:-$(date +%s)}"
+WAKE_LEASE_SECONDS="${PREVIEW_WAKE_LEASE_SECONDS:-120}"
 PR_NUMBER="${1:-}"
 
 is_positive_integer() {
@@ -40,15 +42,18 @@ is_nonnegative_integer "$HEALTH_INTERVAL_SECONDS" || {
   echo "PREVIEW_WAKE_HEALTH_INTERVAL_SECONDS must be a nonnegative integer" >&2
   exit 2
 }
+is_nonnegative_integer "$NOW_EPOCH" || {
+  echo "PREVIEW_NOW_EPOCH must be a nonnegative integer" >&2
+  exit 2
+}
+is_nonnegative_integer "$WAKE_LEASE_SECONDS" || {
+  echo "PREVIEW_WAKE_LEASE_SECONDS must be a nonnegative integer" >&2
+  exit 2
+}
 
 preview_dir="$ROOT/previews/pr-${PR_NUMBER}"
 compose_file="$preview_dir/docker-compose.yml"
 project="yawp-pr-${PR_NUMBER}"
-
-[[ -f "$compose_file" ]] || {
-  echo "Preview pr-${PR_NUMBER} is not resident" >&2
-  exit 4
-}
 
 if [[ "${PREVIEW_WAKE_SKIP_FLOCK:-false}" != "true" ]] && command -v flock >/dev/null 2>&1; then
   mkdir -p "$ROOT"
@@ -58,6 +63,11 @@ if [[ "${PREVIEW_WAKE_SKIP_FLOCK:-false}" != "true" ]] && command -v flock >/dev
     exit 5
   }
 fi
+
+[[ -f "$compose_file" ]] || {
+  echo "Preview pr-${PR_NUMBER} is not resident" >&2
+  exit 4
+}
 
 is_running() {
   local pr="$1"
@@ -102,6 +112,15 @@ access_epoch() {
   marker_mtime "$ROOT/previews/pr-${pr}"
 }
 
+record_access() {
+  local pr="$1"
+  local temporary
+  mkdir -p "$ACCESS_DIR"
+  temporary="$ACCESS_DIR/pr-${pr}.$$.tmp"
+  printf '%s\n' "$NOW_EPOCH" > "$temporary"
+  mv -f -- "$temporary" "$ACCESS_DIR/pr-${pr}"
+}
+
 sleep_lru_candidate() {
   local candidate oldest_pr="" oldest_epoch="" epoch
   while IFS= read -r candidate; do
@@ -110,6 +129,9 @@ sleep_lru_candidate() {
     [[ -f "$ROOT/previews/pr-${candidate}/keep-awake" ]] && continue
     epoch="$(access_epoch "$candidate")"
     is_nonnegative_integer "$epoch" || epoch=0
+    if (( epoch > NOW_EPOCH || NOW_EPOCH - epoch < WAKE_LEASE_SECONDS )); then
+      continue
+    fi
     if [[ -z "$oldest_pr" ]] || (( epoch < oldest_epoch )); then
       oldest_pr="$candidate"
       oldest_epoch="$epoch"
@@ -168,6 +190,11 @@ fail_wake() {
 }
 
 if is_running "$PR_NUMBER"; then
+  wait_for_project_health "$PR_NUMBER" || {
+    echo "Preview pr-${PR_NUMBER} is running but did not become healthy" >&2
+    exit 8
+  }
+  record_access "$PR_NUMBER"
   echo "WAKE_RESULT=already-running"
   echo "WAKE_SLEPT="
   exit 0
@@ -185,6 +212,9 @@ if ! "$DOCKER" compose -p "$project" -f "$compose_file" start; then
 fi
 if ! wait_for_project_health "$PR_NUMBER"; then
   fail_wake "Preview pr-${PR_NUMBER} did not become healthy" 8
+fi
+if ! record_access "$PR_NUMBER"; then
+  fail_wake "Preview pr-${PR_NUMBER} could not record its wake lease" 9
 fi
 
 echo "WAKE_RESULT=woken"

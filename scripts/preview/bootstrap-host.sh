@@ -139,12 +139,18 @@ http:
       headers:
         customRequestHeaders:
           X-Preview-Wake-Secret: "${wake_secret}"
+    preview-wake-rate-limit:
+      rateLimit:
+        average: 2
+        period: 1m
+        burst: 3
   routers:
     preview-wake-fallback:
       rule: '${wake_host_rule}'
       entryPoints:
         - websecure
       middlewares:
+        - preview-wake-rate-limit
         - preview-wake-secret
       service: preview-wake
       priority: 1

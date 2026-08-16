@@ -115,6 +115,19 @@ describe('wake-preview.sh', () => {
     expect(readFileSync(docker.log, 'utf8')).not.toContain(' stop');
   });
 
+  test('does not authorize an already-running preview until it is healthy', () => {
+    const root = makeRoot();
+    makePreview(root, 241);
+    const docker = makeDockerStub(root, [241], false);
+
+    const result = run(root, 241, docker);
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain('healthy');
+    expect(readFileSync(docker.log, 'utf8')).not.toContain(' start');
+    expect(readFileSync(docker.log, 'utf8')).not.toContain(' stop');
+  });
+
   test('starts an existing sleeping Compose project without rebuilding or deleting state', () => {
     const root = makeRoot();
     const preview = makePreview(root, 241);
@@ -212,5 +225,28 @@ describe('wake-preview.sh', () => {
     expect(log).toContain('compose -p yawp-pr-102');
     expect(log).toContain('compose -p yawp-pr-101');
     expect(log.match(/ start/g)?.length).toBe(2);
+  });
+
+  test('protects a newly awakened preview from immediate capacity ping-pong', () => {
+    const root = makeRoot();
+    makePreview(root, 100, { access: 10, pinned: true });
+    makePreview(root, 101, { access: 20 });
+    makePreview(root, 102);
+    makePreview(root, 103);
+    const docker = makeDockerStub(root, [100, 101]);
+
+    const first = run(root, 102, docker, {
+      PREVIEW_NOW_EPOCH: '1000',
+      PREVIEW_WAKE_LEASE_SECONDS: '120',
+    });
+    const second = run(root, 103, docker, {
+      PREVIEW_NOW_EPOCH: '1001',
+      PREVIEW_WAKE_LEASE_SECONDS: '120',
+    });
+
+    expect(first.status).toBe(0);
+    expect(second.status).not.toBe(0);
+    expect(second.stderr).toContain('capacity');
+    expect(readFileSync(docker.state, 'utf8').trim().split('\n').sort()).toEqual(['100', '102']);
   });
 });

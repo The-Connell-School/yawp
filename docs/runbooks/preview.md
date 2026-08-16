@@ -137,3 +137,9 @@ The hot path deliberately keeps state on the host: Docker layer cache, Bun depen
 Scheduled reconciliation runs every six hours. It destroys closed PR environments, sleeps open previews after their idle lease, and enforces separate resident and running caps. URL requests update the activity lease. When waking at the running cap, the host sleeps the least recently used unpinned preview first; `preview:keep-awake` excludes a PR from sleep. Only resident-cap eviction or PR closure deletes preview-local state.
 
 The host-bootstrap workflow always checks out the protected default branch. It cannot execute an arbitrary PR ref with shared-host credentials.
+
+### Sleep/wake rollout and rollback
+
+Keep `PREVIEW_SLEEP_ENABLED=false` during the cutover. Merge the reviewed code, run the default-branch host-bootstrap workflow, and verify `yawp-preview-wake.service` plus the Traefik fallback before enabling sleep. Use a disposable seeded PR preview as the canary: preserve its access code and a state marker, stop it, open its URL, wait for health, then confirm the same Compose project and state returned. Set both idle variables to `48` and enable sleeping only after that canary passes.
+
+For rollback, set `PREVIEW_SLEEP_ENABLED=false` first, start each resident PR Compose project, and restore the prior default-branch bootstrap configuration. Already-running previews never depend on the wake service, so disabling or removing the fallback does not interrupt them.

@@ -555,6 +555,7 @@ describe('PR preview deployment contract', () => {
     expect(workflow).toContain('PREVIEW_DOMAIN');
     expect(bootstrap).toContain('yawp-preview-wake.service');
     expect(bootstrap).toContain('--accesslog.filepath=/logs/access.json');
+    expect(bootstrap).toContain('rateLimit');
     expect(bootstrap).toContain('preview-wake-fallback');
     expect(bootstrap).toContain('X-Preview-Wake-Secret');
     expect(bootstrap).toContain('HostRegexp(`^pr-[1-9][0-9]*\\\\.');

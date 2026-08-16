@@ -168,6 +168,31 @@ describe('preview wake server', () => {
     );
   });
 
+  test('serves the wake redirect even when activity persistence fails', async () => {
+    const originalError = console.error;
+    console.error = () => {};
+    try {
+      const url = await listen(createWakeHandler({
+        domain: 'preview.yawp.school',
+        secret: 'wake-secret',
+        ensureRunning: async () => ({ result: 'woken' }),
+        recordAccess: async () => { throw new Error('disk unavailable'); },
+      }));
+
+      const response = await fetch(`${url}/`, {
+        redirect: 'manual',
+        headers: {
+          'x-preview-wake-secret': 'wake-secret',
+          'x-forwarded-host': 'pr-241.preview.yawp.school',
+        },
+      });
+
+      expect(response.status).toBe(307);
+    } finally {
+      console.error = originalError;
+    }
+  });
+
   test('returns a retryable unavailable response when the host cap cannot make room', async () => {
     const url = await listen(createWakeHandler({
       domain: 'preview.yawp.school',

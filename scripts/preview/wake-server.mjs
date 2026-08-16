@@ -73,7 +73,11 @@ export function createWakeHandler({ domain, secret, ensureRunning, recordAccess 
 
     try {
       await wake(pr);
-      await recordAccess(pr);
+      try {
+        await recordAccess(pr);
+      } catch (error) {
+        console.error('Preview activity recording failed', error);
+      }
       const hostname = `pr-${pr}.${domain.toLowerCase()}`;
       const forwardedUri = Array.isArray(request.headers['x-forwarded-uri'])
         ? request.headers['x-forwarded-uri'][0]
@@ -127,11 +131,14 @@ export function startAccessLogFollower({
       }
       if (info.size === offset) return;
 
-      const buffer = Buffer.alloc(info.size - offset);
+      const buffer = Buffer.alloc(Math.min(info.size - offset, 1024 * 1024));
       const { bytesRead } = await handle.read(buffer, 0, buffer.length, offset);
       const received = buffer.subarray(0, bytesRead);
       const lastNewline = received.lastIndexOf(0x0a);
-      if (lastNewline < 0) return;
+      if (lastNewline < 0) {
+        if (buffer.length === 1024 * 1024) offset += bytesRead;
+        return;
+      }
       offset += lastNewline + 1;
 
       const prs = new Set();
