@@ -1,4 +1,5 @@
 import { test, expect } from '../test-setup';
+import { currentSchoolYear } from '../../app/utils/school-year';
 import { createE2EPrismaClient } from '../prisma-client';
 import type { E2EContext } from '../seed-e2e';
 
@@ -204,7 +205,7 @@ test.describe.serial('Teacher class page redesign', () => {
     );
     await expect(header.getByText(/Grade 9th .* Period 1st/)).toBeVisible();
     await expect(header.getByText('E2E High')).toBeVisible();
-    await expect(header.getByText('2024-2025')).toBeVisible();
+    await expect(header.getByText(currentSchoolYear())).toBeVisible();
     await expect(header.getByText(e2eContext.classCode)).toBeVisible();
     await expect(
       header.getByRole('button', { name: /edit class/i })

@@ -59,7 +59,6 @@ const readOnlySessionAllowedMutationPaths = new Set([
   '/api/preferences/contrast',
   '/api/preferences/submitted-papers-filter',
   '/api/membership-id',
-  '/api/student-preview',
 ]);
 
 function isMutationRequest(request: Request) {
@@ -101,18 +100,6 @@ export async function requireMutableRequest(request: Request) {
     );
   }
 
-  const { getStudentPreviewState } = await import('./student-preview.server.ts');
-  const preview = await getStudentPreviewState(request);
-  if (preview.active) {
-    throw Response.json(
-      {
-        error: 'Student preview active',
-        message:
-          'This session can view student pages but cannot make changes.',
-      },
-      { status: 403 }
-    );
-  }
 }
 
 export async function getUserId(request: Request) {

@@ -1,10 +1,13 @@
 import { describe, expect, test } from 'bun:test';
 
 import {
+  clearStoredStudentWorkFilters,
   mergeStoredStudentWorkSearchParams,
   mergeStudentWorkViewPreferences,
   parseStudentWorkViewPreferences,
   preferencesFromStudentWorkSearchParams,
+  stripStudentWorkResetParam,
+  STUDENT_WORK_RESET_PARAM,
   STUDENT_WORK_VIEW_STORAGE_KEY,
 } from './student-work-view-preferences';
 
@@ -127,6 +130,87 @@ describe('student work view preferences', () => {
       expect(
         parseStudentWorkViewPreferences(storage.get(STUDENT_WORK_VIEW_STORAGE_KEY))
       ).toEqual({});
+    } finally {
+      Object.defineProperty(globalThis, 'window', {
+        configurable: true,
+        value: originalWindow,
+      });
+    }
+  });
+
+  test('a reset link ignores the stored filters and drops the marker', () => {
+    const merged = mergeStoredStudentWorkSearchParams({
+      searchParams: new URLSearchParams(
+        `status=needs-grading&${STUDENT_WORK_RESET_PARAM}=1`
+      ),
+      storedPreferences: {
+        studentIds: ['student-1'],
+        classIds: ['class-1'],
+        assignmentIds: ['assignment-1'],
+        status: 'graded',
+        documentGroup: 'class',
+      },
+    });
+
+    expect(merged.shouldReplace).toBe(true);
+    expect(merged.searchParams.get('status')).toBe('needs-grading');
+    expect(merged.searchParams.has('student')).toBe(false);
+    expect(merged.searchParams.has('class')).toBe(false);
+    expect(merged.searchParams.has('assignment')).toBe(false);
+    expect(merged.searchParams.has('group')).toBe(false);
+    expect(merged.searchParams.has(STUDENT_WORK_RESET_PARAM)).toBe(false);
+  });
+
+  test('stripStudentWorkResetParam keeps every other param', () => {
+    const stripped = stripStudentWorkResetParam(
+      new URLSearchParams(
+        `status=needs-grading&group=student&${STUDENT_WORK_RESET_PARAM}=1`
+      )
+    );
+
+    expect(stripped.get('status')).toBe('needs-grading');
+    expect(stripped.get('group')).toBe('student');
+    expect(stripped.has(STUDENT_WORK_RESET_PARAM)).toBe(false);
+  });
+
+  test('clearStoredStudentWorkFilters keeps sort and collapsed groups', () => {
+    const storage = new Map<string, string>();
+    const originalWindow = globalThis.window;
+
+    Object.defineProperty(globalThis, 'window', {
+      configurable: true,
+      value: {
+        localStorage: {
+          getItem: (key: string) => storage.get(key) ?? null,
+          setItem: (key: string, value: string) => {
+            storage.set(key, value);
+          },
+        },
+      },
+    });
+
+    try {
+      storage.set(
+        STUDENT_WORK_VIEW_STORAGE_KEY,
+        JSON.stringify({
+          studentIds: ['student-1'],
+          classIds: ['class-1'],
+          assignmentIds: ['assignment-1'],
+          status: 'needs-grading',
+          documentGroup: 'class',
+          documentSort: { field: 'student', direction: 'asc' },
+          collapsedGroups: { class: ['class-1'] },
+        })
+      );
+
+      clearStoredStudentWorkFilters();
+
+      expect(
+        parseStudentWorkViewPreferences(storage.get(STUDENT_WORK_VIEW_STORAGE_KEY))
+      ).toEqual({
+        documentSort: { field: 'student', direction: 'asc' },
+        collapsedGroups: { class: ['class-1'] },
+      });
     } finally {
       Object.defineProperty(globalThis, 'window', {
         configurable: true,

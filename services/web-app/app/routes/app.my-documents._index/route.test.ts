@@ -6,11 +6,17 @@ const prisma = {
 
 const requireUserId = mock();
 const requireMembership = mock();
+const resolveStudentSchoolYearScope = mock(() =>
+  Promise.resolve('2025-2026')
+);
 
 mock.module('~/utils/db.server.js', () => ({ prisma }));
 mock.module('~/utils/auth.server.js', () => ({
   requireUserId,
   requireMembership,
+}));
+mock.module('~/utils/school-year-scope.server', () => ({
+  resolveStudentSchoolYearScope,
 }));
 
 const { loader } = await import('./route');
@@ -41,6 +47,44 @@ describe('my documents route', () => {
     requireMembership.mockReset();
 
     requireUserId.mockResolvedValue('user-1');
+    resolveStudentSchoolYearScope.mockClear();
+    resolveStudentSchoolYearScope.mockResolvedValue('2025-2026');
+  });
+
+  /**
+   * The student's work has to be scoped by the same year their classes are, or
+   * My Documents and My Classes disagree about what year it is. Work the
+   * student started outside a class has no year, so it is never scoped away.
+   */
+  test('scopes class work to the selected year and keeps unassigned work', async () => {
+    requireMembership.mockResolvedValue({ id: 'profile-1', role: 'STUDENT' });
+    prisma.document.findMany.mockResolvedValue([]);
+
+    await load('https://example.test/app/my-documents');
+
+    expect(prisma.document.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          membershipId: 'profile-1',
+          OR: [
+            { classAssignment: { class: { schoolYear: '2025-2026' } } },
+            { classAssignment: { is: null } },
+          ],
+        }),
+      })
+    );
+  });
+
+  test('a student viewing all years is not scoped at all', async () => {
+    requireMembership.mockResolvedValue({ id: 'profile-1', role: 'STUDENT' });
+    resolveStudentSchoolYearScope.mockResolvedValue('all');
+    prisma.document.findMany.mockResolvedValue([]);
+
+    await load('https://example.test/app/my-documents');
+
+    const [{ where }] = prisma.document.findMany.mock.calls[0];
+    expect(where.OR).toBeUndefined();
+    expect(where.membershipId).toBe('profile-1');
   });
 
   test('redirects a teacher to the teacher documents/grading surface', async () => {

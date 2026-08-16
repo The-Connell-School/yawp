@@ -10,6 +10,8 @@ import { NoDataPlaceholder } from '~/components/no-data-placeholder.js';
 import { StudentDocumentFiltersBar } from '~/components/student-document-filters';
 import { requireMembership, requireUserId } from '~/utils/auth.server.js';
 import { prisma } from '~/utils/db.server.js';
+import { resolveStudentSchoolYearScope } from '~/utils/school-year-scope.server';
+import { ALL_SCHOOL_YEARS } from '~/utils/school-year';
 import {
   groupStudentDocumentsByClass,
   type StudentDocumentGroupingRow,
@@ -83,9 +85,33 @@ export async function loader({ request }: LoaderFunctionArgs) {
     throw redirect('/app/documents');
   }
 
+  // The same school year that scopes the student's classes scopes their work,
+  // so this page and My Classes cannot disagree about what year it is.
+  //
+  // Class work is scoped by the class it belongs to. A document attached to no
+  // class — a free write the student started themselves — has no year to be
+  // outside of, so it stays on the list whichever year is selected. Hiding it
+  // would lose the student's own writing rather than tidy their view.
+  const schoolYearScope = await resolveStudentSchoolYearScope(
+    request,
+    profile.id
+  );
+
   const documents = await prisma.document.findMany({
     orderBy: { createdAt: 'desc' },
-    where: { membershipId: profile.id, deletedAt: null, archivedAt: null },
+    where: {
+      membershipId: profile.id,
+      deletedAt: null,
+      archivedAt: null,
+      ...(schoolYearScope === ALL_SCHOOL_YEARS
+        ? {}
+        : {
+            OR: [
+              { classAssignment: { class: { schoolYear: schoolYearScope } } },
+              { classAssignment: { is: null } },
+            ],
+          }),
+    },
     include: documentInclude,
   });
 

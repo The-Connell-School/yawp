@@ -47,6 +47,8 @@ describe('my classes route (student branch)', () => {
 
     requireUserId.mockResolvedValue('user-1');
     pickClassArtKeyForOrganization.mockResolvedValue('art-key-1');
+    // Resolving a student's school year reads the years they are enrolled in.
+    prisma.class.findMany.mockResolvedValue([]);
   });
 
   test('a student sees their enrolled classes instead of being redirected', async () => {
@@ -70,7 +72,12 @@ describe('my classes route (student branch)', () => {
       context: {} as never,
     } as any);
 
-    expect(getStudentEnrolledClasses).toHaveBeenCalledWith('profile-1');
+    // The second argument is the resolved school year: students never pick
+    // one, the loader hands them the year their work is in.
+    expect(getStudentEnrolledClasses).toHaveBeenCalledWith(
+      'profile-1',
+      expect.any(String)
+    );
     const data = response.data as any;
     expect(data.role).toBe('STUDENT');
     expect(data.studentClasses).toHaveLength(1);

@@ -1,5 +1,6 @@
 import { test, expect } from '../test-setup';
 import { createE2EPrismaClient } from '../prisma-client';
+import { currentSchoolYear } from '../../app/utils/school-year';
 import type { E2EContext } from '../seed-e2e';
 
 /**
@@ -72,7 +73,7 @@ async function seedSecondSection(
     const klass = await prisma.class.create({
       data: {
         code: `SECTIONS-${suffix}`.toUpperCase(),
-        schoolYear: '2024-2025',
+        schoolYear: currentSchoolYear(),
         // Sorts after the seeded class's "1st" period, so Period 1 stays first.
         period: 'Sections QA',
         grade: '9th',

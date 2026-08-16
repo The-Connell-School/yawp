@@ -1,5 +1,6 @@
 /* eslint-disable no-console */
 import { createE2EPrismaClient, type E2EPrismaClient } from './prisma-client';
+import { currentSchoolYear } from '../app/utils/school-year';
 import { createDeployedAssignment } from './db-helpers';
 import { AP_HISTORY_LIBRARY_ENTRIES } from '../../../packages/prisma/scripts/ap-history-library-data';
 import bcrypt from 'bcryptjs';
@@ -165,7 +166,7 @@ export async function seedE2E(): Promise<E2EContext> {
   const seededClass = await prisma.class.create({
     data: {
       code: classCode,
-      schoolYear: '2024-2025',
+      schoolYear: currentSchoolYear(),
       period: '1st',
       grade: '9th',
       schoolId: school.id,
