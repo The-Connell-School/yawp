@@ -101,13 +101,26 @@ The signed-cookie access gate in the app is the preview and demo host's only acc
 
 Add the `sanitized-production-data` label to an internal PR to replace its seed database with the current scrubbed production snapshot. This mode is deliberately separate from raw `production-dump` mode: it keeps the in-app access gate and enables the dev-login role switcher only after the gate cookie is established.
 
-The snapshot must be sanitized locally before upload. Run `packages/prisma/scripts/sanitize-preview-production-data.ts` only against a temporary database on `localhost` or `127.0.0.1`; the script refuses any remote database host. It deterministically replaces:
+Refresh the snapshot with the fail-closed orchestration command:
+
+```bash
+bun run db:refresh-sanitized-preview-data --dry-run
+bun run db:refresh-sanitized-preview-data --yes
+```
+
+The command reads production access from the ignored `scripts/production-sync.env` by default. Start from `scripts/production-sync.env.example`; configure the bastion and database values, `AWS_PROFILE`, `PREVIEW_DB_DUMP_S3_URI`, and `YAWP_GITHUB_REPOSITORY`. If `YAWP_PROD_BASTION_INSTANCE_ID` is configured, the command starts the instance only when it was stopped, discovers its current public IP, and stops it again during cleanup. `--env-file PATH` selects another ignored configuration file. Trusted non-interactive automation may use `YAWP_CONFIRM_SANITIZED_PREVIEW_REFRESH=yes` instead of `--yes`.
+
+The refresh runs a temporary Postgres 17 container and streams `pg_dump` from the production bastion directly into it. It never writes the raw production dump to disk. It then runs `packages/prisma/scripts/sanitize-preview-production-data.ts` against that localhost-only database, requires the sanitizer's count and fingerprint parity report, creates a compressed dump only after sanitization succeeds, streams its scrubbed plain SQL to the configured S3 object, verifies the object is readable, and updates the repository variable `PREVIEW_SANITIZED_DUMP_VERSION`. A trap removes the temporary container, sanitized dump, report, SSH host-key file, and working directory on success, failure, or interruption. A bastion started by the command is also stopped; a bastion that was already running is left running.
+
+The sanitizer deterministically replaces:
 
 - Every `User.name` and `User.email`, while reserving `dev.admin@yawp.local`, `dev.teacher@yawp.local`, and `dev.student@yawp.local` inside `default-org`.
 - Legacy `schoolTeacher` display values in membership and forensic tables.
 - Email-shaped invitation targets.
 
-The script aborts unless all public-table row counts, user/membership/class IDs, and complete `Document` rows are unchanged. Upload only the resulting scrubbed dump to `PREVIEW_DB_DUMP_S3_URI`, then set `PREVIEW_SANITIZED_DUMP_VERSION` to a new filesystem-safe value. The deploy uses that version in its template name and replaces any existing PR database when the mode, object URI, or version changes. Never upload an unsanitized dump to the preview object.
+The sanitizer aborts unless all public-table row counts, user/membership/class IDs, and complete `Document` rows are unchanged. The orchestration command cannot reach S3 until that check succeeds. Never upload an unsanitized dump to the preview object manually.
+
+The deploy uses the published version in its template name and replaces any existing PR database when the mode, object URI, or version changes. Refreshing the snapshot does not itself redeploy an open PR; rerun its preview workflow or synchronize the PR after the command completes.
 
 Removing the label is intentionally not an automatic deployment event. Close the rehearsal PR when finished; its environment and PR database will be destroyed by the normal preview cleanup path.
 
