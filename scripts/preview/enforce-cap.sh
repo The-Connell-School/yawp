@@ -229,6 +229,20 @@ effective_activity_epoch() {
   fi
 }
 
+write_keep_awake_marker() {
+  local marker="$1"
+  local replacement="${marker}.tmp.$$"
+
+  # Container-backed deploys can leave the existing marker owned by root. The preview
+  # directory remains owned by the deploy user, so replace the file through that
+  # directory instead of truncating the inode in place.
+  if ! (umask 022; printf 'true\n' > "$replacement" && mv -f -- "$replacement" "$marker"); then
+    rm -f -- "$replacement" 2>/dev/null || true
+    echo "::error::could not update keep-awake marker ${marker}" >&2
+    return 1
+  fi
+}
+
 sync_keep_awake_markers() {
   local pr record pinned marker
   while IFS= read -r pr; do
@@ -238,7 +252,7 @@ sync_keep_awake_markers() {
     read -r _ _ _ pinned <<<"$record"
     marker="$previews_dir/pr-${pr}/keep-awake"
     if [[ "$pinned" == "1" ]]; then
-      printf 'true\n' > "$marker"
+      write_keep_awake_marker "$marker"
     else
       rm -f -- "$marker"
     fi
