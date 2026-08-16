@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT="${PREVIEW_ROOT:-/srv/yawp-preview}"
 ACME_EMAIL="${PREVIEW_ACME_EMAIL:-}"
 DOMAIN="${PREVIEW_DOMAIN:-}"
-RUNNING_CAP="${PREVIEW_MAX_RUNNING:-8}"
+RUNNING_CAP="${PREVIEW_MAX_RUNNING:-4}"
 SLEEP_ENABLED="${PREVIEW_SLEEP_ENABLED:-true}"
 WAKE_PORT="${PREVIEW_WAKE_PORT:-9876}"
 WAKE_USER="${PREVIEW_WAKE_USER:-$USER}"
@@ -197,6 +197,8 @@ services:
       - --accesslog=true
       - --accesslog.filepath=/logs/access.json
       - --accesslog.format=json
+      - --accesslog.fields.headers.defaultmode=drop
+      - --accesslog.fields.headers.names.X-Yawp-Preview-Authorized=keep
       - --entrypoints.web.address=:80
       - --entrypoints.web.http.redirections.entrypoint.to=websecure
       - --entrypoints.web.http.redirections.entrypoint.scheme=https

@@ -9,6 +9,8 @@ import {
 export const PREVIEW_ACCESS_COOKIE_NAME = '__yawp_preview_access';
 export const PREVIEW_ACCESS_PATH = '/auth/preview-access';
 export const PREVIEW_ACCESS_MAX_AGE = 60 * 60 * 24 * 30;
+export const PREVIEW_AUTHORIZED_ACTIVITY_HEADER =
+  'X-Yawp-Preview-Authorized';
 
 const ACCESS_SEAT_VALUE_PREFIX = 'seat-v1:';
 const ACCESS_CODE_PATTERN = /^[a-z]+-[a-z]+-[1-9][0-9]{3}$/;
@@ -324,7 +326,9 @@ export function createPreviewAccessMiddleware(
       const sessionBlock = await sessionGuard(request, seat);
       if (sessionBlock) return sessionBlock;
     }
-    return next();
+    const response = await next();
+    response?.headers.set(PREVIEW_AUTHORIZED_ACTIVITY_HEADER, '1');
+    return response;
   };
 }
 

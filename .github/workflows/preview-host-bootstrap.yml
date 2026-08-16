@@ -30,7 +30,7 @@ jobs:
       PREVIEW_DOMAIN: ${{ vars.PREVIEW_DOMAIN }}
       PREVIEW_ROOT: ${{ vars.PREVIEW_ROOT || '/srv/yawp-preview' }}
       PREVIEW_SSH_USER: ${{ vars.PREVIEW_SSH_USER || 'ec2-user' }}
-      PREVIEW_MAX_RUNNING: ${{ vars.PREVIEW_MAX_RUNNING || '8' }}
+      PREVIEW_MAX_RUNNING: ${{ vars.PREVIEW_MAX_RUNNING || '4' }}
       PREVIEW_SLEEP_ENABLED: ${{ vars.PREVIEW_SLEEP_ENABLED || 'true' }}
       PREVIEW_DB_PASSWORD: ${{ secrets.PREVIEW_DB_PASSWORD }}
       PREVIEW_ACME_EMAIL: ${{ vars.PREVIEW_ACME_EMAIL || 'bryant@brock.software' }}
