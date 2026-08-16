@@ -88,16 +88,29 @@ describe('production deployment contract', () => {
 
   test('CI installs only Chromium while full local tests retain Firefox', () => {
     const ciWorkflow = readRepoFile('.github/workflows/ci.yml');
+    const webAppPackage = JSON.parse(
+      readRepoFile('services/web-app/package.json')
+    );
     const playwrightConfig = readRepoFile(
       'services/web-app/playwright.config.ts'
     );
-    const playwrightInstallCommand = ciWorkflow.match(
-      /^\s*run: .*playwright install.*$/m
-    )?.[0];
+    const previewAccessConfig = readRepoFile(
+      'services/web-app/playwright.preview-access.config.ts'
+    );
+    const e2eJob = ciWorkflow.slice(ciWorkflow.indexOf('  e2e-web-app:'));
+    const playwrightInstallCommands = [
+      ...e2eJob.matchAll(/^\s*run: .*playwright install.*$/gm),
+    ].map(([command]) => command.trim());
 
-    expect(playwrightInstallCommand).toBeDefined();
-    expect(playwrightInstallCommand).toContain('chromium');
-    expect(playwrightInstallCommand).not.toContain('firefox');
+    expect(playwrightInstallCommands).toEqual([
+      'run: npx --yes playwright install --with-deps chromium',
+    ]);
+    expect(webAppPackage.scripts['test:e2e:smoke']).toContain(
+      'playwright test --project=chromium'
+    );
+    expect(previewAccessConfig).toContain("name: 'preview-access-chromium'");
+    expect(previewAccessConfig).toContain("devices['Desktop Chrome']");
+    expect(previewAccessConfig).not.toContain('Desktop Firefox');
     expect(playwrightConfig).toContain("name: 'firefox'");
   });
 
