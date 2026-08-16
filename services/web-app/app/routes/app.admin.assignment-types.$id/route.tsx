@@ -6,11 +6,13 @@ import { requireAdmin } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import {
   DEFAULT_OUTPUT_SCHEMA_JSON,
-  parsePromptConfig,
   parseRubric,
-  parseScoringScale,
 } from '~/domain/assignment-types/assignment-type-rubric.shared';
 import { isRubricFullyPopulated } from '~/domain/assignment-types/assignment-type-rubric-config';
+import {
+  listRubrics,
+  seedStarterRubrics,
+} from '~/domain/rubrics/rubric-library.server';
 
 function parseJsonFormField(formData: FormData, name: string) {
   const value = formData.get(name);
@@ -46,7 +48,20 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     throw new Response('Not Found', { status: 404 });
   }
 
-  return dataResponse({ course });
+  // The built-in rubrics are put in the library on first sight, so every
+  // environment offers the same starting set without a deploy step.
+  await seedStarterRubrics();
+  const rubrics = await listRubrics();
+
+  return dataResponse({
+    course,
+    rubrics: rubrics.map((rubric) => ({
+      id: rubric.id,
+      name: rubric.name,
+      title: rubric.title,
+      json: rubric.json,
+    })),
+  });
 }
 
 export async function action({ request, params }: ActionFunctionArgs) {
@@ -118,7 +133,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
     if (hasGradingConfigFields) {
       const nextRubric = parseRubric(gradingConfigData.rubricJson);
       const nextRubricComplete = isRubricFullyPopulated(nextRubric);
-      if (nextRubric.categories.length > 0 && !nextRubricComplete) {
+      if (!nextRubricComplete) {
         // Grandfather assignment types whose rubric was already incomplete
         // before this edit — don't force an unrelated save (e.g. a title
         // change) to be blocked on fixing a pre-existing gap. Only block edits
@@ -216,7 +231,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
 }
 
 export default function AssignmentTypeRoute() {
-  const { course } = useLoaderData<typeof loader>();
+  const { course, rubrics } = useLoaderData<typeof loader>();
 
   return (
     <AssignmentTypeEditorForm
@@ -224,12 +239,11 @@ export default function AssignmentTypeRoute() {
       assignmentTypeId={course.id}
       titleDefaultValue={course.title}
       descriptionDefaultValue={course.description}
-      scoringScale={parseScoringScale(course.scoringScaleJson)}
-      rubric={parseRubric(course.rubricJson)}
-      promptConfig={parsePromptConfig(course.gradingPromptConfigJson)}
       archivedAt={course.archivedAt}
       imageId={course.image?.id ?? null}
       modules={course.assignmentModules}
+      rubrics={rubrics}
+      selectedRubricId={course.rubricId ?? null}
     />
   );
 }
