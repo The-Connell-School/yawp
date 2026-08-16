@@ -1,5 +1,6 @@
 import { test, expect } from '../test-setup';
 import { createE2EPrismaClient } from '../prisma-client';
+import { currentSchoolYear } from '../../app/utils/school-year';
 import type { Page } from '@playwright/test';
 
 const CLASS_LABEL = /Grade 9th .* Period 1st/;
@@ -87,7 +88,7 @@ async function createSecondTeacherClass(params: {
     return await prisma.class.create({
       data: {
         code: `E2E-MULTI-${Date.now()}`,
-        schoolYear: '2024-2025',
+        schoolYear: currentSchoolYear(),
         period: '2nd',
         grade: '10th',
         title: 'E2E Multi-Class Proof',
@@ -234,7 +235,9 @@ test.describe.serial('Teacher dashboard workspace', () => {
       page.getByTestId('teacher-workspace-cards')
     ).toHaveAttribute(
       'href',
-      '/app/documents?status=needs-grading&group=student'
+      // reset=1 clears any filters the teacher left behind, so the card shows
+      // everything that needs grading rather than a stale slice of it.
+      '/app/documents?status=needs-grading&group=student&reset=1'
     );
     const toGradeBox = await gradingGrid
       .getByText('To grade', { exact: true })

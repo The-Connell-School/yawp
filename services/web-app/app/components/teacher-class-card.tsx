@@ -12,6 +12,7 @@ export type TeacherClassCardData = {
   classArtKey: string | null;
   legacyClassArtIndex?: number | null;
   school: { id: string; name: string } | null;
+  schoolYear?: string;
   _count: { students: number; assignments: number };
   stats?: {
     ungradedCount: number;
@@ -23,8 +24,10 @@ export { formatClassCardTitle as formatTeacherClassLabel } from '~/utils/class-d
 
 export function TeacherClassCard({
   klass,
+  showSchoolYear = false,
 }: {
   klass: TeacherClassCardData;
+  showSchoolYear?: boolean;
 }) {
   const { title, subtitle } = getClassCardHeading(klass);
 
@@ -44,9 +47,19 @@ export function TeacherClassCard({
 
         <div className="flex flex-1 flex-col gap-3 p-4">
           <div>
-            {klass.school?.name ? (
-              <p className="font-mono text-[0.625rem] font-medium uppercase tracking-wide text-muted-foreground">
-                {klass.school.name}
+            {klass.school?.name || showSchoolYear ? (
+              <p className="flex items-center gap-1.5 font-mono text-[0.625rem] font-medium uppercase tracking-wide text-muted-foreground">
+                {klass.school?.name ? <span>{klass.school.name}</span> : null}
+                {/*
+                  Only while the list spans years: inside a single year every
+                  card would carry the same label and it would be noise.
+                */}
+                {showSchoolYear && klass.schoolYear ? (
+                  <>
+                    {klass.school?.name ? <span aria-hidden>•</span> : null}
+                    <span>{klass.schoolYear.replace('-', '–')}</span>
+                  </>
+                ) : null}
               </p>
             ) : null}
             <h4 className="mt-1 text-balance text-base font-semibold tracking-tight text-foreground">

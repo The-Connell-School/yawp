@@ -63,6 +63,10 @@ import {
   SelectValue,
 } from '~/components/ui/select';
 import { generateClassCode } from '~/utils/class';
+import {
+  currentSchoolYear,
+  selectableSchoolYears,
+} from '~/utils/school-year';
 import { generateClassCardGradientKey } from '~/utils/class-card-gradient';
 import { pickClassArtKeyForOrganization } from '~/utils/class-art-assignment.server';
 
@@ -1005,7 +1009,7 @@ function ClassSheet({
       : 'create';
   const fetcher = useFetcher({ key: fetcherKey });
   const [schoolId, setSchoolId] = useState('');
-  const [schoolYear, setSchoolYear] = useState('');
+  const [schoolYear, setSchoolYear] = useState(currentSchoolYear());
   const [grade, setGrade] = useState('');
   const [period, setPeriod] = useState('');
   const [title, setTitle] = useState('');
@@ -1016,7 +1020,7 @@ function ClassSheet({
   useEffect(() => {
     const sourceClass = editingClass || duplicatingClass;
     setSchoolId(sourceClass?.schoolId || '');
-    setSchoolYear(sourceClass?.schoolYear || '');
+    setSchoolYear(sourceClass?.schoolYear || currentSchoolYear());
     setGrade(sourceClass?.grade || '');
     setPeriod(sourceClass?.period || '');
     setTitle(sourceClass?.title || '');
@@ -1114,16 +1118,21 @@ function ClassSheet({
 
           <div className="space-y-2">
             <Label htmlFor="schoolYear">School Year</Label>
-            <Input
-              id="schoolYear"
-              placeholder="2024-2025"
-              value={schoolYear}
-              onChange={(e) => setSchoolYear(e.target.value)}
-              required
-            />
-            <p className="text-xs text-muted-foreground">
-              Format: YYYY-YYYY (e.g., 2024-2025)
-            </p>
+            {/* Picked, not typed — the year scopes every teacher surface, so a
+                typo here hides the class from the teacher who owns it. */}
+            <Select value={schoolYear} onValueChange={setSchoolYear}>
+              <SelectTrigger id="schoolYear" data-testid="class-school-year">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {selectableSchoolYears({ include: schoolYear }).map((year) => (
+                  <SelectItem key={year} value={year}>
+                    {year.replace('-', '–')}
+                    {year === currentSchoolYear() ? ' (current)' : ''}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           <div className="space-y-2">

@@ -1,5 +1,6 @@
 import { test, expect } from '../test-setup';
 import { createE2EPrismaClient } from '../prisma-client';
+import { currentSchoolYear } from '../../app/utils/school-year';
 
 test.describe.serial('Admin class creation: optional period', () => {
   test('creates a class with no period selected', async ({
@@ -27,14 +28,18 @@ test.describe.serial('Admin class creation: optional period', () => {
       await page.locator('[role="option"]').first().click();
 
       await sheet.locator('#code').fill(code);
-      await sheet.locator('#schoolYear').fill('2025-2026');
 
-      // Grade (second combobox)
-      await comboboxes.nth(1).click();
+      // School year is picked, not typed, and defaults to the current year.
+      await expect(sheet.getByTestId('class-school-year')).toContainText(
+        currentSchoolYear().replace('-', '–')
+      );
+
+      // Grade (third combobox — school, school year, grade)
+      await comboboxes.nth(2).click();
       await page.getByRole('option', { name: '9', exact: true }).click();
 
       // Period select defaults to "No period" — leave untouched.
-      await expect(comboboxes.nth(2)).toContainText('No period');
+      await expect(comboboxes.nth(3)).toContainText('No period');
 
       await sheet.getByRole('button', { name: 'Create Class' }).click();
       await expect(sheet).toBeHidden();

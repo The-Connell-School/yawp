@@ -11,10 +11,6 @@ import { Button } from '~/components/ui/button';
 import { NoDataPlaceholder } from '~/components/no-data-placeholder.js';
 import { useUser } from '~/hooks/useUser.js';
 import { requireMembership, requireUserId } from '~/utils/auth.server.js';
-import {
-  getStudentPreviewState,
-  shouldUseStudentExperience,
-} from '~/utils/student-preview.server';
 import { prisma } from '~/utils/db.server.js';
 import { getAvailableAssignmentTypesForScopes } from '~/utils/assignment-type-access.server';
 import { AP_HISTORY_ASSIGNMENT_TYPE_KEY } from '~/domain/ap-history/schema';
@@ -24,6 +20,10 @@ import { StudentWriteSomethingNew } from '~/components/student-write-something-n
 import { getTeacherClassCardStats } from '~/utils/teacher-class-card-stats.server';
 import { getTeacherRecentActiveClassIds } from '~/utils/teacher-dashboard-recent-classes.server';
 import { getStudentEnrolledClasses } from '~/utils/student-classes.server';
+import {
+  resolveSchoolYearScopeForMembership,
+  schoolYearWhere,
+} from '~/utils/school-year-scope.server';
 import { AssignmentsAtAGlance } from './components/assignments-at-a-glance';
 import { ClassesAtAGlance } from './components/classes-at-a-glance';
 import { TeacherGradingAtAGlance } from './components/teacher-grading-at-a-glance';
@@ -41,11 +41,13 @@ export type AssignmentTypeRow = {
 export async function loader({ request }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
   const profile = await requireMembership(request, userId);
-  const preview = await getStudentPreviewState(request);
-  const useStudentExperience = shouldUseStudentExperience({
-    membershipRole: profile.role,
-    previewActive: preview.active,
-  });
+  const useStudentExperience = profile.role === 'STUDENT';
+  // The dashboard is the first thing either role sees, so it has to obey the
+  // same school year everything else does.
+  const schoolYearScope = await resolveSchoolYearScopeForMembership(
+    request,
+    profile
+  );
 
   const studentClassCount =
     useStudentExperience
@@ -79,6 +81,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     const studentClasses = await prisma.class.findMany({
       where: {
         students: { some: { id: profile.id } },
+        ...schoolYearWhere(schoolYearScope),
       },
       select: {
         id: true,
@@ -123,7 +126,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       : teacherAssignmentClassScopes.length > 0;
 
   const enrolledClasses = useStudentExperience
-    ? await getStudentEnrolledClasses(profile.id)
+    ? await getStudentEnrolledClasses(profile.id, schoolYearScope)
     : [];
 
   const [assignmentTypes, teacherClasses] = await Promise.all([
@@ -145,6 +148,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
           where: {
             teachers: { some: { id: profile.id } },
             isArchived: false,
+            ...schoolYearWhere(schoolYearScope),
           },
           select: {
             id: true,
@@ -299,9 +303,7 @@ export default function AppRoute() {
   const [createAssignmentTypeId, setCreateAssignmentTypeId] = useState<
     string | undefined
   >();
-  const studentPreviewActive = rootData?.studentPreview?.active ?? false;
-  const isTeacher =
-    user.selectedMembership?.role === 'TEACHER' && !studentPreviewActive;
+  const isTeacher = user.selectedMembership?.role === 'TEACHER';
   const assignmentsEnabled = data.assignmentsEnabled ?? false;
 
   if (isTeacher) {

@@ -34,9 +34,6 @@ mock.module('~/utils/auth.server', () => ({
   requireMembership,
 }));
 mock.module('~/utils/toast.server', () => ({ redirectWithToast }));
-mock.module('~/utils/student-preview.server', () => ({
-  getStudentPreviewState,
-}));
 
 const { action, loader } = await import('./route');
 
