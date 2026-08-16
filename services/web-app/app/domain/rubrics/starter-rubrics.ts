@@ -1,20 +1,22 @@
 import { DEFAULT_OUTPUT_SCHEMA_JSON } from '~/domain/assignment-types/assignment-type-rubric.shared';
 import type { RubricSchema } from './rubric-schema';
-import { THESIS_DRIVEN_ESSAY } from './thesis-driven-essay';
+import {
+  THESIS_DRIVEN_ESSAY,
+  THESIS_DRIVEN_ESSAY_RUBRIC_NAME,
+} from './thesis-driven-essay';
 
 /**
  * The two rubrics the library starts with, taken from what production actually
  * grades with rather than from what the code makes convenient.
  *
- * Both are deliberately self-contained: everything the Grading Assistant sends
- * is inside the object, including the full instruction text. A rubric that
- * points at code — `instructionsPreset`, a `kind` that selects a default —
- * cannot be swapped by editing values, which is the whole point of the library.
- * Verified against the payload in `grading-request.ts`; see
+ * Thesis deliberately uses the same preset as the production fallback instead
+ * of copying and translating that text. Daily Pages carries the exact config
+ * stored on production's assignment type row. Verified against the payload in
+ * `grading-request.ts`; see
  * `scripts/dump-grading-prompt.ts` to print what any assignment type sends.
  */
 
-export const THESIS_DRIVEN_ESSAY_RUBRIC_NAME = 'thesis-driven-essay';
+export { THESIS_DRIVEN_ESSAY_RUBRIC_NAME };
 export const DAILY_PAGES_RUBRIC_NAME = 'daily-pages-engagement';
 
 /**

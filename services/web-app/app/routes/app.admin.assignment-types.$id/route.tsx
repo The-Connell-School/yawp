@@ -6,9 +6,7 @@ import { requireAdmin } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import {
   DEFAULT_OUTPUT_SCHEMA_JSON,
-  parsePromptConfig,
   parseRubric,
-  parseScoringScale,
 } from '~/domain/assignment-types/assignment-type-rubric.shared';
 import { isRubricFullyPopulated } from '~/domain/assignment-types/assignment-type-rubric-config';
 import {
@@ -135,7 +133,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
     if (hasGradingConfigFields) {
       const nextRubric = parseRubric(gradingConfigData.rubricJson);
       const nextRubricComplete = isRubricFullyPopulated(nextRubric);
-      if (nextRubric.categories.length > 0 && !nextRubricComplete) {
+      if (!nextRubricComplete) {
         // Grandfather assignment types whose rubric was already incomplete
         // before this edit — don't force an unrelated save (e.g. a title
         // change) to be blocked on fixing a pre-existing gap. Only block edits
@@ -241,9 +239,6 @@ export default function AssignmentTypeRoute() {
       assignmentTypeId={course.id}
       titleDefaultValue={course.title}
       descriptionDefaultValue={course.description}
-      scoringScale={parseScoringScale(course.scoringScaleJson)}
-      rubric={parseRubric(course.rubricJson)}
-      promptConfig={parsePromptConfig(course.gradingPromptConfigJson)}
       archivedAt={course.archivedAt}
       imageId={course.image?.id ?? null}
       modules={course.assignmentModules}

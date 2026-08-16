@@ -45,7 +45,10 @@ describe('rubric schema', () => {
   });
 
   test('refuses a rubric with no categories', () => {
-    const result = parseRubricSchema({ name: 'empty', rubric: { categories: [] } });
+    const result = parseRubricSchema({
+      name: 'empty',
+      rubric: { categories: [] },
+    });
 
     expect(result.ok).toBe(false);
     if (result.ok) return;
@@ -59,7 +62,9 @@ describe('rubric schema', () => {
   });
 
   test('derives a name from the title when the JSON does not carry one', () => {
-    expect(suggestRubricIdentity({ title: "GBA 300: Int'l Etiquette" })).toEqual({
+    expect(
+      suggestRubricIdentity({ title: "GBA 300: Int'l Etiquette" })
+    ).toEqual({
       name: 'gba-300-int-l-etiquette',
       title: "GBA 300: Int'l Etiquette",
     });
@@ -86,10 +91,16 @@ describe('rubric schema', () => {
     const thesis = STARTER_RUBRICS[0];
     expect(thesis.rubric.categories).toHaveLength(5);
     expect(thesis.scoringScale).toMatchObject({
-      type: 'weighted_percent',
-      minScore: 0,
-      maxScore: 100,
+      type: 'weighted_1_5',
+      minScore: 1,
+      maxScore: 5,
     });
+    expect(thesis.promptConfig).toEqual({
+      instructionsPreset: 'legacy_thesis_driven_essay',
+    });
+    expect(
+      thesis.rubric.categories.every((category) => category.bands === undefined)
+    ).toBe(true);
 
     // Production scores Daily Pages out of 30 in steps of ten, which is not
     // what the built-in Daily Pages default does.

@@ -67,25 +67,42 @@ export async function upsertRubric(schema: RubricSchema, title?: string) {
 }
 
 /**
- * Puts the built-in rubrics in the library if they are not there yet. Safe to
- * run repeatedly and on every environment: an existing rubric keeps whatever
- * edits it has been given rather than being reset to the built-in text.
+ * Puts the protected production rubrics in the library and repairs any drift.
+ * These two definitions are compatibility fixtures, not editable templates.
  */
 export async function seedStarterRubrics() {
-  const existing = await prisma.rubric.findMany({ select: { name: true } });
-  const have = new Set(existing.map((row) => row.name));
+  const existing = await prisma.rubric.findMany({
+    select: { id: true, name: true, title: true, schemaJson: true },
+  });
+  const byName = new Map(existing.map((row) => [row.name, row]));
 
   const created: string[] = [];
   for (const schema of STARTER_RUBRICS) {
-    if (have.has(schema.name)) continue;
-    await prisma.rubric.create({
-      data: {
-        name: schema.name,
-        title: schema.title,
-        schemaJson: schema as object,
-      },
-    });
-    created.push(schema.name);
+    const row = byName.get(schema.name);
+    if (!row) {
+      await prisma.rubric.create({
+        data: {
+          name: schema.name,
+          title: schema.title,
+          schemaJson: schema as object,
+        },
+      });
+      created.push(schema.name);
+      continue;
+    }
+
+    const parsed = parseRubricSchema(row.schemaJson);
+    const existingJson = parsed.ok ? formatRubricSchema(parsed.schema) : null;
+    const parsedCanonical = parseRubricSchema(schema);
+    const canonicalJson = parsedCanonical.ok
+      ? formatRubricSchema(parsedCanonical.schema)
+      : formatRubricSchema(schema);
+    if (row.title !== schema.title || existingJson !== canonicalJson) {
+      await prisma.rubric.update({
+        where: { id: row.id },
+        data: { title: schema.title, schemaJson: schema as object },
+      });
+    }
   }
 
   return created;
