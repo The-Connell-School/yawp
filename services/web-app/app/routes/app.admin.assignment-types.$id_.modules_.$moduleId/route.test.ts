@@ -122,19 +122,17 @@ describe('admin assignment module loader', () => {
       instructions: [],
     });
 
-    const response = (await loader({
+    const response = await loader({
       request: new Request(
         'https://example.test/app/admin/assignment-types/at-1/modules/mod-1'
       ),
       params: { id: 'at-1', moduleId: 'mod-1' },
       context: {} as never,
-    } as never)) as {
-      data: { course: { rubricJson: { categories: Array<{ key: string }> } } };
-    };
+    } as never);
 
-    expect(response.data.course.rubricJson.categories).toEqual([
-      expect.objectContaining({ key: 'library_category' }),
-    ]);
+    expect(response.data.course.rubricJson).toEqual({
+      categories: [expect.objectContaining({ key: 'library_category' })],
+    });
   });
 
   test('returns 404 when module does not belong to assignment type', async () => {
