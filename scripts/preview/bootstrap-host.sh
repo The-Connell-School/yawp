@@ -41,6 +41,10 @@ else
 fi
 
 command -v aws >/dev/null 2>&1 || { echo "AWS CLI is required to restore preview production dumps from S3." >&2; exit 1; }
+command -v flock >/dev/null 2>&1 || {
+  echo "flock is required for preview host mutation locking" >&2
+  exit 1
+}
 
 if ! docker compose version >/dev/null 2>&1; then
   sudo mkdir -p /usr/local/lib/docker/cli-plugins

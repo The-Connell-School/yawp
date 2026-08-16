@@ -104,22 +104,31 @@ export async function hasMatchingPreviewAccessCredential({
   uri,
   cookieHeader,
   nowSeconds = Math.floor(Date.now() / 1000),
+  credentialIsCurrent = async () => false,
 }) {
   try {
     const seats = JSON.parse(await readFile(
       path.join(root, 'previews', `pr-${pr}`, 'access-seats.json'),
       'utf8',
     ));
-    if (!Array.isArray(seats)) return false;
+    const master = Array.isArray(seats) ? seats[0] : null;
+    const masterCode = String(master?.code || '').trim().toLowerCase();
+    const masterOrganizationId = String(master?.organizationId || '').trim();
+    if (
+      !/^[a-z]+-[a-z]+-[1-9][0-9]{3}$/.test(masterCode)
+      || !/^[a-z0-9][a-z0-9-]{0,127}$/.test(masterOrganizationId)
+    ) return false;
     const url = new URL(trustedUri(uri), 'https://preview.invalid');
     const candidate = String(url.searchParams.get('code') || '').trim().toLowerCase();
     if (/^[a-z]+-[a-z]+-[1-9][0-9]{3}$/.test(candidate)) {
-      if (
-        seats.some((seat) => safeSecretEqual(
-          candidate,
-          String(seat?.code || '').trim().toLowerCase(),
-        ))
-      ) return true;
+      if (safeSecretEqual(candidate, masterCode)) {
+        return credentialIsCurrent({
+          pr,
+          organizationId: masterOrganizationId,
+          requirePreviewSeatCode: false,
+        });
+      }
+      return credentialIsCurrent({ pr, code: candidate });
     }
     const secret = (await readFile(
       path.join(root, 'previews', `pr-${pr}`, 'access-secret'),
@@ -127,12 +136,61 @@ export async function hasMatchingPreviewAccessCredential({
     )).trim();
     if (secret.length < 32) return false;
     const organizationId = signedAccessCookieSeat(cookieHeader, secret, nowSeconds);
-    return organizationId !== null && seats.some(
-      (seat) => String(seat?.organizationId || '').trim() === organizationId,
-    );
+    if (organizationId === null) return false;
+    return credentialIsCurrent({
+      pr,
+      organizationId,
+      requirePreviewSeatCode: organizationId !== masterOrganizationId,
+    });
   } catch {
     return false;
   }
+}
+
+export function createPreviewSeatLookup({
+  execFileFn = execFileAsync,
+  postgresContainer = 'preview-postgres',
+} = {}) {
+  return async ({ pr, code, organizationId, requirePreviewSeatCode = true }) => {
+    if (!Number.isSafeInteger(pr) || pr < 1) return false;
+    let predicate;
+    if (typeof code === 'string' && /^[a-z]+-[a-z]+-[1-9][0-9]{3}$/.test(code)) {
+      predicate = `"previewSeatCode" = '${code}'`;
+    } else if (
+      typeof organizationId === 'string'
+      && /^[a-z0-9][a-z0-9-]{0,127}$/.test(organizationId)
+    ) {
+      predicate = `"id" = '${organizationId}'${
+        requirePreviewSeatCode ? ' AND "previewSeatCode" IS NOT NULL' : ''
+      }`;
+    } else {
+      return false;
+    }
+    try {
+      const database = `yawp_pr_${pr}`;
+      const query = `SELECT EXISTS (SELECT 1 FROM "Organization" WHERE ${predicate})::int;`;
+      const { stdout } = await execFileFn('docker', [
+        'exec',
+        postgresContainer,
+        'psql',
+        '--no-psqlrc',
+        '-v',
+        'ON_ERROR_STOP=1',
+        '-U',
+        'postgres',
+        '-d',
+        database,
+        '-tAc',
+        query,
+      ], {
+        timeout: 10_000,
+        maxBuffer: 64 * 1024,
+      });
+      return String(stdout).trim() === '1';
+    } catch {
+      return false;
+    }
+  };
 }
 
 function trustedUri(value) {
@@ -339,6 +397,7 @@ export function createDefaultWakeOperations({
   wakeScript,
   maxRunning,
   commandTimeoutMs = wakeCommandTimeoutMs(),
+  credentialIsCurrent = createPreviewSeatLookup(),
 }) {
   const recentAccess = new Map();
   const accessWrites = new Map();
@@ -366,6 +425,7 @@ export function createDefaultWakeOperations({
         pr,
         uri,
         cookieHeader: request?.headers?.cookie,
+        credentialIsCurrent,
       });
     },
     async recordAccess(pr) {

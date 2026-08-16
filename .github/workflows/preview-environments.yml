@@ -281,6 +281,7 @@ jobs:
       github.event.action == 'closed' &&
       github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-22.04
+    environment: preview-host
     env:
       PR_NUMBER: ${{ github.event.pull_request.number }}
       PREVIEW_HOST: ${{ vars.PREVIEW_HOST }}
@@ -331,8 +332,10 @@ jobs:
 
   preview-cleanup:
     if: >-
-      github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+      github.event_name == 'schedule' ||
+      (github.event_name == 'workflow_dispatch' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch))
     runs-on: ubuntu-22.04
+    environment: preview-host
     env:
       PREVIEW_HOST: ${{ vars.PREVIEW_HOST }}
       PREVIEW_ROOT: ${{ vars.PREVIEW_ROOT || '/srv/yawp-preview' }}
@@ -354,6 +357,8 @@ jobs:
 
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
 
       - name: Prepare SSH
         env:

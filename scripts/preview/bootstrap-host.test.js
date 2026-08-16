@@ -7,6 +7,10 @@ const workflow = readFileSync(
   path.join(import.meta.dir, '../../.github/workflows/preview-host-bootstrap.yml'),
   'utf8',
 );
+const previewWorkflow = readFileSync(
+  path.join(import.meta.dir, '../../.github/workflows/preview-environments.yml'),
+  'utf8',
+);
 
 describe('bootstrap-host.sh', () => {
   test('does not recursively chown the lifecycle-managed preview root', () => {
@@ -38,5 +42,18 @@ describe('bootstrap-host.sh', () => {
   test('allows transactional wake rollback to finish before systemd force-kills the unit', () => {
     expect(script).toContain('KillMode=control-group');
     expect(script).toContain('TimeoutStopSec=1200');
+  });
+
+  test('fails closed when the host lock command is unavailable', () => {
+    expect(script).toContain('command -v flock >/dev/null 2>&1 ||');
+    expect(script).toContain('flock is required for preview host mutation locking');
+  });
+
+  test('runs manual shared-host cleanup only from reviewed default-branch code', () => {
+    expect(previewWorkflow).toContain(
+      "github.event_name == 'workflow_dispatch' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)"
+    );
+    expect(previewWorkflow).toContain('environment: preview-host');
+    expect(previewWorkflow).toContain('ref: ${{ github.sha }}');
   });
 });

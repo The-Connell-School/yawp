@@ -13,6 +13,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import {
   createWakeHandler as createRawWakeHandler,
+  createPreviewSeatLookup,
   hasMatchingPreviewAccessCredential,
   parsePreviewPr,
   startAccessLogFollower,
@@ -61,7 +62,33 @@ describe('preview wake server', () => {
     })).toBe(86_000);
   });
 
-  test('authorizes a sleeping preview only with a current one-click code or unexpired current-seat cookie', async () => {
+  test('looks up runtime and revoked seats in only the retained PR database', async () => {
+    const calls = [];
+    const lookup = createPreviewSeatLookup({
+      execFileFn: async (command, args, options) => {
+        calls.push({ command, args, options });
+        return { stdout: args.at(-1).includes("'calm-panda-8127'") ? '1\n' : '0\n' };
+      },
+    });
+
+    expect(await lookup({ pr: 241, code: 'calm-panda-8127' })).toBe(true);
+    expect(await lookup({
+      pr: 241,
+      organizationId: 'revoked-seat',
+      requirePreviewSeatCode: true,
+    })).toBe(false);
+    expect(await lookup({ pr: 241, code: "bad';drop-table" })).toBe(false);
+
+    expect(calls).toHaveLength(2);
+    expect(calls[0].command).toBe('docker');
+    expect(calls[0].args).toContain('preview-postgres');
+    expect(calls[0].args).toContain('yawp_pr_241');
+    expect(calls[0].args.at(-1)).toContain('"previewSeatCode"');
+    expect(calls[1].args.at(-1)).toContain('"previewSeatCode" IS NOT NULL');
+    expect(calls[0].options.timeout).toBe(10_000);
+  });
+
+  test('authorizes master and runtime seats from the retained database while rejecting revoked manifest seats', async () => {
     const root = mkdtempSync(path.join(tmpdir(), 'preview-code-'));
     roots.push(root);
     const preview = path.join(root, 'previews', 'pr-241');
@@ -69,20 +96,35 @@ describe('preview wake server', () => {
     const secret = 'a'.repeat(64);
     writeFileSync(path.join(preview, 'access-seats.json'), JSON.stringify([
       { code: 'brisk-otter-4321', organizationId: 'local-dev-org', label: 'Master' },
+      { code: 'faded-fox-9876', organizationId: 'revoked-org', label: 'Revoked' },
     ]));
     writeFileSync(path.join(preview, 'access-secret'), `${secret}\n`);
+    const lookups = [];
+    const credentialIsCurrent = async (credential) => {
+      lookups.push(credential);
+      return credential.organizationId === 'local-dev-org'
+        || credential.code === 'calm-panda-8127'
+        || credential.organizationId === 'runtime-seat-2';
+    };
 
     expect(await hasMatchingPreviewAccessCredential({
       root,
       pr: 241,
       uri: '/app?code=brisk-otter-4321',
+      credentialIsCurrent,
     })).toBe(true);
     expect(await hasMatchingPreviewAccessCredential({
       root,
       pr: 241,
-      uri: '/app?code=wrong-otter-4321',
+      uri: '/app?code=calm-panda-8127',
+      credentialIsCurrent,
+    })).toBe(true);
+    expect(await hasMatchingPreviewAccessCredential({
+      root,
+      pr: 241,
+      uri: '/app?code=faded-fox-9876',
+      credentialIsCurrent,
     })).toBe(false);
-    expect(await hasMatchingPreviewAccessCredential({ root, pr: 241, uri: '/app' })).toBe(false);
 
     const signedCookie = (seat, issuedAt) => {
       const value = Buffer.from(JSON.stringify(`seat-v2:${issuedAt}:${seat}`)).toString('base64');
@@ -99,6 +141,15 @@ describe('preview wake server', () => {
       uri: '/app',
       cookieHeader: signedCookie('local-dev-org', nowSeconds - 60),
       nowSeconds,
+      credentialIsCurrent,
+    })).toBe(true);
+    expect(await hasMatchingPreviewAccessCredential({
+      root,
+      pr: 241,
+      uri: '/app',
+      cookieHeader: signedCookie('runtime-seat-2', nowSeconds - 60),
+      nowSeconds,
+      credentialIsCurrent,
     })).toBe(true);
     expect(await hasMatchingPreviewAccessCredential({
       root,
@@ -106,14 +157,43 @@ describe('preview wake server', () => {
       uri: '/app',
       cookieHeader: signedCookie('revoked-org', nowSeconds - 60),
       nowSeconds,
+      credentialIsCurrent,
     })).toBe(false);
     expect(await hasMatchingPreviewAccessCredential({
       root,
       pr: 241,
       uri: '/app',
-      cookieHeader: signedCookie('local-dev-org', nowSeconds - (31 * 24 * 60 * 60)),
+      cookieHeader: signedCookie('unknown-seat', nowSeconds - 60),
       nowSeconds,
+      credentialIsCurrent,
     })).toBe(false);
+    expect(await hasMatchingPreviewAccessCredential({
+      root,
+      pr: 241,
+      uri: '/app',
+      cookieHeader: signedCookie('runtime-seat-2', nowSeconds - (31 * 24 * 60 * 60)),
+      nowSeconds,
+      credentialIsCurrent,
+    })).toBe(false);
+    expect(await hasMatchingPreviewAccessCredential({
+      root,
+      pr: 241,
+      uri: '/app?code=malformed',
+      nowSeconds,
+      credentialIsCurrent,
+    })).toBe(false);
+    expect(await hasMatchingPreviewAccessCredential({
+      root,
+      pr: 241,
+      uri: '/app',
+      nowSeconds,
+      credentialIsCurrent,
+    })).toBe(false);
+    expect(lookups).toContainEqual({
+      pr: 241,
+      organizationId: 'runtime-seat-2',
+      requirePreviewSeatCode: true,
+    });
   });
 
   test('requires access authorization before waking a sleeping preview', async () => {
