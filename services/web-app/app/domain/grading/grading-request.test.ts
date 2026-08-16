@@ -112,74 +112,43 @@ describe('grading request', () => {
     );
   });
 
-  test('a banded rubric asks for a band first, then a score inside it', () => {
+  test('the library thesis rubric sends exactly the production thesis request', () => {
+    const builtIn = getThesisDefaultRubricConfig();
     const thesis = STARTER_RUBRICS[0];
-    const request = requestFor({
+    const productionRequest = requestFor({
+      categories: builtIn.rubric.categories,
+      minScore: builtIn.scoringScale.minScore,
+      maxScore: builtIn.scoringScale.maxScore,
+      promptConfig: builtIn.promptConfig as Record<string, unknown>,
+      label: 'Thesis-driven essay grading assistant',
+    });
+    const libraryRequest = requestFor({
       categories: thesis.rubric.categories,
       minScore: thesis.scoringScale.minScore,
       maxScore: thesis.scoringScale.maxScore,
       promptConfig: thesis.promptConfig as Record<string, unknown>,
-      label: 'Thesis-driven essay',
+      label: 'Thesis-driven essay grading assistant',
     });
 
-    expect(request.system).toContain('"score": 0-100');
-    expect(request.system).toContain(
-      'first decide which band the writing falls in'
-    );
-    expect(request.system).not.toContain('Scores must be integers 0-100.');
-
-    // Every band the rubric defines reaches the model attached to its category.
-    expect(request.userPrompt).toContain(
-      'thesis_and_content: Thesis/Content (25%)'
-    );
-    expect(request.userPrompt).toContain('  90-100 Exemplary:');
-    expect(request.userPrompt).toContain('  80-89 Proficient:');
-    expect(request.userPrompt).toContain('  70-79 Developing:');
-    expect(request.userPrompt).toContain('  0-69 Struggling:');
+    expect(libraryRequest).toEqual(productionRequest);
   });
 
-  test('the cleaned thesis rubric keeps every judgment it always made', () => {
+  test('the library thesis rubric keeps every production category unchanged', () => {
+    const builtIn = getThesisDefaultRubricConfig();
     const thesis = STARTER_RUBRICS[0];
-    const keys = thesis.rubric.categories.map((category) => category.key);
-
-    expect(keys).toEqual([
-      'thesis_and_content',
-      'organization_and_structure',
-      'evidence_and_support',
-      'voice_and_style',
-      'grammar_and_mechanics',
-    ]);
-    expect(
-      thesis.rubric.categories.map((category) => category.weight)
-    ).toEqual([0.25, 0.25, 0.2, 0.2, 0.1]);
-
-    // Every category is judged against the same four bands, and they cover the
-    // whole scale with no gap a score could fall into.
-    for (const category of thesis.rubric.categories) {
-      const bands = (category.bands ?? [])
-        .slice()
-        .sort((a, b) => a.min - b.min);
-
-      expect(bands.map((band) => band.label)).toEqual([
-        'Struggling',
-        'Developing',
-        'Proficient',
-        'Exemplary',
-      ]);
-      expect(bands[0].min).toBe(0);
-      expect(bands.at(-1)?.max).toBe(100);
-      for (const [index, band] of bands.slice(1).entries()) {
-        expect(band.min).toBe(bands[index].max + 1);
-      }
-    }
+    expect(thesis.rubric).toEqual(builtIn.rubric);
+    expect(thesis.scoringScale).toEqual(builtIn.scoringScale);
+    expect(thesis.promptConfig).toEqual(builtIn.promptConfig);
+    expect(thesis.outputSchema).toEqual(builtIn.outputSchema);
+    expect(thesis.calibrationNotes).toEqual(builtIn.calibrationNotes);
   });
 
-  test('no starter rubric depends on code to supply its instructions', () => {
-    for (const rubric of STARTER_RUBRICS) {
-      expect(rubric.promptConfig.instructionsPreset ?? '').toBe('');
-      expect(rubric.promptConfig.gradingInstructions?.length ?? 0).toBeGreaterThan(
-        100
-      );
-    }
+  test('the daily rubric carries its production instructions while thesis uses its production preset', () => {
+    expect(STARTER_RUBRICS[0].promptConfig.instructionsPreset).toBe(
+      'legacy_thesis_driven_essay'
+    );
+    expect(
+      STARTER_RUBRICS[1].promptConfig.gradingInstructions?.length ?? 0
+    ).toBeGreaterThan(100);
   });
 });
