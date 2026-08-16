@@ -21,15 +21,21 @@ function requirePositiveInteger(value) {
 }
 
 function requireDomain(value) {
-  const domain = String(value ?? '').trim().toLowerCase();
+  const domain = String(value ?? '')
+    .trim()
+    .toLowerCase();
   if (!domain || domain.includes('/') || domain.includes(':')) {
-    throw new Error('PREVIEW_DOMAIN must be a bare domain like preview.yawp.school');
+    throw new Error(
+      'PREVIEW_DOMAIN must be a bare domain like preview.yawp.school'
+    );
   }
   return trimSlashes(domain);
 }
 
 function requireRuntime(value) {
-  const runtime = String(value || 'fast').trim().toLowerCase();
+  const runtime = String(value || 'fast')
+    .trim()
+    .toLowerCase();
   if (!['fast', 'production'].includes(runtime)) {
     throw new Error('PREVIEW_RUNTIME must be fast or production');
   }
@@ -37,9 +43,13 @@ function requireRuntime(value) {
 }
 
 function requireDataMode(value) {
-  const dataMode = String(value || 'seed').trim().toLowerCase();
-  if (!['seed', 'production-dump'].includes(dataMode)) {
-    throw new Error('PREVIEW_DATA_MODE must be seed or production-dump');
+  const dataMode = String(value || 'seed')
+    .trim()
+    .toLowerCase();
+  if (!['seed', 'production-dump', 'sanitized-production'].includes(dataMode)) {
+    throw new Error(
+      'PREVIEW_DATA_MODE must be seed, production-dump, or sanitized-production'
+    );
   }
   return dataMode;
 }
@@ -54,7 +64,7 @@ export function requirePreviewAccessCodes(value) {
   }
   if (codes.some((code) => !/^[a-z]+-[a-z]+-[1-9][0-9]{3}$/.test(code))) {
     throw new Error(
-      'PREVIEW_ACCESS_CODES must contain two-word, four-digit codes',
+      'PREVIEW_ACCESS_CODES must contain two-word, four-digit codes'
     );
   }
   return codes.join(',');
@@ -77,7 +87,9 @@ export function requirePreviewAccessSeats(value) {
   }
 
   const seats = parsed.map((seat) => {
-    const code = String(seat?.code ?? '').trim().toLowerCase();
+    const code = String(seat?.code ?? '')
+      .trim()
+      .toLowerCase();
     const organizationId = String(seat?.organizationId ?? '').trim();
     const label = String(seat?.label ?? '').trim();
     if (
@@ -87,7 +99,7 @@ export function requirePreviewAccessSeats(value) {
       label.length > 100
     ) {
       throw new Error(
-        'PREVIEW_ACCESS_SEATS must contain valid code, organizationId, and label values',
+        'PREVIEW_ACCESS_SEATS must contain valid code, organizationId, and label values'
       );
     }
     return { code, organizationId, label };
@@ -98,7 +110,7 @@ export function requirePreviewAccessSeats(value) {
       seats.length
   ) {
     throw new Error(
-      'PREVIEW_ACCESS_SEATS must use a unique code and organization for every seat',
+      'PREVIEW_ACCESS_SEATS must use a unique code and organization for every seat'
     );
   }
   return JSON.stringify(seats);
@@ -107,7 +119,9 @@ export function requirePreviewAccessSeats(value) {
 export function requirePreviewSessionSecret(value) {
   const secret = String(value ?? '').trim();
   if (!secret) {
-    throw new Error('PREVIEW_SESSION_SECRET is required for preview deployments');
+    throw new Error(
+      'PREVIEW_SESSION_SECRET is required for preview deployments'
+    );
   }
   if (secret.length < 32) {
     throw new Error('PREVIEW_SESSION_SECRET must be at least 32 characters');
@@ -118,7 +132,9 @@ export function requirePreviewSessionSecret(value) {
 export function requirePreviewAccessSecret(value) {
   const secret = String(value ?? '').trim();
   if (!secret) {
-    throw new Error('PREVIEW_ACCESS_SECRET is required for preview deployments');
+    throw new Error(
+      'PREVIEW_ACCESS_SECRET is required for preview deployments'
+    );
   }
   if (secret.length < 32) {
     throw new Error('PREVIEW_ACCESS_SECRET must be at least 32 characters');
@@ -126,12 +142,13 @@ export function requirePreviewAccessSecret(value) {
   return secret;
 }
 
-
 // A named environment (the long-lived demo box) reuses this whole pipeline; only the
 // slug differs. Without the override every environment is forced to be "pr-<n>", which
 // would mean a second, divergent deploy path for the one environment that must not drift.
 function normaliseSlug(value) {
-  const slug = String(value ?? '').trim().toLowerCase();
+  const slug = String(value ?? '')
+    .trim()
+    .toLowerCase();
   if (!/^[a-z][a-z0-9-]{0,30}$/.test(slug)) {
     throw new Error('PREVIEW_SLUG must be a short lowercase name like demo');
   }
@@ -150,11 +167,11 @@ export function buildPreviewEnv({
   dataMode = process.env.PREVIEW_DATA_MODE || 'seed',
   databaseHost = process.env.PREVIEW_DB_HOST || DEFAULT_DATABASE_HOST,
   databaseUser = process.env.PREVIEW_DB_USER || DEFAULT_DATABASE_USER,
-  databasePassword =
-    process.env.PREVIEW_DB_PASSWORD || DEFAULT_DATABASE_PASSWORD,
+  databasePassword = process.env.PREVIEW_DB_PASSWORD ||
+    DEFAULT_DATABASE_PASSWORD,
   databasePort = process.env.PREVIEW_DB_PORT || DEFAULT_DATABASE_PORT,
-  templateDatabaseName =
-    process.env.PREVIEW_DB_TEMPLATE_DB || DEFAULT_TEMPLATE_DATABASE_NAME,
+  templateDatabaseName = process.env.PREVIEW_DB_TEMPLATE_DB ||
+    DEFAULT_TEMPLATE_DATABASE_NAME,
   databaseUrl = process.env.PREVIEW_DATABASE_URL,
 } = {}) {
   const namedSlug = slugOverride ? normaliseSlug(slugOverride) : '';

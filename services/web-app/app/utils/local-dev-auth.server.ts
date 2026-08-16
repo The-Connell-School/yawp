@@ -12,8 +12,8 @@ import { isLocalDatabaseUrl } from '../../../../packages/prisma/scripts/local-de
  *    proxy, so it cannot enable role-swap without also putting the gate in front of it.
  * 2. A developer's own machine: NODE_ENV=development against a local database.
  *
- * Production-dump data is excluded either way. Real people's records are not a safe place
- * to hand out an arbitrary identity, whoever is behind the door.
+ * Raw production-dump data is excluded either way. Sanitized production data is a distinct
+ * mode: its identities are synthetic before upload, so it may use role-swap behind the gate.
  *
  * The previous rule inferred "this must be local" from NODE_ENV plus the shape of
  * DATABASE_URL. Preview boxes run the dev server against a container-local Postgres, so
@@ -24,6 +24,10 @@ import { isLocalDatabaseUrl } from '../../../../packages/prisma/scripts/local-de
 export function isLocalDevAuthEnabled() {
   if (process.env.PREVIEW_DATA_MODE === 'production-dump') {
     return false;
+  }
+
+  if (process.env.PREVIEW_DATA_MODE === 'sanitized-production') {
+    return process.env.PREVIEW_ACCESS_GATE === 'on';
   }
 
   if (process.env.PREVIEW_ACCESS_GATE === 'on') {

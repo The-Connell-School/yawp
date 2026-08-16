@@ -84,6 +84,19 @@ describe('local dev auth', () => {
     expect(isLocalDevAuthEnabled()).toBe(false);
   });
 
+  test('sanitized production data enables role swap only behind the access gate', () => {
+    process.env.NODE_ENV = 'development';
+    process.env.DATABASE_URL =
+      'postgresql://postgres:postgres@preview-postgres:5432/yawp_pr_1';
+    process.env.PREVIEW_DATA_MODE = 'sanitized-production';
+
+    delete process.env.PREVIEW_ACCESS_GATE;
+    expect(isLocalDevAuthEnabled()).toBe(false);
+
+    process.env.PREVIEW_ACCESS_GATE = 'on';
+    expect(isLocalDevAuthEnabled()).toBe(true);
+  });
+
   // Fail closed: anything other than the exact flag render-compose emits is not a gate.
   test('a missing or malformed gate flag does not enable anything', () => {
     process.env.NODE_ENV = 'production';
