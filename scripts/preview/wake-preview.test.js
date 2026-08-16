@@ -70,7 +70,11 @@ if [[ "$1" == "compose" && "$*" =~ -p[[:space:]]+yawp-pr-([0-9]+) ]]; then
   fi
 fi
 if [[ "$1" == "inspect" ]]; then
-  ${typeof healthy === 'number' ? `[[ "$*" == *"container-${healthy}"* ]] && echo unhealthy || echo healthy` : healthy ? 'echo healthy' : 'echo unhealthy'}
+  if [[ "$*" == *"NetworkSettings.Networks"* ]]; then
+    echo "172.18.0.245"
+    exit 0
+  fi
+  ${healthy === 'legacy' ? 'exit 1' : typeof healthy === 'number' ? `[[ "$*" == *"container-${healthy}"* ]] && echo unhealthy || echo healthy` : healthy ? 'echo healthy' : 'echo unhealthy'}
   exit 0
 fi
 exit 0
@@ -169,6 +173,31 @@ fi
 
     expect(result.status).toBe(0);
     expect(readFileSync(path.join(root, 'wake', 'access', 'pr-241'), 'utf8')).toBe('1121\n');
+  });
+
+  test('health-gates a legacy resident through its direct container endpoint', () => {
+    const root = makeRoot();
+    makePreview(root, 245);
+    const docker = makeDockerStub(root, [], 'legacy');
+    const curl = path.join(root, 'curl-stub.sh');
+    const curlLog = path.join(root, 'curl.log');
+    writeFileSync(curlLog, '');
+    writeFileSync(curl, `#!/usr/bin/env bash
+printf '%s\\n' "$*" >> "$PREVIEW_CURL_LOG"
+printf 'OK\\n'
+`);
+    chmodSync(curl, 0o755);
+
+    const result = run(root, 245, docker, {
+      PREVIEW_CURL: curl,
+      PREVIEW_CURL_LOG: curlLog,
+    });
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain('WAKE_RESULT=woken');
+    expect(readFileSync(curlLog, 'utf8')).toContain(
+      'http://172.18.0.245:8080/api/healthcheck',
+    );
   });
 
   test('at the running cap sleeps the least recently accessed unpinned preview', () => {
