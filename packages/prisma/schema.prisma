@@ -115,6 +115,14 @@ model Assignment {
   pointValue                      Int?              @default(100)
   gradingAssistantStrictnessLevel String            @default("intermediate")
   tutorEnabled                    Boolean           @default(true)
+  /// The teacher's per-assignment toggle: are students writing one shared
+  /// draft per group. Gated at runtime by Organization.collaborativeDraftsEnabled.
+  collaborationEnabled            Boolean           @default(false)
+  /// How groups are formed for this assignment: teacher | random | whole-class.
+  /// A string rather than an enum, matching gradingAssistantStrictnessLevel.
+  collaborationGroupMode          String            @default("teacher")
+  /// Target students per group. Null for whole-class, where the group is the roster.
+  collaborationGroupSize          Int?
   apHistorySnapshot               Json?
   classAssignments                ClassAssignment[]
   documents                       Document[]
@@ -132,9 +140,56 @@ model ClassAssignment {
   class        Class                   @relation(fields: [classId], references: [id], onDelete: Cascade)
   documents    Document[]
   insight      ClassAssignmentInsight?
+  documentGroups DocumentGroup[]
 
   @@unique([assignmentId, classId])
   @@index([classId, createdAt(sort: Desc)])
+}
+
+/// One collaboration group within one ClassAssignment.
+///
+/// Groups live on ClassAssignment rather than Assignment because they are made of
+/// students, and an Assignment fans out to one ClassAssignment per class.
+///
+/// The group exists before any document does. Before `openedAt` it is only a seating
+/// chart, so reshuffling is free; after it, the group owns a draft that already contains
+/// student writing and moving people between groups has a real cost.
+model DocumentGroup {
+  id                String                @id @default(cuid())
+  createdAt         DateTime              @default(now()) @db.Timestamptz(6)
+  updatedAt         DateTime              @default(now()) @updatedAt @db.Timestamptz(6)
+  classAssignmentId String
+  classAssignment   ClassAssignment       @relation(fields: [classAssignmentId], references: [id], onDelete: Cascade)
+  label             String
+  ordinal           Int
+  /// Set when the teacher opens groups to students. Null means still editable.
+  openedAt          DateTime?             @db.Timestamptz(6)
+  /// The group's shared draft, provisioned when groups are opened.
+  documentId        String?               @unique
+  document          Document?             @relation(fields: [documentId], references: [id], onDelete: SetNull)
+  members           DocumentGroupMember[]
+
+  @@unique([classAssignmentId, ordinal])
+}
+
+/// A student's membership in one DocumentGroup.
+///
+/// Removal is soft. A student moved to another group keeps their attributed text in the
+/// draft they wrote it in, and the row records that they were once a member — but
+/// `removedAt` being set is what withdraws their write access, so every authorization
+/// predicate must filter on `removedAt: null`.
+model DocumentGroupMember {
+  id           String        @id @default(cuid())
+  createdAt    DateTime      @default(now()) @db.Timestamptz(6)
+  groupId      String
+  group        DocumentGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  membershipId String
+  membership   OrgMembership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  removedAt    DateTime?     @db.Timestamptz(6)
+
+  @@unique([groupId, membershipId])
+  @@index([membershipId])
+  @@index([groupId, removedAt])
 }
 
 /// Class-wide, assignment-level feedback for the teacher: an AI summary of how
@@ -223,6 +278,11 @@ model SavedAssignment {
   pointValue                      Int?
   gradingAssistantStrictnessLevel String         @default("intermediate")
   tutorEnabled                    Boolean        @default(true)
+  /// Mirrors the three collaboration fields on Assignment so reusing a saved
+  /// assignment preserves the setting instead of silently dropping it.
+  collaborationEnabled            Boolean        @default(false)
+  collaborationGroupMode          String         @default("teacher")
+  collaborationGroupSize          Int?
   source                          String         @default("creation-sheet")
   archivedAt                      DateTime?      @db.Timestamptz(6)
 
@@ -384,6 +444,8 @@ model Document {
   pasteAlerts              PasteAlert[]
   revisions                DocumentRevision[]
   submissions              Submission[]
+  /// Set only on a collaborative draft: the group whose shared document this is.
+  group                    DocumentGroup?
 
   @@index([assignmentId])
   @@index([classAssignmentId])
@@ -593,6 +655,10 @@ model Organization {
   reporterEnabled           Boolean                      @default(false)
   classInsightsEnabled      Boolean                      @default(false)
   writingPracticeEnabled    Boolean                      @default(false)
+  /// Rollout gate for collaborative drafts: may this organization use the
+  /// feature at all. Distinct from Assignment.collaborationEnabled, which is
+  /// the teacher's per-assignment toggle.
+  collaborativeDraftsEnabled Boolean                     @default(false)
   previewSeatCode           String?                      @unique
   memberships               OrgMembership[]
   invitations               Invitation[]
@@ -654,6 +720,7 @@ model OrgMembership {
   savedThesisPrompts            SavedThesisPrompt[]
   savedDailyPagesPrompts        SavedDailyPagesPrompt[]
   savedAssignments              SavedAssignment[]
+  documentGroupMemberships      DocumentGroupMember[]
 
   @@unique([userId, organizationId])
   @@unique([id, organizationId])
