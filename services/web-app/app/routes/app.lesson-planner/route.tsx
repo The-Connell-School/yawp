@@ -60,6 +60,8 @@ import {
 } from '~/domain/lesson-planner/suggestions';
 import { loadLessonSeed } from '~/domain/lesson-planner/lesson-seed.server';
 import { LessonRail } from './lesson-rail';
+import { PromptTiles } from './prompt-tiles';
+import { useRotatingPlaceholder } from './rotating-placeholder';
 import {
   PlanningProgressBar,
   type PlanningProgressState,
@@ -350,6 +352,9 @@ export default function LessonPlannerRoute() {
   }, [result]);
 
   useEffect(() => {
+    // Only a transcript follows its own bottom. The opening page is a page:
+    // scrolling it down puts its own heading and box above the fold.
+    if (messages.length === 0) return;
     transcriptRef.current?.scrollTo({
       top: transcriptRef.current.scrollHeight,
       behavior: 'smooth',
@@ -645,13 +650,26 @@ export default function LessonPlannerRoute() {
           ref={transcriptRef}
           className="no-scrollbar flex-1 overflow-y-auto px-4 py-6"
         >
-          <div className="mx-auto flex w-full max-w-3xl flex-col gap-4">
+          <div
+            className={cn(
+              'mx-auto flex w-full flex-col gap-4',
+              // Nothing said yet: the box is the page, so it sits up in the
+              // middle of the room rather than pinned to the floor under an
+              // empty transcript. Not vertically centred — the tiles run
+              // taller than a laptop viewport, and centring a column that
+              // overflows puts its own heading above the scroll.
+              hasMessages ? 'max-w-3xl' : 'max-w-4xl py-6 sm:py-10'
+            )}
+          >
             {!hasMessages ? (
               <LessonPlannerEmptyState
                 prompts={recommendedPrompts}
                 seedContext={seed?.context ?? null}
                 onPick={send}
                 disabled={isSending}
+                input={input}
+                onInput={setInput}
+                onSend={() => send(input)}
               />
             ) : (
               messages.map((message, index) => (
@@ -714,41 +732,88 @@ export default function LessonPlannerRoute() {
           </div>
         ) : null}
 
-        <div className="border-t bg-background px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3">
-          <form
-            className="mx-auto flex w-full max-w-3xl items-end gap-2 pr-12"
-            onSubmit={(event) => {
-              event.preventDefault();
-              send(input);
-            }}
-          >
-            <Textarea
-              value={input}
-              onChange={(event) => setInput(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter' && !event.shiftKey) {
-                  event.preventDefault();
-                  send(input);
-                }
-              }}
-              rows={1}
-              placeholder="Describe the lesson and your class…"
-              aria-label="Message the Lesson Planner"
-              className="max-h-40 min-h-[44px] flex-1 resize-none max-sm:text-base"
-              disabled={isSending}
-            />
-            <Button
-              type="submit"
-              size="icon"
-              disabled={isSending || input.trim().length === 0}
-              aria-label="Send message"
-            >
-              <Send size={18} />
-            </Button>
-          </form>
-        </div>
+        {/* Once there is a transcript the box belongs under it. Before that it
+            is rendered inside the empty state, in the middle of the page. */}
+        {hasMessages ? (
+          <div className="border-t bg-background px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3">
+            <div className="mx-auto w-full max-w-3xl pr-12">
+              <LessonComposer
+                value={input}
+                onChange={setInput}
+                onSend={() => send(input)}
+                disabled={isSending}
+              />
+            </div>
+          </div>
+        ) : null}
       </div>
     </section>
+  );
+}
+
+/**
+ * The one box a teacher types into. It renders in two places — in the middle
+ * of an empty page and docked under a transcript — and is the same control in
+ * both, so the thing you started typing into is the thing you keep using.
+ */
+function LessonComposer({
+  value,
+  onChange,
+  onSend,
+  disabled,
+  hero,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  onSend: () => void;
+  disabled: boolean;
+  /** Centred on an empty page: taller, and the examples cycle inside it. */
+  hero?: boolean;
+}) {
+  const rotating = useRotatingPlaceholder(value.length > 0);
+
+  return (
+    <form
+      className={cn(
+        'flex w-full items-end gap-2',
+        hero &&
+          'rounded-2xl border bg-background p-2 shadow-[0_12px_40px_-24px_rgba(0,0,0,0.45)] focus-within:border-primary/40'
+      )}
+      onSubmit={(event) => {
+        event.preventDefault();
+        onSend();
+      }}
+    >
+      <Textarea
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' && !event.shiftKey) {
+            event.preventDefault();
+            onSend();
+          }
+        }}
+        rows={hero ? 2 : 1}
+        placeholder={hero ? rotating : 'Describe the lesson and your class…'}
+        aria-label="Message the Lesson Planner"
+        className={cn(
+          'flex-1 resize-none max-sm:text-base',
+          hero
+            ? 'max-h-56 min-h-[76px] border-0 bg-transparent text-base shadow-none focus-visible:ring-0'
+            : 'max-h-40 min-h-[44px]'
+        )}
+        disabled={disabled}
+      />
+      <Button
+        type="submit"
+        size="icon"
+        disabled={disabled || value.trim().length === 0}
+        aria-label="Send message"
+        className={cn(hero && 'mb-1 mr-1 h-10 w-10 rounded-xl')}
+      >
+        <Send size={hero ? 20 : 18} />
+      </Button>
+    </form>
   );
 }
 
@@ -757,28 +822,40 @@ function LessonPlannerEmptyState({
   seedContext,
   onPick,
   disabled,
+  input,
+  onInput,
+  onSend,
 }: {
   prompts: Array<{ id: string; label: string; prompt: string }>;
   seedContext: string | null;
   onPick: (prompt: string) => void;
   disabled: boolean;
+  input: string;
+  onInput: (value: string) => void;
+  onSend: () => void;
 }) {
   return (
-    <div className="flex flex-col items-center gap-6 py-10 text-center">
-      <div className="flex flex-col items-center gap-2">
-        <div className="rounded-2xl bg-primary/10 p-3 text-primary">
-          <Lightbulb size={28} />
-        </div>
-        <h3 className="text-xl font-semibold">What are we teaching?</h3>
-        <p className="max-w-md text-sm text-muted-foreground">
-          Tell the planner the skill, the class, and what your students are
-          like. It builds the lesson — slides, activities, handouts, exit
-          tickets — around the room you actually teach.
+    <div className="flex flex-col items-center gap-8">
+      <div className="flex w-full max-w-3xl flex-col items-center gap-5 text-center">
+        <h3 className="text-3xl font-semibold tracking-tight sm:text-4xl">
+          What are we teaching?
+        </h3>
+        <p className="max-w-lg text-sm text-muted-foreground">
+          Say it the way you'd say it to a colleague in the hallway. The planner
+          builds the lesson — slides, activities, handouts, exit tickets —
+          around the room you actually teach.
         </p>
+        <LessonComposer
+          hero
+          value={input}
+          onChange={onInput}
+          onSend={onSend}
+          disabled={disabled}
+        />
       </div>
       {seedContext ? (
         <div
-          className="w-full max-w-xl rounded-xl border border-primary/30 bg-primary/5 p-4 text-left"
+          className="w-full max-w-2xl rounded-xl border border-primary/30 bg-primary/5 p-4 text-left"
           data-testid="lesson-planner-seed"
         >
           <p className="text-xs font-semibold uppercase tracking-wide text-primary">
@@ -786,23 +863,16 @@ function LessonPlannerEmptyState({
           </p>
           <p className="mt-1 text-sm text-muted-foreground">{seedContext}</p>
           <p className="mt-2 text-sm text-muted-foreground">
-            We started the message for you below — add anything about this class
+            We started the message for you above — add anything about this class
             before you send it.
           </p>
         </div>
       ) : null}
-      <div className="grid w-full max-w-xl grid-cols-1 gap-2 sm:grid-cols-2">
-        {prompts.map((prompt) => (
-          <button
-            key={prompt.id}
-            type="button"
-            disabled={disabled}
-            onClick={() => onPick(prompt.prompt)}
-            className="rounded-xl border bg-background p-3 text-left text-sm hover:border-primary hover:bg-primary/5 disabled:opacity-50"
-          >
-            <span className="font-medium">{prompt.label}</span>
-          </button>
-        ))}
+      <div className="flex w-full flex-col gap-3">
+        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          Or start from one of these
+        </p>
+        <PromptTiles prompts={prompts} onPick={onPick} disabled={disabled} />
       </div>
     </div>
   );
