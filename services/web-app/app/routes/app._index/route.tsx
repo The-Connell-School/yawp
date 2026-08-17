@@ -35,6 +35,7 @@ export type AssignmentTypeRow = {
   id: string;
   title: string;
   systemKey?: string | null;
+  collaborationSupported?: boolean;
   image?: { id: string } | null;
 };
 
@@ -137,6 +138,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
           select: {
             id: true,
             title: true,
+            collaborationSupported: true,
             systemKey: true,
             image: { select: { id: true } },
           },
@@ -260,6 +262,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
           select: {
             id: true,
             title: true,
+            collaborationSupported: true,
             systemKey: true,
             image: { select: { id: true } },
           },
@@ -275,6 +278,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
     .map((type) => ({
       id: type.id,
       title: type.title,
+      // AssignmentTypeRow is shared with student-side selects that do not ask
+      // for this column, so it is optional there and defaulted here.
+      collaborationSupported: type.collaborationSupported ?? false,
     }));
 
   return dataResponse({

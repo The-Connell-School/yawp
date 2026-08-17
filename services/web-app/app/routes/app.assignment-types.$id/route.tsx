@@ -6,7 +6,7 @@ import {
   Form,
 } from 'react-router';
 import { Link, useLoaderData, useNavigation } from 'react-router';
-import { ChevronDownIcon, PlusIcon } from 'lucide-react';
+import { ChevronDownIcon, PlusIcon, UsersIcon } from 'lucide-react';
 import { DocumentLink } from '~/components/document-link.js';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { CaretLeftIcon } from '~/components/icons';
@@ -95,6 +95,7 @@ type AssignmentTypeDetailRow = {
   title: string;
   description: string | null;
   systemKey: string | null;
+  collaborationSupported: boolean;
   image: { id: string } | null;
   assignmentModules: Array<{
     id: string;
@@ -376,6 +377,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         title: true,
         description: true,
         systemKey: true,
+        collaborationSupported: true,
         image: { select: { id: true } },
         assignmentModules: {
           where: { deletedAt: null },
@@ -643,6 +645,9 @@ export default function AppAssignmentTypesIdRoute() {
               <CreateAssignmentSheet
                 assignmentTypeId={data.assignmentType.id}
                 assignmentTypeTitle={data.assignmentType.title}
+                assignmentTypeCollaborationSupported={
+                  data.assignmentType.collaborationSupported
+                }
                 teacherClasses={assignmentSheetClasses}
                 open={isAssignmentSheetOpen}
                 onOpenChange={setIsAssignmentSheetOpen}
@@ -677,16 +682,28 @@ export default function AppAssignmentTypesIdRoute() {
               ) : null}
             </>
           ) : canCreateDirectDocument ? (
-            <Form method="post">
-              <Button
-                type="submit"
-                className="w-fit"
-                disabled={!hasModules || isLoading}
-                isLoading={isLoading}
-              >
-                New <PlusIcon className="ml-1 h-5 w-5" />
-              </Button>
-            </Form>
+            <div className="flex items-center gap-2">
+              {/* The student's road to a shared draft. Offered only for kinds of
+                  writing in the collaboration pilot, because it leads to a
+                  separate collaborative page that will not serve anything else. */}
+              {data.assignmentType.collaborationSupported ? (
+                <Button asChild variant="outline" className="w-fit">
+                  <Link to="/app/shared-drafts/new">
+                    <UsersIcon className="mr-1 h-5 w-5" /> Write with a classmate
+                  </Link>
+                </Button>
+              ) : null}
+              <Form method="post">
+                <Button
+                  type="submit"
+                  className="w-fit"
+                  disabled={!hasModules || isLoading}
+                  isLoading={isLoading}
+                >
+                  New <PlusIcon className="ml-1 h-5 w-5" />
+                </Button>
+              </Form>
+            </div>
           ) : null}
         </div>
         <div className="flex flex-col items-start gap-6 pb-6 sm:flex-row">

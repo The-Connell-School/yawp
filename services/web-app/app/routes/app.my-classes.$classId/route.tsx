@@ -951,6 +951,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       id: string;
       title: string;
       systemKey: string | null;
+      collaborationSupported: boolean;
     }>({
       scopes: [
         {
@@ -959,7 +960,12 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           teacherProfileId: profile.id,
         },
       ],
-      select: { id: true, title: true, systemKey: true },
+      select: {
+        id: true,
+        title: true,
+        systemKey: true,
+        collaborationSupported: true,
+      },
       orderBy: { position: 'asc' },
     }),
   ]);
@@ -1088,7 +1094,11 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         (assignmentType) =>
           assignmentType.systemKey !== AP_HISTORY_ASSIGNMENT_TYPE_KEY
       )
-      .map(({ id, title }) => ({ id, title })),
+      .map(({ id, title, collaborationSupported }) => ({
+        id,
+        title,
+        collaborationSupported,
+      })),
     assignmentsEnabled: true,
     manageSchools: manageSchools?.schools ?? [],
     teacherClasses,

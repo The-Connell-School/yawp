@@ -35,7 +35,11 @@ export type ClassAssignmentsTabAssignment = AssignmentEditRecord & {
 type ClassAssignmentsTabProps = {
   classOption: { id: string; name: string };
   assignments: ClassAssignmentsTabAssignment[];
-  assignmentTypes: { id: string; title: string }[];
+  assignmentTypes: {
+    id: string;
+    title: string;
+    collaborationSupported: boolean;
+  }[];
   /** Gated on the organization's classInsightsEnabled flag. */
   classInsightsEnabled: boolean;
   onViewDocuments: (assignmentId: string) => void;

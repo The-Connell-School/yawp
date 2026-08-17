@@ -86,8 +86,9 @@ function idleFetcher(data: Record<string, unknown> | null = null) {
 }
 
 const assignmentTypes = [
-  { id: 'type-1', title: 'Literary Analysis' },
-  { id: 'type-2', title: 'Daily Pages' },
+  // type-1 is in the collaborative-drafts pilot; type-2 is not.
+  { id: 'type-1', title: 'Literary Analysis', collaborationSupported: true },
+  { id: 'type-2', title: 'Daily Pages', collaborationSupported: false },
 ];
 
 const teacherClasses = [
@@ -571,5 +572,48 @@ describe('AssignmentCreationSheetContent', () => {
     }).root;
 
     expect(inputByName('pointValue').value).toBe('25');
+  });
+
+  describe('collaborative drafts', () => {
+    it('offers the toggle for a kind of writing in the pilot', () => {
+      root = renderSheet({
+        entryPoint: 'assignment-type',
+        fixedAssignmentTypeId: 'type-1',
+      }).root;
+
+      expect(
+        controlById('assignment-create-collaboration-enabled')
+      ).not.toBeNull();
+    });
+
+    it('hides the toggle for a kind of writing outside the pilot', () => {
+      // Not merely disabled: offering it where nothing downstream would serve a
+      // room is worse than not offering it at all.
+      root = renderSheet({
+        entryPoint: 'assignment-type',
+        fixedAssignmentTypeId: 'type-2',
+      }).root;
+
+      expect(
+        document.getElementById('assignment-create-collaboration-enabled')
+      ).toBeNull();
+    });
+
+    it('posts collaboration off by default even when the toggle is shown', () => {
+      // A hidden false accompanies the checkbox, so an unchecked box still posts
+      // a value and the server keeps producing solo assignments.
+      root = renderSheet({
+        entryPoint: 'assignment-type',
+        fixedAssignmentTypeId: 'type-1',
+      }).root;
+
+      const values = allInputsByName('collaborationEnabled').map(
+        (input) => input.value
+      );
+      expect(values).toContain('false');
+      expect(
+        isChecked(controlById('assignment-create-collaboration-enabled'))
+      ).toBe(false);
+    });
   });
 });
