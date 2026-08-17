@@ -354,8 +354,8 @@ export function renderSleepingPreviewPage({ pr, uri }) {
         --surface: hsl(48 100% 99%);
         --text: hsl(48 20% 20%);
         --muted: hsl(50 7% 42%);
-        --primary: hsl(15 59% 51%);
-        --primary-hover: hsl(15 59% 45%);
+        --primary: hsl(15 59% 45%);
+        --primary-hover: hsl(15 59% 40%);
         --ring: hsl(210 75% 49%);
         --line: hsl(48 12% 78% / 0.72);
         --radius: 1.25rem;
