@@ -5,11 +5,13 @@ const draft: RailLesson = {
   id: 'draft-1',
   title: 'Conclusions, period 3',
   published: false,
+  sectionCount: 0,
 };
 const published: RailLesson = {
   id: 'published-1',
   title: 'Evidence that earns its place',
   published: true,
+  sectionCount: 4,
 };
 
 describe('initialRailTab', () => {

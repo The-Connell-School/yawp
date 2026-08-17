@@ -11,6 +11,11 @@
  * working on, and the ones they published to their library. One tab at a time,
  * because a rail showing two lists at once is the wall of names again.
  *
+ * The split is not just a label. A draft opens the conversation, because that
+ * is where unfinished work continues; a published lesson opens its stack,
+ * because that is the lesson. When both opened the transcript the two tabs
+ * were two names for one behaviour.
+ *
  * Deliberately the only expanding panel on the left. The stack — what this
  * lesson is made of — belongs on the right, and two drawers competing for the
  * same gesture is the thing to avoid.
@@ -27,8 +32,15 @@ import {
 } from 'lucide-react';
 import { cn } from '~/utils/misc';
 import { Button } from '~/components/ui/button';
+import { lessonHref } from '~/domain/lesson-planner/lesson-library';
 
-export type RailLesson = { id: string; title: string; published: boolean };
+export type RailLesson = {
+  id: string;
+  title: string;
+  published: boolean;
+  /** How much is in the stack, which decides where the lesson opens. */
+  sectionCount: number;
+};
 
 export type RailTab = 'drafts' | 'library';
 
@@ -212,28 +224,41 @@ export function LessonRail({
         {shown.length === 0 ? (
           <p className="px-2 py-4 text-sm text-muted-foreground">
             {tab === 'drafts'
-              ? 'Lessons you plan will show up here.'
-              : 'Lessons you publish will show up here.'}
+              ? 'Lessons you are still working on show up here.'
+              : 'Publish a lesson and it lands here, opening straight to its stack.'}
           </p>
         ) : (
           <ul className="flex flex-col gap-1">
-            {shown.map((lesson) => (
-              <li key={lesson.id}>
-                <button
-                  type="button"
-                  onClick={() => onSelect(lesson.id)}
-                  className={cn(
-                    'w-full rounded-lg px-3 py-2 text-left text-sm text-muted-foreground hover:bg-foreground/5 hover:text-foreground',
-                    {
-                      'bg-primary/10 text-primary hover:bg-primary/10':
-                        lesson.id === activeId,
-                    }
+            {shown.map((lesson) => {
+              const itemClass = cn(
+                'block w-full rounded-lg px-3 py-2 text-left text-sm text-muted-foreground hover:bg-foreground/5 hover:text-foreground',
+                {
+                  'bg-primary/10 text-primary hover:bg-primary/10':
+                    lesson.id === activeId,
+                }
+              );
+              const href = lessonHref(lesson);
+              return (
+                <li key={lesson.id}>
+                  {/* A published lesson opens on its stack, which is a
+                      different page and therefore a link. A draft swaps the
+                      conversation on this one, which is not navigation. */}
+                  {href.startsWith('/app/lesson-planner/') ? (
+                    <Link to={href} className={itemClass}>
+                      <span className="truncate">{lesson.title}</span>
+                    </Link>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => onSelect(lesson.id)}
+                      className={itemClass}
+                    >
+                      <span className="truncate">{lesson.title}</span>
+                    </button>
                   )}
-                >
-                  <span className="truncate">{lesson.title}</span>
-                </button>
-              </li>
-            ))}
+                </li>
+              );
+            })}
           </ul>
         )}
       </div>

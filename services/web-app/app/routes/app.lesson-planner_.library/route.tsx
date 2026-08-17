@@ -30,6 +30,7 @@ import { prisma } from '~/utils/db.server';
 import { getLessonPlannerAccess } from '~/utils/lesson-planner/lesson-planner-access.server';
 import {
   buildLessonLibrary,
+  lessonHref,
   splitDraftsAndLibrary,
   type LibraryLesson,
 } from '~/domain/lesson-planner/lesson-library';
@@ -113,7 +114,7 @@ function LessonRow({ lesson }: { lesson: LibraryLesson }) {
 
         <div className="min-w-0 flex-1">
           <Link
-            to={`/app/lesson-planner?c=${lesson.id}`}
+            to={lessonHref(lesson)}
             className="font-medium hover:text-primary hover:underline"
           >
             {lesson.title}
@@ -137,8 +138,11 @@ function LessonRow({ lesson }: { lesson: LibraryLesson }) {
               {lesson.sectionCount === 1 ? 'piece' : 'pieces'}
             </Badge>
           ) : (
+            // "Empty", not "Draft": this badge counts what is in the stack, and
+            // a published lesson with nothing kept was being labelled a draft
+            // while sitting under the library heading.
             <Badge variant="outline" size="sm">
-              Draft
+              Empty
             </Badge>
           )}
           {lesson.handoutCount > 0 ? (
@@ -147,7 +151,16 @@ function LessonRow({ lesson }: { lesson: LibraryLesson }) {
               {lesson.handoutCount === 1 ? 'handout' : 'handouts'}
             </Badge>
           ) : null}
-          {lesson.sectionCount > 0 ? (
+          {/* The other half of the row's destination. A published lesson's
+              name already opens the stack, so what it needs beside it is the
+              way back into planning; a draft is the reverse. */}
+          {published && lesson.sectionCount > 0 ? (
+            <Button variant="outline" size="sm" asChild>
+              <Link to={`/app/lesson-planner?c=${lesson.id}`}>
+                Keep planning
+              </Link>
+            </Button>
+          ) : lesson.sectionCount > 0 ? (
             <Button variant="outline" size="sm" asChild>
               <Link to={`/app/lesson-planner/${lesson.id}/packet`}>Stack</Link>
             </Button>

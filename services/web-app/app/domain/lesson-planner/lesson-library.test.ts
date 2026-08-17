@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import {
   buildLessonLibrary,
   classDisplayName,
+  lessonHref,
   splitDraftsAndLibrary,
 } from './lesson-library';
 
@@ -149,5 +150,37 @@ describe('splitDraftsAndLibrary', () => {
     expect(drafts.map((row) => row.id)).toEqual(['a', 'c']);
     expect(library.map((row) => row.id)).toEqual(['b']);
     expect(drafts.length + library.length).toBe(rows.length);
+  });
+});
+
+/**
+ * Drafts and the library were two names for one behaviour: both opened the
+ * conversation, so a lesson "published to my library" gave the teacher back
+ * the chat they had already finished having. What separates them is what they
+ * are for — a draft is a conversation still in progress, a published lesson is
+ * a finished thing to teach from.
+ */
+describe('lessonHref', () => {
+  test('opens a published lesson on its stack, which is the lesson itself', () => {
+    expect(
+      lessonHref({ id: 'lesson-1', published: true, sectionCount: 3 })
+    ).toBe('/app/lesson-planner/lesson-1/packet');
+  });
+
+  test('opens a draft in the conversation, which is where the work is', () => {
+    expect(
+      lessonHref({ id: 'lesson-2', published: false, sectionCount: 3 })
+    ).toBe('/app/lesson-planner?c=lesson-2');
+  });
+
+  /**
+   * Publishing does not require keeping anything, so a published lesson can
+   * have an empty stack. Landing on a page that says "nothing in this stack
+   * yet" is worse than landing in the conversation that could fill it.
+   */
+  test('falls back to the conversation when the stack would be empty', () => {
+    expect(
+      lessonHref({ id: 'lesson-3', published: true, sectionCount: 0 })
+    ).toBe('/app/lesson-planner?c=lesson-3');
   });
 });

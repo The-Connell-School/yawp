@@ -103,6 +103,15 @@ export async function loader({ request }: LoaderFunctionArgs) {
       packetTitle: true,
       updatedAt: true,
       publishedAt: true,
+      // Whether this lesson has a stack to open onto. A published lesson opens
+      // on the stack rather than the conversation, and one with nothing kept
+      // would open on a page saying so.
+      _count: {
+        select: {
+          messages: { where: { keptAt: { not: null } } },
+          materials: true,
+        },
+      },
     },
     orderBy: [{ publishedAt: 'desc' }, { updatedAt: 'desc' }],
     take: 30,
@@ -177,6 +186,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
       id: conversation.id,
       title: conversation.packetTitle?.trim() || conversation.title,
       published: Boolean(conversation.publishedAt),
+      sectionCount:
+        conversation._count.messages + conversation._count.materials,
     })),
     builtDays,
     unitMapConversation,

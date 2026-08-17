@@ -87,6 +87,32 @@ export function buildLessonLibrary(
 }
 
 /**
+ * Where opening a lesson takes the teacher.
+ *
+ * This is the whole difference between the two lists. A draft is a
+ * conversation still in progress, so it opens in the planner where the work
+ * happens. A published lesson is a finished thing to teach from, so it opens
+ * on its stack — the outline, the deck, the handouts — with the way back into
+ * the conversation still on the page. Without this, "published to my library"
+ * handed the teacher back a chat they had already finished having, and the two
+ * lists were two names for one behaviour.
+ *
+ * Publishing does not require keeping anything, so a published lesson can have
+ * an empty stack; that one falls back to the conversation, because a page
+ * saying "nothing in this stack yet" is a worse landing than the page that
+ * could fill it.
+ */
+export function lessonHref(lesson: {
+  id: string;
+  published: boolean;
+  sectionCount: number;
+}): string {
+  return lesson.published && lesson.sectionCount > 0
+    ? `/app/lesson-planner/${lesson.id}/packet`
+    : `/app/lesson-planner?c=${lesson.id}`;
+}
+
+/**
  * The history, split in two.
  *
  * Every lesson is in exactly one list. A draft is simply one the teacher has
