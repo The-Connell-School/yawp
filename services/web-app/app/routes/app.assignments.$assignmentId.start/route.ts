@@ -1,6 +1,7 @@
 import { type ActionFunctionArgs } from 'react-router';
 import { parseFormData, validationError } from '@rvf/react-router';
 import { z } from 'zod';
+import { findStudentGroupDocument } from '~/domain/collaboration/groups.server';
 import {
   createDocumentForAssignmentType,
   DocumentCreationError,
@@ -42,6 +43,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
       assignment: {
         select: {
           assignmentTypeId: true,
+          collaborationEnabled: true,
         },
       },
       class: {
@@ -59,6 +61,35 @@ export async function action({ request, params }: ActionFunctionArgs) {
       type: 'error',
       description: 'Assignment not found.',
     });
+  }
+
+  // The same branch the class-assignment start route takes. Without it this
+  // endpoint would hand a student a personal solo document for an assignment
+  // their group already owns a draft for — the exact orphan draft the other
+  // route exists to prevent. Both are student-facing POSTs, so the guard has to
+  // live in both rather than only in the one the UI happens to use.
+  if (classAssignment.assignment.collaborationEnabled) {
+    const groupDocument = await findStudentGroupDocument({
+      classAssignmentId: classAssignment.id,
+      membershipId: profile.id,
+    });
+
+    if (!groupDocument) {
+      return redirectWithToast('/app?tab=assignments', {
+        type: 'error',
+        description:
+          'Your teacher has not opened groups for this assignment yet.',
+      });
+    }
+
+    const collabParams = new URLSearchParams({
+      exitTo: '/app?tab=assignments',
+    });
+
+    return redirectWithToast(
+      `/app/collab-documents/${groupDocument.documentId}?${collabParams}`,
+      { type: 'success', description: 'Opening your group document.' }
+    );
   }
 
   let documentId = '';
