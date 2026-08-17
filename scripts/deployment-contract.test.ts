@@ -573,6 +573,9 @@ describe('PR preview deployment contract', () => {
     expect(previewWorkflow).toContain('path: preview-control');
     expect(previewWorkflow).toContain('github.event.pull_request.head.sha');
     expect(previewWorkflow).toContain('github.event.pull_request.base.sha');
+    expect(previewWorkflow).toContain(
+      'github.event.pull_request.base.ref == github.event.repository.default_branch'
+    );
     expect(previewWorkflow).toContain('remote_control=');
     expect(previewWorkflow).toContain('PREVIEW_CONTROL_SHA=');
     expect(previewWorkflow).not.toContain(

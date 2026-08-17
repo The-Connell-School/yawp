@@ -589,7 +589,6 @@ describe('preview wake server', () => {
       domain: 'preview.yawp.school',
       recordAccess: async (pr) => accesses.push(pr),
       pollMs: 10,
-      maxBytes: 1,
     });
     await Bun.sleep(20);
 
@@ -610,7 +609,7 @@ describe('preview wake server', () => {
     follower.stop();
 
     expect(accesses.sort()).toEqual([241, 248]);
-    expect(readFileSync(accessLog, 'utf8')).toBe('');
+    expect(readFileSync(accessLog, 'utf8')).toContain('pr-241.preview.yawp.school');
   });
 
   test('does not truncate an access record appended while activity persistence is pending', async () => {
@@ -634,7 +633,6 @@ describe('preview wake server', () => {
         }
       },
       pollMs: 10,
-      maxBytes: 1,
     });
     await Bun.sleep(20);
     appendFileSync(accessLog, `${JSON.stringify({

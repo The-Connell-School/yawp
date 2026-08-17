@@ -409,7 +409,6 @@ export function startAccessLogFollower({
   domain,
   recordAccess,
   pollMs = 5000,
-  maxBytes = 50 * 1024 * 1024,
 }) {
   let initialized = false;
   let inode = null;
@@ -474,13 +473,8 @@ export function startAccessLogFollower({
       for (const result of results) {
         if (result.status === 'rejected') console.error('Preview activity recording failed', result.reason);
       }
-      if (info.size > maxBytes && offset === info.size) {
-        const latest = await handle.stat();
-        if (latest.ino === info.ino && latest.size === info.size) {
-          await writeFile(accessLog, '');
-          offset = 0;
-        }
-      }
+      // This process is only a reader. It must never truncate a file while Traefik can
+      // append to it; writer-coordinated host maintenance owns any future rotation.
     } catch (error) {
       if (error?.code === 'ENOENT') {
         initialized = true;
@@ -599,15 +593,11 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     || path.join(root, 'bootstrap', 'scripts', 'preview', 'wake-preview.sh');
   const accessLog = process.env.PREVIEW_ACCESS_LOG
     || path.join(root, 'traefik', 'logs', 'access.json');
-  const accessLogMaxBytes = Number(process.env.PREVIEW_ACCESS_LOG_MAX_BYTES || 50 * 1024 * 1024);
   const maxConcurrentWakes = Number(process.env.PREVIEW_MAX_CONCURRENT_WAKES || '2');
   const port = Number(process.env.PREVIEW_WAKE_PORT || '9876');
   const bind = process.env.PREVIEW_WAKE_BIND || '0.0.0.0';
   if (!Number.isInteger(port) || port < 1 || port > 65535) {
     throw new Error('PREVIEW_WAKE_PORT must be a valid TCP port');
-  }
-  if (!Number.isSafeInteger(accessLogMaxBytes) || accessLogMaxBytes < 1) {
-    throw new Error('PREVIEW_ACCESS_LOG_MAX_BYTES must be a positive integer');
   }
   if (!Number.isSafeInteger(maxConcurrentWakes) || maxConcurrentWakes < 1) {
     throw new Error('PREVIEW_MAX_CONCURRENT_WAKES must be a positive integer');
@@ -617,7 +607,6 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     accessLog,
     domain,
     recordAccess: operations.recordAccess,
-    maxBytes: accessLogMaxBytes,
   });
   createServer(createWakeHandler({ domain, secret, maxConcurrentWakes, ...operations })).listen(port, bind, () => {
     console.log(`Yawp preview wake service listening on ${bind}:${port}`);

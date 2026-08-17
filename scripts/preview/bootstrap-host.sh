@@ -282,7 +282,6 @@ Environment=PREVIEW_INFLIGHT_TTL_SECONDS=$INFLIGHT_TTL_SECONDS
 Environment=PREVIEW_WAKE_PORT=$WAKE_PORT
 Environment=PREVIEW_WAKE_SCRIPT=$wake_script
 Environment=PREVIEW_ACCESS_LOG=$ROOT/traefik/logs/access.json
-Environment=PREVIEW_ACCESS_LOG_MAX_BYTES=52428800
 ExecStart=$node_path $wake_server
 Restart=always
 RestartSec=2
