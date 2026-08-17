@@ -6,6 +6,7 @@ ACME_EMAIL="${PREVIEW_ACME_EMAIL:-}"
 DOMAIN="${PREVIEW_DOMAIN:-}"
 RUNNING_CAP="${PREVIEW_MAX_RUNNING:-4}"
 SLEEP_ENABLED="${PREVIEW_SLEEP_ENABLED:-true}"
+INFLIGHT_TTL_SECONDS="${PREVIEW_INFLIGHT_TTL_SECONDS:-3600}"
 WAKE_PORT="${PREVIEW_WAKE_PORT:-9876}"
 WAKE_USER="${PREVIEW_WAKE_USER:-$USER}"
 POSTGRES_PROJECT="${PREVIEW_POSTGRES_PROJECT:-yawp-preview-db}"
@@ -23,6 +24,10 @@ case "$SLEEP_ENABLED" in
   true|false) ;;
   *) echo "PREVIEW_SLEEP_ENABLED must be true or false" >&2; exit 1 ;;
 esac
+[[ "$INFLIGHT_TTL_SECONDS" =~ ^[0-9]+$ ]] || {
+  echo "PREVIEW_INFLIGHT_TTL_SECONDS must be a nonnegative integer" >&2
+  exit 1
+}
 if ! [[ "$WAKE_PORT" =~ ^[1-9][0-9]*$ ]] || (( WAKE_PORT > 65535 )); then
   echo "PREVIEW_WAKE_PORT must be a valid TCP port" >&2
   exit 1
@@ -253,6 +258,7 @@ Environment=PREVIEW_ROOT=$ROOT
 Environment=PREVIEW_DOMAIN=$DOMAIN
 Environment=PREVIEW_MAX_RUNNING=$RUNNING_CAP
 Environment=PREVIEW_SLEEP_ENABLED=$SLEEP_ENABLED
+Environment=PREVIEW_INFLIGHT_TTL_SECONDS=$INFLIGHT_TTL_SECONDS
 Environment=PREVIEW_WAKE_PORT=$WAKE_PORT
 Environment=PREVIEW_WAKE_SCRIPT=$wake_script
 Environment=PREVIEW_ACCESS_LOG=$ROOT/traefik/logs/access.json

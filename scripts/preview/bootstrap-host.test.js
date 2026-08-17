@@ -26,6 +26,18 @@ describe('bootstrap-host.sh', () => {
     expect(workflow).toContain('PREVIEW_SLEEP_ENABLED=$(shell_quote "$PREVIEW_SLEEP_ENABLED")');
   });
 
+  test('plumbs the deploy marker TTL into the wake service', () => {
+    expect(script).toContain(
+      'Environment=PREVIEW_INFLIGHT_TTL_SECONDS=$INFLIGHT_TTL_SECONDS'
+    );
+    expect(workflow).toContain(
+      "PREVIEW_INFLIGHT_TTL_SECONDS: ${{ vars.PREVIEW_INFLIGHT_TTL_SECONDS || '3600' }}"
+    );
+    expect(workflow).toContain(
+      'PREVIEW_INFLIGHT_TTL_SECONDS=$(shell_quote "$PREVIEW_INFLIGHT_TTL_SECONDS")'
+    );
+  });
+
   test('logs only the non-secret authorization marker needed for activity leases', () => {
     expect(script).toContain('--accesslog.fields.defaultmode=drop');
     expect(script).toContain('--accesslog.fields.names.RequestHost=keep');

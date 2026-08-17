@@ -276,6 +276,9 @@ export function createWakeHandler({
       if (error?.code === 'capacity-full') {
         response.setHeader('retry-after', '30');
         send(response, 503, 'Preview capacity is full; retry shortly.\n');
+      } else if (error?.code === 'deploying') {
+        response.setHeader('retry-after', '30');
+        send(response, 503, 'Preview deployment is in progress; retry shortly.\n');
       } else if (error?.code === 'not-resident') {
         send(response, 404, 'Preview is no longer resident.\n');
       } else {
@@ -387,7 +390,8 @@ export function startAccessLogFollower({
 
 function classifyWakeError(error) {
   const message = `${error?.stderr || ''}\n${error?.message || ''}`;
-  if (/capacity/i.test(message)) error.code = 'capacity-full';
+  if (/deployment is in progress/i.test(message)) error.code = 'deploying';
+  else if (/capacity/i.test(message)) error.code = 'capacity-full';
   else if (/not resident/i.test(message)) error.code = 'not-resident';
   return error;
 }

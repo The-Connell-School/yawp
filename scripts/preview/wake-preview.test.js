@@ -158,6 +158,43 @@ describe('wake-preview.sh', () => {
     expect(readFileSync(path.join(preview, 'state-marker'), 'utf8')).toBe('state-241\n');
   });
 
+  test('does not start a sleeping preview while its source deployment is in flight', () => {
+    const root = makeRoot();
+    makePreview(root, 241);
+    const inflight = path.join(root, 'inflight', 'pr-241');
+    mkdirSync(inflight, { recursive: true });
+    writeFileSync(path.join(inflight, '1000-1'), '');
+    const docker = makeDockerStub(root);
+
+    const result = run(root, 241, docker, {
+      PREVIEW_NOW_EPOCH: String(Math.floor(Date.now() / 1000)),
+      PREVIEW_INFLIGHT_TTL_SECONDS: '3600',
+    });
+
+    expect(result.status).toBe(11);
+    expect(result.stderr).toContain('deployment is in progress');
+    expect(readFileSync(docker.log, 'utf8')).not.toContain(' start');
+    expect(readFileSync(docker.log, 'utf8')).not.toContain(' stop');
+  });
+
+  test('ignores a stale deployment marker when waking a sleeping preview', () => {
+    const root = makeRoot();
+    makePreview(root, 241);
+    const inflight = path.join(root, 'inflight', 'pr-241');
+    mkdirSync(inflight, { recursive: true });
+    const marker = path.join(inflight, '1000-1');
+    writeFileSync(marker, '');
+    const docker = makeDockerStub(root);
+
+    const result = run(root, 241, docker, {
+      PREVIEW_NOW_EPOCH: String(Math.floor(Date.now() / 1000) + 7200),
+      PREVIEW_INFLIGHT_TTL_SECONDS: '3600',
+    });
+
+    expect(result.status).toBe(0);
+    expect(readFileSync(docker.log, 'utf8')).toContain(' start');
+  });
+
   test('records the wake lease from the completed wake instead of process startup', () => {
     const root = makeRoot();
     makePreview(root, 241);
