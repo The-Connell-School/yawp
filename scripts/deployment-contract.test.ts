@@ -584,7 +584,7 @@ describe('PR preview deployment contract', () => {
     expect(enforcer).toContain('is_inflight');
   });
 
-  test('preview deployment uses reviewed base control-plane code with protected host credentials', () => {
+  test('preview deployment uses current reviewed control-plane code with protected host credentials', () => {
     const previewWorkflow = readRepoFile(
       '.github/workflows/preview-environments.yml'
     );
@@ -593,11 +593,19 @@ describe('PR preview deployment contract', () => {
     expect(previewWorkflow).toContain('path: pr-source');
     expect(previewWorkflow).toContain('path: preview-control');
     expect(previewWorkflow).toContain('github.event.pull_request.head.sha');
-    expect(previewWorkflow).toContain('github.event.pull_request.base.sha');
+    expect(previewWorkflow).toContain(
+      'ref: ${{ github.event.repository.default_branch }}'
+    );
+    expect(previewWorkflow).not.toContain(
+      'github.event.pull_request.base.sha'
+    );
     expect(previewWorkflow).toContain(
       'github.event.pull_request.base.ref == github.event.repository.default_branch'
     );
     expect(previewWorkflow).toContain('remote_control=');
+    expect(previewWorkflow).toContain(
+      'control_sha="$(git -C preview-control rev-parse HEAD)"'
+    );
     expect(previewWorkflow).toContain('PREVIEW_CONTROL_SHA=');
     expect(previewWorkflow).not.toContain(
       'cd $(shell_quote "$remote_source") && ${remote_env[*]} bash scripts/preview/admit-and-deploy.sh'
