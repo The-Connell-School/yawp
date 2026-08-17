@@ -12,6 +12,19 @@ function run(command, args, options = {}) {
   return spawnSync(command, args, { encoding: 'utf8', ...options });
 }
 
+function createDatabase(container, database) {
+  let result;
+  // A fresh Postgres image briefly accepts connections on its temporary init server,
+  // then restarts into the final server. Retry across that handoff instead of treating
+  // pg_isready's first success as a stable creation boundary.
+  for (let attempt = 0; attempt < 60; attempt += 1) {
+    result = run('docker', ['exec', container, 'createdb', '-U', 'postgres', database]);
+    if (result.status === 0) return result;
+    Bun.sleepSync(250);
+  }
+  return result;
+}
+
 afterAll(() => {
   for (const resource of resources.splice(0)) {
     if (resource.container) run('docker', ['rm', '-f', resource.container]);
@@ -73,14 +86,13 @@ integrationTest('migrates a sleeping resident and denies its role access to anot
     Bun.sleepSync(250);
   }
   expect(ready).toBe(true);
-  expect(run('docker', ['exec', container, 'createdb', '-U', 'postgres', 'yawp_pr_241']).status).toBe(0);
-  expect(run('docker', ['exec', container, 'createdb', '-U', 'postgres', 'yawp_pr_240']).status).toBe(0);
-  expect(run('docker', ['exec', container, 'createdb', '-U', 'postgres', 'yawp_pr_242']).status).toBe(0);
-  expect(run('docker', ['exec', container, 'createdb', '-U', 'postgres', 'yawp_template']).status).toBe(0);
-  expect(run('docker', [
-    'exec', container, 'createdb', '-U', 'postgres',
-    'yawp_template_sanitized_20260814T132612Z_9c2135a3',
-  ]).status).toBe(0);
+  expect(createDatabase(container, 'yawp_pr_241').status).toBe(0);
+  expect(createDatabase(container, 'yawp_pr_240').status).toBe(0);
+  expect(createDatabase(container, 'yawp_pr_242').status).toBe(0);
+  expect(createDatabase(container, 'yawp_template').status).toBe(0);
+  expect(
+    createDatabase(container, 'yawp_template_sanitized_20260814T132612Z_9c2135a3').status,
+  ).toBe(0);
   expect(run('docker', [
     'exec', container, 'psql', '-U', 'postgres', '-d', 'yawp_pr_241', '-c',
     'CREATE TABLE retained_state (id integer primary key); INSERT INTO retained_state VALUES (1);',
