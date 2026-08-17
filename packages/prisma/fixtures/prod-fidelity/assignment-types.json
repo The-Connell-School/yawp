@@ -123,6 +123,7 @@
     "description": "International Expansion Plan — create a firm and prepare a report to present to CEO-level executives that offers a recommendation for expanding into a new international market.\r\n",
     "position": 4,
     "systemKey": null,
+    "collaborationSupported": true,
     "archivedAt": null,
     "ownerOrgId": null,
     "ownerTeacherId": null

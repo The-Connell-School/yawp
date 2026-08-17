@@ -78,6 +78,10 @@ model AssignmentType {
   gradingPromptConfigJson            Json?
   gradingOutputSchemaJson            Json?
   gradingCalibrationNotes            String?
+  /// Prototype gate for collaborative drafts. Collaboration is offered only for
+  /// assignment types that opt in, which keeps the pilot to one course rather
+  /// than every kind of writing in the product.
+  collaborationSupported             Boolean                       @default(false)
   gradingAssistantVersion            Int                           @default(1)
   gradingAssistantSourceTemplateId   String?
   gradingAssistantSourceTemplateSlug String?
