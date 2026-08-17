@@ -1,7 +1,8 @@
 name: PR preview
 
 on:
-  # The workflow and host-side control plane always come from the reviewed base commit.
+  # The workflow and host-side control plane always come from the current reviewed
+  # default branch. A long-lived PR's base SHA can lag behind default-branch repairs.
   # Pull-request code is synced separately and runs only inside the preview containers.
   pull_request_target:
     types: [opened, synchronize, reopened, ready_for_review, labeled, unlabeled, closed]
@@ -87,7 +88,7 @@ jobs:
       - name: Checkout reviewed preview control plane
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.base.sha }}
+          ref: ${{ github.event.repository.default_branch }}
           path: preview-control
           persist-credentials: false
 
@@ -162,6 +163,7 @@ jobs:
           ssh_target="${PREVIEW_SSH_USER}@${PREVIEW_HOST}"
           remote_source="${PREVIEW_ROOT}/sources/pr-${PR_NUMBER}"
           remote_control="${PREVIEW_ROOT}/control/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          control_sha="$(git -C preview-control rev-parse HEAD)"
           inflight_marker="${PREVIEW_ROOT}/inflight/pr-${PR_NUMBER}/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           quarantine_marker="${PREVIEW_ROOT}/quarantine/pr-${PR_NUMBER}"
           remote_env=(
@@ -196,7 +198,7 @@ jobs:
             "PREVIEW_LOGIN_EMAIL=$(shell_quote "$PREVIEW_LOGIN_EMAIL")"
             "PREVIEW_LOGIN_PASSWORD=$(shell_quote "$PREVIEW_LOGIN_PASSWORD")"
             "SOURCE_DIR=$(shell_quote "$remote_source")"
-            "PREVIEW_CONTROL_SHA=$(shell_quote "${{ github.event.pull_request.base.sha }}")"
+            "PREVIEW_CONTROL_SHA=$(shell_quote "$control_sha")"
           )
           set +e
           ssh -i ~/.ssh/preview_key "$ssh_target" \
