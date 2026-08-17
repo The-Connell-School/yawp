@@ -12,7 +12,7 @@ on:
         default: '14'
 
 concurrency:
-  group: demo-database-backup
+  group: demo-environment
   cancel-in-progress: false
 
 permissions:
@@ -76,8 +76,10 @@ jobs:
           local_file="$local_dir/$(basename "$remote_file")"
           scp -i ~/.ssh/demo_key "$ssh_target:$remote_file" "$local_file"
           scp -i ~/.ssh/demo_key "$ssh_target:${remote_file}.sha256" "${local_file}.sha256"
-          sed -i "s#${remote_file}#${local_file}#" "${local_file}.sha256"
-          sha256sum --check "${local_file}.sha256"
+          expected="$(awk '{print $1}' "${local_file}.sha256")"
+          actual="$(sha256sum "$local_file" | awk '{print $1}')"
+          test "$actual" = "$expected" || { echo "Backup checksum mismatch" >&2; exit 1; }
+          printf '%s  %s\n' "$actual" "$(basename "$local_file")" > "${local_file}.sha256"
           echo "local_file=$local_file" >> "$GITHUB_OUTPUT"
           echo "filename=$(basename "$local_file")" >> "$GITHUB_OUTPUT"
 
@@ -112,8 +114,22 @@ jobs:
               echo "Refusing to delete unexpected S3 key: $key" >&2
               exit 1
             }
-            aws s3api delete-object --bucket "$bucket" --key "$key" >/dev/null
-            aws s3api delete-object --bucket "$bucket" --key "${key}.sha256" >/dev/null
+            for object_key in "$key" "${key}.sha256"; do
+              mapfile -t version_ids < <(
+                aws s3api list-object-versions \
+                  --bucket "$bucket" \
+                  --prefix "$object_key" \
+                  --query "[Versions[?Key=='$object_key'].VersionId, DeleteMarkers[?Key=='$object_key'].VersionId][]" \
+                  --output text | tr '\t' '\n'
+              )
+              for version_id in "${version_ids[@]}"; do
+                [[ -n "$version_id" && "$version_id" != "None" ]] || continue
+                aws s3api delete-object \
+                  --bucket "$bucket" \
+                  --key "$object_key" \
+                  --version-id "$version_id" >/dev/null
+              done
+            done
           done
 
           echo "Validated demo backup copied to $destination/$FILENAME"
