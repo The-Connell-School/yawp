@@ -55,7 +55,6 @@ import useBreakpoint from '~/hooks/useBreakpoint';
 import { useUser } from '~/hooks/useUser';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
-import { documentReadWhere } from '~/utils/document-access.server';
 import { hasEffectivePlatformAdmin } from '~/utils/preview-access.server';
 import { redirectWithToast } from '~/utils/toast.server';
 import { ensureAssignmentModuleSessionsForDocument } from '~/domain/documents.server';
@@ -202,9 +201,26 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const doc = await prisma.document.findFirst({
     where: {
       id: params.id,
-      // Read scope: the owning student, a teacher of their class, and — for a
-      // collaborative draft — its active co-authors.
-      ...documentReadWhere({ profileId: profile.id, isAdmin: user?.isAdmin }),
+      ...(hasEffectivePlatformAdmin(user?.isAdmin)
+        ? {}
+        : {
+            OR: [
+              { membershipId: profile.id },
+              {
+                membership: {
+                  classesAsStudent: {
+                    some: {
+                      teachers: {
+                        some: {
+                          id: profile.id,
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            ],
+          }),
     },
     select: {
       id: true,

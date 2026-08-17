@@ -3,7 +3,7 @@ import { type ActionFunctionArgs } from 'react-router';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { contentHash as computeContentHash } from '~/utils/content-hash';
 import { prisma } from '~/utils/db.server';
-import { documentReadWhere } from '~/utils/document-access.server';
+import { hasEffectivePlatformAdmin } from '~/utils/preview-access.server';
 
 const REVISION_INTERVAL_MS = 30 * 60 * 1000; // 30 minutes
 
@@ -30,13 +30,24 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
   const document = await prisma.document.findFirst({
     where: {
       id: params.id,
-      // Read scope, not author scope, and deliberately so: this endpoint has
-      // always accepted saves from a teacher of the owning student's class, and
-      // narrowing that here would break existing teacher workflows. Whether
-      // teachers should write into student drafts at all is an open product
-      // question, not something to change as a side effect of adding groups.
-      // Read scope now also covers a collaborative draft's co-authors.
-      ...documentReadWhere({ profileId: profile.id, isAdmin: user.isAdmin }),
+      ...(hasEffectivePlatformAdmin(user.isAdmin)
+        ? {}
+        : {
+            OR: [
+              { membershipId: profile.id },
+              {
+                membership: {
+                  classesAsStudent: {
+                    some: {
+                      teachers: {
+                        some: { id: profile.id },
+                      },
+                    },
+                  },
+                },
+              },
+            ],
+          }),
     },
     select: {
       id: true,

@@ -4,9 +4,9 @@ import { parseFormData, validationError } from '@rvf/react-router';
 import { z } from 'zod';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
-import { documentReadWhere } from '~/utils/document-access.server';
 import { isDocumentSubmittableContent } from '~/utils/document-submittable';
 import { redirectWithToast } from '~/utils/toast.server';
+import { hasEffectivePlatformAdmin } from '~/utils/preview-access.server';
 
 const POST = z.object({ documentId: z.string(), title: z.string().optional() });
 
@@ -28,11 +28,24 @@ const actionImpl = async ({ request }: ActionFunctionArgs) => {
     where: {
       id: data.documentId,
       deletedAt: null,
-      // Read scope, matching this route's existing behavior, now also covering a
-      // collaborative draft's co-authors. Which group member may submit on the
-      // group's behalf is an open product question handled above this predicate,
-      // not by narrowing it here.
-      ...documentReadWhere({ profileId: profile.id, isAdmin: user?.isAdmin }),
+      ...(hasEffectivePlatformAdmin(user?.isAdmin)
+        ? {}
+        : {
+            OR: [
+              { membershipId: profile.id },
+              {
+                membership: {
+                  classesAsStudent: {
+                    some: {
+                      teachers: {
+                        some: { id: profile.id },
+                      },
+                    },
+                  },
+                },
+              },
+            ],
+          }),
     },
     select: {
       id: true,
