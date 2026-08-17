@@ -54,7 +54,7 @@ const get = () =>
 
 const scoped = ({
   collaborationEnabled = true,
-  orgEnabled = true,
+  typeSupported = true,
   mode = 'teacher',
   students = [
     { id: 'm1', user: { name: 'Ada', email: 'ada@example.com' } },
@@ -68,12 +68,12 @@ const scoped = ({
     collaborationEnabled,
     collaborationGroupSize: 3,
     collaborationGroupMode: mode,
+    assignmentType: { collaborationSupported: typeSupported },
   },
   class: {
     id: 'class-1',
     title: 'English 9',
     period: '3',
-    school: { organization: { collaborativeDraftsEnabled: orgEnabled } },
     students,
   },
 });
@@ -115,17 +115,17 @@ describe('class assignment groups', () => {
       await expect(get()).rejects.toBeDefined();
     });
 
-    test('the loader 404s when the organization is not in the rollout', async () => {
+    test('the loader 404s when the assignment type is outside the pilot', async () => {
       prisma.classAssignment.findFirst.mockResolvedValue(
-        scoped({ orgEnabled: false })
+        scoped({ typeSupported: false })
       );
 
       await expect(get()).rejects.toBeDefined();
     });
 
-    test('the action refuses when the organization is not in the rollout', async () => {
+    test('the action refuses when the assignment type is outside the pilot', async () => {
       prisma.classAssignment.findFirst.mockResolvedValue(
-        scoped({ orgEnabled: false })
+        scoped({ typeSupported: false })
       );
 
       const result: any = await post({ intent: 'open' });

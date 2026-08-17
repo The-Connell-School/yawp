@@ -2,6 +2,7 @@ import { afterAll, beforeEach, describe, expect, mock, test } from 'bun:test';
 
 const prisma = {
   orgMembership: { findMany: mock(), findFirst: mock() },
+  assignmentType: { findFirst: mock() },
   document: { findFirst: mock(), update: mock() },
   documentGroup: { create: mock() },
 };
@@ -28,11 +29,7 @@ const ME = 'member-me';
 const MATE = 'member-mate';
 const OTHER = 'member-stranger';
 
-const actor = ({ sharingEnabled = true, role = 'STUDENT' } = {}) => ({
-  id: ME,
-  role,
-  organization: { studentDocumentSharingEnabled: sharingEnabled },
-});
+const actor = ({ role = 'STUDENT' } = {}) => ({ id: ME, role });
 
 const classmates = [
   { id: MATE, user: { name: 'Devon K.', email: 'devon@example.com' } },
@@ -70,6 +67,9 @@ describe('createSharedDocument', () => {
   beforeEach(() => {
     prisma.orgMembership.findFirst.mockReset().mockResolvedValue(actor());
     prisma.orgMembership.findMany.mockReset().mockResolvedValue(classmates);
+    prisma.assignmentType.findFirst
+      .mockReset()
+      .mockResolvedValue({ id: 'at-1', collaborationSupported: true });
     prisma.documentGroup.create.mockReset().mockResolvedValue({
       id: 'group-1',
       documentId: 'doc-new',
@@ -106,12 +106,22 @@ describe('createSharedDocument', () => {
     expect(members).toEqual([{ membershipId: ME }, { membershipId: MATE }]);
   });
 
-  test('refuses when the school has not enabled student sharing', async () => {
-    prisma.orgMembership.findFirst.mockResolvedValue(
-      actor({ sharingEnabled: false })
-    );
+  test('refuses an assignment type outside the collaboration pilot', async () => {
+    // The same gate the teacher road and the transport enforce: only types with
+    // collaborationSupported can become rooms.
+    prisma.assignmentType.findFirst.mockResolvedValue({
+      id: 'at-1',
+      collaborationSupported: false,
+    });
 
-    await expect(call()).rejects.toThrow(/not turned on for your school/i);
+    await expect(call()).rejects.toThrow(/cannot be written together/i);
+    expect(createDocumentForAssignmentType).not.toHaveBeenCalled();
+  });
+
+  test('refuses an assignment type that does not exist', async () => {
+    prisma.assignmentType.findFirst.mockResolvedValue(null);
+
+    await expect(call()).rejects.toThrow(DocumentShareError);
     expect(createDocumentForAssignmentType).not.toHaveBeenCalled();
   });
 
@@ -171,6 +181,7 @@ describe('shareDocumentCopy', () => {
       html: '<p>Work in progress.</p>',
       text: 'Work in progress.',
       assignmentTypeId: 'at-1',
+      assignmentType: { collaborationSupported: true },
     });
     prisma.document.update.mockReset().mockResolvedValue({});
     prisma.documentGroup.create.mockReset().mockResolvedValue({
@@ -258,8 +269,23 @@ describe('shareDocumentCopy', () => {
       html: null,
       text: null,
       assignmentTypeId: 'at-1',
+      assignmentType: { collaborationSupported: true },
     });
 
     await expect(call()).resolves.toMatchObject({ html: '' });
+  });
+
+  test('refuses a draft whose kind of writing is outside the pilot', async () => {
+    prisma.document.findFirst.mockResolvedValue({
+      id: 'doc-source',
+      title: 'Solo only',
+      html: '<p>x</p>',
+      text: 'x',
+      assignmentTypeId: 'at-solo',
+      assignmentType: { collaborationSupported: false },
+    });
+
+    await expect(call()).rejects.toThrow(/cannot be written together/i);
+    expect(prisma.documentGroup.create).not.toHaveBeenCalled();
   });
 });

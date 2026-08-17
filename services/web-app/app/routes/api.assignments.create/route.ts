@@ -128,7 +128,6 @@ export async function action({ request }: ActionFunctionArgs) {
         select: {
           id: true,
           organizationId: true,
-          organization: { select: { collaborativeDraftsEnabled: true } },
         },
       },
     },
@@ -140,14 +139,6 @@ export async function action({ request }: ActionFunctionArgs) {
       { status: 404 }
     );
   }
-
-  // Rollout gate. Applied after the class query so it can see every target
-  // organization, and forces collaboration off rather than failing when a school
-  // is not in the rollout.
-  const collaboration = applyCollaborationRolloutGate(
-    collaborationResult.value,
-    classes.map((klass) => klass.school.organization.collaborativeDraftsEnabled)
-  );
 
   const gradingIntent = parseAssignmentGradingIntent(formData);
   if (gradingIntent && !gradingIntent.success) {
@@ -171,7 +162,7 @@ export async function action({ request }: ActionFunctionArgs) {
       id: assignmentTypeId,
       archivedAt: null,
     },
-    select: { id: true, systemKey: true },
+    select: { id: true, systemKey: true, collaborationSupported: true },
   });
 
   if (!assignmentTypeAvailable || !assignmentType) {
@@ -183,6 +174,14 @@ export async function action({ request }: ActionFunctionArgs) {
       { status: 400 }
     );
   }
+
+  // Rollout gate. Applied here rather than at parse time because it needs the
+  // resolved assignment type, and it forces collaboration off rather than
+  // failing: a type outside the pilot yields an ordinary solo assignment.
+  const collaboration = applyCollaborationRolloutGate(
+    collaborationResult.value,
+    assignmentType.collaborationSupported
+  );
 
   const deployClassIds = classes.map((klass) => klass.id);
 

@@ -181,22 +181,14 @@ describe('applyCollaborationRolloutGate', () => {
     collaborationGroupSize: 3,
   };
 
-  test('passes settings through when every target organization is enabled', () => {
-    expect(applyCollaborationRolloutGate(on, [true, true])).toEqual(on);
+  test('passes settings through when the assignment type supports collaboration', () => {
+    expect(applyCollaborationRolloutGate(on, true)).toEqual(on);
   });
 
-  test('forces collaboration off when any target organization is not enabled', () => {
-    // Fail closed, and force off rather than erroring: a teacher whose school
-    // is not in the rollout gets an ordinary solo assignment, not a dead end.
-    expect(applyCollaborationRolloutGate(on, [true, false])).toEqual({
-      collaborationEnabled: false,
-      collaborationGroupMode: 'teacher',
-      collaborationGroupSize: null,
-    });
-  });
-
-  test('forces collaboration off when there are no target organizations', () => {
-    expect(applyCollaborationRolloutGate(on, [])).toEqual({
+  test('forces collaboration off for an assignment type that does not', () => {
+    // Fail closed, and force off rather than erroring: a teacher who picks a
+    // type outside the pilot gets an ordinary solo assignment, not a dead end.
+    expect(applyCollaborationRolloutGate(on, false)).toEqual({
       collaborationEnabled: false,
       collaborationGroupMode: 'teacher',
       collaborationGroupSize: null,
@@ -209,6 +201,6 @@ describe('applyCollaborationRolloutGate', () => {
       collaborationGroupMode: 'teacher' as const,
       collaborationGroupSize: null,
     };
-    expect(applyCollaborationRolloutGate(off, [true])).toEqual(off);
+    expect(applyCollaborationRolloutGate(off, true)).toEqual(off);
   });
 });

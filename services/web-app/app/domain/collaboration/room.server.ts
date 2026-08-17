@@ -9,14 +9,17 @@ import { type Prisma } from '@app/prisma';
  * token endpoint hands out access it should not, while a stale copy in the
  * dual-write silently stops persisting a group's work.
  *
- * A document qualifies only if it has an opened group, and that group's road is
- * permitted for its organization:
+ * A document qualifies only if it has an opened group, its assignment type opts
+ * into collaboration, and its group's road is permitted:
  *
- * - `assignment` — teacher-arranged group work. Needs the assignment's own toggle
- *   plus `Organization.collaborativeDraftsEnabled`.
- * - `student-share` — a student's own shared draft. Needs
- *   `Organization.studentDocumentSharingEnabled`, and no assignment at all, since
- *   these drafts are not tied to one.
+ * - `assignment` — teacher-arranged group work. Needs the assignment's own toggle.
+ * - `student-share` — a student's own shared draft, which has no assignment at all.
+ *
+ * `AssignmentType.collaborationSupported` is the prototype gate and applies to both
+ * roads. It replaces the organization-level flags in this predicate: those default
+ * to false, which is right for a real rollout but made the feature invisible
+ * everywhere including preview. Scoping to one assignment type keeps the pilot
+ * narrow while letting it actually be seen.
  *
  * Every document that existed before collaborative drafts has no group, so it
  * matches neither branch and is never treated as a room.
@@ -24,20 +27,13 @@ import { type Prisma } from '@app/prisma';
 export function collaborationRoomWhere(): Prisma.DocumentWhereInput {
   return {
     group: { is: { openedAt: { not: null } } },
+    assignmentType: { is: { collaborationSupported: true } },
     OR: [
       {
         group: { is: { kind: 'assignment' } },
         assignment: { is: { collaborationEnabled: true } },
-        membership: {
-          is: { organization: { is: { collaborativeDraftsEnabled: true } } },
-        },
       },
-      {
-        group: { is: { kind: 'student-share' } },
-        membership: {
-          is: { organization: { is: { studentDocumentSharingEnabled: true } } },
-        },
-      },
+      { group: { is: { kind: 'student-share' } } },
     ],
   };
 }

@@ -56,6 +56,7 @@ async function requireTeacherClassAssignment(
           collaborationEnabled: true,
           collaborationGroupSize: true,
           collaborationGroupMode: true,
+          assignmentType: { select: { collaborationSupported: true } },
         },
       },
       class: {
@@ -63,11 +64,6 @@ async function requireTeacherClassAssignment(
           id: true,
           title: true,
           period: true,
-          school: {
-            select: {
-              organization: { select: { collaborativeDraftsEnabled: true } },
-            },
-          },
           students: {
             orderBy: { id: 'asc' },
             select: { id: true, user: { select: { name: true, email: true } } },
@@ -91,7 +87,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   if (
     !classAssignment ||
     !classAssignment.assignment.collaborationEnabled ||
-    !classAssignment.class.school.organization.collaborativeDraftsEnabled
+    !classAssignment.assignment.assignmentType.collaborationSupported
   ) {
     // Indistinguishable from nonexistent for anyone who is not this class's
     // teacher, and for any assignment that is not a collaborative one.
@@ -170,7 +166,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
   if (
     !classAssignment ||
     !classAssignment.assignment.collaborationEnabled ||
-    !classAssignment.class.school.organization.collaborativeDraftsEnabled
+    !classAssignment.assignment.assignmentType.collaborationSupported
   ) {
     return redirectWithToast('/app', {
       type: 'error',

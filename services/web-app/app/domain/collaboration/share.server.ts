@@ -9,8 +9,10 @@ import { prisma } from '~/utils/db.server';
  * It converges on the same `DocumentGroup` machinery the teacher-assigned road
  * uses, which is the point — `documentAuthorWhere`, the token endpoint, the
  * collaborative editor, the webhook and the dual-write all work unchanged. The
- * only differences are who may create a group (`kind: 'student-share'`) and which
- * gate permits it (`Organization.studentDocumentSharingEnabled`).
+ * only difference is who may create a group (`kind: 'student-share'`); the gate is
+ * the same one the teacher road uses, `AssignmentType.collaborationSupported`, so
+ * a student cannot open a room of a kind the collaborative page would then refuse
+ * to serve.
  *
  * Two entry points, because a student may not have started writing yet:
  *
@@ -67,19 +69,11 @@ async function resolveShareParticipants({
 }) {
   const actor = await prisma.orgMembership.findFirst({
     where: { id: membershipId, role: 'STUDENT', isActive: true },
-    select: {
-      id: true,
-      organization: { select: { studentDocumentSharingEnabled: true } },
-    },
+    select: { id: true },
   });
 
   if (!actor) {
     throw new DocumentShareError('Only students can share their own drafts.');
-  }
-  if (!actor.organization.studentDocumentSharingEnabled) {
-    throw new DocumentShareError(
-      'Sharing drafts with classmates is not turned on for your school.'
-    );
   }
 
   const invited = Array.from(new Set(inviteMembershipIds)).filter(
@@ -108,6 +102,27 @@ async function resolveShareParticipants({
   }
 
   return { memberIds: [membershipId, ...invited] };
+}
+
+/**
+ * The pilot gate, stated once for both entry points.
+ *
+ * A student-shared draft becomes a room, and the collaborative page, the token
+ * endpoint and the dual-write all require `AssignmentType.collaborationSupported`.
+ * Refusing here rather than there is the difference between "you cannot share this
+ * kind of writing" and a document that exists but silently will not sync.
+ */
+async function requireCollaborativeAssignmentType(assignmentTypeId: string) {
+  const assignmentType = await prisma.assignmentType.findFirst({
+    where: { id: assignmentTypeId, archivedAt: null },
+    select: { id: true, collaborationSupported: true },
+  });
+
+  if (!assignmentType?.collaborationSupported) {
+    throw new DocumentShareError(
+      'That kind of writing cannot be written together yet.'
+    );
+  }
 }
 
 /**
@@ -157,6 +172,8 @@ export async function createSharedDocument({
     membershipId,
     inviteMembershipIds,
   });
+
+  await requireCollaborativeAssignmentType(assignmentTypeId);
 
   const created = await createDocumentForAssignmentType({
     membershipId,
@@ -210,11 +227,17 @@ export async function shareDocumentCopy({
       html: true,
       text: true,
       assignmentTypeId: true,
+      assignmentType: { select: { collaborationSupported: true } },
     },
   });
 
   if (!source) {
     throw new DocumentShareError('That draft is not yours to share.');
+  }
+  if (!source.assignmentType.collaborationSupported) {
+    throw new DocumentShareError(
+      'That kind of writing cannot be written together yet.'
+    );
   }
 
   const created = await createDocumentForAssignmentType({

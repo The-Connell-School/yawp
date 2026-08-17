@@ -103,8 +103,13 @@ function responseStatus(response: any) {
 function mockAssignmentTypeAvailable({
   id = 'at-1',
   systemKey = 'generic_essay',
+  collaborationSupported = false,
 } = {}) {
-  prisma.assignmentType.findFirst.mockResolvedValue({ id, systemKey });
+  prisma.assignmentType.findFirst.mockResolvedValue({
+    id,
+    systemKey,
+    collaborationSupported,
+  });
 }
 
 describe('api.assignments.create', () => {
@@ -130,8 +135,8 @@ describe('api.assignments.create', () => {
       organization: { id: 'org-1', name: 'Org' },
     });
     prisma.class.findMany.mockResolvedValue([
-      { id: 'class-1', school: { id: 'school-1', organizationId: 'org-1', organization: { collaborativeDraftsEnabled: false } } },
-      { id: 'class-2', school: { id: 'school-2', organizationId: 'org-1', organization: { collaborativeDraftsEnabled: false } } },
+      { id: 'class-1', school: { id: 'school-1', organizationId: 'org-1' } },
+      { id: 'class-2', school: { id: 'school-2', organizationId: 'org-1' } },
     ]);
     prisma.organizationAssignmentType.findMany.mockResolvedValue([
       { organizationId: 'org-1', assignmentTypeId: 'at-1' },
@@ -178,7 +183,7 @@ describe('api.assignments.create', () => {
         id: 'at-1',
         archivedAt: null,
       },
-      select: { id: true, systemKey: true },
+      select: { id: true, systemKey: true, collaborationSupported: true },
     });
     expect(createAssignmentDeployedToClasses).toHaveBeenCalledWith({
       data: expect.objectContaining({
@@ -359,7 +364,7 @@ describe('api.assignments.create', () => {
 
   test('creates ungraded assignments without a point value', async () => {
     prisma.class.findMany.mockResolvedValueOnce([
-      { id: 'class-1', school: { id: 'school-1', organizationId: 'org-1', organization: { collaborativeDraftsEnabled: false } } },
+      { id: 'class-1', school: { id: 'school-1', organizationId: 'org-1' } },
     ]);
 
     const response = await action({
@@ -387,7 +392,7 @@ describe('api.assignments.create', () => {
 
   test('rejects invalid graded point values before creating assignments', async () => {
     prisma.class.findMany.mockResolvedValueOnce([
-      { id: 'class-1', school: { id: 'school-1', organizationId: 'org-1', organization: { collaborativeDraftsEnabled: false } } },
+      { id: 'class-1', school: { id: 'school-1', organizationId: 'org-1' } },
     ]);
 
     const response = await action({
@@ -413,7 +418,7 @@ describe('api.assignments.create', () => {
 
   test('rejects unowned classes', async () => {
     prisma.class.findMany.mockResolvedValue([
-      { id: 'class-1', school: { id: 'school-1', organizationId: 'org-1', organization: { collaborativeDraftsEnabled: false } } },
+      { id: 'class-1', school: { id: 'school-1', organizationId: 'org-1' } },
     ]);
 
     const response = await action({
@@ -454,7 +459,7 @@ describe('api.assignments.create', () => {
         id: 'at-forbidden',
         archivedAt: null,
       },
-      select: { id: true, systemKey: true },
+      select: { id: true, systemKey: true, collaborationSupported: true },
     });
     expect(createAssignmentDeployedToClasses).not.toHaveBeenCalled();
   });
@@ -583,7 +588,7 @@ describe('api.assignments.create', () => {
 
   test('rejects AP History assignment creation without a library entry id', async () => {
     prisma.class.findMany.mockResolvedValue([
-      { id: 'class-1', school: { organizationId: 'org-1', organization: { collaborativeDraftsEnabled: false } } },
+      { id: 'class-1', school: { organizationId: 'org-1' } },
     ]);
     mockAssignmentTypeAvailable({
       id: 'ap-type-1',
@@ -609,7 +614,7 @@ describe('api.assignments.create', () => {
 
   test('rejects unavailable AP History library entries', async () => {
     prisma.class.findMany.mockResolvedValue([
-      { id: 'class-1', school: { organizationId: 'org-1', organization: { collaborativeDraftsEnabled: false } } },
+      { id: 'class-1', school: { organizationId: 'org-1' } },
     ]);
     mockAssignmentTypeAvailable({
       id: 'ap-type-1',
@@ -710,20 +715,20 @@ describe('api.assignments.create', () => {
   });
   describe('collaborative drafts', () => {
     // One class only, so it matches the single classIds entry the helper posts.
-    const singleClass = (collaborativeDraftsEnabled: boolean) => {
+    const singleClass = () => {
       prisma.class.findMany.mockResolvedValue([
-        {
-          id: 'class-1',
-          school: {
-            id: 'school-1',
-            organizationId: 'org-1',
-            organization: { collaborativeDraftsEnabled },
-          },
-        },
+        { id: 'class-1', school: { id: 'school-1', organizationId: 'org-1' } },
       ]);
     };
-    const enableOrg = () => singleClass(true);
-    const disableOrg = () => singleClass(false);
+    // The pilot gate lives on the assignment type, not the organization.
+    const enablePilot = () => {
+      singleClass();
+      mockAssignmentTypeAvailable({ collaborationSupported: true });
+    };
+    const disablePilot = () => {
+      singleClass();
+      mockAssignmentTypeAvailable({ collaborationSupported: false });
+    };
 
     const createWithCollaboration = (
       extra: Record<string, string | string[]> = {}
@@ -743,8 +748,8 @@ describe('api.assignments.create', () => {
         params: {},
       } as any);
 
-    test('stores the settings when the organization is in the rollout', async () => {
-      enableOrg();
+    test('stores the settings when the assignment type is in the pilot', async () => {
+      enablePilot();
 
       const body = await readBody(await createWithCollaboration());
 
@@ -760,10 +765,10 @@ describe('api.assignments.create', () => {
       );
     });
 
-    test('forces collaboration off when the organization is not in the rollout', async () => {
-      // The assignment is still created: a teacher outside the rollout gets
+    test('forces collaboration off for an assignment type outside the pilot', async () => {
+      // The assignment is still created: a teacher who picks another type gets
       // ordinary solo work rather than an error.
-      disableOrg();
+      disablePilot();
 
       const body = await readBody(await createWithCollaboration());
 
@@ -781,7 +786,7 @@ describe('api.assignments.create', () => {
     test('creates a solo assignment when the form omits the toggle entirely', async () => {
       // Backward compatibility: an older deployed client posts no collaboration
       // fields at all and must keep producing single-author assignments.
-      enableOrg();
+      enablePilot();
 
       await action({
         request: requestFor({
@@ -802,7 +807,7 @@ describe('api.assignments.create', () => {
     });
 
     test('rejects an invalid group size before touching the database', async () => {
-      enableOrg();
+      enablePilot();
       createAssignmentDeployedToClasses.mockClear();
 
       const response = await createWithCollaboration({
