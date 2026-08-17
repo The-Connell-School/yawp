@@ -1,4 +1,5 @@
 import { data as dataResponse, type ActionFunctionArgs } from 'react-router';
+import { collaborationRoomWhere } from '~/domain/collaboration/room.server';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { signCollabToken } from '~/utils/collab-token.server';
 import { prisma } from '~/utils/db.server';
@@ -33,21 +34,11 @@ export async function action({ request, params }: ActionFunctionArgs) {
   const isAdmin = await getIsPlatformAdmin(userId);
 
   // Cheapest and broadest check first: is this document actually a live
-  // collaboration room? All three conditions have to hold — the assignment opted
-  // in, the organization is in the rollout, and the teacher has opened groups so
-  // a draft exists. An ordinary solo document never gets a room token, which is
-  // what keeps the two editors from meeting at runtime.
+  // collaboration room? Both roads qualify — a teacher-arranged group and a
+  // student's own shared draft — but an ordinary solo document never does, which
+  // is what keeps the two editors from meeting at runtime.
   const room = await prisma.document.findFirst({
-    where: {
-      id: documentId,
-      assignment: { is: { collaborationEnabled: true } },
-      group: { is: { openedAt: { not: null } } },
-      membership: {
-        is: {
-          organization: { is: { collaborativeDraftsEnabled: true } },
-        },
-      },
-    },
+    where: { id: documentId, ...collaborationRoomWhere() },
     select: { id: true },
   });
 

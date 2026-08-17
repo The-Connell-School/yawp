@@ -125,18 +125,30 @@ describe('api.collab.token.$id', () => {
     expect(prisma.document.findFirst).toHaveBeenCalledTimes(1);
   });
 
-  test('scopes the room gate to a collaborative, enabled, opened document', async () => {
+  test('scopes the room gate to an opened group on either road', async () => {
     queue(ROOM, ROOM);
 
     await call();
 
     const where = prisma.document.findFirst.mock.calls[0][0].where;
     expect(where.id).toBe('doc-1');
-    expect(where.assignment).toEqual({ is: { collaborationEnabled: true } });
+    // An opened group is required whichever road produced it.
     expect(where.group).toEqual({ is: { openedAt: { not: null } } });
-    expect(where.membership).toEqual({
-      is: {
-        organization: { is: { collaborativeDraftsEnabled: true } },
+
+    // Teacher-arranged work needs the assignment toggle and the drafts gate;
+    // a student share needs the sharing gate and has no assignment.
+    const [assignmentRoad, studentRoad] = where.OR;
+    expect(assignmentRoad).toEqual({
+      group: { is: { kind: 'assignment' } },
+      assignment: { is: { collaborationEnabled: true } },
+      membership: {
+        is: { organization: { is: { collaborativeDraftsEnabled: true } } },
+      },
+    });
+    expect(studentRoad).toEqual({
+      group: { is: { kind: 'student-share' } },
+      membership: {
+        is: { organization: { is: { studentDocumentSharingEnabled: true } } },
       },
     });
   });

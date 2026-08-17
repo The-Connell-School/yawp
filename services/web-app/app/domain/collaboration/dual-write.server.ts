@@ -1,3 +1,4 @@
+import { collaborationRoomWhere } from './room.server';
 import { contentHash } from '~/utils/content-hash';
 import { prisma } from '~/utils/db.server';
 import type { DocumentSnapshot } from './snapshot';
@@ -71,11 +72,7 @@ export async function applyCollabSnapshot({
   // A webhook naming an ordinary solo document must not be able to overwrite a
   // student's individual work.
   const document = await prisma.document.findFirst({
-    where: {
-      id: documentId,
-      assignment: { is: { collaborationEnabled: true } },
-      group: { is: { openedAt: { not: null } } },
-    },
+    where: { id: documentId, ...collaborationRoomWhere() },
     select: { id: true, html: true, text: true, revision: true },
   });
 

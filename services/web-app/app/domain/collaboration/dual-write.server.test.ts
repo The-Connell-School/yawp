@@ -50,13 +50,17 @@ describe('applyCollabSnapshot', () => {
 
   test('only ever writes to an opened collaborative document', async () => {
     // A webhook naming a solo document must not be able to overwrite a
-    // student's individual work.
+    // student's individual work. The gate is the shared room predicate, so this
+    // and the token endpoint cannot drift apart.
     await applyCollabSnapshot({ documentId: 'doc-1', snapshot: SNAPSHOT });
 
     const where = prisma.document.findFirst.mock.calls[0][0].where;
     expect(where.id).toBe('doc-1');
-    expect(where.assignment).toEqual({ is: { collaborationEnabled: true } });
     expect(where.group).toEqual({ is: { openedAt: { not: null } } });
+    expect(where.OR.map((branch: any) => branch.group.is.kind)).toEqual([
+      'assignment',
+      'student-share',
+    ]);
   });
 
   test('skips a document that is not a collaborative draft', async () => {

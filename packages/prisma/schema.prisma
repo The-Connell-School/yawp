@@ -158,18 +158,31 @@ model DocumentGroup {
   id                String                @id @default(cuid())
   createdAt         DateTime              @default(now()) @db.Timestamptz(6)
   updatedAt         DateTime              @default(now()) @updatedAt @db.Timestamptz(6)
-  classAssignmentId String
-  classAssignment   ClassAssignment       @relation(fields: [classAssignmentId], references: [id], onDelete: Cascade)
+  /// Which road produced this group: `assignment` for teacher-arranged group
+  /// work, `student-share` for a student who started their own shared draft.
+  /// Both converge on the same document, membership and authorization machinery;
+  /// the difference is only who may create one and which gate permits it.
+  kind              String                @default("assignment")
+  /// Null for a student share, which belongs to no class assignment. Postgres
+  /// treats NULLs as distinct in a unique index, so many student-share groups
+  /// can coexist at ordinal 0.
+  classAssignmentId String?
+  classAssignment   ClassAssignment?      @relation(fields: [classAssignmentId], references: [id], onDelete: Cascade)
   label             String
   ordinal           Int
-  /// Set when the teacher opens groups to students. Null means still editable.
+  /// Set when the group's draft becomes reachable: when a teacher opens groups,
+  /// or immediately for a student share. Null means still editable.
   openedAt          DateTime?             @db.Timestamptz(6)
+  /// Set once the room has been seeded from the document's existing HTML.
+  /// Durable guard against seeding twice, which would duplicate the content.
+  seededAt          DateTime?             @db.Timestamptz(6)
   /// The group's shared draft, provisioned when groups are opened.
   documentId        String?               @unique
   document          Document?             @relation(fields: [documentId], references: [id], onDelete: SetNull)
   members           DocumentGroupMember[]
 
   @@unique([classAssignmentId, ordinal])
+  @@index([kind])
 }
 
 /// A student's membership in one DocumentGroup.
@@ -659,6 +672,11 @@ model Organization {
   /// feature at all. Distinct from Assignment.collaborationEnabled, which is
   /// the teacher's per-assignment toggle.
   collaborativeDraftsEnabled Boolean                     @default(false)
+  /// Second gate, for the other road to a shared document: may students start
+  /// their own shared draft and invite classmates. Separate from the gate above
+  /// on purpose -- a school may want teacher-assigned group work without
+  /// students forming their own groups.
+  studentDocumentSharingEnabled Boolean                  @default(false)
   previewSeatCode           String?                      @unique
   memberships               OrgMembership[]
   invitations               Invitation[]

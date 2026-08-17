@@ -5,6 +5,7 @@ import {
   type LoaderFunctionArgs,
 } from 'react-router';
 import { useState } from 'react';
+import { collaborationRoomWhere } from '~/domain/collaboration/room.server';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import {
@@ -78,15 +79,11 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const doc = await prisma.document.findFirst({
     where: {
       id: params.id,
-      // Only an opened collaborative draft belongs on this page. Anything else
-      // — including every document that exists today — is sent back to the solo
-      // editor, so the two never mix at runtime.
-      assignment: { is: { collaborationEnabled: true } },
-      group: { is: { openedAt: { not: null } } },
-      membership: {
-        is: { organization: { is: { collaborativeDraftsEnabled: true } } },
-      },
-      ...documentReadWhere({ profileId: profile.id, isAdmin }),
+      // Only an opened collaborative draft belongs on this page — by either
+      // road. Anything else, including every document that exists today, stays
+      // with the solo editor so the two never mix at runtime.
+      ...collaborationRoomWhere(),
+      AND: [documentReadWhere({ profileId: profile.id, isAdmin })],
     },
     select: {
       id: true,
