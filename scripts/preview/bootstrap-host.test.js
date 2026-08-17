@@ -61,6 +61,18 @@ describe('bootstrap-host.sh', () => {
     expect(script).toContain('flock is required for preview host mutation locking');
   });
 
+  test('waits for shared Postgres before resident database migration', () => {
+    const readiness = script.indexOf(
+      'docker exec preview-postgres pg_isready -U postgres -d postgres'
+    );
+    const migration = script.indexOf('bash "$database_role_migration"');
+    expect(readiness).toBeGreaterThan(-1);
+    expect(migration).toBeGreaterThan(readiness);
+    expect(script).toContain(
+      'Shared preview Postgres did not become ready before resident migration'
+    );
+  });
+
   test('runs manual shared-host cleanup only from reviewed default-branch code', () => {
     expect(previewWorkflow).toContain(
       "github.event_name == 'workflow_dispatch' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)"

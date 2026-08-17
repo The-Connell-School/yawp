@@ -34,7 +34,7 @@ ensure_database_role() {
     $DOCKER exec "$POSTGRES_CONTAINER" createuser -U postgres "$role"
   fi
   $DOCKER exec "$POSTGRES_CONTAINER" psql --no-psqlrc -v ON_ERROR_STOP=1 -U postgres -d postgres -c \
-    "ALTER ROLE \"${role}\" WITH LOGIN PASSWORD '${password}' NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS; ALTER DATABASE \"${database}\" OWNER TO \"${role}\"; GRANT CONNECT ON DATABASE \"${database}\" TO \"${role}\";" \
+    "ALTER ROLE \"${role}\" WITH LOGIN PASSWORD '${password}' NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS; ALTER DATABASE \"${database}\" OWNER TO \"${role}\"; REVOKE CONNECT ON DATABASE \"${database}\" FROM PUBLIC; GRANT CONNECT ON DATABASE \"${database}\" TO \"${role}\";" \
     >/dev/null
   $DOCKER exec "$POSTGRES_CONTAINER" psql --no-psqlrc -v ON_ERROR_STOP=1 -U postgres -d "$database" -c "
 DO \$migration\$
@@ -176,12 +176,17 @@ NODE
 # Deny cross-database login before any preview starts using its isolated role. Legacy
 # containers still authenticate as the Postgres superuser during this preflight, so a
 # later resident failure remains functional without reopening tenant boundaries.
+database_list="$($DOCKER exec "$POSTGRES_CONTAINER" psql --no-psqlrc -v ON_ERROR_STOP=1 \
+  -U postgres -d postgres -Atc \
+  "SELECT datname FROM pg_database WHERE datname LIKE 'yawp\_%' ESCAPE '\\' ORDER BY datname")" || {
+  echo "Could not enumerate preview databases before role isolation" >&2
+  exit 1
+}
 while IFS= read -r database; do
   [[ "$database" =~ ^yawp_[a-z0-9_]+$ ]] || continue
   $DOCKER exec "$POSTGRES_CONTAINER" psql --no-psqlrc -v ON_ERROR_STOP=1 -U postgres -d postgres -c \
     "REVOKE CONNECT ON DATABASE \"${database}\" FROM PUBLIC;" >/dev/null
-done < <($DOCKER exec "$POSTGRES_CONTAINER" psql --no-psqlrc -U postgres -d postgres -Atc \
-  "SELECT datname FROM pg_database WHERE datname LIKE 'yawp\_%' ESCAPE '\\' ORDER BY datname")
+done <<< "$database_list"
 
 shopt -s nullglob
 for preview_dir in "$ROOT"/previews/*; do
