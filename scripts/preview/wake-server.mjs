@@ -330,7 +330,7 @@ function acceptsHtml(request) {
     .split(',')
     .some((range) => {
       const [mediaType, ...parameters] = range.split(';').map((part) => part.trim());
-      if (mediaType !== 'text/html' && mediaType !== 'application/xhtml+xml') return false;
+      if (mediaType !== 'text/html') return false;
       const qualityParameter = parameters.find((parameter) => parameter.startsWith('q='));
       if (!qualityParameter) return true;
       const quality = Number(qualityParameter.slice(2));
@@ -339,9 +339,11 @@ function acceptsHtml(request) {
 }
 
 export function renderSleepingPreviewPage({ pr, uri }) {
-  const url = new URL(trustedUri(uri), 'https://preview.invalid');
-  const invalidCode = url.searchParams.has('code');
-  const hiddenFields = [...url.searchParams.entries()]
+  const safeUri = trustedUri(uri);
+  const queryStart = safeUri.indexOf('?');
+  const searchParams = new URLSearchParams(queryStart === -1 ? '' : safeUri.slice(queryStart + 1));
+  const invalidCode = searchParams.has('code');
+  const hiddenFields = [...searchParams.entries()]
     .filter(([name]) => name !== 'code')
     .map(([name, value]) => (
       `<input type="hidden" name="${escapeHtml(name)}" value="${escapeHtml(value)}">`
@@ -503,7 +505,7 @@ export function renderSleepingPreviewPage({ pr, uri }) {
         <p class="eyebrow">PR ${pr} preview</p>
         <h1 id="sleeping-preview-title">This preview is sleeping</h1>
         <p class="description">Use the one-click link in the pull request to wake and authorize this browser automatically. In a fresh, private, or different browser, open that link or enter the access code here once.</p>
-        <form method="get" action="${escapeHtml(url.pathname)}">
+        <form method="get" action="">
           <label for="preview-access-code">Access code</label>
           <input id="preview-access-code" name="code" type="text" autocomplete="one-time-code" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="brave-otter-4193" required${invalidAttributes}>${invalidMessage}${preservedFields}
           <button type="submit">Wake preview</button>

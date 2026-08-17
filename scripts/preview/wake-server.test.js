@@ -288,7 +288,7 @@ describe('preview wake server', () => {
     expect(response.headers.get('cache-control')).toBe('no-store');
     expect(body).toContain('<title>Sleeping preview | YAWP!</title>');
     expect(body).toContain('>This preview is sleeping</h1>');
-    expect(body).toContain('action="/app/classes"');
+    expect(body).toContain('action=""');
     expect(body).toContain('name="tab" value="roster"');
     expect(body).toContain('name="note" value="&lt;script&gt;"');
     expect(body).toContain('id="preview-access-code"');
@@ -302,6 +302,32 @@ describe('preview wake server', () => {
     expect(body).toContain('fresh, private, or different browser');
     expect(body).toContain('border: 1px solid hsl(48 12% 52%);');
     expect(wakes).toEqual([]);
+  });
+
+  test('keeps double-slash origin-form paths on the current preview host', async () => {
+    const url = await listen(createRawWakeHandler({
+      domain: 'preview.yawp.school',
+      secret: 'wake-secret',
+      authorizeWake: async () => false,
+      ensureRunning: async () => ({ result: 'unused' }),
+      recordAccess: async () => {},
+    }));
+    const uri = '//tenant/app?tab=roster';
+
+    const response = await fetch(`${url}/`, {
+      headers: {
+        accept: 'text/html',
+        'x-preview-wake-secret': 'wake-secret',
+        'x-forwarded-host': 'pr-241.preview.yawp.school',
+        'x-forwarded-uri': uri,
+      },
+    });
+    const body = await response.text();
+
+    expect(response.status).toBe(401);
+    expect(body).toContain('<form method="get" action="">');
+    expect(body).toContain('name="tab" value="roster"');
+    expect(body).not.toContain('action="//tenant/app"');
   });
 
   test('returns an accessible generic error after an invalid code submission', async () => {
@@ -385,11 +411,19 @@ describe('preview wake server', () => {
     const accepted = await fetch(`${url}/app`, {
       headers: { ...headers, accept: 'application/json, text/html; q=0.5' },
     });
+    const rejectedXhtmlSubstitution = await fetch(`${url}/app`, {
+      headers: {
+        ...headers,
+        accept: 'text/html;q=0, application/xhtml+xml;q=1',
+      },
+    });
 
     expect(rejected.status).toBe(401);
     expect(rejected.headers.get('content-type')).toContain('text/plain');
     expect(accepted.status).toBe(401);
     expect(accepted.headers.get('content-type')).toContain('text/html');
+    expect(rejectedXhtmlSubstitution.status).toBe(401);
+    expect(rejectedXhtmlSubstitution.headers.get('content-type')).toContain('text/plain');
   });
 
   test('rejects requests that do not carry the bootstrap secret', async () => {
