@@ -1076,19 +1076,28 @@ describe('demo environment deployment contract', () => {
     expect(resetGuard).toContain('DEMO_RESET_CONFIRMATION');
     expect(deployScript).toContain('BACKUP_KIND=pre-reset');
     expect(deployScript).toContain('backup-database.sh');
-    expect(deployScript).toContain('install_demo_backup_schedule');
+    expect(deployScript).toContain('install_demo_backup_tooling');
   });
 
   test('demo backups are scheduled daily with configurable count retention', () => {
     const workflow = readRepoFile('.github/workflows/demo-environment.yml');
+    const backupWorkflow = readRepoFile(
+      '.github/workflows/demo-database-backup.yml'
+    );
     const deployScript = readRepoFile('scripts/preview/deploy.sh');
     const backupScript = readRepoFile('scripts/preview/backup-database.sh');
 
     expect(workflow).toContain("default: '14'");
-    expect(deployScript).toContain('yawp-demo-database-backup');
-    expect(deployScript).toContain('17 3 * * *');
+    expect(deployScript).toContain('install_demo_backup_tooling');
+    expect(deployScript).toContain('$ROOT/ops/backup-database.sh');
+    expect(deployScript).not.toContain('crontab');
+    expect(backupWorkflow).toContain("cron: '17 3 * * *'");
+    expect(backupWorkflow).toContain('aws s3 cp');
+    expect(backupWorkflow).toContain('demo-backups');
+    expect(backupWorkflow).toContain('s3api delete-object');
     expect(backupScript).toContain('BACKUP_RETENTION_COUNT');
     expect(backupScript).toContain('pg_restore --list');
+    expect(backupScript).toContain('--exit-on-error');
     expect(backupScript).toContain('.partial');
   });
 

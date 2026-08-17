@@ -22,7 +22,7 @@ afterEach(async () => {
   );
 });
 
-async function makeHarness(options: { invalidDump?: boolean } = {}) {
+async function makeHarness(options: { restoreFails?: boolean } = {}) {
   const root = await mkdtemp(path.join(tmpdir(), 'yawp-demo-backup-'));
   temporaryDirectories.push(root);
   const bin = path.join(root, 'bin');
@@ -41,11 +41,16 @@ if [[ " $* " == *" pg_dump "* ]]; then
   printf 'valid custom dump\n'
 elif [[ " $* " == *" pg_restore "* ]]; then
   cat >/dev/null
-  ${options.invalidDump ? 'exit 42' : 'exit 0'}
+  if [[ " $* " == *" --exit-on-error "* ]]; then
+    ${options.restoreFails ? 'exit 42' : 'exit 0'}
+  fi
 fi
 `
   );
   await chmod(docker, 0o755);
+  const flock = path.join(bin, 'flock');
+  await writeFile(flock, '#!/usr/bin/env bash\nexit 0\n');
+  await chmod(flock, 0o755);
 
   return {
     root,
@@ -113,6 +118,13 @@ describe('preview database backups', () => {
     expect(commands).toContain(
       'docker exec -i preview-postgres pg_restore --list'
     );
+    expect(commands).toContain(
+      'docker exec preview-postgres createdb -U postgres'
+    );
+    expect(commands).toContain('--exit-on-error --no-owner --no-acl');
+    expect(commands).toContain(
+      'docker exec preview-postgres dropdb -U postgres --force --if-exists'
+    );
   });
 
   test('retains only the newest configured scheduled dumps', async () => {
@@ -144,7 +156,7 @@ describe('preview database backups', () => {
   });
 
   test('does not publish or rotate when dump validation fails', async () => {
-    const harness = await makeHarness({ invalidDump: true });
+    const harness = await makeHarness({ restoreFails: true });
     const backupDir = path.join(harness.root, 'backups');
     await mkdir(backupDir);
     await writeFile(
@@ -159,9 +171,12 @@ describe('preview database backups', () => {
     });
 
     expect(result.exitCode).not.toBe(0);
-    expect(await readdir(backupDir)).toEqual([
+    expect((await readdir(backupDir)).filter((file) => !file.startsWith('.'))).toEqual([
       'yawp_demo-scheduled-20260816T030000Z.dump',
     ]);
+    expect(await readFile(harness.commandLog, 'utf8')).toContain(
+      '--exit-on-error --no-owner --no-acl'
+    );
   });
 
   test('rejects unsafe database names and invalid retention before docker', async () => {

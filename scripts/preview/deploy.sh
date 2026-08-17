@@ -446,22 +446,15 @@ reset_seed_preview_database() {
   DATABASE_CREATED=1
 }
 
-install_demo_backup_schedule() {
+install_demo_backup_tooling() {
   [[ "$PREVIEW_SLUG" == "demo" ]] || return 0
-  [[ "$ROOT" =~ ^/[A-Za-z0-9._/-]+$ && "$SOURCE_DIR" =~ ^/[A-Za-z0-9._/-]+$ ]] || {
+  [[ "$ROOT" =~ ^/[A-Za-z0-9._/-]+$ ]] || {
     echo "Demo backup paths cannot contain whitespace" >&2
     exit 1
   }
-
-  local marker="yawp-demo-database-backup"
-  local cron_file
-  cron_file="$(mktemp)"
-  crontab -l 2>/dev/null | grep -vF "$marker" > "$cron_file" || true
-  printf '%s\n' \
-    "17 3 * * * PREVIEW_ROOT=$ROOT DATABASE_NAME=$DATABASE_NAME PREVIEW_POSTGRES_CONTAINER=$POSTGRES_CONTAINER BACKUP_RETENTION_COUNT=$DEMO_BACKUP_RETENTION BACKUP_KIND=scheduled bash $SOURCE_DIR/scripts/preview/backup-database.sh >> $ROOT/backups/scheduled.log 2>&1 # $marker" \
-    >> "$cron_file"
-  crontab "$cron_file"
-  rm -f -- "$cron_file"
+  mkdir -p "$ROOT/ops" "$ROOT/backups"
+  chmod 700 "$ROOT/ops" "$ROOT/backups"
+  install -m 700 "$SCRIPT_DIR/backup-database.sh" "$ROOT/ops/backup-database.sh"
 }
 
 create_seed_preview_database() {
@@ -637,7 +630,7 @@ ensure_preview_database
 harden_preview_database
 run_tooling_if_needed
 ensure_preview_seats
-install_demo_backup_schedule
+install_demo_backup_tooling
 start_or_refresh_web() {
   refresh_web_container_if_needed
 }

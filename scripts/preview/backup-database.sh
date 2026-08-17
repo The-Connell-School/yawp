@@ -20,7 +20,7 @@ BACKUP_TIMESTAMP="${BACKUP_TIMESTAMP:-$(date -u +%Y%m%dT%H%M%SZ)}"
   echo "Invalid Postgres container name: $POSTGRES_CONTAINER" >&2
   exit 1
 }
-[[ "$BACKUP_KIND" =~ ^[A-Za-z0-9_-]+$ ]] || {
+[[ "$BACKUP_KIND" == "scheduled" || "$BACKUP_KIND" == "pre-reset" ]] || {
   echo "Invalid backup kind: $BACKUP_KIND" >&2
   exit 1
 }
@@ -37,17 +37,23 @@ BACKUP_TIMESTAMP="${BACKUP_TIMESTAMP:-$(date -u +%Y%m%dT%H%M%SZ)}"
 backup_dir="$PREVIEW_ROOT/backups"
 backup_file="$backup_dir/${DATABASE_NAME}-${BACKUP_KIND}-${BACKUP_TIMESTAMP}.dump"
 partial_file="${backup_file}.$$.partial"
-lock_dir="$backup_dir/.${DATABASE_NAME}-backup.lock"
+lock_file="$backup_dir/.${DATABASE_NAME}-backup.lock"
+verification_database=""
 
 umask 077
 mkdir -p "$backup_dir"
-if ! mkdir "$lock_dir" 2>/dev/null; then
+chmod 700 "$backup_dir"
+exec 9>"$lock_file"
+if ! flock -n 9; then
   echo "Another backup for $DATABASE_NAME is already running" >&2
   exit 1
 fi
 cleanup() {
+  if [[ -n "$verification_database" ]]; then
+    docker exec "$POSTGRES_CONTAINER" dropdb -U postgres --force --if-exists \
+      "$verification_database" >/dev/null 2>&1 || true
+  fi
   rm -f -- "$partial_file"
-  rmdir "$lock_dir" 2>/dev/null || true
 }
 trap cleanup EXIT
 
@@ -62,6 +68,17 @@ docker exec "$POSTGRES_CONTAINER" pg_dump \
   exit 1
 }
 docker exec -i "$POSTGRES_CONTAINER" pg_restore --list < "$partial_file" >/dev/null
+verification_database="yawp_backup_verify_${DATABASE_NAME:0:24}_$$"
+docker exec "$POSTGRES_CONTAINER" createdb -U postgres "$verification_database"
+docker exec -i "$POSTGRES_CONTAINER" pg_restore \
+  -U postgres \
+  -d "$verification_database" \
+  --exit-on-error \
+  --no-owner \
+  --no-acl < "$partial_file" >/dev/null
+docker exec "$POSTGRES_CONTAINER" dropdb -U postgres --force --if-exists \
+  "$verification_database"
+verification_database=""
 mv -- "$partial_file" "$backup_file"
 
 if command -v sha256sum >/dev/null 2>&1; then
@@ -70,18 +87,16 @@ else
   shasum -a 256 "$backup_file" > "${backup_file}.sha256"
 fi
 
-if [[ "$BACKUP_KIND" == "scheduled" ]]; then
-  retained=0
-  while IFS= read -r candidate; do
-    [[ -n "$candidate" ]] || continue
-    retained=$((retained + 1))
-    if (( retained > BACKUP_RETENTION_COUNT )); then
-      rm -f -- "$candidate" "${candidate}.sha256"
-    fi
-  done < <(
-    find "$backup_dir" -maxdepth 1 -type f \
-      -name "${DATABASE_NAME}-scheduled-*.dump" -print | LC_ALL=C sort -r
-  )
-fi
+retained=0
+while IFS= read -r candidate; do
+  [[ -n "$candidate" ]] || continue
+  retained=$((retained + 1))
+  if (( retained > BACKUP_RETENTION_COUNT )); then
+    rm -f -- "$candidate" "${candidate}.sha256"
+  fi
+done < <(
+  find "$backup_dir" -maxdepth 1 -type f \
+    -name "${DATABASE_NAME}-${BACKUP_KIND}-*.dump" -print | LC_ALL=C sort -r
+)
 
 echo "BACKUP_FILE=$backup_file"
