@@ -37,7 +37,7 @@ jobs:
           test -n "$PREVIEW_HOST" || { echo "Missing repository variable DEMO_HOST"; exit 1; }
           test -n "$DEMO_SSH_PRIVATE_KEY" || { echo "Missing demo secret DEMO_SSH_PRIVATE_KEY"; exit 1; }
           [[ "$PREVIEW_ROOT" =~ ^/[A-Za-z0-9._/-]+$ ]] || { echo "Invalid DEMO_ROOT"; exit 1; }
-          if [[ ! "$BACKUP_RETENTION_COUNT" =~ ^[0-9]+$ ]] \
+          if [[ ! "$BACKUP_RETENTION_COUNT" =~ ^[1-9][0-9]{0,2}$ ]] \
             || (( BACKUP_RETENTION_COUNT < 1 || BACKUP_RETENTION_COUNT > 365 )); then
             echo "backup_retention must be between 1 and 365" >&2
             exit 1
@@ -103,11 +103,28 @@ jobs:
           bucket_and_prefix="${destination#s3://}"
           bucket="${bucket_and_prefix%%/*}"
           prefix="${bucket_and_prefix#*/}/"
-          mapfile -t keys < <(aws s3api list-objects-v2 \
+          versioned_keys_text="$(aws s3api list-object-versions \
             --bucket "$bucket" \
             --prefix "$prefix" \
-            --query "reverse(sort_by(Contents[?ends_with(Key, '.dump')], &LastModified))[].Key" \
-            --output text | tr '\t' '\n')
+            --query '[Versions[].Key, DeleteMarkers[].Key][]' \
+            --output text)"
+          declare -A seen_dump_keys=()
+          dump_keys=()
+          while IFS= read -r object_key; do
+            [[ -n "$object_key" && "$object_key" != "None" ]] || continue
+            dump_key="${object_key%.sha256}"
+            [[ "$dump_key" == "$prefix"yawp_demo-scheduled-*.dump ]] || continue
+            if [[ -z "${seen_dump_keys[$dump_key]:-}" ]]; then
+              seen_dump_keys[$dump_key]=1
+              dump_keys+=("$dump_key")
+            fi
+          done <<<"$(printf '%s\n' "$versioned_keys_text" | tr '\t' '\n')"
+          sorted_dump_keys="$(printf '%s\n' "${dump_keys[@]}" | LC_ALL=C sort -r)"
+          keys=()
+          while IFS= read -r key; do
+            [[ -n "$key" ]] && keys+=("$key")
+          done <<<"$sorted_dump_keys"
+
           for ((index = BACKUP_RETENTION_COUNT; index < ${#keys[@]}; index++)); do
             key="${keys[$index]}"
             [[ "$key" == "$prefix"yawp_demo-scheduled-*.dump ]] || {
@@ -115,20 +132,19 @@ jobs:
               exit 1
             }
             for object_key in "$key" "${key}.sha256"; do
-              mapfile -t version_ids < <(
-                aws s3api list-object-versions \
-                  --bucket "$bucket" \
-                  --prefix "$object_key" \
-                  --query "[Versions[?Key=='$object_key'].VersionId, DeleteMarkers[?Key=='$object_key'].VersionId][]" \
-                  --output text | tr '\t' '\n'
-              )
-              for version_id in "${version_ids[@]}"; do
+              versions_text="$(aws s3api list-object-versions \
+                --bucket "$bucket" \
+                --prefix "$object_key" \
+                --query '[Versions[].[Key,VersionId], DeleteMarkers[].[Key,VersionId]][]' \
+                --output text)"
+              while read -r returned_key version_id; do
+                [[ "$returned_key" == "$object_key" ]] || continue
                 [[ -n "$version_id" && "$version_id" != "None" ]] || continue
                 aws s3api delete-object \
                   --bucket "$bucket" \
                   --key "$object_key" \
                   --version-id "$version_id" >/dev/null
-              done
+              done <<<"$versions_text"
             done
           done
 

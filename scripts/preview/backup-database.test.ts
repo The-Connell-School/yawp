@@ -184,6 +184,8 @@ describe('preview database backups', () => {
     for (const env of [
       { ...harness.env, DATABASE_NAME: 'yawp_demo;drop database postgres' },
       { ...harness.env, BACKUP_RETENTION_COUNT: '0' },
+      { ...harness.env, BACKUP_RETENTION_COUNT: '08' },
+      { ...harness.env, BACKUP_RETENTION_COUNT: '9999' },
       { ...harness.env, BACKUP_RETENTION_COUNT: 'all' },
     ]) {
       const result = run(env);
