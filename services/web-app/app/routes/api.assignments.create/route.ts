@@ -26,6 +26,10 @@ import {
   DEFAULT_ASSIGNMENT_POINT_VALUE,
   parseAssignmentGradingIntent,
 } from '~/utils/assignment-grading-intent.server';
+import {
+  applyCollaborationRolloutGate,
+  parseAssignmentCollaboration,
+} from '~/utils/assignment-collaboration.server';
 import { parseAssignmentTutorEnabled } from '~/utils/assignment-tutor-enabled.server';
 
 export async function action({ request }: ActionFunctionArgs) {
@@ -104,6 +108,14 @@ export async function action({ request }: ActionFunctionArgs) {
   }
   const tutorEnabled = tutorEnabledResult.value;
 
+  const collaborationResult = parseAssignmentCollaboration(formData);
+  if (!collaborationResult.success) {
+    return dataResponse(
+      { success: false, message: collaborationResult.message },
+      { status: 400 }
+    );
+  }
+
   const classes = await prisma.class.findMany({
     where: {
       id: { in: classIds },
@@ -112,7 +124,13 @@ export async function action({ request }: ActionFunctionArgs) {
     },
     select: {
       id: true,
-      school: { select: { id: true, organizationId: true } },
+      school: {
+        select: {
+          id: true,
+          organizationId: true,
+          organization: { select: { collaborativeDraftsEnabled: true } },
+        },
+      },
     },
   });
 
@@ -122,6 +140,14 @@ export async function action({ request }: ActionFunctionArgs) {
       { status: 404 }
     );
   }
+
+  // Rollout gate. Applied after the class query so it can see every target
+  // organization, and forces collaboration off rather than failing when a school
+  // is not in the rollout.
+  const collaboration = applyCollaborationRolloutGate(
+    collaborationResult.value,
+    classes.map((klass) => klass.school.organization.collaborativeDraftsEnabled)
+  );
 
   const gradingIntent = parseAssignmentGradingIntent(formData);
   if (gradingIntent && !gradingIntent.success) {
@@ -188,6 +214,7 @@ export async function action({ request }: ActionFunctionArgs) {
           gradingAssistantStrictnessLevel,
         }),
         tutorEnabled,
+        ...collaboration,
       },
       classIds: deployClassIds,
     });
@@ -232,6 +259,7 @@ export async function action({ request }: ActionFunctionArgs) {
         prompt,
         gradingAssistantStrictnessLevel,
         tutorEnabled,
+        ...collaboration,
         ...promptAttachmentData,
         ...(gradingIntent?.success
           ? {
@@ -275,6 +303,7 @@ export async function action({ request }: ActionFunctionArgs) {
           : DEFAULT_ASSIGNMENT_POINT_VALUE,
         gradingAssistantStrictnessLevel,
         tutorEnabled,
+        ...collaboration,
       });
     } catch {
       return dataResponse({

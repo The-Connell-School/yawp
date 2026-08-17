@@ -1,53 +1,40 @@
-/**
- * How groups are formed for a collaborative assignment.
- *
- * - `teacher` — the teacher arranges groups, seeded by a shuffle
- * - `random` — the system assigns, teacher may still adjust afterwards
- * - `whole-class` — one shared document for the entire roster
- *
- * Stored as a string column rather than a Prisma enum, matching
- * `gradingAssistantStrictnessLevel`.
- */
-export const COLLABORATION_GROUP_MODES = [
-  'teacher',
-  'random',
-  'whole-class',
-] as const;
-
-export type CollaborationGroupMode =
-  (typeof COLLABORATION_GROUP_MODES)[number];
-
-/** Modes where students are split into groups and a target size is required. */
-const SIZED_MODES: CollaborationGroupMode[] = ['teacher', 'random'];
-
-export const MIN_COLLABORATION_GROUP_SIZE = 2;
-/**
- * Eight is a pedagogical ceiling rather than a technical one, but it is also
- * where concurrent-editor load starts to matter: presence fan-out grows with the
- * square of the participant count. Whole-class mode deliberately bypasses this
- * and is the heaviest case.
- */
-export const MAX_COLLABORATION_GROUP_SIZE = 8;
-
-export type AssignmentCollaborationSettings = {
-  collaborationEnabled: boolean;
-  collaborationGroupMode: CollaborationGroupMode;
-  collaborationGroupSize: number | null;
-};
+import {
+  COLLABORATION_GROUP_MODES,
+  DEFAULT_COLLABORATION_GROUP_MODE,
+  MAX_COLLABORATION_GROUP_SIZE,
+  MIN_COLLABORATION_GROUP_SIZE,
+  SIZED_COLLABORATION_GROUP_MODES,
+  SOLO_COLLABORATION_SETTINGS,
+  type AssignmentCollaborationSettings,
+} from '~/domain/assignments/collaboration';
 
 export type ParseAssignmentCollaborationResult =
   | { success: true; value: AssignmentCollaborationSettings }
   | { success: false; message: string };
 
 /**
- * The settings a non-collaborative assignment gets. Also what an absent toggle
- * parses to.
+ * Applies the `Organization.collaborativeDraftsEnabled` rollout gate to parsed
+ * settings, given the flag for every organization the assignment is being
+ * deployed into.
+ *
+ * Fails closed, and forces collaboration off rather than erroring: a teacher
+ * whose school is not in the rollout should get an ordinary solo assignment, not
+ * a dead end. An assignment spanning classes in more than one organization
+ * requires all of them to be enabled.
  */
-const SOLO: AssignmentCollaborationSettings = {
-  collaborationEnabled: false,
-  collaborationGroupMode: 'teacher',
-  collaborationGroupSize: null,
-};
+export function applyCollaborationRolloutGate(
+  settings: AssignmentCollaborationSettings,
+  organizationsEnabled: boolean[]
+): AssignmentCollaborationSettings {
+  if (!settings.collaborationEnabled) return settings;
+  if (
+    organizationsEnabled.length === 0 ||
+    !organizationsEnabled.every(Boolean)
+  ) {
+    return SOLO_COLLABORATION_SETTINGS;
+  }
+  return settings;
+}
 
 function lastValue(formData: FormData, field: string): string | undefined {
   return formData
@@ -75,7 +62,9 @@ export function parseAssignmentCollaboration(
 ): ParseAssignmentCollaborationResult {
   const rawEnabled = lastValue(formData, 'collaborationEnabled');
 
-  if (!rawEnabled) return { success: true, value: SOLO };
+  if (!rawEnabled) {
+    return { success: true, value: SOLO_COLLABORATION_SETTINGS };
+  }
 
   let collaborationEnabled: boolean;
   if (['true', 'on', '1', 'yes'].includes(rawEnabled)) {
@@ -83,12 +72,19 @@ export function parseAssignmentCollaboration(
   } else if (['false', 'off', '0', 'no'].includes(rawEnabled)) {
     collaborationEnabled = false;
   } else {
-    return { success: false, message: 'Collaboration enabled value is invalid.' };
+    return {
+      success: false,
+      message: 'Collaboration enabled value is invalid.',
+    };
   }
 
-  if (!collaborationEnabled) return { success: true, value: SOLO };
+  if (!collaborationEnabled) {
+    return { success: true, value: SOLO_COLLABORATION_SETTINGS };
+  }
 
-  const rawMode = lastValue(formData, 'collaborationGroupMode') ?? 'teacher';
+  const rawMode =
+    lastValue(formData, 'collaborationGroupMode') ??
+    DEFAULT_COLLABORATION_GROUP_MODE;
   const collaborationGroupMode = COLLABORATION_GROUP_MODES.find(
     (mode) => mode === rawMode
   );
@@ -96,7 +92,7 @@ export function parseAssignmentCollaboration(
     return { success: false, message: 'Collaboration group mode is invalid.' };
   }
 
-  if (!SIZED_MODES.includes(collaborationGroupMode)) {
+  if (!SIZED_COLLABORATION_GROUP_MODES.includes(collaborationGroupMode)) {
     // Whole class: the group is the roster, so any posted size is dropped rather
     // than rejected — switching modes in the UI need not clear the stepper.
     return {
@@ -110,7 +106,7 @@ export function parseAssignmentCollaboration(
   }
 
   const rawSize = lastValue(formData, 'collaborationGroupSize');
-  const sizeMessage = 'Group size must be between 2 and 8 students.';
+  const sizeMessage = `Group size must be between ${MIN_COLLABORATION_GROUP_SIZE} and ${MAX_COLLABORATION_GROUP_SIZE} students.`;
   if (!rawSize) return { success: false, message: sizeMessage };
 
   // Reject "3.5" and "3px" rather than letting parseInt truncate them.

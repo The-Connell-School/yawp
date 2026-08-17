@@ -1,8 +1,9 @@
 import { describe, expect, test } from 'bun:test';
 
+import { type CollaborationGroupMode } from '~/domain/assignments/collaboration';
 import {
+  applyCollaborationRolloutGate,
   parseAssignmentCollaboration,
-  type CollaborationGroupMode,
 } from './assignment-collaboration.server';
 
 const form = (entries: Record<string, string | string[]>) => {
@@ -170,5 +171,44 @@ describe('parseAssignmentCollaboration', () => {
         collaborationGroupSize: null,
       },
     });
+  });
+});
+
+describe('applyCollaborationRolloutGate', () => {
+  const on = {
+    collaborationEnabled: true,
+    collaborationGroupMode: 'teacher' as const,
+    collaborationGroupSize: 3,
+  };
+
+  test('passes settings through when every target organization is enabled', () => {
+    expect(applyCollaborationRolloutGate(on, [true, true])).toEqual(on);
+  });
+
+  test('forces collaboration off when any target organization is not enabled', () => {
+    // Fail closed, and force off rather than erroring: a teacher whose school
+    // is not in the rollout gets an ordinary solo assignment, not a dead end.
+    expect(applyCollaborationRolloutGate(on, [true, false])).toEqual({
+      collaborationEnabled: false,
+      collaborationGroupMode: 'teacher',
+      collaborationGroupSize: null,
+    });
+  });
+
+  test('forces collaboration off when there are no target organizations', () => {
+    expect(applyCollaborationRolloutGate(on, [])).toEqual({
+      collaborationEnabled: false,
+      collaborationGroupMode: 'teacher',
+      collaborationGroupSize: null,
+    });
+  });
+
+  test('leaves an already-disabled assignment untouched', () => {
+    const off = {
+      collaborationEnabled: false,
+      collaborationGroupMode: 'teacher' as const,
+      collaborationGroupSize: null,
+    };
+    expect(applyCollaborationRolloutGate(off, [true])).toEqual(off);
   });
 });
