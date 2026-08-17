@@ -49,6 +49,60 @@ export const COLLABORATION_GROUP_SIZE_OPTIONS = Array.from(
   (_, index) => MIN_COLLABORATION_GROUP_SIZE + index
 );
 
+/**
+ * The three modes, with the copy the creation sheet renders.
+ *
+ * `teacher` and `random` differ in who does the arranging, not in what the
+ * groups look like: `random` arranges at creation so the teacher lands on a
+ * finished chart, `teacher` leaves it empty so they build it. Both stay
+ * editable until groups are opened, so `random` is a starting point rather
+ * than a commitment.
+ */
+export const COLLABORATION_GROUP_MODE_OPTIONS: Array<{
+  value: CollaborationGroupMode;
+  label: string;
+  description: string;
+}> = [
+  {
+    value: 'teacher',
+    label: 'I’ll make the groups',
+    description:
+      'Nothing is arranged yet. You build the groups yourself before students can start.',
+  },
+  {
+    value: 'random',
+    label: 'Group them for me',
+    description:
+      'Students are shuffled into groups right away. You can still rearrange before opening them.',
+  },
+  {
+    value: 'whole-class',
+    label: 'One doc for the whole class',
+    description:
+      'Everyone writes in a single shared document. No group size to choose.',
+  },
+];
+
+/** Whether this mode needs a group size. Whole-class does not: the group is the roster. */
+export function collaborationModeNeedsGroupSize(
+  mode: CollaborationGroupMode
+): boolean {
+  return SIZED_COLLABORATION_GROUP_MODES.includes(mode);
+}
+
+/**
+ * Whether choosing this mode should arrange groups at creation time.
+ *
+ * `teacher` is the one mode that deliberately leaves the chart empty; the other
+ * two have no arrangement decision left for the teacher to make, so making them
+ * walk to the groups page to press Shuffle would be busywork.
+ */
+export function collaborationModeAutoArranges(
+  mode: CollaborationGroupMode
+): boolean {
+  return mode === 'random' || mode === 'whole-class';
+}
+
 export type AssignmentCollaborationSettings = {
   collaborationEnabled: boolean;
   collaborationGroupMode: CollaborationGroupMode;

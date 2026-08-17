@@ -28,6 +28,7 @@ const isAssignmentTypeAvailableForEveryScope = mock();
 const uploadAssignmentPromptAttachment = mock();
 const deleteAssignmentPromptAttachment = mock();
 const saveAssignmentForReuse = mock();
+const autoArrangeNewAssignment = mock();
 class AssignmentPromptAttachmentError extends Error {}
 const actualAssignmentPromptAttachment = await import(
   '~/domain/assignments/assignment-prompt-attachment.server'
@@ -46,6 +47,9 @@ mock.module('~/utils/auth.server', () => ({
 }));
 mock.module('~/utils/assignment-deployment.server', () => ({
   createAssignmentDeployedToClasses,
+}));
+mock.module('~/domain/collaboration/auto-arrange.server', () => ({
+  autoArrangeNewAssignment,
 }));
 mock.module('~/utils/assignment-type-access.server', () => ({
   ...actualAssignmentTypeAccess,
@@ -125,6 +129,7 @@ describe('api.assignments.create', () => {
     uploadAssignmentPromptAttachment.mockReset();
     deleteAssignmentPromptAttachment.mockReset().mockResolvedValue(undefined);
     saveAssignmentForReuse.mockReset().mockResolvedValue({ id: 'saved-1' });
+    autoArrangeNewAssignment.mockReset().mockResolvedValue({ arranged: 1, failed: 0 });
     requireUserId.mockReset();
     requireMembership.mockReset();
 
@@ -804,6 +809,73 @@ describe('api.assignments.create', () => {
           data: expect.objectContaining({ collaborationEnabled: false }),
         })
       );
+    });
+
+    test('passes the chosen mode through to the assignment', async () => {
+      // The sheet posts a mode now; before, every collaborative assignment
+      // silently took the parser's default because nothing rendered a picker.
+      enablePilot();
+
+      await createWithCollaboration({ collaborationGroupMode: 'random' });
+
+      expect(createAssignmentDeployedToClasses).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ collaborationGroupMode: 'random' }),
+        })
+      );
+    });
+
+    test('arranges groups at creation for the modes that describe one', async () => {
+      enablePilot();
+      createAssignmentDeployedToClasses.mockResolvedValue({ id: 'assignment-1' });
+
+      await createWithCollaboration({ collaborationGroupMode: 'random' });
+
+      expect(autoArrangeNewAssignment).toHaveBeenCalledWith({
+        assignmentId: 'assignment-1',
+        mode: 'random',
+        groupSize: 3,
+      });
+    });
+
+    test('whole class drops the posted size', async () => {
+      // The group is the roster, so a size would be meaningless -- and the
+      // stepper is hidden for this mode, so a posted one is stale.
+      enablePilot();
+      createAssignmentDeployedToClasses.mockResolvedValue({ id: 'assignment-1' });
+
+      await createWithCollaboration({ collaborationGroupMode: 'whole-class' });
+
+      expect(autoArrangeNewAssignment).toHaveBeenCalledWith(
+        expect.objectContaining({ mode: 'whole-class', groupSize: null })
+      );
+    });
+
+    test('does not arrange a solo assignment', async () => {
+      enablePilot();
+
+      await action({
+        request: requestFor({
+          intent: 'create-assignment',
+          assignmentTypeId: 'at-1',
+          classIds: ['class-1'],
+          prompt: 'Write the essay.',
+          title: 'Essay',
+        }),
+        params: {},
+      } as any);
+
+      expect(autoArrangeNewAssignment).not.toHaveBeenCalled();
+    });
+
+    test('does not arrange when the pilot gate forces collaboration off', async () => {
+      // Otherwise a type outside the pilot would still get groups built for an
+      // assignment whose collaboration was just switched off.
+      disablePilot();
+
+      await createWithCollaboration({ collaborationGroupMode: 'random' });
+
+      expect(autoArrangeNewAssignment).not.toHaveBeenCalled();
     });
 
     test('rejects an invalid group size before touching the database', async () => {

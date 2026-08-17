@@ -19,6 +19,7 @@ import {
   saveAssignmentForReuse,
 } from '~/domain/assignments/saved-assignments.server';
 import { isAssignmentTypeAvailableForEveryScope } from '~/utils/assignment-type-access.server';
+import { autoArrangeNewAssignment } from '~/domain/collaboration/auto-arrange.server';
 import { createAssignmentDeployedToClasses } from '~/utils/assignment-deployment.server';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
@@ -204,7 +205,7 @@ export async function action({ request }: ActionFunctionArgs) {
       );
     }
 
-    await createAssignmentDeployedToClasses({
+    const createdApAssignment = await createAssignmentDeployedToClasses({
       data: {
         ...buildAssignmentCreateInputFromApHistoryEntry({
           assignmentTypeId: assignmentType.id,
@@ -217,6 +218,17 @@ export async function action({ request }: ActionFunctionArgs) {
       },
       classIds: deployClassIds,
     });
+
+    // Unreachable while AP History is outside the pilot, which forces
+    // collaboration off above. Here anyway so flagging that type later cannot
+    // quietly leave this one branch without an arrangement.
+    if (collaboration.collaborationEnabled) {
+      await autoArrangeNewAssignment({
+        assignmentId: createdApAssignment.id,
+        mode: collaboration.collaborationGroupMode,
+        groupSize: collaboration.collaborationGroupSize,
+      });
+    }
 
     return dataResponse({
       success: true,
@@ -251,7 +263,7 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 
   try {
-    await createAssignmentDeployedToClasses({
+    const createdAssignment = await createAssignmentDeployedToClasses({
       data: {
         assignmentTypeId: assignmentType.id,
         title,
@@ -269,6 +281,18 @@ export async function action({ request }: ActionFunctionArgs) {
       },
       classIds: deployClassIds,
     });
+
+    // "Group them for me" and "one doc for the whole class" describe an
+    // arrangement completely, so it is formed now rather than making the
+    // teacher press Shuffle to reach the answer they already chose. Nothing is
+    // opened, so it stays editable.
+    if (collaboration.collaborationEnabled) {
+      await autoArrangeNewAssignment({
+        assignmentId: createdAssignment.id,
+        mode: collaboration.collaborationGroupMode,
+        groupSize: collaboration.collaborationGroupSize,
+      });
+    }
   } catch (error) {
     if (promptAttachmentData?.promptAttachmentKey) {
       await deleteAssignmentPromptAttachment(

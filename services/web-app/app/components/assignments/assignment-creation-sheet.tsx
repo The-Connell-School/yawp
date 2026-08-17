@@ -7,8 +7,12 @@ import { Checkbox } from '~/components/ui/checkbox';
 import { Input } from '~/components/ui/input';
 import { Label } from '~/components/ui/label';
 import {
+  COLLABORATION_GROUP_MODE_OPTIONS,
   COLLABORATION_GROUP_SIZE_OPTIONS,
+  DEFAULT_COLLABORATION_GROUP_MODE,
   DEFAULT_COLLABORATION_GROUP_SIZE,
+  collaborationModeNeedsGroupSize,
+  type CollaborationGroupMode,
 } from '~/domain/assignments/collaboration';
 import {
   Select,
@@ -220,6 +224,8 @@ export function AssignmentCreationSheetContent({
   const [collaborationEnabled, setCollaborationEnabled] = useState(
     initialCollaborationEnabled
   );
+  const [collaborationGroupMode, setCollaborationGroupMode] =
+    useState<CollaborationGroupMode>(DEFAULT_COLLABORATION_GROUP_MODE);
   const [collaborationGroupSize, setCollaborationGroupSize] = useState(
     initialCollaborationGroupSize ?? DEFAULT_COLLABORATION_GROUP_SIZE
   );
@@ -300,6 +306,7 @@ export function AssignmentCreationSheetContent({
     setPointValue(pointValueFieldValue(initialPointValue));
     setTutorEnabled(initialTutorEnabled);
     setCollaborationEnabled(initialCollaborationEnabled);
+    setCollaborationGroupMode(DEFAULT_COLLABORATION_GROUP_MODE);
     setCollaborationGroupSize(
       initialCollaborationGroupSize ?? DEFAULT_COLLABORATION_GROUP_SIZE
     );
@@ -785,32 +792,78 @@ export function AssignmentCreationSheetContent({
             <p className="mt-1 pl-[calc(1rem+0.625rem)] text-sm text-muted-foreground">
               {isEditing
                 ? 'Collaboration cannot be switched on or off after an assignment is created — groups may already be writing in shared drafts.'
-                : 'Students write together in one shared document per group. After you create this, set up groups for each class.'}
+                : 'Students write together in one shared document per group. You review the groups for each class and open them when you are ready.'}
             </p>
             {collaborationEnabled && !isEditing ? (
-              <div className="mt-3 pl-[calc(1rem+0.625rem)]">
-                <Label
-                  htmlFor="assignment-create-collaboration-group-size"
-                  className="font-normal leading-none"
-                >
-                  Students per group
-                </Label>
-                <select
-                  id="assignment-create-collaboration-group-size"
-                  name="collaborationGroupSize"
-                  value={collaborationGroupSize}
-                  onChange={(event) =>
-                    setCollaborationGroupSize(Number(event.target.value))
-                  }
-                  disabled={isSaving}
-                  className="mt-1 block rounded border px-2 py-1 text-sm"
-                >
-                  {COLLABORATION_GROUP_SIZE_OPTIONS.map((size) => (
-                    <option key={size} value={size}>
-                      {size}
-                    </option>
-                  ))}
-                </select>
+              <div className="mt-3 space-y-3 pl-[calc(1rem+0.625rem)]">
+                <input
+                  type="hidden"
+                  name="collaborationGroupMode"
+                  value={collaborationGroupMode}
+                />
+                <div className="space-y-2">
+                  <Label>How should groups be made?</Label>
+                  <div className="grid gap-2 sm:grid-cols-3">
+                    {COLLABORATION_GROUP_MODE_OPTIONS.map((option) => {
+                      const selected = collaborationGroupMode === option.value;
+                      return (
+                        <button
+                          key={option.value}
+                          type="button"
+                          className={`h-full rounded-md border px-3 py-2 text-left text-sm transition ${
+                            selected
+                              ? 'border-primary bg-primary text-primary-foreground'
+                              : 'border-border bg-background hover:bg-muted'
+                          }`}
+                          aria-pressed={selected}
+                          onClick={() => setCollaborationGroupMode(option.value)}
+                          disabled={isSaving}
+                        >
+                          <span className="block font-medium">
+                            {option.label}
+                          </span>
+                          <span
+                            className={`mt-1 block text-xs ${
+                              selected
+                                ? 'text-primary-foreground/80'
+                                : 'text-muted-foreground'
+                            }`}
+                          >
+                            {option.description}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Whole class has no size to choose: the group is the roster. */}
+                {collaborationModeNeedsGroupSize(collaborationGroupMode) ? (
+                  <div>
+                    <Label
+                      htmlFor="assignment-create-collaboration-group-size"
+                      className="font-normal leading-none"
+                    >
+                      Students per group
+                    </Label>
+                    <select
+                      id="assignment-create-collaboration-group-size"
+                      name="collaborationGroupSize"
+                      value={collaborationGroupSize}
+                      onChange={(event) =>
+                        setCollaborationGroupSize(Number(event.target.value))
+                      }
+                      disabled={isSaving}
+                      className="mt-1 block rounded border px-2 py-1 text-sm"
+                    >
+                      {COLLABORATION_GROUP_SIZE_OPTIONS.map((size) => (
+                        <option key={size} value={size}>
+                          {size}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                ) : null}
               </div>
             ) : null}
           </div>

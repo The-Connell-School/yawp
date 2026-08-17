@@ -70,6 +70,11 @@ if (isWebAppTestFile()) {
     '~/utils/student-assignment-type-scopes.server': await snapshot(
       '~/utils/student-assignment-type-scopes.server'
     ),
+    // The auto-arrange test stubs arrangeGroups, which the groups-route test
+    // also needs real.
+    '~/domain/collaboration/auto-arrange.server': await snapshot(
+      '~/domain/collaboration/auto-arrange.server'
+    ),
   };
 }
 

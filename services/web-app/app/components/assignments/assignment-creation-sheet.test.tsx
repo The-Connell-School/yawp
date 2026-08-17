@@ -599,6 +599,46 @@ describe('AssignmentCreationSheetContent', () => {
       ).toBeNull();
     });
 
+    it('offers every group mode, not just a size', () => {
+      // The sheet shipped with only a size stepper, so the three modes designed
+      // for this feature were unreachable and every assignment silently got the
+      // parser's default.
+      root = renderSheet({
+        entryPoint: 'assignment-type',
+        fixedAssignmentTypeId: 'type-1',
+        initialCollaborationEnabled: true,
+      }).root;
+
+      const labels = Array.from(
+        document.querySelectorAll('button[aria-pressed]')
+      ).map((button) => button.textContent ?? '');
+      for (const fragment of ['make the groups', 'Group them for me', 'whole class']) {
+        expect(labels.some((label) => label.includes(fragment))).toBe(true);
+      }
+    });
+
+    it('posts the chosen mode', () => {
+      root = renderSheet({
+        entryPoint: 'assignment-type',
+        fixedAssignmentTypeId: 'type-1',
+        initialCollaborationEnabled: true,
+      }).root;
+
+      expect(inputByName('collaborationGroupMode').value).toBe('teacher');
+    });
+
+    it('asks for a group size for the sized modes', () => {
+      root = renderSheet({
+        entryPoint: 'assignment-type',
+        fixedAssignmentTypeId: 'type-1',
+        initialCollaborationEnabled: true,
+      }).root;
+
+      expect(
+        document.getElementById('assignment-create-collaboration-group-size')
+      ).not.toBeNull();
+    });
+
     it('posts collaboration off by default even when the toggle is shown', () => {
       // A hidden false accompanies the checkbox, so an unchecked box still posts
       // a value and the server keeps producing solo assignments.
