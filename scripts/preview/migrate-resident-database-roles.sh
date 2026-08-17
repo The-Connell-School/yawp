@@ -173,6 +173,16 @@ fs.renameSync(temporary, composeFile);
 NODE
 }
 
+# Deny cross-database login before any preview starts using its isolated role. Legacy
+# containers still authenticate as the Postgres superuser during this preflight, so a
+# later resident failure remains functional without reopening tenant boundaries.
+while IFS= read -r database; do
+  [[ "$database" =~ ^yawp_[a-z0-9_]+$ ]] || continue
+  $DOCKER exec "$POSTGRES_CONTAINER" psql --no-psqlrc -v ON_ERROR_STOP=1 -U postgres -d postgres -c \
+    "REVOKE CONNECT ON DATABASE \"${database}\" FROM PUBLIC;" >/dev/null
+done < <($DOCKER exec "$POSTGRES_CONTAINER" psql --no-psqlrc -U postgres -d postgres -Atc \
+  "SELECT datname FROM pg_database WHERE datname LIKE 'yawp\_%' ESCAPE '\\' ORDER BY datname")
+
 shopt -s nullglob
 for preview_dir in "$ROOT"/previews/*; do
   [[ -d "$preview_dir" ]] || continue
@@ -240,14 +250,6 @@ for preview_dir in "$ROOT"/previews/*; do
   active_backup=''
   echo "Migrated $slug to isolated database role $role"
 done
-
-# Templates must never be reachable through another preview's login role.
-while IFS= read -r database; do
-  [[ "$database" =~ ^yawp_[a-z0-9_]+$ ]] || continue
-  $DOCKER exec "$POSTGRES_CONTAINER" psql --no-psqlrc -v ON_ERROR_STOP=1 -U postgres -d postgres -c \
-    "REVOKE CONNECT ON DATABASE \"${database}\" FROM PUBLIC;" >/dev/null
-done < <($DOCKER exec "$POSTGRES_CONTAINER" psql --no-psqlrc -U postgres -d postgres -Atc \
-  "SELECT datname FROM pg_database WHERE datname LIKE 'yawp\_%' ESCAPE '\\' ORDER BY datname")
 
 # Existing Postgres volumes ignore POSTGRES_PASSWORD changes. Rotate the actual admin
 # role only after every resident compose file no longer contains the previous credential.

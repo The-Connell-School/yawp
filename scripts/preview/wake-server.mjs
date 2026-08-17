@@ -502,7 +502,7 @@ export function startAccessLogFollower({
 
 function classifyWakeError(error) {
   const message = `${error?.stderr || ''}\n${error?.message || ''}`;
-  if (/deployment is in progress/i.test(message)) error.code = 'deploying';
+  if (/deployment (?:is in progress|is quarantined)/i.test(message)) error.code = 'deploying';
   else if (/authorization (?:expired|was revoked) while queued/i.test(message)) error.code = 'authorization-stale';
   else if (/capacity/i.test(message)) error.code = 'capacity-full';
   else if (/not resident/i.test(message)) error.code = 'not-resident';

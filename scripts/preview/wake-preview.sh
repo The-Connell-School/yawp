@@ -248,6 +248,10 @@ target_deployment_is_inflight() {
   return 1
 }
 
+target_is_quarantined() {
+  [[ -f "$ROOT/quarantine/pr-${PR_NUMBER}" ]]
+}
+
 access_epoch() {
   local pr="$1"
   local access_file="$ACCESS_DIR/pr-${pr}"
@@ -392,6 +396,10 @@ trap 'handle_signal INT' INT
 # Source synchronization intentionally happens before the deploy job takes this
 # host lock. Its marker is published under the lock first, so a wake that acquires
 # the lock during rsync must fail closed instead of starting from a partial tree.
+if target_is_quarantined; then
+  echo "Preview pr-${PR_NUMBER} deployment is quarantined until a clean redeploy" >&2
+  exit 11
+fi
 if target_deployment_is_inflight; then
   echo "Preview pr-${PR_NUMBER} deployment is in progress" >&2
   exit 11

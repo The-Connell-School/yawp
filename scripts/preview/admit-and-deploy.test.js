@@ -19,6 +19,7 @@ function makeFixture(capResult = 'ok') {
   roots.push(root);
   const deployMarker = path.join(root, 'deployed');
   const inflightMarker = path.join(root, 'inflight', 'pr-42', '1000-1');
+  const quarantineMarker = path.join(root, 'quarantine', 'pr-42');
   const enforce = path.join(root, 'enforce.sh');
   const deploy = path.join(root, 'deploy.sh');
   writeFileSync(
@@ -32,8 +33,10 @@ function makeFixture(capResult = 'ok') {
   chmodSync(enforce, 0o755);
   chmodSync(deploy, 0o755);
   mkdirSync(path.dirname(inflightMarker), { recursive: true });
+  mkdirSync(path.dirname(quarantineMarker), { recursive: true });
   writeFileSync(inflightMarker, '');
-  return { root, deployMarker, inflightMarker, enforce, deploy };
+  writeFileSync(quarantineMarker, 'requires-clean-redeploy\n');
+  return { root, deployMarker, inflightMarker, quarantineMarker, enforce, deploy };
 }
 
 function runFixture(fixture) {
@@ -46,6 +49,7 @@ function runFixture(fixture) {
       PREVIEW_DEPLOY_SCRIPT: fixture.deploy,
       PREVIEW_FLOCK: 'false',
       PREVIEW_INFLIGHT_MARKER: fixture.inflightMarker,
+      PREVIEW_QUARANTINE_MARKER: fixture.quarantineMarker,
       PR_NUMBER: '42',
     },
     stdout: 'pipe',
@@ -71,6 +75,7 @@ describe('admit-and-deploy.sh', () => {
     expect(stdout).toContain('PREVIEW_URL=https://pr-42.example.test');
     expect(readFileSync(fixture.deployMarker, 'utf8')).toBe('deployed');
     expect(existsSync(fixture.inflightMarker)).toBe(false);
+    expect(existsSync(fixture.quarantineMarker)).toBe(false);
   });
 
   test('does not deploy when capacity is full', () => {
@@ -81,5 +86,6 @@ describe('admit-and-deploy.sh', () => {
     expect(result.exitCode).toBe(75);
     expect(existsSync(fixture.deployMarker)).toBe(false);
     expect(existsSync(fixture.inflightMarker)).toBe(false);
+    expect(existsSync(fixture.quarantineMarker)).toBe(true);
   });
 });

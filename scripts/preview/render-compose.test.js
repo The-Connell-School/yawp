@@ -193,4 +193,19 @@ describe('renderPreviewCompose', () => {
       }
     }
   });
+
+  test('makes automatic PR preview AI disablement explicit and omits provider credentials', () => {
+    const previousAnthropicKey = process.env.PREVIEW_ANTHROPIC_API_KEY;
+    process.env.PREVIEW_ANTHROPIC_API_KEY = 'shared-provider-key';
+    try {
+      const compose = renderCompose({ aiMode: 'disabled' });
+      expect(compose).toContain('YAWP_PREVIEW_AI_MODE: "disabled"');
+      expect(compose).toContain('CLASS_INSIGHT_MOCK_MODE: "fixture"');
+      expect(compose).toContain('ANTHROPIC_API_KEY: ""');
+      expect(compose).not.toContain('shared-provider-key');
+    } finally {
+      if (previousAnthropicKey === undefined) delete process.env.PREVIEW_ANTHROPIC_API_KEY;
+      else process.env.PREVIEW_ANTHROPIC_API_KEY = previousAnthropicKey;
+    }
+  });
 });

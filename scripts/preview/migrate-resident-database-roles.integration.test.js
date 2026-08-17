@@ -112,6 +112,20 @@ integrationTest('migrates a sleeping resident and denies its role access to anot
     'psql', '-h', postgresIp, '-U', 'postgres', '-d', 'postgres', '-Atc', 'SELECT 1',
   ]);
   expect(oldAdminStillWorks.status).toBe(0);
+  const partialPassword = readFileSync(
+    path.join(previewDir, 'database-password'),
+    'utf8',
+  ).trim();
+  const partialCross = run('docker', [
+    'exec', '-e', `PGPASSWORD=${partialPassword}`, container,
+    'psql', '-h', '127.0.0.1', '-U', 'yawp_pr_241_app', '-d', 'yawp_pr_242', '-Atc', 'SELECT 1',
+  ]);
+  expect(partialCross.status).not.toBe(0);
+  const partialTemplate = run('docker', [
+    'exec', '-e', `PGPASSWORD=${partialPassword}`, container,
+    'psql', '-h', '127.0.0.1', '-U', 'yawp_pr_241_app', '-d', 'yawp_template', '-Atc', 'SELECT 1',
+  ]);
+  expect(partialTemplate.status).not.toBe(0);
 
   writeFileSync(path.join(failingPreviewDir, 'docker-compose.yml'), `services:
   web:

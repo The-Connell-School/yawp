@@ -559,7 +559,10 @@ describe('PR preview deployment contract', () => {
     );
     expect(enforcer).toContain('"$previews_dir" "$ROOT/sources"');
     expect(previewWorkflow).toContain('PREVIEW_INFLIGHT_MARKER');
+    expect(previewWorkflow).toContain('PREVIEW_QUARANTINE_MARKER');
+    expect(previewWorkflow).toContain('quarantine_marker');
     expect(previewWorkflow).toContain('scripts/preview/sync-source.sh');
+    expect(wrapper).toContain('cleanup_quarantine_marker');
     expect(enforcer).toContain('is_inflight');
   });
 
@@ -734,6 +737,10 @@ describe('PR preview deployment contract', () => {
       "PREVIEW_AI_MODEL: ${{ vars.PREVIEW_AI_MODEL || 'claude-sonnet-4-6' }}"
     );
     expect(previewWorkflow).not.toContain('PREVIEW_ANTHROPIC_API_KEY');
+    expect(previewWorkflow).toContain('PREVIEW_AI_MODE: disabled');
+    expect(previewWorkflow).toContain(
+      'AI:** disabled in automatic PR previews'
+    );
     expect(previewWorkflow).toContain('PREVIEW_DB_DUMP_S3_URI');
     expect(previewWorkflow).toContain(
       'PREVIEW_POSTGRES_ADMIN_PASSWORD: ${{ secrets.PREVIEW_DB_PASSWORD }}'

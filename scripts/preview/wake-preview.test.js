@@ -206,6 +206,25 @@ describe('wake-preview.sh', () => {
     expect(readFileSync(docker.log, 'utf8')).toContain(' start');
   });
 
+  test('never wakes a partially synced preview after its transient marker expires', () => {
+    const root = makeRoot();
+    makePreview(root, 241);
+    const quarantine = path.join(root, 'quarantine');
+    mkdirSync(quarantine, { recursive: true });
+    writeFileSync(path.join(quarantine, 'pr-241'), 'requires-clean-redeploy\n');
+    const docker = makeDockerStub(root);
+
+    const result = run(root, 241, docker, {
+      PREVIEW_NOW_EPOCH: '9999999999',
+      PREVIEW_INFLIGHT_TTL_SECONDS: '1',
+    });
+
+    expect(result.status).toBe(11);
+    expect(result.stderr).toContain('quarantined');
+    expect(readFileSync(docker.log, 'utf8')).not.toContain(' start');
+    expect(readFileSync(docker.log, 'utf8')).not.toContain(' stop');
+  });
+
   test('records the wake lease from the completed wake instead of process startup', () => {
     const root = makeRoot();
     makePreview(root, 241);

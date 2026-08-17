@@ -49,6 +49,7 @@ jobs:
       PREVIEW_DATA_MODE: ${{ contains(github.event.pull_request.labels.*.name, 'sanitized-production-data') && 'sanitized-production' || vars.PREVIEW_DATA_MODE || 'seed' }}
       PREVIEW_SEAT_COUNT: ${{ vars.PREVIEW_SEAT_COUNT || '1' }}
       PREVIEW_AI_MODEL: ${{ vars.PREVIEW_AI_MODEL || 'claude-sonnet-4-6' }}
+      PREVIEW_AI_MODE: disabled
       PREVIEW_DB_DUMP_S3_URI: ${{ vars.PREVIEW_DB_DUMP_S3_URI || 's3://yawp-preview-videos/production.dump' }}
       PREVIEW_DB_DUMP_VERSION: ${{ contains(github.event.pull_request.labels.*.name, 'sanitized-production-data') && vars.PREVIEW_SANITIZED_DUMP_VERSION || vars.PREVIEW_DB_DUMP_VERSION || 'unversioned' }}
       PREVIEW_ACCESS_MASTER_ORGANIZATION_ID: ${{ contains(github.event.pull_request.labels.*.name, 'sanitized-production-data') && 'default-org' || 'local-dev-org' }}
@@ -118,12 +119,18 @@ jobs:
           remote_control="${PREVIEW_ROOT}/control/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           inflight_dir="${PREVIEW_ROOT}/inflight/pr-${PR_NUMBER}"
           inflight_marker="${inflight_dir}/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          quarantine_dir="${PREVIEW_ROOT}/quarantine"
+          quarantine_marker="${quarantine_dir}/pr-${PR_NUMBER}"
+          compose_file="${PREVIEW_ROOT}/previews/pr-${PR_NUMBER}/docker-compose.yml"
+          compose_project="yawp-pr-${PR_NUMBER}"
           lock_file="${PREVIEW_ROOT}/preview-host.lock"
           ssh_target="${PREVIEW_SSH_USER}@${PREVIEW_HOST}"
           # Publish the marker before the source path. Capacity reconciliation ignores
           # fresh markers, so it cannot evict a tree while rsync or lock admission runs.
-          printf -v setup_command 'mkdir -p %q && touch %q && mkdir -p %q %q' \
-            "$inflight_dir" "$inflight_marker" "$remote_source" "$remote_control/scripts/preview"
+          printf -v setup_command 'mkdir -p %q %q && touch %q %q && mkdir -p %q %q && if [ -f %q ]; then docker compose -p %q -f %q stop; fi' \
+            "$inflight_dir" "$quarantine_dir" "$inflight_marker" "$quarantine_marker" \
+            "$remote_source" "$remote_control/scripts/preview" \
+            "$compose_file" "$compose_project" "$compose_file"
           ssh -i ~/.ssh/preview_key "$ssh_target" \
             "flock -w 900 $(shell_quote "$lock_file") bash -lc $(shell_quote "$setup_command")"
           rsync -az --delete \
@@ -156,6 +163,7 @@ jobs:
           remote_source="${PREVIEW_ROOT}/sources/pr-${PR_NUMBER}"
           remote_control="${PREVIEW_ROOT}/control/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           inflight_marker="${PREVIEW_ROOT}/inflight/pr-${PR_NUMBER}/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          quarantine_marker="${PREVIEW_ROOT}/quarantine/pr-${PR_NUMBER}"
           remote_env=(
             "PR_NUMBER=$(shell_quote "$PR_NUMBER")"
             "PREVIEW_DOMAIN=$(shell_quote "$PREVIEW_DOMAIN")"
@@ -169,6 +177,7 @@ jobs:
             "PREVIEW_KEEP_AWAKE=$(shell_quote "$PREVIEW_KEEP_AWAKE")"
             "PREVIEW_INFLIGHT_TTL_SECONDS=$(shell_quote "$PREVIEW_INFLIGHT_TTL_SECONDS")"
             "PREVIEW_INFLIGHT_MARKER=$(shell_quote "$inflight_marker")"
+            "PREVIEW_QUARANTINE_MARKER=$(shell_quote "$quarantine_marker")"
             "KEEP_PR=$(shell_quote "$PR_NUMBER")"
             "PREVIEW_GITHUB_REPOSITORY=$(shell_quote "$GITHUB_REPOSITORY")"
             "PREVIEW_GITHUB_API_URL=$(shell_quote "$GITHUB_API_URL")"
@@ -178,6 +187,7 @@ jobs:
             "PREVIEW_DATA_MODE=$(shell_quote "$PREVIEW_DATA_MODE")"
             "PREVIEW_SEAT_COUNT=$(shell_quote "$PREVIEW_SEAT_COUNT")"
             "PREVIEW_AI_MODEL=$(shell_quote "$PREVIEW_AI_MODEL")"
+            "PREVIEW_AI_MODE=$(shell_quote "$PREVIEW_AI_MODE")"
             "PREVIEW_DB_DUMP_S3_URI=$(shell_quote "$PREVIEW_DB_DUMP_S3_URI")"
             "PREVIEW_DB_DUMP_VERSION=$(shell_quote "$PREVIEW_DB_DUMP_VERSION")"
             "PREVIEW_ACCESS_MASTER_ORGANIZATION_ID=$(shell_quote "$PREVIEW_ACCESS_MASTER_ORGANIZATION_ID")"
@@ -290,6 +300,7 @@ jobs:
             - **Access code:** `${{ steps.deploy.outputs.access_code }}`
             - **Runtime:** Docker Compose on the preview environment host
             - **Data:** `${{ env.PREVIEW_DATA_MODE }}` in an isolated PR database
+            - **AI:** disabled in automatic PR previews; use the reviewed demo environment for live-provider QA
             - **Deploy elapsed:** `${{ steps.deploy.outputs.elapsed_ms }}ms`
             - **Smoke:** in-app access gate + dev login
 
