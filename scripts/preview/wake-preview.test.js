@@ -71,6 +71,7 @@ fi
     exit 0
   fi
   if [[ "$*" == *" start"* ]]; then
+    [[ "\${PREVIEW_DOCKER_FAIL_START_PR:-}" == "$pr" ]] && exit 1
     grep -qx "$pr" "$PREVIEW_DOCKER_STATE" 2>/dev/null || echo "$pr" >> "$PREVIEW_DOCKER_STATE"
     exit 0
   fi
@@ -265,6 +266,28 @@ printf 'OK\\n'
     expect(log).not.toContain('compose -p yawp-pr-100');
   });
 
+  test('fails closed without mutation when configuration drift is already above the running cap', () => {
+    const root = makeRoot();
+    makePreview(root, 100, { access: 10 });
+    makePreview(root, 101, { access: 20 });
+    makePreview(root, 102, { access: 30 });
+    makePreview(root, 103, { access: 40 });
+    const docker = makeDockerStub(root, [100, 101, 102]);
+
+    const result = run(root, 103, docker);
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain('above');
+    expect(readFileSync(docker.state, 'utf8').trim().split('\n').sort()).toEqual([
+      '100',
+      '101',
+      '102',
+    ]);
+    const log = readFileSync(docker.log, 'utf8');
+    expect(log).not.toContain(' stop');
+    expect(log).not.toContain(' start');
+  });
+
   test('fails closed when every running preview is pinned', () => {
     const root = makeRoot();
     makePreview(root, 100, { pinned: true });
@@ -359,6 +382,46 @@ printf 'OK\\n'
     expect(log).toContain('compose -p yawp-pr-102');
     expect(log).toContain('compose -p yawp-pr-101');
     expect(log.match(/ start/g)?.length).toBe(2);
+  });
+
+  test('restores the displaced preview when the requested Compose start fails', () => {
+    const root = makeRoot();
+    makePreview(root, 100, { access: 10, pinned: true });
+    makePreview(root, 101, { access: 20 });
+    makePreview(root, 102, { access: 30 });
+    const docker = makeDockerStub(root, [100, 101]);
+
+    const result = run(root, 102, docker, {
+      PREVIEW_DOCKER_FAIL_START_PR: '102',
+    });
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain('could not start');
+    expect(readFileSync(docker.state, 'utf8').trim().split('\n').sort()).toEqual([
+      '100',
+      '101',
+    ]);
+    const log = readFileSync(docker.log, 'utf8');
+    expect(log).toContain('compose -p yawp-pr-102');
+    expect(log).toContain('compose -p yawp-pr-101');
+    expect(log.match(/ start/g)?.length).toBe(2);
+  });
+
+  test('refuses a wake whose authorization aged out while queued for the host lock', () => {
+    const root = makeRoot();
+    makePreview(root, 241);
+    const docker = makeDockerStub(root);
+
+    const result = run(root, 241, docker, {
+      PREVIEW_NOW_EPOCH: '1031',
+      PREVIEW_WAKE_AUTHORIZED_AT_EPOCH: '1000',
+      PREVIEW_WAKE_AUTHORIZATION_MAX_QUEUE_SECONDS: '30',
+    });
+
+    expect(result.status).toBe(12);
+    expect(result.stderr).toContain('authorization expired');
+    expect(readFileSync(docker.log, 'utf8')).not.toContain(' stop');
+    expect(readFileSync(docker.log, 'utf8')).not.toContain(' start');
   });
 
   test('does not restore a displaced preview until a failed target is confirmed stopped', () => {

@@ -111,6 +111,24 @@ jobs:
             "$inflight_dir" "$inflight_marker" "$remote_source"
           ssh -i ~/.ssh/preview_key "$ssh_target" \
             "flock -w 900 $(shell_quote "$lock_file") bash -lc $(shell_quote "$setup_command")"
+          marker_heartbeat_interval=$((PREVIEW_INFLIGHT_TTL_SECONDS / 3))
+          (( marker_heartbeat_interval < 5 )) && marker_heartbeat_interval=5
+          (( marker_heartbeat_interval > 60 )) && marker_heartbeat_interval=60
+          marker_heartbeat_pid=''
+          stop_marker_heartbeat() {
+            if [[ -n "$marker_heartbeat_pid" ]]; then
+              kill "$marker_heartbeat_pid" 2>/dev/null || true
+              wait "$marker_heartbeat_pid" 2>/dev/null || true
+            fi
+          }
+          trap stop_marker_heartbeat EXIT
+          (
+            while sleep "$marker_heartbeat_interval"; do
+              printf -v heartbeat_command 'touch %q' "$inflight_marker"
+              ssh -i ~/.ssh/preview_key "$ssh_target" "$heartbeat_command" || exit 0
+            done
+          ) &
+          marker_heartbeat_pid=$!
           rsync -az --delete \
             --exclude '.git' \
             --exclude 'node_modules' \
@@ -121,6 +139,9 @@ jobs:
             --exclude '.worktrees' \
             -e "ssh -i ~/.ssh/preview_key" \
             ./ "$ssh_target:$remote_source/"
+          stop_marker_heartbeat
+          marker_heartbeat_pid=''
+          trap - EXIT
 
       - name: Admit and deploy preview
         id: deploy

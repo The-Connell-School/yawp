@@ -533,6 +533,9 @@ describe('PR preview deployment contract', () => {
     );
     expect(enforcer).toContain('"$previews_dir" "$ROOT/sources"');
     expect(previewWorkflow).toContain('PREVIEW_INFLIGHT_MARKER');
+    expect(previewWorkflow).toContain('marker_heartbeat_pid=$!');
+    expect(previewWorkflow).toContain('stop_marker_heartbeat');
+    expect(previewWorkflow).toContain('touch %q');
     expect(enforcer).toContain('is_inflight');
   });
 

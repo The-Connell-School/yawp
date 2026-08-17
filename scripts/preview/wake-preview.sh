@@ -16,6 +16,8 @@ HEALTH_INTERVAL_SECONDS="${PREVIEW_WAKE_HEALTH_INTERVAL_SECONDS:-1}"
 ACCESS_DIR="${PREVIEW_ACCESS_DIR:-$ROOT/wake/access}"
 FIXED_NOW_EPOCH="${PREVIEW_NOW_EPOCH:-}"
 NOW_EPOCH=0
+AUTHORIZED_AT_EPOCH="${PREVIEW_WAKE_AUTHORIZED_AT_EPOCH:-}"
+AUTHORIZATION_MAX_QUEUE_SECONDS="${PREVIEW_WAKE_AUTHORIZATION_MAX_QUEUE_SECONDS:-30}"
 WAKE_LEASE_SECONDS="${PREVIEW_WAKE_LEASE_SECONDS:-120}"
 LEGACY_HEALTH_PORT="${PREVIEW_LEGACY_HEALTH_PORT:-8080}"
 PR_NUMBER="${1:-}"
@@ -64,6 +66,14 @@ is_nonnegative_integer "$HEALTH_INTERVAL_SECONDS" || {
   echo "PREVIEW_NOW_EPOCH must be a nonnegative integer" >&2
   exit 2
 }
+[[ -z "$AUTHORIZED_AT_EPOCH" ]] || is_nonnegative_integer "$AUTHORIZED_AT_EPOCH" || {
+  echo "PREVIEW_WAKE_AUTHORIZED_AT_EPOCH must be a nonnegative integer" >&2
+  exit 2
+}
+is_nonnegative_integer "$AUTHORIZATION_MAX_QUEUE_SECONDS" || {
+  echo "PREVIEW_WAKE_AUTHORIZATION_MAX_QUEUE_SECONDS must be a nonnegative integer" >&2
+  exit 2
+}
 is_nonnegative_integer "$WAKE_LEASE_SECONDS" || {
   echo "PREVIEW_WAKE_LEASE_SECONDS must be a nonnegative integer" >&2
   exit 2
@@ -106,6 +116,12 @@ is_nonnegative_integer "$NOW_EPOCH" || {
   echo "Preview clock returned an invalid epoch" >&2
   exit 2
 }
+if [[ -n "$AUTHORIZED_AT_EPOCH" ]] \
+  && (( NOW_EPOCH < AUTHORIZED_AT_EPOCH \
+    || NOW_EPOCH - AUTHORIZED_AT_EPOCH > AUTHORIZATION_MAX_QUEUE_SECONDS )); then
+  echo "Preview authorization expired while queued" >&2
+  exit 12
+fi
 
 is_running() {
   local pr="$1"
@@ -318,7 +334,11 @@ fi
 running_count="$(running_env_numbers | wc -l | tr -d ' ')"
 is_nonnegative_integer "$running_count" || running_count=0
 slept=""
-if (( running_count >= RUNNING_CAP )); then
+if (( running_count > RUNNING_CAP )); then
+  echo "Preview host is already above running capacity" >&2
+  exit 6
+fi
+if (( running_count == RUNNING_CAP )); then
   if [[ "$SLEEP_ENABLED" != "true" || "$ALLOW_DISPLACEMENT" != "true" ]]; then
     echo "Preview running capacity is full and displacement is disabled" >&2
     exit 6
