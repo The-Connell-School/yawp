@@ -61,6 +61,15 @@ if (isWebAppTestFile()) {
     '~/domain/collaboration/groups.server': await snapshot(
       '~/domain/collaboration/groups.server'
     ),
+    // The shared-drafts test stubs both of these wholesale to keep the loader
+    // off the database; without a pristine copy every later file would see the
+    // two-export stub instead of the real modules.
+    '~/utils/school-year-scope.server': await snapshot(
+      '~/utils/school-year-scope.server'
+    ),
+    '~/utils/student-assignment-type-scopes.server': await snapshot(
+      '~/utils/student-assignment-type-scopes.server'
+    ),
   };
 }
 

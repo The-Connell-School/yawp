@@ -11,8 +11,24 @@ const listShareableClassmates = mock();
 const createSharedDocument = mock();
 const shareDocumentCopy = mock();
 const seedGroupRoomIfEmpty = mock();
+const getAvailableAssignmentTypesForScopes = mock();
+const resolveSchoolYearScopeForMembership = mock();
+const studentAssignmentTypeScopes = mock();
 const redirectWithToast = mock();
 class DocumentShareError extends Error {}
+
+// bun's module mocks are global to the test run and mock.restore() does not
+// undo mock.module — restore from the pristine copies test-preload.ts captured
+// before any file could mock.module() these paths (see comment there).
+const actualAssignmentTypeAccess = globalThis.__realModules[
+  '~/utils/assignment-type-access.server'
+];
+const actualSchoolYearScope = globalThis.__realModules[
+  '~/utils/school-year-scope.server'
+];
+const actualStudentScopes = globalThis.__realModules[
+  '~/utils/student-assignment-type-scopes.server'
+];
 
 mock.module('~/utils/db.server', () => ({ prisma }));
 mock.module('~/utils/auth.server', () => ({ requireUserId, requireMembership }));
@@ -28,12 +44,33 @@ mock.module('~/domain/collaboration/seed.server', () => ({
 mock.module('~/domain/collaboration/room-store.server', () => ({
   localRoomClient: () => ({ getState: async () => null, putState: async () => {} }),
 }));
+mock.module('~/utils/assignment-type-access.server', () => ({
+  ...actualAssignmentTypeAccess,
+  getAvailableAssignmentTypesForScopes,
+}));
+mock.module('~/utils/school-year-scope.server', () => ({
+  ...actualSchoolYearScope,
+  resolveSchoolYearScopeForMembership,
+}));
+mock.module('~/utils/student-assignment-type-scopes.server', () => ({
+  ...actualStudentScopes,
+  studentAssignmentTypeScopes,
+}));
 mock.module('~/utils/toast.server', () => ({ redirectWithToast }));
 
 const { action, loader } = await import('./route');
 
 afterAll(() => {
   mock.restore();
+  mock.module(
+    '~/utils/assignment-type-access.server',
+    () => actualAssignmentTypeAccess
+  );
+  mock.module('~/utils/school-year-scope.server', () => actualSchoolYearScope);
+  mock.module(
+    '~/utils/student-assignment-type-scopes.server',
+    () => actualStudentScopes
+  );
 });
 
 const post = (fields: Record<string, string | string[]>) => {
@@ -62,10 +99,7 @@ async function readBody(response: any) {
   return typeof response.json === 'function' ? response.json() : response.data;
 }
 
-const sharingStudent = (enabled = true) => ({
-  id: 'member-me',
-  organization: { studentDocumentSharingEnabled: enabled },
-});
+const sharingStudent = () => ({ id: 'member-me' });
 
 const draftRow = {
   id: 'doc-source',
@@ -98,18 +132,20 @@ describe('app.shared-drafts.new', () => {
       html: '<p>Work.</p>',
     });
     seedGroupRoomIfEmpty.mockReset().mockResolvedValue({ status: 'seeded' });
+    resolveSchoolYearScopeForMembership.mockReset().mockResolvedValue('2026-2027');
+    studentAssignmentTypeScopes
+      .mockReset()
+      .mockResolvedValue([{ organizationId: 'org-1' }]);
+    getAvailableAssignmentTypesForScopes.mockReset().mockResolvedValue([
+      { id: 'at-1', title: 'Essay', collaborationSupported: true },
+      { id: 'at-solo', title: 'Free Write', collaborationSupported: false },
+    ]);
     redirectWithToast
       .mockReset()
       .mockImplementation((to: string, options: any) => ({ to, options }));
   });
 
   describe('gate', () => {
-    test('the loader 404s when the school has not enabled sharing', async () => {
-      prisma.orgMembership.findFirst.mockResolvedValue(sharingStudent(false));
-
-      await expect(get()).rejects.toBeDefined();
-    });
-
     test('the loader 404s for a teacher', async () => {
       // The scoped query filters on role STUDENT, so a teacher misses.
       prisma.orgMembership.findFirst.mockResolvedValue(null);
@@ -117,13 +153,51 @@ describe('app.shared-drafts.new', () => {
       await expect(get()).rejects.toBeDefined();
     });
 
-    test('the action refuses when sharing is not enabled', async () => {
-      prisma.orgMembership.findFirst.mockResolvedValue(sharingStudent(false));
+    test('the action refuses a non-student', async () => {
+      prisma.orgMembership.findFirst.mockResolvedValue(null);
 
       const result: any = await post({ intent: 'create' });
 
       expect(createSharedDocument).not.toHaveBeenCalled();
       expect(result.options.type).toBe('error');
+    });
+
+    test('only offers drafts whose kind of writing is in the pilot', async () => {
+      // Otherwise a student could open a room the collaborative page, the token
+      // endpoint and the dual-write would all then refuse to serve.
+      await get();
+
+      const where = prisma.document.findMany.mock.calls[0][0].where;
+      expect(where.assignmentType).toEqual({ collaborationSupported: true });
+    });
+
+    test('only offers kinds of writing in the pilot', async () => {
+      // The full list comes from the student's classes; the pilot flag narrows it.
+      const body = await readBody(await get());
+
+      expect(body.assignmentTypes).toEqual([{ id: 'at-1', title: 'Essay' }]);
+    });
+
+    test('refuses to start a draft of a kind outside the pilot', async () => {
+      const result: any = await post({
+        intent: 'create',
+        assignmentTypeId: 'at-solo',
+        classmateIds: ['member-mate'],
+      });
+
+      expect(createSharedDocument).not.toHaveBeenCalled();
+      expect(result.options.description).toMatch(/not available to you/i);
+    });
+
+    test('refuses a kind of writing outside the student’s own classes', async () => {
+      const result: any = await post({
+        intent: 'create',
+        assignmentTypeId: 'at-elsewhere',
+        classmateIds: ['member-mate'],
+      });
+
+      expect(createSharedDocument).not.toHaveBeenCalled();
+      expect(result.options.description).toMatch(/not available to you/i);
     });
   });
 
@@ -257,19 +331,15 @@ describe('app.shared-drafts.new', () => {
       expect(result.to).toBe('/app/collab-documents/doc-new');
     });
 
-    test('refuses an assignment type the student does not already write in', async () => {
-      // Guards a crafted POST reaching a type outside their school's setup.
-      prisma.document.findFirst.mockResolvedValue(null);
+    test('offers a kind of writing the student has not yet written in', async () => {
+      // Deriving the options from existing drafts made this road unreachable for
+      // exactly the student who has not started one -- most of them, at first.
+      prisma.document.findMany.mockResolvedValue([]);
 
-      const result: any = await post({
-        intent: 'create',
-        assignmentTypeId: 'at-forbidden',
-        classmateIds: ['member-mate'],
-      });
+      const body = await readBody(await get());
 
-      expect(createSharedDocument).not.toHaveBeenCalled();
-      expect(result.options.type).toBe('error');
-      expect(result.options.description).toMatch(/not available to you/i);
+      expect(body.drafts).toEqual([]);
+      expect(body.assignmentTypes).toEqual([{ id: 'at-1', title: 'Essay' }]);
     });
 
     test('requires an assignment type', async () => {

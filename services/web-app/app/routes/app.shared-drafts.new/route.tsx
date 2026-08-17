@@ -16,8 +16,11 @@ import {
 } from '~/domain/collaboration/share.server';
 import { localRoomClient } from '~/domain/collaboration/room-store.server';
 import { seedGroupRoomIfEmpty } from '~/domain/collaboration/seed.server';
+import { getAvailableAssignmentTypesForScopes } from '~/utils/assignment-type-access.server';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
+import { resolveSchoolYearScopeForMembership } from '~/utils/school-year-scope.server';
+import { studentAssignmentTypeScopes } from '~/utils/student-assignment-type-scopes.server';
 import { redirectWithToast } from '~/utils/toast.server';
 
 /**
@@ -35,18 +38,53 @@ import { redirectWithToast } from '~/utils/toast.server';
  *   so their original private draft is untouched and the solo editor never ends up
  *   writing to the same row the CRDT owns.
  *
+ * The pilot gate is `AssignmentType.collaborationSupported`, the same one the
+ * teacher road and the transport enforce, so a student is only ever offered kinds
+ * of writing the collaborative page will actually serve.
+ *
  * ⚠️ The loader and action are unit-tested. THE RENDERED UI IS UNVERIFIED.
  */
+/**
+ * The kinds of writing this student may start a shared draft of.
+ *
+ * Access is resolved through enrollment — the same rule the dashboard uses to
+ * decide what a student may start at all — and then narrowed to the pilot. It is
+ * the loader's option list and the action's validation set, so what is offered
+ * and what is accepted cannot drift apart.
+ */
+async function collaborativeAssignmentTypesForStudent(
+  request: Request,
+  profile: { id: string; role: string }
+) {
+  const schoolYearScope = await resolveSchoolYearScopeForMembership(
+    request,
+    profile
+  );
+  const scopes = await studentAssignmentTypeScopes({
+    membershipId: profile.id,
+    schoolYearScope,
+  });
+
+  const types = await getAvailableAssignmentTypesForScopes<{
+    id: string;
+    title: string;
+    collaborationSupported: boolean;
+  }>({
+    scopes,
+    select: { id: true, title: true, collaborationSupported: true },
+    orderBy: { position: 'asc' },
+  });
+
+  return types.filter((type) => type.collaborationSupported);
+}
+
 async function requireSharingStudent(request: Request) {
   const userId = await requireUserId(request);
   const profile = await requireMembership(request, userId);
 
   const membership = await prisma.orgMembership.findFirst({
     where: { id: profile.id, role: 'STUDENT', isActive: true },
-    select: {
-      id: true,
-      organization: { select: { studentDocumentSharingEnabled: true } },
-    },
+    select: { id: true },
   });
 
   return { profile, membership };
@@ -55,25 +93,28 @@ async function requireSharingStudent(request: Request) {
 export async function loader({ request }: LoaderFunctionArgs) {
   const { profile, membership } = await requireSharingStudent(request);
 
-  if (!membership?.organization.studentDocumentSharingEnabled) {
-    // Indistinguishable from nonexistent when the school has not enabled it, or
-    // for a teacher.
+  if (!membership) {
+    // Indistinguishable from nonexistent for a teacher, whose road to a shared
+    // document is arranging groups on an assignment.
     throw dataResponse(
       { message: 'Not found.' },
       { status: 404, statusText: 'Not Found' }
     );
   }
 
-  const [classmates, drafts] = await Promise.all([
+  const [classmates, drafts, assignmentTypes] = await Promise.all([
     listShareableClassmates({ membershipId: profile.id }),
-    // Their own drafts, offered as a starting point. Only unshared ones: a draft
-    // that already belongs to a group is not a candidate for sharing again.
+    // Their own drafts, offered as a starting point. Only unshared ones, and only
+    // kinds of writing in the pilot: a draft that already belongs to a group is
+    // not a candidate for sharing again, and one whose type is not collaborative
+    // would become a room nothing else would serve.
     prisma.document.findMany({
       where: {
         membershipId: profile.id,
         deletedAt: null,
         archivedAt: null,
         group: null,
+        assignmentType: { collaborationSupported: true },
       },
       orderBy: { updatedAt: 'desc' },
       take: 20,
@@ -85,11 +126,20 @@ export async function loader({ request }: LoaderFunctionArgs) {
         assignmentType: { select: { title: true } },
       },
     }),
+    collaborativeAssignmentTypesForStudent(request, profile),
   ]);
 
   return dataResponse({
     classmates,
     maxWriters: MAX_COLLABORATION_GROUP_SIZE,
+    // Offered whether or not the student has written anything yet. Deriving the
+    // options from their existing drafts, as this page first did, made the
+    // "start a new shared draft" road unreachable for exactly the student who
+    // has not started one — which is most of them, the first time.
+    assignmentTypes: assignmentTypes.map((type) => ({
+      id: type.id,
+      title: type.title,
+    })),
     drafts: drafts.map((draft) => ({
       id: draft.id,
       title: draft.title?.trim() || 'Untitled',
@@ -104,7 +154,7 @@ export async function action({ request }: ActionFunctionArgs) {
   const { profile, membership } = await requireSharingStudent(request);
   const backTo = '/app/shared-drafts/new';
 
-  if (!membership?.organization.studentDocumentSharingEnabled) {
+  if (!membership) {
     return redirectWithToast('/app', {
       type: 'error',
       description: 'Sharing drafts with classmates is not available.',
@@ -168,15 +218,14 @@ export async function action({ request }: ActionFunctionArgs) {
         });
       }
 
-      // Do not trust the posted id. A student may start a shared draft of a kind
-      // they already write in — which is exactly where the options come from —
-      // so an id crafted by hand cannot reach an assignment type outside their
-      // school's configuration.
-      const permitted = await prisma.document.findFirst({
-        where: { membershipId: profile.id, assignmentTypeId, deletedAt: null },
-        select: { id: true },
-      });
-      if (!permitted) {
+      // Do not trust the posted id: re-derive the permitted set rather than
+      // believing the form, so an id crafted by hand cannot reach a kind of
+      // writing outside this student's classes or outside the pilot.
+      const permitted = await collaborativeAssignmentTypesForStudent(
+        request,
+        profile
+      );
+      if (!permitted.some((type) => type.id === assignmentTypeId)) {
         return redirectWithToast(backTo, {
           type: 'error',
           description: 'That kind of writing is not available to you.',
@@ -212,7 +261,8 @@ export async function action({ request }: ActionFunctionArgs) {
 }
 
 export default function NewSharedDraftRoute() {
-  const { classmates, drafts, maxWriters } = useLoaderData<typeof loader>();
+  const { assignmentTypes, classmates, drafts, maxWriters } =
+    useLoaderData<typeof loader>();
   const navigation = useNavigation();
   const busy = navigation.state !== 'idle';
 
@@ -305,37 +355,35 @@ export default function NewSharedDraftRoute() {
           </p>
         </div>
 
-        {drafts.length > 0 ? (
+        {assignmentTypes.length > 0 ? (
           <label className="grid gap-1 text-sm">
             What kind of writing?
             <select
               name="assignmentTypeId"
               className="rounded border px-2 py-1"
-              defaultValue={drafts[0].assignmentTypeId}
+              defaultValue={assignmentTypes[0].id}
             >
-              {Array.from(
-                new Map(
-                  drafts.map((draft) => [draft.assignmentTypeId, draft])
-                ).values()
-              ).map((draft) => (
-                <option
-                  key={draft.assignmentTypeId}
-                  value={draft.assignmentTypeId}
-                >
-                  {draft.assignmentTypeTitle}
+              {assignmentTypes.map((assignmentType) => (
+                <option key={assignmentType.id} value={assignmentType.id}>
+                  {assignmentType.title}
                 </option>
               ))}
             </select>
           </label>
         ) : (
           <p className="text-sm text-gray-600">
-            Start a draft of your own first, then come back to share it.
+            None of your classes use a kind of writing you can work on together
+            yet.
           </p>
         )}
 
         {classmatePicker}
 
-        <Button type="submit" disabled={busy} className="justify-self-start">
+        <Button
+          type="submit"
+          disabled={busy || assignmentTypes.length === 0}
+          className="justify-self-start"
+        >
           Start a shared draft
         </Button>
       </Form>
