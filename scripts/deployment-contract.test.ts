@@ -390,6 +390,10 @@ describe('PR preview deployment contract', () => {
       'Refusing to replace demo database while DEMO_RESET_DATA=false.'
     );
     expect(deployScript).toContain(
+      'Refusing to adopt an existing demo database without a matching data-source fingerprint.'
+    );
+    expect(deployScript).not.toContain('Adopt legacy demo databases');
+    expect(deployScript).toContain(
       'dropdb -U postgres --force --if-exists "$DATABASE_NAME"'
     );
     expect(deployScript).toContain(

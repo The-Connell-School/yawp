@@ -113,9 +113,8 @@ elif [[ "$PREVIEW_SLUG" == "demo" && "${DEMO_RESET_DATA:-false}" != "true" ]]; t
     echo "Current data source: $(<"$DATA_SOURCE_FINGERPRINT_FILE")" >&2
     exit 1
   fi
-  # Adopt legacy demo databases created before data-source fingerprints existed.
-  # A brand-new demo database is also safe: ensure_preview_database creates it below.
-  DATA_SOURCE_CHANGED=0
+  # A missing fingerprint is safe only for a brand-new database. Once Postgres is
+  # available, reset_preview_database_for_data_source_change verifies that state.
 else
   rm -f "$ACCESS_CODE_FILE" "$ACCESS_SEATS_FILE"
 fi
@@ -397,8 +396,17 @@ ensure_production_dump_preview_database() {
 }
 
 reset_preview_database_for_data_source_change() {
-  if [[ "$DATA_SOURCE_CHANGED" != "1" ]] || ! database_exists "$DATABASE_NAME"; then
+  if [[ "$DATA_SOURCE_CHANGED" != "1" ]]; then
     return 0
+  fi
+
+  if ! database_exists "$DATABASE_NAME"; then
+    return 0
+  fi
+
+  if [[ "$PREVIEW_SLUG" == "demo" && "${DEMO_RESET_DATA:-false}" != "true" ]]; then
+    echo "Refusing to adopt an existing demo database without a matching data-source fingerprint." >&2
+    exit 1
   fi
 
   echo "Preview data source changed; replacing database $DATABASE_NAME..."

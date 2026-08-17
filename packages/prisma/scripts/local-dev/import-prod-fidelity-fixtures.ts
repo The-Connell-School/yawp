@@ -77,7 +77,9 @@ function stripProfileRefs(row: Record<string, unknown>) {
   delete next.updatedById;
   delete next.ownerTeacherId;
   delete next.ownerMembershipId;
-  if ('ownerOrgId' in next) next.ownerOrgId = LOCAL_DEV_ORG_ID;
+  if ('ownerOrgId' in next) {
+    next.ownerOrgId = next.ownerOrgId == null ? null : LOCAL_DEV_ORG_ID;
+  }
   return next;
 }
 
@@ -143,6 +145,23 @@ export async function syncProdFidelityFixtures(
       where: { id: String(row.id) },
       create: data as never,
       update: withoutId(data) as never,
+    });
+  }
+
+  const fixtureInstructionIds = bundle.assignmentModuleInstructions.map((row) =>
+    String(row.id)
+  );
+  const fixtureButtonIds = bundle.assignmentModuleInstructionButtons.map((row) =>
+    String(row.id)
+  );
+  if (fixtureInstructionIds.length > 0) {
+    await prisma.assignmentModuleInstructionButton.deleteMany({
+      where: {
+        assignmentModuleInstructionId: { in: fixtureInstructionIds },
+        ...(fixtureButtonIds.length > 0
+          ? { id: { notIn: fixtureButtonIds } }
+          : {}),
+      },
     });
   }
 
@@ -229,14 +248,37 @@ export async function syncProdFidelityFixtures(
   const organizations = await prisma.organization.findMany({
     select: { id: true },
   });
+  const globalAssignmentTypeIds = bundle.assignmentTypes
+    .filter((row) => row.ownerOrgId == null)
+    .map((row) => String(row.id));
+  const localOwnedAssignmentTypeIds = bundle.assignmentTypes
+    .filter((row) => row.ownerOrgId != null)
+    .map((row) => String(row.id));
   for (const organization of organizations) {
+    const assignmentTypeIds = [
+      ...globalAssignmentTypeIds,
+      ...(organization.id === LOCAL_DEV_ORG_ID
+        ? localOwnedAssignmentTypeIds
+        : []),
+    ];
     await prisma.organizationAssignmentType.createMany({
-      data: bundle.assignmentTypes.map((row) => ({
+      data: assignmentTypeIds.map((assignmentTypeId) => ({
         organizationId: organization.id,
-        assignmentTypeId: String(row.id),
+        assignmentTypeId,
       })),
       skipDuplicates: true,
     });
+    if (
+      organization.id !== LOCAL_DEV_ORG_ID &&
+      localOwnedAssignmentTypeIds.length > 0
+    ) {
+      await prisma.organizationAssignmentType.deleteMany({
+        where: {
+          organizationId: organization.id,
+          assignmentTypeId: { in: localOwnedAssignmentTypeIds },
+        },
+      });
+    }
   }
 
   return {
