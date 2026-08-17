@@ -20,6 +20,15 @@ unset DATABASE_URL
 # this produced the database "yawp_pr_" and, because PR_NUMBER is exported as an empty
 # string rather than left unset, did it silently instead of failing under `set -u`.
 : "${DATABASE_NAME:?preview-env.mjs did not export DATABASE_NAME}"
+DEMO_RESET_DATA="${DEMO_RESET_DATA:-false}"
+DEMO_RESET_CONFIRMATION="${DEMO_RESET_CONFIRMATION:-}"
+DEMO_BACKUP_RETENTION="${DEMO_BACKUP_RETENTION:-14}"
+[[ "$DEMO_BACKUP_RETENTION" =~ ^[0-9]+$ ]] \
+  && (( DEMO_BACKUP_RETENTION >= 1 && DEMO_BACKUP_RETENTION <= 365 )) || {
+    echo "DEMO_BACKUP_RETENTION must be between 1 and 365" >&2
+    exit 1
+  }
+source "$SCRIPT_DIR/demo-reset-guard.sh"
 DUMP_URI="${PREVIEW_DB_DUMP_S3_URI:-s3://yawp-preview-videos/production.dump}"
 DUMP_VERSION="${PREVIEW_DB_DUMP_VERSION:-unversioned}"
 POSTGRES_CONTAINER="${PREVIEW_POSTGRES_CONTAINER:-preview-postgres}"
@@ -344,6 +353,17 @@ database_exists() {
   [[ "$exists" == "1" ]]
 }
 
+backup_demo_database_before_reset() {
+  [[ "$PREVIEW_SLUG" == "demo" ]] || return 0
+  database_exists "$DATABASE_NAME" || return 0
+  BACKUP_KIND=pre-reset \
+    BACKUP_RETENTION_COUNT="$DEMO_BACKUP_RETENTION" \
+    PREVIEW_ROOT="$ROOT" \
+    DATABASE_NAME="$DATABASE_NAME" \
+    PREVIEW_POSTGRES_CONTAINER="$POSTGRES_CONTAINER" \
+    bash "$SCRIPT_DIR/backup-database.sh"
+}
+
 revoke_public_database_connect() {
   local database_name="$1"
   validate_database_name "$database_name"
@@ -411,6 +431,7 @@ reset_preview_database_for_data_source_change() {
 
   echo "Preview data source changed; replacing database $DATABASE_NAME..."
   "${compose[@]}" down --remove-orphans >/dev/null 2>&1 || true
+  backup_demo_database_before_reset
   docker exec "$POSTGRES_CONTAINER" dropdb -U postgres --force --if-exists "$DATABASE_NAME"
   rm -f "$TOOLING_FINGERPRINT_FILE"
 }
@@ -419,9 +440,28 @@ reset_seed_preview_database() {
   validate_database_name "$DATABASE_NAME"
   echo "Resetting preview database $DATABASE_NAME for seeded local-dev data..."
   "${compose[@]}" down --remove-orphans >/dev/null 2>&1 || true
+  backup_demo_database_before_reset
   docker exec "$POSTGRES_CONTAINER" dropdb -U postgres --force --if-exists "$DATABASE_NAME"
   docker exec "$POSTGRES_CONTAINER" createdb -U postgres -O "$DATABASE_USER" "$DATABASE_NAME"
   DATABASE_CREATED=1
+}
+
+install_demo_backup_schedule() {
+  [[ "$PREVIEW_SLUG" == "demo" ]] || return 0
+  [[ "$ROOT" =~ ^/[A-Za-z0-9._/-]+$ && "$SOURCE_DIR" =~ ^/[A-Za-z0-9._/-]+$ ]] || {
+    echo "Demo backup paths cannot contain whitespace" >&2
+    exit 1
+  }
+
+  local marker="yawp-demo-database-backup"
+  local cron_file
+  cron_file="$(mktemp)"
+  crontab -l 2>/dev/null | grep -vF "$marker" > "$cron_file" || true
+  printf '%s\n' \
+    "17 3 * * * PREVIEW_ROOT=$ROOT DATABASE_NAME=$DATABASE_NAME PREVIEW_POSTGRES_CONTAINER=$POSTGRES_CONTAINER BACKUP_RETENTION_COUNT=$DEMO_BACKUP_RETENTION BACKUP_KIND=scheduled bash $SOURCE_DIR/scripts/preview/backup-database.sh >> $ROOT/backups/scheduled.log 2>&1 # $marker" \
+    >> "$cron_file"
+  crontab "$cron_file"
+  rm -f -- "$cron_file"
 }
 
 create_seed_preview_database() {
@@ -597,6 +637,7 @@ ensure_preview_database
 harden_preview_database
 run_tooling_if_needed
 ensure_preview_seats
+install_demo_backup_schedule
 start_or_refresh_web() {
   refresh_web_container_if_needed
 }

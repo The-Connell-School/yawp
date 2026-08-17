@@ -1055,6 +1055,43 @@ describe('demo environment deployment contract', () => {
     expect(workflow).not.toContain('curl --user');
   });
 
+  test('demo reset requires typed confirmation and takes a pre-reset backup', () => {
+    const workflow = readRepoFile('.github/workflows/demo-environment.yml');
+    const deployScript = readRepoFile('scripts/preview/deploy.sh');
+    const resetGuard = readRepoFile('scripts/preview/demo-reset-guard.sh');
+
+    expect(workflow).toContain('reset_confirmation:');
+    expect(workflow).toContain('DEMO_RESET_CONFIRMATION:');
+    expect(workflow).toContain('DEMO_BACKUP_RETENTION:');
+    expect(workflow).toContain(
+      'DEMO_RESET_CONFIRMATION=$(shell_quote "$DEMO_RESET_CONFIRMATION")'
+    );
+    expect(workflow).toContain(
+      'DEMO_BACKUP_RETENTION=$(shell_quote "$DEMO_BACKUP_RETENTION")'
+    );
+
+    expect(deployScript).toContain('demo-reset-guard.sh');
+    expect(resetGuard).toContain('require_demo_reset_confirmation');
+    expect(resetGuard).toContain('RESET ${DATABASE_NAME}');
+    expect(resetGuard).toContain('DEMO_RESET_CONFIRMATION');
+    expect(deployScript).toContain('BACKUP_KIND=pre-reset');
+    expect(deployScript).toContain('backup-database.sh');
+    expect(deployScript).toContain('install_demo_backup_schedule');
+  });
+
+  test('demo backups are scheduled daily with configurable count retention', () => {
+    const workflow = readRepoFile('.github/workflows/demo-environment.yml');
+    const deployScript = readRepoFile('scripts/preview/deploy.sh');
+    const backupScript = readRepoFile('scripts/preview/backup-database.sh');
+
+    expect(workflow).toContain("default: '14'");
+    expect(deployScript).toContain('yawp-demo-database-backup');
+    expect(deployScript).toContain('17 3 * * *');
+    expect(backupScript).toContain('BACKUP_RETENTION_COUNT');
+    expect(backupScript).toContain('pg_restore --list');
+    expect(backupScript).toContain('.partial');
+  });
+
   test('workflow verification is anonymous and retains in-app gate assertions', () => {
     for (const path of [
       '.github/workflows/preview-environments.yml',
