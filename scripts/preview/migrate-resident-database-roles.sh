@@ -7,9 +7,15 @@ ROOT="${PREVIEW_ROOT:-/srv/yawp-preview}"
 DOCKER="${PREVIEW_DOCKER:-docker}"
 POSTGRES_CONTAINER="${PREVIEW_POSTGRES_CONTAINER:-preview-postgres}"
 ADMIN_PASSWORD="${PREVIEW_POSTGRES_ADMIN_PASSWORD:?PREVIEW_POSTGRES_ADMIN_PASSWORD is required}"
+HEALTH_ATTEMPTS="${PREVIEW_MIGRATION_HEALTH_ATTEMPTS:-90}"
+HEALTH_INTERVAL_SECONDS="${PREVIEW_MIGRATION_HEALTH_INTERVAL_SECONDS:-1}"
 
 [[ "$ADMIN_PASSWORD" =~ ^[A-Za-z0-9_-]{32,}$ ]] || {
   echo "PREVIEW_POSTGRES_ADMIN_PASSWORD must be a 32-character URL-safe secret" >&2
+  exit 2
+}
+[[ "$HEALTH_ATTEMPTS" =~ ^[1-9][0-9]*$ && "$HEALTH_INTERVAL_SECONDS" =~ ^[0-9]+$ ]] || {
+  echo "Preview migration health settings are invalid" >&2
   exit 2
 }
 
@@ -28,7 +34,7 @@ ensure_database_role() {
     $DOCKER exec "$POSTGRES_CONTAINER" createuser -U postgres "$role"
   fi
   $DOCKER exec "$POSTGRES_CONTAINER" psql --no-psqlrc -v ON_ERROR_STOP=1 -U postgres -d postgres -c \
-    "ALTER ROLE \"${role}\" WITH LOGIN PASSWORD '${password}' NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS; ALTER DATABASE \"${database}\" OWNER TO \"${role}\"; REVOKE CONNECT ON DATABASE \"${database}\" FROM PUBLIC; GRANT CONNECT ON DATABASE \"${database}\" TO \"${role}\";" \
+    "ALTER ROLE \"${role}\" WITH LOGIN PASSWORD '${password}' NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS; ALTER DATABASE \"${database}\" OWNER TO \"${role}\"; GRANT CONNECT ON DATABASE \"${database}\" TO \"${role}\";" \
     >/dev/null
   $DOCKER exec "$POSTGRES_CONTAINER" psql --no-psqlrc -v ON_ERROR_STOP=1 -U postgres -d "$database" -c "
 DO \$migration\$
@@ -93,6 +99,60 @@ GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO \"${role}\";" \
     >/dev/null
 }
 
+verify_role_database() {
+  local database="$1" role="$2" password="$3"
+  [[ "$($DOCKER exec -e "PGPASSWORD=${password}" "$POSTGRES_CONTAINER" \
+    psql --no-psqlrc -h 127.0.0.1 -U "$role" -d "$database" -Atc 'SELECT 1' \
+    2>/dev/null | tr -d '[:space:]')" == "1" ]]
+}
+
+wait_for_web_health() {
+  local compose_file="$1" project="$2" container_id status container_ip attempt
+  container_id="$($DOCKER compose -p "$project" -f "$compose_file" ps -q web)"
+  [[ -n "$container_id" ]] || return 1
+  for (( attempt = 1; attempt <= HEALTH_ATTEMPTS; attempt++ )); do
+    status="$($DOCKER inspect --format '{{.State.Health.Status}}' "$container_id" 2>/dev/null || true)"
+    [[ "$status" == "healthy" ]] && return 0
+    if [[ -z "$status" ]]; then
+      container_ip="$($DOCKER inspect \
+        --format '{{with index .NetworkSettings.Networks "preview"}}{{.IPAddress}}{{end}}' \
+        "$container_id" 2>/dev/null || true)"
+      if [[ "$container_ip" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]] \
+        && curl --fail --silent --show-error --max-time 2 \
+          "http://${container_ip}:8080/api/healthcheck" >/dev/null; then
+        return 0
+      fi
+    fi
+    (( attempt < HEALTH_ATTEMPTS )) && sleep "$HEALTH_INTERVAL_SECONDS"
+  done
+  return 1
+}
+
+active_backup=''
+active_compose_file=''
+active_project=''
+active_was_running=false
+rollback_active_migration() {
+  [[ -n "$active_backup" && -f "$active_backup" ]] || return 0
+  mv -f -- "$active_backup" "$active_compose_file" || return 1
+  local rollback_compose=("$DOCKER" compose -p "$active_project" -f "$active_compose_file")
+  if [[ "$active_was_running" == "true" ]]; then
+    "${rollback_compose[@]}" up -d --force-recreate web >/dev/null
+  else
+    "${rollback_compose[@]}" create --force-recreate web >/dev/null
+  fi
+  active_backup=''
+}
+handle_exit() {
+  local status="$?"
+  trap - EXIT TERM INT
+  if (( status != 0 )) && ! rollback_active_migration; then
+    echo "Preview database-role migration rollback failed for ${active_project:-unknown}" >&2
+  fi
+  exit "$status"
+}
+trap handle_exit EXIT TERM INT
+
 rewrite_compose_database_url() {
   local compose_file="$1" database="$2" role="$3" password_file="$4"
   node - "$compose_file" "$database" "$role" "$password_file" <<'NODE'
@@ -153,14 +213,31 @@ for preview_dir in "$ROOT"/previews/*; do
     | grep -q .; then
     was_running=true
   fi
+  project="yawp-${slug}"
+  compose=("$DOCKER" compose -p "$project" -f "$compose_file")
+  active_backup="${compose_file}.database-role-migration-backup"
+  active_compose_file="$compose_file"
+  active_project="$project"
+  active_was_running="$was_running"
+  cp -p -- "$compose_file" "$active_backup"
+  chmod 600 "$active_backup"
   ensure_database_role "$database" "$role" "$password"
   rewrite_compose_database_url "$compose_file" "$database" "$role" "$password_file"
-  compose=("$DOCKER" compose -p "yawp-${slug}" -f "$compose_file")
   if [[ "$was_running" == "true" ]]; then
     "${compose[@]}" up -d --force-recreate web >/dev/null
   else
     "${compose[@]}" create --force-recreate web >/dev/null
   fi
+  verify_role_database "$database" "$role" "$password" || {
+    echo "Isolated database role could not connect to $database" >&2
+    exit 1
+  }
+  if [[ "$was_running" == "true" ]] && ! wait_for_web_health "$compose_file" "$project"; then
+    echo "Migrated running preview $slug did not become healthy" >&2
+    exit 1
+  fi
+  rm -f -- "$active_backup"
+  active_backup=''
   echo "Migrated $slug to isolated database role $role"
 done
 
@@ -177,3 +254,4 @@ done < <($DOCKER exec "$POSTGRES_CONTAINER" psql --no-psqlrc -U postgres -d post
 $DOCKER exec "$POSTGRES_CONTAINER" psql --no-psqlrc -v ON_ERROR_STOP=1 -U postgres -d postgres -c \
   "ALTER ROLE postgres WITH PASSWORD '${ADMIN_PASSWORD}';" >/dev/null
 echo "Resident preview database roles isolated and Postgres administrator rotated"
+trap - EXIT TERM INT

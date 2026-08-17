@@ -11,6 +11,7 @@ import {
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { createHmac } from 'node:crypto';
 
 const script = path.join(import.meta.dir, 'wake-preview.sh');
 const roots = [];
@@ -28,6 +29,7 @@ function makePreview(root, pr, { access = 0, pinned = false } = {}) {
   mkdirSync(preview, { recursive: true });
   writeFileSync(path.join(preview, 'docker-compose.yml'), 'services:\n  web: {}\n');
   writeFileSync(path.join(preview, 'state-marker'), `state-${pr}\n`);
+  writeFileSync(path.join(preview, 'access-secret'), `${'a'.repeat(64)}\n`);
   if (pinned) writeFileSync(path.join(preview, 'keep-awake'), 'true\n');
   if (access > 0) {
     writeFileSync(path.join(root, 'wake', 'access', `pr-${pr}`), `${access}\n`);
@@ -55,6 +57,10 @@ if [[ "$1" == "ps" && "$*" =~ com.docker.compose.project=yawp-pr-([0-9]+) ]]; th
 fi
 if [[ "$1" == "exec" && "$*" == *"SELECT EXISTS"* ]]; then
   [[ "\${PREVIEW_DOCKER_AUTH_CURRENT:-true}" == "true" ]] && printf '1\\n' || printf '0\\n'
+  exit 0
+fi
+if [[ "$1" == "exec" && "$*" == *"SELECT COALESCE"* ]]; then
+  printf '%s\n' "\${PREVIEW_DOCKER_AUTH_CODE:-calm-panda-8127}"
   exit 0
 fi
   if [[ "$1" == "compose" && "$*" =~ -p[[:space:]]+yawp-pr-([0-9]+) ]]; then
@@ -445,6 +451,31 @@ printf 'OK\\n'
     expect(result.stderr).toContain('authorization was revoked while queued');
     const log = readFileSync(docker.log, 'utf8');
     expect(log).toContain('SELECT EXISTS');
+    expect(log).not.toContain(' stop');
+    expect(log).not.toContain(' start');
+  });
+
+  test('rejects a queued one-click code after that exact code is rotated', () => {
+    const root = makeRoot();
+    makePreview(root, 241);
+    const docker = makeDockerStub(root);
+    const acceptedDigest = createHmac('sha256', 'a'.repeat(64))
+      .update('calm-panda-8127')
+      .digest('hex');
+
+    const result = run(root, 241, docker, {
+      PREVIEW_NOW_EPOCH: '1001',
+      PREVIEW_WAKE_AUTHORIZED_AT_EPOCH: '1000',
+      PREVIEW_WAKE_AUTHORIZED_ORGANIZATION_ID: 'runtime-seat-2',
+      PREVIEW_WAKE_REQUIRE_PREVIEW_SEAT_CODE: 'true',
+      PREVIEW_WAKE_AUTHORIZED_CODE_HMAC_SHA256: acceptedDigest,
+      PREVIEW_DOCKER_AUTH_CODE: 'rotated-panda-9001',
+    });
+
+    expect(result.status).toBe(12);
+    expect(result.stderr).toContain('authorization was revoked while queued');
+    const log = readFileSync(docker.log, 'utf8');
+    expect(log).toContain('SELECT COALESCE');
     expect(log).not.toContain(' stop');
     expect(log).not.toContain(' start');
   });

@@ -468,6 +468,8 @@ describe('PR preview deployment contract', () => {
     expect(deploy).toContain('REVOKE CONNECT ON DATABASE');
     expect(deploy).toContain('PREVIEW_POSTGRES_ADMIN_PASSWORD');
     expect(deploy).toContain('NOBYPASSRLS');
+    expect(deploy).toContain('revoke_public_database_connect "$TEMPLATE_DB"');
+    expect(deploy).toContain('chmod 600 "$temporary"');
     expect(renderCompose).not.toContain('postgres:postgres@preview-postgres');
     expect(workflow).toContain('PREVIEW_POSTGRES_ADMIN_PASSWORD=');
     expect(workflow).not.toContain(
@@ -606,9 +608,14 @@ describe('PR preview deployment contract', () => {
     expect(workflow).toContain('migrate-resident-database-roles.sh');
     expect(bootstrap).toContain('migrate-resident-database-roles.sh');
     expect(bootstrap).toContain('flock -w 900');
+    expect(bootstrap).toContain('chmod 700 "$ROOT/postgres"');
+    expect(bootstrap).toContain('chmod 600 "$postgres_compose_temporary"');
     expect(migration).toContain("relation.relkind IN ('r', 'p', 'S', 'v', 'm', 'f')");
     expect(migration).toContain('REVOKE CONNECT ON DATABASE');
     expect(migration).toContain('create --force-recreate web');
+    expect(migration).toContain('verify_role_database');
+    expect(migration).toContain('wait_for_web_health');
+    expect(migration).toContain('rollback_active_migration');
     expect(migration).toContain('ALTER ROLE postgres WITH PASSWORD');
   });
 
@@ -723,9 +730,7 @@ describe('PR preview deployment contract', () => {
     expect(previewWorkflow).toContain(
       "PREVIEW_AI_MODEL: ${{ vars.PREVIEW_AI_MODEL || 'claude-sonnet-4-6' }}"
     );
-    expect(previewWorkflow).toContain(
-      'PREVIEW_ANTHROPIC_API_KEY: ${{ secrets.PREVIEW_ANTHROPIC_API_KEY || secrets.ANTHROPIC_API_KEY }}'
-    );
+    expect(previewWorkflow).not.toContain('PREVIEW_ANTHROPIC_API_KEY');
     expect(previewWorkflow).toContain('PREVIEW_DB_DUMP_S3_URI');
     expect(previewWorkflow).toContain(
       'PREVIEW_POSTGRES_ADMIN_PASSWORD: ${{ secrets.PREVIEW_DB_PASSWORD }}'
@@ -741,9 +746,6 @@ describe('PR preview deployment contract', () => {
       'PREVIEW_AI_MODEL=$(shell_quote "$PREVIEW_AI_MODEL")'
     );
     expect(previewWorkflow).toContain(
-      'PREVIEW_ANTHROPIC_API_KEY=$(shell_quote "$PREVIEW_ANTHROPIC_API_KEY")'
-    );
-    expect(previewWorkflow).toContain(
       'PREVIEW_DB_DUMP_S3_URI=$(shell_quote "$PREVIEW_DB_DUMP_S3_URI")'
     );
     expect(previewWorkflow).toContain(
@@ -756,7 +758,6 @@ describe('PR preview deployment contract', () => {
       'PREVIEW_POSTGRES_ADMIN_PASSWORD=$(shell_quote "$PREVIEW_POSTGRES_ADMIN_PASSWORD")'
     );
     expect(previewWorkflow).not.toContain(deprecatedPreviewBasicAuth);
-    expect(previewWorkflow).toContain('test -n "$PREVIEW_ANTHROPIC_API_KEY"');
     expect(previewWorkflow).toContain('production-dump)');
     expect(previewWorkflow).toContain('[[ -n "$PREVIEW_LOGIN_EMAIL" ]]');
     expect(previewWorkflow).toContain('[[ -n "$PREVIEW_LOGIN_PASSWORD" ]]');
@@ -862,7 +863,7 @@ describe('PR preview deployment contract', () => {
       'POSTGRES_PROJECT="${PREVIEW_POSTGRES_PROJECT:-yawp-preview-db}"'
     );
     expect(bootstrapScript).toContain(
-      'docker compose -p "$POSTGRES_PROJECT" -f "$ROOT/postgres/docker-compose.yml" up -d'
+      'docker compose -p "$POSTGRES_PROJECT" -f "$postgres_compose" up -d'
     );
   });
 

@@ -185,7 +185,9 @@ validate_database_name() {
 }
 
 write_shared_postgres_compose() {
-  cat > "$DB_COMPOSE_FILE" <<YAML
+  local temporary="${DB_COMPOSE_FILE}.$$.tmp"
+  umask 077
+  cat > "$temporary" <<YAML
 services:
   postgres:
     image: postgres:16
@@ -207,6 +209,8 @@ networks:
   preview:
     external: true
 YAML
+  chmod 600 "$temporary"
+  mv -f -- "$temporary" "$DB_COMPOSE_FILE"
 }
 
 stream_preview_dump() {
@@ -331,6 +335,13 @@ database_exists() {
   [[ "$exists" == "1" ]]
 }
 
+revoke_public_database_connect() {
+  local database_name="$1"
+  validate_database_name "$database_name"
+  docker exec "$POSTGRES_CONTAINER" psql --no-psqlrc -v ON_ERROR_STOP=1 -U postgres -d postgres -c \
+    "REVOKE CONNECT ON DATABASE \"${database_name}\" FROM PUBLIC;" >/dev/null
+}
+
 restore_dump_into_template() {
   echo "Restoring production dump into template database from ${DUMP_URI}..."
   stream_preview_dump \
@@ -350,11 +361,13 @@ ensure_template_database() {
   (
     flock 9
     if database_exists "$TEMPLATE_DB"; then
+      revoke_public_database_connect "$TEMPLATE_DB"
       echo "Template database $TEMPLATE_DB already exists; skipping production dump restore."
       exit 0
     fi
 
     docker exec "$POSTGRES_CONTAINER" createdb -U postgres "$TEMPLATE_DB"
+    revoke_public_database_connect "$TEMPLATE_DB"
     if ! restore_dump_into_template; then
       docker exec "$POSTGRES_CONTAINER" dropdb -U postgres --if-exists "$TEMPLATE_DB" || true
       exit 1

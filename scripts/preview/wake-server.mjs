@@ -168,6 +168,11 @@ async function resolveMatchingPreviewAccessCredential({
       !/^[a-z]+-[a-z]+-[1-9][0-9]{3}$/.test(masterCode)
       || !/^[a-z0-9][a-z0-9-]{0,127}$/.test(masterOrganizationId)
     ) return null;
+    const secret = (await readFile(
+      path.join(root, 'previews', `pr-${pr}`, 'access-secret'),
+      'utf8',
+    )).trim();
+    if (secret.length < 32) return null;
     const url = new URL(trustedUri(uri), 'https://preview.invalid');
     const candidate = String(url.searchParams.get('code') || '').trim().toLowerCase();
     if (/^[a-z]+-[a-z]+-[1-9][0-9]{3}$/.test(candidate)) {
@@ -178,13 +183,14 @@ async function resolveMatchingPreviewAccessCredential({
           requirePreviewSeatCode: false,
         })
         : await resolveCredential({ pr, code: candidate });
-      if (resolved) return resolved;
+      if (resolved) {
+        return {
+          ...resolved,
+          requirePreviewSeatCode: !safeSecretEqual(candidate, masterCode),
+          credentialDigest: createHmac('sha256', secret).update(candidate).digest('hex'),
+        };
+      }
     }
-    const secret = (await readFile(
-      path.join(root, 'previews', `pr-${pr}`, 'access-secret'),
-      'utf8',
-    )).trim();
-    if (secret.length < 32) return null;
     const organizationId = signedAccessCookieSeat(cookieHeader, secret, nowSeconds);
     if (organizationId === null) return null;
     return resolveCredential({
@@ -469,8 +475,11 @@ export function startAccessLogFollower({
         if (result.status === 'rejected') console.error('Preview activity recording failed', result.reason);
       }
       if (info.size > maxBytes && offset === info.size) {
-        await writeFile(accessLog, '');
-        offset = 0;
+        const latest = await handle.stat();
+        if (latest.ino === info.ino && latest.size === info.size) {
+          await writeFile(accessLog, '');
+          offset = 0;
+        }
       }
     } catch (error) {
       if (error?.code === 'ENOENT') {
@@ -520,11 +529,13 @@ export function createDefaultWakeOperations({
     async ensureRunning(pr, { allowDisplacement = false, authorization } = {}) {
       const organizationId = String(authorization?.organizationId || '');
       const requirePreviewSeatCode = authorization?.requirePreviewSeatCode;
+      const credentialDigest = String(authorization?.credentialDigest || '');
       if (
         authorization
         && (
           !/^[a-z0-9][a-z0-9-]{0,127}$/.test(organizationId)
           || typeof requirePreviewSeatCode !== 'boolean'
+          || (credentialDigest && !/^[a-f0-9]{64}$/.test(credentialDigest))
         )
       ) {
         throw new Error('Preview wake authorization descriptor is invalid');
@@ -541,6 +552,7 @@ export function createDefaultWakeOperations({
             PREVIEW_WAKE_REQUIRE_PREVIEW_SEAT_CODE: authorization
               ? String(requirePreviewSeatCode)
               : '',
+            PREVIEW_WAKE_AUTHORIZED_CODE_HMAC_SHA256: credentialDigest,
           },
           timeout: commandTimeoutMs,
           maxBuffer: 1024 * 1024,

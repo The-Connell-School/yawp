@@ -20,6 +20,7 @@ AUTHORIZED_AT_EPOCH="${PREVIEW_WAKE_AUTHORIZED_AT_EPOCH:-}"
 AUTHORIZATION_MAX_QUEUE_SECONDS="${PREVIEW_WAKE_AUTHORIZATION_MAX_QUEUE_SECONDS:-30}"
 AUTHORIZED_ORGANIZATION_ID="${PREVIEW_WAKE_AUTHORIZED_ORGANIZATION_ID:-}"
 REQUIRE_PREVIEW_SEAT_CODE="${PREVIEW_WAKE_REQUIRE_PREVIEW_SEAT_CODE:-}"
+AUTHORIZED_CODE_SHA256="${PREVIEW_WAKE_AUTHORIZED_CODE_HMAC_SHA256:-}"
 WAKE_LEASE_SECONDS="${PREVIEW_WAKE_LEASE_SECONDS:-120}"
 LEGACY_HEALTH_PORT="${PREVIEW_LEGACY_HEALTH_PORT:-8080}"
 PR_NUMBER="${1:-}"
@@ -90,6 +91,10 @@ if [[ -n "$AUTHORIZED_ORGANIZATION_ID" && -z "$REQUIRE_PREVIEW_SEAT_CODE" ]] \
   echo "Preview wake authorization descriptor is incomplete" >&2
   exit 2
 fi
+if [[ -n "$AUTHORIZED_CODE_SHA256" && ! "$AUTHORIZED_CODE_SHA256" =~ ^[a-f0-9]{64}$ ]]; then
+  echo "PREVIEW_WAKE_AUTHORIZED_CODE_HMAC_SHA256 is invalid" >&2
+  exit 2
+fi
 is_nonnegative_integer "$WAKE_LEASE_SECONDS" || {
   echo "PREVIEW_WAKE_LEASE_SECONDS must be a nonnegative integer" >&2
   exit 2
@@ -141,11 +146,44 @@ fi
 
 revalidate_authorization() {
   [[ -n "$AUTHORIZED_ORGANIZATION_ID" ]] || return 0
-  local seat_predicate=""
-  if [[ "$REQUIRE_PREVIEW_SEAT_CODE" == "true" ]]; then
-    seat_predicate=' AND "previewSeatCode" IS NOT NULL'
+  local current current_code current_digest manifest_record manifest_organization
+  if [[ -n "$AUTHORIZED_CODE_SHA256" ]]; then
+    if [[ "$REQUIRE_PREVIEW_SEAT_CODE" == "true" ]]; then
+      current_code="$($DOCKER exec preview-postgres psql --no-psqlrc -v ON_ERROR_STOP=1 \
+        -U postgres -d "yawp_pr_${PR_NUMBER}" -tAc \
+        "SELECT COALESCE(\"previewSeatCode\", '') FROM \"Organization\" WHERE \"id\" = '${AUTHORIZED_ORGANIZATION_ID}' LIMIT 1;" \
+        2>/dev/null || true)"
+    else
+      manifest_record="$(node -e '
+        const fs = require("node:fs");
+        const seats = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+        const master = Array.isArray(seats) ? seats[0] : null;
+        if (master) process.stdout.write(`${master.organizationId}\t${master.code}`);
+      ' "$preview_dir/access-seats.json" 2>/dev/null || true)"
+      IFS=$'\t' read -r manifest_organization current_code <<< "$manifest_record"
+      [[ "$manifest_organization" == "$AUTHORIZED_ORGANIZATION_ID" ]] || return 1
+      current="$($DOCKER exec preview-postgres psql --no-psqlrc -v ON_ERROR_STOP=1 \
+        -U postgres -d "yawp_pr_${PR_NUMBER}" -tAc \
+        "SELECT EXISTS (SELECT 1 FROM \"Organization\" WHERE \"id\" = '${AUTHORIZED_ORGANIZATION_ID}')::int;" \
+        2>/dev/null || true)"
+      [[ "${current//[[:space:]]/}" == "1" ]] || return 1
+    fi
+    current_digest="$(printf '%s' "$current_code" | node -e '
+      const fs = require("node:fs");
+      const crypto = require("node:crypto");
+      const secret = fs.readFileSync(process.argv[1], "utf8").trim();
+      const chunks = [];
+      process.stdin.on("data", (chunk) => chunks.push(chunk));
+      process.stdin.on("end", () => process.stdout.write(
+        crypto.createHmac("sha256", secret).update(Buffer.concat(chunks)).digest("hex")
+      ));
+    ' "$preview_dir/access-secret" 2>/dev/null || true)"
+    [[ "$current_digest" == "$AUTHORIZED_CODE_SHA256" ]]
+    return
   fi
-  local current
+  local seat_predicate=""
+  [[ "$REQUIRE_PREVIEW_SEAT_CODE" == "true" ]] \
+    && seat_predicate=' AND "previewSeatCode" IS NOT NULL'
   current="$($DOCKER exec preview-postgres psql --no-psqlrc -v ON_ERROR_STOP=1 \
     -U postgres -d "yawp_pr_${PR_NUMBER}" -tAc \
     "SELECT EXISTS (SELECT 1 FROM \"Organization\" WHERE \"id\" = '${AUTHORIZED_ORGANIZATION_ID}'${seat_predicate})::int;" \
@@ -153,7 +191,11 @@ revalidate_authorization() {
   [[ "${current//[[:space:]]/}" == "1" ]]
 }
 
-if ! revalidate_authorization; then
+require_current_authorization() {
+  revalidate_authorization
+}
+
+if ! require_current_authorization; then
   echo "Preview authorization was revoked while queued" >&2
   exit 12
 fi
@@ -360,6 +402,10 @@ if is_running "$PR_NUMBER"; then
     echo "Preview pr-${PR_NUMBER} is running but did not become healthy" >&2
     exit 8
   }
+  require_current_authorization || {
+    echo "Preview authorization was revoked while queued" >&2
+    exit 12
+  }
   record_access "$PR_NUMBER"
   echo "WAKE_RESULT=already-running"
   echo "WAKE_SLEPT="
@@ -369,6 +415,10 @@ fi
 running_count="$(running_env_numbers | wc -l | tr -d ' ')"
 is_nonnegative_integer "$running_count" || running_count=0
 slept=""
+require_current_authorization || {
+  echo "Preview authorization was revoked while queued" >&2
+  exit 12
+}
 if (( running_count > RUNNING_CAP )); then
   echo "Preview host is already above running capacity" >&2
   exit 6
@@ -389,6 +439,7 @@ fi
 if ! wait_for_project_health "$PR_NUMBER"; then
   fail_wake "Preview pr-${PR_NUMBER} did not become healthy" 8
 fi
+require_current_authorization || fail_wake "Preview authorization was revoked while queued" 12
 if ! record_access "$PR_NUMBER"; then
   fail_wake "Preview pr-${PR_NUMBER} could not record its wake lease" 9
 fi

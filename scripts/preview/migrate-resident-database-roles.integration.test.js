@@ -25,7 +25,11 @@ integrationTest('migrates a sleeping resident and denies its role access to anot
   const root = mkdtempSync(path.join(tmpdir(), 'yawp-role-integration-'));
   resources.push({ container, root });
   const previewDir = path.join(root, 'previews', 'pr-241');
+  const runningPreviewDir = path.join(root, 'previews', 'pr-240');
+  const failingPreviewDir = path.join(root, 'previews', 'pr-242');
   mkdirSync(previewDir, { recursive: true });
+  mkdirSync(runningPreviewDir, { recursive: true });
+  mkdirSync(failingPreviewDir, { recursive: true });
   const oldAdmin = 'old-preview-admin-password-00000001';
   const newAdmin = 'new-preview-admin-password-00000001';
   writeFileSync(path.join(previewDir, 'docker-compose.yml'), `services:
@@ -35,6 +39,24 @@ integrationTest('migrates a sleeping resident and denies its role access to anot
     environment:
       DATABASE_URL: "postgresql://postgres:${oldAdmin}@preview-postgres:5432/yawp_pr_241"
 `);
+  writeFileSync(path.join(runningPreviewDir, 'docker-compose.yml'), `services:
+  web:
+    image: busybox:1.36
+    command: ["sleep", "3600"]
+    environment:
+      DATABASE_URL: "postgresql://postgres:${oldAdmin}@preview-postgres:5432/yawp_pr_240"
+    healthcheck:
+      test: ["CMD", "true"]
+      interval: 1s
+      timeout: 1s
+      retries: 10
+`);
+  const failingCompose = `services:
+  web:
+    image: busybox:1.36
+    command: ["sleep", "3600"]
+`;
+  writeFileSync(path.join(failingPreviewDir, 'docker-compose.yml'), failingCompose);
 
   const started = run('docker', [
     'run', '-d', '--name', container,
@@ -52,21 +74,57 @@ integrationTest('migrates a sleeping resident and denies its role access to anot
   }
   expect(ready).toBe(true);
   expect(run('docker', ['exec', container, 'createdb', '-U', 'postgres', 'yawp_pr_241']).status).toBe(0);
+  expect(run('docker', ['exec', container, 'createdb', '-U', 'postgres', 'yawp_pr_240']).status).toBe(0);
   expect(run('docker', ['exec', container, 'createdb', '-U', 'postgres', 'yawp_pr_242']).status).toBe(0);
+  expect(run('docker', ['exec', container, 'createdb', '-U', 'postgres', 'yawp_template']).status).toBe(0);
   expect(run('docker', [
     'exec', container, 'psql', '-U', 'postgres', '-d', 'yawp_pr_241', '-c',
     'CREATE TABLE retained_state (id integer primary key); INSERT INTO retained_state VALUES (1);',
   ]).status).toBe(0);
 
-  const migrated = run('bash', [path.join(import.meta.dir, 'migrate-resident-database-roles.sh')], {
+  const runningCompose = path.join(runningPreviewDir, 'docker-compose.yml');
+  expect(run('docker', [
+    'compose', '-p', 'yawp-pr-240', '-f', runningCompose, 'up', '-d', 'web',
+  ]).status).toBe(0);
+  const migrationOptions = {
     env: {
       ...process.env,
       PREVIEW_ROOT: root,
       PREVIEW_POSTGRES_CONTAINER: container,
       PREVIEW_POSTGRES_ADMIN_PASSWORD: newAdmin,
+      PREVIEW_MIGRATION_HEALTH_ATTEMPTS: '40',
+      PREVIEW_MIGRATION_HEALTH_INTERVAL_SECONDS: '1',
     },
     timeout: 120_000,
-  });
+  };
+  const firstAttempt = run(
+    'bash',
+    [path.join(import.meta.dir, 'migrate-resident-database-roles.sh')],
+    migrationOptions,
+  );
+  expect(firstAttempt.status).not.toBe(0);
+  expect(readFileSync(path.join(failingPreviewDir, 'docker-compose.yml'), 'utf8')).toBe(failingCompose);
+  const postgresIp = run('docker', [
+    'inspect', '--format', '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}', container,
+  ]).stdout.trim();
+  const oldAdminStillWorks = run('docker', [
+    'run', '--rm', '-e', `PGPASSWORD=${oldAdmin}`, 'postgres:16',
+    'psql', '-h', postgresIp, '-U', 'postgres', '-d', 'postgres', '-Atc', 'SELECT 1',
+  ]);
+  expect(oldAdminStillWorks.status).toBe(0);
+
+  writeFileSync(path.join(failingPreviewDir, 'docker-compose.yml'), `services:
+  web:
+    image: busybox:1.36
+    command: ["sleep", "3600"]
+    environment:
+      DATABASE_URL: "postgresql://postgres:${oldAdmin}@preview-postgres:5432/yawp_pr_242"
+`);
+  const migrated = run(
+    'bash',
+    [path.join(import.meta.dir, 'migrate-resident-database-roles.sh')],
+    migrationOptions,
+  );
   expect(migrated.status, migrated.stderr).toBe(0);
   const password = readFileSync(path.join(previewDir, 'database-password'), 'utf8').trim();
   const compose = readFileSync(path.join(previewDir, 'docker-compose.yml'), 'utf8');
@@ -85,6 +143,11 @@ integrationTest('migrates a sleeping resident and denies its role access to anot
     'psql', '-h', '127.0.0.1', '-U', 'yawp_pr_241_app', '-d', 'yawp_pr_242', '-Atc', 'SELECT 1',
   ]);
   expect(cross.status).not.toBe(0);
+  const template = run('docker', [
+    'exec', '-e', `PGPASSWORD=${password}`, container,
+    'psql', '-h', '127.0.0.1', '-U', 'yawp_pr_241_app', '-d', 'yawp_template', '-Atc', 'SELECT 1',
+  ]);
+  expect(template.status).not.toBe(0);
 
   const roleFlags = run('docker', [
     'exec', container, 'psql', '-U', 'postgres', '-d', 'postgres', '-Atc',
@@ -97,10 +160,11 @@ integrationTest('migrates a sleeping resident and denies its role access to anot
   ]).stdout.trim();
   expect(containerId.length).toBeGreaterThan(0);
   expect(run('docker', ['inspect', '--format', '{{.State.Running}}', containerId]).stdout.trim()).toBe('false');
-
-  const postgresIp = run('docker', [
-    'inspect', '--format', '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}', container,
+  const runningContainerId = run('docker', [
+    'compose', '-p', 'yawp-pr-240', '-f', runningCompose, 'ps', '-q', 'web',
   ]).stdout.trim();
+  expect(run('docker', ['inspect', '--format', '{{.State.Health.Status}}', runningContainerId]).stdout.trim()).toBe('healthy');
+
   const newAdminLogin = run('docker', [
     'run', '--rm', '-e', `PGPASSWORD=${newAdmin}`, 'postgres:16',
     'psql', '-h', postgresIp, '-U', 'postgres', '-d', 'postgres', '-Atc', 'SELECT 1',

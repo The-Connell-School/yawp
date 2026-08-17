@@ -103,7 +103,13 @@ fi
 
 sudo mkdir -p "$ROOT/postgres"
 sudo chown -R "$USER":"$USER" "$ROOT/postgres"
-cat > "$ROOT/postgres/docker-compose.yml" <<YAML
+chmod 700 "$ROOT/postgres"
+exec 8>"$ROOT/preview-host.lock"
+flock -w 900 8
+postgres_compose="$ROOT/postgres/docker-compose.yml"
+postgres_compose_temporary="${postgres_compose}.$$.tmp"
+umask 077
+cat > "$postgres_compose_temporary" <<YAML
 services:
   postgres:
     image: postgres:16
@@ -125,8 +131,10 @@ networks:
   preview:
     external: true
 YAML
+chmod 600 "$postgres_compose_temporary"
+mv -f -- "$postgres_compose_temporary" "$postgres_compose"
 
-docker compose -p "$POSTGRES_PROJECT" -f "$ROOT/postgres/docker-compose.yml" up -d
+docker compose -p "$POSTGRES_PROJECT" -f "$postgres_compose" up -d
 connect_container_to_preview_network preview-postgres
 
 database_role_migration="$ROOT/bootstrap/scripts/preview/migrate-resident-database-roles.sh"
@@ -135,10 +143,11 @@ database_role_migration="$ROOT/bootstrap/scripts/preview/migrate-resident-databa
   exit 1
 }
 chmod +x "$database_role_migration"
-flock -w 900 "$ROOT/preview-host.lock" env \
+env \
   PREVIEW_ROOT="$ROOT" \
   PREVIEW_POSTGRES_ADMIN_PASSWORD="$PREVIEW_POSTGRES_ADMIN_PASSWORD" \
   bash "$database_role_migration"
+flock -u 8
 
 # Remove the legacy entrypoint-wide Basic auth configuration. Access control now belongs
 # to each React Router app so it can render the branded gate while still protecting its
