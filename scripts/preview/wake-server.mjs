@@ -442,7 +442,7 @@ export function renderSleepingPreviewPage({ pr, uri }) {
       input[type="text"] {
         appearance: none;
         background: white;
-        border: 1px solid hsl(48 12% 66%);
+        border: 1px solid hsl(48 12% 52%);
         border-radius: 0.625rem;
         color: var(--text);
         font: 1rem/1.25 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;

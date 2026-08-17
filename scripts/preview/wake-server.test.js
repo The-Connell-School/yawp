@@ -300,6 +300,7 @@ describe('preview wake server', () => {
     expect(body).toContain('one-click link in the pull request');
     expect(body).toContain('wake and authorize this browser automatically');
     expect(body).toContain('fresh, private, or different browser');
+    expect(body).toContain('border: 1px solid hsl(48 12% 52%);');
     expect(wakes).toEqual([]);
   });
 
