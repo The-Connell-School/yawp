@@ -299,7 +299,7 @@ describe('PR preview deployment contract', () => {
     );
 
     expect(previewWorkflow).toContain('name: PR preview');
-    expect(previewWorkflow).toContain('pull_request');
+    expect(previewWorkflow).toContain('pull_request_target');
     expect(previewWorkflow).toContain(
       'types: [opened, synchronize, reopened, ready_for_review, labeled, unlabeled, closed]'
     );
@@ -368,7 +368,9 @@ describe('PR preview deployment contract', () => {
     expect(deployScript).toContain(
       'dropdb -U postgres --force --if-exists "$DATABASE_NAME"'
     );
-    expect(deployScript).toContain('createdb -U postgres "$DATABASE_NAME"');
+    expect(deployScript).toContain(
+      'createdb -U postgres -O "$DATABASE_USER" "$DATABASE_NAME"'
+    );
     expect(deployScript).toContain('bun run seed-local-dev');
     expect(deployScript).toContain('bun run seed-preview-seats');
     expect(deployScript).toContain('oven/bun:1.3.1');
@@ -419,7 +421,7 @@ describe('PR preview deployment contract', () => {
     );
     expect(deployScript).toContain('production-dump|sanitized-production)');
     expect(deployScript).toContain(
-      'createdb -U postgres -T "$TEMPLATE_DB" "$DATABASE_NAME"'
+      'createdb -U postgres -O "$DATABASE_USER" -T "$TEMPLATE_DB" "$DATABASE_NAME"'
     );
   });
 
@@ -452,6 +454,27 @@ describe('PR preview deployment contract', () => {
     const compose = readRepoFile('scripts/preview/render-compose.mjs');
 
     expect(compose).toContain('AWS_EC2_METADATA_DISABLED: "true"');
+  });
+
+  test('preview containers receive only a per-database least-privilege role', () => {
+    const previewEnv = readRepoFile('scripts/preview/preview-env.mjs');
+    const renderCompose = readRepoFile('scripts/preview/render-compose.mjs');
+    const deploy = readRepoFile('scripts/preview/deploy.sh');
+    const workflow = readRepoFile('.github/workflows/preview-environments.yml');
+
+    expect(previewEnv).not.toContain("DEFAULT_DATABASE_USER = 'postgres'");
+    expect(previewEnv).not.toContain("DEFAULT_DATABASE_PASSWORD = 'postgres'");
+    expect(deploy).toContain('ensure_preview_database_role');
+    expect(deploy).toContain('REVOKE CONNECT ON DATABASE');
+    expect(deploy).toContain('PREVIEW_POSTGRES_ADMIN_PASSWORD');
+    expect(deploy).toContain('NOBYPASSRLS');
+    expect(deploy).toContain('revoke_public_database_connect "$TEMPLATE_DB"');
+    expect(deploy).toContain('chmod 600 "$temporary"');
+    expect(renderCompose).not.toContain('postgres:postgres@preview-postgres');
+    expect(workflow).toContain('PREVIEW_POSTGRES_ADMIN_PASSWORD=');
+    expect(workflow).not.toContain(
+      'PREVIEW_DB_PASSWORD=$(shell_quote "$PREVIEW_DB_PASSWORD")'
+    );
   });
 
   test('the role-swap flag is structurally coupled to root request middleware', () => {
@@ -489,6 +512,9 @@ describe('PR preview deployment contract', () => {
     expect(cleanupScript).toContain('PREVIEW_TTL_HOURS');
     expect(cleanupScript).toContain(
       'dropdb -U postgres --if-exists "$database_name"'
+    );
+    expect(cleanupScript).toContain(
+      'dropuser -U postgres --if-exists "${database_name}_app"'
     );
     expect(cleanupScript).toContain(
       'docker volume rm "${project}_${project}-postgres-data"'
@@ -533,10 +559,31 @@ describe('PR preview deployment contract', () => {
     );
     expect(enforcer).toContain('"$previews_dir" "$ROOT/sources"');
     expect(previewWorkflow).toContain('PREVIEW_INFLIGHT_MARKER');
-    expect(previewWorkflow).toContain('marker_heartbeat_pid=$!');
-    expect(previewWorkflow).toContain('stop_marker_heartbeat');
-    expect(previewWorkflow).toContain('touch %q');
+    expect(previewWorkflow).toContain('PREVIEW_QUARANTINE_MARKER');
+    expect(previewWorkflow).toContain('quarantine_marker');
+    expect(previewWorkflow).toContain('scripts/preview/sync-source.sh');
+    expect(wrapper).toContain('cleanup_quarantine_marker');
     expect(enforcer).toContain('is_inflight');
+  });
+
+  test('preview deployment uses reviewed base control-plane code with protected host credentials', () => {
+    const previewWorkflow = readRepoFile(
+      '.github/workflows/preview-environments.yml'
+    );
+
+    expect(previewWorkflow).toContain('environment: preview-host');
+    expect(previewWorkflow).toContain('path: pr-source');
+    expect(previewWorkflow).toContain('path: preview-control');
+    expect(previewWorkflow).toContain('github.event.pull_request.head.sha');
+    expect(previewWorkflow).toContain('github.event.pull_request.base.sha');
+    expect(previewWorkflow).toContain(
+      'github.event.pull_request.base.ref == github.event.repository.default_branch'
+    );
+    expect(previewWorkflow).toContain('remote_control=');
+    expect(previewWorkflow).toContain('PREVIEW_CONTROL_SHA=');
+    expect(previewWorkflow).not.toContain(
+      'cd $(shell_quote "$remote_source") && ${remote_env[*]} bash scripts/preview/admit-and-deploy.sh'
+    );
   });
 
   test('preview bootstrap installs aggregate host metrics timer', () => {
@@ -555,6 +602,27 @@ describe('PR preview deployment contract', () => {
     expect(metrics).toContain('MemoryUsedPercent');
     expect(metrics).toContain('RunningPreviews');
     expect(metrics).not.toContain('PullRequest');
+  });
+
+  test('preview bootstrap migrates resident compose files before rotating the administrator', () => {
+    const workflow = readRepoFile('.github/workflows/preview-host-bootstrap.yml');
+    const bootstrap = readRepoFile('scripts/preview/bootstrap-host.sh');
+    const migration = readRepoFile(
+      'scripts/preview/migrate-resident-database-roles.sh'
+    );
+
+    expect(workflow).toContain('migrate-resident-database-roles.sh');
+    expect(bootstrap).toContain('migrate-resident-database-roles.sh');
+    expect(bootstrap).toContain('flock -w 900');
+    expect(bootstrap).toContain('chmod 700 "$ROOT/postgres"');
+    expect(bootstrap).toContain('chmod 600 "$postgres_compose_temporary"');
+    expect(migration).toContain("relation.relkind IN ('r', 'p', 'S', 'v', 'm', 'f')");
+    expect(migration).toContain('REVOKE CONNECT ON DATABASE');
+    expect(migration).toContain('create --force-recreate web');
+    expect(migration).toContain('verify_role_database');
+    expect(migration).toContain('wait_for_web_health');
+    expect(migration).toContain('rollback_active_migration');
+    expect(migration).toContain('ALTER ROLE postgres WITH PASSWORD');
   });
 
   test('preview bootstrap installs a secret-protected first-request wake path', () => {
@@ -668,12 +736,14 @@ describe('PR preview deployment contract', () => {
     expect(previewWorkflow).toContain(
       "PREVIEW_AI_MODEL: ${{ vars.PREVIEW_AI_MODEL || 'claude-sonnet-4-6' }}"
     );
+    expect(previewWorkflow).not.toContain('PREVIEW_ANTHROPIC_API_KEY');
+    expect(previewWorkflow).toContain('PREVIEW_AI_MODE: disabled');
     expect(previewWorkflow).toContain(
-      'PREVIEW_ANTHROPIC_API_KEY: ${{ secrets.PREVIEW_ANTHROPIC_API_KEY || secrets.ANTHROPIC_API_KEY }}'
+      'AI:** disabled in automatic PR previews'
     );
     expect(previewWorkflow).toContain('PREVIEW_DB_DUMP_S3_URI');
     expect(previewWorkflow).toContain(
-      'PREVIEW_DB_PASSWORD: ${{ secrets.PREVIEW_DB_PASSWORD }}'
+      'PREVIEW_POSTGRES_ADMIN_PASSWORD: ${{ secrets.PREVIEW_DB_PASSWORD }}'
     );
     expect(previewWorkflow).toContain('shell_quote()');
     expect(previewWorkflow).toContain(
@@ -686,9 +756,6 @@ describe('PR preview deployment contract', () => {
       'PREVIEW_AI_MODEL=$(shell_quote "$PREVIEW_AI_MODEL")'
     );
     expect(previewWorkflow).toContain(
-      'PREVIEW_ANTHROPIC_API_KEY=$(shell_quote "$PREVIEW_ANTHROPIC_API_KEY")'
-    );
-    expect(previewWorkflow).toContain(
       'PREVIEW_DB_DUMP_S3_URI=$(shell_quote "$PREVIEW_DB_DUMP_S3_URI")'
     );
     expect(previewWorkflow).toContain(
@@ -698,10 +765,9 @@ describe('PR preview deployment contract', () => {
       'PREVIEW_ACCESS_MASTER_ORGANIZATION_ID=$(shell_quote "$PREVIEW_ACCESS_MASTER_ORGANIZATION_ID")'
     );
     expect(previewWorkflow).toContain(
-      'PREVIEW_DB_PASSWORD=$(shell_quote "$PREVIEW_DB_PASSWORD")'
+      'PREVIEW_POSTGRES_ADMIN_PASSWORD=$(shell_quote "$PREVIEW_POSTGRES_ADMIN_PASSWORD")'
     );
     expect(previewWorkflow).not.toContain(deprecatedPreviewBasicAuth);
-    expect(previewWorkflow).toContain('test -n "$PREVIEW_ANTHROPIC_API_KEY"');
     expect(previewWorkflow).toContain('production-dump)');
     expect(previewWorkflow).toContain('[[ -n "$PREVIEW_LOGIN_EMAIL" ]]');
     expect(previewWorkflow).toContain('[[ -n "$PREVIEW_LOGIN_PASSWORD" ]]');
@@ -774,14 +840,12 @@ describe('PR preview deployment contract', () => {
   });
 
   test('preview source sync excludes generated container output', () => {
-    const previewWorkflow = readRepoFile(
-      '.github/workflows/preview-environments.yml'
-    );
+    const syncSource = readRepoFile('scripts/preview/sync-source.sh');
 
-    expect(previewWorkflow).toContain(
+    expect(syncSource).toContain(
       "--exclude 'services/web-app/.react-router'"
     );
-    expect(previewWorkflow).toContain("--exclude 'services/web-app/.vite'");
+    expect(syncSource).toContain("--exclude 'services/web-app/.vite'");
   });
 
   test('preview host bootstrap installs AWS CLI for production dump restores', () => {
@@ -809,7 +873,7 @@ describe('PR preview deployment contract', () => {
       'POSTGRES_PROJECT="${PREVIEW_POSTGRES_PROJECT:-yawp-preview-db}"'
     );
     expect(bootstrapScript).toContain(
-      'docker compose -p "$POSTGRES_PROJECT" -f "$ROOT/postgres/docker-compose.yml" up -d'
+      'docker compose -p "$POSTGRES_PROJECT" -f "$postgres_compose" up -d'
     );
   });
 

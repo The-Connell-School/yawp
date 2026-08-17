@@ -306,6 +306,7 @@ destroy_env() {
   fi
   if "$DOCKER" inspect "$POSTGRES_CONTAINER" >/dev/null 2>&1; then
     "$DOCKER" exec "$POSTGRES_CONTAINER" dropdb -U postgres --if-exists "yawp_pr_${pr}" || return 1
+    "$DOCKER" exec "$POSTGRES_CONTAINER" dropuser -U postgres --if-exists "yawp_pr_${pr}_app" || return 1
   fi
   if "$DOCKER" volume inspect "${project}_${project}-postgres-data" >/dev/null 2>&1; then
     "$DOCKER" volume rm "${project}_${project}-postgres-data" >/dev/null || return 1

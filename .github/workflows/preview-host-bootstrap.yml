@@ -7,8 +7,10 @@ name: Preview host bootstrap
 # workflow that holds the secret. bootstrap-host.sh is idempotent, so running it again is
 # how the host picks up changes to Traefik or the shared Postgres.
 #
-# It does NOT touch any deployed preview: it rewrites the Traefik and Postgres compose
-# files and brings those two back up. Preview containers keep running.
+# It rewrites the shared Traefik/Postgres configuration, migrates existing residents
+# to isolated database roles, and installs the wake service. Resident application state
+# is preserved; previews that were sleeping remain stopped and healthy running previews
+# are recreated and health-checked.
 
 on:
   workflow_dispatch:
@@ -33,7 +35,7 @@ jobs:
       PREVIEW_MAX_RUNNING: ${{ vars.PREVIEW_MAX_RUNNING || '4' }}
       PREVIEW_SLEEP_ENABLED: ${{ vars.PREVIEW_SLEEP_ENABLED || 'true' }}
       PREVIEW_INFLIGHT_TTL_SECONDS: ${{ vars.PREVIEW_INFLIGHT_TTL_SECONDS || '3600' }}
-      PREVIEW_DB_PASSWORD: ${{ secrets.PREVIEW_DB_PASSWORD }}
+      PREVIEW_POSTGRES_ADMIN_PASSWORD: ${{ secrets.PREVIEW_DB_PASSWORD }}
       PREVIEW_ACME_EMAIL: ${{ vars.PREVIEW_ACME_EMAIL || 'bryant@brock.software' }}
     steps:
       - name: Check configuration
@@ -67,6 +69,7 @@ jobs:
             "mkdir -p ${PREVIEW_ROOT}/bootstrap/scripts/preview"
           scp -i ~/.ssh/preview_key \
             scripts/preview/bootstrap-host.sh \
+            scripts/preview/migrate-resident-database-roles.sh \
             scripts/preview/publish-host-metrics.sh \
             scripts/preview/wake-server.mjs \
             scripts/preview/wake-preview.sh \
@@ -82,7 +85,7 @@ jobs:
             "PREVIEW_MAX_RUNNING=$(shell_quote "$PREVIEW_MAX_RUNNING")"
             "PREVIEW_SLEEP_ENABLED=$(shell_quote "$PREVIEW_SLEEP_ENABLED")"
             "PREVIEW_INFLIGHT_TTL_SECONDS=$(shell_quote "$PREVIEW_INFLIGHT_TTL_SECONDS")"
-            "PREVIEW_DB_PASSWORD=$(shell_quote "$PREVIEW_DB_PASSWORD")"
+            "PREVIEW_POSTGRES_ADMIN_PASSWORD=$(shell_quote "$PREVIEW_POSTGRES_ADMIN_PASSWORD")"
             "PREVIEW_ACME_EMAIL=$(shell_quote "$PREVIEW_ACME_EMAIL")"
           )
           ssh -i ~/.ssh/preview_key "${PREVIEW_SSH_USER}@${PREVIEW_HOST}" \

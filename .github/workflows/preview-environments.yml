@@ -1,7 +1,9 @@
 name: PR preview
 
 on:
-  pull_request:
+  # The workflow and host-side control plane always come from the reviewed base commit.
+  # Pull-request code is synced separately and runs only inside the preview containers.
+  pull_request_target:
     types: [opened, synchronize, reopened, ready_for_review, labeled, unlabeled, closed]
   workflow_dispatch:
   schedule:
@@ -18,14 +20,16 @@ permissions:
 jobs:
   preview-deploy:
     if: >-
-      github.event_name == 'pull_request' &&
+      github.event_name == 'pull_request_target' &&
       github.event.action != 'closed' &&
+      github.event.pull_request.base.ref == github.event.repository.default_branch &&
       ((github.event.action != 'labeled' && github.event.action != 'unlabeled') || github.event.label.name == 'preview:keep-awake') &&
       github.event.pull_request.head.repo.full_name == github.repository &&
       contains(github.event.pull_request.title, '[skip preview]') == false &&
       contains(github.event.pull_request.body, '[skip preview]') == false &&
       contains(github.event.pull_request.head.ref, '[skip preview]') == false
     runs-on: ubuntu-22.04
+    environment: preview-host
     env:
       PR_NUMBER: ${{ github.event.pull_request.number }}
       PREVIEW_HOST: ${{ vars.PREVIEW_HOST }}
@@ -45,11 +49,11 @@ jobs:
       PREVIEW_DATA_MODE: ${{ contains(github.event.pull_request.labels.*.name, 'sanitized-production-data') && 'sanitized-production' || vars.PREVIEW_DATA_MODE || 'seed' }}
       PREVIEW_SEAT_COUNT: ${{ vars.PREVIEW_SEAT_COUNT || '1' }}
       PREVIEW_AI_MODEL: ${{ vars.PREVIEW_AI_MODEL || 'claude-sonnet-4-6' }}
-      PREVIEW_ANTHROPIC_API_KEY: ${{ secrets.PREVIEW_ANTHROPIC_API_KEY || secrets.ANTHROPIC_API_KEY }}
+      PREVIEW_AI_MODE: disabled
       PREVIEW_DB_DUMP_S3_URI: ${{ vars.PREVIEW_DB_DUMP_S3_URI || 's3://yawp-preview-videos/production.dump' }}
       PREVIEW_DB_DUMP_VERSION: ${{ contains(github.event.pull_request.labels.*.name, 'sanitized-production-data') && vars.PREVIEW_SANITIZED_DUMP_VERSION || vars.PREVIEW_DB_DUMP_VERSION || 'unversioned' }}
       PREVIEW_ACCESS_MASTER_ORGANIZATION_ID: ${{ contains(github.event.pull_request.labels.*.name, 'sanitized-production-data') && 'default-org' || 'local-dev-org' }}
-      PREVIEW_DB_PASSWORD: ${{ secrets.PREVIEW_DB_PASSWORD }}
+      PREVIEW_POSTGRES_ADMIN_PASSWORD: ${{ secrets.PREVIEW_DB_PASSWORD }}
       PREVIEW_DEV_LOGIN_EMAIL: ${{ vars.PREVIEW_DEV_LOGIN_EMAIL || 'dev.teacher@yawp.local' }}
       PREVIEW_LOGIN_EMAIL: ${{ secrets.PREVIEW_LOGIN_EMAIL }}
       PREVIEW_LOGIN_PASSWORD: ${{ secrets.PREVIEW_LOGIN_PASSWORD }}
@@ -62,7 +66,7 @@ jobs:
           test -n "$PREVIEW_HOST" || { echo "Missing repository variable PREVIEW_HOST"; exit 1; }
           test -n "$PREVIEW_DOMAIN" || { echo "Missing repository variable PREVIEW_DOMAIN"; exit 1; }
           test -n "$PREVIEW_SSH_PRIVATE_KEY" || { echo "Missing repository secret PREVIEW_SSH_PRIVATE_KEY"; exit 1; }
-          test -n "$PREVIEW_ANTHROPIC_API_KEY" || { echo "Missing repository secret PREVIEW_ANTHROPIC_API_KEY or ANTHROPIC_API_KEY"; exit 1; }
+          test -n "$PREVIEW_POSTGRES_ADMIN_PASSWORD" || { echo "Missing preview-host secret PREVIEW_DB_PASSWORD"; exit 1; }
           case "$PREVIEW_DATA_MODE" in
             seed) ;;
             production-dump)
@@ -80,8 +84,19 @@ jobs:
               ;;
           esac
 
-      - name: Checkout
+      - name: Checkout reviewed preview control plane
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: preview-control
+          persist-credentials: false
+
+      - name: Checkout pull request source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          path: pr-source
+          persist-credentials: false
 
       - name: Prepare SSH
         env:
@@ -101,47 +116,35 @@ jobs:
             printf '%q' "$1"
           }
           remote_source="${PREVIEW_ROOT}/sources/pr-${PR_NUMBER}"
+          remote_control="${PREVIEW_ROOT}/control/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           inflight_dir="${PREVIEW_ROOT}/inflight/pr-${PR_NUMBER}"
           inflight_marker="${inflight_dir}/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          quarantine_dir="${PREVIEW_ROOT}/quarantine"
+          quarantine_marker="${quarantine_dir}/pr-${PR_NUMBER}"
+          compose_file="${PREVIEW_ROOT}/previews/pr-${PR_NUMBER}/docker-compose.yml"
+          compose_project="yawp-pr-${PR_NUMBER}"
           lock_file="${PREVIEW_ROOT}/preview-host.lock"
           ssh_target="${PREVIEW_SSH_USER}@${PREVIEW_HOST}"
           # Publish the marker before the source path. Capacity reconciliation ignores
           # fresh markers, so it cannot evict a tree while rsync or lock admission runs.
-          printf -v setup_command 'mkdir -p %q && touch %q && mkdir -p %q' \
-            "$inflight_dir" "$inflight_marker" "$remote_source"
+          printf -v setup_command 'mkdir -p %q %q && touch %q %q && mkdir -p %q %q && if [ -f %q ]; then docker compose -p %q -f %q stop; fi' \
+            "$inflight_dir" "$quarantine_dir" "$inflight_marker" "$quarantine_marker" \
+            "$remote_source" "$remote_control/scripts/preview" \
+            "$compose_file" "$compose_project" "$compose_file"
           ssh -i ~/.ssh/preview_key "$ssh_target" \
             "flock -w 900 $(shell_quote "$lock_file") bash -lc $(shell_quote "$setup_command")"
-          marker_heartbeat_interval=$((PREVIEW_INFLIGHT_TTL_SECONDS / 3))
-          (( marker_heartbeat_interval < 5 )) && marker_heartbeat_interval=5
-          (( marker_heartbeat_interval > 60 )) && marker_heartbeat_interval=60
-          marker_heartbeat_pid=''
-          stop_marker_heartbeat() {
-            if [[ -n "$marker_heartbeat_pid" ]]; then
-              kill "$marker_heartbeat_pid" 2>/dev/null || true
-              wait "$marker_heartbeat_pid" 2>/dev/null || true
-            fi
-          }
-          trap stop_marker_heartbeat EXIT
-          (
-            while sleep "$marker_heartbeat_interval"; do
-              printf -v heartbeat_command 'touch %q' "$inflight_marker"
-              ssh -i ~/.ssh/preview_key "$ssh_target" "$heartbeat_command" || exit 0
-            done
-          ) &
-          marker_heartbeat_pid=$!
           rsync -az --delete \
-            --exclude '.git' \
-            --exclude 'node_modules' \
-            --exclude 'services/web-app/node_modules' \
-            --exclude 'services/web-app/.react-router' \
-            --exclude 'services/web-app/.vite' \
-            --exclude 'packages/prisma/generated' \
-            --exclude '.worktrees' \
             -e "ssh -i ~/.ssh/preview_key" \
-            ./ "$ssh_target:$remote_source/"
-          stop_marker_heartbeat
-          marker_heartbeat_pid=''
-          trap - EXIT
+            preview-control/scripts/preview/ "$ssh_target:$remote_control/scripts/preview/"
+          (
+            cd pr-source
+            PREVIEW_SSH_KEY="$HOME/.ssh/preview_key" \
+            PREVIEW_SSH_TARGET="$ssh_target" \
+            PREVIEW_REMOTE_SOURCE="$remote_source" \
+            PREVIEW_INFLIGHT_MARKER="$inflight_marker" \
+            PREVIEW_INFLIGHT_TTL_SECONDS="$PREVIEW_INFLIGHT_TTL_SECONDS" \
+              bash ../preview-control/scripts/preview/sync-source.sh
+          )
 
       - name: Admit and deploy preview
         id: deploy
@@ -158,7 +161,9 @@ jobs:
           # after it holds the mutation lock, so a queued deploy cannot act on old data.
           ssh_target="${PREVIEW_SSH_USER}@${PREVIEW_HOST}"
           remote_source="${PREVIEW_ROOT}/sources/pr-${PR_NUMBER}"
+          remote_control="${PREVIEW_ROOT}/control/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           inflight_marker="${PREVIEW_ROOT}/inflight/pr-${PR_NUMBER}/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          quarantine_marker="${PREVIEW_ROOT}/quarantine/pr-${PR_NUMBER}"
           remote_env=(
             "PR_NUMBER=$(shell_quote "$PR_NUMBER")"
             "PREVIEW_DOMAIN=$(shell_quote "$PREVIEW_DOMAIN")"
@@ -172,6 +177,7 @@ jobs:
             "PREVIEW_KEEP_AWAKE=$(shell_quote "$PREVIEW_KEEP_AWAKE")"
             "PREVIEW_INFLIGHT_TTL_SECONDS=$(shell_quote "$PREVIEW_INFLIGHT_TTL_SECONDS")"
             "PREVIEW_INFLIGHT_MARKER=$(shell_quote "$inflight_marker")"
+            "PREVIEW_QUARANTINE_MARKER=$(shell_quote "$quarantine_marker")"
             "KEEP_PR=$(shell_quote "$PR_NUMBER")"
             "PREVIEW_GITHUB_REPOSITORY=$(shell_quote "$GITHUB_REPOSITORY")"
             "PREVIEW_GITHUB_API_URL=$(shell_quote "$GITHUB_API_URL")"
@@ -181,19 +187,20 @@ jobs:
             "PREVIEW_DATA_MODE=$(shell_quote "$PREVIEW_DATA_MODE")"
             "PREVIEW_SEAT_COUNT=$(shell_quote "$PREVIEW_SEAT_COUNT")"
             "PREVIEW_AI_MODEL=$(shell_quote "$PREVIEW_AI_MODEL")"
-            "PREVIEW_ANTHROPIC_API_KEY=$(shell_quote "$PREVIEW_ANTHROPIC_API_KEY")"
+            "PREVIEW_AI_MODE=$(shell_quote "$PREVIEW_AI_MODE")"
             "PREVIEW_DB_DUMP_S3_URI=$(shell_quote "$PREVIEW_DB_DUMP_S3_URI")"
             "PREVIEW_DB_DUMP_VERSION=$(shell_quote "$PREVIEW_DB_DUMP_VERSION")"
             "PREVIEW_ACCESS_MASTER_ORGANIZATION_ID=$(shell_quote "$PREVIEW_ACCESS_MASTER_ORGANIZATION_ID")"
-            "PREVIEW_DB_PASSWORD=$(shell_quote "$PREVIEW_DB_PASSWORD")"
+            "PREVIEW_POSTGRES_ADMIN_PASSWORD=$(shell_quote "$PREVIEW_POSTGRES_ADMIN_PASSWORD")"
             "PREVIEW_DEV_LOGIN_EMAIL=$(shell_quote "$PREVIEW_DEV_LOGIN_EMAIL")"
             "PREVIEW_LOGIN_EMAIL=$(shell_quote "$PREVIEW_LOGIN_EMAIL")"
             "PREVIEW_LOGIN_PASSWORD=$(shell_quote "$PREVIEW_LOGIN_PASSWORD")"
             "SOURCE_DIR=$(shell_quote "$remote_source")"
+            "PREVIEW_CONTROL_SHA=$(shell_quote "${{ github.event.pull_request.base.sha }}")"
           )
           set +e
           ssh -i ~/.ssh/preview_key "$ssh_target" \
-            "cd $(shell_quote "$remote_source") && ${remote_env[*]} bash scripts/preview/admit-and-deploy.sh" \
+            "cd $(shell_quote "$remote_control") && ${remote_env[*]} bash scripts/preview/admit-and-deploy.sh" \
             | tee /tmp/preview-deploy.log
           remote_status="${PIPESTATUS[0]}"
           set -e
@@ -293,13 +300,24 @@ jobs:
             - **Access code:** `${{ steps.deploy.outputs.access_code }}`
             - **Runtime:** Docker Compose on the preview environment host
             - **Data:** `${{ env.PREVIEW_DATA_MODE }}` in an isolated PR database
+            - **AI:** disabled in automatic PR previews; use the reviewed demo environment for live-provider QA
             - **Deploy elapsed:** `${{ steps.deploy.outputs.elapsed_ms }}ms`
             - **Smoke:** in-app access gate + dev login
 
+      - name: Remove run-scoped control copy
+        if: always()
+        run: |
+          set -euo pipefail
+          [[ -f "$HOME/.ssh/preview_key" && "$GITHUB_RUN_ID" =~ ^[0-9]+$ && "$GITHUB_RUN_ATTEMPT" =~ ^[0-9]+$ ]] || exit 0
+          remote_control="${PREVIEW_ROOT}/control/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          printf -v cleanup_command 'rm -rf -- %q' "$remote_control"
+          ssh -i "$HOME/.ssh/preview_key" "${PREVIEW_SSH_USER}@${PREVIEW_HOST}" "$cleanup_command" || true
+
   preview-destroy:
     if: >-
-      github.event_name == 'pull_request' &&
+      github.event_name == 'pull_request_target' &&
       github.event.action == 'closed' &&
+      github.event.pull_request.base.ref == github.event.repository.default_branch &&
       github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-22.04
     environment: preview-host

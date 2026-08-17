@@ -9,9 +9,15 @@ import {
   requirePreviewSessionSecret,
 } from './preview-env.mjs';
 
+const databasePassword = 'test-preview-database-password-0001';
+
+function previewEnv(overrides) {
+  return buildPreviewEnv({ databasePassword, ...overrides });
+}
+
 describe('buildPreviewEnv', () => {
   test('derives stable PR-scoped names and URLs', () => {
-    const env = buildPreviewEnv({
+    const env = previewEnv({
       prNumber: '142',
       domain: 'preview.yawp.school',
       root: '/srv/yawp-preview',
@@ -28,13 +34,13 @@ describe('buildPreviewEnv', () => {
     expect(env.databaseName).toBe('yawp_pr_142');
     expect(env.databaseHost).toBe('preview-postgres');
     expect(env.databaseUrl).toBe(
-      'postgresql://postgres:postgres@preview-postgres:5432/yawp_pr_142'
+      `postgresql://yawp_pr_142_app:${databasePassword}@preview-postgres:5432/yawp_pr_142`
     );
   });
 
   test('rejects unsafe pull request numbers', () => {
     expect(() =>
-      buildPreviewEnv({
+      previewEnv({
         prNumber: '../142',
         domain: 'preview.yawp.school',
       })
@@ -42,7 +48,7 @@ describe('buildPreviewEnv', () => {
   });
 
   test('honors an explicit source directory for local and rsync deploys', () => {
-    const env = buildPreviewEnv({
+    const env = previewEnv({
       prNumber: '142',
       domain: 'preview.yawp.school',
       sourceDir: '/tmp/source-checkout',
@@ -52,7 +58,7 @@ describe('buildPreviewEnv', () => {
   });
 
   test('uses a shared Postgres host with a PR-scoped database by default', () => {
-    const env = buildPreviewEnv({
+    const env = previewEnv({
       prNumber: '153',
       domain: 'preview.yawp.school',
     });
@@ -60,12 +66,19 @@ describe('buildPreviewEnv', () => {
     expect(env.databaseName).toBe('yawp_pr_153');
     expect(env.databaseHost).toBe('preview-postgres');
     expect(env.databaseUrl).toBe(
-      'postgresql://postgres:postgres@preview-postgres:5432/yawp_pr_153'
+      `postgresql://yawp_pr_153_app:${databasePassword}@preview-postgres:5432/yawp_pr_153`
     );
   });
 
+  test('fails closed instead of falling back to shared Postgres credentials', () => {
+    expect(() => buildPreviewEnv({
+      prNumber: '153',
+      domain: 'preview.yawp.school',
+    })).toThrow('PREVIEW_DB_PASSWORD must be a 32-character URL-safe secret');
+  });
+
   test('can publish HTTP URLs for temporary sslip.io hosts without certificates', () => {
-    const env = buildPreviewEnv({
+    const env = previewEnv({
       prNumber: '142',
       domain: '54-243-7-236.sslip.io',
       tls: false,
@@ -76,7 +89,7 @@ describe('buildPreviewEnv', () => {
 
   test('rejects unsupported runtimes', () => {
     expect(() =>
-      buildPreviewEnv({
+      previewEnv({
         prNumber: '142',
         domain: 'preview.yawp.school',
         runtime: 'apprunner',
@@ -85,7 +98,7 @@ describe('buildPreviewEnv', () => {
   });
 
   test('still supports production dump data mode when explicitly requested', () => {
-    const env = buildPreviewEnv({
+    const env = previewEnv({
       prNumber: '142',
       domain: 'preview.yawp.school',
       dataMode: 'production-dump',
@@ -95,7 +108,7 @@ describe('buildPreviewEnv', () => {
   });
 
   test('supports scrubbed production data as a distinct gated mode', () => {
-    const env = buildPreviewEnv({
+    const env = previewEnv({
       prNumber: '142',
       domain: 'preview.yawp.school',
       dataMode: 'sanitized-production',
@@ -106,7 +119,7 @@ describe('buildPreviewEnv', () => {
 
   test('rejects unsupported data modes', () => {
     expect(() =>
-      buildPreviewEnv({
+      previewEnv({
         prNumber: '142',
         domain: 'preview.yawp.school',
         dataMode: 'prod',
@@ -274,7 +287,7 @@ describe('buildPreviewEnv', () => {
 
 describe('named environments', () => {
   test('a slug override drops the pr- prefix and needs no PR number', () => {
-    const env = buildPreviewEnv({
+    const env = previewEnv({
       slug: 'demo',
       domain: 'yawp.school',
       prNumber: undefined,
@@ -289,7 +302,7 @@ describe('named environments', () => {
   });
 
   test('PR previews are unchanged by the override existing', () => {
-    const env = buildPreviewEnv({
+    const env = previewEnv({
       prNumber: '208',
       domain: 'preview.yawp.school',
     });
@@ -300,7 +313,7 @@ describe('named environments', () => {
 
   test('a nonsense slug is rejected rather than silently building a bad hostname', () => {
     expect(() =>
-      buildPreviewEnv({ slug: 'Demo Box!', domain: 'yawp.school' })
+      previewEnv({ slug: 'Demo Box!', domain: 'yawp.school' })
     ).toThrow();
   });
 
