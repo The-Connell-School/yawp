@@ -1,5 +1,6 @@
 import * as Y from 'yjs';
 import { prisma } from '~/utils/db.server';
+import { recordUpdateAuthorship } from './authorship.server';
 import { type CollabRoomClient } from './seed.server';
 
 /**
@@ -13,6 +14,11 @@ import { type CollabRoomClient } from './seed.server';
  * is therefore *correct*, not a compromise — the only thing it costs is latency
  * before a collaborator's text appears. Their own typing is unaffected, because
  * the editor applies local edits before the network is involved.
+ *
+ * Compaction discards the per-row membershipId and createdAt, which is the only
+ * record of which student a Yjs client id belongs to. `authorship.server` copies
+ * that link somewhere durable before it goes; without it a compacted room knows
+ * some client wrote the conclusion and cannot say who.
  */
 
 /**
@@ -45,6 +51,11 @@ export async function appendUpdate({
     },
     select: { seq: true },
   });
+
+  // Durable authorship, recorded here because this row is where the link between
+  // a Yjs client id and a person exists — and compaction deletes this row. It
+  // never throws, so attribution can fail without costing a student their edit.
+  await recordUpdateAuthorship({ documentId, membershipId, update });
 
   return { seq: row.seq };
 }

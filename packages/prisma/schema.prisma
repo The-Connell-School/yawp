@@ -13,23 +13,23 @@ enum MembershipRole {
 }
 
 model Class {
-  id               String            @id @default(cuid())
-  createdAt        DateTime          @default(now()) @db.Timestamptz(6)
-  updatedAt        DateTime          @default(now()) @db.Timestamptz(6)
-  code             String
-  schoolYear       String            @default("2024-2025")
-  period           String?
-  grade            String?
-  title            String?
-  cardGradientKey  String            @default("indigo-purple-pink")
-  classArtIndex    Int?
-  classArtKey      String?
-  isArchived       Boolean           @default(false)
-  students         OrgMembership[]   @relation("ClassStudents")
-  teachers         OrgMembership[]   @relation("ClassTeachers")
-  schoolId         String
-  school           School            @relation(fields: [schoolId], references: [id])
-  classAssignments ClassAssignment[]
+  id                              String                           @id @default(cuid())
+  createdAt                       DateTime                         @default(now()) @db.Timestamptz(6)
+  updatedAt                       DateTime                         @default(now()) @db.Timestamptz(6)
+  code                            String
+  schoolYear                      String                           @default("2024-2025")
+  period                          String?
+  grade                           String?
+  title                           String?
+  cardGradientKey                 String                           @default("indigo-purple-pink")
+  classArtIndex                   Int?
+  classArtKey                     String?
+  isArchived                      Boolean                          @default(false)
+  students                        OrgMembership[]                  @relation("ClassStudents")
+  teachers                        OrgMembership[]                  @relation("ClassTeachers")
+  schoolId                        String
+  school                          School                           @relation(fields: [schoolId], references: [id])
+  classAssignments                ClassAssignment[]
   writingPracticeClassAssignments WritingPracticeClassAssignment[]
 
   @@unique([schoolId, code])
@@ -135,15 +135,15 @@ model Assignment {
 }
 
 model ClassAssignment {
-  id           String                  @id @default(cuid())
-  createdAt    DateTime                @default(now()) @db.Timestamptz(6)
-  updatedAt    DateTime                @default(now()) @db.Timestamptz(6)
-  assignmentId String
-  assignment   Assignment              @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
-  classId      String
-  class        Class                   @relation(fields: [classId], references: [id], onDelete: Cascade)
-  documents    Document[]
-  insight      ClassAssignmentInsight?
+  id             String                  @id @default(cuid())
+  createdAt      DateTime                @default(now()) @db.Timestamptz(6)
+  updatedAt      DateTime                @default(now()) @db.Timestamptz(6)
+  assignmentId   String
+  assignment     Assignment              @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  classId        String
+  class          Class                   @relation(fields: [classId], references: [id], onDelete: Cascade)
+  documents      Document[]
+  insight        ClassAssignmentInsight?
   documentGroups DocumentGroup[]
 
   @@unique([assignmentId, classId])
@@ -222,6 +222,46 @@ model DocumentCollabUpdate {
   isCompaction Boolean  @default(false)
 
   @@index([documentId, seq])
+}
+
+/// Who a Yjs client id belongs to, and how much that session wrote.
+///
+/// Every item in a collaborative document permanently carries the id of the
+/// client that created it, so authorship of surviving text is a property of the
+/// document itself. What the document cannot say is which *person* a client id
+/// is — only the update row that carried it knows that, and `compactRoom`
+/// deletes those rows once a log passes its threshold. Without this table a
+/// compacted room still knows that client 1788036363 wrote the conclusion and
+/// has no way left to say who that was.
+///
+/// One row is approximately one editing session: Yjs mints a fresh client id per
+/// document instance, so a tab opened Tuesday and one opened Thursday are
+/// separate rows with their own time ranges. That makes the session timeline
+/// fall out of the same table rather than needing the per-update timestamps
+/// compaction also discards.
+model DocumentCollabAuthor {
+  id            String         @id @default(cuid())
+  createdAt     DateTime       @default(now()) @db.Timestamptz(6)
+  documentId    String
+  document      Document       @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  /// Yjs client id. Text, not Int: Yjs generates uint32 values that run past the
+  /// 2147483647 ceiling of a Postgres integer column.
+  clientId      String
+  /// Null only for writes with no member behind them, such as server-side
+  /// seeding of a room from an existing draft.
+  membershipId  String?
+  membership    OrgMembership? @relation(fields: [membershipId], references: [id], onDelete: SetNull)
+  firstSeenAt   DateTime       @default(now()) @db.Timestamptz(6)
+  lastSeenAt    DateTime       @default(now()) @db.Timestamptz(6)
+  updateCount   Int            @default(0)
+  charsInserted Int            @default(0)
+  /// Characters this session removed, whoever originally wrote them. Kept
+  /// separate from charsInserted so a student who tightens a partner's paragraph
+  /// does not read as having contributed nothing.
+  charsDeleted  Int            @default(0)
+
+  @@unique([documentId, clientId])
+  @@index([documentId, membershipId])
 }
 
 model DocumentGroupMember {
@@ -493,6 +533,7 @@ model Document {
   /// Set only on a collaborative draft: the group whose shared document this is.
   group                    DocumentGroup?
   collabUpdates            DocumentCollabUpdate[]
+  collabAuthors            DocumentCollabAuthor[]
 
   @@index([assignmentId])
   @@index([classAssignmentId])
@@ -692,34 +733,34 @@ model DocumentWriteJournal {
 }
 
 model Organization {
-  id                        String                       @id @default(cuid())
-  createdAt                 DateTime                     @default(now()) @db.Timestamptz(6)
-  updatedAt                 DateTime                     @default(now()) @db.Timestamptz(6)
-  name                      String
-  accessExpiresAt           DateTime?                    @db.Timestamptz(6)
-  numOfStudentSeats         Int                          @default(10)
-  numOfTeacherSeats         Int                          @default(10)
-  reporterEnabled           Boolean                      @default(false)
-  classInsightsEnabled      Boolean                      @default(false)
-  writingPracticeEnabled    Boolean                      @default(false)
+  id                            String                       @id @default(cuid())
+  createdAt                     DateTime                     @default(now()) @db.Timestamptz(6)
+  updatedAt                     DateTime                     @default(now()) @db.Timestamptz(6)
+  name                          String
+  accessExpiresAt               DateTime?                    @db.Timestamptz(6)
+  numOfStudentSeats             Int                          @default(10)
+  numOfTeacherSeats             Int                          @default(10)
+  reporterEnabled               Boolean                      @default(false)
+  classInsightsEnabled          Boolean                      @default(false)
+  writingPracticeEnabled        Boolean                      @default(false)
   /// Rollout gate for collaborative drafts: may this organization use the
   /// feature at all. Distinct from Assignment.collaborationEnabled, which is
   /// the teacher's per-assignment toggle.
-  collaborativeDraftsEnabled Boolean                     @default(false)
+  collaborativeDraftsEnabled    Boolean                      @default(false)
   /// Second gate, for the other road to a shared document: may students start
   /// their own shared draft and invite classmates. Separate from the gate above
   /// on purpose -- a school may want teacher-assigned group work without
   /// students forming their own groups.
-  studentDocumentSharingEnabled Boolean                  @default(false)
-  previewSeatCode           String?                      @unique
-  memberships               OrgMembership[]
-  invitations               Invitation[]
-  schools                   School[]
-  assignmentTypes           AssignmentType[]
-  assignmentTypeAssignments OrganizationAssignmentType[]
-  reporterConversations     ReporterConversation[]
-  reporterGrowthPlans       ReporterGrowthPlan[]
-  aiRequestReservations     AiRequestReservation[]
+  studentDocumentSharingEnabled Boolean                      @default(false)
+  previewSeatCode               String?                      @unique
+  memberships                   OrgMembership[]
+  invitations                   Invitation[]
+  schools                       School[]
+  assignmentTypes               AssignmentType[]
+  assignmentTypeAssignments     OrganizationAssignmentType[]
+  reporterConversations         ReporterConversation[]
+  reporterGrowthPlans           ReporterGrowthPlan[]
+  aiRequestReservations         AiRequestReservation[]
 }
 
 model OrganizationAssignmentType {
@@ -734,45 +775,46 @@ model OrganizationAssignmentType {
 }
 
 model OrgMembership {
-  id                            String                         @id @default(cuid())
-  createdAt                     DateTime                       @default(now()) @db.Timestamptz(6)
-  userId                        String
-  user                          User                           @relation(fields: [userId], references: [id])
-  organizationId                String
-  organization                  Organization                   @relation(fields: [organizationId], references: [id])
-  role                          MembershipRole
-  isOrgOwner                    Boolean                        @default(false)
-  isActive                      Boolean                        @default(true)
-  school                        String?
-  schoolTeacher                 String?
-  grade                         String?
-  period                        String?
-  documents                     Document[]
-  documentComments              DocumentComment[]
-  documentCommentResponses      DocumentCommentResponse[]
-  pasteAlerts                   PasteAlert[]
-  submissionsGraded             Submission[]                   @relation("SubmissionGradedBy")
-  submissionsUnsubmitted        Submission[]                   @relation("SubmissionUnsubmittedBy")
-  submissionComments            SubmissionComment[]            @relation("SubmissionCommentProfile")
-  ownedAssignmentTypes          AssignmentType[]               @relation("AssignmentTypeOwner")
-  classesAsTeacher              Class[]                        @relation("ClassTeachers")
-  classesAsStudent              Class[]                        @relation("ClassStudents")
-  schools                       School[]                       @relation("SchoolTeachers")
-  teacherTrainingModuleSessions TeacherTrainingModuleSession[]
-  assignedTeacherTrainings      TeacherTraining[]              @relation("TeacherTrainingAssignments")
-  assignmentTypesCustomized     Boolean                        @default(false)
-  assignmentTypeAssignments     TeacherAssignmentType[]
-  writingPracticeAssignmentsCreated WritingPracticeAssignment[] @relation("WritingPracticeAssignmentCreator")
-  reporterConversations         ReporterConversation[]
-  reporterGrowthPlansOwned      ReporterGrowthPlan[]           @relation("ReporterGrowthPlanOwner")
-  reporterGrowthPlansAsStudent  ReporterGrowthPlan[]           @relation("ReporterGrowthPlanStudent")
-  aiRequestReservations         AiRequestReservation[]
+  id                                String                         @id @default(cuid())
+  createdAt                         DateTime                       @default(now()) @db.Timestamptz(6)
+  userId                            String
+  user                              User                           @relation(fields: [userId], references: [id])
+  organizationId                    String
+  organization                      Organization                   @relation(fields: [organizationId], references: [id])
+  role                              MembershipRole
+  isOrgOwner                        Boolean                        @default(false)
+  isActive                          Boolean                        @default(true)
+  school                            String?
+  schoolTeacher                     String?
+  grade                             String?
+  period                            String?
+  documents                         Document[]
+  documentComments                  DocumentComment[]
+  documentCommentResponses          DocumentCommentResponse[]
+  pasteAlerts                       PasteAlert[]
+  submissionsGraded                 Submission[]                   @relation("SubmissionGradedBy")
+  submissionsUnsubmitted            Submission[]                   @relation("SubmissionUnsubmittedBy")
+  submissionComments                SubmissionComment[]            @relation("SubmissionCommentProfile")
+  ownedAssignmentTypes              AssignmentType[]               @relation("AssignmentTypeOwner")
+  classesAsTeacher                  Class[]                        @relation("ClassTeachers")
+  classesAsStudent                  Class[]                        @relation("ClassStudents")
+  schools                           School[]                       @relation("SchoolTeachers")
+  teacherTrainingModuleSessions     TeacherTrainingModuleSession[]
+  assignedTeacherTrainings          TeacherTraining[]              @relation("TeacherTrainingAssignments")
+  assignmentTypesCustomized         Boolean                        @default(false)
+  assignmentTypeAssignments         TeacherAssignmentType[]
+  writingPracticeAssignmentsCreated WritingPracticeAssignment[]    @relation("WritingPracticeAssignmentCreator")
+  reporterConversations             ReporterConversation[]
+  reporterGrowthPlansOwned          ReporterGrowthPlan[]           @relation("ReporterGrowthPlanOwner")
+  reporterGrowthPlansAsStudent      ReporterGrowthPlan[]           @relation("ReporterGrowthPlanStudent")
+  aiRequestReservations             AiRequestReservation[]
 
   classAssignmentInsightsGenerated ClassAssignmentInsight[]
-  savedThesisPrompts            SavedThesisPrompt[]
-  savedDailyPagesPrompts        SavedDailyPagesPrompt[]
-  savedAssignments              SavedAssignment[]
-  documentGroupMemberships      DocumentGroupMember[]
+  savedThesisPrompts               SavedThesisPrompt[]
+  savedDailyPagesPrompts           SavedDailyPagesPrompt[]
+  savedAssignments                 SavedAssignment[]
+  documentGroupMemberships         DocumentGroupMember[]
+  documentCollabAuthorships        DocumentCollabAuthor[]
 
   @@unique([userId, organizationId])
   @@unique([id, organizationId])
