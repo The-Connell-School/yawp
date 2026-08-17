@@ -1713,6 +1713,111 @@ describe('api.domain.grade-essay-ai', () => {
     });
   });
 
+  test('scores mixed 5- and 20-point sections as one weighted percentage', async () => {
+    const bands = (max: number) => [
+      { min: 0, max: 0, label: 'Absent', description: 'Missing.' },
+      {
+        min: 1,
+        max,
+        label: 'Present',
+        description: 'Score inside this raw-point range.',
+      },
+    ];
+    const categories = [
+      {
+        key: 'introduction',
+        label: 'Introduction',
+        description: 'Purposeful setup.',
+        weight: 0.1,
+        bands: bands(5),
+        grammarHighlighting: false,
+      },
+      {
+        key: 'country_1',
+        label: 'Country 1',
+        description: 'Two business-communication topics.',
+        weight: 0.4,
+        bands: bands(20),
+        grammarHighlighting: false,
+      },
+      {
+        key: 'country_2',
+        label: 'Country 2',
+        description: 'Two business-communication topics.',
+        weight: 0.4,
+        bands: bands(20),
+        grammarHighlighting: false,
+      },
+      {
+        key: 'conclusion',
+        label: 'Conclusion',
+        description: 'Comparative insight.',
+        weight: 0.1,
+        bands: bands(5),
+        grammarHighlighting: false,
+      },
+    ];
+
+    prisma.assignmentType.findUnique.mockResolvedValue(
+      mockAssignmentType({
+        id: 'assignment-type-gba300',
+        title: 'GBA 300: International Etiquette',
+        scoringScaleJson: {
+          type: 'weighted_percent',
+          minScore: 0,
+          maxScore: 20,
+          step: 1,
+        },
+        rubricJson: { categories },
+        gradingPromptConfigJson: {
+          gradingInstructions: 'Use raw points inside each category band.',
+        },
+      })
+    );
+    prisma.submission.findFirst.mockResolvedValue(
+      mockSubmission({
+        id: 'sub-gba300',
+        document: {
+          ...mockSubmission().document,
+          assignmentTypeId: 'assignment-type-gba300',
+          assignmentType: {
+            id: 'assignment-type-gba300',
+            kind: null,
+            title: 'GBA 300: International Etiquette',
+          },
+        },
+      })
+    );
+    getLLMCompletion.mockReset();
+    getLLMCompletion.mockResolvedValueOnce(
+      JSON.stringify({
+        categories: [
+          { key: 'introduction', score: 5, comment: 'Purposeful setup.' },
+          { key: 'country_1', score: 18, comment: 'Specific analysis.' },
+          { key: 'country_2', score: 16, comment: 'Clear comparison.' },
+          { key: 'conclusion', score: 4, comment: 'Useful synthesis.' },
+        ],
+        overallComment: 'Jordan, the comparison is clear and specific.',
+      })
+    );
+
+    const form = new FormData();
+    form.append('submissionId', 'sub-gba300');
+    await action({
+      request: new Request('https://example.com/api/domain/grade-essay-ai', {
+        method: 'POST',
+        body: form,
+      }),
+    } as any);
+
+    const stored = prisma.submission.update.mock.calls.at(-1)?.[0].data;
+    expect(stored.numericPercentage).toBe(86);
+    expect(stored.overallScore).toBe(86);
+    expect(stored.score).toBe('86% (B)');
+    expect(stored.rubricScores.introduction.score).toBe(5);
+    expect(stored.rubricScores.country_1.score).toBe(18);
+  });
+
   describe('a Daily Pages submission', () => {
     function mockDailyPagesSubmission(id: string) {
       return mockSubmission({
