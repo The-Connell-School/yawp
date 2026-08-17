@@ -1,9 +1,14 @@
 import { invariant } from '@epic-web/invariant';
+import { ArrowLeft } from 'lucide-react';
 import {
   data as dataResponse,
   useLoaderData,
+  useNavigate,
+  useSearchParams,
   type LoaderFunctionArgs,
 } from 'react-router';
+import { Button } from '~/components/ui/button';
+import { CollabPromptPanel } from './collab-prompt-panel';
 import { collaborationRoomWhere } from '~/domain/collaboration/room.server';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
@@ -30,39 +35,27 @@ import { CollabEditor, colorForMembership } from './collab-editor';
  * pages look the same without drifting.
  *
  * ─────────────────────────────────────────────────────────────────────────────
- * PARTIALLY VERIFIED — NOT SHIPPABLE YET
+ * VERIFIED, with gaps that are known rather than unknown.
  *
- * What has actually been run, against a real Postgres and a real browser:
- * this page renders with live data (title, group label, writer count, presence,
- * the assignment prompt), the loader's authorization holds, and the token
- * endpoint mints a correctly document-scoped JWT for a group member.
+ * Proven by running it: two browsers converge on one document (Sam typed, Taylor
+ * saw it, Taylor typed back, Sam saw it), the loader's authorization holds, the
+ * room is seeded server-side from existing HTML exactly once, and the dual-write
+ * keeps Document.html/text/revision current for grading, search and submission.
  *
- * What has NOT been run: anything past the provider boundary. No real
- * collaboration provider was reachable, so two carets in one document, live
- * text, and the schema-version handshake are all still unproven.
+ * The transport is our own HTTP provider polling `api/collab/$id/updates`, not a
+ * hosted service — App Runner has no WebSockets and nothing was purchased. Yjs
+ * updates are commutative and idempotent, so polling converges; the cost is
+ * about one second before a collaborator's text appears, never before your own.
  *
- * Known-missing pieces, each required before a student sees this:
+ * Still missing, each deliberate rather than forgotten:
  *
- * 1. NO SERVER-SIDE SEEDING. An existing document's HTML is never loaded into the
- *    Y.Doc. A group opening a draft that already has content will see it empty.
- *    Seeding must happen once, server-side, into a confirmed-empty room — doing
- *    it client-side duplicates the content once per participant.
- * 2. NO SUBMISSION PATH. Submitting a group draft is not wired, including the
- *    availability fallback the plan calls for.
- * 3. NO COMMENTS, TUTOR, MODULE SESSIONS, OR GRADE PANELS. The solo page has all
- *    of these; this page is the editor surface only. Acceptable for the ungraded
- *    small-group pilot, not beyond it.
- * 4. PROVIDER URL IS UNCONFIRMED. The Hocuspocus URL in `collab-editor.tsx` is
- *    the documented Tiptap Cloud shape but has not been checked against a real
- *    app.
- * 5. NO E2E SPEC. AGENTS.md requires e2e first for UI. The two-browser test that
- *    actually proves collaboration works needs a provider.
- *
- * Dual-write back to Postgres — previously the worst gap here — now exists in
- * `api/collab/webhook` and has been verified end to end against a running
- * server: a signed webhook carrying real Yjs state updates `Document.html`,
- * `Document.text` and `revision`, journals the write with attribution, and cuts
- * a `DocumentRevision`.
+ * 1. NO SUBMISSION PATH. Submitting a group draft is not wired.
+ * 2. NO COMMENTS, TUTOR, MODULE SESSIONS, OR GRADE PANELS. This page is the
+ *    writing surface and the prompt. Acceptable for the ungraded small-group
+ *    pilot, not beyond it.
+ * 3. NO CONTRIBUTION BREAKDOWN. Attribution is captured per update row but
+ *    compaction currently discards it once a room passes its threshold.
+ * 4. NO E2E SPEC. The two-browser proof was run by hand, not in CI.
  * ─────────────────────────────────────────────────────────────────────────────
  */
 export async function loader({ request, params }: LoaderFunctionArgs) {
@@ -88,7 +81,15 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       id: true,
       title: true,
       assignment: {
-        select: { id: true, title: true, prompt: true },
+        // promptAttachmentName so the prompt panel can offer the same PDF the
+        // solo editor does; without it the attachment silently disappears for
+        // group work.
+        select: {
+          id: true,
+          title: true,
+          prompt: true,
+          promptAttachmentName: true,
+        },
       },
       group: {
         select: {
@@ -140,28 +141,46 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
 export default function CollabDocumentRoute() {
   const { doc, canWrite } = useLoaderData<typeof loader>();
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const exitTarget = searchParams.get('exitTo') || '/app';
 
   const groupMemberCount = doc.group?.members.length ?? 0;
 
   return (
-    <div className="flex h-full w-full flex-col">
-      <header className="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3">
-        <div className="min-w-0">
-          <h1 className="truncate text-sm font-semibold">
-            {doc.assignment?.title ?? doc.title}
-          </h1>
-          <p className="text-xs text-gray-600">
+    /* The page shell is deliberately the same shape as the solo editor's:
+       full-height white page, a max-w-screen-2xl nav, and a content row holding
+       the prompt column beside the writing surface. It is duplicated rather than
+       extracted because the solo page must not be touched — but the earlier
+       version duplicated only the writing surface, which left this page as one
+       column stretched across the viewport with no prompt, no chrome, and a
+       stray right border where the comments column would be. */
+    <main className="flex h-screen w-screen flex-col overflow-hidden bg-white">
+      <nav className="mx-auto flex w-full max-w-screen-2xl items-center gap-4 border-b px-3 py-2">
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={() => navigate(exitTarget)}
+        >
+          <ArrowLeft className="h-4" />
+          Exit
+        </Button>
+
+        <div className="flex min-w-0 flex-1 flex-col md:flex-row md:items-baseline md:gap-3">
+          <span className="truncate font-bold">
+            {doc.assignment?.title ?? doc.title ?? 'Untitled document'}
+          </span>
+          <span className="shrink-0 text-sm text-muted-foreground">
             {doc.group?.label ?? 'Group'} · {groupMemberCount}{' '}
             {groupMemberCount === 1 ? 'writer' : 'writers'}
             {canWrite ? '' : ' · read only'}
-          </p>
+          </span>
         </div>
 
-        {/* The group's roster, in the colors their carets will use once awareness
-            is wired. Not live presence yet: this is who belongs to the draft, not
-            who is looking at it this second. */}
+        {/* The group's roster, in the colors their carets use in the document,
+            so one color means one person everywhere on the page. */}
         <ul
-          className="flex items-center gap-1"
+          className="flex shrink-0 items-center -space-x-1.5"
           aria-label="Writers in this draft"
         >
           {(doc.group?.members ?? []).map((member) => {
@@ -171,7 +190,7 @@ export default function CollabDocumentRoute() {
                 key={member.membershipId}
                 title={name}
                 aria-label={name}
-                className="grid h-6 w-6 place-items-center rounded-full text-[10px] font-medium text-white"
+                className="grid h-7 w-7 place-items-center rounded-full text-[10px] font-medium text-white ring-2 ring-white"
                 style={{
                   backgroundColor: colorForMembership(member.membershipId),
                 }}
@@ -185,17 +204,14 @@ export default function CollabDocumentRoute() {
             );
           })}
         </ul>
-      </header>
+      </nav>
 
-      {doc.assignment?.prompt ? (
-        <div className="max-h-[22vh] overflow-y-auto border-b bg-gray-50 px-4 py-3 text-sm">
-          {doc.assignment.prompt}
-        </div>
-      ) : null}
-
-      <div className="min-h-0 grow">
+      <div className="mx-auto flex min-h-0 w-full max-w-screen-2xl flex-1 overflow-hidden">
+        {/* Renders nothing when there is no prompt, which is the student-share
+            road: those drafts belong to no assignment. */}
+        <CollabPromptPanel assignment={doc.assignment} />
         <CollabEditor docId={doc.id} canWrite={canWrite} />
       </div>
-    </div>
+    </main>
   );
 }

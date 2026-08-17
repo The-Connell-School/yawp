@@ -143,7 +143,7 @@ export function CollabEditor({ docId, canWrite }: Props) {
 
   return (
     <ErrorBoundary>
-      <div className="flex w-full flex-col overflow-hidden border-r md:h-full">
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden md:h-full">
         {staleSchema ? (
           <div
             role="alert"
