@@ -172,4 +172,41 @@ describe('computeWeightedBandPercentage', () => {
       computeWeightedBandPercentage({ a: { score: 92 } }, categories)
     ).toBeNull();
   });
+
+  test('normalizes mixed raw-point category ranges before weighting', () => {
+    const rawPointCategories = [
+      {
+        key: 'introduction',
+        weight: 0.1,
+        bands: [{ min: 0, max: 5, label: 'Full range', description: '' }],
+      },
+      {
+        key: 'country_1',
+        weight: 0.4,
+        bands: [{ min: 0, max: 20, label: 'Full range', description: '' }],
+      },
+      {
+        key: 'country_2',
+        weight: 0.4,
+        bands: [{ min: 0, max: 20, label: 'Full range', description: '' }],
+      },
+      {
+        key: 'conclusion',
+        weight: 0.1,
+        bands: [{ min: 0, max: 5, label: 'Full range', description: '' }],
+      },
+    ];
+
+    expect(
+      computeWeightedBandPercentage(
+        {
+          introduction: { score: 5 },
+          country_1: { score: 18 },
+          country_2: { score: 16 },
+          conclusion: { score: 4 },
+        },
+        rawPointCategories
+      )
+    ).toBe(86);
+  });
 });
