@@ -32,7 +32,7 @@ jobs:
         uses: oven-sh/setup-bun@v1
 
       - name: 📦 Install dependencies
-        run: bun install
+        run: bun install --frozen-lockfile
 
       # The root-owned-build-output test needs the image the preview host itself runs.
       - name: 🐳 Pull the preview runtime image
@@ -69,7 +69,7 @@ jobs:
         uses: oven-sh/setup-bun@v1
 
       - name: 📦 Install dependencies
-        run: bun install
+        run: bun install --frozen-lockfile
 
       # bunfig.toml preloads services/web-app/test-preload.ts for every `bun test` run in
       # this repo, and that preload imports ~/utils/auth.server, which imports @app/prisma.
@@ -131,7 +131,7 @@ jobs:
         uses: oven-sh/setup-bun@v1
 
       - name: 📦 Install dependencies
-        run: bun install
+        run: bun install --frozen-lockfile
 
       - name: ⚙️ Generate Prisma Client
         run: bun prisma generate
@@ -171,7 +171,7 @@ jobs:
         uses: oven-sh/setup-bun@v1
 
       - name: 📦 Install dependencies
-        run: bun install
+        run: bun install --frozen-lockfile
 
       - name: ⚙️ Generate Prisma Client
         run: bun prisma generate
