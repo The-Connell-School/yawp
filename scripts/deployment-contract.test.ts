@@ -1098,9 +1098,12 @@ describe('demo environment deployment contract', () => {
     expect(deployScript).toContain('$ROOT/ops/backup-database.sh');
     expect(deployScript).not.toContain('crontab');
     expect(backupWorkflow).toContain("cron: '17 3 * * *'");
+    expect(backupWorkflow).toContain('group: demo-environment');
     expect(backupWorkflow).toContain('aws s3 cp');
     expect(backupWorkflow).toContain('demo-backups');
     expect(backupWorkflow).toContain('s3api delete-object');
+    expect(backupWorkflow).toContain('s3api list-object-versions');
+    expect(backupWorkflow).toContain('--version-id "$version_id"');
     expect(backupScript).toContain('BACKUP_RETENTION_COUNT');
     expect(backupScript).toContain('pg_restore --list');
     expect(backupScript).toContain('--exit-on-error');
