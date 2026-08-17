@@ -129,8 +129,20 @@ export async function loader({ request }: LoaderFunctionArgs) {
     collaborativeAssignmentTypesForStudent(request, profile),
   ]);
 
+  // Arriving from a draft's own menu: that draft is what they meant to share, so
+  // it is preselected rather than making them find it in the list again.
+  const requestedSourceId = new URL(request.url).searchParams.get(
+    'sourceDocumentId'
+  );
+  const preselectedDraftId = drafts.some(
+    (draft) => draft.id === requestedSourceId
+  )
+    ? requestedSourceId
+    : null;
+
   return dataResponse({
     classmates,
+    preselectedDraftId,
     maxWriters: MAX_COLLABORATION_GROUP_SIZE,
     // Offered whether or not the student has written anything yet. Deriving the
     // options from their existing drafts, as this page first did, made the
@@ -261,7 +273,7 @@ export async function action({ request }: ActionFunctionArgs) {
 }
 
 export default function NewSharedDraftRoute() {
-  const { assignmentTypes, classmates, drafts, maxWriters } =
+  const { assignmentTypes, classmates, drafts, maxWriters, preselectedDraftId } =
     useLoaderData<typeof loader>();
   const navigation = useNavigation();
   const busy = navigation.state !== 'idle';
@@ -328,7 +340,7 @@ export default function NewSharedDraftRoute() {
             <select
               name="sourceDocumentId"
               className="rounded border px-2 py-1"
-              defaultValue={drafts[0].id}
+              defaultValue={preselectedDraftId ?? drafts[0].id}
             >
               {drafts.map((draft) => (
                 <option key={draft.id} value={draft.id}>

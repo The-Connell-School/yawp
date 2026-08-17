@@ -23,6 +23,7 @@ import {
   Clock,
   EllipsisVertical,
   Printer,
+  Users,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
@@ -230,10 +231,16 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       title: true,
       html: true,
       text: true,
+      // `group` and `collaborationSupported` answer one question: may this draft
+      // still be turned into a shared one? A draft that already belongs to a
+      // group is already shared, and a kind of writing outside the pilot has no
+      // collaborative page to become.
+      group: { select: { id: true } },
       assignmentType: {
         select: {
           id: true,
           title: true,
+          collaborationSupported: true,
         },
       },
       assignment: {
@@ -439,6 +446,14 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       isOwner &&
       profile.role === 'STUDENT' &&
       !hasEffectivePlatformAdmin(user?.isAdmin),
+    // Offering a student the chance to write this with a classmate. Their own
+    // draft only, a kind of writing in the pilot only, and not one that is
+    // already shared — sharing a shared draft would fork the group's work.
+    canShareWithClassmates:
+      isOwner &&
+      profile.role === 'STUDENT' &&
+      doc.group === null &&
+      doc.assignmentType?.collaborationSupported === true,
   });
 }
 
@@ -1017,6 +1032,25 @@ export default function Route() {
                     <Printer className="h-4 w-4" />
                     Print
                   </DropdownMenuItem>
+                  {/* The one collaboration touchpoint on this page. It links out
+                      rather than opening a picker here: choosing classmates and
+                      copying the draft already exist, tested, on the shared-draft
+                      page, and this file is deliberately kept out of the
+                      collaborative write path. */}
+                  {data.canShareWithClassmates ? (
+                    <DropdownMenuItem
+                      className="gap-2"
+                      data-testid="document-action-share-with-classmates"
+                      onSelect={() =>
+                        navigate(
+                          `/app/shared-drafts/new?sourceDocumentId=${data.doc.id}`
+                        )
+                      }
+                    >
+                      <Users className="h-4 w-4" />
+                      Write with a classmate
+                    </DropdownMenuItem>
+                  ) : null}
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>

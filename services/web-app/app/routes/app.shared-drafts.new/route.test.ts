@@ -89,9 +89,9 @@ const post = (fields: Record<string, string | string[]>) => {
   } as any);
 };
 
-const get = () =>
+const get = (search = '') =>
   loader({
-    request: new Request('https://example.com/app/shared-drafts/new'),
+    request: new Request(`https://example.com/app/shared-drafts/new${search}`),
     params: {},
   } as any);
 
@@ -228,6 +228,22 @@ describe('app.shared-drafts.new', () => {
       expect(where.group).toBeNull();
       expect(where.deletedAt).toBeNull();
       expect(where.archivedAt).toBeNull();
+    });
+
+    test('preselects the draft the student came from', async () => {
+      // Arriving from that draft's own menu, it is what they meant to share.
+      const body = await readBody(await get('?sourceDocumentId=doc-source'));
+
+      expect(body.preselectedDraftId).toBe('doc-source');
+    });
+
+    test('ignores a draft id that is not one of theirs', async () => {
+      // The id comes from the URL, so it cannot be trusted to name a draft they
+      // own or one in the pilot -- both of which the drafts query already
+      // enforces.
+      const body = await readBody(await get('?sourceDocumentId=doc-someone-else'));
+
+      expect(body.preselectedDraftId).toBeNull();
     });
 
     test('falls back to Untitled for a draft with no title', async () => {
