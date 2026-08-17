@@ -106,6 +106,16 @@ fi
 
 if [[ -f "$DATA_SOURCE_FINGERPRINT_FILE" && "$(<"$DATA_SOURCE_FINGERPRINT_FILE")" == "$DATA_SOURCE_FINGERPRINT" ]]; then
   DATA_SOURCE_CHANGED=0
+elif [[ "$PREVIEW_SLUG" == "demo" && "${DEMO_RESET_DATA:-false}" != "true" ]]; then
+  if [[ -f "$DATA_SOURCE_FINGERPRINT_FILE" ]]; then
+    echo "Refusing to replace demo database while DEMO_RESET_DATA=false." >&2
+    echo "Requested data source: $DATA_SOURCE_FINGERPRINT" >&2
+    echo "Current data source: $(<"$DATA_SOURCE_FINGERPRINT_FILE")" >&2
+    exit 1
+  fi
+  # Adopt legacy demo databases created before data-source fingerprints existed.
+  # A brand-new demo database is also safe: ensure_preview_database creates it below.
+  DATA_SOURCE_CHANGED=0
 else
   rm -f "$ACCESS_CODE_FILE" "$ACCESS_SEATS_FILE"
 fi
@@ -474,6 +484,7 @@ compute_tooling_fingerprint() {
         packages/prisma/scripts/assignment-type-release-gate.ts \
         packages/prisma/scripts/backfill-class-art-key.ts \
         packages/prisma/scripts/seed-local-dev.ts \
+        packages/prisma/scripts/sync-prod-fidelity-fixtures.ts \
         packages/prisma/scripts/preview-seats.ts \
         packages/prisma/scripts/seed-preview-seats.ts \
         packages/prisma/scripts/local-dev/class-insights.ts \
@@ -485,6 +496,14 @@ compute_tooling_fingerprint() {
           sha256_file "$file"
         fi
       done
+
+      if [[ -d packages/prisma/fixtures/prod-fidelity ]]; then
+        find packages/prisma/fixtures/prod-fidelity -type f -print \
+          | LC_ALL=C sort \
+          | while IFS= read -r file; do
+              sha256_file "$file"
+            done
+      fi
 
       if [[ -d packages/prisma/migrations ]]; then
         find packages/prisma/migrations -type f -print \
@@ -531,6 +550,8 @@ run_tooling_if_needed() {
       tooling_command='bun install --ignore-scripts && bun prisma generate && cd packages/prisma && bun prisma migrate deploy && bun run scripts/backfill-class-art-key.ts'
       if [[ "$DATABASE_CREATED" == "1" ]]; then
         tooling_command+=' && bun run seed-local-dev'
+      else
+        tooling_command+=' && bun run sync-prod-fidelity-fixtures'
       fi
       tooling_command+=' && bun run scripts/assignment-type-release-gate.ts --require-data'
       ;;

@@ -371,6 +371,9 @@ describe('PR preview deployment contract', () => {
       'bun run scripts/backfill-class-art-key.ts'
     );
     const seedIndex = deployScript.indexOf('bun run seed-local-dev');
+    const syncIndex = deployScript.indexOf(
+      'bun run sync-prod-fidelity-fixtures'
+    );
     const releaseGateIndex = deployScript.indexOf(
       'bun run scripts/assignment-type-release-gate.ts --require-data'
     );
@@ -384,12 +387,17 @@ describe('PR preview deployment contract', () => {
       'if [[ "${DEMO_RESET_DATA:-false}" == "true" ]]'
     );
     expect(deployScript).toContain(
+      'Refusing to replace demo database while DEMO_RESET_DATA=false.'
+    );
+    expect(deployScript).toContain(
       'dropdb -U postgres --force --if-exists "$DATABASE_NAME"'
     );
     expect(deployScript).toContain(
       'createdb -U postgres -O "$DATABASE_USER" "$DATABASE_NAME"'
     );
     expect(deployScript).toContain('bun run seed-local-dev');
+    expect(deployScript).toContain('bun run sync-prod-fidelity-fixtures');
+    expect(deployScript).toContain('packages/prisma/fixtures/prod-fidelity');
     expect(deployScript).toContain('bun run seed-preview-seats');
     expect(deployScript).toContain('oven/bun:1.3.1');
     expect(deployScript).toContain(
@@ -410,6 +418,7 @@ describe('PR preview deployment contract', () => {
     expect(migrateIndex).toBeGreaterThan(generateIndex);
     expect(backfillIndex).toBeGreaterThan(migrateIndex);
     expect(seedIndex).toBeGreaterThan(backfillIndex);
+    expect(syncIndex).toBeGreaterThan(backfillIndex);
     expect(releaseGateIndex).toBeGreaterThan(seedIndex);
     expect(webStartIndex).toBeGreaterThan(releaseGateIndex);
   });

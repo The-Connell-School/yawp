@@ -8,8 +8,10 @@ import { loadProdFidelityBundle } from './local-dev/import-prod-fidelity-fixture
 describe('local dev seed fixtures', () => {
   test('loads committed prod-fidelity fixtures with expected counts', async () => {
     const bundle = await loadProdFidelityBundle();
-    expect(bundle.manifest.version).toBe(1);
-    expect(bundle.assignmentTypes.length).toBeGreaterThan(0);
+    expect(bundle.manifest.version).toBe(2);
+    expect(bundle.manifest.sourceDatabaseUrl).toBe('production-config-export');
+    expect(bundle.assignmentTypes).toHaveLength(12);
+    expect(bundle.rubrics).toHaveLength(2);
     expect(
       bundle.assignmentTypes.some(
         (assignmentType) =>
@@ -20,7 +22,22 @@ describe('local dev seed fixtures', () => {
     expect(bundle.teacherTrainings.length).toBeGreaterThan(0);
   });
 
-  test('aligns thesis module review instructions with the grading assistant rubric', async () => {
+  test('tracks the current production assignment-type and rubric inventory', async () => {
+    const bundle = await loadProdFidelityBundle();
+    const assignmentTypeTitles = new Set(
+      bundle.assignmentTypes.map((assignmentType) => assignmentType.title)
+    );
+    const rubricNames = new Set(bundle.rubrics.map((rubric) => rubric.name));
+
+    expect(assignmentTypeTitles).toContain("GBA 300: Int'l Expansion Plan");
+    expect(assignmentTypeTitles).toContain("GBA 300: Int'l Etiquette");
+    expect(assignmentTypeTitles).toContain('Nonverbal Communication Assignment');
+    expect(rubricNames).toEqual(
+      new Set(['daily-pages-engagement', 'thesis-driven-essay'])
+    );
+  });
+
+  test('retains the current production essay-review instruction snapshot', async () => {
     const bundle = await loadProdFidelityBundle();
     const reviewInstructions = bundle.assignmentModuleInstructions.filter(
       (instruction) =>
@@ -28,20 +45,28 @@ describe('local dev seed fixtures', () => {
         instruction.title.trim().toLowerCase() === 'review my essay!'
     );
 
-    expect(reviewInstructions.length).toBeGreaterThanOrEqual(2);
+    expect(reviewInstructions).toHaveLength(2);
 
-    for (const instruction of reviewInstructions) {
-      const content = `${instruction.prompt ?? ''}\n${instruction.tutorInstructions ?? ''}`;
+    const reviewContent = reviewInstructions.map(
+      (instruction) =>
+        `${instruction.prompt ?? ''}\n${instruction.tutorInstructions ?? ''}`
+    );
 
-      expect(content).not.toContain(
-        'Content, Organization, Syntax, and Grammar'
-      );
-      expect(content).toContain('Thesis/Content (25%)');
-      expect(content).toContain('Organization/Structure (25%)');
-      expect(content).toContain('Evidence/Support (20%)');
-      expect(content).toContain('Voice/Style (20%)');
-      expect(content).toContain('Grammar/Syntax/Formatting (10%)');
-    }
+    expect(
+      reviewContent.every((content) =>
+        content.includes('Content, Organization, Syntax, and Grammar')
+      )
+    ).toBe(true);
+    expect(
+      reviewContent.some((content) =>
+        content.includes('4th Edition of Strunk and White')
+      )
+    ).toBe(true);
+    expect(
+      reviewContent.some((content) =>
+        content.includes('REVIEW BY THESE FIVE CATEGORIES')
+      )
+    ).toBe(true);
   });
 
   test('defines stable dev personas with shared password', () => {
@@ -73,6 +98,30 @@ describe('local dev seed fixtures', () => {
     const seedModule = await import('./local-dev/seed-synthetic-data');
 
     expect(typeof seedModule.seedSyntheticLocalDevData).toBe('function');
+  });
+
+  test('keeps production export and existing-database sync PII-safe and non-destructive', () => {
+    const exportSource = readFileSync(
+      join(
+        import.meta.dirname,
+        'local-dev/export-prod-fidelity-fixtures.ts'
+      ),
+      'utf8'
+    );
+    const syncSource = readFileSync(
+      join(import.meta.dirname, 'sync-prod-fidelity-fixtures.ts'),
+      'utf8'
+    );
+
+    expect(exportSource).not.toMatch(
+      /prisma\.(user|document|submission|orgMembership)\./
+    );
+    expect(exportSource).toContain(
+      "sourceDatabaseUrl: 'production-config-export'"
+    );
+    expect(syncSource).toContain('syncProdFidelityFixtures');
+    expect(syncSource).not.toContain('truncateAllPublicTables');
+    expect(syncSource).not.toContain('deleteMany');
   });
 
   test('connects cumulative staff personas to seeded schools and classes', () => {
