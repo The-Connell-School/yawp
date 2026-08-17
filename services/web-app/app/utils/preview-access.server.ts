@@ -317,6 +317,22 @@ async function consumeCodeQueryParam(
   });
 }
 
+function stripCodeQueryParam(request: Request): Response | null {
+  if (request.method !== 'GET') return null;
+
+  const url = new URL(request.url);
+  if (!url.searchParams.has('code')) return null;
+
+  url.searchParams.delete('code');
+  return new Response(null, {
+    status: 303,
+    headers: {
+      'Cache-Control': 'no-store',
+      Location: `${url.pathname}${url.search}`,
+    },
+  });
+}
+
 /**
  * The preview access flag and this request-boundary middleware are the same switch.
  * Therefore PREVIEW_ACCESS_GATE=on cannot expose role-swap without also putting the
@@ -336,6 +352,11 @@ export function createPreviewAccessMiddleware(
     if (!seat) {
       const oneClickEntry = await consumeCodeQueryParam(request, repository);
       if (oneClickEntry) return oneClickEntry;
+    } else {
+      // The existing seat remains authoritative, but never let a code-bearing PR link
+      // linger in browser history or become a Referer after access is already granted.
+      const cleanedEntry = stripCodeQueryParam(request);
+      if (cleanedEntry) return cleanedEntry;
     }
     if (!seat) return blockedResponse(request);
 

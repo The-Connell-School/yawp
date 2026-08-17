@@ -445,7 +445,7 @@ describe('preview access gate', () => {
       expect(next).not.toHaveBeenCalled();
     });
 
-    test('an existing seat cookie takes precedence and the code is ignored', async () => {
+    test('an existing seat cookie takes precedence while the code is stripped', async () => {
       const cookie = (
         await grantPreviewAccessCookie({
           organizationId: 'local-dev-org',
@@ -457,13 +457,17 @@ describe('preview access gate', () => {
 
       const response = await middleware(
         middlewareArgs(
-          request('/app?code=calm-panda-8127', { headers: { cookie } })
+          request('/app?code=calm-panda-8127&tab=classes', {
+            headers: { cookie },
+          })
         ),
         next
       );
 
-      expect(await response?.text()).toBe('private');
-      expect(next).toHaveBeenCalledTimes(1);
+      expect(response?.status).toBe(303);
+      expect(response?.headers.get('location')).toBe('/app?tab=classes');
+      expect(response?.headers.get('set-cookie')).toBeNull();
+      expect(next).not.toHaveBeenCalled();
     });
   });
 });
