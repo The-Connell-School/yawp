@@ -1064,6 +1064,15 @@ describe('demo environment deployment contract', () => {
     expect(workflow).toContain(
       'reset_data may only deploy the reviewed default branch'
     );
+    expect(workflow).toContain('Checkout reviewed demo control plane');
+    expect(workflow).toContain('Checkout the requested application ref');
+    expect(workflow).toContain('demo-control/ "$ssh_target:$remote_control/"');
+    expect(workflow).toContain(
+      'cd $(shell_quote "$remote_control") && ${remote_env[*]} bash scripts/preview/deploy.sh'
+    );
+    expect(workflow).not.toContain(
+      'cd $(shell_quote "$remote_source") && ${remote_env[*]} bash scripts/preview/deploy.sh'
+    );
     expect(workflow).toContain(
       'DEMO_RESET_CONFIRMATION=$(shell_quote "$DEMO_RESET_CONFIRMATION")'
     );
@@ -1099,6 +1108,9 @@ describe('demo environment deployment contract', () => {
     expect(backupWorkflow).toContain('s3api delete-object');
     expect(backupWorkflow).toContain('s3api list-object-versions');
     expect(backupWorkflow).toContain('--version-id "$version_id"');
+    expect(backupWorkflow).not.toContain(
+      'mapfile -t keys < <(aws s3api'
+    );
     expect(backupScript).toContain('BACKUP_RETENTION_COUNT');
     expect(backupScript).toContain('pg_restore --list');
     expect(backupScript).toContain('--exit-on-error');

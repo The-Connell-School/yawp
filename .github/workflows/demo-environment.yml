@@ -76,7 +76,7 @@ jobs:
           test -n "$DEMO_SSH_PRIVATE_KEY" || { echo "Missing repository secret DEMO_SSH_PRIVATE_KEY"; exit 1; }
           test -n "$PREVIEW_ANTHROPIC_API_KEY" || { echo "Missing an Anthropic API key secret"; exit 1; }
           test -n "$PREVIEW_POSTGRES_ADMIN_PASSWORD" || { echo "Missing demo secret PREVIEW_DB_PASSWORD"; exit 1; }
-          if [[ ! "$DEMO_BACKUP_RETENTION" =~ ^[0-9]+$ ]] \
+          if [[ ! "$DEMO_BACKUP_RETENTION" =~ ^[1-9][0-9]{0,2}$ ]] \
             || (( DEMO_BACKUP_RETENTION < 1 || DEMO_BACKUP_RETENTION > 365 )); then
             echo "backup_retention must be between 1 and 365" >&2
             exit 1
@@ -92,13 +92,23 @@ jobs:
             }
           fi
 
-      - name: Checkout the requested ref
+      - name: Checkout reviewed demo control plane
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          path: demo-control
+          persist-credentials: false
+
+      - name: Checkout the requested application ref
         uses: actions/checkout@v4
         with:
           ref: ${{ inputs.ref }}
+          path: demo-source
+          persist-credentials: false
 
       - name: Record what is being shipped
         id: shipping
+        working-directory: demo-source
         run: |
           set -euo pipefail
           echo "sha=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
@@ -129,8 +139,9 @@ jobs:
         run: |
           set -euo pipefail
           remote_source="${PREVIEW_ROOT}/sources/demo"
+          remote_control="${PREVIEW_ROOT}/control/demo"
           ssh_target="${PREVIEW_SSH_USER}@${PREVIEW_HOST}"
-          ssh -i ~/.ssh/demo_key "$ssh_target" "mkdir -p '$remote_source'"
+          ssh -i ~/.ssh/demo_key "$ssh_target" "mkdir -p '$remote_source' '$remote_control'"
           rsync -az --delete \
             --exclude '.git' \
             --exclude 'node_modules' \
@@ -140,7 +151,17 @@ jobs:
             --exclude 'packages/prisma/generated' \
             --exclude '.worktrees' \
             -e "ssh -i ~/.ssh/demo_key" \
-            ./ "$ssh_target:$remote_source/"
+            demo-control/ "$ssh_target:$remote_control/"
+          rsync -az --delete \
+            --exclude '.git' \
+            --exclude 'node_modules' \
+            --exclude 'services/web-app/node_modules' \
+            --exclude 'services/web-app/.react-router' \
+            --exclude 'services/web-app/.vite' \
+            --exclude 'packages/prisma/generated' \
+            --exclude '.worktrees' \
+            -e "ssh -i ~/.ssh/demo_key" \
+            demo-source/ "$ssh_target:$remote_source/"
 
       - name: Deploy demo
         id: deploy
@@ -149,6 +170,7 @@ jobs:
           shell_quote() { printf '%q' "$1"; }
           ssh_target="${PREVIEW_SSH_USER}@${PREVIEW_HOST}"
           remote_source="${PREVIEW_ROOT}/sources/demo"
+          remote_control="${PREVIEW_ROOT}/control/demo"
           remote_env=(
             "PREVIEW_SLUG=$(shell_quote "$PREVIEW_SLUG")"
             "PREVIEW_DOMAIN=$(shell_quote "$PREVIEW_DOMAIN")"
@@ -168,7 +190,7 @@ jobs:
             "SOURCE_DIR=$(shell_quote "$remote_source")"
           )
           ssh -i ~/.ssh/demo_key "$ssh_target" \
-            "cd $(shell_quote "$remote_source") && ${remote_env[*]} bash scripts/preview/deploy.sh" \
+            "cd $(shell_quote "$remote_control") && ${remote_env[*]} bash scripts/preview/deploy.sh" \
             | tee /tmp/demo-deploy.log
           url="$(awk -F= '/^PREVIEW_URL=/{print $2}' /tmp/demo-deploy.log | tail -1)"
           access_code="$(awk -F= '/^PREVIEW_ACCESS_CODE=/{print $2}' /tmp/demo-deploy.log | tail -1)"

@@ -28,7 +28,7 @@ BACKUP_TIMESTAMP="${BACKUP_TIMESTAMP:-$(date -u +%Y%m%dT%H%M%SZ)}"
   echo "BACKUP_TIMESTAMP must use YYYYMMDDTHHMMSSZ" >&2
   exit 1
 }
-if [[ ! "$BACKUP_RETENTION_COUNT" =~ ^[0-9]+$ ]] \
+if [[ ! "$BACKUP_RETENTION_COUNT" =~ ^[1-9][0-9]{0,2}$ ]] \
   || (( BACKUP_RETENTION_COUNT < 1 || BACKUP_RETENTION_COUNT > 365 )); then
   echo "BACKUP_RETENTION_COUNT must be between 1 and 365" >&2
   exit 1
@@ -82,10 +82,11 @@ verification_database=""
 mv -- "$partial_file" "$backup_file"
 
 if command -v sha256sum >/dev/null 2>&1; then
-  sha256sum "$backup_file" > "${backup_file}.sha256"
+  checksum="$(sha256sum "$backup_file" | awk '{print $1}')"
 else
-  shasum -a 256 "$backup_file" > "${backup_file}.sha256"
+  checksum="$(shasum -a 256 "$backup_file" | awk '{print $1}')"
 fi
+printf '%s  %s\n' "$checksum" "$(basename "$backup_file")" > "${backup_file}.sha256"
 
 retained=0
 while IFS= read -r candidate; do
