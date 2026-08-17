@@ -43,6 +43,9 @@ jobs:
       - name: 🧪 Preview tooling tests
         env:
           ENFORCE_CAP_REQUIRE_ROOT_OWNERSHIP: '1'
+          # Exercise the real Postgres role/ACL migration on Linux. Local macOS runs
+          # may leave this opt-in because the test launches its own Postgres container.
+          PREVIEW_DATABASE_ROLE_INTEGRATION: '1'
         run: bun test ./scripts/preview/
 
   validate-prisma-migrations:

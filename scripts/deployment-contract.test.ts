@@ -605,6 +605,7 @@ describe('PR preview deployment contract', () => {
   });
 
   test('preview bootstrap migrates resident compose files before rotating the administrator', () => {
+    const ci = readRepoFile('.github/workflows/ci.yml');
     const workflow = readRepoFile('.github/workflows/preview-host-bootstrap.yml');
     const bootstrap = readRepoFile('scripts/preview/bootstrap-host.sh');
     const migration = readRepoFile(
@@ -623,6 +624,7 @@ describe('PR preview deployment contract', () => {
     expect(migration).toContain('wait_for_web_health');
     expect(migration).toContain('rollback_active_migration');
     expect(migration).toContain('ALTER ROLE postgres WITH PASSWORD');
+    expect(ci).toContain("PREVIEW_DATABASE_ROLE_INTEGRATION: '1'");
   });
 
   test('preview bootstrap installs a secret-protected first-request wake path', () => {
