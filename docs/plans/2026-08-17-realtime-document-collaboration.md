@@ -270,6 +270,40 @@ scrutiny and almost certainly a human-in-the-loop requirement.
 
 ## Technical blockers
 
+### 0. Architecture decision: a separate page, not a flag inside the editor
+
+**The collaborative editor is a new route that duplicates the existing document
+page. The existing editor, its save path, and submit-document are not modified
+at all.**
+
+This is the strongest available form of the backward-compatibility rule in
+`AGENTS.md`, and this subsystem has already earned it: the local-first
+persistence work was reverted from `main` for breaking things adjacent to it
+(`docs/decisions/2026-03-30-revert-local-first-persistence.md`). A flag threaded
+through `use-editor-sync.ts` puts collaborative and solo writing in the same
+code path, where a mistake reaches every student. A parallel route cannot.
+
+Consequences, all of them good:
+
+- `app_.documents_.$id/route.tsx`, `use-editor-sync.ts`,
+  `api.document.$id.save`, and `api.domain.submit-document` stay byte-identical.
+  A diff against `main` in those paths is a bug in this plan.
+- The new page duplicates the editor shell so it looks the same to students, but
+  swaps `use-editor-sync` for the Yjs `Collaboration` extensions, and disables
+  whole-document autosave entirely.
+- Routing decides which page a student lands on, based on whether their
+  assignment is collaborative — so the two never mix at runtime.
+- Duplication is accepted deliberately and temporarily. Once collaborative
+  editing has run in production long enough to trust, the two pages can be
+  reconciled; until then, duplication is the cheap insurance and shared code is
+  the expensive risk.
+- **The predicate consolidation is therefore reverted out of this branch.** Even
+  a behavior-preserving swap is a diff in files this feature has decided not to
+  touch. It is worth doing on its own, as its own PR.
+
+Because the old page keeps its narrow inline predicate, a co-author cannot open a
+shared draft there at all — which is correct: they belong on the new page.
+
 ### 1. The save path cannot support two writers (blocker)
 
 `app/routes/api.document.$id.save/route.ts` is whole-document snapshot
@@ -286,19 +320,84 @@ and the loser's text is discarded. Collaboration cannot be layered on this
 endpoint — it needs a CRDT as the live source of truth, with the snapshot write
 demoted to a derived flush by one designated writer.
 
-### 2. Hosting does not support WebSockets (blocker)
+### 2. Hosting does not support WebSockets — RESOLVED
 
-`infra/main.tf` deploys `aws_apprunner_service`. App Runner does not support
-WebSockets, so a Hocuspocus / `y-websocket` server cannot live inside the
-existing service. Three options:
+**Decision: keep Yawp on App Runner. The browser connects directly to a managed
+collaboration provider over WSS. Pilot Tiptap Collaboration Cloud.**
 
-1. **Managed realtime provider** (Liveblocks / Hocuspocus Cloud / PartyKit) —
-   fastest, but student writing leaves the VPC and needs a compliance read.
-2. **Separate ECS + ALB sync service** — right long-term answer, keeps data
-   in-VPC, real infra work.
-3. **Yjs updates over plain HTTP** — POST up, SSE or poll down. Works on App
-   Runner today at ~1-2s latency, no infra change. Needs a spike to confirm App
-   Runner's streaming behavior.
+```
+Browser (Tiptap)
+├─ HTTPS → Yawp on App Runner: session, authorization, grading, submission
+└─ WSS   → Tiptap Cloud: Yjs document, live edits, cursors, presence
+
+Tiptap Cloud webhook/API
+└─ HTTPS → Yawp: derived HTML/text snapshots → existing Postgres
+```
+
+The move that makes this work: App Runner never carries a socket, so its
+WebSocket limitation stops being something to engineer around. App Runner keeps
+doing what it is good at — HTTP request/response for auth, grading and
+submission — and realtime traffic bypasses it entirely. No hosting migration is
+required to ship collaboration.
+
+**An earlier draft of this plan recommended spiking SSE on App Runner. That
+recommendation is withdrawn**, for a reason that also removes option 3 below:
+
+- App Runner's runtime is HTTP request/response with a 120s cap and assumes
+  stateless request processing.
+- The WebSocket roadmap request was closed **not planned**.
+- **App Runner moved to maintenance mode** — announced 31 March 2026, effective
+  30 April 2026. Existing customers continue and may still create services;
+  no new customers, and **no new features planned**. AWS points migrations at
+  ECS Express Mode.
+
+Engineering a streaming transport onto a platform AWS has stopped developing is
+the wrong direction. Worth stating the corollary plainly, though: **Yawp has an
+App Runner exit ahead of it regardless of collaboration.** That is a separate
+piece of work, and it should not be bundled into this feature — but it does
+change the long-run economics below.
+
+**Why Tiptap Cloud specifically**
+
+- Yawp is already on Tiptap/ProseMirror, so the editor integration is the
+  supported path rather than an adaptation.
+- Tiptap Collaboration is Yjs plus Hocuspocus underneath: merging, presence,
+  persistence, history and export APIs.
+- Server-generated JWTs can scope access to exact document names with read/write
+  levels — which maps onto the authorization scopes already built, with the token
+  endpoint as the seam.
+
+**Lock-in is lower than a managed dependency usually implies, and this is a
+significant part of the argument.** The protocol underneath is Yjs/Hocuspocus,
+which is open and self-hostable. Moving later from Tiptap Cloud to self-hosted
+Hocuspocus is a transport swap, not a rewrite. Combined with the App Runner exit
+above — which likely lands on ECS anyway — the self-hosted option gets cheaper
+over time, and piloting managed now does not foreclose it.
+
+**Superseded options,** kept for the record: a separate ECS + ALB Hocuspocus
+service (still the endgame if data residency demands it, and cheaper once the
+ECS migration happens for other reasons), and Yjs over HTTP/SSE on App Runner
+(withdrawn — wrong platform to invest in).
+
+### 2a. Open questions on the provider decision
+
+Not blockers, but each should have an answer before money or student data moves:
+
+- **Pricing tier and its limits.** Webhook/API access appears to be a higher tier
+  than the entry plan, and dependable Postgres snapshots depend on it — so the
+  real number is likely the Team price, not the entry price. **Concurrent
+  connection and document limits per tier need confirming**, because the failure
+  mode is mid-class: one period with several classes doing group work at once is
+  a spike, not a trickle. (Not verified here — tiptap.dev is blocked by this
+  environment's egress proxy.)
+- **DPA, data residency and FERPA.** This is the real gate, and it is contractual
+  rather than technical. SOC 2 is a security audit and is **not** FERPA
+  compliance: a K-12 arrangement needs the provider bound as a school official
+  under the district's terms, with residency pinned. COPPA also applies if any
+  students are under 13. Settle this before student writing leaves Yawp's AWS
+  account.
+- **Submission availability coupling.** See the submission note below — this is
+  the most user-visible failure mode and it needs a specified fallback.
 
 ### 2b. How fast can it actually be
 
@@ -596,6 +695,60 @@ Contribution and grading:
 - release — no member sees any grade before `Submission.releasedAt`
 - a member's private `overallComment` is not visible to the rest of the group
 
+## Rollout requirements for the provider integration
+
+Sequenced, and each one is load-bearing:
+
+1. **Flag per document/class.** Largely built: `Organization.collaborativeDraftsEnabled`
+   gates the rollout and `Assignment.collaborationEnabled` plus groups on
+   `ClassAssignment` give per-class and per-document granularity. The legacy
+   editor stays unchanged.
+2. **One collaboration room per Yawp document.** Room name derived from the
+   document id.
+3. **Token endpoint on App Runner** validates existing owner/co-author/teacher
+   permissions, then returns a document-scoped JWT. This is where
+   `documentAuthorWhere` earns its place — the access model is already built and
+   tested, and the token endpoint is its first production call site.
+4. **Seed existing HTML exactly once, and only after confirming the room is
+   empty.** Seeding on every join duplicates content. This check is the
+   difference between a working migration and silently doubling a student's
+   essay.
+5. **Disable whole-document autosave on collaborative documents.** Free here,
+   because the collaborative page is a separate route that never wires up
+   `use-editor-sync` in the first place.
+6. **Keep dual-writing derived HTML/text into `Document`** for grading, tutor,
+   search, comments, revisions and backward compatibility. Non-negotiable per
+   `AGENTS.md`, and the specific thing whose absence got the last attempt
+   reverted.
+7. **Submission fetches canonical state server-side** and creates an immutable
+   `Submission`.
+8. **Enforce editor schema version before joining a room.** A client with an
+   older bundle and fewer extensions can silently drop unsupported nodes from a
+   shared document. This is a data-loss vector, not a compatibility nicety, and
+   it is worse here than in single-player editing because one stale client
+   damages everyone's draft.
+9. **DPA, residency and FERPA cleared** before student writing leaves the AWS
+   account.
+
+### The gap worth closing before build: submission availability
+
+"Submission waits for provider sync" couples the single most deadline-sensitive
+action in the product to a third party's uptime. If Tiptap Cloud is slow or down
+at 11:59pm on a due date, the current plan has no specified behavior — and this
+is precisely the failure that generates angry parent email.
+
+Proposed rule, to be confirmed:
+
+- Try the server-side canonical fetch first, with a short timeout.
+- On timeout or error, fall back to the most recent dual-written
+  `Document.html/text` snapshot rather than blocking the submission.
+- Record which path produced the `Submission`, so a teacher can tell whether they
+  are grading canonical text or a snapshot that may be seconds stale.
+- Never leave the student unable to submit because of provider availability.
+
+A stale-by-seconds submission that exists beats a perfect one that failed to save
+at the deadline.
+
 ## Prior art in this subsystem — read first
 
 `docs/decisions/2026-03-30-revert-local-first-persistence.md`. A previous attempt
@@ -613,15 +766,18 @@ single-writer path untouched, per `AGENTS.md`.
 1. **Finish adopting `document-access.server.ts`.** Migrate the four inline
    document-scoped routes onto the existing helper. Pure refactor, no behavior
    change, ships alone. Unit tests first.
-2. **Spike the transport.** Answer the App Runner question with running code
-   before committing to a design. Everything downstream depends on it.
+2. ~~**Spike the transport.**~~ **Resolved by decision, no spike needed:** the
+   browser connects directly to Tiptap Collaboration Cloud over WSS and App
+   Runner never carries a socket. What replaces the spike is a provider
+   evaluation — pricing tier limits, and the DPA/FERPA review.
 3. **Model groups and collaborators.** `Assignment.collaborationEnabled`,
    grouping mode, group table on `ClassAssignment`, `DocumentCollaborator`.
    Additive migration, nothing reads it yet. Flag `collaborative-drafts`,
    default off.
-4. **Pilot: small teacher-assigned groups, ungraded.** Breakout panel, per-group
-   document provisioning, the creation-to-class hand-off. No grade fan-out yet.
-   Groups of 2-4. E2E first.
+4. **Pilot: small teacher-assigned groups, ungraded.** The new collaborative
+   route, breakout panel, per-group document provisioning, token endpoint, and
+   the creation-to-class hand-off. No grade fan-out yet. Groups of 2-4. E2E
+   first.
 5. **Contribution panel, read-only.** The authorship heatmap and session
    timeline on ungraded group work. Ships before any grading, so teachers can
    tell us whether the evidence is useful before it carries consequences.
