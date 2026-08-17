@@ -124,7 +124,9 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     membershipId: student.id,
     name: student.user.name?.trim() || student.user.email,
   }));
-  const nameFor = new Map(roster.map((entry) => [entry.membershipId, entry.name]));
+  const nameFor = new Map(
+    roster.map((entry) => [entry.membershipId, entry.name])
+  );
 
   const unassigned = unassignedMembershipIds({
     rosterMembershipIds: roster.map((entry) => entry.membershipId),
@@ -144,7 +146,8 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     defaultGroupSize:
       classAssignment.assignment.collaborationGroupSize ??
       MIN_COLLABORATION_GROUP_SIZE,
-    isWholeClass: classAssignment.assignment.collaborationGroupMode === 'whole-class',
+    isWholeClass:
+      classAssignment.assignment.collaborationGroupMode === 'whole-class',
     opened: groups.some((group) => group.openedAt !== null),
     groups: groups.map((group) => ({
       id: group.id,
@@ -317,93 +320,97 @@ export default function GroupsRoute() {
   );
 
   return (
-    <div className="mx-auto w-full max-w-4xl p-6">
-      <div className="mb-4">
-        <Button asChild variant="ghost" size="sm">
-          <Link
-            to={`/app/assignments/${data.assignmentId}?classId=${data.classId}`}
-            className="w-fit"
-          >
-            ← Back to assignment
-          </Link>
-        </Button>
-      </div>
-      <header className="mb-6">
-        <h1 className="text-xl font-semibold">
-          Groups · {data.assignmentTitle ?? 'Collaborative draft'}
-        </h1>
-        <p className="text-sm text-gray-600">
-          {data.className}
-          {data.period ? ` · Period ${data.period}` : ''} · {data.rosterCount}{' '}
-          students
-        </p>
-      </header>
-
-      {data.opened ? (
-        <p
-          className="mb-6 rounded border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900"
-          role="status"
-        >
-          Groups are open and each one has its own draft. Rearranging is turned
-          off now — moving a student would move them between documents their group
-          has already written in.
-        </p>
-      ) : (
-        <Form method="post" className="mb-6 flex flex-wrap items-end gap-3">
-          <input type="hidden" name="intent" value="arrange" />
-          <input type="hidden" name="shuffle" value="true" />
-          {data.isWholeClass ? (
-            <p className="text-sm text-gray-700">
-              This assignment uses one document for the whole class.
-            </p>
-          ) : (
-            <label className="flex flex-col gap-1 text-sm">
-              Students per group
-              <select
-                name="groupSize"
-                defaultValue={data.defaultGroupSize}
-                className="rounded border px-2 py-1"
-              >
-                {sizeOptions.map((size) => (
-                  <option key={size} value={size}>
-                    {size}
-                  </option>
-                ))}
-              </select>
-            </label>
-          )}
-          <Button type="submit" disabled={busy}>
-            {data.groups.length > 0 ? 'Shuffle again' : 'Shuffle into groups'}
+    // The app shell hands each page a fixed-height box and expects the page to
+    // own its scrolling; a roster long enough to overflow was otherwise stuck.
+    <div className="no-scrollbar h-full w-full overflow-y-scroll">
+      <div className="mx-auto w-full max-w-4xl p-6">
+        <div className="mb-4">
+          <Button asChild variant="ghost" size="sm">
+            <Link
+              to={`/app/assignments/${data.assignmentId}?classId=${data.classId}`}
+              className="w-fit"
+            >
+              ← Back to assignment
+            </Link>
           </Button>
-        </Form>
-      )}
+        </div>
+        <header className="mb-6">
+          <h1 className="text-xl font-semibold">
+            Groups · {data.assignmentTitle ?? 'Collaborative draft'}
+          </h1>
+          <p className="text-sm text-gray-600">
+            {data.className}
+            {data.period ? ` · Period ${data.period}` : ''} · {data.rosterCount}{' '}
+            students
+          </p>
+        </header>
 
-      {data.groups.length === 0 && data.unassigned.length === 0 ? (
-        <p className="text-sm text-gray-600">
-          No groups yet. Choose a size and shuffle to get started.
-        </p>
-      ) : (
-        <>
-          <GroupBoard
-            groups={data.groups}
-            unassigned={data.unassigned}
-            disabled={data.opened}
-          />
-
-          {data.opened ? null : (
-            <Form method="post" className="mt-8 border-t pt-6">
-              <input type="hidden" name="intent" value="open" />
-              <Button type="submit" disabled={busy}>
-                Open groups
-              </Button>
-              <p className="mt-2 text-xs text-gray-600">
-                This creates one shared draft per group and lets students start
-                writing. Group arrangements are locked afterwards.
+        {data.opened ? (
+          <p
+            className="mb-6 rounded border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900"
+            role="status"
+          >
+            Groups are open and each one has its own draft. Rearranging is
+            turned off now — moving a student would move them between documents
+            their group has already written in.
+          </p>
+        ) : (
+          <Form method="post" className="mb-6 flex flex-wrap items-end gap-3">
+            <input type="hidden" name="intent" value="arrange" />
+            <input type="hidden" name="shuffle" value="true" />
+            {data.isWholeClass ? (
+              <p className="text-sm text-gray-700">
+                This assignment uses one document for the whole class.
               </p>
-            </Form>
-          )}
-        </>
-      )}
+            ) : (
+              <label className="flex flex-col gap-1 text-sm">
+                Students per group
+                <select
+                  name="groupSize"
+                  defaultValue={data.defaultGroupSize}
+                  className="rounded border px-2 py-1"
+                >
+                  {sizeOptions.map((size) => (
+                    <option key={size} value={size}>
+                      {size}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+            <Button type="submit" disabled={busy}>
+              {data.groups.length > 0 ? 'Shuffle again' : 'Shuffle into groups'}
+            </Button>
+          </Form>
+        )}
+
+        {data.groups.length === 0 && data.unassigned.length === 0 ? (
+          <p className="text-sm text-gray-600">
+            No groups yet. Choose a size and shuffle to get started.
+          </p>
+        ) : (
+          <>
+            <GroupBoard
+              groups={data.groups}
+              unassigned={data.unassigned}
+              disabled={data.opened}
+            />
+
+            {data.opened ? null : (
+              <Form method="post" className="mt-8 border-t pt-6">
+                <input type="hidden" name="intent" value="open" />
+                <Button type="submit" disabled={busy}>
+                  Open groups
+                </Button>
+                <p className="mt-2 text-xs text-gray-600">
+                  This creates one shared draft per group and lets students
+                  start writing. Group arrangements are locked afterwards.
+                </p>
+              </Form>
+            )}
+          </>
+        )}
+      </div>
     </div>
   );
 }

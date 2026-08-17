@@ -205,14 +205,11 @@ export async function action({ request }: ActionFunctionArgs) {
           client: localRoomClient(),
         });
       } catch {
-        return redirectWithToast(
-          `/app/collab-documents/${shared.documentId}`,
-          {
-            type: 'error',
-            description:
-              'Shared draft created, but your existing writing could not be copied into it yet. Your original draft is untouched.',
-          }
-        );
+        return redirectWithToast(`/app/collab-documents/${shared.documentId}`, {
+          type: 'error',
+          description:
+            'Shared draft created, but your existing writing could not be copied into it yet. Your original draft is untouched.',
+        });
       }
 
       return redirectWithToast(`/app/collab-documents/${shared.documentId}`, {
@@ -273,19 +270,26 @@ export async function action({ request }: ActionFunctionArgs) {
 }
 
 export default function NewSharedDraftRoute() {
-  const { assignmentTypes, classmates, drafts, maxWriters, preselectedDraftId } =
-    useLoaderData<typeof loader>();
+  const {
+    assignmentTypes,
+    classmates,
+    drafts,
+    maxWriters,
+    preselectedDraftId,
+  } = useLoaderData<typeof loader>();
   const navigation = useNavigation();
   const busy = navigation.state !== 'idle';
 
   if (classmates.length === 0) {
     return (
-      <div className="mx-auto w-full max-w-2xl p-6">
-        <h1 className="mb-2 text-xl font-semibold">Write with a classmate</h1>
-        <p className="text-sm text-gray-600">
-          You are not in a class with anyone else yet, so there is nobody to share
-          a draft with.
-        </p>
+      <div className="no-scrollbar h-full w-full overflow-y-scroll">
+        <div className="mx-auto w-full max-w-2xl p-6">
+          <h1 className="mb-2 text-xl font-semibold">Write with a classmate</h1>
+          <p className="text-sm text-gray-600">
+            You are not in a class with anyone else yet, so there is nobody to
+            share a draft with.
+          </p>
+        </div>
       </div>
     );
   }
@@ -316,89 +320,104 @@ export default function NewSharedDraftRoute() {
   );
 
   return (
-    <div className="mx-auto w-full max-w-2xl p-6">
-      <header className="mb-6">
-        <h1 className="text-xl font-semibold">Write with a classmate</h1>
-        <p className="text-sm text-gray-600">
-          A shared draft is one document everyone in it writes in at the same time.
-        </p>
-      </header>
+    // The app shell hands each page a fixed-height box and expects the page to
+    // own its scrolling. Without this the second form was simply unreachable on
+    // a short viewport.
+    <div
+      className="no-scrollbar h-full w-full overflow-y-scroll"
+      data-testid="shared-drafts-scroll"
+    >
+      <div className="mx-auto w-full max-w-2xl p-6">
+        <header className="mb-6">
+          <h1 className="text-xl font-semibold">Write with a classmate</h1>
+          <p className="text-sm text-gray-600">
+            A shared draft is one document everyone in it writes in at the same
+            time.
+          </p>
+        </header>
 
-      {drafts.length > 0 ? (
-        <Form method="post" className="mb-8 grid gap-4 rounded border p-4">
-          <input type="hidden" name="intent" value="share-copy" />
+        {drafts.length > 0 ? (
+          <Form method="post" className="mb-8 grid gap-4 rounded border p-4">
+            <input type="hidden" name="intent" value="share-copy" />
+            <div>
+              <h2 className="text-sm font-semibold">Share a copy of a draft</h2>
+              <p className="text-sm text-gray-600">
+                Your original stays private and unchanged — this makes a shared
+                copy to work on together.
+              </p>
+            </div>
+
+            <label className="grid gap-1 text-sm">
+              Which draft?
+              <select
+                name="sourceDocumentId"
+                className="rounded border px-2 py-1"
+                defaultValue={preselectedDraftId ?? drafts[0].id}
+              >
+                {drafts.map((draft) => (
+                  <option key={draft.id} value={draft.id}>
+                    {draft.title} · {draft.assignmentTypeTitle}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            {classmatePicker}
+
+            <Button
+              type="submit"
+              disabled={busy}
+              className="justify-self-start"
+            >
+              Share a copy
+            </Button>
+          </Form>
+        ) : null}
+
+        <Form method="post" className="grid gap-4 rounded border p-4">
+          <input type="hidden" name="intent" value="create" />
           <div>
-            <h2 className="text-sm font-semibold">Share a copy of a draft</h2>
+            <h2 className="text-sm font-semibold">
+              Or start a new shared draft
+            </h2>
             <p className="text-sm text-gray-600">
-              Your original stays private and unchanged — this makes a shared copy
-              to work on together.
+              Begins empty, shared from the moment you create it.
             </p>
           </div>
 
-          <label className="grid gap-1 text-sm">
-            Which draft?
-            <select
-              name="sourceDocumentId"
-              className="rounded border px-2 py-1"
-              defaultValue={preselectedDraftId ?? drafts[0].id}
-            >
-              {drafts.map((draft) => (
-                <option key={draft.id} value={draft.id}>
-                  {draft.title} · {draft.assignmentTypeTitle}
-                </option>
-              ))}
-            </select>
-          </label>
+          {assignmentTypes.length > 0 ? (
+            <label className="grid gap-1 text-sm">
+              What kind of writing?
+              <select
+                name="assignmentTypeId"
+                className="rounded border px-2 py-1"
+                defaultValue={assignmentTypes[0].id}
+              >
+                {assignmentTypes.map((assignmentType) => (
+                  <option key={assignmentType.id} value={assignmentType.id}>
+                    {assignmentType.title}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : (
+            <p className="text-sm text-gray-600">
+              None of your classes use a kind of writing you can work on
+              together yet.
+            </p>
+          )}
 
           {classmatePicker}
 
-          <Button type="submit" disabled={busy} className="justify-self-start">
-            Share a copy
+          <Button
+            type="submit"
+            disabled={busy || assignmentTypes.length === 0}
+            className="justify-self-start"
+          >
+            Start a shared draft
           </Button>
         </Form>
-      ) : null}
-
-      <Form method="post" className="grid gap-4 rounded border p-4">
-        <input type="hidden" name="intent" value="create" />
-        <div>
-          <h2 className="text-sm font-semibold">Or start a new shared draft</h2>
-          <p className="text-sm text-gray-600">
-            Begins empty, shared from the moment you create it.
-          </p>
-        </div>
-
-        {assignmentTypes.length > 0 ? (
-          <label className="grid gap-1 text-sm">
-            What kind of writing?
-            <select
-              name="assignmentTypeId"
-              className="rounded border px-2 py-1"
-              defaultValue={assignmentTypes[0].id}
-            >
-              {assignmentTypes.map((assignmentType) => (
-                <option key={assignmentType.id} value={assignmentType.id}>
-                  {assignmentType.title}
-                </option>
-              ))}
-            </select>
-          </label>
-        ) : (
-          <p className="text-sm text-gray-600">
-            None of your classes use a kind of writing you can work on together
-            yet.
-          </p>
-        )}
-
-        {classmatePicker}
-
-        <Button
-          type="submit"
-          disabled={busy || assignmentTypes.length === 0}
-          className="justify-self-start"
-        >
-          Start a shared draft
-        </Button>
-      </Form>
+      </div>
     </div>
   );
 }
