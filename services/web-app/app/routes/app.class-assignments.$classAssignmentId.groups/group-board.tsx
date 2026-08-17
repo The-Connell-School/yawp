@@ -16,6 +16,7 @@ import {
   type DragStartEvent,
 } from '@dnd-kit/core';
 import { GripVertical, Plus, X } from 'lucide-react';
+import { Link } from 'react-router';
 import { Button } from '~/components/ui/button';
 import { MAX_COLLABORATION_GROUP_SIZE } from '~/domain/assignments/collaboration';
 
@@ -39,6 +40,8 @@ export type BoardGroup = {
   id: string;
   label: string;
   members: BoardStudent[];
+  /** Set once the group is opened and owns a draft. */
+  documentId?: string | null;
 };
 
 const UNASSIGNED = 'unassigned';
@@ -328,6 +331,16 @@ export function GroupBoard({
                     ))}
                   </ul>
                 )}
+
+                {group.documentId ? (
+                  <Link
+                    to={`/app/group-drafts/${group.documentId}`}
+                    className="mt-3 inline-block text-sm underline underline-offset-2"
+                    data-testid="group-board-draft-link"
+                  >
+                    Read the draft
+                  </Link>
+                ) : null}
               </DropZone>
             </li>
           );

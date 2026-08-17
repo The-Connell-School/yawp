@@ -75,6 +75,18 @@ if (isWebAppTestFile()) {
     '~/domain/collaboration/auto-arrange.server': await snapshot(
       '~/domain/collaboration/auto-arrange.server'
     ),
+    // The contribution read model stubs these two; other files need them real.
+    '~/domain/collaboration/room-store.server': await snapshot(
+      '~/domain/collaboration/room-store.server'
+    ),
+    '~/domain/collaboration/authorship.server': await snapshot(
+      '~/domain/collaboration/authorship.server'
+    ),
+    // The group-draft route stubs getIsPlatformAdmin and needs the read/author
+    // scope predicates from the same module left real.
+    '~/utils/document-access.server': await snapshot(
+      '~/utils/document-access.server'
+    ),
   };
 }
 
