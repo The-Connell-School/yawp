@@ -313,6 +313,203 @@ function send(response, status, body = '') {
   response.end(body);
 }
 
+function escapeHtml(value) {
+  return String(value).replace(/[&<>"']/g, (character) => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;',
+  })[character]);
+}
+
+function acceptsHtml(request) {
+  return (request.method === 'GET' || request.method === 'HEAD')
+    && String(request.headers.accept || '').toLowerCase().includes('text/html');
+}
+
+export function renderSleepingPreviewPage({ pr, uri }) {
+  const url = new URL(trustedUri(uri), 'https://preview.invalid');
+  const hiddenFields = [...url.searchParams.entries()]
+    .filter(([name]) => name !== 'code')
+    .map(([name, value]) => (
+      `<input type="hidden" name="${escapeHtml(name)}" value="${escapeHtml(value)}">`
+    ))
+    .join('\n          ');
+  const preservedFields = hiddenFields ? `\n          ${hiddenFields}` : '';
+
+  return `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="robots" content="noindex, nofollow, noarchive">
+    <title>Sleeping preview | YAWP!</title>
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        font-synthesis: none;
+        --canvas: hsl(47 36% 95%);
+        --surface: hsl(48 100% 99%);
+        --text: hsl(48 20% 20%);
+        --muted: hsl(50 7% 42%);
+        --primary: hsl(15 59% 51%);
+        --primary-hover: hsl(15 59% 45%);
+        --ring: hsl(210 75% 49%);
+        --line: hsl(48 12% 78% / 0.72);
+        --radius: 1.25rem;
+        background: var(--canvas);
+        color: var(--text);
+      }
+      * { box-sizing: border-box; }
+      body { margin: 0; min-width: 20rem; }
+      main {
+        align-items: center;
+        display: flex;
+        justify-content: center;
+        min-height: 100dvh;
+        padding: clamp(1.25rem, 5vw, 4rem);
+      }
+      section {
+        background: var(--surface);
+        border-radius: var(--radius);
+        box-shadow: 0 1.5rem 4rem hsl(45 20% 20% / 0.12);
+        max-width: 27rem;
+        padding: clamp(1.5rem, 6vw, 2.5rem);
+        width: 100%;
+      }
+      .mark {
+        align-items: center;
+        background: var(--primary);
+        border-radius: 999px;
+        color: white;
+        display: flex;
+        font-family: Georgia, "Times New Roman", serif;
+        font-size: 1.35rem;
+        font-weight: 600;
+        height: 3.5rem;
+        justify-content: center;
+        letter-spacing: -0.04em;
+        width: 3.5rem;
+      }
+      .eyebrow {
+        color: var(--primary);
+        font-size: 0.8125rem;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        margin: 1.5rem 0 0;
+      }
+      h1 {
+        font-size: clamp(1.75rem, 7vw, 2.25rem);
+        font-weight: 600;
+        letter-spacing: -0.035em;
+        margin: 0.45rem 0 0;
+        text-wrap: balance;
+      }
+      .description {
+        color: var(--muted);
+        font-size: 1rem;
+        line-height: 1.6;
+        margin: 0.85rem 0 0;
+        text-wrap: pretty;
+      }
+      form {
+        border-top: 1px solid var(--line);
+        display: grid;
+        gap: 0.75rem;
+        margin-top: 1.75rem;
+        padding-top: 1.5rem;
+      }
+      label { font-size: 0.925rem; font-weight: 600; }
+      input[type="text"] {
+        appearance: none;
+        background: white;
+        border: 1px solid hsl(48 12% 66%);
+        border-radius: 0.625rem;
+        color: var(--text);
+        font: 1rem/1.25 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+        min-height: 3rem;
+        padding: 0.75rem;
+        width: 100%;
+      }
+      input[type="text"]:focus-visible {
+        border-color: var(--ring);
+        outline: 2px solid var(--ring);
+        outline-offset: -1px;
+      }
+      button {
+        background: var(--primary);
+        border: 0;
+        border-radius: 0.625rem;
+        color: white;
+        cursor: pointer;
+        font: 600 1rem/1.25 ui-sans-serif, system-ui, sans-serif;
+        min-height: 3rem;
+        padding: 0.75rem 1rem;
+      }
+      button:hover { background: var(--primary-hover); }
+      button:focus-visible { outline: 3px solid var(--ring); outline-offset: 3px; }
+      .help {
+        color: var(--muted);
+        font-size: 0.875rem;
+        line-height: 1.55;
+        margin: 1.25rem 0 0;
+      }
+      code {
+        background: hsl(15 59% 51% / 0.1);
+        border-radius: 0.25rem;
+        color: var(--text);
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+        padding: 0.1rem 0.25rem;
+        white-space: nowrap;
+      }
+      @media (max-width: 30rem) {
+        main { align-items: stretch; padding: 0; }
+        section {
+          border-radius: 0;
+          box-shadow: none;
+          max-width: none;
+          padding: 2rem 1.25rem;
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        *, *::before, *::after { scroll-behavior: auto !important; }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <section aria-labelledby="sleeping-preview-title">
+        <div class="mark" aria-hidden="true">Y!</div>
+        <p class="eyebrow">PR ${pr} preview</p>
+        <h1 id="sleeping-preview-title">This preview is sleeping</h1>
+        <p class="description">Enter the access code from the pull request to wake it. Your preview state is preserved; startup can take up to a minute.</p>
+        <form method="get" action="${escapeHtml(url.pathname)}">
+          <label for="preview-access-code">Access code</label>
+          <input id="preview-access-code" name="code" type="text" autocomplete="one-time-code" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="brave-otter-4193" required autofocus>${preservedFields}
+          <button type="submit">Wake preview</button>
+        </form>
+        <p class="help">A one-click URL is the same preview URL with <code>?code=your-access-code</code>. After one successful visit, this browser can wake any URL for this preview automatically.</p>
+      </section>
+    </main>
+  </body>
+</html>`;
+}
+
+function sendSleepingPreviewPage(response, { pr, uri }) {
+  response.statusCode = 401;
+  response.setHeader('cache-control', 'no-store');
+  response.setHeader(
+    'content-security-policy',
+    "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'",
+  );
+  response.setHeader('content-type', 'text/html; charset=utf-8');
+  response.setHeader('referrer-policy', 'no-referrer');
+  response.setHeader('x-content-type-options', 'nosniff');
+  response.end(renderSleepingPreviewPage({ pr, uri }));
+}
+
 export function createWakeHandler({
   domain,
   secret,
@@ -368,7 +565,8 @@ export function createWakeHandler({
     try {
       const authorization = await authorizeWake(pr, uri, request);
       if (!authorization) {
-        send(response, 401, 'Open this sleeping preview with its one-click access URL.\n');
+        if (acceptsHtml(request)) sendSleepingPreviewPage(response, { pr, uri });
+        else send(response, 401, 'Open this sleeping preview with its one-click access URL.\n');
         return;
       }
       await wake(pr, {

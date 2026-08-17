@@ -261,6 +261,74 @@ describe('preview wake server', () => {
     expect(options).toEqual([{ allowDisplacement: true }]);
   });
 
+  test('serves an accessible sleeping-page access form without waking the preview', async () => {
+    const wakes = [];
+    const url = await listen(createRawWakeHandler({
+      domain: 'preview.yawp.school',
+      secret: 'wake-secret',
+      authorizeWake: async () => false,
+      ensureRunning: async (pr) => wakes.push(pr),
+      recordAccess: async () => {},
+    }));
+    const uri = '/app/classes?tab=roster&note=%3Cscript%3E&code=stale-otter-4193';
+
+    const response = await fetch(`${url}${uri}`, {
+      redirect: 'manual',
+      headers: {
+        accept: 'text/html',
+        'x-preview-wake-secret': 'wake-secret',
+        'x-forwarded-host': 'pr-241.preview.yawp.school',
+        'x-forwarded-uri': uri,
+      },
+    });
+    const body = await response.text();
+
+    expect(response.status).toBe(401);
+    expect(response.headers.get('content-type')).toContain('text/html');
+    expect(response.headers.get('cache-control')).toBe('no-store');
+    expect(body).toContain('<title>Sleeping preview | YAWP!</title>');
+    expect(body).toContain('>This preview is sleeping</h1>');
+    expect(body).toContain('action="/app/classes"');
+    expect(body).toContain('name="tab" value="roster"');
+    expect(body).toContain('name="note" value="&lt;script&gt;"');
+    expect(body).not.toContain('name="code" value="stale-otter-4193"');
+    expect(body).toContain('id="preview-access-code"');
+    expect(body).toContain('name="code"');
+    expect(body).toContain('autocomplete="one-time-code"');
+    expect(body).toContain('<button type="submit">Wake preview</button>');
+    expect(body).toContain('same preview URL with <code>?code=your-access-code</code>');
+    expect(wakes).toEqual([]);
+  });
+
+  test('keeps unauthorized API requests machine-readable and asleep', async () => {
+    const wakes = [];
+    const url = await listen(createRawWakeHandler({
+      domain: 'preview.yawp.school',
+      secret: 'wake-secret',
+      authorizeWake: async () => false,
+      ensureRunning: async (pr) => wakes.push(pr),
+      recordAccess: async () => {},
+    }));
+
+    const response = await fetch(`${url}/api/assignments`, {
+      method: 'POST',
+      body: '{}',
+      headers: {
+        accept: 'application/json',
+        'content-type': 'application/json',
+        'x-preview-wake-secret': 'wake-secret',
+        'x-forwarded-host': 'pr-241.preview.yawp.school',
+      },
+    });
+
+    expect(response.status).toBe(401);
+    expect(response.headers.get('content-type')).toContain('text/plain');
+    expect(await response.text()).toBe(
+      'Open this sleeping preview with its one-click access URL.\n',
+    );
+    expect(wakes).toEqual([]);
+  });
+
   test('rejects requests that do not carry the bootstrap secret', async () => {
     const wakes = [];
     const url = await listen(createWakeHandler({
