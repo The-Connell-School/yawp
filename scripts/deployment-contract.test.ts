@@ -590,9 +590,17 @@ describe('PR preview deployment contract', () => {
     );
 
     expect(previewWorkflow).toContain('environment: preview-host');
-    expect(previewWorkflow).toContain('path: pr-source');
     expect(previewWorkflow).toContain('path: preview-control');
     expect(previewWorkflow).toContain('github.event.pull_request.head.sha');
+    expect(previewWorkflow).toContain(
+      'gh api "/repos/${GITHUB_REPOSITORY}/tarball/${PR_HEAD_SHA}"'
+    );
+    expect(previewWorkflow).toContain(
+      'tar -xzf pr-source.tar.gz --strip-components=1 -C pr-source'
+    );
+    expect(previewWorkflow).not.toContain(
+      'name: Checkout pull request source'
+    );
     expect(previewWorkflow).toContain(
       'ref: ${{ github.event.repository.default_branch }}'
     );

@@ -92,12 +92,21 @@ jobs:
           path: preview-control
           persist-credentials: false
 
-      - name: Checkout pull request source
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.pull_request.head.sha }}
-          path: pr-source
-          persist-credentials: false
+      - name: Download pull request source
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          [[ "$PR_HEAD_SHA" =~ ^[0-9a-f]{40}$ ]] || {
+            echo "Pull-request head SHA is invalid" >&2
+            exit 1
+          }
+          mkdir pr-source
+          gh api "/repos/${GITHUB_REPOSITORY}/tarball/${PR_HEAD_SHA}" \
+            > pr-source.tar.gz
+          tar -xzf pr-source.tar.gz --strip-components=1 -C pr-source
+          rm -f pr-source.tar.gz
 
       - name: Prepare SSH
         env:
