@@ -1,83 +1,31 @@
 import { HocuspocusProvider } from '@hocuspocus/provider';
 import Collaboration from '@tiptap/extension-collaboration';
 import CollaborationCursor from '@tiptap/extension-collaboration-cursor';
-import { Color } from '@tiptap/extension-color';
-import Highlight from '@tiptap/extension-highlight';
-import ListItem from '@tiptap/extension-list-item';
-import TextAlign from '@tiptap/extension-text-align';
-import TextStyle from '@tiptap/extension-text-style';
 import { EditorContent, useEditor } from '@tiptap/react';
-import StarterKit from '@tiptap/starter-kit';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import * as Y from 'yjs';
-// Imported from the existing editor, never modified there. Reusing the toolbar
-// and the custom extensions is what makes this page look and behave like the
-// solo editor; duplicating them would let the two drift apart.
+import {
+  COLLAB_META_MAP,
+  COLLAB_SCHEMA_VERSION,
+  COLLAB_SCHEMA_VERSION_KEY,
+  collaborativeSchemaExtensions,
+} from '~/domain/collaboration/schema';
+// Imported from the existing editor, never modified there. Reusing the toolbar is
+// what makes this page look like the solo editor; duplicating it would let the two
+// drift apart.
 import { Bar } from '../app_.documents_.$id/document-editor/editor-bar';
 import { ErrorBoundary } from '../app_.documents_.$id/document-editor/error-boundry';
-import { EmDash } from '../app_.documents_.$id/document-editor/extensions/em-dash';
-import { LineHeight } from '../app_.documents_.$id/document-editor/extensions/line-height';
-import { TabIndent } from '../app_.documents_.$id/document-editor/extensions/tab-indent';
 
 /**
- * ⚠️ UNVERIFIED. This component has never been executed — no browser, no
- * database, and no collaboration provider were available when it was written.
- * Treat every line as a proposal. See the header of `route.tsx` for the full
- * list of what still has to be proven.
- */
-
-/**
- * Bumped whenever the schema below gains or loses a node or mark.
+ * ⚠️ UNVERIFIED. This component has never been executed in a browser — there was
+ * no collaboration provider available when it was written. Treat every line as a
+ * proposal. See the header of `route.tsx` for what still has to be proven.
  *
- * Rollout requirement: a client whose bundle knows fewer node types than the
- * room's content can silently drop what it cannot represent — and in a shared
- * document that damages everyone's draft, not just the stale client's. The room
- * records the highest schema version that has written to it; a client behind that
- * version joins read-only instead of quietly deleting a partner's work.
+ * The document schema lives in `~/domain/collaboration/schema.ts` and is shared
+ * with the server-side snapshot conversion, so the HTML written into Postgres for
+ * grading is generated from exactly the schema the editor wrote with. A local copy
+ * here would silently drop nodes on one side or the other.
  */
-export const COLLAB_SCHEMA_VERSION = 1;
-
-const META_MAP = 'yawpMeta';
-const SCHEMA_VERSION_KEY = 'schemaVersion';
-
-/**
- * Deliberately NOT the solo editor's extension list, in three ways:
- *
- * 1. `history: false` — Collaboration replaces ProseMirror's undo stack with
- *    y-undo. Leaving both installed makes undo reach across collaborators and
- *    revert their edits.
- * 2. No `Comment`/`CommentExtension`/`SourceTracker`/`PastedSource`. Comments and
- *    paste alerts are anchored to solo-document behavior — paste detection in
- *    particular fires on copying from a partner's paragraph, which is normal here.
- *    They come back once they are collaborator-aware.
- * 3. Collaboration and CollaborationCursor are added per-instance below, because
- *    they close over the Y.Doc and provider.
- */
-const baseExtensions = [
-  TabIndent,
-  LineHeight,
-  TextAlign.configure({ types: ['heading', 'paragraph'] }),
-  Color.configure({ types: [TextStyle.name, ListItem.name] }),
-  // @ts-ignore — TextStyle's configure type is overly strict; this works at runtime
-  TextStyle.configure({ types: [ListItem.name] }),
-  StarterKit.configure({
-    bulletList: { keepMarks: true, keepAttributes: false },
-    orderedList: { keepMarks: true, keepAttributes: false },
-    history: false,
-  }),
-  Highlight.extend({
-    addAttributes() {
-      return {
-        id: { default: null, renderHTML: ({ id }: any) => ({ id }) },
-        class: {
-          default: null,
-          renderHTML: ({ class: cn }: any) => ({ class: cn }),
-        },
-      };
-    },
-  }),
-  EmDash,
-];
 
 /** Stable per-person cursor colors, matching the presence avatars. */
 const CURSOR_COLORS = [
@@ -203,15 +151,15 @@ export function CollabEditor({
         // Schema-version handshake. Read the room's recorded version once the
         // initial state has arrived: a room written by a newer client must not be
         // edited by this one.
-        const meta = ydoc.getMap<number>(META_MAP);
-        const roomVersion = meta.get(SCHEMA_VERSION_KEY);
+        const meta = ydoc.getMap<number>(COLLAB_META_MAP);
+        const roomVersion = meta.get(COLLAB_SCHEMA_VERSION_KEY);
 
         if (typeof roomVersion === 'number' && roomVersion > COLLAB_SCHEMA_VERSION) {
           setPhase({ kind: 'stale-schema' });
           return;
         }
         if (roomVersion === undefined && canWrite) {
-          meta.set(SCHEMA_VERSION_KEY, COLLAB_SCHEMA_VERSION);
+          meta.set(COLLAB_SCHEMA_VERSION_KEY, COLLAB_SCHEMA_VERSION);
         }
 
         setPhase({ kind: 'connected' });
@@ -245,9 +193,9 @@ export function CollabEditor({
   }, [docId, canWrite]);
 
   const extensions = useMemo(() => {
-    if (!session) return baseExtensions;
+    if (!session) return collaborativeSchemaExtensions;
     return [
-      ...baseExtensions,
+      ...collaborativeSchemaExtensions,
       Collaboration.configure({ document: session.ydoc }),
       CollaborationCursor.configure({
         provider: session.provider,
