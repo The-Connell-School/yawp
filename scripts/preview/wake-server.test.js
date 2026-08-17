@@ -63,6 +63,29 @@ describe('preview wake server', () => {
     })).toBe(86_000);
   });
 
+  test('stamps the accepted authorization time onto the queued wake command', async () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'preview-authorized-at-'));
+    roots.push(root);
+    const wakeScript = path.join(root, 'wake.sh');
+    writeFileSync(
+      wakeScript,
+      '#!/usr/bin/env bash\nprintf "%s\\n" "$PREVIEW_WAKE_AUTHORIZED_AT_EPOCH"\n',
+    );
+    const operations = createDefaultWakeOperations({
+      root,
+      wakeScript,
+      maxRunning: '4',
+      commandTimeoutMs: 5000,
+    });
+    const before = Math.floor(Date.now() / 1000);
+
+    const result = await operations.ensureRunning(241);
+
+    const acceptedAt = Number(result.result.trim());
+    expect(acceptedAt).toBeGreaterThanOrEqual(before);
+    expect(acceptedAt).toBeLessThanOrEqual(Math.floor(Date.now() / 1000));
+  });
+
   test('looks up runtime and revoked seats in only the retained PR database', async () => {
     const calls = [];
     const lookup = createPreviewSeatLookup({
@@ -140,6 +163,14 @@ describe('preview wake server', () => {
       root,
       pr: 241,
       uri: '/app',
+      cookieHeader: signedCookie('local-dev-org', nowSeconds - 60),
+      nowSeconds,
+      credentialIsCurrent,
+    })).toBe(true);
+    expect(await hasMatchingPreviewAccessCredential({
+      root,
+      pr: 241,
+      uri: '/app?code=faded-fox-9876',
       cookieHeader: signedCookie('local-dev-org', nowSeconds - 60),
       nowSeconds,
       credentialIsCurrent,
@@ -348,6 +379,29 @@ describe('preview wake server', () => {
     expect(response.status).toBe(503);
     expect(response.headers.get('retry-after')).toBe('30');
     expect(await response.text()).toContain('deployment is in progress');
+  });
+
+  test('returns retryable service unavailable when authorization expires in the lock queue', async () => {
+    const error = new Error('Preview authorization expired while queued');
+    error.code = 'authorization-stale';
+    const url = await listen(createWakeHandler({
+      domain: 'preview.yawp.school',
+      secret: 'wake-secret',
+      ensureRunning: async () => { throw error; },
+      recordAccess: async () => {},
+    }));
+
+    const response = await fetch(`${url}/`, {
+      redirect: 'manual',
+      headers: {
+        'x-preview-wake-secret': 'wake-secret',
+        'x-forwarded-host': 'pr-241.preview.yawp.school',
+      },
+    });
+
+    expect(response.status).toBe(503);
+    expect(response.headers.get('retry-after')).toBe('30');
+    expect(await response.text()).toContain('authorization expired');
   });
 
   test('classifies the in-flight deployment shell refusal for retry handling', async () => {

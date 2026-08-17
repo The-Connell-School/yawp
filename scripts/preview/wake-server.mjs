@@ -122,13 +122,14 @@ export async function hasMatchingPreviewAccessCredential({
     const candidate = String(url.searchParams.get('code') || '').trim().toLowerCase();
     if (/^[a-z]+-[a-z]+-[1-9][0-9]{3}$/.test(candidate)) {
       if (safeSecretEqual(candidate, masterCode)) {
-        return credentialIsCurrent({
+        if (await credentialIsCurrent({
           pr,
           organizationId: masterOrganizationId,
           requirePreviewSeatCode: false,
-        });
+        })) return true;
+      } else if (await credentialIsCurrent({ pr, code: candidate })) {
+        return true;
       }
-      return credentialIsCurrent({ pr, code: candidate });
     }
     const secret = (await readFile(
       path.join(root, 'previews', `pr-${pr}`, 'access-secret'),
@@ -279,6 +280,9 @@ export function createWakeHandler({
       } else if (error?.code === 'deploying') {
         response.setHeader('retry-after', '30');
         send(response, 503, 'Preview deployment is in progress; retry shortly.\n');
+      } else if (error?.code === 'authorization-stale') {
+        response.setHeader('retry-after', '30');
+        send(response, 503, 'Preview authorization expired while queued; retry.\n');
       } else if (error?.code === 'not-resident') {
         send(response, 404, 'Preview is no longer resident.\n');
       } else {
@@ -391,6 +395,7 @@ export function startAccessLogFollower({
 function classifyWakeError(error) {
   const message = `${error?.stderr || ''}\n${error?.message || ''}`;
   if (/deployment is in progress/i.test(message)) error.code = 'deploying';
+  else if (/authorization expired while queued/i.test(message)) error.code = 'authorization-stale';
   else if (/capacity/i.test(message)) error.code = 'capacity-full';
   else if (/not resident/i.test(message)) error.code = 'not-resident';
   return error;
@@ -414,6 +419,7 @@ export function createDefaultWakeOperations({
             PREVIEW_ROOT: root,
             PREVIEW_MAX_RUNNING: String(maxRunning),
             PREVIEW_WAKE_ALLOW_DISPLACEMENT: allowDisplacement ? 'true' : 'false',
+            PREVIEW_WAKE_AUTHORIZED_AT_EPOCH: String(Math.floor(Date.now() / 1000)),
           },
           timeout: commandTimeoutMs,
           maxBuffer: 1024 * 1024,
