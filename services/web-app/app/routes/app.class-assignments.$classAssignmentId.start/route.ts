@@ -1,6 +1,7 @@
 import { type ActionFunctionArgs } from 'react-router';
 import { parseFormData, validationError } from '@rvf/react-router';
 import { z } from 'zod';
+import { findStudentGroupDocument } from '~/domain/collaboration/groups.server';
 import {
   createDocumentForAssignmentType,
   DocumentCreationError,
@@ -42,6 +43,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
       assignment: {
         select: {
           assignmentTypeId: true,
+          collaborationEnabled: true,
         },
       },
       class: {
@@ -59,6 +61,37 @@ export async function action({ request, params }: ActionFunctionArgs) {
       type: 'error',
       description: 'Assignment not found.',
     });
+  }
+
+  // Collaborative assignments do not create a personal document. The student
+  // opens the draft their group already owns, which is what removes the race two
+  // partners hitting Start at the same moment would otherwise cause.
+  //
+  // Guarded so the solo path below is reached on exactly the same inputs it was
+  // before this branch existed: every existing assignment has
+  // collaborationEnabled false.
+  if (classAssignment.assignment.collaborationEnabled) {
+    const groupDocument = await findStudentGroupDocument({
+      classAssignmentId: classAssignment.id,
+      membershipId: profile.id,
+    });
+
+    if (!groupDocument) {
+      return redirectWithToast('/app?tab=assignments', {
+        type: 'error',
+        description:
+          'Your teacher has not opened groups for this assignment yet.',
+      });
+    }
+
+    const collabParams = new URLSearchParams({
+      exitTo: '/app?tab=assignments',
+    });
+
+    return redirectWithToast(
+      `/app/collab-documents/${groupDocument.documentId}?${collabParams}`,
+      { type: 'success', description: 'Opening your group document.' }
+    );
   }
 
   let documentId = '';

@@ -55,6 +55,12 @@ if (isWebAppTestFile()) {
     '~/domain/daily-pages-prompts/saved-prompts.server': await snapshot(
       '~/domain/daily-pages-prompts/saved-prompts.server'
     ),
+    // The class-assignment start test stubs findStudentGroupDocument, which would
+    // otherwise leave arrangeGroups/openGroups missing for the groups-route test
+    // that runs after it.
+    '~/domain/collaboration/groups.server': await snapshot(
+      '~/domain/collaboration/groups.server'
+    ),
   };
 }
 
