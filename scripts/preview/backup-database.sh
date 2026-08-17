@@ -28,11 +28,11 @@ BACKUP_TIMESTAMP="${BACKUP_TIMESTAMP:-$(date -u +%Y%m%dT%H%M%SZ)}"
   echo "BACKUP_TIMESTAMP must use YYYYMMDDTHHMMSSZ" >&2
   exit 1
 }
-[[ "$BACKUP_RETENTION_COUNT" =~ ^[0-9]+$ ]] \
-  && (( BACKUP_RETENTION_COUNT >= 1 && BACKUP_RETENTION_COUNT <= 365 )) || {
-    echo "BACKUP_RETENTION_COUNT must be between 1 and 365" >&2
-    exit 1
-  }
+if [[ ! "$BACKUP_RETENTION_COUNT" =~ ^[0-9]+$ ]] \
+  || (( BACKUP_RETENTION_COUNT < 1 || BACKUP_RETENTION_COUNT > 365 )); then
+  echo "BACKUP_RETENTION_COUNT must be between 1 and 365" >&2
+  exit 1
+fi
 
 backup_dir="$PREVIEW_ROOT/backups"
 backup_file="$backup_dir/${DATABASE_NAME}-${BACKUP_KIND}-${BACKUP_TIMESTAMP}.dump"
