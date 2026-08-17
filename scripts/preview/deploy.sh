@@ -559,18 +559,22 @@ run_tooling_if_needed() {
   fi
 
   local tooling_command
-  case "$DATA_MODE" in
-    seed)
-      tooling_command='bun install --ignore-scripts && bun prisma generate && cd packages/prisma && bun prisma migrate deploy && bun run scripts/backfill-class-art-key.ts'
-      if [[ "$DATABASE_CREATED" == "1" ]]; then
-        tooling_command+=' && bun run seed-local-dev'
-      fi
-      tooling_command+=' && bun run scripts/assignment-type-release-gate.ts --require-data'
-      ;;
-    production-dump|sanitized-production)
-      tooling_command='bun install --ignore-scripts && bun prisma generate && cd packages/prisma && bun prisma migrate deploy && bun run scripts/backfill-class-art-key.ts && bun run scripts/assignment-type-release-gate.ts --require-data'
-      ;;
-  esac
+  tooling_command='bun install --ignore-scripts && bun prisma generate && cd packages/prisma && bun prisma migrate deploy'
+  if [[ -f "$SOURCE_DIR/packages/prisma/scripts/backfill-class-art-key.ts" ]]; then
+    tooling_command+=' && bun run scripts/backfill-class-art-key.ts'
+  fi
+  if [[ "$DATA_MODE" == "seed" && "$DATABASE_CREATED" == "1" ]]; then
+    if [[ ! -f "$SOURCE_DIR/packages/prisma/scripts/seed-local-dev.ts" ]]; then
+      echo "Requested application ref cannot seed a new preview database." >&2
+      exit 1
+    fi
+    tooling_command+=' && bun run seed-local-dev'
+  elif [[ "$DATA_MODE" == "seed" && -f "$SOURCE_DIR/packages/prisma/scripts/sync-prod-fidelity-fixtures.ts" ]]; then
+    tooling_command+=' && bun run sync-prod-fidelity-fixtures'
+  fi
+  if [[ -f "$SOURCE_DIR/packages/prisma/scripts/assignment-type-release-gate.ts" ]]; then
+    tooling_command+=' && bun run scripts/assignment-type-release-gate.ts --require-data'
+  fi
 
   "${compose[@]}" run --rm toolbox bash -lc "$tooling_command"
   printf '%s\n' "$fingerprint" > "$TOOLING_FINGERPRINT_FILE"
@@ -578,6 +582,10 @@ run_tooling_if_needed() {
 
 ensure_preview_seats() {
   if [[ "$DATA_MODE" != "seed" ]]; then
+    return 0
+  fi
+  if [[ ! -f "$SOURCE_DIR/packages/prisma/scripts/seed-preview-seats.ts" ]]; then
+    echo "Requested application ref predates preview seats; preserving the existing demo database."
     return 0
   fi
   "${compose[@]}" run --rm toolbox bash -lc \
