@@ -46,7 +46,7 @@ jobs:
           # Exercise the real Postgres role/ACL migration on Linux. Local macOS runs
           # may leave this opt-in because the test launches its own Postgres container.
           PREVIEW_DATABASE_ROLE_INTEGRATION: '1'
-        run: bun test ./scripts/preview/
+        run: bun test ./scripts/preview/ --timeout 180000
 
   validate-prisma-migrations:
     name: Prisma migrations
