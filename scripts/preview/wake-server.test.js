@@ -13,6 +13,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import {
   createWakeHandler as createRawWakeHandler,
+  createDefaultWakeOperations,
   createPreviewSeatLookup,
   hasMatchingPreviewAccessCredential,
   parsePreviewPr,
@@ -324,6 +325,47 @@ describe('preview wake server', () => {
     expect(third.status).toBe(503);
     expect((await first).status).toBe(307);
     expect((await second).status).toBe(307);
+  });
+
+  test('returns retryable service unavailable while the requested preview is deploying', async () => {
+    const error = new Error('Preview pr-241 deployment is in progress');
+    error.code = 'deploying';
+    const url = await listen(createWakeHandler({
+      domain: 'preview.yawp.school',
+      secret: 'wake-secret',
+      ensureRunning: async () => { throw error; },
+      recordAccess: async () => {},
+    }));
+
+    const response = await fetch(`${url}/`, {
+      redirect: 'manual',
+      headers: {
+        'x-preview-wake-secret': 'wake-secret',
+        'x-forwarded-host': 'pr-241.preview.yawp.school',
+      },
+    });
+
+    expect(response.status).toBe(503);
+    expect(response.headers.get('retry-after')).toBe('30');
+    expect(await response.text()).toContain('deployment is in progress');
+  });
+
+  test('classifies the in-flight deployment shell refusal for retry handling', async () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'preview-deploying-'));
+    roots.push(root);
+    const wakeScript = path.join(root, 'wake.sh');
+    writeFileSync(
+      wakeScript,
+      '#!/usr/bin/env bash\necho "Preview pr-241 deployment is in progress" >&2\nexit 11\n',
+    );
+    const operations = createDefaultWakeOperations({
+      root,
+      wakeScript,
+      maxRunning: '4',
+      commandTimeoutMs: 5000,
+    });
+
+    await expect(operations.ensureRunning(241)).rejects.toMatchObject({ code: 'deploying' });
   });
 
   test('fallback router redirects to the same validated host after wake', async () => {

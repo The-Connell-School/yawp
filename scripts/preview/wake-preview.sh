@@ -10,6 +10,7 @@ RUNNING_CAP="${PREVIEW_MAX_RUNNING:-4}"
 SLEEP_ENABLED="${PREVIEW_SLEEP_ENABLED:-true}"
 ALLOW_DISPLACEMENT="${PREVIEW_WAKE_ALLOW_DISPLACEMENT:-true}"
 LOCK_WAIT_SECONDS="${PREVIEW_LOCK_WAIT_SECONDS:-900}"
+INFLIGHT_TTL_SECONDS="${PREVIEW_INFLIGHT_TTL_SECONDS:-3600}"
 HEALTH_ATTEMPTS="${PREVIEW_WAKE_HEALTH_ATTEMPTS:-60}"
 HEALTH_INTERVAL_SECONDS="${PREVIEW_WAKE_HEALTH_INTERVAL_SECONDS:-1}"
 ACCESS_DIR="${PREVIEW_ACCESS_DIR:-$ROOT/wake/access}"
@@ -45,6 +46,10 @@ case "$ALLOW_DISPLACEMENT" in
 esac
 is_nonnegative_integer "$LOCK_WAIT_SECONDS" || {
   echo "PREVIEW_LOCK_WAIT_SECONDS must be a nonnegative integer" >&2
+  exit 2
+}
+is_nonnegative_integer "$INFLIGHT_TTL_SECONDS" || {
+  echo "PREVIEW_INFLIGHT_TTL_SECONDS must be a nonnegative integer" >&2
   exit 2
 }
 is_positive_integer "$HEALTH_ATTEMPTS" || {
@@ -129,6 +134,25 @@ running_env_numbers() {
 
 marker_mtime() {
   stat -c %Y "$1" 2>/dev/null || stat -f %m "$1" 2>/dev/null || printf '0\n'
+}
+
+inflight_marker_is_fresh() {
+  local marker="$1"
+  local modified
+  modified="$(marker_mtime "$marker")"
+  is_nonnegative_integer "$modified" || return 1
+  (( modified > NOW_EPOCH || NOW_EPOCH - modified < INFLIGHT_TTL_SECONDS ))
+}
+
+target_deployment_is_inflight() {
+  local marker leaf
+  for marker in "$ROOT/inflight/pr-${PR_NUMBER}"/*; do
+    [[ -f "$marker" ]] || continue
+    leaf="$(basename "$marker")"
+    [[ "$leaf" =~ ^[0-9]+-[0-9]+$ ]] || continue
+    inflight_marker_is_fresh "$marker" && return 0
+  done
+  return 1
 }
 
 access_epoch() {
@@ -271,6 +295,14 @@ handle_signal() {
 trap 'handle_exit $?' EXIT
 trap 'handle_signal TERM' TERM
 trap 'handle_signal INT' INT
+
+# Source synchronization intentionally happens before the deploy job takes this
+# host lock. Its marker is published under the lock first, so a wake that acquires
+# the lock during rsync must fail closed instead of starting from a partial tree.
+if target_deployment_is_inflight; then
+  echo "Preview pr-${PR_NUMBER} deployment is in progress" >&2
+  exit 11
+fi
 
 if is_running "$PR_NUMBER"; then
   wait_for_project_health "$PR_NUMBER" || {

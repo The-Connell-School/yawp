@@ -624,6 +624,12 @@ describe('PR preview deployment contract', () => {
     expect(wakePreview).toContain(
       'RUNNING_CAP="${PREVIEW_MAX_RUNNING:-4}"'
     );
+    expect(wakePreview).toContain(
+      'INFLIGHT_TTL_SECONDS="${PREVIEW_INFLIGHT_TTL_SECONDS:-3600}"'
+    );
+    expect(bootstrapWorkflow).toContain(
+      "PREVIEW_INFLIGHT_TTL_SECONDS: ${{ vars.PREVIEW_INFLIGHT_TTL_SECONDS || '3600' }}"
+    );
     expect(wakeServer).toContain(
       "process.env.PREVIEW_MAX_RUNNING || '4'"
     );
