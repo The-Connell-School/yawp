@@ -70,6 +70,19 @@ const POST = z.object({
   llmRetry: z.enum(['fallback']).optional(),
 });
 
+export function getRubricEvaluationMaxTokens(categoryCount: number) {
+  const baseCategoryCount = 5;
+  const baseMaxTokens = 900;
+  const tokensPerAdditionalCategory = 300;
+
+  return Math.min(
+    2400,
+    baseMaxTokens +
+      Math.max(0, categoryCount - baseCategoryCount) *
+        tokensPerAdditionalCategory
+  );
+}
+
 function buildAiSchemas({
   rubricCategories,
   minScore,
@@ -881,6 +894,9 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
     assignmentPrompt,
     essayText: submission.text,
   });
+  const rubricEvaluationMaxTokens = getRubricEvaluationMaxTokens(
+    rubricCategories.length
+  );
 
   let responseText = '';
 
@@ -898,7 +914,7 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
         model,
         system,
         messages: [{ role: 'user', content: userPrompt }],
-        maxTokens: 900,
+        maxTokens: rubricEvaluationMaxTokens,
         metadata: {
           feature: 'grading',
           kind: 'rubric-evaluation',
@@ -992,7 +1008,7 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
           content: `Original grading response:\n${rawResponseText}`,
         },
       ],
-      maxTokens: 900,
+      maxTokens: rubricEvaluationMaxTokens,
       temperature: 0.1,
       metadata: {
         feature: 'grading',

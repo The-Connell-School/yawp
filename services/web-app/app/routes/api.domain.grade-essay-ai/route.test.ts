@@ -42,7 +42,14 @@ mock.module('~/utils/toast.server', () => ({
 const { LlmFallbackRetrySignal } = await import(
   '~/utils/getLLMCompletion/llm-provider-errors.server'
 );
-const { action } = await import('./route');
+const { action, getRubricEvaluationMaxTokens } = await import('./route');
+
+test('expands the rubric response budget for category-heavy grading assistants', () => {
+  expect(getRubricEvaluationMaxTokens(4)).toBe(900);
+  expect(getRubricEvaluationMaxTokens(5)).toBe(900);
+  expect(getRubricEvaluationMaxTokens(9)).toBe(2100);
+  expect(getRubricEvaluationMaxTokens(20)).toBe(2400);
+});
 
 function buildRubricResponseJson(
   scoresByKey: Partial<Record<(typeof rubricKeys)[number], number>> = {}
