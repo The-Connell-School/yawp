@@ -23,11 +23,11 @@ unset DATABASE_URL
 DEMO_RESET_DATA="${DEMO_RESET_DATA:-false}"
 DEMO_RESET_CONFIRMATION="${DEMO_RESET_CONFIRMATION:-}"
 DEMO_BACKUP_RETENTION="${DEMO_BACKUP_RETENTION:-14}"
-[[ "$DEMO_BACKUP_RETENTION" =~ ^[0-9]+$ ]] \
-  && (( DEMO_BACKUP_RETENTION >= 1 && DEMO_BACKUP_RETENTION <= 365 )) || {
-    echo "DEMO_BACKUP_RETENTION must be between 1 and 365" >&2
-    exit 1
-  }
+if [[ ! "$DEMO_BACKUP_RETENTION" =~ ^[0-9]+$ ]] \
+  || (( DEMO_BACKUP_RETENTION < 1 || DEMO_BACKUP_RETENTION > 365 )); then
+  echo "DEMO_BACKUP_RETENTION must be between 1 and 365" >&2
+  exit 1
+fi
 source "$SCRIPT_DIR/demo-reset-guard.sh"
 DUMP_URI="${PREVIEW_DB_DUMP_S3_URI:-s3://yawp-preview-videos/production.dump}"
 DUMP_VERSION="${PREVIEW_DB_DUMP_VERSION:-unversioned}"

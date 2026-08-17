@@ -37,11 +37,11 @@ jobs:
           test -n "$PREVIEW_HOST" || { echo "Missing repository variable DEMO_HOST"; exit 1; }
           test -n "$DEMO_SSH_PRIVATE_KEY" || { echo "Missing demo secret DEMO_SSH_PRIVATE_KEY"; exit 1; }
           [[ "$PREVIEW_ROOT" =~ ^/[A-Za-z0-9._/-]+$ ]] || { echo "Invalid DEMO_ROOT"; exit 1; }
-          [[ "$BACKUP_RETENTION_COUNT" =~ ^[0-9]+$ ]] \
-            && (( BACKUP_RETENTION_COUNT >= 1 && BACKUP_RETENTION_COUNT <= 365 )) || {
-              echo "backup_retention must be between 1 and 365" >&2
-              exit 1
-            }
+          if [[ ! "$BACKUP_RETENTION_COUNT" =~ ^[0-9]+$ ]] \
+            || (( BACKUP_RETENTION_COUNT < 1 || BACKUP_RETENTION_COUNT > 365 )); then
+            echo "backup_retention must be between 1 and 365" >&2
+            exit 1
+          fi
           [[ "$BACKUP_S3_URI" =~ ^s3://[a-z0-9.-]+/[A-Za-z0-9._/-]+$ ]] || {
             echo "Invalid DEMO_BACKUP_S3_URI" >&2
             exit 1
