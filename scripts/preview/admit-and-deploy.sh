@@ -9,6 +9,8 @@ ENFORCE_SCRIPT="${PREVIEW_ENFORCE_CAP_SCRIPT:-$SCRIPT_DIR/enforce-cap.sh}"
 DEPLOY_SCRIPT="${PREVIEW_DEPLOY_SCRIPT:-$SCRIPT_DIR/deploy.sh}"
 INFLIGHT_MARKER="${PREVIEW_INFLIGHT_MARKER:-}"
 QUARANTINE_MARKER="${PREVIEW_QUARANTINE_MARKER:-}"
+DOCKER="${PREVIEW_DOCKER:-docker}"
+DEPLOY_STARTED=false
 
 cleanup_inflight_marker() {
   [[ -n "$INFLIGHT_MARKER" ]] || return 0
@@ -42,9 +44,27 @@ cleanup_quarantine_marker() {
   rm -f -- "$QUARANTINE_MARKER"
 }
 
+stop_failed_deploy() {
+  [[ "$DEPLOY_STARTED" == true ]] || return 0
+  local pr="${PR_NUMBER:-}" compose_file project
+  [[ "$pr" =~ ^[1-9][0-9]*$ ]] || {
+    echo "Refusing to stop failed deploy without a valid PR_NUMBER" >&2
+    return 0
+  }
+  compose_file="$ROOT/previews/pr-${pr}/docker-compose.yml"
+  [[ -f "$compose_file" ]] || return 0
+  project="yawp-pr-${pr}"
+  if ! "$DOCKER" compose -p "$project" -f "$compose_file" stop; then
+    echo "Failed to stop unhealthy preview after deploy failure: pr-${pr}" >&2
+  fi
+}
+
 cleanup_deploy_state() {
   local status="$1"
   trap - EXIT
+  if (( status != 0 )); then
+    stop_failed_deploy
+  fi
   cleanup_inflight_marker
   if (( status == 0 )); then
     cleanup_quarantine_marker
@@ -76,4 +96,5 @@ if [[ "$capacity_result" != "ok" ]]; then
   exit 75
 fi
 
+DEPLOY_STARTED=true
 PREVIEW_LOCK_HELD=true bash "$DEPLOY_SCRIPT"
