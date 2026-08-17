@@ -9,8 +9,12 @@ const requireUserId = mock();
 const requireMembership = mock();
 const arrangeGroups = mock();
 const openGroups = mock();
+const moveStudentToGroup = mock();
+const addGroup = mock();
+const removeEmptyGroup = mock();
 const redirectWithToast = mock();
 class GroupProvisioningError extends Error {}
+class GroupEditingError extends Error {}
 
 mock.module('~/utils/db.server', () => ({ prisma }));
 mock.module('~/utils/auth.server', () => ({ requireUserId, requireMembership }));
@@ -22,6 +26,12 @@ mock.module('~/domain/collaboration/groups.server', () => ({
   arrangeGroups,
   openGroups,
   GroupProvisioningError,
+}));
+mock.module('~/domain/collaboration/group-editing.server', () => ({
+  moveStudentToGroup,
+  addGroup,
+  removeEmptyGroup,
+  GroupEditingError,
 }));
 mock.module('~/utils/toast.server', () => ({ redirectWithToast }));
 
@@ -93,6 +103,9 @@ describe('class assignment groups', () => {
     });
     arrangeGroups.mockReset().mockResolvedValue({ groupCount: 2 });
     openGroups.mockReset().mockResolvedValue({ provisioned: 2 });
+    moveStudentToGroup.mockReset().mockResolvedValue({ moved: true });
+    addGroup.mockReset().mockResolvedValue({ groupId: 'g-new', label: 'Group 3' });
+    removeEmptyGroup.mockReset().mockResolvedValue({ removed: true });
     redirectWithToast
       .mockReset()
       .mockImplementation((to: string, options: any) => ({ to, options }));
@@ -313,6 +326,141 @@ describe('class assignment groups', () => {
 
       expect(result.options.type).toBe('error');
       expect(result.options.description).toMatch(/Arrange groups/);
+    });
+  });
+
+  describe('drag-and-drop editing', () => {
+    beforeEach(() => {
+      prisma.classAssignment.findFirst.mockResolvedValue(scoped());
+    });
+
+    const body = async (response: any) =>
+      typeof response.json === 'function' ? response.json() : response.data;
+
+    test('a move answers with data rather than a redirect', async () => {
+      // These arrive as fetcher submissions. A fetcher that receives a redirect
+      // navigates the whole app, which would throw the teacher off the page
+      // mid-arrangement.
+      const result: any = await post({
+        intent: 'move-student',
+        membershipId: 'student-1',
+        targetGroupId: 'group-2',
+      });
+
+      expect(redirectWithToast).not.toHaveBeenCalled();
+      expect(await body(result)).toEqual({ success: true });
+    });
+
+    test('a move is passed through with the class assignment from the URL', async () => {
+      await post({
+        intent: 'move-student',
+        membershipId: 'student-1',
+        targetGroupId: 'group-2',
+      });
+
+      expect(moveStudentToGroup).toHaveBeenCalledWith({
+        classAssignmentId: 'ca-1',
+        membershipId: 'student-1',
+        targetGroupId: 'group-2',
+      });
+    });
+
+    test('an empty target group means the unassigned bucket', async () => {
+      // The bucket is not a group and has no id, so the form posts an empty
+      // string; sending it through as "" would look like a group named "".
+      await post({
+        intent: 'move-student',
+        membershipId: 'student-1',
+        targetGroupId: '',
+      });
+
+      expect(moveStudentToGroup).toHaveBeenCalledWith(
+        expect.objectContaining({ targetGroupId: null })
+      );
+    });
+
+    test('a move with no student is rejected', async () => {
+      const result: any = await post({ intent: 'move-student' });
+
+      expect(moveStudentToGroup).not.toHaveBeenCalled();
+      expect((await body(result)).success).toBe(false);
+    });
+
+    test('a refused move is reported inline, not thrown', async () => {
+      moveStudentToGroup.mockRejectedValue(
+        new GroupEditingError('A group can hold at most 8 students.')
+      );
+
+      const result: any = await post({
+        intent: 'move-student',
+        membershipId: 'student-1',
+        targetGroupId: 'group-2',
+      });
+
+      const data = await body(result);
+      expect(data.success).toBe(false);
+      expect(data.message).toMatch(/at most 8/);
+    });
+
+    test('an unexpected failure is not swallowed as a refusal', async () => {
+      // A database outage must not read to the teacher as "that group is full".
+      moveStudentToGroup.mockRejectedValue(new Error('connection reset'));
+
+      await expect(
+        post({
+          intent: 'move-student',
+          membershipId: 'student-1',
+          targetGroupId: 'group-2',
+        })
+      ).rejects.toThrow(/connection reset/);
+    });
+
+    test('adds a group', async () => {
+      const result: any = await post({ intent: 'add-group' });
+
+      expect(addGroup).toHaveBeenCalledWith({ classAssignmentId: 'ca-1' });
+      expect(await body(result)).toEqual({ success: true });
+    });
+
+    test('removes an empty group', async () => {
+      const result: any = await post({
+        intent: 'remove-group',
+        groupId: 'group-3',
+      });
+
+      expect(removeEmptyGroup).toHaveBeenCalledWith({
+        classAssignmentId: 'ca-1',
+        groupId: 'group-3',
+      });
+      expect(await body(result)).toEqual({ success: true });
+    });
+
+    test('reports a refusal to remove a populated group', async () => {
+      removeEmptyGroup.mockRejectedValue(
+        new GroupEditingError('That group still has students in it.')
+      );
+
+      const result: any = await post({
+        intent: 'remove-group',
+        groupId: 'group-1',
+      });
+
+      expect((await body(result)).message).toMatch(/still has students/);
+    });
+
+    test('editing is refused for an assignment type outside the pilot', async () => {
+      // The gate runs before the intent split, so it covers these too.
+      prisma.classAssignment.findFirst.mockResolvedValue(
+        scoped({ typeSupported: false })
+      );
+
+      await post({
+        intent: 'move-student',
+        membershipId: 'student-1',
+        targetGroupId: 'group-2',
+      });
+
+      expect(moveStudentToGroup).not.toHaveBeenCalled();
     });
   });
 

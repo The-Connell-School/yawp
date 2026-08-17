@@ -13,6 +13,12 @@ import {
   MAX_COLLABORATION_GROUP_SIZE,
   MIN_COLLABORATION_GROUP_SIZE,
 } from '~/domain/assignments/collaboration';
+import {
+  addGroup,
+  GroupEditingError,
+  moveStudentToGroup,
+  removeEmptyGroup,
+} from '~/domain/collaboration/group-editing.server';
 import { unassignedMembershipIds } from '~/domain/collaboration/groups';
 import {
   arrangeGroups,
@@ -22,6 +28,7 @@ import {
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { redirectWithToast } from '~/utils/toast.server';
+import { GroupBoard } from './group-board';
 
 /**
  * The teacher's group builder for one class assignment.
@@ -180,6 +187,60 @@ export async function action({ request, params }: ActionFunctionArgs) {
   const formData = await request.formData();
   const intent = formData.get('intent')?.toString();
 
+  // Drag-and-drop edits arrive as fetcher submissions and must not navigate, so
+  // they answer with data the page reads inline rather than a redirect+toast. A
+  // fetcher that receives a redirect navigates the whole app, which would throw
+  // the teacher off the page mid-arrangement.
+  const editIntents = ['move-student', 'add-group', 'remove-group'];
+  if (intent && editIntents.includes(intent)) {
+    try {
+      if (intent === 'move-student') {
+        const membershipId = formData.get('membershipId')?.toString();
+        if (!membershipId) {
+          return dataResponse(
+            { success: false, message: 'No student to move.' },
+            { status: 400 }
+          );
+        }
+        // The empty string is the unassigned bucket, which has no group id.
+        const rawTarget = formData.get('targetGroupId')?.toString() ?? '';
+        await moveStudentToGroup({
+          classAssignmentId: classAssignment.id,
+          membershipId,
+          targetGroupId: rawTarget === '' ? null : rawTarget,
+        });
+      }
+
+      if (intent === 'add-group') {
+        await addGroup({ classAssignmentId: classAssignment.id });
+      }
+
+      if (intent === 'remove-group') {
+        const groupId = formData.get('groupId')?.toString();
+        if (!groupId) {
+          return dataResponse(
+            { success: false, message: 'No group to remove.' },
+            { status: 400 }
+          );
+        }
+        await removeEmptyGroup({
+          classAssignmentId: classAssignment.id,
+          groupId,
+        });
+      }
+
+      return dataResponse({ success: true });
+    } catch (error) {
+      if (error instanceof GroupEditingError) {
+        return dataResponse(
+          { success: false, message: error.message },
+          { status: 400 }
+        );
+      }
+      throw error;
+    }
+  }
+
   try {
     if (intent === 'arrange') {
       const isWholeClass =
@@ -317,50 +378,20 @@ export default function GroupsRoute() {
         </Form>
       )}
 
-      {data.unassigned.length > 0 ? (
-        <section className="mb-6 rounded border border-amber-300 bg-amber-50 p-4">
-          <h2 className="mb-2 text-sm font-semibold text-amber-900">
-            Not in a group ({data.unassigned.length})
-          </h2>
-          <ul className="flex flex-wrap gap-2">
-            {data.unassigned.map((student) => (
-              <li
-                key={student.membershipId}
-                className="rounded bg-white px-2 py-1 text-sm"
-              >
-                {student.name}
-              </li>
-            ))}
-          </ul>
-        </section>
-      ) : null}
-
-      {data.groups.length === 0 ? (
+      {data.groups.length === 0 && data.unassigned.length === 0 ? (
         <p className="text-sm text-gray-600">
           No groups yet. Choose a size and shuffle to get started.
         </p>
       ) : (
         <>
-          <ul className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {data.groups.map((group) => (
-              <li key={group.id} className="rounded border p-3">
-                <div className="mb-2 flex items-baseline justify-between">
-                  <h2 className="text-sm font-semibold">{group.label}</h2>
-                  <span className="text-xs text-gray-500">
-                    {group.members.length}
-                  </span>
-                </div>
-                <ul className="grid gap-1 text-sm">
-                  {group.members.map((member) => (
-                    <li key={member.membershipId}>{member.name}</li>
-                  ))}
-                </ul>
-              </li>
-            ))}
-          </ul>
+          <GroupBoard
+            groups={data.groups}
+            unassigned={data.unassigned}
+            disabled={data.opened}
+          />
 
           {data.opened ? null : (
-            <Form method="post">
+            <Form method="post" className="mt-8 border-t pt-6">
               <input type="hidden" name="intent" value="open" />
               <Button type="submit" disabled={busy}>
                 Open groups
