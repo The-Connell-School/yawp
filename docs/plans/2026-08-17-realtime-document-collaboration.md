@@ -300,6 +300,57 @@ existing service. Three options:
    Runner today at ~1-2s latency, no infra change. Needs a spike to confirm App
    Runner's streaming behavior.
 
+### 2b. How fast can it actually be
+
+Three different latencies get conflated as "realtime". Only the third is
+transport-bound:
+
+| What | Latency | Depends on transport? |
+| --- | --- | --- |
+| Your own keystroke reaching your own screen | ~0ms | **No.** Yjs applies your edit to the local doc synchronously; it never waits on the network. True even at 5s polling. |
+| Your partner's cursor moving | tens of ms | Only loosely — awareness data is tiny and disposable, and can ride a faster cadence than content. |
+| Your partner's *text* appearing | 100ms–1s | **Yes.** This is the whole question. |
+
+Budget for the third: client batch ~150ms + network ~20-60ms + server and
+Postgres write ~5-20ms + delivery down (the variable) + apply and render ~5ms. So
+the floor is ~200ms whatever we do; the transport decides whether delivery adds
+nothing or up to a full poll interval.
+
+| Approach | Realistic p50 for partner's text | Cost |
+| --- | --- | --- |
+| WebSocket sync service (Hocuspocus on ECS + ALB) | **80–150ms** — Google Docs territory | New service, Terraform, deploy target, auth bridging |
+| **SSE down + batched POST up on App Runner** | **200–350ms** — reads as live | No new infra, if streaming holds |
+| HTTP polling at 1s | ~600ms average, ~1.1s worst | No new infra, cheapest to build |
+| HTTP polling at 300ms | ~300–450ms | 3.3 req/s **per client**: 30 students on one document is ~100 req/s for that document alone |
+
+The polling row is why whole-class is the heaviest case: poll cost is
+O(participants) per document, while push is O(1) write fanned out.
+
+**Why a dumb transport is still correct.** Yjs is a CRDT, so updates are
+commutative and idempotent. Late, duplicated, or out-of-order delivery cannot
+corrupt the document. Polling would be unacceptable with OT; here it is merely
+laggier. That is what makes the cheap option safe rather than a hack.
+
+**Known wrinkle for SSE:** App Runner caps request duration (120s), so an SSE
+stream will be cut and must reconnect. `EventSource` reconnects on its own, but
+the client needs a `since` cursor to catch up — which an append-only update table
+with a sequence number provides for free.
+
+**What we can do regardless of transport,** and it accounts for most of the
+perceived speed:
+
+- optimistic local apply — own typing always instant (free, biggest win)
+- awareness on a faster, separate cadence than content, so cursors feel live even
+  when text trails
+- batch upstream at ~150ms instead of per keystroke
+- compact accumulated Yjs updates server-side to keep payloads small
+- `y-indexeddb` for instant load and offline tolerance
+
+Honest summary: **~200–350ms without leaving App Runner if SSE streaming works,
+~600ms–1s if we must poll, ~100ms only with a dedicated sync service.** The spike
+is worth a day precisely because it separates "feels live" from "feels laggy"
+without spending a month on infrastructure.
+
 ### 3. Document ownership and authorization (smaller than it looked)
 
 `Document.membershipId` is a single owner, and no group or team concept exists
