@@ -401,6 +401,12 @@ describe('PR preview deployment contract', () => {
     );
     expect(deployScript).toContain('bun run seed-local-dev');
     expect(deployScript).toContain('bun run sync-prod-fidelity-fixtures');
+    expect(deployScript).toContain(
+      '-f "$SOURCE_DIR/packages/prisma/scripts/sync-prod-fidelity-fixtures.ts"'
+    );
+    expect(deployScript).toContain(
+      'Requested application ref predates preview seats; preserving the existing demo database.'
+    );
     expect(deployScript).toContain('packages/prisma/fixtures/prod-fidelity');
     expect(deployScript).toContain('bun run seed-preview-seats');
     expect(deployScript).toContain('oven/bun:1.3.1');

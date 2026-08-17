@@ -108,18 +108,14 @@ jobs:
             --prefix "$prefix" \
             --query '[Versions[].Key, DeleteMarkers[].Key][]' \
             --output text)"
-          declare -A seen_dump_keys=()
-          dump_keys=()
+          dump_keys_text=''
           while IFS= read -r object_key; do
             [[ -n "$object_key" && "$object_key" != "None" ]] || continue
             dump_key="${object_key%.sha256}"
             [[ "$dump_key" == "$prefix"yawp_demo-scheduled-*.dump ]] || continue
-            if [[ -z "${seen_dump_keys[$dump_key]:-}" ]]; then
-              seen_dump_keys[$dump_key]=1
-              dump_keys+=("$dump_key")
-            fi
+            dump_keys_text+="${dump_key}"$'\n'
           done <<<"$(printf '%s\n' "$versioned_keys_text" | tr '\t' '\n')"
-          sorted_dump_keys="$(printf '%s\n' "${dump_keys[@]}" | LC_ALL=C sort -r)"
+          sorted_dump_keys="$(printf '%s' "$dump_keys_text" | LC_ALL=C sort -ur)"
           keys=()
           while IFS= read -r key; do
             [[ -n "$key" ]] && keys+=("$key")
