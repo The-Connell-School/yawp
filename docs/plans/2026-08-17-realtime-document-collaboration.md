@@ -43,7 +43,7 @@ self-select.
 | --- | --- |
 | Teacher chooses (drag roster into groups, "shuffle into groups of N" helper) | **v1 default** |
 | Random groups of N | Cheap — a preset of the above, not a separate system |
-| Whole class, one document | Different use case (shared notes/brainstorm); likely ungraded, so it sidesteps grade fan-out. Cheapest real pilot. |
+| Whole class, one document | Different use case (shared notes/brainstorm); likely ungraded, so it sidesteps grade fan-out — but 30 editors on one doc is the heaviest transport case, not the lightest. |
 | Students pick partners | Defer. Needs invite/accept state, a cap, and a fix for the creation race below. |
 
 Reasons teacher-assignment wins for v1:
@@ -60,6 +60,53 @@ Reasons teacher-assignment wins for v1:
    "Start" becomes "open your group's draft" and the race disappears.
 3. **Teachers want the control** — mixed-ability pairing, IEP considerations,
    keeping particular students apart.
+
+### Group builder: borrow the breakout-room panel
+
+The reference model is Zoom/Hangouts breakout rooms. Zoom's three options are
+*Assign automatically*, *Assign manually*, *Let participants choose* — the same
+three modes above, arrived at independently. Teachers already know this
+interaction; adopting its vocabulary means close to zero learning curve.
+
+(Supporting data point for deferring student-picked partners: *Let participants
+choose* is the option Zoom shipped **last**, years after the other two, and it
+needed a client-version gate.)
+
+The panel maps cleanly onto `Class.students`, which is a flat `OrgMembership[]`
+many-to-many roster — nothing exotic to query. Carry over:
+
+- **Group cards with member chips**, sized by a "groups of N" control
+- **Shuffle** to seed, then drag to adjust
+- **Move to** *and* **Exchange** — swapping two students between groups is a
+  single intent, not two moves
+- **An "Not in a group" bucket, always visible.** This is how a student who
+  joined the class after groups were built becomes the teacher's problem rather
+  than a silent failure. It is the concrete answer to the roster-churn open
+  question: a transfer-in lands in the bucket and the class assignment shows an
+  unresolved badge until someone places them.
+- **"Open groups"** as a distinct action from building them — this is the
+  lifecycle boundary below
+
+### Where the breakout analogy stops: persistence
+
+Breakout rooms are disposable; these groups own a document. A Zoom room holds no
+artifact, which is why *Recreate rooms* is a harmless button. Here a group owns a
+draft with revision history and a pending submission, so the same button is
+destructive once writing has begun.
+
+The panel therefore needs a lifecycle boundary Zoom has no reason to model:
+
+| | Before "Open groups" | After the first keystroke |
+| --- | --- | --- |
+| Documents | Not yet provisioned | Exist, contain writing |
+| Shuffle / Recreate | Cheap, reversible | Destructive — remove or hard-confirm |
+| Moving a student | Reseating a chart | Moving them between two live drafts |
+
+When a student is moved after writing has started, their text stays in the old
+draft. Because `DocumentWriteJournal` attributes every write, it stays correctly
+attributed to them there — nothing is lost or misassigned, it just does not
+follow them. That is probably the right behavior, but it should be a decision
+rather than an accident.
 
 ### Student-facing
 
@@ -164,12 +211,23 @@ single-writer path untouched, per `AGENTS.md`.
    grouping mode, group table on `ClassAssignment`, `DocumentCollaborator`.
    Additive migration, nothing reads it yet. Flag `collaborative-drafts`,
    default off.
-4. **Pilot: whole-class ungraded document.** Cheapest honest test of the stack —
-   one shared doc, no group UI, no grade fan-out. E2E first.
-5. **Teacher-assigned groups, still ungraded.** Group builder UI, per-group
-   document provisioning, the creation-to-class hand-off.
+4. **Pilot: small teacher-assigned groups, ungraded.** Breakout panel, per-group
+   document provisioning, the creation-to-class hand-off. No grade fan-out yet.
+   Groups of 2-4. E2E first.
+5. **Whole-class shared document.** A deliberate concurrency stress test, not a
+   shortcut — see the note below.
 6. **Graded group submissions.** Last, and only once the submission questions
    have real answers. Dual-write throughout.
+
+### Revision to the phasing
+
+An earlier draft of this sketch put the whole-class shared document first as the
+cheapest pilot, since it needs no group UI and no grade fan-out. That is true of
+the *product* work but backwards on the *transport*: ~30 students on one document
+is the heaviest concurrency case, because presence and update fan-out grow with
+the square of the participant count. Once the breakout panel is being built
+anyway, small groups are the better first pilot — 2-4 concurrent editors is a
+gentle load, and it exercises group formation, where the real product risk lives.
 
 ## Open questions
 
@@ -186,4 +244,6 @@ single-writer path untouched, per `AGENTS.md`.
    of infra work.
 5. **What happens to a group when a student transfers out mid-assignment?**
    `DocumentClassForensic` and `ClassStudentCourseForensic` show roster churn is
-   an established problem here, not a hypothetical.
+   an established problem here, not a hypothetical. The "Not in a group" bucket
+   covers transfers *in*; transfers *out* still need an answer (does the group
+   keep working with their text in place? almost certainly yes).
