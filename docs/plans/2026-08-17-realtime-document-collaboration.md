@@ -749,6 +749,62 @@ Proposed rule, to be confirmed:
 A stale-by-seconds submission that exists beats a perfect one that failed to save
 at the deadline.
 
+## Seeing it in a preview
+
+The end-to-end path exists in code. What it needs to actually run:
+
+**One-time setup**
+
+1. **Provider credentials.** Set `TIPTAP_COLLAB_APP_ID` and
+   `TIPTAP_COLLAB_SECRET`. Both are optional in `env.server.ts` so environments
+   without them still boot; the token route returns 500 rather than a token when
+   they are absent. **This requires a Tiptap Cloud account and is the one
+   blocker that cannot be satisfied from the repo.**
+2. **Turn on the org gate.** `Organization.collaborativeDraftsEnabled = true` for
+   the preview organization. There is no admin UI for this yet, so it is a SQL
+   update.
+
+**Per assignment**
+
+3. **Create a collaborative assignment.** The creation sheet shows a
+   "Collaborative draft" checkbox and a students-per-group select, but only when
+   the org gate above is on — the toggle is hidden entirely otherwise. Note the
+   sheet's caller must pass `collaborativeDraftsEnabled`; a caller that does not
+   renders the sheet exactly as before.
+4. **Arrange and open groups.** Visit
+   `/app/class-assignments/:classAssignmentId/groups` as the class's teacher.
+   Pick a size, shuffle, review, then **Open groups** — which provisions one
+   shared draft per group and stamps `openedAt`. Rearranging is refused after
+   that point.
+5. **Students click Start.** They are routed to
+   `/app/collab-documents/:documentId` instead of getting a personal document.
+   A student whose teacher has not opened groups gets a toast saying so.
+
+**What a preview will and will not show**
+
+Working: two students in the same group typing into one document, named carets,
+presence avatars, a teacher joining read-only.
+
+Not working, and expected:
+
+- **Nothing reaches Postgres.** No dual-write exists yet, so `Document.html/text`
+  stays empty. The Y.Doc persists in the provider, so content survives a reload —
+  but grading, tutor, search, comments and submission all read the stale row.
+  **This is the next thing to build and the one that most matters.**
+- **No seeding.** Irrelevant for a fresh preview, since a newly provisioned group
+  draft starts empty. It matters the moment collaboration is turned on for an
+  assignment students have already written in.
+- **No submission.** Not wired, including the availability fallback above.
+- **No comments, tutor, module sessions or grade panels** on the collaborative
+  page. Acceptable for an ungraded small-group pilot, not beyond it.
+- **The groups page has no drag-and-drop.** Shuffle, review, open. Move and
+  exchange between groups are not built.
+
+**Unverified.** Steps 3–5 exercise UI that has never been rendered. The server
+side of each — the parser, the rollout gate, group planning and provisioning, the
+start-route branch, the groups loader and action, the token endpoint — is
+unit-tested. The pages are not.
+
 ## Prior art in this subsystem — read first
 
 `docs/decisions/2026-03-30-revert-local-first-persistence.md`. A previous attempt

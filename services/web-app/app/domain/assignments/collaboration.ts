@@ -40,6 +40,15 @@ export const MIN_COLLABORATION_GROUP_SIZE = 2;
  */
 export const MAX_COLLABORATION_GROUP_SIZE = 8;
 
+/** Sensible starting point in the creation sheet: pairs are the common case. */
+export const DEFAULT_COLLABORATION_GROUP_SIZE = 3;
+
+/** Every size a teacher may pick, for rendering a stepper or select. */
+export const COLLABORATION_GROUP_SIZE_OPTIONS = Array.from(
+  { length: MAX_COLLABORATION_GROUP_SIZE - MIN_COLLABORATION_GROUP_SIZE + 1 },
+  (_, index) => MIN_COLLABORATION_GROUP_SIZE + index
+);
+
 export type AssignmentCollaborationSettings = {
   collaborationEnabled: boolean;
   collaborationGroupMode: CollaborationGroupMode;
