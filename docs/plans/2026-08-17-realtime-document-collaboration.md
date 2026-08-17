@@ -121,6 +121,153 @@ details that fall out of the data model:
   normal in a shared document. Paste detection must become collaborator-aware or
   it will fire on every group assignment.
 
+## Teacher side: contribution breakdown and two-tier grading
+
+Requirement: the group gets a grade, and each student also gets an individual
+grade based on their contribution, with a teacher-facing breakdown of who did
+what.
+
+### Recommendation: the breakdown is evidence, not an algorithm
+
+Build the breakdown as evidence a teacher reads, and keep the individual grade
+**teacher-set**. Do not compute an individual grade from contribution metrics.
+This still delivers the requirement — every student gets their own grade — but it
+does not pretend a metric can measure contribution, and it is the difference
+between a feature teachers trust and one they fight.
+
+Every automatic contribution metric fails in ways that are common rather than
+exotic:
+
+| Failure | Why it happens |
+| --- | --- |
+| **The scribe** | One student types while the group talks. Character attribution gives the typist 100% and everyone else 0% — and this is the single most common group-work pattern. |
+| **The reviser** | A student who cuts 300 words and tightens the argument shows *negative* net contribution by volume, while doing some of the highest-value work. |
+| **The thesis writer** | Writes the one sentence the others elaborate on. Scores ~2%. |
+| **Gaming** | Once students know volume is measured, padding then deleting is trivial. |
+| **Equity** | Slower typists, students with motor impairments, and students who compose on paper first are systematically undercounted. This repo already carries `docs/compliance/accessibility` and accessibility e2e specs; an auto-graded volume metric cuts against that work. |
+
+Teachers also audit evidence they can see far more readily than a number they
+cannot, so the evidence panel is the more defensible product regardless.
+
+### What the panel should show
+
+Roughly in order of usefulness — note that the most useful signals are
+behavioral, not volumetric:
+
+1. **Authorship heatmap over the draft itself.** The real document with each
+   student's text tinted in their caret color. A teacher can see who wrote the
+   conclusion in about two seconds. Reuses the student-side color assignment, so
+   one color means one person everywhere in the product.
+2. **Session timeline per student.** When each student worked, how many distinct
+   sessions, spread across the week or all at 11pm the night before. The best
+   free-rider signal available, and it does not reward verbosity.
+3. **Added vs. revised vs. deleted.** Splitting new text from edits to existing
+   text is what rescues the reviser from looking like a freeloader.
+4. **Words surviving in the final draft** — the headline number, but never shown
+   alone, and never shown as a percentage that looks like a grade.
+5. **Comments and tutor engagement.** `DocumentComment` and
+   `DocumentCommentResponse` both already carry `membershipId`, so who asked what
+   is free data. If the tutor stays communal, who engaged it is a strong signal.
+
+### Where attribution data comes from
+
+Two candidate sources, and the choice matters:
+
+- **`DocumentWriteJournal`** carries `membershipId` and `userId` per write, so
+  attribution is technically available today. But it stores **full `html` +
+  `text` per row**, not diffs, so "who wrote what" means diffing consecutive
+  snapshots. It also records rejected writes. Workable, but it is
+  reverse-engineering, and on a shared document the row count and stored text
+  multiply per collaborator.
+- **Yjs `PermanentUserData`** makes per-character authorship a durable property
+  of the document rather than something inferred. This is the real answer, and it
+  is **a second independent argument for the CRDT approach** that blocker 1
+  already forces: contribution attribution stops being an analytics problem and
+  becomes a property of the data structure.
+
+Caveats: Yjs attributes *insertions* cleanly, while deletion attribution needs
+deliberate handling, and `PermanentUserData` adds document size overhead. Also
+note `DocumentRevision` has **no** author field at all, so revision history
+cannot help here.
+
+### Schema: two-tier grading
+
+The group grade needs no schema change. `Submission` already has `overallScore`,
+`numericPercentage`, `letterGrade`, `feedback`, `rubricScores` — the submission
+simply belongs to the group.
+
+The individual grade is a new per-member overlay:
+
+```prisma
+model SubmissionMemberGrade {
+  id                   String        @id @default(cuid())
+  createdAt            DateTime      @default(now()) @db.Timestamptz(6)
+  updatedAt            DateTime      @default(now()) @updatedAt @db.Timestamptz(6)
+  submissionId         String
+  submission           Submission    @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  membershipId         String
+  membership           OrgMembership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+
+  /// While true this row tracks the group grade. The teacher editing the
+  /// individual grade detaches it, and a later group regrade updates only the
+  /// rows still attached.
+  followsGroupGrade    Boolean       @default(true)
+  numericPercentage    Int?
+  letterGrade          String?
+  /// Private to this student — not shown to the rest of the group.
+  overallComment       String?
+  gradedAt             DateTime?     @db.Timestamptz(6)
+  gradedByMembershipId String?
+
+  @@unique([submissionId, membershipId])
+  @@index([membershipId])
+}
+```
+
+`followsGroupGrade` resolves the absolute-vs-delta fork. Storing an absolute
+value alone means a group regrade silently strands the individual grades; storing
+a delta alone means the number a student already saw can shift under them. The
+boolean plus an absolute value gives both: the stored number is always
+authoritative, and a regrade can safely reapply to the untouched rows only.
+
+**Release stays a single gate.** `Submission.releasedAt` continues to govern.
+Releasing individual grades separately would leak comparative timing information
+between group members for no benefit.
+
+### Query surface — easy to miss
+
+Everything student-facing on submissions is currently scoped through
+`document.membershipId`, so on a shared document **only the nominal owner would
+see the submission or its grade at all.** Verified sites:
+
+- `app/routes/app_.submissions_.$submissionId/route.tsx` — owner OR
+  teacher-of-owner, inline
+- `app/routes/api.domain.release-grades/route.ts` — filters
+  `document: { is: { membershipId: { not: actor.membershipId } } }`
+- plus `api.domain.grade-essay-ai` and `api.domain.update-submission`
+
+These need the same widening as document access, and for a group member the
+grade shown must be their `SubmissionMemberGrade`, not the raw `Submission`
+fields.
+
+### Phasing consequence
+
+This does **not** move graded group work earlier — it still sits behind
+attribution, which sits behind the CRDT, which sits behind the transport spike.
+But it splits usefully: **the contribution panel is buildable and testable as a
+read-only teacher view on ungraded group work**, before any grading exists. Ship
+the evidence first, find out from teachers whether it is actually useful, then
+put grading on top of evidence that has already earned trust.
+
+### Deliberately not in v1
+
+`SubmissionGradingAssistantRun` runs per submission with a rubric snapshot, so
+once text is authorship-segmented the AI assistant could comment on the *quality*
+of each student's contribution rather than its volume — the thing word count
+fundamentally cannot do. Genuinely promising, and explicitly out of scope for
+v1: an AI judgment that feeds an individual student's grade needs its own
+scrutiny and almost certainly a human-in-the-loop requirement.
+
 ## Technical blockers
 
 ### 1. The save path cannot support two writers (blocker)
@@ -357,6 +504,8 @@ an aide — rather than up front.
 | Editor | `document-editor/editor.tsx` (Yjs extensions, disable StarterKit `history`); `use-editor-sync.ts` (the save loop becomes a flush); `use-pm-tripwire.ts`; `use-paste-alert.ts` (collaborator-aware) |
 | Persistence | `api.document.$id.save/route.ts` — one designated writer flushes; keep dual-write to `Document.html/text` + `DocumentRevision` |
 | Group builder | new route + API under `app.my-classes.$classId...` |
+| Contribution panel | new read-only teacher view; authorship source is Yjs `PermanentUserData` (preferred) or diffed `DocumentWriteJournal` rows |
+| Two-tier grading | new `SubmissionMemberGrade`; widen `app_.submissions_.$submissionId`, `api.domain.release-grades`, `api.domain.grade-essay-ai`, `api.domain.update-submission` |
 | Transport | new route (HTTP/SSE) or a separate sync service, pending the spike |
 
 ### Test list (TDD, per AGENTS.md)
@@ -385,6 +534,17 @@ E2E (before the UI, per AGENTS.md), alongside the existing
 - **regression:** a single-author document behaves exactly as before with the
   flag off — the existing specs must pass untouched
 
+Contribution and grading:
+
+- attribution — text typed by A is attributed to A after B edits a different
+  paragraph; a paragraph A wrote and B rewrote reports as revised, not as A's
+- `followsGroupGrade` — a group regrade updates attached rows and leaves detached
+  ones alone; editing an individual grade detaches exactly that row
+- every group member can open the submission and sees **their own**
+  `SubmissionMemberGrade`, not the group's raw fields and not a peer's
+- release — no member sees any grade before `Submission.releasedAt`
+- a member's private `overallComment` is not visible to the rest of the group
+
 ## Prior art in this subsystem — read first
 
 `docs/decisions/2026-03-30-revert-local-first-persistence.md`. A previous attempt
@@ -411,10 +571,14 @@ single-writer path untouched, per `AGENTS.md`.
 4. **Pilot: small teacher-assigned groups, ungraded.** Breakout panel, per-group
    document provisioning, the creation-to-class hand-off. No grade fan-out yet.
    Groups of 2-4. E2E first.
-5. **Whole-class shared document.** A deliberate concurrency stress test, not a
+5. **Contribution panel, read-only.** The authorship heatmap and session
+   timeline on ungraded group work. Ships before any grading, so teachers can
+   tell us whether the evidence is useful before it carries consequences.
+6. **Whole-class shared document.** A deliberate concurrency stress test, not a
    shortcut — see the note below.
-6. **Graded group submissions.** Last, and only once the submission questions
-   have real answers. Dual-write throughout.
+7. **Two-tier graded submissions.** Last. Group grade plus
+   `SubmissionMemberGrade`, on top of an evidence panel that has already earned
+   trust. Dual-write throughout.
 
 ### Revision to the phasing
 
@@ -430,8 +594,11 @@ gentle load, and it exercises group formation, where the real product risk lives
 
 1. **Can one student submit for the whole group?** All of the grading model
    hangs off this.
-2. **Does every group member get the same grade?** Usually yes-with-override; an
-   override needs per-student scores on a shared submission.
+2. ~~**Does every group member get the same grade?**~~ **Decided:** no. Two-tier —
+   a group grade on `Submission` plus a per-member `SubmissionMemberGrade` that
+   defaults to following the group grade and detaches when the teacher edits it.
+   The remaining sub-question is whether an individual grade may exceed the group
+   grade, or only reduce it.
 3. **Is the writing tutor shared by the group, or one conversation per student?**
    Forced by the schema: `AssignmentModuleSession` is keyed to `documentId` with
    no `membershipId`, so today the answer is "shared" by default and module
