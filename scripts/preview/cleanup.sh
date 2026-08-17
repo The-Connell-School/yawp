@@ -72,6 +72,7 @@ drop_preview_database() {
 
   if docker inspect "$POSTGRES_CONTAINER" >/dev/null 2>&1; then
     docker exec "$POSTGRES_CONTAINER" dropdb -U postgres --if-exists "$database_name"
+    docker exec "$POSTGRES_CONTAINER" dropuser -U postgres --if-exists "${database_name}_app"
   fi
 }
 

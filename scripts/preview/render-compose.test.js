@@ -15,6 +15,7 @@ const previewAccessSeats = JSON.stringify([
 ]);
 const previewSessionSecret = 'test-preview-session-secret-32-bytes';
 const previewAccessSecret = 'test-preview-access-secret-32-bytes';
+const previewDatabasePassword = 'test-preview-database-password-0001';
 
 function renderCompose(overrides = {}) {
   return renderPreviewCompose({
@@ -24,6 +25,7 @@ function renderCompose(overrides = {}) {
     accessSeats: previewAccessSeats,
     sessionSecret: previewSessionSecret,
     accessSecret: previewAccessSecret,
+    databasePassword: previewDatabasePassword,
     ...overrides,
   });
 }
@@ -60,7 +62,7 @@ describe('renderPreviewCompose', () => {
     expect(compose).toContain('/api/healthcheck');
     expect(compose).toContain('PORT: "8080"');
     expect(compose).toContain(
-      'DATABASE_URL: "postgresql://postgres:postgres@preview-postgres:5432/yawp_pr_142"'
+      `DATABASE_URL: "postgresql://yawp_pr_142_app:${previewDatabasePassword}@preview-postgres:5432/yawp_pr_142"`
     );
     expect(compose).toContain('AWS_EC2_METADATA_DISABLED: "true"');
     expect(compose).toContain('YAWP_ENVIRONMENT: "preview"');

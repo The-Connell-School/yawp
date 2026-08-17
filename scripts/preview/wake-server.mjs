@@ -148,6 +148,55 @@ export async function hasMatchingPreviewAccessCredential({
   }
 }
 
+async function resolveMatchingPreviewAccessCredential({
+  root,
+  pr,
+  uri,
+  cookieHeader,
+  nowSeconds = Math.floor(Date.now() / 1000),
+  resolveCredential,
+}) {
+  try {
+    const seats = JSON.parse(await readFile(
+      path.join(root, 'previews', `pr-${pr}`, 'access-seats.json'),
+      'utf8',
+    ));
+    const master = Array.isArray(seats) ? seats[0] : null;
+    const masterCode = String(master?.code || '').trim().toLowerCase();
+    const masterOrganizationId = String(master?.organizationId || '').trim();
+    if (
+      !/^[a-z]+-[a-z]+-[1-9][0-9]{3}$/.test(masterCode)
+      || !/^[a-z0-9][a-z0-9-]{0,127}$/.test(masterOrganizationId)
+    ) return null;
+    const url = new URL(trustedUri(uri), 'https://preview.invalid');
+    const candidate = String(url.searchParams.get('code') || '').trim().toLowerCase();
+    if (/^[a-z]+-[a-z]+-[1-9][0-9]{3}$/.test(candidate)) {
+      const resolved = safeSecretEqual(candidate, masterCode)
+        ? await resolveCredential({
+          pr,
+          organizationId: masterOrganizationId,
+          requirePreviewSeatCode: false,
+        })
+        : await resolveCredential({ pr, code: candidate });
+      if (resolved) return resolved;
+    }
+    const secret = (await readFile(
+      path.join(root, 'previews', `pr-${pr}`, 'access-secret'),
+      'utf8',
+    )).trim();
+    if (secret.length < 32) return null;
+    const organizationId = signedAccessCookieSeat(cookieHeader, secret, nowSeconds);
+    if (organizationId === null) return null;
+    return resolveCredential({
+      pr,
+      organizationId,
+      requirePreviewSeatCode: organizationId !== masterOrganizationId,
+    });
+  } catch {
+    return null;
+  }
+}
+
 export function createPreviewSeatLookup({
   execFileFn = execFileAsync,
   postgresContainer = 'preview-postgres',
@@ -190,6 +239,59 @@ export function createPreviewSeatLookup({
       return String(stdout).trim() === '1';
     } catch {
       return false;
+    }
+  };
+}
+
+function createPreviewSeatResolver({
+  execFileFn = execFileAsync,
+  postgresContainer = 'preview-postgres',
+} = {}) {
+  return async ({ pr, code, organizationId, requirePreviewSeatCode = true }) => {
+    if (!Number.isSafeInteger(pr) || pr < 1) return null;
+    let predicate;
+    if (typeof code === 'string' && /^[a-z]+-[a-z]+-[1-9][0-9]{3}$/.test(code)) {
+      predicate = `"previewSeatCode" = '${code}'`;
+    } else if (
+      typeof organizationId === 'string'
+      && /^[a-z0-9][a-z0-9-]{0,127}$/.test(organizationId)
+    ) {
+      predicate = `"id" = '${organizationId}'${
+        requirePreviewSeatCode ? ' AND "previewSeatCode" IS NOT NULL' : ''
+      }`;
+    } else {
+      return null;
+    }
+    try {
+      const database = `yawp_pr_${pr}`;
+      const query = `SELECT "id" FROM "Organization" WHERE ${predicate} LIMIT 1;`;
+      const { stdout } = await execFileFn('docker', [
+        'exec',
+        postgresContainer,
+        'psql',
+        '--no-psqlrc',
+        '-v',
+        'ON_ERROR_STOP=1',
+        '-U',
+        'postgres',
+        '-d',
+        database,
+        '-tAc',
+        query,
+      ], {
+        timeout: 10_000,
+        maxBuffer: 64 * 1024,
+      });
+      const resolvedOrganizationId = String(stdout).trim();
+      if (!/^[a-z0-9][a-z0-9-]{0,127}$/.test(resolvedOrganizationId)) return null;
+      return {
+        organizationId: resolvedOrganizationId,
+        requirePreviewSeatCode: resolvedOrganizationId !== organizationId
+          ? true
+          : requirePreviewSeatCode,
+      };
+    } catch {
+      return null;
     }
   };
 }
@@ -258,12 +360,15 @@ export function createWakeHandler({
     const uri = trustedUri(forwardedUri || request.url);
 
     try {
-      const authorized = await authorizeWake(pr, uri, request);
-      if (!authorized) {
+      const authorization = await authorizeWake(pr, uri, request);
+      if (!authorization) {
         send(response, 401, 'Open this sleeping preview with its one-click access URL.\n');
         return;
       }
-      await wake(pr, { allowDisplacement: true });
+      await wake(pr, {
+        allowDisplacement: true,
+        ...(typeof authorization === 'object' ? { authorization } : {}),
+      });
       try {
         await recordAccess(pr);
       } catch (error) {
@@ -395,7 +500,7 @@ export function startAccessLogFollower({
 function classifyWakeError(error) {
   const message = `${error?.stderr || ''}\n${error?.message || ''}`;
   if (/deployment is in progress/i.test(message)) error.code = 'deploying';
-  else if (/authorization expired while queued/i.test(message)) error.code = 'authorization-stale';
+  else if (/authorization (?:expired|was revoked) while queued/i.test(message)) error.code = 'authorization-stale';
   else if (/capacity/i.test(message)) error.code = 'capacity-full';
   else if (/not resident/i.test(message)) error.code = 'not-resident';
   return error;
@@ -407,11 +512,23 @@ export function createDefaultWakeOperations({
   maxRunning,
   commandTimeoutMs = wakeCommandTimeoutMs(),
   credentialIsCurrent = createPreviewSeatLookup(),
+  credentialResolver = createPreviewSeatResolver(),
 }) {
   const recentAccess = new Map();
   const accessWrites = new Map();
   return {
-    async ensureRunning(pr, { allowDisplacement = false } = {}) {
+    async ensureRunning(pr, { allowDisplacement = false, authorization } = {}) {
+      const organizationId = String(authorization?.organizationId || '');
+      const requirePreviewSeatCode = authorization?.requirePreviewSeatCode;
+      if (
+        authorization
+        && (
+          !/^[a-z0-9][a-z0-9-]{0,127}$/.test(organizationId)
+          || typeof requirePreviewSeatCode !== 'boolean'
+        )
+      ) {
+        throw new Error('Preview wake authorization descriptor is invalid');
+      }
       try {
         const { stdout } = await execFileAsync('bash', [wakeScript, String(pr)], {
           env: {
@@ -420,6 +537,10 @@ export function createDefaultWakeOperations({
             PREVIEW_MAX_RUNNING: String(maxRunning),
             PREVIEW_WAKE_ALLOW_DISPLACEMENT: allowDisplacement ? 'true' : 'false',
             PREVIEW_WAKE_AUTHORIZED_AT_EPOCH: String(Math.floor(Date.now() / 1000)),
+            PREVIEW_WAKE_AUTHORIZED_ORGANIZATION_ID: organizationId,
+            PREVIEW_WAKE_REQUIRE_PREVIEW_SEAT_CODE: authorization
+              ? String(requirePreviewSeatCode)
+              : '',
           },
           timeout: commandTimeoutMs,
           maxBuffer: 1024 * 1024,
@@ -430,12 +551,12 @@ export function createDefaultWakeOperations({
       }
     },
     async authorizeWake(pr, uri, request) {
-      return hasMatchingPreviewAccessCredential({
+      return resolveMatchingPreviewAccessCredential({
         root,
         pr,
         uri,
         cookieHeader: request?.headers?.cookie,
-        credentialIsCurrent,
+        resolveCredential: credentialResolver,
       });
     },
     async recordAccess(pr) {

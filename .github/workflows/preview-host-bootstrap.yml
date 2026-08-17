@@ -33,7 +33,7 @@ jobs:
       PREVIEW_MAX_RUNNING: ${{ vars.PREVIEW_MAX_RUNNING || '4' }}
       PREVIEW_SLEEP_ENABLED: ${{ vars.PREVIEW_SLEEP_ENABLED || 'true' }}
       PREVIEW_INFLIGHT_TTL_SECONDS: ${{ vars.PREVIEW_INFLIGHT_TTL_SECONDS || '3600' }}
-      PREVIEW_DB_PASSWORD: ${{ secrets.PREVIEW_DB_PASSWORD }}
+      PREVIEW_POSTGRES_ADMIN_PASSWORD: ${{ secrets.PREVIEW_DB_PASSWORD }}
       PREVIEW_ACME_EMAIL: ${{ vars.PREVIEW_ACME_EMAIL || 'bryant@brock.software' }}
     steps:
       - name: Check configuration
@@ -67,6 +67,7 @@ jobs:
             "mkdir -p ${PREVIEW_ROOT}/bootstrap/scripts/preview"
           scp -i ~/.ssh/preview_key \
             scripts/preview/bootstrap-host.sh \
+            scripts/preview/migrate-resident-database-roles.sh \
             scripts/preview/publish-host-metrics.sh \
             scripts/preview/wake-server.mjs \
             scripts/preview/wake-preview.sh \
@@ -82,7 +83,7 @@ jobs:
             "PREVIEW_MAX_RUNNING=$(shell_quote "$PREVIEW_MAX_RUNNING")"
             "PREVIEW_SLEEP_ENABLED=$(shell_quote "$PREVIEW_SLEEP_ENABLED")"
             "PREVIEW_INFLIGHT_TTL_SECONDS=$(shell_quote "$PREVIEW_INFLIGHT_TTL_SECONDS")"
-            "PREVIEW_DB_PASSWORD=$(shell_quote "$PREVIEW_DB_PASSWORD")"
+            "PREVIEW_POSTGRES_ADMIN_PASSWORD=$(shell_quote "$PREVIEW_POSTGRES_ADMIN_PASSWORD")"
             "PREVIEW_ACME_EMAIL=$(shell_quote "$PREVIEW_ACME_EMAIL")"
           )
           ssh -i ~/.ssh/preview_key "${PREVIEW_SSH_USER}@${PREVIEW_HOST}" \

@@ -23,6 +23,8 @@ export function renderPreviewCompose({
   enableTls = process.env.PREVIEW_TLS !== 'false',
   runtime = process.env.PREVIEW_RUNTIME || 'fast',
   dataMode = process.env.PREVIEW_DATA_MODE || 'seed',
+  databaseUser = process.env.PREVIEW_DB_USER,
+  databasePassword = process.env.PREVIEW_DB_PASSWORD,
   accessSeats = process.env.PREVIEW_ACCESS_SEATS,
   accessSecret = process.env.PREVIEW_ACCESS_SECRET,
   sessionSecret = process.env.PREVIEW_SESSION_SECRET,
@@ -39,6 +41,8 @@ export function renderPreviewCompose({
     tls: enableTls,
     runtime,
     dataMode,
+    databaseUser,
+    databasePassword,
   });
   const routerBase = env.composeProject;
   const directPortBlock = env.directPort

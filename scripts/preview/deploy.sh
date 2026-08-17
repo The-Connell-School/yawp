@@ -9,7 +9,10 @@ source "$SCRIPT_DIR/tooling-artifacts.sh"
 
 export PREVIEW_DATA_MODE="${PREVIEW_DATA_MODE:-seed}"
 export PREVIEW_DEV_LOGIN_EMAIL="${PREVIEW_DEV_LOGIN_EMAIL:-dev.teacher@yawp.local}"
-eval "$(node "$SCRIPT_DIR/preview-env.mjs" --shell)"
+# Derive paths and database identity before creating the per-preview credential.
+# The placeholder URL never reaches a container or persistent compose file.
+eval "$(PREVIEW_DATABASE_URL=postgresql://identity.invalid/identity node "$SCRIPT_DIR/preview-env.mjs" --shell)"
+unset DATABASE_URL
 
 # preview-env.mjs already derives this and exports it in the eval above — yawp_pr_142 for
 # a PR preview, yawp_demo for a slug-named environment like the demo box. Recomputing it
@@ -54,6 +57,35 @@ TOOLING_CHANGED=1
 DATABASE_CREATED=0
 
 mkdir -p "$PREVIEW_DIR" "$DB_COMPOSE_DIR"
+DATABASE_ROLE_FILE="$PREVIEW_DIR/database-role"
+DATABASE_PASSWORD_FILE="$PREVIEW_DIR/database-password"
+load_or_create_database_credential() {
+  umask 077
+  if [[ -s "$DATABASE_ROLE_FILE" ]]; then
+    PREVIEW_DB_USER="$(<"$DATABASE_ROLE_FILE")"
+  else
+    PREVIEW_DB_USER="${DATABASE_NAME}_app"
+    printf '%s\n' "$PREVIEW_DB_USER" > "$DATABASE_ROLE_FILE"
+  fi
+  if [[ -s "$DATABASE_PASSWORD_FILE" ]]; then
+    PREVIEW_DB_PASSWORD="$(<"$DATABASE_PASSWORD_FILE")"
+  else
+    PREVIEW_DB_PASSWORD="$(node -e "process.stdout.write(require('node:crypto').randomBytes(32).toString('base64url'))")"
+    printf '%s\n' "$PREVIEW_DB_PASSWORD" > "$DATABASE_PASSWORD_FILE"
+  fi
+  [[ "$PREVIEW_DB_USER" =~ ^[a-z_][a-z0-9_]{0,62}$ ]] || {
+    echo "Stored preview database role is invalid" >&2
+    exit 1
+  }
+  [[ "$PREVIEW_DB_PASSWORD" =~ ^[A-Za-z0-9_-]{32,}$ ]] || {
+    echo "Stored preview database password is invalid" >&2
+    exit 1
+  }
+  export PREVIEW_DB_USER PREVIEW_DB_PASSWORD
+}
+load_or_create_database_credential
+eval "$(node "$SCRIPT_DIR/preview-env.mjs" --shell)"
+: "${PREVIEW_POSTGRES_ADMIN_PASSWORD:?PREVIEW_POSTGRES_ADMIN_PASSWORD is required}"
 case "${PREVIEW_KEEP_AWAKE:-false}" in
   true) printf 'true\n' > "$PREVIEW_DIR/keep-awake" ;;
   false) rm -f -- "$PREVIEW_DIR/keep-awake" ;;
@@ -161,7 +193,7 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: ${DATABASE_PASSWORD:-postgres}
+      POSTGRES_PASSWORD: ${PREVIEW_POSTGRES_ADMIN_PASSWORD}
       POSTGRES_DB: postgres
     volumes:
       - preview-postgres-data:/var/lib/postgresql/data
@@ -214,6 +246,83 @@ ensure_shared_postgres() {
   wait_for_shared_postgres
 }
 
+ensure_preview_database_role() {
+  local exists
+  exists="$(docker exec "$POSTGRES_CONTAINER" psql --no-psqlrc -U postgres -d postgres -Atc \
+    "SELECT 1 FROM pg_roles WHERE rolname = '${DATABASE_USER}'" | tr -d '[:space:]')"
+  if [[ "$exists" != "1" ]]; then
+    docker exec "$POSTGRES_CONTAINER" createuser -U postgres "$DATABASE_USER"
+  fi
+  docker exec "$POSTGRES_CONTAINER" psql --no-psqlrc -v ON_ERROR_STOP=1 -U postgres -d postgres -c \
+    "ALTER ROLE \"${DATABASE_USER}\" WITH LOGIN PASSWORD '${DATABASE_PASSWORD}' NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;"
+}
+
+harden_preview_database() {
+  validate_database_name "$DATABASE_NAME"
+  docker exec "$POSTGRES_CONTAINER" psql --no-psqlrc -v ON_ERROR_STOP=1 -U postgres -d postgres -c \
+    "ALTER DATABASE \"${DATABASE_NAME}\" OWNER TO \"${DATABASE_USER}\"; REVOKE CONNECT ON DATABASE \"${DATABASE_NAME}\" FROM PUBLIC; GRANT CONNECT ON DATABASE \"${DATABASE_NAME}\" TO \"${DATABASE_USER}\";"
+  docker exec "$POSTGRES_CONTAINER" psql --no-psqlrc -v ON_ERROR_STOP=1 -U postgres -d "$DATABASE_NAME" -c "
+DO \$migration\$
+DECLARE object record;
+BEGIN
+  FOR object IN
+    SELECT namespace.nspname, relation.relname,
+      CASE relation.relkind
+        WHEN 'S' THEN 'SEQUENCE'
+        WHEN 'v' THEN 'VIEW'
+        WHEN 'm' THEN 'MATERIALIZED VIEW'
+        WHEN 'f' THEN 'FOREIGN TABLE'
+        ELSE 'TABLE'
+      END AS kind
+    FROM pg_class relation
+    JOIN pg_namespace namespace ON namespace.oid = relation.relnamespace
+    WHERE namespace.nspname NOT IN ('pg_catalog', 'information_schema')
+      AND relation.relkind IN ('r', 'p', 'S', 'v', 'm', 'f')
+      AND pg_get_userbyid(relation.relowner) = 'postgres'
+      AND NOT EXISTS (
+        SELECT 1 FROM pg_depend dependency
+        WHERE dependency.classid = 'pg_class'::regclass
+          AND dependency.objid = relation.oid AND dependency.deptype = 'e'
+      )
+  LOOP
+    EXECUTE format('ALTER %s %I.%I OWNER TO %I', object.kind, object.nspname, object.relname, '${DATABASE_USER}');
+  END LOOP;
+  FOR object IN
+    SELECT namespace.nspname, routine.proname, pg_get_function_identity_arguments(routine.oid) AS arguments
+    FROM pg_proc routine
+    JOIN pg_namespace namespace ON namespace.oid = routine.pronamespace
+    WHERE namespace.nspname NOT IN ('pg_catalog', 'information_schema')
+      AND pg_get_userbyid(routine.proowner) = 'postgres'
+      AND NOT EXISTS (
+        SELECT 1 FROM pg_depend dependency
+        WHERE dependency.classid = 'pg_proc'::regclass
+          AND dependency.objid = routine.oid AND dependency.deptype = 'e'
+      )
+  LOOP
+    EXECUTE format('ALTER FUNCTION %I.%I(%s) OWNER TO %I', object.nspname, object.proname, object.arguments, '${DATABASE_USER}');
+  END LOOP;
+  FOR object IN
+    SELECT namespace.nspname, data_type.typname
+    FROM pg_type data_type
+    JOIN pg_namespace namespace ON namespace.oid = data_type.typnamespace
+    WHERE namespace.nspname NOT IN ('pg_catalog', 'information_schema')
+      AND data_type.typtype IN ('e', 'd')
+      AND pg_get_userbyid(data_type.typowner) = 'postgres'
+      AND NOT EXISTS (
+        SELECT 1 FROM pg_depend dependency
+        WHERE dependency.classid = 'pg_type'::regclass
+          AND dependency.objid = data_type.oid AND dependency.deptype = 'e'
+      )
+  LOOP
+    EXECUTE format('ALTER TYPE %I.%I OWNER TO %I', object.nspname, object.typname, '${DATABASE_USER}');
+  END LOOP;
+END
+\$migration\$;
+GRANT ALL ON SCHEMA public TO \"${DATABASE_USER}\";
+GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO \"${DATABASE_USER}\";
+GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO \"${DATABASE_USER}\";"
+}
+
 database_exists() {
   local database_name="$1"
   validate_database_name "$database_name"
@@ -260,7 +369,7 @@ ensure_production_dump_preview_database() {
     return 0
   fi
 
-  docker exec "$POSTGRES_CONTAINER" createdb -U postgres -T "$TEMPLATE_DB" "$DATABASE_NAME"
+  docker exec "$POSTGRES_CONTAINER" createdb -U postgres -O "$DATABASE_USER" -T "$TEMPLATE_DB" "$DATABASE_NAME"
   DATABASE_CREATED=1
 }
 
@@ -280,14 +389,14 @@ reset_seed_preview_database() {
   echo "Resetting preview database $DATABASE_NAME for seeded local-dev data..."
   "${compose[@]}" down --remove-orphans >/dev/null 2>&1 || true
   docker exec "$POSTGRES_CONTAINER" dropdb -U postgres --force --if-exists "$DATABASE_NAME"
-  docker exec "$POSTGRES_CONTAINER" createdb -U postgres "$DATABASE_NAME"
+  docker exec "$POSTGRES_CONTAINER" createdb -U postgres -O "$DATABASE_USER" "$DATABASE_NAME"
   DATABASE_CREATED=1
 }
 
 create_seed_preview_database() {
   validate_database_name "$DATABASE_NAME"
   echo "Creating preview database $DATABASE_NAME for seeded local-dev data..."
-  docker exec "$POSTGRES_CONTAINER" createdb -U postgres "$DATABASE_NAME"
+  docker exec "$POSTGRES_CONTAINER" createdb -U postgres -O "$DATABASE_USER" "$DATABASE_NAME"
   DATABASE_CREATED=1
 }
 
@@ -333,6 +442,14 @@ compute_tooling_fingerprint() {
   (
     cd "$SOURCE_DIR"
     {
+      for control_file in \
+        "$SCRIPT_DIR/deploy.sh" \
+        "$SCRIPT_DIR/preview-env.mjs" \
+        "$SCRIPT_DIR/render-compose.mjs" \
+        "$SCRIPT_DIR/tooling-artifacts.sh"
+      do
+        sha256_file "$control_file"
+      done
       for file in \
         package.json \
         bun.lock \
@@ -432,8 +549,10 @@ refresh_web_container_if_needed() {
 }
 
 ensure_shared_postgres
+ensure_preview_database_role
 reset_preview_database_for_data_source_change
 ensure_preview_database
+harden_preview_database
 run_tooling_if_needed
 ensure_preview_seats
 start_or_refresh_web() {

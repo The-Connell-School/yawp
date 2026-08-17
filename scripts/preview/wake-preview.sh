@@ -18,6 +18,8 @@ FIXED_NOW_EPOCH="${PREVIEW_NOW_EPOCH:-}"
 NOW_EPOCH=0
 AUTHORIZED_AT_EPOCH="${PREVIEW_WAKE_AUTHORIZED_AT_EPOCH:-}"
 AUTHORIZATION_MAX_QUEUE_SECONDS="${PREVIEW_WAKE_AUTHORIZATION_MAX_QUEUE_SECONDS:-30}"
+AUTHORIZED_ORGANIZATION_ID="${PREVIEW_WAKE_AUTHORIZED_ORGANIZATION_ID:-}"
+REQUIRE_PREVIEW_SEAT_CODE="${PREVIEW_WAKE_REQUIRE_PREVIEW_SEAT_CODE:-}"
 WAKE_LEASE_SECONDS="${PREVIEW_WAKE_LEASE_SECONDS:-120}"
 LEGACY_HEALTH_PORT="${PREVIEW_LEGACY_HEALTH_PORT:-8080}"
 PR_NUMBER="${1:-}"
@@ -74,6 +76,20 @@ is_nonnegative_integer "$AUTHORIZATION_MAX_QUEUE_SECONDS" || {
   echo "PREVIEW_WAKE_AUTHORIZATION_MAX_QUEUE_SECONDS must be a nonnegative integer" >&2
   exit 2
 }
+if [[ -n "$AUTHORIZED_ORGANIZATION_ID" ]] \
+  && [[ ! "$AUTHORIZED_ORGANIZATION_ID" =~ ^[a-z0-9][a-z0-9-]{0,127}$ ]]; then
+  echo "PREVIEW_WAKE_AUTHORIZED_ORGANIZATION_ID is invalid" >&2
+  exit 2
+fi
+case "$REQUIRE_PREVIEW_SEAT_CODE" in
+  true|false|'') ;;
+  *) echo "PREVIEW_WAKE_REQUIRE_PREVIEW_SEAT_CODE must be true or false" >&2; exit 2 ;;
+esac
+if [[ -n "$AUTHORIZED_ORGANIZATION_ID" && -z "$REQUIRE_PREVIEW_SEAT_CODE" ]] \
+  || [[ -z "$AUTHORIZED_ORGANIZATION_ID" && -n "$REQUIRE_PREVIEW_SEAT_CODE" ]]; then
+  echo "Preview wake authorization descriptor is incomplete" >&2
+  exit 2
+fi
 is_nonnegative_integer "$WAKE_LEASE_SECONDS" || {
   echo "PREVIEW_WAKE_LEASE_SECONDS must be a nonnegative integer" >&2
   exit 2
@@ -120,6 +136,25 @@ if [[ -n "$AUTHORIZED_AT_EPOCH" ]] \
   && (( NOW_EPOCH < AUTHORIZED_AT_EPOCH \
     || NOW_EPOCH - AUTHORIZED_AT_EPOCH > AUTHORIZATION_MAX_QUEUE_SECONDS )); then
   echo "Preview authorization expired while queued" >&2
+  exit 12
+fi
+
+revalidate_authorization() {
+  [[ -n "$AUTHORIZED_ORGANIZATION_ID" ]] || return 0
+  local seat_predicate=""
+  if [[ "$REQUIRE_PREVIEW_SEAT_CODE" == "true" ]]; then
+    seat_predicate=' AND "previewSeatCode" IS NOT NULL'
+  fi
+  local current
+  current="$($DOCKER exec preview-postgres psql --no-psqlrc -v ON_ERROR_STOP=1 \
+    -U postgres -d "yawp_pr_${PR_NUMBER}" -tAc \
+    "SELECT EXISTS (SELECT 1 FROM \"Organization\" WHERE \"id\" = '${AUTHORIZED_ORGANIZATION_ID}'${seat_predicate})::int;" \
+    2>/dev/null || true)"
+  [[ "${current//[[:space:]]/}" == "1" ]]
+}
+
+if ! revalidate_authorization; then
+  echo "Preview authorization was revoked while queued" >&2
   exit 12
 fi
 

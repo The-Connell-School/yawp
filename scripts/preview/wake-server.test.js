@@ -69,7 +69,7 @@ describe('preview wake server', () => {
     const wakeScript = path.join(root, 'wake.sh');
     writeFileSync(
       wakeScript,
-      '#!/usr/bin/env bash\nprintf "%s\\n" "$PREVIEW_WAKE_AUTHORIZED_AT_EPOCH"\n',
+      '#!/usr/bin/env bash\nprintf "%s|%s|%s\\n" "$PREVIEW_WAKE_AUTHORIZED_AT_EPOCH" "$PREVIEW_WAKE_AUTHORIZED_ORGANIZATION_ID" "$PREVIEW_WAKE_REQUIRE_PREVIEW_SEAT_CODE"\n',
     );
     const operations = createDefaultWakeOperations({
       root,
@@ -79,11 +79,19 @@ describe('preview wake server', () => {
     });
     const before = Math.floor(Date.now() / 1000);
 
-    const result = await operations.ensureRunning(241);
+    const result = await operations.ensureRunning(241, {
+      authorization: {
+        organizationId: 'runtime-seat-2',
+        requirePreviewSeatCode: true,
+      },
+    });
 
-    const acceptedAt = Number(result.result.trim());
+    const [acceptedAtText, organizationId, requirePreviewSeatCode] = result.result.trim().split('|');
+    const acceptedAt = Number(acceptedAtText);
     expect(acceptedAt).toBeGreaterThanOrEqual(before);
     expect(acceptedAt).toBeLessThanOrEqual(Math.floor(Date.now() / 1000));
+    expect(organizationId).toBe('runtime-seat-2');
+    expect(requirePreviewSeatCode).toBe('true');
   });
 
   test('looks up runtime and revoked seats in only the retained PR database', async () => {

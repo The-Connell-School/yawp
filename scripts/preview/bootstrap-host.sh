@@ -111,7 +111,7 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: ${PREVIEW_DB_PASSWORD:-postgres}
+      POSTGRES_PASSWORD: ${PREVIEW_POSTGRES_ADMIN_PASSWORD:?PREVIEW_POSTGRES_ADMIN_PASSWORD is required}
       POSTGRES_DB: postgres
     volumes:
       - preview-postgres-data:/var/lib/postgresql/data
@@ -128,6 +128,17 @@ YAML
 
 docker compose -p "$POSTGRES_PROJECT" -f "$ROOT/postgres/docker-compose.yml" up -d
 connect_container_to_preview_network preview-postgres
+
+database_role_migration="$ROOT/bootstrap/scripts/preview/migrate-resident-database-roles.sh"
+[[ -f "$database_role_migration" ]] || {
+  echo "Preview database role migration must be synced before bootstrap" >&2
+  exit 1
+}
+chmod +x "$database_role_migration"
+flock -w 900 "$ROOT/preview-host.lock" env \
+  PREVIEW_ROOT="$ROOT" \
+  PREVIEW_POSTGRES_ADMIN_PASSWORD="$PREVIEW_POSTGRES_ADMIN_PASSWORD" \
+  bash "$database_role_migration"
 
 # Remove the legacy entrypoint-wide Basic auth configuration. Access control now belongs
 # to each React Router app so it can render the branded gate while still protecting its

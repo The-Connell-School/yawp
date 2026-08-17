@@ -53,6 +53,10 @@ if [[ "$1" == "ps" && "$*" =~ com.docker.compose.project=yawp-pr-([0-9]+) ]]; th
   grep -qx "$pr" "$PREVIEW_DOCKER_STATE" 2>/dev/null && echo "container-$pr"
   exit 0
 fi
+if [[ "$1" == "exec" && "$*" == *"SELECT EXISTS"* ]]; then
+  [[ "\${PREVIEW_DOCKER_AUTH_CURRENT:-true}" == "true" ]] && printf '1\\n' || printf '0\\n'
+  exit 0
+fi
   if [[ "$1" == "compose" && "$*" =~ -p[[:space:]]+yawp-pr-([0-9]+) ]]; then
   pr="\${BASH_REMATCH[1]}"
   if [[ "$*" == *" stop"* ]]; then
@@ -422,6 +426,27 @@ printf 'OK\\n'
     expect(result.stderr).toContain('authorization expired');
     expect(readFileSync(docker.log, 'utf8')).not.toContain(' stop');
     expect(readFileSync(docker.log, 'utf8')).not.toContain(' start');
+  });
+
+  test('revalidates the authoritative seat after the host lock before any mutation', () => {
+    const root = makeRoot();
+    makePreview(root, 241);
+    const docker = makeDockerStub(root);
+
+    const result = run(root, 241, docker, {
+      PREVIEW_NOW_EPOCH: '1001',
+      PREVIEW_WAKE_AUTHORIZED_AT_EPOCH: '1000',
+      PREVIEW_WAKE_AUTHORIZED_ORGANIZATION_ID: 'revoked-while-queued',
+      PREVIEW_WAKE_REQUIRE_PREVIEW_SEAT_CODE: 'true',
+      PREVIEW_DOCKER_AUTH_CURRENT: 'false',
+    });
+
+    expect(result.status).toBe(12);
+    expect(result.stderr).toContain('authorization was revoked while queued');
+    const log = readFileSync(docker.log, 'utf8');
+    expect(log).toContain('SELECT EXISTS');
+    expect(log).not.toContain(' stop');
+    expect(log).not.toContain(' start');
   });
 
   test('does not restore a displaced preview until a failed target is confirmed stopped', () => {
