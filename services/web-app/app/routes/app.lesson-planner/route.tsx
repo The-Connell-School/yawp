@@ -596,15 +596,20 @@ export default function LessonPlannerRoute() {
               )}
             </div>
             <div className="flex shrink-0 items-center gap-2 md:hidden">
+              {/* "Switch lesson", not "Your lessons": the rail's link to the
+                  full list is called "All your lessons", and one accessible
+                  name containing another makes both ambiguous to anything
+                  selecting by name — a screen reader included. It is also the
+                  truer name, since this picker switches between lessons. */}
               <label
                 className="sr-only"
                 htmlFor="lesson-planner-mobile-history"
               >
-                Your lessons
+                Switch lesson
               </label>
               <select
                 id="lesson-planner-mobile-history"
-                aria-label="Your lessons"
+                aria-label="Switch lesson"
                 value={selectedConversation?.id ?? ''}
                 onChange={(event) => {
                   if (!event.target.value) return;
@@ -616,7 +621,7 @@ export default function LessonPlannerRoute() {
                 }}
                 className="h-9 max-w-32 rounded-md border bg-background px-2 text-sm"
               >
-                <option value="">Your lessons</option>
+                <option value="">Switch lesson</option>
                 {conversations.map((conversation) => (
                   <option key={conversation.id} value={conversation.id}>
                     {conversation.title}

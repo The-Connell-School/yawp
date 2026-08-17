@@ -68,10 +68,10 @@ export function initialRailTab(
 }
 
 /**
- * The toggle says "lesson history", not "your lessons": the mobile picker in
- * the chat header is labelled "Your lessons", and a label that contains
- * another one makes both ambiguous to anything selecting by accessible name —
- * a screen reader included.
+ * Accessible names here have to stay distinct from each other and from the
+ * chat header's "Switch lesson" picker: one name containing another makes both
+ * ambiguous to anything selecting by name, a screen reader included. That is
+ * why the toggle says "lesson history" rather than "your lessons".
  */
 export function LessonRail({
   lessons,

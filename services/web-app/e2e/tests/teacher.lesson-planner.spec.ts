@@ -770,7 +770,7 @@ test.describe('YAWP! Lesson Planner', () => {
       await expect(composer).toBeVisible();
       await expect(send).toBeVisible();
       if (viewport.width === 390) {
-        await expect(page.getByLabel('Your lessons')).toBeVisible();
+        await expect(page.getByLabel('Switch lesson')).toBeVisible();
         await expect(
           page.getByRole('button', { name: 'New lesson' })
         ).toBeVisible();
