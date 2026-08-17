@@ -86,7 +86,12 @@ describe('rubric schema', () => {
 
   test('the starter rubrics are the ones production already grades with', () => {
     const names = STARTER_RUBRICS.map((rubric) => rubric.name);
-    expect(names).toEqual(['thesis-driven-essay', 'daily-pages-engagement']);
+    expect(names).toEqual([
+      'thesis-driven-essay',
+      'daily-pages-engagement',
+      'gba300-international-expansion',
+      'gba300-international-etiquette',
+    ]);
 
     const thesis = STARTER_RUBRICS[0];
     expect(thesis.rubric.categories).toHaveLength(5);
@@ -118,5 +123,37 @@ describe('rubric schema', () => {
       { value: 30, label: 'ALL IN' },
     ]);
     expect(dailyPages.rubric.categories[0].grammarHighlighting).toBe(false);
+
+    const expansion = STARTER_RUBRICS[2];
+    expect(expansion.rubric.categories).toHaveLength(9);
+    expect(expansion.rubric.categories.map((category) => category.weight)).toEqual([
+      0.1,
+      0.1,
+      0.2,
+      0.2,
+      0.05,
+      0.05,
+      0.1,
+      0.1,
+      0.1,
+    ]);
+    expect(expansion.rubric.categories[0].bands?.at(-1)?.max).toBe(10);
+    expect(expansion.rubric.categories[2].bands?.at(-1)?.max).toBe(20);
+
+    const etiquette = STARTER_RUBRICS[3];
+    expect(etiquette.rubric.categories.map((category) => category.key)).toEqual([
+      'introduction',
+      'country_1_its_two_topics',
+      'country_2_its_two_topics',
+      'conclusion',
+    ]);
+    expect(
+      etiquette.rubric.categories.some((category) =>
+        category.key.includes('deduction')
+      )
+    ).toBe(false);
+    expect(etiquette.promptConfig.gradingInstructions).toContain(
+      'never applies a deduction'
+    );
   });
 });
