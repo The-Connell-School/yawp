@@ -324,12 +324,23 @@ function escapeHtml(value) {
 }
 
 function acceptsHtml(request) {
-  return (request.method === 'GET' || request.method === 'HEAD')
-    && String(request.headers.accept || '').toLowerCase().includes('text/html');
+  if (request.method !== 'GET' && request.method !== 'HEAD') return false;
+  return String(request.headers.accept || '')
+    .toLowerCase()
+    .split(',')
+    .some((range) => {
+      const [mediaType, ...parameters] = range.split(';').map((part) => part.trim());
+      if (mediaType !== 'text/html' && mediaType !== 'application/xhtml+xml') return false;
+      const qualityParameter = parameters.find((parameter) => parameter.startsWith('q='));
+      if (!qualityParameter) return true;
+      const quality = Number(qualityParameter.slice(2));
+      return Number.isFinite(quality) && quality > 0 && quality <= 1;
+    });
 }
 
 export function renderSleepingPreviewPage({ pr, uri }) {
   const url = new URL(trustedUri(uri), 'https://preview.invalid');
+  const invalidCode = url.searchParams.has('code');
   const hiddenFields = [...url.searchParams.entries()]
     .filter(([name]) => name !== 'code')
     .map(([name, value]) => (
@@ -337,6 +348,12 @@ export function renderSleepingPreviewPage({ pr, uri }) {
     ))
     .join('\n          ');
   const preservedFields = hiddenFields ? `\n          ${hiddenFields}` : '';
+  const invalidAttributes = invalidCode
+    ? ' aria-invalid="true" aria-describedby="preview-access-error" autofocus'
+    : '';
+  const invalidMessage = invalidCode
+    ? '\n          <p id="preview-access-error" class="error" role="alert">That code did not work. Check the pull request and try again.</p>'
+    : '';
 
   return `<!doctype html>
 <html lang="en">
@@ -456,13 +473,14 @@ export function renderSleepingPreviewPage({ pr, uri }) {
         line-height: 1.55;
         margin: 1.25rem 0 0;
       }
-      code {
-        background: hsl(15 59% 51% / 0.1);
-        border-radius: 0.25rem;
-        color: var(--text);
-        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-        padding: 0.1rem 0.25rem;
-        white-space: nowrap;
+      .error {
+        background: hsl(0 52% 42% / 0.09);
+        border-radius: 0.5rem;
+        color: hsl(0 52% 36%);
+        font-size: 0.875rem;
+        line-height: 1.5;
+        margin: 0;
+        padding: 0.625rem 0.75rem;
       }
       @media (max-width: 30rem) {
         main { align-items: stretch; padding: 0; }
@@ -484,13 +502,13 @@ export function renderSleepingPreviewPage({ pr, uri }) {
         <div class="mark" aria-hidden="true">Y!</div>
         <p class="eyebrow">PR ${pr} preview</p>
         <h1 id="sleeping-preview-title">This preview is sleeping</h1>
-        <p class="description">Enter the access code from the pull request to wake it. Your preview state is preserved; startup can take up to a minute.</p>
+        <p class="description">Use the one-click link in the pull request to wake and authorize this browser automatically. In a fresh, private, or different browser, open that link or enter the access code here once.</p>
         <form method="get" action="${escapeHtml(url.pathname)}">
           <label for="preview-access-code">Access code</label>
-          <input id="preview-access-code" name="code" type="text" autocomplete="one-time-code" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="brave-otter-4193" required autofocus>${preservedFields}
+          <input id="preview-access-code" name="code" type="text" autocomplete="one-time-code" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="brave-otter-4193" required${invalidAttributes}>${invalidMessage}${preservedFields}
           <button type="submit">Wake preview</button>
         </form>
-        <p class="help">A one-click URL is the same preview URL with <code>?code=your-access-code</code>. After one successful visit, this browser can wake any URL for this preview automatically.</p>
+        <p class="help">Your preview state is preserved while it sleeps. Startup can take up to a minute.</p>
       </section>
     </main>
   </body>

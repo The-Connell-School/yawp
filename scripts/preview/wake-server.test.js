@@ -270,7 +270,7 @@ describe('preview wake server', () => {
       ensureRunning: async (pr) => wakes.push(pr),
       recordAccess: async () => {},
     }));
-    const uri = '/app/classes?tab=roster&note=%3Cscript%3E&code=stale-otter-4193';
+    const uri = '/app/classes?tab=roster&note=%3Cscript%3E';
 
     const response = await fetch(`${url}${uri}`, {
       redirect: 'manual',
@@ -291,12 +291,48 @@ describe('preview wake server', () => {
     expect(body).toContain('action="/app/classes"');
     expect(body).toContain('name="tab" value="roster"');
     expect(body).toContain('name="note" value="&lt;script&gt;"');
-    expect(body).not.toContain('name="code" value="stale-otter-4193"');
     expect(body).toContain('id="preview-access-code"');
     expect(body).toContain('name="code"');
     expect(body).toContain('autocomplete="one-time-code"');
+    expect(body).not.toContain('autofocus');
+    expect(body).not.toContain('aria-invalid');
     expect(body).toContain('<button type="submit">Wake preview</button>');
-    expect(body).toContain('same preview URL with <code>?code=your-access-code</code>');
+    expect(body).toContain('one-click link in the pull request');
+    expect(body).toContain('wake and authorize this browser automatically');
+    expect(body).toContain('fresh, private, or different browser');
+    expect(wakes).toEqual([]);
+  });
+
+  test('returns an accessible generic error after an invalid code submission', async () => {
+    const wakes = [];
+    const url = await listen(createRawWakeHandler({
+      domain: 'preview.yawp.school',
+      secret: 'wake-secret',
+      authorizeWake: async () => false,
+      ensureRunning: async (pr) => wakes.push(pr),
+      recordAccess: async () => {},
+    }));
+    const uri = '/app/classes?tab=roster&code=stale-otter-4193';
+
+    const response = await fetch(`${url}${uri}`, {
+      redirect: 'manual',
+      headers: {
+        accept: 'text/html',
+        'x-preview-wake-secret': 'wake-secret',
+        'x-forwarded-host': 'pr-241.preview.yawp.school',
+        'x-forwarded-uri': uri,
+      },
+    });
+    const body = await response.text();
+
+    expect(response.status).toBe(401);
+    expect(body).toContain('id="preview-access-error"');
+    expect(body).toContain('role="alert"');
+    expect(body).toContain('aria-invalid="true"');
+    expect(body).toContain('aria-describedby="preview-access-error"');
+    expect(body).toContain('autofocus');
+    expect(body).toContain('That code did not work. Check the pull request and try again.');
+    expect(body).not.toContain('name="code" value="stale-otter-4193"');
     expect(wakes).toEqual([]);
   });
 
@@ -327,6 +363,32 @@ describe('preview wake server', () => {
       'Open this sleeping preview with its one-click access URL.\n',
     );
     expect(wakes).toEqual([]);
+  });
+
+  test('honors explicit HTML quality rejection during content negotiation', async () => {
+    const url = await listen(createRawWakeHandler({
+      domain: 'preview.yawp.school',
+      secret: 'wake-secret',
+      authorizeWake: async () => false,
+      ensureRunning: async () => ({ result: 'unused' }),
+      recordAccess: async () => {},
+    }));
+    const headers = {
+      'x-preview-wake-secret': 'wake-secret',
+      'x-forwarded-host': 'pr-241.preview.yawp.school',
+    };
+
+    const rejected = await fetch(`${url}/app`, {
+      headers: { ...headers, accept: 'application/json, text/html;q=0' },
+    });
+    const accepted = await fetch(`${url}/app`, {
+      headers: { ...headers, accept: 'application/json, text/html; q=0.5' },
+    });
+
+    expect(rejected.status).toBe(401);
+    expect(rejected.headers.get('content-type')).toContain('text/plain');
+    expect(accepted.status).toBe(401);
+    expect(accepted.headers.get('content-type')).toContain('text/html');
   });
 
   test('rejects requests that do not carry the bootstrap secret', async () => {
