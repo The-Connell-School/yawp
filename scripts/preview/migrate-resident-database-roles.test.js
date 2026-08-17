@@ -11,6 +11,7 @@ test('fails closed when database enumeration fails', () => {
   expect(script).toContain('database_list="$($DOCKER exec');
   expect(script).toContain('Could not enumerate preview databases before role isolation');
   expect(script).not.toContain('done < <($DOCKER exec');
+  expect(script).toContain('^yawp_[A-Za-z0-9_]+$');
 });
 
 test('revokes public connect again after changing each database owner', () => {

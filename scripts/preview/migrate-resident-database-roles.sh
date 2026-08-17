@@ -183,7 +183,8 @@ database_list="$($DOCKER exec "$POSTGRES_CONTAINER" psql --no-psqlrc -v ON_ERROR
   exit 1
 }
 while IFS= read -r database; do
-  [[ "$database" =~ ^yawp_[a-z0-9_]+$ ]] || continue
+  # Sanitized template versions retain ISO timestamp separators such as T/Z.
+  [[ "$database" =~ ^yawp_[A-Za-z0-9_]+$ ]] || continue
   $DOCKER exec "$POSTGRES_CONTAINER" psql --no-psqlrc -v ON_ERROR_STOP=1 -U postgres -d postgres -c \
     "REVOKE CONNECT ON DATABASE \"${database}\" FROM PUBLIC;" >/dev/null
 done <<< "$database_list"

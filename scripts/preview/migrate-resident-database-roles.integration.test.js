@@ -78,6 +78,10 @@ integrationTest('migrates a sleeping resident and denies its role access to anot
   expect(run('docker', ['exec', container, 'createdb', '-U', 'postgres', 'yawp_pr_242']).status).toBe(0);
   expect(run('docker', ['exec', container, 'createdb', '-U', 'postgres', 'yawp_template']).status).toBe(0);
   expect(run('docker', [
+    'exec', container, 'createdb', '-U', 'postgres',
+    'yawp_template_sanitized_20260814T132612Z_9c2135a3',
+  ]).status).toBe(0);
+  expect(run('docker', [
     'exec', container, 'psql', '-U', 'postgres', '-d', 'yawp_pr_241', '-c',
     'CREATE TABLE retained_state (id integer primary key); INSERT INTO retained_state VALUES (1);',
   ]).status).toBe(0);
@@ -126,6 +130,12 @@ integrationTest('migrates a sleeping resident and denies its role access to anot
     'psql', '-h', '127.0.0.1', '-U', 'yawp_pr_241_app', '-d', 'yawp_template', '-Atc', 'SELECT 1',
   ]);
   expect(partialTemplate.status).not.toBe(0);
+  const partialVersionedTemplate = run('docker', [
+    'exec', '-e', `PGPASSWORD=${partialPassword}`, container,
+    'psql', '-h', '127.0.0.1', '-U', 'yawp_pr_241_app',
+    '-d', 'yawp_template_sanitized_20260814T132612Z_9c2135a3', '-Atc', 'SELECT 1',
+  ]);
+  expect(partialVersionedTemplate.status).not.toBe(0);
 
   writeFileSync(path.join(failingPreviewDir, 'docker-compose.yml'), `services:
   web:
@@ -162,6 +172,12 @@ integrationTest('migrates a sleeping resident and denies its role access to anot
     'psql', '-h', '127.0.0.1', '-U', 'yawp_pr_241_app', '-d', 'yawp_template', '-Atc', 'SELECT 1',
   ]);
   expect(template.status).not.toBe(0);
+  const versionedTemplate = run('docker', [
+    'exec', '-e', `PGPASSWORD=${password}`, container,
+    'psql', '-h', '127.0.0.1', '-U', 'yawp_pr_241_app',
+    '-d', 'yawp_template_sanitized_20260814T132612Z_9c2135a3', '-Atc', 'SELECT 1',
+  ]);
+  expect(versionedTemplate.status).not.toBe(0);
 
   const roleFlags = run('docker', [
     'exec', container, 'psql', '-U', 'postgres', '-d', 'postgres', '-Atc',
