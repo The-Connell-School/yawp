@@ -137,6 +137,19 @@ mv -f -- "$postgres_compose_temporary" "$postgres_compose"
 docker compose -p "$POSTGRES_PROJECT" -f "$postgres_compose" up -d
 connect_container_to_preview_network preview-postgres
 
+postgres_ready=false
+for attempt in {1..90}; do
+  if docker exec preview-postgres pg_isready -U postgres -d postgres >/dev/null 2>&1; then
+    postgres_ready=true
+    break
+  fi
+  (( attempt < 90 )) && sleep 1
+done
+[[ "$postgres_ready" == "true" ]] || {
+  echo "Shared preview Postgres did not become ready before resident migration" >&2
+  exit 1
+}
+
 database_role_migration="$ROOT/bootstrap/scripts/preview/migrate-resident-database-roles.sh"
 [[ -f "$database_role_migration" ]] || {
   echo "Preview database role migration must be synced before bootstrap" >&2

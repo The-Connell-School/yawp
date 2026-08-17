@@ -53,6 +53,24 @@ function listTrackedRepoFiles(): string[] {
 }
 
 describe('production deployment contract', () => {
+  test('tracked gitlinks have matching submodule declarations', () => {
+    const gitlinks = execFileSync('git', ['ls-files', '-s'], {
+      cwd: repoRoot,
+      encoding: 'utf8',
+    })
+      .trim()
+      .split('\n')
+      .filter((line) => line.startsWith('160000 '))
+      .map((line) => line.split('\t')[1]);
+    const modules = existsSync(join(repoRoot, '.gitmodules'))
+      ? readRepoFile('.gitmodules')
+      : '';
+
+    for (const gitlink of gitlinks) {
+      expect(modules).toContain(`path = ${gitlink}`);
+    }
+  });
+
   test('container startup does not run Prisma migrations', () => {
     const startScript = readRepoFile('services/web-app/start.sh');
 
@@ -605,6 +623,7 @@ describe('PR preview deployment contract', () => {
   });
 
   test('preview bootstrap migrates resident compose files before rotating the administrator', () => {
+    const ci = readRepoFile('.github/workflows/ci.yml');
     const workflow = readRepoFile('.github/workflows/preview-host-bootstrap.yml');
     const bootstrap = readRepoFile('scripts/preview/bootstrap-host.sh');
     const migration = readRepoFile(
@@ -623,6 +642,8 @@ describe('PR preview deployment contract', () => {
     expect(migration).toContain('wait_for_web_health');
     expect(migration).toContain('rollback_active_migration');
     expect(migration).toContain('ALTER ROLE postgres WITH PASSWORD');
+    expect(ci).toContain("PREVIEW_DATABASE_ROLE_INTEGRATION: '1'");
+    expect(ci).toContain('bun test ./scripts/preview/ --timeout 180000');
   });
 
   test('preview bootstrap installs a secret-protected first-request wake path', () => {
