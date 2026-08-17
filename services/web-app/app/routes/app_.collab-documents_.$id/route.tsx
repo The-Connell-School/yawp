@@ -30,31 +30,39 @@ import { CollabEditor } from './collab-editor';
  * pages look the same without drifting.
  *
  * ─────────────────────────────────────────────────────────────────────────────
- * ⚠️ UNVERIFIED — NOT SHIPPABLE YET
+ * PARTIALLY VERIFIED — NOT SHIPPABLE YET
  *
- * Nothing on this page has ever run. It was written without a browser, a
- * database, or a collaboration provider. It typechecks; that is all that has
- * been demonstrated. Known-missing pieces, each of which is required before this
- * is put in front of a student:
+ * What has actually been run, against a real Postgres and a real browser:
+ * this page renders with live data (title, group label, writer count, presence,
+ * the assignment prompt), the loader's authorization holds, and the token
+ * endpoint mints a correctly document-scoped JWT for a group member.
+ *
+ * What has NOT been run: anything past the provider boundary. No real
+ * collaboration provider was reachable, so two carets in one document, live
+ * text, and the schema-version handshake are all still unproven.
+ *
+ * Known-missing pieces, each required before a student sees this:
  *
  * 1. NO SERVER-SIDE SEEDING. An existing document's HTML is never loaded into the
  *    Y.Doc. A group opening a draft that already has content will see it empty.
  *    Seeding must happen once, server-side, into a confirmed-empty room — doing
  *    it client-side duplicates the content once per participant.
- * 2. NO DUAL-WRITE BACK TO POSTGRES. Nothing here writes `Document.html/text`,
- *    so grading, tutor, search, comments, revisions and submission would all see
- *    a stale document. The provider webhook that closes this loop does not exist
- *    yet. This is the specific omission that got the last attempt reverted, and
- *    it is the next thing to build.
- * 3. NO SUBMISSION PATH. Submitting a group draft is not wired, including the
+ * 2. NO SUBMISSION PATH. Submitting a group draft is not wired, including the
  *    availability fallback the plan calls for.
- * 4. NO COMMENTS, TUTOR, MODULE SESSIONS, OR GRADE PANELS. The solo page has all
+ * 3. NO COMMENTS, TUTOR, MODULE SESSIONS, OR GRADE PANELS. The solo page has all
  *    of these; this page is the editor surface only. Acceptable for the ungraded
  *    small-group pilot, not beyond it.
- * 5. PROVIDER URL IS A GUESS. The Hocuspocus URL in `collab-editor.tsx` is the
- *    documented Tiptap Cloud shape but has not been confirmed against a real app.
- * 6. NO E2E COVERAGE. AGENTS.md requires e2e first for UI. The two-browser test
- *    that actually proves collaboration works needs Postgres and a provider.
+ * 4. PROVIDER URL IS UNCONFIRMED. The Hocuspocus URL in `collab-editor.tsx` is
+ *    the documented Tiptap Cloud shape but has not been checked against a real
+ *    app.
+ * 5. NO E2E SPEC. AGENTS.md requires e2e first for UI. The two-browser test that
+ *    actually proves collaboration works needs a provider.
+ *
+ * Dual-write back to Postgres — previously the worst gap here — now exists in
+ * `api/collab/webhook` and has been verified end to end against a running
+ * server: a signed webhook carrying real Yjs state updates `Document.html`,
+ * `Document.text` and `revision`, journals the write with attribution, and cuts
+ * a `DocumentRevision`.
  * ─────────────────────────────────────────────────────────────────────────────
  */
 export async function loader({ request, params }: LoaderFunctionArgs) {

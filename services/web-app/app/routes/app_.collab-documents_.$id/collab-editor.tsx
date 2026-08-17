@@ -17,9 +17,11 @@ import { Bar } from '../app_.documents_.$id/document-editor/editor-bar';
 import { ErrorBoundary } from '../app_.documents_.$id/document-editor/error-boundry';
 
 /**
- * ⚠️ UNVERIFIED. This component has never been executed in a browser — there was
- * no collaboration provider available when it was written. Treat every line as a
- * proposal. See the header of `route.tsx` for what still has to be proven.
+ * ⚠️ PARTIALLY VERIFIED. This component has been rendered in a real browser
+ * against a real database — the token fetch, the loading and error states, and the
+ * connection timeout below all work. Everything past the provider boundary
+ * (carets, live text, the schema handshake) is still unproven, because no
+ * collaboration provider was reachable. See the header of `route.tsx`.
  *
  * The document schema lives in `~/domain/collaboration/schema.ts` and is shared
  * with the server-side snapshot conversion, so the HTML written into Postgres for
@@ -74,6 +76,16 @@ type Phase =
   | { kind: 'stale-schema' }
   | { kind: 'error'; message: string };
 
+/**
+ * How long to sit on "connecting" before saying something went wrong.
+ *
+ * Found by actually running the page against an unreachable provider: without
+ * this the student stares at "Connecting to your group's draft…" indefinitely and
+ * has no idea whether to wait, reload, or go get their teacher. A stuck spinner
+ * is the worst of the three outcomes, so it becomes an error with an action.
+ */
+const CONNECT_TIMEOUT_MS = 12_000;
+
 export function CollabEditor({
   docId,
   userName,
@@ -99,6 +111,7 @@ export function CollabEditor({
     let cancelled = false;
     let provider: HocuspocusProvider | null = null;
     let ydoc: Y.Doc | null = null;
+    let connectTimer: ReturnType<typeof setTimeout> | null = null;
 
     const connect = async () => {
       // The token is minted per document by our own server, which is where
@@ -145,8 +158,26 @@ export function CollabEditor({
         },
       });
 
+      // Give up waiting eventually rather than spinning forever.
+      connectTimer = setTimeout(() => {
+        if (cancelled) return;
+        setPhase((current) =>
+          current.kind === 'loading'
+            ? {
+                kind: 'error',
+                message:
+                  'Could not connect to your group\u2019s draft. Check your connection and reload — nothing your group has written is lost.',
+              }
+            : current
+        );
+      }, CONNECT_TIMEOUT_MS);
+
       provider.on('synced', () => {
         if (cancelled || !ydoc) return;
+        if (connectTimer) {
+          clearTimeout(connectTimer);
+          connectTimer = null;
+        }
 
         // Schema-version handshake. Read the room's recorded version once the
         // initial state has arrived: a room written by a newer client must not be
@@ -186,6 +217,7 @@ export function CollabEditor({
 
     return () => {
       cancelled = true;
+      if (connectTimer) clearTimeout(connectTimer);
       provider?.destroy();
       ydoc?.destroy();
       setSession(null);
@@ -260,7 +292,11 @@ export function CollabEditor({
           </div>
         ) : null}
         {phase.kind === 'loading' ? (
-          <div className="border-b px-4 py-2 text-sm text-gray-600">
+          <div
+            className="border-b px-4 py-2 text-sm text-gray-600"
+            role="status"
+            aria-live="polite"
+          >
             Connecting to your group's draft…
           </div>
         ) : null}
