@@ -639,6 +639,34 @@ describe('AssignmentCreationSheetContent', () => {
       ).not.toBeNull();
     });
 
+    it('sends the teacher to group setup once the assignment is created', () => {
+      // Closing the sheet was the whole ending, which left a collaborative
+      // assignment looking done while its groups did not exist yet.
+      const went: string[] = [];
+      root = renderSheet({
+        entryPoint: 'assignment-type',
+        fixedAssignmentTypeId: 'type-1',
+        createFetcher: idleFetcher({
+          success: true,
+          nextStep: { url: '/app/class-assignments/ca-1/groups', classCount: 1 },
+        }),
+        navigate: (to: string) => went.push(to),
+      }).root;
+
+      expect(went).toEqual(['/app/class-assignments/ca-1/groups']);
+    });
+
+    it('does not navigate for a solo assignment', () => {
+      const went: string[] = [];
+      root = renderSheet({
+        entryPoint: 'dashboard',
+        createFetcher: idleFetcher({ success: true, nextStep: null }),
+        navigate: (to: string) => went.push(to),
+      }).root;
+
+      expect(went).toEqual([]);
+    });
+
     it('posts collaboration off by default even when the toggle is shown', () => {
       // A hidden false accompanies the checkbox, so an unchecked box still posts
       // a value and the server keeps producing solo assignments.

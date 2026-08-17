@@ -19,6 +19,9 @@ const prisma = {
   apHistoryPromptLibraryEntry: {
     findFirst: mock(),
   },
+  classAssignment: {
+    findMany: mock(),
+  },
 };
 
 const requireUserId = mock();
@@ -130,6 +133,9 @@ describe('api.assignments.create', () => {
     deleteAssignmentPromptAttachment.mockReset().mockResolvedValue(undefined);
     saveAssignmentForReuse.mockReset().mockResolvedValue({ id: 'saved-1' });
     autoArrangeNewAssignment.mockReset().mockResolvedValue({ arranged: 1, failed: 0 });
+    prisma.classAssignment.findMany
+      .mockReset()
+      .mockResolvedValue([{ id: 'ca-1', classId: 'class-1' }]);
     requireUserId.mockReset();
     requireMembership.mockReset();
 
@@ -876,6 +882,55 @@ describe('api.assignments.create', () => {
       await createWithCollaboration({ collaborationGroupMode: 'random' });
 
       expect(autoArrangeNewAssignment).not.toHaveBeenCalled();
+    });
+
+    test('sends the teacher on to group setup, because creating is not the end', async () => {
+      // The sheet used to just close, leaving a collaborative assignment looking
+      // finished while its groups did not exist and no student could see it.
+      enablePilot();
+      createAssignmentDeployedToClasses.mockResolvedValue({ id: 'assignment-1' });
+      prisma.classAssignment.findMany.mockResolvedValue([
+        { id: 'ca-1', classId: 'class-1' },
+      ]);
+
+      const body = await readBody(await createWithCollaboration());
+
+      expect(body.nextStep).toEqual({
+        url: '/app/class-assignments/ca-1/groups',
+        classCount: 1,
+      });
+    });
+
+    test('says plainly that students cannot see it yet', async () => {
+      enablePilot();
+      createAssignmentDeployedToClasses.mockResolvedValue({ id: 'assignment-1' });
+      prisma.classAssignment.findMany.mockResolvedValue([
+        { id: 'ca-1', classId: 'class-1' },
+      ]);
+
+      const body = await readBody(await createWithCollaboration());
+
+      expect(body.message).toMatch(/cannot see it until you open groups/i);
+    });
+
+    test('a solo assignment has no next step and keeps its old message', async () => {
+      enablePilot();
+
+      const body = await readBody(
+        await action({
+          request: requestFor({
+            intent: 'create-assignment',
+            assignmentTypeId: 'at-1',
+            classIds: ['class-1'],
+            prompt: 'Write the essay.',
+            title: 'Essay',
+          }),
+          params: {},
+        } as any)
+      );
+
+      expect(body.nextStep).toBeNull();
+      expect(body.message).toBe('Assignment created and applied to classes.');
     });
 
     test('rejects an invalid group size before touching the database', async () => {

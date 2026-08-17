@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type * as React from 'react';
-import { useFetcher } from 'react-router';
+import { useFetcher, useNavigate } from 'react-router';
 import { FileUp, Loader2 } from 'lucide-react';
 import { Button } from '~/components/ui/button';
 import { Checkbox } from '~/components/ui/checkbox';
@@ -69,6 +69,12 @@ export type AssignmentCreationClassOption = {
 type CreateFetcherData = {
   success?: boolean;
   message?: string;
+  /**
+   * Where the teacher still has to go. Present only for collaborative
+   * assignments, which are not finished at creation: students see nothing until
+   * groups are opened.
+   */
+  nextStep?: { url: string; classCount: number } | null;
 };
 
 type ExtractFetcherData = CreateFetcherData & {
@@ -120,6 +126,8 @@ export type AssignmentCreationSheetProps = {
 type AssignmentCreationSheetContentProps = AssignmentCreationSheetProps & {
   createFetcher: AssignmentCreationFetcher<CreateFetcherData>;
   extractFetcher: AssignmentCreationFetcher<ExtractFetcherData>;
+  /** Injectable so the content is testable without a router. */
+  navigate?: (to: string) => void;
   renderSheet?: boolean;
 };
 
@@ -167,12 +175,14 @@ export function AssignmentCreationSheet({
 }: AssignmentCreationSheetProps) {
   const createFetcher = useFetcher<CreateFetcherData>();
   const extractFetcher = useFetcher<ExtractFetcherData>();
+  const navigate = useNavigate();
 
   return (
     <AssignmentCreationSheetContent
       {...props}
       createFetcher={createFetcher}
       extractFetcher={extractFetcher}
+      navigate={navigate}
     />
   );
 }
@@ -199,6 +209,7 @@ export function AssignmentCreationSheetContent({
   initialGradingAssistantStrictnessLevel = DEFAULT_GRADING_ASSISTANT_STRICTNESS_LEVEL,
   createFetcher,
   extractFetcher,
+  navigate = () => {},
   renderSheet = true,
 }: AssignmentCreationSheetContentProps) {
   const [selectedAssignmentTypeId, setSelectedAssignmentTypeId] = useState(
@@ -335,10 +346,14 @@ export function AssignmentCreationSheetContent({
   ]);
 
   useEffect(() => {
-    if (createFetcher.state === 'idle' && createFetcher.data?.success) {
-      onOpenChange(false);
-    }
-  }, [createFetcher.state, createFetcher.data, onOpenChange]);
+    if (createFetcher.state !== 'idle' || !createFetcher.data?.success) return;
+    onOpenChange(false);
+    // Closing the sheet used to be the whole ending, which left a collaborative
+    // assignment looking done while its groups did not exist yet. `navigate` is
+    // injectable so this is testable without a router.
+    const nextStep = createFetcher.data.nextStep;
+    if (nextStep) navigate(nextStep.url);
+  }, [createFetcher.state, createFetcher.data, onOpenChange, navigate]);
 
   useEffect(() => {
     if (!extractFetcher.data?.success) return;

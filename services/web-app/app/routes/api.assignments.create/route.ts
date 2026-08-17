@@ -20,6 +20,7 @@ import {
 } from '~/domain/assignments/saved-assignments.server';
 import { isAssignmentTypeAvailableForEveryScope } from '~/utils/assignment-type-access.server';
 import { autoArrangeNewAssignment } from '~/domain/collaboration/auto-arrange.server';
+import { groupSetupNextStep } from '~/domain/collaboration/next-step';
 import { createAssignmentDeployedToClasses } from '~/utils/assignment-deployment.server';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
@@ -262,6 +263,8 @@ export async function action({ request }: ActionFunctionArgs) {
     }
   }
 
+  let nextStep: ReturnType<typeof groupSetupNextStep> = null;
+
   try {
     const createdAssignment = await createAssignmentDeployedToClasses({
       data: {
@@ -291,6 +294,23 @@ export async function action({ request }: ActionFunctionArgs) {
         assignmentId: createdAssignment.id,
         mode: collaboration.collaborationGroupMode,
         groupSize: collaboration.collaborationGroupSize,
+      });
+
+      // Creating is not the end of the job: students see nothing until groups
+      // are opened, so the teacher is sent to finish it rather than left on
+      // whatever page they started from with no sign anything is outstanding.
+      const deployments = await prisma.classAssignment.findMany({
+        where: { assignmentId: createdAssignment.id },
+        orderBy: { createdAt: 'asc' },
+        select: { id: true, classId: true },
+      });
+      nextStep = groupSetupNextStep({
+        assignmentId: createdAssignment.id,
+        collaborationEnabled: true,
+        deployments: deployments.map((deployment) => ({
+          classAssignmentId: deployment.id,
+          classId: deployment.classId,
+        })),
       });
     }
   } catch (error) {
@@ -333,12 +353,16 @@ export async function action({ request }: ActionFunctionArgs) {
         success: true,
         message:
           'Assignment created and applied to classes, but it could not be saved for reuse.',
+        nextStep,
       });
     }
   }
 
   return dataResponse({
     success: true,
-    message: 'Assignment created and applied to classes.',
+    message: nextStep
+      ? 'Assignment created. Students cannot see it until you open groups.'
+      : 'Assignment created and applied to classes.',
+    nextStep,
   });
 }
