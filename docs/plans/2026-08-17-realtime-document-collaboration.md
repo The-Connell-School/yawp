@@ -1,10 +1,92 @@
 # Real-time document collaboration — feature sketch
 
 **Date:** 2026-08-17
-**Status:** Sketch / brainstorm. No implementation. Open questions listed at the bottom.
+**Status:** Partly implemented — see PR #267. Product decisions recorded below;
+one still open (whether an individual grade may exceed the group grade).
 
 Letting multiple people (students or teachers) write in the same document at the
 same time.
+
+## Decisions — 2026-08-17
+
+Answers from Kevin. These supersede anything below that contradicts them.
+
+| # | Question | Answer |
+| --- | --- | --- |
+| 1 | Buy a collaboration provider? | **No.** Build with what we already have — no new SaaS subscription. |
+| 2 | May student writing leave our AWS account? | **Probably not** — Bryant decides, but plan for no. |
+| 3 | Can any group member hit submit? | **Yes**, any one of them submits for the group. |
+| 4 | Can an individual grade exceed the group grade? | **Open.** Still thinking. |
+| 5 | Shared writing tutor, or one each? | **One each.** |
+| 6 | Can teachers type in a student draft? | **No — comment only.** |
+| 7 | Share an existing draft as a copy, or move the original? | **Copy.** Original stays private. |
+| 8 | Students share freely, or teacher approves? | **Both** must be possible. |
+
+### What 1 and 2 change: no provider, we host the transport
+
+Together these rule out Tiptap Collaboration Cloud and every other hosted
+provider — one on cost, the other on data residency. The remaining option is the
+one this doc previously withdrew: **Yjs updates over ordinary HTTP, served by the
+existing app.**
+
+It is a downgrade in exactly one dimension and an upgrade in several:
+
+- **Latency.** Polling gives roughly 600ms–1s before a partner's text appears,
+  against ~100ms for a hosted WebSocket service. Server-sent events might reach
+  200–350ms and are worth one day of investigation. Note what is *not* affected:
+  a student's own typing stays instant regardless, because Yjs applies edits
+  locally before the network is involved. Cursors can also stay lively on a faster
+  channel than text.
+- **Cost.** Zero. No subscription, no new infrastructure.
+- **Data residency.** Student writing never leaves the AWS account, which
+  answers question 2 by construction rather than by contract.
+- **Verifiability.** This is the significant one. Every piece that was unverifiable
+  because it depended on a third party becomes ordinary code we own and can test:
+  the seeding transport, the room storage, the token exchange.
+- **Portability.** Because it is still Yjs underneath, swapping to self-hosted
+  Hocuspocus later — after the App Runner migration lands and WebSockets become
+  possible — is a transport change, not a rewrite.
+
+The earlier objection to this approach was that App Runner is in maintenance mode
+and not worth investing in. That argument is about platform longevity, not cost,
+and it is answered by the portability point: the Yjs layer survives the migration
+even if the HTTP transport is later replaced.
+
+**Code this removes rather than adds.** The provider integration built so far
+becomes simpler, not more complex:
+
+- the inbound webhook, its signature verification and replay handling — gone;
+  the endpoint that receives updates does the dual-write directly
+- the signed JWT handed to a third party — gone; requests carry the existing
+  session cookie
+- `providerRoomClient`, the one genuinely unverified piece of HTTP — replaced by
+  a Postgres table of Yjs updates, which is testable
+
+**New work it adds:** an append-only updates table with a sequence cursor, an
+endpoint to accept batched updates, an endpoint to stream or poll them back, and
+periodic compaction so the table does not grow without bound.
+
+### What 3, 5, 6, 7 and 8 change
+
+- **3 — any member submits.** Group submission is a real feature now rather than
+  an open question. Still needs the availability fallback described below, and
+  still sits behind the two-tier grading model.
+- **5 — one tutor conversation each.** This is the larger of the two options
+  considered: `AssignmentModuleSession` is keyed to `documentId` with no
+  `membershipId`, so it needs the column, a backfill from `Document.membershipId`,
+  and a uniqueness change to `[documentId, membershipId, assignmentModuleId]`.
+  Until that lands, collaboration and the tutor must not both be on for the same
+  assignment.
+- **6 — teachers comment only.** Already how the collaborative side is built:
+  `documentAuthorWhere` excludes teachers, and the token exchange grants them
+  read-only. No change needed, and the exclusion is now a requirement rather than
+  a judgement call. Note this is about *shared* drafts; the solo editor's existing
+  behaviour is untouched.
+- **7 — copy, not move.** Already built and verified. The tradeoff stands: later
+  edits to the private original do not appear in the shared copy.
+- **8 — both sharing modes.** New work: a per-organization (or per-class) setting
+  for whether a student's share needs teacher approval, plus a pending state and
+  an approval queue. Today sharing is immediate with no approval path.
 
 ## Product shape
 
