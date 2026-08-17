@@ -1,6 +1,7 @@
 import { invariant } from '@epic-web/invariant';
 import {
   Form,
+  Link,
   data as dataResponse,
   useLoaderData,
   useNavigation,
@@ -128,6 +129,8 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
   return dataResponse({
     classAssignmentId: classAssignment.id,
+    assignmentId: classAssignment.assignment.id,
+    classId: classAssignment.class.id,
     assignmentTitle: classAssignment.assignment.title,
     className: classAssignment.class.title,
     period: classAssignment.class.period,
@@ -254,6 +257,16 @@ export default function GroupsRoute() {
 
   return (
     <div className="mx-auto w-full max-w-4xl p-6">
+      <div className="mb-4">
+        <Button asChild variant="ghost" size="sm">
+          <Link
+            to={`/app/assignments/${data.assignmentId}?classId=${data.classId}`}
+            className="w-fit"
+          >
+            ← Back to assignment
+          </Link>
+        </Button>
+      </div>
       <header className="mb-6">
         <h1 className="text-xl font-semibold">
           Groups · {data.assignmentTitle ?? 'Collaborative draft'}

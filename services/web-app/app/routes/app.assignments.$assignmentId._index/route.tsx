@@ -7,7 +7,7 @@ import {
   useNavigate,
   useSearchParams,
 } from 'react-router';
-import { Copy, Pencil } from 'lucide-react';
+import { Copy, Pencil, UsersIcon } from 'lucide-react';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { Button } from '~/components/ui/button';
@@ -103,6 +103,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           submitForGrade: true,
           pointValue: true,
           tutorEnabled: true,
+          collaborationEnabled: true,
           gradingAssistantStrictnessLevel: true,
           assignmentTypeId: true,
           assignmentType: {
@@ -111,6 +112,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         },
       },
       _count: { select: { documents: true } },
+      documentGroups: { select: { openedAt: true } },
     },
     orderBy: [{ createdAt: 'asc' }],
   });
@@ -185,6 +187,17 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     classInsightsEnabled,
     assignmentTypes,
     activeClassId: active.classId,
+    // Group setup is per class, because the roster is: one assignment pushed to
+    // three sections needs three seating charts. `groupsOpened` decides whether
+    // the button offers to set them up or to review what is already running.
+    collaboration: active.assignment.collaborationEnabled
+      ? {
+          groupCount: active.documentGroups.length,
+          groupsOpened: active.documentGroups.some(
+            (group) => group.openedAt !== null
+          ),
+        }
+      : null,
     classes: deployments.map((deployment) => ({
       id: deployment.classId,
       name: formatClassLabel(deployment.class),
@@ -243,7 +256,7 @@ export default function AssignmentDetailRoute() {
     );
   }
 
-  const { assignment, activeClassId, classes } = data;
+  const { assignment, activeClassId, classes, collaboration } = data;
   const backHref = `/app/my-classes/${activeClassId}?tab=assignments`;
 
   /**
@@ -359,6 +372,21 @@ export default function AssignmentDetailRoute() {
                       ))}
                     </SelectContent>
                   </Select>
+                ) : null}
+                {collaboration ? (
+                  <Button asChild variant="outline">
+                    <Link
+                      to={`/app/class-assignments/${assignment.classAssignmentId}/groups`}
+                      data-testid="assignment-detail-groups-link"
+                    >
+                      <UsersIcon className="mr-2 h-4 w-4" />
+                      {collaboration.groupsOpened
+                        ? 'Groups'
+                        : collaboration.groupCount > 0
+                          ? 'Finish setting up groups'
+                          : 'Set up groups'}
+                    </Link>
+                  </Button>
                 ) : null}
                 {canEdit ? (
                   <>
