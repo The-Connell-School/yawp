@@ -25,6 +25,9 @@ mock.module('~/domain/collaboration/share.server', () => ({
 mock.module('~/domain/collaboration/seed.server', () => ({
   seedGroupRoomIfEmpty,
 }));
+mock.module('~/domain/collaboration/room-store.server', () => ({
+  localRoomClient: () => ({ getState: async () => null, putState: async () => {} }),
+}));
 mock.module('~/utils/toast.server', () => ({ redirectWithToast }));
 
 const { action, loader } = await import('./route');
@@ -175,7 +178,9 @@ describe('app.shared-drafts.new', () => {
         sourceDocumentId: 'doc-source',
         inviteMembershipIds: ['member-mate'],
       });
-      expect(seedGroupRoomIfEmpty).toHaveBeenCalledWith({ groupId: 'group-2' });
+      expect(seedGroupRoomIfEmpty).toHaveBeenCalledWith(
+        expect.objectContaining({ groupId: 'group-2' })
+      );
       expect(result.to).toBe('/app/collab-documents/doc-copy');
       expect(result.options.type).toBe('success');
     });

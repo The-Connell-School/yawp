@@ -14,6 +14,7 @@ import {
   listShareableClassmates,
   shareDocumentCopy,
 } from '~/domain/collaboration/share.server';
+import { localRoomClient } from '~/domain/collaboration/room-store.server';
 import { seedGroupRoomIfEmpty } from '~/domain/collaboration/seed.server';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
@@ -137,7 +138,10 @@ export async function action({ request }: ActionFunctionArgs) {
       // usable but empty, and `seededAt` unstamped so it can be retried — so the
       // student is told plainly rather than silently handed a blank page.
       try {
-        await seedGroupRoomIfEmpty({ groupId: shared.groupId });
+        await seedGroupRoomIfEmpty({
+          groupId: shared.groupId,
+          client: localRoomClient(),
+        });
       } catch {
         return redirectWithToast(
           `/app/collab-documents/${shared.documentId}`,

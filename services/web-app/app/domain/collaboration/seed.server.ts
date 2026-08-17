@@ -4,73 +4,21 @@ import { decideSeed, type SeedDecision } from './seed';
 /**
  * Seeding a collaboration room from the document's existing HTML.
  *
- * The provider is reached through a small injectable client so the orchestration —
- * the guards, the ordering, the failure handling — is testable without a network,
- * and only the HTTP transport itself is unverified.
+ * The room is reached through an injectable client. With the transport now
+ * self-hosted, the only implementation is `localRoomClient` in
+ * `room-store.server.ts`, which reads and writes our own update log — so this is
+ * ordinary testable code rather than the unverified provider HTTP it replaced.
+ * The seam stays because it is also what lets the tests drive it.
  */
 
 export type CollabRoomClient = {
-  /** Encoded Yjs state for a room, or null if the room does not exist yet. */
+  /** Encoded Yjs state for a room, or null if the room holds nothing yet. */
   getState: (documentName: string) => Promise<Uint8Array | null>;
   /** Applies an encoded Yjs update to a room. */
   putState: (documentName: string, update: Uint8Array) => Promise<void>;
 };
 
 export class SeedError extends Error {}
-
-/**
- * The real provider client.
- *
- * ⚠️ UNVERIFIED TRANSPORT. The paths and the `format=yjs` parameter follow Tiptap
- * Collaboration's documented REST shape but have not been exercised against a live
- * app. If seeding misbehaves, check this first — the orchestration below is
- * covered by tests, this function is not.
- */
-export function providerRoomClient({
-  appId = process.env.TIPTAP_COLLAB_APP_ID,
-  secret = process.env.TIPTAP_COLLAB_SECRET,
-}: { appId?: string; secret?: string } = {}): CollabRoomClient {
-  if (!appId || !secret) {
-    throw new SeedError('Collaboration is not configured on this server.');
-  }
-
-  const base = `https://${appId}.collab.tiptap.cloud/api/documents`;
-  const headers = { Authorization: secret };
-
-  return {
-    async getState(documentName) {
-      const response = await fetch(
-        `${base}/${encodeURIComponent(documentName)}?format=yjs`,
-        { headers }
-      );
-      // A room that has never been opened does not exist yet, which is the
-      // emptiest a room can be.
-      if (response.status === 404) return null;
-      if (!response.ok) {
-        throw new SeedError(
-          `Could not read the collaboration room (${response.status}).`
-        );
-      }
-      return new Uint8Array(await response.arrayBuffer());
-    },
-
-    async putState(documentName, update) {
-      const response = await fetch(
-        `${base}/${encodeURIComponent(documentName)}?format=yjs`,
-        {
-          method: 'PATCH',
-          headers: { ...headers, 'content-type': 'application/octet-stream' },
-          body: update as unknown as BodyInit,
-        }
-      );
-      if (!response.ok) {
-        throw new SeedError(
-          `Could not seed the collaboration room (${response.status}).`
-        );
-      }
-    },
-  };
-}
 
 export type SeedGroupResult =
   | { status: 'seeded' }
@@ -93,7 +41,8 @@ export async function seedGroupRoomIfEmpty({
   client,
 }: {
   groupId: string;
-  client?: CollabRoomClient;
+  /** Required: the caller chooses the store, so there is no hidden default. */
+  client: CollabRoomClient;
 }): Promise<SeedGroupResult> {
   const group = await prisma.documentGroup.findUnique({
     where: { id: groupId },
@@ -113,8 +62,7 @@ export async function seedGroupRoomIfEmpty({
     return { status: 'skipped', reason: 'already-seeded' as never };
   }
 
-  const rooms = client ?? providerRoomClient();
-  const roomState = await rooms.getState(group.documentId);
+  const roomState = await client.getState(group.documentId);
 
   const decision = decideSeed({
     html: group.document.html,
@@ -135,7 +83,7 @@ export async function seedGroupRoomIfEmpty({
     return { status: 'skipped', reason: decision.reason as never };
   }
 
-  await rooms.putState(group.documentId, decision.update);
+  await client.putState(group.documentId, decision.update);
 
   // Only now, once the provider has accepted it.
   await prisma.documentGroup.update({

@@ -4,7 +4,6 @@ import {
   useLoaderData,
   type LoaderFunctionArgs,
 } from 'react-router';
-import { useState } from 'react';
 import { collaborationRoomWhere } from '~/domain/collaboration/room.server';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
@@ -13,7 +12,7 @@ import {
   documentReadWhere,
   getIsPlatformAdmin,
 } from '~/utils/document-access.server';
-import { CollabEditor } from './collab-editor';
+import { CollabEditor, colorForMembership } from './collab-editor';
 
 /**
  * The collaborative draft page: `/app/collab-documents/:id`.
@@ -140,11 +139,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 }
 
 export default function CollabDocumentRoute() {
-  const { doc, membershipId, userName, canWrite } =
-    useLoaderData<typeof loader>();
-  const [peers, setPeers] = useState<
-    { clientId: number; name: string; color: string }[]
-  >([]);
+  const { doc, canWrite } = useLoaderData<typeof loader>();
 
   const groupMemberCount = doc.group?.members.length ?? 0;
 
@@ -162,31 +157,34 @@ export default function CollabDocumentRoute() {
           </p>
         </div>
 
-        {/* Presence. Shows who else is in the draft right now, in the same
-            colors their carets use. */}
-        <div className="flex items-center gap-2">
-          {peers.length === 0 ? (
-            <span className="text-xs text-gray-500">No one else here yet</span>
-          ) : (
-            <ul className="flex items-center gap-1" aria-label="People editing now">
-              {peers.map((peer) => (
-                <li
-                  key={peer.clientId}
-                  title={peer.name}
-                  aria-label={peer.name}
-                  className="grid h-6 w-6 place-items-center rounded-full text-[10px] font-medium text-white"
-                  style={{ backgroundColor: peer.color }}
-                >
-                  {peer.name
-                    .split(/\s+/)
-                    .slice(0, 2)
-                    .map((part) => part[0]?.toUpperCase() ?? '')
-                    .join('')}
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
+        {/* The group's roster, in the colors their carets will use once awareness
+            is wired. Not live presence yet: this is who belongs to the draft, not
+            who is looking at it this second. */}
+        <ul
+          className="flex items-center gap-1"
+          aria-label="Writers in this draft"
+        >
+          {(doc.group?.members ?? []).map((member) => {
+            const name = member.membership.user.name?.trim() || 'Student';
+            return (
+              <li
+                key={member.membershipId}
+                title={name}
+                aria-label={name}
+                className="grid h-6 w-6 place-items-center rounded-full text-[10px] font-medium text-white"
+                style={{
+                  backgroundColor: colorForMembership(member.membershipId),
+                }}
+              >
+                {name
+                  .split(/\s+/)
+                  .slice(0, 2)
+                  .map((part) => part[0]?.toUpperCase() ?? '')
+                  .join('')}
+              </li>
+            );
+          })}
+        </ul>
       </header>
 
       {doc.assignment?.prompt ? (
@@ -196,13 +194,7 @@ export default function CollabDocumentRoute() {
       ) : null}
 
       <div className="min-h-0 grow">
-        <CollabEditor
-          docId={doc.id}
-          userName={userName}
-          membershipId={membershipId}
-          canWrite={canWrite}
-          onPeersChange={setPeers}
-        />
+        <CollabEditor docId={doc.id} canWrite={canWrite} />
       </div>
     </div>
   );

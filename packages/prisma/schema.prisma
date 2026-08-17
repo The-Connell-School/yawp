@@ -191,6 +191,35 @@ model DocumentGroup {
 /// draft they wrote it in, and the row records that they were once a member — but
 /// `removedAt` being set is what withdraws their write access, so every authorization
 /// predicate must filter on `removedAt: null`.
+/// One Yjs update in a collaborative document's append-only log.
+///
+/// This is the room: rather than paying a hosted provider to hold live document
+/// state, the state lives here and clients exchange updates over ordinary HTTP.
+/// Yjs updates are commutative and idempotent, which is what makes that safe —
+/// late, duplicated or out-of-order delivery cannot corrupt the document, so a
+/// polling transport is correct rather than merely tolerable.
+///
+/// `seq` is a single global autoincrement rather than a per-document counter.
+/// Per-document ordering is still correct because each document's rows are a
+/// subset of one monotonic sequence, and it removes the read-then-write race that
+/// allocating MAX(seq)+1 per document would introduce.
+model DocumentCollabUpdate {
+  seq          Int      @id @default(autoincrement())
+  createdAt    DateTime @default(now()) @db.Timestamptz(6)
+  documentId   String
+  document     Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  /// Encoded Yjs update bytes.
+  update       Bytes
+  /// Which member's client produced it. Kept for the contribution breakdown.
+  membershipId String?
+  /// True for a compaction row, which merges every update up to its own seq.
+  /// Safe for clients holding an older cursor: they receive the merged row and
+  /// applying it twice is a no-op.
+  isCompaction Boolean  @default(false)
+
+  @@index([documentId, seq])
+}
+
 model DocumentGroupMember {
   id           String        @id @default(cuid())
   createdAt    DateTime      @default(now()) @db.Timestamptz(6)
@@ -459,6 +488,7 @@ model Document {
   submissions              Submission[]
   /// Set only on a collaborative draft: the group whose shared document this is.
   group                    DocumentGroup?
+  collabUpdates            DocumentCollabUpdate[]
 
   @@index([assignmentId])
   @@index([classAssignmentId])
