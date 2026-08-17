@@ -4,10 +4,16 @@ import {
   Link,
   data as dataResponse,
   useLoaderData,
+  type ActionFunctionArgs,
   type LoaderFunctionArgs,
 } from 'react-router';
 import { Button } from '~/components/ui/button';
 import { buildContributionBreakdown } from '~/domain/collaboration/contribution.server';
+import {
+  MemberGradeError,
+  readMemberGrades,
+  recordMemberGrade,
+} from '~/domain/collaboration/member-grades.server';
 import { collaborationRoomWhere } from '~/domain/collaboration/room.server';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
@@ -60,6 +66,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       assignment: { select: { id: true, title: true } },
       group: {
         select: {
+          id: true,
           label: true,
           classAssignmentId: true,
           classAssignment: { select: { classId: true } },
@@ -92,13 +99,15 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       member.membership.user.name?.trim() || member.membership.user.email,
   }));
 
-  const breakdown = await buildContributionBreakdown({
-    documentId: doc.id,
-    roster,
-  });
+  const [breakdown, grades] = await Promise.all([
+    buildContributionBreakdown({ documentId: doc.id, roster }),
+    doc.group ? readMemberGrades({ groupId: doc.group.id }) : new Map(),
+  ]);
 
   return dataResponse({
     documentId: doc.id,
+    groupId: doc.group?.id ?? null,
+    grades: Object.fromEntries(grades),
     title: doc.assignment?.title ?? doc.title ?? 'Shared draft',
     groupLabel: doc.group?.label ?? 'Group',
     backTo: doc.group?.classAssignmentId
@@ -106,6 +115,77 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       : '/app',
     breakdown,
   });
+}
+
+/**
+ * Recording one student's individual grade.
+ *
+ * A fetcher submission per student, so grading one does not disturb a comment
+ * being typed for another, and so nothing navigates mid-marking.
+ */
+export async function action({ request, params }: ActionFunctionArgs) {
+  invariant(params.documentId, 'No document id provided');
+
+  const userId = await requireUserId(request);
+  const profile = await requireMembership(request, userId);
+  const isAdmin = await getIsPlatformAdmin(userId);
+
+  if (profile.role !== 'TEACHER' && !isAdmin) {
+    return dataResponse(
+      { success: false, message: 'Only teachers can grade.' },
+      { status: 403 }
+    );
+  }
+
+  // Re-derive the group from the document under the same scope the loader uses,
+  // rather than trusting a group id posted from the form.
+  const doc = await prisma.document.findFirst({
+    where: {
+      id: params.documentId,
+      ...collaborationRoomWhere(),
+      AND: [documentReadWhere({ profileId: profile.id, isAdmin })],
+    },
+    select: { group: { select: { id: true } } },
+  });
+
+  if (!doc?.group) {
+    return dataResponse(
+      { success: false, message: 'Draft not found.' },
+      { status: 404 }
+    );
+  }
+
+  const formData = await request.formData();
+  const membershipId = formData.get('membershipId')?.toString();
+  if (!membershipId) {
+    return dataResponse(
+      { success: false, message: 'No student to grade.' },
+      { status: 400 }
+    );
+  }
+
+  const releaseRaw = formData.get('release')?.toString();
+
+  try {
+    await recordMemberGrade({
+      groupId: doc.group.id,
+      membershipId,
+      gradedByMembershipId: profile.id,
+      score: formData.get('score')?.toString() ?? null,
+      feedback: formData.get('feedback')?.toString() ?? null,
+      release: releaseRaw === undefined ? undefined : releaseRaw === 'true',
+    });
+  } catch (error) {
+    if (error instanceof MemberGradeError) {
+      return dataResponse(
+        { success: false, message: error.message },
+        { status: 400 }
+      );
+    }
+    throw error;
+  }
+
+  return dataResponse({ success: true, membershipId });
 }
 
 export default function GroupDraftRoute() {
@@ -131,7 +211,7 @@ export default function GroupDraftRoute() {
           </p>
         </header>
 
-        <ContributionPanel breakdown={data.breakdown} />
+        <ContributionPanel breakdown={data.breakdown} grades={data.grades} />
       </div>
     </div>
   );

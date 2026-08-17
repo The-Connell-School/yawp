@@ -159,31 +159,32 @@ model ClassAssignment {
 /// chart, so reshuffling is free; after it, the group owns a draft that already contains
 /// student writing and moving people between groups has a real cost.
 model DocumentGroup {
-  id                String                @id @default(cuid())
-  createdAt         DateTime              @default(now()) @db.Timestamptz(6)
-  updatedAt         DateTime              @default(now()) @updatedAt @db.Timestamptz(6)
+  id                String                     @id @default(cuid())
+  createdAt         DateTime                   @default(now()) @db.Timestamptz(6)
+  updatedAt         DateTime                   @default(now()) @updatedAt @db.Timestamptz(6)
   /// Which road produced this group: `assignment` for teacher-arranged group
   /// work, `student-share` for a student who started their own shared draft.
   /// Both converge on the same document, membership and authorization machinery;
   /// the difference is only who may create one and which gate permits it.
-  kind              String                @default("assignment")
+  kind              String                     @default("assignment")
   /// Null for a student share, which belongs to no class assignment. Postgres
   /// treats NULLs as distinct in a unique index, so many student-share groups
   /// can coexist at ordinal 0.
   classAssignmentId String?
-  classAssignment   ClassAssignment?      @relation(fields: [classAssignmentId], references: [id], onDelete: Cascade)
+  classAssignment   ClassAssignment?           @relation(fields: [classAssignmentId], references: [id], onDelete: Cascade)
   label             String
   ordinal           Int
   /// Set when the group's draft becomes reachable: when a teacher opens groups,
   /// or immediately for a student share. Null means still editable.
-  openedAt          DateTime?             @db.Timestamptz(6)
+  openedAt          DateTime?                  @db.Timestamptz(6)
   /// Set once the room has been seeded from the document's existing HTML.
   /// Durable guard against seeding twice, which would duplicate the content.
-  seededAt          DateTime?             @db.Timestamptz(6)
+  seededAt          DateTime?                  @db.Timestamptz(6)
   /// The group's shared draft, provisioned when groups are opened.
-  documentId        String?               @unique
-  document          Document?             @relation(fields: [documentId], references: [id], onDelete: SetNull)
+  documentId        String?                    @unique
+  document          Document?                  @relation(fields: [documentId], references: [id], onDelete: SetNull)
   members           DocumentGroupMember[]
+  memberGrades      DocumentGroupMemberGrade[]
 
   @@unique([classAssignmentId, ordinal])
   @@index([kind])
@@ -262,6 +263,45 @@ model DocumentCollabAuthor {
 
   @@unique([documentId, clientId])
   @@index([documentId, membershipId])
+}
+
+/// One student's individual grade on a shared draft.
+///
+/// The group's own grade lives on `Submission` — one document, one submission,
+/// one grade for the work. This is the per-student overlay the requirement asks
+/// for: the group gets a grade, and each member also gets one for what they
+/// contributed.
+///
+/// Keyed to the group rather than to a Submission on purpose. Submitting a group
+/// draft is not wired yet, so hanging member grades off a Submission would mean
+/// they could not be entered at all. It also means a teacher can grade
+/// contributions on ungraded group work, which is how the pilot is meant to run.
+///
+/// `score` is free text, matching `Submission.score`, so a teacher can write 18/20
+/// or A- or "meets expectations" rather than being forced into one scheme.
+///
+/// Nothing computes this. Character counts and shares are evidence a teacher
+/// weighs; every automatic contribution metric fails on ordinary group-work
+/// patterns, so the number here is always one a person chose.
+model DocumentGroupMemberGrade {
+  id                   String         @id @default(cuid())
+  createdAt            DateTime       @default(now()) @db.Timestamptz(6)
+  updatedAt            DateTime       @default(now()) @updatedAt @db.Timestamptz(6)
+  groupId              String
+  group                DocumentGroup  @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  membershipId         String
+  membership           OrgMembership  @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  score                String?
+  feedback             String?
+  /// Who recorded it. Kept so a co-taught class can tell who graded what.
+  gradedByMembershipId String?
+  gradedBy             OrgMembership? @relation("DocumentGroupMemberGradedBy", fields: [gradedByMembershipId], references: [id], onDelete: SetNull)
+  /// Set when the student may see it. Null means the teacher is still working, so
+  /// nothing leaks mid-grading — the same guard Submission.releasedAt provides.
+  releasedAt           DateTime?      @db.Timestamptz(6)
+
+  @@unique([groupId, membershipId])
+  @@index([membershipId])
 }
 
 model DocumentGroupMember {
@@ -815,6 +855,8 @@ model OrgMembership {
   savedAssignments                 SavedAssignment[]
   documentGroupMemberships         DocumentGroupMember[]
   documentCollabAuthorships        DocumentCollabAuthor[]
+  documentGroupMemberGrades        DocumentGroupMemberGrade[]
+  documentGroupMemberGradesGiven   DocumentGroupMemberGrade[] @relation("DocumentGroupMemberGradedBy")
 
   @@unique([userId, organizationId])
   @@unique([id, organizationId])

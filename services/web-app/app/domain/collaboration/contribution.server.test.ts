@@ -167,15 +167,80 @@ describe('buildContributionBreakdown', () => {
     });
   });
 
-  test('never reports a percentage of the document', async () => {
-    // Deliberate: a percentage reads as a grade, and this is evidence a teacher
-    // weighs rather than a score. The design note is in contribution.ts.
+  test('reports each student’s share of the draft’s current characters', async () => {
+    // Asked for explicitly. It is a proportion of text, which is not the same as
+    // a proportion of the work — the panel says so, and nothing computes a grade
+    // from it.
     const result = await build();
 
-    const serialized = JSON.stringify(result);
-    expect(serialized).not.toContain('percent');
-    expect(serialized).not.toContain('share');
-    expect(serialized).not.toContain('score');
+    const maya = result.members.find((m) => m.membershipId === MAYA);
+    const devon = result.members.find((m) => m.membershipId === DEVON);
+    // 15 and 12 surviving characters out of 27.
+    expect(result.totalChars).toBe(27);
+    expect(maya?.survivingShare).toBe(56);
+    expect(devon?.survivingShare).toBe(44);
+  });
+
+  test('a student who wrote nothing has a zero share, not a missing one', async () => {
+    readDocumentAuthorship.mockResolvedValue({
+      ownerOfClient: new Map([[String(docs.maya.clientID), MAYA]]),
+      byMember: [
+        {
+          membershipId: MAYA,
+          charsInserted: 15,
+          charsDeleted: 0,
+          updateCount: 6,
+          sessionCount: 1,
+          firstSeenAt: new Date('2026-08-17T09:00:00Z'),
+          lastSeenAt: new Date('2026-08-17T09:30:00Z'),
+        },
+      ],
+    });
+
+    const result = await build();
+
+    expect(
+      result.members.find((m) => m.membershipId === DEVON)?.survivingShare
+    ).toBe(0);
+  });
+
+  test('shares are of the whole draft, including unattributed text', async () => {
+    // Otherwise a draft that is half unattributed would report shares summing to
+    // 100% and quietly overstate what is actually known.
+    readDocumentAuthorship.mockResolvedValue({
+      ownerOfClient: new Map([[String(docs.maya.clientID), MAYA]]),
+      byMember: [
+        {
+          membershipId: MAYA,
+          charsInserted: 15,
+          charsDeleted: 0,
+          updateCount: 1,
+          sessionCount: 1,
+          firstSeenAt: new Date('2026-08-17T09:00:00Z'),
+          lastSeenAt: new Date('2026-08-17T09:30:00Z'),
+        },
+      ],
+    });
+
+    const result = await build();
+
+    expect(result.unattributedChars).toBe(12);
+    expect(
+      result.members.find((m) => m.membershipId === MAYA)?.survivingShare
+    ).toBe(56);
+  });
+
+  test('an empty draft reports zero shares rather than dividing by zero', async () => {
+    readRoomState.mockResolvedValue(null);
+    readDocumentAuthorship.mockResolvedValue({
+      ownerOfClient: new Map(),
+      byMember: [],
+    });
+
+    const result = await build();
+
+    expect(result.totalChars).toBe(0);
+    expect(result.members.every((m) => m.survivingShare === 0)).toBe(true);
   });
 
   test('an empty room reports the roster with nothing written', async () => {

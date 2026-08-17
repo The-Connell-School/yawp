@@ -1,5 +1,8 @@
+import { useFetcher } from 'react-router';
 import { colorForMembership } from '../app_.collab-documents_.$id/collab-editor';
+import { Button } from '~/components/ui/button';
 import type { ContributionBreakdown } from '~/domain/collaboration/contribution.server';
+import type { MemberGrade } from '~/domain/collaboration/member-grades.server';
 
 /**
  * Evidence about who wrote a shared draft, for a teacher to read and judge.
@@ -15,9 +18,10 @@ import type { ContributionBreakdown } from '~/domain/collaboration/contribution.
  * 3. Written / still here / removed, side by side — the split that keeps a
  *    student who tightened a partner's paragraph from reading as a freeloader.
  *
- * No percentages and no computed score, deliberately: a percentage reads as a
- * grade, and character counts measure typing rather than contribution. The
- * individual grade stays the teacher's to set.
+ * The share column answers "who did more", which is a real question — but it is
+ * a share of *characters currently in the draft*, not of the work, and the panel
+ * says so directly under the table. Nothing computes a grade from it: the
+ * individual grade is typed by the teacher, informed by everything here.
  */
 
 const dateFormat = new Intl.DateTimeFormat(undefined, {
@@ -39,10 +43,105 @@ function initials(name: string) {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
+
+/**
+ * One student's grade, saved on its own.
+ *
+ * A fetcher per student so marking one does not disturb a comment being typed
+ * for another, and nothing navigates part-way through a group.
+ */
+function MemberGradeCard({
+  membershipId,
+  name,
+  grade,
+}: {
+  membershipId: string;
+  name: string;
+  grade?: MemberGrade;
+}) {
+  const fetcher = useFetcher<{ success?: boolean; message?: string }>();
+  const saving = fetcher.state !== 'idle';
+  const error =
+    fetcher.data && fetcher.data.success === false ? fetcher.data.message : '';
+  const released = Boolean(grade?.releasedAt);
+
+  return (
+    <fetcher.Form method="post" className="grid gap-2 rounded-lg border p-4">
+      <input type="hidden" name="membershipId" value={membershipId} />
+
+      <div className="flex items-center justify-between gap-3">
+        <span className="flex items-center gap-2 text-sm font-medium">
+          <span
+            aria-hidden
+            className="grid size-6 shrink-0 place-items-center rounded-full text-[10px] font-medium text-white"
+            style={{ backgroundColor: colorForMembership(membershipId) }}
+          >
+            {initials(name)}
+          </span>
+          {name}
+        </span>
+        <span
+          className={`text-xs ${released ? 'text-green-700' : 'text-muted-foreground'}`}
+        >
+          {released ? 'Visible to student' : 'Not shared yet'}
+        </span>
+      </div>
+
+      <label className="grid gap-1 text-sm">
+        Grade
+        <input
+          type="text"
+          name="score"
+          defaultValue={grade?.score ?? ''}
+          placeholder="18/20, A-, meets expectations…"
+          maxLength={64}
+          className="rounded border px-2 py-1"
+        />
+      </label>
+
+      <label className="grid gap-1 text-sm">
+        Comment for this student
+        <textarea
+          name="feedback"
+          defaultValue={grade?.feedback ?? ''}
+          rows={3}
+          className="rounded border px-2 py-1"
+        />
+      </label>
+
+      {error ? (
+        <p className="text-sm text-red-700" role="alert">
+          {error}
+        </p>
+      ) : null}
+
+      <div className="flex flex-wrap items-center gap-2">
+        <Button type="submit" size="sm" disabled={saving}>
+          Save
+        </Button>
+        {/* Releasing is a separate press, so a half-written grade cannot reach a
+            student by reflex. */}
+        <Button
+          type="submit"
+          size="sm"
+          variant="outline"
+          name="release"
+          value={released ? 'false' : 'true'}
+          disabled={saving}
+        >
+          {released ? 'Take back' : 'Save and share with student'}
+        </Button>
+      </div>
+    </fetcher.Form>
+  );
+}
+
 export function ContributionPanel({
   breakdown,
+  grades,
 }: {
   breakdown: ContributionBreakdown;
+  grades: Record<string, MemberGrade>;
 }) {
   const { members, paragraphs, unattributedChars } = breakdown;
   const nameFor = new Map(members.map((m) => [m.membershipId, m.name]));
@@ -94,6 +193,9 @@ export function ContributionPanel({
                   Still here
                 </th>
                 <th scope="col" className="px-4 py-2 font-medium">
+                  Share of draft
+                </th>
+                <th scope="col" className="px-4 py-2 font-medium">
                   Removed
                 </th>
               </tr>
@@ -122,6 +224,27 @@ export function ContributionPanel({
                   <td className="px-4 py-2">{formatWhen(member.lastSeenAt)}</td>
                   <td className="px-4 py-2">{member.charsInserted}</td>
                   <td className="px-4 py-2">{member.survivingChars}</td>
+                  <td className="px-4 py-2">
+                    <span className="flex items-center gap-2">
+                      {/* A bar as well as a number: proportion is easier to
+                          judge at a glance and harder to mistake for a score. */}
+                      <span
+                        aria-hidden
+                        className="h-1.5 w-16 shrink-0 overflow-hidden rounded-full bg-muted"
+                      >
+                        <span
+                          className="block h-full rounded-full"
+                          style={{
+                            width: `${member.survivingShare}%`,
+                            backgroundColor: colorForMembership(
+                              member.membershipId
+                            ),
+                          }}
+                        />
+                      </span>
+                      {member.survivingShare}%
+                    </span>
+                  </td>
                   <td className="px-4 py-2">{member.charsDeleted}</td>
                 </tr>
               ))}
@@ -130,11 +253,33 @@ export function ContributionPanel({
         </div>
 
         <p className="border-t px-4 py-2 text-xs text-muted-foreground">
-          Counts are characters, not a score. They measure typing, which is not
-          the same as contribution — one student often types while the group
-          talks, and removing weak text is real work. Read the draft below
-          alongside them.
+          Share is of the characters currently in the draft — a proportion of
+          text, not of the work. One student often types while the group talks,
+          the person who wrote the load-bearing sentence may hold very little of
+          it, and removing weak text counts for nothing here. Read the draft
+          below before you grade.
         </p>
+      </section>
+
+      <section aria-labelledby="contribution-grades">
+        <h2 id="contribution-grades" className="mb-1 text-sm font-semibold">
+          Individual grades
+        </h2>
+        <p className="mb-3 text-xs text-muted-foreground">
+          The group gets one grade for the draft. This is each student's own, for
+          what they contributed — yours to decide, not calculated from the
+          numbers above. Students see nothing until you share it.
+        </p>
+        <div className="grid gap-3 md:grid-cols-2">
+          {members.map((member) => (
+            <MemberGradeCard
+              key={member.membershipId}
+              membershipId={member.membershipId}
+              name={member.name}
+              grade={grades[member.membershipId]}
+            />
+          ))}
+        </div>
       </section>
 
       <section aria-labelledby="contribution-draft" className="rounded-lg border">

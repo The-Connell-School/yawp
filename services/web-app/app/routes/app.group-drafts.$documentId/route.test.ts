@@ -5,6 +5,9 @@ const requireUserId = mock();
 const requireMembership = mock();
 const getIsPlatformAdmin = mock();
 const buildContributionBreakdown = mock();
+const readMemberGrades = mock();
+const recordMemberGrade = mock();
+class MemberGradeError extends Error {}
 
 const actualDocumentAccess = globalThis.__realModules[
   '~/utils/document-access.server'
@@ -19,8 +22,13 @@ mock.module('~/utils/document-access.server', () => ({
 mock.module('~/domain/collaboration/contribution.server', () => ({
   buildContributionBreakdown,
 }));
+mock.module('~/domain/collaboration/member-grades.server', () => ({
+  readMemberGrades,
+  recordMemberGrade,
+  MemberGradeError,
+}));
 
-const { loader } = await import('./route');
+const { action, loader } = await import('./route');
 
 afterAll(() => {
   mock.restore();
@@ -41,6 +49,7 @@ const docRow = ({ classAssignmentId = 'ca-1' as string | null } = {}) => ({
   title: 'Untitled',
   assignment: { id: 'a-1', title: 'Expansion Plan' },
   group: {
+    id: 'group-1',
     label: 'Group 2',
     classAssignmentId,
     classAssignment: classAssignmentId ? { classId: 'class-1' } : null,
@@ -69,7 +78,10 @@ describe('app.group-drafts.$documentId loader', () => {
       members: [],
       paragraphs: [],
       unattributedChars: 0,
+      totalChars: 0,
     });
+    readMemberGrades.mockReset().mockResolvedValue(new Map());
+    recordMemberGrade.mockReset().mockResolvedValue({ saved: true });
   });
 
   test('404s for a student', async () => {
@@ -145,6 +157,25 @@ describe('app.group-drafts.$documentId loader', () => {
     expect(body.title).toBe('Expansion Plan');
   });
 
+  test('serialises existing grades for the panel', async () => {
+    readMemberGrades.mockResolvedValue(
+      new Map([
+        [
+          'member-1',
+          { score: '18/20', feedback: 'Strong.', releasedAt: null },
+        ],
+      ])
+    );
+
+    const body = await readBody(await get());
+
+    expect(body.grades['member-1']).toEqual({
+      score: '18/20',
+      feedback: 'Strong.',
+      releasedAt: null,
+    });
+  });
+
   test('a platform admin may read it without being the teacher', async () => {
     requireMembership.mockResolvedValue({ id: 'admin-1', role: 'OWNER' });
     getIsPlatformAdmin.mockResolvedValue(true);
@@ -152,5 +183,101 @@ describe('app.group-drafts.$documentId loader', () => {
     const body = await readBody(await get());
 
     expect(body.documentId).toBe('doc-1');
+  });
+
+  describe('grading', () => {
+    const post = (fields: Record<string, string>) => {
+      const form = new FormData();
+      for (const [key, value] of Object.entries(fields)) form.append(key, value);
+      return action({
+        request: new Request('https://example.com/app/group-drafts/doc-1', {
+          method: 'POST',
+          body: form,
+        }),
+        params: { documentId: 'doc-1' },
+      } as any);
+    };
+
+    test('records a grade against the group the document belongs to', async () => {
+      await post({ membershipId: 'member-1', score: '18/20', feedback: 'Good.' });
+
+      expect(recordMemberGrade).toHaveBeenCalledWith(
+        expect.objectContaining({
+          groupId: 'group-1',
+          membershipId: 'member-1',
+          gradedByMembershipId: 'teacher-1',
+          score: '18/20',
+        })
+      );
+    });
+
+    test('re-derives the group rather than trusting a posted id', async () => {
+      // The form is teacher-facing, but the group id must still come from the
+      // document under the same scope the loader uses.
+      await post({
+        membershipId: 'member-1',
+        score: '5',
+        groupId: 'group-somebody-elses',
+      });
+
+      expect(recordMemberGrade).toHaveBeenCalledWith(
+        expect.objectContaining({ groupId: 'group-1' })
+      );
+    });
+
+    test('leaves release alone when the form does not mention it', async () => {
+      // Saving a draft grade must not quietly publish it.
+      await post({ membershipId: 'member-1', score: '18/20' });
+
+      expect(recordMemberGrade.mock.calls[0][0].release).toBeUndefined();
+    });
+
+    test('shares a grade with the student when asked', async () => {
+      await post({ membershipId: 'member-1', score: '18/20', release: 'true' });
+
+      expect(recordMemberGrade.mock.calls[0][0].release).toBe(true);
+    });
+
+    test('takes a grade back when asked', async () => {
+      await post({ membershipId: 'member-1', score: '18/20', release: 'false' });
+
+      expect(recordMemberGrade.mock.calls[0][0].release).toBe(false);
+    });
+
+    test('refuses a student', async () => {
+      requireMembership.mockResolvedValue({ id: 'member-1', role: 'STUDENT' });
+
+      const response: any = await post({ membershipId: 'member-1', score: '5' });
+
+      expect(recordMemberGrade).not.toHaveBeenCalled();
+      expect((await readBody(response)).success).toBe(false);
+    });
+
+    test('refuses a document this teacher cannot see', async () => {
+      prisma.document.findFirst.mockResolvedValue(null);
+
+      const response: any = await post({ membershipId: 'member-1', score: '5' });
+
+      expect(recordMemberGrade).not.toHaveBeenCalled();
+      expect((await readBody(response)).success).toBe(false);
+    });
+
+    test('reports a refusal inline rather than throwing', async () => {
+      recordMemberGrade.mockRejectedValue(
+        new MemberGradeError('That student is not in this group.')
+      );
+
+      const response: any = await post({ membershipId: 'x', score: '5' });
+
+      expect((await readBody(response)).message).toMatch(/not in this group/i);
+    });
+
+    test('does not swallow an unexpected failure as a refusal', async () => {
+      recordMemberGrade.mockRejectedValue(new Error('connection reset'));
+
+      await expect(
+        post({ membershipId: 'member-1', score: '5' })
+      ).rejects.toThrow(/connection reset/);
+    });
   });
 });
