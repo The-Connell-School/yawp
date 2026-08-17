@@ -1064,6 +1064,12 @@ describe('demo environment deployment contract', () => {
     expect(workflow).toContain('DEMO_RESET_CONFIRMATION:');
     expect(workflow).toContain('DEMO_BACKUP_RETENTION:');
     expect(workflow).toContain(
+      'test "$DEMO_REQUESTED_REF" = "$DEMO_DEFAULT_BRANCH"'
+    );
+    expect(workflow).toContain(
+      'reset_data may only deploy the reviewed default branch'
+    );
+    expect(workflow).toContain(
       'DEMO_RESET_CONFIRMATION=$(shell_quote "$DEMO_RESET_CONFIRMATION")'
     );
     expect(workflow).toContain(
