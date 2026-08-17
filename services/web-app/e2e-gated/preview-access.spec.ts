@@ -3,7 +3,38 @@ import { expect, test } from '@playwright/test';
 const ACCESS_CODE = 'brave-otter-4193';
 const ORIGINAL_PATH = '/accessibility?gate-e2e=1';
 
+async function enterPreview(page: import('@playwright/test').Page) {
+  await page.goto(ORIGINAL_PATH);
+  await page.getByLabel('Access code').fill(ACCESS_CODE);
+  await page.getByRole('button', { name: 'Open preview' }).click();
+  await expect(page).toHaveURL(ORIGINAL_PATH);
+}
+
 test.describe('in-app preview access gate', () => {
+  test('loads dev-login users only after the Beaker opens', async ({
+    page,
+  }) => {
+    const requestedCursors: number[] = [];
+    page.on('request', (request) => {
+      const url = new URL(request.url());
+      if (url.pathname === '/auth/dev-login/options') {
+        requestedCursors.push(Number(url.searchParams.get('cursor') ?? '0'));
+      }
+    });
+
+    await enterPreview(page);
+    expect(requestedCursors).toEqual([]);
+
+    await page
+      .getByRole('button', {
+        name: 'Local development environment. Open dev login menu.',
+      })
+      .click();
+
+    await expect(page.getByText('Alex Teacher')).toBeVisible();
+    expect(requestedCursors).toEqual([0]);
+  });
+
   test('blocks anonymous browser and API access until a valid code is entered', async ({
     context,
     page,

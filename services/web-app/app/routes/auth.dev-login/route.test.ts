@@ -15,13 +15,16 @@ const isLocalDevAuthEnabled = mock();
 const isPreviewAccessGateEnabled = mock();
 const getPreviewAccessSeat = mock();
 const allSanitizedUsersEnabled = mock();
-const redirectResponse = mock((headers: Headers) =>
-  new Response(null, { status: 302, headers: { Location: '/app' } }),
+const redirectResponse = mock(
+  (headers: Headers) =>
+    new Response(null, { status: 302, headers: { Location: '/app' } })
 );
 
-const { createDevLoginAction, getLocalDevLoginOptions } = await import(
-  './dev-login.server'
-);
+const {
+  createDevLoginAction,
+  createDevLoginOptionsLoader,
+  getLocalDevLoginOptionsPage,
+} = await import('./dev-login.server');
 const action = createDevLoginAction({
   prismaClient: prisma as never,
   getExpirationDate: getSessionExpirationDate as never,
@@ -33,6 +36,13 @@ const action = createDevLoginAction({
   previewSeatForRequest: getPreviewAccessSeat as never,
   allSanitizedUsersEnabled: allSanitizedUsersEnabled as never,
   redirectResponse,
+});
+const optionsLoader = createDevLoginOptionsLoader({
+  prismaClient: prisma as never,
+  localDevAuthEnabled: isLocalDevAuthEnabled as never,
+  previewGateEnabled: isPreviewAccessGateEnabled as never,
+  previewSeatForRequest: getPreviewAccessSeat as never,
+  allSanitizedUsersEnabled: allSanitizedUsersEnabled as never,
 });
 
 function makeRequest(email: string, cookie?: string) {
@@ -52,6 +62,16 @@ function actionArgs(request: Request) {
     params: {},
     url: new URL(request.url),
     pattern: '/auth/dev-login',
+    context: {},
+  };
+}
+
+function loaderArgs(request: Request) {
+  return {
+    request,
+    params: {},
+    url: new URL(request.url),
+    pattern: '/auth/dev-login/options',
     context: {},
   };
 }
@@ -77,7 +97,9 @@ describe('auth.dev-login action', () => {
     isPreviewAccessGateEnabled.mockReturnValue(false);
     getPreviewAccessSeat.mockResolvedValue(null);
     allSanitizedUsersEnabled.mockReturnValue(false);
-    getSessionExpirationDate.mockReturnValue(new Date('2030-01-01T00:00:00.000Z'));
+    getSessionExpirationDate.mockReturnValue(
+      new Date('2030-01-01T00:00:00.000Z')
+    );
     authSessionStorage.getSession.mockResolvedValue({
       get: () => 'old-session-id',
       set: mock(),
@@ -134,7 +156,7 @@ describe('auth.dev-login action', () => {
     });
 
     const response = await action(
-      actionArgs(makeRequest('student@seat-two.example', 'preview=seat-2')),
+      actionArgs(makeRequest('student@seat-two.example', 'preview=seat-2'))
     );
 
     expect(response.status).toBe(302);
@@ -165,7 +187,7 @@ describe('auth.dev-login action', () => {
     prisma.user.findFirst.mockResolvedValue(null);
 
     const response = await action(
-      actionArgs(makeRequest('dev.student@yawp.local', 'preview=seat-2')),
+      actionArgs(makeRequest('dev.student@yawp.local', 'preview=seat-2'))
     );
 
     expect(response.status).toBe(404);
@@ -185,7 +207,7 @@ describe('auth.dev-login action', () => {
     });
 
     const response = await action(
-      actionArgs(makeRequest('teacher@another-org.example', 'preview=master')),
+      actionArgs(makeRequest('teacher@another-org.example', 'preview=master'))
     );
 
     expect(response.status).toBe(302);
@@ -209,23 +231,19 @@ describe('auth.dev-login action', () => {
         email: 'teacher@seat-two.example',
         name: 'Seat Two Teacher',
         isAdmin: false,
-        memberships: [
-          { role: 'TEACHER', isOrgOwner: false },
-        ],
+        memberships: [{ role: 'TEACHER', isOrgOwner: false }],
       },
       {
         email: 'student@seat-two.example',
         name: 'Seat Two Student',
         isAdmin: false,
-        memberships: [
-          { role: 'STUDENT', isOrgOwner: false },
-        ],
+        memberships: [{ role: 'STUDENT', isOrgOwner: false }],
       },
     ]);
 
-    const options = await getLocalDevLoginOptions(
+    const page = await getLocalDevLoginOptionsPage(
       'preview-seat-2',
-      prisma as never,
+      prisma as never
     );
 
     expect(prisma.user.findMany).toHaveBeenCalledWith({
@@ -241,12 +259,14 @@ describe('auth.dev-login action', () => {
         },
       },
       orderBy: [{ name: 'asc' }, { email: 'asc' }],
+      skip: 0,
+      take: 20,
     });
-    expect(options.map((option) => option.email)).toEqual([
+    expect(page.options.map((option) => option.email)).toEqual([
       'teacher@seat-two.example',
       'student@seat-two.example',
     ]);
-    expect(options.map((option) => option.role)).toEqual([
+    expect(page.options.map((option) => option.role)).toEqual([
       'teacher',
       'student',
     ]);
@@ -262,10 +282,10 @@ describe('auth.dev-login action', () => {
       },
     ]);
 
-    const options = await getLocalDevLoginOptions(
+    const page = await getLocalDevLoginOptionsPage(
       'default-org',
       prisma as never,
-      { includeAllOrganizations: true },
+      { includeAllOrganizations: true }
     );
 
     expect(prisma.user.findMany).toHaveBeenCalledWith({
@@ -280,9 +300,108 @@ describe('auth.dev-login action', () => {
         },
       },
       orderBy: [{ name: 'asc' }, { email: 'asc' }],
+      skip: 0,
+      take: 20,
     });
-    expect(options.map((option) => option.email)).toEqual([
+    expect(page.options.map((option) => option.email)).toEqual([
       'teacher@another-org.example',
     ]);
+  });
+});
+
+describe('auth.dev-login options pagination', () => {
+  beforeEach(() => {
+    prisma.user.findMany.mockReset();
+    isLocalDevAuthEnabled.mockReset();
+    isPreviewAccessGateEnabled.mockReset();
+    getPreviewAccessSeat.mockReset();
+    allSanitizedUsersEnabled.mockReset();
+
+    isLocalDevAuthEnabled.mockReturnValue(true);
+    isPreviewAccessGateEnabled.mockReturnValue(false);
+    getPreviewAccessSeat.mockResolvedValue(null);
+    allSanitizedUsersEnabled.mockReturnValue(false);
+  });
+
+  test('does not expose the user directory when dev login is disabled', async () => {
+    isLocalDevAuthEnabled.mockReturnValue(false);
+
+    const response = await optionsLoader(
+      loaderArgs(
+        new Request('http://localhost/auth/dev-login/options?cursor=0')
+      )
+    );
+
+    expect(response.status).toBe(403);
+    expect(prisma.user.findMany).not.toHaveBeenCalled();
+  });
+
+  test('requires a valid preview seat before listing users', async () => {
+    isPreviewAccessGateEnabled.mockReturnValue(true);
+
+    const response = await optionsLoader(
+      loaderArgs(
+        new Request('http://localhost/auth/dev-login/options?cursor=0')
+      )
+    );
+
+    expect(response.status).toBe(401);
+    expect(prisma.user.findMany).not.toHaveBeenCalled();
+  });
+
+  test('returns twenty users and a cursor when another page exists', async () => {
+    prisma.user.findMany.mockResolvedValue(
+      Array.from({ length: 20 }, (_, index) => ({
+        email: `student-${String(index + 1).padStart(2, '0')}@example.test`,
+        name: `Student ${String(index + 1).padStart(2, '0')}`,
+        isAdmin: false,
+        memberships: [{ role: 'STUDENT', isOrgOwner: false }],
+      }))
+    );
+
+    const page = await getLocalDevLoginOptionsPage(
+      'preview-seat-2',
+      prisma as never,
+      { cursor: 0 }
+    );
+
+    expect(prisma.user.findMany).toHaveBeenCalledWith({
+      where: { memberships: { some: { organizationId: 'preview-seat-2' } } },
+      select: {
+        email: true,
+        name: true,
+        isAdmin: true,
+        memberships: {
+          where: { organizationId: 'preview-seat-2' },
+          select: { role: true, isOrgOwner: true },
+          take: 1,
+        },
+      },
+      orderBy: [{ name: 'asc' }, { email: 'asc' }],
+      skip: 0,
+      take: 20,
+    });
+    expect(page.options).toHaveLength(20);
+    expect(page.nextCursor).toBe(20);
+  });
+
+  test('returns no cursor for the final partial page', async () => {
+    prisma.user.findMany.mockResolvedValue(
+      Array.from({ length: 5 }, (_, index) => ({
+        email: `student-${index + 21}@example.test`,
+        name: `Student ${index + 21}`,
+        isAdmin: false,
+        memberships: [{ role: 'STUDENT', isOrgOwner: false }],
+      }))
+    );
+
+    const page = await getLocalDevLoginOptionsPage(
+      'preview-seat-2',
+      prisma as never,
+      { cursor: 20 }
+    );
+
+    expect(page.options).toHaveLength(5);
+    expect(page.nextCursor).toBeNull();
   });
 });

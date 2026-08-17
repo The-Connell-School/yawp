@@ -1,7 +1,4 @@
-import {
-  getSessionExpirationDate,
-  sessionKey,
-} from '~/utils/auth.server';
+import { getSessionExpirationDate, sessionKey } from '~/utils/auth.server';
 import { authSessionStorage } from '~/cookie-session-storages/authentication.server';
 import { setMembershipId } from '~/cookies/membership-id.server';
 import { prisma } from '~/utils/db.server';
@@ -12,7 +9,7 @@ import {
 } from '~/utils/preview-access.server';
 import {
   createDevLoginAction,
-  getLocalDevLoginOptions as getLoginOptions,
+  createDevLoginOptionsLoader,
 } from './dev-login.server';
 
 /**
@@ -38,9 +35,11 @@ export const devLoginAction = createDevLoginAction({
   redirectResponse: (headers) => new Response(null, { status: 302, headers }),
 });
 
-export function getLocalDevLoginOptions(organizationId?: string) {
-  return getLoginOptions(organizationId, prisma, {
-    includeAllOrganizations:
-      process.env.PREVIEW_DATA_MODE === 'sanitized-production',
-  });
-}
+export const devLoginOptionsLoader = createDevLoginOptionsLoader({
+  prismaClient: prisma,
+  localDevAuthEnabled: isLocalDevAuthEnabled,
+  previewGateEnabled: isPreviewAccessGateEnabled,
+  previewSeatForRequest: getPreviewAccessSeat,
+  allSanitizedUsersEnabled: () =>
+    process.env.PREVIEW_DATA_MODE === 'sanitized-production',
+});
