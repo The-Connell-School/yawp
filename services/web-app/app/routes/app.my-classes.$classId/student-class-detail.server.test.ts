@@ -119,9 +119,32 @@ describe('loadStudentClassDetail', () => {
       classId: 'class-1',
     });
 
-    expect(prisma.classAssignment.findMany.mock.calls[0][0].where).toEqual({
+    expect(prisma.classAssignment.findMany.mock.calls[0][0].where.classId).toBe(
+      'class-1'
+    );
+  });
+
+  test('hides a collaborative assignment until this student’s group is open', async () => {
+    // Before the teacher opens groups there is no document to open, so the
+    // assignment stays off the list rather than sitting there refusing the
+    // click. Solo assignments match the first branch and are unaffected.
+    await loadStudentClassDetail({
+      membershipId: 'student-1',
       classId: 'class-1',
     });
+
+    const where = prisma.classAssignment.findMany.mock.calls[0][0].where;
+    expect(where.OR).toEqual([
+      { assignment: { is: { collaborationEnabled: false } } },
+      {
+        documentGroups: {
+          some: {
+            openedAt: { not: null },
+            members: { some: { membershipId: 'student-1', removedAt: null } },
+          },
+        },
+      },
+    ]);
   });
 
   test('scopes documents to this student in this class', async () => {

@@ -1,4 +1,5 @@
 import { prisma } from '~/utils/db.server.js';
+import { studentVisibleClassAssignmentWhere } from '~/domain/collaboration/visibility';
 import { getAvailableAssignmentTypesForScopes } from '~/utils/assignment-type-access.server';
 import { buildStudentClassDocumentsScope } from '~/utils/class-assignment-scope.server';
 
@@ -78,7 +79,13 @@ export async function loadStudentClassDetail({
 
   const [assignments, assignmentTypes, documents] = await Promise.all([
     prisma.classAssignment.findMany({
-      where: { classId: klass.id },
+      where: {
+        classId: klass.id,
+        // A collaborative assignment has nothing for this student to open until
+        // their teacher opens groups, so it stays off the list until then rather
+        // than sitting there refusing the click.
+        ...studentVisibleClassAssignmentWhere(membershipId),
+      },
       select: {
         id: true,
         assignment: {
