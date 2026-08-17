@@ -356,10 +356,10 @@ database_exists() {
 backup_demo_database_before_reset() {
   [[ "$PREVIEW_SLUG" == "demo" ]] || return 0
   database_exists "$DATABASE_NAME" || return 0
+  export DATABASE_NAME
   BACKUP_KIND=pre-reset \
     BACKUP_RETENTION_COUNT="$DEMO_BACKUP_RETENTION" \
     PREVIEW_ROOT="$ROOT" \
-    DATABASE_NAME="$DATABASE_NAME" \
     PREVIEW_POSTGRES_CONTAINER="$POSTGRES_CONTAINER" \
     bash "$SCRIPT_DIR/backup-database.sh"
 }
