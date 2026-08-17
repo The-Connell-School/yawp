@@ -9,6 +9,7 @@ import {
   markAnthropicOutageOpen,
 } from './anthropic-outage-cache.server';
 import {
+  describeProviderError,
   getAnthropicRetryableStatus,
   isRetryableAnthropicOutageError,
   LlmFallbackRetrySignal,
@@ -76,6 +77,12 @@ async function logLlmCall(data: {
   totalTokens?: number;
   durationMs?: number;
   metadata?: Record<string, unknown>;
+  /**
+   * The failure said without the provider's message body, so it survives
+   * redaction. Without it a metadata-only log records that something failed
+   * and nothing about what — which is the one question worth asking.
+   */
+  errorSummary?: string;
   logPayload?: 'full' | 'metadata-only';
 }) {
   const metadataOnly = data.logPayload === 'metadata-only';
@@ -95,7 +102,10 @@ async function logLlmCall(data: {
             }
           : (data.messages as object),
         response: metadataOnly ? undefined : data.response,
-        error: metadataOnly && data.error ? 'LLM request failed' : data.error,
+        error:
+          metadataOnly && data.error
+            ? (data.errorSummary ?? 'LLM request failed')
+            : data.error,
         inputTokens: data.inputTokens,
         outputTokens: data.outputTokens,
         totalTokens: data.totalTokens,
@@ -322,6 +332,7 @@ async function runAnthropicCompletion(params: Params, startTime: number) {
       systemPrompt: systemForLog,
       messages,
       error: err instanceof Error ? err.message : String(err),
+      errorSummary: describeProviderError(err),
       durationMs,
       metadata: {
         ...buildLogMetadata({
@@ -476,6 +487,7 @@ async function runOpenAiCompletion({
       systemPrompt: stripTabs(systemToPlainString(params.system)),
       messages: formattedMessages,
       error: err instanceof Error ? err.message : String(err),
+      errorSummary: describeProviderError(err),
       durationMs,
       metadata: buildLogMetadata({
         metadata,

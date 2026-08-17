@@ -36,9 +36,9 @@ describe('placeholderFor', () => {
 
 describe('shouldRotatePlaceholder', () => {
   test('rotates for a teacher who has not typed anything', () => {
-    expect(shouldRotatePlaceholder({ typed: false, reducedMotion: false })).toBe(
-      true
-    );
+    expect(
+      shouldRotatePlaceholder({ typed: false, reducedMotion: false })
+    ).toBe(true);
   });
 
   /**

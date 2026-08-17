@@ -29,6 +29,10 @@ import { verifyLessonResources } from '~/domain/lesson-planner/lesson-resource';
 import { shouldRenameLesson } from '~/domain/lesson-planner/lesson-name';
 import { buildLessonPlannerSystemPrompt } from './build-system-prompt';
 import {
+  describeProviderError,
+  isProviderConfigurationError,
+} from '~/utils/getLLMCompletion/llm-provider-errors.server';
+import {
   AiRateLimitError,
   reserveAiRequest,
 } from '~/utils/ai-admission.server';
@@ -41,6 +45,15 @@ import {
 
 const PLANNER_FAILED =
   'The lesson planner could not put that together. Please try again.';
+/**
+ * Said instead of PLANNER_FAILED when the model refused the deployment rather
+ * than the request — a key it will not accept, a model name that is not there.
+ * "Try again" is false advice for these: the next attempt fails identically
+ * until someone changes an environment variable, and a teacher retrying in
+ * front of a class deserves to be told that.
+ */
+const PLANNER_MISCONFIGURED =
+  'The lesson planner cannot reach the model it writes with. This is a setup problem on our end, not something your retry can fix — please tell whoever runs your YAWP! instance.';
 // Roomier than the reporter's cap: a teacher pasting a prompt, a rubric, or a
 // draft handout into the planner is a normal turn, not an attack.
 const MAX_PLANNER_MESSAGE_CHARS = 6_000;
@@ -360,8 +373,24 @@ export async function action({ request }: ActionFunctionArgs) {
           feature: 'lesson-planner',
         },
       });
-    } catch {
-      return { status: 500, payload: { error: PLANNER_FAILED } };
+    } catch (error) {
+      // The one place the planner's failures are visible. The LLM log for this
+      // feature is metadata-only, so without this line an operator sees that
+      // the turn failed and nothing about why — a rejected key, a model name
+      // that does not exist, and a request that ran out of time all look the
+      // same from the outside. No prompt content: only the shape of the error.
+      // eslint-disable-next-line no-console
+      console.error(
+        `[lesson-planner] model call failed: ${describeProviderError(error)}`
+      );
+      return {
+        status: 500,
+        payload: {
+          error: isProviderConfigurationError(error)
+            ? PLANNER_MISCONFIGURED
+            : PLANNER_FAILED,
+        },
+      };
     }
 
     // Every tool has returned and the model is writing. This is the long stretch
