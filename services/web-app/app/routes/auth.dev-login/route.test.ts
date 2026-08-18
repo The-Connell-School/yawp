@@ -194,35 +194,39 @@ describe('auth.dev-login action', () => {
     expect(prisma.session.create).not.toHaveBeenCalled();
   });
 
-  test('allows scrubbed users from every organization in sanitized production rehearsal', async () => {
+  test('keeps scrubbed dev-login scoped to the master-selected organization', async () => {
     isPreviewAccessGateEnabled.mockReturnValue(true);
     allSanitizedUsersEnabled.mockReturnValue(true);
     getPreviewAccessSeat.mockResolvedValue({
       organizationId: 'default-org',
       label: 'Production rehearsal',
     });
-    prisma.user.findUnique.mockResolvedValue({
+    prisma.user.findFirst.mockResolvedValue({
       id: 'returning-teacher',
       memberships: [{ id: 'returning-membership', role: 'TEACHER' }],
     });
 
     const response = await action(
-      actionArgs(makeRequest('teacher@another-org.example', 'preview=master'))
+      actionArgs(makeRequest('teacher@default-org.example', 'preview=master'))
     );
 
     expect(response.status).toBe(302);
-    expect(prisma.user.findUnique).toHaveBeenCalledWith({
-      where: { email: 'teacher@another-org.example' },
+    expect(prisma.user.findFirst).toHaveBeenCalledWith({
+      where: {
+        email: 'teacher@default-org.example',
+        memberships: { some: { organizationId: 'default-org' } },
+      },
       select: {
         id: true,
         memberships: {
+          where: { organizationId: 'default-org' },
           select: { id: true, role: true },
           orderBy: { createdAt: 'asc' },
           take: 1,
         },
       },
     });
-    expect(prisma.user.findFirst).not.toHaveBeenCalled();
+    expect(prisma.user.findUnique).not.toHaveBeenCalled();
   });
 
   test('lists only users belonging to the current preview seat', async () => {
@@ -272,7 +276,7 @@ describe('auth.dev-login action', () => {
     ]);
   });
 
-  test('lists scrubbed users from every organization in production rehearsal', async () => {
+  test('lists scrubbed users only from the selected production organization', async () => {
     prisma.user.findMany.mockResolvedValue([
       {
         email: 'teacher@another-org.example',
@@ -289,12 +293,13 @@ describe('auth.dev-login action', () => {
     );
 
     expect(prisma.user.findMany).toHaveBeenCalledWith({
-      where: { memberships: { some: {} } },
+      where: { memberships: { some: { organizationId: 'default-org' } } },
       select: {
         email: true,
         name: true,
         isAdmin: true,
         memberships: {
+          where: { organizationId: 'default-org' },
           select: { role: true, isOrgOwner: true },
           take: 1,
         },

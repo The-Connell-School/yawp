@@ -1,13 +1,18 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 import {
   PREVIEW_ACCESS_COOKIE_NAME,
+  PREVIEW_MASTER_SELECTION_COOKIE_NAME,
   PREVIEW_AUTHORIZED_ACTIVITY_HEADER,
+  clearPreviewMasterSelectionCookie,
   clearPreviewAccessCookie,
   createPreviewAccessCookie,
   createPreviewAccessMiddleware,
+  findPreviewAccessCredentialByCode,
   findPreviewAccessSeatByCode,
   getPreviewAccessSeat,
+  hasPreviewMasterSelection,
   grantPreviewAccessCookie,
+  grantPreviewMasterSelectionCookie,
   isIsolatedPreviewSeatMode,
   isPreviewAccessConfigured,
   previewAccessMiddleware,
@@ -19,6 +24,7 @@ const originalEnv = {
   NODE_ENV: process.env.NODE_ENV,
   PREVIEW_ACCESS_CODES: process.env.PREVIEW_ACCESS_CODES,
   PREVIEW_ACCESS_GATE: process.env.PREVIEW_ACCESS_GATE,
+  PREVIEW_MASTER_ACCESS_CODE: process.env.PREVIEW_MASTER_ACCESS_CODE,
   PREVIEW_DATA_MODE: process.env.PREVIEW_DATA_MODE,
   PREVIEW_ACCESS_SEATS: process.env.PREVIEW_ACCESS_SEATS,
   PREVIEW_ACCESS_SECRET: process.env.PREVIEW_ACCESS_SECRET,
@@ -86,6 +92,7 @@ describe('preview access gate', () => {
     restore('NODE_ENV');
     restore('PREVIEW_ACCESS_CODES');
     restore('PREVIEW_ACCESS_GATE');
+    restore('PREVIEW_MASTER_ACCESS_CODE');
     restore('PREVIEW_DATA_MODE');
     restore('PREVIEW_ACCESS_SEATS');
     restore('PREVIEW_ACCESS_SECRET');
@@ -371,6 +378,30 @@ describe('preview access gate', () => {
   });
 
   describe('one-click ?code= entry', () => {
+    test('a generic master code opens organization selection without granting app access', async () => {
+      process.env.PREVIEW_MASTER_ACCESS_CODE = 'wise-owl-9876';
+      const next = mock(async () => new Response('private'));
+
+      const response = (await previewAccessMiddleware(
+        middlewareArgs(
+          request('/app/classes?code=wise-owl-9876&tab=roster')
+        ),
+        next
+      )) as Response;
+
+      expect(response.status).toBe(303);
+      expect(response.headers.get('location')).toBe(
+        '/auth/preview-access?returnTo=%2Fapp%2Fclasses%3Ftab%3Droster'
+      );
+      expect(response.headers.get('set-cookie')).toContain(
+        `${PREVIEW_MASTER_SELECTION_COOKIE_NAME}=`
+      );
+      expect(response.headers.get('set-cookie')).not.toContain(
+        `${PREVIEW_ACCESS_COOKIE_NAME}=`
+      );
+      expect(next).not.toHaveBeenCalled();
+    });
+
     test('a valid code sets the cookie, 303s, and strips the param', async () => {
       const next = mock(async () => new Response('private'));
 
@@ -477,6 +508,7 @@ describe('preview access codes', () => {
     restore('PREVIEW_ACCESS_CODES');
     restore('PREVIEW_ACCESS_SEATS');
     restore('PREVIEW_ACCESS_SECRET');
+    restore('PREVIEW_MASTER_ACCESS_CODE');
     restore('SESSION_SECRET');
   });
 
@@ -521,6 +553,103 @@ describe('preview access codes', () => {
       label: 'Master',
     });
     expect(runtimeRepository.findByCode).not.toHaveBeenCalled();
+  });
+
+  test('distinguishes a generic master credential from an organization code', async () => {
+    process.env.PREVIEW_ACCESS_SECRET = 'test-preview-access-secret';
+    process.env.PREVIEW_MASTER_ACCESS_CODE = 'wise-owl-9876';
+    process.env.PREVIEW_ACCESS_SEATS = JSON.stringify([
+      {
+        code: 'brave-otter-4193',
+        organizationId: 'local-dev-org',
+        label: 'Yawp Local Dev',
+      },
+    ]);
+    const runtimeRepository = repository();
+
+    expect(
+      await findPreviewAccessCredentialByCode(
+        ' WISE-OWL-9876 ',
+        runtimeRepository
+      )
+    ).toEqual({ kind: 'master' });
+    expect(
+      await findPreviewAccessCredentialByCode(
+        'brave-otter-4193',
+        runtimeRepository
+      )
+    ).toEqual({
+      kind: 'organization',
+      seat: {
+        organizationId: 'local-dev-org',
+        label: 'Yawp Local Dev',
+      },
+    });
+    expect(
+      await findPreviewAccessSeatByCode('wise-owl-9876', runtimeRepository)
+    ).toBeNull();
+    expect(runtimeRepository.findByCode).not.toHaveBeenCalled();
+  });
+
+  test('uses a short-lived signed master-selection cookie without granting preview access', async () => {
+    process.env.PREVIEW_ACCESS_SECRET = 'test-preview-access-secret';
+    process.env.PREVIEW_MASTER_ACCESS_CODE = 'wise-owl-9876';
+    process.env.PREVIEW_ACCESS_SEATS = JSON.stringify([
+      {
+        code: 'brave-otter-4193',
+        organizationId: 'local-dev-org',
+        label: 'Yawp Local Dev',
+      },
+    ]);
+
+    const serialized = await grantPreviewMasterSelectionCookie();
+    const cookie = serialized.split(';', 1)[0];
+    const pendingRequest = request('/auth/preview-access', {
+      headers: { cookie },
+    });
+
+    expect(serialized).toContain(`${PREVIEW_MASTER_SELECTION_COOKIE_NAME}=`);
+    expect(serialized).toContain('HttpOnly');
+    expect(serialized).toContain('Max-Age=600');
+    expect(await hasPreviewMasterSelection(pendingRequest)).toBe(true);
+    expect(await getPreviewAccessSeat(pendingRequest)).toBeNull();
+    expect(await clearPreviewMasterSelectionCookie()).toContain('Max-Age=0');
+  });
+
+  test('accepts a master-selected organization without requiring an organization code', async () => {
+    process.env.PREVIEW_ACCESS_SECRET = 'test-preview-access-secret';
+    process.env.PREVIEW_MASTER_ACCESS_CODE = 'wise-owl-9876';
+    process.env.PREVIEW_ACCESS_SEATS = JSON.stringify([
+      {
+        code: 'brave-otter-4193',
+        organizationId: 'local-dev-org',
+        label: 'Yawp Local Dev',
+      },
+    ]);
+    const selectedSeat = {
+      organizationId: 'another-org',
+      label: 'Another Organization',
+      accessKind: 'master' as const,
+    };
+    const cookie = (await grantPreviewAccessCookie(selectedSeat)).split(
+      ';',
+      1
+    )[0];
+
+    expect(
+      await getPreviewAccessSeat(
+        request('/app', { headers: { cookie } }),
+        repository({
+          byId: {
+            'another-org': {
+              id: 'another-org',
+              name: 'Another Organization',
+              previewSeatCode: null,
+            },
+          },
+        })
+      )
+    ).toEqual(selectedSeat);
   });
 
   test('resolves runtime seats by their unique DB code and rejects unknown codes', async () => {
