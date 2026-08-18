@@ -236,6 +236,59 @@ describe('create-only preview seat seeding', () => {
   });
 });
 
+/**
+ * Topping up an existing seat, and the line it must not cross.
+ *
+ * A per-PR preview keeps its database between deploys, so data a branch adds
+ * after that database was created has no other way in — without this, work like a
+ * new demo class is committed, tested and invisible on the preview it exists for.
+ *
+ * A named environment is the opposite case. The demo box is long-lived, someone
+ * else demos from it, and its whole contract is that redeploying ships code and
+ * not data. So the gate is the preview being disposable — `PR_NUMBER` set, which
+ * deploy.sh turns into this flag — not a judgement about whether the data looks
+ * harmless.
+ */
+describe('topping up an existing preview seat', () => {
+  const withTopUp = async (enabled: boolean) => {
+    const fixture = fakePrisma(brianWorld);
+    const toppedUp: string[] = [];
+    const previous = process.env.PREVIEW_SEAT_TOP_UP;
+    if (enabled) process.env.PREVIEW_SEAT_TOP_UP = '1';
+    else delete process.env.PREVIEW_SEAT_TOP_UP;
+    try {
+      await ensurePreviewSeats(
+        fixture.client as never,
+        buildPreviewSeatDefinitions(1),
+        fixture.createSeat,
+        async (_transaction, seat) => {
+          toppedUp.push(seat.organizationId);
+        }
+      );
+    } finally {
+      if (previous === undefined) delete process.env.PREVIEW_SEAT_TOP_UP;
+      else process.env.PREVIEW_SEAT_TOP_UP = previous;
+    }
+    return { fixture, toppedUp };
+  };
+
+  test('tops up an adopted seat when the preview is disposable', async () => {
+    const { fixture, toppedUp } = await withTopUp(true);
+
+    expect(toppedUp).toEqual(['local-dev-org']);
+    // Still not a create: the organization is adopted, not rebuilt.
+    expect(fixture.writes).toEqual([]);
+  });
+
+  test('leaves an existing seat completely alone by default', async () => {
+    // The demo box takes this path. Nothing about a redeploy may touch its data.
+    const { fixture, toppedUp } = await withTopUp(false);
+
+    expect(toppedUp).toEqual([]);
+    expect(fixture.writes).toEqual([]);
+  });
+});
+
 describe('legacy preview seat code backfill', () => {
   test('skips Master, fills null codes only, and never creates missing organizations', async () => {
     const rows: Record<string, string | null> = {

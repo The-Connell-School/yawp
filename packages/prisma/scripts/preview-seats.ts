@@ -164,20 +164,29 @@ export async function createPreviewSeat(
 }
 
 /**
+ * Whether an existing seat may be topped up with data added since it was seeded.
+ *
+ * Set by `deploy.sh` for a per-PR preview and only for one. Such a preview is
+ * disposable, belongs to a single branch, and keeps its database between deploys —
+ * so a class the branch adds has no other way of reaching the environment that
+ * exists to review the branch. A named environment (the demo box) is long-lived
+ * and someone else demos from it; redeploying it ships code and not data, so it
+ * takes the untouched path.
+ *
+ * The gate is the preview being disposable, not a judgement about whether the
+ * data looks harmless — "reseeding an existing seat performs zero writes and
+ * preserves divergence" stays true everywhere it was true before.
+ */
+function seatTopUpEnabled() {
+  return process.env.PREVIEW_SEAT_TOP_UP === '1';
+}
+
+/**
  * The collaborative GBA 300 demo for one seat.
  *
- * Creation-time only, like everything else a seat gets. It resolves what it needs
- * by persona email and no-ops when the class is already there, so it is safe to
- * retry — but it is deliberately NOT run for a seat whose organization already
- * exists. Reseeding an existing seat performs zero writes and preserves whatever
- * the person using it has diverged into, which is a contract with its own test;
- * a seat that has been in use for a week should not silently acquire a class and
- * eight students because a later deploy learned how to make them.
- *
- * The consequence is that a preview whose database predates this demo does not
- * get it. That database has to be recreated — `DEMO_RESET_DATA=true`, or a
- * destroyed and redeployed preview — which is the existing lever for exactly
- * this, rather than a new one that writes into other people's worlds.
+ * Runs at creation and, on a disposable preview, on later deploys too. It
+ * resolves what it needs by persona email and no-ops once the class is there, so
+ * it is safe to run repeatedly and safe to retry after a failure part-way.
  *
  * Same reasoning as the persona cast above: a seat missing the group work is a
  * seat where the thing under review cannot be reviewed.
@@ -197,7 +206,8 @@ export async function seedCollaborationDemoForSeat(
 export async function ensurePreviewSeats(
   prisma: PrismaClient,
   seats = buildPreviewSeatDefinitions(),
-  createSeat: PreviewSeatCreator = createPreviewSeat
+  createSeat: PreviewSeatCreator = createPreviewSeat,
+  topUpSeat: PreviewSeatCreator = seedCollaborationDemoForSeat
 ) {
   const results: Array<{
     organizationId: string;
@@ -210,6 +220,7 @@ export async function ensurePreviewSeats(
       select: { id: true },
     });
     if (existing) {
+      if (seatTopUpEnabled()) await topUpSeat(prisma, seat);
       results.push({
         organizationId: seat.organizationId,
         status: seat.adoptExisting ? 'adopted' : 'existing',
@@ -320,7 +331,8 @@ export async function createRuntimePreviewSeat(
     generateCode?: () => string;
     maxAttempts?: number;
   } = {},
-  createSeat: PreviewSeatCreator = createPreviewSeat
+  createSeat: PreviewSeatCreator = createPreviewSeat,
+  topUpSeat: PreviewSeatCreator = seedCollaborationDemoForSeat
 ) {
   const {
     reservedCodes = [],
