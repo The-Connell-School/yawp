@@ -2,33 +2,38 @@ import { prisma } from '~/utils/db.server';
 import { hasMeaningfulGrade } from '~/utils/teacher-document-status';
 
 export async function getTeacherClassCardStats(classId: string) {
-  const submissions = await prisma.submission.findMany({
+  const documents = await prisma.document.findMany({
     where: {
-      document: {
-        is: {
-          deletedAt: null,
-          classAssignment: { classId },
+      deletedAt: null,
+      classAssignment: { classId },
+    },
+    select: {
+      submissions: {
+        orderBy: { submittedAt: 'desc' },
+        take: 1,
+        select: {
+          score: true,
+          feedback: true,
+          rubricScores: true,
+          overallComment: true,
+          numericPercentage: true,
+          letterGrade: true,
+          releasedAt: true,
+          gradedAt: true,
         },
       },
     },
-    select: {
-      score: true,
-      feedback: true,
-      rubricScores: true,
-      overallComment: true,
-      numericPercentage: true,
-      letterGrade: true,
-      releasedAt: true,
-      gradedAt: true,
-    },
   });
+  const latestSubmissions = documents.flatMap(
+    (document) => document.submissions
+  );
 
-  const ungradedCount = submissions.filter(
+  const ungradedCount = latestSubmissions.filter(
     (submission) =>
       !hasMeaningfulGrade(submission) && !submission.releasedAt
   ).length;
 
-  const gradedUnreleasedCount = submissions.filter(
+  const gradedUnreleasedCount = latestSubmissions.filter(
     (submission) =>
       hasMeaningfulGrade(submission) && !submission.releasedAt
   ).length;
