@@ -63,7 +63,12 @@ export default function PreviewAccessRoute({ loaderData }: Route.ComponentProps)
 
         {loaderData.masterSelection ? (
           <div className="space-y-4">
-            <Form method="post" replace className="space-y-4">
+            <Form
+              method="post"
+              replace
+              className="space-y-4"
+              data-preview-organization-selector
+            >
               <input type="hidden" name="intent" value="select-organization" />
               <input type="hidden" name="returnTo" value={loaderData.returnTo} />
               <div>

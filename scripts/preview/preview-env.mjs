@@ -68,6 +68,21 @@ export function requirePreviewAccessCodes(value) {
   return codes.join(',');
 }
 
+export function requirePreviewMasterAccessCode(value) {
+  const code = String(value ?? '')
+    .trim()
+    .toLowerCase();
+  if (!code) {
+    throw new Error('PREVIEW_MASTER_ACCESS_CODE is required');
+  }
+  if (!/^[a-z]+-[a-z]+-[1-9][0-9]{3}$/.test(code)) {
+    throw new Error(
+      'PREVIEW_MASTER_ACCESS_CODE must be a two-word, four-digit code'
+    );
+  }
+  return code;
+}
+
 export function requirePreviewAccessSeats(value) {
   const raw = String(value ?? '').trim();
   if (!raw) {

@@ -6,6 +6,7 @@ import {
   requirePreviewAccessSecret,
   requirePreviewAccessSeats,
   requirePreviewAccessCodes,
+  requirePreviewMasterAccessCode,
   requirePreviewSessionSecret,
 } from './preview-env.mjs';
 
@@ -144,6 +145,18 @@ describe('buildPreviewEnv', () => {
     );
   });
 
+  test('requires one memorable generic master access code', () => {
+    expect(requirePreviewMasterAccessCode(' Wise-Owl-9876 ')).toBe(
+      'wise-owl-9876'
+    );
+    expect(() => requirePreviewMasterAccessCode('')).toThrow(
+      'PREVIEW_MASTER_ACCESS_CODE is required'
+    );
+    expect(() => requirePreviewMasterAccessCode('shared password')).toThrow(
+      'PREVIEW_MASTER_ACCESS_CODE must be a two-word, four-digit code'
+    );
+  });
+
   test('requires a strong cookie signing secret', () => {
     expect(
       requirePreviewSessionSecret('a-preview-session-secret-over-32-chars')
@@ -244,6 +257,7 @@ describe('buildPreviewEnv', () => {
     expect(deploy).toContain('PREVIEW_ACCESS_CODES');
     expect(deploy).toContain('PREVIEW_ACCESS_SEATS');
     expect(deploy).toContain('PREVIEW_ACCESS_SECRET');
+    expect(deploy).toContain('PREVIEW_MASTER_ACCESS_CODE');
     expect(deploy).toContain('PREVIEW_SESSION_SECRET');
     expect(deploy).toContain('PREVIEW_ACCESS_CODE=');
     expect(deploy).toContain('PREVIEW_SEAT_COUNT="${PREVIEW_SEAT_COUNT:-1}"');

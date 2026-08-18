@@ -56,6 +56,8 @@ jobs:
       PREVIEW_RUNTIME: production
       PREVIEW_DATA_MODE: ${{ vars.DEMO_DATA_MODE || 'seed' }}
       PREVIEW_SEAT_COUNT: ${{ vars.DEMO_SEAT_COUNT || '1' }}
+      PREVIEW_ACCESS_MASTER_ORGANIZATION_ID: ${{ (vars.DEMO_DATA_MODE || 'seed') == 'sanitized-production' && 'default-org' || 'local-dev-org' }}
+      PREVIEW_MASTER_ACCESS_CODE: ${{ secrets.PREVIEW_MASTER_ACCESS_CODE }}
       PREVIEW_AI_MODEL: ${{ vars.DEMO_AI_MODEL || 'claude-sonnet-4-6' }}
       PREVIEW_ANTHROPIC_API_KEY: ${{ secrets.PREVIEW_ANTHROPIC_API_KEY || secrets.ANTHROPIC_API_KEY }}
       PREVIEW_POSTGRES_ADMIN_PASSWORD: ${{ secrets.PREVIEW_DB_PASSWORD }}
@@ -76,6 +78,7 @@ jobs:
           test -n "$DEMO_SSH_PRIVATE_KEY" || { echo "Missing repository secret DEMO_SSH_PRIVATE_KEY"; exit 1; }
           test -n "$PREVIEW_ANTHROPIC_API_KEY" || { echo "Missing an Anthropic API key secret"; exit 1; }
           test -n "$PREVIEW_POSTGRES_ADMIN_PASSWORD" || { echo "Missing demo secret PREVIEW_DB_PASSWORD"; exit 1; }
+          test -n "$PREVIEW_MASTER_ACCESS_CODE" || { echo "Missing repository secret PREVIEW_MASTER_ACCESS_CODE"; exit 1; }
           if [[ ! "$DEMO_BACKUP_RETENTION" =~ ^[1-9][0-9]{0,2}$ ]] \
             || (( DEMO_BACKUP_RETENTION < 1 || DEMO_BACKUP_RETENTION > 365 )); then
             echo "backup_retention must be between 1 and 365" >&2
@@ -179,6 +182,8 @@ jobs:
             "PREVIEW_RUNTIME=production"
             "PREVIEW_DATA_MODE=$(shell_quote "$PREVIEW_DATA_MODE")"
             "PREVIEW_SEAT_COUNT=$(shell_quote "$PREVIEW_SEAT_COUNT")"
+            "PREVIEW_ACCESS_MASTER_ORGANIZATION_ID=$(shell_quote "$PREVIEW_ACCESS_MASTER_ORGANIZATION_ID")"
+            "PREVIEW_MASTER_ACCESS_CODE=$(shell_quote "$PREVIEW_MASTER_ACCESS_CODE")"
             "PREVIEW_AI_MODEL=$(shell_quote "$PREVIEW_AI_MODEL")"
             "PREVIEW_ANTHROPIC_API_KEY=$(shell_quote "$PREVIEW_ANTHROPIC_API_KEY")"
             "PREVIEW_POSTGRES_ADMIN_PASSWORD=$(shell_quote "$PREVIEW_POSTGRES_ADMIN_PASSWORD")"
@@ -227,6 +232,27 @@ jobs:
           case "$entered" in
             302|303) ;;
             *) echo "Demo access code returned HTTP $entered" >&2; exit 1 ;;
+          esac
+
+          master_jar="$(mktemp)"
+          master_entered="$(curl -sk -o /dev/null -m 15 -w '%{http_code}' -c "$master_jar" \
+            --data-urlencode "code=$PREVIEW_MASTER_ACCESS_CODE" "$url/auth/preview-access")"
+          case "$master_entered" in
+            302|303) ;;
+            *) echo "Demo master access code returned HTTP $master_entered" >&2; exit 1 ;;
+          esac
+          master_gate="$(curl -skL -m 15 -b "$master_jar" "$url/auth/preview-access")"
+          grep -q 'data-preview-organization-selector' <<<"$master_gate" || {
+            echo "Demo master access did not require organization selection" >&2
+            exit 1
+          }
+          master_selected="$(curl -sk -o /dev/null -m 15 -w '%{http_code}' -b "$master_jar" -c "$master_jar" \
+            --data-urlencode 'intent=select-organization' \
+            --data-urlencode "organizationId=$PREVIEW_ACCESS_MASTER_ORGANIZATION_ID" \
+            "$url/auth/preview-access")"
+          case "$master_selected" in
+            302|303) ;;
+            *) echo "Demo master organization selection returned HTTP $master_selected" >&2; exit 1 ;;
           esac
 
           for attempt in $(seq 1 30); do

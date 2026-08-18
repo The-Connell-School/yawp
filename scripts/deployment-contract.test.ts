@@ -821,6 +821,12 @@ describe('PR preview deployment contract', () => {
       'PREVIEW_ACCESS_MASTER_ORGANIZATION_ID=$(shell_quote "$PREVIEW_ACCESS_MASTER_ORGANIZATION_ID")'
     );
     expect(previewWorkflow).toContain(
+      'PREVIEW_MASTER_ACCESS_CODE: ${{ secrets.PREVIEW_MASTER_ACCESS_CODE }}'
+    );
+    expect(previewWorkflow).toContain(
+      'PREVIEW_MASTER_ACCESS_CODE=$(shell_quote "$PREVIEW_MASTER_ACCESS_CODE")'
+    );
+    expect(previewWorkflow).toContain(
       'PREVIEW_POSTGRES_ADMIN_PASSWORD=$(shell_quote "$PREVIEW_POSTGRES_ADMIN_PASSWORD")'
     );
     expect(previewWorkflow).not.toContain(deprecatedPreviewBasicAuth);

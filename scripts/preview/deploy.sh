@@ -95,6 +95,7 @@ load_or_create_database_credential() {
 load_or_create_database_credential
 eval "$(node "$SCRIPT_DIR/preview-env.mjs" --shell)"
 : "${PREVIEW_POSTGRES_ADMIN_PASSWORD:?PREVIEW_POSTGRES_ADMIN_PASSWORD is required}"
+: "${PREVIEW_MASTER_ACCESS_CODE:?PREVIEW_MASTER_ACCESS_CODE is required}"
 case "${PREVIEW_KEEP_AWAKE:-false}" in
   true) printf 'true\n' > "$PREVIEW_DIR/keep-awake" ;;
   false) rm -f -- "$PREVIEW_DIR/keep-awake" ;;
@@ -145,6 +146,7 @@ load_or_create_access_config() {
         -e PREVIEW_ACCESS_MASTER_LABEL="$PREVIEW_ACCESS_MASTER_LABEL" \
         -e PREVIEW_EXISTING_ACCESS_SEATS="$existing_seats" \
         -e PREVIEW_ACCESS_CODES="$legacy_codes" \
+        -e PREVIEW_MASTER_ACCESS_CODE="$PREVIEW_MASTER_ACCESS_CODE" \
         -v "$SOURCE_DIR:/app:ro" \
         -w /app \
         oven/bun:1.3.1 \
@@ -182,7 +184,7 @@ load_or_create_access_config() {
     fi
   fi
 
-  export PREVIEW_ACCESS_CODES PREVIEW_ACCESS_SEATS PREVIEW_ACCESS_SECRET PREVIEW_SESSION_SECRET PREVIEW_SEAT_COUNT
+  export PREVIEW_ACCESS_CODES PREVIEW_ACCESS_SEATS PREVIEW_ACCESS_SECRET PREVIEW_MASTER_ACCESS_CODE PREVIEW_SESSION_SECRET PREVIEW_SEAT_COUNT
 }
 
 load_or_create_access_config

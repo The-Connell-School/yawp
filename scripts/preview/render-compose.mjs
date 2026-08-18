@@ -2,6 +2,7 @@ import { fileURLToPath } from 'node:url';
 import {
   buildPreviewEnv,
   requirePreviewAccessSecret,
+  requirePreviewMasterAccessCode,
   requirePreviewAccessSeats,
   requirePreviewSessionSecret,
 } from './preview-env.mjs';
@@ -26,11 +27,14 @@ export function renderPreviewCompose({
   databaseUser = process.env.PREVIEW_DB_USER,
   databasePassword = process.env.PREVIEW_DB_PASSWORD,
   accessSeats = process.env.PREVIEW_ACCESS_SEATS,
+  masterAccessCode = process.env.PREVIEW_MASTER_ACCESS_CODE,
   accessSecret = process.env.PREVIEW_ACCESS_SECRET,
   sessionSecret = process.env.PREVIEW_SESSION_SECRET,
   aiMode = process.env.PREVIEW_AI_MODE || 'live',
 } = {}) {
   const previewAccessSeats = requirePreviewAccessSeats(accessSeats);
+  const previewMasterAccessCode =
+    requirePreviewMasterAccessCode(masterAccessCode);
   const previewAccessSecret = requirePreviewAccessSecret(accessSecret);
   const previewSessionSecret = requirePreviewSessionSecret(sessionSecret);
   if (!['disabled', 'live'].includes(aiMode)) {
@@ -69,6 +73,7 @@ export function renderPreviewCompose({
       PREVIEW_DATA_MODE: ${q(env.dataMode)}
       PREVIEW_ACCESS_GATE: "on"
       PREVIEW_ACCESS_SEATS: ${q(previewAccessSeats)}
+      PREVIEW_MASTER_ACCESS_CODE: ${q(previewMasterAccessCode)}
       PREVIEW_ACCESS_SECRET: ${q(previewAccessSecret)}
       PREVIEW_SEAT_COUNT: ${q(optionalEnv('PREVIEW_SEAT_COUNT', '1'))}
       PORT: "8080"
