@@ -115,6 +115,15 @@ fi
 
 if [[ -f "$DATA_SOURCE_FINGERPRINT_FILE" && "$(<"$DATA_SOURCE_FINGERPRINT_FILE")" == "$DATA_SOURCE_FINGERPRINT" ]]; then
   DATA_SOURCE_CHANGED=0
+elif [[ "$PREVIEW_SLUG" == "demo" && "${DEMO_RESET_DATA:-false}" != "true" ]]; then
+  if [[ -f "$DATA_SOURCE_FINGERPRINT_FILE" ]]; then
+    echo "Refusing to replace demo database while DEMO_RESET_DATA=false." >&2
+    echo "Requested data source: $DATA_SOURCE_FINGERPRINT" >&2
+    echo "Current data source: $(<"$DATA_SOURCE_FINGERPRINT_FILE")" >&2
+    exit 1
+  fi
+  # A missing fingerprint is safe only for a brand-new database. Once Postgres is
+  # available, reset_preview_database_for_data_source_change verifies that state.
 else
   rm -f "$ACCESS_CODE_FILE" "$ACCESS_SEATS_FILE"
 fi
@@ -421,8 +430,17 @@ ensure_production_dump_preview_database() {
 }
 
 reset_preview_database_for_data_source_change() {
-  if [[ "$DATA_SOURCE_CHANGED" != "1" ]] || ! database_exists "$DATABASE_NAME"; then
+  if [[ "$DATA_SOURCE_CHANGED" != "1" ]]; then
     return 0
+  fi
+
+  if ! database_exists "$DATABASE_NAME"; then
+    return 0
+  fi
+
+  if [[ "$PREVIEW_SLUG" == "demo" && "${DEMO_RESET_DATA:-false}" != "true" ]]; then
+    echo "Refusing to adopt an existing demo database without a matching data-source fingerprint." >&2
+    exit 1
   fi
 
   echo "Preview data source changed; replacing database $DATABASE_NAME..."
@@ -523,6 +541,7 @@ compute_tooling_fingerprint() {
         packages/prisma/scripts/assignment-type-release-gate.ts \
         packages/prisma/scripts/backfill-class-art-key.ts \
         packages/prisma/scripts/seed-local-dev.ts \
+        packages/prisma/scripts/sync-prod-fidelity-fixtures.ts \
         packages/prisma/scripts/preview-seats.ts \
         packages/prisma/scripts/seed-preview-seats.ts \
         packages/prisma/scripts/local-dev/class-insights.ts \
@@ -534,6 +553,14 @@ compute_tooling_fingerprint() {
           sha256_file "$file"
         fi
       done
+
+      if [[ -d packages/prisma/fixtures/prod-fidelity ]]; then
+        find packages/prisma/fixtures/prod-fidelity -type f -print \
+          | LC_ALL=C sort \
+          | while IFS= read -r file; do
+              sha256_file "$file"
+            done
+      fi
 
       if [[ -d packages/prisma/migrations ]]; then
         find packages/prisma/migrations -type f -print \
