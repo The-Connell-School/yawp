@@ -388,6 +388,13 @@ export default function LessonPlannerRoute() {
   // Packet edits get their own fetcher so keeping a section never blocks — or
   // is blocked by — a chat turn in flight.
   const packetFetcher = useFetcher();
+  // What the in-flight add-material submission was for, so a conflict
+  // response can be resolved and, if the teacher confirms, resubmitted with
+  // the same identifiers plus the override.
+  const pendingMaterialRef = useRef<{
+    messageId: string;
+    materialKey: string;
+  } | null>(null);
 
   function setKept(messageId: string, audience: PacketAudience | null) {
     if (!conversationId) return;
@@ -410,10 +417,47 @@ export default function LessonPlannerRoute() {
   }
 
   // Filing a revision replaces the version it supersedes, so the card for the
-  // older one has to stop claiming to be in the packet.
+  // older one has to stop claiming to be in the packet. And a slot the
+  // teacher hand-edited refuses the same filing instead — ask before a
+  // click in the chat erases an edit made in the stack.
   useEffect(() => {
-    const replaced = (packetFetcher.data as { replaced?: string } | undefined)
-      ?.replaced;
+    const data = packetFetcher.data as
+      | { replaced?: string; conflict?: boolean }
+      | undefined;
+    if (!data) return;
+
+    if (data.conflict) {
+      const pending = pendingMaterialRef.current;
+      pendingMaterialRef.current = null;
+      if (!pending || !conversationId) return;
+      const token = `${pending.messageId}:${pending.materialKey}`;
+      // The optimistic add never actually happened — take the pill back off
+      // while the teacher decides.
+      setAddedMaterials((prev) => {
+        if (!prev.has(token)) return prev;
+        const next = new Set(prev);
+        next.delete(token);
+        return next;
+      });
+      const replace = window.confirm(
+        'This has been edited by hand in the stack. Filing this version will replace those edits. Replace them?'
+      );
+      if (!replace) return;
+      setAddedMaterials((prev) => new Set(prev).add(token));
+      packetFetcher.submit(
+        {
+          intent: 'add-material',
+          conversationId,
+          messageId: pending.messageId,
+          materialKey: pending.materialKey,
+          confirmReplace: '1',
+        },
+        { method: 'post', action: '/api/domain/lesson-planner/packet' }
+      );
+      return;
+    }
+
+    const replaced = data.replaced;
     if (!replaced) return;
     setAddedMaterials((prev) => {
       if (!prev.has(replaced)) return prev;
@@ -421,7 +465,7 @@ export default function LessonPlannerRoute() {
       next.delete(replaced);
       return next;
     });
-  }, [packetFetcher.data]);
+  }, [packetFetcher.data, conversationId]);
 
   // A material goes into the packet on its own — the teacher wanted the
   // handout, not the whole lesson plan wrapped around it.
@@ -438,6 +482,7 @@ export default function LessonPlannerRoute() {
       else next.delete(token);
       return next;
     });
+    if (added) pendingMaterialRef.current = { messageId, materialKey };
     packetFetcher.submit(
       {
         intent: added ? 'add-material' : 'remove-material',

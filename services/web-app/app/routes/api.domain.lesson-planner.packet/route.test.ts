@@ -444,3 +444,153 @@ describe('lesson packet action', () => {
     expect(prisma.lessonPlanMessage.updateMany).not.toHaveBeenCalled();
   });
 });
+
+/**
+ * A teacher's own words in a handout, saved directly — and what has to
+ * happen the moment a later "Add to stack" click would write over them.
+ */
+describe('lesson packet action — editing a material by hand', () => {
+  test('saves the new content and marks it edited', async () => {
+    prisma.lessonPlanMaterial.updateMany.mockResolvedValue({ count: 1 });
+
+    const response = await action({
+      request: formRequest({
+        intent: 'edit-material',
+        conversationId: 'plan-1',
+        materialId: 'material-1',
+        content: 'Read each excerpt, revised by hand.',
+      }),
+    } as any);
+
+    expect(prisma.lessonPlanMaterial.updateMany.mock.calls[0][0]).toMatchObject(
+      {
+        where: { id: 'material-1', conversationId: 'plan-1' },
+        data: { content: 'Read each excerpt, revised by hand.' },
+      }
+    );
+    expect(
+      prisma.lessonPlanMaterial.updateMany.mock.calls[0][0].data.editedAt
+    ).toBeInstanceOf(Date);
+    expect((response.data as any).edited).toBe(true);
+  });
+
+  test('refuses to edit a material from another lesson', async () => {
+    prisma.lessonPlanMaterial.updateMany.mockResolvedValue({ count: 0 });
+
+    const response = await action({
+      request: formRequest({
+        intent: 'edit-material',
+        conversationId: 'plan-1',
+        materialId: 'someone-elses-material',
+        content: 'Rewritten.',
+      }),
+    } as any);
+
+    expect(response.init?.status).toBe(404);
+  });
+
+  test('requires content', async () => {
+    const response = await action({
+      request: formRequest({
+        intent: 'edit-material',
+        conversationId: 'plan-1',
+        materialId: 'material-1',
+      }),
+    } as any);
+
+    expect(response.init?.status).toBe(422);
+  });
+});
+
+describe('lesson packet action — filing a revision over a hand-edited material', () => {
+  test('refuses to file a different version without asking first', async () => {
+    prisma.lessonPlanMaterial.findUnique.mockResolvedValue({
+      sourceMessageId: 'msg-old',
+      blockKey: '0',
+      editedAt: new Date('2026-08-18T09:00:00.000Z'),
+    });
+
+    const response = await action({
+      request: formRequest({
+        intent: 'add-material',
+        conversationId: 'plan-1',
+        messageId: 'msg-1',
+        materialKey: '0',
+      }),
+    } as any);
+
+    expect(response.init?.status).toBe(409);
+    expect((response.data as any).conflict).toBe(true);
+    expect(prisma.lessonPlanMaterial.upsert).not.toHaveBeenCalled();
+  });
+
+  test('files the revision once the teacher confirms, and clears the fork', async () => {
+    prisma.lessonPlanMaterial.findUnique.mockResolvedValue({
+      sourceMessageId: 'msg-old',
+      blockKey: '0',
+      editedAt: new Date('2026-08-18T09:00:00.000Z'),
+    });
+
+    const response = await action({
+      request: formRequest({
+        intent: 'add-material',
+        conversationId: 'plan-1',
+        messageId: 'msg-1',
+        materialKey: '0',
+        confirmReplace: '1',
+      }),
+    } as any);
+
+    const upsert = prisma.lessonPlanMaterial.upsert.mock.calls[0][0];
+    expect(upsert.update).toMatchObject({
+      sourceMessageId: 'msg-1',
+      editedAt: null,
+    });
+    expect((response.data as any).replaced).toBe('msg-old:0');
+  });
+
+  /**
+   * Re-filing the exact material the edit was made on is not a new version —
+   * it has nowhere else to have come from — so it must not be treated as a
+   * conflict even though the slot's `editedAt` is still set.
+   */
+  test('does not treat re-filing the same source as a conflict', async () => {
+    prisma.lessonPlanMaterial.findUnique.mockResolvedValue({
+      sourceMessageId: 'msg-1',
+      blockKey: '0',
+      editedAt: new Date('2026-08-18T09:00:00.000Z'),
+    });
+
+    const response = await action({
+      request: formRequest({
+        intent: 'add-material',
+        conversationId: 'plan-1',
+        messageId: 'msg-1',
+        materialKey: '0',
+      }),
+    } as any);
+
+    expect(response.init?.status).toBeUndefined();
+    expect(prisma.lessonPlanMaterial.upsert).toHaveBeenCalled();
+  });
+
+  test('an unedited slot replaces normally, same as before', async () => {
+    prisma.lessonPlanMaterial.findUnique.mockResolvedValue({
+      sourceMessageId: 'msg-old',
+      blockKey: '0',
+      editedAt: null,
+    });
+
+    const response = await action({
+      request: formRequest({
+        intent: 'add-material',
+        conversationId: 'plan-1',
+        messageId: 'msg-1',
+        materialKey: '0',
+      }),
+    } as any);
+
+    expect(response.init?.status).toBeUndefined();
+    expect((response.data as any).replaced).toBe('msg-old:0');
+  });
+});

@@ -1096,10 +1096,12 @@ test.describe('YAWP! Lesson Planner', () => {
     );
     await expect(keptRow).toHaveCount(1);
     await expect(draftRow).toHaveCount(1);
-    // A lesson with nothing kept says so rather than pretending to be one.
+    // A lesson with nothing kept says so rather than pretending to be one —
+    // "Empty" describes the stack, not the draft/published status the row
+    // already sits under.
     await expect(
       page.getByRole('listitem').filter({ has: draftRow })
-    ).toContainText(/draft/i);
+    ).toContainText(/empty/i);
     await expect(
       page.getByRole('listitem').filter({ has: keptRow })
     ).toContainText(/1 piece/i);
@@ -2072,6 +2074,128 @@ test.describe('YAWP! Lesson Planner', () => {
     await page.goto(`/app/lesson-planner/${conversationId}/packet`);
     await expect(page.locator('main')).toContainText('The shorter version.');
     await expect(page.locator('main')).not.toContainText('The long version.');
+  });
+
+  test('edits a filed handout in place, in the stack', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    await setLessonPlannerEnabled(e2eContext.organizationId, true);
+    const { conversationId } = await seedLessonWithMaterials(e2eContext);
+    await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+    await page.goto(`/app/lesson-planner?c=${conversationId}`);
+
+    const save = page.waitForResponse(
+      (response) =>
+        response.url().includes('/api/domain/lesson-planner/packet') &&
+        response.request().method() === 'POST'
+    );
+    await page
+      .getByTestId('material-card')
+      .nth(1)
+      .getByTestId('material-toggle')
+      .click();
+    await save;
+
+    await page.goto(`/app/lesson-planner/${conversationId}/packet`);
+    await page.getByTestId('material-edit-start').click();
+    const textarea = page.getByTestId('material-editor-textarea');
+    await expect(textarea).toBeVisible();
+    await textarea.fill('Read each excerpt, revised by hand for this class.');
+
+    const saveEdit = page.waitForResponse(
+      (response) =>
+        response.url().includes('/api/domain/lesson-planner/packet') &&
+        response.request().method() === 'POST'
+    );
+    await page.getByTestId('material-editor-save').click();
+    await saveEdit;
+
+    await expect(page.getByTestId('material-editor')).toHaveCount(0);
+    await expect(page.locator('main')).toContainText(
+      'revised by hand for this class'
+    );
+    await expect(page.getByTestId('material-edited-badge')).toBeVisible();
+
+    // Reload: the edit is saved, not just held in the page's own state.
+    await page.reload();
+    await expect(page.locator('main')).toContainText(
+      'revised by hand for this class'
+    );
+    await expect(page.getByTestId('material-edited-badge')).toBeVisible();
+  });
+
+  test('asks before a chat revision replaces a hand-edited handout', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    await setLessonPlannerEnabled(e2eContext.organizationId, true);
+    const { conversationId } = await seedRevisedHandout(e2eContext);
+    await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+    await page.goto(`/app/lesson-planner?c=${conversationId}`);
+
+    // File the first version, then hand-edit it in the stack.
+    const cards = page.getByTestId('material-card');
+    const fileFirst = page.waitForResponse(
+      (response) =>
+        response.url().includes('/api/domain/lesson-planner/packet') &&
+        response.request().method() === 'POST'
+    );
+    await cards.nth(0).getByTestId('material-toggle').click();
+    await fileFirst;
+
+    await page.goto(`/app/lesson-planner/${conversationId}/packet`);
+    await page.getByTestId('material-edit-start').click();
+    await page
+      .getByTestId('material-editor-textarea')
+      .fill('My own rewrite of the long version.');
+    const saveEdit = page.waitForResponse(
+      (response) =>
+        response.url().includes('/api/domain/lesson-planner/packet') &&
+        response.request().method() === 'POST'
+    );
+    await page.getByTestId('material-editor-save').click();
+    await saveEdit;
+
+    // Back in chat, filing the second version over the same slot has to ask
+    // rather than quietly erase the edit just made.
+    await page.goto(`/app/lesson-planner?c=${conversationId}`);
+    page.once('dialog', (dialog) => dialog.dismiss());
+    const conflict = page.waitForResponse(
+      (response) =>
+        response.url().includes('/api/domain/lesson-planner/packet') &&
+        response.status() === 409
+    );
+    await cards.nth(1).getByTestId('material-toggle').click();
+    await conflict;
+
+    // Dismissed: the hand-edited version is still what is filed.
+    await page.goto(`/app/lesson-planner/${conversationId}/packet`);
+    await expect(page.locator('main')).toContainText(
+      'My own rewrite of the long version.'
+    );
+
+    // Back in chat, try again and accept this time.
+    await page.goto(`/app/lesson-planner?c=${conversationId}`);
+    page.once('dialog', (dialog) => dialog.accept());
+    const replaced = page.waitForResponse(
+      (response) =>
+        response.url().includes('/api/domain/lesson-planner/packet') &&
+        response.status() !== 409
+    );
+    await cards.nth(1).getByTestId('material-toggle').click();
+    await replaced;
+
+    await page.goto(`/app/lesson-planner/${conversationId}/packet`);
+    await expect(page.locator('main')).toContainText('The shorter version.');
+    await expect(page.locator('main')).not.toContainText(
+      'My own rewrite of the long version.'
+    );
+    // The fork is over: the "Edited" mark does not survive a confirmed
+    // replace, because the content on file came from the model again.
+    await expect(page.getByTestId('material-edited-badge')).toHaveCount(0);
   });
 
   test('files a deck on its own and presents it from the packet', async ({

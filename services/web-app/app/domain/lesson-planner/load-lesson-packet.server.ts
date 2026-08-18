@@ -72,6 +72,7 @@ export async function loadLessonPacket({
           title: true,
           audience: true,
           content: true,
+          editedAt: true,
         },
       },
     },
@@ -111,6 +112,7 @@ export async function loadLessonPacket({
         keptTitle: material.title,
         kind: packetKindForMaterial(material.kind),
         origin: 'material' as const,
+        editedAt: material.editedAt,
       },
     })),
   ]

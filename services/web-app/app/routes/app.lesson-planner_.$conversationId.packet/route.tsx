@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Link,
   useFetcher,
@@ -13,6 +13,8 @@ import {
   ListTree,
   Rows,
   BookMarked,
+  PenLine,
+  X,
 } from 'lucide-react';
 import {
   KIND_LABEL,
@@ -49,6 +51,9 @@ export default function LessonPacketRoute() {
   const [excluded, setExcluded] = useState<string[]>([]);
   const [filter, setFilter] = useState<ResourceFilter>('all');
   const scrollerRef = useRef<HTMLElement>(null);
+  // A material being hand-edited, by section id. Only one at a time — editing
+  // a second piece mid-edit is not a case worth the state to support.
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   // Answer the click straight away; waiting on the round trip reads as a
   // button that did not work.
@@ -438,6 +443,15 @@ export default function LessonPacketRoute() {
                         <KindIcon kind={section.kind} size={11} />
                         {KIND_LABEL[section.kind]}
                       </span>
+                      {section.edited ? (
+                        <span
+                          data-testid="material-edited-badge"
+                          className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary print:hidden"
+                        >
+                          <PenLine size={11} />
+                          Edited
+                        </span>
+                      ) : null}
                       <h2 className="min-w-0 flex-1 text-base font-semibold">
                         <input
                           aria-label={`Name for ${section.title}`}
@@ -449,6 +463,21 @@ export default function LessonPacketRoute() {
                           className="w-full rounded border border-transparent bg-transparent px-1 py-0.5 font-semibold hover:border-border focus:border-border focus:outline-none print:border-0 print:px-0"
                         />
                       </h2>
+                      {/* Only a filed material has its own content to edit — a
+                          kept reply is a turn of the conversation, not one
+                          artifact with a place to save an edit back to. */}
+                      {section.origin === 'material' &&
+                      editingId !== section.id ? (
+                        <button
+                          type="button"
+                          onClick={() => setEditingId(section.id)}
+                          data-testid="material-edit-start"
+                          className="inline-flex shrink-0 items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-muted-foreground transition hover:bg-foreground/5 hover:text-foreground print:hidden"
+                        >
+                          <PenLine size={13} />
+                          Edit
+                        </button>
+                      ) : null}
                       <a
                         href={pdfHref(section.id)}
                         download
@@ -459,10 +488,19 @@ export default function LessonPacketRoute() {
                         Save this as PDF
                       </a>
                     </div>
-                    <SectionContent
-                      section={section}
-                      conversationId={conversationId}
-                    />
+                    {editingId === section.id ? (
+                      <MaterialEditor
+                        materialId={section.id}
+                        conversationId={conversationId}
+                        content={section.content}
+                        onDone={() => setEditingId(null)}
+                      />
+                    ) : (
+                      <SectionContent
+                        section={section}
+                        conversationId={conversationId}
+                      />
+                    )}
                   </section>
                 ))}
               </div>
@@ -544,6 +582,134 @@ function SectionContent({
           </div>
         </div>
       ))}
+    </div>
+  );
+}
+
+/**
+ * Editing a filed material's own words, in place, in the stack.
+ *
+ * A plain textarea over the Markdown, not a rich editor: the same content
+ * feeds the packet page, the PDF, and the pptx exporter, all of which parse
+ * this Markdown directly, and a rich editor round-trips through its own model
+ * on the way there. One source of truth stays one source of truth.
+ *
+ * Saving here is what forks the material out of the model's control — the
+ * server marks it edited, and a later "Add to stack" over the same slot has
+ * to ask before it can replace what got typed here.
+ */
+function MaterialEditor({
+  materialId,
+  conversationId,
+  content,
+  onDone,
+}: {
+  materialId: string;
+  conversationId: string;
+  content: string;
+  onDone: () => void;
+}) {
+  const fetcher = useFetcher();
+  const [tab, setTab] = useState<'write' | 'preview'>('write');
+  const [draft, setDraft] = useState(content);
+  const saving = fetcher.state !== 'idle';
+  const error =
+    fetcher.state === 'idle' &&
+    fetcher.data &&
+    typeof fetcher.data === 'object' &&
+    'error' in (fetcher.data as Record<string, unknown>)
+      ? String((fetcher.data as Record<string, unknown>).error)
+      : null;
+
+  // Leave edit mode the moment the save actually lands — not on submit, so an
+  // error keeps the draft on screen instead of quietly discarding it.
+  useEffect(() => {
+    if (fetcher.state === 'idle' && fetcher.data && !error) onDone();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fetcher.state, fetcher.data]);
+
+  function save() {
+    fetcher.submit(
+      {
+        intent: 'edit-material',
+        conversationId,
+        materialId,
+        content: draft,
+      },
+      { method: 'post', action: '/api/domain/lesson-planner/packet' }
+    );
+  }
+
+  return (
+    <div
+      data-testid="material-editor"
+      className="rounded-lg border bg-foreground/[0.02] p-3"
+    >
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <div className="flex rounded-md border bg-background p-0.5">
+          {(['write', 'preview'] as const).map((option) => (
+            <button
+              key={option}
+              type="button"
+              onClick={() => setTab(option)}
+              aria-pressed={tab === option}
+              data-testid={`material-editor-tab-${option}`}
+              className={cn(
+                'rounded px-2.5 py-1 text-xs font-medium capitalize text-muted-foreground transition',
+                tab === option && 'bg-primary/10 text-primary'
+              )}
+            >
+              {option}
+            </button>
+          ))}
+        </div>
+        <button
+          type="button"
+          onClick={onDone}
+          aria-label="Cancel editing"
+          className="rounded-md p-1 text-muted-foreground transition hover:bg-foreground/5 hover:text-foreground"
+        >
+          <X size={14} />
+        </button>
+      </div>
+
+      {tab === 'write' ? (
+        <textarea
+          value={draft}
+          onChange={(event) => setDraft(event.target.value)}
+          aria-label="Edit material"
+          data-testid="material-editor-textarea"
+          rows={12}
+          className="w-full resize-y rounded-md border bg-background p-3 font-mono text-sm leading-relaxed focus:border-primary focus:outline-none"
+        />
+      ) : (
+        <div className="rounded-md border bg-background p-3">
+          <MarkdownContent content={draft} />
+        </div>
+      )}
+
+      {error ? (
+        <p className="mt-2 text-sm text-destructive" role="alert">
+          {error === 'edited'
+            ? 'Something changed before this saved. Try again.'
+            : 'That did not save. Try again.'}
+        </p>
+      ) : null}
+
+      <div className="mt-2 flex items-center justify-end gap-2">
+        <Button variant="outline" size="sm" onClick={onDone} type="button">
+          Cancel
+        </Button>
+        <Button
+          size="sm"
+          type="button"
+          onClick={save}
+          disabled={saving || draft.trim().length === 0}
+          data-testid="material-editor-save"
+        >
+          {saving ? 'Saving…' : 'Save'}
+        </Button>
+      </div>
     </div>
   );
 }

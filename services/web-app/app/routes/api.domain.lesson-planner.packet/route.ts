@@ -21,6 +21,8 @@ import {
 
 const MAX_PACKET_TITLE_CHARS = 120;
 const MAX_SECTION_TITLE_CHARS = 120;
+// A handout runs several printed pages; a tight cap would clip one mid-page.
+const MAX_MATERIAL_CONTENT_CHARS = 20_000;
 
 const MESSAGE_INTENTS = [
   'keep',
@@ -40,6 +42,7 @@ const POST = z
       'add-material',
       'remove-material',
       'rename-material',
+      'edit-material',
       'publish',
       'unpublish',
       'delete',
@@ -53,6 +56,14 @@ const POST = z
     audience: z.enum(PACKET_AUDIENCES).optional(),
     packetTitle: z.string().max(MAX_PACKET_TITLE_CHARS).optional(),
     sectionTitle: z.string().max(MAX_SECTION_TITLE_CHARS).optional(),
+    /** New body for `edit-material`. */
+    content: z.string().max(MAX_MATERIAL_CONTENT_CHARS).optional(),
+    /**
+     * Set to file a revision over a material the teacher has hand-edited
+     * anyway — the confirmation a conflict asks for, sent back explicitly
+     * rather than assumed.
+     */
+    confirmReplace: z.enum(['1']).optional(),
   })
   .strict()
   .superRefine((value, context) => {
@@ -74,6 +85,20 @@ const POST = z
         code: z.ZodIssueCode.custom,
         path: ['messageId'],
         message: 'A message is required.',
+      });
+    }
+    if (value.intent === 'edit-material' && !value.materialId) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['materialId'],
+        message: 'A material is required.',
+      });
+    }
+    if (value.intent === 'edit-material' && value.content === undefined) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['content'],
+        message: 'Content is required.',
       });
     }
   });
@@ -175,6 +200,28 @@ export async function action({ request }: ActionFunctionArgs) {
     });
   }
 
+  // A teacher's own words in a handout, saved directly. `editedAt` is what
+  // forks this material out of the model's control: a revision the planner
+  // writes for the same slot after this can no longer replace it without
+  // asking, because the content here is no longer something the model wrote.
+  if (data.intent === 'edit-material') {
+    const { count } = await prisma.lessonPlanMaterial.updateMany({
+      where: { id: data.materialId!, conversationId: conversation.id },
+      data: { content: data.content!, editedAt: new Date() },
+    });
+    if (count === 0) {
+      return dataResponse(
+        { error: 'That material is not part of this lesson.' },
+        { status: 404 }
+      );
+    }
+    return dataResponse({
+      materialId: data.materialId,
+      content: data.content,
+      edited: true,
+    });
+  }
+
   // A material is kept on its own: a teacher who wants the handout should not
   // have to take the whole lesson plan wrapped around it.
   if (data.intent === 'add-material' || data.intent === 'remove-material') {
@@ -240,8 +287,30 @@ export async function action({ request }: ActionFunctionArgs) {
           slot: material.slot,
         },
       },
-      select: { sourceMessageId: true, blockKey: true },
+      select: { sourceMessageId: true, blockKey: true, editedAt: true },
     });
+
+    // A different version filed over a hand-edited one is exactly the case
+    // `editedAt` exists to catch: without asking, the teacher's own words
+    // vanish under whatever the model happened to write next. Re-filing the
+    // same material the edit was made on is not a conflict — that already
+    // has nowhere else to go — so only a genuinely different source blocks.
+    const isDifferentVersion =
+      replaced &&
+      (replaced.sourceMessageId !== message.id ||
+        replaced.blockKey !== material.key);
+    if (replaced?.editedAt && isDifferentVersion && !data.confirmReplace) {
+      return dataResponse(
+        {
+          error: 'edited',
+          conflict: true,
+          message:
+            'This has been edited by hand. Filing the new version will replace those edits.',
+        },
+        { status: 409 }
+      );
+    }
+
     await prisma.lessonPlanMaterial.upsert({
       where: {
         conversationId_slot: {
@@ -254,7 +323,9 @@ export async function action({ request }: ActionFunctionArgs) {
         slot: material.slot,
         ...saved,
       },
-      update: saved,
+      // Confirmed or not previously edited: the content now on file came from
+      // the model again, so any earlier fork is over.
+      update: { ...saved, editedAt: null },
     });
 
     return dataResponse({

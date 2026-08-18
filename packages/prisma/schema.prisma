@@ -813,6 +813,12 @@ model LessonPlanMaterial {
   title           String
   audience        String
   content         String
+  /// Set the moment a teacher hand-edits this material's content in the
+  /// stack. While set, a revision the planner writes for the same slot no
+  /// longer replaces it silently — editing forks the material out of the
+  /// model's control, because a hand-edited handout is a decision, not a
+  /// draft to be clobbered by the next thing the model happens to write.
+  editedAt        DateTime?              @db.Timestamptz(6)
 
   @@unique([conversationId, slot])
   @@index([conversationId, sourceMessageId, blockKey])

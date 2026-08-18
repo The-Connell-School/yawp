@@ -325,6 +325,34 @@ describe('buildLessonPacket — materials kept on their own', () => {
     expect(packet.sections[0]!.origin).toBe('reply');
     expect(packet.sections[1]!.origin).toBe('material');
   });
+
+  test('is not marked edited when nothing has been hand-edited', () => {
+    expect(packet.sections[0]!.edited).toBe(false);
+    expect(packet.sections[1]!.edited).toBe(false);
+  });
+
+  /**
+   * `editedAt` is what tells the stack a material was hand-edited and should
+   * no longer be silently replaced by a later revision from the model.
+   */
+  test('marks a material edited once it carries an editedAt', () => {
+    const edited = buildLessonPacket({
+      title: 'Evidence lesson',
+      className: null,
+      sections: [
+        {
+          id: 'material-1',
+          content:
+            '## Diagnose & Repair\n\nRead each excerpt, revised by hand.',
+          keptAudience: 'student',
+          kind: 'handout',
+          origin: 'material',
+          editedAt: new Date('2026-08-18T10:00:00.000Z'),
+        },
+      ],
+    });
+    expect(edited.sections[0]!.edited).toBe(true);
+  });
 });
 
 describe('buildLessonPacket — a kept reply that carries materials', () => {

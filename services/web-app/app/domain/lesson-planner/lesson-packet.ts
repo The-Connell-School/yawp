@@ -140,6 +140,8 @@ export type PacketSectionInput = {
   /** Known for a material; derived from the text for a kept reply. */
   kind?: PacketSectionKind;
   origin?: PacketSectionOrigin;
+  /** Set for a material the teacher hand-edited in the stack. */
+  editedAt?: Date | string | null;
 };
 
 export type PacketSection = {
@@ -155,6 +157,13 @@ export type PacketSection = {
    * section instead of being dropped or shown as a fence.
    */
   materials: LessonMaterial[];
+  /**
+   * Whether a teacher hand-edited this material's content in the stack. Only
+   * ever true for a `material` section — a kept reply has no separate edit
+   * path — and it is what tells the stack to show an "Edited" mark and offer
+   * editing again instead of the plain read view.
+   */
+  edited: boolean;
   /**
    * The deck this section hands over, parsed once here rather than at each
    * point of render.
@@ -251,6 +260,7 @@ export function buildLessonPacket({
       kind: section.kind ?? deriveSectionKind(body, audience),
       origin: section.origin ?? 'reply',
       materials,
+      edited: Boolean(section.editedAt),
       deck,
       deckFailed: deckOutcome.kind === 'unreadable',
       anchor: `resource-${section.id}`,
