@@ -29,7 +29,7 @@ async function makeHarness({ duplicate = false } = {}) {
 set -euo pipefail
 if [[ " $* " == *" ps --format "* ]]; then
   printf 'app123 yawp-demo-web:current\n'
-  printf 'traefik123 traefik:v3.1\n'
+  printf 'traefik123 traefik\n'
   ${duplicate ? "printf 'traefik456 docker.io/library/traefik:v3.1\\n'" : ':'}
 elif [[ " $* " == *" inspect "*"traefik123"* ]]; then
   printf '${dynamic}\n'
@@ -62,7 +62,7 @@ function run(env: Record<string, string | undefined>) {
 }
 
 describe('Traefik dynamic directory discovery', () => {
-  test('uses the host directory mounted at /dynamic by the running Traefik container', async () => {
+  test('supports an untagged legacy Traefik image while resolving its /dynamic mount', async () => {
     const harness = await makeHarness();
     const result = run(harness.env);
 
