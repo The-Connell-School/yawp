@@ -3,8 +3,6 @@ import { fileURLToPath } from 'node:url';
 
 const DEFAULT_ROOT = '/srv/yawp-preview';
 const DEFAULT_DATABASE_HOST = 'preview-postgres';
-const DEFAULT_DATABASE_USER = 'postgres';
-const DEFAULT_DATABASE_PASSWORD = 'postgres';
 const DEFAULT_DATABASE_PORT = '5432';
 const DEFAULT_TEMPLATE_DATABASE_NAME = 'yawp_template';
 
@@ -166,9 +164,8 @@ export function buildPreviewEnv({
   runtime = process.env.PREVIEW_RUNTIME || 'fast',
   dataMode = process.env.PREVIEW_DATA_MODE || 'seed',
   databaseHost = process.env.PREVIEW_DB_HOST || DEFAULT_DATABASE_HOST,
-  databaseUser = process.env.PREVIEW_DB_USER || DEFAULT_DATABASE_USER,
-  databasePassword = process.env.PREVIEW_DB_PASSWORD ||
-    DEFAULT_DATABASE_PASSWORD,
+  databaseUser = process.env.PREVIEW_DB_USER,
+  databasePassword = process.env.PREVIEW_DB_PASSWORD,
   databasePort = process.env.PREVIEW_DB_PORT || DEFAULT_DATABASE_PORT,
   templateDatabaseName = process.env.PREVIEW_DB_TEMPLATE_DB ||
     DEFAULT_TEMPLATE_DATABASE_NAME,
@@ -184,6 +181,14 @@ export function buildPreviewEnv({
   const slug = namedSlug || `pr-${safePrNumber}`;
   const composeProject = `yawp-${slug}`;
   const databaseName = `yawp_${slug.replace(/-/g, '_')}`;
+  const resolvedDatabaseUser = String(databaseUser || `${databaseName}_app`);
+  const resolvedDatabasePassword = String(databasePassword || '');
+  if (!/^[a-z_][a-z0-9_]{0,62}$/.test(resolvedDatabaseUser)) {
+    throw new Error('PREVIEW_DB_USER must be a valid Postgres role name');
+  }
+  if (!databaseUrl && !/^[A-Za-z0-9_-]{32,}$/.test(resolvedDatabasePassword)) {
+    throw new Error('PREVIEW_DB_PASSWORD must be a 32-character URL-safe secret');
+  }
   const hostname = `${slug}.${safeDomain}`;
   const previewRoot = safeRoot.startsWith('/') ? safeRoot : `/${safeRoot}`;
   const previewDir = path.posix.join(previewRoot, 'previews', slug);
@@ -195,7 +200,7 @@ export function buildPreviewEnv({
     : `${scheme}://${hostname}`;
   const resolvedDatabaseUrl =
     databaseUrl ||
-    `postgresql://${databaseUser}:${databasePassword}@${databaseHost}:${databasePort}/${databaseName}`;
+    `postgresql://${resolvedDatabaseUser}:${resolvedDatabasePassword}@${databaseHost}:${databasePort}/${databaseName}`;
 
   return {
     prNumber: safePrNumber,
@@ -204,8 +209,8 @@ export function buildPreviewEnv({
     databaseName,
     databaseHost,
     databasePort,
-    databaseUser,
-    databasePassword,
+    databaseUser: resolvedDatabaseUser,
+    databasePassword: resolvedDatabasePassword,
     templateDatabaseName,
     hostname,
     url,

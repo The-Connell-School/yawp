@@ -23,13 +23,22 @@ export function renderPreviewCompose({
   enableTls = process.env.PREVIEW_TLS !== 'false',
   runtime = process.env.PREVIEW_RUNTIME || 'fast',
   dataMode = process.env.PREVIEW_DATA_MODE || 'seed',
+  databaseUser = process.env.PREVIEW_DB_USER,
+  databasePassword = process.env.PREVIEW_DB_PASSWORD,
   accessSeats = process.env.PREVIEW_ACCESS_SEATS,
   accessSecret = process.env.PREVIEW_ACCESS_SECRET,
   sessionSecret = process.env.PREVIEW_SESSION_SECRET,
+  aiMode = process.env.PREVIEW_AI_MODE || 'live',
 } = {}) {
   const previewAccessSeats = requirePreviewAccessSeats(accessSeats);
   const previewAccessSecret = requirePreviewAccessSecret(accessSecret);
   const previewSessionSecret = requirePreviewSessionSecret(sessionSecret);
+  if (!['disabled', 'live'].includes(aiMode)) {
+    throw new Error('PREVIEW_AI_MODE must be disabled or live');
+  }
+  const anthropicApiKey = aiMode === 'live'
+    ? optionalEnv('PREVIEW_ANTHROPIC_API_KEY')
+    : '';
   const env = buildPreviewEnv({
     prNumber,
     domain,
@@ -39,6 +48,8 @@ export function renderPreviewCompose({
     tls: enableTls,
     runtime,
     dataMode,
+    databaseUser,
+    databasePassword,
   });
   const routerBase = env.composeProject;
   const directPortBlock = env.directPort
@@ -72,7 +83,9 @@ export function renderPreviewCompose({
       RESEND_API_KEY: ${q(optionalEnv('PREVIEW_RESEND_API_KEY', 'preview-resend-key'))}
       OPENAI_ORGANIZATION_ID: ${q(optionalEnv('PREVIEW_OPENAI_ORGANIZATION_ID'))}
       OPENAI_API_KEY: ${q(optionalEnv('PREVIEW_OPENAI_API_KEY'))}
-      ANTHROPIC_API_KEY: ${q(optionalEnv('PREVIEW_ANTHROPIC_API_KEY'))}
+      YAWP_PREVIEW_AI_MODE: ${q(aiMode)}
+      CLASS_INSIGHT_MOCK_MODE: ${q(aiMode === 'disabled' ? 'fixture' : optionalEnv('PREVIEW_CLASS_INSIGHT_MOCK_MODE'))}
+      ANTHROPIC_API_KEY: ${q(anthropicApiKey)}
       AI_MODEL: ${q(optionalEnv('PREVIEW_AI_MODEL', 'claude-sonnet-4-6'))}`;
   const fastVolumes = `    volumes:
       - ${q(`${env.sourceDir}:/app`)}

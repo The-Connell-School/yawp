@@ -15,6 +15,7 @@ const previewAccessSeats = JSON.stringify([
 ]);
 const previewSessionSecret = 'test-preview-session-secret-32-bytes';
 const previewAccessSecret = 'test-preview-access-secret-32-bytes';
+const previewDatabasePassword = 'test-preview-database-password-0001';
 
 function renderCompose(overrides = {}) {
   return renderPreviewCompose({
@@ -24,6 +25,7 @@ function renderCompose(overrides = {}) {
     accessSeats: previewAccessSeats,
     sessionSecret: previewSessionSecret,
     accessSecret: previewAccessSecret,
+    databasePassword: previewDatabasePassword,
     ...overrides,
   });
 }
@@ -60,7 +62,7 @@ describe('renderPreviewCompose', () => {
     expect(compose).toContain('/api/healthcheck');
     expect(compose).toContain('PORT: "8080"');
     expect(compose).toContain(
-      'DATABASE_URL: "postgresql://postgres:postgres@preview-postgres:5432/yawp_pr_142"'
+      `DATABASE_URL: "postgresql://yawp_pr_142_app:${previewDatabasePassword}@preview-postgres:5432/yawp_pr_142"`
     );
     expect(compose).toContain('AWS_EC2_METADATA_DISABLED: "true"');
     expect(compose).toContain('YAWP_ENVIRONMENT: "preview"');
@@ -176,6 +178,8 @@ describe('renderPreviewCompose', () => {
     try {
       const compose = renderCompose();
 
+      expect(compose).toContain('YAWP_PREVIEW_AI_MODE: "live"');
+      expect(compose).toContain('CLASS_INSIGHT_MOCK_MODE: ""');
       expect(compose).toContain('ANTHROPIC_API_KEY: "anthropic-preview-key"');
       expect(compose).toContain('AI_MODEL: "claude-opus-test"');
     } finally {
@@ -189,6 +193,21 @@ describe('renderPreviewCompose', () => {
       } else {
         process.env.PREVIEW_AI_MODEL = previousModel;
       }
+    }
+  });
+
+  test('keeps an explicit emergency AI-disabled mode without provider credentials', () => {
+    const previousAnthropicKey = process.env.PREVIEW_ANTHROPIC_API_KEY;
+    process.env.PREVIEW_ANTHROPIC_API_KEY = 'shared-provider-key';
+    try {
+      const compose = renderCompose({ aiMode: 'disabled' });
+      expect(compose).toContain('YAWP_PREVIEW_AI_MODE: "disabled"');
+      expect(compose).toContain('CLASS_INSIGHT_MOCK_MODE: "fixture"');
+      expect(compose).toContain('ANTHROPIC_API_KEY: ""');
+      expect(compose).not.toContain('shared-provider-key');
+    } finally {
+      if (previousAnthropicKey === undefined) delete process.env.PREVIEW_ANTHROPIC_API_KEY;
+      else process.env.PREVIEW_ANTHROPIC_API_KEY = previousAnthropicKey;
     }
   });
 });

@@ -69,7 +69,7 @@ describe('preview wake server', () => {
     const wakeScript = path.join(root, 'wake.sh');
     writeFileSync(
       wakeScript,
-      '#!/usr/bin/env bash\nprintf "%s\\n" "$PREVIEW_WAKE_AUTHORIZED_AT_EPOCH"\n',
+      '#!/usr/bin/env bash\nprintf "%s|%s|%s|%s\\n" "$PREVIEW_WAKE_AUTHORIZED_AT_EPOCH" "$PREVIEW_WAKE_AUTHORIZED_ORGANIZATION_ID" "$PREVIEW_WAKE_REQUIRE_PREVIEW_SEAT_CODE" "$PREVIEW_WAKE_AUTHORIZED_CODE_HMAC_SHA256"\n',
     );
     const operations = createDefaultWakeOperations({
       root,
@@ -79,11 +79,21 @@ describe('preview wake server', () => {
     });
     const before = Math.floor(Date.now() / 1000);
 
-    const result = await operations.ensureRunning(241);
+    const result = await operations.ensureRunning(241, {
+      authorization: {
+        organizationId: 'runtime-seat-2',
+        requirePreviewSeatCode: true,
+        credentialDigest: 'a'.repeat(64),
+      },
+    });
 
-    const acceptedAt = Number(result.result.trim());
+    const [acceptedAtText, organizationId, requirePreviewSeatCode, credentialDigest] = result.result.trim().split('|');
+    const acceptedAt = Number(acceptedAtText);
     expect(acceptedAt).toBeGreaterThanOrEqual(before);
     expect(acceptedAt).toBeLessThanOrEqual(Math.floor(Date.now() / 1000));
+    expect(organizationId).toBe('runtime-seat-2');
+    expect(requirePreviewSeatCode).toBe('true');
+    expect(credentialDigest).toBe('a'.repeat(64));
   });
 
   test('looks up runtime and revoked seats in only the retained PR database', async () => {
@@ -579,7 +589,6 @@ describe('preview wake server', () => {
       domain: 'preview.yawp.school',
       recordAccess: async (pr) => accesses.push(pr),
       pollMs: 10,
-      maxBytes: 1,
     });
     await Bun.sleep(20);
 
@@ -600,6 +609,49 @@ describe('preview wake server', () => {
     follower.stop();
 
     expect(accesses.sort()).toEqual([241, 248]);
-    expect(readFileSync(accessLog, 'utf8')).toBe('');
+    expect(readFileSync(accessLog, 'utf8')).toContain('pr-241.preview.yawp.school');
+  });
+
+  test('does not truncate an access record appended while activity persistence is pending', async () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'preview-access-log-race-'));
+    roots.push(root);
+    const accessLog = path.join(root, 'access.json');
+    writeFileSync(accessLog, '');
+    const accesses = [];
+    let releaseFirst;
+    let sawFirst;
+    const firstSeen = new Promise((resolve) => { sawFirst = resolve; });
+    const firstRelease = new Promise((resolve) => { releaseFirst = resolve; });
+    const follower = startAccessLogFollower({
+      accessLog,
+      domain: 'preview.yawp.school',
+      recordAccess: async (pr) => {
+        accesses.push(pr);
+        if (pr === 241) {
+          sawFirst();
+          await firstRelease;
+        }
+      },
+      pollMs: 10,
+    });
+    await Bun.sleep(20);
+    appendFileSync(accessLog, `${JSON.stringify({
+      RequestHost: 'pr-241.preview.yawp.school',
+      RequestMethod: 'GET',
+      DownstreamStatus: 200,
+      'origin_X-Yawp-Preview-Authorized': '1',
+    })}\n`);
+    await firstSeen;
+    appendFileSync(accessLog, `${JSON.stringify({
+      RequestHost: 'pr-242.preview.yawp.school',
+      RequestMethod: 'GET',
+      DownstreamStatus: 200,
+      'origin_X-Yawp-Preview-Authorized': '1',
+    })}\n`);
+    releaseFirst();
+    await Bun.sleep(50);
+    follower.stop();
+
+    expect(accesses).toEqual([241, 242]);
   });
 });
