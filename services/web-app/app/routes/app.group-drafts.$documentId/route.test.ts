@@ -9,6 +9,10 @@ const readMemberGrades = mock();
 const recordMemberGrade = mock();
 const readGroupGrade = mock();
 const recordGroupGrade = mock();
+const listDraftComments = mock();
+const addDraftComment = mock();
+const replyToDraftComment = mock();
+class DraftCommentError extends Error {}
 class MemberGradeError extends Error {}
 class GroupGradeError extends Error {}
 
@@ -29,6 +33,12 @@ mock.module('~/domain/collaboration/member-grades.server', () => ({
   readMemberGrades,
   recordMemberGrade,
   MemberGradeError,
+}));
+mock.module('~/domain/collaboration/comments.server', () => ({
+  listDraftComments,
+  addDraftComment,
+  replyToDraftComment,
+  DraftCommentError,
 }));
 mock.module('~/domain/collaboration/group-grade.server', () => ({
   readGroupGrade,
@@ -93,6 +103,9 @@ describe('app.group-drafts.$documentId loader', () => {
     recordMemberGrade.mockReset().mockResolvedValue({ saved: true });
     readGroupGrade.mockReset().mockResolvedValue(null);
     recordGroupGrade.mockReset().mockResolvedValue({ saved: true });
+    listDraftComments.mockReset().mockResolvedValue([]);
+    addDraftComment.mockReset().mockResolvedValue({ commentId: 'comment-1' });
+    replyToDraftComment.mockReset().mockResolvedValue({ replied: true });
   });
 
   test('404s for a student', async () => {
@@ -314,6 +327,38 @@ describe('app.group-drafts.$documentId loader', () => {
       });
 
       expect(recordMemberGrade.mock.calls[0][0].useGroupGrade).toBe(true);
+    });
+
+    test('posts a teacher comment on the draft', async () => {
+      await post({ intent: 'add-comment', content: 'Tighten the intro.' });
+
+      expect(addDraftComment).toHaveBeenCalledWith({
+        documentId: 'doc-1',
+        membershipId: 'teacher-1',
+        content: 'Tighten the intro.',
+      });
+      expect(recordMemberGrade).not.toHaveBeenCalled();
+    });
+
+    test('leaves anchored comments out of the list it loads', async () => {
+      // The collaborative page has no comment mark, so an anchored comment would
+      // point at text nobody can see.
+      await get();
+
+      expect(listDraftComments).toHaveBeenCalledWith({
+        documentId: 'doc-1',
+        documentLevelOnly: true,
+      });
+    });
+
+    test('reports an empty comment inline', async () => {
+      addDraftComment.mockRejectedValue(
+        new DraftCommentError('Write something first.')
+      );
+
+      const response: any = await post({ intent: 'add-comment', content: ' ' });
+
+      expect((await readBody(response)).message).toMatch(/write something/i);
     });
 
     test('does not swallow an unexpected failure as a refusal', async () => {

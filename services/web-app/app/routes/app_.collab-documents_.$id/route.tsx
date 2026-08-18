@@ -6,10 +6,17 @@ import {
   useLoaderData,
   useNavigate,
   useSearchParams,
+  type ActionFunctionArgs,
   type LoaderFunctionArgs,
 } from 'react-router';
 import { Button } from '~/components/ui/button';
 import { CollabPromptPanel } from './collab-prompt-panel';
+import {
+  DraftCommentError,
+  listDraftComments,
+  replyToDraftComment,
+} from '~/domain/collaboration/comments.server';
+import { DraftCommentThread } from '~/domain/collaboration/draft-comments';
 import { collaborationRoomWhere } from '~/domain/collaboration/room.server';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
@@ -133,10 +140,15 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     select: { id: true },
   });
 
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { name: true },
-  });
+  const [user, comments] = await Promise.all([
+    prisma.user.findUnique({
+      where: { id: userId },
+      select: { name: true },
+    }),
+    // Document-level only: the collaborative schema has no comment mark, so an
+    // anchored comment would point at text this page cannot highlight.
+    listDraftComments({ documentId: doc.id, documentLevelOnly: true }),
+  ]);
 
   return dataResponse({
     doc,
@@ -144,11 +156,61 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     userName: user?.name?.trim() || 'Someone',
     canWrite: Boolean(asAuthor),
     submittedAt: doc.submissions[0]?.submittedAt?.toISOString() ?? null,
+    comments,
   });
 }
 
+/**
+ * Replying to the teacher. Students never open a comment thread on their own
+ * work — the teacher starts it, the group answers.
+ */
+export async function action({ request, params }: ActionFunctionArgs) {
+  invariant(params.id, 'No document id provided');
+
+  const userId = await requireUserId(request);
+  const profile = await requireMembership(request, userId);
+  const isAdmin = await getIsPlatformAdmin(userId);
+
+  // Author scope: a member of this group, not merely someone who can read it.
+  const doc = await prisma.document.findFirst({
+    where: {
+      id: params.id,
+      ...collaborationRoomWhere(),
+      AND: [documentAuthorWhere({ profileId: profile.id, isAdmin })],
+    },
+    select: { id: true },
+  });
+
+  if (!doc) {
+    return dataResponse(
+      { success: false, message: 'Draft not found.' },
+      { status: 404 }
+    );
+  }
+
+  const formData = await request.formData();
+
+  try {
+    await replyToDraftComment({
+      documentId: doc.id,
+      commentId: formData.get('commentId')?.toString() ?? '',
+      membershipId: profile.id,
+      content: formData.get('content')?.toString() ?? '',
+    });
+    return dataResponse({ success: true });
+  } catch (error) {
+    if (error instanceof DraftCommentError) {
+      return dataResponse(
+        { success: false, message: error.message },
+        { status: 400 }
+      );
+    }
+    throw error;
+  }
+}
+
 export default function CollabDocumentRoute() {
-  const { doc, canWrite, submittedAt } = useLoaderData<typeof loader>();
+  const { doc, canWrite, submittedAt, comments } = useLoaderData<typeof loader>();
   const navigate = useNavigate();
   const submitFetcher = useFetcher<{ success?: boolean; message?: string }>();
   const submitting = submitFetcher.state !== 'idle';
@@ -250,9 +312,20 @@ export default function CollabDocumentRoute() {
       ) : null}
 
       <div className="mx-auto flex min-h-0 w-full max-w-screen-2xl flex-1 overflow-hidden">
-        {/* Renders nothing when there is no prompt, which is the student-share
-            road: those drafts belong to no assignment. */}
-        <CollabPromptPanel assignment={doc.assignment} />
+        {/* Prompt and teacher comments share the left column: both are things to
+            read while writing, and neither should take width from the draft. */}
+        <div className="flex w-full shrink-0 flex-col overflow-y-auto border-r md:w-[340px] lg:w-[380px]">
+          <CollabPromptPanel assignment={doc.assignment} />
+          {comments.length > 0 || canWrite ? (
+            <div className="p-3">
+              <DraftCommentThread
+                comments={comments}
+                canComment={false}
+                canReply={canWrite}
+              />
+            </div>
+          ) : null}
+        </div>
         <CollabEditor docId={doc.id} canWrite={canWrite} />
       </div>
     </main>

@@ -3,8 +3,12 @@ import { afterAll, beforeEach, describe, expect, mock, test } from 'bun:test';
 const prisma = { submission: { findFirst: mock(), update: mock() } };
 mock.module('~/utils/db.server', () => ({ prisma }));
 
-const { GroupGradeError, readGroupGrade, recordGroupGrade, effectiveGrade } =
-  await import('./group-grade.server');
+const { GroupGradeError, readGroupGrade, recordGroupGrade } = await import(
+  './group-grade.server'
+);
+// Imported from the pure module: it is rendered in the browser, so it must not
+// live behind a Prisma import.
+const { effectiveGrade } = await import('./grading');
 
 afterAll(() => {
   mock.restore();

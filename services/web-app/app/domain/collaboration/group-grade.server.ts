@@ -1,4 +1,8 @@
 import { prisma } from '~/utils/db.server';
+import type { GroupGrade } from './grading';
+
+export { effectiveGrade } from './grading';
+export type { GroupGrade, MemberGrade } from './grading';
 
 /**
  * The group half of two-tier grading.
@@ -15,14 +19,6 @@ import { prisma } from '~/utils/db.server';
  */
 
 export class GroupGradeError extends Error {}
-
-export type GroupGrade = {
-  submissionId: string;
-  score: string | null;
-  feedback: string | null;
-  submittedAt: string;
-  releasedAt: string | null;
-};
 
 /** The group's live submission, or null if they have not submitted. */
 export async function readGroupGrade({
@@ -100,27 +96,4 @@ export async function recordGroupGrade({
   });
 
   return { saved: true as const };
-}
-
-/**
- * What one student's grade actually is.
- *
- * Derivation rather than storage is the whole point: a student who follows the
- * group has no number of their own, so changing the group's grade changes theirs
- * with no rows to update and nothing to fall out of step.
- */
-export function effectiveGrade({
-  member,
-  groupGrade,
-}: {
-  member?: { followsGroupGrade: boolean; score: string | null };
-  groupGrade: { score: string | null } | null;
-}): { score: string | null; source: 'group' | 'individual' | 'none' } {
-  if (member && !member.followsGroupGrade && member.score) {
-    return { score: member.score, source: 'individual' };
-  }
-  if (groupGrade?.score) {
-    return { score: groupGrade.score, source: 'group' };
-  }
-  return { score: null, source: 'none' };
 }

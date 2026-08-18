@@ -1,4 +1,7 @@
 import { prisma } from '~/utils/db.server';
+import type { MemberGrade } from './grading';
+
+export type { MemberGrade } from './grading';
 
 /**
  * The individual half of two-tier grading: one grade per student on a shared
@@ -115,13 +118,6 @@ export async function recordMemberGrade({
 
   return { saved: true as const };
 }
-
-export type MemberGrade = {
-  followsGroupGrade: boolean;
-  score: string | null;
-  feedback: string | null;
-  releasedAt: string | null;
-};
 
 export async function readMemberGrades({
   groupId,

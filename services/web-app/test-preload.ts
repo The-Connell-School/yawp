@@ -99,6 +99,9 @@ if (isWebAppTestFile()) {
     '~/domain/collaboration/snapshot': await snapshot(
       '~/domain/collaboration/snapshot'
     ),
+    '~/domain/collaboration/comments.server': await snapshot(
+      '~/domain/collaboration/comments.server'
+    ),
   };
 }
 

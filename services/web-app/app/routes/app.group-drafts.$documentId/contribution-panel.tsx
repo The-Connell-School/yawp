@@ -2,9 +2,11 @@ import { useFetcher } from 'react-router';
 import { colorForMembership } from '../app_.collab-documents_.$id/collab-editor';
 import { Button } from '~/components/ui/button';
 import type { ContributionBreakdown } from '~/domain/collaboration/contribution.server';
-import { effectiveGrade } from '~/domain/collaboration/group-grade.server';
-import type { GroupGrade } from '~/domain/collaboration/group-grade.server';
-import type { MemberGrade } from '~/domain/collaboration/member-grades.server';
+import { effectiveGrade } from '~/domain/collaboration/grading';
+import type {
+  GroupGrade,
+  MemberGrade,
+} from '~/domain/collaboration/grading';
 
 /**
  * Evidence about who wrote a shared draft, for a teacher to read and judge.

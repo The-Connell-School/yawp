@@ -8,6 +8,13 @@ import {
   type LoaderFunctionArgs,
 } from 'react-router';
 import { Button } from '~/components/ui/button';
+import {
+  DraftCommentError,
+  addDraftComment,
+  listDraftComments,
+  replyToDraftComment,
+} from '~/domain/collaboration/comments.server';
+import { DraftCommentThread } from '~/domain/collaboration/draft-comments';
 import { buildContributionBreakdown } from '~/domain/collaboration/contribution.server';
 import {
   GroupGradeError,
@@ -104,10 +111,11 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       member.membership.user.name?.trim() || member.membership.user.email,
   }));
 
-  const [breakdown, grades, groupGrade] = await Promise.all([
+  const [breakdown, grades, groupGrade, comments] = await Promise.all([
     buildContributionBreakdown({ documentId: doc.id, roster }),
     doc.group ? readMemberGrades({ groupId: doc.group.id }) : new Map(),
     readGroupGrade({ documentId: doc.id }),
+    listDraftComments({ documentId: doc.id, documentLevelOnly: true }),
   ]);
 
   return dataResponse({
@@ -115,6 +123,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     groupId: doc.group?.id ?? null,
     grades: Object.fromEntries(grades),
     groupGrade,
+    comments,
     title: doc.assignment?.title ?? doc.title ?? 'Shared draft',
     groupLabel: doc.group?.label ?? 'Group',
     backTo: doc.group?.classAssignmentId
@@ -163,11 +172,43 @@ export async function action({ request, params }: ActionFunctionArgs) {
   }
 
   const formData = await request.formData();
+  const intent = formData.get('intent')?.toString();
+
+  // Commenting is the teacher's whole channel into a group's draft: they never
+  // write in it, so this is how they say anything at all about the work.
+  if (intent === 'add-comment' || intent === 'reply-comment') {
+    try {
+      if (intent === 'add-comment') {
+        await addDraftComment({
+          documentId: params.documentId,
+          membershipId: profile.id,
+          content: formData.get('content')?.toString() ?? '',
+        });
+      } else {
+        await replyToDraftComment({
+          documentId: params.documentId,
+          commentId: formData.get('commentId')?.toString() ?? '',
+          membershipId: profile.id,
+          content: formData.get('content')?.toString() ?? '',
+        });
+      }
+      return dataResponse({ success: true });
+    } catch (error) {
+      if (error instanceof DraftCommentError) {
+        return dataResponse(
+          { success: false, message: error.message },
+          { status: 400 }
+        );
+      }
+      throw error;
+    }
+  }
+
   const releaseRaw = formData.get('release')?.toString();
   const release = releaseRaw === undefined ? undefined : releaseRaw === 'true';
 
   // The group's own grade: one judgement of the draft, shared by everyone.
-  if (formData.get('intent')?.toString() === 'group-grade') {
+  if (intent === 'group-grade') {
     try {
       await recordGroupGrade({
         documentId: params.documentId,
@@ -242,11 +283,19 @@ export default function GroupDraftRoute() {
           </p>
         </header>
 
-        <ContributionPanel
-          breakdown={data.breakdown}
-          grades={data.grades}
-          groupGrade={data.groupGrade}
-        />
+        <div className="grid gap-6">
+          <ContributionPanel
+            breakdown={data.breakdown}
+            grades={data.grades}
+            groupGrade={data.groupGrade}
+          />
+          {/* The teacher writes here; the group replies from their own page. */}
+          <DraftCommentThread
+            comments={data.comments}
+            canComment
+            canReply
+          />
+        </div>
       </div>
     </div>
   );

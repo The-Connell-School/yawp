@@ -11,7 +11,8 @@ import type { AssignmentPrompt } from '../app_.documents_.$id/document-editor/do
  * the part students actually use — as the smaller half.
  *
  * Editing the shared component would have changed the solo editor's layout,
- * which this feature must not touch, so the width is the one thing that differs.
+ * which this feature must not touch. The width now belongs to the column that
+ * holds this and the comment thread together, so this fills whatever it is given.
  */
 export function CollabPromptPanel({
   assignment,
@@ -23,7 +24,7 @@ export function CollabPromptPanel({
 
   return (
     <div
-      className="flex w-full shrink-0 flex-col border-r bg-amber-50 pb-2 md:w-[340px] lg:w-[380px]"
+      className="flex w-full shrink-0 flex-col bg-amber-50 pb-2"
       data-testid="collab-prompt-side-panel"
     >
       <div className="flex items-center justify-between gap-8 border-b py-1 pl-4 pr-2">
