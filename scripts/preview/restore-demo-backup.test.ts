@@ -87,6 +87,11 @@ describe('failed demo reset recovery', () => {
       'ALTER\\ DATABASE\\ \\"yawp_demo\\"\\ RENAME\\ TO'
     );
     expect(commands).toContain('RENAME\\ TO\\ \\"yawp_demo\\"');
+    expect(
+      commands
+        .split('\n')
+        .filter((line) => line.includes('ALTER\\ DATABASE')).length
+    ).toBe(1);
     expect(commands).not.toContain(
       'dropdb -U postgres --force --if-exists yawp_demo\n'
     );

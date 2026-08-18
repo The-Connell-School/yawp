@@ -77,21 +77,18 @@ if [[ "$live_exists" == "1" ]]; then
   docker exec "$POSTGRES_CONTAINER" psql --no-psqlrc -v ON_ERROR_STOP=1 \
     -U postgres -d postgres -c \
     "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '${DATABASE_NAME}' AND pid <> pg_backend_pid();" >/dev/null
-  docker exec "$POSTGRES_CONTAINER" psql --no-psqlrc -v ON_ERROR_STOP=1 \
+  if ! docker exec "$POSTGRES_CONTAINER" psql --no-psqlrc -v ON_ERROR_STOP=1 \
     -U postgres -d postgres -c \
-    "ALTER DATABASE \"${DATABASE_NAME}\" RENAME TO \"${failed_database}\";" >/dev/null
-  old_renamed=true
-fi
-
-if ! docker exec "$POSTGRES_CONTAINER" psql --no-psqlrc -v ON_ERROR_STOP=1 \
-  -U postgres -d postgres -c \
-  "ALTER DATABASE \"${recovery_database}\" RENAME TO \"${DATABASE_NAME}\";" >/dev/null; then
-  if [[ "$old_renamed" == "true" ]]; then
-    docker exec "$POSTGRES_CONTAINER" psql --no-psqlrc -v ON_ERROR_STOP=1 \
-      -U postgres -d postgres -c \
-      "ALTER DATABASE \"${failed_database}\" RENAME TO \"${DATABASE_NAME}\";" >/dev/null || true
+    "BEGIN; ALTER DATABASE \"${DATABASE_NAME}\" RENAME TO \"${failed_database}\"; ALTER DATABASE \"${recovery_database}\" RENAME TO \"${DATABASE_NAME}\"; COMMIT;" >/dev/null; then
+    exit 1
   fi
-  exit 1
+  old_renamed=true
+else
+  if ! docker exec "$POSTGRES_CONTAINER" psql --no-psqlrc -v ON_ERROR_STOP=1 \
+    -U postgres -d postgres -c \
+    "ALTER DATABASE \"${recovery_database}\" RENAME TO \"${DATABASE_NAME}\";" >/dev/null; then
+    exit 1
+  fi
 fi
 swapped=true
 if [[ "$old_renamed" == "true" ]]; then
