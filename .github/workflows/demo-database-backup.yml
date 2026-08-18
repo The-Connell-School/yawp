@@ -29,6 +29,12 @@ jobs:
       BACKUP_RETENTION_COUNT: ${{ inputs.backup_retention || vars.DEMO_BACKUP_RETENTION || '14' }}
       BACKUP_S3_URI: ${{ vars.DEMO_BACKUP_S3_URI || 's3://yawp-preview-videos/demo-backups' }}
     steps:
+      - name: Checkout reviewed backup control plane
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+
       - name: Check backup configuration
         env:
           DEMO_SSH_PRIVATE_KEY: ${{ secrets.DEMO_SSH_PRIVATE_KEY }}
@@ -58,6 +64,21 @@ jobs:
           chmod 600 ~/.ssh/demo_key
           ssh-keyscan -H "$PREVIEW_HOST" >> ~/.ssh/known_hosts
 
+      - name: Install reviewed backup tooling
+        run: |
+          set -euo pipefail
+          shell_quote() { printf '%q' "$1"; }
+          ssh_target="${PREVIEW_SSH_USER}@${PREVIEW_HOST}"
+          remote_ops="${PREVIEW_ROOT}/ops"
+          ssh -i ~/.ssh/demo_key "$ssh_target" \
+            "mkdir -p $(shell_quote "$remote_ops") && chmod 700 $(shell_quote "$remote_ops")"
+          scp -i ~/.ssh/demo_key scripts/preview/backup-database.sh \
+            "$ssh_target:${remote_ops}/backup-database.sh.next"
+          scp -i ~/.ssh/demo_key scripts/preview/publish-demo-backup.sh \
+            "$ssh_target:${remote_ops}/publish-demo-backup.sh.next"
+          ssh -i ~/.ssh/demo_key "$ssh_target" \
+            "install -m 700 $(shell_quote "${remote_ops}/backup-database.sh.next") $(shell_quote "${remote_ops}/backup-database.sh") && install -m 700 $(shell_quote "${remote_ops}/publish-demo-backup.sh.next") $(shell_quote "${remote_ops}/publish-demo-backup.sh") && rm -f $(shell_quote "${remote_ops}/backup-database.sh.next") $(shell_quote "${remote_ops}/publish-demo-backup.sh.next")"
+
       - name: Create validated backup
         id: backup
         run: |
@@ -74,7 +95,7 @@ jobs:
           }
           echo "remote_file=$remote_file" >> "$GITHUB_OUTPUT"
 
-      - name: Copy backup off-host and retain newest set
+      - name: Copy backup off-host
         env:
           REMOTE_FILE: ${{ steps.backup.outputs.remote_file }}
         run: |
@@ -83,4 +104,4 @@ jobs:
           ssh_target="${PREVIEW_SSH_USER}@${PREVIEW_HOST}"
           remote_script="$PREVIEW_ROOT/ops/publish-demo-backup.sh"
           ssh -i ~/.ssh/demo_key "$ssh_target" \
-            "PREVIEW_ROOT=$(shell_quote "$PREVIEW_ROOT") BACKUP_FILE=$(shell_quote "$REMOTE_FILE") BACKUP_RETENTION_COUNT=$(shell_quote "$BACKUP_RETENTION_COUNT") BACKUP_S3_URI=$(shell_quote "$BACKUP_S3_URI") bash $(shell_quote "$remote_script")"
+            "PREVIEW_ROOT=$(shell_quote "$PREVIEW_ROOT") BACKUP_FILE=$(shell_quote "$REMOTE_FILE") BACKUP_S3_URI=$(shell_quote "$BACKUP_S3_URI") bash $(shell_quote "$remote_script")"

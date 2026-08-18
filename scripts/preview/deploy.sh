@@ -23,6 +23,9 @@ unset DATABASE_URL
 DEMO_RESET_DATA="${DEMO_RESET_DATA:-false}"
 DEMO_RESET_CONFIRMATION="${DEMO_RESET_CONFIRMATION:-}"
 DEMO_BACKUP_RETENTION="${DEMO_BACKUP_RETENTION:-14}"
+DEMO_BACKUP_S3_URI="${DEMO_BACKUP_S3_URI:-s3://yawp-preview-videos/demo-backups}"
+DEMO_RESET_BACKUP_FILE=""
+DEMO_RESET_RECOVERY_ARMED=false
 if [[ ! "$DEMO_BACKUP_RETENTION" =~ ^[0-9]+$ ]] \
   || (( DEMO_BACKUP_RETENTION < 1 || DEMO_BACKUP_RETENTION > 365 )); then
   echo "DEMO_BACKUP_RETENTION must be between 1 and 365" >&2
@@ -354,14 +357,57 @@ database_exists() {
 }
 
 backup_demo_database_before_reset() {
+  local backup_file backup_output
   [[ "$PREVIEW_SLUG" == "demo" ]] || return 0
   database_exists "$DATABASE_NAME" || return 0
   export DATABASE_NAME
-  BACKUP_KIND=pre-reset \
+  backup_output="$(BACKUP_KIND=pre-reset \
     BACKUP_RETENTION_COUNT="$DEMO_BACKUP_RETENTION" \
     PREVIEW_ROOT="$ROOT" \
     PREVIEW_POSTGRES_CONTAINER="$POSTGRES_CONTAINER" \
-    bash "$SCRIPT_DIR/backup-database.sh"
+    bash "$SCRIPT_DIR/backup-database.sh")"
+  printf '%s\n' "$backup_output"
+  backup_file="$(awk -F= '/^BACKUP_FILE=/{print $2}' <<<"$backup_output" | tail -1)"
+  [[ "$backup_file" == "$ROOT"/backups/yawp_demo-pre-reset-*.dump ]] || {
+    echo "Pre-reset backup returned an unexpected path" >&2
+    return 1
+  }
+  PREVIEW_ROOT="$ROOT" \
+    BACKUP_FILE="$backup_file" \
+    BACKUP_S3_URI="$DEMO_BACKUP_S3_URI" \
+    bash "$SCRIPT_DIR/publish-demo-backup.sh"
+  DEMO_RESET_BACKUP_FILE="$backup_file"
+}
+
+arm_demo_reset_recovery() {
+  [[ "$PREVIEW_SLUG" == "demo" ]] || return 0
+  [[ -n "$DEMO_RESET_BACKUP_FILE" ]] || {
+    echo "Refusing demo reset without a verified off-host pre-reset backup" >&2
+    return 1
+  }
+  DEMO_RESET_RECOVERY_ARMED=true
+}
+
+# shellcheck disable=SC2329 # Invoked by the EXIT trap after the function is defined.
+recover_demo_database_on_failure() {
+  local status=$?
+  trap - EXIT
+  if (( status != 0 )) && [[ "$DEMO_RESET_RECOVERY_ARMED" == "true" ]]; then
+    DEMO_RESET_RECOVERY_ARMED=false
+    echo "Demo deployment failed after reset; restoring the pre-reset database." >&2
+    if PREVIEW_ROOT="$ROOT" \
+      BACKUP_FILE="$DEMO_RESET_BACKUP_FILE" \
+      DATABASE_NAME="$DATABASE_NAME" \
+      DATABASE_USER="$DATABASE_USER" \
+      PREVIEW_POSTGRES_CONTAINER="$POSTGRES_CONTAINER" \
+      bash "$SCRIPT_DIR/restore-demo-backup.sh" \
+      && harden_preview_database; then
+      echo "Demo pre-reset database restored; existing web container can reconnect." >&2
+    else
+      echo "CRITICAL: automatic demo database recovery failed; use $DEMO_RESET_BACKUP_FILE." >&2
+    fi
+  fi
+  return "$status"
 }
 
 drop_preview_database() {
@@ -445,7 +491,11 @@ reset_preview_database_for_data_source_change() {
 
   echo "Preview data source changed; replacing database $DATABASE_NAME..."
   backup_demo_database_before_reset
-  "${compose[@]}" down --remove-orphans >/dev/null 2>&1 || true
+  if [[ "$PREVIEW_SLUG" == "demo" ]]; then
+    arm_demo_reset_recovery
+  else
+    "${compose[@]}" down --remove-orphans >/dev/null 2>&1 || true
+  fi
   drop_preview_database "$DATABASE_NAME"
   rm -f "$TOOLING_FINGERPRINT_FILE"
 }
@@ -454,7 +504,11 @@ reset_seed_preview_database() {
   validate_database_name "$DATABASE_NAME"
   echo "Resetting preview database $DATABASE_NAME for seeded local-dev data..."
   backup_demo_database_before_reset
-  "${compose[@]}" down --remove-orphans >/dev/null 2>&1 || true
+  if [[ "$PREVIEW_SLUG" == "demo" ]]; then
+    arm_demo_reset_recovery
+  else
+    "${compose[@]}" down --remove-orphans >/dev/null 2>&1 || true
+  fi
   drop_preview_database "$DATABASE_NAME"
   docker exec "$POSTGRES_CONTAINER" createdb -U postgres -O "$DATABASE_USER" "$DATABASE_NAME"
   DATABASE_CREATED=1
@@ -470,6 +524,7 @@ install_demo_backup_tooling() {
   chmod 700 "$ROOT/ops" "$ROOT/backups"
   install -m 700 "$SCRIPT_DIR/backup-database.sh" "$ROOT/ops/backup-database.sh"
   install -m 700 "$SCRIPT_DIR/publish-demo-backup.sh" "$ROOT/ops/publish-demo-backup.sh"
+  install -m 700 "$SCRIPT_DIR/restore-demo-backup.sh" "$ROOT/ops/restore-demo-backup.sh"
 }
 
 create_seed_preview_database() {
@@ -584,14 +639,6 @@ run_tooling_if_needed() {
   local missing_artifacts
   missing_artifacts="$(preview_missing_tooling_artifacts "$SOURCE_DIR" | awk 'BEGIN { first = 1 } { if (!first) printf ", "; printf "%s", $0; first = 0 }')"
 
-  # The tooling fingerprint intentionally covers database/bootstrap inputs, not every
-  # application source file. Production images therefore rebuild on every deployment;
-  # Docker's layer cache keeps unchanged builds cheap while guaranteeing code-only refs
-  # cannot silently restart the previously tagged image.
-  if [[ "$RUNTIME" == "production" ]]; then
-    COMPOSE_PARALLEL_LIMIT=1 "${compose[@]}" build web
-  fi
-
   if [[ "$DATABASE_CREATED" == "0" && "$fingerprint" == "$previous_fingerprint" && -z "$missing_artifacts" ]]; then
     echo "Tooling fingerprint unchanged and database already existed; skipping install/generate/migrate."
     TOOLING_CHANGED=0
@@ -602,9 +649,7 @@ run_tooling_if_needed() {
     echo "Preview tooling artifacts missing ($missing_artifacts); running install/generate/migrate."
   fi
 
-  if [[ "$RUNTIME" == "production" ]]; then
-    COMPOSE_PARALLEL_LIMIT=1 "${compose[@]}" build toolbox
-  else
+  if [[ "$RUNTIME" != "production" ]]; then
     "${compose[@]}" pull --quiet toolbox web || true
   fi
 
@@ -628,6 +673,13 @@ run_tooling_if_needed() {
 
   "${compose[@]}" run --rm toolbox bash -lc "$tooling_command"
   printf '%s\n' "$fingerprint" > "$TOOLING_FINGERPRINT_FILE"
+}
+
+prebuild_production_images() {
+  [[ "$RUNTIME" == "production" ]] || return 0
+  # Complete every fallible image build before an explicit demo reset can touch data.
+  # Docker's layer cache keeps unchanged builds cheap while code-only refs still rebuild.
+  COMPOSE_PARALLEL_LIMIT=1 "${compose[@]}" build web toolbox
 }
 
 ensure_preview_seats() {
@@ -672,6 +724,8 @@ rollout_demo_web_without_downtime() {
 
 ensure_shared_postgres
 ensure_preview_database_role
+prebuild_production_images
+trap recover_demo_database_on_failure EXIT
 reset_preview_database_for_data_source_change
 ensure_preview_database
 harden_preview_database
@@ -717,6 +771,7 @@ for attempt in $(seq 1 90); do
     '
     echo "PREVIEW_ELAPSED_MS=$elapsed_ms"
     printf '%s\n' "$DATA_SOURCE_FINGERPRINT" > "$DATA_SOURCE_FINGERPRINT_FILE"
+    DEMO_RESET_RECOVERY_ARMED=false
     exit 0
   fi
   echo "Waiting for preview healthcheck ($attempt/90): $health_url"

@@ -496,23 +496,30 @@ describe('PR preview deployment contract', () => {
 
   test('production previews rebuild application code even when database tooling is cached', () => {
     const deployScript = readRepoFile('scripts/preview/deploy.sh');
-    const toolingFunction = deployScript.slice(
-      deployScript.indexOf('run_tooling_if_needed()'),
+    const prebuildFunction = deployScript.slice(
+      deployScript.indexOf('prebuild_production_images()'),
       deployScript.indexOf(
         '\n}',
-        deployScript.indexOf('run_tooling_if_needed()')
+        deployScript.indexOf('prebuild_production_images()')
       )
     );
-    const buildIndex = toolingFunction.indexOf(
-      'COMPOSE_PARALLEL_LIMIT=1 "${compose[@]}" build web'
+    const buildIndex = prebuildFunction.indexOf(
+      'COMPOSE_PARALLEL_LIMIT=1 "${compose[@]}" build web toolbox'
     );
-    const cacheReturnIndex = toolingFunction.indexOf(
+    const cacheReturnIndex = deployScript.indexOf(
       'Tooling fingerprint unchanged and database already existed; skipping install/generate/migrate.'
+    );
+    const prebuildCallIndex = deployScript.lastIndexOf(
+      '\nprebuild_production_images\n'
+    );
+    const resetCallIndex = deployScript.lastIndexOf(
+      '\nreset_preview_database_for_data_source_change\n'
     );
 
     expect(buildIndex).toBeGreaterThan(-1);
     expect(cacheReturnIndex).toBeGreaterThan(-1);
-    expect(buildIndex).toBeLessThan(cacheReturnIndex);
+    expect(prebuildCallIndex).toBeGreaterThan(-1);
+    expect(resetCallIndex).toBeGreaterThan(prebuildCallIndex);
   });
 
   test('preview containers cannot use EC2 metadata credentials', () => {
@@ -949,6 +956,9 @@ describe('PR preview deployment contract', () => {
       'PREVIEW_ROLLBACK_WEB_CONTAINER=$old_container'
     );
     expect(rolloutScript).not.toContain('docker rm "$old_container"');
+    expect(rolloutScript).toContain(
+      'web_containers_output="$(list_web_containers)"'
+    );
   });
 
   test('preview source sync excludes generated container output', () => {
@@ -1159,6 +1169,10 @@ describe('demo environment deployment contract', () => {
     expect(resetGuard).toContain('DEMO_RESET_CONFIRMATION');
     expect(deployScript).toContain('BACKUP_KIND=pre-reset');
     expect(deployScript).toContain('backup-database.sh');
+    expect(deployScript).toContain('publish-demo-backup.sh');
+    expect(deployScript).toContain('DEMO_RESET_RECOVERY_ARMED=true');
+    expect(deployScript).toContain('recover_demo_database_on_failure');
+    expect(deployScript).toContain('restore-demo-backup.sh');
     expect(deployScript).toContain('install_demo_backup_tooling');
   });
 
@@ -1181,6 +1195,10 @@ describe('demo environment deployment contract', () => {
     expect(deployScript).not.toContain('crontab');
     expect(backupWorkflow).toContain("cron: '17 3 * * *'");
     expect(backupWorkflow).toContain('group: demo-environment');
+    expect(backupWorkflow).toContain('Checkout reviewed backup control plane');
+    expect(backupWorkflow).toContain('Install reviewed backup tooling');
+    expect(backupWorkflow).toContain('backup-database.sh.next');
+    expect(backupWorkflow).toContain('publish-demo-backup.sh.next');
     expect(backupWorkflow).toContain('$PREVIEW_ROOT/ops/publish-demo-backup.sh');
     expect(backupWorkflow).not.toContain('AWS_ACCESS_KEY_ID');
     expect(backupWorkflow).not.toContain('AWS_SECRET_ACCESS_KEY');
@@ -1189,9 +1207,10 @@ describe('demo environment deployment contract', () => {
     expect(backupWorkflow).not.toContain('mapfile -t keys < <(aws s3api');
     expect(publishScript).toContain('aws s3 cp');
     expect(publishScript).toContain('s3api get-bucket-versioning');
-    expect(publishScript).toContain('s3api delete-object');
-    expect(publishScript).toContain('s3api list-object-versions');
-    expect(publishScript).toContain('--version-id "$version_id"');
+    expect(publishScript).toContain('yawp_demo-scheduled-*.dump');
+    expect(publishScript).toContain('yawp_demo-pre-reset-*.dump');
+    expect(publishScript).not.toContain('s3api delete-object');
+    expect(publishScript).not.toContain('s3api list-object-versions');
     expect(backupScript).toContain('BACKUP_RETENTION_COUNT');
     expect(backupScript).toContain('pg_restore --list');
     expect(backupScript).toContain('--exit-on-error');

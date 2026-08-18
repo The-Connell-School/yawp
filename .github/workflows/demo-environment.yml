@@ -64,6 +64,7 @@ jobs:
       DEMO_RESET_DATA: ${{ inputs.reset_data }}
       DEMO_RESET_CONFIRMATION: ${{ inputs.reset_confirmation }}
       DEMO_BACKUP_RETENTION: ${{ inputs.backup_retention }}
+      DEMO_BACKUP_S3_URI: ${{ vars.DEMO_BACKUP_S3_URI || 's3://yawp-preview-videos/demo-backups' }}
       DEMO_REQUESTED_REF: ${{ inputs.ref }}
       DEMO_DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
     steps:
@@ -81,6 +82,10 @@ jobs:
             echo "backup_retention must be between 1 and 365" >&2
             exit 1
           fi
+          [[ "$DEMO_BACKUP_S3_URI" =~ ^s3://[a-z0-9.-]+/[A-Za-z0-9._/-]+$ ]] || {
+            echo "Invalid DEMO_BACKUP_S3_URI" >&2
+            exit 1
+          }
           if [[ "$DEMO_RESET_DATA" == "true" ]]; then
             test "$DEMO_RESET_CONFIRMATION" = "RESET yawp_demo" || {
               echo "reset_data requires reset_confirmation=RESET yawp_demo" >&2
@@ -187,6 +192,7 @@ jobs:
             "DEMO_RESET_DATA=$(shell_quote "$DEMO_RESET_DATA")"
             "DEMO_RESET_CONFIRMATION=$(shell_quote "$DEMO_RESET_CONFIRMATION")"
             "DEMO_BACKUP_RETENTION=$(shell_quote "$DEMO_BACKUP_RETENTION")"
+            "DEMO_BACKUP_S3_URI=$(shell_quote "$DEMO_BACKUP_S3_URI")"
             "SOURCE_DIR=$(shell_quote "$remote_source")"
           )
           lock_file="${PREVIEW_ROOT}/preview-host.lock"
