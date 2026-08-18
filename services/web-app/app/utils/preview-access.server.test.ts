@@ -611,6 +611,7 @@ describe('preview access codes', () => {
     expect(serialized).toContain(`${PREVIEW_MASTER_SELECTION_COOKIE_NAME}=`);
     expect(serialized).toContain('HttpOnly');
     expect(serialized).toContain('Max-Age=600');
+    expect(serialized).toContain('Path=/');
     expect(await hasPreviewMasterSelection(pendingRequest)).toBe(true);
     expect(await getPreviewAccessSeat(pendingRequest)).toBeNull();
     expect(await clearPreviewMasterSelectionCookie()).toContain('Max-Age=0');

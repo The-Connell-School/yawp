@@ -262,7 +262,10 @@ export function createPreviewMasterSelectionCookie() {
   return createCookie(PREVIEW_MASTER_SELECTION_COOKIE_NAME, {
     httpOnly: true,
     maxAge: PREVIEW_MASTER_SELECTION_MAX_AGE,
-    path: PREVIEW_ACCESS_PATH,
+    // React Router can refresh route data through a root-level `.data` URL after the
+    // action redirect. This pending token grants no app access; it only unlocks the
+    // organization picker, while the actual access cookie remains the second gate.
+    path: '/',
     sameSite: 'lax',
     secrets: secrets.length > 0 ? secrets : ['preview-access-unconfigured'],
     secure: shouldUseSecureCookies(),
