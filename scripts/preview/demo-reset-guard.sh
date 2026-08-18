@@ -3,7 +3,7 @@ set -euo pipefail
 
 DEMO_RESET_DATA="${DEMO_RESET_DATA:-false}"
 DEMO_RESET_CONFIRMATION="${DEMO_RESET_CONFIRMATION:-}"
-: "${PREVIEW_SLUG:?PREVIEW_SLUG is required}"
+: "${SLUG:?SLUG is required}"
 : "${DATABASE_NAME:?DATABASE_NAME is required}"
 
 require_demo_reset_confirmation() {
@@ -12,7 +12,7 @@ require_demo_reset_confirmation() {
     *) echo "DEMO_RESET_DATA must be true or false" >&2; return 1 ;;
   esac
   [[ "$DEMO_RESET_DATA" == "true" ]] || return 0
-  [[ "$PREVIEW_SLUG" == "demo" && "$DATABASE_NAME" == "yawp_demo" ]] || {
+  [[ "$SLUG" == "demo" && "$DATABASE_NAME" == "yawp_demo" ]] || {
     echo "DEMO_RESET_DATA may only reset the demo database yawp_demo" >&2
     return 1
   }

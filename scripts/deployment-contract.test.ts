@@ -500,23 +500,30 @@ describe('PR preview deployment contract', () => {
 
   test('production previews rebuild application code even when database tooling is cached', () => {
     const deployScript = readRepoFile('scripts/preview/deploy.sh');
-    const toolingFunction = deployScript.slice(
-      deployScript.indexOf('run_tooling_if_needed()'),
+    const prebuildFunction = deployScript.slice(
+      deployScript.indexOf('prebuild_production_images()'),
       deployScript.indexOf(
         '\n}',
-        deployScript.indexOf('run_tooling_if_needed()')
+        deployScript.indexOf('prebuild_production_images()')
       )
     );
-    const buildIndex = toolingFunction.indexOf(
-      'COMPOSE_PARALLEL_LIMIT=1 "${compose[@]}" build web'
+    const buildIndex = prebuildFunction.indexOf(
+      'COMPOSE_PARALLEL_LIMIT=1 "${compose[@]}" build web toolbox'
     );
-    const cacheReturnIndex = toolingFunction.indexOf(
+    const cacheReturnIndex = deployScript.indexOf(
       'Tooling fingerprint unchanged and database already existed; skipping install/generate/migrate.'
+    );
+    const prebuildCallIndex = deployScript.lastIndexOf(
+      '\nprebuild_production_images\n'
+    );
+    const resetCallIndex = deployScript.lastIndexOf(
+      '\nreset_preview_database_for_data_source_change\n'
     );
 
     expect(buildIndex).toBeGreaterThan(-1);
     expect(cacheReturnIndex).toBeGreaterThan(-1);
-    expect(buildIndex).toBeLessThan(cacheReturnIndex);
+    expect(prebuildCallIndex).toBeGreaterThan(-1);
+    expect(resetCallIndex).toBeGreaterThan(prebuildCallIndex);
   });
 
   test('preview containers cannot use EC2 metadata credentials', () => {
@@ -967,15 +974,23 @@ describe('PR preview deployment contract', () => {
   test('demo production deploy keeps the old web container until its replacement passes health and login checks', () => {
     const deployScript = readRepoFile('scripts/preview/deploy.sh');
     const rolloutPath = 'scripts/preview/rollout-web.sh';
+    const traefikDiscoveryPath = 'scripts/preview/find-traefik-dynamic-dir.sh';
 
     expect(existsSync(join(repoRoot, rolloutPath))).toBe(true);
+    expect(existsSync(join(repoRoot, traefikDiscoveryPath))).toBe(true);
     if (!existsSync(join(repoRoot, rolloutPath))) return;
 
     const rolloutScript = readRepoFile(rolloutPath);
     expect(deployScript).toContain(
-      '[[ "$PREVIEW_SLUG" == "demo" && "$RUNTIME" == "production"'
+      '[[ "$SLUG" == "demo" && "$RUNTIME" == "production"'
     );
     expect(deployScript).toContain('bash "$SCRIPT_DIR/rollout-web.sh"');
+    expect(deployScript).toContain(
+      'bash "$SCRIPT_DIR/find-traefik-dynamic-dir.sh"'
+    );
+    expect(deployScript).not.toContain(
+      'PREVIEW_ROUTER_FILE="$ROOT/traefik/dynamic/'
+    );
     expect(rolloutScript).toContain('--no-recreate --scale web=2 web');
     expect(rolloutScript).toContain('wait_for_container_health');
     expect(rolloutScript).toContain('run_login_smoke "$candidate_url"');
@@ -988,6 +1003,9 @@ describe('PR preview deployment contract', () => {
       'PREVIEW_ROLLBACK_WEB_CONTAINER=$old_container'
     );
     expect(rolloutScript).not.toContain('docker rm "$old_container"');
+    expect(rolloutScript).toContain(
+      'web_containers_output="$(list_web_containers)"'
+    );
   });
 
   test('preview source sync excludes generated container output', () => {
@@ -1108,6 +1126,25 @@ describe('PR preview deployment contract', () => {
 });
 
 describe('demo environment deployment contract', () => {
+  test('demo host diagnostics expose only non-secret container and mount metadata', () => {
+    const diagnostics = readRepoFile(
+      '.github/workflows/demo-host-diagnostics.yml'
+    );
+
+    expect(diagnostics).toContain('environment: demo');
+    expect(diagnostics).toContain(
+      "docker ps --format 'name={{.Names}} image={{.Image}} status={{.Status}}'"
+    );
+    expect(diagnostics).toContain('.Config.Image');
+    expect(diagnostics).toContain('.Config.Cmd');
+    expect(diagnostics).toContain('.Destination');
+    expect(diagnostics).not.toContain('.Config.Env');
+    expect(diagnostics).not.toContain('.Source');
+    expect(diagnostics).not.toContain('docker exec');
+    expect(diagnostics).not.toContain('docker stop');
+    expect(diagnostics).not.toContain('docker rm');
+  });
+
   // deploy.sh runs ON THE DEMO HOST over SSH, so a value declared in the job's `env:`
   // reaches the runner and stops there unless remote_env forwards it. Declared and
   // forwarded are two different things; this asserts they agree.
@@ -1198,9 +1235,26 @@ describe('demo environment deployment contract', () => {
     expect(resetGuard).toContain('DEMO_RESET_CONFIRMATION');
     expect(deployScript).toContain('BACKUP_KIND=pre-reset');
     expect(deployScript).toContain('backup-database.sh');
+    expect(deployScript).toContain('publish-demo-backup.sh');
+    expect(deployScript).toContain('DEMO_RESET_RECOVERY_ARMED=true');
+    expect(deployScript).toContain('recover_demo_database_on_failure');
+    expect(deployScript).toContain('restore-demo-backup.sh');
     expect(deployScript).toContain('install_demo_backup_tooling');
   });
 
+  test('normal demo deploys prove aggregate data counts do not decrease', () => {
+    const workflow = readRepoFile('.github/workflows/demo-environment.yml');
+    const signaturePath = 'scripts/preview/demo-data-signature.sh';
+
+    expect(existsSync(join(repoRoot, signaturePath))).toBe(true);
+    expect(workflow).toContain('Capture demo data before deploy');
+    expect(workflow).toContain('Capture demo data after deploy');
+    expect(workflow).toContain('steps.before_data.outputs.signature');
+    expect(workflow).toContain('DEMO_RESET_DATA');
+    expect(workflow).toContain(
+      'Demo aggregate data decreased during no-reset deploy'
+    );
+  });
   test('demo backups are scheduled daily with configurable count retention', () => {
     const workflow = readRepoFile('.github/workflows/demo-environment.yml');
     const backupWorkflow = readRepoFile(
@@ -1220,7 +1274,13 @@ describe('demo environment deployment contract', () => {
     expect(deployScript).not.toContain('crontab');
     expect(backupWorkflow).toContain("cron: '17 3 * * *'");
     expect(backupWorkflow).toContain('group: demo-environment');
-    expect(backupWorkflow).toContain('$PREVIEW_ROOT/ops/publish-demo-backup.sh');
+    expect(backupWorkflow).toContain('Checkout reviewed backup control plane');
+    expect(backupWorkflow).toContain('Install reviewed backup tooling');
+    expect(backupWorkflow).toContain('backup-database.sh.next');
+    expect(backupWorkflow).toContain('publish-demo-backup.sh.next');
+    expect(backupWorkflow).toContain(
+      '$PREVIEW_ROOT/ops/publish-demo-backup.sh'
+    );
     expect(backupWorkflow).not.toContain('AWS_ACCESS_KEY_ID');
     expect(backupWorkflow).not.toContain('AWS_SECRET_ACCESS_KEY');
     expect(backupWorkflow).not.toContain('configure-aws-credentials');
@@ -1228,15 +1288,45 @@ describe('demo environment deployment contract', () => {
     expect(backupWorkflow).not.toContain('mapfile -t keys < <(aws s3api');
     expect(publishScript).toContain('aws s3 cp');
     expect(publishScript).toContain('s3api get-bucket-versioning');
-    expect(publishScript).toContain('s3api delete-object');
-    expect(publishScript).toContain('s3api list-object-versions');
-    expect(publishScript).toContain('--version-id "$version_id"');
+    expect(publishScript).toContain('yawp_demo-scheduled-*.dump');
+    expect(publishScript).toContain('yawp_demo-pre-reset-*.dump');
+    expect(publishScript).not.toContain('s3api delete-object');
+    expect(publishScript).not.toContain('s3api list-object-versions');
     expect(backupScript).toContain('BACKUP_RETENTION_COUNT');
     expect(backupScript).toContain('pg_restore --list');
     expect(backupScript).toContain('--exit-on-error');
     expect(backupScript).toContain('.partial');
   });
 
+  test('demo backup IAM rollout explicitly denies deletion from the host role', () => {
+    const workflowPath = '.github/workflows/demo-backup-iam-guard.yml';
+    const guardPath = 'scripts/preview/guard-demo-backup-iam.sh';
+    expect(existsSync(join(repoRoot, workflowPath))).toBe(true);
+    expect(existsSync(join(repoRoot, guardPath))).toBe(true);
+    if (
+      !existsSync(join(repoRoot, workflowPath)) ||
+      !existsSync(join(repoRoot, guardPath))
+    )
+      return;
+
+    const workflow = readRepoFile(workflowPath);
+    const guard = readRepoFile(guardPath);
+    expect(workflow).toContain('environment: production');
+    expect(workflow).toContain('AWS_ACCESS_KEY_ID');
+    expect(workflow).toContain('AWS_SECRET_ACCESS_KEY');
+    expect(workflow).toContain('github.event.repository.default_branch');
+    expect(workflow).toContain('guard-demo-backup-iam.sh');
+    expect(guard).toContain('iam put-role-policy');
+    expect(guard).toContain('iam create-instance-profile');
+    expect(guard).toContain('ec2 associate-iam-instance-profile');
+    expect(guard).toContain('yawp-demo-host-backup-access');
+    expect(guard).toContain('s3:PutObject');
+    expect(guard).toContain('yawp-demo-backup-deny-delete');
+    expect(guard).toContain('s3:DeleteObject');
+    expect(guard).toContain('s3:DeleteObjectVersion');
+    expect(guard).toContain('iam simulate-principal-policy');
+    expect(guard).toContain('explicitDeny');
+  });
   test('workflow verification is anonymous and retains in-app gate assertions', () => {
     for (const path of [
       '.github/workflows/preview-environments.yml',

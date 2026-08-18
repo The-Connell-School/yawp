@@ -26,7 +26,9 @@ async function executable(file: string, contents: string) {
   await chmod(file, 0o755);
 }
 
-async function makeHarness({ failAfterStop = false } = {}) {
+async function makeHarness(
+  { failAfterStop = false, listFails = false } = {}
+) {
   const root = await mkdtemp(path.join(tmpdir(), 'yawp-demo-rollout-'));
   temporaryDirectories.push(root);
   const bin = path.join(root, 'bin');
@@ -54,6 +56,7 @@ printf 'docker' >> "$COMMAND_LOG"
 printf ' %q' "$@" >> "$COMMAND_LOG"
 printf '\n' >> "$COMMAND_LOG"
 if [[ " $* " == *" compose "*" ps --all -q web "* ]]; then
+  if [[ "${listFails ? 'true' : 'false'}" == "true" ]]; then exit 55; fi
   cat "$CONTAINER_STATE"
 elif [[ " $* " == *" compose "*" up -d --no-recreate --scale web=2 web "* ]]; then
   printf 'old123\nnew456\n' > "$CONTAINER_STATE"
@@ -193,5 +196,24 @@ describe('demo web rollout', () => {
     expect(commands).toContain('docker start old123');
     expect(commands).toContain('docker rm -f new456');
     expect(commands).not.toContain('docker rm old123');
+  });
+
+  test('fails closed without changing routing when Docker cannot list the active container', async () => {
+    const harness = await makeHarness({ listFails: true });
+    const previousRoute = 'http:\n  services:\n    prior: {}\n';
+    await writeFile(harness.routerFile, previousRoute);
+    await writeFile(`${harness.composeFile}.active-web`, 'old123\n');
+
+    const result = run(harness.env);
+
+    expect(result.exitCode).not.toBe(0);
+    expect(await readFile(harness.routerFile, 'utf8')).toBe(previousRoute);
+    expect(await readFile(`${harness.composeFile}.active-web`, 'utf8')).toBe(
+      'old123\n'
+    );
+    expect(await readFile(harness.state, 'utf8')).toBe('old123\n');
+    expect(await readFile(harness.commandLog, 'utf8')).not.toContain(
+      ' up -d web'
+    );
   });
 });
