@@ -195,12 +195,22 @@ export async function seedCollaborationDemoForSeat(
   prisma: PreviewSeatClient,
   seat: PreviewSeatDefinition
 ) {
-  await seedCollaborationDemoData(prisma, {
+  const seeded = await seedCollaborationDemoData(prisma, {
     organizationId: seat.organizationId,
     schoolCode: seat.schoolCodes[0],
     personas: seat.personas,
     emailSuffix: seat.number === 1 ? '' : `.seat-${seat.number}`,
   });
+
+  // Every path through this says what it did. A step that writes data silently
+  // cannot be checked from the deploy log, and the deploy log is the only view
+  // anyone has of a preview's database — the environment itself is behind an
+  // access gate and there is no console.
+  if (seeded) {
+    console.log(
+      `Collaboration demo seeded for ${seat.label}: ${seeded.groupIds.length} groups, ${seeded.cohort.length} students.`
+    );
+  }
 }
 
 export async function ensurePreviewSeats(

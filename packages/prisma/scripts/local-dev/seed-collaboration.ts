@@ -136,7 +136,12 @@ export async function seedCollaborationDemoData(
     where: { schoolId: school.id, code: GBA300_CLASS_CODE },
     select: { id: true },
   });
-  if (alreadySeeded) return null;
+  if (alreadySeeded) {
+    console.log(
+      `Collaboration demo already present in ${options.organizationId}; nothing to do.`
+    );
+    return null;
+  }
 
   // Everything else comes from the personas, by email. Resolving rather than
   // being handed ids is what lets this run against an organization it did not
