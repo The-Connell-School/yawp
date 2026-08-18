@@ -15,7 +15,7 @@ The target behavior is:
 - The preview URL is `https://pr-<number>.$PREVIEW_DOMAIN` when TLS is enabled.
 - The React Router app protects every loader, action, and API route with a signed-cookie access gate. `/api/healthcheck` is the only exception. Deploys generate a memorable code and fail closed if no code reaches the app.
 - Live Anthropic AI is enabled in every access-gated PR preview. Deploys fail closed when neither `PREVIEW_ANTHROPIC_API_KEY` nor `ANTHROPIC_API_KEY` is configured for the preview-host environment.
-- The default runtime is `PREVIEW_RUNTIME=fast`: source is bind-mounted, Bun dependencies live in Docker volumes, React Router runs in dev mode, and warm deploys skip dependency install, Prisma generate, and migration work when the tooling fingerprint has not changed. The web container is still recreated after each source sync so the dev server starts from a clean process. Set `PREVIEW_RUNTIME=production` to use the production Dockerfile build path.
+- The default runtime is `PREVIEW_RUNTIME=fast`: source is bind-mounted, identical dependency graphs share immutable content-addressed Docker volumes, React Router runs in dev mode, and warm deploys skip dependency install, Prisma generate, and migration work when the tooling fingerprint has not changed. Vite and React Router write only to per-preview scratch volumes. The web container is still recreated after each source sync so the dev server starts from a clean process. Set `PREVIEW_RUNTIME=production` to use the production Dockerfile build path, or add `preview:production-runtime` to canary that path on one PR.
 
 ## Host Setup
 
@@ -33,7 +33,7 @@ Then run:
 ```bash
 PREVIEW_ROOT=/srv/yawp-preview \
 PREVIEW_DOMAIN=preview.yawp.school \
-PREVIEW_MAX_RUNNING=4 \
+PREVIEW_MAX_RUNNING=8 \
 PREVIEW_ACME_EMAIL=ops@yawp.school \
 bash scripts/preview/bootstrap-host.sh
 ```
@@ -69,6 +69,7 @@ Required repository settings:
 - Variable `PREVIEW_RUNTIME`
 - Variable `PREVIEW_MAX_RESIDENT` (defaults to `20`; disk/state limit)
 - Variable `PREVIEW_MAX_RUNNING` (defaults to `4`; memory limit)
+- Variable `PREVIEW_DEPENDENCY_CACHE_GRACE_HOURS` (defaults to `168`; unused-cache rollback window)
 - Variable `PREVIEW_SLEEP_ENABLED` (`true` enables idle sleeping)
 - Variables `PREVIEW_DRAFT_IDLE_HOURS` and `PREVIEW_READY_IDLE_HOURS` (both default to `48`)
 - Variable `PREVIEW_SEAT_COUNT` (optional; defaults to `6`)
@@ -167,9 +168,24 @@ Production-dump app-login smoke credentials come from `PREVIEW_LOGIN_EMAIL` and 
 
 ## Performance Notes
 
-The hot path deliberately keeps state on the host: Docker layer cache, Bun dependency volumes, the shared restored template database, and PR-scoped Postgres databases. The first build on a cold host is slower because it creates the shared Postgres container and restores the production dump. Subsequent PR creates clone the template database locally, and warm PR updates skip tooling work when package, Prisma, and migration inputs are unchanged. In `fast` runtime, the web container still restarts by default; the speedup comes from removing package install, Prisma generate, migration, dump restore, and cloud control-plane work from the warm path.
+The hot path deliberately keeps state on the host: Docker layer cache, content-addressed Bun dependency volumes, the shared restored template database, and PR-scoped Postgres databases. The dependency fingerprint covers the Bun image, lockfile, root manifest, and every workspace manifest. Two PRs with the same fingerprint mount the same root and web dependency volumes read-only. A changed lockfile or manifest creates a different cache automatically. Failed installs never receive a readiness marker and are removed before retry. Scheduled reconciliation removes only correctly labeled, unreferenced caches older than `PREVIEW_DEPENDENCY_CACHE_GRACE_HOURS`; Docker still refuses removal if a cache is mounted.
 
-Scheduled reconciliation runs every six hours. It destroys closed PR environments, sleeps open previews after their idle lease, and enforces separate resident and running caps. Only traffic whose app response carries the non-secret authorization marker updates the activity lease; HEAD, healthcheck, anonymous redirect, access-screen, static-asset, stale-cookie, and error traffic do not. The resident cap (20), running cap (4), Traefik rate limit (2 requests/minute with burst 3), and wake concurrency limit (2) bound resource use. A sleeping preview wakes automatically when the request carries either its one-click `code` or a valid signed access cookie from an earlier visit. Bare anonymous requests remain asleep and receive `401`, preventing bots and public probes from churning host memory. An authorized wake at the running cap may sleep the least recently used unpinned preview first. `preview:keep-awake` excludes a PR from sleep. Only resident-cap eviction or PR closure deletes preview-local state.
+Runtime configuration remains isolated per Compose project. Database credentials, access seats, session secrets, AI keys, data mode, and other environment values do not enter dependency identity and may differ between any two PRs without splitting or mutating the shared cache. Production Docker dependency layers likewise receive only package manifests; `DATABASE_URL` enters after dependency installation. Future variables that affect a client build must remain in the per-PR tooling/build stages, never the dependency stage. Ordinary runtime-only variables belong in the container environment.
+
+The first build on a cold host is slower because it installs one dependency graph, creates the shared Postgres container, and may restore the production dump. Subsequent PR creates clone the template database locally, and warm PR updates skip tooling work when package, Prisma, and migration inputs are unchanged. In `fast` runtime, the web container still restarts by default; the speedup comes from removing package install, Prisma generate, migration, dump restore, and cloud control-plane work from the warm path. In `production` runtime, application source changes preserve the large dependency layer and rebuild only tooling, application bundles, and the thin per-PR image layers.
+
+### Measured t3.large capacity
+
+Measurements on the x86 preview host on 2026-08-18 showed fast-runtime containers at 459–603 MiB each. PR 241 used 488 MiB. The same source in the production runtime used 246 MiB idle and 301 MiB after 200 health requests. The host has 7.64 GiB RAM, 4 GiB swap, and roughly 1.8–2.0 GiB of non-preview working memory under the measured workload.
+
+- Keep `PREVIEW_MAX_RUNNING=8` while fast runtime remains the default.
+- Canary production runtime with `preview:production-runtime`. After at least one week without memory alarms, set production as the default and raise the running cap to `12`.
+- Treat `14` as the probable hard ceiling on this t3.large after representative page and AI load testing. Do not set `16`: the arithmetic fits only by consuming operating-system, build, and burst headroom.
+- Keep Docker builds serialized. Build memory and CPU are transient but materially larger than the steady application process.
+
+Rollback is label/config-only: remove `preview:production-runtime` from a canary or set repository variable `PREVIEW_RUNTIME=fast`, then redeploy. Dependency caches and PR databases remain compatible across both runtimes.
+
+Scheduled reconciliation runs every six hours. It destroys closed PR environments, sleeps open previews after their idle lease, garbage-collects aged unreferenced dependency caches, and enforces separate resident and running caps. Only traffic whose app response carries the non-secret authorization marker updates the activity lease; HEAD, healthcheck, anonymous redirect, access-screen, static-asset, stale-cookie, and error traffic do not. The resident cap (20), current t3.large running cap (8), Traefik rate limit (2 requests/minute with burst 3), and wake concurrency limit (2) bound resource use. A sleeping preview wakes automatically when the request carries either its one-click `code` or a valid signed access cookie from an earlier visit. Bare anonymous requests remain asleep and receive `401`, preventing bots and public probes from churning host memory. An authorized wake at the running cap may sleep the least recently used unpinned preview first. `preview:keep-awake` excludes a PR from sleep. Only resident-cap eviction or PR closure deletes preview-local state.
 
 The host-bootstrap workflow runs only when dispatched from the default branch and checks out that dispatch's immutable commit SHA. It cannot execute an arbitrary PR ref with shared-host credentials.
 
