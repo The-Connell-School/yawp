@@ -66,6 +66,9 @@ describe('admin assignment type detail action', () => {
           },
         ],
       },
+      gradingPromptConfigJson: {
+        instructionsPreset: 'legacy_thesis_driven_essay',
+      },
     });
     prisma.orgMembership.findMany.mockResolvedValue([]);
     prisma.orgMembership.findUnique.mockResolvedValue({ id: 'teacher-1' });
@@ -225,6 +228,83 @@ describe('admin assignment type detail action', () => {
       data: {
         title: 'Renamed assignment type',
         description: 'Only the basics changed.',
+      },
+    });
+  });
+
+  test('saves grading assistant instructions without rewriting the rubric', async () => {
+    const form = new FormData();
+    form.set('intent', 'updateCourse');
+    form.set('title', 'ACT Writing');
+    form.set('description', 'ACT writing assignment type');
+    form.set(
+      'gradingInstructionsOverride',
+      'Apply the rubric with extra emphasis on concrete supporting details.'
+    );
+
+    await action({
+      request: new Request(
+        'https://example.test/app/admin/assignment-types/at-1',
+        {
+          method: 'POST',
+          body: form,
+        }
+      ),
+      params: { id: 'at-1' },
+      context: {} as never,
+    });
+
+    expect(prisma.assignmentType.update).toHaveBeenCalledWith({
+      where: { id: 'at-1' },
+      data: {
+        title: 'ACT Writing',
+        description: 'ACT writing assignment type',
+        gradingPromptConfigJson: {
+          instructionsPreset: 'legacy_thesis_driven_essay',
+          gradingInstructionsOverride:
+            'Apply the rubric with extra emphasis on concrete supporting details.',
+        },
+        gradingAssistantVersion: { increment: 1 },
+      },
+    });
+  });
+
+  test('clears only the grading assistant instruction override', async () => {
+    prisma.assignmentType.findUnique.mockResolvedValue({
+      id: 'at-1',
+      rubricJson: { categories: [] },
+      gradingPromptConfigJson: {
+        instructionsPreset: 'legacy_thesis_driven_essay',
+        gradingInstructionsOverride: 'Use the temporary custom instructions.',
+      },
+    });
+
+    const form = new FormData();
+    form.set('intent', 'updateCourse');
+    form.set('title', 'Thesis-Driven Essay');
+    form.set('gradingInstructionsOverride', '   ');
+
+    await action({
+      request: new Request(
+        'https://example.test/app/admin/assignment-types/at-1',
+        {
+          method: 'POST',
+          body: form,
+        }
+      ),
+      params: { id: 'at-1' },
+      context: {} as never,
+    });
+
+    expect(prisma.assignmentType.update).toHaveBeenCalledWith({
+      where: { id: 'at-1' },
+      data: {
+        title: 'Thesis-Driven Essay',
+        description: null,
+        gradingPromptConfigJson: {
+          instructionsPreset: 'legacy_thesis_driven_essay',
+        },
+        gradingAssistantVersion: { increment: 1 },
       },
     });
   });

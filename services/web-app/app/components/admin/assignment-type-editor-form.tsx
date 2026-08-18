@@ -31,13 +31,23 @@ type AssignmentTypeEditorFormProps = {
   assignmentTypeId?: string;
   titleDefaultValue?: string;
   descriptionDefaultValue?: string | null;
+  /** Per-assignment-type override applied on top of the resolved rubric's instructions. */
+  gradingInstructionsDefaultValue?: string;
   archivedAt?: Date | string | null;
   imageId?: string | null;
   modules?: AssignmentTypeModuleRow[];
 };
 
-function formSnapshot(values: { title: string; description: string }) {
-  return [values.title.trim(), values.description.trim()].join('\u0000');
+function formSnapshot(values: {
+  title: string;
+  description: string;
+  gradingInstructions: string;
+}) {
+  return [
+    values.title.trim(),
+    values.description.trim(),
+    values.gradingInstructions.trim(),
+  ].join('\u0000');
 }
 
 export function FieldLabel({
@@ -91,6 +101,7 @@ export function AssignmentTypeEditorForm({
   assignmentTypeId,
   titleDefaultValue = '',
   descriptionDefaultValue = '',
+  gradingInstructionsDefaultValue = '',
   archivedAt = null,
   imageId = null,
   modules = [],
@@ -107,18 +118,23 @@ export function AssignmentTypeEditorForm({
 
   const [title, setTitle] = useState(titleDefaultValue);
   const [description, setDescription] = useState(descriptionDefaultValue ?? '');
+  const [gradingInstructions, setGradingInstructions] = useState(
+    gradingInstructionsDefaultValue
+  );
   const savedSnapshot = useMemo(
     () =>
       formSnapshot({
         title: titleDefaultValue,
         description: descriptionDefaultValue ?? '',
+        gradingInstructions: gradingInstructionsDefaultValue,
       }),
-    [titleDefaultValue, descriptionDefaultValue]
+    [titleDefaultValue, descriptionDefaultValue, gradingInstructionsDefaultValue]
   );
 
   useEffect(() => {
     setTitle(titleDefaultValue);
     setDescription(descriptionDefaultValue ?? '');
+    setGradingInstructions(gradingInstructionsDefaultValue);
   }, [savedSnapshot]);
 
   useEffect(() => {
@@ -142,8 +158,9 @@ export function AssignmentTypeEditorForm({
       formSnapshot({
         title,
         description,
+        gradingInstructions,
       }),
-    [title, description]
+    [title, description, gradingInstructions]
   );
 
   const isDirty = currentSnapshot !== savedSnapshot || imageDirty;
@@ -159,6 +176,7 @@ export function AssignmentTypeEditorForm({
   function handleCancel() {
     setTitle(titleDefaultValue);
     setDescription(descriptionDefaultValue ?? '');
+    setGradingInstructions(gradingInstructionsDefaultValue);
     setPreviewUrl(null);
     setHasRemovedImage(false);
     if (imageFileInputRef.current) {
@@ -277,13 +295,15 @@ export function AssignmentTypeEditorForm({
 
         <Section
           title="Rubric"
-          description="Keep the current production behavior, or choose a database-managed rubric. Rubrics are view-only here."
+          description="Keep the current production behavior, or choose a database-managed rubric. Rubrics stay view-only; grading assistant instructions can be customized per assignment type."
         >
           {assignmentTypeId ? (
             <RubricLibrarySection
               assignmentTypeId={assignmentTypeId}
               rubrics={rubrics}
               selectedRubricId={selectedRubricId}
+              gradingInstructions={gradingInstructions}
+              onGradingInstructionsChange={setGradingInstructions}
             />
           ) : (
             <p className="text-sm text-muted-foreground">
