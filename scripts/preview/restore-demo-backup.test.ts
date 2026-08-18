@@ -37,6 +37,7 @@ printf 'docker' >> "$COMMAND_LOG"
 printf ' %q' "$@" >> "$COMMAND_LOG"
 printf '\n' >> "$COMMAND_LOG"
 if [[ " $* " == *" pg_restore "* ]]; then cat >/dev/null; fi
+if [[ " $* " == *" SELECT 1 FROM pg_database "* ]]; then printf '1\n'; fi
 `
   );
   await chmod(path.join(bin, 'docker'), 0o755);
@@ -77,13 +78,17 @@ describe('failed demo reset recovery', () => {
     const commands = await readFile(harness.commandLog, 'utf8');
     expect(commands).toContain('pg_restore --list');
     expect(commands).toContain(
-      'dropdb -U postgres --force --if-exists yawp_demo'
+      'createdb -U postgres -O yawp_demo_app yawp_demo_recovery_'
     );
     expect(commands).toContain(
-      'createdb -U postgres -O yawp_demo_app yawp_demo'
+      'pg_restore -U postgres -d yawp_demo_recovery_'
     );
     expect(commands).toContain(
-      'pg_restore -U postgres -d yawp_demo --exit-on-error --no-owner --no-acl'
+      'ALTER\\ DATABASE\\ \\"yawp_demo\\"\\ RENAME\\ TO'
+    );
+    expect(commands).toContain('RENAME\\ TO\\ \\"yawp_demo\\"');
+    expect(commands).not.toContain(
+      'dropdb -U postgres --force --if-exists yawp_demo\n'
     );
   });
 

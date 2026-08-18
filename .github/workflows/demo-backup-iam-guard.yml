@@ -1,0 +1,45 @@
+name: Demo backup IAM guard
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: demo-backup-iam-guard
+  cancel-in-progress: false
+
+jobs:
+  deny-demo-backup-deletion:
+    runs-on: ubuntu-22.04
+    environment: production
+    env:
+      AWS_REGION: us-east-1
+      DEMO_HOST: ${{ vars.DEMO_HOST }}
+      BACKUP_S3_URI: ${{ vars.DEMO_BACKUP_S3_URI || 's3://yawp-preview-videos/demo-backups' }}
+      DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+    steps:
+      - name: Require reviewed default branch
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF_NAME" = "$DEFAULT_BRANCH" || {
+            echo "IAM guard may only run from the reviewed default branch" >&2
+            exit 1
+          }
+
+      - name: Checkout reviewed IAM control plane
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Deny demo host backup deletion
+        run: bash scripts/preview/guard-demo-backup-iam.sh

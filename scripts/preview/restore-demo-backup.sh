@@ -48,16 +48,58 @@ expected_checksum="$(awk 'NR == 1 {print $1}' "$checksum_file")"
   exit 1
 }
 
+recovery_database="${DATABASE_NAME}_recovery_$$"
+failed_database="${DATABASE_NAME}_failed_$$"
+swapped=false
+old_renamed=false
+
+cleanup() {
+  if [[ "$swapped" != "true" ]]; then
+    docker exec "$POSTGRES_CONTAINER" dropdb -U postgres --force --if-exists \
+      "$recovery_database" >/dev/null 2>&1 || true
+  fi
+}
+trap cleanup EXIT
+
 docker exec -i "$POSTGRES_CONTAINER" pg_restore --list < "$BACKUP_FILE" >/dev/null
-docker exec "$POSTGRES_CONTAINER" dropdb -U postgres --force --if-exists \
-  "$DATABASE_NAME"
 docker exec "$POSTGRES_CONTAINER" createdb -U postgres -O "$DATABASE_USER" \
-  "$DATABASE_NAME"
+  "$recovery_database"
 docker exec -i "$POSTGRES_CONTAINER" pg_restore \
   -U postgres \
-  -d "$DATABASE_NAME" \
+  -d "$recovery_database" \
   --exit-on-error \
   --no-owner \
   --no-acl < "$BACKUP_FILE" >/dev/null
+
+live_exists="$(docker exec "$POSTGRES_CONTAINER" psql --no-psqlrc -U postgres -d postgres -Atc \
+  "SELECT 1 FROM pg_database WHERE datname = '${DATABASE_NAME}'" | tr -d '[:space:]')"
+if [[ "$live_exists" == "1" ]]; then
+  docker exec "$POSTGRES_CONTAINER" psql --no-psqlrc -v ON_ERROR_STOP=1 \
+    -U postgres -d postgres -c \
+    "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '${DATABASE_NAME}' AND pid <> pg_backend_pid();" >/dev/null
+  docker exec "$POSTGRES_CONTAINER" psql --no-psqlrc -v ON_ERROR_STOP=1 \
+    -U postgres -d postgres -c \
+    "ALTER DATABASE \"${DATABASE_NAME}\" RENAME TO \"${failed_database}\";" >/dev/null
+  old_renamed=true
+fi
+
+if ! docker exec "$POSTGRES_CONTAINER" psql --no-psqlrc -v ON_ERROR_STOP=1 \
+  -U postgres -d postgres -c \
+  "ALTER DATABASE \"${recovery_database}\" RENAME TO \"${DATABASE_NAME}\";" >/dev/null; then
+  if [[ "$old_renamed" == "true" ]]; then
+    docker exec "$POSTGRES_CONTAINER" psql --no-psqlrc -v ON_ERROR_STOP=1 \
+      -U postgres -d postgres -c \
+      "ALTER DATABASE \"${failed_database}\" RENAME TO \"${DATABASE_NAME}\";" >/dev/null || true
+  fi
+  exit 1
+fi
+swapped=true
+if [[ "$old_renamed" == "true" ]]; then
+  docker exec "$POSTGRES_CONTAINER" dropdb -U postgres --force --if-exists \
+    "$failed_database" >/dev/null 2>&1 || {
+      echo "Recovered demo database is active; remove stale database $failed_database manually." >&2
+    }
+fi
+trap - EXIT
 
 echo "RESTORED_DATABASE=$DATABASE_NAME"

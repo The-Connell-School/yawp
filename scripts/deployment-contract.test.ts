@@ -1217,6 +1217,32 @@ describe('demo environment deployment contract', () => {
     expect(backupScript).toContain('.partial');
   });
 
+  test('demo backup IAM rollout explicitly denies deletion from the host role', () => {
+    const workflowPath = '.github/workflows/demo-backup-iam-guard.yml';
+    const guardPath = 'scripts/preview/guard-demo-backup-iam.sh';
+    expect(existsSync(join(repoRoot, workflowPath))).toBe(true);
+    expect(existsSync(join(repoRoot, guardPath))).toBe(true);
+    if (
+      !existsSync(join(repoRoot, workflowPath)) ||
+      !existsSync(join(repoRoot, guardPath))
+    )
+      return;
+
+    const workflow = readRepoFile(workflowPath);
+    const guard = readRepoFile(guardPath);
+    expect(workflow).toContain('environment: production');
+    expect(workflow).toContain('AWS_ACCESS_KEY_ID');
+    expect(workflow).toContain('AWS_SECRET_ACCESS_KEY');
+    expect(workflow).toContain('github.event.repository.default_branch');
+    expect(workflow).toContain('guard-demo-backup-iam.sh');
+    expect(guard).toContain('iam put-role-policy');
+    expect(guard).toContain('yawp-demo-backup-deny-delete');
+    expect(guard).toContain('s3:DeleteObject');
+    expect(guard).toContain('s3:DeleteObjectVersion');
+    expect(guard).toContain('iam simulate-principal-policy');
+    expect(guard).toContain('explicitDeny');
+  });
+
   test('workflow verification is anonymous and retains in-app gate assertions', () => {
     for (const path of [
       '.github/workflows/preview-environments.yml',
