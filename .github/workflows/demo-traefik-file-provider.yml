@@ -1,0 +1,70 @@
+name: Demo Traefik file provider
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: demo-environment
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  enable:
+    runs-on: ubuntu-22.04
+    environment: demo
+    env:
+      PREVIEW_DOMAIN: ${{ vars.DEMO_DOMAIN || 'yawp.school' }}
+      PREVIEW_HOST: ${{ vars.DEMO_HOST }}
+      PREVIEW_ROOT: ${{ vars.DEMO_ROOT || '/srv/yawp-demo' }}
+      PREVIEW_SSH_USER: ${{ vars.DEMO_SSH_USER || 'ec2-user' }}
+    steps:
+      - name: Check maintenance configuration
+        env:
+          DEMO_SSH_PRIVATE_KEY: ${{ secrets.DEMO_SSH_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          [[ "$PREVIEW_DOMAIN" =~ ^[A-Za-z0-9.-]+$ ]] || { echo "Invalid PREVIEW_DOMAIN"; exit 1; }
+          [[ "$PREVIEW_HOST" =~ ^[A-Za-z0-9.-]+$ ]] || { echo "Invalid PREVIEW_HOST"; exit 1; }
+          [[ "$PREVIEW_ROOT" =~ ^/srv/[A-Za-z0-9._-]+$ ]] || { echo "Invalid PREVIEW_ROOT"; exit 1; }
+          [[ "$PREVIEW_SSH_USER" =~ ^[A-Za-z0-9._-]+$ ]] || { echo "Invalid PREVIEW_SSH_USER"; exit 1; }
+          test -n "$DEMO_SSH_PRIVATE_KEY" || { echo "Missing DEMO_SSH_PRIVATE_KEY"; exit 1; }
+
+      - name: Checkout reviewed maintenance control
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+
+      - name: Prepare SSH
+        env:
+          DEMO_SSH_PRIVATE_KEY: ${{ secrets.DEMO_SSH_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$DEMO_SSH_PRIVATE_KEY" > ~/.ssh/demo_key
+          chmod 600 ~/.ssh/demo_key
+          ssh-keyscan -H "$PREVIEW_HOST" >> ~/.ssh/known_hosts
+
+      - name: Enable rollback-protected file provider
+        run: |
+          set -euo pipefail
+          shell_quote() { printf '%q' "$1"; }
+          public_url="https://demo.${PREVIEW_DOMAIN}"
+          remote_command="PREVIEW_ROOT=$(shell_quote "$PREVIEW_ROOT") PREVIEW_ROOT_PARENT=/srv PREVIEW_PUBLIC_URL=$(shell_quote "$public_url") bash -s"
+          ssh -i ~/.ssh/demo_key "${PREVIEW_SSH_USER}@${PREVIEW_HOST}" "$remote_command" \
+            < scripts/preview/enable-traefik-file-provider.sh \
+            | tee /tmp/traefik-file-provider.log
+          grep -Eq '^TRAEFIK_FILE_PROVIDER_ENABLED=(true|already)$' \
+            /tmp/traefik-file-provider.log
+
+      - name: Summary
+        run: |
+          {
+            echo "### Demo Traefik file provider"
+            echo
+            echo "The demo reverse proxy now accepts atomic dynamic cutover routes."
+            echo "Its prior Compose file remains on-host as a timestamped rollback copy."
+          } >> "$GITHUB_STEP_SUMMARY"

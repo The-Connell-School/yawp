@@ -591,6 +591,7 @@ compute_tooling_fingerprint() {
         "$SCRIPT_DIR/deploy.sh" \
         "$SCRIPT_DIR/preview-env.mjs" \
         "$SCRIPT_DIR/render-compose.mjs" \
+        "$SCRIPT_DIR/find-traefik-dynamic-dir.sh" \
         "$SCRIPT_DIR/rollout-web.sh" \
         "$SCRIPT_DIR/tooling-artifacts.sh"
       do
@@ -724,9 +725,11 @@ refresh_web_container_if_needed() {
 }
 
 rollout_demo_web_without_downtime() {
+  local traefik_dynamic_dir
+  traefik_dynamic_dir="$(bash "$SCRIPT_DIR/find-traefik-dynamic-dir.sh")"
   PREVIEW_COMPOSE_PROJECT="$COMPOSE_PROJECT" \
     PREVIEW_COMPOSE_FILE="$PREVIEW_DIR/docker-compose.yml" \
-    PREVIEW_ROUTER_FILE="$ROOT/traefik/dynamic/${COMPOSE_PROJECT}-cutover.yml" \
+    PREVIEW_ROUTER_FILE="$traefik_dynamic_dir/${COMPOSE_PROJECT}-cutover.yml" \
     PREVIEW_HOSTNAME="$HOSTNAME" \
     PREVIEW_PUBLIC_URL="$URL" \
     PREVIEW_LOGIN_SMOKE_SCRIPT="$SCRIPT_DIR/smoke-login.mjs" \

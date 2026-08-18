@@ -974,8 +974,10 @@ describe('PR preview deployment contract', () => {
   test('demo production deploy keeps the old web container until its replacement passes health and login checks', () => {
     const deployScript = readRepoFile('scripts/preview/deploy.sh');
     const rolloutPath = 'scripts/preview/rollout-web.sh';
+    const traefikDiscoveryPath = 'scripts/preview/find-traefik-dynamic-dir.sh';
 
     expect(existsSync(join(repoRoot, rolloutPath))).toBe(true);
+    expect(existsSync(join(repoRoot, traefikDiscoveryPath))).toBe(true);
     if (!existsSync(join(repoRoot, rolloutPath))) return;
 
     const rolloutScript = readRepoFile(rolloutPath);
@@ -983,6 +985,12 @@ describe('PR preview deployment contract', () => {
       '[[ "$SLUG" == "demo" && "$RUNTIME" == "production"'
     );
     expect(deployScript).toContain('bash "$SCRIPT_DIR/rollout-web.sh"');
+    expect(deployScript).toContain(
+      'bash "$SCRIPT_DIR/find-traefik-dynamic-dir.sh"'
+    );
+    expect(deployScript).not.toContain(
+      'PREVIEW_ROUTER_FILE="$ROOT/traefik/dynamic/'
+    );
     expect(rolloutScript).toContain('--no-recreate --scale web=2 web');
     expect(rolloutScript).toContain('wait_for_container_health');
     expect(rolloutScript).toContain('run_login_smoke "$candidate_url"');
@@ -1118,6 +1126,49 @@ describe('PR preview deployment contract', () => {
 });
 
 describe('demo environment deployment contract', () => {
+  test('demo host diagnostics expose only non-secret container and mount metadata', () => {
+    const diagnostics = readRepoFile(
+      '.github/workflows/demo-host-diagnostics.yml'
+    );
+
+    expect(diagnostics).toContain('environment: demo');
+    expect(diagnostics).toContain(
+      "docker ps --format 'name={{.Names}} image={{.Image}} status={{.Status}}'"
+    );
+    expect(diagnostics).toContain('.Config.Image');
+    expect(diagnostics).toContain('.Config.Cmd');
+    expect(diagnostics).toContain('.Destination');
+    expect(diagnostics).not.toContain('.Config.Env');
+    expect(diagnostics).not.toContain('.Source');
+    expect(diagnostics).not.toContain('docker exec');
+    expect(diagnostics).not.toContain('docker stop');
+    expect(diagnostics).not.toContain('docker rm');
+  });
+
+  test('demo Traefik maintenance is main-controlled and rollback protected', () => {
+    const workflow = readRepoFile(
+      '.github/workflows/demo-traefik-file-provider.yml'
+    );
+    const script = readRepoFile(
+      'scripts/preview/enable-traefik-file-provider.sh'
+    );
+
+    expect(workflow).toContain('environment: demo');
+    expect(workflow).toContain(
+      'ref: ${{ github.event.repository.default_branch }}'
+    );
+    expect(workflow).toContain('group: demo-environment');
+    expect(workflow).toContain(
+      '< scripts/preview/enable-traefik-file-provider.sh'
+    );
+    expect(script).toContain('Demo must be healthy before');
+    expect(script).toContain('cp -p -- "$COMPOSE_FILE" "$backup_file"');
+    expect(script).toContain('trap rollback EXIT');
+    expect(script).toContain('Previous Traefik configuration restored');
+    expect(script).toContain('verify_running_provider');
+    expect(script).toContain('TRAEFIK_FILE_PROVIDER_ENABLED=true');
+  });
+
   // deploy.sh runs ON THE DEMO HOST over SSH, so a value declared in the job's `env:`
   // reaches the runner and stops there unless remote_env forwards it. Declared and
   // forwarded are two different things; this asserts they agree.
@@ -1251,7 +1302,9 @@ describe('demo environment deployment contract', () => {
     expect(backupWorkflow).toContain('Install reviewed backup tooling');
     expect(backupWorkflow).toContain('backup-database.sh.next');
     expect(backupWorkflow).toContain('publish-demo-backup.sh.next');
-    expect(backupWorkflow).toContain('$PREVIEW_ROOT/ops/publish-demo-backup.sh');
+    expect(backupWorkflow).toContain(
+      '$PREVIEW_ROOT/ops/publish-demo-backup.sh'
+    );
     expect(backupWorkflow).not.toContain('AWS_ACCESS_KEY_ID');
     expect(backupWorkflow).not.toContain('AWS_SECRET_ACCESS_KEY');
     expect(backupWorkflow).not.toContain('configure-aws-credentials');
