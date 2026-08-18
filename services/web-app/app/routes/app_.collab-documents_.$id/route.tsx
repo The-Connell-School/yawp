@@ -244,7 +244,12 @@ export default function CollabDocumentRoute() {
 
         <div className="flex min-w-0 flex-1 flex-col md:flex-row md:items-baseline md:gap-3">
           <span className="truncate font-bold">
-            {doc.assignment?.title ?? doc.title ?? 'Untitled document'}
+            {/* Documents are created with an empty-string title, which `??` does
+                not catch — the header rendered blank for every student-shared
+                draft. */}
+            {doc.assignment?.title?.trim() ||
+              doc.title?.trim() ||
+              'Untitled document'}
           </span>
           <span className="shrink-0 text-sm text-muted-foreground">
             {doc.group?.label ?? 'Group'} · {groupMemberCount}{' '}

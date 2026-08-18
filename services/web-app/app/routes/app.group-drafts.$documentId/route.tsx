@@ -124,7 +124,9 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     grades: Object.fromEntries(grades),
     groupGrade,
     comments,
-    title: doc.assignment?.title ?? doc.title ?? 'Shared draft',
+    // Empty string, not null, is what a freshly created document carries, so
+    // `??` would let a blank title through.
+    title: doc.assignment?.title?.trim() || doc.title?.trim() || 'Shared draft',
     groupLabel: doc.group?.label ?? 'Group',
     backTo: doc.group?.classAssignmentId
       ? `/app/class-assignments/${doc.group.classAssignmentId}/groups`
