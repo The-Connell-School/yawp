@@ -350,5 +350,7 @@ describe('named environments', () => {
       );
     expect(reDerived).toEqual([]);
     expect(deployScript).not.toMatch(/yawp_pr_\$\{?PR_NUMBER/);
+    expect(deployScript).not.toContain('$PREVIEW_SLUG');
+    expect(deployScript).toContain('$SLUG');
   });
 });

@@ -980,7 +980,7 @@ describe('PR preview deployment contract', () => {
 
     const rolloutScript = readRepoFile(rolloutPath);
     expect(deployScript).toContain(
-      '[[ "$PREVIEW_SLUG" == "demo" && "$RUNTIME" == "production"'
+      '[[ "$SLUG" == "demo" && "$RUNTIME" == "production"'
     );
     expect(deployScript).toContain('bash "$SCRIPT_DIR/rollout-web.sh"');
     expect(rolloutScript).toContain('--no-recreate --scale web=2 web');

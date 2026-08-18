@@ -131,7 +131,7 @@ fi
 
 if [[ -f "$DATA_SOURCE_FINGERPRINT_FILE" && "$(<"$DATA_SOURCE_FINGERPRINT_FILE")" == "$DATA_SOURCE_FINGERPRINT" ]]; then
   DATA_SOURCE_CHANGED=0
-elif [[ "$PREVIEW_SLUG" == "demo" && "${DEMO_RESET_DATA:-false}" != "true" ]]; then
+elif [[ "$SLUG" == "demo" && "${DEMO_RESET_DATA:-false}" != "true" ]]; then
   if [[ -f "$DATA_SOURCE_FINGERPRINT_FILE" ]]; then
     echo "Refusing to replace demo database while DEMO_RESET_DATA=false." >&2
     echo "Requested data source: $DATA_SOURCE_FINGERPRINT" >&2
@@ -372,7 +372,7 @@ database_exists() {
 
 backup_demo_database_before_reset() {
   local backup_file backup_output
-  [[ "$PREVIEW_SLUG" == "demo" ]] || return 0
+  [[ "$SLUG" == "demo" ]] || return 0
   database_exists "$DATABASE_NAME" || return 0
   export DATABASE_NAME
   backup_output="$(BACKUP_KIND=pre-reset \
@@ -394,7 +394,7 @@ backup_demo_database_before_reset() {
 }
 
 arm_demo_reset_recovery() {
-  [[ "$PREVIEW_SLUG" == "demo" ]] || return 0
+  [[ "$SLUG" == "demo" ]] || return 0
   [[ -n "$DEMO_RESET_BACKUP_FILE" ]] || {
     echo "Refusing demo reset without a verified off-host pre-reset backup" >&2
     return 1
@@ -424,7 +424,7 @@ recover_demo_database_on_failure() {
 drop_preview_database() {
   local database_name="$1"
   validate_database_name "$database_name"
-  if [[ "$PREVIEW_SLUG" == "demo" ]]; then
+  if [[ "$SLUG" == "demo" ]]; then
     require_demo_reset_confirmation
     [[ "$DEMO_RESET_DATA" == "true" ]] || {
       echo "Refusing to delete the demo database while DEMO_RESET_DATA=false" >&2
@@ -495,14 +495,14 @@ reset_preview_database_for_data_source_change() {
     return 0
   fi
 
-  if [[ "$PREVIEW_SLUG" == "demo" && "${DEMO_RESET_DATA:-false}" != "true" ]]; then
+  if [[ "$SLUG" == "demo" && "${DEMO_RESET_DATA:-false}" != "true" ]]; then
     echo "Refusing to adopt an existing demo database without a matching data-source fingerprint." >&2
     exit 1
   fi
 
   echo "Preview data source changed; replacing database $DATABASE_NAME..."
   backup_demo_database_before_reset
-  if [[ "$PREVIEW_SLUG" == "demo" ]]; then
+  if [[ "$SLUG" == "demo" ]]; then
     arm_demo_reset_recovery
   else
     "${compose[@]}" down --remove-orphans >/dev/null 2>&1 || true
@@ -515,7 +515,7 @@ reset_seed_preview_database() {
   validate_database_name "$DATABASE_NAME"
   echo "Resetting preview database $DATABASE_NAME for seeded local-dev data..."
   backup_demo_database_before_reset
-  if [[ "$PREVIEW_SLUG" == "demo" ]]; then
+  if [[ "$SLUG" == "demo" ]]; then
     arm_demo_reset_recovery
   else
     "${compose[@]}" down --remove-orphans >/dev/null 2>&1 || true
@@ -526,7 +526,7 @@ reset_seed_preview_database() {
 }
 
 install_demo_backup_tooling() {
-  [[ "$PREVIEW_SLUG" == "demo" ]] || return 0
+  [[ "$SLUG" == "demo" ]] || return 0
   [[ "$ROOT" =~ ^/[A-Za-z0-9._/-]+$ ]] || {
     echo "Demo backup paths cannot contain whitespace" >&2
     exit 1
@@ -786,7 +786,7 @@ if [[ -n "${DIRECT_PORT:-}" ]]; then
 fi
 
 start_or_refresh_web() {
-  if [[ "$PREVIEW_SLUG" == "demo" && "$RUNTIME" == "production" && -z "${DIRECT_PORT:-}" ]]; then
+  if [[ "$SLUG" == "demo" && "$RUNTIME" == "production" && -z "${DIRECT_PORT:-}" ]]; then
     rollout_demo_web_without_downtime
   else
     refresh_web_container_if_needed
