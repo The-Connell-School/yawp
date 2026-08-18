@@ -178,6 +178,8 @@ describe('renderPreviewCompose', () => {
     try {
       const compose = renderCompose();
 
+      expect(compose).toContain('YAWP_PREVIEW_AI_MODE: "live"');
+      expect(compose).toContain('CLASS_INSIGHT_MOCK_MODE: ""');
       expect(compose).toContain('ANTHROPIC_API_KEY: "anthropic-preview-key"');
       expect(compose).toContain('AI_MODEL: "claude-opus-test"');
     } finally {

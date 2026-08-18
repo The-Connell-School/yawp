@@ -756,7 +756,7 @@ describe('PR preview deployment contract', () => {
     expect(workflow).not.toContain('${{ inputs.ref }}');
   });
 
-  test('preview workflow passes selected preview mode to remote deploy', () => {
+  test('preview workflow enables live AI for every access-gated preview', () => {
     const previewWorkflow = readRepoFile(
       '.github/workflows/preview-environments.yml'
     );
@@ -773,10 +773,12 @@ describe('PR preview deployment contract', () => {
     expect(previewWorkflow).toContain(
       "PREVIEW_AI_MODEL: ${{ vars.PREVIEW_AI_MODEL || 'claude-sonnet-4-6' }}"
     );
-    expect(previewWorkflow).not.toContain('PREVIEW_ANTHROPIC_API_KEY');
-    expect(previewWorkflow).toContain('PREVIEW_AI_MODE: disabled');
     expect(previewWorkflow).toContain(
-      'AI:** disabled in automatic PR previews'
+      'PREVIEW_ANTHROPIC_API_KEY: ${{ secrets.PREVIEW_ANTHROPIC_API_KEY || secrets.ANTHROPIC_API_KEY }}'
+    );
+    expect(previewWorkflow).toContain('PREVIEW_AI_MODE: live');
+    expect(previewWorkflow).toContain(
+      'AI:** live in every access-gated PR preview'
     );
     expect(previewWorkflow).toContain('PREVIEW_DB_DUMP_S3_URI');
     expect(previewWorkflow).toContain(
@@ -791,6 +793,12 @@ describe('PR preview deployment contract', () => {
     );
     expect(previewWorkflow).toContain(
       'PREVIEW_AI_MODEL=$(shell_quote "$PREVIEW_AI_MODEL")'
+    );
+    expect(previewWorkflow).toContain(
+      'PREVIEW_ANTHROPIC_API_KEY=$(shell_quote "$PREVIEW_ANTHROPIC_API_KEY")'
+    );
+    expect(previewWorkflow).toContain(
+      'test -n "$PREVIEW_ANTHROPIC_API_KEY" || { echo "Missing preview-host secret PREVIEW_ANTHROPIC_API_KEY or ANTHROPIC_API_KEY"; exit 1; }'
     );
     expect(previewWorkflow).toContain(
       'PREVIEW_DB_DUMP_S3_URI=$(shell_quote "$PREVIEW_DB_DUMP_S3_URI")'
