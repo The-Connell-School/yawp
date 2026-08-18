@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
 
-const writingPracticeAssignment = { create: mock() };
+const writingPracticeAssignment = { create: mock(), findMany: mock() };
 const writingPracticeAttempt = { create: mock() };
 const writingPracticeClassAssignment = { findMany: mock(), findFirst: mock() };
 const writingPracticePromptSet = { findUnique: mock(), create: mock() };
@@ -21,6 +21,8 @@ mock.module('~/utils/getLLMCompletion', () => ({
 
 const {
   createWritingPracticeAssignmentForClasses,
+  listWritingPracticeAssignmentsForStudent,
+  listWritingPracticeAssignmentsForTeacher,
   recordWritingPracticeAttempt,
   getAssignedPracticeForStudent,
   buildAssignedPracticeSequence,
@@ -32,6 +34,7 @@ const {
 
 beforeEach(() => {
   writingPracticeAssignment.create.mockReset();
+  writingPracticeAssignment.findMany.mockReset();
   writingPracticeAttempt.create.mockReset();
   writingPracticeClassAssignment.findMany.mockReset();
   writingPracticeClassAssignment.findFirst.mockReset();
@@ -79,7 +82,7 @@ describe('createWritingPracticeAssignmentForClasses', () => {
         title: 'Comma week',
         lessonSlugs: ['fixing-comma-splices'],
         problemCount: 3,
-        dueAt: null,
+        dueAt: new Date('2026-09-01T00:00:00.000Z'),
         instructions: null,
       },
       ['class-a', 'class-a', 'class-b']
@@ -94,6 +97,67 @@ describe('createWritingPracticeAssignmentForClasses', () => {
       { classId: 'class-a' },
       { classId: 'class-b' },
     ]);
+  });
+});
+
+describe('listing writing practice assignments', () => {
+  const row = {
+    id: 'practice-1',
+    title: 'Wordiness warm-up',
+    lessonSlugs: ['revising-for-wordiness'],
+    problemCount: 5,
+    dueAt: new Date('2026-09-01T00:00:00.000Z'),
+    instructions: 'Complete before class.',
+    classAssignments: [
+      {
+        class: {
+          id: 'class-1',
+          title: 'English 9',
+          grade: '9',
+          period: '2',
+        },
+      },
+    ],
+  };
+
+  beforeEach(() => {
+    writingPracticeAssignment.findMany.mockResolvedValue([row]);
+  });
+
+  test('flattens class deployments onto the teacher assignment summary', async () => {
+    const assignments =
+      await listWritingPracticeAssignmentsForTeacher('teacher-1');
+
+    expect(assignments[0]).toMatchObject({
+      id: 'practice-1',
+      title: 'Wordiness warm-up',
+      classes: [
+        { id: 'class-1', title: 'English 9', grade: '9', period: '2' },
+      ],
+    });
+
+    const [args] = writingPracticeAssignment.findMany.mock.calls[0];
+    const classFilter = {
+      isArchived: false,
+      teachers: { some: { id: 'teacher-1' } },
+    };
+    expect(args.where).toEqual({
+      classAssignments: { some: { class: classFilter } },
+    });
+    expect(args.select.classAssignments.where).toEqual({ class: classFilter });
+  });
+
+  test('scopes the student list to active enrolled classes', async () => {
+    await listWritingPracticeAssignmentsForStudent('student-1');
+
+    const [args] = writingPracticeAssignment.findMany.mock.calls[0];
+    const classFilter = {
+      isArchived: false,
+      students: { some: { id: 'student-1' } },
+    };
+    expect(args.where).toEqual({
+      classAssignments: { some: { class: classFilter } },
+    });
   });
 });
 

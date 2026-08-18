@@ -16,6 +16,7 @@ import { GeneralErrorBoundary } from './components/error-boundary.tsx';
 import { GlobalLoading } from './components/global-loading.tsx';
 import { Toaster } from './components/toaster.tsx';
 import { useNonce } from './contexts/nonce.ts';
+import { useInternalCopyMarker } from './hooks/useInternalCopyMarker.ts';
 import { authSessionStorage } from './cookie-session-storages/authentication.server.ts';
 import {
   type NavState,
@@ -38,12 +39,20 @@ import omit from 'lodash/omit';
 import { getMembershipId } from './cookies/membership-id.server.ts';
 import { LocalDevEnvironmentBar } from './components/local-dev-environment-bar.tsx';
 import { isLocalDevAuthEnabled } from './utils/local-dev-auth.server.ts';
-import { getLocalDevLoginOptions } from './routes/auth.dev-login/route.tsx';
+import { getLocalDevLoginOptions } from './routes/auth.dev-login/bound.server';
 import { useContrastPreference } from './routes/api.preferences.contrast/route.tsx';
 import {
   getEnvironmentBannerWarning,
   shouldEnableLocalDevQuickLogin,
 } from './utils/environment-banner.server.ts';
+import {
+  getPreviewAccessSeat,
+  isIsolatedPreviewSeatMode,
+  isPreviewAccessGateEnabled,
+  previewAccessMiddleware,
+} from './utils/preview-access.server.ts';
+
+export const middleware = [previewAccessMiddleware];
 
 export const links: LinksFunction = () => {
   return [
@@ -76,7 +85,11 @@ export const meta: MetaFunction<typeof loader> = ({ data }) => {
 export async function loader({ request }: LoaderFunctionArgs) {
   const timings = makeTimings('root loader');
   const url = new URL(request.url);
-  const publicLandingPage = url.pathname === '/' || url.pathname === '/info';
+  const publicLandingPage =
+    url.pathname === '/' ||
+    url.pathname === '/info' ||
+    url.pathname === '/auth/preview-access' ||
+    url.pathname === '/auth/preview-access.data';
   const cookieHeader = request.headers.get('Cookie');
   const contrastCookie =
     (await contrastPreferenceCookie.parse(cookieHeader)) || {};
@@ -99,8 +112,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
         ENV: getEnv(),
         bannerWarning: null,
         localDevQuickLogin: { enabled: false, options: [] },
+        previewAccessGateEnabled: isPreviewAccessGateEnabled(),
+        previewAccessSeat: null,
         impersonation: { isReadOnly: false, impersonatorUserId: null },
-        studentPreview: { active: false, organizationId: null },
         toast: null,
       },
       { headers: { 'Server-Timing': timings.toString() } }
@@ -120,6 +134,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
     desc: 'getUserId in root',
   });
   const { prisma } = await import('./utils/db.server.ts');
+  const previewAccessSeat = isPreviewAccessGateEnabled()
+    ? await getPreviewAccessSeat(request)
+    : null;
 
   const user = userId
     ? await time(
@@ -131,12 +148,22 @@ export async function loader({ request }: LoaderFunctionArgs) {
               email: true,
               isAdmin: true,
               memberships: {
+                ...(previewAccessSeat && isIsolatedPreviewSeatMode()
+                  ? { where: { organizationId: previewAccessSeat.organizationId } }
+                  : {}),
                 orderBy: { createdAt: 'asc' },
                 select: {
                   id: true,
                   role: true,
                   isOrgOwner: true,
-                  organization: { select: { name: true } },
+                  organization: {
+                    select: {
+                      name: true,
+                      reporterEnabled: true,
+                      classInsightsEnabled: true,
+                      writingPracticeEnabled: true,
+                    },
+                  },
                 },
               },
             },
@@ -166,10 +193,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
     user?.memberships.find((m) => m.id === membershipId) ??
     user?.memberships[0];
   const impersonation = await getImpersonationState(request);
-  const { getStudentPreviewState } = await import(
-    './utils/student-preview.server.ts'
-  );
-  const studentPreview = await getStudentPreviewState(request);
   const bannerWarning = getEnvironmentBannerWarning(request.url);
   const localDevQuickLoginEnabled = shouldEnableLocalDevQuickLogin({
     bannerWarning,
@@ -178,7 +201,11 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   return data(
     {
-      user: { ...user, selectedMembership: membership },
+      user: {
+        ...user,
+        isAdmin: Boolean(user?.isAdmin),
+        selectedMembership: membership,
+      },
       requestInfo: {
         hints: getHints(request),
         origin: getDomainUrl(request),
@@ -192,10 +219,15 @@ export async function loader({ request }: LoaderFunctionArgs) {
       bannerWarning,
       localDevQuickLogin: {
         enabled: localDevQuickLoginEnabled,
-        options: localDevQuickLoginEnabled ? getLocalDevLoginOptions() : [],
+        options: localDevQuickLoginEnabled
+          ? await getLocalDevLoginOptions(
+              previewAccessSeat?.organizationId,
+            )
+          : [],
       },
+      previewAccessGateEnabled: isPreviewAccessGateEnabled(),
+      previewAccessSeat,
       impersonation,
-      studentPreview,
       toast,
     },
     {
@@ -261,6 +293,14 @@ function Document({
 export default function App({ loaderData: data }: Route.ComponentProps) {
   const nonce = useNonce();
   const contrastPreference = useContrastPreference();
+
+  // Copy/cut provenance for the paste alert. It has to live at the root,
+  // not in the /app layout: the document editor is an `app_.documents_.$id`
+  // route, which opts out of that layout. Mounted here, a copy made on any
+  // page — class detail, an assignment prompt, writing lessons, another
+  // document — is recognized when the student later pastes into an editor,
+  // instead of reading as an external paste and raising a false alarm.
+  useInternalCopyMarker();
 
   useEffect(() => {
     function createSecureLoginMethod() {
@@ -337,6 +377,8 @@ export default function App({ loaderData: data }: Route.ComponentProps) {
         <LocalDevEnvironmentBar
           bannerWarning={data.bannerWarning}
           localDevQuickLogin={data.localDevQuickLogin}
+          previewAccessGateEnabled={data.previewAccessGateEnabled}
+          previewAccessSeatLabel={data.previewAccessSeat?.label ?? null}
         />
       ) : null}
       <GlobalLoading />

@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
 
 const prisma = {
-  submission: { findFirst: mock(), update: mock() },
+  $transaction: mock(),
+  submission: { findFirst: mock(), updateMany: mock() },
 };
 
 const getGradingActor = mock();
@@ -19,6 +20,9 @@ mock.module('~/utils/grading-auth.server', () => ({
 
 const { action } = await import('./route');
 
+const UNSUBMITTED_BEFORE_GRADED_MESSAGE =
+  'This submission was unsubmitted before you could grade it. Please refresh the page.';
+
 function makeRequest(body: Record<string, unknown>) {
   return new Request('https://example.com/api/domain/update-submission', {
     method: 'POST',
@@ -29,8 +33,9 @@ function makeRequest(body: Record<string, unknown>) {
 
 describe('api.domain.update-submission', () => {
   beforeEach(() => {
+    prisma.$transaction.mockReset();
     prisma.submission.findFirst.mockReset();
-    prisma.submission.update.mockReset();
+    prisma.submission.updateMany.mockReset();
     getGradingActor.mockReset();
     canManageGrades.mockReset();
     isGradingOwnDocument.mockReset();
@@ -47,6 +52,10 @@ describe('api.domain.update-submission', () => {
       (actorId: string, docMembershipId: string) => actorId === docMembershipId
     );
     buildTeacherClassWhere.mockReturnValue({});
+    prisma.submission.updateMany.mockResolvedValue({ count: 1 });
+    prisma.$transaction.mockImplementation(async (callback: any) =>
+      callback(prisma)
+    );
   });
 
   test('updates grading fields on a submission', async () => {
@@ -74,6 +83,8 @@ describe('api.domain.update-submission', () => {
       id: 'sub-1',
       gradedAt: new Date(),
       gradedByMembershipId: 'teacher-1',
+      numericPercentage: null,
+      unsubmittedAt: null,
       document: {
         membershipId: 'student-1',
         assignment: {
@@ -93,11 +104,6 @@ describe('api.domain.update-submission', () => {
         },
       },
     });
-    prisma.submission.update.mockResolvedValue({
-      id: 'sub-1',
-      score: '85% B',
-      feedback: 'Great work',
-    });
 
     const response = (await action({
       request: makeRequest({
@@ -110,7 +116,10 @@ describe('api.domain.update-submission', () => {
     const body = await response.json();
     expect(body.success).toBe(true);
     expect(body.submission.score).toBe('85% B');
-    expect(prisma.submission.update).toHaveBeenCalledTimes(1);
+    expect(prisma.submission.updateMany).toHaveBeenCalledTimes(1);
+    const updateCall = prisma.submission.updateMany.mock.calls[0][0];
+    expect(updateCall.where).toEqual({ id: 'sub-1', unsubmittedAt: null });
+    expect(updateCall.data.score).toBe('85% B');
     expect(prisma.submission.findFirst).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({
@@ -144,48 +153,132 @@ describe('api.domain.update-submission', () => {
       id: 'sub-1',
       gradedAt: new Date(),
       gradedByMembershipId: 'teacher-1',
+      numericPercentage: null,
+      unsubmittedAt: null,
       document: {
         membershipId: 'student-1',
         assignment: null,
         membership: { classesAsStudent: [] },
       },
     });
-    prisma.submission.update.mockResolvedValue({ id: 'sub-1', grammarIssues });
 
     const response = (await action({
       request: makeRequest({ submissionId: 'sub-1', grammarIssues }),
     } as any)) as Response;
 
     const body = await response.json();
-    const updateCall = prisma.submission.update.mock.calls[0]?.[0];
+    const updateCall = prisma.submission.updateMany.mock.calls[0]?.[0];
     expect(body.success).toBe(true);
     expect(updateCall.data.grammarIssues).toEqual(grammarIssues);
   });
 
-  test('sets gradedAt and gradedById on first grading edit', async () => {
+  test('sets gradedAt and gradedById on first grading edit with overall percentage', async () => {
     prisma.submission.findFirst.mockResolvedValue({
       id: 'sub-1',
       gradedAt: null,
       gradedByMembershipId: null,
+      numericPercentage: null,
+      unsubmittedAt: null,
       document: {
         membershipId: 'student-1',
         assignment: null,
         membership: { classesAsStudent: [] },
       },
     });
-    prisma.submission.update.mockResolvedValue({ id: 'sub-1', score: '90% A' });
 
     await action({
       request: makeRequest({
         submissionId: 'sub-1',
         score: '90% A',
+        numericPercentage: 90,
         markAsGraded: true,
       }),
     } as any);
 
-    const updateCall = prisma.submission.update.mock.calls[0]?.[0];
+    const updateCall = prisma.submission.updateMany.mock.calls[0]?.[0];
     expect(updateCall.data.gradedAt).toBeInstanceOf(Date);
     expect(updateCall.data.gradedByMembershipId).toBe('teacher-1');
+  });
+
+  test('rejects markAsGraded without an overall percentage', async () => {
+    prisma.submission.findFirst.mockResolvedValue({
+      id: 'sub-1',
+      gradedAt: null,
+      gradedByMembershipId: null,
+      numericPercentage: null,
+      unsubmittedAt: null,
+      document: {
+        membershipId: 'student-1',
+        assignment: null,
+        membership: { classesAsStudent: [] },
+      },
+    });
+
+    const response = (await action({
+      request: makeRequest({
+        submissionId: 'sub-1',
+        markAsGraded: true,
+      }),
+    } as any)) as Response;
+
+    expect(response.status).toBe(400);
+    expect(prisma.submission.updateMany).not.toHaveBeenCalled();
+  });
+
+  test('marks a points-scale submission graded, which records points and no percentage', async () => {
+    prisma.submission.findFirst.mockResolvedValue({
+      id: 'sub-1',
+      gradedAt: null,
+      gradedByMembershipId: null,
+      numericPercentage: null,
+      overallScore: 2,
+      score: '2/3',
+      unsubmittedAt: null,
+      document: {
+        membershipId: 'student-1',
+        assignment: null,
+        membership: { classesAsStudent: [] },
+      },
+    });
+
+    const response = (await action({
+      request: makeRequest({
+        submissionId: 'sub-1',
+        markAsGraded: true,
+      }),
+    } as any)) as Response;
+
+    expect(response.status).toBe(200);
+    const updateCall = prisma.submission.updateMany.mock.calls[0][0];
+    expect(updateCall.data.gradedAt).toBeInstanceOf(Date);
+  });
+
+  test('marks graded when the points grade arrives in the same request', async () => {
+    prisma.submission.findFirst.mockResolvedValue({
+      id: 'sub-1',
+      gradedAt: null,
+      gradedByMembershipId: null,
+      numericPercentage: null,
+      overallScore: null,
+      score: null,
+      unsubmittedAt: null,
+      document: {
+        membershipId: 'student-1',
+        assignment: null,
+        membership: { classesAsStudent: [] },
+      },
+    });
+
+    const response = (await action({
+      request: makeRequest({
+        submissionId: 'sub-1',
+        markAsGraded: true,
+        overallScore: 0,
+        score: '0/3',
+      }),
+    } as any)) as Response;
+
+    expect(response.status).toBe(200);
   });
 
   test('does not overwrite gradedAt on subsequent edits', async () => {
@@ -194,21 +287,48 @@ describe('api.domain.update-submission', () => {
       id: 'sub-1',
       gradedAt: existingGradedAt,
       gradedByMembershipId: 'teacher-1',
+      numericPercentage: 90,
+      unsubmittedAt: null,
       document: {
         membershipId: 'student-1',
         assignment: null,
         membership: { classesAsStudent: [] },
       },
     });
-    prisma.submission.update.mockResolvedValue({ id: 'sub-1' });
 
     await action({
       request: makeRequest({ submissionId: 'sub-1', feedback: 'Updated' }),
     } as any);
 
-    const updateCall = prisma.submission.update.mock.calls[0]?.[0];
+    const updateCall = prisma.submission.updateMany.mock.calls[0]?.[0];
     expect(updateCall.data.gradedAt).toBeUndefined();
     expect(updateCall.data.gradedByMembershipId).toBeUndefined();
+  });
+
+  test('assigns gradedByMembershipId when marking an already graded submission', async () => {
+    prisma.submission.findFirst.mockResolvedValue({
+      id: 'sub-1',
+      gradedAt: new Date('2026-01-01'),
+      gradedByMembershipId: null,
+      numericPercentage: 85,
+      unsubmittedAt: null,
+      document: {
+        membershipId: 'student-1',
+        assignment: null,
+        membership: { classesAsStudent: [] },
+      },
+    });
+
+    await action({
+      request: makeRequest({
+        submissionId: 'sub-1',
+        markAsGraded: true,
+      }),
+    } as any);
+
+    const updateCall = prisma.submission.updateMany.mock.calls[0]?.[0];
+    expect(updateCall.data.gradedAt).toBeUndefined();
+    expect(updateCall.data.gradedByMembershipId).toBe('teacher-1');
   });
 
   test('rejects non-teachers', async () => {
@@ -226,6 +346,8 @@ describe('api.domain.update-submission', () => {
       id: 'sub-1',
       gradedAt: null,
       gradedByMembershipId: null,
+      numericPercentage: null,
+      unsubmittedAt: null,
       document: {
         membershipId: 'teacher-1',
         assignment: null,
@@ -238,7 +360,7 @@ describe('api.domain.update-submission', () => {
     } as any)) as Response;
 
     expect(response.status).toBe(403);
-    expect(prisma.submission.update).not.toHaveBeenCalled();
+    expect(prisma.submission.updateMany).not.toHaveBeenCalled();
   });
 
   test('returns 404 when submission not found', async () => {
@@ -257,5 +379,112 @@ describe('api.domain.update-submission', () => {
     } as any)) as Response;
 
     expect(response.status).toBe(400);
+  });
+
+  // ── Grading race: a student unsubmits while the teacher has the grading
+  // screen open. The save must be refused, not silently applied. ──────────
+
+  test('refuses to save a grade when the submission was already unsubmitted', async () => {
+    prisma.submission.findFirst.mockResolvedValue({
+      id: 'sub-1',
+      gradedAt: null,
+      gradedByMembershipId: null,
+      numericPercentage: null,
+      unsubmittedAt: new Date('2026-08-08T12:00:00Z'),
+      document: {
+        membershipId: 'student-1',
+        assignment: null,
+        membership: { classesAsStudent: [] },
+      },
+    });
+
+    const response = (await action({
+      request: makeRequest({
+        submissionId: 'sub-1',
+        score: '90% A',
+        numericPercentage: 90,
+        markAsGraded: true,
+      }),
+    } as any)) as Response;
+
+    expect(response.status).toBe(409);
+    const body = await response.json();
+    expect(body.success).toBe(false);
+    expect(body.message).toBe(UNSUBMITTED_BEFORE_GRADED_MESSAGE);
+    expect(prisma.submission.updateMany).not.toHaveBeenCalled();
+  });
+
+  test('refuses a draft field save (not just markAsGraded) once unsubmitted', async () => {
+    prisma.submission.findFirst.mockResolvedValue({
+      id: 'sub-1',
+      gradedAt: null,
+      gradedByMembershipId: null,
+      numericPercentage: null,
+      unsubmittedAt: new Date('2026-08-08T12:00:00Z'),
+      document: {
+        membershipId: 'student-1',
+        assignment: null,
+        membership: { classesAsStudent: [] },
+      },
+    });
+
+    const response = (await action({
+      request: makeRequest({ submissionId: 'sub-1', feedback: 'Nice work' }),
+    } as any)) as Response;
+
+    expect(response.status).toBe(409);
+    const body = await response.json();
+    expect(body.message).toBe(UNSUBMITTED_BEFORE_GRADED_MESSAGE);
+    expect(prisma.submission.updateMany).not.toHaveBeenCalled();
+  });
+
+  test('closes the race: refuses when unsubmit lands between the read and the write', async () => {
+    prisma.submission.findFirst.mockResolvedValue({
+      id: 'sub-1',
+      gradedAt: null,
+      gradedByMembershipId: null,
+      numericPercentage: null,
+      unsubmittedAt: null,
+      document: {
+        membershipId: 'student-1',
+        assignment: null,
+        membership: { classesAsStudent: [] },
+      },
+    });
+    // Simulates the student's unsubmit winning the race: the guarded
+    // updateMany matches zero rows even though the initial read looked safe.
+    prisma.submission.updateMany.mockResolvedValue({ count: 0 });
+
+    const response = (await action({
+      request: makeRequest({ submissionId: 'sub-1', score: '90% A' }),
+    } as any)) as Response;
+
+    expect(response.status).toBe(409);
+    const body = await response.json();
+    expect(body.success).toBe(false);
+    expect(body.message).toBe(UNSUBMITTED_BEFORE_GRADED_MESSAGE);
+  });
+
+  test('enforces the guard inside the same transaction/predicate style as unsubmit', async () => {
+    prisma.submission.findFirst.mockResolvedValue({
+      id: 'sub-1',
+      gradedAt: null,
+      gradedByMembershipId: null,
+      numericPercentage: null,
+      unsubmittedAt: null,
+      document: {
+        membershipId: 'student-1',
+        assignment: null,
+        membership: { classesAsStudent: [] },
+      },
+    });
+
+    await action({
+      request: makeRequest({ submissionId: 'sub-1', score: '90% A' }),
+    } as any);
+
+    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+    const updateCall = prisma.submission.updateMany.mock.calls[0][0];
+    expect(updateCall.where).toEqual({ id: 'sub-1', unsubmittedAt: null });
   });
 });

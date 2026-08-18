@@ -52,10 +52,13 @@ describe('admin assignment type new action', () => {
     );
 
     const response = await action({
-      request: new Request('https://example.test/app/admin/assignment-types/new', {
-        method: 'POST',
-        body: form,
-      }),
+      request: new Request(
+        'https://example.test/app/admin/assignment-types/new',
+        {
+          method: 'POST',
+          body: form,
+        }
+      ),
       params: {},
       context: {} as never,
     } as never);
@@ -94,5 +97,103 @@ describe('admin assignment type new action', () => {
     expect((response as Response).headers.get('Location')).toBe(
       '/app/admin/assignment-types/at-new'
     );
+  });
+
+  test('creates from the simplified UI without rewriting grading configuration', async () => {
+    const form = new FormData();
+    form.set('title', 'New assignment type');
+    form.set('description', 'Choose its database rubric after saving.');
+
+    await action({
+      request: new Request(
+        'https://example.test/app/admin/assignment-types/new',
+        {
+          method: 'POST',
+          body: form,
+        }
+      ),
+      params: {},
+      context: {} as never,
+    } as never);
+
+    expect(prisma.assignmentType.create).toHaveBeenCalledWith({
+      data: {
+        title: 'New assignment type',
+        kind: null,
+        description: 'Choose its database rubric after saving.',
+        position: 4,
+      },
+    });
+  });
+
+  test('blocks creating an assignment type whose rubric would silently fall back to the thesis default', async () => {
+    const form = new FormData();
+    form.set('title', 'New assignment type');
+    form.set(
+      'scoringScale',
+      JSON.stringify({ type: 'weighted_1_5', minScore: 1, maxScore: 5 })
+    );
+    form.set('rubricJson', JSON.stringify({ categories: [] }));
+    form.set('promptConfigJson', JSON.stringify({ gradingInstructions: '' }));
+
+    let thrown: unknown;
+    try {
+      await action({
+        request: new Request(
+          'https://example.test/app/admin/assignment-types/new',
+          {
+            method: 'POST',
+            body: form,
+          }
+        ),
+        params: {},
+        context: {} as never,
+      } as never);
+    } catch (error) {
+      thrown = error;
+    }
+
+    expect(thrown).toBeInstanceOf(Response);
+    expect((thrown as Response).status).toBe(400);
+    expect(prisma.assignmentType.create).not.toHaveBeenCalled();
+  });
+
+  test('blocks creating an assignment type with a partially-filled rubric category', async () => {
+    const form = new FormData();
+    form.set('title', 'New assignment type');
+    form.set(
+      'scoringScale',
+      JSON.stringify({ type: 'weighted_1_5', minScore: 1, maxScore: 5 })
+    );
+    form.set(
+      'rubricJson',
+      JSON.stringify({
+        categories: [
+          { key: 'claim', label: 'Claim', description: '', weight: 1 },
+        ],
+      })
+    );
+    form.set('promptConfigJson', JSON.stringify({ gradingInstructions: '' }));
+
+    let thrown: unknown;
+    try {
+      await action({
+        request: new Request(
+          'https://example.test/app/admin/assignment-types/new',
+          {
+            method: 'POST',
+            body: form,
+          }
+        ),
+        params: {},
+        context: {} as never,
+      } as never);
+    } catch (error) {
+      thrown = error;
+    }
+
+    expect(thrown).toBeInstanceOf(Response);
+    expect((thrown as Response).status).toBe(400);
+    expect(prisma.assignmentType.create).not.toHaveBeenCalled();
   });
 });

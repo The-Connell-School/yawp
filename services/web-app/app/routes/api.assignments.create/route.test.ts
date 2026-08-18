@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, mock, test } from 'bun:test';
+import { afterAll, beforeEach, describe, expect, mock, test } from 'bun:test';
 
 const prisma = {
   class: {
@@ -25,6 +25,19 @@ const requireUserId = mock();
 const requireMembership = mock();
 const createAssignmentDeployedToClasses = mock();
 const isAssignmentTypeAvailableForEveryScope = mock();
+const uploadAssignmentPromptAttachment = mock();
+const deleteAssignmentPromptAttachment = mock();
+const saveAssignmentForReuse = mock();
+class AssignmentPromptAttachmentError extends Error {}
+const actualAssignmentPromptAttachment = await import(
+  '~/domain/assignments/assignment-prompt-attachment.server'
+);
+// bun's module mocks are global to the test run and mock.restore() does not
+// undo mock.module — restore from the pristine copy test-preload.ts captured
+// before any file could mock.module() this path (see comment there).
+const actualAssignmentTypeAccess = globalThis.__realModules[
+  '~/utils/assignment-type-access.server'
+];
 
 mock.module('~/utils/db.server', () => ({ prisma }));
 mock.module('~/utils/auth.server', () => ({
@@ -35,10 +48,34 @@ mock.module('~/utils/assignment-deployment.server', () => ({
   createAssignmentDeployedToClasses,
 }));
 mock.module('~/utils/assignment-type-access.server', () => ({
+  ...actualAssignmentTypeAccess,
   isAssignmentTypeAvailableForEveryScope,
+}));
+mock.module(
+  '~/domain/assignments/assignment-prompt-attachment.server',
+  () => ({
+    ...actualAssignmentPromptAttachment,
+    AssignmentPromptAttachmentError,
+    assignmentPromptAttachmentRequestTooLarge: () => false,
+    deleteAssignmentPromptAttachment,
+    uploadAssignmentPromptAttachment,
+  })
+);
+
+mock.module('~/domain/assignments/saved-assignments.server', () => ({
+  SAVED_ASSIGNMENTS_ENABLED: true,
+  saveAssignmentForReuse,
 }));
 
 const { action } = await import('./route');
+
+afterAll(() => {
+  mock.restore();
+  mock.module(
+    '~/utils/assignment-type-access.server',
+    () => actualAssignmentTypeAccess
+  );
+});
 
 function requestFor(body: Record<string, string | string[]>) {
   const form = new FormData();
@@ -80,6 +117,9 @@ describe('api.assignments.create', () => {
     prisma.apHistoryPromptLibraryEntry.findFirst.mockReset();
     createAssignmentDeployedToClasses.mockReset();
     isAssignmentTypeAvailableForEveryScope.mockReset();
+    uploadAssignmentPromptAttachment.mockReset();
+    deleteAssignmentPromptAttachment.mockReset().mockResolvedValue(undefined);
+    saveAssignmentForReuse.mockReset().mockResolvedValue({ id: 'saved-1' });
     requireUserId.mockReset();
     requireMembership.mockReset();
 
@@ -103,6 +143,11 @@ describe('api.assignments.create', () => {
     isAssignmentTypeAvailableForEveryScope.mockResolvedValue(true);
     prisma.apHistoryPromptLibraryEntry.findFirst.mockResolvedValue(null);
     createAssignmentDeployedToClasses.mockResolvedValue({ id: 'assignment-1' });
+    uploadAssignmentPromptAttachment.mockResolvedValue({
+      promptAttachmentKey: 'assignment-prompts/file-id/assignment.pdf',
+      promptAttachmentName: 'assignment.pdf',
+      promptAttachmentSize: 4,
+    });
   });
 
   test('creates one standardized assignment per selected teacher-owned class', async () => {
@@ -143,6 +188,42 @@ describe('api.assignments.create', () => {
         submitForGrade: true,
         pointValue: 100,
         gradingAssistantStrictnessLevel: 'intermediate',
+      }),
+      classIds: ['class-1', 'class-2'],
+    });
+  });
+
+  test('stores a PDF attachment for assignments created across classes', async () => {
+    const form = new FormData();
+    form.set('intent', 'create-assignment');
+    form.set('assignmentTypeId', 'at-1');
+    form.append('classIds', 'class-1');
+    form.append('classIds', 'class-2');
+    form.set('prompt', 'Reference the attached assignment.');
+    form.set(
+      'promptAttachment',
+      new File([new Uint8Array([0x25, 0x50, 0x44, 0x46])], 'assignment.pdf', {
+        type: 'application/pdf',
+      })
+    );
+
+    const response = await action({
+      request: new Request('https://example.com/api/assignments/create', {
+        method: 'POST',
+        body: form,
+      }),
+      params: {},
+    } as any);
+
+    expect((await readBody(response)).success).toBe(true);
+    expect(uploadAssignmentPromptAttachment).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'assignment.pdf' })
+    );
+    expect(createAssignmentDeployedToClasses).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        promptAttachmentKey: 'assignment-prompts/file-id/assignment.pdf',
+        promptAttachmentName: 'assignment.pdf',
+        promptAttachmentSize: 4,
       }),
       classIds: ['class-1', 'class-2'],
     });
@@ -210,6 +291,68 @@ describe('api.assignments.create', () => {
     expect(body).toMatchObject({
       success: false,
       message: 'Grading assistant strictness level is invalid.',
+    });
+    expect(createAssignmentDeployedToClasses).not.toHaveBeenCalled();
+  });
+
+  test('defaults the tutor to enabled when not specified (preserves current behavior)', async () => {
+    const response = await action({
+      request: requestFor({
+        intent: 'create-assignment',
+        assignmentTypeId: 'at-1',
+        classIds: ['class-1', 'class-2'],
+        prompt: 'Write the essay.',
+        title: 'Essay',
+      }),
+      params: {},
+    } as any);
+
+    const body = await readBody(response);
+    expect(body.success).toBe(true);
+    expect(createAssignmentDeployedToClasses).toHaveBeenCalledWith({
+      data: expect.objectContaining({ tutorEnabled: true }),
+      classIds: ['class-1', 'class-2'],
+    });
+  });
+
+  test('disables the tutor when the toggle is turned off', async () => {
+    const response = await action({
+      request: requestFor({
+        intent: 'create-assignment',
+        assignmentTypeId: 'at-1',
+        classIds: ['class-1', 'class-2'],
+        prompt: 'Write the essay.',
+        title: 'Essay',
+        tutorEnabled: 'false',
+      }),
+      params: {},
+    } as any);
+
+    const body = await readBody(response);
+    expect(body.success).toBe(true);
+    expect(createAssignmentDeployedToClasses).toHaveBeenCalledWith({
+      data: expect.objectContaining({ tutorEnabled: false }),
+      classIds: ['class-1', 'class-2'],
+    });
+  });
+
+  test('rejects an invalid tutor toggle value', async () => {
+    const response = await action({
+      request: requestFor({
+        intent: 'create-assignment',
+        assignmentTypeId: 'at-1',
+        classIds: ['class-1'],
+        prompt: 'Write the essay.',
+        tutorEnabled: 'maybe',
+      }),
+      params: {},
+    } as any);
+
+    const body = await readBody(response);
+    expect(responseStatus(response)).toBe(400);
+    expect(body).toMatchObject({
+      success: false,
+      message: 'Tutor enabled value is invalid.',
     });
     expect(createAssignmentDeployedToClasses).not.toHaveBeenCalled();
   });
@@ -395,6 +538,49 @@ describe('api.assignments.create', () => {
     });
   });
 
+  test('carries the tutor toggle through the AP History creation path', async () => {
+    const libraryEntry = {
+      externalKey: 'apush-dbq-new-deal-federal-power',
+      course: 'apush',
+      essayType: 'dbq',
+      title: 'New Deal and Federal Power DBQ',
+      prompt:
+        'Evaluate the extent to which the New Deal changed the role of the federal government.',
+      period: '1932-1980',
+      periodNumber: 7,
+      reasoningSkill: 'causation',
+      defaultTimeMode: 'untimed',
+      defaultDurationMinutes: 60,
+      sources: [],
+    };
+    mockAssignmentTypeAvailable({
+      id: 'ap-type-1',
+      systemKey: 'ap_history_essay',
+    });
+    prisma.apHistoryPromptLibraryEntry.findFirst.mockResolvedValue(
+      libraryEntry
+    );
+
+    const response = await action({
+      request: requestFor({
+        intent: 'create-assignment',
+        assignmentTypeId: 'ap-type-1',
+        classIds: ['class-1', 'class-2'],
+        title: 'Unit 7 DBQ',
+        apHistoryLibraryEntryId: 'apush-dbq-new-deal-federal-power',
+        tutorEnabled: 'false',
+      }),
+      params: {},
+    } as any);
+
+    const body = await readBody(response);
+    expect(body.success).toBe(true);
+    expect(createAssignmentDeployedToClasses).toHaveBeenCalledWith({
+      data: expect.objectContaining({ tutorEnabled: false }),
+      classIds: ['class-1', 'class-2'],
+    });
+  });
+
   test('rejects AP History assignment creation without a library entry id', async () => {
     prisma.class.findMany.mockResolvedValue([
       { id: 'class-1', school: { organizationId: 'org-1' } },
@@ -447,5 +633,73 @@ describe('api.assignments.create', () => {
     expect(responseStatus(response)).toBe(400);
     expect(body.message).toBe('AP History library entry is unavailable.');
     expect(createAssignmentDeployedToClasses).not.toHaveBeenCalled();
+  });
+  test('keeps the assignment for reuse when the teacher asked it to be saved', async () => {
+    const response = await action({
+      request: requestFor({
+        intent: 'create-assignment',
+        assignmentTypeId: 'at-1',
+        classIds: ['class-1', 'class-2'],
+        prompt: 'Write the essay.',
+        title: 'Essay',
+        submitForGrade: 'true',
+        pointValue: '50',
+        tutorEnabled: 'false',
+        saveForReuse: 'true',
+      }),
+      params: {},
+    } as any);
+
+    const body = await readBody(response);
+    expect(body.success).toBe(true);
+    expect(saveAssignmentForReuse).toHaveBeenCalledWith({
+      membershipId: 'teacher-1',
+      assignmentTypeId: 'at-1',
+      title: 'Essay',
+      prompt: 'Write the essay.',
+      submitForGrade: true,
+      pointValue: 50,
+      gradingAssistantStrictnessLevel: 'intermediate',
+      tutorEnabled: false,
+    });
+  });
+
+  test('does not keep the assignment when the teacher did not ask', async () => {
+    await action({
+      request: requestFor({
+        intent: 'create-assignment',
+        assignmentTypeId: 'at-1',
+        classIds: ['class-1', 'class-2'],
+        prompt: 'Write the essay.',
+        title: 'Essay',
+      }),
+      params: {},
+    } as any);
+
+    expect(saveAssignmentForReuse).not.toHaveBeenCalled();
+  });
+
+  test('still reports the assignment created when keeping it fails', async () => {
+    // The classes already have the assignment by then; a failed save must not
+    // read as a failed creation.
+    saveAssignmentForReuse.mockRejectedValue(new Error('nope'));
+
+    const response = await action({
+      request: requestFor({
+        intent: 'create-assignment',
+        assignmentTypeId: 'at-1',
+        classIds: ['class-1', 'class-2'],
+        prompt: 'Write the essay.',
+        title: 'Essay',
+        saveForReuse: 'true',
+      }),
+      params: {},
+    } as any);
+
+    const body = await readBody(response);
+    expect(body.success).toBe(true);
+    expect(body.message).toBe(
+      'Assignment created and applied to classes, but it could not be saved for reuse.'
+    );
   });
 });

@@ -10,9 +10,11 @@ import { useCommentsSelection } from '../comments/selection-context';
 import { Bar } from './editor-bar';
 import { ErrorBoundary } from './error-boundry';
 import { Comment, CommentExtension } from './extensions/comment';
+import { EmDash } from './extensions/em-dash';
 import { LineHeight } from './extensions/line-height';
 import { TabIndent } from './extensions/tab-indent';
 import { SourceTracker } from './extensions/source-tracker';
+import { PastedSource } from './extensions/pasted-source';
 import { usePmTripwire } from './use-pm-tripwire';
 import { useEditorSync, type EditorBridge } from './use-editor-sync';
 import { usePasteAlert } from './use-paste-alert';
@@ -40,6 +42,8 @@ const extensions = [
   Comment,
   CommentExtension,
   SourceTracker,
+  PastedSource,
+  EmDash,
 ];
 
 type Props = {

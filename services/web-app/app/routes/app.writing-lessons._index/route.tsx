@@ -1,515 +1,316 @@
-import { ChevronRight, ClipboardPlus } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { CalendarDays, ChevronRight, Plus, Zap } from 'lucide-react';
+import { useState } from 'react';
 import {
   Link,
   data as dataResponse,
+  redirect,
   useLoaderData,
-  useNavigate,
   type LoaderFunctionArgs,
 } from 'react-router';
 
-import {
-  AssignmentCreationSheet,
-  WRITING_PRACTICE_TYPE_ID,
-} from '~/components/assignments/assignment-creation-sheet';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
-import { Badge } from '~/components/ui/badge';
-import { Button } from '~/components/ui/button';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '~/components/ui/card';
-import { Checkbox } from '~/components/ui/checkbox';
-import { Input } from '~/components/ui/input';
-import { Label } from '~/components/ui/label';
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from '~/components/ui/sheet';
+import { Tooltip } from '~/components/ui/tooltip';
+import { WritingPracticeAssignmentSheet } from '~/components/writing-lessons/writing-practice-assignment-sheet';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
+import { formatClassLabel } from '~/utils/class-display';
+import { formatDateOnly } from '~/utils/date-only';
 import { prisma } from '~/utils/db.server';
 import {
-  getAssignedPracticeForStudent,
-  getWritingPracticeAssignmentsForTeacher,
+  resolveTeacherSchoolYearScope,
+  schoolYearWhere,
+} from '~/utils/school-year-scope.server';
+import {
+  listWritingPracticeAssignmentsForStudent,
+  listWritingPracticeAssignmentsForTeacher,
+  type WritingPracticeAssignmentSummary,
 } from '~/utils/writing-lessons/practice-assignments.server';
-import { getQuickWritingLessonGroups } from '~/utils/writing-lessons/static-lessons.server';
+import {
+  getQuickWritingLessonBySlug,
+  getQuickWritingLessonGroups,
+  getQuickWritingPracticePrompts,
+} from '~/utils/writing-lessons/static-lessons.server';
+
+function toAssignmentCard(assignment: WritingPracticeAssignmentSummary) {
+  return {
+    id: assignment.id,
+    title: assignment.title,
+    problemCount: assignment.problemCount,
+    dueAt: formatDateOnly(assignment.dueAt),
+    instructions: assignment.instructions,
+    lessons: assignment.lessonSlugs.map((slug) => ({
+      slug,
+      title: getQuickWritingLessonBySlug(slug)?.title ?? slug,
+    })),
+    classes: assignment.classes.map((klass) => ({
+      id: klass.id,
+      label: formatClassLabel(klass),
+    })),
+  };
+}
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
-  const profile = await requireMembership(request, userId);
+  const membership = await requireMembership(request, userId);
 
-  const groups = getQuickWritingLessonGroups();
+  if (!membership.organization.writingPracticeEnabled) {
+    throw redirect('/app');
+  }
 
-  // Flat skill list for the student "Create practice" builder.
-  const practiceSkillOptions = groups.flatMap((group) =>
-    group.lessons.map((lesson) => ({
-      slug: lesson.slug,
-      title: lesson.title,
-      category: lesson.category,
-    }))
+  const groups = getQuickWritingLessonGroups().map((group) => ({
+    ...group,
+    lessons: group.lessons.map((lesson) => ({
+      ...lesson,
+      promptCount: getQuickWritingPracticePrompts(lesson.slug).length,
+    })),
+  }));
+  const lessonCount = groups.reduce(
+    (count, group) => count + group.lessons.length,
+    0
+  );
+  const promptCount = groups.reduce(
+    (count, group) =>
+      count +
+      group.lessons.reduce(
+        (lessonTotal, lesson) => lessonTotal + lesson.promptCount,
+        0
+      ),
+    0
   );
 
-  const isTeacher = profile.role === 'TEACHER';
-
+  const isTeacher = membership.role === 'TEACHER';
   const teacherClasses = isTeacher
-    ? (
-        await prisma.class.findMany({
-          where: { teachers: { some: { id: profile.id } }, isArchived: false },
-          select: { id: true, title: true, grade: true, period: true },
-          orderBy: [{ grade: 'asc' }, { period: 'asc' }],
-        })
-      ).map((klass) => ({
-        id: klass.id,
-        title: klass.title,
-        grade: klass.grade,
-        period: klass.period,
-      }))
-    : [];
-  const writingPracticeLessons = isTeacher
-    ? groups.flatMap((group) =>
-        group.lessons.map((lesson) => ({
-          slug: lesson.slug,
-          title: lesson.title,
-          category: lesson.category,
-        }))
-      )
+    ? await prisma.class.findMany({
+        where: {
+          teachers: { some: { id: membership.id } },
+          isArchived: false,
+          ...schoolYearWhere(
+            await resolveTeacherSchoolYearScope(request, membership.id)
+          ),
+        },
+        orderBy: [{ title: 'asc' }, { grade: 'asc' }, { period: 'asc' }],
+        select: { id: true, title: true, grade: true, period: true },
+      })
     : [];
 
-  const assignedPractice =
-    profile.role === 'STUDENT'
-      ? (await getAssignedPracticeForStudent(profile.id)).map(
-          (classAssignment) => ({
-            id: classAssignment.id,
-            title: classAssignment.assignment.title,
-            problemCount: classAssignment.assignment.problemCount,
-            dueAt: classAssignment.assignment.dueAt
-              ? classAssignment.assignment.dueAt.toISOString()
-              : null,
-            completedCount: Math.min(
-              classAssignment.attempts.length,
-              classAssignment.assignment.problemCount
-            ),
-          })
-        )
-      : [];
-
-  const assignedByTeacher =
-    profile.role === 'TEACHER'
-      ? (await getWritingPracticeAssignmentsForTeacher(profile.id)).map(
-          (classAssignment) => ({
-            id: classAssignment.id,
-            title: classAssignment.assignment.title,
-            problemCount: classAssignment.assignment.problemCount,
-            dueAt: classAssignment.assignment.dueAt
-              ? classAssignment.assignment.dueAt.toISOString()
-              : null,
-            classLabel:
-              classAssignment.class.title ??
-              `Grade ${classAssignment.class.grade} · Period ${classAssignment.class.period}`,
-            attemptCount: classAssignment._count.attempts,
-          })
-        )
-      : [];
+  const assignments = (
+    isTeacher
+      ? await listWritingPracticeAssignmentsForTeacher(membership.id)
+      : await listWritingPracticeAssignmentsForStudent(membership.id)
+  ).map(toAssignmentCard);
 
   return dataResponse({
     groups,
+    lessonCount,
+    promptCount,
     isTeacher,
     teacherClasses,
-    writingPracticeLessons,
-    practiceSkillOptions,
-    assignedPractice,
-    assignedByTeacher,
+    assignments,
   });
-}
-
-const PRACTICE_PROBLEM_PRESETS = [3, 5, 10, 15] as const;
-
-type PracticeSkillOption = { slug: string; title: string; category: string };
-
-function StudentPracticeBuilder({
-  open,
-  onOpenChange,
-  skills,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  skills: PracticeSkillOption[];
-}) {
-  const navigate = useNavigate();
-  const [selected, setSelected] = useState<string[]>([]);
-  const [problemCount, setProblemCount] = useState('5');
-
-  const grouped = useMemo(() => {
-    const map = new Map<string, PracticeSkillOption[]>();
-    for (const skill of skills) {
-      const list = map.get(skill.category) ?? [];
-      list.push(skill);
-      map.set(skill.category, list);
-    }
-    return Array.from(map, ([category, items]) => ({ category, items }));
-  }, [skills]);
-
-  function toggle(slug: string) {
-    setSelected((current) =>
-      current.includes(slug)
-        ? current.filter((value) => value !== slug)
-        : [...current, slug]
-    );
-  }
-
-  const parsedCount = Number(problemCount);
-  const countValid =
-    Number.isInteger(parsedCount) && parsedCount >= 1 && parsedCount <= 20;
-  const canStart = selected.length > 0 && countValid;
-
-  function start() {
-    if (!canStart) return;
-    const params = new URLSearchParams({
-      skills: selected.join(','),
-      count: String(parsedCount),
-    });
-    navigate(`/app/writing-lessons/practice?${params.toString()}`);
-  }
-
-  return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-full overflow-y-auto sm:max-w-lg">
-        <SheetHeader>
-          <SheetTitle>Create practice</SheetTitle>
-          <SheetDescription>
-            Pick the skills you want to work on and how many problems. We&rsquo;ll
-            build a mixed set and give you feedback on every rewrite.
-          </SheetDescription>
-        </SheetHeader>
-
-        <div className="mt-6 space-y-5">
-          <div className="space-y-2">
-            <Label>Skills to practice</Label>
-            <p className="text-sm text-muted-foreground">
-              Pick one, or several to mix them into one set.
-            </p>
-            <div className="max-h-72 space-y-3 overflow-y-auto rounded-md border p-3">
-              {grouped.map((group) => (
-                <div key={group.category} className="space-y-1.5">
-                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                    {group.category}
-                  </p>
-                  {group.items.map((skill) => (
-                    <div key={skill.slug} className="flex items-center gap-2.5">
-                      <Checkbox
-                        id={`practice-skill-${skill.slug}`}
-                        checked={selected.includes(skill.slug)}
-                        onCheckedChange={() => toggle(skill.slug)}
-                      />
-                      <Label
-                        htmlFor={`practice-skill-${skill.slug}`}
-                        className="cursor-pointer font-normal"
-                      >
-                        {skill.title}
-                      </Label>
-                    </div>
-                  ))}
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <Label>How many problems?</Label>
-            <div className="flex flex-wrap items-center gap-2">
-              {PRACTICE_PROBLEM_PRESETS.map((preset) => {
-                const isSelected = problemCount === String(preset);
-                return (
-                  <button
-                    key={preset}
-                    type="button"
-                    onClick={() => setProblemCount(String(preset))}
-                    aria-pressed={isSelected}
-                    className={`h-9 w-12 rounded-md border text-sm transition ${
-                      isSelected
-                        ? 'border-primary bg-primary text-primary-foreground'
-                        : 'border-border bg-background hover:bg-muted'
-                    }`}
-                  >
-                    {preset}
-                  </button>
-                );
-              })}
-              <Input
-                type="number"
-                min={1}
-                max={20}
-                inputMode="numeric"
-                aria-label="Custom number of problems"
-                value={problemCount}
-                onChange={(event) => setProblemCount(event.target.value)}
-                className="h-9 w-20"
-              />
-            </div>
-            <p className="text-sm text-muted-foreground">
-              You can keep going past this — the set never runs dry.
-            </p>
-          </div>
-
-          <div className="flex items-center justify-end gap-2 pt-2">
-            <Button variant="outline" onClick={() => onOpenChange(false)}>
-              Cancel
-            </Button>
-            <Button onClick={start} disabled={!canStart}>
-              Start practice
-            </Button>
-          </div>
-        </div>
-      </SheetContent>
-    </Sheet>
-  );
-}
-
-function formatDueDate(iso: string): string {
-  return new Date(iso).toLocaleDateString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  });
-}
-
-function TeacherDirections() {
-  return (
-    <section className="rounded-lg border bg-muted/40 p-4">
-      <h3 className="mb-2 text-base font-semibold">
-        How writing practice works
-      </h3>
-      <p className="mb-3 max-w-[70ch] text-sm text-muted-foreground">
-        Open any lesson and choose “Assign to your classes” to send a short set
-        of targeted rewrite drills. Students get instant, skill-specific
-        feedback from the tutor — it guides them toward the fix without handing
-        it over — and every attempt is saved. Track who has practiced and how
-        they are doing under “Assigned by you.”
-      </p>
-      <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-        When to use it
-      </p>
-      <ul className="list-disc space-y-1 pl-5 text-sm text-foreground/80">
-        <li>
-          Warm-ups or bell-ringers on a single skill (comma splices, passive
-          voice…)
-        </li>
-        <li>Reteaching after you notice a recurring error in student essays</li>
-        <li>Low-stakes practice between larger, graded writing assignments</li>
-        <li>Mixed review that combines several skills at once</li>
-      </ul>
-    </section>
-  );
 }
 
 export default function WritingLessonsIndexRoute() {
   const {
     groups,
+    lessonCount,
+    promptCount,
     isTeacher,
     teacherClasses,
-    writingPracticeLessons,
-    practiceSkillOptions,
-    assignedPractice,
-    assignedByTeacher,
+    assignments,
   } = useLoaderData<typeof loader>();
-  const [isAssignOpen, setIsAssignOpen] = useState(false);
-  const [isBuilderOpen, setIsBuilderOpen] = useState(false);
+  const [lessonToAssign, setLessonToAssign] = useState<{
+    slug: string;
+    title: string;
+  } | null>(null);
 
   return (
     <section className="no-scrollbar flex h-full w-full flex-col overflow-y-scroll">
-      <div className="flex w-full justify-between border-b bg-secondary">
-        <div className="mx-auto w-full max-w-screen-lg p-3 sm:p-5">
-          <img
-            src="/img/writing-fundamentals-cafe-cat.png"
-            alt="A cat in a beret writing in a notebook at a Parisian café"
-            data-testid="writing-fundamentals-banner"
-            className="mb-4 h-32 w-full rounded-lg object-cover object-center sm:h-48"
-          />
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-            <div className="flex flex-col">
-              <p className="text-base font-medium text-primary sm:text-sm">
-                Practice
+      {/* Hero */}
+      <div
+        data-testid="writing-practice-hero"
+        className="relative shrink-0 overflow-hidden border-b bg-linear-to-br from-background via-background to-primary/5"
+      >
+        <div className="mx-auto w-full min-w-0 max-w-screen-lg px-3 py-8 sm:px-5 sm:py-12">
+          <h2 className="text-balance text-3xl font-semibold tracking-tight sm:text-4xl">
+            Writing practice
+          </h2>
+          {isTeacher ? (
+            <p className="mt-3 max-w-xl text-pretty text-base text-muted-foreground sm:text-sm">
+              Create and send lessons on grammar, syntax, and revision to hone
+              your students' writing.
+            </p>
+          ) : (
+            <div
+              data-testid="writing-practice-student-intro"
+              className="mt-3 max-w-xl space-y-2"
+            >
+              <p className="text-pretty text-base text-muted-foreground sm:text-sm">
+                Short lessons on grammar, sentence structure, and revision. This
+                is practice, not graded work.
               </p>
-              <h2 className="mt-1">Writing Fundamentals Practice</h2>
-              <p className="mt-3 max-w-full text-base text-muted-foreground sm:max-w-[620px] sm:text-sm">
-                Focused lessons and quick rewrite drills for sentence control,
-                grammar, and revision habits.
+              <p className="text-pretty text-base text-muted-foreground sm:text-sm">
+                Pick a lesson below, read the example, then answer the practice
+                prompt. Your answers stay on your screen and are not sent to
+                your teacher.
               </p>
             </div>
-            {isTeacher ? (
-              <>
-                <Button
-                  className="shrink-0 rounded-full"
-                  onClick={() => setIsAssignOpen(true)}
-                >
-                  <ClipboardPlus className="mr-2 h-4 w-4" />
-                  New practice assignment
-                </Button>
-                <AssignmentCreationSheet
-                  open={isAssignOpen}
-                  onOpenChange={setIsAssignOpen}
-                  entryPoint="dashboard"
-                  assignmentTypes={[]}
-                  teacherClasses={teacherClasses}
-                  initialAssignmentTypeId={WRITING_PRACTICE_TYPE_ID}
-                  writingPracticeEnabled
-                  writingPracticeLessons={writingPracticeLessons}
-                />
-              </>
-            ) : (
-              <>
-                <Button
-                  className="shrink-0 rounded-full"
-                  onClick={() => setIsBuilderOpen(true)}
-                >
-                  Create practice
-                </Button>
-                <StudentPracticeBuilder
-                  open={isBuilderOpen}
-                  onOpenChange={setIsBuilderOpen}
-                  skills={practiceSkillOptions}
-                />
-              </>
-            )}
+          )}
+          <div className="mt-6 grid grid-cols-3 gap-px overflow-hidden rounded-xl border bg-border sm:w-fit">
+            <div className="flex flex-col gap-0.5 bg-popover px-4 py-3 sm:px-6">
+              <p className="text-xl font-semibold tabular-nums">
+                {lessonCount}
+              </p>
+              <p className="text-base text-muted-foreground sm:text-sm">
+                Lessons
+              </p>
+            </div>
+            <div className="flex flex-col gap-0.5 bg-popover px-4 py-3 sm:px-6">
+              <p className="text-xl font-semibold tabular-nums">
+                {promptCount}
+              </p>
+              <p className="text-base text-muted-foreground sm:text-sm">
+                Prompts
+              </p>
+            </div>
+            <div className="flex flex-col gap-0.5 bg-popover px-4 py-3 sm:px-6">
+              <p className="text-xl font-semibold tabular-nums">
+                {groups.length}
+              </p>
+              <p className="text-base text-muted-foreground sm:text-sm">
+                Topics
+              </p>
+            </div>
           </div>
         </div>
       </div>
 
-      <div className="mx-auto flex w-full max-w-screen-lg flex-col gap-8 px-3 py-6 pb-24 sm:px-5">
-        {isTeacher ? <TeacherDirections /> : null}
+      {/* Assigned practice */}
+      {assignments.length > 0 ? (
+        <div className="mx-auto w-full min-w-0 max-w-screen-lg px-3 pt-8 sm:px-5">
+          <h3 className="text-lg font-semibold tracking-tight">
+            {isTeacher ? 'Practice you assigned' : 'Assigned to you'}
+          </h3>
+          <div
+            data-testid="writing-practice-assignment-list"
+            className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2"
+          >
+            {assignments.map((assignment) => (
+              <div
+                key={assignment.id}
+                data-testid={`writing-practice-assignment-${assignment.id}`}
+                className="rounded-xl border bg-popover p-5 shadow-sm ring-1 ring-black/5"
+              >
+                <p className="text-balance text-base font-semibold">
+                  {assignment.title}
+                </p>
+                <p className="mt-1 text-pretty text-base text-muted-foreground sm:text-sm">
+                  {assignment.classes
+                    .map((klass) => klass.label)
+                    .join(' • ') || 'No active classes'}
+                </p>
+                {assignment.instructions ? (
+                  <p className="mt-2 text-pretty text-base text-muted-foreground sm:text-sm">
+                    {assignment.instructions}
+                  </p>
+                ) : null}
+                <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1 text-base text-muted-foreground sm:text-sm">
+                  <span className="inline-flex items-center gap-1">
+                    <CalendarDays className="size-3.5 shrink-0" />
+                    Due {assignment.dueAt}
+                  </span>
+                  <span className="inline-flex items-center gap-1">
+                    <Zap className="size-3.5 shrink-0" />
+                    {assignment.problemCount} problems
+                  </span>
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {assignment.lessons.map((lesson) => (
+                    <Link
+                      key={lesson.slug}
+                      to={`/app/writing-lessons/${lesson.slug}`}
+                      className="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-base font-medium transition-colors hover:bg-muted sm:text-sm"
+                    >
+                      {lesson.title}
+                      <ChevronRight className="size-3.5 shrink-0" />
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
 
-        {assignedByTeacher.length > 0 ? (
-          <section className="flex flex-col gap-3">
-            <div className="flex items-center gap-2">
-              <h3 className="text-lg font-semibold">Assigned by you</h3>
-              <Badge variant="secondary" size="sm">
-                {assignedByTeacher.length}
-              </Badge>
-            </div>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {assignedByTeacher.map((assignment) => (
+      {/* Flat lesson grid */}
+      <div className="mx-auto w-full min-w-0 max-w-screen-lg px-3 py-8 pb-24 sm:px-5">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {groups.flatMap((group) =>
+            group.lessons.map((lesson) => (
+              <div
+                key={lesson.slug}
+                data-testid={`writing-lesson-card-${lesson.slug}`}
+                className="relative overflow-hidden rounded-xl border bg-popover shadow-sm ring-1 ring-black/5 transition-shadow hover:shadow-md"
+              >
                 <Link
-                  key={assignment.id}
-                  to={`/app/writing-lessons/results/${assignment.id}`}
-                  className="block h-full"
-                  data-testid="assigned-by-teacher-card"
-                >
-                  <Card className="flex h-full flex-col shadow-none hover:shadow-sm">
-                    <CardHeader className="pb-3">
-                      <CardTitle className="text-base leading-snug">
-                        {assignment.title ?? 'Writing Fundamentals Practice'}
-                      </CardTitle>
-                      <CardDescription className="text-base sm:text-sm">
-                        {assignment.classLabel} · {assignment.problemCount}{' '}
-                        problems
-                        {assignment.dueAt
-                          ? ` · Due ${formatDueDate(assignment.dueAt)}`
-                          : ''}
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent className="mt-auto flex items-center justify-between gap-3 text-base text-muted-foreground sm:text-sm">
-                      <span>{assignment.attemptCount} attempts</span>
-                      <span className="inline-flex items-center gap-1">
-                        View progress
-                        <ChevronRight className="h-4 w-4 shrink-0" />
-                      </span>
-                    </CardContent>
-                  </Card>
-                </Link>
-              ))}
-            </div>
-          </section>
-        ) : null}
-
-        {assignedPractice.length > 0 ? (
-          <section className="flex flex-col gap-3">
-            <div className="flex items-center gap-2">
-              <h3 className="text-lg font-semibold">Assigned to you</h3>
-              <Badge variant="secondary" size="sm">
-                {assignedPractice.length}
-              </Badge>
-            </div>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {assignedPractice.map((assignment) => {
-                const complete =
-                  assignment.completedCount >= assignment.problemCount;
-                return (
-                  <Link
-                    key={assignment.id}
-                    to={`/app/writing-lessons/assigned/${assignment.id}`}
-                    className="block h-full"
-                    data-testid="assigned-practice-card"
-                  >
-                    <Card className="flex h-full flex-col border-primary/40 shadow-none hover:shadow-sm">
-                      <CardHeader className="pb-3">
-                        <CardTitle className="text-base leading-snug">
-                          {assignment.title ?? 'Writing Fundamentals Practice'}
-                        </CardTitle>
-                        <CardDescription className="text-base sm:text-sm">
-                          {assignment.completedCount} of{' '}
-                          {assignment.problemCount} problems done
-                          {assignment.dueAt
-                            ? ` · Due ${formatDueDate(assignment.dueAt)}`
-                            : ''}
-                        </CardDescription>
-                      </CardHeader>
-                      <CardContent className="mt-auto flex items-center justify-between gap-3 text-base text-muted-foreground sm:text-sm">
-                        <Badge
-                          variant={complete ? 'secondary' : 'default'}
-                          size="sm"
-                        >
-                          {complete ? 'Complete' : 'Continue'}
-                        </Badge>
-                        <span className="inline-flex items-center gap-1">
-                          {complete ? 'Review' : 'Start'}
-                          <ChevronRight className="h-4 w-4 shrink-0" />
-                        </span>
-                      </CardContent>
-                    </Card>
-                  </Link>
-                );
-              })}
-            </div>
-          </section>
-        ) : null}
-
-        {groups.map((group) => (
-          <section key={group.category} className="flex flex-col gap-3">
-            <div className="flex items-center gap-2">
-              <h3 className="text-lg font-semibold">{group.category}</h3>
-              <Badge variant="secondary" size="sm">
-                {group.lessons.length}
-              </Badge>
-            </div>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {group.lessons.map((lesson) => (
-                <Link
-                  key={lesson.slug}
                   to={`/app/writing-lessons/${lesson.slug}`}
-                  className="block h-full"
+                  className="flex h-full flex-col p-5"
                 >
-                  <Card className="h-full shadow-none hover:shadow-sm">
-                    <CardHeader className="p-4">
-                      <CardTitle className="text-base leading-snug">
-                        {lesson.title}
-                      </CardTitle>
-                      <CardDescription className="text-base sm:text-sm">
-                        {lesson.description}
-                      </CardDescription>
-                    </CardHeader>
-                  </Card>
+                  <p className="pr-9 font-mono text-[0.6rem] font-medium uppercase tracking-widest text-primary">
+                    {group.category}
+                  </p>
+                  <p className="mt-1.5 line-clamp-2 pr-9 text-balance text-base font-semibold">
+                    {lesson.title}
+                  </p>
+                  <p className="mt-1 line-clamp-2 text-pretty text-base text-muted-foreground sm:text-sm">
+                    {lesson.description}
+                  </p>
+                  <div className="mt-4 flex items-center justify-between text-base text-muted-foreground sm:text-sm">
+                    <span className="inline-flex items-center gap-1">
+                      <Zap className="size-3.5 shrink-0" />
+                      {lesson.promptCount} prompts
+                    </span>
+                    <span className="inline-flex items-center gap-1 font-medium text-foreground">
+                      Start
+                      <ChevronRight className="size-4 shrink-0" />
+                    </span>
+                  </div>
                 </Link>
-              ))}
-            </div>
-          </section>
-        ))}
+                {isTeacher ? (
+                  <Tooltip text={`New ${lesson.title} assignment`}>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setLessonToAssign({
+                          slug: lesson.slug,
+                          title: lesson.title,
+                        })
+                      }
+                      aria-label={`New ${lesson.title} assignment`}
+                      className="absolute right-2 top-2 inline-flex size-7 items-center justify-center rounded-full bg-background text-foreground shadow-sm ring-1 ring-black/10 transition-colors hover:bg-muted"
+                    >
+                      <Plus className="size-4" />
+                      <span
+                        className="pointer-fine:hidden absolute left-1/2 top-1/2 size-[max(100%,3rem)] -translate-x-1/2 -translate-y-1/2"
+                        aria-hidden="true"
+                      />
+                    </button>
+                  </Tooltip>
+                ) : null}
+              </div>
+            ))
+          )}
+        </div>
       </div>
+
+      {lessonToAssign ? (
+        <WritingPracticeAssignmentSheet
+          key={lessonToAssign.slug}
+          lesson={lessonToAssign}
+          teacherClasses={teacherClasses}
+          onOpenChange={(open) => {
+            if (!open) setLessonToAssign(null);
+          }}
+        />
+      ) : null}
     </section>
   );
 }

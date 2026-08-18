@@ -14,12 +14,16 @@ export function useUpdateSubmission(submissionId: string) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ submissionId, ...fields }),
       });
-      if (!res.ok) throw new Error('Save failed');
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        throw new Error((body as { message?: string } | null)?.message ?? 'Save failed');
+      }
       setStatus('saved');
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
       timeoutRef.current = setTimeout(() => setStatus('idle'), 2000);
-    } catch {
+    } catch (err) {
       setStatus('error');
+      throw err instanceof Error ? err : new Error('Save failed');
     }
   }, [submissionId]);
 

@@ -4,28 +4,18 @@ import {
   data as dataResponse,
   redirect,
 } from 'react-router';
-import {
-  Form,
-  Link,
-  useLoaderData,
-  useNavigate,
-  useSearchParams,
-} from 'react-router';
+import { Form, Link, useFetcher, useLoaderData } from 'react-router';
 import { useEffect, useMemo, useState } from 'react';
-import { ClipboardList, Copy, Pencil, Plus, Trash2, X } from 'lucide-react';
-import { Badge } from '~/components/ui/badge';
+import { ArrowDown, ArrowUp, Plus, Search, Trash2 } from 'lucide-react';
+import { AssignmentCreationSheet } from '~/components/assignments/assignment-creation-sheet';
 import { Button } from '~/components/ui/button';
 import { Checkbox } from '~/components/ui/checkbox';
+import { Input } from '~/components/ui/input';
 import { Tooltip } from '~/components/ui/tooltip';
+import { Pagination } from '~/components/table/pagination';
 import { useTable } from '~/hooks/useTable';
-import { cn } from '~/utils/misc';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '~/components/ui/select';
+import { clampAssignmentPaginationSkip } from '../app.my-classes.$classId/class-assignments-tab';
+import { AssignmentClasses } from './assignment-classes';
 import {
   Table,
   TableBody,
@@ -34,1083 +24,668 @@ import {
   TableHeader,
   TableRow,
 } from '~/components/ui/table';
-import {
-  AssignmentCreationSheet,
-  WRITING_PRACTICE_TYPE_ID,
-} from '~/components/assignments/assignment-creation-sheet';
-import {
-  AssignmentEditSheet,
-  type AssignmentEditRecord,
-} from '~/components/assignments/assignment-edit-sheet';
 import { AP_HISTORY_ASSIGNMENT_TYPE_KEY } from '~/domain/ap-history/schema';
-import { getAvailableAssignmentTypesForScopes } from '~/utils/assignment-type-access.server';
-import { parseAssignmentGradingIntent } from '~/utils/assignment-grading-intent.server';
+// The flag is read by the component, so it has to come from the client-safe module.
+// Importing it through saved-assignments.server (which merely re-exports it) makes the
+// component depend on server-only code, and React Router can only strip server code from
+// loader/action/middleware/headers — the route's client module then fails to build, and
+// clicking the sidebar link does nothing at all.
+import {
+  SAVED_ASSIGNMENTS_ENABLED,
+  type SavedAssignment,
+} from '~/domain/assignments/saved-assignments';
+import {
+  archiveSavedAssignment,
+  listSavedAssignments,
+} from '~/domain/assignments/saved-assignments.server';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
+import { deleteClassAssignmentDeployment } from '~/utils/assignment-deployment.server';
+import { getAvailableAssignmentTypesForScopes } from '~/utils/assignment-type-access.server';
 import { prisma } from '~/utils/db.server';
-import { getQuickWritingLessonGroups } from '~/utils/writing-lessons/static-lessons.server';
+import {
+  resolveTeacherSchoolYearScope,
+  schoolYearWhere,
+} from '~/utils/school-year-scope.server';
+import { formatClassLabel } from '~/utils/teacher-document-work-utils';
 
-export const handle = { breadcrumb: 'Assignments' };
-
-function formatClassLabel(klass: {
-  grade: string;
-  period: string;
-  title: string | null;
-}) {
-  const base = `Grade ${klass.grade} • Period ${klass.period}`;
-  return klass.title ? `${base} — ${klass.title}` : base;
-}
-
-export function sanitizeAssignmentCreateReturnTo(value: string | null) {
-  if (!value) return null;
-  if (
-    value === '/app' ||
-    value.startsWith('/app/') ||
-    value.startsWith('/app?')
-  ) {
-    return value;
-  }
-  return null;
-}
-
-export async function action({ request }: ActionFunctionArgs) {
-  const userId = await requireUserId(request);
-  const profile = await requireMembership(request, userId);
-  if (profile.role !== 'TEACHER') {
-    return dataResponse(
-      { success: false, message: 'Only teachers can manage assignments.' },
-      { status: 403 }
-    );
-  }
-
-  const formData = await request.formData();
-  const intent = formData.get('intent')?.toString();
-  const assignmentId = formData.get('assignmentId')?.toString();
-
-  if (
-    intent !== 'update-assignment' &&
-    intent !== 'delete-assignment' &&
-    intent !== 'delete-assignments'
-  ) {
-    return dataResponse(
-      { success: false, message: 'Unsupported action.' },
-      { status: 400 }
-    );
-  }
-
-  if (intent === 'delete-assignments') {
-    const assignmentIds = formData.getAll('assignmentIds') as string[];
-    const practiceAssignmentIds = formData.getAll(
-      'practiceAssignmentIds'
-    ) as string[];
-
-    if (!assignmentIds.length && !practiceAssignmentIds.length) {
-      return dataResponse(
-        { success: false, message: 'Select at least one assignment.' },
-        { status: 400 }
-      );
-    }
-
-    if (assignmentIds.length) {
-      const assignments = await prisma.assignment.findMany({
-        where: {
-          id: { in: assignmentIds },
-          classAssignments: {
-            some: {
-              class: { teachers: { some: { id: profile.id } } },
-            },
-          },
-        },
-        select: {
-          id: true,
-          classAssignments: {
-            select: {
-              class: {
-                select: {
-                  id: true,
-                  school: { select: { id: true, organizationId: true } },
-                },
-              },
-            },
-          },
-        },
-      });
-
-      if (assignments.length !== assignmentIds.length) {
-        return dataResponse(
-          { success: false, message: 'Some assignments were not found.' },
-          { status: 400 }
-        );
-      }
-    }
-
-    if (practiceAssignmentIds.length) {
-      const practiceAssignments =
-        await prisma.writingPracticeAssignment.findMany({
-          where: {
-            id: { in: practiceAssignmentIds },
-            classAssignments: {
-              some: {
-                class: { teachers: { some: { id: profile.id } } },
-              },
-            },
-          },
-          select: { id: true },
-        });
-
-      if (practiceAssignments.length !== practiceAssignmentIds.length) {
-        return dataResponse(
-          { success: false, message: 'Some assignments were not found.' },
-          { status: 400 }
-        );
-      }
-    }
-
-    if (assignmentIds.length) {
-      await prisma.assignment.deleteMany({
-        where: { id: { in: assignmentIds } },
-      });
-    }
-
-    if (practiceAssignmentIds.length) {
-      // Cascades to the per-class deployments and their student attempts.
-      await prisma.writingPracticeAssignment.deleteMany({
-        where: { id: { in: practiceAssignmentIds } },
-      });
-    }
-
-    return dataResponse({
-      success: true,
-      message: `Deleted ${
-        assignmentIds.length + practiceAssignmentIds.length
-      } assignment(s).`,
-    });
-  }
-
-  if (!assignmentId) {
-    return dataResponse(
-      { success: false, message: 'Assignment is required.' },
-      { status: 400 }
-    );
-  }
-
-  const assignment = await prisma.assignment.findFirst({
-    where: {
-      id: assignmentId,
-      classAssignments: {
-        some: {
-          class: { teachers: { some: { id: profile.id } } },
-        },
-      },
-    },
-    select: {
-      id: true,
-      assignmentTypeId: true,
-      assignmentType: { select: { systemKey: true } },
-      classAssignments: {
-        select: {
-          class: {
-            select: {
-              id: true,
-              school: { select: { id: true, organizationId: true } },
-            },
-          },
-        },
-      },
-    },
-  });
-
-  if (!assignment) {
-    return dataResponse(
-      { success: false, message: 'Assignment not found.' },
-      { status: 404 }
-    );
-  }
-
-  const deploymentClasses = assignment.classAssignments.map(
-    (deployment) => deployment.class
-  );
-
-  if (intent === 'delete-assignment') {
-    // Documents keep their content; the assignment link is set to null by the schema.
-    await prisma.assignment.delete({ where: { id: assignment.id } });
-    return dataResponse({
-      success: true,
-      message: 'Assignment deleted successfully.',
-    });
-  }
-
-  const assignmentTypeId = formData.get('assignmentTypeId')?.toString();
-  const title = (formData.get('title')?.toString() ?? '').trim() || null;
-  const prompt = (formData.get('prompt')?.toString() ?? '').trim();
-
-  if (!assignmentTypeId) {
-    return dataResponse(
-      { success: false, message: 'Assignment type is required.' },
-      { status: 400 }
-    );
-  }
-  if (!prompt) {
-    return dataResponse(
-      { success: false, message: 'Prompt is required.' },
-      { status: 400 }
-    );
-  }
-
-  const allowedAssignmentTypes = await getAvailableAssignmentTypesForScopes<{
-    id: string;
-    systemKey: string | null;
-  }>({
-    scopes: deploymentClasses.map((klass) => ({
-      organizationId: klass.school.organizationId,
-      schoolId: klass.school.id,
-      teacherProfileId: profile.id,
-    })),
-    select: { id: true, systemKey: true },
-  });
-
-  const selectedAssignmentType = allowedAssignmentTypes.find(
-    (type) => type.id === assignmentTypeId
-  );
-  if (
-    selectedAssignmentType?.systemKey === AP_HISTORY_ASSIGNMENT_TYPE_KEY ||
-    assignment.assignmentType.systemKey === AP_HISTORY_ASSIGNMENT_TYPE_KEY
-  ) {
-    return dataResponse(
-      {
-        success: false,
-        message: 'Choose an APUSH prompt from the library first.',
-      },
-      { status: 400 }
-    );
-  }
-
-  const isPreservingCurrentArchivedType =
-    assignment.assignmentTypeId === assignmentTypeId;
-  if (!selectedAssignmentType && !isPreservingCurrentArchivedType) {
-    return dataResponse(
-      { success: false, message: 'Selected assignment type is not available.' },
-      { status: 400 }
-    );
-  }
-
-  const gradingIntent = parseAssignmentGradingIntent(formData);
-  if (gradingIntent && !gradingIntent.success) {
-    return dataResponse(
-      { success: false, message: gradingIntent.message },
-      { status: 400 }
-    );
-  }
-
-  await prisma.assignment.update({
-    where: { id: assignment.id },
-    data: {
-      assignmentTypeId,
-      title,
-      prompt,
-      ...(gradingIntent?.success
-        ? {
-            submitForGrade: gradingIntent.data.submitForGrade,
-            pointValue: gradingIntent.data.pointValue,
-          }
-        : {}),
-    },
-  });
-
-  return dataResponse({
-    success: true,
-    message: 'Assignment updated successfully.',
-  });
-}
+export const handle = { breadcrumb: 'My Assignments' };
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
   const profile = await requireMembership(request, userId);
+
   if (profile.role !== 'TEACHER') {
     return redirect('/app');
   }
 
-  const classes = await prisma.class.findMany({
+  const schoolYearScope = await resolveTeacherSchoolYearScope(
+    request,
+    profile.id
+  );
+
+  const classAssignments = await prisma.classAssignment.findMany({
+    where: {
+      class: {
+        teachers: { some: { id: profile.id } },
+        isArchived: false,
+        ...schoolYearWhere(schoolYearScope),
+      },
+    },
+    select: {
+      id: true,
+      class: {
+        select: { id: true, grade: true, period: true, title: true },
+      },
+      assignment: {
+        select: {
+          id: true,
+          title: true,
+          assignmentType: { select: { title: true } },
+        },
+      },
+      // Counted per deployment, not per assignment: the assignment-level count
+      // is the cross-class total, which is the wrong number for a single class
+      // and gets summed below for the row that spans several.
+      _count: { select: { documents: true } },
+    },
+    orderBy: [{ assignment: { createdAt: 'desc' } }],
+  });
+
+  // An Assignment is one assignment however many classes it is deployed to, so
+  // the list collapses its ClassAssignment rows into one entry that names them.
+  const assignmentsById = new Map<
+    string,
+    {
+      assignmentId: string;
+      title: string;
+      assignmentTypeTitle: string;
+      documentCount: number;
+      classes: { id: string; label: string }[];
+    }
+  >();
+
+  for (const classAssignment of classAssignments) {
+    const existing = assignmentsById.get(classAssignment.assignment.id);
+    const entry = existing ?? {
+      assignmentId: classAssignment.assignment.id,
+      title: classAssignment.assignment.title?.trim() || 'Untitled Assignment',
+      assignmentTypeTitle: classAssignment.assignment.assignmentType.title,
+      documentCount: 0,
+      classes: [],
+    };
+    entry.documentCount += classAssignment._count.documents;
+    entry.classes.push({
+      id: classAssignment.class.id,
+      label: formatClassLabel(classAssignment.class),
+    });
+    if (!existing) assignmentsById.set(entry.assignmentId, entry);
+  }
+
+  const assignments = [...assignmentsById.values()].map((entry) => ({
+    ...entry,
+    // Search index rather than display text: the table renders one chip per
+    // class, but searching a class the chips collapsed still finds the row.
+    classLabel: entry.classes.map((klass) => klass.label).join(', '),
+    // The detail page is class-scoped. Hand it the class when there is only
+    // one; with several it falls back to the first deployment and shows its
+    // own class picker, so pinning one here would be a guess.
+    href:
+      entry.classes.length === 1
+        ? `/app/assignments/${entry.assignmentId}?classId=${entry.classes[0].id}`
+        : `/app/assignments/${entry.assignmentId}`,
+  }));
+
+  // Everything the page needs to reuse a saved assignment: the saved rows plus
+  // the classes and assignment types the creation sheet offers.
+  const teacherClasses = await prisma.class.findMany({
     where: {
       teachers: { some: { id: profile.id } },
       isArchived: false,
+      ...schoolYearWhere(schoolYearScope),
     },
     select: {
       id: true,
       grade: true,
       period: true,
       title: true,
-      school: { select: { id: true, name: true, organizationId: true } },
+      school: { select: { id: true, organizationId: true } },
     },
-    orderBy: [{ grade: 'asc' }, { period: 'asc' }],
   });
 
-  const classIds = classes.map((klass) => klass.id);
-  const hasActiveClasses = classIds.length > 0;
+  const availableAssignmentTypes =
+    teacherClasses.length > 0
+      ? await getAvailableAssignmentTypesForScopes<{
+          id: string;
+          title: string;
+          systemKey: string | null;
+        }>({
+          scopes: teacherClasses.map((klass) => ({
+            organizationId: klass.school.organizationId,
+            schoolId: klass.school.id,
+            teacherProfileId: profile.id,
+          })),
+          select: { id: true, title: true, systemKey: true },
+          orderBy: { position: 'asc' },
+        })
+      : [];
 
-  const [assignments, allowedAssignmentTypes, practiceAssignments] =
-    await Promise.all([
-      hasActiveClasses
-        ? prisma.assignment.findMany({
-            where: {
-              classAssignments: {
-                some: { classId: { in: classIds } },
-              },
-            },
-            select: {
-              id: true,
-              title: true,
-              prompt: true,
-              submitForGrade: true,
-              pointValue: true,
-              createdAt: true,
-              assignmentTypeId: true,
-              assignmentType: {
-                select: { id: true, title: true, systemKey: true },
-              },
-              classAssignments: {
-                where: { classId: { in: classIds } },
-                select: {
-                  id: true,
-                  class: {
-                    select: {
-                      id: true,
-                      grade: true,
-                      period: true,
-                      title: true,
-                    },
-                  },
-                  _count: { select: { documents: true } },
-                },
-              },
-            },
-            orderBy: [{ createdAt: 'desc' }],
-          })
-        : [],
-      hasActiveClasses
-        ? getAvailableAssignmentTypesForScopes<{
-            id: string;
-            title: string;
-            systemKey: string | null;
-          }>({
-            scopes: classes.map((klass) => ({
-              organizationId: klass.school.organizationId,
-              schoolId: klass.school.id,
-              teacherProfileId: profile.id,
-            })),
-            select: { id: true, title: true, systemKey: true },
-            orderBy: { position: 'asc' },
-          })
-        : [],
-      hasActiveClasses
-        ? prisma.writingPracticeAssignment.findMany({
-            where: {
-              classAssignments: {
-                some: { classId: { in: classIds } },
-              },
-            },
-            select: {
-              id: true,
-              title: true,
-              lessonSlugs: true,
-              problemCount: true,
-              dueAt: true,
-              createdAt: true,
-              classAssignments: {
-                where: { classId: { in: classIds } },
-                select: {
-                  id: true,
-                  class: {
-                    select: {
-                      id: true,
-                      grade: true,
-                      period: true,
-                      title: true,
-                    },
-                  },
-                  _count: { select: { attempts: true } },
-                },
-              },
-            },
-            orderBy: [{ createdAt: 'desc' }],
-          })
-        : [],
-    ]);
-
-  const genericAssignmentTypes = allowedAssignmentTypes.filter(
-    (type) => type.systemKey !== AP_HISTORY_ASSIGNMENT_TYPE_KEY
-  );
-
-  const writingPracticeLessons = hasActiveClasses
-    ? getQuickWritingLessonGroups().flatMap((group) =>
-        group.lessons.map((lesson) => ({
-          slug: lesson.slug,
-          title: lesson.title,
-          category: lesson.category,
-        }))
-      )
+  const savedAssignments = SAVED_ASSIGNMENTS_ENABLED
+    ? await listSavedAssignments({ membershipId: profile.id })
     : [];
 
-  const lessonTitleBySlug = new Map(
-    writingPracticeLessons.map((lesson) => [lesson.slug, lesson.title])
-  );
-
-  return dataResponse({
+  return {
     assignments,
-    writingPracticeAssignments: practiceAssignments.map((assignment) => ({
-      id: assignment.id,
-      title: assignment.title,
-      problemCount: assignment.problemCount,
-      lessonTitles: assignment.lessonSlugs.map(
-        (slug) => lessonTitleBySlug.get(slug) ?? slug
-      ),
-      dueAt: assignment.dueAt ? assignment.dueAt.toISOString() : null,
-      createdAt: assignment.createdAt,
-      classAssignments: assignment.classAssignments,
-    })),
-    classes: classes.map((klass) => ({
-      id: klass.id,
-      grade: klass.grade,
-      period: klass.period,
-      title: klass.title,
-      school: { name: klass.school.name },
-    })),
-    creationClasses: classes.map((klass) => ({
+    savedAssignments,
+    assignmentCreationClasses: teacherClasses.map((klass) => ({
       id: klass.id,
       name: formatClassLabel(klass),
     })),
-    assignmentTypes: genericAssignmentTypes.map((type) => ({
-      id: type.id,
-      title: type.title,
-    })),
-    browseAssignmentTypes: allowedAssignmentTypes.map((type) => ({
-      id: type.id,
-      title: type.title,
-    })),
-    assignmentsEnabled: hasActiveClasses,
-    hasActiveClasses,
-    writingPracticeLessons,
-  });
+    // AP History assignments are built from their own library rather than a
+    // free-text prompt, so they are not offered here.
+    assignmentCreationTypes: availableAssignmentTypes
+      .filter((type) => type.systemKey !== AP_HISTORY_ASSIGNMENT_TYPE_KEY)
+      .map((type) => ({ id: type.id, title: type.title })),
+  };
 }
 
-type AssignmentRow = {
-  id: string;
-  title: string | null;
-  prompt: string;
-  submitForGrade: boolean;
-  pointValue: number | null;
-  createdAt: Date | string;
-  assignmentTypeId: string;
-  assignmentType: { id: string; title: string; systemKey: string | null };
-  classAssignments: Array<{
-    id: string;
-    class: { id: string; grade: string; period: string; title: string | null };
-    _count: { documents: number };
-  }>;
-};
+export async function action({ request }: ActionFunctionArgs) {
+  const userId = await requireUserId(request);
+  const profile = await requireMembership(request, userId);
 
-type PracticeAssignmentRow = {
-  id: string;
-  title: string | null;
-  problemCount: number;
-  lessonTitles: string[];
-  dueAt: string | null;
-  createdAt: Date | string;
-  classAssignments: Array<{
-    id: string;
-    class: { id: string; grade: string; period: string; title: string | null };
-    _count: { attempts: number };
-  }>;
-};
+  if (profile.role !== 'TEACHER') {
+    return dataResponse(
+      { success: false, message: 'Only teachers can do that.' },
+      { status: 403 }
+    );
+  }
 
-type TableRowData =
-  | ({ kind: 'standard' } & AssignmentRow)
-  | ({ kind: 'practice' } & PracticeAssignmentRow);
+  const formData = await request.formData();
+  const intent = formData.get('intent')?.toString();
 
-const WRITING_PRACTICE_TYPE_TITLE = 'Writing Fundamentals Practice';
+  if (intent === 'delete-assignments') {
+    const assignmentIds = [
+      ...new Set(formData.getAll('assignmentIds').map(String)),
+    ];
 
-export default function AssignmentsRoute() {
-  const data = useLoaderData<typeof loader>();
-  const navigate = useNavigate();
-  const [searchParams, setSearchParams] = useSearchParams();
+    if (!assignmentIds.length) {
+      return dataResponse(
+        { success: false, message: 'Select at least one assignment.' },
+        { status: 400 }
+      );
+    }
+
+    // Only the deployments in this teacher's own classes: an assignment shared
+    // with a class someone else teaches must not disappear from under them.
+    // The assignment row itself is removed once its last deployment goes.
+    const deployments = await prisma.classAssignment.findMany({
+      where: {
+        assignmentId: { in: assignmentIds },
+        class: { teachers: { some: { id: profile.id } }, isArchived: false },
+      },
+      select: { assignmentId: true, classId: true },
+    });
+
+    const reachable = new Set(
+      deployments.map((deployment) => deployment.assignmentId)
+    );
+    if (reachable.size !== assignmentIds.length) {
+      return dataResponse(
+        { success: false, message: 'Some assignments were not found.' },
+        { status: 404 }
+      );
+    }
+
+    for (const deployment of deployments) {
+      await deleteClassAssignmentDeployment({
+        assignmentId: deployment.assignmentId,
+        classId: deployment.classId,
+      });
+    }
+
+    return dataResponse({
+      success: true,
+      message:
+        assignmentIds.length === 1
+          ? 'Assignment deleted.'
+          : `Deleted ${assignmentIds.length} assignments.`,
+    });
+  }
+
+  if (intent !== 'remove-saved-assignment') {
+    return dataResponse(
+      { success: false, message: 'Unsupported action.' },
+      { status: 400 }
+    );
+  }
+
+  const savedAssignmentId = formData.get('savedAssignmentId')?.toString() ?? '';
+  if (!savedAssignmentId) {
+    return dataResponse(
+      { success: false, message: 'Saved assignment is required.' },
+      { status: 400 }
+    );
+  }
+
+  // Scoped by membership inside the domain call, so an id from someone else's
+  // list simply removes nothing.
+  const removed = await archiveSavedAssignment({
+    membershipId: profile.id,
+    savedAssignmentId,
+  });
+
+  if (!removed) {
+    return dataResponse(
+      { success: false, message: 'That saved assignment is no longer there.' },
+      { status: 404 }
+    );
+  }
+
+  return dataResponse({ success: true });
+}
+
+function SavedAssignmentsPanel({
+  savedAssignments,
+  onReuse,
+}: {
+  savedAssignments: SavedAssignment[];
+  onReuse: (savedAssignment: SavedAssignment) => void;
+}) {
+  const removeFetcher = useFetcher<{ success?: boolean; message?: string }>();
+  const removingId =
+    removeFetcher.state !== 'idle'
+      ? removeFetcher.formData?.get('savedAssignmentId')?.toString()
+      : undefined;
+
+  return (
+    <section className="mb-8" aria-labelledby="saved-assignments-heading">
+      <h2
+        id="saved-assignments-heading"
+        className="mb-2 text-lg font-semibold"
+      >
+        My Saved Assignments
+      </h2>
+      <p className="mb-4 text-base/7 text-muted-foreground sm:text-sm/6">
+        Assignments you kept for reuse. Giving one to a class opens it
+        pre-filled — nothing here has been assigned yet.
+      </p>
+
+      {savedAssignments.length === 0 ? (
+        <div className="flex flex-col items-center justify-center rounded-lg border border-dashed bg-muted/50 p-8 text-center">
+          <span className="text-base/7 text-muted-foreground sm:text-sm/6">
+            Tick &quot;Save to My Saved Assignments&quot; when you create an
+            assignment and it will show up here.
+          </span>
+        </div>
+      ) : (
+        <ul className="divide-y rounded-lg bg-muted/50" data-testid="saved-assignments-list">
+          {savedAssignments.map((savedAssignment) => (
+            <li
+              key={savedAssignment.id}
+              className="flex flex-wrap items-center justify-between gap-3 p-4"
+              data-testid={`saved-assignment-${savedAssignment.id}`}
+            >
+              <div className="min-w-0">
+                <p className="font-medium [overflow-wrap:anywhere]">
+                  {savedAssignment.title}
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  {savedAssignment.assignmentTypeTitle}
+                </p>
+              </div>
+              <div className="flex shrink-0 items-center gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => onReuse(savedAssignment)}
+                  data-testid={`saved-assignment-use-${savedAssignment.id}`}
+                >
+                  Give to a class
+                </Button>
+                <removeFetcher.Form method="post">
+                  <input
+                    type="hidden"
+                    name="intent"
+                    value="remove-saved-assignment"
+                  />
+                  <input
+                    type="hidden"
+                    name="savedAssignmentId"
+                    value={savedAssignment.id}
+                  />
+                  <Button
+                    type="submit"
+                    size="sm"
+                    variant="ghost"
+                    disabled={removingId === savedAssignment.id}
+                    data-testid={`saved-assignment-remove-${savedAssignment.id}`}
+                  >
+                    Remove
+                  </Button>
+                </removeFetcher.Form>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {removeFetcher.data && removeFetcher.data.success === false ? (
+        <p className="mt-2 text-sm text-destructive">
+          {removeFetcher.data.message}
+        </p>
+      ) : null}
+    </section>
+  );
+}
+
+export default function MyAssignmentsRoute() {
+  const {
+    assignments,
+    savedAssignments,
+    assignmentCreationClasses,
+    assignmentCreationTypes,
+  } = useLoaderData<typeof loader>();
+  const [searchQuery, setSearchQuery] = useState('');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+  const [pagination, setPagination] = useState({ skip: 0, take: 20 });
   const [isCreateSheetOpen, setIsCreateSheetOpen] = useState(false);
-  const [duplicateAssignment, setDuplicateAssignment] =
-    useState<AssignmentRow | null>(null);
-  const [editingAssignmentId, setEditingAssignmentId] = useState<string | null>(
-    null
-  );
-  const [createAssignmentTypeId, setCreateAssignmentTypeId] = useState<
-    string | undefined
-  >();
-  const [createReturnTo, setCreateReturnTo] = useState<string | null>(null);
+  const [reusedAssignment, setReusedAssignment] =
+    useState<SavedAssignment | null>(null);
 
-  useEffect(() => {
-    if (searchParams.get('create') !== '1') {
-      return;
-    }
-
-    const assignmentTypeId = searchParams.get('assignmentType') ?? undefined;
-    if (
-      assignmentTypeId &&
-      data.assignmentTypes.some((type) => type.id === assignmentTypeId)
-    ) {
-      setCreateAssignmentTypeId(assignmentTypeId);
-    } else {
-      setCreateAssignmentTypeId(undefined);
-    }
-
-    setCreateReturnTo(
-      sanitizeAssignmentCreateReturnTo(searchParams.get('returnTo'))
-    );
-    setIsCreateSheetOpen(true);
-    const next = new URLSearchParams(searchParams);
-    next.delete('create');
-    next.delete('assignmentType');
-    next.delete('returnTo');
-    setSearchParams(next, { replace: true });
-  }, [data.assignmentTypes, searchParams, setSearchParams]);
-
-  const classFilter = searchParams.get('class') ?? 'all';
-  const typeFilter = searchParams.get('type') ?? 'all';
-
-  const assignments = data.assignments as AssignmentRow[];
-  const practiceAssignments =
-    data.writingPracticeAssignments as PracticeAssignmentRow[];
-
-  const rows = useMemo<TableRowData[]>(
-    () =>
-      [
-        ...assignments.map((assignment) => ({
-          kind: 'standard' as const,
-          ...assignment,
-        })),
-        ...practiceAssignments.map((assignment) => ({
-          kind: 'practice' as const,
-          ...assignment,
-        })),
-      ].sort(
-        (a, b) =>
-          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-      ),
-    [assignments, practiceAssignments]
+  const collator = useMemo(
+    () => new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' }),
+    []
   );
 
-  const typeOptions = useMemo(() => {
-    const byId = new Map<string, { id: string; title: string }>();
-    for (const assignment of assignments) {
-      byId.set(assignment.assignmentType.id, {
-        id: assignment.assignmentType.id,
-        title: assignment.assignmentType.title,
-      });
-    }
-    if (practiceAssignments.length > 0) {
-      byId.set(WRITING_PRACTICE_TYPE_ID, {
-        id: WRITING_PRACTICE_TYPE_ID,
-        title: WRITING_PRACTICE_TYPE_TITLE,
-      });
-    }
-    return Array.from(byId.values()).sort((a, b) =>
-      a.title.localeCompare(b.title)
+  const sortedAssignments = useMemo(() => {
+    const direction = sortDirection === 'asc' ? 1 : -1;
+    return [...assignments].sort(
+      (a, b) => collator.compare(a.title, b.title) * direction
     );
-  }, [assignments, practiceAssignments]);
+  }, [assignments, collator, sortDirection]);
 
-  const filteredRows = useMemo(
-    () =>
-      rows.filter(
-        (row) =>
-          (classFilter === 'all' ||
-            row.classAssignments.some(
-              (deployment) => deployment.class.id === classFilter
-            )) &&
-          (typeFilter === 'all' ||
-            (row.kind === 'practice'
-              ? typeFilter === WRITING_PRACTICE_TYPE_ID
-              : row.assignmentType.id === typeFilter))
-      ),
-    [rows, classFilter, typeFilter]
+  const filteredAssignments = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return sortedAssignments;
+    return sortedAssignments.filter(
+      (assignment) =>
+        assignment.title.toLowerCase().includes(query) ||
+        assignment.classLabel.toLowerCase().includes(query) ||
+        assignment.assignmentTypeTitle.toLowerCase().includes(query)
+    );
+  }, [sortedAssignments, searchQuery]);
+
+  const paginatedAssignments = filteredAssignments.slice(
+    pagination.skip,
+    pagination.skip + pagination.take
   );
-
-  const hasFilters = classFilter !== 'all' || typeFilter !== 'all';
-
-  const editingAssignment: (AssignmentRow & AssignmentEditRecord) | null =
-    useMemo(
-      () =>
-        assignments.find((candidate) => candidate.id === editingAssignmentId) ??
-        null,
-      [assignments, editingAssignmentId]
-    );
 
   const {
     selected: selectedAssignmentIds,
     setSelected: setSelectedAssignmentIds,
     handleSelectAll,
     handleSelect,
-  } = useTable({ rows: filteredRows });
+  } = useTable({
+    rows: useMemo(
+      () => filteredAssignments.map(({ assignmentId }) => ({ id: assignmentId })),
+      [filteredAssignments]
+    ),
+  });
 
-  const selectedRows = useMemo(
-    () => filteredRows.filter((row) => selectedAssignmentIds.includes(row.id)),
-    [filteredRows, selectedAssignmentIds]
-  );
+  useEffect(() => {
+    setPagination((current) => ({ ...current, skip: 0 }));
+  }, [searchQuery, sortDirection]);
 
-  const selectedStandardIds = selectedRows
-    .filter((row) => row.kind === 'standard')
-    .map((row) => row.id);
-  const selectedPracticeIds = selectedRows
-    .filter((row) => row.kind === 'practice')
-    .map((row) => row.id);
+  useEffect(() => {
+    setPagination((current) => {
+      const skip = clampAssignmentPaginationSkip(
+        current.skip,
+        current.take,
+        filteredAssignments.length
+      );
+      return skip === current.skip ? current : { ...current, skip };
+    });
+  }, [filteredAssignments.length]);
 
-  const canEditSelectedAssignment =
-    selectedRows.length === 1 &&
-    selectedRows[0]!.kind === 'standard' &&
-    selectedRows[0]!.assignmentType.systemKey !==
-      AP_HISTORY_ASSIGNMENT_TYPE_KEY;
+  // A row that search or a delete took away must not stay selected, or the
+  // bulk bar acts on assignments the teacher can no longer see.
+  useEffect(() => {
+    const visibleIds = new Set(
+      filteredAssignments.map(({ assignmentId }) => assignmentId)
+    );
+    setSelectedAssignmentIds((current) => {
+      const next = current.filter((id) => visibleIds.has(id));
+      return next.length === current.length ? current : next;
+    });
+  }, [filteredAssignments, setSelectedAssignmentIds]);
 
-  const updateFilter = (key: 'class' | 'type', value: string) => {
-    const next = new URLSearchParams(searchParams);
-    if (value === 'all') {
-      next.delete(key);
-    } else {
-      next.set(key, value);
-    }
-    setSearchParams(next, { replace: true });
-  };
+  const hasSelection = selectedAssignmentIds.length > 0;
 
   return (
-    <section className="no-scrollbar flex h-full w-full flex-col overflow-y-scroll">
-      <div className="flex w-full justify-between border-b bg-secondary">
-        <div className="mx-auto w-full max-w-screen-lg p-3 sm:p-5">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-            <div>
-              <h2>Assignments</h2>
-              <p className="mt-3 max-w-full text-muted-foreground sm:max-w-[460px]">
-                Create assignments and apply them to your classes. Grading lives
-                in Documents.
-              </p>
-            </div>
-          </div>
+    <div className="mx-auto max-w-5xl px-4 py-8">
+      <h1 className="mb-6 text-2xl font-semibold">My Assignments</h1>
+
+      {SAVED_ASSIGNMENTS_ENABLED ? (
+        <SavedAssignmentsPanel
+          savedAssignments={savedAssignments}
+          onReuse={setReusedAssignment}
+        />
+      ) : null}
+
+      {reusedAssignment ? (
+        <AssignmentCreationSheet
+          // Remounting per saved assignment is what re-seeds the sheet's own
+          // state with that assignment's settings.
+          key={reusedAssignment.id}
+          open
+          onOpenChange={(open) => {
+            if (!open) setReusedAssignment(null);
+          }}
+          entryPoint="dashboard"
+          assignmentTypes={assignmentCreationTypes}
+          teacherClasses={assignmentCreationClasses}
+          initialAssignmentTypeId={reusedAssignment.assignmentTypeId}
+          initialTitle={reusedAssignment.title}
+          initialPrompt={reusedAssignment.prompt}
+          initialSubmitForGrade={reusedAssignment.submitForGrade}
+          initialPointValue={reusedAssignment.pointValue}
+          initialTutorEnabled={reusedAssignment.tutorEnabled}
+          initialGradingAssistantStrictnessLevel={
+            reusedAssignment.gradingAssistantStrictnessLevel
+          }
+        />
+      ) : null}
+
+      <h2 className="mb-2 text-lg font-semibold">Assigned</h2>
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <div className="relative min-w-0 w-full max-w-sm flex-1">
+          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            name="my-assignments-search"
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            placeholder="Search assignments"
+            className="h-9 rounded-md border-0 bg-background pl-9 shadow-none ring-1 ring-black/5 focus-visible:ring-2 focus-visible:ring-ring"
+            aria-label="Search assignments"
+            data-testid="my-assignments-search"
+          />
+        </div>
+        <div className="ml-auto flex w-full shrink-0 items-center justify-end gap-2 sm:w-auto">
+          {hasSelection ? (
+            <Form
+              method="post"
+              className="inline"
+              onSubmit={(event) => {
+                const count = selectedAssignmentIds.length;
+                if (
+                  !window.confirm(
+                    count === 1
+                      ? 'Delete this assignment from your classes? Existing student documents will remain, but they will no longer be linked to this assignment.'
+                      : `Delete ${count} assignments from your classes? Existing student documents will remain, but they will no longer be linked to these assignments.`
+                  )
+                ) {
+                  event.preventDefault();
+                  return;
+                }
+                setSelectedAssignmentIds([]);
+              }}
+            >
+              <input type="hidden" name="intent" value="delete-assignments" />
+              {selectedAssignmentIds.map((id) => (
+                <input key={id} type="hidden" name="assignmentIds" value={id} />
+              ))}
+              <Tooltip
+                text={`Delete ${selectedAssignmentIds.length} assignment(s)`}
+              >
+                <Button
+                  type="submit"
+                  size="icon-sm"
+                  variant="outline"
+                  aria-label={`Delete ${selectedAssignmentIds.length} assignment(s)`}
+                  data-testid="my-assignments-delete-selected"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </Tooltip>
+            </Form>
+          ) : null}
+          <Button
+            type="button"
+            size="sm"
+            className="shrink-0"
+            data-testid="my-assignments-new-assignment"
+            onClick={() => setIsCreateSheetOpen(true)}
+          >
+            <Plus className="mr-2 h-4 w-4" />
+            New Assignment
+          </Button>
         </div>
       </div>
 
-      <div className="mx-auto flex w-full max-w-screen-lg flex-col gap-4 px-3 py-4 pb-24 sm:px-5">
-        {!data.hasActiveClasses ? (
-          <div className="flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed bg-muted p-12 text-center">
-            <ClipboardList className="h-8 w-8 text-muted-foreground" />
-            <span className="text-lg font-bold">No active classes</span>
-            <span className="text-sm text-muted-foreground">
-              You are not assigned to any active classes yet.
-            </span>
-          </div>
-        ) : (
-          <>
-            <div className="flex flex-wrap items-center gap-2">
-              <Select
-                value={classFilter}
-                onValueChange={(value) => updateFilter('class', value)}
-              >
-                <SelectTrigger className="w-[240px] bg-background">
-                  <SelectValue placeholder="All classes" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All classes</SelectItem>
-                  {data.classes.map((klass) => (
-                    <SelectItem key={klass.id} value={klass.id}>
-                      {formatClassLabel(klass)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Select
-                value={typeFilter}
-                onValueChange={(value) => updateFilter('type', value)}
-              >
-                <SelectTrigger className="w-[220px] bg-background">
-                  <SelectValue placeholder="All assignment types" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All assignment types</SelectItem>
-                  {typeOptions.map((type) => (
-                    <SelectItem key={type.id} value={type.id}>
-                      {type.title}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {hasFilters ? (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="gap-2"
-                  onClick={() => {
-                    const next = new URLSearchParams(searchParams);
-                    next.delete('class');
-                    next.delete('type');
-                    setSearchParams(next, { replace: true });
-                  }}
-                >
-                  <X className="h-4 w-4" />
-                  Clear
-                </Button>
-              ) : null}
-            </div>
-
-            <div className="flex items-center justify-end gap-2">
-              {selectedAssignmentIds.length > 0 ? (
-                <>
-                  <Tooltip
-                    text={
-                      canEditSelectedAssignment
-                        ? 'Edit assignment'
-                        : selectedRows.length === 1
-                          ? selectedRows[0]!.kind === 'practice'
-                            ? 'Open the practice assignment to see results'
-                            : 'Edit this assignment from the APUSH library'
-                          : 'Select one assignment to edit'
+      {assignments.length === 0 ? (
+        <div className="flex flex-col items-center justify-center rounded-lg border border-dashed bg-muted/50 p-12 text-center">
+          <span className="text-lg font-bold">No assignments yet</span>
+          <span className="text-base/7 text-muted-foreground sm:text-sm/6">
+            Assignments you create for your classes will show up here.
+          </span>
+        </div>
+      ) : filteredAssignments.length === 0 ? (
+        <div className="flex flex-col items-center justify-center rounded-lg border border-dashed bg-muted/50 p-12 text-center">
+          <span className="text-lg font-bold">No assignments found</span>
+          <span className="text-base/7 text-muted-foreground sm:text-sm/6">
+            Try a different search term
+          </span>
+        </div>
+      ) : (
+        <div className="rounded-lg bg-muted/50">
+          <Table aria-label="My Assignments">
+            <TableHeader className="rounded-t-lg">
+              <TableRow className="rounded-t-lg bg-muted/50">
+                <TableHead className="w-[50px] rounded-tl-lg pl-4">
+                  <Checkbox
+                    aria-label="Select all assignments"
+                    checked={
+                      filteredAssignments.length > 0 &&
+                      selectedAssignmentIds.length ===
+                        filteredAssignments.length
+                    }
+                    onCheckedChange={handleSelectAll}
+                  />
+                </TableHead>
+                <TableHead>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="-ml-2 h-8 gap-2 px-2"
+                    aria-label={`Sort assignments by title ${
+                      sortDirection === 'asc' ? 'descending' : 'ascending'
+                    }`}
+                    onClick={() =>
+                      setSortDirection((current) =>
+                        current === 'asc' ? 'desc' : 'asc'
+                      )
                     }
                   >
-                    <Button
-                      type="button"
-                      size="icon-sm"
-                      variant="outline"
-                      disabled={!canEditSelectedAssignment}
-                      aria-label="Edit selected assignment"
-                      onClick={() => {
-                        if (!canEditSelectedAssignment) return;
-                        setEditingAssignmentId(selectedRows[0]!.id);
-                        setSelectedAssignmentIds([]);
-                      }}
-                    >
-                      <Pencil className="h-4 w-4" />
-                    </Button>
-                  </Tooltip>
-                  <Form
-                    method="post"
-                    className="inline"
-                    onSubmit={(event) => {
-                      const count = selectedAssignmentIds.length;
-                      const parts = [
-                        count === 1
-                          ? 'Delete this assignment?'
-                          : `Delete ${count} assignments?`,
-                      ];
-                      if (selectedStandardIds.length > 0) {
-                        parts.push(
-                          'Existing student documents will remain, but they will no longer be linked.'
-                        );
+                    Assignment
+                    {sortDirection === 'asc' ? (
+                      <ArrowUp className="h-4 w-4" />
+                    ) : (
+                      <ArrowDown className="h-4 w-4" />
+                    )}
+                  </Button>
+                </TableHead>
+                <TableHead className="whitespace-nowrap">Classes</TableHead>
+                <TableHead className="whitespace-nowrap">Type</TableHead>
+                <TableHead className="whitespace-nowrap rounded-tr-lg pr-4">
+                  Documents
+                </TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {paginatedAssignments.map((assignment) => (
+                <TableRow
+                  key={assignment.assignmentId}
+                  data-state={
+                    selectedAssignmentIds.includes(assignment.assignmentId)
+                      ? 'selected'
+                      : undefined
+                  }
+                >
+                  <TableCell className="max-h-[37px] pl-4">
+                    <Checkbox
+                      aria-label={`Select assignment ${assignment.title}`}
+                      checked={selectedAssignmentIds.includes(
+                        assignment.assignmentId
+                      )}
+                      onCheckedChange={() =>
+                        handleSelect(assignment.assignmentId)
                       }
-                      if (selectedPracticeIds.length > 0) {
-                        parts.push(
-                          'Student progress on writing practice will be deleted.'
-                        );
-                      }
-                      if (!window.confirm(parts.join(' '))) {
-                        event.preventDefault();
-                        return;
-                      }
-                      setSelectedAssignmentIds([]);
-                    }}
-                  >
-                    <input
-                      type="hidden"
-                      name="intent"
-                      value="delete-assignments"
                     />
-                    {selectedStandardIds.map((id) => (
-                      <input
-                        key={id}
-                        type="hidden"
-                        name="assignmentIds"
-                        value={id}
-                      />
-                    ))}
-                    {selectedPracticeIds.map((id) => (
-                      <input
-                        key={id}
-                        type="hidden"
-                        name="practiceAssignmentIds"
-                        value={id}
-                      />
-                    ))}
-                    <Tooltip
-                      text={`Delete ${selectedAssignmentIds.length} assignment(s)`}
-                    >
-                      <Button
-                        type="submit"
-                        size="icon-sm"
-                        variant="outline"
-                        aria-label={`Delete ${selectedAssignmentIds.length} assignment(s)`}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </Tooltip>
-                  </Form>
-                </>
-              ) : null}
-              <Button
-                size="sm"
-                className="shrink-0"
-                onClick={() => setIsCreateSheetOpen(true)}
-              >
-                <Plus className="mr-2 h-4 w-4" />
-                New Assignment
-              </Button>
-            </div>
-
-            {filteredRows.length === 0 ? (
-              <div className="flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed bg-muted p-12 text-center">
-                <span className="text-lg font-bold">
-                  {hasFilters ? 'No assignments match' : 'No assignments yet'}
-                </span>
-                <span className="text-sm text-muted-foreground">
-                  {hasFilters
-                    ? 'Try clearing a filter.'
-                    : 'Create your first assignment to get started.'}
-                </span>
-              </div>
-            ) : (
-              <div className="rounded-lg bg-muted/50">
-                <Table aria-label="Assignments">
-                  <TableHeader className="rounded-t-lg">
-                    <TableRow className="rounded-t-lg bg-muted/50">
-                      <TableHead className="w-[50px] rounded-tl-lg pl-4">
-                        <Checkbox
-                          aria-label="Select all assignments"
-                          checked={
-                            filteredRows.length > 0 &&
-                            selectedAssignmentIds.length === filteredRows.length
-                          }
-                          onCheckedChange={handleSelectAll}
-                        />
-                      </TableHead>
-                      <TableHead>Assignment</TableHead>
-                      <TableHead>Assignment Type</TableHead>
-                      <TableHead>Applied to</TableHead>
-                      <TableHead className="pr-4">Documents</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredRows.map((row) => {
-                      if (row.kind === 'practice') {
-                        const resultsHref = row.classAssignments[0]
-                          ? `/app/writing-lessons/results/${row.classAssignments[0].id}`
-                          : '/app/writing-lessons';
-                        return (
-                          <TableRow key={row.id}>
-                            <TableCell className="max-h-[37px] pl-4">
-                              <Checkbox
-                                aria-label={`Select assignment ${
-                                  row.title?.trim() ||
-                                  WRITING_PRACTICE_TYPE_TITLE
-                                }`}
-                                checked={selectedAssignmentIds.includes(row.id)}
-                                onCheckedChange={() => handleSelect(row.id)}
-                              />
-                            </TableCell>
-                            <TableCell className="max-w-[320px] font-medium">
-                              <Link
-                                to={resultsHref}
-                                data-testid={`assignment-open-${row.id}`}
-                                className="flex min-w-0 flex-1 flex-col gap-1 text-left hover:text-primary"
-                              >
-                                <span>
-                                  {row.title?.trim() ||
-                                    WRITING_PRACTICE_TYPE_TITLE}
-                                </span>
-                                <span className="line-clamp-1 text-xs font-normal text-muted-foreground">
-                                  {row.problemCount} problems ·{' '}
-                                  {row.lessonTitles.join(', ')}
-                                </span>
-                              </Link>
-                            </TableCell>
-                            <TableCell className="text-muted-foreground">
-                              {WRITING_PRACTICE_TYPE_TITLE}
-                            </TableCell>
-                            <TableCell>
-                              <div className="flex flex-col gap-1">
-                                {row.classAssignments.map((deployment) => (
-                                  <Link
-                                    key={deployment.id}
-                                    to={`/app/writing-lessons/results/${deployment.id}`}
-                                    className="text-sm hover:underline"
-                                  >
-                                    {formatClassLabel(deployment.class)}
-                                  </Link>
-                                ))}
-                              </div>
-                            </TableCell>
-                            <TableCell className="pr-4">
-                              <Badge variant="secondary" size="sm">
-                                {row.classAssignments.reduce(
-                                  (total, deployment) =>
-                                    total + deployment._count.attempts,
-                                  0
-                                )}{' '}
-                                attempts
-                              </Badge>
-                            </TableCell>
-                          </TableRow>
-                        );
-                      }
-
-                      const assignment = row;
-                      const canEdit =
-                        assignment.assignmentType.systemKey !==
-                        AP_HISTORY_ASSIGNMENT_TYPE_KEY;
-
-                      return (
-                        <TableRow key={assignment.id}>
-                          <TableCell className="max-h-[37px] pl-4">
-                            <Checkbox
-                              aria-label={`Select assignment ${
-                                assignment.title?.trim() ||
-                                'Untitled Assignment'
-                              }`}
-                              checked={selectedAssignmentIds.includes(
-                                assignment.id
-                              )}
-                              onCheckedChange={() =>
-                                handleSelect(assignment.id)
-                              }
-                            />
-                          </TableCell>
-                          <TableCell className="max-w-[320px] font-medium">
-                            <div className="flex items-start gap-2">
-                              <button
-                                type="button"
-                                data-testid={`assignment-open-${assignment.id}`}
-                                className={cn(
-                                  'flex min-w-0 flex-1 flex-col gap-1 text-left',
-                                  canEdit
-                                    ? 'cursor-pointer hover:text-primary'
-                                    : 'cursor-default text-foreground'
-                                )}
-                                disabled={!canEdit}
-                                onClick={() =>
-                                  setEditingAssignmentId(assignment.id)
-                                }
-                              >
-                                <span>
-                                  {assignment.title?.trim() ||
-                                    'Untitled Assignment'}
-                                </span>
-                                <span className="line-clamp-1 text-xs font-normal text-muted-foreground">
-                                  {assignment.prompt}
-                                </span>
-                              </button>
-                              {canEdit ? (
-                                <Tooltip text="Duplicate">
-                                  <Button
-                                    type="button"
-                                    size="icon-sm"
-                                    variant="ghost"
-                                    aria-label="Duplicate"
-                                    onClick={() => {
-                                      setDuplicateAssignment(assignment);
-                                      setIsCreateSheetOpen(true);
-                                    }}
-                                  >
-                                    <Copy className="h-4 w-4" />
-                                  </Button>
-                                </Tooltip>
-                              ) : null}
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-muted-foreground">
-                            {assignment.assignmentType.title}
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex flex-col gap-1">
-                              {assignment.classAssignments.map((deployment) => (
-                                <Link
-                                  key={deployment.id}
-                                  to={`/app/my-classes/${deployment.class.id}?tab=documents&classAssignmentId=${deployment.id}`}
-                                  className="text-sm hover:underline"
-                                >
-                                  {formatClassLabel(deployment.class)}
-                                </Link>
-                              ))}
-                            </div>
-                          </TableCell>
-                          <TableCell className="pr-4">
-                            <Badge variant="secondary" size="sm">
-                              {assignment.classAssignments.reduce(
-                                (total, deployment) =>
-                                  total + deployment._count.documents,
-                                0
-                              )}
-                            </Badge>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              </div>
-            )}
-
-            {data.browseAssignmentTypes.length > 0 ? (
-              <div className="mt-2">
-                <p className="mb-2 text-sm font-medium text-muted-foreground">
-                  Assignment Types
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  {data.browseAssignmentTypes.map((type) => (
+                  </TableCell>
+                  <TableCell className="font-medium">
                     <Link
-                      key={type.id}
-                      to={`/app/assignment-types/${type.id}`}
-                      className="rounded-md border bg-background px-2.5 py-1 text-sm text-foreground transition-colors hover:bg-muted"
+                      to={assignment.href}
+                      className="[overflow-wrap:anywhere] hover:underline"
+                      data-testid={`my-assignment-open-${assignment.assignmentId}`}
                     >
-                      {type.title}
+                      {assignment.title}
                     </Link>
-                  ))}
-                </div>
-              </div>
-            ) : null}
-          </>
-        )}
-      </div>
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">
+                    <AssignmentClasses classes={assignment.classes} />
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {assignment.assignmentTypeTitle}
+                  </TableCell>
+                  <TableCell className="pr-4 text-muted-foreground">
+                    {assignment.documentCount}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      )}
 
-      <AssignmentCreationSheet
-        open={isCreateSheetOpen}
-        onOpenChange={(open) => {
-          setIsCreateSheetOpen(open);
-          if (!open) {
-            const returnTo = createReturnTo;
-            setDuplicateAssignment(null);
-            setCreateAssignmentTypeId(undefined);
-            setCreateReturnTo(null);
-            if (returnTo) {
-              navigate(returnTo, { replace: true });
-            }
-          }
-        }}
-        entryPoint="dashboard"
-        assignmentTypes={data.assignmentTypes}
-        teacherClasses={data.creationClasses}
-        fixedAssignmentTypeId={duplicateAssignment?.assignmentTypeId}
-        initialAssignmentTypeId={createAssignmentTypeId}
-        initialTitle={
-          duplicateAssignment
-            ? `Copy of ${
-                duplicateAssignment.title?.trim() || 'Untitled Assignment'
-              }`
-            : undefined
-        }
-        initialPrompt={duplicateAssignment?.prompt}
-        writingPracticeEnabled
-        writingPracticeLessons={data.writingPracticeLessons}
-      />
-
-      {editingAssignment ? (
-        <AssignmentEditSheet
-          open
-          onOpenChange={(open) => {
-            if (!open) setEditingAssignmentId(null);
-          }}
-          pdfClassId={editingAssignment.classAssignments[0]?.class.id ?? ''}
-          allowedAssignmentTypes={data.assignmentTypes}
-          editingAssignment={editingAssignment}
+      {filteredAssignments.length > 0 ? (
+        <Pagination
+          totalCount={filteredAssignments.length}
+          skip={pagination.skip}
+          take={pagination.take}
+          onChange={(skip, take) => setPagination({ skip, take })}
         />
       ) : null}
-    </section>
+
+      {/* Creating from here spans classes, so the sheet takes the teacher's
+          whole class list rather than being fixed to one. Editing uses this
+          same sheet from the assignment detail page a row links to. */}
+      <AssignmentCreationSheet
+        open={isCreateSheetOpen}
+        onOpenChange={setIsCreateSheetOpen}
+        entryPoint="dashboard"
+        assignmentTypes={assignmentCreationTypes}
+        teacherClasses={assignmentCreationClasses}
+      />
+    </div>
   );
 }

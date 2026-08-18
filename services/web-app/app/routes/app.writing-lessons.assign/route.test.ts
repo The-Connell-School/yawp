@@ -58,9 +58,11 @@ beforeEach(() => {
 describe('writing-lessons assign action', () => {
   test('creates the assignment for an owned class', async () => {
     const result = (await run({
+      title: 'Comma week',
       lessonSlugs: 'fixing-comma-splices',
       classIds: 'class-a',
       problemCount: '5',
+      dueAt: '2026-09-01',
     })) as { success: boolean; classCount?: number };
 
     expect(result.success).toBe(true);
@@ -69,8 +71,10 @@ describe('writing-lessons assign action', () => {
     const [input, classIds] =
       createWritingPracticeAssignmentForClasses.mock.calls[0];
     expect(input.createdByMembershipId).toBe('teacher-1');
+    expect(input.title).toBe('Comma week');
     expect(input.lessonSlugs).toEqual(['fixing-comma-splices']);
     expect(input.problemCount).toBe(5);
+    expect(input.dueAt).toEqual(new Date('2026-09-01'));
     expect(classIds).toEqual(['class-a']);
   });
 
@@ -82,9 +86,11 @@ describe('writing-lessons assign action', () => {
     });
 
     const result = (await run({
+      title: 'Comma week',
       lessonSlugs: 'fixing-comma-splices',
       classIds: 'class-a',
       problemCount: '5',
+      dueAt: '2026-09-01',
     })) as { success: boolean };
 
     expect(result.success).toBe(false);
@@ -93,9 +99,11 @@ describe('writing-lessons assign action', () => {
 
   test('rejects an unknown lesson slug', async () => {
     const result = (await run({
+      title: 'Comma week',
       lessonSlugs: 'not-a-real-lesson',
       classIds: 'class-a',
       problemCount: '5',
+      dueAt: '2026-09-01',
     })) as { success: boolean; message: string };
 
     expect(result.success).toBe(false);
@@ -107,9 +115,11 @@ describe('writing-lessons assign action', () => {
     classFindMany.mockResolvedValue([]); // ownership query returns nothing
 
     const result = (await run({
+      title: 'Comma week',
       lessonSlugs: 'fixing-comma-splices',
       classIds: 'class-x',
       problemCount: '5',
+      dueAt: '2026-09-01',
     })) as { success: boolean; message: string };
 
     expect(result.success).toBe(false);
@@ -119,13 +129,41 @@ describe('writing-lessons assign action', () => {
 
   test('rejects an out-of-range problem count', async () => {
     const result = (await run({
+      title: 'Comma week',
       lessonSlugs: 'fixing-comma-splices',
       classIds: 'class-a',
       problemCount: '99',
+      dueAt: '2026-09-01',
     })) as { success: boolean; message: string };
 
     expect(result.success).toBe(false);
     expect(result.message).toContain('Number of problems');
+    expect(createWritingPracticeAssignmentForClasses).not.toHaveBeenCalled();
+  });
+
+  test('requires an assignment title', async () => {
+    const result = (await run({
+      lessonSlugs: 'fixing-comma-splices',
+      classIds: 'class-a',
+      problemCount: '5',
+      dueAt: '2026-09-01',
+    })) as { success: boolean; message: string };
+
+    expect(result.success).toBe(false);
+    expect(result.message).toContain('title');
+    expect(createWritingPracticeAssignmentForClasses).not.toHaveBeenCalled();
+  });
+
+  test('requires a due date', async () => {
+    const result = (await run({
+      title: 'Comma week',
+      lessonSlugs: 'fixing-comma-splices',
+      classIds: 'class-a',
+      problemCount: '5',
+    })) as { success: boolean; message: string };
+
+    expect(result.success).toBe(false);
+    expect(result.message).toContain('due date');
     expect(createWritingPracticeAssignmentForClasses).not.toHaveBeenCalled();
   });
 });

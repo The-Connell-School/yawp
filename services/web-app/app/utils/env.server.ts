@@ -11,6 +11,9 @@ const schema = z.object({
   AWS_S3_BUCKET_FOR_VIDEOS: z.string(),
   AWS_S3_REGION_FOR_VIDEOS: z.string(),
   AI_MODEL: z.string().optional(),
+  PREVIEW_DATA_MODE: z
+    .enum(['seed', 'production-dump', 'sanitized-production'])
+    .optional(),
 });
 
 declare global {

@@ -6,6 +6,7 @@ import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { isDocumentSubmittableContent } from '~/utils/document-submittable';
 import { redirectWithToast } from '~/utils/toast.server';
+import { hasEffectivePlatformAdmin } from '~/utils/preview-access.server';
 
 const POST = z.object({ documentId: z.string(), title: z.string().optional() });
 
@@ -27,7 +28,7 @@ const actionImpl = async ({ request }: ActionFunctionArgs) => {
     where: {
       id: data.documentId,
       deletedAt: null,
-      ...(user?.isAdmin
+      ...(hasEffectivePlatformAdmin(user?.isAdmin)
         ? {}
         : {
             OR: [

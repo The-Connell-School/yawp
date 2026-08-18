@@ -21,9 +21,17 @@ import {
 } from '~/components/ui/table';
 import { CaretLeftIcon } from '~/components/icons';
 import { timeAgo } from '~/utils/timeAgo';
+import {
+  getClassCardHeading,
+} from '~/utils/class-display';
 import { formatAssignmentGrade } from '~/domain/grading/gradeMath';
 import { Loader2 } from 'lucide-react';
 import { postFormWithFallbackRetry } from '~/utils/llm-retry-ui';
+import {
+  ClassInsightsPanel,
+  type ClassInsight,
+  type ClassInsightSummary,
+} from './class-insights-panel';
 
 type StatusFilter = 'submitted' | 'graded' | 'released' | 'in-progress';
 
@@ -45,7 +53,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
   const userId = await requireUserId(request);
   const profile = await requireMembership(request, userId);
-  if (profile.role !== "TEACHER") {
+  if (profile.role !== 'TEACHER') {
     throw new Response('Not Found', { status: 404 });
   }
 
@@ -84,6 +92,40 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   });
   if (!classAssignment) throw new Response('Not Found', { status: 404 });
   const assignment = classAssignment.assignment;
+
+  const classInsightsEnabled = profile.organization.classInsightsEnabled;
+  const insightRow = classInsightsEnabled
+    ? await prisma.classAssignmentInsight.findUnique({
+        where: { classAssignmentId: classAssignment.id },
+        select: {
+          status: true,
+          submissionCount: true,
+          generatedAt: true,
+          summaryJson: true,
+        },
+      })
+    : null;
+  const insight: ClassInsight | null =
+    insightRow && insightRow.status === 'ready' && insightRow.summaryJson
+      ? {
+          status: 'ready',
+          submissionCount: insightRow.submissionCount,
+          generatedAt: insightRow.generatedAt
+            ? insightRow.generatedAt.toISOString()
+            : null,
+          summary: insightRow.summaryJson as unknown as ClassInsightSummary,
+        }
+      : null;
+
+  const gradedCount = await prisma.submission.count({
+    where: {
+      gradedAt: { not: null },
+      document: {
+        classAssignmentId: classAssignment.id,
+        deletedAt: null,
+      },
+    },
+  });
 
   const url = new URL(request.url);
   const rawStatus = url.searchParams.get('status');
@@ -160,6 +202,10 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   return dataResponse({
     klass,
     assignment,
+    classAssignmentId: classAssignment.id,
+    insight,
+    classInsightsEnabled,
+    gradedCount,
     status,
     isDocumentSubmissionEnabled,
     submissions,
@@ -177,6 +223,10 @@ export default function AssignmentSubmissionsRoute() {
   const {
     klass,
     assignment,
+    classAssignmentId,
+    insight,
+    classInsightsEnabled,
+    gradedCount,
     status,
     isDocumentSubmissionEnabled,
     submissions,
@@ -302,6 +352,7 @@ export default function AssignmentSubmissionsRoute() {
     graded: 'Graded',
     released: 'Released',
   };
+  const { title, subtitle } = getClassCardHeading(klass);
 
   return (
     <section className="no-scrollbar flex h-full w-full flex-col overflow-y-scroll">
@@ -309,9 +360,10 @@ export default function AssignmentSubmissionsRoute() {
       <div className="flex w-full justify-between border-b bg-secondary">
         <div className="mx-auto w-full max-w-screen-lg p-3 sm:p-5">
           <div className="flex flex-col">
-            <h2>
-              Grade {klass.grade} • Period {klass.period}
-            </h2>
+            <h2>{title}</h2>
+            {subtitle ? (
+              <p className="mt-1 text-muted-foreground">{subtitle}</p>
+            ) : null}
             {klass.school?.name ? (
               <p className="mt-1 text-muted-foreground">{klass.school.name}</p>
             ) : null}
@@ -337,6 +389,17 @@ export default function AssignmentSubmissionsRoute() {
           <div className="mt-1 flex gap-4 text-sm text-muted-foreground">
             <span>{assignment.assignmentType.title}</span>
           </div>
+        </div>
+
+        {/* Class-wide, assignment-level feedback for the teacher */}
+        <div className="mb-6">
+          {classInsightsEnabled ? (
+            <ClassInsightsPanel
+              classAssignmentId={classAssignmentId}
+              initialInsight={insight}
+              gradedCount={gradedCount}
+            />
+          ) : null}
         </div>
 
         {/* Status tabs */}
@@ -619,9 +682,7 @@ export default function AssignmentSubmissionsRoute() {
                           letterGrade: sub.letterGrade ?? null,
                           pointValue: assignment.pointValue,
                           score: sub.score,
-                        }) ?? (
-                          <span className="text-muted-foreground">—</span>
-                        )}
+                        }) ?? <span className="text-muted-foreground">—</span>}
                       </TableCell>
                       <TableCell className="text-muted-foreground text-sm">
                         {sub.gradedAt ? timeAgo(sub.gradedAt) : '—'}
@@ -675,9 +736,7 @@ export default function AssignmentSubmissionsRoute() {
                           letterGrade: sub.letterGrade ?? null,
                           pointValue: assignment.pointValue,
                           score: sub.score,
-                        }) ?? (
-                          <span className="text-muted-foreground">—</span>
-                        )}
+                        }) ?? <span className="text-muted-foreground">—</span>}
                       </TableCell>
                       <TableCell className="text-muted-foreground text-sm">
                         {sub.releasedAt ? timeAgo(sub.releasedAt) : '—'}

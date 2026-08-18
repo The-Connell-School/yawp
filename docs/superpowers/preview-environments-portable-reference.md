@@ -1,5 +1,12 @@
 # PR preview environments — portable reference & replication prompt
 
+> **Retired 2026-08-11. Do not use this runbook.** The RDS, ECR, App Runner,
+> Secrets Manager, IAM, and Terraform deployment path described below was removed.
+> Current previews run as Docker Compose projects on the shared preview host through
+> `.github/workflows/preview-environments.yml` and `scripts/preview/`.
+
+The remaining material is historical context only.
+
 Use this from **any machine** by referencing the **absolute paths** below (repo: `yawp-2.0` on disk). Copy the **§ Replication prompt** block into another repo’s AI session to reproduce the same pattern.
 
 ---

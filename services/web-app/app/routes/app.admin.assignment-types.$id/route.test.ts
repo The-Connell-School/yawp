@@ -10,6 +10,12 @@ const prisma = {
     findMany: mock(),
     findUnique: mock(),
   },
+  // The editor lists the shared rubric library and seeds the built-in
+  // rubrics on first sight.
+  rubric: {
+    findMany: mock(() => Promise.resolve([])),
+    create: mock(),
+  },
 };
 
 const requireAdmin = mock();
@@ -45,8 +51,22 @@ describe('admin assignment type detail action', () => {
     requireMembership.mockReset();
 
     requireAdmin.mockResolvedValue(undefined);
-    prisma.$transaction.mockImplementation(async (callback) => callback(prisma));
-    prisma.assignmentType.findUnique.mockResolvedValue({ id: 'at-1' });
+    prisma.$transaction.mockImplementation(async (callback) =>
+      callback(prisma)
+    );
+    prisma.assignmentType.findUnique.mockResolvedValue({
+      id: 'at-1',
+      rubricJson: {
+        categories: [
+          {
+            key: 'ideas_and_analysis',
+            label: 'Ideas and Analysis',
+            description: 'Generate productive ideas and analyze perspectives.',
+            weight: 1,
+          },
+        ],
+      },
+    });
     prisma.orgMembership.findMany.mockResolvedValue([]);
     prisma.orgMembership.findUnique.mockResolvedValue({ id: 'teacher-1' });
   });
@@ -118,6 +138,10 @@ describe('admin assignment type detail action', () => {
             label: 'Ideas and Analysis',
             description: 'Generate productive ideas and analyze perspectives.',
             weight: 0.25,
+            scoreLabels: [
+              { value: 1, label: 'Needs work' },
+              { value: 6, label: 'Exceptional' },
+            ],
           },
         ],
       })
@@ -149,6 +173,8 @@ describe('admin assignment type detail action', () => {
           minScore: 1,
           maxScore: 6,
         },
+        // Score labels are part of what this save must persist — not just
+        // the fields already required for a "complete" category.
         rubricJson: {
           categories: [
             {
@@ -157,6 +183,10 @@ describe('admin assignment type detail action', () => {
               description:
                 'Generate productive ideas and analyze perspectives.',
               weight: 0.25,
+              scoreLabels: [
+                { value: 1, label: 'Needs work' },
+                { value: 6, label: 'Exceptional' },
+              ],
             },
           ],
         },
@@ -170,6 +200,104 @@ describe('admin assignment type detail action', () => {
         gradingAssistantVersion: { increment: 1 },
       }),
     });
+  });
+
+  test('updates basics without rewriting or versioning the production grading config', async () => {
+    const form = new FormData();
+    form.set('intent', 'updateCourse');
+    form.set('title', 'Renamed assignment type');
+    form.set('description', 'Only the basics changed.');
+
+    await action({
+      request: new Request(
+        'https://example.test/app/admin/assignment-types/at-1',
+        {
+          method: 'POST',
+          body: form,
+        }
+      ),
+      params: { id: 'at-1' },
+      context: {} as never,
+    });
+
+    expect(prisma.assignmentType.update).toHaveBeenCalledWith({
+      where: { id: 'at-1' },
+      data: {
+        title: 'Renamed assignment type',
+        description: 'Only the basics changed.',
+      },
+    });
+  });
+
+  test('blocks saving an edit that would newly introduce a thesis-default fallback', async () => {
+    const form = new FormData();
+    form.set('intent', 'updateCourse');
+    form.set('title', 'ACT Writing');
+    form.set(
+      'scoringScale',
+      JSON.stringify({ type: 'act_writing_2_12', minScore: 1, maxScore: 6 })
+    );
+    form.set('rubricJson', JSON.stringify({ categories: [] }));
+    form.set('promptConfigJson', JSON.stringify({ gradingInstructions: '' }));
+
+    let thrown: unknown;
+    try {
+      await action({
+        request: new Request(
+          'https://example.test/app/admin/assignment-types/at-1',
+          {
+            method: 'POST',
+            body: form,
+          }
+        ),
+        params: { id: 'at-1' },
+        context: {} as never,
+      });
+    } catch (error) {
+      thrown = error;
+    }
+
+    expect(thrown).toBeInstanceOf(Response);
+    expect((thrown as Response).status).toBe(400);
+    expect(prisma.assignmentType.update).not.toHaveBeenCalled();
+  });
+
+  test('grandfathers an assignment type that already falls back to the thesis default', async () => {
+    prisma.assignmentType.findUnique.mockResolvedValue({
+      id: 'at-1',
+      rubricJson: { categories: [] },
+    });
+
+    const form = new FormData();
+    form.set('intent', 'updateCourse');
+    form.set('title', 'Renamed title, rubric still unset');
+    form.set(
+      'scoringScale',
+      JSON.stringify({ type: 'weighted_1_5', minScore: 1, maxScore: 5 })
+    );
+    form.set('rubricJson', JSON.stringify({ categories: [] }));
+    form.set('promptConfigJson', JSON.stringify({ gradingInstructions: '' }));
+
+    await action({
+      request: new Request(
+        'https://example.test/app/admin/assignment-types/at-1',
+        {
+          method: 'POST',
+          body: form,
+        }
+      ),
+      params: { id: 'at-1' },
+      context: {} as never,
+    });
+
+    expect(prisma.assignmentType.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'at-1' },
+        data: expect.objectContaining({
+          title: 'Renamed title, rubric still unset',
+        }),
+      })
+    );
   });
 
   test('loads assignment type details without external rubric links', async () => {

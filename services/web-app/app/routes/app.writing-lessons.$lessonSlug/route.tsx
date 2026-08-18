@@ -24,6 +24,7 @@ import { Badge } from '~/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
 import { Textarea } from '~/components/ui/textarea';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
+import { formatClassLabel } from '~/utils/class-display';
 import { prisma } from '~/utils/db.server';
 import { getActPracticeQuestions } from '~/utils/writing-lessons/act-practice-bank';
 import { generateActPracticeQuestions } from '~/utils/writing-lessons/act-practice-generation.server';
@@ -44,8 +45,8 @@ import {
 type TeacherClass = {
   id: string;
   title: string | null;
-  period: string;
-  grade: string;
+  period: string | null;
+  grade: string | null;
 };
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
@@ -177,6 +178,7 @@ export default function WritingLessonDetailRoute() {
             <div className="space-y-6">
               <TeacherAssignPanel
                 lessonSlug={lesson.slug}
+                lessonTitle={lesson.title}
                 classes={teacherClasses}
                 promptCount={practicePrompts.length}
               />
@@ -395,16 +397,17 @@ type AssignResult = {
 };
 
 function classLabel(cls: TeacherClass): string {
-  if (cls.title && cls.title.trim().length > 0) return cls.title;
-  return `Grade ${cls.grade} · Period ${cls.period}`;
+  return formatClassLabel(cls);
 }
 
 function TeacherAssignPanel({
   lessonSlug,
+  lessonTitle,
   classes,
   promptCount,
 }: {
   lessonSlug: string;
+  lessonTitle: string;
   classes: TeacherClass[];
   promptCount: number;
 }) {
@@ -434,6 +437,23 @@ function TeacherAssignPanel({
             className="space-y-4"
           >
             <input type="hidden" name="lessonSlugs" value={lessonSlug} />
+
+            <div className="space-y-2">
+              <label
+                htmlFor="assignmentTitle"
+                className="text-base font-medium text-foreground sm:text-sm"
+              >
+                Assignment title
+              </label>
+              <input
+                id="assignmentTitle"
+                name="title"
+                type="text"
+                defaultValue={`${lessonTitle} practice`}
+                required
+                className="h-9 w-full rounded-md border border-input bg-background px-3 text-base sm:text-sm"
+              />
+            </div>
 
             <fieldset className="space-y-2">
               <legend className="text-base font-medium text-foreground sm:text-sm">
@@ -480,13 +500,13 @@ function TeacherAssignPanel({
                 htmlFor="dueAt"
                 className="text-base font-medium text-foreground sm:text-sm"
               >
-                Due date{' '}
-                <span className="text-muted-foreground">(optional)</span>
+                Due date
               </label>
               <input
                 id="dueAt"
                 name="dueAt"
                 type="date"
+                required
                 className="h-9 w-full rounded-md border border-input bg-background px-3 text-base sm:text-sm"
               />
             </div>

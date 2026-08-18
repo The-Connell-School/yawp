@@ -8,11 +8,25 @@ import {
   DEFAULT_GRADING_ASSISTANT_STRICTNESS_LEVEL,
   parseGradingAssistantStrictnessLevel,
 } from '~/domain/grading/grading-assistant-strictness';
+import {
+  AssignmentPromptAttachmentError,
+  assignmentPromptAttachmentRequestTooLarge,
+  deleteAssignmentPromptAttachment,
+  uploadAssignmentPromptAttachment,
+} from '~/domain/assignments/assignment-prompt-attachment.server';
+import {
+  SAVED_ASSIGNMENTS_ENABLED,
+  saveAssignmentForReuse,
+} from '~/domain/assignments/saved-assignments.server';
 import { isAssignmentTypeAvailableForEveryScope } from '~/utils/assignment-type-access.server';
 import { createAssignmentDeployedToClasses } from '~/utils/assignment-deployment.server';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
-import { parseAssignmentGradingIntent } from '~/utils/assignment-grading-intent.server';
+import {
+  DEFAULT_ASSIGNMENT_POINT_VALUE,
+  parseAssignmentGradingIntent,
+} from '~/utils/assignment-grading-intent.server';
+import { parseAssignmentTutorEnabled } from '~/utils/assignment-tutor-enabled.server';
 
 export async function action({ request }: ActionFunctionArgs) {
   const userId = await requireUserId(request);
@@ -22,6 +36,13 @@ export async function action({ request }: ActionFunctionArgs) {
     return dataResponse(
       { success: false, message: 'Only teachers can create assignments.' },
       { status: 403 }
+    );
+  }
+
+  if (assignmentPromptAttachmentRequestTooLarge(request)) {
+    return dataResponse(
+      { success: false, message: 'PDF is too large. Maximum size is 10 MB.' },
+      { status: 413 }
     );
   }
 
@@ -73,6 +94,15 @@ export async function action({ request }: ActionFunctionArgs) {
       { status: 400 }
     );
   }
+
+  const tutorEnabledResult = parseAssignmentTutorEnabled(formData);
+  if (!tutorEnabledResult.success) {
+    return dataResponse(
+      { success: false, message: tutorEnabledResult.message },
+      { status: 400 }
+    );
+  }
+  const tutorEnabled = tutorEnabledResult.value;
 
   const classes = await prisma.class.findMany({
     where: {
@@ -150,12 +180,15 @@ export async function action({ request }: ActionFunctionArgs) {
     }
 
     await createAssignmentDeployedToClasses({
-      data: buildAssignmentCreateInputFromApHistoryEntry({
-        assignmentTypeId: assignmentType.id,
-        title,
-        entry,
-        gradingAssistantStrictnessLevel,
-      }),
+      data: {
+        ...buildAssignmentCreateInputFromApHistoryEntry({
+          assignmentTypeId: assignmentType.id,
+          title,
+          entry,
+          gradingAssistantStrictnessLevel,
+        }),
+        tutorEnabled,
+      },
       classIds: deployClassIds,
     });
 
@@ -172,21 +205,85 @@ export async function action({ request }: ActionFunctionArgs) {
     );
   }
 
-  await createAssignmentDeployedToClasses({
-    data: {
-      assignmentTypeId: assignmentType.id,
-      title,
-      prompt,
-      gradingAssistantStrictnessLevel,
-      ...(gradingIntent?.success
-        ? {
-            submitForGrade: gradingIntent.data.submitForGrade,
-            pointValue: gradingIntent.data.pointValue,
-          }
-        : {}),
-    },
-    classIds: deployClassIds,
-  });
+  const promptAttachment = formData.get('promptAttachment');
+  let promptAttachmentData:
+    | Awaited<ReturnType<typeof uploadAssignmentPromptAttachment>>
+    | undefined;
+  if (promptAttachment instanceof File && promptAttachment.size > 0) {
+    try {
+      promptAttachmentData =
+        await uploadAssignmentPromptAttachment(promptAttachment);
+    } catch (error) {
+      if (error instanceof AssignmentPromptAttachmentError) {
+        return dataResponse(
+          { success: false, message: error.message },
+          { status: 400 }
+        );
+      }
+      throw error;
+    }
+  }
+
+  try {
+    await createAssignmentDeployedToClasses({
+      data: {
+        assignmentTypeId: assignmentType.id,
+        title,
+        prompt,
+        gradingAssistantStrictnessLevel,
+        tutorEnabled,
+        ...promptAttachmentData,
+        ...(gradingIntent?.success
+          ? {
+              submitForGrade: gradingIntent.data.submitForGrade,
+              pointValue: gradingIntent.data.pointValue,
+            }
+          : {}),
+      },
+      classIds: deployClassIds,
+    });
+  } catch (error) {
+    if (promptAttachmentData?.promptAttachmentKey) {
+      await deleteAssignmentPromptAttachment(
+        promptAttachmentData.promptAttachmentKey
+      ).catch(() => {});
+    }
+    throw error;
+  }
+
+  // "My Saved Assignments": keep the configuration so the teacher can push the
+  // same assignment again later. The classes already have the assignment by
+  // this point, so a failed save is reported alongside the success rather than
+  // rolling the creation back.
+  const saveForReuse =
+    SAVED_ASSIGNMENTS_ENABLED &&
+    formData.get('saveForReuse')?.toString() === 'true';
+  if (saveForReuse) {
+    try {
+      await saveAssignmentForReuse({
+        membershipId: profile.id,
+        assignmentTypeId: assignmentType.id,
+        title: title ?? '',
+        prompt,
+        submitForGrade: gradingIntent?.success
+          ? gradingIntent.data.submitForGrade
+          : true,
+        // Mirrors the assignment that was just created: no grading fields on
+        // the form means submitted for a grade at the default point value.
+        pointValue: gradingIntent?.success
+          ? gradingIntent.data.pointValue
+          : DEFAULT_ASSIGNMENT_POINT_VALUE,
+        gradingAssistantStrictnessLevel,
+        tutorEnabled,
+      });
+    } catch {
+      return dataResponse({
+        success: true,
+        message:
+          'Assignment created and applied to classes, but it could not be saved for reuse.',
+      });
+    }
+  }
 
   return dataResponse({
     success: true,

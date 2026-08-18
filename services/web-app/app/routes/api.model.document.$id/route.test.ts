@@ -7,6 +7,7 @@ const prisma = {
   document: {
     findUniqueOrThrow: mock(),
     findUnique: mock(),
+    findFirst: mock(),
     update: mock(),
   },
   documentRevision: {
@@ -41,6 +42,7 @@ describe('api.model.document.$id', () => {
     prisma.user.findUniqueOrThrow.mockReset();
     prisma.document.findUniqueOrThrow.mockReset();
     prisma.document.findUnique.mockReset();
+    prisma.document.findFirst.mockReset();
     prisma.document.update.mockReset();
     prisma.documentRevision.findFirst.mockReset();
     prisma.documentRevision.create.mockReset();
@@ -56,9 +58,14 @@ describe('api.model.document.$id', () => {
     requireUserId.mockResolvedValue('user-1');
     requireMembership.mockResolvedValue({ id: 'profile-1' });
     prisma.user.findUniqueOrThrow.mockResolvedValue({ isAdmin: false });
-    prisma.document.findUniqueOrThrow.mockResolvedValue({
+    // The route resolves the document through the access predicate
+    // (`document.findFirst` + `documentReadWhere`) before it writes anything.
+    // These tests are about save ordering, not authorization: profile-1 owns
+    // doc-1, so the scoped lookup succeeds. The predicate itself is exercised in
+    // `authz.test.ts`, which runs the route's own where clause against a fixture.
+    prisma.document.findFirst.mockResolvedValue({
       id: 'doc-1',
-      profileId: 'profile-1',
+      membershipId: 'profile-1',
       text: 'Old text',
       html: '<p>Old text</p>',
       revision: 4,

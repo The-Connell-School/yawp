@@ -18,8 +18,8 @@ model Class {
   updatedAt        DateTime          @default(now()) @db.Timestamptz(6)
   code             String
   schoolYear       String            @default("2024-2025")
-  period           String
-  grade            String
+  period           String?
+  grade            String?
   title            String?
   cardGradientKey  String            @default("indigo-purple-pink")
   classArtIndex    Int?
@@ -30,11 +30,28 @@ model Class {
   schoolId         String
   school           School            @relation(fields: [schoolId], references: [id])
   classAssignments ClassAssignment[]
-
   writingPracticeClassAssignments WritingPracticeClassAssignment[]
 
   @@unique([schoolId, code])
   @@index([schoolId, schoolYear, period, grade])
+}
+
+/// A whole grading rubric as one portable object: scale, categories, prompt
+/// configuration, output schema and calibration notes together. Rubrics are
+/// written elsewhere and pasted in, which is what makes them movable between
+/// environments — the JSON is the transfer format.
+model Rubric {
+  id              String           @id @default(cuid())
+  createdAt       DateTime         @default(now()) @db.Timestamptz(6)
+  updatedAt       DateTime         @default(now()) @updatedAt @db.Timestamptz(6)
+  /// Stable identifier used to match the same rubric across environments.
+  name            String           @unique
+  /// What an admin sees in the picker.
+  title           String
+  schemaJson      Json
+  assignmentTypes AssignmentType[]
+
+  @@index([title])
 }
 
 model AssignmentType {
@@ -51,6 +68,11 @@ model AssignmentType {
   ownerOrg                           Organization?                 @relation(fields: [ownerOrgId], references: [id], onDelete: Cascade)
   ownerMembershipId                  String?
   ownerMembership                    OrgMembership?                @relation("AssignmentTypeOwner", fields: [ownerMembershipId], references: [id], onDelete: Cascade)
+  /// The rubric this assignment type grades with, chosen from the shared
+  /// library. Null keeps the older behaviour: its own JSON columns below, or
+  /// the built-in default for its kind.
+  rubricId                           String?
+  rubric                             Rubric?                       @relation(fields: [rubricId], references: [id])
   scoringScaleJson                   Json?
   rubricJson                         Json?
   gradingPromptConfigJson            Json?
@@ -67,6 +89,9 @@ model AssignmentType {
   assignments                        Assignment[]
   documents                          Document[]
   apHistoryLibraryEntries            ApHistoryPromptLibraryEntry[]
+  savedThesisPrompts                 SavedThesisPrompt[]
+  savedDailyPagesPrompts             SavedDailyPagesPrompt[]
+  savedAssignments                   SavedAssignment[]
 
   @@index([ownerOrgId])
   @@index([ownerMembershipId])
@@ -83,9 +108,13 @@ model Assignment {
   assignmentType                  AssignmentType    @relation(fields: [assignmentTypeId], references: [id], onDelete: Cascade)
   title                           String?
   prompt                          String
+  promptAttachmentKey             String?
+  promptAttachmentName            String?
+  promptAttachmentSize            Int?
   submitForGrade                  Boolean           @default(true)
   pointValue                      Int?              @default(100)
   gradingAssistantStrictnessLevel String            @default("intermediate")
+  tutorEnabled                    Boolean           @default(true)
   apHistorySnapshot               Json?
   classAssignments                ClassAssignment[]
   documents                       Document[]
@@ -94,17 +123,114 @@ model Assignment {
 }
 
 model ClassAssignment {
-  id           String     @id @default(cuid())
-  createdAt    DateTime   @default(now()) @db.Timestamptz(6)
-  updatedAt    DateTime   @default(now()) @db.Timestamptz(6)
+  id           String                  @id @default(cuid())
+  createdAt    DateTime                @default(now()) @db.Timestamptz(6)
+  updatedAt    DateTime                @default(now()) @db.Timestamptz(6)
   assignmentId String
-  assignment   Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  assignment   Assignment              @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
   classId      String
-  class        Class      @relation(fields: [classId], references: [id], onDelete: Cascade)
+  class        Class                   @relation(fields: [classId], references: [id], onDelete: Cascade)
   documents    Document[]
+  insight      ClassAssignmentInsight?
 
   @@unique([assignmentId, classId])
   @@index([classId, createdAt(sort: Desc)])
+}
+
+/// Class-wide, assignment-level feedback for the teacher: an AI summary of how
+/// the whole class did on one assignment (strengths, gaps, teaching next steps).
+/// One cached row per ClassAssignment; regenerated on demand.
+model ClassAssignmentInsight {
+  id                      String          @id @default(cuid())
+  createdAt               DateTime        @default(now()) @db.Timestamptz(6)
+  updatedAt               DateTime        @default(now()) @updatedAt @db.Timestamptz(6)
+  classAssignmentId       String          @unique
+  classAssignment         ClassAssignment @relation(fields: [classAssignmentId], references: [id], onDelete: Cascade)
+  status                  String          @default("ready") // ready | failed
+  model                   String?
+  submissionCount         Int             @default(0)
+  summaryJson             Json?
+  generatedByMembershipId String?
+  generatedByMembership   OrgMembership?  @relation(fields: [generatedByMembershipId], references: [id], onDelete: SetNull)
+  generatedAt             DateTime?       @db.Timestamptz(6)
+
+  @@index([generatedByMembershipId])
+}
+
+/// A thesis-driven essay prompt a teacher generated and kept ("My prompts").
+/// Keyed by a hash of the prompt body so saving and then using the same draft
+/// leaves a single row.
+model SavedThesisPrompt {
+  id               String         @id @default(cuid())
+  createdAt        DateTime       @default(now()) @db.Timestamptz(6)
+  updatedAt        DateTime       @default(now()) @updatedAt @db.Timestamptz(6)
+  membershipId     String
+  membership       OrgMembership  @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  assignmentTypeId String
+  assignmentType   AssignmentType @relation(fields: [assignmentTypeId], references: [id], onDelete: Cascade)
+  title            String
+  prompt           String
+  promptHash       String
+  source           String         @default("generator")
+  archivedAt       DateTime?      @db.Timestamptz(6)
+
+  @@unique([membershipId, assignmentTypeId, promptHash])
+  @@index([membershipId, assignmentTypeId, archivedAt])
+}
+
+/// A Daily Pages prompt a teacher generated and kept ("My prompts").
+/// Keyed by a hash of the prompt text so saving and then using the same draft
+/// leaves a single row. `facets` holds the generator's library-vocabulary tags
+/// ({ type, seriousness, cognitiveMoves }) so a saved prompt filters and reads
+/// like a corpus row; it is validated on the way out, never trusted raw.
+model SavedDailyPagesPrompt {
+  id               String         @id @default(cuid())
+  createdAt        DateTime       @default(now()) @db.Timestamptz(6)
+  updatedAt        DateTime       @default(now()) @updatedAt @db.Timestamptz(6)
+  membershipId     String
+  membership       OrgMembership  @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  assignmentTypeId String
+  assignmentType   AssignmentType @relation(fields: [assignmentTypeId], references: [id], onDelete: Cascade)
+  prompt           String
+  promptHash       String
+  facets           Json?
+  source           String         @default("generator")
+  archivedAt       DateTime?      @db.Timestamptz(6)
+
+  // Named explicitly: the default names would run past Postgres's 63-byte
+  // identifier limit and be silently truncated.
+  @@unique([membershipId, assignmentTypeId, promptHash], map: "SavedDailyPagesPrompt_membership_type_promptHash_key")
+  @@index([membershipId, assignmentTypeId, archivedAt], map: "SavedDailyPagesPrompt_membership_type_archivedAt_idx")
+}
+
+/// An assignment a teacher kept for reuse ("My Saved Assignments"). This is a
+/// configuration, not a deployment: it holds the assignment type, title,
+/// prompt and the grading/tutor settings, and reusing one pre-fills the
+/// creation sheet. Keyed by a hash of the prompt body so saving the same
+/// assignment twice leaves a single row.
+model SavedAssignment {
+  id                              String         @id @default(cuid())
+  createdAt                       DateTime       @default(now()) @db.Timestamptz(6)
+  updatedAt                       DateTime       @default(now()) @updatedAt @db.Timestamptz(6)
+  membershipId                    String
+  membership                      OrgMembership  @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  assignmentTypeId                String
+  assignmentType                  AssignmentType @relation(fields: [assignmentTypeId], references: [id], onDelete: Cascade)
+  title                           String
+  prompt                          String
+  promptHash                      String
+  submitForGrade                  Boolean        @default(true)
+  pointValue                      Int?
+  gradingAssistantStrictnessLevel String         @default("intermediate")
+  tutorEnabled                    Boolean        @default(true)
+  source                          String         @default("creation-sheet")
+  archivedAt                      DateTime?      @db.Timestamptz(6)
+
+  // Named explicitly: the default names would run past Postgres's 63-byte
+  // identifier limit and be silently truncated.
+  @@unique([membershipId, assignmentTypeId, promptHash], map: "SavedAssignment_membership_type_promptHash_key")
+  @@index([membershipId, archivedAt], map: "SavedAssignment_membership_archivedAt_idx")
+  @@index([assignmentTypeId], map: "SavedAssignment_assignmentTypeId_idx")
 }
 
 model ApHistoryPromptLibraryEntry {
@@ -289,6 +415,106 @@ model ClassStudentCourseForensic {
   @@id([classId, studentCourseId])
 }
 
+// Forensic archives from the 2026-06-12 assignment-template split and the
+// 2026-06-13 OrgMembership cutover (see
+// docs/superpowers/plans/2026-06-13-org-membership-cutover-runbook.md).
+// These tables were created by hand-written migrations and are read by
+// packages/prisma/scripts/org-membership-staging-verify.ts; they were never
+// declared in this schema, which made `prisma migrate dev` propose dropping
+// them. Declaring them here stops that false-positive drift.
+model AssignmentClassIdForensic {
+  assignmentId String   @id
+  classId      String
+  capturedAt   DateTime @default(now()) @db.Timestamptz(6)
+}
+
+model AssignmentDueDateForensic {
+  assignmentId String   @id
+  dueDate      DateTime @db.Timestamptz(6)
+  capturedAt   DateTime @default(now()) @db.Timestamptz(6)
+}
+
+model DocumentStudentProfileIdForensic {
+  documentId       String   @id
+  studentProfileId String
+  capturedAt       DateTime @default(now()) @db.Timestamptz(6)
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model FeatureAccessTargetTeacherForensic {
+  id         String?
+  createdAt  DateTime? @db.Timestamptz(6)
+  updatedAt  DateTime? @db.Timestamptz(6)
+  featureKey String?
+  targetKind String?
+  targetId   String?
+  enabled    Boolean?
+  expiresAt  DateTime? @db.Timestamptz(6)
+  note       String?
+  capturedAt DateTime? @db.Timestamptz(6)
+
+  @@ignore
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model ProfileDuplicateForensic {
+  id             String?
+  createdAt      DateTime?       @db.Timestamptz(6)
+  organizationId String?
+  userId         String?
+  isOrgOwner     Boolean?
+  role           MembershipRole?
+  isActive       Boolean?
+  school         String?
+  schoolTeacher  String?
+  grade          String?
+  period         String?
+  archivedAt     DateTime?       @db.Timestamptz(6)
+
+  @@ignore
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model ProfileOrphanForensic {
+  id             String?
+  createdAt      DateTime?       @db.Timestamptz(6)
+  organizationId String?
+  userId         String?
+  isOrgOwner     Boolean?
+  role           MembershipRole?
+  isActive       Boolean?
+  school         String?
+  schoolTeacher  String?
+  grade          String?
+  period         String?
+  archivedAt     DateTime?       @db.Timestamptz(6)
+
+  @@ignore
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model StudentProfileForensic {
+  id            String?
+  createdAt     DateTime? @db.Timestamptz(6)
+  school        String?
+  schoolTeacher String?
+  grade         String?
+  period        String?
+  profileId     String?
+
+  @@ignore
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model TeacherProfileForensic {
+  id        String?
+  createdAt DateTime? @db.Timestamptz(6)
+  isActive  Boolean?
+  profileId String?
+
+  @@ignore
+}
+
 model DocumentComment {
   id           String                    @id @default(cuid())
   createdAt    DateTime                  @default(now()) @db.Timestamptz(6)
@@ -364,11 +590,18 @@ model Organization {
   accessExpiresAt           DateTime?                    @db.Timestamptz(6)
   numOfStudentSeats         Int                          @default(10)
   numOfTeacherSeats         Int                          @default(10)
+  reporterEnabled           Boolean                      @default(false)
+  classInsightsEnabled      Boolean                      @default(false)
+  writingPracticeEnabled    Boolean                      @default(false)
+  previewSeatCode           String?                      @unique
   memberships               OrgMembership[]
   invitations               Invitation[]
   schools                   School[]
   assignmentTypes           AssignmentType[]
   assignmentTypeAssignments OrganizationAssignmentType[]
+  reporterConversations     ReporterConversation[]
+  reporterGrowthPlans       ReporterGrowthPlan[]
+  aiRequestReservations     AiRequestReservation[]
 }
 
 model OrganizationAssignmentType {
@@ -401,6 +634,7 @@ model OrgMembership {
   documentCommentResponses      DocumentCommentResponse[]
   pasteAlerts                   PasteAlert[]
   submissionsGraded             Submission[]                   @relation("SubmissionGradedBy")
+  submissionsUnsubmitted        Submission[]                   @relation("SubmissionUnsubmittedBy")
   submissionComments            SubmissionComment[]            @relation("SubmissionCommentProfile")
   ownedAssignmentTypes          AssignmentType[]               @relation("AssignmentTypeOwner")
   classesAsTeacher              Class[]                        @relation("ClassTeachers")
@@ -410,13 +644,101 @@ model OrgMembership {
   assignedTeacherTrainings      TeacherTraining[]              @relation("TeacherTrainingAssignments")
   assignmentTypesCustomized     Boolean                        @default(false)
   assignmentTypeAssignments     TeacherAssignmentType[]
+  reporterConversations         ReporterConversation[]
+  reporterGrowthPlansOwned      ReporterGrowthPlan[]           @relation("ReporterGrowthPlanOwner")
+  reporterGrowthPlansAsStudent  ReporterGrowthPlan[]           @relation("ReporterGrowthPlanStudent")
+  aiRequestReservations         AiRequestReservation[]
+
+  classAssignmentInsightsGenerated ClassAssignmentInsight[]
+  savedThesisPrompts            SavedThesisPrompt[]
+  savedDailyPagesPrompts        SavedDailyPagesPrompt[]
+  savedAssignments              SavedAssignment[]
 
   writingPracticeAssignmentsCreated WritingPracticeAssignment[] @relation("WritingPracticeAssignmentCreator")
   writingPracticeAttempts           WritingPracticeAttempt[]    @relation("WritingPracticeAttemptStudent")
   writingPracticePromptSets         WritingPracticePromptSet[]  @relation("WritingPracticePromptSetStudent")
 
   @@unique([userId, organizationId])
+  @@unique([id, organizationId])
   @@map("OrgMembership")
+}
+
+/// Durable admission record created before an AI provider call. Advisory locks
+/// serialize each membership and organization budget so concurrent requests
+/// cannot all pass a count-then-call race.
+model AiRequestReservation {
+  id             String        @id @default(cuid())
+  createdAt      DateTime      @default(now()) @db.Timestamptz(6)
+  feature        String
+  membershipId   String
+  membership     OrgMembership @relation(fields: [membershipId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  organizationId String
+  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([membershipId, feature, createdAt(sort: Desc)])
+  @@index([organizationId, feature, createdAt(sort: Desc)])
+}
+
+/// A Yawp Reporter chat session. Owned by a teacher (OrgMembership) and scoped
+/// to their organization. Holds an ordered transcript of reporter messages.
+model ReporterConversation {
+  id             String            @id @default(cuid())
+  createdAt      DateTime          @default(now()) @db.Timestamptz(6)
+  updatedAt      DateTime          @default(now()) @updatedAt @db.Timestamptz(6)
+  deletedAt      DateTime?         @db.Timestamptz(6)
+  title          String            @default("New report")
+  membershipId   String
+  membership     OrgMembership     @relation(fields: [membershipId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  organizationId String
+  organization   Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  messages       ReporterMessage[]
+
+  @@index([membershipId, updatedAt(sort: Desc)])
+  @@index([organizationId])
+}
+
+/// A single turn in a Yawp Reporter conversation. `role` is 'user' or
+/// 'assistant'. `toolCalls` optionally records the tool invocations the
+/// assistant made to produce its answer (for transparency/auditing).
+model ReporterMessage {
+  id             String               @id @default(cuid())
+  createdAt      DateTime             @default(now()) @db.Timestamptz(6)
+  role           String
+  content        String
+  toolCalls      Json?
+  conversationId String
+  conversation   ReporterConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, createdAt])
+}
+
+/// A saved, forward-looking writing growth plan for one student, produced by
+/// the Yawp Reporter. Owned by a teacher (membership) and scoped to their org.
+/// Stores a baseline snapshot at creation so later reports can measure progress
+/// on the rubric skills the plan targets. `status` is 'active' | 'archived' |
+/// 'completed'; only one plan per student is kept active at a time.
+model ReporterGrowthPlan {
+  id                  String        @id @default(cuid())
+  createdAt           DateTime      @default(now()) @db.Timestamptz(6)
+  updatedAt           DateTime      @default(now()) @updatedAt @db.Timestamptz(6)
+  status              String        @default("active")
+  focus               String
+  /// Rubric category keys this plan targets (string[]).
+  targetSkills        Json
+  body                String
+  /// { averagePercentage, rubricLevels: { category: level }, capturedAt } at creation.
+  baseline            Json
+  checkInAt           DateTime?     @db.Timestamptz(6)
+  membershipId        String
+  membership          OrgMembership @relation("ReporterGrowthPlanOwner", fields: [membershipId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  organizationId      String
+  organization        Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  studentMembershipId String
+  student             OrgMembership @relation("ReporterGrowthPlanStudent", fields: [studentMembershipId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  @@index([membershipId, studentMembershipId, status])
+  @@index([studentMembershipId])
+  @@index([organizationId])
 }
 
 model Password {
@@ -481,6 +803,41 @@ model Setting {
   description String?
   value       String
   valueType   String   @default("string")
+}
+
+/// A teacher-authored writing-practice assignment. The lesson slugs remain
+/// separate from regular assignment types so this feature can roll out without
+/// changing the existing essay-assignment data model.
+model WritingPracticeAssignment {
+  id                    String                           @id @default(cuid())
+  createdAt             DateTime                         @default(now()) @db.Timestamptz(6)
+  updatedAt             DateTime                         @default(now()) @updatedAt @db.Timestamptz(6)
+  title                 String
+  lessonSlugs           String[]
+  problemCount          Int                              @default(5)
+  dueAt                 DateTime                         @db.Timestamptz(6)
+  instructions          String?
+  createdByMembershipId String?
+  createdByMembership   OrgMembership?                   @relation("WritingPracticeAssignmentCreator", fields: [createdByMembershipId], references: [id], onDelete: SetNull)
+  classAssignments      WritingPracticeClassAssignment[]
+
+  @@index([createdByMembershipId])
+}
+
+/// Per-class deployment of a writing-practice assignment.
+model WritingPracticeClassAssignment {
+  id           String                    @id @default(cuid())
+  createdAt    DateTime                  @default(now()) @db.Timestamptz(6)
+  updatedAt    DateTime                  @default(now()) @updatedAt @db.Timestamptz(6)
+  assignmentId String
+  assignment   WritingPracticeAssignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  classId      String
+  class        Class                     @relation(fields: [classId], references: [id], onDelete: Cascade)
+  attempts     WritingPracticeAttempt[]
+  promptSets   WritingPracticePromptSet[]
+
+  @@unique([assignmentId, classId])
+  @@index([classId, createdAt(sort: Desc)])
 }
 
 // Upload table removed. Videos will be stored in S3 and referenced by key.
@@ -609,37 +966,46 @@ model PasteAlert {
 }
 
 model Submission {
-  id                   String                          @id @default(cuid())
-  createdAt            DateTime                        @default(now()) @db.Timestamptz(6)
-  updatedAt            DateTime                        @default(now()) @db.Timestamptz(6)
-  title                String
-  text                 String
-  html                 String
-  submittedAt          DateTime                        @db.Timestamptz(6)
-  score                String?
-  feedback             String?
-  rubricScores         Json?
-  overallScore         Int?
-  overallComment       String?
-  numericPercentage    Int?
-  letterGrade          String?
-  grammarIssues        Json?
-  promptConfig         Json?
-  aiMeta               Json?
-  gradedAt             DateTime?                       @db.Timestamptz(6)
-  gradedByMembershipId String?
-  gradedBy             OrgMembership?                  @relation("SubmissionGradedBy", fields: [gradedByMembershipId], references: [id], onDelete: SetNull)
-  releasedAt           DateTime?                       @db.Timestamptz(6)
+  id                        String                          @id @default(cuid())
+  createdAt                 DateTime                        @default(now()) @db.Timestamptz(6)
+  updatedAt                 DateTime                        @default(now()) @db.Timestamptz(6)
+  title                     String
+  text                      String
+  html                      String
+  submittedAt               DateTime                        @db.Timestamptz(6)
+  score                     String?
+  feedback                  String?
+  rubricScores              Json?
+  overallScore              Int?
+  overallComment            String?
+  numericPercentage         Int?
+  letterGrade               String?
+  grammarIssues             Json?
+  promptConfig              Json?
+  aiMeta                    Json?
+  gradedAt                  DateTime?                       @db.Timestamptz(6)
+  gradedByMembershipId      String?
+  gradedBy                  OrgMembership?                  @relation("SubmissionGradedBy", fields: [gradedByMembershipId], references: [id], onDelete: SetNull)
+  releasedAt                DateTime?                       @db.Timestamptz(6)
   /// When set, hidden from the student's active submission list (teachers unaffected).
-  archivedAt           DateTime?                       @db.Timestamptz(6)
-  documentId           String
-  document             Document                        @relation(fields: [documentId], references: [id], onDelete: Restrict)
-  comments             SubmissionComment[]
-  gradingAssistantRuns SubmissionGradingAssistantRun[]
+  archivedAt                DateTime?                       @db.Timestamptz(6)
+  /// Teacher-initiated "unsubmit": hidden from both the student and the teacher's
+  /// active submission views (grading queues, dashboard cards, editor lock state),
+  /// but the row — and any grade/AI feedback already on it — is kept, not deleted.
+  /// The underlying Document and its DocumentRevision history are never touched.
+  unsubmittedAt             DateTime?                       @db.Timestamptz(6)
+  unsubmittedByMembershipId String?
+  unsubmittedBy             OrgMembership?                  @relation("SubmissionUnsubmittedBy", fields: [unsubmittedByMembershipId], references: [id], onDelete: SetNull)
+  documentId                String
+  document                  Document                        @relation(fields: [documentId], references: [id], onDelete: Restrict)
+  comments                  SubmissionComment[]
+  gradingAssistantRuns      SubmissionGradingAssistantRun[]
 
   @@index([documentId, submittedAt(sort: Desc)])
   @@index([documentId, archivedAt])
+  @@index([documentId, unsubmittedAt])
   @@index([gradedByMembershipId])
+  @@index([unsubmittedByMembershipId])
   @@index([releasedAt])
 }
 
@@ -703,43 +1069,6 @@ model LlmLog {
   @@index([createdAt(sort: Desc)])
   @@index([model])
   @@index([provider])
-}
-
-/// A teacher-authored writing-practice assignment (the template/config).
-/// One lesson slug = massed practice on a single skill; multiple slugs =
-/// interleaved practice mixing skills.
-model WritingPracticeAssignment {
-  id                    String                           @id @default(cuid())
-  createdAt             DateTime                         @default(now()) @db.Timestamptz(6)
-  updatedAt             DateTime                         @default(now()) @updatedAt @db.Timestamptz(6)
-  title                 String?
-  lessonSlugs           String[]
-  /// How many practice prompts each student should complete.
-  problemCount          Int                              @default(5)
-  dueAt                 DateTime?                        @db.Timestamptz(6)
-  instructions          String?
-  createdByMembershipId String?
-  createdByMembership   OrgMembership?                   @relation("WritingPracticeAssignmentCreator", fields: [createdByMembershipId], references: [id], onDelete: SetNull)
-  classAssignments      WritingPracticeClassAssignment[]
-
-  @@index([createdByMembershipId])
-}
-
-/// Per-class deployment of a writing-practice assignment (the join row),
-/// mirroring the Assignment -> ClassAssignment split.
-model WritingPracticeClassAssignment {
-  id           String                    @id @default(cuid())
-  createdAt    DateTime                  @default(now()) @db.Timestamptz(6)
-  updatedAt    DateTime                  @default(now()) @updatedAt @db.Timestamptz(6)
-  assignmentId String
-  assignment   WritingPracticeAssignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
-  classId      String
-  class        Class                     @relation(fields: [classId], references: [id], onDelete: Cascade)
-  attempts     WritingPracticeAttempt[]
-  promptSets   WritingPracticePromptSet[]
-
-  @@unique([assignmentId, classId])
-  @@index([classId, createdAt(sort: Desc)])
 }
 
 /// A single student's persisted response to one practice prompt, with the

@@ -97,7 +97,7 @@ describe('buildTeacherDocumentWorkGroups', () => {
 
     expect(groups.map((group: TeacherDocumentWorkGroup) => group.label)).toEqual([
       'Grade 9th • Period 1st',
-      'Grade 10th • Period 2nd — Honors',
+      'Honors · Grade 10th • Period 2nd',
     ]);
   });
 });

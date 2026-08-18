@@ -3,6 +3,7 @@ import { type ActionFunctionArgs } from 'react-router';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { findSubmissionForTitleEdit } from '~/utils/submission-access.server';
+import { hasEffectivePlatformAdmin } from '~/utils/preview-access.server';
 
 const MAX_TITLE_LEN = 500;
 
@@ -42,7 +43,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
     const submission = await findSubmissionForTitleEdit({
       submissionId: params.id,
       membershipId: profile.id,
-      isAdmin: Boolean(user?.isAdmin),
+      isAdmin: hasEffectivePlatformAdmin(user?.isAdmin),
     });
 
     if (!submission) {
@@ -63,44 +64,26 @@ export async function action({ request, params }: ActionFunctionArgs) {
     return Response.json({ success: true, title: normalized.title });
   }
 
-  if (intent !== 'archive' && intent !== 'unarchive') {
+  // Archive is retired: Unsubmit (POST /api/domain/unsubmit-submission) is
+  // the single way a student takes a submission out of active state. Archive
+  // had no grading guard, so a student could archive an already-graded
+  // submission with no attribution and no block — that hole is closed by
+  // removing the capability rather than reachable-but-disabled. Existing
+  // Submission.archivedAt rows are untouched and still partition as
+  // inactive; this only blocks creating new ones.
+  if (intent === 'archive' || intent === 'unarchive') {
     return Response.json(
       {
         success: false,
         message:
-          'Expected intent=archive, intent=unarchive, or intent=updateTitle.',
+          'Archiving submissions is no longer supported. Use unsubmit instead.',
       },
       { status: 400 }
     );
   }
 
-  const submission = await prisma.submission.findFirst({
-    where: {
-      id: params.id,
-      document: {
-        is: {
-          deletedAt: null,
-          membershipId: profile.id,
-        },
-      },
-    },
-    select: { id: true },
-  });
-
-  if (!submission) {
-    return Response.json(
-      { success: false, message: 'Submission not found.' },
-      { status: 404 }
-    );
-  }
-
-  await prisma.submission.update({
-    where: { id: submission.id },
-    data: {
-      archivedAt: intent === 'archive' ? new Date() : null,
-      updatedAt: new Date(),
-    },
-  });
-
-  return Response.json({ success: true });
+  return Response.json(
+    { success: false, message: 'Expected intent=updateTitle.' },
+    { status: 400 }
+  );
 }

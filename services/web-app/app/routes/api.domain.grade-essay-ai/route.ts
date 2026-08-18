@@ -7,19 +7,34 @@ import { prisma } from '~/utils/db.server';
 import { getLLMCompletion } from '~/utils/getLLMCompletion';
 import { isLlmFallbackRetrySignal } from '~/utils/getLLMCompletion/llm-provider-errors.server';
 import {
+  computeWeightedBandPercentage,
   formatGrade,
   letterFromPercent,
   scoreToPercent,
 } from '~/domain/grading/gradeMath';
+import {
+  ACT_WRITING_SCORING_TYPE,
+  rubricScaleGradeFields,
+} from '~/domain/grading/recorded-grade';
 import { firstNameFromFullName } from '~/domain/grading/personalize';
 import { parseGrammarIssuesPayload } from '~/domain/grading/grammarIssues';
 import { resolveAssignmentTypeGradingConfig } from '~/domain/assignment-types/assignment-type-grading-config.server';
 import type { RubricCategory as GradingRubricCategory } from '~/domain/assignment-types/assignment-type-rubric.shared';
 import {
+  isGrammarHighlightCategory,
+  resolveGrammarHighlightingEnabled,
+} from '~/domain/assignment-types/rubric-category-options';
+import {
+  buildGradingPromptShape,
+  buildGradingResponseSchemaText,
+} from '~/domain/grading/grading-prompt-shape';
+import { buildGradingRequest } from '~/domain/grading/grading-request';
+import {
+  applyGradingAssistantStrictnessToActComposite,
+  applyGradingAssistantStrictnessToPercentage,
   DEFAULT_GRADING_ASSISTANT_STRICTNESS_LEVEL,
-  getGradingAssistantStrictnessInstructions,
-  getGradingAssistantStrictnessLabel,
   parseGradingAssistantStrictnessLevel,
+  type GradingAssistantStrictnessLevel,
 } from '~/domain/grading/grading-assistant-strictness';
 import { redirectWithToast } from '~/utils/toast.server';
 import {
@@ -41,6 +56,11 @@ import {
   parseApHistorySnapshot,
   type ApHistorySnapshot,
 } from '~/domain/ap-history/schema';
+import {
+  createGradingRequestDeadlineSignal,
+  isGradingRequestDeadlineError,
+  runWithGradingRequestDeadline,
+} from './grading-request-deadline.server';
 
 const POST = z.object({
   documentId: z.string().optional(),
@@ -53,16 +73,25 @@ function buildAiSchemas({
   rubricKeys,
   minScore,
   maxScore,
+  categoryFeedbackEnabled = true,
 }: {
   rubricKeys: string[];
   minScore: number;
   maxScore: number;
+  /**
+   * When the rubric wants overall feedback only, the model is never asked for a
+   * per-category comment, so one must not be required back. A comment it sends
+   * anyway is still kept.
+   */
+  categoryFeedbackEnabled?: boolean;
 }) {
   const RubricKeySchema = z.enum(rubricKeys as [string, ...string[]]);
   const AiCategorySchema = z.object({
     key: RubricKeySchema,
     score: z.number().int().min(minScore).max(maxScore),
-    comment: z.string().min(1),
+    comment: categoryFeedbackEnabled
+      ? z.string().min(1)
+      : z.string().optional().default(''),
   });
   const AiCategoriesSchema = z
     .array(AiCategorySchema)
@@ -245,11 +274,13 @@ function buildE2EGradingFixtureResponse({
   minScore,
   maxScore,
   studentFirstName,
+  categoryFeedbackEnabled,
 }: {
   rubricCategories: GradingRubricCategory[];
   minScore: number;
   maxScore: number;
   studentFirstName: string;
+  categoryFeedbackEnabled: boolean;
 }) {
   return JSON.stringify({
     categories: rubricCategories.map((category) => {
@@ -260,7 +291,9 @@ function buildE2EGradingFixtureResponse({
       return {
         key: category.key,
         score: Math.max(minScore, Math.min(maxScore, fixture.score)),
-        comment: fixture.comment,
+        // A rubric that wants overall feedback only never gets asked for a
+        // per-category comment, so the fixture must not invent one either.
+        ...(categoryFeedbackEnabled ? { comment: fixture.comment } : {}),
       };
     }),
     overallComment: `${studentFirstName}, these legacy grading assistant suggestions still apply.`,
@@ -295,29 +328,6 @@ function computeWeightedPercentageForCategories({
   return Math.round(weightedSum / totalWeight);
 }
 
-function computeGradeFields({
-  categories,
-  scoringType,
-}: {
-  categories: Array<{ score: number }>;
-  scoringType: string;
-}) {
-  const average =
-    categories.reduce((sum, item) => sum + item.score, 0) / categories.length;
-
-  if (scoringType === 'act_writing_2_12') {
-    const composite = Math.max(2, Math.min(12, Math.round(average * 2)));
-    return {
-      overallScore: composite,
-      numericPercentage: null,
-      letterGrade: null,
-      score: `${composite}/12`,
-    };
-  }
-
-  return null;
-}
-
 function computeLegacyGradeFields({
   categories,
   rubricScores,
@@ -341,20 +351,62 @@ function computeLegacyGradeFields({
   return { overallScore, numericPercentage, letterGrade, score };
 }
 
+/**
+ * The overall grade for a rubric whose categories declare their own bands.
+ *
+ * Nothing is converted: the categories are scored inside the bands the rubric
+ * writes, so the weighted average of those scores is the grade.
+ */
+function computeBandScoredGradeFields({
+  rubricScores,
+  rubricCategories,
+}: {
+  rubricScores: Record<string, Prisma.InputJsonValue>;
+  rubricCategories: GradingRubricCategory[];
+}) {
+  const numericPercentage = computeWeightedBandPercentage(
+    rubricScores as unknown as Record<string, unknown>,
+    rubricCategories
+  );
+  if (numericPercentage === null) return null;
+
+  const letterGrade = letterFromPercent(numericPercentage);
+
+  return {
+    overallScore: numericPercentage,
+    numericPercentage,
+    letterGrade,
+    score: formatGrade(numericPercentage, letterGrade) ?? '',
+  };
+}
+
 function buildDynamicGradeFields({
   categories,
   rubricScores,
   scoringType,
+  maxScore,
   rubricCategories,
+  bandScored,
 }: {
   categories: Array<{ score: number }>;
   rubricScores: Record<string, Prisma.InputJsonValue>;
   scoringType: string;
+  maxScore: number;
   rubricCategories: GradingRubricCategory[];
+  bandScored: boolean;
 }) {
-  const nonLegacy = computeGradeFields({
+  if (bandScored) {
+    const banded = computeBandScoredGradeFields({
+      rubricScores,
+      rubricCategories,
+    });
+    if (banded) return banded;
+  }
+
+  const nonLegacy = rubricScaleGradeFields({
     categories,
     scoringType,
+    maxScore,
   });
   if (nonLegacy) return nonLegacy;
 
@@ -365,7 +417,63 @@ function buildDynamicGradeFields({
   });
 }
 
+function applyStrictnessToGradeFields({
+  overallScore,
+  numericPercentage,
+  letterGrade,
+  score,
+  scoringType,
+  gradingAssistantStrictnessLevel,
+}: {
+  overallScore: number;
+  numericPercentage: number | null;
+  letterGrade: string | null;
+  score: string | null;
+  scoringType: string;
+  gradingAssistantStrictnessLevel: GradingAssistantStrictnessLevel;
+}) {
+  if (scoringType === ACT_WRITING_SCORING_TYPE) {
+    const adjustedComposite = applyGradingAssistantStrictnessToActComposite(
+      overallScore,
+      gradingAssistantStrictnessLevel
+    );
+    return {
+      overallScore: adjustedComposite,
+      numericPercentage,
+      letterGrade,
+      score: `${adjustedComposite}/12`,
+    };
+  }
+
+  if (numericPercentage === null) {
+    return { overallScore, numericPercentage, letterGrade, score };
+  }
+
+  const adjustedPercentage = applyGradingAssistantStrictnessToPercentage(
+    numericPercentage,
+    gradingAssistantStrictnessLevel
+  );
+  const adjustedLetterGrade = letterFromPercent(adjustedPercentage);
+  return {
+    overallScore,
+    numericPercentage: adjustedPercentage,
+    letterGrade: adjustedLetterGrade,
+    score: formatGrade(adjustedPercentage, adjustedLetterGrade) ?? score,
+  };
+}
+
 export async function action({ request }: ActionFunctionArgs) {
+  const gradingDeadlineSignal = createGradingRequestDeadlineSignal();
+  const gradingDeadlineResponse = () =>
+    dataResponse(
+      {
+        success: false,
+        code: 'GRADING_REQUEST_TIMEOUT',
+        message: 'Grading took too long. Please try again.',
+      },
+      { status: 504 }
+    );
+
   const { error, data } = await parseFormData(request, POST);
   if (error) return validationError(error);
   if (!data.documentId && !data.submissionId) {
@@ -409,6 +517,7 @@ export async function action({ request }: ActionFunctionArgs) {
             id: true,
             gradingAssistantStrictnessLevel: true,
             apHistorySnapshot: true,
+            prompt: true,
           },
         },
         classAssignment: {
@@ -530,37 +639,43 @@ export async function action({ request }: ActionFunctionArgs) {
     requestedStrictnessLevel ??
     assignmentStrictnessLevel ??
     DEFAULT_GRADING_ASSISTANT_STRICTNESS_LEVEL;
-  const gradingAssistantStrictnessLabel = getGradingAssistantStrictnessLabel(
-    gradingAssistantStrictnessLevel
-  );
-  const gradingAssistantStrictnessInstructions =
-    getGradingAssistantStrictnessInstructions(gradingAssistantStrictnessLevel);
   const rubricCategories = resolvedGradingConfig.rubricCategories;
   const rubricKeys = rubricCategories.map((category) => category.key);
-  const { minScore, maxScore, scoringType } = resolvedGradingConfig;
+  const { minScore, maxScore, step, scoringType } = resolvedGradingConfig;
   const rubricConfig = {
     categories: rubricCategories,
     minScore,
     maxScore,
+    // Without the step the panel rebuilds its score picker from the raw range,
+    // so a 0-30 scale scored in tens offers all thirty-one values the moment
+    // the grading assistant returns.
+    step,
     scoringType,
+    source: resolvedGradingConfig.source,
   };
   const templateInstructions = resolvedGradingConfig.instructions;
+  const studentFirstName = firstNameFromFullName(
+    submission.document.membership?.user?.name
+  );
+  // The prompt is derived from the rubric itself: how many judgments it asks
+  // for, which words each score carries, and whether it wants per-category
+  // feedback or overall feedback alone. No assignment type is named here.
+  const promptShape = buildGradingPromptShape({
+    categories: rubricCategories,
+    minScore,
+    maxScore,
+    studentFirstName,
+  });
+  const categoryFeedbackEnabled = promptShape.categoryFeedbackEnabled;
   const { AiCategoriesSchema, AiResponseSchema } = buildAiSchemas({
     rubricKeys,
     minScore,
     maxScore,
+    categoryFeedbackEnabled,
   });
 
-  const rubricText = rubricCategories
-    .map(
-      (item) =>
-        `${item.key}: ${item.label} (${Math.round(item.weight * 100)}%) - ${item.description}`
-    )
-    .join('\n');
+  const assignmentPrompt = submission.document.assignment?.prompt?.trim();
 
-  const studentFirstName = firstNameFromFullName(
-    submission.document.membership?.user?.name
-  );
   const model = process.env.AI_MODEL ?? 'claude-sonnet-4-6';
   const forceFallback = data.llmRetry === 'fallback';
   const llmRetryOptions = {
@@ -571,7 +686,10 @@ export async function action({ request }: ActionFunctionArgs) {
     dataResponse({ retrying: true }, { status: 202 });
   const getGradingLlmCompletion = (
     params: Parameters<typeof getLLMCompletion>[0]
-  ) => getLLMCompletion({ ...params, ...llmRetryOptions });
+  ) =>
+    runWithGradingRequestDeadline(gradingDeadlineSignal, (signal) =>
+      getLLMCompletion({ ...params, ...llmRetryOptions, signal })
+    );
   const useE2EFixture = shouldUseE2EGradingFixture();
   const documentContext = buildAiTextContextAudit({
     documentSource: 'submission-snapshot',
@@ -651,6 +769,9 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
         parsedJsonCandidate.points
       );
     } catch (error) {
+      if (isGradingRequestDeadlineError(error)) {
+        return gradingDeadlineResponse();
+      }
       if (isLlmFallbackRetrySignal(error)) return retryResponse();
       return dataResponse(
         {
@@ -671,10 +792,24 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
       earnedPoints,
       points,
     } satisfies Prisma.InputJsonObject;
-    const numericPercentage = Math.round((earnedPoints / totalPoints) * 100);
-    const letterGrade = letterFromPercent(numericPercentage);
-    const score = formatGrade(numericPercentage, letterGrade);
-    const overallScore = earnedPoints;
+    const {
+      numericPercentage,
+      letterGrade,
+      score,
+      overallScore,
+    } = applyStrictnessToGradeFields({
+      overallScore: earnedPoints,
+      numericPercentage: Math.round((earnedPoints / totalPoints) * 100),
+      letterGrade: letterFromPercent(
+        Math.round((earnedPoints / totalPoints) * 100)
+      ),
+      score: formatGrade(
+        Math.round((earnedPoints / totalPoints) * 100),
+        letterFromPercent(Math.round((earnedPoints / totalPoints) * 100))
+      ) ?? '',
+      scoringType: 'percentage',
+      gradingAssistantStrictnessLevel,
+    });
     const overallComment =
       typeof parsedJson.overallComment === 'string' &&
       parsedJson.overallComment.trim()
@@ -682,6 +817,10 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
         : `${studentFirstName}, your AP History response has been scored with the ${apHistorySnapshot.rubric.rubricId} rubric.`;
     const grammarIssues = null;
     const now = new Date();
+
+    if (gradingDeadlineSignal.aborted) {
+      return gradingDeadlineResponse();
+    }
 
     await prisma.submission.update({
       where: { id: submission.id },
@@ -719,36 +858,14 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
     });
   }
 
-  const gradingSystemBase = `You are a grading assistant. Return ONLY valid JSON with the schema:\n{\n  \"categories\": [{\"key\": string, \"score\": ${minScore}-${maxScore}, \"comment\": string}],\n  \"overallComment\": string\n}\nScores must be integers ${minScore}-${maxScore}.\nReturn exactly one category for each rubric key provided.\nProvide concise, actionable comments.\nIn overallComment, start with \"${studentFirstName},\" and continue with cohesive feedback in a warm but professional tone.\nAfter the name, continue naturally (for example: \"${studentFirstName}, you ...\").\nDo not use fixed lead-ins like \"Overall grade,\" or \"${studentFirstName}, this is your overall feedback.\"`;
-  const strictnessBlock = `Grading assistant strictness: ${gradingAssistantStrictnessLabel}\n${gradingAssistantStrictnessInstructions}\n\n`;
-
-  let system = gradingSystemBase;
-  let userPrompt = '';
-
-  if (templateInstructions.mode === 'unified') {
-    system = `${gradingSystemBase}\nFollow the grading instructions in the user prompt exactly.`;
-    userPrompt = `Student first name: ${studentFirstName}\n\nAssignment type grading config: ${resolvedGradingConfig.label}\n\n${strictnessBlock}Rubric category keys (use these exact keys in categories[].key):\n${rubricText}\n\nGrading instructions:\n${templateInstructions.gradingInstructions}\n\nEssay:\n${submission.text}`;
-  } else {
-    const rubricInstructions =
-      templateInstructions.mode === 'legacy-split' ||
-      templateInstructions.mode === 'preset'
-        ? templateInstructions.rubricInstructions
-        : '';
-    const scoreInstructions =
-      templateInstructions.mode === 'legacy-split' ||
-      templateInstructions.mode === 'preset'
-        ? templateInstructions.scoreInstructions
-        : '';
-    const systemInstructions =
-      templateInstructions.mode === 'legacy-split'
-        ? templateInstructions.systemInstructions
-        : undefined;
-    const templateSystemInstructions = systemInstructions
-      ? `${systemInstructions}\n\n`
-      : '';
-    system = `${templateSystemInstructions}${gradingSystemBase}\nUse the rubric language, proficiency bands, and category weights from the user prompt exactly.\n${scoreInstructions}`;
-    userPrompt = `Student first name: ${studentFirstName}\n\nAssignment type grading config: ${resolvedGradingConfig.label}\n\n${strictnessBlock}Rubric category keys (use these exact keys in categories[].key):\n${rubricText}\n\nRubric Instructions:\n${rubricInstructions}\n\nEssay:\n${submission.text}`;
-  }
+  const { system, userPrompt } = buildGradingRequest({
+    promptShape,
+    instructions: templateInstructions,
+    label: resolvedGradingConfig.label,
+    studentFirstName,
+    assignmentPrompt,
+    essayText: submission.text,
+  });
 
   let responseText = '';
 
@@ -758,6 +875,7 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
       minScore,
       maxScore,
       studentFirstName,
+      categoryFeedbackEnabled,
     });
   } else {
     try {
@@ -780,6 +898,9 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
         },
       });
     } catch (error) {
+      if (isGradingRequestDeadlineError(error)) {
+        return gradingDeadlineResponse();
+      }
       if (isLlmFallbackRetrySignal(error)) return retryResponse();
       throw error;
     }
@@ -847,7 +968,9 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
 
     const repairedResponseText = await getGradingLlmCompletion({
       model,
-      system: `You repair grading assistant JSON. Return ONLY valid JSON with the schema:\n{\n  "categories": [{"key": string, "score": ${minScore}-${maxScore}, "comment": string}],\n  "overallComment": string\n}\nRules:\n- Preserve valid category scores/comments from the original output when possible.\n- Scores must be integers ${minScore}-${maxScore}.\n- Return exactly one category for each rubric key.\n- Use only these rubric keys: ${rubricKeys.join(', ')}.\n- overallComment must start with "${studentFirstName},".\n- Do not include markdown or explanation.`,
+      system: `You repair grading assistant JSON. Return ONLY valid JSON with the schema:\n${buildGradingResponseSchemaText(
+        { minScore, maxScore, categoryFeedbackEnabled }
+      )}\nRules:\n- Preserve valid category scores${categoryFeedbackEnabled ? '/comments' : ''} from the original output when possible.\n- Scores must be integers ${minScore}-${maxScore}.\n- Return exactly one category for each rubric key.\n- Use only these rubric keys: ${rubricKeys.join(', ')}.\n- overallComment must start with "${studentFirstName},".\n- Do not include markdown or explanation.`,
       messages: [
         {
           role: 'user',
@@ -877,6 +1000,9 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
   try {
     parsed = await parseAiResponse(responseText);
   } catch (error) {
+    if (isGradingRequestDeadlineError(error)) {
+      return gradingDeadlineResponse();
+    }
     if (isLlmFallbackRetrySignal(error)) return retryResponse();
     return dataResponse(
       {
@@ -899,20 +1025,34 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
   }, {});
 
   const overallComment = parsed.overallComment;
+  const baseGradeFields = buildDynamicGradeFields({
+    categories: parsed.categories,
+    rubricScores,
+    scoringType,
+    maxScore,
+    rubricCategories,
+    bandScored: promptShape.bandScored,
+  });
   const { overallScore, numericPercentage, letterGrade, score } =
-    buildDynamicGradeFields({
-      categories: parsed.categories,
-      rubricScores,
+    applyStrictnessToGradeFields({
+      ...baseGradeFields,
       scoringType,
-      rubricCategories,
+      gradingAssistantStrictnessLevel,
     });
 
+  // Grammar/syntax highlighting has always run for every non-AP-History
+  // rubric, so a rubric whose categories say nothing about it keeps running it.
+  // Only a rubric that explicitly opts every category out skips the pass.
+  const grammarHighlightingEnabled =
+    resolveGrammarHighlightingEnabled(rubricCategories);
+  const grammarCategoryKeys = new Set(
+    rubricCategories
+      .filter((category) => isGrammarHighlightCategory(category))
+      .map((category) => category.key)
+  );
   const grammarAndMechanicsScore =
-    parsed.categories.find(
-      (item) =>
-        item.key === 'grammar_and_mechanics' ||
-        item.key === 'language_use_and_conventions'
-    )?.score ?? null;
+    parsed.categories.find((item) => grammarCategoryKeys.has(item.key))
+      ?.score ?? null;
 
   let grammarIssues: Prisma.InputJsonValue | null = null;
   const parseGrammarIssuesFromResponseText = (responseText: string) => {
@@ -950,7 +1090,12 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
       })),
     }) satisfies Prisma.InputJsonValue;
 
-  if (useE2EFixture) {
+  if (!grammarHighlightingEnabled) {
+    // Write an empty issue set rather than leaving the field untouched, so
+    // turning highlighting off and re-grading clears highlights an earlier run
+    // stored. A grammar pass that merely fails still leaves them alone.
+    grammarIssues = buildGrammarIssuesPayload([]);
+  } else if (useE2EFixture) {
     grammarIssues = buildGrammarIssuesPayload(
       parseGrammarIssuesPayload(
         {
@@ -1015,12 +1160,19 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
 
       grammarIssues = buildGrammarIssuesPayload(parsedGrammarIssues);
     } catch (error) {
+      if (isGradingRequestDeadlineError(error)) {
+        return gradingDeadlineResponse();
+      }
       if (isLlmFallbackRetrySignal(error)) return retryResponse();
       grammarIssues = null;
     }
   }
 
   // Write AI grading results directly to the Submission
+  if (gradingDeadlineSignal.aborted) {
+    return gradingDeadlineResponse();
+  }
+
   const now = new Date();
   await prisma.submission.update({
     where: { id: submission.id },
@@ -1068,6 +1220,20 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
       model,
       status: 'succeeded',
       metadata: {
+        // The suggestions exactly as the assistant produced them. A teacher
+        // edits the submission itself afterwards, so this is the only record
+        // of what was suggested — it is what "reset to the suggestions"
+        // restores, including after a reload.
+        output: {
+          rubricScores,
+          overallScore,
+          overallComment,
+          numericPercentage,
+          letterGrade,
+          score,
+          grammarIssues,
+          gradingAssistantStrictnessLevel,
+        },
         assignmentTypeGradingLabel: resolvedGradingConfig.label,
         assignmentTypeRubricSource: resolvedGradingConfig.source,
         assignmentTypeSourceTemplateId: resolvedGradingConfig.sourceTemplateId,

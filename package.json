@@ -7,11 +7,13 @@
     "services/*"
   ],
   "scripts": {
+    "typecheck": "bun web-app:typecheck",
     "export-env": "export $(grep -v '^#' .env | xargs) ",
     "dev": "bash scripts/worktree-local-setup.sh --no-dev && source .worktree-local/config.env && PORT=\"$DEV_PORT\" bun web-app:dev",
     "web-app:dev": "bun run --cwd services/web-app dev",
     "web-app:test:e2e": "bun run --cwd services/web-app test:e2e",
     "web-app:test:e2e:prepare": "bun run --cwd services/web-app test:e2e:prepare",
+    "web-app:test:e2e:preview-access": "bun run --cwd services/web-app test:e2e:preview-access",
     "web-app:test:e2e:smoke": "bun run --cwd services/web-app test:e2e:smoke",
     "web-app:test:e2e:full": "bun run --cwd services/web-app test:e2e:full",
     "web-app:build": "bun run --cwd services/web-app build",
@@ -40,6 +42,7 @@
     "worktree:setup:fresh": "bash scripts/worktree-local-setup.sh --fresh --no-dev",
     "db:fixtures-export-prod-fidelity": "bun run --cwd packages/prisma fixtures:export-prod-fidelity",
     "db:assignment-type-release-gate": "bun run --cwd packages/prisma assignment-type-release-gate",
+    "db:refresh-sanitized-preview-data": "bash scripts/refresh-sanitized-preview-data.sh",
     "db:sync-local-from-production": "bash scripts/sync-production-db-to-local.sh",
     "db:practice-full-rollback": "bash scripts/practice-full-rollback.sh",
     "db:staging-org-membership-rehearsal": "bash scripts/staging-org-membership-rehearsal.sh"

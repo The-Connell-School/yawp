@@ -9,20 +9,165 @@ source "$SCRIPT_DIR/tooling-artifacts.sh"
 
 export PREVIEW_DATA_MODE="${PREVIEW_DATA_MODE:-seed}"
 export PREVIEW_DEV_LOGIN_EMAIL="${PREVIEW_DEV_LOGIN_EMAIL:-dev.teacher@yawp.local}"
-eval "$(node "$SCRIPT_DIR/preview-env.mjs" --shell)"
+# Derive paths and database identity before creating the per-preview credential.
+# The placeholder URL never reaches a container or persistent compose file.
+eval "$(PREVIEW_DATABASE_URL=postgresql://identity.invalid/identity node "$SCRIPT_DIR/preview-env.mjs" --shell)"
+unset DATABASE_URL
 
-DATABASE_NAME="yawp_pr_${PR_NUMBER}"
+# preview-env.mjs already derives this and exports it in the eval above — yawp_pr_142 for
+# a PR preview, yawp_demo for a slug-named environment like the demo box. Recomputing it
+# from PR_NUMBER here defeated the slug override: a named environment has no PR number, so
+# this produced the database "yawp_pr_" and, because PR_NUMBER is exported as an empty
+# string rather than left unset, did it silently instead of failing under `set -u`.
+: "${DATABASE_NAME:?preview-env.mjs did not export DATABASE_NAME}"
 DUMP_URI="${PREVIEW_DB_DUMP_S3_URI:-s3://yawp-preview-videos/production.dump}"
+DUMP_VERSION="${PREVIEW_DB_DUMP_VERSION:-unversioned}"
 POSTGRES_CONTAINER="${PREVIEW_POSTGRES_CONTAINER:-preview-postgres}"
 POSTGRES_PROJECT="${PREVIEW_POSTGRES_PROJECT:-yawp-preview-db}"
-TEMPLATE_DB="${PREVIEW_DB_TEMPLATE_DB:-${TEMPLATE_DATABASE_NAME:-yawp_template}}"
+if [[ ! "$DUMP_VERSION" =~ ^[A-Za-z0-9._-]+$ ]]; then
+  echo "PREVIEW_DB_DUMP_VERSION contains unsupported characters" >&2
+  exit 1
+fi
+if [[ "$DATA_MODE" == "sanitized-production" && "$DUMP_VERSION" == "unversioned" ]]; then
+  echo "PREVIEW_DB_DUMP_VERSION is required for sanitized production previews" >&2
+  exit 1
+fi
+safe_dump_version="$(printf '%s' "$DUMP_VERSION" | tr '.-' '__' | cut -c1-28)"
+if [[ "$DATA_MODE" == "sanitized-production" ]]; then
+  default_template_database="yawp_template_sanitized_${safe_dump_version}"
+else
+  default_template_database="yawp_template"
+fi
+if [[ -n "${PREVIEW_DB_TEMPLATE_DB:-}" ]]; then
+  TEMPLATE_DB="$PREVIEW_DB_TEMPLATE_DB"
+elif [[ "$DATA_MODE" == "sanitized-production" ]]; then
+  # preview-env.mjs exports TEMPLATE_DATABASE_NAME=yawp_template for backward
+  # compatibility. Sanitized snapshots must not inherit that unversioned cache.
+  TEMPLATE_DB="$default_template_database"
+else
+  TEMPLATE_DB="${TEMPLATE_DATABASE_NAME:-$default_template_database}"
+fi
 DB_COMPOSE_DIR="$ROOT/postgres"
 DB_COMPOSE_FILE="$DB_COMPOSE_DIR/docker-compose.yml"
 TOOLING_FINGERPRINT_FILE="$PREVIEW_DIR/tooling.sha256"
+DATA_SOURCE_FINGERPRINT_FILE="$PREVIEW_DIR/data-source"
+DATA_SOURCE_FINGERPRINT="${DATA_MODE}:${DUMP_URI}:${DUMP_VERSION}"
+DATA_SOURCE_CHANGED=1
 TOOLING_CHANGED=1
 DATABASE_CREATED=0
 
 mkdir -p "$PREVIEW_DIR" "$DB_COMPOSE_DIR"
+DATABASE_ROLE_FILE="$PREVIEW_DIR/database-role"
+DATABASE_PASSWORD_FILE="$PREVIEW_DIR/database-password"
+load_or_create_database_credential() {
+  umask 077
+  if [[ -s "$DATABASE_ROLE_FILE" ]]; then
+    PREVIEW_DB_USER="$(<"$DATABASE_ROLE_FILE")"
+  else
+    PREVIEW_DB_USER="${DATABASE_NAME}_app"
+    printf '%s\n' "$PREVIEW_DB_USER" > "$DATABASE_ROLE_FILE"
+  fi
+  if [[ -s "$DATABASE_PASSWORD_FILE" ]]; then
+    PREVIEW_DB_PASSWORD="$(<"$DATABASE_PASSWORD_FILE")"
+  else
+    PREVIEW_DB_PASSWORD="$(node -e "process.stdout.write(require('node:crypto').randomBytes(32).toString('base64url'))")"
+    printf '%s\n' "$PREVIEW_DB_PASSWORD" > "$DATABASE_PASSWORD_FILE"
+  fi
+  [[ "$PREVIEW_DB_USER" =~ ^[a-z_][a-z0-9_]{0,62}$ ]] || {
+    echo "Stored preview database role is invalid" >&2
+    exit 1
+  }
+  [[ "$PREVIEW_DB_PASSWORD" =~ ^[A-Za-z0-9_-]{32,}$ ]] || {
+    echo "Stored preview database password is invalid" >&2
+    exit 1
+  }
+  export PREVIEW_DB_USER PREVIEW_DB_PASSWORD
+}
+load_or_create_database_credential
+eval "$(node "$SCRIPT_DIR/preview-env.mjs" --shell)"
+: "${PREVIEW_POSTGRES_ADMIN_PASSWORD:?PREVIEW_POSTGRES_ADMIN_PASSWORD is required}"
+case "${PREVIEW_KEEP_AWAKE:-false}" in
+  true) printf 'true\n' > "$PREVIEW_DIR/keep-awake" ;;
+  false) rm -f -- "$PREVIEW_DIR/keep-awake" ;;
+  *) echo "PREVIEW_KEEP_AWAKE must be true or false" >&2; exit 1 ;;
+esac
+ACCESS_CODE_FILE="$PREVIEW_DIR/access-code"
+ACCESS_SEATS_FILE="$PREVIEW_DIR/access-seats.json"
+ACCESS_SECRET_FILE="$PREVIEW_DIR/access-secret"
+SESSION_SECRET_FILE="$PREVIEW_DIR/session-secret"
+export PREVIEW_SEAT_COUNT="${PREVIEW_SEAT_COUNT:-1}"
+if [[ "$DATA_MODE" == "sanitized-production" ]]; then
+  export PREVIEW_ACCESS_MASTER_ORGANIZATION_ID="${PREVIEW_ACCESS_MASTER_ORGANIZATION_ID:-default-org}"
+  export PREVIEW_ACCESS_MASTER_LABEL="${PREVIEW_ACCESS_MASTER_LABEL:-Production rehearsal}"
+else
+  export PREVIEW_ACCESS_MASTER_ORGANIZATION_ID="${PREVIEW_ACCESS_MASTER_ORGANIZATION_ID:-local-dev-org}"
+  export PREVIEW_ACCESS_MASTER_LABEL="${PREVIEW_ACCESS_MASTER_LABEL:-Master}"
+fi
+
+if [[ -f "$DATA_SOURCE_FINGERPRINT_FILE" && "$(<"$DATA_SOURCE_FINGERPRINT_FILE")" == "$DATA_SOURCE_FINGERPRINT" ]]; then
+  DATA_SOURCE_CHANGED=0
+else
+  rm -f "$ACCESS_CODE_FILE" "$ACCESS_SEATS_FILE"
+fi
+
+load_or_create_access_config() {
+  umask 077
+  if [[ -z "${PREVIEW_ACCESS_SEATS:-}" ]]; then
+    local existing_seats="[]"
+    local legacy_codes="${PREVIEW_ACCESS_CODES:-}"
+    if [[ -s "$ACCESS_SEATS_FILE" ]]; then
+      existing_seats="$(<"$ACCESS_SEATS_FILE")"
+    elif [[ -z "$legacy_codes" && -s "$ACCESS_CODE_FILE" ]]; then
+      legacy_codes="$(<"$ACCESS_CODE_FILE")"
+    fi
+    PREVIEW_ACCESS_SEATS="$(
+      docker run --rm \
+        -e PREVIEW_SEAT_COUNT="$PREVIEW_SEAT_COUNT" \
+        -e PREVIEW_ACCESS_MASTER_ORGANIZATION_ID="$PREVIEW_ACCESS_MASTER_ORGANIZATION_ID" \
+        -e PREVIEW_ACCESS_MASTER_LABEL="$PREVIEW_ACCESS_MASTER_LABEL" \
+        -e PREVIEW_EXISTING_ACCESS_SEATS="$existing_seats" \
+        -e PREVIEW_ACCESS_CODES="$legacy_codes" \
+        -v "$SOURCE_DIR:/app:ro" \
+        -w /app \
+        oven/bun:1.3.1 \
+        bun scripts/preview/access-code.mjs --seats
+    )"
+    printf '%s\n' "$PREVIEW_ACCESS_SEATS" > "$ACCESS_SEATS_FILE"
+  fi
+
+  PREVIEW_ACCESS_CODES="$(
+    PREVIEW_ACCESS_SEATS="$PREVIEW_ACCESS_SEATS" node -e \
+      "process.stdout.write(JSON.parse(process.env.PREVIEW_ACCESS_SEATS).map((seat) => seat.code).join(','))"
+  )"
+  # A retained seat map may be larger than a subsequently lowered count. Never
+  # orphan one of those worlds on a reset; seed through the full retained map.
+  PREVIEW_SEAT_COUNT="$(
+    PREVIEW_ACCESS_SEATS="$PREVIEW_ACCESS_SEATS" node -e \
+      "process.stdout.write(String(JSON.parse(process.env.PREVIEW_ACCESS_SEATS).length))"
+  )"
+
+  if [[ -z "${PREVIEW_ACCESS_SECRET:-}" ]]; then
+    if [[ -s "$ACCESS_SECRET_FILE" ]]; then
+      PREVIEW_ACCESS_SECRET="$(<"$ACCESS_SECRET_FILE")"
+    else
+      PREVIEW_ACCESS_SECRET="$(node -e "process.stdout.write(require('node:crypto').randomBytes(32).toString('base64url'))")"
+      printf '%s\n' "$PREVIEW_ACCESS_SECRET" > "$ACCESS_SECRET_FILE"
+    fi
+  fi
+
+  if [[ -z "${PREVIEW_SESSION_SECRET:-}" ]]; then
+    if [[ -s "$SESSION_SECRET_FILE" ]]; then
+      PREVIEW_SESSION_SECRET="$(<"$SESSION_SECRET_FILE")"
+    else
+      PREVIEW_SESSION_SECRET="$(node -e "process.stdout.write(require('node:crypto').randomBytes(32).toString('base64url'))")"
+      printf '%s\n' "$PREVIEW_SESSION_SECRET" > "$SESSION_SECRET_FILE"
+    fi
+  fi
+
+  export PREVIEW_ACCESS_CODES PREVIEW_ACCESS_SEATS PREVIEW_ACCESS_SECRET PREVIEW_SESSION_SECRET PREVIEW_SEAT_COUNT
+}
+
+load_or_create_access_config
 node "$SCRIPT_DIR/render-compose.mjs" > "$PREVIEW_DIR/docker-compose.yml"
 
 docker network inspect preview >/dev/null 2>&1 || docker network create preview >/dev/null
@@ -40,7 +185,9 @@ validate_database_name() {
 }
 
 write_shared_postgres_compose() {
-  cat > "$DB_COMPOSE_FILE" <<YAML
+  local temporary="${DB_COMPOSE_FILE}.$$.tmp"
+  umask 077
+  cat > "$temporary" <<YAML
 services:
   postgres:
     image: postgres:16
@@ -48,7 +195,7 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: ${DATABASE_PASSWORD:-postgres}
+      POSTGRES_PASSWORD: ${PREVIEW_POSTGRES_ADMIN_PASSWORD}
       POSTGRES_DB: postgres
     volumes:
       - preview-postgres-data:/var/lib/postgresql/data
@@ -62,6 +209,8 @@ networks:
   preview:
     external: true
 YAML
+  chmod 600 "$temporary"
+  mv -f -- "$temporary" "$DB_COMPOSE_FILE"
 }
 
 stream_preview_dump() {
@@ -101,12 +250,96 @@ ensure_shared_postgres() {
   wait_for_shared_postgres
 }
 
+ensure_preview_database_role() {
+  local exists
+  exists="$(docker exec "$POSTGRES_CONTAINER" psql --no-psqlrc -U postgres -d postgres -Atc \
+    "SELECT 1 FROM pg_roles WHERE rolname = '${DATABASE_USER}'" | tr -d '[:space:]')"
+  if [[ "$exists" != "1" ]]; then
+    docker exec "$POSTGRES_CONTAINER" createuser -U postgres "$DATABASE_USER"
+  fi
+  docker exec "$POSTGRES_CONTAINER" psql --no-psqlrc -v ON_ERROR_STOP=1 -U postgres -d postgres -c \
+    "ALTER ROLE \"${DATABASE_USER}\" WITH LOGIN PASSWORD '${DATABASE_PASSWORD}' NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;"
+}
+
+harden_preview_database() {
+  validate_database_name "$DATABASE_NAME"
+  docker exec "$POSTGRES_CONTAINER" psql --no-psqlrc -v ON_ERROR_STOP=1 -U postgres -d postgres -c \
+    "ALTER DATABASE \"${DATABASE_NAME}\" OWNER TO \"${DATABASE_USER}\"; REVOKE CONNECT ON DATABASE \"${DATABASE_NAME}\" FROM PUBLIC; GRANT CONNECT ON DATABASE \"${DATABASE_NAME}\" TO \"${DATABASE_USER}\";"
+  docker exec "$POSTGRES_CONTAINER" psql --no-psqlrc -v ON_ERROR_STOP=1 -U postgres -d "$DATABASE_NAME" -c "
+DO \$migration\$
+DECLARE object record;
+BEGIN
+  FOR object IN
+    SELECT namespace.nspname, relation.relname,
+      CASE relation.relkind
+        WHEN 'S' THEN 'SEQUENCE'
+        WHEN 'v' THEN 'VIEW'
+        WHEN 'm' THEN 'MATERIALIZED VIEW'
+        WHEN 'f' THEN 'FOREIGN TABLE'
+        ELSE 'TABLE'
+      END AS kind
+    FROM pg_class relation
+    JOIN pg_namespace namespace ON namespace.oid = relation.relnamespace
+    WHERE namespace.nspname NOT IN ('pg_catalog', 'information_schema')
+      AND relation.relkind IN ('r', 'p', 'S', 'v', 'm', 'f')
+      AND pg_get_userbyid(relation.relowner) = 'postgres'
+      AND NOT EXISTS (
+        SELECT 1 FROM pg_depend dependency
+        WHERE dependency.classid = 'pg_class'::regclass
+          AND dependency.objid = relation.oid AND dependency.deptype = 'e'
+      )
+  LOOP
+    EXECUTE format('ALTER %s %I.%I OWNER TO %I', object.kind, object.nspname, object.relname, '${DATABASE_USER}');
+  END LOOP;
+  FOR object IN
+    SELECT namespace.nspname, routine.proname, pg_get_function_identity_arguments(routine.oid) AS arguments
+    FROM pg_proc routine
+    JOIN pg_namespace namespace ON namespace.oid = routine.pronamespace
+    WHERE namespace.nspname NOT IN ('pg_catalog', 'information_schema')
+      AND pg_get_userbyid(routine.proowner) = 'postgres'
+      AND NOT EXISTS (
+        SELECT 1 FROM pg_depend dependency
+        WHERE dependency.classid = 'pg_proc'::regclass
+          AND dependency.objid = routine.oid AND dependency.deptype = 'e'
+      )
+  LOOP
+    EXECUTE format('ALTER FUNCTION %I.%I(%s) OWNER TO %I', object.nspname, object.proname, object.arguments, '${DATABASE_USER}');
+  END LOOP;
+  FOR object IN
+    SELECT namespace.nspname, data_type.typname
+    FROM pg_type data_type
+    JOIN pg_namespace namespace ON namespace.oid = data_type.typnamespace
+    WHERE namespace.nspname NOT IN ('pg_catalog', 'information_schema')
+      AND data_type.typtype IN ('e', 'd')
+      AND pg_get_userbyid(data_type.typowner) = 'postgres'
+      AND NOT EXISTS (
+        SELECT 1 FROM pg_depend dependency
+        WHERE dependency.classid = 'pg_type'::regclass
+          AND dependency.objid = data_type.oid AND dependency.deptype = 'e'
+      )
+  LOOP
+    EXECUTE format('ALTER TYPE %I.%I OWNER TO %I', object.nspname, object.typname, '${DATABASE_USER}');
+  END LOOP;
+END
+\$migration\$;
+GRANT ALL ON SCHEMA public TO \"${DATABASE_USER}\";
+GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO \"${DATABASE_USER}\";
+GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO \"${DATABASE_USER}\";"
+}
+
 database_exists() {
   local database_name="$1"
   validate_database_name "$database_name"
   local exists
   exists="$(docker exec "$POSTGRES_CONTAINER" psql -U postgres -d postgres -Atc "SELECT 1 FROM pg_database WHERE datname = '${database_name}'" | tr -d '[:space:]')"
   [[ "$exists" == "1" ]]
+}
+
+revoke_public_database_connect() {
+  local database_name="$1"
+  validate_database_name "$database_name"
+  docker exec "$POSTGRES_CONTAINER" psql --no-psqlrc -v ON_ERROR_STOP=1 -U postgres -d postgres -c \
+    "REVOKE CONNECT ON DATABASE \"${database_name}\" FROM PUBLIC;" >/dev/null
 }
 
 restore_dump_into_template() {
@@ -128,11 +361,13 @@ ensure_template_database() {
   (
     flock 9
     if database_exists "$TEMPLATE_DB"; then
+      revoke_public_database_connect "$TEMPLATE_DB"
       echo "Template database $TEMPLATE_DB already exists; skipping production dump restore."
       exit 0
     fi
 
     docker exec "$POSTGRES_CONTAINER" createdb -U postgres "$TEMPLATE_DB"
+    revoke_public_database_connect "$TEMPLATE_DB"
     if ! restore_dump_into_template; then
       docker exec "$POSTGRES_CONTAINER" dropdb -U postgres --if-exists "$TEMPLATE_DB" || true
       exit 1
@@ -147,8 +382,19 @@ ensure_production_dump_preview_database() {
     return 0
   fi
 
-  docker exec "$POSTGRES_CONTAINER" createdb -U postgres -T "$TEMPLATE_DB" "$DATABASE_NAME"
+  docker exec "$POSTGRES_CONTAINER" createdb -U postgres -O "$DATABASE_USER" -T "$TEMPLATE_DB" "$DATABASE_NAME"
   DATABASE_CREATED=1
+}
+
+reset_preview_database_for_data_source_change() {
+  if [[ "$DATA_SOURCE_CHANGED" != "1" ]] || ! database_exists "$DATABASE_NAME"; then
+    return 0
+  fi
+
+  echo "Preview data source changed; replacing database $DATABASE_NAME..."
+  "${compose[@]}" down --remove-orphans >/dev/null 2>&1 || true
+  docker exec "$POSTGRES_CONTAINER" dropdb -U postgres --force --if-exists "$DATABASE_NAME"
+  rm -f "$TOOLING_FINGERPRINT_FILE"
 }
 
 reset_seed_preview_database() {
@@ -156,16 +402,29 @@ reset_seed_preview_database() {
   echo "Resetting preview database $DATABASE_NAME for seeded local-dev data..."
   "${compose[@]}" down --remove-orphans >/dev/null 2>&1 || true
   docker exec "$POSTGRES_CONTAINER" dropdb -U postgres --force --if-exists "$DATABASE_NAME"
-  docker exec "$POSTGRES_CONTAINER" createdb -U postgres "$DATABASE_NAME"
+  docker exec "$POSTGRES_CONTAINER" createdb -U postgres -O "$DATABASE_USER" "$DATABASE_NAME"
+  DATABASE_CREATED=1
+}
+
+create_seed_preview_database() {
+  validate_database_name "$DATABASE_NAME"
+  echo "Creating preview database $DATABASE_NAME for seeded local-dev data..."
+  docker exec "$POSTGRES_CONTAINER" createdb -U postgres -O "$DATABASE_USER" "$DATABASE_NAME"
   DATABASE_CREATED=1
 }
 
 ensure_preview_database() {
   case "$DATA_MODE" in
     seed)
-      reset_seed_preview_database
+      if [[ "${DEMO_RESET_DATA:-false}" == "true" ]]; then
+        reset_seed_preview_database
+      elif database_exists "$DATABASE_NAME"; then
+        echo "Preview database $DATABASE_NAME already exists; preserving seat data."
+      else
+        create_seed_preview_database
+      fi
       ;;
-    production-dump)
+    production-dump|sanitized-production)
       ensure_template_database
       ensure_production_dump_preview_database
       ;;
@@ -196,6 +455,14 @@ compute_tooling_fingerprint() {
   (
     cd "$SOURCE_DIR"
     {
+      for control_file in \
+        "$SCRIPT_DIR/deploy.sh" \
+        "$SCRIPT_DIR/preview-env.mjs" \
+        "$SCRIPT_DIR/render-compose.mjs" \
+        "$SCRIPT_DIR/tooling-artifacts.sh"
+      do
+        sha256_file "$control_file"
+      done
       for file in \
         package.json \
         bun.lock \
@@ -207,6 +474,9 @@ compute_tooling_fingerprint() {
         packages/prisma/scripts/assignment-type-release-gate.ts \
         packages/prisma/scripts/backfill-class-art-key.ts \
         packages/prisma/scripts/seed-local-dev.ts \
+        packages/prisma/scripts/preview-seats.ts \
+        packages/prisma/scripts/seed-preview-seats.ts \
+        packages/prisma/scripts/local-dev/class-insights.ts \
         packages/prisma/scripts/local-dev/dev-personas.ts \
         packages/prisma/scripts/local-dev/seed-synthetic-data.ts \
         scripts/preview/deploy.sh
@@ -258,15 +528,27 @@ run_tooling_if_needed() {
   local tooling_command
   case "$DATA_MODE" in
     seed)
-      tooling_command='bun install --ignore-scripts && bun prisma generate && cd packages/prisma && bun prisma migrate deploy && bun run scripts/backfill-class-art-key.ts && bun run seed-local-dev && bun run scripts/assignment-type-release-gate.ts --require-data'
+      tooling_command='bun install --ignore-scripts && bun prisma generate && cd packages/prisma && bun prisma migrate deploy && bun run scripts/backfill-class-art-key.ts'
+      if [[ "$DATABASE_CREATED" == "1" ]]; then
+        tooling_command+=' && bun run seed-local-dev'
+      fi
+      tooling_command+=' && bun run scripts/assignment-type-release-gate.ts --require-data'
       ;;
-    production-dump)
+    production-dump|sanitized-production)
       tooling_command='bun install --ignore-scripts && bun prisma generate && cd packages/prisma && bun prisma migrate deploy && bun run scripts/backfill-class-art-key.ts && bun run scripts/assignment-type-release-gate.ts --require-data'
       ;;
   esac
 
   "${compose[@]}" run --rm toolbox bash -lc "$tooling_command"
   printf '%s\n' "$fingerprint" > "$TOOLING_FINGERPRINT_FILE"
+}
+
+ensure_preview_seats() {
+  if [[ "$DATA_MODE" != "seed" ]]; then
+    return 0
+  fi
+  "${compose[@]}" run --rm toolbox bash -lc \
+    'cd packages/prisma && bun run seed-preview-seats'
 }
 
 remove_legacy_project_postgres() {
@@ -280,8 +562,12 @@ refresh_web_container_if_needed() {
 }
 
 ensure_shared_postgres
+ensure_preview_database_role
+reset_preview_database_for_data_source_change
 ensure_preview_database
+harden_preview_database
 run_tooling_if_needed
+ensure_preview_seats
 start_or_refresh_web() {
   refresh_web_container_if_needed
 }
@@ -289,6 +575,10 @@ start_or_refresh_web
 
 health_url="${PREVIEW_HEALTHCHECK_URL:-${URL}/api/healthcheck}"
 login_url="${PREVIEW_LOGIN_URL:-${URL}}"
+smoke_access_code="$(
+  PREVIEW_ACCESS_SEATS="$PREVIEW_ACCESS_SEATS" node -e \
+    "process.stdout.write(JSON.parse(process.env.PREVIEW_ACCESS_SEATS)[0].code)"
+)"
 if [[ -n "${DIRECT_PORT:-}" ]]; then
   health_url="http://127.0.0.1:${DIRECT_PORT}/api/healthcheck"
   login_url="http://127.0.0.1:${DIRECT_PORT}"
@@ -296,12 +586,23 @@ fi
 
 for attempt in $(seq 1 90); do
   if curl -fsS --connect-timeout 1 --max-time 2 "$health_url" >/dev/null; then
-    PREVIEW_BASE_URL="$login_url" PREVIEW_DATA_MODE="$DATA_MODE" node "$SCRIPT_DIR/smoke-login.mjs"
+    PREVIEW_BASE_URL="$login_url" \
+      PREVIEW_DATA_MODE="$DATA_MODE" \
+      PREVIEW_ACCESS_CODE="$smoke_access_code" \
+      node "$SCRIPT_DIR/smoke-login.mjs"
     end_ms="$(date +%s%3N)"
     elapsed_ms="$((end_ms - start_ms))"
     echo "PREVIEW_URL=$URL"
     echo "PREVIEW_HOSTNAME=$HOSTNAME"
+    echo "PREVIEW_ACCESS_CODE=$smoke_access_code"
+    PREVIEW_ACCESS_SEATS="$PREVIEW_ACCESS_SEATS" node -e '
+      for (const [index, seat] of JSON.parse(process.env.PREVIEW_ACCESS_SEATS).entries()) {
+        console.log(`PREVIEW_SEAT_CODE_${index + 1}=${seat.code}`)
+        console.log(`Preview seat ${index + 1} (${seat.label}): ${seat.code}`)
+      }
+    '
     echo "PREVIEW_ELAPSED_MS=$elapsed_ms"
+    printf '%s\n' "$DATA_SOURCE_FINGERPRINT" > "$DATA_SOURCE_FINGERPRINT_FILE"
     exit 0
   fi
   echo "Waiting for preview healthcheck ($attempt/90): $health_url"

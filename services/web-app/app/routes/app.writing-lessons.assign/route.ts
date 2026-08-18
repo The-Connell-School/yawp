@@ -36,6 +36,14 @@ export async function action({ request }: ActionFunctionArgs) {
   const dueAtRaw = String(formData.get('dueAt') ?? '').trim();
   const problemCount = Number(formData.get('problemCount'));
 
+  if (!title) {
+    return fail('Enter an assignment title.');
+  }
+
+  if (!dueAtRaw) {
+    return fail('Choose a due date.');
+  }
+
   if (lessonSlugs.length === 0) {
     return fail('Pick at least one lesson to assign.');
   }
@@ -60,13 +68,9 @@ export async function action({ request }: ActionFunctionArgs) {
     );
   }
 
-  let dueAt: Date | null = null;
-  if (dueAtRaw) {
-    const parsed = new Date(dueAtRaw);
-    if (Number.isNaN(parsed.getTime())) {
-      return fail('The due date is invalid.');
-    }
-    dueAt = parsed;
+  const dueAt = new Date(dueAtRaw);
+  if (Number.isNaN(dueAt.getTime())) {
+    return fail('The due date is invalid.');
   }
 
   // Ownership: the teacher must own every class they are deploying to.
@@ -85,7 +89,7 @@ export async function action({ request }: ActionFunctionArgs) {
   await createWritingPracticeAssignmentForClasses(
     {
       createdByMembershipId: profile.id,
-      title: title || null,
+      title,
       lessonSlugs,
       problemCount,
       dueAt,

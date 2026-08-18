@@ -32,6 +32,8 @@ describe('api.document.$id.save', () => {
     }
     requireUserId.mockReset();
     requireMembership.mockReset();
+    delete process.env.PREVIEW_ACCESS_GATE;
+    delete process.env.PREVIEW_DATA_MODE;
 
     requireUserId.mockResolvedValue('user-1');
     requireMembership.mockResolvedValue({ id: 'profile-1' });
@@ -71,6 +73,57 @@ describe('api.document.$id.save', () => {
     expect(body.revision).toBe(4);
     expect(body.savedAt).toBeDefined();
     expect(prisma.document.update).toHaveBeenCalledTimes(1);
+  });
+
+  // Preview seats keep production admin behaviour. Seats stop testers colliding by
+  // accident; they are not a security boundary between them, so a platform admin reaches
+  // documents here exactly as they would in production -- see hasEffectivePlatformAdmin.
+  test('a platform admin keeps production document access inside a preview seat', async () => {
+    process.env.PREVIEW_ACCESS_GATE = 'on';
+    process.env.PREVIEW_DATA_MODE = 'seed';
+    prisma.user.findUniqueOrThrow.mockResolvedValue({ isAdmin: true });
+    prisma.document.findFirst.mockResolvedValue(null);
+
+    try {
+      const response = (await action({
+        request: makeRequest('other-seat-doc', {
+          html: '<p>changed</p>',
+          text: 'changed',
+          contentHash: 'abc123',
+        }),
+        params: { id: 'other-seat-doc' },
+      } as any)) as Response;
+
+      expect(response.status).toBe(403);
+      expect(prisma.document.findFirst.mock.calls[0]?.[0]?.where).toEqual({
+        id: 'other-seat-doc',
+      });
+      expect(prisma.documentWriteJournal.create).not.toHaveBeenCalled();
+    } finally {
+      delete process.env.PREVIEW_ACCESS_GATE;
+      delete process.env.PREVIEW_DATA_MODE;
+    }
+  });
+
+  test('a non-admin is still scoped to documents their membership can reach', async () => {
+    prisma.user.findUniqueOrThrow.mockResolvedValue({ isAdmin: false });
+    prisma.document.findFirst.mockResolvedValue(null);
+
+    const response = (await action({
+      request: makeRequest('someone-elses-doc', {
+        html: '<p>changed</p>',
+        text: 'changed',
+        contentHash: 'abc123',
+      }),
+      params: { id: 'someone-elses-doc' },
+    } as any)) as Response;
+
+    expect(response.status).toBe(403);
+    expect(prisma.document.findFirst.mock.calls[0]?.[0]?.where).toMatchObject({
+      id: 'someone-elses-doc',
+      OR: expect.any(Array),
+    });
+    expect(prisma.documentWriteJournal.create).not.toHaveBeenCalled();
   });
 
   test('creates a revision when none exists (session-start)', async () => {

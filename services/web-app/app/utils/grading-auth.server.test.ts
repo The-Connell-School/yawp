@@ -15,6 +15,7 @@ describe('grading auth helpers', () => {
     expect(
       buildTeacherClassWhere({
         membershipId: 'teacher-membership-1',
+        organizationId: 'org-1',
         teacherProfileId: 'teacher-1',
         isTeacher: true,
         isAdmin: false,
@@ -53,6 +54,7 @@ describe('grading auth helpers', () => {
     expect(
       buildTeacherClassWhere({
         membershipId: 'admin-membership-1',
+        organizationId: 'org-1',
         teacherProfileId: null,
         isTeacher: false,
         isAdmin: true,
@@ -64,6 +66,7 @@ describe('grading auth helpers', () => {
     expect(
       canManageGrades({
         membershipId: 'teacher-membership-1',
+        organizationId: 'org-1',
         teacherProfileId: 'teacher-1',
         isTeacher: true,
         isAdmin: false,
@@ -72,6 +75,7 @@ describe('grading auth helpers', () => {
     expect(
       canManageGrades({
         membershipId: 'admin-membership-1',
+        organizationId: 'org-1',
         teacherProfileId: null,
         isTeacher: false,
         isAdmin: true,

@@ -2,6 +2,7 @@ import { describe, it, expect } from 'bun:test';
 import {
   buildModuleRubricGuidance,
   buildTutorSystemPrompt,
+  buildTutorSystemPromptBlocks,
 } from './build-system-prompt';
 
 const base = {
@@ -95,5 +96,40 @@ describe('buildTutorSystemPrompt', () => {
 
     expect(prompt).toContain('Module rubric guidance');
     expect(prompt).toContain('Primary');
+  });
+});
+
+describe('buildTutorSystemPromptBlocks (prompt caching)', () => {
+  it('wraps the whole prompt in a single cache_control block', () => {
+    const blocks = buildTutorSystemPromptBlocks(base);
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0]!.cache_control).toEqual({ type: 'ephemeral' });
+    expect(blocks[0]!.text).toBe(buildTutorSystemPrompt(base));
+  });
+
+  it('is byte-identical across different students in the same module', () => {
+    // Nothing student-specific (document text, message history) ever enters
+    // buildTutorSystemPrompt — those flow through `messages` instead — so
+    // the same module + instruction params must yield an identical block
+    // for every student taking that module. This is the property the cache
+    // breakpoint depends on: if any student-specific field leaked in here,
+    // every student's first turn would write a fresh, unread cache entry.
+    const moduleParams = {
+      tutorInstructions: 'Coach the student through their thesis.',
+      instructionTutorInstructions: 'Focus on paragraph 2.',
+      moduleRubricGuidance: 'Module rubric guidance:\n- Primary: Thesis',
+    };
+    const studentA = buildTutorSystemPromptBlocks(moduleParams);
+    const studentB = buildTutorSystemPromptBlocks(moduleParams);
+    expect(studentA[0]!.text).toBe(studentB[0]!.text);
+  });
+
+  it('changes when module-level instructions change (still a correct cache key)', () => {
+    const blocksA = buildTutorSystemPromptBlocks(base);
+    const blocksB = buildTutorSystemPromptBlocks({
+      ...base,
+      tutorInstructions: 'A completely different module persona.',
+    });
+    expect(blocksA[0]!.text).not.toBe(blocksB[0]!.text);
   });
 });

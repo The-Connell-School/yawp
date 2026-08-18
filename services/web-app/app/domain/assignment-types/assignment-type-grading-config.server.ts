@@ -3,11 +3,14 @@ import {
   gradingAssistantRubricInstructions,
   gradingAssistantScoreScaleInstructions,
 } from '~/domain/grading/rubric-instructions';
+import { parseRubricSchema } from '~/domain/rubrics/rubric-schema';
+import { THESIS_DRIVEN_ESSAY_RUBRIC_NAME } from '~/domain/rubrics/thesis-driven-essay';
 import {
   parseAssignmentTypeRubricConfig,
   type AssignmentTypeRubricConfigSource,
 } from './assignment-type-rubric-config';
 import type { RubricCategory } from '~/domain/assignment-types/assignment-type-rubric.shared';
+import { normalizeScoreStep } from './score-scale-steps';
 
 export type AssignmentTypeGradingInstructions =
   | {
@@ -28,6 +31,12 @@ export type AssignmentTypeGradingInstructions =
 
 export type ResolvedAssignmentTypeGradingConfig = {
   source: AssignmentTypeRubricConfigSource;
+  /**
+   * The assignment type's own rubric is in use but some categories are not
+   * fully filled in. Grading still uses it; the flag exists so the gap is
+   * shown rather than silently swapping in a default rubric.
+   */
+  rubricIncomplete: boolean;
   assignmentTypeId: string;
   assignmentTypeKind: string | null;
   assignmentTypeTitle: string | null;
@@ -36,6 +45,8 @@ export type ResolvedAssignmentTypeGradingConfig = {
   scoringType: string;
   minScore: number;
   maxScore: number;
+  /** Gap between allowed scores; 1 means every value in the range. */
+  step: number;
   rubricCategories: RubricCategory[];
   instructions: AssignmentTypeGradingInstructions;
   rubricSnapshot: Record<string, unknown>;
@@ -58,6 +69,7 @@ type AssignmentTypeGradingRow = {
   gradingAssistantVersion: number;
   gradingAssistantSourceTemplateId: string | null;
   gradingAssistantSourceTemplateSlug: string | null;
+  selectedRubricName?: string | null;
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -129,6 +141,27 @@ export function getAssignmentTypeGradingInstructions(
   };
 }
 
+function withLibraryRubric<
+  T extends AssignmentTypeGradingRow & {
+    rubric?: { name: string; schemaJson: unknown } | null;
+  },
+>(row: T | null): AssignmentTypeGradingRow | null {
+  if (!row?.rubric) return row;
+
+  const parsed = parseRubricSchema(row.rubric.schemaJson);
+  if (!parsed.ok) return row;
+
+  return {
+    ...row,
+    selectedRubricName: row.rubric.name,
+    scoringScaleJson: parsed.schema.scoringScale as never,
+    rubricJson: parsed.schema.rubric as never,
+    gradingPromptConfigJson: parsed.schema.promptConfig as never,
+    gradingOutputSchemaJson: parsed.schema.outputSchema as never,
+    gradingCalibrationNotes: parsed.schema.calibrationNotes,
+  };
+}
+
 function buildResolvedConfig({
   assignmentTypeId,
   assignmentTypeKind,
@@ -140,12 +173,23 @@ function buildResolvedConfig({
   assignmentTypeTitle: string | null;
   row: AssignmentTypeGradingRow | null;
 }): ResolvedAssignmentTypeGradingConfig {
+  const usesProductionThesis =
+    row?.selectedRubricName === THESIS_DRIVEN_ESSAY_RUBRIC_NAME;
   const parsedConfig = parseAssignmentTypeRubricConfig({
-    scoringScaleJson: row?.scoringScaleJson,
-    rubricJson: row?.rubricJson,
-    gradingPromptConfigJson: row?.gradingPromptConfigJson,
-    gradingOutputSchemaJson: row?.gradingOutputSchemaJson,
-    gradingCalibrationNotes: row?.gradingCalibrationNotes,
+    assignmentTypeKind: usesProductionThesis
+      ? null
+      : (row?.kind ?? assignmentTypeKind),
+    scoringScaleJson: usesProductionThesis ? null : row?.scoringScaleJson,
+    rubricJson: usesProductionThesis ? null : row?.rubricJson,
+    gradingPromptConfigJson: usesProductionThesis
+      ? null
+      : row?.gradingPromptConfigJson,
+    gradingOutputSchemaJson: usesProductionThesis
+      ? null
+      : row?.gradingOutputSchemaJson,
+    gradingCalibrationNotes: usesProductionThesis
+      ? null
+      : row?.gradingCalibrationNotes,
   });
   const promptConfigSnapshot =
     parsedConfig.source === 'assignment-type'
@@ -155,18 +199,23 @@ function buildResolvedConfig({
         )
       : (parsedConfig.promptConfig as Record<string, unknown>);
   const { minScore, maxScore } = getScoreBounds(parsedConfig.scoringScale);
+  const step = normalizeScoreStep(parsedConfig.scoringScale.step);
   const scoringType = getScoringType(parsedConfig.scoringScale);
   const rubricCategories = parsedConfig.rubric.categories;
 
   return {
     source: parsedConfig.source,
+    rubricIncomplete: parsedConfig.rubricIncomplete,
     assignmentTypeId,
     assignmentTypeKind: row?.kind ?? assignmentTypeKind,
     assignmentTypeTitle: row?.title ?? assignmentTypeTitle,
     label:
       parsedConfig.source === 'assignment-type'
-        ? (row?.title ?? assignmentTypeTitle ?? 'Assignment type grading config')
-        : 'Thesis-driven essay grading assistant',
+        ? (row?.title ??
+          assignmentTypeTitle ??
+          'Assignment type grading config')
+        : (parsedConfig.defaultLabel ??
+          'Thesis-driven essay grading assistant'),
     version:
       parsedConfig.source === 'assignment-type'
         ? (row?.gradingAssistantVersion ?? 1)
@@ -174,9 +223,16 @@ function buildResolvedConfig({
     scoringType,
     minScore,
     maxScore,
+    step,
     rubricCategories,
     instructions: getAssignmentTypeGradingInstructions(promptConfigSnapshot),
-    rubricSnapshot: { categories: rubricCategories, minScore, maxScore, scoringType },
+    rubricSnapshot: {
+      categories: rubricCategories,
+      minScore,
+      maxScore,
+      step,
+      scoringType,
+    },
     promptConfigSnapshot,
     outputSchemaSnapshot: parsedConfig.outputSchema,
     calibrationNotes: parsedConfig.calibrationNotes,
@@ -214,6 +270,7 @@ export async function resolveAssignmentTypeGradingConfig({
       gradingAssistantVersion: true,
       gradingAssistantSourceTemplateId: true,
       gradingAssistantSourceTemplateSlug: true,
+      rubric: { select: { name: true, schemaJson: true } },
     },
   });
 
@@ -221,6 +278,9 @@ export async function resolveAssignmentTypeGradingConfig({
     assignmentTypeId,
     assignmentTypeKind,
     assignmentTypeTitle,
-    row: assignmentType,
+    // A rubric chosen from the library replaces the assignment type's own
+    // columns wholesale. Everything downstream reads the same shape either
+    // way, so nothing else in grading has to know where the rubric came from.
+    row: withLibraryRubric(assignmentType),
   });
 }

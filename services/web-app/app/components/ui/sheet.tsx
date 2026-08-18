@@ -51,6 +51,13 @@ interface SheetContentProps
   extends React.ComponentPropsWithoutRef<typeof SheetPrimitive.Content>,
     VariantProps<typeof sheetVariants> {
   includeOverlay?: boolean;
+  /**
+   * Dim the page for a NON-modal sheet. Radix renders no overlay at all unless
+   * the dialog is modal, so a sheet that must leave the page behind clickable
+   * gets its dim from here instead — inert by design (`pointer-events-none`),
+   * with outside clicks handled by the sheet's own onInteractOutside.
+   */
+  dimBehind?: boolean;
 }
 
 const SheetContent = React.forwardRef<
@@ -58,11 +65,24 @@ const SheetContent = React.forwardRef<
   SheetContentProps
 >(
   (
-    { side = 'right', className, children, includeOverlay = true, ...props },
+    {
+      side = 'right',
+      className,
+      children,
+      includeOverlay = true,
+      dimBehind = false,
+      ...props
+    },
     ref
   ) => (
     <SheetPortal>
       {includeOverlay ? <SheetOverlay /> : null}
+      {dimBehind ? (
+        <div
+          aria-hidden
+          className="pointer-events-none fixed inset-0 z-40 bg-black/80 animate-in fade-in-0"
+        />
+      ) : null}
       <SheetPrimitive.Content
         ref={ref}
         className={cn(sheetVariants({ side }), className)}
@@ -107,6 +127,13 @@ const SheetFooter = ({
 );
 SheetFooter.displayName = 'SheetFooter';
 
+/** Scrollable sheet body — pair with `SHEET_STICKY_FOOTER_CLASS_NAME` on SheetFooter. */
+const SHEET_SCROLL_BODY_CLASS_NAME = 'min-h-0 flex-1 overflow-y-auto';
+
+/** Sticky footer separated from scrollable content; stays visible when the body overflows. */
+const SHEET_STICKY_FOOTER_CLASS_NAME =
+  'mt-auto shrink-0 border-t bg-background px-6 py-4';
+
 const SheetTitle = React.forwardRef<
   React.ElementRef<typeof SheetPrimitive.Title>,
   React.ComponentPropsWithoutRef<typeof SheetPrimitive.Title>
@@ -142,4 +169,6 @@ export {
   SheetFooter,
   SheetTitle,
   SheetDescription,
+  SHEET_SCROLL_BODY_CLASS_NAME,
+  SHEET_STICKY_FOOTER_CLASS_NAME,
 };

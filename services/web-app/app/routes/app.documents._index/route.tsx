@@ -42,7 +42,12 @@ import {
   readStudentWorkViewPreferences,
   getStoredCollapsedStudentWorkGroups,
   withStoredCollapsedStudentWorkGroups,
+  clearStoredStudentWorkFilters,
+  stripStudentWorkResetParam,
+  STUDENT_WORK_RESET_PARAM,
 } from './student-work-view-preferences';
+import { resolveTeacherSchoolYearScope } from '~/utils/school-year-scope.server';
+import { ALL_SCHOOL_YEARS } from '~/utils/school-year';
 
 export const handle = { breadcrumb: 'Documents' };
 
@@ -104,10 +109,21 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const group = parseDocumentGroupMode(url.searchParams.get('group'));
   const query = (url.searchParams.get('q') ?? '').trim();
 
+  // Everything on this page hangs off the teacher's classes, so scoping them
+  // to the school year chosen in the sidebar scopes the whole grading queue —
+  // and keeps it agreeing with what My Classes shows.
+  const schoolYearScope = await resolveTeacherSchoolYearScope(
+    request,
+    profile.id
+  );
+
   const classes = await prisma.class.findMany({
     where: {
       teachers: { some: { id: profile.id } },
       isArchived: false,
+      ...(schoolYearScope === ALL_SCHOOL_YEARS
+        ? {}
+        : { schoolYear: schoolYearScope }),
     },
     select: {
       id: true,
@@ -191,6 +207,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
         },
       },
       submissions: {
+        where: { unsubmittedAt: null },
         orderBy: { submittedAt: 'desc' },
         select: {
           id: true,
@@ -291,6 +308,15 @@ export default function StudentWorkRoute() {
     }
 
     hasHydratedStudentWorkPreferences.current = true;
+
+    if (searchParams.has(STUDENT_WORK_RESET_PARAM)) {
+      clearStoredStudentWorkFilters();
+      setSearchParams(stripStudentWorkResetParam(searchParams), {
+        replace: true,
+      });
+      return;
+    }
+
     const merged = mergeStoredStudentWorkSearchParams({
       searchParams,
       storedPreferences: readStudentWorkViewPreferences(),
