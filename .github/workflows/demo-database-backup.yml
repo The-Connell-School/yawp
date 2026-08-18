@@ -1,0 +1,86 @@
+name: Demo database backup
+
+on:
+  schedule:
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+    inputs:
+      backup_retention:
+        description: 'Number of daily demo backups to retain (1-365)'
+        type: string
+        required: false
+        default: '14'
+
+concurrency:
+  group: demo-environment
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  backup:
+    runs-on: ubuntu-22.04
+    environment: demo
+    env:
+      PREVIEW_HOST: ${{ vars.DEMO_HOST }}
+      PREVIEW_ROOT: ${{ vars.DEMO_ROOT || '/srv/yawp-demo' }}
+      PREVIEW_SSH_USER: ${{ vars.DEMO_SSH_USER || 'ec2-user' }}
+      BACKUP_RETENTION_COUNT: ${{ inputs.backup_retention || vars.DEMO_BACKUP_RETENTION || '14' }}
+      BACKUP_S3_URI: ${{ vars.DEMO_BACKUP_S3_URI || 's3://yawp-preview-videos/demo-backups' }}
+    steps:
+      - name: Check backup configuration
+        env:
+          DEMO_SSH_PRIVATE_KEY: ${{ secrets.DEMO_SSH_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "$PREVIEW_HOST" || { echo "Missing repository variable DEMO_HOST"; exit 1; }
+          test -n "$DEMO_SSH_PRIVATE_KEY" || { echo "Missing demo secret DEMO_SSH_PRIVATE_KEY"; exit 1; }
+          [[ "$PREVIEW_ROOT" =~ ^/[A-Za-z0-9._/-]+$ ]] || { echo "Invalid DEMO_ROOT"; exit 1; }
+          if [[ ! "$BACKUP_RETENTION_COUNT" =~ ^[1-9][0-9]{0,2}$ ]] \
+            || (( BACKUP_RETENTION_COUNT < 1 || BACKUP_RETENTION_COUNT > 365 )); then
+            echo "backup_retention must be between 1 and 365" >&2
+            exit 1
+          fi
+          [[ "$BACKUP_S3_URI" =~ ^s3://[a-z0-9.-]+/[A-Za-z0-9._/-]+$ ]] || {
+            echo "Invalid DEMO_BACKUP_S3_URI" >&2
+            exit 1
+          }
+
+      - name: Prepare SSH
+        env:
+          DEMO_SSH_PRIVATE_KEY: ${{ secrets.DEMO_SSH_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$DEMO_SSH_PRIVATE_KEY" > ~/.ssh/demo_key
+          chmod 600 ~/.ssh/demo_key
+          ssh-keyscan -H "$PREVIEW_HOST" >> ~/.ssh/known_hosts
+
+      - name: Create validated backup
+        id: backup
+        run: |
+          set -euo pipefail
+          shell_quote() { printf '%q' "$1"; }
+          ssh_target="${PREVIEW_SSH_USER}@${PREVIEW_HOST}"
+          remote_script="${PREVIEW_ROOT}/ops/backup-database.sh"
+          output="$(ssh -i ~/.ssh/demo_key "$ssh_target" \
+            "PREVIEW_ROOT=$(shell_quote "$PREVIEW_ROOT") DATABASE_NAME=yawp_demo PREVIEW_POSTGRES_CONTAINER=preview-postgres BACKUP_KIND=scheduled BACKUP_RETENTION_COUNT=$(shell_quote "$BACKUP_RETENTION_COUNT") bash $(shell_quote "$remote_script")")"
+          remote_file="$(awk -F= '/^BACKUP_FILE=/{print $2}' <<<"$output" | tail -1)"
+          [[ "$remote_file" == "$PREVIEW_ROOT"/backups/yawp_demo-scheduled-*.dump ]] || {
+            echo "Backup command returned an unexpected path" >&2
+            exit 1
+          }
+          echo "remote_file=$remote_file" >> "$GITHUB_OUTPUT"
+
+      - name: Copy backup off-host and retain newest set
+        env:
+          REMOTE_FILE: ${{ steps.backup.outputs.remote_file }}
+        run: |
+          set -euo pipefail
+          shell_quote() { printf '%q' "$1"; }
+          ssh_target="${PREVIEW_SSH_USER}@${PREVIEW_HOST}"
+          remote_script="$PREVIEW_ROOT/ops/publish-demo-backup.sh"
+          ssh -i ~/.ssh/demo_key "$ssh_target" \
+            "PREVIEW_ROOT=$(shell_quote "$PREVIEW_ROOT") BACKUP_FILE=$(shell_quote "$REMOTE_FILE") BACKUP_RETENTION_COUNT=$(shell_quote "$BACKUP_RETENTION_COUNT") BACKUP_S3_URI=$(shell_quote "$BACKUP_S3_URI") bash $(shell_quote "$remote_script")"

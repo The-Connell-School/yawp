@@ -15,6 +15,7 @@ const previewAccessSeats = JSON.stringify([
 ]);
 const previewSessionSecret = 'test-preview-session-secret-32-bytes';
 const previewAccessSecret = 'test-preview-access-secret-32-bytes';
+const previewMasterAccessCode = 'yawp-rocks';
 const previewDatabasePassword = 'test-preview-database-password-0001';
 
 function renderCompose(overrides = {}) {
@@ -25,6 +26,8 @@ function renderCompose(overrides = {}) {
     accessSeats: previewAccessSeats,
     sessionSecret: previewSessionSecret,
     accessSecret: previewAccessSecret,
+    masterAccessCode: previewMasterAccessCode,
+    masterOrgGateEnabled: true,
     databasePassword: previewDatabasePassword,
     ...overrides,
   });
@@ -81,6 +84,7 @@ describe('renderPreviewCompose', () => {
       runtime: 'production',
     });
 
+    expect(compose).toContain('image: "yawp-pr-142-web:current"');
     expect(compose).toContain('dockerfile: services/web-app/Dockerfile');
     expect(compose).toContain('target: deps');
     expect(compose).toContain('target: production');
@@ -124,6 +128,7 @@ describe('renderPreviewCompose', () => {
     expect(compose).toContain(
       'PREVIEW_ACCESS_SECRET: "test-preview-access-secret-32-bytes"'
     );
+    expect(compose).toContain('PREVIEW_MASTER_ACCESS_CODE: "yawp-rocks"');
     expect(compose).toContain('PREVIEW_SEAT_COUNT: "1"');
     expect(compose).toContain(
       'SESSION_SECRET: "test-preview-session-secret-32-bytes"'
@@ -143,30 +148,37 @@ describe('renderPreviewCompose', () => {
     ).toThrow('PREVIEW_ACCESS_SEATS is required');
   });
 
-  test('requires a non-default signing secret', () => {
+  test('requires the shared master access code', () => {
+    expect(() => renderCompose({ masterAccessCode: '' })).toThrow(
+      'PREVIEW_MASTER_ACCESS_CODE is required'
+    );
     expect(() =>
-      renderPreviewCompose({
-        prNumber: '142',
-        domain: 'preview.yawp.school',
-        sourceDir: '/srv/yawp-preview/sources/pr-142',
-        accessSeats: previewAccessSeats,
-        sessionSecret: '',
-        accessSecret: previewAccessSecret,
-      })
-    ).toThrow('PREVIEW_SESSION_SECRET is required');
+      renderCompose({ masterAccessCode: 'shared password' })
+    ).toThrow(
+      'PREVIEW_MASTER_ACCESS_CODE must be a lowercase hyphenated code between 8 and 64 characters'
+    );
+  });
+
+  test('keeps pre-feature application refs deployable without the master capability', () => {
+    const compose = renderCompose({
+      masterOrgGateEnabled: false,
+      masterAccessCode: '',
+    });
+
+    expect(compose).not.toContain('PREVIEW_MASTER_ACCESS_CODE:');
+    expect(compose).toContain('PREVIEW_ACCESS_SEATS:');
+  });
+
+  test('requires a non-default signing secret', () => {
+    expect(() => renderCompose({ sessionSecret: '' })).toThrow(
+      'PREVIEW_SESSION_SECRET is required'
+    );
   });
 
   test('requires a dedicated preview access secret', () => {
-    expect(() =>
-      renderPreviewCompose({
-        prNumber: '142',
-        domain: 'preview.yawp.school',
-        sourceDir: '/srv/yawp-preview/sources/pr-142',
-        accessSeats: previewAccessSeats,
-        sessionSecret: previewSessionSecret,
-        accessSecret: '',
-      })
-    ).toThrow('PREVIEW_ACCESS_SECRET is required');
+    expect(() => renderCompose({ accessSecret: '' })).toThrow(
+      'PREVIEW_ACCESS_SECRET is required'
+    );
   });
 
   test('passes preview Anthropic credentials into app containers', () => {
@@ -206,7 +218,8 @@ describe('renderPreviewCompose', () => {
       expect(compose).toContain('ANTHROPIC_API_KEY: ""');
       expect(compose).not.toContain('shared-provider-key');
     } finally {
-      if (previousAnthropicKey === undefined) delete process.env.PREVIEW_ANTHROPIC_API_KEY;
+      if (previousAnthropicKey === undefined)
+        delete process.env.PREVIEW_ANTHROPIC_API_KEY;
       else process.env.PREVIEW_ANTHROPIC_API_KEY = previousAnthropicKey;
     }
   });

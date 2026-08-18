@@ -7,6 +7,7 @@ import {
 } from '~/domain/grading/rubric-display';
 import {
   parseOptionalBoolean,
+  parseRubricScoreBands,
   parseRubricScoreLabels,
   resolveGrammarHighlightingEnabled,
 } from '~/domain/assignment-types/rubric-category-options';
@@ -63,6 +64,7 @@ function parseSnapshotCategory(value: unknown): RubricSnapshotCategory | null {
   if (!key || !label || !description || weight === null) return null;
 
   const scoreLabels = parseRubricScoreLabels(value.scoreLabels);
+  const bands = parseRubricScoreBands(value.bands);
   const feedbackEnabled = parseOptionalBoolean(value.feedbackEnabled);
   const grammarHighlighting = parseOptionalBoolean(value.grammarHighlighting);
 
@@ -72,6 +74,7 @@ function parseSnapshotCategory(value: unknown): RubricSnapshotCategory | null {
     description,
     weight,
     ...(scoreLabels ? { scoreLabels } : {}),
+    ...(bands ? { bands } : {}),
     ...(feedbackEnabled === undefined ? {} : { feedbackEnabled }),
     ...(grammarHighlighting === undefined ? {} : { grammarHighlighting }),
   };

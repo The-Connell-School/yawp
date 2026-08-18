@@ -55,6 +55,7 @@ jobs:
       PREVIEW_DB_DUMP_S3_URI: ${{ vars.PREVIEW_DB_DUMP_S3_URI || 's3://yawp-preview-videos/production.dump' }}
       PREVIEW_DB_DUMP_VERSION: ${{ contains(github.event.pull_request.labels.*.name, 'sanitized-production-data') && vars.PREVIEW_SANITIZED_DUMP_VERSION || vars.PREVIEW_DB_DUMP_VERSION || 'unversioned' }}
       PREVIEW_ACCESS_MASTER_ORGANIZATION_ID: ${{ contains(github.event.pull_request.labels.*.name, 'sanitized-production-data') && 'default-org' || 'local-dev-org' }}
+      PREVIEW_MASTER_ACCESS_CODE: ${{ secrets.PREVIEW_MASTER_ACCESS_CODE }}
       PREVIEW_POSTGRES_ADMIN_PASSWORD: ${{ secrets.PREVIEW_DB_PASSWORD }}
       PREVIEW_DEV_LOGIN_EMAIL: ${{ vars.PREVIEW_DEV_LOGIN_EMAIL || 'dev.teacher@yawp.local' }}
       PREVIEW_LOGIN_EMAIL: ${{ secrets.PREVIEW_LOGIN_EMAIL }}
@@ -69,6 +70,7 @@ jobs:
           test -n "$PREVIEW_DOMAIN" || { echo "Missing repository variable PREVIEW_DOMAIN"; exit 1; }
           test -n "$PREVIEW_SSH_PRIVATE_KEY" || { echo "Missing repository secret PREVIEW_SSH_PRIVATE_KEY"; exit 1; }
           test -n "$PREVIEW_POSTGRES_ADMIN_PASSWORD" || { echo "Missing preview-host secret PREVIEW_DB_PASSWORD"; exit 1; }
+          test -n "$PREVIEW_MASTER_ACCESS_CODE" || { echo "Missing repository secret PREVIEW_MASTER_ACCESS_CODE"; exit 1; }
           test -n "$PREVIEW_ANTHROPIC_API_KEY" || { echo "Missing preview-host secret PREVIEW_ANTHROPIC_API_KEY or ANTHROPIC_API_KEY"; exit 1; }
           case "$PREVIEW_DATA_MODE" in
             seed) ;;
@@ -205,6 +207,7 @@ jobs:
             "PREVIEW_DB_DUMP_S3_URI=$(shell_quote "$PREVIEW_DB_DUMP_S3_URI")"
             "PREVIEW_DB_DUMP_VERSION=$(shell_quote "$PREVIEW_DB_DUMP_VERSION")"
             "PREVIEW_ACCESS_MASTER_ORGANIZATION_ID=$(shell_quote "$PREVIEW_ACCESS_MASTER_ORGANIZATION_ID")"
+            "PREVIEW_MASTER_ACCESS_CODE=$(shell_quote "$PREVIEW_MASTER_ACCESS_CODE")"
             "PREVIEW_POSTGRES_ADMIN_PASSWORD=$(shell_quote "$PREVIEW_POSTGRES_ADMIN_PASSWORD")"
             "PREVIEW_DEV_LOGIN_EMAIL=$(shell_quote "$PREVIEW_DEV_LOGIN_EMAIL")"
             "PREVIEW_LOGIN_EMAIL=$(shell_quote "$PREVIEW_LOGIN_EMAIL")"
@@ -249,6 +252,7 @@ jobs:
           preview_url="$(awk -F= '/^PREVIEW_URL=/{print $2}' /tmp/preview-deploy.log | tail -1)"
           access_code="$(awk -F= '/^PREVIEW_ACCESS_CODE=/{print $2}' /tmp/preview-deploy.log | tail -1)"
           elapsed_ms="$(awk -F= '/^PREVIEW_ELAPSED_MS=/{print $2}' /tmp/preview-deploy.log | tail -1)"
+          master_org_gate_enabled="$(awk -F= '/^PREVIEW_MASTER_ORG_GATE_ENABLED=/{print $2}' /tmp/preview-deploy.log | tail -1)"
           test -n "$preview_url" || { echo "Deploy script did not print PREVIEW_URL"; exit 1; }
           test -n "$access_code" || { echo "Deploy script did not print PREVIEW_ACCESS_CODE"; exit 1; }
           echo "Preview capacity OK: ${running}/${PREVIEW_MAX_RUNNING} running before deploy, ${resident}/${PREVIEW_MAX_RESIDENT} resident."
@@ -256,6 +260,7 @@ jobs:
             echo "url=$preview_url"
             echo "access_code=$access_code"
             echo "elapsed_ms=${elapsed_ms:-unknown}"
+            echo "master_org_gate_enabled=${master_org_gate_enabled:-false}"
           } >> "$GITHUB_OUTPUT"
 
       - name: Verify preview access gate
@@ -299,7 +304,32 @@ jobs:
           }
           one_click_app="$(curl -skL -o /dev/null -m 15 -w '%{http_code}' -b "$one_click_jar" "$url")"
           test "$one_click_app" = "200" || { echo "One-click cookie request returned HTTP $one_click_app"; exit 1; }
-          echo "Access gate confirmed: health 200, no-cookie access screen, dev-login 401, code-bearing app 200, one-click ?code= 303"
+
+          if [[ "${{ steps.deploy.outputs.master_org_gate_enabled }}" == "true" ]]; then
+            master_jar="$(mktemp)"
+            master_entered="$(curl -sk -o /dev/null -m 15 -w '%{http_code}' -c "$master_jar" \
+              --data-urlencode "code=$PREVIEW_MASTER_ACCESS_CODE" "$url/auth/preview-access")"
+            case "$master_entered" in
+              302|303) ;;
+              *) echo "Master access code returned HTTP $master_entered" >&2; exit 1 ;;
+            esac
+            master_gate="$(curl -skL -m 15 -b "$master_jar" "$url/auth/preview-access")"
+            grep -q 'data-preview-organization-selector' <<<"$master_gate" || {
+              echo "Master access did not require organization selection" >&2
+              exit 1
+            }
+            master_selected="$(curl -sk -o /dev/null -m 15 -w '%{http_code}' -b "$master_jar" -c "$master_jar" \
+              --data-urlencode 'intent=select-organization' \
+              --data-urlencode "organizationId=$PREVIEW_ACCESS_MASTER_ORGANIZATION_ID" \
+              "$url/auth/preview-access")"
+            case "$master_selected" in
+              302|303) ;;
+              *) echo "Master organization selection returned HTTP $master_selected" >&2; exit 1 ;;
+            esac
+            master_app="$(curl -skL -o /dev/null -m 15 -w '%{http_code}' -b "$master_jar" "$url")"
+            test "$master_app" = "200" || { echo "Master-selected request returned HTTP $master_app"; exit 1; }
+          fi
+          echo "Access gate confirmed: anonymous blocked, organization code accepted, supported refs verify master organization selection"
 
       - name: Comment preview URL on PR
         uses: marocchino/sticky-pull-request-comment@v2

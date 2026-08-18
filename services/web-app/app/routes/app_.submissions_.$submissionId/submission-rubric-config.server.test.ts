@@ -275,6 +275,14 @@ describe('resolveRubricConfigForSubmission', () => {
               ],
               feedbackEnabled: false,
               grammarHighlighting: false,
+              bands: [
+                {
+                  min: 0,
+                  max: 5,
+                  label: 'Raw points',
+                  description: 'Score this section out of five.',
+                },
+              ],
             },
           ],
         },
@@ -290,6 +298,14 @@ describe('resolveRubricConfigForSubmission', () => {
     ]);
     expect(config.categories[0].feedbackEnabled).toBe(false);
     expect(config.categories[0].grammarHighlighting).toBe(false);
+    expect(config.categories[0].bands).toEqual([
+      {
+        min: 0,
+        max: 5,
+        label: 'Raw points',
+        description: 'Score this section out of five.',
+      },
+    ]);
   });
 });
 

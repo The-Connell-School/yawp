@@ -20,6 +20,15 @@ unset DATABASE_URL
 # this produced the database "yawp_pr_" and, because PR_NUMBER is exported as an empty
 # string rather than left unset, did it silently instead of failing under `set -u`.
 : "${DATABASE_NAME:?preview-env.mjs did not export DATABASE_NAME}"
+DEMO_RESET_DATA="${DEMO_RESET_DATA:-false}"
+DEMO_RESET_CONFIRMATION="${DEMO_RESET_CONFIRMATION:-}"
+DEMO_BACKUP_RETENTION="${DEMO_BACKUP_RETENTION:-14}"
+if [[ ! "$DEMO_BACKUP_RETENTION" =~ ^[0-9]+$ ]] \
+  || (( DEMO_BACKUP_RETENTION < 1 || DEMO_BACKUP_RETENTION > 365 )); then
+  echo "DEMO_BACKUP_RETENTION must be between 1 and 365" >&2
+  exit 1
+fi
+source "$SCRIPT_DIR/demo-reset-guard.sh"
 DUMP_URI="${PREVIEW_DB_DUMP_S3_URI:-s3://yawp-preview-videos/production.dump}"
 DUMP_VERSION="${PREVIEW_DB_DUMP_VERSION:-unversioned}"
 POSTGRES_CONTAINER="${PREVIEW_POSTGRES_CONTAINER:-preview-postgres}"
@@ -86,6 +95,19 @@ load_or_create_database_credential() {
 load_or_create_database_credential
 eval "$(node "$SCRIPT_DIR/preview-env.mjs" --shell)"
 : "${PREVIEW_POSTGRES_ADMIN_PASSWORD:?PREVIEW_POSTGRES_ADMIN_PASSWORD is required}"
+if [[ -f "$SOURCE_DIR/services/web-app/.preview-master-org-gate-v1" ]]; then
+  PREVIEW_MASTER_ORG_GATE_ENABLED=true
+  : "${PREVIEW_MASTER_ACCESS_CODE:?PREVIEW_MASTER_ACCESS_CODE is required}"
+  [[ ${#PREVIEW_MASTER_ACCESS_CODE} -ge 8 \
+    && ${#PREVIEW_MASTER_ACCESS_CODE} -le 64 \
+    && "$PREVIEW_MASTER_ACCESS_CODE" =~ ^[a-z][a-z0-9]*(-[a-z0-9]+)+$ ]] || {
+    echo "PREVIEW_MASTER_ACCESS_CODE must be a lowercase hyphenated code between 8 and 64 characters" >&2
+    exit 1
+  }
+else
+  PREVIEW_MASTER_ORG_GATE_ENABLED=false
+fi
+export PREVIEW_MASTER_ORG_GATE_ENABLED
 case "${PREVIEW_KEEP_AWAKE:-false}" in
   true) printf 'true\n' > "$PREVIEW_DIR/keep-awake" ;;
   false) rm -f -- "$PREVIEW_DIR/keep-awake" ;;
@@ -106,6 +128,15 @@ fi
 
 if [[ -f "$DATA_SOURCE_FINGERPRINT_FILE" && "$(<"$DATA_SOURCE_FINGERPRINT_FILE")" == "$DATA_SOURCE_FINGERPRINT" ]]; then
   DATA_SOURCE_CHANGED=0
+elif [[ "$PREVIEW_SLUG" == "demo" && "${DEMO_RESET_DATA:-false}" != "true" ]]; then
+  if [[ -f "$DATA_SOURCE_FINGERPRINT_FILE" ]]; then
+    echo "Refusing to replace demo database while DEMO_RESET_DATA=false." >&2
+    echo "Requested data source: $DATA_SOURCE_FINGERPRINT" >&2
+    echo "Current data source: $(<"$DATA_SOURCE_FINGERPRINT_FILE")" >&2
+    exit 1
+  fi
+  # A missing fingerprint is safe only for a brand-new database. Once Postgres is
+  # available, reset_preview_database_for_data_source_change verifies that state.
 else
   rm -f "$ACCESS_CODE_FILE" "$ACCESS_SEATS_FILE"
 fi
@@ -127,6 +158,7 @@ load_or_create_access_config() {
         -e PREVIEW_ACCESS_MASTER_LABEL="$PREVIEW_ACCESS_MASTER_LABEL" \
         -e PREVIEW_EXISTING_ACCESS_SEATS="$existing_seats" \
         -e PREVIEW_ACCESS_CODES="$legacy_codes" \
+        -e PREVIEW_MASTER_ACCESS_CODE="${PREVIEW_MASTER_ACCESS_CODE:-}" \
         -v "$SOURCE_DIR:/app:ro" \
         -w /app \
         oven/bun:1.3.1 \
@@ -164,7 +196,7 @@ load_or_create_access_config() {
     fi
   fi
 
-  export PREVIEW_ACCESS_CODES PREVIEW_ACCESS_SEATS PREVIEW_ACCESS_SECRET PREVIEW_SESSION_SECRET PREVIEW_SEAT_COUNT
+  export PREVIEW_ACCESS_CODES PREVIEW_ACCESS_SEATS PREVIEW_ACCESS_SECRET PREVIEW_MASTER_ACCESS_CODE PREVIEW_MASTER_ORG_GATE_ENABLED PREVIEW_SESSION_SECRET PREVIEW_SEAT_COUNT
 }
 
 load_or_create_access_config
@@ -335,6 +367,31 @@ database_exists() {
   [[ "$exists" == "1" ]]
 }
 
+backup_demo_database_before_reset() {
+  [[ "$PREVIEW_SLUG" == "demo" ]] || return 0
+  database_exists "$DATABASE_NAME" || return 0
+  export DATABASE_NAME
+  BACKUP_KIND=pre-reset \
+    BACKUP_RETENTION_COUNT="$DEMO_BACKUP_RETENTION" \
+    PREVIEW_ROOT="$ROOT" \
+    PREVIEW_POSTGRES_CONTAINER="$POSTGRES_CONTAINER" \
+    bash "$SCRIPT_DIR/backup-database.sh"
+}
+
+drop_preview_database() {
+  local database_name="$1"
+  validate_database_name "$database_name"
+  if [[ "$PREVIEW_SLUG" == "demo" ]]; then
+    require_demo_reset_confirmation
+    [[ "$DEMO_RESET_DATA" == "true" ]] || {
+      echo "Refusing to delete the demo database while DEMO_RESET_DATA=false" >&2
+      return 1
+    }
+  fi
+  docker exec "$POSTGRES_CONTAINER" dropdb -U postgres --force --if-exists \
+    "$database_name"
+}
+
 revoke_public_database_connect() {
   local database_name="$1"
   validate_database_name "$database_name"
@@ -387,23 +444,46 @@ ensure_production_dump_preview_database() {
 }
 
 reset_preview_database_for_data_source_change() {
-  if [[ "$DATA_SOURCE_CHANGED" != "1" ]] || ! database_exists "$DATABASE_NAME"; then
+  if [[ "$DATA_SOURCE_CHANGED" != "1" ]]; then
     return 0
   fi
 
+  if ! database_exists "$DATABASE_NAME"; then
+    return 0
+  fi
+
+  if [[ "$PREVIEW_SLUG" == "demo" && "${DEMO_RESET_DATA:-false}" != "true" ]]; then
+    echo "Refusing to adopt an existing demo database without a matching data-source fingerprint." >&2
+    exit 1
+  fi
+
   echo "Preview data source changed; replacing database $DATABASE_NAME..."
+  backup_demo_database_before_reset
   "${compose[@]}" down --remove-orphans >/dev/null 2>&1 || true
-  docker exec "$POSTGRES_CONTAINER" dropdb -U postgres --force --if-exists "$DATABASE_NAME"
+  drop_preview_database "$DATABASE_NAME"
   rm -f "$TOOLING_FINGERPRINT_FILE"
 }
 
 reset_seed_preview_database() {
   validate_database_name "$DATABASE_NAME"
   echo "Resetting preview database $DATABASE_NAME for seeded local-dev data..."
+  backup_demo_database_before_reset
   "${compose[@]}" down --remove-orphans >/dev/null 2>&1 || true
-  docker exec "$POSTGRES_CONTAINER" dropdb -U postgres --force --if-exists "$DATABASE_NAME"
+  drop_preview_database "$DATABASE_NAME"
   docker exec "$POSTGRES_CONTAINER" createdb -U postgres -O "$DATABASE_USER" "$DATABASE_NAME"
   DATABASE_CREATED=1
+}
+
+install_demo_backup_tooling() {
+  [[ "$PREVIEW_SLUG" == "demo" ]] || return 0
+  [[ "$ROOT" =~ ^/[A-Za-z0-9._/-]+$ ]] || {
+    echo "Demo backup paths cannot contain whitespace" >&2
+    exit 1
+  }
+  mkdir -p "$ROOT/ops" "$ROOT/backups"
+  chmod 700 "$ROOT/ops" "$ROOT/backups"
+  install -m 700 "$SCRIPT_DIR/backup-database.sh" "$ROOT/ops/backup-database.sh"
+  install -m 700 "$SCRIPT_DIR/publish-demo-backup.sh" "$ROOT/ops/publish-demo-backup.sh"
 }
 
 create_seed_preview_database() {
@@ -459,6 +539,7 @@ compute_tooling_fingerprint() {
         "$SCRIPT_DIR/deploy.sh" \
         "$SCRIPT_DIR/preview-env.mjs" \
         "$SCRIPT_DIR/render-compose.mjs" \
+        "$SCRIPT_DIR/rollout-web.sh" \
         "$SCRIPT_DIR/tooling-artifacts.sh"
       do
         sha256_file "$control_file"
@@ -474,6 +555,7 @@ compute_tooling_fingerprint() {
         packages/prisma/scripts/assignment-type-release-gate.ts \
         packages/prisma/scripts/backfill-class-art-key.ts \
         packages/prisma/scripts/seed-local-dev.ts \
+        packages/prisma/scripts/sync-prod-fidelity-fixtures.ts \
         packages/prisma/scripts/preview-seats.ts \
         packages/prisma/scripts/seed-preview-seats.ts \
         packages/prisma/scripts/local-dev/class-insights.ts \
@@ -485,6 +567,14 @@ compute_tooling_fingerprint() {
           sha256_file "$file"
         fi
       done
+
+      if [[ -d packages/prisma/fixtures/prod-fidelity ]]; then
+        find packages/prisma/fixtures/prod-fidelity -type f -print \
+          | LC_ALL=C sort \
+          | while IFS= read -r file; do
+              sha256_file "$file"
+            done
+      fi
 
       if [[ -d packages/prisma/migrations ]]; then
         find packages/prisma/migrations -type f -print \
@@ -508,6 +598,14 @@ run_tooling_if_needed() {
   local missing_artifacts
   missing_artifacts="$(preview_missing_tooling_artifacts "$SOURCE_DIR" | awk 'BEGIN { first = 1 } { if (!first) printf ", "; printf "%s", $0; first = 0 }')"
 
+  # The tooling fingerprint intentionally covers database/bootstrap inputs, not every
+  # application source file. Production images therefore rebuild on every deployment;
+  # Docker's layer cache keeps unchanged builds cheap while guaranteeing code-only refs
+  # cannot silently restart the previously tagged image.
+  if [[ "$RUNTIME" == "production" ]]; then
+    COMPOSE_PARALLEL_LIMIT=1 "${compose[@]}" build web
+  fi
+
   if [[ "$DATABASE_CREATED" == "0" && "$fingerprint" == "$previous_fingerprint" && -z "$missing_artifacts" ]]; then
     echo "Tooling fingerprint unchanged and database already existed; skipping install/generate/migrate."
     TOOLING_CHANGED=0
@@ -520,24 +618,27 @@ run_tooling_if_needed() {
 
   if [[ "$RUNTIME" == "production" ]]; then
     COMPOSE_PARALLEL_LIMIT=1 "${compose[@]}" build toolbox
-    COMPOSE_PARALLEL_LIMIT=1 "${compose[@]}" build web
   else
     "${compose[@]}" pull --quiet toolbox web || true
   fi
 
   local tooling_command
-  case "$DATA_MODE" in
-    seed)
-      tooling_command='bun install --ignore-scripts && bun prisma generate && cd packages/prisma && bun prisma migrate deploy && bun run scripts/backfill-class-art-key.ts'
-      if [[ "$DATABASE_CREATED" == "1" ]]; then
-        tooling_command+=' && bun run seed-local-dev'
-      fi
-      tooling_command+=' && bun run scripts/assignment-type-release-gate.ts --require-data'
-      ;;
-    production-dump|sanitized-production)
-      tooling_command='bun install --ignore-scripts && bun prisma generate && cd packages/prisma && bun prisma migrate deploy && bun run scripts/backfill-class-art-key.ts && bun run scripts/assignment-type-release-gate.ts --require-data'
-      ;;
-  esac
+  tooling_command='bun install --ignore-scripts && bun prisma generate && cd packages/prisma && bun prisma migrate deploy'
+  if [[ -f "$SOURCE_DIR/packages/prisma/scripts/backfill-class-art-key.ts" ]]; then
+    tooling_command+=' && bun run scripts/backfill-class-art-key.ts'
+  fi
+  if [[ "$DATA_MODE" == "seed" && "$DATABASE_CREATED" == "1" ]]; then
+    if [[ ! -f "$SOURCE_DIR/packages/prisma/scripts/seed-local-dev.ts" ]]; then
+      echo "Requested application ref cannot seed a new preview database." >&2
+      exit 1
+    fi
+    tooling_command+=' && bun run seed-local-dev'
+  elif [[ "$DATA_MODE" == "seed" && -f "$SOURCE_DIR/packages/prisma/scripts/sync-prod-fidelity-fixtures.ts" ]]; then
+    tooling_command+=' && bun run sync-prod-fidelity-fixtures'
+  fi
+  if [[ -f "$SOURCE_DIR/packages/prisma/scripts/assignment-type-release-gate.ts" ]]; then
+    tooling_command+=' && bun run scripts/assignment-type-release-gate.ts --require-data'
+  fi
 
   "${compose[@]}" run --rm toolbox bash -lc "$tooling_command"
   printf '%s\n' "$fingerprint" > "$TOOLING_FINGERPRINT_FILE"
@@ -545,6 +646,10 @@ run_tooling_if_needed() {
 
 ensure_preview_seats() {
   if [[ "$DATA_MODE" != "seed" ]]; then
+    return 0
+  fi
+  if [[ ! -f "$SOURCE_DIR/packages/prisma/scripts/seed-preview-seats.ts" ]]; then
+    echo "Requested application ref predates preview seats; preserving the existing demo database."
     return 0
   fi
   "${compose[@]}" run --rm toolbox bash -lc \
@@ -561,18 +666,55 @@ refresh_web_container_if_needed() {
   remove_legacy_project_postgres
 }
 
+rollout_demo_web_without_downtime() {
+  PREVIEW_COMPOSE_PROJECT="$COMPOSE_PROJECT" \
+    PREVIEW_COMPOSE_FILE="$PREVIEW_DIR/docker-compose.yml" \
+    PREVIEW_ROUTER_FILE="$ROOT/traefik/dynamic/${COMPOSE_PROJECT}-cutover.yml" \
+    PREVIEW_HOSTNAME="$HOSTNAME" \
+    PREVIEW_PUBLIC_URL="$URL" \
+    PREVIEW_LOGIN_SMOKE_SCRIPT="$SCRIPT_DIR/smoke-login.mjs" \
+    PREVIEW_ACCESS_CODE="$smoke_access_code" \
+    PREVIEW_DATA_MODE="$DATA_MODE" \
+    PREVIEW_RUNTIME="$RUNTIME" \
+    PREVIEW_DEV_LOGIN_EMAIL="$PREVIEW_DEV_LOGIN_EMAIL" \
+    PREVIEW_LOGIN_EMAIL="${PREVIEW_LOGIN_EMAIL:-}" \
+    PREVIEW_LOGIN_PASSWORD="${PREVIEW_LOGIN_PASSWORD:-}" \
+    PREVIEW_TLS="${PREVIEW_TLS:-true}" \
+    bash "$SCRIPT_DIR/rollout-web.sh"
+  remove_legacy_project_postgres
+}
+
 ensure_shared_postgres
+
+assert_no_master_code_collision() {
+  [[ "$PREVIEW_MASTER_ORG_GATE_ENABLED" == "true" ]] || return 0
+  local database_exists relation_exists collision
+  database_exists="$(docker exec "$POSTGRES_CONTAINER" psql --no-psqlrc -U postgres -d postgres -Atc \
+    "SELECT 1 FROM pg_database WHERE datname = '${DATABASE_NAME}'" | tr -d '[:space:]')"
+  [[ "$database_exists" == "1" ]] || return 0
+  relation_exists="$(docker exec "$POSTGRES_CONTAINER" psql --no-psqlrc -U postgres -d "$DATABASE_NAME" -Atc \
+    "SELECT to_regclass('public.\"Organization\"') IS NOT NULL" | tr -d '[:space:]')"
+  [[ "$relation_exists" == "t" ]] || return 0
+  collision="$(docker exec \
+    -e PGOPTIONS="-c yawp.master_access_code=$PREVIEW_MASTER_ACCESS_CODE" \
+    "$POSTGRES_CONTAINER" psql --no-psqlrc -U postgres -d "$DATABASE_NAME" -Atc \
+    "SELECT 1 FROM \"Organization\" WHERE lower(\"previewSeatCode\") = lower(current_setting('yawp.master_access_code')) LIMIT 1" \
+    | tr -d '[:space:]')"
+  if [[ "$collision" == "1" ]]; then
+    echo "Generic master access code collides with an existing organization code; deployment stopped without changing that code." >&2
+    exit 1
+  fi
+}
+
+assert_no_master_code_collision
 ensure_preview_database_role
 reset_preview_database_for_data_source_change
 ensure_preview_database
 harden_preview_database
 run_tooling_if_needed
 ensure_preview_seats
-start_or_refresh_web() {
-  refresh_web_container_if_needed
-}
-start_or_refresh_web
-
+assert_no_master_code_collision
+install_demo_backup_tooling
 health_url="${PREVIEW_HEALTHCHECK_URL:-${URL}/api/healthcheck}"
 login_url="${PREVIEW_LOGIN_URL:-${URL}}"
 smoke_access_code="$(
@@ -583,6 +725,15 @@ if [[ -n "${DIRECT_PORT:-}" ]]; then
   health_url="http://127.0.0.1:${DIRECT_PORT}/api/healthcheck"
   login_url="http://127.0.0.1:${DIRECT_PORT}"
 fi
+
+start_or_refresh_web() {
+  if [[ "$PREVIEW_SLUG" == "demo" && "$RUNTIME" == "production" && -z "${DIRECT_PORT:-}" ]]; then
+    rollout_demo_web_without_downtime
+  else
+    refresh_web_container_if_needed
+  fi
+}
+start_or_refresh_web
 
 for attempt in $(seq 1 90); do
   if curl -fsS --connect-timeout 1 --max-time 2 "$health_url" >/dev/null; then
@@ -595,6 +746,7 @@ for attempt in $(seq 1 90); do
     echo "PREVIEW_URL=$URL"
     echo "PREVIEW_HOSTNAME=$HOSTNAME"
     echo "PREVIEW_ACCESS_CODE=$smoke_access_code"
+    echo "PREVIEW_MASTER_ORG_GATE_ENABLED=$PREVIEW_MASTER_ORG_GATE_ENABLED"
     PREVIEW_ACCESS_SEATS="$PREVIEW_ACCESS_SEATS" node -e '
       for (const [index, seat] of JSON.parse(process.env.PREVIEW_ACCESS_SEATS).entries()) {
         console.log(`PREVIEW_SEAT_CODE_${index + 1}=${seat.code}`)

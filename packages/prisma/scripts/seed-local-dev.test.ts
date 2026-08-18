@@ -1,15 +1,23 @@
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, mock, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { isLocalDatabaseUrl } from './local-dev/connection';
-import { LOCAL_DEV_PERSONAS } from './local-dev/dev-personas';
-import { loadProdFidelityBundle } from './local-dev/import-prod-fidelity-fixtures';
+import {
+  LOCAL_DEV_ORG_ID,
+  LOCAL_DEV_PERSONAS,
+} from './local-dev/dev-personas';
+import {
+  loadProdFidelityBundle,
+  syncProdFidelityFixtures,
+} from './local-dev/import-prod-fidelity-fixtures';
 
 describe('local dev seed fixtures', () => {
   test('loads committed prod-fidelity fixtures with expected counts', async () => {
     const bundle = await loadProdFidelityBundle();
-    expect(bundle.manifest.version).toBe(1);
-    expect(bundle.assignmentTypes.length).toBeGreaterThan(0);
+    expect(bundle.manifest.version).toBe(2);
+    expect(bundle.manifest.sourceDatabaseUrl).toBe('production-config-export');
+    expect(bundle.assignmentTypes).toHaveLength(12);
+    expect(bundle.rubrics).toHaveLength(2);
     expect(
       bundle.assignmentTypes.some(
         (assignmentType) =>
@@ -20,7 +28,22 @@ describe('local dev seed fixtures', () => {
     expect(bundle.teacherTrainings.length).toBeGreaterThan(0);
   });
 
-  test('aligns thesis module review instructions with the grading assistant rubric', async () => {
+  test('tracks the current production assignment-type and rubric inventory', async () => {
+    const bundle = await loadProdFidelityBundle();
+    const assignmentTypeTitles = new Set(
+      bundle.assignmentTypes.map((assignmentType) => assignmentType.title)
+    );
+    const rubricNames = new Set(bundle.rubrics.map((rubric) => rubric.name));
+
+    expect(assignmentTypeTitles).toContain("GBA 300: Int'l Expansion Plan");
+    expect(assignmentTypeTitles).toContain("GBA 300: Int'l Etiquette");
+    expect(assignmentTypeTitles).toContain('Nonverbal Communication Assignment');
+    expect(rubricNames).toEqual(
+      new Set(['daily-pages-engagement', 'thesis-driven-essay'])
+    );
+  });
+
+  test('retains the current production essay-review instruction snapshot', async () => {
     const bundle = await loadProdFidelityBundle();
     const reviewInstructions = bundle.assignmentModuleInstructions.filter(
       (instruction) =>
@@ -28,20 +51,28 @@ describe('local dev seed fixtures', () => {
         instruction.title.trim().toLowerCase() === 'review my essay!'
     );
 
-    expect(reviewInstructions.length).toBeGreaterThanOrEqual(2);
+    expect(reviewInstructions).toHaveLength(2);
 
-    for (const instruction of reviewInstructions) {
-      const content = `${instruction.prompt ?? ''}\n${instruction.tutorInstructions ?? ''}`;
+    const reviewContent = reviewInstructions.map(
+      (instruction) =>
+        `${instruction.prompt ?? ''}\n${instruction.tutorInstructions ?? ''}`
+    );
 
-      expect(content).not.toContain(
-        'Content, Organization, Syntax, and Grammar'
-      );
-      expect(content).toContain('Thesis/Content (25%)');
-      expect(content).toContain('Organization/Structure (25%)');
-      expect(content).toContain('Evidence/Support (20%)');
-      expect(content).toContain('Voice/Style (20%)');
-      expect(content).toContain('Grammar/Syntax/Formatting (10%)');
-    }
+    expect(
+      reviewContent.every((content) =>
+        content.includes('Content, Organization, Syntax, and Grammar')
+      )
+    ).toBe(true);
+    expect(
+      reviewContent.some((content) =>
+        content.includes('4th Edition of Strunk and White')
+      )
+    ).toBe(true);
+    expect(
+      reviewContent.some((content) =>
+        content.includes('REVIEW BY THESE FIVE CATEGORIES')
+      )
+    ).toBe(true);
   });
 
   test('defines stable dev personas with shared password', () => {
@@ -73,6 +104,139 @@ describe('local dev seed fixtures', () => {
     const seedModule = await import('./local-dev/seed-synthetic-data');
 
     expect(typeof seedModule.seedSyntheticLocalDevData).toBe('function');
+  });
+
+  test('keeps production export and existing-database sync PII-safe', async () => {
+    const exportSource = readFileSync(
+      join(
+        import.meta.dirname,
+        'local-dev/export-prod-fidelity-fixtures.ts'
+      ),
+      'utf8'
+    );
+    const importSource = readFileSync(
+      join(
+        import.meta.dirname,
+        'local-dev/import-prod-fidelity-fixtures.ts'
+      ),
+      'utf8'
+    );
+    const syncSource = readFileSync(
+      join(import.meta.dirname, 'sync-prod-fidelity-fixtures.ts'),
+      'utf8'
+    );
+
+    expect(exportSource).not.toMatch(
+      /prisma\.(user|document|submission|orgMembership)\./
+    );
+    expect(exportSource).toContain(
+      "sourceDatabaseUrl: 'production-config-export'"
+    );
+    expect(syncSource).toContain('syncProdFidelityFixtures');
+    expect(syncSource).not.toContain('truncateAllPublicTables');
+    expect(importSource).not.toMatch(
+      /prisma\.(user|document|submission|orgMembership)\.(delete|deleteMany|update|updateMany)/
+    );
+
+    const bundle = await loadProdFidelityBundle();
+    const fixtureText = JSON.stringify({
+      ...bundle,
+      assignmentTypeImages: [],
+      teacherTrainingImages: [],
+      teacherTrainingModuleResources: [],
+    });
+    expect(fixtureText).not.toMatch(/postgres(?:ql)?:\/\/[^\s"']+@/i);
+    expect(fixtureText).not.toMatch(
+      /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i
+    );
+    expect(fixtureText).not.toMatch(/sk-ant-[A-Za-z0-9_-]+/);
+
+    for (const resource of bundle.teacherTrainingModuleResources) {
+      if (!String(resource.contentType ?? '').startsWith('text/')) continue;
+      const decoded = Buffer.from(resource.blob.base64, 'base64').toString(
+        'utf8'
+      );
+      expect(decoded).not.toMatch(
+        /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i
+      );
+      expect(decoded).not.toMatch(
+        /(?:\+?1[-. (]*)?\d{3}[-. )]*\d{3}[-. ]*\d{4}/
+      );
+    }
+  });
+
+  test('reconciles stale fixture buttons and preserves assignment-type ownership scope', async () => {
+    const bundle = await loadProdFidelityBundle();
+    const buttonDeleteMany = mock(async () => ({ count: 0 }));
+    const visibilityDeleteMany = mock(async () => ({ count: 0 }));
+    const assignmentTypeUpsert = mock(async (args: { create: { id: string } }) =>
+      args.create
+    );
+    const upsert = mock(async (args: { create: { id: string } }) => args.create);
+    const rubricUpsert = mock(
+      async (args: { create: { id: string; name: string } }) => args.create
+    );
+    const createMany = mock(async () => ({ count: 0 }));
+    const prisma = {
+      rubric: { upsert: rubricUpsert },
+      assignmentType: { upsert: assignmentTypeUpsert },
+      assignmentTypeImage: { upsert },
+      assignmentModule: { upsert },
+      assignmentModuleInstruction: { upsert },
+      assignmentModuleInstructionButton: {
+        upsert,
+        deleteMany: buttonDeleteMany,
+      },
+      teacherTraining: { upsert },
+      teacherTrainingImage: { upsert },
+      teacherTrainingModule: { upsert },
+      teacherTrainingModuleResource: { upsert },
+      teacherTrainingResource: { upsert },
+      apHistoryPromptLibraryEntry: { upsert },
+      apHistoryPromptLibrarySource: { upsert },
+      organization: {
+        findMany: mock(async () => [
+          { id: LOCAL_DEV_ORG_ID },
+          { id: 'preview-seat-2' },
+        ]),
+      },
+      organizationAssignmentType: {
+        createMany,
+        deleteMany: visibilityDeleteMany,
+      },
+    };
+
+    await syncProdFidelityFixtures(prisma as never, bundle);
+
+    const fixtureInstructionIds = bundle.assignmentModuleInstructions.map(
+      ({ id }) => String(id)
+    );
+    const fixtureButtonIds = bundle.assignmentModuleInstructionButtons.map(
+      ({ id }) => String(id)
+    );
+    expect(buttonDeleteMany).toHaveBeenCalledWith({
+      where: {
+        assignmentModuleInstructionId: { in: fixtureInstructionIds },
+        id: { notIn: fixtureButtonIds },
+      },
+    });
+
+    const thesisUpsert = assignmentTypeUpsert.mock.calls.find(
+      ([args]) => args.create.title === 'The Thesis-Driven Essay'
+    )?.[0];
+    const productionQaUpsert = assignmentTypeUpsert.mock.calls.find(
+      ([args]) => args.create.id === 'prodqa-free-nav-at'
+    )?.[0];
+    expect(thesisUpsert?.create.ownerOrgId).toBeNull();
+    expect(productionQaUpsert?.create.ownerOrgId).toBe(LOCAL_DEV_ORG_ID);
+    expect(visibilityDeleteMany).toHaveBeenCalledWith({
+      where: {
+        organizationId: 'preview-seat-2',
+        assignmentTypeId: {
+          in: expect.arrayContaining(['prodqa-free-nav-at']),
+        },
+      },
+    });
   });
 
   test('connects cumulative staff personas to seeded schools and classes', () => {
