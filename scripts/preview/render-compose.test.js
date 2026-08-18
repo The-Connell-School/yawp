@@ -15,7 +15,7 @@ const previewAccessSeats = JSON.stringify([
 ]);
 const previewSessionSecret = 'test-preview-session-secret-32-bytes';
 const previewAccessSecret = 'test-preview-access-secret-32-bytes';
-const previewMasterAccessCode = 'wise-owl-9876';
+const previewMasterAccessCode = 'yawp-rocks';
 const previewDatabasePassword = 'test-preview-database-password-0001';
 
 function renderCompose(overrides = {}) {
@@ -128,7 +128,7 @@ describe('renderPreviewCompose', () => {
       'PREVIEW_ACCESS_SECRET: "test-preview-access-secret-32-bytes"'
     );
     expect(compose).toContain(
-      'PREVIEW_MASTER_ACCESS_CODE: "wise-owl-9876"'
+      'PREVIEW_MASTER_ACCESS_CODE: "yawp-rocks"'
     );
     expect(compose).toContain('PREVIEW_SEAT_COUNT: "1"');
     expect(compose).toContain(
@@ -154,7 +154,7 @@ describe('renderPreviewCompose', () => {
       'PREVIEW_MASTER_ACCESS_CODE is required'
     );
     expect(() => renderCompose({ masterAccessCode: 'shared password' })).toThrow(
-      'PREVIEW_MASTER_ACCESS_CODE must be a two-word, four-digit code'
+      'PREVIEW_MASTER_ACCESS_CODE must be a lowercase hyphenated code between 8 and 64 characters'
     );
   });
 

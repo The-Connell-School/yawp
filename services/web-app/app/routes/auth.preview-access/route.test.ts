@@ -216,7 +216,7 @@ describe('preview access action', () => {
       await action(
         actionArgs(
           makeRequest({
-            code: 'wise-owl-9876',
+            code: 'yawp-rocks',
             returnTo: '/app/classes?tab=active',
           })
         )

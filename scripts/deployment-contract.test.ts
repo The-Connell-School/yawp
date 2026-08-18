@@ -868,6 +868,9 @@ describe('PR preview deployment contract', () => {
     expect(deployScript).toContain(
       'deployment stopped without changing that code'
     );
+    expect(deployScript).toContain(
+      'PREVIEW_MASTER_ACCESS_CODE must be a lowercase hyphenated code between 8 and 64 characters'
+    );
     expect(previewWorkflow).toContain(
       'steps.deploy.outputs.master_org_gate_enabled'
     );

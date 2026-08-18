@@ -19,6 +19,8 @@ const LEGACY_ACCESS_SEAT_VALUE_PREFIX = 'seat-v2:';
 const MASTER_SELECTION_VALUE_PREFIX = 'master-v2:';
 const ACCESS_COOKIE_CLOCK_SKEW_SECONDS = 5 * 60;
 const ACCESS_CODE_PATTERN = /^[a-z]+-[a-z]+-[1-9][0-9]{3}$/;
+const MASTER_ACCESS_CODE_PATTERN =
+  /^(?=.{8,64}$)[a-z][a-z0-9]*(?:-[a-z0-9]+)+$/;
 const OPEN_PATHS = new Set([
   '/api/healthcheck',
   PREVIEW_ACCESS_PATH,
@@ -101,7 +103,7 @@ function configuredGlobalMasterCode() {
   const code = normalizeCode(
     String(process.env.PREVIEW_MASTER_ACCESS_CODE ?? '')
   );
-  return ACCESS_CODE_PATTERN.test(code) ? code : null;
+  return MASTER_ACCESS_CODE_PATTERN.test(code) ? code : null;
 }
 
 function accessSecrets() {
@@ -200,7 +202,10 @@ export async function findPreviewAccessCredentialByCode(
 ): Promise<PreviewAccessCredential | null> {
   if (!isPreviewAccessConfigured()) return null;
   const candidate = normalizeCode(value);
-  if (!ACCESS_CODE_PATTERN.test(candidate)) return null;
+  const isOrganizationCode = ACCESS_CODE_PATTERN.test(candidate);
+  if (!isOrganizationCode && !MASTER_ACCESS_CODE_PATTERN.test(candidate)) {
+    return null;
+  }
 
   const candidateDigest = digestCode(candidate);
   const globalMasterCode = configuredGlobalMasterCode();
@@ -220,6 +225,8 @@ export async function findPreviewAccessCredentialByCode(
     }
     return { kind: 'master' };
   }
+
+  if (!isOrganizationCode) return null;
 
   const primarySeat = configuredPrimarySeat();
   if (

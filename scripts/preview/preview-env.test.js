@@ -146,14 +146,12 @@ describe('buildPreviewEnv', () => {
   });
 
   test('requires one memorable generic master access code', () => {
-    expect(requirePreviewMasterAccessCode(' Wise-Owl-9876 ')).toBe(
-      'wise-owl-9876'
-    );
+    expect(requirePreviewMasterAccessCode(' YAWP-ROCKS ')).toBe('yawp-rocks');
     expect(() => requirePreviewMasterAccessCode('')).toThrow(
       'PREVIEW_MASTER_ACCESS_CODE is required'
     );
     expect(() => requirePreviewMasterAccessCode('shared password')).toThrow(
-      'PREVIEW_MASTER_ACCESS_CODE must be a two-word, four-digit code'
+      'PREVIEW_MASTER_ACCESS_CODE must be a lowercase hyphenated code between 8 and 64 characters'
     );
   });
 

@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 
 const ACCESS_CODE = 'brave-otter-4193';
-const MASTER_ACCESS_CODE = 'wise-owl-9876';
+const MASTER_ACCESS_CODE = 'yawp-rocks';
 const ORIGINAL_PATH = '/accessibility?gate-e2e=1';
 
 async function enterPreview(page: import('@playwright/test').Page) {

@@ -5,6 +5,8 @@ const DEFAULT_ROOT = '/srv/yawp-preview';
 const DEFAULT_DATABASE_HOST = 'preview-postgres';
 const DEFAULT_DATABASE_PORT = '5432';
 const DEFAULT_TEMPLATE_DATABASE_NAME = 'yawp_template';
+export const PREVIEW_MASTER_ACCESS_CODE_PATTERN =
+  /^(?=.{8,64}$)[a-z][a-z0-9]*(?:-[a-z0-9]+)+$/;
 
 function trimSlashes(value) {
   return value.replace(/^\/+|\/+$/g, '');
@@ -75,9 +77,9 @@ export function requirePreviewMasterAccessCode(value) {
   if (!code) {
     throw new Error('PREVIEW_MASTER_ACCESS_CODE is required');
   }
-  if (!/^[a-z]+-[a-z]+-[1-9][0-9]{3}$/.test(code)) {
+  if (!PREVIEW_MASTER_ACCESS_CODE_PATTERN.test(code)) {
     throw new Error(
-      'PREVIEW_MASTER_ACCESS_CODE must be a two-word, four-digit code'
+      'PREVIEW_MASTER_ACCESS_CODE must be a lowercase hyphenated code between 8 and 64 characters'
     );
   }
   return code;

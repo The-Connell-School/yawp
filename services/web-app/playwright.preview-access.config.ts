@@ -25,7 +25,7 @@ export default defineConfig({
   ],
   webServer: {
     command:
-      "bash -c 'bun ./e2e/ensure-e2e-env.ts && set -a && source ./e2e/.env.e2e && set +a && bun run --cwd ../../packages/prisma seed-local-dev && exec env PREVIEW_ACCESS_GATE=on PREVIEW_DATA_MODE=seed PREVIEW_MASTER_ACCESS_CODE=wise-owl-9876 PREVIEW_ACCESS_CODES=brave-otter-4193 PREVIEW_ACCESS_SECRET=e2e-preview-access-secret E2E=true bun run dev -- --port 5174 --host 127.0.0.1 --strictPort'",
+      "bash -c 'bun ./e2e/ensure-e2e-env.ts && set -a && source ./e2e/.env.e2e && set +a && bun run --cwd ../../packages/prisma seed-local-dev && exec env PREVIEW_ACCESS_GATE=on PREVIEW_DATA_MODE=seed PREVIEW_MASTER_ACCESS_CODE=yawp-rocks PREVIEW_ACCESS_CODES=brave-otter-4193 PREVIEW_ACCESS_SECRET=e2e-preview-access-secret E2E=true bun run dev -- --port 5174 --host 127.0.0.1 --strictPort'",
     url: baseURL,
     reuseExistingServer: false,
     timeout: 240 * 1000,

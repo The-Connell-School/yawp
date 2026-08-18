@@ -98,8 +98,10 @@ eval "$(node "$SCRIPT_DIR/preview-env.mjs" --shell)"
 if [[ -f "$SOURCE_DIR/services/web-app/.preview-master-org-gate-v1" ]]; then
   PREVIEW_MASTER_ORG_GATE_ENABLED=true
   : "${PREVIEW_MASTER_ACCESS_CODE:?PREVIEW_MASTER_ACCESS_CODE is required}"
-  [[ "$PREVIEW_MASTER_ACCESS_CODE" =~ ^[a-z]+-[a-z]+-[1-9][0-9]{3}$ ]] || {
-    echo "PREVIEW_MASTER_ACCESS_CODE must be a two-word, four-digit code" >&2
+  [[ ${#PREVIEW_MASTER_ACCESS_CODE} -ge 8 \
+    && ${#PREVIEW_MASTER_ACCESS_CODE} -le 64 \
+    && "$PREVIEW_MASTER_ACCESS_CODE" =~ ^[a-z][a-z0-9]*(-[a-z0-9]+)+$ ]] || {
+    echo "PREVIEW_MASTER_ACCESS_CODE must be a lowercase hyphenated code between 8 and 64 characters" >&2
     exit 1
   }
 else

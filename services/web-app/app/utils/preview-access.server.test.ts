@@ -381,7 +381,7 @@ describe('preview access gate', () => {
 
   describe('one-click ?code= entry', () => {
     test('a generic master code in a URL is stripped without granting access', async () => {
-      process.env.PREVIEW_MASTER_ACCESS_CODE = 'wise-owl-9876';
+      process.env.PREVIEW_MASTER_ACCESS_CODE = 'yawp-rocks';
       const next = mock(async () => new Response('private'));
       const middleware = createPreviewAccessMiddleware(
         async () => null,
@@ -389,7 +389,7 @@ describe('preview access gate', () => {
       );
 
       const response = (await middleware(
-        middlewareArgs(request('/app/classes?code=wise-owl-9876&tab=roster')),
+        middlewareArgs(request('/app/classes?code=yawp-rocks&tab=roster')),
         next
       )) as Response;
 
@@ -552,7 +552,7 @@ describe('preview access codes', () => {
 
   test('preserves the organization meaning when a database code collides with master', async () => {
     process.env.PREVIEW_ACCESS_SECRET = 'test-preview-access-secret';
-    process.env.PREVIEW_MASTER_ACCESS_CODE = 'wise-owl-9876';
+    process.env.PREVIEW_MASTER_ACCESS_CODE = 'yawp-rocks';
     process.env.PREVIEW_ACCESS_SEATS = JSON.stringify([
       {
         code: 'brave-otter-4193',
@@ -562,13 +562,13 @@ describe('preview access codes', () => {
     ]);
     const runtimeRepository = repository({
       byCode: {
-        'wise-owl-9876': { id: 'existing-org', name: 'Existing Org' },
+        'yawp-rocks': { id: 'existing-org', name: 'Existing Org' },
       },
     });
 
     expect(
       await findPreviewAccessCredentialByCode(
-        'wise-owl-9876',
+        'yawp-rocks',
         runtimeRepository
       )
     ).toEqual({
@@ -579,7 +579,7 @@ describe('preview access codes', () => {
 
   test('distinguishes a generic master credential from an organization code', async () => {
     process.env.PREVIEW_ACCESS_SECRET = 'test-preview-access-secret';
-    process.env.PREVIEW_MASTER_ACCESS_CODE = 'wise-owl-9876';
+    process.env.PREVIEW_MASTER_ACCESS_CODE = 'yawp-rocks';
     process.env.PREVIEW_ACCESS_SEATS = JSON.stringify([
       {
         code: 'brave-otter-4193',
@@ -591,7 +591,7 @@ describe('preview access codes', () => {
 
     expect(
       await findPreviewAccessCredentialByCode(
-        ' WISE-OWL-9876 ',
+        ' YAWP-ROCKS ',
         runtimeRepository
       )
     ).toEqual({ kind: 'master' });
@@ -608,13 +608,13 @@ describe('preview access codes', () => {
       },
     });
     expect(
-      await findPreviewAccessSeatByCode('wise-owl-9876', runtimeRepository)
+      await findPreviewAccessSeatByCode('yawp-rocks', runtimeRepository)
     ).toBeNull();
-    expect(runtimeRepository.findByCode).toHaveBeenCalledWith('wise-owl-9876');
+    expect(runtimeRepository.findByCode).toHaveBeenCalledWith('yawp-rocks');
   });
 
   test('keeps the configured organization code distinct from the generic master', () => {
-    process.env.PREVIEW_MASTER_ACCESS_CODE = 'wise-owl-9876';
+    process.env.PREVIEW_MASTER_ACCESS_CODE = 'yawp-rocks';
     process.env.PREVIEW_ACCESS_SEATS = JSON.stringify([
       {
         code: 'brave-otter-4193',
@@ -633,7 +633,7 @@ describe('preview access codes', () => {
 
   test('uses a short-lived signed master-selection cookie without granting preview access', async () => {
     process.env.PREVIEW_ACCESS_SECRET = 'test-preview-access-secret';
-    process.env.PREVIEW_MASTER_ACCESS_CODE = 'wise-owl-9876';
+    process.env.PREVIEW_MASTER_ACCESS_CODE = 'yawp-rocks';
     process.env.PREVIEW_ACCESS_SEATS = JSON.stringify([
       {
         code: 'brave-otter-4193',
@@ -659,7 +659,7 @@ describe('preview access codes', () => {
 
   test('accepts a master-selected organization without requiring an organization code', async () => {
     process.env.PREVIEW_ACCESS_SECRET = 'test-preview-access-secret';
-    process.env.PREVIEW_MASTER_ACCESS_CODE = 'wise-owl-9876';
+    process.env.PREVIEW_MASTER_ACCESS_CODE = 'yawp-rocks';
     process.env.PREVIEW_ACCESS_SEATS = JSON.stringify([
       {
         code: 'brave-otter-4193',
@@ -695,7 +695,7 @@ describe('preview access codes', () => {
 
   test('revokes pending and selected master access when the master code rotates', async () => {
     process.env.PREVIEW_ACCESS_SECRET = 'test-preview-access-secret';
-    process.env.PREVIEW_MASTER_ACCESS_CODE = 'wise-owl-9876';
+    process.env.PREVIEW_MASTER_ACCESS_CODE = 'yawp-rocks';
     process.env.PREVIEW_ACCESS_SEATS = JSON.stringify([
       {
         code: 'brave-otter-4193',
@@ -715,7 +715,7 @@ describe('preview access codes', () => {
       })
     ).split(';', 1)[0];
 
-    process.env.PREVIEW_MASTER_ACCESS_CODE = 'steady-heron-6834';
+    process.env.PREVIEW_MASTER_ACCESS_CODE = 'yawp-rules';
 
     expect(
       await hasPreviewMasterSelection(
