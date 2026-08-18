@@ -1288,6 +1288,10 @@ describe('demo environment deployment contract', () => {
     expect(workflow).toContain('github.event.repository.default_branch');
     expect(workflow).toContain('guard-demo-backup-iam.sh');
     expect(guard).toContain('iam put-role-policy');
+    expect(guard).toContain('iam create-instance-profile');
+    expect(guard).toContain('ec2 associate-iam-instance-profile');
+    expect(guard).toContain('yawp-demo-host-backup-access');
+    expect(guard).toContain('s3:PutObject');
     expect(guard).toContain('yawp-demo-backup-deny-delete');
     expect(guard).toContain('s3:DeleteObject');
     expect(guard).toContain('s3:DeleteObjectVersion');
