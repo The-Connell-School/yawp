@@ -509,6 +509,22 @@ describe('PR preview deployment contract', () => {
     );
   });
 
+  test('scheduled preview reconciliation garbage-collects only aged dependency caches', () => {
+    const previewWorkflow = readRepoFile(
+      '.github/workflows/preview-environments.yml'
+    );
+    const gcScript = readRepoFile(
+      'scripts/preview/gc-dependency-caches.sh'
+    );
+
+    expect(previewWorkflow).toContain('gc-dependency-caches.sh');
+    expect(previewWorkflow).toContain('PREVIEW_DEPENDENCY_CACHE_GRACE_HOURS');
+    expect(gcScript).toContain('com.yawp.preview.dependency-cache=true');
+    expect(gcScript).toContain('dependency-cache.sha256');
+    expect(gcScript).not.toContain('docker system prune');
+    expect(gcScript).not.toContain('docker volume prune');
+  });
+
   test('production previews rebuild application code even when database tooling is cached', () => {
     const deployScript = readRepoFile('scripts/preview/deploy.sh');
     const prebuildFunction = deployScript.slice(

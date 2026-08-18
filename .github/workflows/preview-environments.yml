@@ -429,6 +429,7 @@ jobs:
       PREVIEW_DRAFT_IDLE_HOURS: ${{ vars.PREVIEW_DRAFT_IDLE_HOURS || '48' }}
       PREVIEW_READY_IDLE_HOURS: ${{ vars.PREVIEW_READY_IDLE_HOURS || '48' }}
       PREVIEW_INFLIGHT_TTL_SECONDS: ${{ vars.PREVIEW_INFLIGHT_TTL_SECONDS || '3600' }}
+      PREVIEW_DEPENDENCY_CACHE_GRACE_HOURS: ${{ vars.PREVIEW_DEPENDENCY_CACHE_GRACE_HOURS || '168' }}
     steps:
       - name: Check preview cleanup configuration
         env:
@@ -502,3 +503,19 @@ jobs:
             exit 1
           fi
           echo "Preview reconcile OK: ${running}/${PREVIEW_MAX_RUNNING} running, ${resident}/${PREVIEW_MAX_RESIDENT} resident."
+
+      - name: Garbage-collect unused dependency caches
+        run: |
+          set -euo pipefail
+          shell_quote() {
+            printf '%q' "$1"
+          }
+          ssh_target="${PREVIEW_SSH_USER}@${PREVIEW_HOST}"
+          lock_file="$(shell_quote "$PREVIEW_ROOT/preview-host.lock")"
+          remote_env=(
+            "PREVIEW_ROOT=$(shell_quote "$PREVIEW_ROOT")"
+            "PREVIEW_DEPENDENCY_CACHE_GRACE_HOURS=$(shell_quote "$PREVIEW_DEPENDENCY_CACHE_GRACE_HOURS")"
+          )
+          cat scripts/preview/gc-dependency-caches.sh \
+            | ssh -i ~/.ssh/preview_key "$ssh_target" \
+              "flock -w 900 $lock_file env ${remote_env[*]} bash -s"
