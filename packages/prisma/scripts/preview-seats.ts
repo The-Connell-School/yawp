@@ -3,9 +3,11 @@ import { enableClassInsightsForOrganizations } from './local-dev/class-insights'
 import {
   LOCAL_DEV_ORG_ID,
   LOCAL_DEV_ORG_NAME,
+  LOCAL_DEV_PASSWORD,
   LOCAL_DEV_PERSONAS,
   type LocalDevPersona,
 } from './local-dev/dev-personas';
+import { seedCollaborationDemoData } from './local-dev/seed-collaboration';
 import { seedSyntheticLocalDevData } from './local-dev/seed-synthetic-data';
 import { loadProdFidelityBundle } from './local-dev/import-prod-fidelity-fixtures';
 import {
@@ -142,12 +144,34 @@ export async function createPreviewSeat(
     })),
   });
 
-  await seedSyntheticLocalDevData(transaction, {
+  const context = await seedSyntheticLocalDevData(transaction, {
     organizationId: seat.organizationId,
     personas: seat.personas,
     schoolCodes: seat.schoolCodes,
     assignmentTypeIds,
     teacherTrainingIds,
+  });
+
+  // Same reasoning as the persona cast above: a seat that is missing the group
+  // work is a seat where the thing under review cannot be reviewed.
+  await seedCollaborationDemoData(transaction, {
+    organizationId: seat.organizationId,
+    schoolId: context.schoolIds[0]!,
+    teacherMembershipIds: [
+      context.personas.teacher.membershipId,
+      context.personas.owner.membershipId,
+      context.personas.admin.membershipId,
+      context.personas['teacher-multi'].membershipId,
+    ],
+    primaryTeacherMembershipId: context.personas.teacher.membershipId,
+    personaStudentMembershipIds: {
+      student: context.personas.student.membershipId,
+      'student-submitted': context.personas['student-submitted'].membershipId,
+      'student-graded': context.personas['student-graded'].membershipId,
+      'student-unreleased': context.personas['student-unreleased'].membershipId,
+    },
+    password: seat.personas[0]?.password ?? LOCAL_DEV_PASSWORD,
+    emailSuffix: seat.number === 1 ? '' : `.seat-${seat.number}`,
   });
 
   const [insights] = await enableClassInsightsForOrganizations(transaction, [
@@ -296,46 +320,50 @@ export async function createRuntimePreviewSeat(
 
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     try {
-      return await prisma.$transaction(async (transaction) => {
-        const organizations = await transaction.organization.findMany({
-          select: { id: true, previewSeatCode: true },
-        });
-        const highestSeatNumber = organizations.reduce(
-          (highest, organization) => {
-            if (organization.id === adoptedOrganizationId()) {
-              return Math.max(highest, 1);
-            }
-            const match = /^preview-seat-([1-9][0-9]*)$/.exec(organization.id);
-            return match ? Math.max(highest, Number(match[1])) : highest;
-          },
-          1
-        );
-        const previewSeatCode = generateUniquePreviewAccessCode(
-          [
-            ...reservedCodes,
-            ...organizations.flatMap(({ previewSeatCode }) =>
-              previewSeatCode ? [previewSeatCode] : []
-            ),
-          ],
-          generateCode
-        );
-        const seat = buildPreviewSeatDefinition(highestSeatNumber + 1, {
-          previewSeatCode,
-        });
+      return await prisma.$transaction(
+        async (transaction) => {
+          const organizations = await transaction.organization.findMany({
+            select: { id: true, previewSeatCode: true },
+          });
+          const highestSeatNumber = organizations.reduce(
+            (highest, organization) => {
+              if (organization.id === adoptedOrganizationId()) {
+                return Math.max(highest, 1);
+              }
+              const match = /^preview-seat-([1-9][0-9]*)$/.exec(
+                organization.id
+              );
+              return match ? Math.max(highest, Number(match[1])) : highest;
+            },
+            1
+          );
+          const previewSeatCode = generateUniquePreviewAccessCode(
+            [
+              ...reservedCodes,
+              ...organizations.flatMap(({ previewSeatCode }) =>
+                previewSeatCode ? [previewSeatCode] : []
+              ),
+            ],
+            generateCode
+          );
+          const seat = buildPreviewSeatDefinition(highestSeatNumber + 1, {
+            previewSeatCode,
+          });
 
-        await createSeat(transaction, seat);
-        return {
-          organizationId: seat.organizationId,
-          label: seat.label,
-          organizationName: seat.organizationName,
-          previewSeatCode,
-        };
-      },
-      // Seeding a seat loads the prod-fidelity bundle and writes an entire organization.
-      // The deploy path fits inside Prisma's five-second default, but this one runs
-      // inside a web request on a shared preview box, where the margin is thin enough
-      // that a timeout would abort the seat halfway.
-      { maxWait: 10_000, timeout: 120_000 });
+          await createSeat(transaction, seat);
+          return {
+            organizationId: seat.organizationId,
+            label: seat.label,
+            organizationName: seat.organizationName,
+            previewSeatCode,
+          };
+        },
+        // Seeding a seat loads the prod-fidelity bundle and writes an entire organization.
+        // The deploy path fits inside Prisma's five-second default, but this one runs
+        // inside a web request on a shared preview box, where the margin is thin enough
+        // that a timeout would abort the seat halfway.
+        { maxWait: 10_000, timeout: 120_000 }
+      );
     } catch (error) {
       if (!isUniqueConstraintError(error) || attempt === maxAttempts - 1) {
         throw error;

@@ -7,12 +7,14 @@ import {
   importProdFidelityFixtures,
   loadProdFidelityBundle,
 } from './local-dev/import-prod-fidelity-fixtures';
+import { seedCollaborationDemoData } from './local-dev/seed-collaboration';
 import { seedSyntheticLocalDevData } from './local-dev/seed-synthetic-data';
 import { truncateAllPublicTables } from './local-dev/truncate-all';
 import { enableClassInsightsForOrganizations } from './local-dev/class-insights';
 import {
   LOCAL_DEV_ORG_ID,
   LOCAL_DEV_ORG_NAME,
+  LOCAL_DEV_PASSWORD,
   LOCAL_DEV_PERSONAS,
 } from './local-dev/dev-personas';
 
@@ -50,6 +52,29 @@ try {
   const context = await seedSyntheticLocalDevData(prisma);
   console.timeEnd('synthetic');
 
+  // After the synthetic seed, because it puts the four student personas into
+  // groups alongside the cohort it creates.
+  console.time('collaboration');
+  const collaboration = await seedCollaborationDemoData(prisma, {
+    organizationId: context.organizationId,
+    schoolId: context.schoolIds[0]!,
+    teacherMembershipIds: [
+      context.personas.teacher.membershipId,
+      context.personas.owner.membershipId,
+      context.personas.admin.membershipId,
+      context.personas['teacher-multi'].membershipId,
+    ],
+    primaryTeacherMembershipId: context.personas.teacher.membershipId,
+    personaStudentMembershipIds: {
+      student: context.personas.student.membershipId,
+      'student-submitted': context.personas['student-submitted'].membershipId,
+      'student-graded': context.personas['student-graded'].membershipId,
+      'student-unreleased': context.personas['student-unreleased'].membershipId,
+    },
+    password: LOCAL_DEV_PASSWORD,
+  });
+  console.timeEnd('collaboration');
+
   console.log('🌱 Local dev seed complete.');
   console.log(
     JSON.stringify(
@@ -62,6 +87,20 @@ try {
           email: persona.email,
           password: persona.password,
         })),
+        // Listed because these have no persona entry — the preview login picker
+        // reads the organization's users, so they are selectable there, but a
+        // local run needs the addresses printed to know they exist.
+        collaborationDemo: collaboration
+          ? {
+              classId: collaboration.classId,
+              groups: collaboration.groupIds.length,
+              students: collaboration.cohort.map((student) => ({
+                name: student.name,
+                email: student.email,
+                password: LOCAL_DEV_PASSWORD,
+              })),
+            }
+          : null,
       },
       null,
       2
