@@ -25,7 +25,7 @@ running_containers="$(docker ps --format '{{.ID}} {{.Image}}')" || {
 dynamic_directories=()
 while read -r container_id image_name _; do
   [[ -n "$container_id" && -n "$image_name" ]] || continue
-  [[ "$image_name" =~ (^|/)traefik(:|@) ]] || continue
+  [[ "$image_name" =~ (^|/)traefik($|:|@) ]] || continue
 
   mount_sources="$(docker inspect --format '{{range .Mounts}}{{if eq .Destination "/dynamic"}}{{println .Source}}{{end}}{{end}}' "$container_id")" || {
     echo "Unable to inspect running Traefik container" >&2
