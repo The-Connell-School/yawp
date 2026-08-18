@@ -98,6 +98,7 @@ destroy_preview_path() {
 
   drop_preview_database "$pr_number" || return 1
   remove_legacy_postgres_volume "$project" || return 1
+  docker image rm "${project}-web:current" >/dev/null 2>&1 || true
   local remove_failed=0
   if ! preview_remove_path "$preview_path"; then
     remove_failed=1

@@ -20,6 +20,7 @@ RUN bun web-app:build
 
 FROM base AS production
 WORKDIR /app
+LABEL com.yawp.preview.production-runtime=true
 
 COPY --from=build /app/package.json ./package.json
 COPY --from=build /app/bun.lockb ./bun.lockb

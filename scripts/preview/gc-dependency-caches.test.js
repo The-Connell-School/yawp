@@ -30,6 +30,7 @@ function makeHarness() {
   const bin = path.join(root, 'bin');
   mkdirSync(bin, { recursive: true });
   writeFileSync(path.join(root, 'removed'), '');
+  writeFileSync(path.join(root, 'image-prune'), '');
   const docker = path.join(bin, 'docker');
   writeFileSync(
     docker,
@@ -56,6 +57,10 @@ if [[ "$1 $2" == "volume rm" ]]; then
   printf '%s\\n' "$volume" >> "$FAKE_REMOVED"
   exit 0
 fi
+if [[ "$1 $2" == "image prune" ]]; then
+  printf '%s\\n' "$*" >> "$FAKE_IMAGE_PRUNE"
+  exit 0
+fi
 exit 2
 `,
   );
@@ -75,6 +80,7 @@ function runGc(root, bin, volumes, env = {}) {
       FAKE_CREATED_AT: '100',
       FAKE_VOLUMES: volumes.join('\n'),
       FAKE_REMOVED: path.join(root, 'removed'),
+      FAKE_IMAGE_PRUNE: path.join(root, 'image-prune'),
       ...env,
     },
   });
@@ -102,6 +108,9 @@ describe('dependency cache garbage collection', () => {
       volumeName(stale, 'root'),
       volumeName(stale, 'web'),
     ]);
+    expect(readFileSync(path.join(root, 'image-prune'), 'utf8')).toContain(
+      'label=com.yawp.preview.production-runtime=true',
+    );
   });
 
   test('keeps recent caches for rollback and deploy retries', () => {

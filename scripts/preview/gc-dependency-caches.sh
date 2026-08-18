@@ -56,3 +56,11 @@ done < <(
     --filter label=com.yawp.preview.dependency-cache=true \
     --format '{{.Name}}'
 )
+
+# Production image layers are labeled explicitly. Default image prune targets only
+# dangling images, and Docker retains anything referenced by a running or stopped
+# container; the age filter preserves a rollback/build-cache window.
+docker image prune --force \
+  --filter label=com.yawp.preview.production-runtime=true \
+  --filter "until=${GRACE_HOURS}h" \
+  >/dev/null

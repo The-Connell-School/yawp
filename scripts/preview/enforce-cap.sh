@@ -311,6 +311,7 @@ destroy_env() {
   if "$DOCKER" volume inspect "${project}_${project}-postgres-data" >/dev/null 2>&1; then
     "$DOCKER" volume rm "${project}_${project}-postgres-data" >/dev/null || return 1
   fi
+  "$DOCKER" image rm "${project}-web:current" >/dev/null 2>&1 || true
 
   if ! preview_remove_path "$path"; then
     echo "::error::could not remove ${path}; it still counts against the resident cap"

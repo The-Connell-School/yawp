@@ -556,6 +556,22 @@ describe('PR preview deployment contract', () => {
     expect(gcScript).toContain('dependency-cache.sha256');
     expect(gcScript).not.toContain('docker system prune');
     expect(gcScript).not.toContain('docker volume prune');
+    expect(gcScript).toContain(
+      'label=com.yawp.preview.production-runtime=true'
+    );
+    expect(gcScript).toContain('docker image prune');
+  });
+
+  test('preview teardown removes only its own production image tag', () => {
+    const cleanup = readRepoFile('scripts/preview/cleanup.sh');
+    const enforcer = readRepoFile('scripts/preview/enforce-cap.sh');
+
+    expect(cleanup).toContain(
+      'docker image rm "${project}-web:current"'
+    );
+    expect(enforcer).toContain(
+      '"$DOCKER" image rm "${project}-web:current"'
+    );
   });
 
   test('production previews rebuild application code even when database tooling is cached', () => {
