@@ -1126,6 +1126,25 @@ describe('PR preview deployment contract', () => {
 });
 
 describe('demo environment deployment contract', () => {
+  test('demo host diagnostics expose only non-secret container and mount metadata', () => {
+    const diagnostics = readRepoFile(
+      '.github/workflows/demo-host-diagnostics.yml'
+    );
+
+    expect(diagnostics).toContain('environment: demo');
+    expect(diagnostics).toContain(
+      "docker ps --format 'name={{.Names}} image={{.Image}} status={{.Status}}'"
+    );
+    expect(diagnostics).toContain('.Config.Image');
+    expect(diagnostics).toContain('.Config.Cmd');
+    expect(diagnostics).toContain('.Destination');
+    expect(diagnostics).not.toContain('.Config.Env');
+    expect(diagnostics).not.toContain('.Source');
+    expect(diagnostics).not.toContain('docker exec');
+    expect(diagnostics).not.toContain('docker stop');
+    expect(diagnostics).not.toContain('docker rm');
+  });
+
   // deploy.sh runs ON THE DEMO HOST over SSH, so a value declared in the job's `env:`
   // reaches the runner and stops there unless remote_env forwards it. Declared and
   // forwarded are two different things; this asserts they agree.
