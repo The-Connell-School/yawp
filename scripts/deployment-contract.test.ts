@@ -148,12 +148,18 @@ describe('production deployment contract', () => {
     const prismaSourceIndex = dockerfile.indexOf(
       'COPY packages/prisma ./packages/prisma'
     );
+    const toolingIndex = dockerfile.indexOf('FROM deps AS tooling');
+    const databaseArgIndex = dockerfile.indexOf('ARG DATABASE_URL');
+    const databaseEnvIndex = dockerfile.indexOf('ENV DATABASE_URL=');
 
     expect(webManifestIndex).toBeGreaterThan(-1);
     expect(prismaManifestIndex).toBeGreaterThan(-1);
     expect(installIndex).toBeGreaterThan(prismaManifestIndex);
     expect(webSourceIndex).toBeGreaterThan(installIndex);
     expect(prismaSourceIndex).toBeGreaterThan(installIndex);
+    expect(databaseArgIndex).toBeGreaterThan(toolingIndex);
+    expect(databaseArgIndex).toBeGreaterThan(installIndex);
+    expect(databaseEnvIndex).toBeGreaterThan(databaseArgIndex);
     expect(dockerfile.match(/apt-get install -y openssl/g)?.length).toBe(1);
   });
 

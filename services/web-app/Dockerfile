@@ -1,7 +1,5 @@
 FROM oven/bun:1.3.1 AS base
 RUN apt-get update -y && apt-get install -y openssl
-ARG DATABASE_URL
-ENV DATABASE_URL=${DATABASE_URL}
 
 FROM base AS deps
 WORKDIR /app
@@ -11,6 +9,8 @@ COPY packages/prisma/package.json ./packages/prisma/package.json
 RUN bun install --frozen-lockfile --ignore-scripts
 
 FROM deps AS tooling
+ARG DATABASE_URL
+ENV DATABASE_URL=${DATABASE_URL}
 COPY services/web-app ./services/web-app
 COPY packages/prisma ./packages/prisma
 RUN bun prisma generate
