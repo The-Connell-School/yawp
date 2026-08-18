@@ -83,6 +83,7 @@ describe('failed demo reset recovery', () => {
     expect(commands).toContain(
       'pg_restore -U postgres -d yawp_demo_recovery_'
     );
+    expect(commands).toContain('--role yawp_demo_app');
     expect(commands).toContain(
       'ALTER\\ DATABASE\\ \\"yawp_demo\\"\\ RENAME\\ TO'
     );

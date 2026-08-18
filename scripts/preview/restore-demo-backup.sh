@@ -67,6 +67,7 @@ docker exec "$POSTGRES_CONTAINER" createdb -U postgres -O "$DATABASE_USER" \
 docker exec -i "$POSTGRES_CONTAINER" pg_restore \
   -U postgres \
   -d "$recovery_database" \
+  --role "$DATABASE_USER" \
   --exit-on-error \
   --no-owner \
   --no-acl < "$BACKUP_FILE" >/dev/null
