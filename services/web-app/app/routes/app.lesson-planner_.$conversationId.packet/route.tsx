@@ -680,7 +680,8 @@ function MaterialEditor({
           aria-label="Edit material"
           data-testid="material-editor-textarea"
           rows={12}
-          className="w-full resize-y rounded-md border bg-background p-3 font-mono text-sm leading-relaxed focus:border-primary focus:outline-none"
+          spellCheck
+          className="w-full resize-y rounded-md border bg-background p-4 text-[15px] leading-7 focus:border-primary focus:outline-none"
         />
       ) : (
         <div className="rounded-md border bg-background p-3">
