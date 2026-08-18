@@ -58,7 +58,7 @@ jobs:
           chmod 600 ~/.ssh/demo_key
           ssh-keyscan -H "$PREVIEW_HOST" >> ~/.ssh/known_hosts
 
-      - name: Create and retrieve validated backup
+      - name: Create validated backup
         id: backup
         run: |
           set -euo pipefail
@@ -72,76 +72,15 @@ jobs:
             echo "Backup command returned an unexpected path" >&2
             exit 1
           }
-          local_dir="$(mktemp -d)"
-          local_file="$local_dir/$(basename "$remote_file")"
-          scp -i ~/.ssh/demo_key "$ssh_target:$remote_file" "$local_file"
-          scp -i ~/.ssh/demo_key "$ssh_target:${remote_file}.sha256" "${local_file}.sha256"
-          expected="$(awk '{print $1}' "${local_file}.sha256")"
-          actual="$(sha256sum "$local_file" | awk '{print $1}')"
-          test "$actual" = "$expected" || { echo "Backup checksum mismatch" >&2; exit 1; }
-          printf '%s  %s\n' "$actual" "$(basename "$local_file")" > "${local_file}.sha256"
-          echo "local_file=$local_file" >> "$GITHUB_OUTPUT"
-          echo "filename=$(basename "$local_file")" >> "$GITHUB_OUTPUT"
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-east-1
+          echo "remote_file=$remote_file" >> "$GITHUB_OUTPUT"
 
       - name: Copy backup off-host and retain newest set
         env:
-          LOCAL_FILE: ${{ steps.backup.outputs.local_file }}
-          FILENAME: ${{ steps.backup.outputs.filename }}
+          REMOTE_FILE: ${{ steps.backup.outputs.remote_file }}
         run: |
           set -euo pipefail
-          destination="${BACKUP_S3_URI%/}"
-          aws s3 cp "$LOCAL_FILE" "$destination/$FILENAME" --sse AES256 --only-show-errors
-          aws s3 cp "${LOCAL_FILE}.sha256" "$destination/${FILENAME}.sha256" --sse AES256 --only-show-errors
-
-          bucket_and_prefix="${destination#s3://}"
-          bucket="${bucket_and_prefix%%/*}"
-          prefix="${bucket_and_prefix#*/}/"
-          versioned_keys_text="$(aws s3api list-object-versions \
-            --bucket "$bucket" \
-            --prefix "$prefix" \
-            --query '[Versions[].Key, DeleteMarkers[].Key][]' \
-            --output text)"
-          dump_keys_text=''
-          while IFS= read -r object_key; do
-            [[ -n "$object_key" && "$object_key" != "None" ]] || continue
-            dump_key="${object_key%.sha256}"
-            [[ "$dump_key" == "$prefix"yawp_demo-scheduled-*.dump ]] || continue
-            dump_keys_text+="${dump_key}"$'\n'
-          done <<<"$(printf '%s\n' "$versioned_keys_text" | tr '\t' '\n')"
-          sorted_dump_keys="$(printf '%s' "$dump_keys_text" | LC_ALL=C sort -ur)"
-          keys=()
-          while IFS= read -r key; do
-            [[ -n "$key" ]] && keys+=("$key")
-          done <<<"$sorted_dump_keys"
-
-          for ((index = BACKUP_RETENTION_COUNT; index < ${#keys[@]}; index++)); do
-            key="${keys[$index]}"
-            [[ "$key" == "$prefix"yawp_demo-scheduled-*.dump ]] || {
-              echo "Refusing to delete unexpected S3 key: $key" >&2
-              exit 1
-            }
-            for object_key in "$key" "${key}.sha256"; do
-              versions_text="$(aws s3api list-object-versions \
-                --bucket "$bucket" \
-                --prefix "$object_key" \
-                --query '[Versions[].[Key,VersionId], DeleteMarkers[].[Key,VersionId]][]' \
-                --output text)"
-              while read -r returned_key version_id; do
-                [[ "$returned_key" == "$object_key" ]] || continue
-                [[ -n "$version_id" && "$version_id" != "None" ]] || continue
-                aws s3api delete-object \
-                  --bucket "$bucket" \
-                  --key "$object_key" \
-                  --version-id "$version_id" >/dev/null
-              done <<<"$versions_text"
-            done
-          done
-
-          echo "Validated demo backup copied to $destination/$FILENAME"
+          shell_quote() { printf '%q' "$1"; }
+          ssh_target="${PREVIEW_SSH_USER}@${PREVIEW_HOST}"
+          remote_script="$PREVIEW_ROOT/ops/publish-demo-backup.sh"
+          ssh -i ~/.ssh/demo_key "$ssh_target" \
+            "PREVIEW_ROOT=$(shell_quote "$PREVIEW_ROOT") BACKUP_FILE=$(shell_quote "$REMOTE_FILE") BACKUP_RETENTION_COUNT=$(shell_quote "$BACKUP_RETENTION_COUNT") BACKUP_S3_URI=$(shell_quote "$BACKUP_S3_URI") bash $(shell_quote "$remote_script")"

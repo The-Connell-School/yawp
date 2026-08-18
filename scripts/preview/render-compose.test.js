@@ -84,6 +84,7 @@ describe('renderPreviewCompose', () => {
       runtime: 'production',
     });
 
+    expect(compose).toContain('image: "yawp-pr-142-web:current"');
     expect(compose).toContain('dockerfile: services/web-app/Dockerfile');
     expect(compose).toContain('target: deps');
     expect(compose).toContain('target: production');
@@ -127,9 +128,7 @@ describe('renderPreviewCompose', () => {
     expect(compose).toContain(
       'PREVIEW_ACCESS_SECRET: "test-preview-access-secret-32-bytes"'
     );
-    expect(compose).toContain(
-      'PREVIEW_MASTER_ACCESS_CODE: "yawp-rocks"'
-    );
+    expect(compose).toContain('PREVIEW_MASTER_ACCESS_CODE: "yawp-rocks"');
     expect(compose).toContain('PREVIEW_SEAT_COUNT: "1"');
     expect(compose).toContain(
       'SESSION_SECRET: "test-preview-session-secret-32-bytes"'
@@ -153,7 +152,9 @@ describe('renderPreviewCompose', () => {
     expect(() => renderCompose({ masterAccessCode: '' })).toThrow(
       'PREVIEW_MASTER_ACCESS_CODE is required'
     );
-    expect(() => renderCompose({ masterAccessCode: 'shared password' })).toThrow(
+    expect(() =>
+      renderCompose({ masterAccessCode: 'shared password' })
+    ).toThrow(
       'PREVIEW_MASTER_ACCESS_CODE must be a lowercase hyphenated code between 8 and 64 characters'
     );
   });
@@ -215,7 +216,8 @@ describe('renderPreviewCompose', () => {
       expect(compose).toContain('ANTHROPIC_API_KEY: ""');
       expect(compose).not.toContain('shared-provider-key');
     } finally {
-      if (previousAnthropicKey === undefined) delete process.env.PREVIEW_ANTHROPIC_API_KEY;
+      if (previousAnthropicKey === undefined)
+        delete process.env.PREVIEW_ANTHROPIC_API_KEY;
       else process.env.PREVIEW_ANTHROPIC_API_KEY = previousAnthropicKey;
     }
   });
