@@ -131,6 +131,181 @@ describe('buildCollabRoom', () => {
   });
 });
 
+describe('buildCollabRoom, revising an earlier paragraph', () => {
+  const original = 'Ben wrote this sentence, though it runs a little long.';
+
+  test('the reviser gets credit for the deletion, not the original author', () => {
+    const room = buildCollabRoom([
+      { author: 'ben', paragraphs: [original] },
+      {
+        author: 'cy',
+        paragraphs: [],
+        revise: {
+          paragraph: original,
+          removeSubstring: ', though it runs a little long',
+        },
+      },
+    ]);
+
+    const ben = room.authors.find((a) => a.author === 'ben');
+    const cy = room.authors.find((a) => a.author === 'cy');
+    expect(ben?.charsDeleted).toBe(0);
+    expect(cy?.charsDeleted).toBe(', though it runs a little long'.length);
+  });
+
+  test('a reviser who only deletes types nothing new', () => {
+    const room = buildCollabRoom([
+      { author: 'ben', paragraphs: [original] },
+      {
+        author: 'cy',
+        paragraphs: [],
+        revise: {
+          paragraph: original,
+          removeSubstring: ', though it runs a little long',
+        },
+      },
+    ]);
+
+    const cy = room.authors.find((a) => a.author === 'cy');
+    expect(cy?.charsInserted).toBe(0);
+  });
+
+  test('a reviser who replaces text is credited for what they typed', () => {
+    const room = buildCollabRoom([
+      { author: 'ben', paragraphs: [original] },
+      {
+        author: 'cy',
+        paragraphs: [],
+        revise: {
+          paragraph: original,
+          removeSubstring: 'runs a little long',
+          insertText: 'is too long',
+        },
+      },
+    ]);
+
+    const cy = room.authors.find((a) => a.author === 'cy');
+    expect(cy?.charsInserted).toBe('is too long'.length);
+    expect(room.text).toBe('Ben wrote this sentence, though it is too long.');
+  });
+
+  test('the surviving document and the stored snapshot still match', () => {
+    // The invariant the whole shortcut depends on, now under a delete as well
+    // as an insert.
+    const room = buildCollabRoom([
+      { author: 'ben', paragraphs: [original] },
+      {
+        author: 'cy',
+        paragraphs: [],
+        revise: {
+          paragraph: original,
+          removeSubstring: 'runs a little long',
+          insertText: 'is too long',
+        },
+      },
+    ]);
+
+    const replayed = yDocToSnapshot(replayRoom(room.updates));
+    expect(replayed.html).toBe(room.html);
+    expect(replayed.text).toBe(room.text);
+  });
+
+  test('deleted text is attributed away from its original author on replay', () => {
+    // Attribution is per surviving Yjs item, so this is really testing that the
+    // delete reached the real document and not just the seed's own bookkeeping.
+    const room = buildCollabRoom([
+      { author: 'ben', paragraphs: [original] },
+      {
+        author: 'cy',
+        paragraphs: [],
+        revise: {
+          paragraph: original,
+          removeSubstring: ', though it runs a little long',
+        },
+      },
+    ]);
+
+    const doc = replayRoom(room.updates);
+    const text = doc
+      .getXmlFragment(COLLAB_FRAGMENT_FIELD)
+      .toArray()[0]
+      .toArray()[0];
+    expect(String(text)).toBe('Ben wrote this sentence.');
+  });
+
+  test('a revise-only contribution produces exactly one update, not a blank append', () => {
+    const room = buildCollabRoom([
+      { author: 'ben', paragraphs: [original] },
+      {
+        author: 'cy',
+        paragraphs: [],
+        revise: {
+          paragraph: original,
+          removeSubstring: ', though it runs a little long',
+        },
+      },
+    ]);
+
+    expect(room.updates).toHaveLength(2);
+    expect(room.updates[1].author).toBe('cy');
+  });
+
+  test('a target paragraph that does not exist fails loudly', () => {
+    // A copy edit to the original paragraph, or a typo in the plan, must not
+    // silently revise nothing — it has to be caught before it reaches a demo.
+    expect(() =>
+      buildCollabRoom([
+        { author: 'ben', paragraphs: [original] },
+        {
+          author: 'cy',
+          paragraphs: [],
+          revise: {
+            paragraph: 'Not a paragraph that exists.',
+            removeSubstring: 'x',
+          },
+        },
+      ])
+    ).toThrow(/Revise target not found/);
+  });
+
+  test('a substring that is not actually in the target paragraph fails loudly', () => {
+    expect(() =>
+      buildCollabRoom([
+        { author: 'ben', paragraphs: [original] },
+        {
+          author: 'cy',
+          paragraphs: [],
+          revise: {
+            paragraph: original,
+            removeSubstring: 'nonexistent phrase',
+          },
+        },
+      ])
+    ).toThrow(/Revise substring/);
+  });
+
+  test('a contribution may both revise an earlier line and add its own', () => {
+    const room = buildCollabRoom([
+      { author: 'ben', paragraphs: [original] },
+      {
+        author: 'cy',
+        paragraphs: ["Cy's own new sentence."],
+        revise: {
+          paragraph: original,
+          removeSubstring: ', though it runs a little long',
+        },
+      },
+    ]);
+
+    const cy = room.authors.find((a) => a.author === 'cy');
+    // One session, two things done in it: the revise and the new paragraph.
+    expect(cy?.updateCount).toBe(2);
+    expect(cy?.charsDeleted).toBe(', though it runs a little long'.length);
+    expect(cy?.charsInserted).toBe("Cy's own new sentence.".length);
+    expect(room.text).toBe("Ben wrote this sentence.\nCy's own new sentence.");
+  });
+});
+
 describe('the GBA 300 demo plan', () => {
   const authorKeys = new Set<string>([
     ...GBA300_COHORT.map((student) => student.key),
@@ -140,13 +315,26 @@ describe('the GBA 300 demo plan', () => {
     'student-unreleased',
   ]);
 
-  test('every contributor is someone in the group', () => {
+  test('every contributor is someone in the group, present or removed', () => {
     // A paragraph attributed to a non-member would seed an authorship row the
-    // contribution breakdown cannot resolve to a name.
+    // contribution breakdown cannot resolve to a name. `removedMember` is the
+    // one deliberate exception: a former member's writing is still theirs.
     for (const plan of GBA300_GROUP_PLANS) {
+      const known = plan.removedMember
+        ? [...plan.members, plan.removedMember]
+        : plan.members;
       for (const contribution of plan.contributions) {
-        expect(plan.members).toContain(contribution.author);
+        expect(known).toContain(contribution.author);
       }
+    }
+  });
+
+  test('a removed member is not also a current one', () => {
+    // Being in both would make "absent from the roster, present in the draft"
+    // meaningless — the whole point of the scenario.
+    for (const plan of GBA300_GROUP_PLANS) {
+      if (!plan.removedMember) continue;
+      expect(plan.members).not.toContain(plan.removedMember);
     }
   });
 
@@ -155,6 +343,8 @@ describe('the GBA 300 demo plan', () => {
       for (const member of plan.members) {
         expect(authorKeys.has(member)).toBe(true);
       }
+      if (plan.removedMember)
+        expect(authorKeys.has(plan.removedMember)).toBe(true);
     }
   });
 

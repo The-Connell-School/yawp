@@ -385,7 +385,20 @@ async function seedGroup(
       seededAt: daysAgo(6),
       documentId: document.id,
       members: {
-        create: plan.members.map((key) => ({ membershipId: memberId(key) })),
+        create: [
+          ...plan.members.map((key) => ({ membershipId: memberId(key) })),
+          // Wrote in the draft, then left the group. `removedAt` is what keeps
+          // them off the roster the contribution table and grade cards read,
+          // while their surviving text still shows up in the draft itself.
+          ...(plan.removedMember
+            ? [
+                {
+                  membershipId: memberId(plan.removedMember),
+                  removedAt: daysAgo(4),
+                },
+              ]
+            : []),
+        ],
       },
     },
   });
@@ -412,7 +425,7 @@ async function seedGroup(
       lastSeenAt: daysAgo(1),
       updateCount: author.updateCount,
       charsInserted: author.charsInserted,
-      charsDeleted: 0,
+      charsDeleted: author.charsDeleted,
     })),
   });
 
@@ -587,7 +600,7 @@ async function seedStudentShare(
       lastSeenAt: daysAgo(2),
       updateCount: author.updateCount,
       charsInserted: author.charsInserted,
-      charsDeleted: 0,
+      charsDeleted: author.charsDeleted,
     })),
   });
 }

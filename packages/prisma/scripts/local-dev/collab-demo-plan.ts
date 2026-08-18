@@ -40,6 +40,28 @@ export type RoomContribution = {
   /** A key within the plan; resolved to a real membership id when seeding. */
   author: string;
   paragraphs: string[];
+  /**
+   * An edit to a paragraph an earlier contribution wrote, attributed to this
+   * contribution's own author and client id rather than the paragraph's
+   * original one.
+   *
+   * This is the one thing the append-only shape above cannot produce on its
+   * own, and it matters: without it, every demo author's `charsDeleted` stays
+   * zero and the panel's "Removed" column — the one that keeps a student who
+   * tightened a partner's paragraph from reading as a freeloader — never has
+   * anything to show.
+   *
+   * `paragraph` identifies the target by its exact current text rather than by
+   * position, so a copy edit to an earlier contribution fails this loudly
+   * instead of silently revising the wrong sentence.
+   */
+  revise?: {
+    paragraph: string;
+    /** Must occur exactly once in `paragraph`; asserted at build time. */
+    removeSubstring: string;
+    /** Replacement text inserted where `removeSubstring` was, if any. */
+    insertText?: string;
+  };
 };
 
 export type RoomAuthorStat = {
@@ -47,6 +69,7 @@ export type RoomAuthorStat = {
   /** Yjs client id, as text: Yjs mints uint32 values past Postgres `integer`. */
   clientId: string;
   charsInserted: number;
+  charsDeleted: number;
   updateCount: number;
 };
 
@@ -76,33 +99,86 @@ export function buildCollabRoom(contributions: RoomContribution[]): BuiltRoom {
 
   try {
     for (const contribution of contributions) {
-      if (contribution.paragraphs.length === 0) continue;
+      if (contribution.paragraphs.length === 0 && !contribution.revise)
+        continue;
 
       // A fresh Doc per contribution, because a Yjs client id is per document
       // instance — which is exactly what makes it stand in for a person here.
       const client = new Y.Doc();
       try {
         Y.applyUpdate(client, Y.encodeStateAsUpdate(master));
-        const before = Y.encodeStateVector(client);
 
-        client.getXmlFragment(COLLAB_FRAGMENT_FIELD).push(
-          contribution.paragraphs.map((line) => {
-            const paragraph = new Y.XmlElement('paragraph');
-            paragraph.insert(0, [new Y.XmlText(line)]);
-            return paragraph;
-          })
-        );
+        let charsInserted = 0;
+        let charsDeleted = 0;
+        let updateCount = 0;
 
-        const update = Y.encodeStateAsUpdate(client, before);
-        Y.applyUpdate(master, update);
-        paragraphs.push(...contribution.paragraphs);
+        // The revise, if any, happens first — it can only ever touch a
+        // paragraph an earlier contribution wrote, never this one's own.
+        if (contribution.revise) {
+          const { paragraph, removeSubstring, insertText } =
+            contribution.revise;
+          const paragraphIndex = paragraphs.indexOf(paragraph);
+          if (paragraphIndex === -1) {
+            throw new Error(
+              `Revise target not found among earlier paragraphs: ${JSON.stringify(paragraph)}`
+            );
+          }
+          const at = paragraph.indexOf(removeSubstring);
+          if (at === -1) {
+            throw new Error(
+              `Revise substring ${JSON.stringify(removeSubstring)} not found in paragraph ${JSON.stringify(paragraph)}`
+            );
+          }
 
-        updates.push({ author: contribution.author, update });
+          const before = Y.encodeStateVector(client);
+          // Paragraphs are pushed one Y.XmlElement per line, each holding one
+          // Y.XmlText child — the exact shape the append branch below writes.
+          const target = client.getXmlFragment(COLLAB_FRAGMENT_FIELD).toArray()[
+            paragraphIndex
+          ] as Y.XmlElement;
+          const text = target.toArray()[0] as Y.XmlText;
+          text.delete(at, removeSubstring.length);
+          if (insertText) text.insert(at, insertText);
+
+          const update = Y.encodeStateAsUpdate(client, before);
+          Y.applyUpdate(master, update);
+          updates.push({ author: contribution.author, update });
+
+          paragraphs[paragraphIndex] =
+            paragraph.slice(0, at) +
+            (insertText ?? '') +
+            paragraph.slice(at + removeSubstring.length);
+          charsDeleted += removeSubstring.length;
+          charsInserted += insertText?.length ?? 0;
+          updateCount += 1;
+        }
+
+        if (contribution.paragraphs.length > 0) {
+          const before = Y.encodeStateVector(client);
+
+          client.getXmlFragment(COLLAB_FRAGMENT_FIELD).push(
+            contribution.paragraphs.map((line) => {
+              const paragraph = new Y.XmlElement('paragraph');
+              paragraph.insert(0, [new Y.XmlText(line)]);
+              return paragraph;
+            })
+          );
+
+          const update = Y.encodeStateAsUpdate(client, before);
+          Y.applyUpdate(master, update);
+          paragraphs.push(...contribution.paragraphs);
+          updates.push({ author: contribution.author, update });
+
+          charsInserted += contribution.paragraphs.join('').length;
+          updateCount += contribution.paragraphs.length;
+        }
+
         authors.push({
           author: contribution.author,
           clientId: String(client.clientID),
-          charsInserted: contribution.paragraphs.join('').length,
-          updateCount: contribution.paragraphs.length,
+          charsInserted,
+          charsDeleted,
+          updateCount,
         });
       } finally {
         client.destroy();
@@ -141,6 +217,10 @@ export const GBA300_COHORT = [
   { key: 'fen', name: 'Fen Zhao' },
   { key: 'gia', name: 'Gia Petrov' },
   { key: 'hal', name: 'Hal Mwangi' },
+  // Not a current member of any group — see `removedMember` below. Ninth
+  // rather than reused, so removing her from Group 4 never has to be told
+  // apart from a student who is simply quiet in some other group.
+  { key: 'iris', name: 'Iris Novak' },
 ] as const;
 
 export type GbaCohortKey = (typeof GBA300_COHORT)[number]['key'];
@@ -161,6 +241,15 @@ export type DemoGroupPlan = {
   ordinal: number;
   /** Plan-local author keys; cohort keys and the four student personas. */
   members: string[];
+  /**
+   * Someone who wrote in this draft and was then moved out of the group —
+   * present in `contributions` but absent from `members`. `DocumentGroupMember`
+   * still carries their row, with `removedAt` set, so the "who worked on this"
+   * table and the individual-grade cards correctly leave them out while their
+   * surviving text still renders in the draft below, labelled "Former student"
+   * rather than tinted to a name nobody on the roster recognizes.
+   */
+  removedMember?: string;
   contributions: RoomContribution[];
   /** Where the group is in the assignment, which decides what gets written. */
   stage: 'drafting' | 'submitted' | 'graded';
@@ -309,18 +398,41 @@ export const GBA300_GROUP_PLANS: DemoGroupPlan[] = [
           'Executive summary: Northfield should enter Australia through a distributor, lead on a five-year warranty, and hold the decision on a direct sales force until the warranty claim rate is known.',
         ],
       },
+      {
+        // A separate sitting, days later: Casey comes back not to write
+        // something new but to tighten Gia's sentence — the exact case the
+        // panel's "Removed" column and its own docstring exist for, and until
+        // now nothing in the demo produced a charsDeleted greater than zero.
+        author: 'student-graded',
+        paragraphs: [],
+        revise: {
+          paragraph:
+            'Consumer profile: independent tradespeople who replace tools on failure, not on schedule, and who ask other tradespeople before they ask a salesperson.',
+          removeSubstring: ' not on schedule,',
+        },
+      },
     ],
   },
   {
     label: 'Group 4',
     ordinal: 3,
     members: ['hal', 'student-unreleased', 'ada'],
+    // Iris opened the document, then the teacher moved her to a different
+    // section — the group and its draft stayed behind. Her sentence is still
+    // the first thing in it.
+    removedMember: 'iris',
     stage: 'drafting',
     contributions: [
       {
+        author: 'iris',
+        paragraphs: [
+          'Company overview: we are proposing Sundial Bakery, a regional chain looking at its first international location.',
+        ],
+      },
+      {
         author: 'hal',
         paragraphs: [
-          'Company overview: we picked Sundial Bakery. Still deciding whether the international location should be Ireland or Portugal.',
+          'Still deciding whether the international location should be Ireland or Portugal.',
         ],
       },
     ],
