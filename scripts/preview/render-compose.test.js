@@ -127,7 +127,7 @@ describe('renderPreviewCompose', () => {
 
     expect(compose).toContain('image: "yawp-pr-142-web:current"');
     expect(compose).toContain('dockerfile: services/web-app/Dockerfile');
-    expect(compose).toContain('target: deps');
+    expect(compose).toContain('target: tooling');
     expect(compose).toContain('target: production');
     expect(compose).not.toContain('yawp-preview-deps-v2-');
   });

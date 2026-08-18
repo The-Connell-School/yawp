@@ -6,17 +6,20 @@ ENV DATABASE_URL=${DATABASE_URL}
 FROM base AS deps
 WORKDIR /app
 COPY package.json bun.lockb ./
+COPY services/web-app/package.json ./services/web-app/package.json
+COPY packages/prisma/package.json ./packages/prisma/package.json
+RUN bun install --frozen-lockfile --ignore-scripts
+
+FROM deps AS tooling
 COPY services/web-app ./services/web-app
 COPY packages/prisma ./packages/prisma
-RUN bun install --ignore-scripts
 RUN bun prisma generate
 
-FROM deps AS build
+FROM tooling AS build
 RUN bun web-app:build
 
 FROM base AS production
 WORKDIR /app
-RUN apt-get update -y && apt-get install -y openssl
 
 COPY --from=build /app/package.json ./package.json
 COPY --from=build /app/bun.lockb ./bun.lockb

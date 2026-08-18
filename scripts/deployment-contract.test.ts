@@ -127,7 +127,34 @@ describe('production deployment contract', () => {
     const dockerfile = readRepoFile('services/web-app/Dockerfile');
 
     expect(dockerfile).toContain('FROM base AS deps');
-    expect(dockerfile).toContain('FROM deps AS build');
+    expect(dockerfile).toContain('FROM deps AS tooling');
+    expect(dockerfile).toContain('FROM tooling AS build');
+  });
+
+  test('Docker dependency layers depend on manifests instead of application source', () => {
+    const dockerfile = readRepoFile('services/web-app/Dockerfile');
+    const installIndex = dockerfile.indexOf(
+      'RUN bun install --frozen-lockfile --ignore-scripts'
+    );
+    const webManifestIndex = dockerfile.indexOf(
+      'COPY services/web-app/package.json ./services/web-app/package.json'
+    );
+    const prismaManifestIndex = dockerfile.indexOf(
+      'COPY packages/prisma/package.json ./packages/prisma/package.json'
+    );
+    const webSourceIndex = dockerfile.indexOf(
+      'COPY services/web-app ./services/web-app'
+    );
+    const prismaSourceIndex = dockerfile.indexOf(
+      'COPY packages/prisma ./packages/prisma'
+    );
+
+    expect(webManifestIndex).toBeGreaterThan(-1);
+    expect(prismaManifestIndex).toBeGreaterThan(-1);
+    expect(installIndex).toBeGreaterThan(prismaManifestIndex);
+    expect(webSourceIndex).toBeGreaterThan(installIndex);
+    expect(prismaSourceIndex).toBeGreaterThan(installIndex);
+    expect(dockerfile.match(/apt-get install -y openssl/g)?.length).toBe(1);
   });
 
   test('Docker runtime image includes workspace node_modules for web app binaries', () => {

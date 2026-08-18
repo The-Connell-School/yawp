@@ -152,7 +152,7 @@ ${commonEnvironment}
     build:
       context: ${q(env.sourceDir)}
       dockerfile: services/web-app/Dockerfile
-      target: deps
+      target: tooling
       args:
         DATABASE_URL: ${q(env.databaseUrl)}
     environment:
