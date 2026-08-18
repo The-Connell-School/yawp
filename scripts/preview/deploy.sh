@@ -355,6 +355,20 @@ backup_demo_database_before_reset() {
     bash "$SCRIPT_DIR/backup-database.sh"
 }
 
+drop_preview_database() {
+  local database_name="$1"
+  validate_database_name "$database_name"
+  if [[ "$PREVIEW_SLUG" == "demo" ]]; then
+    require_demo_reset_confirmation
+    [[ "$DEMO_RESET_DATA" == "true" ]] || {
+      echo "Refusing to delete the demo database while DEMO_RESET_DATA=false" >&2
+      return 1
+    }
+  fi
+  docker exec "$POSTGRES_CONTAINER" dropdb -U postgres --force --if-exists \
+    "$database_name"
+}
+
 revoke_public_database_connect() {
   local database_name="$1"
   validate_database_name "$database_name"
@@ -412,18 +426,18 @@ reset_preview_database_for_data_source_change() {
   fi
 
   echo "Preview data source changed; replacing database $DATABASE_NAME..."
-  "${compose[@]}" down --remove-orphans >/dev/null 2>&1 || true
   backup_demo_database_before_reset
-  docker exec "$POSTGRES_CONTAINER" dropdb -U postgres --force --if-exists "$DATABASE_NAME"
+  "${compose[@]}" down --remove-orphans >/dev/null 2>&1 || true
+  drop_preview_database "$DATABASE_NAME"
   rm -f "$TOOLING_FINGERPRINT_FILE"
 }
 
 reset_seed_preview_database() {
   validate_database_name "$DATABASE_NAME"
   echo "Resetting preview database $DATABASE_NAME for seeded local-dev data..."
-  "${compose[@]}" down --remove-orphans >/dev/null 2>&1 || true
   backup_demo_database_before_reset
-  docker exec "$POSTGRES_CONTAINER" dropdb -U postgres --force --if-exists "$DATABASE_NAME"
+  "${compose[@]}" down --remove-orphans >/dev/null 2>&1 || true
+  drop_preview_database "$DATABASE_NAME"
   docker exec "$POSTGRES_CONTAINER" createdb -U postgres -O "$DATABASE_USER" "$DATABASE_NAME"
   DATABASE_CREATED=1
 }
@@ -437,6 +451,7 @@ install_demo_backup_tooling() {
   mkdir -p "$ROOT/ops" "$ROOT/backups"
   chmod 700 "$ROOT/ops" "$ROOT/backups"
   install -m 700 "$SCRIPT_DIR/backup-database.sh" "$ROOT/ops/backup-database.sh"
+  install -m 700 "$SCRIPT_DIR/publish-demo-backup.sh" "$ROOT/ops/publish-demo-backup.sh"
 }
 
 create_seed_preview_database() {
@@ -492,6 +507,7 @@ compute_tooling_fingerprint() {
         "$SCRIPT_DIR/deploy.sh" \
         "$SCRIPT_DIR/preview-env.mjs" \
         "$SCRIPT_DIR/render-compose.mjs" \
+        "$SCRIPT_DIR/rollout-web.sh" \
         "$SCRIPT_DIR/tooling-artifacts.sh"
       do
         sha256_file "$control_file"
@@ -541,6 +557,14 @@ run_tooling_if_needed() {
   local missing_artifacts
   missing_artifacts="$(preview_missing_tooling_artifacts "$SOURCE_DIR" | awk 'BEGIN { first = 1 } { if (!first) printf ", "; printf "%s", $0; first = 0 }')"
 
+  # The tooling fingerprint intentionally covers database/bootstrap inputs, not every
+  # application source file. Production images therefore rebuild on every deployment;
+  # Docker's layer cache keeps unchanged builds cheap while guaranteeing code-only refs
+  # cannot silently restart the previously tagged image.
+  if [[ "$RUNTIME" == "production" ]]; then
+    COMPOSE_PARALLEL_LIMIT=1 "${compose[@]}" build web
+  fi
+
   if [[ "$DATABASE_CREATED" == "0" && "$fingerprint" == "$previous_fingerprint" && -z "$missing_artifacts" ]]; then
     echo "Tooling fingerprint unchanged and database already existed; skipping install/generate/migrate."
     TOOLING_CHANGED=0
@@ -553,7 +577,6 @@ run_tooling_if_needed() {
 
   if [[ "$RUNTIME" == "production" ]]; then
     COMPOSE_PARALLEL_LIMIT=1 "${compose[@]}" build toolbox
-    COMPOSE_PARALLEL_LIMIT=1 "${compose[@]}" build web
   else
     "${compose[@]}" pull --quiet toolbox web || true
   fi
@@ -602,6 +625,24 @@ refresh_web_container_if_needed() {
   remove_legacy_project_postgres
 }
 
+rollout_demo_web_without_downtime() {
+  PREVIEW_COMPOSE_PROJECT="$COMPOSE_PROJECT" \
+    PREVIEW_COMPOSE_FILE="$PREVIEW_DIR/docker-compose.yml" \
+    PREVIEW_ROUTER_FILE="$ROOT/traefik/dynamic/${COMPOSE_PROJECT}-cutover.yml" \
+    PREVIEW_HOSTNAME="$HOSTNAME" \
+    PREVIEW_PUBLIC_URL="$URL" \
+    PREVIEW_LOGIN_SMOKE_SCRIPT="$SCRIPT_DIR/smoke-login.mjs" \
+    PREVIEW_ACCESS_CODE="$smoke_access_code" \
+    PREVIEW_DATA_MODE="$DATA_MODE" \
+    PREVIEW_RUNTIME="$RUNTIME" \
+    PREVIEW_DEV_LOGIN_EMAIL="$PREVIEW_DEV_LOGIN_EMAIL" \
+    PREVIEW_LOGIN_EMAIL="${PREVIEW_LOGIN_EMAIL:-}" \
+    PREVIEW_LOGIN_PASSWORD="${PREVIEW_LOGIN_PASSWORD:-}" \
+    PREVIEW_TLS="${PREVIEW_TLS:-true}" \
+    bash "$SCRIPT_DIR/rollout-web.sh"
+  remove_legacy_project_postgres
+}
+
 ensure_shared_postgres
 ensure_preview_database_role
 reset_preview_database_for_data_source_change
@@ -610,11 +651,6 @@ harden_preview_database
 run_tooling_if_needed
 ensure_preview_seats
 install_demo_backup_tooling
-start_or_refresh_web() {
-  refresh_web_container_if_needed
-}
-start_or_refresh_web
-
 health_url="${PREVIEW_HEALTHCHECK_URL:-${URL}/api/healthcheck}"
 login_url="${PREVIEW_LOGIN_URL:-${URL}}"
 smoke_access_code="$(
@@ -625,6 +661,15 @@ if [[ -n "${DIRECT_PORT:-}" ]]; then
   health_url="http://127.0.0.1:${DIRECT_PORT}/api/healthcheck"
   login_url="http://127.0.0.1:${DIRECT_PORT}"
 fi
+
+start_or_refresh_web() {
+  if [[ "$PREVIEW_SLUG" == "demo" && "$RUNTIME" == "production" && -z "${DIRECT_PORT:-}" ]]; then
+    rollout_demo_web_without_downtime
+  else
+    refresh_web_container_if_needed
+  fi
+}
+start_or_refresh_web
 
 for attempt in $(seq 1 90); do
   if curl -fsS --connect-timeout 1 --max-time 2 "$health_url" >/dev/null; then

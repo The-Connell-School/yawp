@@ -36,9 +36,8 @@ export function renderPreviewCompose({
   if (!['disabled', 'live'].includes(aiMode)) {
     throw new Error('PREVIEW_AI_MODE must be disabled or live');
   }
-  const anthropicApiKey = aiMode === 'live'
-    ? optionalEnv('PREVIEW_ANTHROPIC_API_KEY')
-    : '';
+  const anthropicApiKey =
+    aiMode === 'live' ? optionalEnv('PREVIEW_ANTHROPIC_API_KEY') : '';
   const env = buildPreviewEnv({
     prNumber,
     domain,
@@ -127,6 +126,7 @@ ${fastVolumes}
 ${commonEnvironment}
 `
       : `  web:
+    image: ${q(`${routerBase}-web:current`)}
     build:
       context: ${q(env.sourceDir)}
       dockerfile: services/web-app/Dockerfile

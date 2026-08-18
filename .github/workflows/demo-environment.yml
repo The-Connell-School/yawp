@@ -189,15 +189,19 @@ jobs:
             "DEMO_BACKUP_RETENTION=$(shell_quote "$DEMO_BACKUP_RETENTION")"
             "SOURCE_DIR=$(shell_quote "$remote_source")"
           )
+          lock_file="${PREVIEW_ROOT}/preview-host.lock"
+          deploy_command="cd $(shell_quote "$remote_control") && ${remote_env[*]} bash scripts/preview/deploy.sh"
           ssh -i ~/.ssh/demo_key "$ssh_target" \
-            "cd $(shell_quote "$remote_control") && ${remote_env[*]} bash scripts/preview/deploy.sh" \
+            "flock -w 1800 $(shell_quote "$lock_file") bash -lc $(shell_quote "$deploy_command")" \
             | tee /tmp/demo-deploy.log
           url="$(awk -F= '/^PREVIEW_URL=/{print $2}' /tmp/demo-deploy.log | tail -1)"
           access_code="$(awk -F= '/^PREVIEW_ACCESS_CODE=/{print $2}' /tmp/demo-deploy.log | tail -1)"
           test -n "$url" || { echo "Deploy did not print PREVIEW_URL"; exit 1; }
           test -n "$access_code" || { echo "Deploy did not print PREVIEW_ACCESS_CODE"; exit 1; }
-          echo "url=$url" >> "$GITHUB_OUTPUT"
-          echo "access_code=$access_code" >> "$GITHUB_OUTPUT"
+          {
+            echo "url=$url"
+            echo "access_code=$access_code"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Verify the demo actually serves
         run: |

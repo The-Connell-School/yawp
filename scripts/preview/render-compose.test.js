@@ -81,6 +81,7 @@ describe('renderPreviewCompose', () => {
       runtime: 'production',
     });
 
+    expect(compose).toContain('image: "yawp-pr-142-web:current"');
     expect(compose).toContain('dockerfile: services/web-app/Dockerfile');
     expect(compose).toContain('target: deps');
     expect(compose).toContain('target: production');
@@ -206,7 +207,8 @@ describe('renderPreviewCompose', () => {
       expect(compose).toContain('ANTHROPIC_API_KEY: ""');
       expect(compose).not.toContain('shared-provider-key');
     } finally {
-      if (previousAnthropicKey === undefined) delete process.env.PREVIEW_ANTHROPIC_API_KEY;
+      if (previousAnthropicKey === undefined)
+        delete process.env.PREVIEW_ANTHROPIC_API_KEY;
       else process.env.PREVIEW_ANTHROPIC_API_KEY = previousAnthropicKey;
     }
   });
