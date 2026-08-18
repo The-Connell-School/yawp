@@ -365,8 +365,44 @@ describe('the GBA 300 demo plan', () => {
 
   test('only a graded group carries a grade', () => {
     for (const plan of GBA300_GROUP_PLANS) {
-      expect(Boolean(plan.grade)).toBe(plan.stage === 'graded');
+      expect(Boolean(plan.grade)).toBe(
+        plan.stage === 'graded' || plan.stage === 'graded-unreleased'
+      );
     }
+  });
+
+  test('a drafting group has nothing to submit', () => {
+    // A prior submission on a group that never submitted would be incoherent.
+    for (const plan of GBA300_GROUP_PLANS) {
+      if (plan.stage !== 'drafting') continue;
+      expect(plan.priorSubmission).toBeUndefined();
+    }
+  });
+
+  test('a withdrawn submission predates the current one', () => {
+    // It is seeded at `withdrawnAfterDays + 2` and withdrawn at
+    // `withdrawnAfterDays`; the current submission is three days ago. A
+    // withdrawal newer than the live submission would read as the teacher
+    // sending back work the group had not yet resubmitted.
+    for (const plan of GBA300_GROUP_PLANS) {
+      if (!plan.priorSubmission) continue;
+      expect(plan.priorSubmission.withdrawnAfterDays).toBeGreaterThan(3);
+    }
+  });
+
+  test('covers both released and unreleased grading', () => {
+    // Most of a teacher's marking time is spent in the unreleased state, and
+    // it is the one where a bug shows a student a grade early.
+    const stages = new Set(GBA300_GROUP_PLANS.map((plan) => plan.stage));
+    expect(stages.has('graded')).toBe(true);
+    expect(stages.has('graded-unreleased')).toBe(true);
+  });
+
+  test('the assignment has more than one group submitting', () => {
+    const submitting = GBA300_GROUP_PLANS.filter(
+      (plan) => plan.stage !== 'drafting'
+    );
+    expect(submitting.length).toBeGreaterThanOrEqual(3);
   });
 
   test('a graded group has the free-text score the group grade is read from', () => {
@@ -395,9 +431,11 @@ describe('the GBA 300 demo plan', () => {
     }
   });
 
-  test('covers drafting, submitted and graded so every view has data', () => {
+  test('covers every stage, so every view has data', () => {
     const stages = new Set(GBA300_GROUP_PLANS.map((plan) => plan.stage));
-    expect(stages).toEqual(new Set(['drafting', 'submitted', 'graded']));
+    expect(stages).toEqual(
+      new Set(['drafting', 'submitted', 'graded', 'graded-unreleased'])
+    );
   });
 
   test('shows an uneven split, which is what the breakdown is for', () => {

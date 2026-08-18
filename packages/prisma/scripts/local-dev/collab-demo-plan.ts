@@ -221,6 +221,12 @@ export const GBA300_COHORT = [
   // rather than reused, so removing her from Group 4 never has to be told
   // apart from a student who is simply quiet in some other group.
   { key: 'iris', name: 'Iris Novak' },
+  { key: 'jae', name: 'Jae Lindqvist' },
+  { key: 'kit', name: 'Kit Abara' },
+  { key: 'lou', name: 'Lou Ferreira' },
+  { key: 'mia', name: 'Mia Sokolov' },
+  { key: 'noa', name: 'Noa Haddad' },
+  { key: 'ravi', name: 'Ravi Chandran' },
 ] as const;
 
 export type GbaCohortKey = (typeof GBA300_COHORT)[number]['key'];
@@ -251,8 +257,22 @@ export type DemoGroupPlan = {
    */
   removedMember?: string;
   contributions: RoomContribution[];
-  /** Where the group is in the assignment, which decides what gets written. */
-  stage: 'drafting' | 'submitted' | 'graded';
+  /**
+   * Where the group is in the assignment, which decides what gets written.
+   *
+   * `graded` releases the grade to the group; `graded-unreleased` keeps it back,
+   * which is the state a teacher is in for most of the time they are marking and
+   * the one where a bug would leak a grade early.
+   */
+  stage: 'drafting' | 'submitted' | 'graded' | 'graded-unreleased';
+  /**
+   * An earlier submission the teacher sent back, kept alongside the current one.
+   *
+   * `unsubmittedAt` is what distinguishes it: every query for "the group's work"
+   * filters on that being null, so a withdrawn submission has to exist in the
+   * demo for those filters to be worth anything.
+   */
+  priorSubmission?: { withdrawnAfterDays: number };
   /** Teacher comment on the draft, and the group's reply to it. */
   comment?: { teacher: string; reply?: { author: string; content: string } };
   grade?: {
@@ -436,5 +456,100 @@ export const GBA300_GROUP_PLANS: DemoGroupPlan[] = [
         ],
       },
     ],
+  },
+  {
+    label: 'Group 5',
+    ordinal: 4,
+    members: ['jae', 'kit', 'lou'],
+    // Submitted, sent back for more work, and submitted again. The withdrawn
+    // submission is still on the document.
+    stage: 'submitted',
+    priorSubmission: { withdrawnAfterDays: 5 },
+    contributions: [
+      {
+        author: 'jae',
+        paragraphs: [
+          'Company overview: Rivet & Stone is a Canadian furniture maker selling flat-pack hardwood pieces direct to consumers.',
+          'Industry analysis: direct-to-consumer furniture lives and dies on shipping cost, so the analysis has to start from freight rather than from taste.',
+          'International location: the Netherlands. Central for onward EU shipping, high English fluency, and a buyer who already assembles their own furniture.',
+        ],
+      },
+      {
+        author: 'kit',
+        paragraphs: [
+          'Consumer profile: 28-45, renting or in a first home, buying one considered piece at a time rather than furnishing a room at once.',
+          'Advertising strategy: assembly-first. The message is that it goes together in twenty minutes, shown rather than claimed, on video.',
+        ],
+      },
+      {
+        author: 'lou',
+        paragraphs: [
+          'Budget breakdown: EUR 210,000 in year one — 50% freight and a Rotterdam 3PL, 25% video production, 15% paid social, 10% returns reserve.',
+          'Recommendation: enter the Netherlands in Q2 with four SKUs, and treat the returns rate in the first two quarters as the decision point on widening the range.',
+          'Executive summary: Rivet & Stone should enter the Netherlands with a deliberately narrow range, lead on assembly, and let the returns rate decide whether to widen it.',
+        ],
+      },
+      {
+        // The revision that came out of being sent back the first time.
+        author: 'jae',
+        paragraphs: [],
+        revise: {
+          paragraph:
+            'Industry analysis: direct-to-consumer furniture lives and dies on shipping cost, so the analysis has to start from freight rather than from taste.',
+          removeSubstring: 'lives and dies on shipping cost',
+          insertText:
+            'competes on landed cost, where freight is the largest single line',
+        },
+      },
+    ],
+    comment: {
+      teacher:
+        'Much stronger on the resubmission — starting from freight rather than from taste is the right instinct, and the returns rate as a decision point is exactly the kind of commitment I was asking for.',
+    },
+  },
+  {
+    label: 'Group 6',
+    ordinal: 5,
+    members: ['mia', 'noa', 'ravi'],
+    // Graded but deliberately not released: the state a teacher spends most of
+    // their marking time in, and the one where a leak would be worst.
+    stage: 'graded-unreleased',
+    contributions: [
+      {
+        author: 'mia',
+        paragraphs: [
+          'Company overview: Two Rivers Cider presses from a single orchard and sells through restaurants and bottle shops in one province.',
+          'Industry analysis: cider abroad competes with beer for the same tap, not with wine for the same shelf, which changes who we have to convince.',
+        ],
+      },
+      {
+        author: 'noa',
+        paragraphs: [
+          'International location: Ireland. An established cider category means we do not have to explain the product, only why ours is different.',
+          'Consumer profile: pub operators choosing a second cider tap, who need a reason to displace something already selling.',
+          'Advertising strategy: single-orchard provenance, argued to the operator rather than the drinker, with a tap takeover in three Dublin pubs as the proof.',
+        ],
+      },
+      {
+        author: 'ravi',
+        paragraphs: [
+          'Budget breakdown: EUR 95,000 year one, over half of it the tap takeovers, because that is the whole strategy rather than a marketing line.',
+          'Recommendation: enter Dublin only, hold the range at one product, and judge it on repeat orders from the first three accounts.',
+        ],
+      },
+    ],
+    grade: {
+      score: 'B+ (87)',
+      numericPercentage: 87,
+      letterGrade: 'B+',
+      overallComment:
+        'The competitive framing — cider against beer for the tap, not against wine for the shelf — is the best single observation in any brief this term. The executive summary is missing.',
+      override: {
+        author: 'ravi',
+        score: '80',
+        feedback:
+          'Your budget follows the strategy honestly, which is more than most. The missing executive summary was your section.',
+      },
+    },
   },
 ];

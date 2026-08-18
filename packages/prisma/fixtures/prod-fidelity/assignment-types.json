@@ -126,7 +126,55 @@
     "collaborationSupported": true,
     "archivedAt": null,
     "ownerOrgId": null,
-    "ownerTeacherId": null
+    "ownerTeacherId": null,
+    "rubricJson": {
+      "categories": [
+        {
+          "key": "company_and_opportunity",
+          "label": "Company & Opportunity",
+          "weight": 0.15,
+          "description": "A concrete company with clear objectives, mission, and a statement of opportunity specific enough to carry the rest of the report."
+        },
+        {
+          "key": "market_and_location",
+          "label": "Industry & Location Analysis",
+          "weight": 0.25,
+          "description": "Industry conditions and the chosen international market are argued from evidence, including the trade-offs against alternatives that were rejected."
+        },
+        {
+          "key": "consumer_and_strategy",
+          "label": "Consumer Profile & Advertising Strategy",
+          "weight": 0.25,
+          "description": "A specific target consumer, and an advertising strategy whose channel and message follow from who that consumer actually is."
+        },
+        {
+          "key": "budget",
+          "label": "Budget Breakdown",
+          "weight": 0.15,
+          "description": "Costs are itemised, proportionate to the strategy, and specific enough that a reader could disagree with a line of them."
+        },
+        {
+          "key": "recommendation_and_summary",
+          "label": "Recommendation & Executive Summary",
+          "weight": 0.2,
+          "description": "A recommendation that follows from the evidence rather than being announced, and a summary that stands on its own."
+        }
+      ]
+    },
+    "scoringScaleJson": {
+      "type": "weighted_1_5",
+      "minScore": 1,
+      "maxScore": 5
+    },
+    "gradingPromptConfigJson": {
+      "gradingInstructions": "This is a group business brief, not a literary essay. Grade the argument and the evidence, not the prose style. Reward specificity — a named market with a stated trade-off, an itemised budget, a consumer described by behaviour rather than demographics — and mark down sections that assert a conclusion without the analysis behind it. Placeholder or unfinished sections should score low on their category rather than dragging down the others. Do not speculate about which group member wrote which section."
+    },
+    "gradingOutputSchemaJson": {
+      "responseShape": "categories_overall_comment",
+      "schemaVersion": 1
+    },
+    "gradingCalibrationNotes": "Written for the GBA 300 international expansion brief. Without this the assignment type has no config of its own and falls back to the thesis-driven essay assistant, which grades a business brief against \"Thesis/Content\" and \"Voice/Style\".",
+    "gradingAssistantVersion": 1
   },
   {
     "id": "cmpphw7w303lh01l15z0pr6nd",

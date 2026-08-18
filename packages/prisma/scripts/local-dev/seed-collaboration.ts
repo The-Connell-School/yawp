@@ -454,6 +454,24 @@ async function seedGroup(
 
   if (plan.stage === 'drafting') return group.id;
 
+  // A submission the teacher sent back, kept beside the current one. Every
+  // query for "the group's work" filters on `unsubmittedAt` being null, so the
+  // filter is only worth anything if a withdrawn row actually exists.
+  if (plan.priorSubmission) {
+    await prisma.submission.create({
+      data: {
+        documentId: document.id,
+        html: room.html,
+        text: room.text,
+        title: 'International expansion brief',
+        submittedAt: daysAgo(plan.priorSubmission.withdrawnAfterDays + 2),
+        unsubmittedAt: daysAgo(plan.priorSubmission.withdrawnAfterDays),
+      },
+    });
+  }
+
+  const released = plan.stage === 'graded';
+
   await prisma.submission.create({
     data: {
       documentId: document.id,
@@ -474,7 +492,7 @@ async function seedGroup(
             numericPercentage: plan.grade.numericPercentage,
             letterGrade: plan.grade.letterGrade,
             overallComment: plan.grade.overallComment,
-            releasedAt: daysAgo(1),
+            releasedAt: released ? daysAgo(1) : null,
           }
         : {}),
     },
@@ -495,7 +513,10 @@ async function seedGroup(
         score: override?.score ?? null,
         feedback: override?.feedback ?? null,
         gradedByMembershipId: primaryTeacherMembershipId,
-        releasedAt: daysAgo(1),
+        // Held back with the group grade: a member grade released while the
+        // group's own is not would show a student a mark for work the teacher
+        // has not finished judging.
+        releasedAt: released ? daysAgo(1) : null,
       };
     }),
   });
