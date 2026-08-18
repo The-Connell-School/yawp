@@ -1176,6 +1176,20 @@ describe('demo environment deployment contract', () => {
     expect(deployScript).toContain('install_demo_backup_tooling');
   });
 
+  test('normal demo deploys prove aggregate data counts do not decrease', () => {
+    const workflow = readRepoFile('.github/workflows/demo-environment.yml');
+    const signaturePath = 'scripts/preview/demo-data-signature.sh';
+
+    expect(existsSync(join(repoRoot, signaturePath))).toBe(true);
+    expect(workflow).toContain('Capture demo data before deploy');
+    expect(workflow).toContain('Capture demo data after deploy');
+    expect(workflow).toContain('steps.before_data.outputs.signature');
+    expect(workflow).toContain('DEMO_RESET_DATA');
+    expect(workflow).toContain(
+      'Demo aggregate data decreased during no-reset deploy'
+    );
+  });
+
   test('demo backups are scheduled daily with configurable count retention', () => {
     const workflow = readRepoFile('.github/workflows/demo-environment.yml');
     const backupWorkflow = readRepoFile(

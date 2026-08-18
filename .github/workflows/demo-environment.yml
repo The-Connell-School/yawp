@@ -168,6 +168,19 @@ jobs:
             -e "ssh -i ~/.ssh/demo_key" \
             demo-source/ "$ssh_target:$remote_source/"
 
+      - name: Capture demo data before deploy
+        id: before_data
+        run: |
+          set -euo pipefail
+          shell_quote() { printf '%q' "$1"; }
+          ssh_target="${PREVIEW_SSH_USER}@${PREVIEW_HOST}"
+          remote_script="${PREVIEW_ROOT}/control/demo/scripts/preview/demo-data-signature.sh"
+          signature="$(ssh -i ~/.ssh/demo_key "$ssh_target" \
+            "DATABASE_NAME=yawp_demo PREVIEW_POSTGRES_CONTAINER=preview-postgres bash $(shell_quote "$remote_script")")"
+          jq -e 'all(.[]; type == "number" and . >= 0)' <<<"$signature" >/dev/null
+          echo "signature=$signature" >> "$GITHUB_OUTPUT"
+          echo "Demo aggregate data before deploy: $signature"
+
       - name: Deploy demo
         id: deploy
         run: |
@@ -252,6 +265,31 @@ jobs:
           echo "::error::Demo did not become healthy at $url. Previous version was ${{ steps.previous.outputs.sha }} — redeploy that ref to roll back."
           exit 1
 
+      - name: Capture demo data after deploy
+        id: after_data
+        env:
+          BEFORE_SIGNATURE: ${{ steps.before_data.outputs.signature }}
+        run: |
+          set -euo pipefail
+          shell_quote() { printf '%q' "$1"; }
+          ssh_target="${PREVIEW_SSH_USER}@${PREVIEW_HOST}"
+          remote_script="${PREVIEW_ROOT}/control/demo/scripts/preview/demo-data-signature.sh"
+          signature="$(ssh -i ~/.ssh/demo_key "$ssh_target" \
+            "DATABASE_NAME=yawp_demo PREVIEW_POSTGRES_CONTAINER=preview-postgres bash $(shell_quote "$remote_script")")"
+          jq -e 'all(.[]; type == "number" and . >= 0)' <<<"$signature" >/dev/null
+          echo "signature=$signature" >> "$GITHUB_OUTPUT"
+          echo "Demo aggregate data after deploy: $signature"
+          if [[ "$DEMO_RESET_DATA" == "false" ]]; then
+            for key in organizations users classes assignments documents submissions moduleSessions; do
+              before_count="$(jq -er --arg key "$key" '.[$key]' <<<"$BEFORE_SIGNATURE")"
+              after_count="$(jq -er --arg key "$key" '.[$key]' <<<"$signature")"
+              (( after_count >= before_count )) || {
+                echo "Demo aggregate data decreased during no-reset deploy: $key $before_count -> $after_count" >&2
+                exit 1
+              }
+            done
+          fi
+
       - name: Record the deployed version
         run: |
           set -euo pipefail
@@ -267,6 +305,8 @@ jobs:
             echo "- **Now running:** \`${{ steps.shipping.outputs.sha }}\` — ${{ steps.shipping.outputs.subject }}"
             echo "- **Was running:** \`${{ steps.previous.outputs.sha }}\`"
             echo "- **Build:** production"
+            echo "- **Data before:** ${{ steps.before_data.outputs.signature }}"
+            echo "- **Data after:** ${{ steps.after_data.outputs.signature }}"
             echo
             echo "To roll back, dispatch this workflow again with ref \`${{ steps.previous.outputs.sha }}\`."
           } >> "$GITHUB_STEP_SUMMARY"
