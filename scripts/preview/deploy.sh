@@ -395,11 +395,8 @@ recover_demo_database_on_failure() {
   if (( status != 0 )) && [[ "$DEMO_RESET_RECOVERY_ARMED" == "true" ]]; then
     DEMO_RESET_RECOVERY_ARMED=false
     echo "Demo deployment failed after reset; restoring the pre-reset database." >&2
-    if PREVIEW_ROOT="$ROOT" \
-      BACKUP_FILE="$DEMO_RESET_BACKUP_FILE" \
-      DATABASE_NAME="$DATABASE_NAME" \
-      DATABASE_USER="$DATABASE_USER" \
-      PREVIEW_POSTGRES_CONTAINER="$POSTGRES_CONTAINER" \
+    if PREVIEW_ROOT="$ROOT" BACKUP_FILE="$DEMO_RESET_BACKUP_FILE" DATABASE_NAME="$DATABASE_NAME" \
+      DATABASE_USER="$DATABASE_USER" PREVIEW_POSTGRES_CONTAINER="$POSTGRES_CONTAINER" \
       bash "$SCRIPT_DIR/restore-demo-backup.sh" \
       && harden_preview_database; then
       echo "Demo pre-reset database restored; existing web container can reconnect." >&2
