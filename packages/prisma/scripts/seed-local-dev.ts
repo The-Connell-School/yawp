@@ -57,21 +57,8 @@ try {
   console.time('collaboration');
   const collaboration = await seedCollaborationDemoData(prisma, {
     organizationId: context.organizationId,
-    schoolId: context.schoolIds[0]!,
-    teacherMembershipIds: [
-      context.personas.teacher.membershipId,
-      context.personas.owner.membershipId,
-      context.personas.admin.membershipId,
-      context.personas['teacher-multi'].membershipId,
-    ],
-    primaryTeacherMembershipId: context.personas.teacher.membershipId,
-    personaStudentMembershipIds: {
-      student: context.personas.student.membershipId,
-      'student-submitted': context.personas['student-submitted'].membershipId,
-      'student-graded': context.personas['student-graded'].membershipId,
-      'student-unreleased': context.personas['student-unreleased'].membershipId,
-    },
-    password: LOCAL_DEV_PASSWORD,
+    schoolCode: 'DEV-SCH-1',
+    personas: LOCAL_DEV_PERSONAS,
   });
   console.timeEnd('collaboration');
 

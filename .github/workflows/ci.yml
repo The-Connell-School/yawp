@@ -115,6 +115,24 @@ jobs:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
         run: bun run --cwd packages/prisma assignment-type-release-gate
 
+      # Last, because it truncates every table before it writes.
+      #
+      # The seed is what a preview runs against a fresh database, and until now
+      # nothing ran it before a preview did. `packages/prisma/scripts` is outside
+      # the web app's tsconfig, so typecheck does not reach it either — a call
+      # that no longer matches its function surfaced as a failed deploy rather
+      # than a failed check. This runs the same sequence against the same kind of
+      # database.
+      #
+      # It does not catch everything the deploy can hit: a package the Prisma
+      # workspace imports without declaring resolves fine here, because a plain
+      # install hoists it to the root, and only fails where node_modules is laid
+      # out differently. Declaring what the seed imports is the guard for that.
+      - name: 🌱 Seed local-dev data
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
+        run: bun run --cwd packages/prisma seed-local-dev
+
   typecheck-web-app:
     name: ʦ TypeScript
     runs-on: ubuntu-22.04

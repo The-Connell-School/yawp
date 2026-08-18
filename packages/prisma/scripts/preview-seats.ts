@@ -3,7 +3,6 @@ import { enableClassInsightsForOrganizations } from './local-dev/class-insights'
 import {
   LOCAL_DEV_ORG_ID,
   LOCAL_DEV_ORG_NAME,
-  LOCAL_DEV_PASSWORD,
   LOCAL_DEV_PERSONAS,
   type LocalDevPersona,
 } from './local-dev/dev-personas';
@@ -144,7 +143,7 @@ export async function createPreviewSeat(
     })),
   });
 
-  const context = await seedSyntheticLocalDevData(transaction, {
+  await seedSyntheticLocalDevData(transaction, {
     organizationId: seat.organizationId,
     personas: seat.personas,
     schoolCodes: seat.schoolCodes,
@@ -152,27 +151,7 @@ export async function createPreviewSeat(
     teacherTrainingIds,
   });
 
-  // Same reasoning as the persona cast above: a seat that is missing the group
-  // work is a seat where the thing under review cannot be reviewed.
-  await seedCollaborationDemoData(transaction, {
-    organizationId: seat.organizationId,
-    schoolId: context.schoolIds[0]!,
-    teacherMembershipIds: [
-      context.personas.teacher.membershipId,
-      context.personas.owner.membershipId,
-      context.personas.admin.membershipId,
-      context.personas['teacher-multi'].membershipId,
-    ],
-    primaryTeacherMembershipId: context.personas.teacher.membershipId,
-    personaStudentMembershipIds: {
-      student: context.personas.student.membershipId,
-      'student-submitted': context.personas['student-submitted'].membershipId,
-      'student-graded': context.personas['student-graded'].membershipId,
-      'student-unreleased': context.personas['student-unreleased'].membershipId,
-    },
-    password: seat.personas[0]?.password ?? LOCAL_DEV_PASSWORD,
-    emailSuffix: seat.number === 1 ? '' : `.seat-${seat.number}`,
-  });
+  await seedCollaborationDemoForSeat(transaction, seat);
 
   const [insights] = await enableClassInsightsForOrganizations(transaction, [
     seat.organizationId,
@@ -182,6 +161,37 @@ export async function createPreviewSeat(
       `Could not enable class insights for preview seat ${seat.organizationId}.`
     );
   }
+}
+
+/**
+ * The collaborative GBA 300 demo for one seat.
+ *
+ * Creation-time only, like everything else a seat gets. It resolves what it needs
+ * by persona email and no-ops when the class is already there, so it is safe to
+ * retry — but it is deliberately NOT run for a seat whose organization already
+ * exists. Reseeding an existing seat performs zero writes and preserves whatever
+ * the person using it has diverged into, which is a contract with its own test;
+ * a seat that has been in use for a week should not silently acquire a class and
+ * eight students because a later deploy learned how to make them.
+ *
+ * The consequence is that a preview whose database predates this demo does not
+ * get it. That database has to be recreated — `DEMO_RESET_DATA=true`, or a
+ * destroyed and redeployed preview — which is the existing lever for exactly
+ * this, rather than a new one that writes into other people's worlds.
+ *
+ * Same reasoning as the persona cast above: a seat missing the group work is a
+ * seat where the thing under review cannot be reviewed.
+ */
+export async function seedCollaborationDemoForSeat(
+  prisma: PreviewSeatClient,
+  seat: PreviewSeatDefinition
+) {
+  await seedCollaborationDemoData(prisma, {
+    organizationId: seat.organizationId,
+    schoolCode: seat.schoolCodes[0],
+    personas: seat.personas,
+    emailSuffix: seat.number === 1 ? '' : `.seat-${seat.number}`,
+  });
 }
 
 export async function ensurePreviewSeats(

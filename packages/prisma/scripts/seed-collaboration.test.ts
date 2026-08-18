@@ -6,7 +6,7 @@ import {
   GBA300_COHORT,
   GBA300_GROUP_PLANS,
 } from './local-dev/collab-demo-plan';
-import { COLLAB_FRAGMENT_FIELD } from '../../../services/web-app/app/domain/collaboration/schema';
+import { COLLAB_FRAGMENT_FIELD } from '../../../services/web-app/app/domain/collaboration/fragment';
 import { yDocToSnapshot } from '../../../services/web-app/app/domain/collaboration/snapshot';
 
 /**
@@ -29,15 +29,29 @@ describe('buildCollabRoom', () => {
   ];
 
   test('replaying the log reproduces the snapshot the seed stores', async () => {
-    // This is the invariant the dual-write depends on: Document.html has to be
-    // what the room actually contains, or grading reads one document and the
-    // students see another.
+    // Two invariants at once. `Document.html` has to be what the room actually
+    // contains, or grading reads one document while the students see another —
+    // and the seed builds that HTML itself rather than calling the converter,
+    // because the converter drags TipTap into a workspace that does not have it.
+    // This is what stops the shortcut drifting from the real thing.
     const room = buildCollabRoom(contributions);
 
     const replayed = yDocToSnapshot(replayRoom(room.updates));
 
     expect(replayed.html).toBe(room.html);
     expect(replayed.text).toBe(room.text);
+  });
+
+  test('every seeded room’s HTML is what the converter would produce', () => {
+    // The same check across the demo's real content, not just the fixture above:
+    // an apostrophe or an ampersand the converter escapes and the seed does not
+    // would put two different documents in front of the teacher and the group.
+    for (const plan of GBA300_GROUP_PLANS) {
+      const room = buildCollabRoom(plan.contributions);
+      const replayed = yDocToSnapshot(replayRoom(room.updates));
+      expect(replayed.html).toBe(room.html);
+      expect(replayed.text).toBe(room.text);
+    }
   });
 
   test('keeps every member’s paragraphs, in the order they were added', () => {

@@ -1,6 +1,5 @@
 import * as Y from 'yjs';
-import { COLLAB_FRAGMENT_FIELD } from '../../../../services/web-app/app/domain/collaboration/schema';
-import { yDocToSnapshot } from '../../../../services/web-app/app/domain/collaboration/snapshot';
+import { COLLAB_FRAGMENT_FIELD } from '../../../../services/web-app/app/domain/collaboration/fragment';
 
 /**
  * The demo's collaborative GBA 300 work, as data.
@@ -11,11 +10,30 @@ import { yDocToSnapshot } from '../../../../services/web-app/app/domain/collabor
  * opens, the draft is blank, and the first keystroke dual-writes that blankness
  * over the HTML the seed put in the database.
  *
- * `~/` resolves from this package because the import chain reaches back into the
- * web app, which is deliberate: the room has to be built with the same schema and
- * the same snapshot converter the editor and the grader use, or the demo's
- * documents would disagree with themselves.
+ * It reaches into the web app for exactly one thing — the fragment name the
+ * editor binds to — and that constant has its own import-free module so this can.
+ * The obvious alternative, calling the web app's `yDocToSnapshot` for the HTML,
+ * would pull TipTap and every editor extension into a workspace whose job is the
+ * database; the preview toolbox does not have them, so the seed would die on
+ * import. The HTML is built here instead, and a test holds it to what the real
+ * converter produces so the two cannot drift apart quietly.
  */
+
+/**
+ * What the ProseMirror serializer does to a run of text, and no more.
+ *
+ * Written out rather than inferred: `Maple & Co.` in the demo copy is
+ * `Maple &amp; Co.` once it has been through a room, and a seed that stored the
+ * unescaped form would put a different document in `Document.html` than the one
+ * the group sees. The test compares this against the real converter over every
+ * paragraph the demo contains, so a case missing here fails loudly.
+ */
+function escapeText(value: string) {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
 
 /** One member's writing, in the order they added it to the shared draft. */
 export type RoomContribution = {
@@ -54,6 +72,7 @@ export function buildCollabRoom(contributions: RoomContribution[]): BuiltRoom {
   const master = new Y.Doc();
   const updates: BuiltRoom['updates'] = [];
   const authors: RoomAuthorStat[] = [];
+  const paragraphs: string[] = [];
 
   try {
     for (const contribution of contributions) {
@@ -76,6 +95,7 @@ export function buildCollabRoom(contributions: RoomContribution[]): BuiltRoom {
 
         const update = Y.encodeStateAsUpdate(client, before);
         Y.applyUpdate(master, update);
+        paragraphs.push(...contribution.paragraphs);
 
         updates.push({ author: contribution.author, update });
         authors.push({
@@ -89,7 +109,16 @@ export function buildCollabRoom(contributions: RoomContribution[]): BuiltRoom {
       }
     }
 
-    return { updates, authors, ...yDocToSnapshot(master) };
+    return {
+      updates,
+      authors,
+      // What the dual-write would have persisted. Every contribution is a
+      // paragraph of plain text, so this is the whole of what the converter
+      // would produce for this document — and `seed-collaboration.test.ts`
+      // checks that against the converter itself rather than taking it on faith.
+      html: paragraphs.map((line) => `<p>${escapeText(line)}</p>`).join(''),
+      text: paragraphs.join('\n'),
+    };
   } finally {
     master.destroy();
   }

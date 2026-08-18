@@ -46,7 +46,8 @@
     "dotenv": "^17.2.3",
     "node-ssh": "^13.2.1",
     "prisma": "^7.2.0",
-    "typescript": "^5.4.2"
+    "typescript": "^5.4.2",
+    "yjs": "^13.6.32"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.2.0",

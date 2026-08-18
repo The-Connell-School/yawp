@@ -71,8 +71,11 @@ export const collaborativeSchemaExtensions = [
  */
 export const COLLAB_SCHEMA_VERSION = 1;
 
-/** The Y.Doc XML fragment the ProseMirror binding writes into. */
-export const COLLAB_FRAGMENT_FIELD = 'default';
+/**
+ * Re-exported so every existing importer keeps reaching it here; it lives in its
+ * own module because the demo seed needs it without TipTap in tow.
+ */
+export { COLLAB_FRAGMENT_FIELD } from './fragment';
 
 /** Y.Map holding room metadata that is not document content. */
 export const COLLAB_META_MAP = 'yawpMeta';

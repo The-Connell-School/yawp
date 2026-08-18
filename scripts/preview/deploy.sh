@@ -349,6 +349,8 @@ compute_tooling_fingerprint() {
         packages/prisma/scripts/local-dev/class-insights.ts \
         packages/prisma/scripts/local-dev/dev-personas.ts \
         packages/prisma/scripts/local-dev/seed-synthetic-data.ts \
+        packages/prisma/scripts/local-dev/seed-collaboration.ts \
+        packages/prisma/scripts/local-dev/collab-demo-plan.ts \
         scripts/preview/deploy.sh
       do
         if [[ -f "$file" ]]; then

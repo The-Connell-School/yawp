@@ -2,6 +2,7 @@
 import type { Prisma, PrismaClient } from '../../generated/prisma';
 import { createPassword } from '../utils';
 import { getClassArtByIndex } from '../../../../services/web-app/app/utils/class-art.ts';
+import type { LocalDevPersona } from './dev-personas';
 import {
   buildCollabRoom,
   cohortEmail,
@@ -33,14 +34,15 @@ type SeedClient = PrismaClient | Prisma.TransactionClient;
 
 export type CollaborationSeedOptions = {
   organizationId: string;
-  schoolId: string;
-  /** Every teacher on the class, so any staff persona can open the demo. */
-  teacherMembershipIds: string[];
-  /** Who arranged the groups and grades the work. */
-  primaryTeacherMembershipId: string;
-  /** The four student personas the synthetic seed already created, by key. */
-  personaStudentMembershipIds: Record<string, string>;
-  password: string;
+  /** The school the class belongs to, by code — the seat's first one. */
+  schoolCode: string;
+  /**
+   * The personas this organization was seeded with. Everything else is resolved
+   * from them by email, so this works the same on an organization seeded minutes
+   * ago and on one that has been up for a week — which is what lets a preview
+   * that already has a database gain the demo without being wiped.
+   */
+  personas: LocalDevPersona[];
   /**
    * Qualifier for the cohort's email addresses, so a second preview seat can
    * seed the same cohort without colliding on the unique email index. Empty for
@@ -57,6 +59,8 @@ export type CollaborationSeedResult = {
 } | null;
 
 const GBA300_TITLE = 'GBA 300';
+/** Also the marker that says this organization already has the demo. */
+const GBA300_CLASS_CODE = 'DEV-CLASS-GBA300';
 
 /** Mirrors `createDocumentForAssignmentType`: every module needs a session. */
 function moduleSessionRows(
@@ -112,21 +116,65 @@ export async function seedCollaborationDemoData(
     return null;
   }
 
-  // Looked up rather than passed in: they are only used to fill the roster
-  // fields a student's membership carries, and threading two more strings
-  // through the caller for that is not worth it.
-  const [school, primaryTeacher] = await Promise.all([
-    prisma.school.findUnique({
-      where: { id: options.schoolId },
-      select: { name: true },
-    }),
-    prisma.orgMembership.findUnique({
-      where: { id: options.primaryTeacherMembershipId },
-      select: { user: { select: { name: true } } },
-    }),
-  ]);
-  const schoolName = school?.name ?? '';
-  const primaryTeacherName = primaryTeacher?.user.name ?? '';
+  const school = await prisma.school.findFirst({
+    where: { organizationId: options.organizationId, code: options.schoolCode },
+    select: { id: true, name: true },
+  });
+
+  if (!school) {
+    console.warn(
+      `⚠️  Skipping the collaboration demo: no school ${options.schoolCode} in ${options.organizationId}.`
+    );
+    return null;
+  }
+
+  // Idempotent, and this is the check that makes it so. A preview whose database
+  // already exists is never reseeded, so the demo has to be able to arrive on a
+  // later deploy — which means running again on an organization that may already
+  // have it, and doing nothing when it does.
+  const alreadySeeded = await prisma.class.findFirst({
+    where: { schoolId: school.id, code: GBA300_CLASS_CODE },
+    select: { id: true },
+  });
+  if (alreadySeeded) return null;
+
+  // Everything else comes from the personas, by email. Resolving rather than
+  // being handed ids is what lets this run against an organization it did not
+  // just create.
+  const personaMemberships = new Map<string, string>();
+  for (const persona of options.personas) {
+    const membership = await prisma.orgMembership.findFirst({
+      where: {
+        organizationId: options.organizationId,
+        user: { is: { email: persona.email } },
+      },
+      select: { id: true },
+    });
+    if (membership) personaMemberships.set(persona.key, membership.id);
+  }
+
+  const teacherMembershipIds = options.personas
+    .filter((persona) => persona.role === 'TEACHER')
+    .map((persona) => personaMemberships.get(persona.key))
+    .filter((id): id is string => Boolean(id));
+
+  const primaryTeacherPersona =
+    options.personas.find((persona) => persona.key === 'teacher') ??
+    options.personas.find((persona) => persona.role === 'TEACHER');
+  const primaryTeacherMembershipId = primaryTeacherPersona
+    ? personaMemberships.get(primaryTeacherPersona.key)
+    : undefined;
+
+  if (!primaryTeacherMembershipId || teacherMembershipIds.length === 0) {
+    console.warn(
+      `⚠️  Skipping the collaboration demo: no teacher persona in ${options.organizationId}.`
+    );
+    return null;
+  }
+
+  const schoolName = school.name;
+  const primaryTeacherName = primaryTeacherPersona?.name ?? '';
+  const password = primaryTeacherPersona?.password ?? '';
 
   const modules = await prisma.assignmentModule.findMany({
     where: { assignmentTypeId: assignmentType.id, deletedAt: null },
@@ -140,36 +188,66 @@ export async function seedCollaborationDemoData(
     },
   });
 
-  // Author key -> membership id. Seeded with the personas the synthetic seed
-  // already made, then filled in with the cohort as they are created.
+  // Author key -> membership id: the student personas the synthetic seed already
+  // made, then the cohort as they are created.
   const membershipByKey = new Map<string, string>(
-    Object.entries(options.personaStudentMembershipIds)
+    options.personas
+      .filter((persona) => persona.role === 'STUDENT')
+      .flatMap((persona) => {
+        const id = personaMemberships.get(persona.key);
+        return id ? [[persona.key, id] as [string, string]] : [];
+      })
   );
 
   const cohort: { name: string; email: string }[] = [];
   for (const student of GBA300_COHORT) {
     const email = cohortEmail(student.key, options.emailSuffix ?? '');
-    const user = await prisma.user.create({
-      data: {
-        email,
-        name: student.name,
-        password: { create: createPassword(options.password) },
+    // Adopted rather than created outright when the address is already taken.
+    // The class above is the guard that stops this running twice, but a seed
+    // that died part-way through leaves users behind it, and `User.email` is
+    // unique across the whole database — so creating blind would turn one
+    // interrupted run into a permanently failing deploy.
+    const existing = await prisma.user.findUnique({
+      where: { email },
+      select: {
+        id: true,
         memberships: {
-          create: {
-            organizationId: options.organizationId,
-            role: 'STUDENT',
-            school: schoolName,
-            grade: '11',
-            period: '2',
-            schoolTeacher: primaryTeacherName,
-          },
+          where: { organizationId: options.organizationId },
+          select: { id: true },
+          take: 1,
         },
       },
-      include: { memberships: true },
     });
-    const membership = user.memberships[0];
-    if (!membership) throw new Error(`No membership created for ${email}`);
-    membershipByKey.set(student.key, membership.id);
+
+    let membershipId = existing?.memberships[0]?.id;
+    if (!membershipId) {
+      const roster = {
+        organization: { connect: { id: options.organizationId } },
+        role: 'STUDENT' as const,
+        school: schoolName,
+        grade: '11',
+        period: '2',
+        schoolTeacher: primaryTeacherName,
+      };
+      const membership = await prisma.orgMembership.create({
+        data: existing
+          ? { ...roster, user: { connect: { id: existing.id } } }
+          : {
+              ...roster,
+              user: {
+                create: {
+                  email,
+                  name: student.name,
+                  password: { create: createPassword(password) },
+                },
+              },
+            },
+        select: { id: true },
+      });
+      membershipId = membership.id;
+    }
+
+    membershipByKey.set(student.key, membershipId);
     cohort.push({ name: student.name, email });
   }
 
@@ -181,15 +259,15 @@ export async function seedCollaborationDemoData(
 
   const gbaClass = await prisma.class.create({
     data: {
-      code: 'DEV-CLASS-GBA300',
+      code: GBA300_CLASS_CODE,
       schoolYear: '2025-2026',
       period: '2',
       grade: '11',
       title: 'GBA 300 - Period 2',
       classArtKey: getClassArtByIndex(7).key,
-      schoolId: options.schoolId,
+      schoolId: school.id,
       teachers: {
-        connect: options.teacherMembershipIds.map((id) => ({ id })),
+        connect: teacherMembershipIds.map((id) => ({ id })),
       },
       students: {
         connect: [...membershipByKey.values()].map((id) => ({ id })),
@@ -225,7 +303,7 @@ export async function seedCollaborationDemoData(
         classAssignmentId: classAssignment.id,
         modules,
         memberId,
-        primaryTeacherMembershipId: options.primaryTeacherMembershipId,
+        primaryTeacherMembershipId,
       })
     );
   }
