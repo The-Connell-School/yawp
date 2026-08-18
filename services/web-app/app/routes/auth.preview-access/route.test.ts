@@ -177,7 +177,9 @@ describe('preview access action', () => {
 
     expect(findCredential).toHaveBeenCalledWith('calm-panda-8127');
     expect(response?.status).toBe(302);
-    expect(logout.mock.calls[0]?.[1]?.headers['set-cookie']).toContain(
+    expect(
+      new Headers(logout.mock.calls[0]?.[1]?.headers).get('set-cookie')
+    ).toContain(
       '__yawp_preview_access='
     );
   });

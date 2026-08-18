@@ -7,12 +7,17 @@ import {
 } from './preview-session-seat.server';
 
 export const PREVIEW_ACCESS_COOKIE_NAME = '__yawp_preview_access';
+export const PREVIEW_MASTER_SELECTION_COOKIE_NAME =
+  '__yawp_preview_master';
 export const PREVIEW_ACCESS_PATH = '/auth/preview-access';
 export const PREVIEW_ACCESS_MAX_AGE = 60 * 60 * 24 * 30;
+export const PREVIEW_MASTER_SELECTION_MAX_AGE = 10 * 60;
 export const PREVIEW_AUTHORIZED_ACTIVITY_HEADER =
   'X-Yawp-Preview-Authorized';
 
-const ACCESS_SEAT_VALUE_PREFIX = 'seat-v2:';
+const ACCESS_SEAT_VALUE_PREFIX = 'seat-v3:';
+const LEGACY_ACCESS_SEAT_VALUE_PREFIX = 'seat-v2:';
+const MASTER_SELECTION_VALUE_PREFIX = 'master-v1:';
 const ACCESS_COOKIE_CLOCK_SKEW_SECONDS = 5 * 60;
 const ACCESS_CODE_PATTERN = /^[a-z]+-[a-z]+-[1-9][0-9]{3}$/;
 const OPEN_PATHS = new Set([
@@ -28,7 +33,12 @@ function normalizeCode(value: string) {
 export type PreviewAccessSeat = {
   organizationId: string;
   label: string;
+  accessKind?: 'organization' | 'master';
 };
+
+export type PreviewAccessCredential =
+  | { kind: 'master' }
+  | { kind: 'organization'; seat: PreviewAccessSeat };
 
 type ConfiguredPreviewAccessSeat = PreviewAccessSeat & { code: string };
 
@@ -49,7 +59,7 @@ function legacyConfiguredMasterSeat(): ConfiguredPreviewAccessSeat | null {
     : null;
 }
 
-function configuredMasterSeat(): ConfiguredPreviewAccessSeat | null {
+function configuredPrimarySeat(): ConfiguredPreviewAccessSeat | null {
   const raw = String(process.env.PREVIEW_ACCESS_SEATS ?? '').trim();
   if (!raw) return legacyConfiguredMasterSeat();
 
@@ -89,6 +99,13 @@ function configuredMasterSeat(): ConfiguredPreviewAccessSeat | null {
   }
 }
 
+function configuredGlobalMasterCode() {
+  const code = normalizeCode(
+    String(process.env.PREVIEW_MASTER_ACCESS_CODE ?? '')
+  );
+  return ACCESS_CODE_PATTERN.test(code) ? code : null;
+}
+
 function accessSecrets() {
   return String(process.env.PREVIEW_ACCESS_SECRET ?? '')
     .split(',')
@@ -122,7 +139,11 @@ export function hasEffectivePlatformAdmin(
 }
 
 export function isPreviewAccessConfigured() {
-  return configuredMasterSeat() !== null && accessSecrets().length > 0;
+  return (
+    (configuredGlobalMasterCode() !== null ||
+      configuredPrimarySeat() !== null) &&
+    accessSecrets().length > 0
+  );
 }
 
 function digestCode(value: string) {
@@ -156,35 +177,72 @@ const databasePreviewSeatRepository: PreviewAccessSeatRepository = {
 };
 
 export function getPreviewMasterAccessCode() {
-  return configuredMasterSeat()?.code ?? null;
+  return (
+    configuredGlobalMasterCode() ?? configuredPrimarySeat()?.code ?? null
+  );
+}
+
+export async function findPreviewAccessCredentialByCode(
+  value: string,
+  repository: PreviewAccessSeatRepository = databasePreviewSeatRepository
+): Promise<PreviewAccessCredential | null> {
+  if (!isPreviewAccessConfigured()) return null;
+  const candidate = normalizeCode(value);
+  if (!ACCESS_CODE_PATTERN.test(candidate)) return null;
+
+  const candidateDigest = digestCode(candidate);
+  const globalMasterCode = configuredGlobalMasterCode();
+  if (
+    globalMasterCode &&
+    timingSafeEqual(candidateDigest, digestCode(globalMasterCode))
+  ) {
+    return { kind: 'master' };
+  }
+
+  const primarySeat = configuredPrimarySeat();
+  if (
+    primarySeat &&
+    timingSafeEqual(candidateDigest, digestCode(primarySeat.code))
+  ) {
+    return {
+      kind: 'organization',
+      seat: {
+        organizationId: primarySeat.organizationId,
+        label: primarySeat.label,
+      },
+    };
+  }
+
+  const runtimeSeat = await repository.findByCode(candidate);
+  return runtimeSeat
+    ? {
+        kind: 'organization',
+        seat: {
+          organizationId: runtimeSeat.id,
+          label: runtimeSeat.name,
+        },
+      }
+    : null;
 }
 
 export async function findPreviewAccessSeatByCode(
   value: string,
   repository: PreviewAccessSeatRepository = databasePreviewSeatRepository
 ): Promise<PreviewAccessSeat | null> {
-  if (!isPreviewAccessConfigured()) return null;
-  const candidate = normalizeCode(value);
-  if (!ACCESS_CODE_PATTERN.test(candidate)) return null;
-
-  const master = configuredMasterSeat();
-  if (!master) return null;
-  const candidateDigest = digestCode(candidate);
-  if (timingSafeEqual(candidateDigest, digestCode(master.code))) {
-    return { organizationId: master.organizationId, label: master.label };
-  }
-
-  const runtimeSeat = await repository.findByCode(candidate);
-  return runtimeSeat
-    ? { organizationId: runtimeSeat.id, label: runtimeSeat.name }
-    : null;
+  const credential = await findPreviewAccessCredentialByCode(
+    value,
+    repository
+  );
+  return credential?.kind === 'organization' ? credential.seat : null;
 }
 
 export async function validatePreviewAccessCode(
   value: string,
   repository?: PreviewAccessSeatRepository
 ) {
-  return (await findPreviewAccessSeatByCode(value, repository)) !== null;
+  return (
+    (await findPreviewAccessCredentialByCode(value, repository)) !== null
+  );
 }
 
 export function createPreviewAccessCookie() {
@@ -199,6 +257,18 @@ export function createPreviewAccessCookie() {
   });
 }
 
+export function createPreviewMasterSelectionCookie() {
+  const secrets = accessSecrets();
+  return createCookie(PREVIEW_MASTER_SELECTION_COOKIE_NAME, {
+    httpOnly: true,
+    maxAge: PREVIEW_MASTER_SELECTION_MAX_AGE,
+    path: PREVIEW_ACCESS_PATH,
+    sameSite: 'lax',
+    secrets: secrets.length > 0 ? secrets : ['preview-access-unconfigured'],
+    secure: shouldUseSecureCookies(),
+  });
+}
+
 export async function grantPreviewAccessCookie(seat: PreviewAccessSeat) {
   if (!isPreviewAccessConfigured()) {
     throw new Error('Preview access gate is not configured.');
@@ -207,13 +277,56 @@ export async function grantPreviewAccessCookie(seat: PreviewAccessSeat) {
     throw new Error('Preview access seat has an invalid organization.');
   }
   const issuedAt = Math.floor(Date.now() / 1000);
+  const accessKind = seat.accessKind === 'master' ? 'master' : 'organization';
   return createPreviewAccessCookie().serialize(
-    `${ACCESS_SEAT_VALUE_PREFIX}${issuedAt}:${seat.organizationId}`
+    `${ACCESS_SEAT_VALUE_PREFIX}${issuedAt}:${accessKind}:${seat.organizationId}`
   );
 }
 
 export async function clearPreviewAccessCookie() {
   return createPreviewAccessCookie().serialize('', { maxAge: 0 });
+}
+
+export async function grantPreviewMasterSelectionCookie() {
+  if (!configuredGlobalMasterCode() || !isPreviewAccessConfigured()) {
+    throw new Error('Generic preview master access is not configured.');
+  }
+  const issuedAt = Math.floor(Date.now() / 1000);
+  return createPreviewMasterSelectionCookie().serialize(
+    `${MASTER_SELECTION_VALUE_PREFIX}${issuedAt}`
+  );
+}
+
+export async function clearPreviewMasterSelectionCookie() {
+  return createPreviewMasterSelectionCookie().serialize('', { maxAge: 0 });
+}
+
+function timestampIsCurrent(value: string, maxAge: number) {
+  if (!/^[1-9][0-9]*$/.test(value)) return false;
+  const issuedAt = Number(value);
+  const now = Math.floor(Date.now() / 1000);
+  return (
+    Number.isSafeInteger(issuedAt) &&
+    issuedAt <= now + ACCESS_COOKIE_CLOCK_SKEW_SECONDS &&
+    now - issuedAt <= maxAge
+  );
+}
+
+export async function hasPreviewMasterSelection(request: Request) {
+  if (!configuredGlobalMasterCode() || !isPreviewAccessConfigured()) {
+    return false;
+  }
+  const value = await createPreviewMasterSelectionCookie().parse(
+    request.headers.get('cookie')
+  );
+  return (
+    typeof value === 'string' &&
+    value.startsWith(MASTER_SELECTION_VALUE_PREFIX) &&
+    timestampIsCurrent(
+      value.slice(MASTER_SELECTION_VALUE_PREFIX.length),
+      PREVIEW_MASTER_SELECTION_MAX_AGE
+    )
+  );
 }
 
 export async function getPreviewAccessSeat(
@@ -224,36 +337,52 @@ export async function getPreviewAccessSeat(
   const value = await createPreviewAccessCookie().parse(
     request.headers.get('cookie')
   );
-  if (
-    typeof value !== 'string' ||
-    !value.startsWith(ACCESS_SEAT_VALUE_PREFIX)
-  ) {
+  if (typeof value !== 'string') return null;
+
+  let accessKind: 'organization' | 'master' = 'organization';
+  let payload: string;
+  if (value.startsWith(ACCESS_SEAT_VALUE_PREFIX)) {
+    payload = value.slice(ACCESS_SEAT_VALUE_PREFIX.length);
+    const kindSeparator = payload.indexOf(':');
+    if (kindSeparator < 1) return null;
+    const issuedAtValue = payload.slice(0, kindSeparator);
+    if (!timestampIsCurrent(issuedAtValue, PREVIEW_ACCESS_MAX_AGE)) {
+      return null;
+    }
+    const remainder = payload.slice(kindSeparator + 1);
+    const organizationSeparator = remainder.indexOf(':');
+    if (organizationSeparator < 1) return null;
+    const kind = remainder.slice(0, organizationSeparator);
+    if (kind !== 'organization' && kind !== 'master') return null;
+    accessKind = kind;
+    payload = remainder.slice(organizationSeparator + 1);
+  } else if (value.startsWith(LEGACY_ACCESS_SEAT_VALUE_PREFIX)) {
+    payload = value.slice(LEGACY_ACCESS_SEAT_VALUE_PREFIX.length);
+    const separator = payload.indexOf(':');
+    if (separator < 1) return null;
+    const issuedAtValue = payload.slice(0, separator);
+    if (!timestampIsCurrent(issuedAtValue, PREVIEW_ACCESS_MAX_AGE)) {
+      return null;
+    }
+    payload = payload.slice(separator + 1);
+  } else {
     return null;
   }
-  const payload = value.slice(ACCESS_SEAT_VALUE_PREFIX.length);
-  const separator = payload.indexOf(':');
-  if (separator < 1) return null;
-  const issuedAtValue = payload.slice(0, separator);
-  if (!/^[1-9][0-9]*$/.test(issuedAtValue)) return null;
-  const issuedAt = Number(issuedAtValue);
-  const now = Math.floor(Date.now() / 1000);
-  if (
-    !Number.isSafeInteger(issuedAt) ||
-    issuedAt > now + ACCESS_COOKIE_CLOCK_SKEW_SECONDS ||
-    now - issuedAt > PREVIEW_ACCESS_MAX_AGE
-  ) {
-    return null;
-  }
-  const organizationId = payload.slice(separator + 1);
+
+  const organizationId = payload;
   if (!/^[a-z0-9][a-z0-9-]{0,127}$/.test(organizationId)) return null;
-  const master = configuredMasterSeat();
-  if (organizationId === master?.organizationId) {
-    return { organizationId, label: master.label };
+  const primarySeat = configuredPrimarySeat();
+  if (accessKind === 'organization' && organizationId === primarySeat?.organizationId) {
+    return { organizationId, label: primarySeat.label };
   }
   const seat = await repository.findById(organizationId);
-  return seat?.previewSeatCode !== null && seat?.previewSeatCode !== undefined
-    ? { organizationId: seat.id, label: seat.name }
-    : null;
+  if (!seat) return null;
+  if (accessKind === 'organization' && !seat.previewSeatCode) return null;
+  return {
+    organizationId: seat.id,
+    label: seat.name,
+    ...(accessKind === 'master' ? { accessKind } : {}),
+  };
 }
 
 export async function hasPreviewAccess(request: Request) {
@@ -303,15 +432,30 @@ async function consumeCodeQueryParam(
   const code = url.searchParams.get('code');
   if (!code) return null;
 
-  const seat = await findPreviewAccessSeatByCode(code, repository);
-  if (!seat) return null;
+  const credential = await findPreviewAccessCredentialByCode(
+    code,
+    repository
+  );
+  if (!credential) return null;
 
   url.searchParams.delete('code');
+  if (credential.kind === 'master') {
+    const returnTo = `${url.pathname}${url.search}`;
+    return new Response(null, {
+      status: 303,
+      headers: {
+        'Cache-Control': 'no-store',
+        'set-cookie': await grantPreviewMasterSelectionCookie(),
+        Location: `${PREVIEW_ACCESS_PATH}?${new URLSearchParams({ returnTo })}`,
+      },
+    });
+  }
+
   return new Response(null, {
     status: 303,
     headers: {
       'Cache-Control': 'no-store',
-      'set-cookie': await grantPreviewAccessCookie(seat),
+      'set-cookie': await grantPreviewAccessCookie(credential.seat),
       Location: `${url.pathname}${url.search}`,
     },
   });

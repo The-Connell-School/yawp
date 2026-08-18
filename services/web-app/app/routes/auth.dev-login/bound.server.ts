@@ -30,8 +30,6 @@ export const devLoginAction = createDevLoginAction({
   localDevAuthEnabled: isLocalDevAuthEnabled,
   previewGateEnabled: isPreviewAccessGateEnabled,
   previewSeatForRequest: getPreviewAccessSeat,
-  allSanitizedUsersEnabled: () =>
-    process.env.PREVIEW_DATA_MODE === 'sanitized-production',
   redirectResponse: (headers) => new Response(null, { status: 302, headers }),
 });
 
@@ -40,6 +38,4 @@ export const devLoginOptionsLoader = createDevLoginOptionsLoader({
   localDevAuthEnabled: isLocalDevAuthEnabled,
   previewGateEnabled: isPreviewAccessGateEnabled,
   previewSeatForRequest: getPreviewAccessSeat,
-  allSanitizedUsersEnabled: () =>
-    process.env.PREVIEW_DATA_MODE === 'sanitized-production',
 });

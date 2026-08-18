@@ -14,7 +14,6 @@ const setMembershipId = mock();
 const isLocalDevAuthEnabled = mock();
 const isPreviewAccessGateEnabled = mock();
 const getPreviewAccessSeat = mock();
-const allSanitizedUsersEnabled = mock();
 const redirectResponse = mock(
   (headers: Headers) =>
     new Response(null, { status: 302, headers: { Location: '/app' } })
@@ -34,7 +33,6 @@ const action = createDevLoginAction({
   localDevAuthEnabled: isLocalDevAuthEnabled as never,
   previewGateEnabled: isPreviewAccessGateEnabled as never,
   previewSeatForRequest: getPreviewAccessSeat as never,
-  allSanitizedUsersEnabled: allSanitizedUsersEnabled as never,
   redirectResponse,
 });
 const optionsLoader = createDevLoginOptionsLoader({
@@ -42,7 +40,6 @@ const optionsLoader = createDevLoginOptionsLoader({
   localDevAuthEnabled: isLocalDevAuthEnabled as never,
   previewGateEnabled: isPreviewAccessGateEnabled as never,
   previewSeatForRequest: getPreviewAccessSeat as never,
-  allSanitizedUsersEnabled: allSanitizedUsersEnabled as never,
 });
 
 function makeRequest(email: string, cookie?: string) {
@@ -90,13 +87,11 @@ describe('auth.dev-login action', () => {
     isLocalDevAuthEnabled.mockReset();
     isPreviewAccessGateEnabled.mockReset();
     getPreviewAccessSeat.mockReset();
-    allSanitizedUsersEnabled.mockReset();
     redirectResponse.mockClear();
 
     isLocalDevAuthEnabled.mockReturnValue(true);
     isPreviewAccessGateEnabled.mockReturnValue(false);
     getPreviewAccessSeat.mockResolvedValue(null);
-    allSanitizedUsersEnabled.mockReturnValue(false);
     getSessionExpirationDate.mockReturnValue(
       new Date('2030-01-01T00:00:00.000Z')
     );
@@ -196,7 +191,6 @@ describe('auth.dev-login action', () => {
 
   test('keeps scrubbed dev-login scoped to the master-selected organization', async () => {
     isPreviewAccessGateEnabled.mockReturnValue(true);
-    allSanitizedUsersEnabled.mockReturnValue(true);
     getPreviewAccessSeat.mockResolvedValue({
       organizationId: 'default-org',
       label: 'Production rehearsal',
@@ -320,12 +314,10 @@ describe('auth.dev-login options pagination', () => {
     isLocalDevAuthEnabled.mockReset();
     isPreviewAccessGateEnabled.mockReset();
     getPreviewAccessSeat.mockReset();
-    allSanitizedUsersEnabled.mockReset();
 
     isLocalDevAuthEnabled.mockReturnValue(true);
     isPreviewAccessGateEnabled.mockReturnValue(false);
     getPreviewAccessSeat.mockResolvedValue(null);
-    allSanitizedUsersEnabled.mockReturnValue(false);
   });
 
   test('does not expose the user directory when dev login is disabled', async () => {

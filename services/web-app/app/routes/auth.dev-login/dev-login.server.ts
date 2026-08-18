@@ -30,7 +30,6 @@ export type DevLoginDependencies = {
   localDevAuthEnabled: () => boolean;
   previewGateEnabled: () => boolean;
   previewSeatForRequest: (request: Request) => Promise<PreviewSeat | null>;
-  allSanitizedUsersEnabled: () => boolean;
   redirectResponse: (headers: Headers) => Response;
 };
 
@@ -40,7 +39,6 @@ export type DevLoginOptionsDependencies = Pick<
   | 'localDevAuthEnabled'
   | 'previewGateEnabled'
   | 'previewSeatForRequest'
-  | 'allSanitizedUsersEnabled'
 >;
 
 function forbidden() {
@@ -56,7 +54,6 @@ export function createDevLoginAction({
   localDevAuthEnabled,
   previewGateEnabled,
   previewSeatForRequest,
-  allSanitizedUsersEnabled,
   redirectResponse,
 }: DevLoginDependencies) {
   return async ({ request }: ActionFunctionArgs) => {
@@ -70,8 +67,8 @@ export function createDevLoginAction({
     const previewSeat = gateEnabled
       ? await previewSeatForRequest(request)
       : null;
-    const includeAllSanitizedUsers =
-      Boolean(previewSeat) && allSanitizedUsersEnabled();
+    // The master access flow binds its cookie to one selected organization before this
+    // route can run. Sanitized-production previews must honor that same boundary.
 
     if (gateEnabled && !previewSeat) {
       return Response.json(
@@ -84,7 +81,7 @@ export function createDevLoginAction({
     }
 
     const user =
-      previewSeat && !includeAllSanitizedUsers
+      previewSeat
         ? await prismaClient.user.findFirst({
             where: {
               email,
@@ -118,11 +115,9 @@ export function createDevLoginAction({
       return Response.json(
         {
           error:
-            previewSeat && !includeAllSanitizedUsers
+            previewSeat
               ? 'No user with that email belongs to this preview seat.'
-              : includeAllSanitizedUsers
-                ? 'No scrubbed user with that email exists in this rehearsal.'
-                : 'Dev persona missing. Run `bun db:seed-local-dev` first.',
+              : 'Dev persona missing. Run `bun db:seed-local-dev` first.',
         },
         { status: 404 }
       );
@@ -169,7 +164,6 @@ export function createDevLoginOptionsLoader({
   localDevAuthEnabled,
   previewGateEnabled,
   previewSeatForRequest,
-  allSanitizedUsersEnabled,
 }: DevLoginOptionsDependencies) {
   return async ({ request }: LoaderFunctionArgs) => {
     if (!localDevAuthEnabled()) return forbidden();
@@ -193,8 +187,7 @@ export function createDevLoginOptionsLoader({
       prismaClient,
       {
         cursor,
-        includeAllOrganizations:
-          Boolean(previewSeat) && allSanitizedUsersEnabled(),
+        includeAllOrganizations: false,
       }
     );
 
@@ -235,7 +228,7 @@ export async function getLocalDevLoginOptionsPage(
 ): Promise<DevLoginOptionsPage> {
   const cursor = Math.max(0, options.cursor ?? 0);
 
-  if (!organizationId && !options.includeAllOrganizations) {
+  if (!organizationId) {
     const pageOptions = LOCAL_DEV_PERSONAS.slice(
       cursor,
       cursor + DEV_LOGIN_OPTIONS_PAGE_SIZE
@@ -255,7 +248,7 @@ export async function getLocalDevLoginOptionsPage(
   const users = await prismaClient.user.findMany({
     where: {
       memberships: {
-        some: options.includeAllOrganizations ? {} : { organizationId },
+        some: { organizationId },
       },
     },
     select: {
@@ -263,9 +256,7 @@ export async function getLocalDevLoginOptionsPage(
       name: true,
       isAdmin: true,
       memberships: {
-        ...(options.includeAllOrganizations
-          ? {}
-          : { where: { organizationId } }),
+        where: { organizationId },
         select: { role: true, isOrgOwner: true },
         take: 1,
       },
