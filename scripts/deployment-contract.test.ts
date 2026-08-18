@@ -974,8 +974,10 @@ describe('PR preview deployment contract', () => {
   test('demo production deploy keeps the old web container until its replacement passes health and login checks', () => {
     const deployScript = readRepoFile('scripts/preview/deploy.sh');
     const rolloutPath = 'scripts/preview/rollout-web.sh';
+    const traefikDiscoveryPath = 'scripts/preview/find-traefik-dynamic-dir.sh';
 
     expect(existsSync(join(repoRoot, rolloutPath))).toBe(true);
+    expect(existsSync(join(repoRoot, traefikDiscoveryPath))).toBe(true);
     if (!existsSync(join(repoRoot, rolloutPath))) return;
 
     const rolloutScript = readRepoFile(rolloutPath);
@@ -983,6 +985,12 @@ describe('PR preview deployment contract', () => {
       '[[ "$SLUG" == "demo" && "$RUNTIME" == "production"'
     );
     expect(deployScript).toContain('bash "$SCRIPT_DIR/rollout-web.sh"');
+    expect(deployScript).toContain(
+      'bash "$SCRIPT_DIR/find-traefik-dynamic-dir.sh"'
+    );
+    expect(deployScript).not.toContain(
+      'PREVIEW_ROUTER_FILE="$ROOT/traefik/dynamic/'
+    );
     expect(rolloutScript).toContain('--no-recreate --scale web=2 web');
     expect(rolloutScript).toContain('wait_for_container_health');
     expect(rolloutScript).toContain('run_login_smoke "$candidate_url"');
@@ -1251,7 +1259,9 @@ describe('demo environment deployment contract', () => {
     expect(backupWorkflow).toContain('Install reviewed backup tooling');
     expect(backupWorkflow).toContain('backup-database.sh.next');
     expect(backupWorkflow).toContain('publish-demo-backup.sh.next');
-    expect(backupWorkflow).toContain('$PREVIEW_ROOT/ops/publish-demo-backup.sh');
+    expect(backupWorkflow).toContain(
+      '$PREVIEW_ROOT/ops/publish-demo-backup.sh'
+    );
     expect(backupWorkflow).not.toContain('AWS_ACCESS_KEY_ID');
     expect(backupWorkflow).not.toContain('AWS_SECRET_ACCESS_KEY');
     expect(backupWorkflow).not.toContain('configure-aws-credentials');
