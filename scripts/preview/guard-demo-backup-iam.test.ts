@@ -14,7 +14,10 @@ afterEach(async () => {
   );
 });
 
-async function makeHarness({ decision = 'explicitDeny' } = {}) {
+async function makeHarness({
+  decision = 'explicitDeny',
+  hasProfile = true,
+} = {}) {
   const root = await mkdtemp(path.join(tmpdir(), 'yawp-demo-iam-'));
   temporaryDirectories.push(root);
   const bin = path.join(root, 'bin');
@@ -27,16 +30,46 @@ set -euo pipefail
 printf 'aws' >> "$COMMAND_LOG"
 printf ' %q' "$@" >> "$COMMAND_LOG"
 printf '\n' >> "$COMMAND_LOG"
+state_prefix="$COMMAND_LOG.state"
+mark() { : > "\${state_prefix}.$1"; }
+has() { [[ -f "\${state_prefix}.$1" ]]; }
 if [[ " $* " == *" ec2 describe-instances "* ]]; then
   if [[ " $* " == *" --filters "* ]]; then
     printf 'i-abc123\n'
-  else
+  elif [[ "${hasProfile}" == "true" ]] || has associated; then
     printf 'arn:aws:iam::123456789012:instance-profile/yawp-demo\n'
+  else
+    printf 'None\n'
   fi
+elif [[ " $* " == *" ec2 associate-iam-instance-profile "* ]]; then
+  mark associated
+  printf 'iip-assoc-abc123\n'
+elif [[ " $* " == *" ec2 describe-iam-instance-profile-associations "* ]]; then
+  printf 'associated\n'
 elif [[ " $* " == *" iam get-instance-profile "* ]]; then
-  printf 'yawp-demo-role\n'
+  if [[ "${hasProfile}" == "true" ]] || has profile; then
+    if [[ "$*" == *"Roles[].RoleName"* ]]; then
+      if [[ "${hasProfile}" == "true" ]] || has role_attached; then
+        printf 'yawp-demo-role\n'
+      fi
+    else
+      printf 'arn:aws:iam::123456789012:instance-profile/yawp-demo\n'
+    fi
+  else
+    exit 254
+  fi
+elif [[ " $* " == *" iam create-instance-profile "* ]]; then
+  mark profile
+elif [[ " $* " == *" iam add-role-to-instance-profile "* ]]; then
+  mark role_attached
 elif [[ " $* " == *" iam get-role "* ]]; then
-  printf 'arn:aws:iam::123456789012:role/yawp-demo-role\n'
+  if [[ "${hasProfile}" == "true" ]] || has role; then
+    printf 'arn:aws:iam::123456789012:role/yawp-demo-role\n'
+  else
+    exit 254
+  fi
+elif [[ " $* " == *" iam create-role "* ]]; then
+  mark role
 elif [[ " $* " == *" iam simulate-principal-policy "* ]]; then
   printf '${decision}\t${decision}\n'
 fi
@@ -75,12 +108,31 @@ describe('demo backup IAM guard', () => {
     expect(result.exitCode).toBe(0);
     const commands = await readFile(harness.commandLog, 'utf8');
     expect(commands).toContain('iam put-role-policy');
+    expect(commands).toContain('yawp-demo-host-backup-access');
+    expect(commands).toContain('s3:GetObject');
+    expect(commands).toContain('s3:PutObject');
     expect(commands).toContain('yawp-demo-backup-deny-delete');
     expect(commands).toContain('s3:DeleteObject');
     expect(commands).toContain('s3:DeleteObjectVersion');
     expect(commands).toContain('iam simulate-principal-policy');
     expect(new TextDecoder().decode(result.stdout)).toContain(
       'DEMO_BACKUP_DELETE_DECISION=explicitDeny'
+    );
+  });
+
+  test('provisions and attaches a least-privilege profile when the host has none', async () => {
+    const harness = await makeHarness({ hasProfile: false });
+    const result = run(harness.env);
+
+    expect(result.exitCode).toBe(0);
+    const commands = await readFile(harness.commandLog, 'utf8');
+    expect(commands).toContain('iam create-role');
+    expect(commands).toContain('iam create-instance-profile');
+    expect(commands).toContain('iam add-role-to-instance-profile');
+    expect(commands).toContain('ec2 associate-iam-instance-profile');
+    expect(commands).toContain('ec2 describe-iam-instance-profile-associations');
+    expect(new TextDecoder().decode(result.stdout)).toContain(
+      'DEMO_INSTANCE_PROFILE_PROVISIONED=true'
     );
   });
 
