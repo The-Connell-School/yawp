@@ -1,12 +1,13 @@
 import { useFetcher } from 'react-router';
 import { colorForMembership } from '../app_.collab-documents_.$id/collab-editor';
 import { Button } from '~/components/ui/button';
-import type { ContributionBreakdown } from '~/domain/collaboration/contribution.server';
-import { effectiveGrade } from '~/domain/collaboration/grading';
 import type {
-  GroupGrade,
-  MemberGrade,
-} from '~/domain/collaboration/grading';
+  ContributionBreakdown,
+  ContributionMember,
+} from '~/domain/collaboration/contribution.server';
+import type { AttributedRun } from '~/domain/collaboration/contribution';
+import { effectiveGrade } from '~/domain/collaboration/grading';
+import type { GroupGrade, MemberGrade } from '~/domain/collaboration/grading';
 
 /**
  * Evidence about who wrote a shared draft, for a teacher to read and judge.
@@ -46,7 +47,6 @@ function initials(name: string) {
   if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
-
 
 /**
  * One student's grade, saved on its own.
@@ -258,6 +258,73 @@ function GroupGradeCard({ groupGrade }: { groupGrade: GroupGrade | null }) {
   );
 }
 
+/**
+ * What each colour in the draft below means.
+ *
+ * The colour is unreadable without this: nothing else on the page puts a name
+ * next to a student's colour, and matching a swatch against the avatars in the
+ * table above is the wrong way to read a paragraph.
+ *
+ * Its own component so it can be tested without rendering the grade cards,
+ * which need a router and a fetcher and have nothing to do with the key.
+ */
+export function DraftColourKey({
+  members,
+  paragraphs,
+}: {
+  members: ContributionMember[];
+  paragraphs: AttributedRun[][];
+}) {
+  // Nothing written yet means no colour on the page to explain, and a key
+  // listing three students beside "Nothing written yet" would imply otherwise.
+  if (paragraphs.length === 0) return null;
+
+  const nameFor = new Map(members.map((m) => [m.membershipId, m.name]));
+
+  // Anyone whose writing survives in the draft but who is not on the current
+  // roster — the same "Former student" fallback the paragraphs use. Derived
+  // from the same runs the text is rendered from, so the key and the colours
+  // can never disagree about who a colour belongs to.
+  const formerStudentIds = [
+    ...new Set(
+      paragraphs.flatMap((runs) =>
+        runs
+          .map((run) => run.membershipId)
+          .filter((id): id is string => id !== null)
+      )
+    ),
+  ].filter((id) => !nameFor.has(id));
+
+  return (
+    <div
+      className="flex flex-wrap items-center gap-x-4 gap-y-1.5 border-b bg-muted/30 px-4 py-2 text-xs"
+      aria-label="Colour key"
+      data-testid="contribution-draft-key"
+    >
+      {members.map((member) => (
+        <span key={member.membershipId} className="flex items-center gap-1.5">
+          <span
+            aria-hidden
+            className="size-2.5 shrink-0 rounded-full"
+            style={{ backgroundColor: colorForMembership(member.membershipId) }}
+          />
+          {member.name}
+        </span>
+      ))}
+      {formerStudentIds.map((id) => (
+        <span key={id} className="flex items-center gap-1.5">
+          <span
+            aria-hidden
+            className="size-2.5 shrink-0 rounded-full"
+            style={{ backgroundColor: colorForMembership(id) }}
+          />
+          Former student
+        </span>
+      ))}
+    </div>
+  );
+}
+
 export function ContributionPanel({
   breakdown,
   grades,
@@ -290,7 +357,8 @@ export function ContributionPanel({
             role="status"
           >
             {silent.map((m) => m.name).join(', ')}{' '}
-            {silent.length === 1 ? 'has' : 'have'} not written in this draft yet.
+            {silent.length === 1 ? 'has' : 'have'} not written in this draft
+            yet.
           </p>
         ) : null}
 
@@ -326,7 +394,10 @@ export function ContributionPanel({
             </thead>
             <tbody>
               {members.map((member) => (
-                <tr key={member.membershipId} className="border-b last:border-0">
+                <tr
+                  key={member.membershipId}
+                  className="border-b last:border-0"
+                >
                   <th scope="row" className="px-4 py-2 font-normal">
                     <span className="flex items-center gap-2">
                       <span
@@ -344,7 +415,9 @@ export function ContributionPanel({
                     </span>
                   </th>
                   <td className="px-4 py-2">{member.sessionCount}</td>
-                  <td className="px-4 py-2">{formatWhen(member.firstSeenAt)}</td>
+                  <td className="px-4 py-2">
+                    {formatWhen(member.firstSeenAt)}
+                  </td>
                   <td className="px-4 py-2">{formatWhen(member.lastSeenAt)}</td>
                   <td className="px-4 py-2">{member.charsInserted}</td>
                   <td className="px-4 py-2">{member.survivingChars}</td>
@@ -392,9 +465,9 @@ export function ContributionPanel({
           Individual grades
         </h2>
         <p className="mb-3 text-xs text-muted-foreground">
-          Everyone takes the group grade unless you give them their own here, for
-          what they contributed — yours to decide, not calculated from the numbers
-          above. Students see nothing until you share it.
+          Everyone takes the group grade unless you give them their own here,
+          for what they contributed — yours to decide, not calculated from the
+          numbers above. Students see nothing until you share it.
         </p>
         <div className="grid gap-3 md:grid-cols-2">
           {members.map((member) => (
@@ -409,13 +482,18 @@ export function ContributionPanel({
         </div>
       </section>
 
-      <section aria-labelledby="contribution-draft" className="rounded-lg border">
+      <section
+        aria-labelledby="contribution-draft"
+        className="rounded-lg border"
+      >
         <h2
           id="contribution-draft"
           className="border-b px-4 py-2 text-sm font-semibold"
         >
           The draft, coloured by who wrote it
         </h2>
+
+        <DraftColourKey members={members} paragraphs={paragraphs} />
 
         {unattributedChars > 0 ? (
           <p className="border-b bg-gray-50 px-4 py-2 text-xs text-muted-foreground">
