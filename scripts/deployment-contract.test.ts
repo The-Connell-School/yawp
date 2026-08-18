@@ -1145,6 +1145,30 @@ describe('demo environment deployment contract', () => {
     expect(diagnostics).not.toContain('docker rm');
   });
 
+  test('demo Traefik maintenance is main-controlled and rollback protected', () => {
+    const workflow = readRepoFile(
+      '.github/workflows/demo-traefik-file-provider.yml'
+    );
+    const script = readRepoFile(
+      'scripts/preview/enable-traefik-file-provider.sh'
+    );
+
+    expect(workflow).toContain('environment: demo');
+    expect(workflow).toContain(
+      'ref: ${{ github.event.repository.default_branch }}'
+    );
+    expect(workflow).toContain('group: demo-environment');
+    expect(workflow).toContain(
+      '< scripts/preview/enable-traefik-file-provider.sh'
+    );
+    expect(script).toContain('Demo must be healthy before');
+    expect(script).toContain('cp -p -- "$COMPOSE_FILE" "$backup_file"');
+    expect(script).toContain('trap rollback EXIT');
+    expect(script).toContain('Previous Traefik configuration restored');
+    expect(script).toContain('verify_running_provider');
+    expect(script).toContain('TRAEFIK_FILE_PROVIDER_ENABLED=true');
+  });
+
   // deploy.sh runs ON THE DEMO HOST over SSH, so a value declared in the job's `env:`
   // reaches the runner and stops there unless remote_env forwards it. Declared and
   // forwarded are two different things; this asserts they agree.
