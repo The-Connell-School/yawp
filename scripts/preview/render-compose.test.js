@@ -196,7 +196,7 @@ describe('renderPreviewCompose', () => {
     }
   });
 
-  test('makes automatic PR preview AI disablement explicit and omits provider credentials', () => {
+  test('keeps an explicit emergency AI-disabled mode without provider credentials', () => {
     const previousAnthropicKey = process.env.PREVIEW_ANTHROPIC_API_KEY;
     process.env.PREVIEW_ANTHROPIC_API_KEY = 'shared-provider-key';
     try {
