@@ -1,8 +1,11 @@
 import { test, expect } from '../test-setup';
 import { createE2EPrismaClient } from '../prisma-client';
 import { readFile } from 'node:fs/promises';
+import { EDITOR_SELECTOR } from '../test-helpers';
 
 const TEACHER_PASSWORD = 'teacher-e2e-password';
+const SELECT_ALL_SHORTCUT =
+  process.platform === 'darwin' ? 'Meta+A' : 'Control+A';
 
 async function setLessonPlannerEnabled(
   organizationId: string,
@@ -2100,9 +2103,17 @@ test.describe('YAWP! Lesson Planner', () => {
 
     await page.goto(`/app/lesson-planner/${conversationId}/packet`);
     await page.getByTestId('material-edit-start').click();
-    const textarea = page.getByTestId('material-editor-textarea');
-    await expect(textarea).toBeVisible();
-    await textarea.fill('Read each excerpt, revised by hand for this class.');
+    const surface = page
+      .getByTestId('material-editor-surface')
+      .locator(EDITOR_SELECTOR);
+    await expect(surface).toBeVisible();
+    // A real editing surface, not a text field: select everything and type
+    // over it, the way a teacher would in any document editor.
+    await surface.click();
+    await page.keyboard.press(SELECT_ALL_SHORTCUT);
+    await page.keyboard.insertText(
+      'Read each excerpt, revised by hand for this class.'
+    );
 
     const saveEdit = page.waitForResponse(
       (response) =>
@@ -2148,9 +2159,12 @@ test.describe('YAWP! Lesson Planner', () => {
 
     await page.goto(`/app/lesson-planner/${conversationId}/packet`);
     await page.getByTestId('material-edit-start').click();
-    await page
-      .getByTestId('material-editor-textarea')
-      .fill('My own rewrite of the long version.');
+    const surface = page
+      .getByTestId('material-editor-surface')
+      .locator(EDITOR_SELECTOR);
+    await surface.click();
+    await page.keyboard.press(SELECT_ALL_SHORTCUT);
+    await page.keyboard.insertText('My own rewrite of the long version.');
     const saveEdit = page.waitForResponse(
       (response) =>
         response.url().includes('/api/domain/lesson-planner/packet') &&
