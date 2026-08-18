@@ -1,5 +1,6 @@
 import { type ActionFunctionArgs, type LoaderFunctionArgs } from 'react-router';
 import { data as dataResponse, redirect, useLoaderData } from 'react-router';
+import type { Prisma } from '@app/prisma';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { AssignmentTypeEditorForm } from '~/components/admin/assignment-type-editor-form';
 import { requireAdmin } from '~/utils/auth.server';
@@ -22,6 +23,42 @@ function parseJsonFormField(formData: FormData, name: string) {
   } catch {
     throw new Response(`${name} must be valid JSON`, { status: 400 });
   }
+}
+
+function withGradingInstructionsOverride(
+  rawPromptConfig: unknown,
+  rawOverride: FormDataEntryValue | null
+) {
+  const promptConfig =
+    rawPromptConfig &&
+    typeof rawPromptConfig === 'object' &&
+    !Array.isArray(rawPromptConfig)
+      ? { ...(rawPromptConfig as Record<string, unknown>) }
+      : {};
+  const gradingInstructionsOverride =
+    typeof rawOverride === 'string' ? rawOverride.trim() : '';
+
+  if (gradingInstructionsOverride) {
+    promptConfig.gradingInstructionsOverride = gradingInstructionsOverride;
+  } else {
+    delete promptConfig.gradingInstructionsOverride;
+  }
+
+  return promptConfig as Prisma.InputJsonObject;
+}
+
+function readGradingInstructionsOverride(rawPromptConfig: unknown) {
+  if (
+    !rawPromptConfig ||
+    typeof rawPromptConfig !== 'object' ||
+    Array.isArray(rawPromptConfig)
+  ) {
+    return '';
+  }
+
+  const value = (rawPromptConfig as Record<string, unknown>)
+    .gradingInstructionsOverride;
+  return typeof value === 'string' ? value.trim() : '';
 }
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
@@ -98,6 +135,9 @@ export async function action({ request, params }: ActionFunctionArgs) {
       formData.has('rubricJson') ||
       formData.has('promptConfigJson') ||
       formData.has('outputSchemaJson');
+    const hasGradingInstructionsOverrideField = formData.has(
+      'gradingInstructionsOverride'
+    );
 
     if (!assignmentTypeId) {
       throw new Response('Not Found', { status: 404 });
@@ -109,26 +149,41 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
     const existing = await prisma.assignmentType.findUnique({
       where: { id: assignmentTypeId },
-      select: { id: true, rubricJson: true },
+      select: { id: true, rubricJson: true, gradingPromptConfigJson: true },
     });
     if (!existing) {
       throw new Response('Not Found', { status: 404 });
     }
 
+    const gradingInstructionsOverrideChanged =
+      hasGradingInstructionsOverrideField &&
+      (formData.get('gradingInstructionsOverride')?.toString().trim() ?? '') !==
+        readGradingInstructionsOverride(existing.gradingPromptConfigJson);
+
     const gradingConfigData = hasGradingConfigFields
       ? {
           scoringScaleJson: parseJsonFormField(formData, 'scoringScale'),
           rubricJson: parseJsonFormField(formData, 'rubricJson'),
-          gradingPromptConfigJson: parseJsonFormField(
-            formData,
-            'promptConfigJson'
-          ),
+          gradingPromptConfigJson: hasGradingInstructionsOverrideField
+            ? withGradingInstructionsOverride(
+                parseJsonFormField(formData, 'promptConfigJson'),
+                formData.get('gradingInstructionsOverride')
+              )
+            : parseJsonFormField(formData, 'promptConfigJson'),
           gradingOutputSchemaJson:
             parseJsonFormField(formData, 'outputSchemaJson') ??
             DEFAULT_OUTPUT_SCHEMA_JSON,
           gradingAssistantVersion: { increment: 1 },
         }
-      : {};
+      : gradingInstructionsOverrideChanged
+        ? {
+            gradingPromptConfigJson: withGradingInstructionsOverride(
+              existing.gradingPromptConfigJson,
+              formData.get('gradingInstructionsOverride')
+            ),
+            gradingAssistantVersion: { increment: 1 },
+          }
+        : {};
 
     if (hasGradingConfigFields) {
       const nextRubric = parseRubric(gradingConfigData.rubricJson);
@@ -232,6 +287,16 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
 export default function AssignmentTypeRoute() {
   const { course, rubrics } = useLoaderData<typeof loader>();
+  const gradingPromptConfig = course.gradingPromptConfigJson;
+  const gradingInstructionsDefaultValue =
+    gradingPromptConfig &&
+    typeof gradingPromptConfig === 'object' &&
+    !Array.isArray(gradingPromptConfig) &&
+    typeof (gradingPromptConfig as Record<string, unknown>)
+      .gradingInstructionsOverride === 'string'
+      ? ((gradingPromptConfig as Record<string, unknown>)
+          .gradingInstructionsOverride as string)
+      : '';
 
   return (
     <AssignmentTypeEditorForm
@@ -239,6 +304,7 @@ export default function AssignmentTypeRoute() {
       assignmentTypeId={course.id}
       titleDefaultValue={course.title}
       descriptionDefaultValue={course.description}
+      gradingInstructionsDefaultValue={gradingInstructionsDefaultValue}
       archivedAt={course.archivedAt}
       imageId={course.image?.id ?? null}
       modules={course.assignmentModules}

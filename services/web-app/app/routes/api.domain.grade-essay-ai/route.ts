@@ -682,6 +682,11 @@ export async function action({ request }: ActionFunctionArgs) {
     source: resolvedGradingConfig.source,
   };
   const templateInstructions = resolvedGradingConfig.instructions;
+  const gradingInstructionsOverride =
+    typeof resolvedGradingConfig.promptConfigSnapshot
+      .gradingInstructionsOverride === 'string'
+      ? resolvedGradingConfig.promptConfigSnapshot.gradingInstructionsOverride.trim()
+      : '';
   const studentFirstName = firstNameFromFullName(
     submission.document.membership?.user?.name
   );
@@ -752,11 +757,14 @@ For DBQ, score these point keys: ${apHistoryDbqPointKeys.join(', ')}.
 For LEQ, score these point keys: ${apHistoryLeqPointKeys.join(', ')}.
 In overallComment, start with "${studentFirstName}," and continue with concise, actionable AP History feedback.`;
 
-    const apUserPrompt = buildApHistoryPrompt({
+    const apUserPromptBase = buildApHistoryPrompt({
       snapshot: apHistorySnapshot,
       essayText: submission.text,
       studentFirstName,
     });
+    const apUserPrompt = gradingInstructionsOverride
+      ? `${apUserPromptBase}\n\nGrading instructions:\n${gradingInstructionsOverride}`
+      : apUserPromptBase;
 
     let parsedJson: Record<string, unknown>;
     let points: Prisma.InputJsonObject;

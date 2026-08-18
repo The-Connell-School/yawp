@@ -132,7 +132,11 @@ describe('resolveAssignmentTypeGradingConfig', () => {
         maxScore: 100,
       },
       rubricJson: { categories: [] },
-      gradingPromptConfigJson: { gradingInstructions: 'Changed instructions.' },
+      gradingPromptConfigJson: {
+        gradingInstructions: 'Stale instructions from the retired rubric editor.',
+        gradingInstructionsOverride:
+          'Apply the thesis rubric with extra emphasis on source analysis.',
+      },
       gradingOutputSchemaJson: null,
       gradingCalibrationNotes: 'Changed notes.',
       gradingAssistantVersion: 9,
@@ -154,7 +158,17 @@ describe('resolveAssignmentTypeGradingConfig', () => {
     expect(config.scoringType).toBe('weighted_1_5');
     expect(config.minScore).toBe(1);
     expect(config.maxScore).toBe(5);
-    expect(config.instructions.mode).toBe('preset');
+    expect(config.instructions).toEqual({
+      mode: 'unified',
+      gradingInstructions:
+        'Apply the thesis rubric with extra emphasis on source analysis.',
+    });
+    expect(config.promptConfigSnapshot).toEqual(
+      expect.objectContaining({
+        gradingInstructions:
+          'Apply the thesis rubric with extra emphasis on source analysis.',
+      })
+    );
     expect(config.sourceTemplateId).toBeNull();
     expect(config.sourceTemplateSlug).toBeNull();
   });

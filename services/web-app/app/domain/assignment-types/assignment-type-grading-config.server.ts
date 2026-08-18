@@ -98,9 +98,32 @@ function getPromptConfigSnapshot(
   return isRecord(rawPromptConfig) ? rawPromptConfig : fallbackPromptConfig;
 }
 
+function applyGradingInstructionsOverride(
+  promptConfig: Record<string, unknown>
+): Record<string, unknown> {
+  const gradingInstructionsOverride =
+    typeof promptConfig.gradingInstructionsOverride === 'string'
+      ? promptConfig.gradingInstructionsOverride.trim()
+      : '';
+  if (!gradingInstructionsOverride) return promptConfig;
+
+  return {
+    ...promptConfig,
+    gradingInstructions: gradingInstructionsOverride,
+  };
+}
+
 export function getAssignmentTypeGradingInstructions(
   promptConfig: Record<string, unknown>
 ): AssignmentTypeGradingInstructions {
+  const gradingInstructionsOverride =
+    typeof promptConfig.gradingInstructionsOverride === 'string'
+      ? promptConfig.gradingInstructionsOverride.trim()
+      : '';
+  if (gradingInstructionsOverride) {
+    return { mode: 'unified', gradingInstructions: gradingInstructionsOverride };
+  }
+
   const gradingInstructions =
     typeof promptConfig.gradingInstructions === 'string'
       ? promptConfig.gradingInstructions.trim()
@@ -162,16 +185,29 @@ function withLibraryRubric<
   };
 }
 
+function getOwnGradingInstructionsOverride(
+  row: AssignmentTypeGradingRow | null
+): string | undefined {
+  const promptConfig = row?.gradingPromptConfigJson;
+  if (!isRecord(promptConfig)) return undefined;
+  const override = promptConfig.gradingInstructionsOverride;
+  return typeof override === 'string' && override.trim()
+    ? override.trim()
+    : undefined;
+}
+
 function buildResolvedConfig({
   assignmentTypeId,
   assignmentTypeKind,
   assignmentTypeTitle,
   row,
+  ownGradingInstructionsOverride,
 }: {
   assignmentTypeId: string;
   assignmentTypeKind: string | null;
   assignmentTypeTitle: string | null;
   row: AssignmentTypeGradingRow | null;
+  ownGradingInstructionsOverride?: string;
 }): ResolvedAssignmentTypeGradingConfig {
   const usesProductionThesis =
     row?.selectedRubricName === THESIS_DRIVEN_ESSAY_RUBRIC_NAME;
@@ -191,13 +227,21 @@ function buildResolvedConfig({
       ? null
       : row?.gradingCalibrationNotes,
   });
-  const promptConfigSnapshot =
+  const rawPromptConfigSnapshot =
     parsedConfig.source === 'assignment-type'
       ? getPromptConfigSnapshot(
           row?.gradingPromptConfigJson,
           parsedConfig.promptConfig as Record<string, unknown>
         )
       : (parsedConfig.promptConfig as Record<string, unknown>);
+  const promptConfigSnapshot = applyGradingInstructionsOverride(
+    ownGradingInstructionsOverride
+      ? {
+          ...rawPromptConfigSnapshot,
+          gradingInstructionsOverride: ownGradingInstructionsOverride,
+        }
+      : rawPromptConfigSnapshot
+  );
   const { minScore, maxScore } = getScoreBounds(parsedConfig.scoringScale);
   const step = normalizeScoreStep(parsedConfig.scoringScale.step);
   const scoringType = getScoringType(parsedConfig.scoringScale);
@@ -282,5 +326,10 @@ export async function resolveAssignmentTypeGradingConfig({
     // columns wholesale. Everything downstream reads the same shape either
     // way, so nothing else in grading has to know where the rubric came from.
     row: withLibraryRubric(assignmentType),
+    // The per-assignment-type grading assistant override always applies,
+    // even when a library rubric supplies the rest of the prompt config.
+    ownGradingInstructionsOverride: getOwnGradingInstructionsOverride(
+      assignmentType as AssignmentTypeGradingRow | null
+    ),
   });
 }
