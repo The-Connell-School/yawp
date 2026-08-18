@@ -36,6 +36,20 @@ export type LessonPlannerToolContext = {
   organizationId: string;
 };
 
+export type LessonPlannerToolDependencies = {
+  handleReporterTool: typeof handleReporterToolCall;
+  listLounge: typeof listLoungeMaterials;
+  listAssignmentTypes: typeof listAssignableTypes;
+  readLounge: typeof readLoungeMaterial;
+};
+
+const productionDependencies: LessonPlannerToolDependencies = {
+  handleReporterTool: handleReporterToolCall,
+  listLounge: listLoungeMaterials,
+  listAssignmentTypes: listAssignableTypes,
+  readLounge: readLoungeMaterial,
+};
+
 /**
  * Reporter tools the planner may call. Read-only and class-level: which classes
  * exist, how each did against the rubric, and who is struggling enough to need
@@ -189,7 +203,8 @@ export const LESSON_PLANNER_TOOLS: ReporterTool[] = [
 async function handleCatalogToolCall(
   name: string,
   input: Record<string, unknown>,
-  ctx: LessonPlannerToolContext
+  ctx: LessonPlannerToolContext,
+  dependencies: LessonPlannerToolDependencies
 ): Promise<unknown | undefined> {
   switch (name) {
     case 'search_daily_pages_prompts': {
@@ -221,7 +236,7 @@ async function handleCatalogToolCall(
       };
     }
     case 'list_lounge_materials': {
-      const trainings = await listLoungeMaterials(ctx);
+      const trainings = await dependencies.listLounge(ctx);
       const readable = trainings.some((training) =>
         training.modules.some((module) =>
           module.materials.some((material) => material.readable)
@@ -236,10 +251,10 @@ async function handleCatalogToolCall(
     }
     case 'read_lounge_material': {
       const id = typeof input.id === 'string' ? input.id : '';
-      return readLoungeMaterial(ctx, id);
+      return dependencies.readLounge(ctx, id);
     }
     case 'list_assignment_types':
-      return { assignmentTypes: await listAssignableTypes(ctx) };
+      return { assignmentTypes: await dependencies.listAssignmentTypes(ctx) };
     default:
       return undefined;
   }
@@ -248,19 +263,20 @@ async function handleCatalogToolCall(
 export async function handleLessonPlannerToolCall(
   name: string,
   input: Record<string, unknown>,
-  ctx: LessonPlannerToolContext
+  ctx: LessonPlannerToolContext,
+  dependencies: LessonPlannerToolDependencies = productionDependencies
 ): Promise<string> {
   if (allowedReporterTools.has(name)) {
     // Rebuild the context explicitly: the reporter handler stages writes into a
     // caller-supplied buffer, and the planner must never hand it one.
-    return handleReporterToolCall(name, input, {
+    return dependencies.handleReporterTool(name, input, {
       membershipId: ctx.membershipId,
       organizationId: ctx.organizationId,
     });
   }
 
   try {
-    const result = await handleCatalogToolCall(name, input, ctx);
+    const result = await handleCatalogToolCall(name, input, ctx, dependencies);
     if (result === undefined) {
       return JSON.stringify({
         error: `Unknown tool: ${name}. The lesson planner can only read class reports and the Yawp teaching catalog.`,

@@ -1,4 +1,4 @@
-import { afterAll, beforeEach, describe, expect, mock, test } from 'bun:test';
+import { beforeEach, describe, expect, mock, test } from 'bun:test';
 
 const getAvailableAssignmentTypesForScopes = mock();
 const prisma = {
@@ -8,18 +8,14 @@ const prisma = {
   class: { findMany: mock() },
 };
 
-mock.module('~/utils/db.server', () => ({ prisma }));
-mock.module('~/utils/assignment-type-access.server', () => ({
-  getAvailableAssignmentTypesForScopes,
-}));
-
 const { listAssignableTypes, listLoungeMaterials, readLoungeMaterial } =
   await import('./yawp-catalog.server');
 const { readFixture } = await import('~/domain/office/fixtures');
 
-afterAll(() => {
-  mock.restore();
-});
+const dependencies = {
+  prismaClient: prisma,
+  getAvailableAssignmentTypes: getAvailableAssignmentTypesForScopes,
+} as never;
 
 const ctx = { membershipId: 'teacher-1', organizationId: 'org-1' };
 
@@ -64,7 +60,7 @@ beforeEach(() => {
 
 describe('listLoungeMaterials', () => {
   test('returns linkable material for a training', async () => {
-    const materials = await listLoungeMaterials(ctx);
+    const materials = await listLoungeMaterials(ctx, dependencies);
     expect(materials[0]).toMatchObject({
       title: 'Teaching Argument',
       href: '/app/teacher-trainings/tr-1',
@@ -80,7 +76,7 @@ describe('listLoungeMaterials', () => {
       _count: { assignedTeacherTrainings: 2 },
     });
 
-    await listLoungeMaterials(ctx);
+    await listLoungeMaterials(ctx, dependencies);
 
     // Mirrors the Teacher's Lounge itself: assigned-only once anything is
     // assigned, everything otherwise.
@@ -90,7 +86,7 @@ describe('listLoungeMaterials', () => {
   });
 
   test('shows the whole library when nothing is assigned', async () => {
-    await listLoungeMaterials(ctx);
+    await listLoungeMaterials(ctx, dependencies);
     expect(
       prisma.teacherTraining.findMany.mock.calls[0][0].where
     ).toBeUndefined();
@@ -99,7 +95,7 @@ describe('listLoungeMaterials', () => {
 
 describe('listAssignableTypes', () => {
   test('resolves the types this teacher can actually assign', async () => {
-    const types = await listAssignableTypes(ctx);
+    const types = await listAssignableTypes(ctx, dependencies);
     expect(types).toEqual([
       { id: 'at-1', title: 'Daily Pages' },
       { id: 'at-2', title: 'Argument Essay' },
@@ -107,7 +103,7 @@ describe('listAssignableTypes', () => {
   });
 
   test('scopes resolution to the teacher’s own active classes', async () => {
-    await listAssignableTypes(ctx);
+    await listAssignableTypes(ctx, dependencies);
 
     expect(prisma.class.findMany.mock.calls[0][0].where).toMatchObject({
       teachers: { some: { id: 'teacher-1' } },
@@ -126,7 +122,7 @@ describe('listAssignableTypes', () => {
 
   test('returns nothing when the teacher has no classes yet', async () => {
     prisma.class.findMany.mockResolvedValue([]);
-    expect(await listAssignableTypes(ctx)).toEqual([]);
+    expect(await listAssignableTypes(ctx, dependencies)).toEqual([]);
     expect(getAvailableAssignmentTypesForScopes).not.toHaveBeenCalled();
   });
 });
@@ -144,7 +140,7 @@ describe('readLoungeMaterial', () => {
   test('reads a deck slide by slide, in presentation order', async () => {
     stubResource('Conclusions.pptx', 'deck.pptx');
 
-    const result = await readLoungeMaterial(ctx, 'res-deck');
+    const result = await readLoungeMaterial(ctx, 'res-deck', dependencies);
 
     expect(result).toMatchObject({ kind: 'slides', truncated: false });
     const slides = (result as { slides: Array<{ number: number }> }).slides;
@@ -159,7 +155,7 @@ describe('readLoungeMaterial', () => {
   test('reads a document as text', async () => {
     stubResource('Handout.docx', 'handout.docx');
 
-    const result = await readLoungeMaterial(ctx, 'res-doc');
+    const result = await readLoungeMaterial(ctx, 'res-doc', dependencies);
 
     expect(result).toMatchObject({ kind: 'document' });
     expect((result as { text: string }).text).toContain('Diagnose & Repair');
@@ -168,7 +164,7 @@ describe('readLoungeMaterial', () => {
   test('hands back the same href the listing gave, so a resource block matches', async () => {
     stubResource('Conclusions.pptx', 'deck.pptx');
 
-    const result = await readLoungeMaterial(ctx, 'res-deck');
+    const result = await readLoungeMaterial(ctx, 'res-deck', dependencies);
 
     expect((result as { href: string }).href).toBe(
       '/api/teacher-training-module-resource/res-deck'
@@ -180,7 +176,11 @@ describe('readLoungeMaterial', () => {
     // the model can hold onto, and this must not become a way around it.
     prisma.teacherTrainingModuleResource.findFirst.mockResolvedValue(null);
 
-    const result = await readLoungeMaterial(ctx, 'someone-elses-deck');
+    const result = await readLoungeMaterial(
+      ctx,
+      'someone-elses-deck',
+      dependencies
+    );
 
     expect((result as { error: string }).error).toMatch(
       /list_lounge_materials/
@@ -193,7 +193,7 @@ describe('readLoungeMaterial', () => {
     });
     prisma.teacherTrainingModuleResource.findFirst.mockResolvedValue(null);
 
-    await readLoungeMaterial(ctx, 'res-deck');
+    await readLoungeMaterial(ctx, 'res-deck', dependencies);
 
     const where = prisma.teacherTrainingModuleResource.findFirst.mock
       .calls[0]![0].where as Record<string, any>;
@@ -210,7 +210,7 @@ describe('readLoungeMaterial', () => {
       blob: Buffer.from('not a zip we can read'),
     });
 
-    const result = await readLoungeMaterial(ctx, 'res-key');
+    const result = await readLoungeMaterial(ctx, 'res-key', dependencies);
 
     expect((result as { error: string }).error).toMatch(
       /only \.pptx and \.docx/
@@ -225,7 +225,7 @@ describe('readLoungeMaterial', () => {
       blob: Buffer.from('this is not a zip archive at all'),
     });
 
-    const result = await readLoungeMaterial(ctx, 'res-broken');
+    const result = await readLoungeMaterial(ctx, 'res-broken', dependencies);
 
     expect((result as { error: string }).error).toMatch(/could not be opened/);
   });
@@ -239,7 +239,7 @@ describe('readLoungeMaterial', () => {
       blob: readFixture('deck-images-only.pptx'),
     });
 
-    const result = await readLoungeMaterial(ctx, 'res-images');
+    const result = await readLoungeMaterial(ctx, 'res-images', dependencies);
 
     expect((result as { error: string }).error).toMatch(/no readable text/);
     expect((result as { error: string }).error).toMatch(/say nothing about/i);

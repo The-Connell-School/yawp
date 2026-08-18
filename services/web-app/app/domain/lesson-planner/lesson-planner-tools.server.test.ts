@@ -1,31 +1,12 @@
-import { afterAll, beforeEach, describe, expect, mock, test } from 'bun:test';
+import { beforeEach, describe, expect, mock, test } from 'bun:test';
 
 import { PLANNING_PROGRESS_LABELS } from './planning-progress';
+import { REPORTER_TOOLS } from '~/domain/reporter/reporter-tools.server';
 
 const handleReporterToolCall = mock();
 const listLoungeMaterials = mock();
 const listAssignableTypes = mock();
 const readLoungeMaterial = mock();
-
-mock.module('~/domain/reporter/reporter-tools.server', () => ({
-  handleReporterToolCall,
-  REPORTER_TOOLS: [
-    { name: 'list_classes', description: 'a', input_schema: {} },
-    { name: 'get_class_grade_report', description: 'b', input_schema: {} },
-    {
-      name: 'find_students_needing_attention',
-      description: 'c',
-      input_schema: {},
-    },
-    { name: 'get_submission_detail', description: 'd', input_schema: {} },
-    { name: 'save_growth_plan', description: 'e', input_schema: {} },
-  ],
-}));
-mock.module('~/domain/lesson-planner/yawp-catalog.server', () => ({
-  listLoungeMaterials,
-  listAssignableTypes,
-  readLoungeMaterial,
-}));
 
 const {
   LESSON_PLANNER_TOOLS,
@@ -34,11 +15,21 @@ const {
   handleLessonPlannerToolCall,
 } = await import('./lesson-planner-tools.server');
 
-afterAll(() => {
-  mock.restore();
-});
-
 const ctx = { membershipId: 'member-1', organizationId: 'org-1' };
+const dependencies = {
+  handleReporterTool: handleReporterToolCall,
+  listLounge: listLoungeMaterials,
+  listAssignmentTypes: listAssignableTypes,
+  readLounge: readLoungeMaterial,
+} as never;
+
+function callTool(
+  name: string,
+  input: Record<string, unknown>,
+  context = { ...ctx }
+) {
+  return handleLessonPlannerToolCall(name, input, context, dependencies);
+}
 
 beforeEach(() => {
   handleReporterToolCall.mockReset().mockResolvedValue('{"ok":true}');
@@ -101,7 +92,9 @@ describe('LESSON_PLANNER_TOOLS', () => {
     const listClasses = LESSON_PLANNER_TOOLS.find(
       (tool) => tool.name === 'list_classes'
     );
-    expect(listClasses).toMatchObject({ description: 'a' });
+    expect(listClasses).toEqual(
+      REPORTER_TOOLS.find((tool) => tool.name === 'list_classes')
+    );
   });
 
   test('gives every catalog tool a schema the API will accept', () => {
@@ -114,11 +107,7 @@ describe('LESSON_PLANNER_TOOLS', () => {
 
 describe('handleLessonPlannerToolCall', () => {
   test('delegates an allowed reporter tool to the reporter handler', async () => {
-    const result = await handleLessonPlannerToolCall(
-      'list_classes',
-      {},
-      { ...ctx }
-    );
+    const result = await callTool('list_classes', {}, { ...ctx });
 
     expect(result).toBe('{"ok":true}');
     expect(handleReporterToolCall).toHaveBeenCalledWith(
@@ -129,7 +118,7 @@ describe('handleLessonPlannerToolCall', () => {
   });
 
   test('refuses a reporter tool outside the allowlist without calling through', async () => {
-    const result = await handleLessonPlannerToolCall(
+    const result = await callTool(
       'save_growth_plan',
       { student: 'x' },
       { ...ctx }
@@ -140,22 +129,14 @@ describe('handleLessonPlannerToolCall', () => {
   });
 
   test('refuses an unknown tool name', async () => {
-    const result = await handleLessonPlannerToolCall(
-      'drop_tables',
-      {},
-      { ...ctx }
-    );
+    const result = await callTool('drop_tables', {}, { ...ctx });
 
     expect(JSON.parse(result).error).toContain('drop_tables');
     expect(handleReporterToolCall).not.toHaveBeenCalled();
   });
 
   test('never forwards a growth-plan write buffer to the reporter layer', async () => {
-    await handleLessonPlannerToolCall(
-      'get_class_grade_report',
-      { classId: 'c' },
-      { ...ctx }
-    );
+    await callTool('get_class_grade_report', { classId: 'c' }, { ...ctx });
 
     const forwarded = handleReporterToolCall.mock.calls[0]![2] as Record<
       string,
@@ -166,7 +147,7 @@ describe('handleLessonPlannerToolCall', () => {
 
   test('serves Daily Pages prompts without going through the reporter', async () => {
     const result = JSON.parse(
-      await handleLessonPlannerToolCall(
+      await callTool(
         'search_daily_pages_prompts',
         { gradeBand: '10', limit: 2 },
         { ...ctx }
@@ -180,7 +161,7 @@ describe('handleLessonPlannerToolCall', () => {
 
   test('tells the model to loosen its filters instead of inventing a prompt', async () => {
     const result = JSON.parse(
-      await handleLessonPlannerToolCall(
+      await callTool(
         'search_daily_pages_prompts',
         { text: 'a-book-yawp-does-not-have' },
         { ...ctx }
@@ -193,16 +174,12 @@ describe('handleLessonPlannerToolCall', () => {
 
   test('returns a writing lesson with its full text and link', async () => {
     const listed = JSON.parse(
-      await handleLessonPlannerToolCall('list_writing_lessons', {}, { ...ctx })
+      await callTool('list_writing_lessons', {}, { ...ctx })
     );
     const slug = listed.lessons[0].slug;
 
     const lesson = JSON.parse(
-      await handleLessonPlannerToolCall(
-        'get_writing_lesson',
-        { slug },
-        { ...ctx }
-      )
+      await callTool('get_writing_lesson', { slug }, { ...ctx })
     );
     expect(lesson.href).toBe(`/app/writing-lessons/${slug}`);
     expect(lesson.content.length).toBeGreaterThan(0);
@@ -210,18 +187,14 @@ describe('handleLessonPlannerToolCall', () => {
 
   test('reports an unknown lesson slug rather than improvising one', async () => {
     const lesson = JSON.parse(
-      await handleLessonPlannerToolCall(
-        'get_writing_lesson',
-        { slug: 'not-a-lesson' },
-        { ...ctx }
-      )
+      await callTool('get_writing_lesson', { slug: 'not-a-lesson' }, { ...ctx })
     );
     expect(lesson.error).toContain('not-a-lesson');
   });
 
   test('passes the teacher scope to the lounge and assignment lookups', async () => {
-    await handleLessonPlannerToolCall('list_lounge_materials', {}, { ...ctx });
-    await handleLessonPlannerToolCall('list_assignment_types', {}, { ...ctx });
+    await callTool('list_lounge_materials', {}, { ...ctx });
+    await callTool('list_assignment_types', {}, { ...ctx });
 
     expect(listLoungeMaterials).toHaveBeenCalledWith(ctx);
     expect(listAssignableTypes).toHaveBeenCalledWith(ctx);
@@ -231,7 +204,7 @@ describe('handleLessonPlannerToolCall', () => {
     listLoungeMaterials.mockRejectedValue(new Error('db down'));
 
     const result = JSON.parse(
-      await handleLessonPlannerToolCall('list_lounge_materials', {}, { ...ctx })
+      await callTool('list_lounge_materials', {}, { ...ctx })
     );
 
     expect(result.error).toMatch(/plan without it/i);
@@ -261,11 +234,7 @@ describe('read_lounge_material', () => {
     });
 
     const result = JSON.parse(
-      await handleLessonPlannerToolCall(
-        'read_lounge_material',
-        { id: 'res-0' },
-        { ...ctx }
-      )
+      await callTool('read_lounge_material', { id: 'res-0' }, { ...ctx })
     );
 
     expect(readLoungeMaterial).toHaveBeenCalledWith(ctx, 'res-0');
@@ -276,7 +245,7 @@ describe('read_lounge_material', () => {
     listLoungeMaterials.mockResolvedValue(loungeWith([{ readable: true }]));
 
     const result = JSON.parse(
-      await handleLessonPlannerToolCall('list_lounge_materials', {}, { ...ctx })
+      await callTool('list_lounge_materials', {}, { ...ctx })
     );
 
     expect(result.note).toMatch(/read_lounge_material/);
@@ -287,7 +256,7 @@ describe('read_lounge_material', () => {
     listLoungeMaterials.mockResolvedValue(loungeWith([{ readable: false }]));
 
     const result = JSON.parse(
-      await handleLessonPlannerToolCall('list_lounge_materials', {}, { ...ctx })
+      await callTool('list_lounge_materials', {}, { ...ctx })
     );
 
     expect(result.note).toMatch(/say nothing about what is inside/i);

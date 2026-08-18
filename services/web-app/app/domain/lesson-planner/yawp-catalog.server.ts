@@ -26,6 +26,22 @@ export type CatalogContext = {
 
 export type AssignableType = { id: string; title: string };
 
+export type YawpCatalogDependencies = {
+  prismaClient: Pick<
+    typeof prisma,
+    | 'orgMembership'
+    | 'teacherTraining'
+    | 'teacherTrainingModuleResource'
+    | 'class'
+  >;
+  getAvailableAssignmentTypes: typeof getAvailableAssignmentTypesForScopes;
+};
+
+const productionDependencies: YawpCatalogDependencies = {
+  prismaClient: prisma,
+  getAvailableAssignmentTypes: getAvailableAssignmentTypesForScopes,
+};
+
 /**
  * Which Lounge courses this teacher can see: their assigned ones once they have
  * any, and otherwise all of them — the same scoping the Lounge index does.
@@ -34,11 +50,15 @@ export type AssignableType = { id: string; title: string };
  * resource id is a handle the model holds onto, and the read tool must not
  * become a way around the scoping the listing already applies.
  */
-async function visibleTrainingsWhere(ctx: CatalogContext) {
-  const assignmentCounts = await prisma.orgMembership.findUnique({
-    where: { id: ctx.membershipId, role: 'TEACHER' },
-    select: { _count: { select: { assignedTeacherTrainings: true } } },
-  });
+async function visibleTrainingsWhere(
+  ctx: CatalogContext,
+  dependencies: YawpCatalogDependencies
+) {
+  const assignmentCounts =
+    await dependencies.prismaClient.orgMembership.findUnique({
+      where: { id: ctx.membershipId, role: 'TEACHER' },
+      select: { _count: { select: { assignedTeacherTrainings: true } } },
+    });
   const hasAssignedCourses =
     (assignmentCounts?._count.assignedTeacherTrainings ?? 0) > 0;
   return hasAssignedCourses
@@ -52,10 +72,11 @@ async function visibleTrainingsWhere(ctx: CatalogContext) {
  * `readLoungeMaterial` for what is inside one.
  */
 export async function listLoungeMaterials(
-  ctx: CatalogContext
+  ctx: CatalogContext,
+  dependencies: YawpCatalogDependencies = productionDependencies
 ): Promise<LoungeTrainingSummary[]> {
-  const trainings = await prisma.teacherTraining.findMany({
-    where: await visibleTrainingsWhere(ctx),
+  const trainings = await dependencies.prismaClient.teacherTraining.findMany({
+    where: await visibleTrainingsWhere(ctx, dependencies),
     select: {
       id: true,
       title: true,
@@ -128,20 +149,22 @@ function capSlides(slides: PptxSlide[]): {
 
 export async function readLoungeMaterial(
   ctx: CatalogContext,
-  resourceId: string
+  resourceId: string,
+  dependencies: YawpCatalogDependencies = productionDependencies
 ): Promise<LoungeMaterialContents | { error: string }> {
-  const resource = await prisma.teacherTrainingModuleResource.findFirst({
-    // Scoped through the module's course, so this can only open a file the
-    // same teacher's list_lounge_materials would already have shown them.
-    where: {
-      id: resourceId,
-      teacherTrainingModule: {
-        deletedAt: null,
-        teacherTraining: await visibleTrainingsWhere(ctx),
+  const resource =
+    await dependencies.prismaClient.teacherTrainingModuleResource.findFirst({
+      // Scoped through the module's course, so this can only open a file the
+      // same teacher's list_lounge_materials would already have shown them.
+      where: {
+        id: resourceId,
+        teacherTrainingModule: {
+          deletedAt: null,
+          teacherTraining: await visibleTrainingsWhere(ctx, dependencies),
+        },
       },
-    },
-    select: { name: true, contentType: true, blob: true },
-  });
+      select: { name: true, contentType: true, blob: true },
+    });
 
   if (!resource) {
     return {
@@ -202,9 +225,10 @@ export async function readLoungeMaterial(
  * org/school/teacher inheritance the dashboard uses.
  */
 export async function listAssignableTypes(
-  ctx: CatalogContext
+  ctx: CatalogContext,
+  dependencies: YawpCatalogDependencies = productionDependencies
 ): Promise<AssignableType[]> {
-  const classes = await prisma.class.findMany({
+  const classes = await dependencies.prismaClient.class.findMany({
     where: {
       teachers: { some: { id: ctx.membershipId } },
       isArchived: false,
@@ -222,7 +246,7 @@ export async function listAssignableTypes(
     teacherProfileId: ctx.membershipId,
   }));
 
-  const types = await getAvailableAssignmentTypesForScopes<{
+  const types = await dependencies.getAvailableAssignmentTypes<{
     id: string;
     title: string;
     systemKey: string | null;
@@ -243,8 +267,9 @@ export async function listAssignableTypes(
  * button rather than a link into a page they cannot open.
  */
 export async function findDailyPagesTypeId(
-  ctx: CatalogContext
+  ctx: CatalogContext,
+  dependencies: YawpCatalogDependencies = productionDependencies
 ): Promise<string | null> {
-  const types = await listAssignableTypes(ctx);
+  const types = await listAssignableTypes(ctx, dependencies);
   return types.find((type) => isDailyPagesTitle(type.title))?.id ?? null;
 }
