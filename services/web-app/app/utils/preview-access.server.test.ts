@@ -379,11 +379,15 @@ describe('preview access gate', () => {
   });
 
   describe('one-click ?code= entry', () => {
-    test('a generic master code opens organization selection without granting app access', async () => {
+    test('a generic master code in a URL is stripped without granting access', async () => {
       process.env.PREVIEW_MASTER_ACCESS_CODE = 'wise-owl-9876';
       const next = mock(async () => new Response('private'));
+      const middleware = createPreviewAccessMiddleware(
+        async () => null,
+        repository()
+      );
 
-      const response = (await previewAccessMiddleware(
+      const response = (await middleware(
         middlewareArgs(
           request('/app/classes?code=wise-owl-9876&tab=roster')
         ),
@@ -394,12 +398,7 @@ describe('preview access gate', () => {
       expect(response.headers.get('location')).toBe(
         '/auth/preview-access?returnTo=%2Fapp%2Fclasses%3Ftab%3Droster'
       );
-      expect(response.headers.get('set-cookie')).toContain(
-        `${PREVIEW_MASTER_SELECTION_COOKIE_NAME}=`
-      );
-      expect(response.headers.get('set-cookie')).not.toContain(
-        `${PREVIEW_ACCESS_COOKIE_NAME}=`
-      );
+      expect(response.headers.get('set-cookie')).toBeNull();
       expect(next).not.toHaveBeenCalled();
     });
 
@@ -531,7 +530,7 @@ describe('preview access codes', () => {
     ).toBe(false);
   });
 
-  test('resolves the env master without a DB query', async () => {
+  test('resolves the configured organization code without a DB query', async () => {
     process.env.PREVIEW_ACCESS_SECRET = 'test-preview-access-secret';
     process.env.PREVIEW_ACCESS_SEATS = JSON.stringify([
       {
@@ -554,6 +553,30 @@ describe('preview access codes', () => {
       label: 'Master',
     });
     expect(runtimeRepository.findByCode).not.toHaveBeenCalled();
+  });
+
+  test('fails closed when the generic master collides with a database organization code', async () => {
+    process.env.PREVIEW_ACCESS_SECRET = 'test-preview-access-secret';
+    process.env.PREVIEW_MASTER_ACCESS_CODE = 'wise-owl-9876';
+    process.env.PREVIEW_ACCESS_SEATS = JSON.stringify([
+      {
+        code: 'brave-otter-4193',
+        organizationId: 'local-dev-org',
+        label: 'Yawp Local Dev',
+      },
+    ]);
+    const runtimeRepository = repository({
+      byCode: {
+        'wise-owl-9876': { id: 'existing-org', name: 'Existing Org' },
+      },
+    });
+
+    expect(
+      await findPreviewAccessCredentialByCode(
+        'wise-owl-9876',
+        runtimeRepository
+      )
+    ).toBeNull();
   });
 
   test('distinguishes a generic master credential from an organization code', async () => {
@@ -589,7 +612,9 @@ describe('preview access codes', () => {
     expect(
       await findPreviewAccessSeatByCode('wise-owl-9876', runtimeRepository)
     ).toBeNull();
-    expect(runtimeRepository.findByCode).not.toHaveBeenCalled();
+    expect(runtimeRepository.findByCode).toHaveBeenCalledWith(
+      'wise-owl-9876'
+    );
   });
 
   test('keeps the configured organization code distinct from the generic master', () => {

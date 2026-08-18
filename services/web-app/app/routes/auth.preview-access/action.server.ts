@@ -15,6 +15,11 @@ import {
   type PreviewAccessCredential,
   type PreviewAccessSeat,
 } from '~/utils/preview-access.server';
+import {
+  checkPreviewAccessAttempt,
+  clearFailedPreviewAccessAttempts,
+  recordFailedPreviewAccessAttempt,
+} from '~/utils/preview-access-rate-limit.server';
 
 /**
  * Kept out of route.tsx on purpose.
@@ -37,6 +42,12 @@ type PreviewAccessRouteDependencies = {
   clearAccess?: () => Promise<string>;
   findOrganization?: (id: string) => Promise<PreviewOrganization | null>;
   listOrganizations?: () => Promise<PreviewOrganization[]>;
+  checkAttemptAllowed?: (request: Request) => {
+    allowed: boolean;
+    retryAfter: number;
+  };
+  recordFailedAttempt?: (request: Request) => void;
+  clearFailedAttempts?: (request: Request) => void;
 };
 
 async function databaseFindOrganization(id: string) {
@@ -105,6 +116,12 @@ export function createPreviewAccessAction(
   const clearAccess = dependencies.clearAccess ?? clearPreviewAccessCookie;
   const findOrganization =
     dependencies.findOrganization ?? databaseFindOrganization;
+  const checkAttemptAllowed =
+    dependencies.checkAttemptAllowed ?? checkPreviewAccessAttempt;
+  const recordFailedAttempt =
+    dependencies.recordFailedAttempt ?? recordFailedPreviewAccessAttempt;
+  const clearFailedAttempts =
+    dependencies.clearFailedAttempts ?? clearFailedPreviewAccessAttempts;
 
   return async ({ request }: ActionFunctionArgs): Promise<Response> => {
     const formData = await request.formData();
@@ -118,8 +135,12 @@ export function createPreviewAccessAction(
       (await import('~/utils/auth.server')).logout;
 
     if (intent === 'sign-out' || intent === 'cancel-master') {
+      const redirectTo =
+        intent === 'cancel-master'
+          ? selectionUrl(returnTo)
+          : PREVIEW_ACCESS_PATH;
       await signOut(
-        { request, redirectTo: PREVIEW_ACCESS_PATH },
+        { request, redirectTo },
         {
           headers: cookieHeaders(
             await clearAccess(),
@@ -174,14 +195,30 @@ export function createPreviewAccessAction(
       throw new Error('Preview organization selection did not redirect.');
     }
 
+    const rateLimit = checkAttemptAllowed(request);
+    if (!rateLimit.allowed) {
+      return Response.json(
+        { error: 'Too many access-code attempts. Try again later.' },
+        {
+          status: 429,
+          headers: {
+            'Cache-Control': 'no-store',
+            'Retry-After': String(rateLimit.retryAfter),
+          },
+        }
+      );
+    }
+
     const code = String(formData.get('code') ?? '');
     const credential = await findCredential(code);
     if (!credential) {
+      recordFailedAttempt(request);
       return Response.json(
         { error: 'That access code was not recognized.' },
         { status: 400, headers: { 'Cache-Control': 'no-store' } }
       );
     }
+    clearFailedAttempts(request);
 
     if (credential.kind === 'master') {
       await signOut(

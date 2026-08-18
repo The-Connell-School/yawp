@@ -135,6 +135,7 @@ export default function PreviewAccessRoute({ loaderData }: Route.ComponentProps)
 
             <Form method="post" replace>
               <input type="hidden" name="intent" value="cancel-master" />
+              <input type="hidden" name="returnTo" value={loaderData.returnTo} />
               <button
                 type="submit"
                 className="h-9 w-full rounded-md px-3 text-sm font-medium text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"

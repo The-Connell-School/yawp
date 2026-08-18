@@ -282,8 +282,7 @@ describe('auth.dev-login action', () => {
 
     const page = await getLocalDevLoginOptionsPage(
       'default-org',
-      prisma as never,
-      { includeAllOrganizations: true }
+      prisma as never
     );
 
     expect(prisma.user.findMany).toHaveBeenCalledWith({

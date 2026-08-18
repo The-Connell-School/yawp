@@ -9,6 +9,9 @@ const grantAccess = mock();
 const clearAccess = mock();
 const findOrganization = mock();
 const listOrganizations = mock();
+const checkAttemptAllowed = mock();
+const recordFailedAttempt = mock();
+const clearFailedAttempts = mock();
 const { createPreviewAccessAction, createPreviewAccessLoader } = await import(
   './action.server'
 );
@@ -22,6 +25,9 @@ const dependencies = {
   clearAccess: clearAccess as never,
   findOrganization: findOrganization as never,
   listOrganizations: listOrganizations as never,
+  checkAttemptAllowed: checkAttemptAllowed as never,
+  recordFailedAttempt: recordFailedAttempt as never,
+  clearFailedAttempts: clearFailedAttempts as never,
 };
 const action = createPreviewAccessAction(dependencies);
 const loader = createPreviewAccessLoader(dependencies);
@@ -73,6 +79,10 @@ describe('preview access action', () => {
     clearAccess.mockReset();
     findOrganization.mockReset();
     listOrganizations.mockReset();
+    checkAttemptAllowed.mockReset();
+    recordFailedAttempt.mockReset();
+    clearFailedAttempts.mockReset();
+    checkAttemptAllowed.mockReturnValue({ allowed: true, retryAfter: 0 });
     findCredential.mockImplementation(async (code: string) =>
       code.trim().toLowerCase() === 'brave-otter-4193'
         ? {
@@ -147,9 +157,23 @@ describe('preview access action', () => {
 
     expect(response.status).toBe(400);
     expect(response.headers.get('set-cookie')).toBeNull();
+    expect(recordFailedAttempt).toHaveBeenCalledTimes(1);
     expect(await response.json()).toEqual({
       error: 'That access code was not recognized.',
     });
+  });
+
+  test('rate-limits repeated access-code attempts before credential lookup', async () => {
+    checkAttemptAllowed.mockReturnValue({ allowed: false, retryAfter: 900 });
+
+    const response = await action(
+      actionArgs(makeRequest({ code: 'wrong-otter-4193' }))
+    );
+
+    expect(response.status).toBe(429);
+    expect(response.headers.get('Retry-After')).toBe('900');
+    expect(findCredential).not.toHaveBeenCalled();
+    expect(recordFailedAttempt).not.toHaveBeenCalled();
   });
 
   test('awaits runtime DB seat resolution before setting the cookie', async () => {
@@ -289,6 +313,27 @@ describe('preview access action', () => {
     expect(await response.json()).toEqual({
       error: 'Preview access is not configured. Contact the deployment owner.',
     });
+  });
+
+  test('canceling master selection preserves the originally requested page', async () => {
+    let response: Response | undefined;
+    try {
+      await action(
+        actionArgs(
+          makeRequest({
+            intent: 'cancel-master',
+            returnTo: '/app/classes?tab=active',
+          })
+        )
+      );
+    } catch (error) {
+      response = error as Response;
+    }
+
+    expect(response?.status).toBe(302);
+    expect(logout.mock.calls[0]?.[0].redirectTo).toBe(
+      '/auth/preview-access?returnTo=%2Fapp%2Fclasses%3Ftab%3Dactive'
+    );
   });
 
   test('re-enter-code clears both access and application auth sessions', async () => {

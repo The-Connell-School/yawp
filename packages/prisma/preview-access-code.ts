@@ -146,10 +146,13 @@ export function generatePreviewAccessSeats({
     const existing = byOrganization.get(identity.organizationId);
     const legacyCode = existingCodes[index];
     const preservedCode = existing?.code || legacyCode;
+    if (preservedCode && reserved.has(preservedCode)) {
+      throw new Error(
+        `Generic master access code collides with the existing organization code for ${identity.organizationId}.`
+      );
+    }
     const code =
-      preservedCode && !reserved.has(preservedCode)
-        ? preservedCode
-        : generateUniquePreviewAccessCode(usedCodes, generateCode);
+      preservedCode ?? generateUniquePreviewAccessCode(usedCodes, generateCode);
     usedCodes.add(code);
     return { code, ...identity };
   });

@@ -203,6 +203,10 @@ export async function findPreviewAccessCredentialByCode(
     globalMasterCode &&
     timingSafeEqual(candidateDigest, digestCode(globalMasterCode))
   ) {
+    // Deployment preflight rejects this state, but fail closed at runtime too if
+    // database state changes afterward. Existing organization codes always win the
+    // right to keep their meaning; a colliding master credential is unusable.
+    if (await repository.findByCode(candidate)) return null;
     return { kind: 'master' };
   }
 
@@ -425,7 +429,7 @@ function blockedResponse(request: Request) {
 }
 
 /**
- * Lets a PR-comment link log a tester straight in: `?code=<preview-access-code>`
+ * Lets a PR-comment link log a tester straight in: `?code=<organization-code>`
  * appended to any in-app URL. Consumes the code through the same validation path
  * as the POST form, sets the same signed cookie, then 303s to the same URL with
  * `code` stripped so it never lingers in the address bar, browser history, or a
@@ -450,12 +454,14 @@ async function consumeCodeQueryParam(
 
   url.searchParams.delete('code');
   if (credential.kind === 'master') {
+    // Never authenticate a reusable cross-environment credential through a URL.
+    // Strip it immediately and require the POST form so it cannot persist in logs,
+    // browser history, screenshots, analytics, or Referer headers.
     const returnTo = `${url.pathname}${url.search}`;
     return new Response(null, {
       status: 303,
       headers: {
         'Cache-Control': 'no-store',
-        'set-cookie': await grantPreviewMasterSelectionCookie(),
         Location: `${PREVIEW_ACCESS_PATH}?${new URLSearchParams({ returnTo })}`,
       },
     });

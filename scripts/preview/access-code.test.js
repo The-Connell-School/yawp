@@ -97,21 +97,21 @@ describe('preview access-code generator', () => {
     expect(seats[0]?.code).toBe('sunny-fox-2468');
   });
 
-  test('rotates an existing organization code that becomes the generic master', () => {
-    const seats = generatePreviewAccessSeats({
-      count: 1,
-      existingSeats: [
-        {
-          code: 'wise-owl-9876',
-          organizationId: 'local-dev-org',
-          label: 'Master',
-        },
-      ],
-      reservedCodes: ['wise-owl-9876'],
-      generateCode: () => 'sunny-fox-2468',
-    });
-
-    expect(seats[0]?.code).toBe('sunny-fox-2468');
+  test('rejects a generic master code that would replace an existing organization code', () => {
+    expect(() =>
+      generatePreviewAccessSeats({
+        count: 1,
+        existingSeats: [
+          {
+            code: 'wise-owl-9876',
+            organizationId: 'local-dev-org',
+            label: 'Master',
+          },
+        ],
+        reservedCodes: ['wise-owl-9876'],
+        generateCode: () => 'sunny-fox-2468',
+      })
+    ).toThrow('collides with the existing organization code');
   });
 
   test('lowering the requested count never removes a retained seat mapping', () => {

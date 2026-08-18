@@ -95,7 +95,17 @@ load_or_create_database_credential() {
 load_or_create_database_credential
 eval "$(node "$SCRIPT_DIR/preview-env.mjs" --shell)"
 : "${PREVIEW_POSTGRES_ADMIN_PASSWORD:?PREVIEW_POSTGRES_ADMIN_PASSWORD is required}"
-: "${PREVIEW_MASTER_ACCESS_CODE:?PREVIEW_MASTER_ACCESS_CODE is required}"
+if [[ -f "$SOURCE_DIR/services/web-app/.preview-master-org-gate-v1" ]]; then
+  PREVIEW_MASTER_ORG_GATE_ENABLED=true
+  : "${PREVIEW_MASTER_ACCESS_CODE:?PREVIEW_MASTER_ACCESS_CODE is required}"
+  [[ "$PREVIEW_MASTER_ACCESS_CODE" =~ ^[a-z]+-[a-z]+-[1-9][0-9]{3}$ ]] || {
+    echo "PREVIEW_MASTER_ACCESS_CODE must be a two-word, four-digit code" >&2
+    exit 1
+  }
+else
+  PREVIEW_MASTER_ORG_GATE_ENABLED=false
+fi
+export PREVIEW_MASTER_ORG_GATE_ENABLED
 case "${PREVIEW_KEEP_AWAKE:-false}" in
   true) printf 'true\n' > "$PREVIEW_DIR/keep-awake" ;;
   false) rm -f -- "$PREVIEW_DIR/keep-awake" ;;
@@ -146,7 +156,7 @@ load_or_create_access_config() {
         -e PREVIEW_ACCESS_MASTER_LABEL="$PREVIEW_ACCESS_MASTER_LABEL" \
         -e PREVIEW_EXISTING_ACCESS_SEATS="$existing_seats" \
         -e PREVIEW_ACCESS_CODES="$legacy_codes" \
-        -e PREVIEW_MASTER_ACCESS_CODE="$PREVIEW_MASTER_ACCESS_CODE" \
+        -e PREVIEW_MASTER_ACCESS_CODE="${PREVIEW_MASTER_ACCESS_CODE:-}" \
         -v "$SOURCE_DIR:/app:ro" \
         -w /app \
         oven/bun:1.3.1 \
@@ -184,7 +194,7 @@ load_or_create_access_config() {
     fi
   fi
 
-  export PREVIEW_ACCESS_CODES PREVIEW_ACCESS_SEATS PREVIEW_ACCESS_SECRET PREVIEW_MASTER_ACCESS_CODE PREVIEW_SESSION_SECRET PREVIEW_SEAT_COUNT
+  export PREVIEW_ACCESS_CODES PREVIEW_ACCESS_SEATS PREVIEW_ACCESS_SECRET PREVIEW_MASTER_ACCESS_CODE PREVIEW_MASTER_ORG_GATE_ENABLED PREVIEW_SESSION_SECRET PREVIEW_SEAT_COUNT
 }
 
 load_or_create_access_config
@@ -632,12 +642,35 @@ refresh_web_container_if_needed() {
 }
 
 ensure_shared_postgres
+
+assert_no_master_code_collision() {
+  [[ "$PREVIEW_MASTER_ORG_GATE_ENABLED" == "true" ]] || return 0
+  local database_exists relation_exists collision
+  database_exists="$(docker exec "$POSTGRES_CONTAINER" psql --no-psqlrc -U postgres -d postgres -Atc \
+    "SELECT 1 FROM pg_database WHERE datname = '${DATABASE_NAME}'" | tr -d '[:space:]')"
+  [[ "$database_exists" == "1" ]] || return 0
+  relation_exists="$(docker exec "$POSTGRES_CONTAINER" psql --no-psqlrc -U postgres -d "$DATABASE_NAME" -Atc \
+    "SELECT to_regclass('public.\"Organization\"') IS NOT NULL" | tr -d '[:space:]')"
+  [[ "$relation_exists" == "t" ]] || return 0
+  collision="$(docker exec \
+    -e PGOPTIONS="-c yawp.master_access_code=$PREVIEW_MASTER_ACCESS_CODE" \
+    "$POSTGRES_CONTAINER" psql --no-psqlrc -U postgres -d "$DATABASE_NAME" -Atc \
+    "SELECT 1 FROM \"Organization\" WHERE lower(\"previewSeatCode\") = lower(current_setting('yawp.master_access_code')) LIMIT 1" \
+    | tr -d '[:space:]')"
+  if [[ "$collision" == "1" ]]; then
+    echo "Generic master access code collides with an existing organization code; deployment stopped without changing that code." >&2
+    exit 1
+  fi
+}
+
+assert_no_master_code_collision
 ensure_preview_database_role
 reset_preview_database_for_data_source_change
 ensure_preview_database
 harden_preview_database
 run_tooling_if_needed
 ensure_preview_seats
+assert_no_master_code_collision
 install_demo_backup_tooling
 start_or_refresh_web() {
   refresh_web_container_if_needed
@@ -666,6 +699,7 @@ for attempt in $(seq 1 90); do
     echo "PREVIEW_URL=$URL"
     echo "PREVIEW_HOSTNAME=$HOSTNAME"
     echo "PREVIEW_ACCESS_CODE=$smoke_access_code"
+    echo "PREVIEW_MASTER_ORG_GATE_ENABLED=$PREVIEW_MASTER_ORG_GATE_ENABLED"
     PREVIEW_ACCESS_SEATS="$PREVIEW_ACCESS_SEATS" node -e '
       for (const [index, seat] of JSON.parse(process.env.PREVIEW_ACCESS_SEATS).entries()) {
         console.log(`PREVIEW_SEAT_CODE_${index + 1}=${seat.code}`)

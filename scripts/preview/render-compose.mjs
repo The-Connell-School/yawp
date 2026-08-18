@@ -28,13 +28,16 @@ export function renderPreviewCompose({
   databasePassword = process.env.PREVIEW_DB_PASSWORD,
   accessSeats = process.env.PREVIEW_ACCESS_SEATS,
   masterAccessCode = process.env.PREVIEW_MASTER_ACCESS_CODE,
+  masterOrgGateEnabled =
+    process.env.PREVIEW_MASTER_ORG_GATE_ENABLED === 'true',
   accessSecret = process.env.PREVIEW_ACCESS_SECRET,
   sessionSecret = process.env.PREVIEW_SESSION_SECRET,
   aiMode = process.env.PREVIEW_AI_MODE || 'live',
 } = {}) {
   const previewAccessSeats = requirePreviewAccessSeats(accessSeats);
-  const previewMasterAccessCode =
-    requirePreviewMasterAccessCode(masterAccessCode);
+  const previewMasterAccessCode = masterOrgGateEnabled
+    ? requirePreviewMasterAccessCode(masterAccessCode)
+    : '';
   const previewAccessSecret = requirePreviewAccessSecret(accessSecret);
   const previewSessionSecret = requirePreviewSessionSecret(sessionSecret);
   if (!['disabled', 'live'].includes(aiMode)) {
@@ -66,6 +69,9 @@ export function renderPreviewCompose({
   // PREVIEW_ACCESS_GATE is consumed by the root route middleware itself. This render
   // cannot emit that enforcement switch without validated seats and its own signing secret,
   // so enabling role-swap necessarily enables the request-boundary gate too.
+  const masterAccessEnvironment = masterOrgGateEnabled
+    ? `      PREVIEW_MASTER_ACCESS_CODE: ${q(previewMasterAccessCode)}\n`
+    : '';
   const commonEnvironment = `      DATABASE_URL: ${q(env.databaseUrl)}
       DATABASE_SSL_REJECT_UNAUTHORIZED: "false"
       NODE_ENV: ${env.runtime === 'fast' ? 'development' : 'production'}
@@ -73,8 +79,7 @@ export function renderPreviewCompose({
       PREVIEW_DATA_MODE: ${q(env.dataMode)}
       PREVIEW_ACCESS_GATE: "on"
       PREVIEW_ACCESS_SEATS: ${q(previewAccessSeats)}
-      PREVIEW_MASTER_ACCESS_CODE: ${q(previewMasterAccessCode)}
-      PREVIEW_ACCESS_SECRET: ${q(previewAccessSecret)}
+${masterAccessEnvironment}      PREVIEW_ACCESS_SECRET: ${q(previewAccessSecret)}
       PREVIEW_SEAT_COUNT: ${q(optionalEnv('PREVIEW_SEAT_COUNT', '1'))}
       PORT: "8080"
       COOKIE_SECURE: ${cookieSecure}

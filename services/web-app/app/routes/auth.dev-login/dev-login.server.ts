@@ -187,7 +187,6 @@ export function createDevLoginOptionsLoader({
       prismaClient,
       {
         cursor,
-        includeAllOrganizations: false,
       }
     );
 
@@ -224,7 +223,7 @@ function toDevLoginOption(user: any): DevLoginOption | null {
 export async function getLocalDevLoginOptionsPage(
   organizationId: string | undefined,
   prismaClient: any,
-  options: { includeAllOrganizations?: boolean; cursor?: number } = {}
+  options: { cursor?: number } = {}
 ): Promise<DevLoginOptionsPage> {
   const cursor = Math.max(0, options.cursor ?? 0);
 

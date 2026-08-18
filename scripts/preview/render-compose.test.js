@@ -27,6 +27,7 @@ function renderCompose(overrides = {}) {
     sessionSecret: previewSessionSecret,
     accessSecret: previewAccessSecret,
     masterAccessCode: previewMasterAccessCode,
+    masterOrgGateEnabled: true,
     databasePassword: previewDatabasePassword,
     ...overrides,
   });
@@ -155,6 +156,16 @@ describe('renderPreviewCompose', () => {
     expect(() => renderCompose({ masterAccessCode: 'shared password' })).toThrow(
       'PREVIEW_MASTER_ACCESS_CODE must be a two-word, four-digit code'
     );
+  });
+
+  test('keeps pre-feature application refs deployable without the master capability', () => {
+    const compose = renderCompose({
+      masterOrgGateEnabled: false,
+      masterAccessCode: '',
+    });
+
+    expect(compose).not.toContain('PREVIEW_MASTER_ACCESS_CODE:');
+    expect(compose).toContain('PREVIEW_ACCESS_SEATS:');
   });
 
   test('requires a non-default signing secret', () => {

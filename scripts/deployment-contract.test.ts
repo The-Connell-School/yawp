@@ -850,6 +850,32 @@ describe('PR preview deployment contract', () => {
     expect(previewWorkflow).not.toContain('aws s3 presign');
   });
 
+  test('master organization gate rolls out only to capable refs and rejects code collisions', () => {
+    const previewWorkflow = readRepoFile(
+      '.github/workflows/preview-environments.yml'
+    );
+    const demoWorkflow = readRepoFile('.github/workflows/demo-environment.yml');
+    const deployScript = readRepoFile('scripts/preview/deploy.sh');
+    const capability = readRepoFile(
+      'services/web-app/.preview-master-org-gate-v1'
+    );
+
+    expect(capability).toContain('preview-master-org-gate-v1');
+    expect(deployScript).toContain(
+      'SOURCE_DIR/services/web-app/.preview-master-org-gate-v1'
+    );
+    expect(deployScript).toContain('assert_no_master_code_collision');
+    expect(deployScript).toContain(
+      'deployment stopped without changing that code'
+    );
+    expect(previewWorkflow).toContain(
+      'steps.deploy.outputs.master_org_gate_enabled'
+    );
+    expect(demoWorkflow).toContain(
+      'steps.deploy.outputs.master_org_gate_enabled'
+    );
+  });
+
   test('preview deploy polls health quickly once containers are starting', () => {
     const deployScript = readRepoFile('scripts/preview/deploy.sh');
 

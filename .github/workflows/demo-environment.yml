@@ -199,10 +199,12 @@ jobs:
             | tee /tmp/demo-deploy.log
           url="$(awk -F= '/^PREVIEW_URL=/{print $2}' /tmp/demo-deploy.log | tail -1)"
           access_code="$(awk -F= '/^PREVIEW_ACCESS_CODE=/{print $2}' /tmp/demo-deploy.log | tail -1)"
+          master_org_gate_enabled="$(awk -F= '/^PREVIEW_MASTER_ORG_GATE_ENABLED=/{print $2}' /tmp/demo-deploy.log | tail -1)"
           test -n "$url" || { echo "Deploy did not print PREVIEW_URL"; exit 1; }
           test -n "$access_code" || { echo "Deploy did not print PREVIEW_ACCESS_CODE"; exit 1; }
           echo "url=$url" >> "$GITHUB_OUTPUT"
           echo "access_code=$access_code" >> "$GITHUB_OUTPUT"
+          echo "master_org_gate_enabled=${master_org_gate_enabled:-false}" >> "$GITHUB_OUTPUT"
 
       - name: Verify the demo actually serves
         run: |
@@ -234,26 +236,28 @@ jobs:
             *) echo "Demo access code returned HTTP $entered" >&2; exit 1 ;;
           esac
 
-          master_jar="$(mktemp)"
-          master_entered="$(curl -sk -o /dev/null -m 15 -w '%{http_code}' -c "$master_jar" \
-            --data-urlencode "code=$PREVIEW_MASTER_ACCESS_CODE" "$url/auth/preview-access")"
-          case "$master_entered" in
-            302|303) ;;
-            *) echo "Demo master access code returned HTTP $master_entered" >&2; exit 1 ;;
-          esac
-          master_gate="$(curl -skL -m 15 -b "$master_jar" "$url/auth/preview-access")"
-          grep -q 'data-preview-organization-selector' <<<"$master_gate" || {
-            echo "Demo master access did not require organization selection" >&2
-            exit 1
-          }
-          master_selected="$(curl -sk -o /dev/null -m 15 -w '%{http_code}' -b "$master_jar" -c "$master_jar" \
-            --data-urlencode 'intent=select-organization' \
-            --data-urlencode "organizationId=$PREVIEW_ACCESS_MASTER_ORGANIZATION_ID" \
-            "$url/auth/preview-access")"
-          case "$master_selected" in
-            302|303) ;;
-            *) echo "Demo master organization selection returned HTTP $master_selected" >&2; exit 1 ;;
-          esac
+          if [[ "${{ steps.deploy.outputs.master_org_gate_enabled }}" == "true" ]]; then
+            master_jar="$(mktemp)"
+            master_entered="$(curl -sk -o /dev/null -m 15 -w '%{http_code}' -c "$master_jar" \
+              --data-urlencode "code=$PREVIEW_MASTER_ACCESS_CODE" "$url/auth/preview-access")"
+            case "$master_entered" in
+              302|303) ;;
+              *) echo "Demo master access code returned HTTP $master_entered" >&2; exit 1 ;;
+            esac
+            master_gate="$(curl -skL -m 15 -b "$master_jar" "$url/auth/preview-access")"
+            grep -q 'data-preview-organization-selector' <<<"$master_gate" || {
+              echo "Demo master access did not require organization selection" >&2
+              exit 1
+            }
+            master_selected="$(curl -sk -o /dev/null -m 15 -w '%{http_code}' -b "$master_jar" -c "$master_jar" \
+              --data-urlencode 'intent=select-organization' \
+              --data-urlencode "organizationId=$PREVIEW_ACCESS_MASTER_ORGANIZATION_ID" \
+              "$url/auth/preview-access")"
+            case "$master_selected" in
+              302|303) ;;
+              *) echo "Demo master organization selection returned HTTP $master_selected" >&2; exit 1 ;;
+            esac
+          fi
 
           for attempt in $(seq 1 30); do
             code="$(curl -skL -o /dev/null -m 15 -w '%{http_code}' \
