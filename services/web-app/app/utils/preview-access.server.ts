@@ -1,4 +1,4 @@
-import { createHash, timingSafeEqual } from 'node:crypto';
+import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 import { createCookie, type MiddlewareFunction } from 'react-router';
 import { shouldUseSecureCookies } from './cookie-security.server';
 import {
@@ -7,17 +7,16 @@ import {
 } from './preview-session-seat.server';
 
 export const PREVIEW_ACCESS_COOKIE_NAME = '__yawp_preview_access';
-export const PREVIEW_MASTER_SELECTION_COOKIE_NAME =
-  '__yawp_preview_master';
+export const PREVIEW_MASTER_SELECTION_COOKIE_NAME = '__yawp_preview_master';
 export const PREVIEW_ACCESS_PATH = '/auth/preview-access';
 export const PREVIEW_ACCESS_MAX_AGE = 60 * 60 * 24 * 30;
 export const PREVIEW_MASTER_SELECTION_MAX_AGE = 10 * 60;
-export const PREVIEW_AUTHORIZED_ACTIVITY_HEADER =
-  'X-Yawp-Preview-Authorized';
+export const PREVIEW_AUTHORIZED_ACTIVITY_HEADER = 'X-Yawp-Preview-Authorized';
 
 const ACCESS_SEAT_VALUE_PREFIX = 'seat-v3:';
+const MASTER_ACCESS_SEAT_VALUE_PREFIX = 'seat-master-v1:';
 const LEGACY_ACCESS_SEAT_VALUE_PREFIX = 'seat-v2:';
-const MASTER_SELECTION_VALUE_PREFIX = 'master-v1:';
+const MASTER_SELECTION_VALUE_PREFIX = 'master-v2:';
 const ACCESS_COOKIE_CLOCK_SKEW_SECONDS = 5 * 60;
 const ACCESS_CODE_PATTERN = /^[a-z]+-[a-z]+-[1-9][0-9]{3}$/;
 const OPEN_PATHS = new Set([
@@ -37,8 +36,7 @@ export type PreviewAccessSeat = {
 };
 
 export type PreviewAccessCredential =
-  | { kind: 'master' }
-  | { kind: 'organization'; seat: PreviewAccessSeat };
+  { kind: 'master' } | { kind: 'organization'; seat: PreviewAccessSeat };
 
 type ConfiguredPreviewAccessSeat = PreviewAccessSeat & { code: string };
 
@@ -113,14 +111,23 @@ function accessSecrets() {
     .filter(Boolean);
 }
 
+function masterCredentialVersion() {
+  const masterCode = configuredGlobalMasterCode();
+  const [accessSecret] = accessSecrets();
+  if (!masterCode || !accessSecret) return null;
+  return createHmac('sha256', accessSecret)
+    .update(masterCode)
+    .digest('hex')
+    .slice(0, 24);
+}
+
 export function isPreviewAccessGateEnabled() {
   return process.env.PREVIEW_ACCESS_GATE === 'on';
 }
 
 export function isIsolatedPreviewSeatMode() {
   return (
-    isPreviewAccessGateEnabled() &&
-    process.env.PREVIEW_DATA_MODE === 'seed'
+    isPreviewAccessGateEnabled() && process.env.PREVIEW_DATA_MODE === 'seed'
   );
 }
 
@@ -177,9 +184,7 @@ const databasePreviewSeatRepository: PreviewAccessSeatRepository = {
 };
 
 export function getPreviewMasterAccessCode() {
-  return (
-    configuredGlobalMasterCode() ?? configuredPrimarySeat()?.code ?? null
-  );
+  return configuredGlobalMasterCode() ?? configuredPrimarySeat()?.code ?? null;
 }
 
 export function getConfiguredPreviewOrganizationAccessCode(
@@ -206,7 +211,13 @@ export async function findPreviewAccessCredentialByCode(
     // Deployment preflight rejects this state, but fail closed at runtime too if
     // database state changes afterward. Existing organization codes always win the
     // right to keep their meaning; a colliding master credential is unusable.
-    if (await repository.findByCode(candidate)) return null;
+    const collision = await repository.findByCode(candidate);
+    if (collision) {
+      return {
+        kind: 'organization',
+        seat: { organizationId: collision.id, label: collision.name },
+      };
+    }
     return { kind: 'master' };
   }
 
@@ -240,20 +251,38 @@ export async function findPreviewAccessSeatByCode(
   value: string,
   repository: PreviewAccessSeatRepository = databasePreviewSeatRepository
 ): Promise<PreviewAccessSeat | null> {
-  const credential = await findPreviewAccessCredentialByCode(
-    value,
-    repository
-  );
+  const credential = await findPreviewAccessCredentialByCode(value, repository);
   return credential?.kind === 'organization' ? credential.seat : null;
+}
+
+async function findPreviewOrganizationAccessSeatByCode(
+  value: string,
+  repository: PreviewAccessSeatRepository
+): Promise<PreviewAccessSeat | null> {
+  if (!isPreviewAccessConfigured()) return null;
+  const candidate = normalizeCode(value);
+  if (!ACCESS_CODE_PATTERN.test(candidate)) return null;
+  const primarySeat = configuredPrimarySeat();
+  if (
+    primarySeat &&
+    timingSafeEqual(digestCode(candidate), digestCode(primarySeat.code))
+  ) {
+    return {
+      organizationId: primarySeat.organizationId,
+      label: primarySeat.label,
+    };
+  }
+  const runtimeSeat = await repository.findByCode(candidate);
+  return runtimeSeat
+    ? { organizationId: runtimeSeat.id, label: runtimeSeat.name }
+    : null;
 }
 
 export async function validatePreviewAccessCode(
   value: string,
   repository?: PreviewAccessSeatRepository
 ) {
-  return (
-    (await findPreviewAccessCredentialByCode(value, repository)) !== null
-  );
+  return (await findPreviewAccessCredentialByCode(value, repository)) !== null;
 }
 
 export function createPreviewAccessCookie() {
@@ -292,6 +321,15 @@ export async function grantPreviewAccessCookie(seat: PreviewAccessSeat) {
   }
   const issuedAt = Math.floor(Date.now() / 1000);
   const accessKind = seat.accessKind === 'master' ? 'master' : 'organization';
+  if (accessKind === 'master') {
+    const version = masterCredentialVersion();
+    if (!version) {
+      throw new Error('Generic preview master access is not configured.');
+    }
+    return createPreviewAccessCookie().serialize(
+      `${MASTER_ACCESS_SEAT_VALUE_PREFIX}${issuedAt}:${seat.organizationId}:${version}`
+    );
+  }
   return createPreviewAccessCookie().serialize(
     `${ACCESS_SEAT_VALUE_PREFIX}${issuedAt}:${accessKind}:${seat.organizationId}`
   );
@@ -306,8 +344,12 @@ export async function grantPreviewMasterSelectionCookie() {
     throw new Error('Generic preview master access is not configured.');
   }
   const issuedAt = Math.floor(Date.now() / 1000);
+  const version = masterCredentialVersion();
+  if (!version) {
+    throw new Error('Generic preview master access is not configured.');
+  }
   return createPreviewMasterSelectionCookie().serialize(
-    `${MASTER_SELECTION_VALUE_PREFIX}${issuedAt}`
+    `${MASTER_SELECTION_VALUE_PREFIX}${issuedAt}:${version}`
   );
 }
 
@@ -336,10 +378,20 @@ export async function hasPreviewMasterSelection(request: Request) {
   return (
     typeof value === 'string' &&
     value.startsWith(MASTER_SELECTION_VALUE_PREFIX) &&
-    timestampIsCurrent(
-      value.slice(MASTER_SELECTION_VALUE_PREFIX.length),
-      PREVIEW_MASTER_SELECTION_MAX_AGE
-    )
+    (() => {
+      const payload = value.slice(MASTER_SELECTION_VALUE_PREFIX.length);
+      const separator = payload.indexOf(':');
+      if (separator < 1) return false;
+      const version = masterCredentialVersion();
+      return (
+        version !== null &&
+        timestampIsCurrent(
+          payload.slice(0, separator),
+          PREVIEW_MASTER_SELECTION_MAX_AGE
+        ) &&
+        payload.slice(separator + 1) === version
+      );
+    })()
   );
 }
 
@@ -355,7 +407,28 @@ export async function getPreviewAccessSeat(
 
   let accessKind: 'organization' | 'master' = 'organization';
   let payload: string;
-  if (value.startsWith(ACCESS_SEAT_VALUE_PREFIX)) {
+  if (value.startsWith(MASTER_ACCESS_SEAT_VALUE_PREFIX)) {
+    payload = value.slice(MASTER_ACCESS_SEAT_VALUE_PREFIX.length);
+    const issuedSeparator = payload.indexOf(':');
+    if (issuedSeparator < 1) return null;
+    if (
+      !timestampIsCurrent(
+        payload.slice(0, issuedSeparator),
+        PREVIEW_ACCESS_MAX_AGE
+      )
+    ) {
+      return null;
+    }
+    const remainder = payload.slice(issuedSeparator + 1);
+    const versionSeparator = remainder.lastIndexOf(':');
+    if (versionSeparator < 1) return null;
+    const version = masterCredentialVersion();
+    if (!version || remainder.slice(versionSeparator + 1) !== version) {
+      return null;
+    }
+    accessKind = 'master';
+    payload = remainder.slice(0, versionSeparator);
+  } else if (value.startsWith(ACCESS_SEAT_VALUE_PREFIX)) {
     payload = value.slice(ACCESS_SEAT_VALUE_PREFIX.length);
     const kindSeparator = payload.indexOf(':');
     if (kindSeparator < 1) return null;
@@ -367,8 +440,7 @@ export async function getPreviewAccessSeat(
     const organizationSeparator = remainder.indexOf(':');
     if (organizationSeparator < 1) return null;
     const kind = remainder.slice(0, organizationSeparator);
-    if (kind !== 'organization' && kind !== 'master') return null;
-    accessKind = kind;
+    if (kind !== 'organization') return null;
     payload = remainder.slice(organizationSeparator + 1);
   } else if (value.startsWith(LEGACY_ACCESS_SEAT_VALUE_PREFIX)) {
     payload = value.slice(LEGACY_ACCESS_SEAT_VALUE_PREFIX.length);
@@ -386,7 +458,10 @@ export async function getPreviewAccessSeat(
   const organizationId = payload;
   if (!/^[a-z0-9][a-z0-9-]{0,127}$/.test(organizationId)) return null;
   const primarySeat = configuredPrimarySeat();
-  if (accessKind === 'organization' && organizationId === primarySeat?.organizationId) {
+  if (
+    accessKind === 'organization' &&
+    organizationId === primarySeat?.organizationId
+  ) {
     return { organizationId, label: primarySeat.label };
   }
   const seat = await repository.findById(organizationId);
@@ -446,32 +521,15 @@ async function consumeCodeQueryParam(
   const code = url.searchParams.get('code');
   if (!code) return null;
 
-  const credential = await findPreviewAccessCredentialByCode(
-    code,
-    repository
-  );
-  if (!credential) return null;
+  const seat = await findPreviewOrganizationAccessSeatByCode(code, repository);
+  if (!seat) return null;
 
   url.searchParams.delete('code');
-  if (credential.kind === 'master') {
-    // Never authenticate a reusable cross-environment credential through a URL.
-    // Strip it immediately and require the POST form so it cannot persist in logs,
-    // browser history, screenshots, analytics, or Referer headers.
-    const returnTo = `${url.pathname}${url.search}`;
-    return new Response(null, {
-      status: 303,
-      headers: {
-        'Cache-Control': 'no-store',
-        Location: `${PREVIEW_ACCESS_PATH}?${new URLSearchParams({ returnTo })}`,
-      },
-    });
-  }
-
   return new Response(null, {
     status: 303,
     headers: {
       'Cache-Control': 'no-store',
-      'set-cookie': await grantPreviewAccessCookie(credential.seat),
+      'set-cookie': await grantPreviewAccessCookie(seat),
       Location: `${url.pathname}${url.search}`,
     },
   });
@@ -512,6 +570,8 @@ export function createPreviewAccessMiddleware(
     if (!seat) {
       const oneClickEntry = await consumeCodeQueryParam(request, repository);
       if (oneClickEntry) return oneClickEntry;
+      const cleanedEntry = stripCodeQueryParam(request);
+      if (cleanedEntry) return cleanedEntry;
     } else {
       // The existing seat remains authoritative, but never let a code-bearing PR link
       // linger in browser history or become a Referer after access is already granted.
