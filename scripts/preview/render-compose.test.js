@@ -29,6 +29,9 @@ function renderCompose(overrides = {}) {
     masterAccessCode: previewMasterAccessCode,
     masterOrgGateEnabled: true,
     databasePassword: previewDatabasePassword,
+    dependencyCacheFingerprint: 'a'.repeat(64),
+    dependencyRootVolume: `yawp-preview-deps-v2-${'a'.repeat(64)}-root`,
+    dependencyWebVolume: `yawp-preview-deps-v2-${'a'.repeat(64)}-web`,
     ...overrides,
   });
 }
@@ -49,7 +52,23 @@ describe('renderPreviewCompose', () => {
     expect(compose).not.toContain('image: postgres:16');
     expect(compose).toContain('toolbox:');
     expect(compose).toContain('image: oven/bun:1.3.1');
-    expect(compose).toContain('yawp-pr-142-node-modules');
+    expect(parsed.volumes['dependency-root'].name).toBe(
+      `yawp-preview-deps-v2-${'a'.repeat(64)}-root`,
+    );
+    expect(parsed.volumes['dependency-web'].name).toBe(
+      `yawp-preview-deps-v2-${'a'.repeat(64)}-web`,
+    );
+    expect(parsed.services.web.volumes).toContainEqual({
+      type: 'bind',
+      source: '/srv/yawp-preview/sources/pr-142',
+      target: '/app',
+    });
+    expect(parsed.services.toolbox.volumes[0].read_only).toBeUndefined();
+    expect(parsed.services.web.volumes).toContainEqual({
+      type: 'volume',
+      source: 'web-vite-cache',
+      target: '/app/services/web-app/node_modules/.vite',
+    });
     expect(compose).not.toContain(
       'rm -rf services/web-app/.react-router services/web-app/.vite'
     );
@@ -79,6 +98,28 @@ describe('renderPreviewCompose', () => {
     expect(compose).not.toContain('docker push');
   });
 
+  test('keeps per-PR environment values isolated while sharing dependencies', () => {
+    const first = Bun.YAML.parse(renderCompose());
+    const second = Bun.YAML.parse(
+      renderCompose({
+        prNumber: '143',
+        databasePassword: 'different-preview-database-password-0002',
+        accessSecret: 'different-preview-access-secret-0002',
+        sessionSecret: 'different-preview-session-secret-0002',
+      }),
+    );
+
+    expect(first.services.web.volumes[1].source).toBe(
+      second.services.web.volumes[1].source,
+    );
+    expect(first.services.web.environment.DATABASE_URL).not.toBe(
+      second.services.web.environment.DATABASE_URL,
+    );
+    expect(first.services.web.environment.SESSION_SECRET).not.toBe(
+      second.services.web.environment.SESSION_SECRET,
+    );
+  });
+
   test('still supports production-image previews when explicitly requested', () => {
     const compose = renderCompose({
       runtime: 'production',
@@ -88,6 +129,7 @@ describe('renderPreviewCompose', () => {
     expect(compose).toContain('dockerfile: services/web-app/Dockerfile');
     expect(compose).toContain('target: deps');
     expect(compose).toContain('target: production');
+    expect(compose).not.toContain('yawp-preview-deps-v2-');
   });
 
   test('pins Traefik to the shared preview network', () => {

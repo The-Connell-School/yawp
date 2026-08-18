@@ -1,4 +1,5 @@
 import { fileURLToPath } from 'node:url';
+import { cacheVolumeNames } from './dependency-cache.mjs';
 import {
   buildPreviewEnv,
   requirePreviewAccessSecret,
@@ -32,6 +33,9 @@ export function renderPreviewCompose({
   accessSecret = process.env.PREVIEW_ACCESS_SECRET,
   sessionSecret = process.env.PREVIEW_SESSION_SECRET,
   aiMode = process.env.PREVIEW_AI_MODE || 'live',
+  dependencyCacheFingerprint = process.env.DEPENDENCY_CACHE_FINGERPRINT,
+  dependencyRootVolume = process.env.DEPENDENCY_ROOT_VOLUME,
+  dependencyWebVolume = process.env.DEPENDENCY_WEB_VOLUME,
 } = {}) {
   const previewAccessSeats = requirePreviewAccessSeats(accessSeats);
   const previewMasterAccessCode = masterOrgGateEnabled
@@ -44,6 +48,18 @@ export function renderPreviewCompose({
   }
   const anthropicApiKey =
     aiMode === 'live' ? optionalEnv('PREVIEW_ANTHROPIC_API_KEY') : '';
+  if (runtime === 'fast') {
+    if (!/^[0-9a-f]{64}$/.test(dependencyCacheFingerprint || '')) {
+      throw new Error('DEPENDENCY_CACHE_FINGERPRINT is required for fast previews');
+    }
+    const expectedVolumes = cacheVolumeNames(dependencyCacheFingerprint);
+    if (
+      dependencyRootVolume !== expectedVolumes.root ||
+      dependencyWebVolume !== expectedVolumes.web
+    ) {
+      throw new Error('dependency cache volume names do not match the fingerprint');
+    }
+  }
   const env = buildPreviewEnv({
     prNumber,
     domain,
@@ -95,17 +111,37 @@ ${masterAccessEnvironment}      PREVIEW_ACCESS_SECRET: ${q(previewAccessSecret)}
       CLASS_INSIGHT_MOCK_MODE: ${q(aiMode === 'disabled' ? 'fixture' : optionalEnv('PREVIEW_CLASS_INSIGHT_MOCK_MODE'))}
       ANTHROPIC_API_KEY: ${q(anthropicApiKey)}
       AI_MODEL: ${q(optionalEnv('PREVIEW_AI_MODEL', 'claude-sonnet-4-6'))}`;
-  const fastVolumes = `    volumes:
-      - ${q(`${env.sourceDir}:/app`)}
-      - ${env.composeProject}-node-modules:/app/node_modules
-      - ${env.composeProject}-web-node-modules:/app/services/web-app/node_modules`;
+  const dependencyVolumes = `      - type: volume
+        source: dependency-root
+        target: /app/node_modules
+        read_only: true
+      - type: volume
+        source: dependency-web
+        target: /app/services/web-app/node_modules
+        read_only: true`;
+  const toolboxFastVolumes = `    volumes:
+      - type: bind
+        source: ${q(env.sourceDir)}
+        target: /app
+${dependencyVolumes}`;
+  const webFastVolumes = `    volumes:
+      - type: bind
+        source: ${q(env.sourceDir)}
+        target: /app
+${dependencyVolumes}
+      - type: volume
+        source: web-vite-cache
+        target: /app/services/web-app/node_modules/.vite
+      - type: volume
+        source: web-react-router-cache
+        target: /app/services/web-app/.react-router`;
   const toolboxService =
     env.runtime === 'fast'
       ? `  toolbox:
     profiles: ["tools"]
     image: oven/bun:1.3.1
     working_dir: /app
-${fastVolumes}
+${toolboxFastVolumes}
     environment:
 ${commonEnvironment}
     networks:
@@ -130,7 +166,7 @@ ${commonEnvironment}
     image: oven/bun:1.3.1
     working_dir: /app
     command: bash -lc "cd services/web-app && bun run dev -- --host 0.0.0.0 --port 8080"
-${fastVolumes}
+${webFastVolumes}
     environment:
 ${commonEnvironment}
 `
@@ -145,6 +181,21 @@ ${commonEnvironment}
     environment:
 ${commonEnvironment}
 `;
+
+  const volumes =
+    env.runtime === 'fast'
+      ? `
+volumes:
+  dependency-root:
+    name: ${q(dependencyRootVolume)}
+    external: true
+  dependency-web:
+    name: ${q(dependencyWebVolume)}
+    external: true
+  web-vite-cache:
+  web-react-router-cache:
+`
+      : '';
 
   return `name: ${env.composeProject}
 services:
@@ -167,10 +218,7 @@ ${tlsLabels}
     networks:
       - default
       - preview${directPortBlock}
-
-volumes:
-  ${env.composeProject}-node-modules:
-  ${env.composeProject}-web-node-modules:
+${volumes}
 
 networks:
   preview:

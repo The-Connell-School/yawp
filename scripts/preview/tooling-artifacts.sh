@@ -2,13 +2,16 @@
 
 preview_missing_tooling_artifacts() {
   local source_dir="$1"
+  local dependencies_external="${2:-false}"
 
-  if [[ ! -d "$source_dir/node_modules" ]]; then
-    echo "node_modules"
-  fi
+  if [[ "$dependencies_external" != "true" ]]; then
+    if [[ ! -d "$source_dir/node_modules" ]]; then
+      echo "node_modules"
+    fi
 
-  if [[ ! -d "$source_dir/services/web-app/node_modules" ]]; then
-    echo "services/web-app/node_modules"
+    if [[ ! -d "$source_dir/services/web-app/node_modules" ]]; then
+      echo "services/web-app/node_modules"
+    fi
   fi
 
   if [[ ! -f "$source_dir/packages/prisma/generated/prisma/index.js" ]]; then

@@ -498,6 +498,17 @@ describe('PR preview deployment contract', () => {
     );
   });
 
+  test('preview workflow supports an isolated production-runtime canary label', () => {
+    const previewWorkflow = readRepoFile(
+      '.github/workflows/preview-environments.yml'
+    );
+
+    expect(previewWorkflow).toContain('preview:production-runtime');
+    expect(previewWorkflow).toContain(
+      "contains(github.event.pull_request.labels.*.name, 'preview:production-runtime') && 'production'"
+    );
+  });
+
   test('production previews rebuild application code even when database tooling is cached', () => {
     const deployScript = readRepoFile('scripts/preview/deploy.sh');
     const prebuildFunction = deployScript.slice(

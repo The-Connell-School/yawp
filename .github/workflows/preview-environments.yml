@@ -24,7 +24,7 @@ jobs:
       github.event_name == 'pull_request_target' &&
       github.event.action != 'closed' &&
       github.event.pull_request.base.ref == github.event.repository.default_branch &&
-      ((github.event.action != 'labeled' && github.event.action != 'unlabeled') || github.event.label.name == 'preview:keep-awake') &&
+      ((github.event.action != 'labeled' && github.event.action != 'unlabeled') || contains(fromJSON('["preview:keep-awake", "preview:production-runtime"]'), github.event.label.name)) &&
       github.event.pull_request.head.repo.full_name == github.repository &&
       contains(github.event.pull_request.title, '[skip preview]') == false &&
       contains(github.event.pull_request.body, '[skip preview]') == false &&
@@ -38,7 +38,7 @@ jobs:
       PREVIEW_ROOT: ${{ vars.PREVIEW_ROOT || '/srv/yawp-preview' }}
       PREVIEW_SSH_USER: ${{ vars.PREVIEW_SSH_USER || 'ec2-user' }}
       PREVIEW_TLS: ${{ vars.PREVIEW_TLS || 'true' }}
-      PREVIEW_RUNTIME: ${{ vars.PREVIEW_RUNTIME || 'fast' }}
+      PREVIEW_RUNTIME: ${{ contains(github.event.pull_request.labels.*.name, 'preview:production-runtime') && 'production' || vars.PREVIEW_RUNTIME || 'fast' }}
       PREVIEW_MAX_ENVS: ${{ vars.PREVIEW_MAX_ENVS || '30' }}
       PREVIEW_MAX_RESIDENT: ${{ vars.PREVIEW_MAX_RESIDENT || vars.PREVIEW_MAX_ENVS || '20' }}
       PREVIEW_MAX_RUNNING: ${{ vars.PREVIEW_MAX_RUNNING || '4' }}

@@ -6,6 +6,7 @@ SOURCE_DIR="${SOURCE_DIR:-$(cd "$SCRIPT_DIR/../.." && pwd)}"
 export SOURCE_DIR
 
 source "$SCRIPT_DIR/tooling-artifacts.sh"
+source "$SCRIPT_DIR/dependency-cache.sh"
 
 export PREVIEW_DATA_MODE="${PREVIEW_DATA_MODE:-seed}"
 export PREVIEW_DEV_LOGIN_EMAIL="${PREVIEW_DEV_LOGIN_EMAIL:-dev.teacher@yawp.local}"
@@ -203,6 +204,12 @@ load_or_create_access_config() {
 }
 
 load_or_create_access_config
+if [[ "$RUNTIME" == "fast" ]]; then
+  preview_prepare_dependency_cache "$SCRIPT_DIR" "$ROOT"
+  printf '%s\n' "$DEPENDENCY_CACHE_FINGERPRINT" > "$PREVIEW_DIR/dependency-cache.sha256"
+else
+  rm -f "$PREVIEW_DIR/dependency-cache.sha256"
+fi
 node "$SCRIPT_DIR/render-compose.mjs" > "$PREVIEW_DIR/docker-compose.yml"
 
 docker network inspect preview >/dev/null 2>&1 || docker network create preview >/dev/null
@@ -648,7 +655,7 @@ run_tooling_if_needed() {
   fi
 
   local missing_artifacts
-  missing_artifacts="$(preview_missing_tooling_artifacts "$SOURCE_DIR" | awk 'BEGIN { first = 1 } { if (!first) printf ", "; printf "%s", $0; first = 0 }')"
+  missing_artifacts="$(preview_missing_tooling_artifacts "$SOURCE_DIR" true | awk 'BEGIN { first = 1 } { if (!first) printf ", "; printf "%s", $0; first = 0 }')"
 
   # The tooling fingerprint intentionally covers database/bootstrap inputs, not every
   # application source file. Production images therefore rebuild on every deployment;
@@ -673,7 +680,7 @@ run_tooling_if_needed() {
   fi
 
   local tooling_command
-  tooling_command='bun install --ignore-scripts && bun prisma generate && cd packages/prisma && bun prisma migrate deploy'
+  tooling_command='bun prisma generate && cd packages/prisma && bun prisma migrate deploy'
   if [[ -f "$SOURCE_DIR/packages/prisma/scripts/backfill-class-art-key.ts" ]]; then
     tooling_command+=' && bun run scripts/backfill-class-art-key.ts'
   fi
