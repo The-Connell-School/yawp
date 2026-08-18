@@ -190,6 +190,8 @@ describe('renderPreviewCompose', () => {
     try {
       const compose = renderCompose();
 
+      expect(compose).toContain('YAWP_PREVIEW_AI_MODE: "live"');
+      expect(compose).toContain('CLASS_INSIGHT_MOCK_MODE: ""');
       expect(compose).toContain('ANTHROPIC_API_KEY: "anthropic-preview-key"');
       expect(compose).toContain('AI_MODEL: "claude-opus-test"');
     } finally {
@@ -206,7 +208,7 @@ describe('renderPreviewCompose', () => {
     }
   });
 
-  test('makes automatic PR preview AI disablement explicit and omits provider credentials', () => {
+  test('keeps an explicit emergency AI-disabled mode without provider credentials', () => {
     const previousAnthropicKey = process.env.PREVIEW_ANTHROPIC_API_KEY;
     process.env.PREVIEW_ANTHROPIC_API_KEY = 'shared-provider-key';
     try {
