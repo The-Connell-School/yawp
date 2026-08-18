@@ -164,21 +164,30 @@ export async function createPreviewSeat(
 }
 
 /**
- * Whether an existing seat may be topped up with data added since it was seeded.
+ * Whether this environment is a disposable per-PR preview.
  *
- * Set by `deploy.sh` for a per-PR preview and only for one. Such a preview is
- * disposable, belongs to a single branch, and keeps its database between deploys —
- * so a class the branch adds has no other way of reaching the environment that
- * exists to review the branch. A named environment (the demo box) is long-lived
- * and someone else demos from it; redeploying it ships code and not data, so it
- * takes the untouched path.
+ * Read from the database name, which `preview-env.mjs` derives from the slug:
+ * `yawp_pr_267` for a pull request, `yawp_demo` for the named demo box. That is a
+ * roundabout-looking source for it, and the reason is worth writing down.
  *
- * The gate is the preview being disposable, not a judgement about whether the
- * data looks harmless — "reseeding an existing seat performs zero writes and
- * preserves divergence" stays true everywhere it was true before.
+ * The preview control plane — everything under `scripts/preview/` — is checked out
+ * from the default branch on purpose, so that a pull request cannot change what
+ * runs on the shared preview host. A flag set there would therefore do nothing
+ * for the branch that added it and would only start working once merged, which is
+ * exactly when nobody needs it any more. This file runs from the PR's own source,
+ * so it has to derive the answer from what the container already gives it.
+ *
+ * What it gates: whether a seat whose organization already exists may be topped
+ * up with data the branch added after that database was created. A per-PR preview
+ * is disposable and belongs to one branch, so it should show that branch's data.
+ * The demo box is long-lived and someone demos from it — redeploying it ships code
+ * and not data, and "reseeding an existing seat performs zero writes and preserves
+ * divergence" stays true there.
  */
 function seatTopUpEnabled() {
-  return process.env.PREVIEW_SEAT_TOP_UP === '1';
+  const explicit = process.env.PREVIEW_SEAT_TOP_UP;
+  if (explicit) return explicit === '1';
+  return /\/yawp_pr_\d+(\?|$)/.test(process.env.DATABASE_URL ?? '');
 }
 
 /**

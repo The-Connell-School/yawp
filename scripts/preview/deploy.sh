@@ -349,8 +349,6 @@ compute_tooling_fingerprint() {
         packages/prisma/scripts/local-dev/class-insights.ts \
         packages/prisma/scripts/local-dev/dev-personas.ts \
         packages/prisma/scripts/local-dev/seed-synthetic-data.ts \
-        packages/prisma/scripts/local-dev/seed-collaboration.ts \
-        packages/prisma/scripts/local-dev/collab-demo-plan.ts \
         scripts/preview/deploy.sh
       do
         if [[ -f "$file" ]]; then
@@ -419,19 +417,7 @@ ensure_preview_seats() {
   if [[ "$DATA_MODE" != "seed" ]]; then
     return 0
   fi
-  # A per-PR preview keeps its database between deploys, and `seed-local-dev` runs
-  # only when that database was just created — so data a branch adds afterwards
-  # never reaches the environment that exists to review the branch. This lets the
-  # seat step top up what is missing.
-  #
-  # Gated on PR_NUMBER, which preview-env.mjs exports empty for a named
-  # environment. The demo box is long-lived and someone demos from it: redeploying
-  # it ships code and not data, so it does not get this.
-  local top_up=0
-  if [[ -n "${PR_NUMBER:-}" ]]; then
-    top_up=1
-  fi
-  "${compose[@]}" run --rm -e "PREVIEW_SEAT_TOP_UP=$top_up" toolbox bash -lc \
+  "${compose[@]}" run --rm toolbox bash -lc \
     'cd packages/prisma && bun run seed-preview-seats'
 }
 
