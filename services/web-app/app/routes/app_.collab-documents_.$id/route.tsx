@@ -2,6 +2,7 @@ import { invariant } from '@epic-web/invariant';
 import { ArrowLeft } from 'lucide-react';
 import {
   data as dataResponse,
+  useFetcher,
   useLoaderData,
   useNavigate,
   useSearchParams,
@@ -80,6 +81,12 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     select: {
       id: true,
       title: true,
+      submissions: {
+        where: { unsubmittedAt: null },
+        orderBy: { submittedAt: 'desc' },
+        take: 1,
+        select: { id: true, submittedAt: true },
+      },
       assignment: {
         // promptAttachmentName so the prompt panel can offer the same PDF the
         // solo editor does; without it the attachment silently disappears for
@@ -136,12 +143,19 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     membershipId: profile.id,
     userName: user?.name?.trim() || 'Someone',
     canWrite: Boolean(asAuthor),
+    submittedAt: doc.submissions[0]?.submittedAt?.toISOString() ?? null,
   });
 }
 
 export default function CollabDocumentRoute() {
-  const { doc, canWrite } = useLoaderData<typeof loader>();
+  const { doc, canWrite, submittedAt } = useLoaderData<typeof loader>();
   const navigate = useNavigate();
+  const submitFetcher = useFetcher<{ success?: boolean; message?: string }>();
+  const submitting = submitFetcher.state !== 'idle';
+  const submitError =
+    submitFetcher.data && submitFetcher.data.success === false
+      ? submitFetcher.data.message
+      : '';
   const [searchParams] = useSearchParams();
   const exitTarget = searchParams.get('exitTo') || '/app';
 
@@ -177,6 +191,26 @@ export default function CollabDocumentRoute() {
           </span>
         </div>
 
+        {/* Any member may submit for the group, which is what the group agreed
+            when they asked for it. Pressing twice is harmless: the route returns
+            the existing submission rather than creating a second. */}
+        {canWrite ? (
+          <submitFetcher.Form
+            method="post"
+            action={`/api/collab/${doc.id}/submit`}
+            className="shrink-0"
+          >
+            <Button
+              type="submit"
+              size="sm"
+              variant={submittedAt ? 'outline' : 'default'}
+              disabled={submitting || Boolean(submittedAt)}
+            >
+              {submittedAt ? 'Submitted' : 'Submit'}
+            </Button>
+          </submitFetcher.Form>
+        ) : null}
+
         {/* The group's roster, in the colors their carets use in the document,
             so one color means one person everywhere on the page. */}
         <ul
@@ -205,6 +239,15 @@ export default function CollabDocumentRoute() {
           })}
         </ul>
       </nav>
+
+      {submitError ? (
+        <p
+          className="border-b bg-red-50 px-4 py-2 text-sm text-red-800"
+          role="alert"
+        >
+          {submitError}
+        </p>
+      ) : null}
 
       <div className="mx-auto flex min-h-0 w-full max-w-screen-2xl flex-1 overflow-hidden">
         {/* Renders nothing when there is no prompt, which is the student-share

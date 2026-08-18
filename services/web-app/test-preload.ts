@@ -87,6 +87,18 @@ if (isWebAppTestFile()) {
     '~/utils/document-access.server': await snapshot(
       '~/utils/document-access.server'
     ),
+    // The group-draft route stubs these wholesale; other files need them real.
+    '~/domain/collaboration/group-grade.server': await snapshot(
+      '~/domain/collaboration/group-grade.server'
+    ),
+    '~/domain/collaboration/member-grades.server': await snapshot(
+      '~/domain/collaboration/member-grades.server'
+    ),
+    // The group-submit test stubs yUpdateToSnapshot; the updates-route test
+    // asserts on the real dual-written snapshot and needs it back.
+    '~/domain/collaboration/snapshot': await snapshot(
+      '~/domain/collaboration/snapshot'
+    ),
   };
 }
 

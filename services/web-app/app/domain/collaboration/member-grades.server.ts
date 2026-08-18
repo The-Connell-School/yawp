@@ -11,8 +11,15 @@ import { prisma } from '~/utils/db.server';
  * sentence takes almost none. The evidence informs the number; it never becomes
  * the number.
  *
- * Keyed to the group rather than a Submission because submitting a group draft
- * is not wired yet, so a Submission-keyed grade could not be entered at all.
+ * Keyed to the group rather than a Submission so that grading works whether or
+ * not the group has submitted.
+ *
+ * The group's grade is never copied onto member rows. Most students simply take
+ * it — a teacher with thirty students in ten groups should type it once and
+ * override the two or three outliers, not enter thirty grades — so
+ * `followsGroupGrade` records only whether an override exists, and the effective
+ * grade is derived at read time. Re-grading the group then flows to every
+ * follower automatically and never disturbs a row a teacher deliberately set.
  */
 
 export class MemberGradeError extends Error {}
@@ -32,6 +39,7 @@ export async function recordMemberGrade({
   score,
   feedback,
   release,
+  useGroupGrade,
   now = new Date(),
 }: {
   groupId: string;
@@ -41,6 +49,8 @@ export async function recordMemberGrade({
   feedback?: string | null;
   /** True to show the student, false to take it back, undefined to leave as-is. */
   release?: boolean;
+  /** True to drop any override and hand this student back to the group grade. */
+  useGroupGrade?: boolean;
   now?: Date;
 }) {
   const cleanScore = trimmedOrNull(score);
@@ -76,13 +86,19 @@ export async function recordMemberGrade({
     release === undefined ? undefined : release ? now : null;
   const cleanFeedback = trimmedOrNull(feedback);
 
+  // A score is what makes a grade individual. Clearing it, or asking explicitly,
+  // hands the student back to whatever the group is graded.
+  const follows = useGroupGrade ? true : cleanScore === null;
+  const storedScore = follows ? null : cleanScore;
+
   await prisma.documentGroupMemberGrade.upsert({
     where: { groupId_membershipId: { groupId, membershipId } },
     create: {
       groupId,
       membershipId,
       gradedByMembershipId,
-      score: cleanScore,
+      followsGroupGrade: follows,
+      score: storedScore,
       feedback: cleanFeedback,
       // Unreleased by default: nothing reaches a student while the teacher is
       // still working through the group.
@@ -90,7 +106,8 @@ export async function recordMemberGrade({
     },
     update: {
       gradedByMembershipId,
-      score: cleanScore,
+      followsGroupGrade: follows,
+      score: storedScore,
       feedback: cleanFeedback,
       ...(release === undefined ? {} : { releasedAt }),
     },
@@ -100,6 +117,7 @@ export async function recordMemberGrade({
 }
 
 export type MemberGrade = {
+  followsGroupGrade: boolean;
   score: string | null;
   feedback: string | null;
   releasedAt: string | null;
@@ -114,6 +132,7 @@ export async function readMemberGrades({
     where: { groupId },
     select: {
       membershipId: true,
+      followsGroupGrade: true,
       score: true,
       feedback: true,
       releasedAt: true,
@@ -124,6 +143,7 @@ export async function readMemberGrades({
     rows.map((row) => [
       row.membershipId,
       {
+        followsGroupGrade: row.followsGroupGrade,
         score: row.score,
         feedback: row.feedback,
         releasedAt: row.releasedAt ? row.releasedAt.toISOString() : null,

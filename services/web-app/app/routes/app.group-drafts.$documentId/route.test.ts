@@ -7,7 +7,10 @@ const getIsPlatformAdmin = mock();
 const buildContributionBreakdown = mock();
 const readMemberGrades = mock();
 const recordMemberGrade = mock();
+const readGroupGrade = mock();
+const recordGroupGrade = mock();
 class MemberGradeError extends Error {}
+class GroupGradeError extends Error {}
 
 const actualDocumentAccess = globalThis.__realModules[
   '~/utils/document-access.server'
@@ -26,6 +29,12 @@ mock.module('~/domain/collaboration/member-grades.server', () => ({
   readMemberGrades,
   recordMemberGrade,
   MemberGradeError,
+}));
+mock.module('~/domain/collaboration/group-grade.server', () => ({
+  readGroupGrade,
+  recordGroupGrade,
+  GroupGradeError,
+  effectiveGrade: () => ({ score: null, source: 'none' }),
 }));
 
 const { action, loader } = await import('./route');
@@ -82,6 +91,8 @@ describe('app.group-drafts.$documentId loader', () => {
     });
     readMemberGrades.mockReset().mockResolvedValue(new Map());
     recordMemberGrade.mockReset().mockResolvedValue({ saved: true });
+    readGroupGrade.mockReset().mockResolvedValue(null);
+    recordGroupGrade.mockReset().mockResolvedValue({ saved: true });
   });
 
   test('404s for a student', async () => {
@@ -270,6 +281,39 @@ describe('app.group-drafts.$documentId loader', () => {
       const response: any = await post({ membershipId: 'x', score: '5' });
 
       expect((await readBody(response)).message).toMatch(/not in this group/i);
+    });
+
+    test('records the group grade against the document', async () => {
+      await post({ intent: 'group-grade', score: 'B+', feedback: 'Solid.' });
+
+      expect(recordGroupGrade).toHaveBeenCalledWith(
+        expect.objectContaining({
+          documentId: 'doc-1',
+          gradedByMembershipId: 'teacher-1',
+          score: 'B+',
+        })
+      );
+      expect(recordMemberGrade).not.toHaveBeenCalled();
+    });
+
+    test('reports that an unsubmitted draft cannot be group-graded', async () => {
+      recordGroupGrade.mockRejectedValue(
+        new GroupGradeError('This group has not submitted their draft yet.')
+      );
+
+      const response: any = await post({ intent: 'group-grade', score: 'B+' });
+
+      expect((await readBody(response)).message).toMatch(/not submitted/i);
+    });
+
+    test('hands a student back to the group grade when asked', async () => {
+      await post({
+        membershipId: 'member-1',
+        score: 'A-',
+        useGroupGrade: 'true',
+      });
+
+      expect(recordMemberGrade.mock.calls[0][0].useGroupGrade).toBe(true);
     });
 
     test('does not swallow an unexpected failure as a refusal', async () => {

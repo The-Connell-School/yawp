@@ -10,6 +10,11 @@ import {
 import { Button } from '~/components/ui/button';
 import { buildContributionBreakdown } from '~/domain/collaboration/contribution.server';
 import {
+  GroupGradeError,
+  readGroupGrade,
+  recordGroupGrade,
+} from '~/domain/collaboration/group-grade.server';
+import {
   MemberGradeError,
   readMemberGrades,
   recordMemberGrade,
@@ -99,15 +104,17 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       member.membership.user.name?.trim() || member.membership.user.email,
   }));
 
-  const [breakdown, grades] = await Promise.all([
+  const [breakdown, grades, groupGrade] = await Promise.all([
     buildContributionBreakdown({ documentId: doc.id, roster }),
     doc.group ? readMemberGrades({ groupId: doc.group.id }) : new Map(),
+    readGroupGrade({ documentId: doc.id }),
   ]);
 
   return dataResponse({
     documentId: doc.id,
     groupId: doc.group?.id ?? null,
     grades: Object.fromEntries(grades),
+    groupGrade,
     title: doc.assignment?.title ?? doc.title ?? 'Shared draft',
     groupLabel: doc.group?.label ?? 'Group',
     backTo: doc.group?.classAssignmentId
@@ -156,6 +163,31 @@ export async function action({ request, params }: ActionFunctionArgs) {
   }
 
   const formData = await request.formData();
+  const releaseRaw = formData.get('release')?.toString();
+  const release = releaseRaw === undefined ? undefined : releaseRaw === 'true';
+
+  // The group's own grade: one judgement of the draft, shared by everyone.
+  if (formData.get('intent')?.toString() === 'group-grade') {
+    try {
+      await recordGroupGrade({
+        documentId: params.documentId,
+        gradedByMembershipId: profile.id,
+        score: formData.get('score')?.toString() ?? null,
+        feedback: formData.get('feedback')?.toString() ?? null,
+        release,
+      });
+      return dataResponse({ success: true });
+    } catch (error) {
+      if (error instanceof GroupGradeError) {
+        return dataResponse(
+          { success: false, message: error.message },
+          { status: 400 }
+        );
+      }
+      throw error;
+    }
+  }
+
   const membershipId = formData.get('membershipId')?.toString();
   if (!membershipId) {
     return dataResponse(
@@ -164,8 +196,6 @@ export async function action({ request, params }: ActionFunctionArgs) {
     );
   }
 
-  const releaseRaw = formData.get('release')?.toString();
-
   try {
     await recordMemberGrade({
       groupId: doc.group.id,
@@ -173,7 +203,8 @@ export async function action({ request, params }: ActionFunctionArgs) {
       gradedByMembershipId: profile.id,
       score: formData.get('score')?.toString() ?? null,
       feedback: formData.get('feedback')?.toString() ?? null,
-      release: releaseRaw === undefined ? undefined : releaseRaw === 'true',
+      release,
+      useGroupGrade: formData.get('useGroupGrade')?.toString() === 'true',
     });
   } catch (error) {
     if (error instanceof MemberGradeError) {
@@ -211,7 +242,11 @@ export default function GroupDraftRoute() {
           </p>
         </header>
 
-        <ContributionPanel breakdown={data.breakdown} grades={data.grades} />
+        <ContributionPanel
+          breakdown={data.breakdown}
+          grades={data.grades}
+          groupGrade={data.groupGrade}
+        />
       </div>
     </div>
   );

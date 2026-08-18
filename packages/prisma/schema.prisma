@@ -291,6 +291,11 @@ model DocumentGroupMemberGrade {
   group                DocumentGroup  @relation(fields: [groupId], references: [id], onDelete: Cascade)
   membershipId         String
   membership           OrgMembership  @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  /// True while this student simply takes the group's grade. An individual score
+  /// is an override, so the group grade is never copied onto member rows — it is
+  /// derived at read time, and re-grading the group flows to every follower
+  /// automatically without touching a row a teacher deliberately set.
+  followsGroupGrade    Boolean        @default(true)
   score                String?
   feedback             String?
   /// Who recorded it. Kept so a co-taught class can tell who graded what.

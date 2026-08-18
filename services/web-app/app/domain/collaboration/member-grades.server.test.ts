@@ -98,12 +98,49 @@ describe('recordMemberGrade', () => {
     await expect(record()).rejects.toThrow(MemberGradeError);
   });
 
+  test('setting a score makes the grade an override', async () => {
+    await record();
+
+    expect(
+      prisma.documentGroupMemberGrade.upsert.mock.calls[0][0].update
+        .followsGroupGrade
+    ).toBe(false);
+  });
+
+  test('clearing the score hands the student back to the group grade', async () => {
+    // The common correction: a teacher who overrode by mistake should not have
+    // to hunt for a separate control to undo it.
+    await record({ score: '' });
+
+    const call = prisma.documentGroupMemberGrade.upsert.mock.calls[0][0];
+    expect(call.update.followsGroupGrade).toBe(true);
+    expect(call.update.score).toBeNull();
+  });
+
+  test('asking for the group grade drops an override even with a score typed', async () => {
+    await record({ score: '18/20', useGroupGrade: true });
+
+    const call = prisma.documentGroupMemberGrade.upsert.mock.calls[0][0];
+    expect(call.update.followsGroupGrade).toBe(true);
+    expect(call.update.score).toBeNull();
+  });
+
+  test('a comment survives handing the student back to the group grade', async () => {
+    // "You get the group grade, and here is why" is a real thing to say.
+    await record({ score: '', feedback: 'Good work on the intro.' });
+
+    expect(
+      prisma.documentGroupMemberGrade.upsert.mock.calls[0][0].update.feedback
+    ).toBe('Good work on the intro.');
+  });
+
   test('trims a score down to nothing rather than storing whitespace', async () => {
     await record({ score: '   ', feedback: '  ' });
 
     const call = prisma.documentGroupMemberGrade.upsert.mock.calls[0][0];
     expect(call.create.score).toBeNull();
     expect(call.create.feedback).toBeNull();
+    expect(call.create.followsGroupGrade).toBe(true);
   });
 
   test('rejects a score longer than a score could reasonably be', async () => {
@@ -120,12 +157,14 @@ describe('readMemberGrades', () => {
     prisma.documentGroupMemberGrade.findMany.mockReset().mockResolvedValue([
       {
         membershipId: 'member-1',
+        followsGroupGrade: false,
         score: '18/20',
         feedback: 'Strong.',
         releasedAt: new Date('2026-08-18T09:00:00Z'),
       },
       {
         membershipId: 'member-2',
+        followsGroupGrade: true,
         score: null,
         feedback: null,
         releasedAt: null,
@@ -137,6 +176,7 @@ describe('readMemberGrades', () => {
     const grades = await readMemberGrades({ groupId: GROUP });
 
     expect(grades.get('member-1')).toEqual({
+      followsGroupGrade: false,
       score: '18/20',
       feedback: 'Strong.',
       releasedAt: '2026-08-18T09:00:00.000Z',
@@ -147,6 +187,7 @@ describe('readMemberGrades', () => {
     const grades = await readMemberGrades({ groupId: GROUP });
 
     expect(grades.get('member-2')).toEqual({
+      followsGroupGrade: true,
       score: null,
       feedback: null,
       releasedAt: null,

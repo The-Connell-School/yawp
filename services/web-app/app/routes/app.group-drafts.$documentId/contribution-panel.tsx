@@ -2,6 +2,8 @@ import { useFetcher } from 'react-router';
 import { colorForMembership } from '../app_.collab-documents_.$id/collab-editor';
 import { Button } from '~/components/ui/button';
 import type { ContributionBreakdown } from '~/domain/collaboration/contribution.server';
+import { effectiveGrade } from '~/domain/collaboration/group-grade.server';
+import type { GroupGrade } from '~/domain/collaboration/group-grade.server';
 import type { MemberGrade } from '~/domain/collaboration/member-grades.server';
 
 /**
@@ -54,16 +56,19 @@ function MemberGradeCard({
   membershipId,
   name,
   grade,
+  groupGrade,
 }: {
   membershipId: string;
   name: string;
   grade?: MemberGrade;
+  groupGrade: GroupGrade | null;
 }) {
   const fetcher = useFetcher<{ success?: boolean; message?: string }>();
   const saving = fetcher.state !== 'idle';
   const error =
     fetcher.data && fetcher.data.success === false ? fetcher.data.message : '';
   const released = Boolean(grade?.releasedAt);
+  const effective = effectiveGrade({ member: grade, groupGrade });
 
   return (
     <fetcher.Form method="post" className="grid gap-2 rounded-lg border p-4">
@@ -87,13 +92,24 @@ function MemberGradeCard({
         </span>
       </div>
 
+      <p className="text-xs text-muted-foreground">
+        {effective.source === 'group'
+          ? `Currently takes the group grade (${effective.score}).`
+          : effective.source === 'individual'
+            ? 'Graded individually.'
+            : 'No grade yet.'}
+      </p>
+
       <label className="grid gap-1 text-sm">
-        Grade
+        Their own grade{' '}
+        <span className="font-normal text-muted-foreground">
+          — leave blank to use the group grade
+        </span>
         <input
           type="text"
           name="score"
           defaultValue={grade?.score ?? ''}
-          placeholder="18/20, A-, meets expectations…"
+          placeholder={groupGrade?.score ?? '18/20, A-, meets expectations…'}
           maxLength={64}
           className="rounded border px-2 py-1"
         />
@@ -131,6 +147,110 @@ function MemberGradeCard({
         >
           {released ? 'Take back' : 'Save and share with student'}
         </Button>
+        {/* Explicit undo for a teacher who overrode by mistake, so they do not
+            have to work out that clearing the box is what does it. */}
+        {effective.source === 'individual' ? (
+          <Button
+            type="submit"
+            size="sm"
+            variant="ghost"
+            name="useGroupGrade"
+            value="true"
+            disabled={saving}
+          >
+            Use group grade
+          </Button>
+        ) : null}
+      </div>
+    </fetcher.Form>
+  );
+}
+
+/**
+ * The group's own grade: one judgement of the draft, shared by everyone in it.
+ *
+ * Lives on the group's Submission, so it is the same row and the same columns a
+ * solo essay's grade uses. Until the group submits there is nothing to grade,
+ * and the card says so rather than offering a form that cannot save.
+ */
+function GroupGradeCard({ groupGrade }: { groupGrade: GroupGrade | null }) {
+  const fetcher = useFetcher<{ success?: boolean; message?: string }>();
+  const saving = fetcher.state !== 'idle';
+  const error =
+    fetcher.data && fetcher.data.success === false ? fetcher.data.message : '';
+  const released = Boolean(groupGrade?.releasedAt);
+
+  if (!groupGrade) {
+    return (
+      <div className="rounded-lg border border-dashed p-4">
+        <h2 className="text-sm font-semibold">Group grade</h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          This group has not submitted their draft yet. Once they do, the grade
+          you give here applies to everyone in the group.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <fetcher.Form method="post" className="grid gap-2 rounded-lg border p-4">
+      <input type="hidden" name="intent" value="group-grade" />
+
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h2 className="text-sm font-semibold">Group grade</h2>
+        <span
+          className={`text-xs ${released ? 'text-green-700' : 'text-muted-foreground'}`}
+        >
+          {released ? 'Visible to the group' : 'Not shared yet'}
+        </span>
+      </div>
+      <p className="text-xs text-muted-foreground">
+        For the draft itself. Everyone in the group gets this unless you give
+        them their own below.
+      </p>
+
+      <label className="grid gap-1 text-sm">
+        Grade
+        <input
+          type="text"
+          name="score"
+          defaultValue={groupGrade.score ?? ''}
+          placeholder="B+, 17/20, meets expectations…"
+          maxLength={64}
+          className="rounded border px-2 py-1"
+        />
+      </label>
+
+      <label className="grid gap-1 text-sm">
+        Comment for the group
+        <textarea
+          name="feedback"
+          defaultValue={groupGrade.feedback ?? ''}
+          rows={3}
+          className="rounded border px-2 py-1"
+        />
+      </label>
+
+      {error ? (
+        <p className="text-sm text-red-700" role="alert">
+          {error}
+        </p>
+      ) : null}
+
+      <div className="flex flex-wrap items-center gap-2">
+        <Button type="submit" size="sm" disabled={saving}>
+          Save
+        </Button>
+        <Button
+          type="submit"
+          size="sm"
+          variant="outline"
+          name="release"
+          value={released ? 'false' : 'true'}
+          disabled={saving}
+        >
+          {released ? 'Take back' : 'Save and share with the group'}
+        </Button>
       </div>
     </fetcher.Form>
   );
@@ -139,9 +259,11 @@ function MemberGradeCard({
 export function ContributionPanel({
   breakdown,
   grades,
+  groupGrade,
 }: {
   breakdown: ContributionBreakdown;
   grades: Record<string, MemberGrade>;
+  groupGrade: GroupGrade | null;
 }) {
   const { members, paragraphs, unattributedChars } = breakdown;
   const nameFor = new Map(members.map((m) => [m.membershipId, m.name]));
@@ -261,14 +383,16 @@ export function ContributionPanel({
         </p>
       </section>
 
+      <GroupGradeCard groupGrade={groupGrade} />
+
       <section aria-labelledby="contribution-grades">
         <h2 id="contribution-grades" className="mb-1 text-sm font-semibold">
           Individual grades
         </h2>
         <p className="mb-3 text-xs text-muted-foreground">
-          The group gets one grade for the draft. This is each student's own, for
-          what they contributed — yours to decide, not calculated from the
-          numbers above. Students see nothing until you share it.
+          Everyone takes the group grade unless you give them their own here, for
+          what they contributed — yours to decide, not calculated from the numbers
+          above. Students see nothing until you share it.
         </p>
         <div className="grid gap-3 md:grid-cols-2">
           {members.map((member) => (
@@ -277,6 +401,7 @@ export function ContributionPanel({
               membershipId={member.membershipId}
               name={member.name}
               grade={grades[member.membershipId]}
+              groupGrade={groupGrade}
             />
           ))}
         </div>
