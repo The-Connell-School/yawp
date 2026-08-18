@@ -18,6 +18,9 @@ import {
 } from '~/domain/collaboration/comments.server';
 import { DraftCommentThread } from '~/domain/collaboration/draft-comments';
 import { collaborationRoomWhere } from '~/domain/collaboration/room.server';
+import { ensureMemberModuleSessions } from '~/domain/collaboration/tutor.server';
+import { resolveCurrentAssignmentModuleSession } from '~/utils/assignment-module-session-resume';
+import { Tutor } from '../app_.documents_.$id/tutor/tutor';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import {
@@ -57,15 +60,44 @@ import { CollabEditor, colorForMembership } from './collab-editor';
  *
  * Still missing, each deliberate rather than forgotten:
  *
- * 1. NO SUBMISSION PATH. Submitting a group draft is not wired.
- * 2. NO COMMENTS, TUTOR, MODULE SESSIONS, OR GRADE PANELS. This page is the
- *    writing surface and the prompt. Acceptable for the ungraded small-group
- *    pilot, not beyond it.
- * 3. NO CONTRIBUTION BREAKDOWN. Attribution is captured per update row but
- *    compaction currently discards it once a room passes its threshold.
- * 4. NO E2E SPEC. The two-browser proof was run by hand, not in CI.
+ * 1. NO GRADE PANEL on this page. Grades are shown to the group on the drafts
+ *    list and to the teacher on the group-drafts page, not here.
+ * 2. NO MOBILE LAYOUT. Three columns and no tab switcher, so the tutor is
+ *    hidden below `md` and the prompt column still crowds the draft.
+ * 3. NO E2E SPEC. The two-browser proof was run by hand, not in CI.
+ *
+ * The tutor is here, one conversation per member: `AssignmentModuleSession`
+ * carries a `membershipId` on a shared draft (null on every solo document,
+ * meaning "the owner"), so two students in one group coach separately while
+ * writing together.
  * ─────────────────────────────────────────────────────────────────────────────
  */
+/**
+ * Everything the tutor needs about one module session. Same shape the solo
+ * editor loads, because the same component renders it.
+ */
+const moduleSessionInclude = {
+  assignmentModule: {
+    include: {
+      instructions: {
+        orderBy: { position: 'asc' as const },
+        include: { buttons: { orderBy: { position: 'asc' as const } } },
+      },
+      assignmentType: {
+        select: {
+          assignmentModules: {
+            select: { id: true, position: true },
+            orderBy: { position: 'asc' as const },
+          },
+        },
+      },
+    },
+  },
+  messages: {
+    orderBy: [{ createdAt: 'asc' as const }, { id: 'asc' as const }],
+  },
+};
+
 export async function loader({ request, params }: LoaderFunctionArgs) {
   invariant(params.id, 'No document id provided');
 
@@ -88,6 +120,11 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     select: {
       id: true,
       title: true,
+      assignmentTypeId: true,
+      // The nominal owner: `Document.membershipId` is single-valued, so on a
+      // group draft it names the first member. Needed so a student who shared a
+      // draft they had already been tutored on keeps that conversation.
+      membershipId: true,
       submissions: {
         where: { unsubmittedAt: null },
         orderBy: { submittedAt: 'desc' },
@@ -103,6 +140,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           title: true,
           prompt: true,
           promptAttachmentName: true,
+          tutorEnabled: true,
         },
       },
       group: {
@@ -140,6 +178,48 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     select: { id: true },
   });
 
+  // Each member gets their own coaching conversation on a shared draft: they are
+  // writing one document, but a question one student wants to ask the tutor is
+  // not one they should have to ask in front of their group. Ensured lazily
+  // because a student can join a group after the draft was created.
+  if (asAuthor) {
+    await ensureMemberModuleSessions({
+      documentId: doc.id,
+      assignmentTypeId: doc.assignmentTypeId,
+      membershipId: profile.id,
+      ownerMembershipId: doc.membershipId,
+    });
+  }
+
+  const moduleSessions = asAuthor
+    ? await prisma.assignmentModuleSession.findMany({
+        where: {
+          documentId: doc.id,
+          membershipId: profile.id,
+          deletedAt: null,
+        },
+        orderBy: { assignmentModule: { position: 'asc' } },
+        include: moduleSessionInclude,
+      })
+    : [];
+
+  const explicitCmsIdx = Number.parseInt(
+    new URL(request.url).searchParams.get('cmsIdx') ?? '',
+    10
+  );
+  const { currentCms, currentCmsIdx } = resolveCurrentAssignmentModuleSession(
+    moduleSessions,
+    Number.isFinite(explicitCmsIdx) ? explicitCmsIdx : null
+  );
+
+  const allModules =
+    currentCms?.assignmentModule.assignmentType?.assignmentModules ?? [];
+  const moduleIndex = allModules.findIndex(
+    (module) => module.id === currentCms?.assignmentModuleId
+  );
+  const nextCmId =
+    moduleIndex >= 0 ? allModules[moduleIndex + 1]?.id : undefined;
+
   const [user, comments] = await Promise.all([
     prisma.user.findUnique({
       where: { id: userId },
@@ -157,6 +237,13 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     canWrite: Boolean(asAuthor),
     submittedAt: doc.submissions[0]?.submittedAt?.toISOString() ?? null,
     comments,
+    // `null`, never `undefined`: a shared draft whose assignment type has no
+    // modules has no session to resume, and undefined would be dropped on the
+    // way through JSON rather than arriving as "there isn't one".
+    currentCms: currentCms ?? null,
+    currentCmsIdx,
+    nextCmId: nextCmId ?? null,
+    hasPreviousCms: currentCmsIdx > 0,
   });
 }
 
@@ -209,8 +296,32 @@ export async function action({ request, params }: ActionFunctionArgs) {
   }
 }
 
+/**
+ * Whether the tutor column belongs on the page.
+ *
+ * Read straight off the assignment rather than imported from the solo route:
+ * importing anything from that module would pull its loader — and everything
+ * server-only it depends on — into this page's client bundle.
+ *
+ * A shared draft with no assignment (a student sharing their own writing) has no
+ * flag to read, and gets the tutor, which is what the same student sees when
+ * writing alone.
+ */
+function isTutorEnabled(assignment: { tutorEnabled?: boolean } | null) {
+  return assignment?.tutorEnabled !== false;
+}
+
 export default function CollabDocumentRoute() {
-  const { doc, canWrite, submittedAt, comments } = useLoaderData<typeof loader>();
+  const {
+    doc,
+    canWrite,
+    submittedAt,
+    comments,
+    currentCms,
+    currentCmsIdx,
+    nextCmId,
+    hasPreviousCms,
+  } = useLoaderData<typeof loader>();
   const navigate = useNavigate();
   const submitFetcher = useFetcher<{ success?: boolean; message?: string }>();
   const submitting = submitFetcher.state !== 'idle';
@@ -222,6 +333,12 @@ export default function CollabDocumentRoute() {
   const exitTarget = searchParams.get('exitTo') || '/app';
 
   const groupMemberCount = doc.group?.members.length ?? 0;
+
+  // Each author gets their own transcript on a shared draft, so the panel only
+  // appears for someone who is actually in the group — a teacher reading the
+  // draft has no session of their own to show, and showing a student's would be
+  // reading their coaching over their shoulder.
+  const tutor = isTutorEnabled(doc.assignment) && canWrite ? currentCms : null;
 
   return (
     /* The page shell is deliberately the same shape as the solo editor's:
@@ -317,9 +434,37 @@ export default function CollabDocumentRoute() {
       ) : null}
 
       <div className="mx-auto flex min-h-0 w-full max-w-screen-2xl flex-1 overflow-hidden">
-        {/* Prompt and teacher comments share the left column: both are things to
-            read while writing, and neither should take width from the draft. */}
-        <div className="flex w-full shrink-0 flex-col overflow-y-auto border-r md:w-[340px] lg:w-[380px]">
+        {/* Same order as the solo editor — tutor, then the writing, then what
+            there is to read — so a student who moves between the two pages finds
+            the same thing in the same place.
+
+            The width lives here rather than on the Tutor: its own `md:w-3/5` is
+            sized for the solo editor's three columns, and at 60% of this page it
+            left the draft as the smaller half. Overriding it from the outside
+            keeps the solo layout untouched. Hidden below `md` because this page
+            has no mobile tab switcher yet; a third column there would squeeze
+            the draft to nothing. */}
+        {tutor ? (
+          <div className="hidden shrink-0 md:flex md:w-[360px] lg:w-[420px] [&>div]:!w-full">
+            <Tutor
+              docId={doc.id}
+              cms={tutor as any}
+              cmsIdx={currentCmsIdx}
+              nextCmId={nextCmId ?? undefined}
+              hasPreviousCms={hasPreviousCms}
+              basePath="/app/collab-documents"
+              // No `getCurrentDocumentText`: the collaborative dual-write keeps
+              // Document.text current on every batch of updates, and the tutor
+              // endpoint falls back to it when the client sends nothing. Reading
+              // it from the server is the more honest answer here anyway — it is
+              // the whole group's draft, not just this browser's view of it.
+            />
+          </div>
+        ) : null}
+        <CollabEditor docId={doc.id} canWrite={canWrite} />
+        {/* Prompt and teacher comments share a column: both are things to read
+            while writing, and neither should take width from the draft. */}
+        <div className="flex w-full shrink-0 flex-col overflow-y-auto border-l md:w-[340px] lg:w-[380px]">
           <CollabPromptPanel assignment={doc.assignment} />
           {comments.length > 0 || canWrite ? (
             <div className="p-3">
@@ -331,7 +476,6 @@ export default function CollabDocumentRoute() {
             </div>
           ) : null}
         </div>
-        <CollabEditor docId={doc.id} canWrite={canWrite} />
       </div>
     </main>
   );

@@ -102,6 +102,7 @@ if (isWebAppTestFile()) {
     '~/domain/collaboration/comments.server': await snapshot(
       '~/domain/collaboration/comments.server'
     ),
+    '~/domain/documents.server': await snapshot('~/domain/documents.server'),
   };
 }
 

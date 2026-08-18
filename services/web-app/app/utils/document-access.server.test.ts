@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import {
+  documentAuthorOwnSessionWhere,
   documentAuthorWhere,
   documentOwnerWhere,
   documentReadWhere,
@@ -132,5 +133,86 @@ describe('documentReadWhere', () => {
     expect(
       matches(documentReadWhere({ profileId: CLASSMATE }), groupDocument)
     ).toBe(false);
+  });
+});
+
+describe('documentAuthorOwnSessionWhere', () => {
+  const soloSession = {
+    membershipId: null,
+    document: { membershipId: 'owner-1', groupMemberIds: [] as string[] },
+  };
+  const sharedSession = (member: string) => ({
+    membershipId: member,
+    document: {
+      membershipId: 'owner-1',
+      groupMemberIds: ['owner-1', 'partner-1'],
+    },
+  });
+
+  /** Evaluates just the shape this predicate produces. */
+  function matches(
+    where: any,
+    session: {
+      membershipId: string | null;
+      document: { membershipId: string; groupMemberIds: string[] };
+    }
+  ) {
+    if (Object.keys(where).length === 0) return true;
+    return where.OR.some((branch: any) => {
+      if (branch.membershipId === null) {
+        return (
+          session.membershipId === null &&
+          session.document.membershipId === branch.document.is.membershipId
+        );
+      }
+      const wanted = branch.document.is.group.is.members.some.membershipId;
+      return (
+        session.membershipId === branch.membershipId &&
+        session.document.groupMemberIds.includes(wanted)
+      );
+    });
+  }
+
+  const forProfile = (profileId: string) =>
+    documentAuthorOwnSessionWhere({ profileId });
+
+  test('a solo document’s owner still reaches their own sessions', () => {
+    // The whole of the previous behaviour, intact: every session written before
+    // shared drafts has a null membershipId.
+    expect(matches(forProfile('owner-1'), soloSession)).toBe(true);
+  });
+
+  test('someone else never reaches a solo session', () => {
+    expect(matches(forProfile('stranger'), soloSession)).toBe(false);
+  });
+
+  test('a co-author reaches their own session on a shared draft', () => {
+    // Owner-scope alone would 404 here, which is the bug this replaces.
+    expect(matches(forProfile('partner-1'), sharedSession('partner-1'))).toBe(
+      true
+    );
+  });
+
+  test('a co-author cannot reach their partner’s session', () => {
+    // Widening to "any author" would let one student write into another's
+    // transcript, which is the whole reason the coaching is per student.
+    expect(matches(forProfile('partner-1'), sharedSession('owner-1'))).toBe(
+      false
+    );
+  });
+
+  test('a removed group member loses their sessions', () => {
+    const removed = {
+      membershipId: 'partner-1',
+      document: { membershipId: 'owner-1', groupMemberIds: ['owner-1'] },
+    };
+
+    expect(matches(forProfile('partner-1'), removed)).toBe(false);
+  });
+
+  test('a platform admin is unscoped, like every other predicate here', () => {
+    expect(
+      documentAuthorOwnSessionWhere({ profileId: 'anyone', isAdmin: true })
+    ).toEqual({});
   });
 });

@@ -117,6 +117,45 @@ export function documentOwnerWhere({
  * (AssignmentModuleSession). Returns `{}` for a platform admin rather than an empty
  * relation filter, so no query ever carries a `document: { is: {} }` no-op.
  */
+/**
+ * The rule for "this module session is mine", on a shared draft or a solo one.
+ *
+ * Owner-scope is not enough once a document has co-authors: only the nominal
+ * owner would reach the tutor and everyone else in the group would get a 404.
+ * But widening it to every author is too much the other way — that would let one
+ * student write into their partner's transcript.
+ *
+ * So: the session's own `membershipId` decides. A shared draft's sessions carry
+ * one, and each student matches only their own. Solo sessions carry null, which
+ * is why the owner branch stays — it is the whole of the old behaviour, intact.
+ */
+export function documentAuthorOwnSessionWhere({
+  profileId,
+  isAdmin,
+}: {
+  profileId: string;
+  isAdmin?: boolean | null;
+}): Prisma.AssignmentModuleSessionWhereInput {
+  if (hasEffectivePlatformAdmin(isAdmin)) return {};
+
+  return {
+    OR: [
+      // Solo: the session has no member of its own, so the document's owner owns
+      // it. Unchanged from documentOwnerSessionWhere.
+      {
+        membershipId: null,
+        document: { is: { membershipId: profileId } },
+      },
+      // Shared: the session names its student, and they must also still be an
+      // active member of the group that owns the draft.
+      {
+        membershipId: profileId,
+        document: { is: activeGroupMemberClause(profileId) },
+      },
+    ],
+  };
+}
+
 export function documentOwnerSessionWhere({
   profileId,
   isAdmin,

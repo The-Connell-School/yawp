@@ -10,7 +10,7 @@ import {
   requireUserId,
 } from '~/utils/auth.server';
 import {
-  documentOwnerSessionWhere,
+  documentAuthorOwnSessionWhere,
   getIsPlatformAdmin,
 } from '~/utils/document-access.server';
 import {
@@ -71,13 +71,15 @@ export async function action({ request }: ActionFunctionArgs) {
     const { error, data } = await parseFormData(request, POST);
     if (error) return validationError(error);
 
-    // Owner-scoped, not merely authenticated: driving the tutor bills a completion and
-    // writes two messages (one carrying the document text) into the session, so only the
-    // student whose document it is may reach it. A revoked account no longer matches.
+    // Scoped to the caller's OWN session, not merely authenticated: driving the
+    // tutor bills a completion and writes two messages (one carrying the document
+    // text) into the session, so only the student whose transcript it is may reach
+    // it. On a shared draft that is the group member it belongs to rather than the
+    // document's nominal owner. A revoked account no longer matches.
     const cms = await prisma.assignmentModuleSession.findFirst({
       where: {
         id: data.cmsId,
-        ...documentOwnerSessionWhere({ profileId: profile.id, isAdmin }),
+        ...documentAuthorOwnSessionWhere({ profileId: profile.id, isAdmin }),
       },
       include: {
         assignmentModule: {

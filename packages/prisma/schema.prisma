@@ -536,7 +536,18 @@ model AssignmentModuleSession {
   assignmentModule      AssignmentModule                 @relation(fields: [assignmentModuleId], references: [id], onDelete: Cascade)
   documentId            String
   document              Document                         @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  /// Whose coaching conversation this is.
+  ///
+  /// Null means the document's owner, which is every session that existed before
+  /// shared drafts — a solo document has exactly one student, so the column was
+  /// redundant. On a shared draft it is not: each member gets their own
+  /// transcript and their own progress through the modules, so one student
+  /// asking the tutor a question does not put it in front of their group.
+  membershipId          String?
+  membership            OrgMembership?                   @relation(fields: [membershipId], references: [id], onDelete: Cascade)
   messages              AssignmentModuleSessionMessage[]
+
+  @@index([documentId, membershipId])
 }
 
 model AssignmentModuleSessionMessage {
@@ -861,6 +872,7 @@ model OrgMembership {
   documentGroupMemberships         DocumentGroupMember[]
   documentCollabAuthorships        DocumentCollabAuthor[]
   documentGroupMemberGrades        DocumentGroupMemberGrade[]
+  assignmentModuleSessions         AssignmentModuleSession[]
   documentGroupMemberGradesGiven   DocumentGroupMemberGrade[] @relation("DocumentGroupMemberGradedBy")
 
   @@unique([userId, organizationId])

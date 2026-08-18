@@ -129,6 +129,10 @@ describe('api.model.assignment-module-session', () => {
           documentId: 'document-1',
           assignmentModuleId: 'module-1',
           deletedAt: null,
+          // "The document's owner". Every session on a solo document has a null
+          // membershipId, so this selects exactly what the unscoped query did —
+          // it just says out loud which rows those are.
+          membershipId: null,
         },
       })
     );
@@ -330,5 +334,128 @@ describe('api.model.assignment-module-session', () => {
       expect(response.init?.status).toBe(403);
       expect(prisma.assignmentModuleSession.create).not.toHaveBeenCalled();
     });
+  });
+});
+
+/**
+ * A shared draft has several authors, and each of them has their own tutor
+ * conversation. That makes the previously harmless "most recent session for this
+ * module" lookup a way to read a classmate's transcript.
+ */
+describe('api.model.assignment-module-session on a shared draft', () => {
+  const DOC_SHARED: ScopedDocument = {
+    id: 'document-shared',
+    membershipId: 'student-profile-1',
+    teacherProfileIds: ['profile-teacher'],
+    activeGroupMemberIds: ['student-profile-1', 'student-profile-2'],
+  };
+
+  beforeEach(() => {
+    prisma.user.findUnique.mockReset().mockResolvedValue({ isAdmin: false });
+    prisma.document.findFirst.mockReset();
+    prisma.document.findUnique.mockReset();
+    prisma.assignmentModule.findUnique.mockReset();
+    prisma.assignmentModuleSession.findFirst.mockReset();
+    prisma.assignmentModuleSession.create.mockReset();
+    prisma.assignmentModuleSession.update.mockReset();
+    prisma.assignmentModuleSession.findUnique.mockReset();
+    requireUserId.mockReset().mockResolvedValue('user-2');
+    requireMembership
+      .mockReset()
+      .mockResolvedValue({ id: 'student-profile-2', role: 'STUDENT' });
+
+    prisma.document.findFirst.mockImplementation(async ({ where }: any) => {
+      // The room predicate, told apart by the assignment-type gate no
+      // authorization clause carries.
+      if (where.assignmentType) return { id: DOC_SHARED.id };
+      return matchesDocumentWhere(where, DOC_SHARED)
+        ? {
+            id: DOC_SHARED.id,
+            membershipId: DOC_SHARED.membershipId,
+            group: { id: 'group-1' },
+          }
+        : null;
+    });
+    prisma.assignmentModule.findUnique.mockResolvedValue({
+      id: 'module-1',
+      instructions: [{ id: 'instruction-1', prompt: 'Prompt' }],
+    });
+  });
+
+  const post = () =>
+    action({
+      request: requestFor({
+        documentId: 'document-shared',
+        assignmentModuleId: 'module-1',
+      }),
+      params: {},
+    } as any);
+
+  test('never hands a member the session belonging to someone else', async () => {
+    // Without the member scope this returns the group's most recent session for
+    // the module — whoever wrote it — and its id is the key the tutor endpoint
+    // posts to. One click on "next" and a student is typing into a classmate's
+    // conversation.
+    prisma.assignmentModuleSession.findFirst.mockResolvedValue(null);
+    prisma.assignmentModuleSession.create.mockResolvedValue({ id: 'cms-mine' });
+    prisma.assignmentModuleSession.findUnique.mockResolvedValue({
+      ...existingCms,
+      id: 'cms-mine',
+    });
+
+    await post();
+
+    expect(prisma.assignmentModuleSession.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          documentId: 'document-shared',
+          membershipId: 'student-profile-2',
+        }),
+      })
+    );
+  });
+
+  test('stamps a session it creates with the member who asked for it', async () => {
+    prisma.assignmentModuleSession.findFirst.mockResolvedValue(null);
+    prisma.assignmentModuleSession.create.mockResolvedValue({ id: 'cms-mine' });
+    prisma.assignmentModuleSession.findUnique.mockResolvedValue({
+      ...existingCms,
+      id: 'cms-mine',
+    });
+
+    await post();
+
+    expect(prisma.assignmentModuleSession.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ membershipId: 'student-profile-2' }),
+    });
+  });
+
+  test('lets a co-author who does not own the document start their own session', async () => {
+    // The document belongs to student 1 by database necessity — one column, one
+    // value — but student 2 writes in it too, so owner scope would leave them
+    // with no tutor at all.
+    prisma.assignmentModuleSession.findFirst.mockResolvedValue(null);
+    prisma.assignmentModuleSession.create.mockResolvedValue({ id: 'cms-mine' });
+    prisma.assignmentModuleSession.findUnique.mockResolvedValue({
+      ...existingCms,
+      id: 'cms-mine',
+    });
+
+    const response = await post();
+
+    const body = await readBody(response);
+    expect(body.cms.id).toBe('cms-mine');
+  });
+
+  test('a student outside the group gets nothing', async () => {
+    requireMembership.mockResolvedValue({
+      id: 'student-profile-9',
+      role: 'STUDENT',
+    });
+
+    const response = await post();
+
+    expect(response.init?.status).toBe(404);
+    expect(prisma.assignmentModuleSession.create).not.toHaveBeenCalled();
   });
 });
