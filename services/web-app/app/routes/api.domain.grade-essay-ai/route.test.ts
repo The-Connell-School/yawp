@@ -1163,6 +1163,16 @@ describe('api.domain.grade-essay-ai', () => {
         },
       })
     );
+    prisma.assignmentType.findUnique.mockResolvedValue(
+      mockAssignmentType({
+        id: 'ap-history-type',
+        title: 'AP History Essay',
+        gradingPromptConfigJson: {
+          gradingInstructionsOverride:
+            'Prioritize accurate sourcing before awarding the complexity point.',
+        },
+      })
+    );
 
     const form = new FormData();
     form.append('submissionId', 'ap-sub-1');
@@ -1187,6 +1197,10 @@ describe('api.domain.grade-essay-ai', () => {
     expect(prompt).toContain('Reasoning skill: Causation');
     expect(prompt).toContain('Rubric: ap-history-dbq-2026');
     expect(prompt).toContain('Total points: 7');
+    expect(prompt).toContain('Grading instructions:');
+    expect(prompt).toContain(
+      'Prioritize accurate sourcing before awarding the complexity point.'
+    );
     expect(prompt).toContain('Document 1: Fourteenth Amendment');
     expect(prompt).toContain(
       'Body: All persons born or naturalized in the United States are citizens.'

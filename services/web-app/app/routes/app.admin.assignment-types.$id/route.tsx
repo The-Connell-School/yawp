@@ -47,6 +47,20 @@ function withGradingInstructionsOverride(
   return promptConfig as Prisma.InputJsonObject;
 }
 
+function readGradingInstructionsOverride(rawPromptConfig: unknown) {
+  if (
+    !rawPromptConfig ||
+    typeof rawPromptConfig !== 'object' ||
+    Array.isArray(rawPromptConfig)
+  ) {
+    return '';
+  }
+
+  const value = (rawPromptConfig as Record<string, unknown>)
+    .gradingInstructionsOverride;
+  return typeof value === 'string' ? value.trim() : '';
+}
+
 export async function loader({ request, params }: LoaderFunctionArgs) {
   await requireAdmin(request);
 
@@ -141,6 +155,11 @@ export async function action({ request, params }: ActionFunctionArgs) {
       throw new Response('Not Found', { status: 404 });
     }
 
+    const gradingInstructionsOverrideChanged =
+      hasGradingInstructionsOverrideField &&
+      (formData.get('gradingInstructionsOverride')?.toString().trim() ?? '') !==
+        readGradingInstructionsOverride(existing.gradingPromptConfigJson);
+
     const gradingConfigData = hasGradingConfigFields
       ? {
           scoringScaleJson: parseJsonFormField(formData, 'scoringScale'),
@@ -156,7 +175,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
             DEFAULT_OUTPUT_SCHEMA_JSON,
           gradingAssistantVersion: { increment: 1 },
         }
-      : hasGradingInstructionsOverrideField
+      : gradingInstructionsOverrideChanged
         ? {
             gradingPromptConfigJson: withGradingInstructionsOverride(
               existing.gradingPromptConfigJson,

@@ -232,6 +232,34 @@ describe('admin assignment type detail action', () => {
     });
   });
 
+  test('does not version an unchanged grading instruction override', async () => {
+    const form = new FormData();
+    form.set('intent', 'updateCourse');
+    form.set('title', 'Renamed assignment type');
+    form.set('description', 'Only the basics changed.');
+    form.set('gradingInstructionsOverride', '');
+
+    await action({
+      request: new Request(
+        'https://example.test/app/admin/assignment-types/at-1',
+        {
+          method: 'POST',
+          body: form,
+        }
+      ),
+      params: { id: 'at-1' },
+      context: {} as never,
+    });
+
+    expect(prisma.assignmentType.update).toHaveBeenCalledWith({
+      where: { id: 'at-1' },
+      data: {
+        title: 'Renamed assignment type',
+        description: 'Only the basics changed.',
+      },
+    });
+  });
+
   test('saves grading assistant instructions without rewriting the rubric', async () => {
     const form = new FormData();
     form.set('intent', 'updateCourse');
