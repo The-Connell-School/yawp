@@ -208,10 +208,14 @@ YAML
   route_changed=true
 }
 
+web_containers_output="$(list_web_containers)" || {
+  echo "Unable to list the active demo web container; refusing rollout" >&2
+  exit 1
+}
 existing_containers=()
 while IFS= read -r container; do
   [[ -n "$container" ]] && existing_containers+=("$container")
-done < <(list_web_containers)
+done <<<"$web_containers_output"
 if (( ${#existing_containers[@]} == 0 )); then
   rm -f -- "$PREVIEW_ROUTER_FILE" "$PREVIEW_ACTIVE_WEB_FILE"
   "${compose[@]}" up -d web
@@ -248,10 +252,14 @@ old_container="${existing_containers[0]}"
 write_candidate_override
 "${candidate_compose[@]}" up -d --no-recreate --scale web=2 web
 
+web_containers_output="$(list_web_containers)" || {
+  echo "Unable to list demo web containers after candidate start" >&2
+  exit 1
+}
 rollout_containers=()
 while IFS= read -r container; do
   [[ -n "$container" ]] && rollout_containers+=("$container")
-done < <(list_web_containers)
+done <<<"$web_containers_output"
 for container in "${rollout_containers[@]}"; do
   if [[ "$container" != "$old_container" ]]; then
     if [[ -n "$candidate_container" ]]; then

@@ -66,6 +66,7 @@ jobs:
       DEMO_RESET_DATA: ${{ inputs.reset_data }}
       DEMO_RESET_CONFIRMATION: ${{ inputs.reset_confirmation }}
       DEMO_BACKUP_RETENTION: ${{ inputs.backup_retention }}
+      DEMO_BACKUP_S3_URI: ${{ vars.DEMO_BACKUP_S3_URI || 's3://yawp-preview-videos/demo-backups' }}
       DEMO_REQUESTED_REF: ${{ inputs.ref }}
       DEMO_DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
     steps:
@@ -84,6 +85,10 @@ jobs:
             echo "backup_retention must be between 1 and 365" >&2
             exit 1
           fi
+          [[ "$DEMO_BACKUP_S3_URI" =~ ^s3://[a-z0-9.-]+/[A-Za-z0-9._/-]+$ ]] || {
+            echo "Invalid DEMO_BACKUP_S3_URI" >&2
+            exit 1
+          }
           if [[ "$DEMO_RESET_DATA" == "true" ]]; then
             test "$DEMO_RESET_CONFIRMATION" = "RESET yawp_demo" || {
               echo "reset_data requires reset_confirmation=RESET yawp_demo" >&2
@@ -166,6 +171,19 @@ jobs:
             -e "ssh -i ~/.ssh/demo_key" \
             demo-source/ "$ssh_target:$remote_source/"
 
+      - name: Capture demo data before deploy
+        id: before_data
+        run: |
+          set -euo pipefail
+          shell_quote() { printf '%q' "$1"; }
+          ssh_target="${PREVIEW_SSH_USER}@${PREVIEW_HOST}"
+          remote_script="${PREVIEW_ROOT}/control/demo/scripts/preview/demo-data-signature.sh"
+          signature="$(ssh -i ~/.ssh/demo_key "$ssh_target" \
+            "DATABASE_NAME=yawp_demo PREVIEW_POSTGRES_CONTAINER=preview-postgres bash $(shell_quote "$remote_script")")"
+          jq -e 'all(.[]; type == "number" and . >= 0)' <<<"$signature" >/dev/null
+          echo "signature=$signature" >> "$GITHUB_OUTPUT"
+          echo "Demo aggregate data before deploy: $signature"
+
       - name: Deploy demo
         id: deploy
         run: |
@@ -192,6 +210,7 @@ jobs:
             "DEMO_RESET_DATA=$(shell_quote "$DEMO_RESET_DATA")"
             "DEMO_RESET_CONFIRMATION=$(shell_quote "$DEMO_RESET_CONFIRMATION")"
             "DEMO_BACKUP_RETENTION=$(shell_quote "$DEMO_BACKUP_RETENTION")"
+            "DEMO_BACKUP_S3_URI=$(shell_quote "$DEMO_BACKUP_S3_URI")"
             "SOURCE_DIR=$(shell_quote "$remote_source")"
           )
           lock_file="${PREVIEW_ROOT}/preview-host.lock"
@@ -276,6 +295,31 @@ jobs:
           echo "::error::Demo did not become healthy at $url. Previous version was ${{ steps.previous.outputs.sha }} — redeploy that ref to roll back."
           exit 1
 
+      - name: Capture demo data after deploy
+        id: after_data
+        env:
+          BEFORE_SIGNATURE: ${{ steps.before_data.outputs.signature }}
+        run: |
+          set -euo pipefail
+          shell_quote() { printf '%q' "$1"; }
+          ssh_target="${PREVIEW_SSH_USER}@${PREVIEW_HOST}"
+          remote_script="${PREVIEW_ROOT}/control/demo/scripts/preview/demo-data-signature.sh"
+          signature="$(ssh -i ~/.ssh/demo_key "$ssh_target" \
+            "DATABASE_NAME=yawp_demo PREVIEW_POSTGRES_CONTAINER=preview-postgres bash $(shell_quote "$remote_script")")"
+          jq -e 'all(.[]; type == "number" and . >= 0)' <<<"$signature" >/dev/null
+          echo "signature=$signature" >> "$GITHUB_OUTPUT"
+          echo "Demo aggregate data after deploy: $signature"
+          if [[ "$DEMO_RESET_DATA" == "false" ]]; then
+            for key in organizations users classes assignments documents submissions moduleSessions; do
+              before_count="$(jq -er --arg key "$key" '.[$key]' <<<"$BEFORE_SIGNATURE")"
+              after_count="$(jq -er --arg key "$key" '.[$key]' <<<"$signature")"
+              (( after_count >= before_count )) || {
+                echo "Demo aggregate data decreased during no-reset deploy: $key $before_count -> $after_count" >&2
+                exit 1
+              }
+            done
+          fi
+
       - name: Record the deployed version
         run: |
           set -euo pipefail
@@ -291,6 +335,8 @@ jobs:
             echo "- **Now running:** \`${{ steps.shipping.outputs.sha }}\` — ${{ steps.shipping.outputs.subject }}"
             echo "- **Was running:** \`${{ steps.previous.outputs.sha }}\`"
             echo "- **Build:** production"
+            echo "- **Data before:** ${{ steps.before_data.outputs.signature }}"
+            echo "- **Data after:** ${{ steps.after_data.outputs.signature }}"
             echo
             echo "To roll back, dispatch this workflow again with ref \`${{ steps.previous.outputs.sha }}\`."
           } >> "$GITHUB_STEP_SUMMARY"

@@ -22,13 +22,15 @@ afterEach(async () => {
   );
 });
 
-async function makeHarness({ versioning = 'Enabled' } = {}) {
+async function makeHarness(
+  { versioning = 'Enabled', kind = 'scheduled' } = {}
+) {
   const root = await mkdtemp(path.join(tmpdir(), 'yawp-demo-publish-'));
   temporaryDirectories.push(root);
   const bin = path.join(root, 'bin');
   const backupDir = path.join(root, 'backups');
   const commandLog = path.join(root, 'commands.log');
-  const filename = 'yawp_demo-scheduled-20260817T030000Z.dump';
+  const filename = `yawp_demo-${kind}-20260817T030000Z.dump`;
   const backupFile = path.join(backupDir, filename);
   const contents = 'restore-tested demo backup\n';
   const checksum = createHash('sha256').update(contents).digest('hex');
@@ -47,22 +49,6 @@ printf ' %q' "$@" >> "$COMMAND_LOG"
 printf '\n' >> "$COMMAND_LOG"
 if [[ " $* " == *" s3api get-bucket-versioning "* ]]; then
   printf '${versioning}\n'
-elif [[ " $* " == *" s3api list-object-versions "* ]]; then
-  prefix=''
-  previous=''
-  for argument in "$@"; do
-    if [[ "$previous" == "--prefix" ]]; then prefix="$argument"; break; fi
-    previous="$argument"
-  done
-  if [[ "$prefix" == "demo-backups/" ]]; then
-    printf '%s\t%s\t%s\t%s\n' \
-      'demo-backups/yawp_demo-scheduled-20260817T030000Z.dump' \
-      'demo-backups/yawp_demo-scheduled-20260817T030000Z.dump.sha256' \
-      'demo-backups/yawp_demo-scheduled-20260816T030000Z.dump' \
-      'demo-backups/yawp_demo-scheduled-20260816T030000Z.dump.sha256'
-  else
-    printf '%s\tv1\n' "$prefix"
-  fi
 fi
 `
   );
@@ -95,7 +81,7 @@ function run(env: Record<string, string | undefined>) {
 }
 
 describe('demo backup off-host publishing', () => {
-  test('checks versioning, uploads encrypted files, and fully deletes expired versions', async () => {
+  test('checks versioning and uploads encrypted files without deletion rights', async () => {
     const harness = await makeHarness();
     const result = run(harness.env);
 
@@ -110,12 +96,20 @@ describe('demo backup off-host publishing', () => {
     expect(commands).toContain('s3api get-bucket-versioning');
     expect(commands.match(/aws s3 cp/g)?.length).toBe(2);
     expect(commands).toContain('--sse AES256');
-    expect(commands).toContain(
-      '--key demo-backups/yawp_demo-scheduled-20260816T030000Z.dump --version-id v1'
+    expect(commands).not.toContain('delete-object');
+    expect(commands).not.toContain('list-object-versions');
+  });
+
+  test('publishes the verified pre-reset recovery point off-host', async () => {
+    const harness = await makeHarness({ kind: 'pre-reset' });
+    const result = run(harness.env);
+
+    expect(result.exitCode).toBe(0);
+    expect(new TextDecoder().decode(result.stdout)).toContain(
+      'BACKUP_S3_OBJECT=s3://yawp-preview-videos/demo-backups/yawp_demo-pre-reset-20260817T030000Z.dump'
     );
-    expect(commands).toContain(
-      '--key demo-backups/yawp_demo-scheduled-20260816T030000Z.dump.sha256 --version-id v1'
-    );
+    const commands = await readFile(harness.commandLog, 'utf8');
+    expect(commands.match(/aws s3 cp/g)?.length).toBe(2);
   });
 
   test('fails before upload when bucket versioning is not enabled', async () => {

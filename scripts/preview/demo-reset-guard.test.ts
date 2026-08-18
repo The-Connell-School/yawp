@@ -9,7 +9,8 @@ function run(overrides: Record<string, string | undefined>) {
     cwd: path.resolve('.'),
     env: {
       ...process.env,
-      PREVIEW_SLUG: 'demo',
+      SLUG: 'demo',
+      PREVIEW_SLUG: undefined,
       DATABASE_NAME: 'yawp_demo',
       DEMO_RESET_DATA: 'false',
       DEMO_RESET_CONFIRMATION: '',
@@ -46,7 +47,7 @@ describe('demo reset guard', () => {
     const confirmation = 'RESET yawp_demo';
     expect(
       run({
-        PREVIEW_SLUG: 'pr-274',
+        SLUG: 'pr-274',
         DEMO_RESET_DATA: 'true',
         DEMO_RESET_CONFIRMATION: confirmation,
       }).exitCode
