@@ -369,6 +369,9 @@ describe('PR preview deployment contract', () => {
       'bun run scripts/backfill-class-art-key.ts'
     );
     const seedIndex = deployScript.indexOf('bun run seed-local-dev');
+    const syncIndex = deployScript.indexOf(
+      'bun run sync-prod-fidelity-fixtures'
+    );
     const releaseGateIndex = deployScript.indexOf(
       'bun run scripts/assignment-type-release-gate.ts --require-data'
     );
@@ -421,6 +424,7 @@ describe('PR preview deployment contract', () => {
     expect(migrateIndex).toBeGreaterThan(generateIndex);
     expect(backfillIndex).toBeGreaterThan(migrateIndex);
     expect(seedIndex).toBeGreaterThan(backfillIndex);
+    expect(syncIndex).toBeGreaterThan(backfillIndex);
     expect(releaseGateIndex).toBeGreaterThan(seedIndex);
     expect(webStartIndex).toBeGreaterThan(releaseGateIndex);
   });
@@ -858,6 +862,12 @@ describe('PR preview deployment contract', () => {
       'PREVIEW_ACCESS_MASTER_ORGANIZATION_ID=$(shell_quote "$PREVIEW_ACCESS_MASTER_ORGANIZATION_ID")'
     );
     expect(previewWorkflow).toContain(
+      'PREVIEW_MASTER_ACCESS_CODE: ${{ secrets.PREVIEW_MASTER_ACCESS_CODE }}'
+    );
+    expect(previewWorkflow).toContain(
+      'PREVIEW_MASTER_ACCESS_CODE=$(shell_quote "$PREVIEW_MASTER_ACCESS_CODE")'
+    );
+    expect(previewWorkflow).toContain(
       'PREVIEW_POSTGRES_ADMIN_PASSWORD=$(shell_quote "$PREVIEW_POSTGRES_ADMIN_PASSWORD")'
     );
     expect(previewWorkflow).not.toContain(deprecatedPreviewBasicAuth);
@@ -879,6 +889,35 @@ describe('PR preview deployment contract', () => {
     expect(previewWorkflow).not.toContain('secrets.AWS_ACCESS_KEY_ID');
     expect(previewWorkflow).not.toContain('secrets.AWS_SECRET_ACCESS_KEY');
     expect(previewWorkflow).not.toContain('aws s3 presign');
+  });
+
+  test('master organization gate rolls out only to capable refs and rejects code collisions', () => {
+    const previewWorkflow = readRepoFile(
+      '.github/workflows/preview-environments.yml'
+    );
+    const demoWorkflow = readRepoFile('.github/workflows/demo-environment.yml');
+    const deployScript = readRepoFile('scripts/preview/deploy.sh');
+    const capability = readRepoFile(
+      'services/web-app/.preview-master-org-gate-v1'
+    );
+
+    expect(capability).toContain('preview-master-org-gate-v1');
+    expect(deployScript).toContain(
+      'SOURCE_DIR/services/web-app/.preview-master-org-gate-v1'
+    );
+    expect(deployScript).toContain('assert_no_master_code_collision');
+    expect(deployScript).toContain(
+      'deployment stopped without changing that code'
+    );
+    expect(deployScript).toContain(
+      'PREVIEW_MASTER_ACCESS_CODE must be a lowercase hyphenated code between 8 and 64 characters'
+    );
+    expect(previewWorkflow).toContain(
+      'steps.deploy.outputs.master_org_gate_enabled'
+    );
+    expect(demoWorkflow).toContain(
+      'steps.deploy.outputs.master_org_gate_enabled'
+    );
   });
 
   test('preview deploy polls health quickly once containers are starting', () => {
@@ -1189,7 +1228,6 @@ describe('demo environment deployment contract', () => {
       'Demo aggregate data decreased during no-reset deploy'
     );
   });
-
   test('demo backups are scheduled daily with configurable count retention', () => {
     const workflow = readRepoFile('.github/workflows/demo-environment.yml');
     const backupWorkflow = readRepoFile(
@@ -1256,7 +1294,6 @@ describe('demo environment deployment contract', () => {
     expect(guard).toContain('iam simulate-principal-policy');
     expect(guard).toContain('explicitDeny');
   });
-
   test('workflow verification is anonymous and retains in-app gate assertions', () => {
     for (const path of [
       '.github/workflows/preview-environments.yml',

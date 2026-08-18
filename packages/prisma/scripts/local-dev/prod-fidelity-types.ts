@@ -1,5 +1,5 @@
 export type ProdFidelityManifest = {
-  version: 1;
+  version: 1 | 2;
   exportedAt: string;
   sourceDatabaseUrl: string;
   counts: Record<string, number>;
@@ -12,6 +12,7 @@ export type SerializedBytes = {
 
 export type ProdFidelityBundle = {
   manifest: ProdFidelityManifest;
+  rubrics: Array<Record<string, unknown>>;
   assignmentTypes: Array<Record<string, unknown>>;
   assignmentTypeImages: Array<Record<string, unknown> & { blob: SerializedBytes }>;
   assignmentModules: Array<Record<string, unknown>>;

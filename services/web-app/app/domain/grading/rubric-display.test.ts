@@ -84,6 +84,14 @@ describe('normalizeRubricDisplayConfig', () => {
           scoreLabels: [{ value: 1, label: 'Skipped' }],
           feedbackEnabled: false,
           grammarHighlighting: false,
+          bands: [
+            {
+              min: 0,
+              max: 5,
+              label: 'Raw points',
+              description: 'Score this section out of five.',
+            },
+          ],
         },
       ],
       minScore: 1,
@@ -96,6 +104,14 @@ describe('normalizeRubricDisplayConfig', () => {
     ]);
     expect(normalized.categories[0].feedbackEnabled).toBe(false);
     expect(normalized.categories[0].grammarHighlighting).toBe(false);
+    expect(normalized.categories[0].bands).toEqual([
+      {
+        min: 0,
+        max: 5,
+        label: 'Raw points',
+        description: 'Score this section out of five.',
+      },
+    ]);
   });
 
   test('leaves the new options undefined for categories that predate them', () => {
@@ -165,6 +181,18 @@ describe('buildScoreOptions', () => {
         { value: 9, label: 'Off the chart' },
       ]).map((option) => option.label)
     ).toEqual(['1', '2']);
+  });
+
+  test('uses a category band range instead of the rubric-wide maximum', () => {
+    expect(
+      buildScoreOptions(0, 20, undefined, 1, [
+        { min: 0, max: 0, label: 'Absent', description: 'Missing.' },
+        { min: 1, max: 2, label: 'Struggling', description: 'Incomplete.' },
+        { min: 3, max: 3, label: 'Developing', description: 'Generic.' },
+        { min: 4, max: 4, label: 'Proficient', description: 'Clear.' },
+        { min: 5, max: 5, label: 'Exemplary', description: 'Purposeful.' },
+      ]).map((option) => option.value)
+    ).toEqual(['0', '1', '2', '3', '4', '5']);
   });
 });
 
