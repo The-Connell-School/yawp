@@ -14,6 +14,7 @@ import {
 import { prisma } from '~/utils/db.server';
 import {
   createRuntimePreviewSeat,
+  getConfiguredPreviewOrganizationAccessCode,
   getPreviewMasterAccessCode,
   isIsolatedPreviewSeatMode,
 } from './preview-seat.server';
@@ -31,7 +32,6 @@ export async function organizationsLoader({ request }: LoaderFunctionArgs) {
   const { sort, direction, skip, take } =
     await getOrganizationTableCookie(request);
   const previewSeatMode = isIsolatedPreviewSeatMode();
-  const masterCode = previewSeatMode ? getPreviewMasterAccessCode() : null;
 
   const [organizationRows, totalCount, stats] = await Promise.all([
     prisma.organization.findMany({
@@ -67,9 +67,8 @@ export async function organizationsLoader({ request }: LoaderFunctionArgs) {
     ({ previewSeatCode, ...organization }) => ({
       ...organization,
       previewAccessCode: previewSeatMode
-        ? organization.id === 'local-dev-org'
-          ? masterCode
-          : previewSeatCode
+        ? previewSeatCode ??
+          getConfiguredPreviewOrganizationAccessCode(organization.id)
         : null,
     })
   );

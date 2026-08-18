@@ -9,6 +9,7 @@ import {
   createPreviewAccessMiddleware,
   findPreviewAccessCredentialByCode,
   findPreviewAccessSeatByCode,
+  getConfiguredPreviewOrganizationAccessCode,
   getPreviewAccessSeat,
   hasPreviewMasterSelection,
   grantPreviewAccessCookie,
@@ -589,6 +590,24 @@ describe('preview access codes', () => {
       await findPreviewAccessSeatByCode('wise-owl-9876', runtimeRepository)
     ).toBeNull();
     expect(runtimeRepository.findByCode).not.toHaveBeenCalled();
+  });
+
+  test('keeps the configured organization code distinct from the generic master', () => {
+    process.env.PREVIEW_MASTER_ACCESS_CODE = 'wise-owl-9876';
+    process.env.PREVIEW_ACCESS_SEATS = JSON.stringify([
+      {
+        code: 'brave-otter-4193',
+        organizationId: 'local-dev-org',
+        label: 'Yawp Local Dev',
+      },
+    ]);
+
+    expect(
+      getConfiguredPreviewOrganizationAccessCode('local-dev-org')
+    ).toBe('brave-otter-4193');
+    expect(
+      getConfiguredPreviewOrganizationAccessCode('preview-seat-2')
+    ).toBeNull();
   });
 
   test('uses a short-lived signed master-selection cookie without granting preview access', async () => {

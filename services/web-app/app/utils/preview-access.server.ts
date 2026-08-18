@@ -182,6 +182,13 @@ export function getPreviewMasterAccessCode() {
   );
 }
 
+export function getConfiguredPreviewOrganizationAccessCode(
+  organizationId: string
+) {
+  const seat = configuredPrimarySeat();
+  return seat?.organizationId === organizationId ? seat.code : null;
+}
+
 export async function findPreviewAccessCredentialByCode(
   value: string,
   repository: PreviewAccessSeatRepository = databasePreviewSeatRepository

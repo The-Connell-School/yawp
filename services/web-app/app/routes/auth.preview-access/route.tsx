@@ -26,7 +26,7 @@ export default function PreviewAccessRoute({ loaderData }: Route.ComponentProps)
 
   return (
     <main
-      className="flex min-h-screen items-center justify-center bg-muted/40 px-4 py-10"
+      className="flex min-h-dvh items-center justify-center bg-muted/40 px-4 py-10"
       data-preview-access-screen
     >
       <section className="w-full max-w-md rounded-2xl border border-border bg-background p-8 shadow-xl sm:p-10">
@@ -91,7 +91,7 @@ export default function PreviewAccessRoute({ loaderData }: Route.ComponentProps)
                     aria-describedby={
                       error ? 'preview-access-error' : undefined
                     }
-                    className="h-11 w-full appearance-none rounded-md border border-input bg-background pl-10 pr-8 text-sm shadow-sm outline-none transition focus:border-ring focus:ring-2 focus:ring-ring/20 disabled:cursor-not-allowed disabled:opacity-60"
+                    className="h-11 w-full appearance-none rounded-md border border-input bg-background pl-10 pr-8 text-base outline-none focus:border-ring focus:ring-2 focus:ring-ring/20 disabled:cursor-not-allowed disabled:opacity-60 sm:text-sm"
                   >
                     <option value="" disabled>
                       Select an organization
@@ -127,7 +127,7 @@ export default function PreviewAccessRoute({ loaderData }: Route.ComponentProps)
 
               <button
                 type="submit"
-                className="h-11 w-full rounded-md bg-primary px-4 text-sm font-semibold text-primary-foreground shadow-sm transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
+                className="h-11 w-full rounded-md bg-primary px-4 text-sm font-semibold text-primary-foreground shadow-sm hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 Continue to organization
               </button>
@@ -137,7 +137,7 @@ export default function PreviewAccessRoute({ loaderData }: Route.ComponentProps)
               <input type="hidden" name="intent" value="cancel-master" />
               <button
                 type="submit"
-                className="h-9 w-full rounded-md px-3 text-sm font-medium text-muted-foreground transition hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                className="h-9 w-full rounded-md px-3 text-sm font-medium text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               >
                 Use a different access code
               </button>
@@ -170,7 +170,7 @@ export default function PreviewAccessRoute({ loaderData }: Route.ComponentProps)
                   disabled={!loaderData.configured}
                   placeholder="brave-otter-4193"
                   aria-describedby={error ? 'preview-access-error' : undefined}
-                  className="h-11 w-full rounded-md border border-input bg-background pl-10 pr-3 font-mono text-sm shadow-sm outline-none transition focus:border-ring focus:ring-2 focus:ring-ring/20 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="h-11 w-full rounded-md border border-input bg-background pl-10 pr-3 font-mono text-base outline-none focus:border-ring focus:ring-2 focus:ring-ring/20 disabled:cursor-not-allowed disabled:opacity-60 sm:text-sm"
                 />
               </div>
             </div>
@@ -188,7 +188,7 @@ export default function PreviewAccessRoute({ loaderData }: Route.ComponentProps)
             <button
               type="submit"
               disabled={!loaderData.configured}
-              className="h-11 w-full rounded-md bg-primary px-4 text-sm font-semibold text-primary-foreground shadow-sm transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
+              className="h-11 w-full rounded-md bg-primary px-4 text-sm font-semibold text-primary-foreground shadow-sm hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
             >
               Open preview
             </button>

@@ -15,6 +15,7 @@ const requireUserId = mock();
 const createRuntimePreviewSeat = mock();
 const isIsolatedPreviewSeatMode = mock();
 const getPreviewMasterAccessCode = mock();
+const getConfiguredPreviewOrganizationAccessCode = mock();
 const getOrganizationTableCookie = mock();
 const getOrganizationTableCookieValue = mock();
 const setOrganizationTableCookie = mock();
@@ -34,6 +35,7 @@ mock.module('~/utils/cookies.server', () => ({
 }));
 mock.module('./preview-seat.server', () => ({
   createRuntimePreviewSeat,
+  getConfiguredPreviewOrganizationAccessCode,
   getPreviewMasterAccessCode,
   isIsolatedPreviewSeatMode,
 }));
@@ -64,6 +66,7 @@ describe('admin organizations index route', () => {
     createRuntimePreviewSeat.mockReset();
     isIsolatedPreviewSeatMode.mockReset();
     getPreviewMasterAccessCode.mockReset();
+    getConfiguredPreviewOrganizationAccessCode.mockReset();
     getOrganizationTableCookie.mockReset();
 
     requireAdmin.mockResolvedValue({ id: 'admin-1' });
@@ -71,6 +74,10 @@ describe('admin organizations index route', () => {
     prisma.organization.create.mockResolvedValue({ id: 'org-1' });
     isIsolatedPreviewSeatMode.mockReturnValue(false);
     getPreviewMasterAccessCode.mockReturnValue('brave-otter-4193');
+    getConfiguredPreviewOrganizationAccessCode.mockImplementation(
+      (organizationId: string) =>
+        organizationId === 'local-dev-org' ? 'brave-otter-4193' : null
+    );
     createRuntimePreviewSeat.mockResolvedValue({
       organizationId: 'preview-seat-2',
       label: 'Seat 2',
@@ -223,5 +230,6 @@ describe('admin organizations index route', () => {
       'previewSeatCode'
     );
     expect(getPreviewMasterAccessCode).not.toHaveBeenCalled();
+    expect(getConfiguredPreviewOrganizationAccessCode).not.toHaveBeenCalled();
   });
 });
