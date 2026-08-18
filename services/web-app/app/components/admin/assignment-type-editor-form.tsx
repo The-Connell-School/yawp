@@ -14,53 +14,30 @@ import { Textarea } from '~/components/ui/textarea';
 import { ConfirmationDialog } from '~/components/confirmation-dialog';
 import { AssignmentTypeImageThumbnail } from './assignment-type-image-thumbnail';
 import {
-  DEFAULT_PROMPT_CONFIG,
-  DEFAULT_RUBRIC,
-  DEFAULT_SCORING_SCALE,
-  type PromptConfigData,
-  type RubricData,
-  type ScoringScaleData,
-} from '~/domain/assignment-types/assignment-type-rubric.shared';
-import {
-  PromptConfigEditor,
-  promptConfigSnapshot,
-  RubricConfigurationEditor,
-  rubricSnapshot,
-  scoringScaleSnapshot,
-} from './rubric-config-editors';
+  RubricLibrarySection,
+  type RubricOption,
+} from '~/components/admin/rubric-library-section';
 import {
   AssignmentTypeModulesSection,
   type AssignmentTypeModuleRow,
 } from './assignment-type-modules-section';
-import { RubricSourceBanner } from './rubric-source-indicator';
 
 type AssignmentTypeEditorFormProps = {
+  /** Every rubric in the shared library, for the picker. */
+  rubrics?: RubricOption[];
+  /** The rubric this assignment type grades with, if one was chosen. */
+  selectedRubricId?: string | null;
   mode: 'create' | 'edit';
   assignmentTypeId?: string;
   titleDefaultValue?: string;
   descriptionDefaultValue?: string | null;
-  scoringScale?: ScoringScaleData;
-  rubric?: RubricData;
-  promptConfig?: PromptConfigData;
   archivedAt?: Date | string | null;
   imageId?: string | null;
   modules?: AssignmentTypeModuleRow[];
 };
 
-function formSnapshot(values: {
-  title: string;
-  description: string;
-  scoringScale: ScoringScaleData;
-  rubric: RubricData;
-  promptConfig: PromptConfigData;
-}) {
-  return [
-    values.title.trim(),
-    values.description.trim(),
-    scoringScaleSnapshot(values.scoringScale),
-    rubricSnapshot(values.rubric),
-    promptConfigSnapshot(values.promptConfig),
-  ].join('\u0000');
+function formSnapshot(values: { title: string; description: string }) {
+  return [values.title.trim(), values.description.trim()].join('\u0000');
 }
 
 export function FieldLabel({
@@ -114,12 +91,11 @@ export function AssignmentTypeEditorForm({
   assignmentTypeId,
   titleDefaultValue = '',
   descriptionDefaultValue = '',
-  scoringScale = DEFAULT_SCORING_SCALE,
-  rubric = DEFAULT_RUBRIC,
-  promptConfig = DEFAULT_PROMPT_CONFIG,
   archivedAt = null,
   imageId = null,
   modules = [],
+  rubrics = [],
+  selectedRubricId = null,
 }: AssignmentTypeEditorFormProps) {
   const fetcher = useFetcher();
   const imageFileInputRef = useRef<HTMLInputElement>(null);
@@ -131,44 +107,18 @@ export function AssignmentTypeEditorForm({
 
   const [title, setTitle] = useState(titleDefaultValue);
   const [description, setDescription] = useState(descriptionDefaultValue ?? '');
-  const [scoringScaleState, setScoringScaleState] =
-    useState<ScoringScaleData>(scoringScale);
-  const [rubricState, setRubricState] = useState<RubricData>(rubric);
-  const [promptConfigState, setPromptConfigState] =
-    useState<PromptConfigData>(promptConfig);
-  const [editorGeneration, setEditorGeneration] = useState(0);
-  const hasHydratedSavedValues = useRef(false);
-
   const savedSnapshot = useMemo(
     () =>
       formSnapshot({
         title: titleDefaultValue,
         description: descriptionDefaultValue ?? '',
-        scoringScale,
-        rubric,
-        promptConfig,
       }),
-    [
-      titleDefaultValue,
-      descriptionDefaultValue,
-      scoringScale,
-      rubric,
-      promptConfig,
-    ]
+    [titleDefaultValue, descriptionDefaultValue]
   );
 
   useEffect(() => {
     setTitle(titleDefaultValue);
     setDescription(descriptionDefaultValue ?? '');
-    setScoringScaleState(scoringScale);
-    setRubricState(rubric);
-    setPromptConfigState(promptConfig);
-
-    if (hasHydratedSavedValues.current) {
-      setEditorGeneration((generation) => generation + 1);
-    } else {
-      hasHydratedSavedValues.current = true;
-    }
   }, [savedSnapshot]);
 
   useEffect(() => {
@@ -192,11 +142,8 @@ export function AssignmentTypeEditorForm({
       formSnapshot({
         title,
         description,
-        scoringScale: scoringScaleState,
-        rubric: rubricState,
-        promptConfig: promptConfigState,
       }),
-    [title, description, scoringScaleState, rubricState, promptConfigState]
+    [title, description]
   );
 
   const isDirty = currentSnapshot !== savedSnapshot || imageDirty;
@@ -212,15 +159,11 @@ export function AssignmentTypeEditorForm({
   function handleCancel() {
     setTitle(titleDefaultValue);
     setDescription(descriptionDefaultValue ?? '');
-    setScoringScaleState(scoringScale);
-    setRubricState(rubric);
-    setPromptConfigState(promptConfig);
     setPreviewUrl(null);
     setHasRemovedImage(false);
     if (imageFileInputRef.current) {
       imageFileInputRef.current.value = '';
     }
-    setEditorGeneration((generation) => generation + 1);
   }
 
   function handleImageChange(event: ChangeEvent<HTMLInputElement>) {
@@ -334,30 +277,20 @@ export function AssignmentTypeEditorForm({
 
         <Section
           title="Rubric"
-          description="The source of truth shared by grading and tutor guidance."
+          description="Keep the current production behavior, or choose a database-managed rubric. Rubrics are view-only here."
         >
-          <RubricSourceBanner rubric={rubricState} />
-          <RubricConfigurationEditor
-            key={`rubric-editor-${editorGeneration}`}
-            initialScoringScale={scoringScaleState}
-            initialRubric={rubricState}
-            namePrefix="assignmentType"
-            excludeAssignmentTypeId={assignmentTypeId ?? null}
-            onScoringScaleChange={setScoringScaleState}
-            onRubricChange={setRubricState}
-          />
-        </Section>
-
-        <Section
-          title="Grading assistant"
-          description="Instructions for applying this rubric during submission review."
-        >
-          <PromptConfigEditor
-            key={`prompt-editor-${editorGeneration}`}
-            initial={promptConfigState}
-            namePrefix="assignmentType"
-            onChange={setPromptConfigState}
-          />
+          {assignmentTypeId ? (
+            <RubricLibrarySection
+              assignmentTypeId={assignmentTypeId}
+              rubrics={rubrics}
+              selectedRubricId={selectedRubricId}
+            />
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              Shared rubrics become available after this assignment type is
+              saved.
+            </p>
+          )}
         </Section>
 
         {!isEdit ? (

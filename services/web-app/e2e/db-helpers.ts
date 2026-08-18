@@ -1,4 +1,5 @@
 import type { E2EPrismaClient } from './prisma-client';
+import { currentSchoolYear } from '../app/utils/school-year';
 import { generateTOTP } from '../app/utils/totp.server';
 import bcrypt from 'bcryptjs';
 
@@ -220,7 +221,7 @@ export async function createTeacherClassPilotFixture(params: {
   const klass = await prisma.class.create({
     data: {
       code: `E2E-${normalizedSuffix}`.slice(0, 32),
-      schoolYear: '2024-2025',
+      schoolYear: currentSchoolYear(),
       period: '2nd',
       grade: '10th',
       title: `Non-pilot ${normalizedSuffix}`,

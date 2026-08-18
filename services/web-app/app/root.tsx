@@ -115,7 +115,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
         previewAccessGateEnabled: isPreviewAccessGateEnabled(),
         previewAccessSeat: null,
         impersonation: { isReadOnly: false, impersonatorUserId: null },
-        studentPreview: { active: false, organizationId: null },
         toast: null,
       },
       { headers: { 'Server-Timing': timings.toString() } }
@@ -199,9 +198,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
     user?.memberships.find((m) => m.id === membershipId) ??
     user?.memberships[0];
   const impersonation = await getImpersonationState(request);
-  const { getStudentPreviewState } =
-    await import('./utils/student-preview.server.ts');
-  const studentPreview = await getStudentPreviewState(request);
   const bannerWarning = getEnvironmentBannerWarning(request.url);
   const localDevQuickLoginEnabled = shouldEnableLocalDevQuickLogin({
     bannerWarning,
@@ -235,7 +231,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
       previewAccessGateEnabled: isPreviewAccessGateEnabled(),
       previewAccessSeat,
       impersonation,
-      studentPreview,
       toast,
     },
     {

@@ -1,11 +1,14 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 import {
   PREVIEW_ACCESS_COOKIE_NAME,
+  PREVIEW_AUTHORIZED_ACTIVITY_HEADER,
   clearPreviewAccessCookie,
+  createPreviewAccessCookie,
   createPreviewAccessMiddleware,
   findPreviewAccessSeatByCode,
   getPreviewAccessSeat,
   grantPreviewAccessCookie,
+  isIsolatedPreviewSeatMode,
   isPreviewAccessConfigured,
   previewAccessMiddleware,
   type PreviewAccessSeatRepository,
@@ -149,6 +152,9 @@ describe('preview access gate', () => {
         next
       );
       expect(await response?.text()).toBe('ok');
+      expect(
+        response?.headers.get(PREVIEW_AUTHORIZED_ACTIVITY_HEADER)
+      ).toBeNull();
     }
 
     expect(next).toHaveBeenCalledTimes(3);
@@ -191,6 +197,9 @@ describe('preview access gate', () => {
       next
     );
     expect(await authenticated?.text()).toBe('private');
+    expect(
+      authenticated?.headers.get(PREVIEW_AUTHORIZED_ACTIVITY_HEADER)
+    ).toBe('1');
 
     const tampered = `${cookiePair.slice(0, -1)}x`;
     const rejected = await middleware(
@@ -198,12 +207,60 @@ describe('preview access gate', () => {
       next
     );
     expect((rejected as Response).status).toBe(302);
+    expect(
+      (rejected as Response).headers.get(PREVIEW_AUTHORIZED_ACTIVITY_HEADER)
+    ).toBeNull();
     expect(next).toHaveBeenCalledTimes(1);
 
     const parsedSeat = await getPreviewAccessSeat(
       request('/app', { headers: { cookie: cookiePair } })
     );
     expect(parsedSeat).toEqual(seat);
+  });
+
+  test('rejects signed access cookies after their embedded preview-access lifetime', async () => {
+    const expiredAt = Math.floor(Date.now() / 1000) - 31 * 24 * 60 * 60;
+    const expiredValue = `seat-v2:${expiredAt}:local-dev-org`;
+    const serialized = await createPreviewAccessCookie().serialize(expiredValue);
+    const cookie = serialized.split(';', 1)[0];
+
+    expect(
+      await getPreviewAccessSeat(request('/app', { headers: { cookie } }))
+    ).toBeNull();
+  });
+
+  test('rejects legacy signed access cookies that have no embedded lifetime', async () => {
+    const serialized = await createPreviewAccessCookie().serialize(
+      'seat-v1:local-dev-org'
+    );
+    const cookie = serialized.split(';', 1)[0];
+
+    expect(
+      await getPreviewAccessSeat(request('/app', { headers: { cookie } }))
+    ).toBeNull();
+  });
+
+  test('does not mark a stale runtime-seat cookie as authorized activity', async () => {
+    const cookie = (
+      await grantPreviewAccessCookie({
+        organizationId: 'preview-seat-2',
+        label: 'Removed seat',
+      })
+    ).split(';', 1)[0];
+    const next = mock(async () => new Response('private'));
+    const middleware = createPreviewAccessMiddleware(
+      async () => null,
+      repository({ byId: { 'preview-seat-2': null } })
+    );
+
+    const response = (await middleware(
+      middlewareArgs(request('/app', { headers: { cookie } })),
+      next
+    )) as Response;
+
+    expect(response.status).toBe(302);
+    expect(response.headers.get(PREVIEW_AUTHORIZED_ACTIVITY_HEADER)).toBeNull();
+    expect(next).not.toHaveBeenCalled();
   });
 
   test('rejects an authenticated session that is bound outside the signed seat', async () => {
@@ -266,6 +323,31 @@ describe('preview access gate', () => {
 
     expect(await response?.text()).toBe('production data');
     expect(sessionGuard).not.toHaveBeenCalled();
+  });
+
+  test('binds sanitized production access to its configured production organization', async () => {
+    process.env.PREVIEW_DATA_MODE = 'sanitized-production';
+    process.env.PREVIEW_ACCESS_SEATS = JSON.stringify([
+      {
+        code: 'brave-otter-4193',
+        organizationId: 'default-org',
+        label: 'Production rehearsal',
+      },
+    ]);
+    const seat = await findPreviewAccessSeatByCode('brave-otter-4193');
+    expect(seat).toEqual({
+      organizationId: 'default-org',
+      label: 'Production rehearsal',
+    });
+
+    const cookie = (await grantPreviewAccessCookie(seat!)).split(';', 1)[0];
+    expect(
+      await getPreviewAccessSeat(
+        request('/app', { headers: { cookie } }),
+        repository()
+      )
+    ).toEqual(seat);
+    expect(isIsolatedPreviewSeatMode()).toBe(false);
   });
 
   test('clears the signed access cookie for re-entry', async () => {
@@ -363,7 +445,7 @@ describe('preview access gate', () => {
       expect(next).not.toHaveBeenCalled();
     });
 
-    test('an existing seat cookie takes precedence and the code is ignored', async () => {
+    test('an existing seat cookie takes precedence while the code is stripped', async () => {
       const cookie = (
         await grantPreviewAccessCookie({
           organizationId: 'local-dev-org',
@@ -375,13 +457,17 @@ describe('preview access gate', () => {
 
       const response = await middleware(
         middlewareArgs(
-          request('/app?code=calm-panda-8127', { headers: { cookie } })
+          request('/app?code=calm-panda-8127&tab=classes', {
+            headers: { cookie },
+          })
         ),
         next
       );
 
-      expect(await response?.text()).toBe('private');
-      expect(next).toHaveBeenCalledTimes(1);
+      expect(response?.status).toBe(303);
+      expect(response?.headers.get('location')).toBe('/app?tab=classes');
+      expect(response?.headers.get('set-cookie')).toBeNull();
+      expect(next).not.toHaveBeenCalled();
     });
   });
 });

@@ -52,6 +52,23 @@ describe('preview access-code generator', () => {
     expect(new Set(seats.map((seat) => seat.code)).size).toBe(6);
   });
 
+  test('can bind the master code to an existing production organization', () => {
+    const seats = generatePreviewAccessSeats({
+      count: 1,
+      masterOrganizationId: 'default-org',
+      masterLabel: 'Production rehearsal',
+      existingCodes: ['brave-otter-4193'],
+    });
+
+    expect(seats).toEqual([
+      {
+        code: 'brave-otter-4193',
+        organizationId: 'default-org',
+        label: 'Production rehearsal',
+      },
+    ]);
+  });
+
   test('adding N+1 preserves all prior code mappings', () => {
     const first = generatePreviewAccessSeats({ count: 3 });
     const next = generatePreviewAccessSeats({

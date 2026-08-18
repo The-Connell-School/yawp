@@ -26,7 +26,6 @@ const prisma = {
 const requireUserId = mock();
 const requireMembership = mock();
 const redirectWithToast = mock();
-const getStudentPreviewState = mock();
 
 mock.module('~/utils/db.server', () => ({ prisma }));
 mock.module('~/utils/auth.server', () => ({
@@ -34,9 +33,6 @@ mock.module('~/utils/auth.server', () => ({
   requireMembership,
 }));
 mock.module('~/utils/toast.server', () => ({ redirectWithToast }));
-mock.module('~/utils/student-preview.server', () => ({
-  getStudentPreviewState,
-}));
 
 const { action, loader } = await import('./route');
 
@@ -96,9 +92,6 @@ describe('enter-code authorization', () => {
     requireUserId.mockReset();
     requireMembership.mockReset();
     redirectWithToast.mockReset();
-    getStudentPreviewState.mockReset();
-
-    getStudentPreviewState.mockResolvedValue({ active: false });
     redirectWithToast.mockImplementation(
       async (to: string) =>
         new Response(null, { status: 302, headers: { location: to } })

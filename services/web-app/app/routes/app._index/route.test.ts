@@ -3,7 +3,7 @@ import { afterAll, beforeEach, describe, expect, mock, test } from 'bun:test';
 const prisma = {
   classAssignment: { findMany: mock() },
   assignmentType: { findMany: mock() },
-  class: { findMany: mock() },
+  class: { findMany: mock(), findFirst: mock() },
   document: { findMany: mock(), count: mock() },
   orgMembership: { findUnique: mock() },
   teacherTraining: { findMany: mock() },
@@ -16,7 +16,6 @@ const requireMutableRequest = mock();
 const getTeacherClassCardStats = mock();
 const getTeacherRecentActiveClassIds = mock();
 const getAvailableAssignmentTypesForScopes = mock();
-const getStudentPreviewState = mock();
 const getStudentEnrolledClasses = mock();
 // bun's module mocks are global to the test run and mock.restore() does not
 // undo mock.module — restore from the pristine copy test-preload.ts captured
@@ -43,15 +42,6 @@ mock.module('~/utils/assignment-type-access.server', () => ({
   ...actualAssignmentTypeAccess,
   getAvailableAssignmentTypesForScopes,
 }));
-mock.module('~/utils/student-preview.server', () => ({
-  getStudentPreviewState,
-  studentPreviewModeKey: 'studentPreviewMode',
-  studentPreviewOrgIdKey: 'studentPreviewOrgId',
-  shouldUseStudentExperience: (args: {
-    membershipRole: string;
-    previewActive: boolean;
-  }) => args.membershipRole === 'STUDENT' || args.previewActive,
-}));
 mock.module('~/utils/student-classes.server', () => ({
   getStudentEnrolledClasses,
 }));
@@ -77,11 +67,6 @@ describe('app index loader assignments', () => {
     getTeacherClassCardStats.mockReset();
     getTeacherRecentActiveClassIds.mockReset();
     getAvailableAssignmentTypesForScopes.mockReset();
-    getStudentPreviewState.mockReset();
-    getStudentPreviewState.mockResolvedValue({
-      active: false,
-      organizationId: null,
-    });
     getAvailableAssignmentTypesForScopes.mockResolvedValue([]);
     getStudentEnrolledClasses.mockReset();
     getStudentEnrolledClasses.mockResolvedValue([]);
@@ -184,7 +169,10 @@ describe('app index loader assignments', () => {
     } as any);
     const data = (response as { data: any }).data;
 
-    expect(getStudentEnrolledClasses).toHaveBeenCalledWith('profile-1');
+    expect(getStudentEnrolledClasses).toHaveBeenCalledWith(
+      'profile-1',
+      expect.any(String)
+    );
     expect(data.enrolledClasses).toHaveLength(1);
     expect(data.enrolledClasses[0].id).toBe('class-1');
   });

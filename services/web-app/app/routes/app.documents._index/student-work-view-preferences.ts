@@ -261,12 +261,49 @@ export function preferencesFromStudentWorkSearchParams(
   return preferences;
 }
 
+/**
+ * Entry points that mean "start from a clean slate" — the homepage grading
+ * cards — carry this param. Without it the stored filters are restored for
+ * every key the link does not spell out, which is how a stale class filter
+ * ends up hiding the work the teacher just clicked through to see.
+ */
+export const STUDENT_WORK_RESET_PARAM = 'reset';
+
+/**
+ * Drops the filter half of the stored preferences and keeps the presentation
+ * half: which groups are collapsed and how the table is sorted are not what
+ * the teacher is trying to escape.
+ */
+export function clearStoredStudentWorkFilters() {
+  const stored = readStudentWorkViewPreferences();
+
+  writeStudentWorkViewPreferences({
+    collapsedGroups: stored.collapsedGroups,
+    documentSort: stored.documentSort,
+  });
+}
+
+/**
+ * The URL the documents page should settle on when it was entered through a
+ * reset link: the params the link asked for, minus the reset marker itself.
+ */
+export function stripStudentWorkResetParam(searchParams: URLSearchParams) {
+  const next = new URLSearchParams(searchParams.toString());
+  next.delete(STUDENT_WORK_RESET_PARAM);
+  return next;
+}
+
 export function mergeStoredStudentWorkSearchParams(params: {
   searchParams: URLSearchParams;
   storedPreferences: StudentWorkViewPreferences;
 }) {
   const next = new URLSearchParams(params.searchParams.toString());
   let shouldReplace = false;
+
+  if (next.has(STUDENT_WORK_RESET_PARAM)) {
+    next.delete(STUDENT_WORK_RESET_PARAM);
+    return { searchParams: next, shouldReplace: true };
+  }
 
   if (!next.has('student') && params.storedPreferences.studentIds?.length) {
     const serialized = serializeDocumentWorkFilterIds(

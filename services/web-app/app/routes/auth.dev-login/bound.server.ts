@@ -30,9 +30,14 @@ export const devLoginAction = createDevLoginAction({
   localDevAuthEnabled: isLocalDevAuthEnabled,
   previewGateEnabled: isPreviewAccessGateEnabled,
   previewSeatForRequest: getPreviewAccessSeat,
+  allSanitizedUsersEnabled: () =>
+    process.env.PREVIEW_DATA_MODE === 'sanitized-production',
   redirectResponse: (headers) => new Response(null, { status: 302, headers }),
 });
 
 export function getLocalDevLoginOptions(organizationId?: string) {
-  return getLoginOptions(organizationId, prisma);
+  return getLoginOptions(organizationId, prisma, {
+    includeAllOrganizations:
+      process.env.PREVIEW_DATA_MODE === 'sanitized-production',
+  });
 }

@@ -9,8 +9,11 @@ import {
 export const PREVIEW_ACCESS_COOKIE_NAME = '__yawp_preview_access';
 export const PREVIEW_ACCESS_PATH = '/auth/preview-access';
 export const PREVIEW_ACCESS_MAX_AGE = 60 * 60 * 24 * 30;
+export const PREVIEW_AUTHORIZED_ACTIVITY_HEADER =
+  'X-Yawp-Preview-Authorized';
 
-const ACCESS_SEAT_VALUE_PREFIX = 'seat-v1:';
+const ACCESS_SEAT_VALUE_PREFIX = 'seat-v2:';
+const ACCESS_COOKIE_CLOCK_SKEW_SECONDS = 5 * 60;
 const ACCESS_CODE_PATTERN = /^[a-z]+-[a-z]+-[1-9][0-9]{3}$/;
 const OPEN_PATHS = new Set([
   '/api/healthcheck',
@@ -29,7 +32,7 @@ export type PreviewAccessSeat = {
 
 type ConfiguredPreviewAccessSeat = PreviewAccessSeat & { code: string };
 
-const MASTER_ORGANIZATION_ID = 'local-dev-org';
+const DEFAULT_MASTER_ORGANIZATION_ID = 'local-dev-org';
 const MASTER_SEAT_LABEL = 'Master';
 
 function legacyConfiguredMasterSeat(): ConfiguredPreviewAccessSeat | null {
@@ -40,7 +43,7 @@ function legacyConfiguredMasterSeat(): ConfiguredPreviewAccessSeat | null {
   return code && ACCESS_CODE_PATTERN.test(code)
     ? {
         code,
-        organizationId: MASTER_ORGANIZATION_ID,
+        organizationId: DEFAULT_MASTER_ORGANIZATION_ID,
         label: MASTER_SEAT_LABEL,
       }
     : null;
@@ -53,13 +56,20 @@ function configuredMasterSeat(): ConfiguredPreviewAccessSeat | null {
   try {
     const parsed = JSON.parse(raw) as unknown;
     if (!Array.isArray(parsed)) return null;
+    const configuredMasterOrganizationId =
+      process.env.PREVIEW_DATA_MODE === 'sanitized-production'
+        ? String(
+            (parsed[0] as Record<string, unknown> | undefined)
+              ?.organizationId ?? ''
+          ).trim()
+        : DEFAULT_MASTER_ORGANIZATION_ID;
     const master = parsed.find(
       (value) =>
         value &&
         typeof value === 'object' &&
         String(
           (value as Record<string, unknown>).organizationId ?? ''
-        ).trim() === MASTER_ORGANIZATION_ID
+        ).trim() === configuredMasterOrganizationId
     );
     if (!master || typeof master !== 'object') return null;
     const code = normalizeCode(
@@ -68,8 +78,10 @@ function configuredMasterSeat(): ConfiguredPreviewAccessSeat | null {
     return ACCESS_CODE_PATTERN.test(code)
       ? {
           code,
-          organizationId: MASTER_ORGANIZATION_ID,
-          label: MASTER_SEAT_LABEL,
+          organizationId: configuredMasterOrganizationId,
+          label:
+            String((master as Record<string, unknown>).label ?? '').trim() ||
+            MASTER_SEAT_LABEL,
         }
       : null;
   } catch {
@@ -90,7 +102,8 @@ export function isPreviewAccessGateEnabled() {
 
 export function isIsolatedPreviewSeatMode() {
   return (
-    isPreviewAccessGateEnabled() && process.env.PREVIEW_DATA_MODE === 'seed'
+    isPreviewAccessGateEnabled() &&
+    process.env.PREVIEW_DATA_MODE === 'seed'
   );
 }
 
@@ -193,8 +206,9 @@ export async function grantPreviewAccessCookie(seat: PreviewAccessSeat) {
   if (!/^[a-z0-9][a-z0-9-]{0,127}$/.test(seat.organizationId)) {
     throw new Error('Preview access seat has an invalid organization.');
   }
+  const issuedAt = Math.floor(Date.now() / 1000);
   return createPreviewAccessCookie().serialize(
-    `${ACCESS_SEAT_VALUE_PREFIX}${seat.organizationId}`
+    `${ACCESS_SEAT_VALUE_PREFIX}${issuedAt}:${seat.organizationId}`
   );
 }
 
@@ -216,9 +230,25 @@ export async function getPreviewAccessSeat(
   ) {
     return null;
   }
-  const organizationId = value.slice(ACCESS_SEAT_VALUE_PREFIX.length);
-  if (organizationId === MASTER_ORGANIZATION_ID) {
-    return { organizationId, label: MASTER_SEAT_LABEL };
+  const payload = value.slice(ACCESS_SEAT_VALUE_PREFIX.length);
+  const separator = payload.indexOf(':');
+  if (separator < 1) return null;
+  const issuedAtValue = payload.slice(0, separator);
+  if (!/^[1-9][0-9]*$/.test(issuedAtValue)) return null;
+  const issuedAt = Number(issuedAtValue);
+  const now = Math.floor(Date.now() / 1000);
+  if (
+    !Number.isSafeInteger(issuedAt) ||
+    issuedAt > now + ACCESS_COOKIE_CLOCK_SKEW_SECONDS ||
+    now - issuedAt > PREVIEW_ACCESS_MAX_AGE
+  ) {
+    return null;
+  }
+  const organizationId = payload.slice(separator + 1);
+  if (!/^[a-z0-9][a-z0-9-]{0,127}$/.test(organizationId)) return null;
+  const master = configuredMasterSeat();
+  if (organizationId === master?.organizationId) {
+    return { organizationId, label: master.label };
   }
   const seat = await repository.findById(organizationId);
   return seat?.previewSeatCode !== null && seat?.previewSeatCode !== undefined
@@ -287,6 +317,22 @@ async function consumeCodeQueryParam(
   });
 }
 
+function stripCodeQueryParam(request: Request): Response | null {
+  if (request.method !== 'GET') return null;
+
+  const url = new URL(request.url);
+  if (!url.searchParams.has('code')) return null;
+
+  url.searchParams.delete('code');
+  return new Response(null, {
+    status: 303,
+    headers: {
+      'Cache-Control': 'no-store',
+      Location: `${url.pathname}${url.search}`,
+    },
+  });
+}
+
 /**
  * The preview access flag and this request-boundary middleware are the same switch.
  * Therefore PREVIEW_ACCESS_GATE=on cannot expose role-swap without also putting the
@@ -306,6 +352,11 @@ export function createPreviewAccessMiddleware(
     if (!seat) {
       const oneClickEntry = await consumeCodeQueryParam(request, repository);
       if (oneClickEntry) return oneClickEntry;
+    } else {
+      // The existing seat remains authoritative, but never let a code-bearing PR link
+      // linger in browser history or become a Referer after access is already granted.
+      const cleanedEntry = stripCodeQueryParam(request);
+      if (cleanedEntry) return cleanedEntry;
     }
     if (!seat) return blockedResponse(request);
 
@@ -313,7 +364,9 @@ export function createPreviewAccessMiddleware(
       const sessionBlock = await sessionGuard(request, seat);
       if (sessionBlock) return sessionBlock;
     }
-    return next();
+    const response = await next();
+    response?.headers.set(PREVIEW_AUTHORIZED_ACTIVITY_HEADER, '1');
+    return response;
   };
 }
 

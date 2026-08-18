@@ -1,4 +1,5 @@
 import { prisma } from '~/utils/db.server.js';
+import { schoolYearWhere } from '~/utils/school-year-scope.server';
 
 export type StudentEnrolledClass = {
   id: string;
@@ -17,12 +18,19 @@ export type StudentEnrolledClass = {
  * teacher My Classes view, students never create/edit classes here.
  */
 export async function getStudentEnrolledClasses(
-  membershipId: string
+  membershipId: string,
+  /**
+   * The school year to show. Students are never asked to pick one — the
+   * caller resolves it to whichever year their work is actually in — but a
+   * student who deliberately looks at another year gets it here.
+   */
+  schoolYearScope?: string
 ): Promise<StudentEnrolledClass[]> {
   const classes = await prisma.class.findMany({
     where: {
       students: { some: { id: membershipId } },
       isArchived: false,
+      ...(schoolYearScope ? schoolYearWhere(schoolYearScope) : {}),
     },
     select: {
       id: true,

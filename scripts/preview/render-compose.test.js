@@ -15,6 +15,7 @@ const previewAccessSeats = JSON.stringify([
 ]);
 const previewSessionSecret = 'test-preview-session-secret-32-bytes';
 const previewAccessSecret = 'test-preview-access-secret-32-bytes';
+const previewDatabasePassword = 'test-preview-database-password-0001';
 
 function renderCompose(overrides = {}) {
   return renderPreviewCompose({
@@ -24,6 +25,7 @@ function renderCompose(overrides = {}) {
     accessSeats: previewAccessSeats,
     sessionSecret: previewSessionSecret,
     accessSecret: previewAccessSecret,
+    databasePassword: previewDatabasePassword,
     ...overrides,
   });
 }
@@ -31,8 +33,15 @@ function renderCompose(overrides = {}) {
 describe('renderPreviewCompose', () => {
   test('renders the fast full-stack preview runtime by default', () => {
     const compose = renderCompose();
+    const parsed = Bun.YAML.parse(compose);
 
     expect(compose).toContain('services:');
+    expect(parsed.services.web.healthcheck.test).toEqual([
+      'CMD',
+      'bun',
+      '-e',
+      "fetch('http://127.0.0.1:8080/api/healthcheck').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))",
+    ]);
     expect(compose).not.toContain('\n  postgres:\n');
     expect(compose).not.toContain('image: postgres:16');
     expect(compose).toContain('toolbox:');
@@ -48,9 +57,12 @@ describe('renderPreviewCompose', () => {
     expect(compose).not.toContain('bun prisma generate');
     expect(compose).not.toContain('bun run --cwd services/web-app dev');
     expect(compose).toContain('web:');
+    expect(compose).toContain('restart: unless-stopped');
+    expect(compose).toContain('healthcheck:');
+    expect(compose).toContain('/api/healthcheck');
     expect(compose).toContain('PORT: "8080"');
     expect(compose).toContain(
-      'DATABASE_URL: "postgresql://postgres:postgres@preview-postgres:5432/yawp_pr_142"'
+      `DATABASE_URL: "postgresql://yawp_pr_142_app:${previewDatabasePassword}@preview-postgres:5432/yawp_pr_142"`
     );
     expect(compose).toContain('AWS_EC2_METADATA_DISABLED: "true"');
     expect(compose).toContain('YAWP_ENVIRONMENT: "preview"');
@@ -81,7 +93,7 @@ describe('renderPreviewCompose', () => {
     expect(compose).not.toContain(deprecatedPreviewSlug);
   });
 
-  test('leaves Traefik routing open for the app-owned access gate', () => {
+  test('leaves running preview traffic independent of the wake service', () => {
     const compose = renderCompose();
 
     expect(compose).not.toContain('basicauth');
@@ -98,7 +110,7 @@ describe('renderPreviewCompose', () => {
 
     expect(source).not.toContain(deprecatedTransportAuth);
     expect(compose).not.toContain('basicauth');
-    expect(compose).not.toContain('.middlewares=');
+    expect(compose).not.toContain('preview-wake-request@file');
   });
 
   // PREVIEW_ACCESS_GATE is the same switch read by the root route middleware. Requiring
@@ -166,6 +178,8 @@ describe('renderPreviewCompose', () => {
     try {
       const compose = renderCompose();
 
+      expect(compose).toContain('YAWP_PREVIEW_AI_MODE: "live"');
+      expect(compose).toContain('CLASS_INSIGHT_MOCK_MODE: ""');
       expect(compose).toContain('ANTHROPIC_API_KEY: "anthropic-preview-key"');
       expect(compose).toContain('AI_MODEL: "claude-opus-test"');
     } finally {
@@ -179,6 +193,21 @@ describe('renderPreviewCompose', () => {
       } else {
         process.env.PREVIEW_AI_MODEL = previousModel;
       }
+    }
+  });
+
+  test('keeps an explicit emergency AI-disabled mode without provider credentials', () => {
+    const previousAnthropicKey = process.env.PREVIEW_ANTHROPIC_API_KEY;
+    process.env.PREVIEW_ANTHROPIC_API_KEY = 'shared-provider-key';
+    try {
+      const compose = renderCompose({ aiMode: 'disabled' });
+      expect(compose).toContain('YAWP_PREVIEW_AI_MODE: "disabled"');
+      expect(compose).toContain('CLASS_INSIGHT_MOCK_MODE: "fixture"');
+      expect(compose).toContain('ANTHROPIC_API_KEY: ""');
+      expect(compose).not.toContain('shared-provider-key');
+    } finally {
+      if (previousAnthropicKey === undefined) delete process.env.PREVIEW_ANTHROPIC_API_KEY;
+      else process.env.PREVIEW_ANTHROPIC_API_KEY = previousAnthropicKey;
     }
   });
 });

@@ -5,9 +5,17 @@ import {
   data as dataResponse,
   redirect,
 } from 'react-router';
-import { Link, useLoaderData, useSearchParams } from 'react-router';
+import { Link, useFetcher, useLoaderData, useSearchParams } from 'react-router';
 import { useState } from 'react';
 import { Tabs, TabsList, TabsTrigger } from '~/components/ui/tabs';
+import { Badge } from '~/components/ui/badge';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '~/components/ui/select';
 import { Button } from '~/components/ui/button';
 import {
   ClassManageSheet,
@@ -24,6 +32,9 @@ import { generateClassCardGradientKey } from '~/utils/class-card-gradient';
 import { getTeacherClassCardStats } from '~/utils/teacher-class-card-stats.server';
 import { pickClassArtKeyForOrganization } from '~/utils/class-art-assignment.server';
 import { getStudentEnrolledClasses } from '~/utils/student-classes.server';
+import { ALL_SCHOOL_YEARS } from '~/utils/school-year';
+import { resolveTeacherSchoolYearScope } from '~/utils/school-year-scope.server';
+import { resolveStudentSchoolYearScope } from '~/utils/school-year-scope.server';
 
 async function getTeacherSchoolIds(membershipId: string) {
   const teacher = await prisma.orgMembership.findUnique({
@@ -38,7 +49,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const profile = await requireMembership(request, userId);
 
   if (profile.role === 'STUDENT') {
-    const studentClasses = await getStudentEnrolledClasses(profile.id);
+    const studentClasses = await getStudentEnrolledClasses(
+      profile.id,
+      await resolveStudentSchoolYearScope(request, profile.id)
+    );
     return dataResponse({ role: 'STUDENT' as const, studentClasses });
   }
 
@@ -46,11 +60,23 @@ export async function loader({ request }: LoaderFunctionArgs) {
     throw redirect('/app');
   }
 
+  // A teacher works inside one school year, chosen once in the sidebar and
+  // honoured everywhere. Earlier years are still there behind that control —
+  // nothing is archived to get them out of the way, because archiving would
+  // take the work away from students too.
+  const selectedSchoolYear = await resolveTeacherSchoolYearScope(
+    request,
+    profile.id
+  );
+
   const [classes, teacherSchools] = await Promise.all([
     prisma.class.findMany({
       where: {
         teachers: { some: { id: profile.id } },
         isArchived: false,
+        ...(selectedSchoolYear === ALL_SCHOOL_YEARS
+          ? {}
+          : { schoolYear: selectedSchoolYear }),
       },
       select: {
         id: true,
@@ -114,6 +140,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   return dataResponse({
     role: 'TEACHER' as const,
     classes: classesWithStats,
+    selectedSchoolYear,
     teacherSchoolCount: teacherSchools?.schools.length ?? 0,
     schools,
     manageSchools: teacherSchools?.schools ?? [],
@@ -308,6 +335,8 @@ function TeacherMyClassesView({
   const filteredClasses = data.classes.filter((klass) =>
     selectedSchoolId === 'all' ? true : klass.school?.id === selectedSchoolId
   );
+  const scopedToOneYear = data.selectedSchoolYear !== ALL_SCHOOL_YEARS;
+  const yearScopeFetcher = useFetcher();
 
   const openCreate = () => {
     setSheetOpen(true);
@@ -319,7 +348,19 @@ function TeacherMyClassesView({
         <div className="mx-auto w-full max-w-screen-lg p-3 sm:p-5">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <h2>My Classes</h2>
+              <div className="flex items-center gap-2">
+                <h2>My Classes</h2>
+                {scopedToOneYear ? (
+                  <Badge
+                    variant="outline"
+                    size="sm"
+                    className="bg-background font-medium"
+                    data-testid="my-classes-year-badge"
+                  >
+                    {data.selectedSchoolYear.replace('-', '–')}
+                  </Badge>
+                ) : null}
+              </div>
               <p className="mt-3 max-w-full text-muted-foreground sm:max-w-[460px]">
                 Your classes at a glance. Open a class to manage students and
                 assignments.
@@ -365,20 +406,47 @@ function TeacherMyClassesView({
         {filteredClasses.length ? (
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {filteredClasses.map((klass) => (
-              <TeacherClassCard key={klass.id} klass={klass} />
+              <TeacherClassCard
+                key={klass.id}
+                klass={klass}
+                showSchoolYear={!scopedToOneYear}
+              />
             ))}
           </div>
         ) : (
-          <div className="rounded-lg border border-dashed py-12 text-center">
+          <div
+            className="rounded-lg border border-dashed py-12 text-center"
+            data-testid="my-classes-empty"
+          >
             <User className="mx-auto mb-3 h-8 w-8 text-muted-foreground" />
-            <p className="font-medium">No classes yet</p>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Create your first class to get started.
+            <p className="font-medium">
+              {scopedToOneYear
+                ? `No classes for ${data.selectedSchoolYear.replace('-', '–')}`
+                : 'No classes yet'}
             </p>
-            <Button size="sm" className="mt-4" onClick={openCreate}>
-              <Plus className="mr-2 h-4 w-4" />
-              Create Class
-            </Button>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {scopedToOneYear
+                ? 'Create a class for this year, or change the school year in Settings.'
+                : 'Create your first class to get started.'}
+            </p>
+            <div className="mt-4 flex justify-center gap-2">
+              <Button size="sm" onClick={openCreate}>
+                <Plus className="mr-2 h-4 w-4" />
+                Create Class
+              </Button>
+              {scopedToOneYear ? (
+                <yearScopeFetcher.Form method="POST" action="/api/school-year">
+                  <input
+                    type="hidden"
+                    name="year"
+                    value={ALL_SCHOOL_YEARS}
+                  />
+                  <Button size="sm" variant="outline" type="submit">
+                    View all years
+                  </Button>
+                </yearScopeFetcher.Form>
+              ) : null}
+            </div>
           </div>
         )}
       </div>

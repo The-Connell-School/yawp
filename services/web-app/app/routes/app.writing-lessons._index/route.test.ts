@@ -13,7 +13,7 @@ mock.module('~/utils/auth.server', () => ({
 
 mock.module('~/utils/db.server', () => ({
   prisma: {
-    class: { findMany: classFindMany },
+    class: { findMany: classFindMany, findFirst: mock() },
   },
 }));
 
@@ -97,6 +97,9 @@ describe('writing lessons index route', () => {
       where: {
         teachers: { some: { id: 'teacher-1' } },
         isArchived: false,
+        // The picker offers this year's classes, matching every other
+        // teacher surface.
+        schoolYear: expect.any(String),
       },
       orderBy: [{ title: 'asc' }, { grade: 'asc' }, { period: 'asc' }],
       select: { id: true, title: true, grade: true, period: true },

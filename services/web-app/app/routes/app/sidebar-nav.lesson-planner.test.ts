@@ -23,16 +23,14 @@ function userWith({
   } as any;
 }
 
-function visibleLinks(user: any, studentPreviewActive = false) {
-  return getVisibleSidebarSections(
-    FLAT_SIDEBAR_SECTIONS,
-    user,
-    studentPreviewActive
-  ).flatMap((section) => section.links);
+function visibleLinks(user: any) {
+  return getVisibleSidebarSections(FLAT_SIDEBAR_SECTIONS, user).flatMap(
+    (section) => section.links
+  );
 }
 
-function plannerVisible(user: any, studentPreviewActive = false) {
-  return visibleLinks(user, studentPreviewActive).some(
+function plannerVisible(user: any) {
+  return visibleLinks(user).some(
     (link) => link.to === '/app/lesson-planner'
   );
 }
@@ -53,15 +51,6 @@ describe('Lesson Planner sidebar gating', () => {
   test('hidden for a student even if the org flag is on', () => {
     expect(
       plannerVisible(userWith({ role: 'STUDENT', lessonPlannerEnabled: true }))
-    ).toBe(false);
-  });
-
-  test('hidden while previewing as a student', () => {
-    expect(
-      plannerVisible(
-        userWith({ role: 'TEACHER', lessonPlannerEnabled: true }),
-        true
-      )
     ).toBe(false);
   });
 

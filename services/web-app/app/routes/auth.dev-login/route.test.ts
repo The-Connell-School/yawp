@@ -14,9 +14,9 @@ const setMembershipId = mock();
 const isLocalDevAuthEnabled = mock();
 const isPreviewAccessGateEnabled = mock();
 const getPreviewAccessSeat = mock();
-const redirectResponse = mock(
-  (headers: Headers) =>
-    new Response(null, { status: 302, headers: { Location: '/app' } })
+const allSanitizedUsersEnabled = mock();
+const redirectResponse = mock((headers: Headers) =>
+  new Response(null, { status: 302, headers: { Location: '/app' } }),
 );
 
 const { createDevLoginAction, getLocalDevLoginOptions } =
@@ -30,6 +30,7 @@ const action = createDevLoginAction({
   localDevAuthEnabled: isLocalDevAuthEnabled as never,
   previewGateEnabled: isPreviewAccessGateEnabled as never,
   previewSeatForRequest: getPreviewAccessSeat as never,
+  allSanitizedUsersEnabled: allSanitizedUsersEnabled as never,
   redirectResponse,
 });
 
@@ -68,14 +69,14 @@ describe('auth.dev-login action', () => {
     isLocalDevAuthEnabled.mockReset();
     isPreviewAccessGateEnabled.mockReset();
     getPreviewAccessSeat.mockReset();
+    allSanitizedUsersEnabled.mockReset();
     redirectResponse.mockClear();
 
     isLocalDevAuthEnabled.mockReturnValue(true);
     isPreviewAccessGateEnabled.mockReturnValue(false);
     getPreviewAccessSeat.mockResolvedValue(null);
-    getSessionExpirationDate.mockReturnValue(
-      new Date('2030-01-01T00:00:00.000Z')
-    );
+    allSanitizedUsersEnabled.mockReturnValue(false);
+    getSessionExpirationDate.mockReturnValue(new Date('2030-01-01T00:00:00.000Z'));
     authSessionStorage.getSession.mockResolvedValue({
       get: () => 'old-session-id',
       set: mock(),
@@ -170,6 +171,37 @@ describe('auth.dev-login action', () => {
     expect(prisma.session.create).not.toHaveBeenCalled();
   });
 
+  test('allows scrubbed users from every organization in sanitized production rehearsal', async () => {
+    isPreviewAccessGateEnabled.mockReturnValue(true);
+    allSanitizedUsersEnabled.mockReturnValue(true);
+    getPreviewAccessSeat.mockResolvedValue({
+      organizationId: 'default-org',
+      label: 'Production rehearsal',
+    });
+    prisma.user.findUnique.mockResolvedValue({
+      id: 'returning-teacher',
+      memberships: [{ id: 'returning-membership', role: 'TEACHER' }],
+    });
+
+    const response = await action(
+      actionArgs(makeRequest('teacher@another-org.example', 'preview=master')),
+    );
+
+    expect(response.status).toBe(302);
+    expect(prisma.user.findUnique).toHaveBeenCalledWith({
+      where: { email: 'teacher@another-org.example' },
+      select: {
+        id: true,
+        memberships: {
+          select: { id: true, role: true },
+          orderBy: { createdAt: 'asc' },
+          take: 1,
+        },
+      },
+    });
+    expect(prisma.user.findFirst).not.toHaveBeenCalled();
+  });
+
   test('lists only users belonging to the current preview seat', async () => {
     prisma.user.findMany.mockResolvedValue([
       {
@@ -212,6 +244,40 @@ describe('auth.dev-login action', () => {
     expect(options.map((option) => option.role)).toEqual([
       'teacher',
       'student',
+    ]);
+  });
+
+  test('lists scrubbed users from every organization in production rehearsal', async () => {
+    prisma.user.findMany.mockResolvedValue([
+      {
+        email: 'teacher@another-org.example',
+        name: 'Teacher 0010',
+        isAdmin: false,
+        memberships: [{ role: 'TEACHER', isOrgOwner: false }],
+      },
+    ]);
+
+    const options = await getLocalDevLoginOptions(
+      'default-org',
+      prisma as never,
+      { includeAllOrganizations: true },
+    );
+
+    expect(prisma.user.findMany).toHaveBeenCalledWith({
+      where: { memberships: { some: {} } },
+      select: {
+        email: true,
+        name: true,
+        isAdmin: true,
+        memberships: {
+          select: { role: true, isOrgOwner: true },
+          take: 1,
+        },
+      },
+      orderBy: [{ name: 'asc' }, { email: 'asc' }],
+    });
+    expect(options.map((option) => option.email)).toEqual([
+      'teacher@another-org.example',
     ]);
   });
 });

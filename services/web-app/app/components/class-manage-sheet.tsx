@@ -18,6 +18,10 @@ import {
   SheetTitle,
 } from '~/components/ui/sheet';
 import { generateClassCode } from '~/utils/class';
+import {
+  currentSchoolYear,
+  selectableSchoolYears,
+} from '~/utils/school-year';
 
 export type ClassManageRow = {
   id: string;
@@ -29,11 +33,7 @@ export type ClassManageRow = {
   code: string;
 };
 
-function defaultSchoolYear() {
-  const now = new Date();
-  const year = now.getMonth() >= 6 ? now.getFullYear() : now.getFullYear() - 1;
-  return `${year}-${year + 1}`;
-}
+const defaultSchoolYear = () => currentSchoolYear();
 
 const NO_PERIOD_VALUE = '__none__';
 const NO_GRADE_VALUE = '__none__';
@@ -62,6 +62,7 @@ export function ClassManageSheet({
   const [period, setPeriod] = useState('');
   const [title, setTitle] = useState('');
   const [code, setCode] = useState(generateClassCode());
+  const yearChoices = selectableSchoolYears({ include: schoolYear });
 
   useEffect(() => {
     if (editingClass) {
@@ -150,12 +151,24 @@ export function ClassManageSheet({
 
           <div className="space-y-2">
             <Label>School Year</Label>
-            <Input
-              value={schoolYear}
-              onChange={(e) => setSchoolYear(e.target.value)}
-              placeholder="2025-2026"
-              required
-            />
+            {/*
+              A picked year rather than typed text: the year is what scopes
+              every teacher surface, and one typo used to be enough to hide a
+              class from the teacher who just created it.
+            */}
+            <Select value={schoolYear} onValueChange={setSchoolYear}>
+              <SelectTrigger data-testid="class-school-year">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {yearChoices.map((year) => (
+                  <SelectItem key={year} value={year}>
+                    {year.replace('-', '–')}
+                    {year === currentSchoolYear() ? ' (current)' : ''}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           <div className="grid grid-cols-2 gap-3">

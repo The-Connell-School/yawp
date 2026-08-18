@@ -29,11 +29,12 @@ describe('admin assignment module loader', () => {
     requireAdmin.mockResolvedValue(undefined);
   });
 
-  test('loads module without selecting rubricJson explicitly', async () => {
+  test('loads module with the assignment type rubric relation', async () => {
     prisma.assignmentType.findUnique.mockResolvedValue({
       id: 'at-1',
       title: 'Essay',
       rubricJson: { categories: [] },
+      rubric: null,
     });
     prisma.assignmentModule.findFirst.mockResolvedValue({
       id: 'mod-1',
@@ -58,6 +59,7 @@ describe('admin assignment module loader', () => {
 
     expect(prisma.assignmentType.findUnique).toHaveBeenCalledWith({
       where: { id: 'at-1' },
+      include: { rubric: { select: { schemaJson: true } } },
     });
     expect(prisma.assignmentModule.findFirst).toHaveBeenCalledWith({
       where: {
@@ -80,10 +82,66 @@ describe('admin assignment module loader', () => {
     expect(response.data.module.id).toBe('mod-1');
   });
 
+  test('uses the selected library rubric for module relationships', async () => {
+    prisma.assignmentType.findUnique.mockResolvedValue({
+      id: 'at-1',
+      title: 'Essay',
+      rubricJson: {
+        categories: [
+          {
+            key: 'legacy',
+            label: 'Legacy',
+            description: 'Legacy category.',
+            weight: 1,
+          },
+        ],
+      },
+      rubric: {
+        schemaJson: {
+          name: 'portable-rubric',
+          title: 'Portable rubric',
+          rubric: {
+            categories: [
+              {
+                key: 'library_category',
+                label: 'Library category',
+                description: 'Selected from the shared library.',
+                weight: 1,
+              },
+            ],
+          },
+        },
+      },
+    });
+    prisma.assignmentModule.findFirst.mockResolvedValue({
+      id: 'mod-1',
+      title: 'Draft',
+      isSelfGuided: false,
+      description: null,
+      tutorInstructions: null,
+      position: 0,
+      rubricAlignmentJson: null,
+      instructions: [],
+    });
+
+    const response = await loader({
+      request: new Request(
+        'https://example.test/app/admin/assignment-types/at-1/modules/mod-1'
+      ),
+      params: { id: 'at-1', moduleId: 'mod-1' },
+      context: {} as never,
+    } as never);
+
+    expect(response.data.course.rubricJson).toEqual({
+      categories: [expect.objectContaining({ key: 'library_category' })],
+    });
+  });
+
   test('returns 404 when module does not belong to assignment type', async () => {
     prisma.assignmentType.findUnique.mockResolvedValue({
       id: 'at-1',
       title: 'Essay',
+      rubric: null,
     });
     prisma.assignmentModule.findFirst.mockResolvedValue(null);
 

@@ -39,13 +39,37 @@ export async function action({ request }: ActionFunctionArgs) {
     throw new Response('Title is required', { status: 400 });
   }
 
-  const rubricJson = parseJsonFormField(formData, 'rubricJson');
-  if (!isRubricFullyPopulated(parseRubric(rubricJson))) {
+  const hasGradingConfigFields =
+    formData.has('scoringScale') ||
+    formData.has('rubricJson') ||
+    formData.has('promptConfigJson') ||
+    formData.has('outputSchemaJson');
+  const rubricJson = hasGradingConfigFields
+    ? parseJsonFormField(formData, 'rubricJson')
+    : null;
+  if (
+    hasGradingConfigFields &&
+    !isRubricFullyPopulated(parseRubric(rubricJson))
+  ) {
     throw new Response(
       'Every rubric category needs a key, label, description, and weight before you can create this assignment type. Add at least one, and finish the ones you started.',
       { status: 400 }
     );
   }
+
+  const gradingConfigData = hasGradingConfigFields
+    ? {
+        scoringScaleJson: parseJsonFormField(formData, 'scoringScale'),
+        rubricJson,
+        gradingPromptConfigJson: parseJsonFormField(
+          formData,
+          'promptConfigJson'
+        ),
+        gradingOutputSchemaJson:
+          parseJsonFormField(formData, 'outputSchemaJson') ??
+          DEFAULT_OUTPUT_SCHEMA_JSON,
+      }
+    : {};
 
   const count = await prisma.assignmentType.count();
   const assignmentType = await prisma.assignmentType.create({
@@ -54,15 +78,7 @@ export async function action({ request }: ActionFunctionArgs) {
       kind: null,
       description,
       position: count,
-      scoringScaleJson: parseJsonFormField(formData, 'scoringScale'),
-      rubricJson,
-      gradingPromptConfigJson: parseJsonFormField(
-        formData,
-        'promptConfigJson'
-      ),
-      gradingOutputSchemaJson:
-        parseJsonFormField(formData, 'outputSchemaJson') ??
-        DEFAULT_OUTPUT_SCHEMA_JSON,
+      ...gradingConfigData,
     },
   });
 

@@ -99,6 +99,33 @@ describe('admin assignment type new action', () => {
     );
   });
 
+  test('creates from the simplified UI without rewriting grading configuration', async () => {
+    const form = new FormData();
+    form.set('title', 'New assignment type');
+    form.set('description', 'Choose its database rubric after saving.');
+
+    await action({
+      request: new Request(
+        'https://example.test/app/admin/assignment-types/new',
+        {
+          method: 'POST',
+          body: form,
+        }
+      ),
+      params: {},
+      context: {} as never,
+    } as never);
+
+    expect(prisma.assignmentType.create).toHaveBeenCalledWith({
+      data: {
+        title: 'New assignment type',
+        kind: null,
+        description: 'Choose its database rubric after saving.',
+        position: 4,
+      },
+    });
+  });
+
   test('blocks creating an assignment type whose rubric would silently fall back to the thesis default', async () => {
     const form = new FormData();
     form.set('title', 'New assignment type');
@@ -112,10 +139,13 @@ describe('admin assignment type new action', () => {
     let thrown: unknown;
     try {
       await action({
-        request: new Request('https://example.test/app/admin/assignment-types/new', {
-          method: 'POST',
-          body: form,
-        }),
+        request: new Request(
+          'https://example.test/app/admin/assignment-types/new',
+          {
+            method: 'POST',
+            body: form,
+          }
+        ),
         params: {},
         context: {} as never,
       } as never);
@@ -148,10 +178,13 @@ describe('admin assignment type new action', () => {
     let thrown: unknown;
     try {
       await action({
-        request: new Request('https://example.test/app/admin/assignment-types/new', {
-          method: 'POST',
-          body: form,
-        }),
+        request: new Request(
+          'https://example.test/app/admin/assignment-types/new',
+          {
+            method: 'POST',
+            body: form,
+          }
+        ),
         params: {},
         context: {} as never,
       } as never);

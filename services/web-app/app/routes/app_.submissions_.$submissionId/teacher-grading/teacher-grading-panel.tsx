@@ -45,10 +45,12 @@ import {
 import { rubricScaleGradeFieldsFromScores } from '~/domain/grading/recorded-grade';
 import {
   getCategoryScoreLabel,
+  isBandScoredRubric,
   isCategoryFeedbackEnabled,
   isGrammarHighlightCategory,
 } from '~/domain/assignment-types/rubric-category-options';
 import {
+  computeWeightedBandPercentage,
   computeWeightedPercentageForCategories,
   formatGrade,
   letterFromPercent,
@@ -57,6 +59,7 @@ import {
   type GrammarIssue,
   parseGrammarIssuesPayload,
 } from '~/domain/grading/grammarIssues';
+import type { AssistantSuggestion } from '~/domain/grading/assistant-suggestion';
 import {
   DEFAULT_GRADING_ASSISTANT_STRICTNESS_LEVEL,
   getGradingAssistantStrictnessLabel,
@@ -64,7 +67,7 @@ import {
   parseGradingAssistantStrictnessLevel,
   type GradingAssistantStrictnessLevel,
 } from '~/domain/grading/grading-assistant-strictness';
-import { AlertTriangle, Info, Loader2, TrendingUp } from 'lucide-react';
+import { AlertTriangle, Loader2, TrendingUp } from 'lucide-react';
 import { Tooltip } from '~/components/ui/tooltip';
 import { cn } from '~/utils/misc';
 import { useUpdateSubmission } from './use-update-submission';
@@ -136,6 +139,44 @@ export type TeacherGradingPanelHeaderState = {
   getSavedGradeSnapshot: () => SavedGradeSnapshot;
 };
 
+/**
+ * Puts the Grading Assistant's own suggestions back after a teacher has edited
+ * them. It replaced a "recalculate from rubric scores" link, which recomputed
+ * the total from whatever was on screen — a different thing that read as the
+ * same thing.
+ */
+function ResetToAssistantSuggestions({
+  disabled,
+  available,
+  onReset,
+}: {
+  disabled: boolean;
+  available: boolean;
+  onReset: () => void;
+}) {
+  if (!available) return null;
+
+  return (
+    <div>
+      <Button
+        type="button"
+        variant="link"
+        size="sm"
+        className="h-auto p-0 text-xs"
+        data-testid="grading-reset-to-assistant-suggestions"
+        disabled={disabled}
+        onClick={onReset}
+      >
+        Reset Grading Assistant suggestions
+      </Button>
+      <p className="mt-0.5 text-xs text-muted-foreground">
+        Use this if you&apos;ve made changes and want to revert to the original
+        Grading Assistant suggestions. Nothing saves until you click Save.
+      </p>
+    </div>
+  );
+}
+
 export function TeacherGradingPanel({
   documentId,
   submissionId,
@@ -147,6 +188,7 @@ export function TeacherGradingPanel({
   onGrammarIssuesChange,
   onAiGradingComplete,
   rubricConfig,
+  assistantSuggestion,
   initialGradingAssistantStrictnessLevel,
   hideHeader = false,
   onHeaderStateChange,
@@ -180,6 +222,12 @@ export function TeacherGradingPanel({
     rubricConfig?: RubricDisplayConfig | null;
   }) => void;
   rubricConfig?: RubricDisplayConfig | null;
+  /**
+   * What the Grading Assistant last suggested for this submission, if it has
+   * ever run. Absent means the reset action has nothing to restore and is
+   * not offered.
+   */
+  assistantSuggestion?: AssistantSuggestion | null;
   initialGradingAssistantStrictnessLevel?: string | null;
   hideHeader?: boolean;
   onHeaderStateChange?: (state: TeacherGradingPanelHeaderState) => void;
@@ -211,6 +259,8 @@ export function TeacherGradingPanel({
    * the teacher types their own number.
    */
   const [overallScoreInput, setOverallScoreInput] = useState('');
+  const [sessionSuggestion, setSessionSuggestion] =
+    useState<AssistantSuggestion | null>(null);
   const [hasManualScoreOverride, setHasManualScoreOverride] = useState(false);
   const pendingAiFormRef = useRef<FormData | null>(null);
   const hasRetriedAiFormRef = useRef(false);
@@ -225,6 +275,15 @@ export function TeacherGradingPanel({
     );
   const [savedSnapshot, setSavedSnapshot] = useState<string | null>(null);
   const computedNumericPercentage = useMemo(() => {
+    // A rubric whose categories declare bands is already scored as a
+    // percentage, so its overall grade is the weighted average with nothing
+    // converted. Everything else keeps the 1-5 mapping.
+    if (isBandScoredRubric(activeRubricConfig.categories)) {
+      return computeWeightedBandPercentage(
+        rubricScores as unknown as Record<string, unknown>,
+        activeRubricConfig.categories
+      );
+    }
     if (activeRubricConfig.scoringType !== 'weighted_1_5') return null;
     return computeWeightedPercentageForCategories(
       rubricScores as unknown as Record<string, unknown>,
@@ -461,6 +520,16 @@ export function TeacherGradingPanel({
     }
 
     const d = aiFetcher.data;
+    setSessionSuggestion({
+      rubricScores: d.rubricScores ?? null,
+      overallComment:
+        typeof d.overallComment === 'string' ? d.overallComment : null,
+      numericPercentage:
+        typeof d.numericPercentage === 'number' ? d.numericPercentage : null,
+      score: typeof d.score === 'string' ? d.score : null,
+      letterGrade: typeof d.letterGrade === 'string' ? d.letterGrade : null,
+      grammarIssues: d.grammarIssues ?? null,
+    });
     const nextRubricConfig = normalizeRubricDisplayConfig(
       d.rubricConfig ?? legacyRubricDisplayConfig
     );
@@ -657,15 +726,48 @@ export function TeacherGradingPanel({
   ]);
 
 
-  const handleRecalculateFromRubric = () => {
-    if (rubricScaleGrade) {
-      setOverallScoreInput(String(rubricScaleGrade.overallScore));
-      setHasManualScoreOverride(false);
-      return;
+  /**
+   * The suggestions to restore: whatever the assistant produced in this
+   * session if it has just run, otherwise the copy kept with the last run, so
+   * the action survives a reload.
+   */
+  const restorableSuggestion = sessionSuggestion ?? assistantSuggestion ?? null;
+
+  const handleResetToAssistantSuggestions = () => {
+    if (!restorableSuggestion) return;
+
+    setRubricScores(
+      normalizeRubricScoresForCategories({
+        raw: restorableSuggestion.rubricScores,
+        categories: activeRubricConfig.categories,
+        minScore: activeRubricConfig.minScore,
+        maxScore: activeRubricConfig.maxScore,
+      })
+    );
+
+    if (typeof restorableSuggestion.overallComment === 'string') {
+      setOverallComment(restorableSuggestion.overallComment);
     }
-    if (computedNumericPercentage === null) return;
-    setNumericPercentage(computedNumericPercentage.toString());
-    setHasManualPercentOverride(false);
+
+    if (typeof restorableSuggestion.numericPercentage === 'number') {
+      setNumericPercentage(String(restorableSuggestion.numericPercentage));
+      setHasManualPercentOverride(false);
+    }
+
+    // A points scale carries its total separately from the percentage.
+    if (restorableSuggestion.score) {
+      const suggestedTotal = Number(
+        restorableSuggestion.score.split('/')[0]?.trim()
+      );
+      if (Number.isFinite(suggestedTotal)) {
+        setOverallScoreInput(String(suggestedTotal));
+        setHasManualScoreOverride(false);
+      }
+    }
+
+    onGrammarIssuesChange(
+      parseGrammarIssuesPayload(restorableSuggestion.grammarIssues)
+    );
   };
 
   const generateAiSuggestionsAtLevel = useCallback(
@@ -988,23 +1090,11 @@ export function TeacherGradingPanel({
                 }
               }}
             />
-            <div>
-              <Button
-                type="button"
-                variant="link"
-                size="sm"
-                className="h-auto p-0 text-xs"
-                data-testid="grading-recalculate-from-rubric"
-                disabled={isGenerating}
-                onClick={handleRecalculateFromRubric}
-              >
-                Recalculate from rubric scores
-              </Button>
-              <p className="mt-0.5 text-xs text-muted-foreground">
-                Sets the total above to what the category scores add up to (
-                {rubricScaleGrade.score}). Nothing saves until you click Save.
-              </p>
-            </div>
+            <ResetToAssistantSuggestions
+              disabled={isGenerating}
+              available={restorableSuggestion !== null}
+              onReset={handleResetToAssistantSuggestions}
+            />
           </div>
         ) : (
         <div className="space-y-2">
@@ -1030,25 +1120,11 @@ export function TeacherGradingPanel({
             }}
           />
           {computedNumericPercentage !== null ? (
-            <div>
-              <Button
-                type="button"
-                variant="link"
-                size="sm"
-                className="h-auto p-0 text-xs"
-                data-testid="grading-recalculate-from-rubric"
-                disabled={isGenerating}
-                onClick={handleRecalculateFromRubric}
-              >
-                Recalculate from rubric scores
-              </Button>
-              <p className="mt-0.5 text-xs text-muted-foreground">
-                Sets the overall percentage above to match the rubric scores
-                below ({computedNumericPercentage}%). Rubric scores and
-                comments aren't changed, and nothing saves until you click
-                Save.
-              </p>
-            </div>
+            <ResetToAssistantSuggestions
+              disabled={isGenerating}
+              available={restorableSuggestion !== null}
+              onReset={handleResetToAssistantSuggestions}
+            />
           ) : null}
         </div>
         )}
@@ -1073,24 +1149,6 @@ export function TeacherGradingPanel({
 
         <div className="space-y-2 border-t pt-4">
           <div className="text-sm font-medium">Rubric</div>
-          {activeRubricConfig.source === 'thesis-default' ? (
-            <div
-              data-testid="teacher-grading-rubric-source-warning"
-              className="flex items-start gap-3 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3"
-            >
-              <Info className="mt-0.5 size-5 shrink-0 text-blue-600" />
-              <div>
-                <p className="text-sm font-medium">
-                  Using the default thesis rubric
-                </p>
-                <p className="mt-0.5 text-sm text-muted-foreground text-pretty">
-                  This assignment type has no rubric of its own configured, so
-                  the thesis-driven essay grading assistant rubric was applied
-                  instead.
-                </p>
-              </div>
-            </div>
-          ) : null}
           {activeRubricConfig.rubricIncomplete ? (
             <div
               data-testid="teacher-grading-rubric-incomplete-warning"

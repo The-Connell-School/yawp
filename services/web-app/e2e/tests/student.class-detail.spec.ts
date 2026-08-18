@@ -1,5 +1,6 @@
 import { test, expect } from '../test-setup';
 import { createE2EPrismaClient } from '../prisma-client';
+import { currentSchoolYear } from '../../app/utils/school-year';
 import { createDeployedAssignment } from '../db-helpers';
 
 const STUDENT_PASSWORD = 'johndoe';
@@ -74,7 +75,7 @@ test.describe.serial('Student class detail', () => {
       const otherClass = await prisma.class.create({
         data: {
           code: `E2E-${suffix}`.slice(0, 32),
-          schoolYear: '2024-2025',
+          schoolYear: currentSchoolYear(),
           period: '4th',
           grade: '11th',
           title: `Someone else's class ${suffix}`,

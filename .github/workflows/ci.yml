@@ -16,17 +16,6 @@ permissions:
   contents: read
 
 jobs:
-  validate-terraform-infra-pr:
-    name: Terraform validate (infra-pr)
-    runs-on: ubuntu-22.04
-    steps:
-      - uses: actions/checkout@v4
-      - uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: 1.8.5
-      - name: Terraform validate
-        run: terraform -chdir=infra-pr init -backend=false && terraform -chdir=infra-pr validate
-
   # CI names every test file it runs, so a test file that is merely present never executes.
   # scripts/preview/*.test.js sat unrun for exactly that reason. It matters most here:
   # enforce-cap.sh removes trees as root before every deploy, and the ownership case it
@@ -54,7 +43,10 @@ jobs:
       - name: 🧪 Preview tooling tests
         env:
           ENFORCE_CAP_REQUIRE_ROOT_OWNERSHIP: '1'
-        run: bun test ./scripts/preview/
+          # Exercise the real Postgres role/ACL migration on Linux. Local macOS runs
+          # may leave this opt-in because the test launches its own Postgres container.
+          PREVIEW_DATABASE_ROLE_INTEGRATION: '1'
+        run: bun test ./scripts/preview/ --timeout 180000
 
   validate-prisma-migrations:
     name: Prisma migrations

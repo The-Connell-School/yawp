@@ -23,6 +23,7 @@ export type DevLoginDependencies = {
   localDevAuthEnabled: () => boolean;
   previewGateEnabled: () => boolean;
   previewSeatForRequest: (request: Request) => Promise<PreviewSeat | null>;
+  allSanitizedUsersEnabled: () => boolean;
   redirectResponse: (headers: Headers) => Response;
 };
 
@@ -39,6 +40,7 @@ export function createDevLoginAction({
   localDevAuthEnabled,
   previewGateEnabled,
   previewSeatForRequest,
+  allSanitizedUsersEnabled,
   redirectResponse,
 }: DevLoginDependencies) {
   return async ({ request }: ActionFunctionArgs) => {
@@ -52,6 +54,8 @@ export function createDevLoginAction({
     const previewSeat = gateEnabled
       ? await previewSeatForRequest(request)
       : null;
+    const includeAllSanitizedUsers =
+      Boolean(previewSeat) && allSanitizedUsersEnabled();
 
     if (gateEnabled && !previewSeat) {
       return Response.json(
@@ -63,7 +67,7 @@ export function createDevLoginAction({
       return Response.json({ error: 'Unknown dev persona.' }, { status: 404 });
     }
 
-    const user = previewSeat
+    const user = previewSeat && !includeAllSanitizedUsers
       ? await prismaClient.user.findFirst({
           where: {
             email,
@@ -96,9 +100,11 @@ export function createDevLoginAction({
     if (!user) {
       return Response.json(
         {
-          error: previewSeat
+          error: previewSeat && !includeAllSanitizedUsers
             ? 'No user with that email belongs to this preview seat.'
-            : 'Dev persona missing. Run `bun db:seed-local-dev` first.',
+            : includeAllSanitizedUsers
+              ? 'No scrubbed user with that email exists in this rehearsal.'
+              : 'Dev persona missing. Run `bun db:seed-local-dev` first.',
         },
         { status: 404 }
       );
@@ -125,8 +131,6 @@ export function createDevLoginAction({
     authSession.set(sessionKey, session.id);
     authSession.unset('impersonationMode');
     authSession.unset('impersonatorUserId');
-    authSession.unset('studentPreviewMode');
-    authSession.unset('studentPreviewOrgId');
 
     return redirectResponse(
       combineHeaders(
@@ -144,9 +148,10 @@ export function createDevLoginAction({
 
 export async function getLocalDevLoginOptions(
   organizationId: string | undefined,
-  prismaClient: any
+  prismaClient: any,
+  options: { includeAllOrganizations?: boolean } = {},
 ): Promise<DevLoginOption[]> {
-  if (!organizationId) {
+  if (!organizationId && !options.includeAllOrganizations) {
     return LOCAL_DEV_PERSONAS.map((persona) => ({
       email: persona.email,
       label: persona.label,
@@ -156,13 +161,19 @@ export async function getLocalDevLoginOptions(
   }
 
   const users = await prismaClient.user.findMany({
-    where: { memberships: { some: { organizationId } } },
+    where: {
+      memberships: {
+        some: options.includeAllOrganizations ? {} : { organizationId },
+      },
+    },
     select: {
       email: true,
       name: true,
       isAdmin: true,
       memberships: {
-        where: { organizationId },
+        ...(options.includeAllOrganizations
+          ? {}
+          : { where: { organizationId } }),
         select: { role: true, isOrgOwner: true },
         take: 1,
       },
