@@ -149,7 +149,10 @@ function uniqueConstraintIncludes(
   field: string
 ): boolean {
   return targets.some((target) =>
-    target.replaceAll('"', '').split(',').some((part) => part.trim().includes(field))
+    target
+      .replace(/[()"']/g, '')
+      .split(',')
+      .some((part) => part.trim() === field)
   );
 }
 
