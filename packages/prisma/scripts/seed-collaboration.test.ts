@@ -480,6 +480,49 @@ describe('the GBA 300 demo plan', () => {
     expect(Math.max(...counts)).toBeLessThan(Math.min(...counts) * 1.5);
   });
 
+  test('a graded brief carries per-category scores, not just an overall grade', () => {
+    // The class performance summary, the differentiation groupings and the
+    // per-category examples all read Submission.rubricScores and nothing else.
+    // A grade with no categories behind it is graded to the needs-grading queue
+    // and invisible to every class-level view.
+    for (const plan of GBA300_GROUP_PLANS) {
+      if (!plan.grade) continue;
+      expect(Object.keys(plan.grade.categoryScores).length).toBeGreaterThan(0);
+    }
+  });
+
+  test('those scores use the assignment type’s own categories and range', async () => {
+    // Read from the fixture rather than restated here, so a regenerated rubric
+    // fails this test instead of silently orphaning every seeded score.
+    const fixture = (await import(
+      '../fixtures/prod-fidelity/assignment-types.json'
+    )) as unknown as {
+      default: {
+        id: string;
+        collaborationSupported?: boolean;
+        scoringScaleJson?: { minScore?: number; maxScore?: number };
+        rubricJson?: { categories?: { key: string }[] };
+      }[];
+    };
+    const gba = fixture.default.find((type) => type.collaborationSupported);
+    const keys = (gba?.rubricJson?.categories ?? []).map((c) => c.key);
+    const minScore = gba?.scoringScaleJson?.minScore ?? 0;
+    const maxScore = gba?.scoringScaleJson?.maxScore ?? 100;
+
+    expect(keys.length).toBeGreaterThan(0);
+
+    for (const plan of GBA300_GROUP_PLANS) {
+      if (!plan.grade) continue;
+      expect(Object.keys(plan.grade.categoryScores).sort()).toEqual(
+        [...keys].sort()
+      );
+      for (const entry of Object.values(plan.grade.categoryScores)) {
+        expect(entry.score).toBeGreaterThanOrEqual(minScore);
+        expect(entry.score).toBeLessThanOrEqual(maxScore);
+      }
+    }
+  });
+
   test('cohort emails are unique and follow the dev pattern', () => {
     const emails = GBA300_COHORT.map((student) => cohortEmail(student.key));
     expect(new Set(emails).size).toBe(emails.length);

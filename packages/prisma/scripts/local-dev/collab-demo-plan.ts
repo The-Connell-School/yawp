@@ -293,6 +293,20 @@ export type DemoGroupPlan = {
     letterGrade: string;
     overallComment: string;
     /**
+     * Per-category scores in `Submission.rubricScores`, keyed by GBA 300's own
+     * rubric categories and marked in its own 0-100 range.
+     *
+     * Not decoration. The class performance summary, the differentiation
+     * groupings and the per-category examples all read this column and nothing
+     * else — a graded submission without it is graded as far as the queue is
+     * concerned and invisible to every class-level view. Seeding only the
+     * overall grade is what made those views look broken.
+     *
+     * `seed-collaboration.test.ts` checks these keys against the assignment-type
+     * fixture, so a regenerated rubric cannot silently orphan them.
+     */
+    categoryScores: Record<string, { score: number; comment: string }>;
+    /**
      * The member whose individual grade departs from the group's. Everyone else
      * follows the group grade, which is stored as following rather than copied —
      * re-grading the group has to reach them.
@@ -387,6 +401,17 @@ export const GBA300_GROUP_PLANS: DemoGroupPlan[] = [
       letterGrade: 'A-',
       overallComment:
         'Clear-eyed about margin and honest about what it does not know. The recommendation follows from the evidence rather than being announced.',
+      categoryScores: {
+        executive_summary: { score: 88, comment: 'Stands alone, but the budget figure never appears in it.' },
+        company_overview: { score: 90, comment: 'Objectives, mission and opportunity all present and specific.' },
+        industry_analysis: { score: 96, comment: 'The cafe-supply-not-grocery distinction is the whole brief in one line.' },
+        international_location_profile: { score: 92, comment: 'Berlin argued on entry cost and segment, not on familiarity.' },
+        consumer_profile: { score: 90, comment: 'Volume band and buying criteria both concrete.' },
+        advertising_strategy: { score: 88, comment: 'Trade-first is right; the festival choice is asserted rather than argued.' },
+        budget: { score: 94, comment: 'Specific enough to argue with, which is the point of the exercise.' },
+        recommendation: { score: 92, comment: 'Follows from the evidence and names what would change it.' },
+        references: { score: 25, comment: 'Two of the market figures have no source at all, and the format is inconsistent throughout.' },
+      },
       override: {
         author: 'student-submitted',
         score: '78',
@@ -550,6 +575,17 @@ export const GBA300_GROUP_PLANS: DemoGroupPlan[] = [
       letterGrade: 'B+',
       overallComment:
         'The competitive framing — cider against beer for the tap, not against wine for the shelf — is the best single observation in any brief this term. The executive summary is missing.',
+      categoryScores: {
+        executive_summary: { score: 0, comment: 'Absent. A CEO reading only this page learns nothing.' },
+        company_overview: { score: 84, comment: 'Clear on scale; the mission is implied rather than stated.' },
+        industry_analysis: { score: 97, comment: 'Cider against beer for the tap, not wine for the shelf — the best observation in any brief this term.' },
+        international_location_profile: { score: 90, comment: 'Ireland argued from an existing category rather than from novelty.' },
+        consumer_profile: { score: 92, comment: 'Naming the pub operator rather than the drinker is the right unit.' },
+        advertising_strategy: { score: 90, comment: 'The tap takeover is a real proof, not a slogan.' },
+        budget: { score: 86, comment: 'Follows the strategy honestly, including what it costs.' },
+        recommendation: { score: 88, comment: 'One city, one product, one measure. Disciplined.' },
+        references: { score: 20, comment: 'Two sources, both trade press. Nothing at all on Irish import duty, which the recommendation depends on.' },
+      },
       override: {
         author: 'ravi',
         score: '80',
@@ -609,6 +645,17 @@ export const GBA300_GROUP_PLANS: DemoGroupPlan[] = [
       letterGrade: 'A',
       overallComment:
         'Refuses the easy version of every question: no distributor, no advertising, no grocery. Each refusal is argued rather than asserted, and the budget is honest about what the strategy actually costs.',
+      categoryScores: {
+        executive_summary: { score: 95, comment: 'Genuinely stands alone: firm, country, findings and the call, on one page.' },
+        company_overview: { score: 93, comment: 'Eleven staff and one press — specific enough to believe.' },
+        industry_analysis: { score: 96, comment: 'Names the real barrier as being carried at all, not as shelf space.' },
+        international_location_profile: { score: 94, comment: 'Tokyo argued from existing import behaviour rather than from size.' },
+        consumer_profile: { score: 92, comment: 'The reorder criterion is unexpected and well evidenced.' },
+        advertising_strategy: { score: 95, comment: 'Choosing not to advertise, and defending it, is the strongest move in the brief.' },
+        budget: { score: 93, comment: 'Translation costed per title rather than as a lump. Honest.' },
+        recommendation: { score: 96, comment: 'Two seasons before any distributor, with a stated measure. A real decision.' },
+        references: { score: 90, comment: 'JETRO plus two primary interviews. The only brief with primary sourcing.' },
+      },
       // No override. Everyone follows the group grade, which is the answer for
       // most students on most group work and the one this demo was missing.
     },

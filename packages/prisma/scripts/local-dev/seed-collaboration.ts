@@ -502,6 +502,11 @@ async function seedGroup(
             numericPercentage: plan.grade.numericPercentage,
             letterGrade: plan.grade.letterGrade,
             overallComment: plan.grade.overallComment,
+            // Every class-level view — the performance summary, the
+            // differentiation groupings, the per-category examples — reads
+            // this column and nothing else. A submission with a grade but no
+            // rubric scores is graded to the queue and invisible to all of them.
+            rubricScores: plan.grade.categoryScores,
             releasedAt: released ? daysAgo(1) : null,
           }
         : {}),
