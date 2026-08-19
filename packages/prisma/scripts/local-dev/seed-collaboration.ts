@@ -138,21 +138,6 @@ export async function seedCollaborationDemoData(
     return null;
   }
 
-  // Idempotent, and this is the check that makes it so. A preview whose database
-  // already exists is never reseeded, so the demo has to be able to arrive on a
-  // later deploy — which means running again on an organization that may already
-  // have it, and doing nothing when it does.
-  const alreadySeeded = await prisma.class.findFirst({
-    where: { schoolId: school.id, code: GBA300_CLASS_CODE },
-    select: { id: true },
-  });
-  if (alreadySeeded) {
-    console.log(
-      `Collaboration demo already present in ${options.organizationId}; nothing to do.`
-    );
-    return null;
-  }
-
   // Everything else comes from the personas, by email. Resolving rather than
   // being handed ids is what lets this run against an organization it did not
   // just create.
@@ -272,6 +257,29 @@ export async function seedCollaborationDemoData(
     return id;
   };
 
+  // Idempotent, and this is the check that makes it so. A preview's database
+  // outlives its deploys, so this runs again on an organization that may already
+  // have the demo. It used to stop here — which meant every later addition to
+  // the demo was invisible until somebody recreated the database by hand, and
+  // recreating a preview database is not a thing a reviewer should have to do to
+  // see the work. It reconciles instead.
+  const existingClass = await prisma.class.findFirst({
+    where: { schoolId: school.id, code: GBA300_CLASS_CODE },
+    select: { id: true },
+  });
+  if (existingClass) {
+    return upgradeCollaborationDemo(prisma, {
+      organizationId: options.organizationId,
+      classId: existingClass.id,
+      assignmentTypeId: assignmentType.id,
+      studentMembershipIds: [...membershipByKey.values()],
+      modules,
+      memberId,
+      primaryTeacherMembershipId,
+      cohort,
+    });
+  }
+
   const gbaClass = await prisma.class.create({
     data: {
       code: GBA300_CLASS_CODE,
@@ -332,6 +340,130 @@ export async function seedCollaborationDemoData(
 
   return {
     classId: gbaClass.id,
+    classAssignmentId: classAssignment.id,
+    groupIds,
+    cohort,
+  };
+}
+
+/**
+ * Bring an existing demo up to the current plan, without disturbing what is
+ * already there.
+ *
+ * Strictly additive, because a preview is somewhere people click: a group that
+ * exists may have been edited, graded or commented on since it was seeded, and
+ * a "refresh" that rewrote it would throw that away. So this adds the groups the
+ * plan has gained and fills in the columns that were left empty when a group was
+ * first written, and touches nothing else.
+ */
+async function upgradeCollaborationDemo(
+  prisma: SeedClient,
+  {
+    organizationId,
+    classId,
+    assignmentTypeId,
+    studentMembershipIds,
+    modules,
+    memberId,
+    primaryTeacherMembershipId,
+    cohort,
+  }: {
+    organizationId: string;
+    classId: string;
+    assignmentTypeId: string;
+    studentMembershipIds: string[];
+    modules: { id: string; instructions: { id: string; prompt: string }[] }[];
+    memberId: (key: string) => string;
+    primaryTeacherMembershipId: string;
+    cohort: { name: string; email: string }[];
+  }
+): Promise<CollaborationSeedResult> {
+  const classAssignment = await prisma.classAssignment.findFirst({
+    where: {
+      classId,
+      assignment: { is: { assignmentTypeId, collaborationEnabled: true } },
+    },
+    orderBy: { createdAt: 'asc' },
+    select: { id: true, assignmentId: true },
+  });
+
+  if (!classAssignment) {
+    console.warn(
+      `⚠️  Collaboration demo class exists in ${organizationId} but its assignment does not; leaving it alone.`
+    );
+    return null;
+  }
+
+  // A cohort student added since the first seed is on nobody's roster, so
+  // nothing they write is visible to the teacher. Connect is idempotent.
+  await prisma.class.update({
+    where: { id: classId },
+    data: {
+      students: { connect: studentMembershipIds.map((id) => ({ id })) },
+    },
+  });
+
+  const existingGroups = await prisma.documentGroup.findMany({
+    where: { classAssignmentId: classAssignment.id },
+    select: { id: true, label: true, documentId: true },
+  });
+  const existingByLabel = new Map(
+    existingGroups.map((group) => [group.label, group])
+  );
+
+  const groupIds = existingGroups.map((group) => group.id);
+  let addedGroups = 0;
+  for (const plan of GBA300_GROUP_PLANS) {
+    if (existingByLabel.has(plan.label)) continue;
+    groupIds.push(
+      await seedGroup(prisma, {
+        plan,
+        assignmentTypeId,
+        assignmentId: classAssignment.assignmentId,
+        classAssignmentId: classAssignment.id,
+        modules,
+        memberId,
+        primaryTeacherMembershipId,
+      })
+    );
+    addedGroups += 1;
+  }
+
+  // Per-category scores landed after the first briefs were seeded. Without them
+  // a graded brief is graded to the needs-grading queue and invisible to every
+  // class-level view, so backfilling is the difference between those pages
+  // having data and looking broken. Only ever filled in when empty: a score a
+  // teacher entered in the preview is theirs, not the seed's.
+  let backfilledGrades = 0;
+  for (const plan of GBA300_GROUP_PLANS) {
+    const group = plan.grade ? existingByLabel.get(plan.label) : undefined;
+    if (!group?.documentId) continue;
+
+    const submissions = await prisma.submission.findMany({
+      where: {
+        documentId: group.documentId,
+        unsubmittedAt: null,
+        gradedAt: { not: null },
+      },
+      select: { id: true, rubricScores: true },
+    });
+
+    for (const submission of submissions) {
+      if (submission.rubricScores) continue;
+      await prisma.submission.update({
+        where: { id: submission.id },
+        data: { rubricScores: plan.grade!.categoryScores },
+      });
+      backfilledGrades += 1;
+    }
+  }
+
+  console.log(
+    `Collaboration demo already present in ${organizationId}; added ${addedGroups} group(s), backfilled ${backfilledGrades} rubric score set(s).`
+  );
+
+  return {
+    classId,
     classAssignmentId: classAssignment.id,
     groupIds,
     cohort,
