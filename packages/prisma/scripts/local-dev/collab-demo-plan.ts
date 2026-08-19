@@ -227,6 +227,12 @@ export const GBA300_COHORT = [
   { key: 'mia', name: 'Mia Sokolov' },
   { key: 'noa', name: 'Noa Haddad' },
   { key: 'ravi', name: 'Ravi Chandran' },
+  // Group 7: the evenly-split brief. Three more names rather than reusing
+  // anyone, because "nobody is in two groups at once" is what makes the
+  // contribution breakdown mean anything.
+  { key: 'sol', name: 'Sol Bramante' },
+  { key: 'tao', name: 'Tao Nguyen' },
+  { key: 'uma', name: 'Uma Beckett' },
 ] as const;
 
 export type GbaCohortKey = (typeof GBA300_COHORT)[number]['key'];
@@ -550,6 +556,61 @@ export const GBA300_GROUP_PLANS: DemoGroupPlan[] = [
         feedback:
           'Your budget follows the strategy honestly, which is more than most. The missing executive summary was your section.',
       },
+    },
+  },
+  {
+    label: 'Group 7',
+    ordinal: 6,
+    members: ['sol', 'tao', 'uma'],
+    // A third graded brief, so the class-level views have more than two points
+    // to work from. Deliberately the even one: three students who wrote roughly
+    // the same amount, nobody overridden, and everyone on the group grade. It is
+    // the case the individual-grade drafting should answer with "no separate
+    // grade for anyone", and there was no group in the demo that looked like it.
+    stage: 'graded',
+    contributions: [
+      {
+        author: 'sol',
+        paragraphs: [
+          'Executive summary: Fieldnote Press prints small-run art books in one city and proposes entering Japan through specialist bookshops rather than distributors.',
+          'Company overview: eleven staff, one press, and a catalogue that sells out at art fairs and almost nowhere else.',
+          'Industry analysis: art book buyers abroad are reached by curation, not by shelf space. The competition is other publishers\u2019 taste, and the barrier is being carried at all.',
+        ],
+      },
+      {
+        author: 'tao',
+        paragraphs: [
+          'International location profile: Tokyo. The densest concentration of independent art bookshops anywhere, and buyers who already import from Europe.',
+          'Consumer profile: shop buyers ordering 10-30 copies a title, who reorder on how a book photographs in their own feed as much as on how it sells.',
+          'Advertising strategy: no advertising. A launch at one Tokyo art book fair, then consignment with four shops and a Japanese-language colophon in every title.',
+        ],
+      },
+      {
+        author: 'uma',
+        paragraphs: [
+          'Budget: JPY 4.2 million in year one, most of it freight and the fair stand, with translation costed per title rather than as a lump.',
+          'Recommendation: consign with four shops for two seasons before signing any distributor, and treat the fair as the whole marketing budget.',
+          'References: JETRO import guidance, the Tokyo Art Book Fair exhibitor pack, and two shop interviews recorded in the appendix.',
+        ],
+      },
+    ],
+    comment: {
+      teacher:
+        'The most evenly written brief in the class, and it shows \u2014 the sections read as though one person argued them, which is what a real report has to do.',
+      reply: {
+        author: 'tao',
+        content:
+          'We drafted the outline together before anyone wrote, which is probably why.',
+      },
+    },
+    grade: {
+      score: 'A (94)',
+      numericPercentage: 94,
+      letterGrade: 'A',
+      overallComment:
+        'Refuses the easy version of every question: no distributor, no advertising, no grocery. Each refusal is argued rather than asserted, and the budget is honest about what the strategy actually costs.',
+      // No override. Everyone follows the group grade, which is the answer for
+      // most students on most group work and the one this demo was missing.
     },
   },
 ];

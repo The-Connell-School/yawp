@@ -450,6 +450,36 @@ describe('the GBA 300 demo plan', () => {
     expect(Math.max(...counts)).toBeGreaterThan(Math.min(...counts) * 3);
   });
 
+  test('enough graded briefs for the class-level views to say anything', () => {
+    // A class summary drawn from one or two graded briefs is a summary of one
+    // or two briefs. Three is the floor at which the class page stops being a
+    // restatement of a single group.
+    const graded = GBA300_GROUP_PLANS.filter(
+      (plan) => plan.stage === 'graded' || plan.stage === 'graded-unreleased'
+    );
+
+    expect(graded.length).toBeGreaterThanOrEqual(3);
+  });
+
+  test('one graded group has nobody pulled off the group grade', () => {
+    // The normal outcome, and the one the demo lacked: every group carrying an
+    // override makes overriding look like the default rather than the exception.
+    const graded = GBA300_GROUP_PLANS.filter((plan) => plan.grade);
+
+    expect(graded.some((plan) => !plan.grade!.override)).toBe(true);
+  });
+
+  test('one graded group is evenly written, as a contrast to the lopsided one', () => {
+    // Group 1 exists to show an uneven split. Without its opposite there is no
+    // group where "no separate grade for anyone" is the right reading.
+    const even = GBA300_GROUP_PLANS.find((plan) => plan.label === 'Group 7');
+    const counts = buildCollabRoom(even!.contributions).authors.map(
+      (author) => author.charsInserted
+    );
+
+    expect(Math.max(...counts)).toBeLessThan(Math.min(...counts) * 1.5);
+  });
+
   test('cohort emails are unique and follow the dev pattern', () => {
     const emails = GBA300_COHORT.map((student) => cohortEmail(student.key));
     expect(new Set(emails).size).toBe(emails.length);
