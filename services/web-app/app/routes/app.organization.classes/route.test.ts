@@ -178,6 +178,42 @@ describe('app.organization.classes action', () => {
     );
   });
 
+  test('create-class identifies code collisions from Prisma adapter metadata', async () => {
+    prisma.class.create.mockRejectedValue({
+      code: 'P2002',
+      meta: {
+        driverAdapterError: {
+          cause: {
+            kind: 'UniqueConstraintViolation',
+            constraint: { fields: ['schoolId', 'code'] },
+          },
+        },
+      },
+    });
+
+    const body = new URLSearchParams();
+    body.set('intent', 'create-class');
+    body.set('schoolId', 'school-1');
+    body.set('schoolYear', '2025-2026');
+    body.set('code', 'ABC123');
+
+    const request = new Request('https://example.com/app/organization/classes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body,
+    });
+
+    const result = (await action({ request } as any)) as {
+      data: { error: string };
+      init: { status: number };
+    };
+
+    expect(result.init.status).toBe(400);
+    expect(result.data.error).toBe(
+      'Class code already in use. Choose a different code.'
+    );
+  });
+
   test('create-class still requires school year', async () => {
     const body = new URLSearchParams();
     body.set('intent', 'create-class');
