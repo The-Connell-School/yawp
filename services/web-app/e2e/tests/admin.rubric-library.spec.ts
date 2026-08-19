@@ -53,6 +53,30 @@ test.describe.serial('Admin rubric library', () => {
           return row?.rubric?.name;
         })
         .toBe('daily-pages-engagement');
+
+      const gradingInstructions =
+        'Apply the rubric with extra emphasis on concrete supporting details.';
+      const gradingInstructionsField = page.getByLabel(
+        'Grading assistant instructions'
+      );
+      await expect(gradingInstructionsField).toBeVisible();
+      await gradingInstructionsField.fill(gradingInstructions);
+      await page.getByRole('button', { name: 'Update' }).click();
+
+      await expect
+        .poll(async () => {
+          const row = await prisma.assignmentType.findUnique({
+            where: { id: assignmentTypeId! },
+            select: { gradingPromptConfigJson: true },
+          });
+          return (
+            row?.gradingPromptConfigJson as Record<string, unknown> | null
+          )?.gradingInstructionsOverride;
+        })
+        .toBe(gradingInstructions);
+
+      await page.reload();
+      await expect(gradingInstructionsField).toHaveValue(gradingInstructions);
     } finally {
       if (assignmentTypeId) {
         await prisma.assignmentType.deleteMany({

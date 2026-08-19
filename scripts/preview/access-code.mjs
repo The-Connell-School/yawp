@@ -22,6 +22,14 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     const existingSeats = process.env.PREVIEW_EXISTING_ACCESS_SEATS
       ? JSON.parse(process.env.PREVIEW_EXISTING_ACCESS_SEATS)
       : [];
+    const reservedCodes = String(
+      process.env.PREVIEW_RESERVED_ACCESS_CODES ??
+        process.env.PREVIEW_MASTER_ACCESS_CODE ??
+        ''
+    )
+      .split(/[;,\n]/)
+      .map((code) => code.trim().toLowerCase())
+      .filter(Boolean);
     const count = Number(process.env.PREVIEW_SEAT_COUNT ?? 1);
     const masterOrganizationId =
       process.env.PREVIEW_ACCESS_MASTER_ORGANIZATION_ID || 'local-dev-org';
@@ -32,6 +40,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
           count,
           existingCodes,
           existingSeats,
+          reservedCodes,
           masterOrganizationId,
           masterLabel,
         })

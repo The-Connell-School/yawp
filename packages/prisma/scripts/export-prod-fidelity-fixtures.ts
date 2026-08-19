@@ -20,7 +20,7 @@ assertLocalSeedTarget(sourceDatabaseUrl);
 const prisma = createPrismaClient(sourceDatabaseUrl);
 
 try {
-  const bundle = await exportProdFidelityFixtures(prisma, sourceDatabaseUrl);
+  const bundle = await exportProdFidelityFixtures(prisma);
   await writeProdFidelityBundle(bundle);
 } finally {
   await prisma.$disconnect();

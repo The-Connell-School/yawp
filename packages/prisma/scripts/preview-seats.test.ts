@@ -103,6 +103,8 @@ describe('preview seat definitions', () => {
     expect(source).toContain('loadProdFidelityBundle');
     expect(source).toContain('assignmentTypeIds');
     expect(source).toContain('teacherTrainingIds');
+    expect(source).toContain('assignmentType.ownerOrgId == null');
+    expect(source).toContain('seat.organizationId === LOCAL_DEV_ORG_ID');
     expect(source).not.toContain('assignmentType.findMany({\n    select');
   });
 });

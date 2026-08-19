@@ -26,6 +26,7 @@
     "compare-grade-submission-parity": "bun ./scripts/compare-grade-submission-parity.ts",
     "seed-ap-history-library": "bun run scripts/seed-ap-history-library.ts",
     "seed-local-dev": "bun run scripts/seed-local-dev.ts",
+    "sync-prod-fidelity-fixtures": "bun run scripts/sync-prod-fidelity-fixtures.ts",
     "seed-preview-seats": "bun run scripts/seed-preview-seats.ts",
     "ensure-class-insights-local": "bun run scripts/local-dev/ensure-class-insights-enabled.ts",
     "fixtures:export-prod-fidelity": "bun run scripts/export-prod-fidelity-fixtures.ts",

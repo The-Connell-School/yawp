@@ -125,7 +125,13 @@ export async function createPreviewSeat(
   });
 
   const bundle = await loadProdFidelityBundle();
-  const assignmentTypeIds = bundle.assignmentTypes.map(({ id }) => String(id));
+  const assignmentTypeIds = bundle.assignmentTypes
+    .filter(
+      (assignmentType) =>
+        assignmentType.ownerOrgId == null ||
+        seat.organizationId === LOCAL_DEV_ORG_ID
+    )
+    .map(({ id }) => String(id));
   const teacherTrainingIds = bundle.teacherTrainings.map(({ id }) =>
     String(id)
   );

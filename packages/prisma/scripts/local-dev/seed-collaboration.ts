@@ -58,7 +58,16 @@ export type CollaborationSeedResult = {
   cohort: { name: string; email: string }[];
 } | null;
 
-const GBA300_TITLE = 'GBA 300';
+/**
+ * Looked up by `collaborationSupported` rather than by title.
+ *
+ * The title moved once already: an upstream fixture regeneration renamed
+ * "GBA 300" to "GBA 300: Int'l Expansion Plan", which a title match would have
+ * turned into a silently skipped demo rather than a failure. The flag is the
+ * thing this actually depends on — it is what `collaborationRoomWhere` gates on
+ * — and it is set on exactly one assignment type.
+ */
+const GBA300_TITLE = "GBA 300: Int'l Expansion Plan";
 /** Also the marker that says this organization already has the demo. */
 const GBA300_CLASS_CODE = 'DEV-CLASS-GBA300';
 
@@ -105,13 +114,14 @@ export async function seedCollaborationDemoData(
   options: CollaborationSeedOptions
 ): Promise<CollaborationSeedResult> {
   const assignmentType = await prisma.assignmentType.findFirst({
-    where: { title: GBA300_TITLE, collaborationSupported: true },
-    select: { id: true },
+    where: { collaborationSupported: true, archivedAt: null },
+    orderBy: { position: 'asc' },
+    select: { id: true, title: true },
   });
 
   if (!assignmentType) {
     console.warn(
-      `⚠️  Skipping the collaboration demo: no "${GBA300_TITLE}" assignment type with collaborationSupported.`
+      `⚠️  Skipping the collaboration demo: no assignment type has collaborationSupported set (expected ${GBA300_TITLE}).`
     );
     return null;
   }

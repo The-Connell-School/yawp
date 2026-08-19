@@ -98,6 +98,31 @@ export function getCategoryScoreBand(
   );
 }
 
+/** Raw score range declared by one category's proficiency bands. */
+export function getCategoryScoreBounds(
+  category: Partial<RubricCategoryOptions>
+): { min: number; max: number } | null {
+  const bands = category.bands ?? [];
+  if (bands.length === 0) return null;
+
+  return bands.reduce(
+    (bounds, band) => ({
+      min: Math.min(bounds.min, band.min),
+      max: Math.max(bounds.max, band.max),
+    }),
+    { min: bands[0].min, max: bands[0].max }
+  );
+}
+
+/** A non-banded category keeps the rubric-wide score validation path. */
+export function isScoreInCategoryBands(
+  category: Partial<RubricCategoryOptions>,
+  score: number
+) {
+  if (!category.bands?.length) return true;
+  return getCategoryScoreBand(category, score) !== null;
+}
+
 /**
  * Whether this rubric is scored directly on the scale its bands are written in.
  *

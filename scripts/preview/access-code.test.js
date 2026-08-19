@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, mock, test } from 'bun:test';
 import {
   ACCESS_CODE_ADJECTIVES,
   ACCESS_CODE_ANIMALS,
@@ -81,6 +81,37 @@ describe('preview access-code generator', () => {
       organizationId: 'preview-seat-4',
       label: 'Seat 4',
     });
+  });
+
+  test('never assigns the generic master code to an organization seat', () => {
+    const generateCode = mock(() => 'wise-owl-9876');
+    generateCode.mockReturnValueOnce('wise-owl-9876');
+    generateCode.mockReturnValueOnce('sunny-fox-2468');
+
+    const seats = generatePreviewAccessSeats({
+      count: 1,
+      reservedCodes: ['wise-owl-9876'],
+      generateCode,
+    });
+
+    expect(seats[0]?.code).toBe('sunny-fox-2468');
+  });
+
+  test('rejects a generic master code that would replace an existing organization code', () => {
+    expect(() =>
+      generatePreviewAccessSeats({
+        count: 1,
+        existingSeats: [
+          {
+            code: 'wise-owl-9876',
+            organizationId: 'local-dev-org',
+            label: 'Master',
+          },
+        ],
+        reservedCodes: ['wise-owl-9876'],
+        generateCode: () => 'sunny-fox-2468',
+      })
+    ).toThrow('collides with the existing organization code');
   });
 
   test('lowering the requested count never removes a retained seat mapping', () => {

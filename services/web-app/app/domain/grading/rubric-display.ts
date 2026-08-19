@@ -2,9 +2,14 @@ import { rubricCategories } from './rubric';
 import {
   getCategoryScoreLabel,
   parseOptionalBoolean,
+  parseRubricScoreBands,
   parseRubricScoreLabels,
 } from '~/domain/assignment-types/rubric-category-options';
-import type { RubricScoreLabel } from '~/domain/assignment-types/assignment-type-rubric.shared';
+import { getCategoryScoreBounds } from '~/domain/assignment-types/rubric-category-options';
+import type {
+  RubricScoreBand,
+  RubricScoreLabel,
+} from '~/domain/assignment-types/assignment-type-rubric.shared';
 import {
   buildScoreScaleValues,
   normalizeScoreStep,
@@ -16,6 +21,7 @@ export type RubricDisplayCategory = {
   description: string;
   weight: number;
   scoreLabels?: RubricScoreLabel[];
+  bands?: RubricScoreBand[];
   feedbackEnabled?: boolean;
   grammarHighlighting?: boolean;
 };
@@ -126,6 +132,7 @@ export function normalizeRubricDisplayConfig(
               : 0;
           if (!key || !label) return null;
           const scoreLabels = parseRubricScoreLabels(category.scoreLabels);
+          const bands = parseRubricScoreBands(category.bands);
           const feedbackEnabled = parseOptionalBoolean(
             category.feedbackEnabled
           );
@@ -138,6 +145,7 @@ export function normalizeRubricDisplayConfig(
             description,
             weight,
             ...(scoreLabels ? { scoreLabels } : {}),
+            ...(bands ? { bands } : {}),
             ...(feedbackEnabled === undefined ? {} : { feedbackEnabled }),
             ...(grammarHighlighting === undefined
               ? {}
@@ -263,9 +271,12 @@ export function normalizeRubricScoresForCategories({
         ? Math.round(scoreValue)
         : unscored;
 
+    const categoryBounds = getCategoryScoreBounds(item);
+    const categoryMin = categoryBounds?.min ?? minScore;
+    const categoryMax = categoryBounds?.max ?? maxScore;
     normalized[item.key] = {
       score: isScored(roundedScore, minScore)
-        ? Math.max(minScore, Math.min(maxScore, roundedScore))
+        ? Math.max(categoryMin, Math.min(categoryMax, roundedScore))
         : unscored,
       comment: typeof commentValue === 'string' ? commentValue : '',
       isAi: Boolean(candidate.isAi),
@@ -286,17 +297,21 @@ export function buildScoreOptions(
   minScore: number,
   maxScore: number,
   scoreLabels?: RubricScoreLabel[],
-  step?: number
+  step?: number,
+  bands?: RubricScoreBand[]
 ) {
   // Same grid the rubric editor lays its label rows out on, so the teacher is
   // never offered a score the rubric has no label for.
-  return buildScoreScaleValues({ minScore, maxScore, step }).map((score) => {
+  const categoryBounds = getCategoryScoreBounds({ key: '', bands });
+  const optionMin = categoryBounds?.min ?? minScore;
+  const optionMax = categoryBounds?.max ?? maxScore;
+  return buildScoreScaleValues({ minScore: optionMin, maxScore: optionMax, step }).map((score) => {
     const configured = scoreLabels
       ? getCategoryScoreLabel({ scoreLabels }, score)
       : null;
     const suffix =
       configured ??
-      (maxScore === 5 && minScore === 1 ? legacyScoreLabels[score] : null);
+      (optionMax === 5 && optionMin === 1 ? legacyScoreLabels[score] : null);
     return {
       value: score.toString(),
       label: suffix ? `${score} - ${suffix}` : score.toString(),
