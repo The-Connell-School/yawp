@@ -297,7 +297,9 @@ function MemberGradesSection({
               value="suggest-member-grades"
             />
             <Button type="submit" size="sm" variant="outline" disabled={drafting}>
-              {drafting ? 'Reading the draft…' : 'Draft these with the assistant'}
+              {drafting
+                ? 'Reading the draft…'
+                : 'Grade individual contributions'}
             </Button>
           </fetcher.Form>
         ) : null}
