@@ -16,7 +16,7 @@ import {
   ACT_WRITING_SCORING_TYPE,
   rubricScaleGradeFields,
 } from '~/domain/grading/recorded-grade';
-import { firstNameFromFullName } from '~/domain/grading/personalize';
+import { gradingAddressee } from '~/domain/grading/personalize';
 import { parseGrammarIssuesPayload } from '~/domain/grading/grammarIssues';
 import { resolveAssignmentTypeGradingConfig } from '~/domain/assignment-types/assignment-type-grading-config.server';
 import type { RubricCategory as GradingRubricCategory } from '~/domain/assignment-types/assignment-type-rubric.shared';
@@ -241,7 +241,9 @@ function buildApHistoryPrompt({
     snapshot.essayType === 'dbq'
       ? snapshot.sources
           .map((source) => {
-            const caption = source.caption ? `\nCaption: ${source.caption}` : '';
+            const caption = source.caption
+              ? `\nCaption: ${source.caption}`
+              : '';
             return `Document ${source.position}: ${source.title}\nAttribution: ${source.attribution}${caption}\nBody: ${source.body}`;
           })
           .join('\n\n')
@@ -533,6 +535,9 @@ export async function action({ request }: ActionFunctionArgs) {
         id: true,
         membershipId: true,
         assignmentTypeId: true,
+        // Only to tell a group brief from a solo essay when deciding who the
+        // feedback is addressed to; see `gradingAddressee`.
+        group: { select: { label: true } },
         assignmentType: {
           select: {
             id: true,
@@ -618,10 +623,7 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 
   if (
-    isGradingOwnDocument(
-      actor.membershipId,
-      submission.document.membershipId
-    )
+    isGradingOwnDocument(actor.membershipId, submission.document.membershipId)
   ) {
     return dataResponse(
       {
@@ -644,10 +646,10 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 
   const resolvedGradingConfig = await resolveAssignmentTypeGradingConfig({
-      assignmentTypeId: submission.document.assignmentTypeId,
-      assignmentTypeKind: submission.document.assignmentType?.kind ?? null,
-      assignmentTypeTitle: submission.document.assignmentType?.title ?? null,
-    });
+    assignmentTypeId: submission.document.assignmentTypeId,
+    assignmentTypeKind: submission.document.assignmentType?.kind ?? null,
+    assignmentTypeTitle: submission.document.assignmentType?.title ?? null,
+  });
   const requestedStrictnessLevel = data.gradingAssistantStrictnessLevel
     ? parseGradingAssistantStrictnessLevel(data.gradingAssistantStrictnessLevel)
     : null;
@@ -687,9 +689,13 @@ export async function action({ request }: ActionFunctionArgs) {
       .gradingInstructionsOverride === 'string'
       ? resolvedGradingConfig.promptConfigSnapshot.gradingInstructionsOverride.trim()
       : '';
-  const studentFirstName = firstNameFromFullName(
-    submission.document.membership?.user?.name
-  );
+  // A group brief is addressed to the group. `Document.membershipId` names
+  // whichever member is first in it, so addressing the student here put one
+  // name on feedback about work the whole group wrote.
+  const studentFirstName = gradingAddressee({
+    studentName: submission.document.membership?.user?.name,
+    groupLabel: submission.document.group?.label,
+  });
   // The prompt is derived from the rubric itself: how many judgments it asks
   // for, which words each score carries, and whether it wants per-category
   // feedback or overall feedback alone. No assignment type is named here.
@@ -715,8 +721,7 @@ export async function action({ request }: ActionFunctionArgs) {
     forceFallback,
     signalFallbackRetry: !forceFallback,
   };
-  const retryResponse = () =>
-    dataResponse({ retrying: true }, { status: 202 });
+  const retryResponse = () => dataResponse({ retrying: true }, { status: 202 });
   const getGradingLlmCompletion = (
     params: Parameters<typeof getLLMCompletion>[0]
   ) =>
@@ -828,24 +833,21 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
       earnedPoints,
       points,
     } satisfies Prisma.InputJsonObject;
-    const {
-      numericPercentage,
-      letterGrade,
-      score,
-      overallScore,
-    } = applyStrictnessToGradeFields({
-      overallScore: earnedPoints,
-      numericPercentage: Math.round((earnedPoints / totalPoints) * 100),
-      letterGrade: letterFromPercent(
-        Math.round((earnedPoints / totalPoints) * 100)
-      ),
-      score: formatGrade(
-        Math.round((earnedPoints / totalPoints) * 100),
-        letterFromPercent(Math.round((earnedPoints / totalPoints) * 100))
-      ) ?? '',
-      scoringType: 'percentage',
-      gradingAssistantStrictnessLevel,
-    });
+    const { numericPercentage, letterGrade, score, overallScore } =
+      applyStrictnessToGradeFields({
+        overallScore: earnedPoints,
+        numericPercentage: Math.round((earnedPoints / totalPoints) * 100),
+        letterGrade: letterFromPercent(
+          Math.round((earnedPoints / totalPoints) * 100)
+        ),
+        score:
+          formatGrade(
+            Math.round((earnedPoints / totalPoints) * 100),
+            letterFromPercent(Math.round((earnedPoints / totalPoints) * 100))
+          ) ?? '',
+        scoringType: 'percentage',
+        gradingAssistantStrictnessLevel,
+      });
     const overallComment =
       typeof parsedJson.overallComment === 'string' &&
       parsedJson.overallComment.trim()
@@ -929,7 +931,8 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
           gradingConfigSource: resolvedGradingConfig.source,
           ...gradingAiContextMetadata,
           assignmentTypeGradingLabel: resolvedGradingConfig.label,
-          assignmentTypeSourceTemplateId: resolvedGradingConfig.sourceTemplateId,
+          assignmentTypeSourceTemplateId:
+            resolvedGradingConfig.sourceTemplateId,
           assignmentTypeSourceTemplateSlug:
             resolvedGradingConfig.sourceTemplateSlug,
           gradingAssistantStrictnessLevel,
@@ -1231,7 +1234,8 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
         assignmentTypeGradingVersion: resolvedGradingConfig.version,
         assignmentTypeGradingLabel: resolvedGradingConfig.label,
         assignmentTypeSourceTemplateId: resolvedGradingConfig.sourceTemplateId,
-        assignmentTypeSourceTemplateSlug: resolvedGradingConfig.sourceTemplateSlug,
+        assignmentTypeSourceTemplateSlug:
+          resolvedGradingConfig.sourceTemplateSlug,
         gradingAssistantStrictnessLevel,
         assignmentTypeId: submission.document.assignmentTypeId,
         assignmentId: submission.document.assignment?.id ?? null,
