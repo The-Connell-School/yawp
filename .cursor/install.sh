@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
-# Cloud Agent install: idempotent repository bootstrap.
-# Provisions a native Postgres (no Docker), writes dev .env files, installs
-# dependencies, runs migrations, and seeds local dev data.
+# Cloud Agent install: idempotent, self-contained repository bootstrap.
+#
+# Works from a clean Ubuntu base image (no personal snapshot required):
+#   - installs bun (if missing) and a native PostgreSQL server (if missing)
+#   - starts Postgres, writes dev .env files
+#   - installs deps, generates the Prisma client, migrates, and seeds dev data
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -9,13 +12,31 @@ cd "$ROOT"
 
 export PATH="$HOME/.bun/bin:$PATH"
 
-PG_VERSION="$(ls /usr/lib/postgresql/ | sort -n | tail -1)"
 DB_NAME="yawp_workspace"
 DATABASE_URL="postgresql://postgres:password@127.0.0.1:5432/${DB_NAME}"
 
-ensure_postgres() {
+ensure_bun() {
+  if ! command -v bun >/dev/null 2>&1; then
+    curl -fsSL https://bun.sh/install | bash
+    export PATH="$HOME/.bun/bin:$PATH"
+  fi
+  bun --version
+}
+
+ensure_postgres_installed() {
+  if ! command -v pg_lsclusters >/dev/null 2>&1 && ! ls /usr/lib/postgresql/ >/dev/null 2>&1; then
+    sudo apt-get update -qq
+    sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq postgresql postgresql-contrib
+  fi
+}
+
+pg_version() { ls /usr/lib/postgresql/ | sort -n | tail -1; }
+
+ensure_postgres_running() {
+  local ver
+  ver="$(pg_version)"
   if ! sudo pg_lsclusters -h 2>/dev/null | awk '{print $4}' | grep -q online; then
-    sudo pg_ctlcluster "$PG_VERSION" main start 2>/dev/null || true
+    sudo pg_ctlcluster "$ver" main start 2>/dev/null || true
   fi
   for _ in $(seq 1 60); do
     if sudo -u postgres pg_isready -q; then return; fi
@@ -63,7 +84,9 @@ database_seeded() {
   [[ "${has_admin// /}" -gt 0 ]]
 }
 
-ensure_postgres
+ensure_bun
+ensure_postgres_installed
+ensure_postgres_running
 ensure_database
 write_env_files
 

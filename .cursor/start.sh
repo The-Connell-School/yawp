@@ -1,7 +1,12 @@
 #!/usr/bin/env bash
 # Cloud Agent start: per-boot runtime reconciliation.
-# Ensures the native Postgres cluster is online, then returns.
+# Ensures the native Postgres cluster is installed and online, then returns.
 set -euo pipefail
+
+if ! ls /usr/lib/postgresql/ >/dev/null 2>&1; then
+  sudo apt-get update -qq
+  sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq postgresql postgresql-contrib
+fi
 
 PG_VERSION="$(ls /usr/lib/postgresql/ | sort -n | tail -1)"
 
