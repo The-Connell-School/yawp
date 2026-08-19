@@ -212,5 +212,6 @@ scripts/production-sync.env
 .claude/worktrees/
 .superpowers/
 .cursor/*
+!.cursor/environment.json
 !.cursor/install.sh
 !.cursor/start.sh
