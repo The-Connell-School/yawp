@@ -214,6 +214,43 @@ describe('app.organization.classes action', () => {
     );
   });
 
+  test('create-class retries a generated code after an adapter collision', async () => {
+    prisma.class.create
+      .mockRejectedValueOnce({
+        code: 'P2002',
+        meta: {
+          driverAdapterError: {
+            cause: {
+              kind: 'UniqueConstraintViolation',
+              constraint: { fields: ['schoolId', 'code'] },
+            },
+          },
+        },
+      })
+      .mockResolvedValueOnce({ id: 'c2' });
+
+    const body = new URLSearchParams();
+    body.set('intent', 'create-class');
+    body.set('schoolId', 'school-1');
+    body.set('schoolYear', '2025-2026');
+    body.set('code', 'ABC123');
+    body.set('codeWasGenerated', 'true');
+
+    const request = new Request('https://example.com/app/organization/classes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body,
+    });
+
+    const result = (await action({ request } as any)) as {
+      data: { success: boolean };
+    };
+
+    expect(result.data.success).toBe(true);
+    expect(prisma.class.create).toHaveBeenCalledTimes(2);
+    expect(prisma.class.create.mock.calls[1][0].data.code).not.toBe('ABC123');
+  });
+
   test('create-class still requires school year', async () => {
     const body = new URLSearchParams();
     body.set('intent', 'create-class');
