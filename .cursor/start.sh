@@ -4,8 +4,13 @@
 set -euo pipefail
 
 if ! ls /usr/lib/postgresql/ >/dev/null 2>&1; then
-  sudo apt-get update -qq
-  sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq postgresql postgresql-contrib
+  for attempt in 1 2 3 4 5; do
+    sudo apt-get update -qq -o Acquire::Retries=3 && \
+      sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
+        -o Acquire::Retries=3 --fix-missing postgresql postgresql-contrib && break
+    echo "apt install attempt ${attempt} failed; retrying..." >&2
+    sleep $((attempt * 4))
+  done
 fi
 
 PG_VERSION="$(ls /usr/lib/postgresql/ | sort -n | tail -1)"

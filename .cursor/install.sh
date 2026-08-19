@@ -23,10 +23,23 @@ ensure_bun() {
   bun --version
 }
 
+apt_install_with_retry() {
+  # Isolated build pods occasionally return transient 400s from the Ubuntu
+  # mirror. Retry update+install a few times before giving up.
+  local attempt
+  for attempt in 1 2 3 4 5; do
+    sudo apt-get update -qq -o Acquire::Retries=3 && \
+      sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
+        -o Acquire::Retries=3 --fix-missing "$@" && return 0
+    echo "apt install attempt ${attempt} failed; retrying..." >&2
+    sleep $((attempt * 4))
+  done
+  return 1
+}
+
 ensure_postgres_installed() {
   if ! command -v pg_lsclusters >/dev/null 2>&1 && ! ls /usr/lib/postgresql/ >/dev/null 2>&1; then
-    sudo apt-get update -qq
-    sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq postgresql postgresql-contrib
+    apt_install_with_retry postgresql postgresql-contrib
   fi
 }
 
