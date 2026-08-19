@@ -6,6 +6,7 @@ import {
   mkdtempSync,
   readFileSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -14,6 +15,7 @@ import {
   certificateNeedsRenewal,
   ensureCertificate,
   importResidentTraefikCertificates,
+  isDirectExecution,
   maintainCertificates,
   validateCertificatePair,
 } from './certificate-manager.mjs';
@@ -48,6 +50,15 @@ afterEach(() => {
 });
 
 describe('preview certificate manager', () => {
+  test('runs renewal when systemd invokes the release through the current symlink', () => {
+    const root = temporaryRoot('preview-cert-entrypoint-');
+    const target = new URL('./certificate-manager.mjs', import.meta.url);
+    const current = path.join(root, 'certificate-manager.mjs');
+    symlinkSync(target, current);
+
+    expect(isDirectExecution(target.href, current)).toBe(true);
+  });
+
   test('imports valid Traefik certificates only for resident PR previews', async () => {
     const root = temporaryRoot('preview-cert-import-');
     const certRoot = path.join(root, 'ingress', 'certs');

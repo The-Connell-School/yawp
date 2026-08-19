@@ -1,4 +1,5 @@
 import { execFile } from 'node:child_process';
+import { realpathSync } from 'node:fs';
 import {
   createHash,
   createPrivateKey,
@@ -26,6 +27,15 @@ import { parsePreviewPr } from './wake-server.mjs';
 
 const execFileAsync = promisify(execFile);
 const DEFAULT_DIRECTORY_URL = 'https://acme-v02.api.letsencrypt.org/directory';
+
+export function isDirectExecution(moduleUrl, argv1 = process.argv[1]) {
+  if (!argv1) return false;
+  try {
+    return realpathSync(argv1) === realpathSync(fileURLToPath(moduleUrl));
+  } catch {
+    return false;
+  }
+}
 
 function base64url(value) {
   return Buffer.from(value).toString('base64url');
@@ -455,7 +465,7 @@ export async function maintainCertificates({ hostnames, ensure = ensureCertifica
   return { results, failures };
 }
 
-if (process.argv[1] === fileURLToPath(import.meta.url)) {
+if (isDirectExecution(import.meta.url)) {
   const root = process.env.PREVIEW_ROOT || '/srv/yawp-preview';
   const domain = process.env.PREVIEW_DOMAIN || '';
   const email = process.env.PREVIEW_ACME_EMAIL || '';
