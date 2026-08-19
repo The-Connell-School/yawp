@@ -106,6 +106,15 @@ describe('renderPreviewCompose', () => {
     expect(compose).toContain('Host(`demo.preview.yawp.school`)');
   });
 
+  test('retains legacy PR labels only until the custom ingress is active', () => {
+    const transitional = renderCompose({ customIngressActive: false });
+    const migrated = renderCompose({ customIngressActive: true });
+
+    expect(transitional).toContain('traefik.enable=true');
+    expect(transitional).toContain('Host(`pr-142.preview.yawp.school`)');
+    expect(migrated).not.toContain('traefik');
+  });
+
   test('leaves running preview traffic independent of the wake service', () => {
     const compose = renderCompose();
 

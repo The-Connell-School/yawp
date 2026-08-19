@@ -75,6 +75,15 @@ describe('bootstrap-host.sh', () => {
     );
   });
 
+  test('keeps the pre-cutover Traefik host deployable during the migration PR', () => {
+    const detection = '-f "$ROOT/ingress/current/ingress-server.mjs"';
+    expect(deploy).toContain(detection);
+    expect(deploy.indexOf(detection)).toBeLessThan(
+      deploy.indexOf('node "$SCRIPT_DIR/render-compose.mjs"')
+    );
+    expect(deploy).toContain('"$PREVIEW_CUSTOM_INGRESS_ACTIVE" == "true"');
+  });
+
   test('allows transactional wake rollback to finish before systemd force-kills the unit', () => {
     expect(script).toContain('KillMode=control-group');
     expect(script).toContain('TimeoutStopSec=1200');

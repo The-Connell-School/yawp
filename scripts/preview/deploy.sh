@@ -203,6 +203,13 @@ load_or_create_access_config() {
 }
 
 load_or_create_access_config
+if [[ -n "${DIRECT_PORT:-}" || -f "$ROOT/ingress/current/ingress-server.mjs" ]]; then
+  export PREVIEW_CUSTOM_INGRESS_ACTIVE=true
+else
+  # The migration PR itself still deploys through the old host. Keep its labels until
+  # bootstrap proves and activates custom ingress; after cutover they disappear.
+  export PREVIEW_CUSTOM_INGRESS_ACTIVE=false
+fi
 node "$SCRIPT_DIR/render-compose.mjs" > "$PREVIEW_DIR/docker-compose.yml"
 
 docker network inspect preview >/dev/null 2>&1 || docker network create preview >/dev/null
@@ -797,7 +804,10 @@ start_or_refresh_web() {
 }
 start_or_refresh_web
 
-if [[ "$SLUG" != "demo" && -z "${DIRECT_PORT:-}" && "${PREVIEW_TLS:-true}" == "true" ]]; then
+if [[ "$SLUG" != "demo" \
+  && -z "${DIRECT_PORT:-}" \
+  && "${PREVIEW_TLS:-true}" == "true" \
+  && "$PREVIEW_CUSTOM_INGRESS_ACTIVE" == "true" ]]; then
   PREVIEW_ROOT="$ROOT" \
   PREVIEW_DOMAIN="$DOMAIN" \
   PREVIEW_ACME_EMAIL="${PREVIEW_ACME_EMAIL:-admin@example.com}" \

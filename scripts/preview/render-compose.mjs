@@ -33,6 +33,7 @@ export function renderPreviewCompose({
   accessSecret = process.env.PREVIEW_ACCESS_SECRET,
   sessionSecret = process.env.PREVIEW_SESSION_SECRET,
   aiMode = process.env.PREVIEW_AI_MODE || 'live',
+  customIngressActive = process.env.PREVIEW_CUSTOM_INGRESS_ACTIVE !== 'false',
 } = {}) {
   const previewAccessSeats = requirePreviewAccessSeats(accessSeats);
   const previewMasterAccessCode = masterOrgGateEnabled
@@ -65,9 +66,8 @@ export function renderPreviewCompose({
   const tlsLabels = enableTls
     ? `\n      - ${q(`traefik.http.routers.${routerBase}-https.rule=Host(\`${env.hostname}\`)`)}\n      - ${q(`traefik.http.routers.${routerBase}-https.entrypoints=websecure`)}\n      - ${q(`traefik.http.routers.${routerBase}-https.tls.certresolver=letsencrypt`)}\n      - ${q(`traefik.http.routers.${routerBase}-https.service=${routerBase}`)}`
     : '';
-  const legacyNamedIngressLabels = env.prNumber
-    ? ''
-    : `    labels:
+  const legacyTraefikLabels = (!env.prNumber || !customIngressActive)
+    ? `    labels:
       - "traefik.enable=true"
       - "traefik.docker.network=preview"
       - ${q(`traefik.http.routers.${routerBase}-http.rule=Host(\`${env.hostname}\`)`)}
@@ -75,7 +75,8 @@ export function renderPreviewCompose({
       - ${q(`traefik.http.routers.${routerBase}-http.service=${routerBase}`)}
 ${tlsLabels}
       - ${q(`traefik.http.services.${routerBase}.loadbalancer.server.port=8080`)}
-`;
+`
+    : '';
   const cookieSecure = enableTls ? '"true"' : '"false"';
   // PREVIEW_ACCESS_GATE is consumed by the root route middleware itself. This render
   // cannot emit that enforcement switch without validated seats and its own signing secret,
@@ -162,7 +163,7 @@ ${commonEnvironment}
   return `name: ${env.composeProject}
 services:
 ${toolboxService}
-${webService}${legacyNamedIngressLabels}    restart: unless-stopped
+${webService}${legacyTraefikLabels}    restart: unless-stopped
     healthcheck:
       test: ["CMD", "bun", "-e", "fetch('http://127.0.0.1:8080/api/healthcheck').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
       interval: 15s
