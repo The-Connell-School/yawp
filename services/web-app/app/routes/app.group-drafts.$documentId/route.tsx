@@ -26,6 +26,7 @@ import {
   readMemberGrades,
   recordMemberGrade,
 } from '~/domain/collaboration/member-grades.server';
+import { suggestMemberGrades } from '~/domain/collaboration/member-grade-suggestions.server';
 import { collaborationRoomWhere } from '~/domain/collaboration/room.server';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
@@ -163,7 +164,27 @@ export async function action({ request, params }: ActionFunctionArgs) {
       ...collaborationRoomWhere(),
       AND: [documentReadWhere({ profileId: profile.id, isAdmin })],
     },
-    select: { group: { select: { id: true } } },
+    select: {
+      id: true,
+      // Only the drafting branch reads these two, but they ride along on the
+      // one query that already proves this teacher may see the document.
+      assignment: { select: { prompt: true } },
+      group: {
+        select: {
+          id: true,
+          members: {
+            where: { removedAt: null },
+            orderBy: { membershipId: 'asc' },
+            select: {
+              membershipId: true,
+              membership: {
+                select: { user: { select: { name: true, email: true } } },
+              },
+            },
+          },
+        },
+      },
+    },
   });
 
   if (!doc?.group) {
@@ -203,6 +224,39 @@ export async function action({ request, params }: ActionFunctionArgs) {
         );
       }
       throw error;
+    }
+  }
+
+  // Drafting individual grades. This writes nothing: it hands the teacher text
+  // for the boxes on their form, and Save is still a separate, deliberate press.
+  if (intent === 'suggest-member-grades') {
+    const roster = doc.group.members.map((member) => ({
+      membershipId: member.membershipId,
+      name: member.membership.user.name?.trim() || member.membership.user.email,
+    }));
+
+    const [breakdown, groupGrade] = await Promise.all([
+      buildContributionBreakdown({ documentId: params.documentId, roster }),
+      readGroupGrade({ documentId: params.documentId }),
+    ]);
+
+    try {
+      const { suggestions } = await suggestMemberGrades({
+        breakdown,
+        groupGrade,
+        assignmentPrompt: doc.assignment?.prompt ?? null,
+      });
+      return dataResponse({ success: true, suggestions });
+    } catch {
+      // A grading page with empty boxes beats a grading page that 500s.
+      return dataResponse(
+        {
+          success: false,
+          message:
+            'The assistant could not draft these right now. Grade them yourself, or try again in a moment.',
+        },
+        { status: 502 }
+      );
     }
   }
 

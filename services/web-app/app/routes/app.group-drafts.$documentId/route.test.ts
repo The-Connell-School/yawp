@@ -8,6 +8,7 @@ const buildContributionBreakdown = mock();
 const readMemberGrades = mock();
 const recordMemberGrade = mock();
 const readGroupGrade = mock();
+const suggestMemberGrades = mock();
 const recordGroupGrade = mock();
 const listDraftComments = mock();
 const addDraftComment = mock();
@@ -39,6 +40,9 @@ mock.module('~/domain/collaboration/comments.server', () => ({
   addDraftComment,
   replyToDraftComment,
   DraftCommentError,
+}));
+mock.module('~/domain/collaboration/member-grade-suggestions.server', () => ({
+  suggestMemberGrades,
 }));
 mock.module('~/domain/collaboration/group-grade.server', () => ({
   readGroupGrade,
@@ -106,6 +110,9 @@ describe('app.group-drafts.$documentId loader', () => {
     listDraftComments.mockReset().mockResolvedValue([]);
     addDraftComment.mockReset().mockResolvedValue({ commentId: 'comment-1' });
     replyToDraftComment.mockReset().mockResolvedValue({ replied: true });
+    suggestMemberGrades
+      .mockReset()
+      .mockResolvedValue({ suggestions: [], model: 'test-model' });
   });
 
   test('404s for a student', async () => {
@@ -367,6 +374,81 @@ describe('app.group-drafts.$documentId loader', () => {
       await expect(
         post({ membershipId: 'member-1', score: '5' })
       ).rejects.toThrow(/connection reset/);
+    });
+
+    describe('drafting individual grades', () => {
+      test('returns suggestions without recording any grade', async () => {
+        // The whole safety argument: the assistant fills the teacher's form and
+        // stops. Saving is still their press.
+        suggestMemberGrades.mockResolvedValue({
+          suggestions: [
+            { membershipId: 'member-1', score: null, feedback: 'You framed it.' },
+          ],
+          model: 'test-model',
+        });
+
+        const response: any = await post({ intent: 'suggest-member-grades' });
+
+        expect(await readBody(response)).toEqual(
+          expect.objectContaining({
+            success: true,
+            suggestions: [
+              { membershipId: 'member-1', score: null, feedback: 'You framed it.' },
+            ],
+          })
+        );
+        expect(recordMemberGrade).not.toHaveBeenCalled();
+        expect(recordGroupGrade).not.toHaveBeenCalled();
+      });
+
+      test('reads the same evidence the teacher is looking at', async () => {
+        const breakdown = {
+          members: [
+            { membershipId: 'member-1', name: 'Maya P.', hasWritten: true },
+          ],
+          paragraphs: [[{ membershipId: 'member-1', text: 'Lisbon.' }]],
+          unattributedChars: 0,
+          totalChars: 7,
+        };
+        buildContributionBreakdown.mockResolvedValue(breakdown);
+        readGroupGrade.mockResolvedValue({ score: '88' });
+
+        await post({ intent: 'suggest-member-grades' });
+
+        expect(buildContributionBreakdown).toHaveBeenCalledWith({
+          documentId: 'doc-1',
+          roster: [
+            { membershipId: 'member-1', name: 'Maya P.' },
+            { membershipId: 'member-2', name: 'devon@x.com' },
+          ],
+        });
+        expect(suggestMemberGrades).toHaveBeenCalledWith(
+          expect.objectContaining({
+            breakdown,
+            groupGrade: { score: '88' },
+          })
+        );
+      });
+
+      test('refuses a student', async () => {
+        requireMembership.mockResolvedValue({ id: 'kid-1', role: 'STUDENT' });
+
+        const response: any = await post({ intent: 'suggest-member-grades' });
+
+        expect(response.init.status).toBe(403);
+        expect(suggestMemberGrades).not.toHaveBeenCalled();
+      });
+
+      test('reports a failed draft inline rather than breaking the page', async () => {
+        // A grading page that 500s because a draft could not be written is worse
+        // than one with empty boxes.
+        suggestMemberGrades.mockRejectedValue(new Error('upstream timeout'));
+
+        const response: any = await post({ intent: 'suggest-member-grades' });
+
+        expect(response.init.status).toBe(502);
+        expect((await readBody(response)).message).toMatch(/could not/i);
+      });
     });
   });
 });

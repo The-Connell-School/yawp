@@ -3,6 +3,7 @@ import type { ContributionMember } from './contribution.server';
 import {
   buildSuggestionPrompt,
   collectMemberWriting,
+  fieldsForSuggestion,
   parseSuggestions,
   SUGGESTION_SYSTEM_PROMPT,
 } from './member-grade-suggestions';
@@ -246,5 +247,39 @@ describe('parseSuggestions', () => {
     expect(parseSuggestions({ raw, memberIds: ['m1'] })).toEqual([
       { membershipId: 'm1', score: null, feedback: 'ok' },
     ]);
+  });
+});
+
+describe('fieldsForSuggestion', () => {
+  const saved = { savedScore: '', savedFeedback: '' };
+
+  test('fills both boxes from the suggestion', () => {
+    expect(
+      fieldsForSuggestion({
+        suggestion: { membershipId: 'm1', score: '82', feedback: 'Strong market case.' },
+        ...saved,
+      })
+    ).toEqual({ score: '82', feedback: 'Strong market case.' });
+  });
+
+  test('leaves a typed score alone when the suggestion is "takes the group grade"', () => {
+    // Null means no override, not "delete what the teacher entered".
+    expect(
+      fieldsForSuggestion({
+        suggestion: { membershipId: 'm1', score: null, feedback: 'Nice work.' },
+        savedScore: '95',
+        savedFeedback: '',
+      })
+    ).toEqual({ score: '95', feedback: 'Nice work.' });
+  });
+
+  test('keeps an existing comment when the model wrote none', () => {
+    expect(
+      fieldsForSuggestion({
+        suggestion: { membershipId: 'm1', score: '70', feedback: '   ' },
+        savedScore: '',
+        savedFeedback: 'Talk to me about the sources.',
+      })
+    ).toEqual({ score: '70', feedback: 'Talk to me about the sources.' });
   });
 });

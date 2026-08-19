@@ -180,3 +180,27 @@ export function parseSuggestions({
 
   return suggestions;
 }
+
+/**
+ * What a suggestion puts in the two boxes on a student's card.
+ *
+ * Neither field is emptied by a suggestion. A null score means "takes the group
+ * grade", which is not the same instruction as "delete the number the teacher
+ * typed", and an empty draft comment is the model having nothing to say rather
+ * than a request to clear the one already there. In both cases what the teacher
+ * had stands.
+ */
+export function fieldsForSuggestion({
+  suggestion,
+  savedScore,
+  savedFeedback,
+}: {
+  suggestion: MemberGradeSuggestion;
+  savedScore: string;
+  savedFeedback: string;
+}): { score: string; feedback: string } {
+  return {
+    score: suggestion.score ?? savedScore,
+    feedback: suggestion.feedback.trim() || savedFeedback,
+  };
+}
