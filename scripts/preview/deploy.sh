@@ -809,7 +809,7 @@ if [[ "$SLUG" != "demo" \
   && "${PREVIEW_TLS:-true}" == "true" \
   && "$PREVIEW_CUSTOM_INGRESS_ACTIVE" == "true" ]]; then
   PREVIEW_ROOT="$ROOT" \
-  PREVIEW_DOMAIN="$DOMAIN" \
+  PREVIEW_DOMAIN="$PREVIEW_DOMAIN" \
   PREVIEW_ACME_EMAIL="${PREVIEW_ACME_EMAIL:-admin@example.com}" \
     node "$SCRIPT_DIR/certificate-manager.mjs" "$HOSTNAME"
 fi
