@@ -307,6 +307,8 @@ export async function action({ request }: ActionFunctionArgs) {
     const period = (formData.get('period') as string)?.trim() || null;
     const title = (formData.get('title') as string)?.trim() || null;
     let code = (formData.get('code') as string)?.trim().toUpperCase() || '';
+    const codeWasGenerated =
+      formData.get('codeWasGenerated') === 'true' || !code;
     const teacherIds = formData.getAll('teacherIds') as string[];
 
     if (!schoolId || !schoolYear) {
@@ -338,45 +340,61 @@ export async function action({ request }: ActionFunctionArgs) {
       return dataResponse({ error: 'Invalid school' }, { status: 400 });
     }
 
-    try {
-      const classArtKey = await pickClassArtKeyForOrganization(
-        profile.organization.id
-      );
+    const classArtKey = await pickClassArtKeyForOrganization(
+      profile.organization.id
+    );
+    const maxAttempts = codeWasGenerated ? 4 : 1;
 
-      await prisma.$transaction(async (tx) => {
-        await tx.class.create({
-          data: {
-            schoolId,
-            schoolYear,
-            grade,
-            period,
-            title,
-            code,
-            cardGradientKey: generateClassCardGradientKey(code),
-            classArtKey,
-            teachers: {
-              connect: teacherIds.map((id) => ({ id })),
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      try {
+        await prisma.$transaction(async (tx) => {
+          await tx.class.create({
+            data: {
+              schoolId,
+              schoolYear,
+              grade,
+              period,
+              title,
+              code,
+              cardGradientKey: generateClassCardGradientKey(code),
+              classArtKey,
+              teachers: {
+                connect: teacherIds.map((id) => ({ id })),
+              },
             },
-          },
+          });
+
+          await connectTeachersToSchool(tx, teacherIds, schoolId);
         });
 
-        await connectTeachersToSchool(tx, teacherIds, schoolId);
-      });
+        return dataResponse({ success: true });
+      } catch (error: unknown) {
+        const uniqueTargets = prismaUniqueConstraintTargets(error);
+        const isCodeCollision =
+          uniqueTargets && uniqueConstraintIncludes(uniqueTargets, 'code');
 
-      return dataResponse({ success: true });
-    } catch (error: unknown) {
-      const uniqueTargets = prismaUniqueConstraintTargets(error);
-      if (uniqueTargets) {
-        if (uniqueConstraintIncludes(uniqueTargets, 'code')) {
+        if (isCodeCollision && attempt + 1 < maxAttempts) {
+          code = generateClassCode();
+          continue;
+        }
+
+        if (isCodeCollision) {
           return dataResponse(
             { error: 'Class code already in use. Choose a different code.' },
             { status: 400 }
           );
         }
-        return dataResponse({ error: 'Class could not be created.' }, { status: 400 });
+        if (uniqueTargets) {
+          return dataResponse(
+            { error: 'Class could not be created.' },
+            { status: 400 }
+          );
+        }
+        throw error;
       }
-      throw error;
     }
+
+    throw new Error('Class code retry loop exhausted unexpectedly');
   }
 
   if (intent === 'edit-class') {
@@ -1048,6 +1066,7 @@ function ClassSheet({
   const [period, setPeriod] = useState('');
   const [title, setTitle] = useState('');
   const [code, setCode] = useState('');
+  const [generatedCode, setGeneratedCode] = useState('');
   const [selectedTeachers, setSelectedTeachers] = useState<string[]>([]);
 
   // Reset form when editingClass or duplicatingClass changes or sheet opens/closes
@@ -1059,10 +1078,9 @@ function ClassSheet({
     setPeriod(sourceClass?.period || '');
     setTitle(sourceClass?.title || '');
     // Generate new code for duplicates, use existing for edits
-    setCode(
-      editingClass?.code ||
-        (duplicatingClass ? generateClassCode() : generateClassCode())
-    );
+    const nextCode = editingClass?.code || generateClassCode();
+    setCode(nextCode);
+    setGeneratedCode(editingClass ? '' : nextCode);
     setSelectedTeachers(sourceClass?.teachers?.map((t: any) => t.id) || []);
   }, [editingClass, duplicatingClass, open]);
 
@@ -1079,6 +1097,9 @@ function ClassSheet({
     formData.append('period', period);
     formData.append('title', title);
     formData.append('code', code);
+    if (!editingClass && code === generatedCode) {
+      formData.append('codeWasGenerated', 'true');
+    }
     selectedTeachers.forEach((teacherId) => {
       formData.append('teacherIds', teacherId);
     });
