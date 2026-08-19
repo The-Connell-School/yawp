@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useFetcher } from 'react-router';
 import { colorForMembership } from '../app_.collab-documents_.$id/collab-editor';
 import { Button } from '~/components/ui/button';
@@ -7,6 +8,8 @@ import type {
 } from '~/domain/collaboration/contribution.server';
 import type { AttributedRun } from '~/domain/collaboration/contribution';
 import { effectiveGrade } from '~/domain/collaboration/grading';
+import { fieldsForSuggestion } from '~/domain/collaboration/member-grade-suggestions';
+import type { MemberGradeSuggestion } from '~/domain/collaboration/member-grade-suggestions';
 import type { GroupGrade, MemberGrade } from '~/domain/collaboration/grading';
 
 /**
@@ -59,11 +62,14 @@ function MemberGradeCard({
   name,
   grade,
   groupGrade,
+  suggestion,
 }: {
   membershipId: string;
   name: string;
   grade?: MemberGrade;
   groupGrade: GroupGrade | null;
+  /** A draft waiting in the boxes, never something already recorded. */
+  suggestion?: MemberGradeSuggestion;
 }) {
   const fetcher = useFetcher<{ success?: boolean; message?: string }>();
   const saving = fetcher.state !== 'idle';
@@ -71,6 +77,41 @@ function MemberGradeCard({
     fetcher.data && fetcher.data.success === false ? fetcher.data.message : '';
   const released = Boolean(grade?.releasedAt);
   const effective = effectiveGrade({ member: grade, groupGrade });
+
+  const savedScore = grade?.score ?? '';
+  const savedFeedback = grade?.feedback ?? '';
+
+  // Controlled, because a suggestion has to be able to fill these boxes after
+  // they have already rendered — `defaultValue` only ever lands once.
+  const [fields, setFields] = useState({
+    score: savedScore,
+    feedback: savedFeedback,
+  });
+  // The suggestion already dealt with, so one arriving is applied exactly once
+  // and a teacher who discards it does not get it straight back.
+  const [applied, setApplied] = useState<MemberGradeSuggestion | null>(null);
+  const [showingDraft, setShowingDraft] = useState(false);
+  const [savedKey, setSavedKey] = useState(`${savedScore}\u0000${savedFeedback}`);
+
+  const currentSavedKey = `${savedScore}\u0000${savedFeedback}`;
+  if (currentSavedKey !== savedKey) {
+    // A save landed and the loader revalidated: the server's copy is the truth
+    // now, and anything still marked as a draft has become a real grade.
+    setSavedKey(currentSavedKey);
+    setFields({ score: savedScore, feedback: savedFeedback });
+    setShowingDraft(false);
+  }
+
+  if (suggestion && suggestion !== applied) {
+    setApplied(suggestion);
+    setShowingDraft(true);
+    setFields(fieldsForSuggestion({ suggestion, savedScore, savedFeedback }));
+  }
+
+  const discardDraft = () => {
+    setShowingDraft(false);
+    setFields({ score: savedScore, feedback: savedFeedback });
+  };
 
   return (
     <fetcher.Form method="post" className="grid gap-2 rounded-lg border p-4">
@@ -110,7 +151,10 @@ function MemberGradeCard({
         <input
           type="text"
           name="score"
-          defaultValue={grade?.score ?? ''}
+          value={fields.score}
+          onChange={(event) =>
+            setFields((current) => ({ ...current, score: event.target.value }))
+          }
           placeholder={groupGrade?.score ?? '18/20, A-, meets expectations…'}
           maxLength={64}
           className="rounded border px-2 py-1"
@@ -121,11 +165,43 @@ function MemberGradeCard({
         Comment for this student
         <textarea
           name="feedback"
-          defaultValue={grade?.feedback ?? ''}
+          value={fields.feedback}
+          onChange={(event) =>
+            setFields((current) => ({
+              ...current,
+              feedback: event.target.value,
+            }))
+          }
           rows={3}
           className="rounded border px-2 py-1"
         />
       </label>
+
+      {showingDraft ? (
+        <div
+          className="rounded border border-dashed border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900"
+          data-testid="member-grade-draft-notice"
+        >
+          <p>
+            <span className="font-medium">Drafted, not saved.</span> Edit
+            anything here, then press Save — nothing reaches this student until
+            you do.
+          </p>
+          {applied?.score === null ? (
+            <p className="mt-1">
+              The assistant did not suggest a separate grade for them, so the
+              grade box is untouched.
+            </p>
+          ) : null}
+          <button
+            type="button"
+            onClick={discardDraft}
+            className="mt-1 underline underline-offset-2"
+          >
+            Discard this draft
+          </button>
+        </div>
+      ) : null}
 
       {error ? (
         <p className="text-sm text-red-700" role="alert">
@@ -165,6 +241,93 @@ function MemberGradeCard({
         ) : null}
       </div>
     </fetcher.Form>
+  );
+}
+
+/**
+ * The individual grades, and the one button that drafts them.
+ *
+ * The button lives here rather than on each card because the assistant reads
+ * the group as a whole: what one student contributed only means anything beside
+ * what the others did.
+ *
+ * What comes back is put in the boxes and nowhere else. No response from this
+ * fetcher is saved — each card still has its own Save, which is what the teacher
+ * has always pressed.
+ */
+function MemberGradesSection({
+  members,
+  grades,
+  groupGrade,
+  hasWriting,
+}: {
+  members: ContributionMember[];
+  grades: Record<string, MemberGrade>;
+  groupGrade: GroupGrade | null;
+  hasWriting: boolean;
+}) {
+  const fetcher = useFetcher<{
+    success?: boolean;
+    message?: string;
+    suggestions?: MemberGradeSuggestion[];
+  }>();
+  const drafting = fetcher.state !== 'idle';
+  const error =
+    fetcher.data && fetcher.data.success === false ? fetcher.data.message : '';
+  // A fresh array each response, so asking twice re-fills the boxes rather than
+  // looking like nothing happened.
+  const suggestionFor = new Map(
+    (fetcher.data?.suggestions ?? []).map((suggestion) => [
+      suggestion.membershipId,
+      suggestion,
+    ])
+  );
+
+  return (
+    <section aria-labelledby="contribution-grades">
+      <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
+        <h2 id="contribution-grades" className="text-sm font-semibold">
+          Individual grades
+        </h2>
+        {hasWriting ? (
+          <fetcher.Form method="post">
+            <input
+              type="hidden"
+              name="intent"
+              value="suggest-member-grades"
+            />
+            <Button type="submit" size="sm" variant="outline" disabled={drafting}>
+              {drafting ? 'Reading the draft…' : 'Draft these with the assistant'}
+            </Button>
+          </fetcher.Form>
+        ) : null}
+      </div>
+      <p className="mb-3 text-xs text-muted-foreground">
+        Everyone takes the group grade unless you give them their own here, for
+        what they contributed — yours to decide, not calculated from the numbers
+        above. The assistant can draft these from who wrote what; it fills the
+        boxes and saves nothing. Students see nothing until you share it.
+      </p>
+
+      {error ? (
+        <p className="mb-3 text-sm text-red-700" role="alert">
+          {error}
+        </p>
+      ) : null}
+
+      <div className="grid gap-3 md:grid-cols-2">
+        {members.map((member) => (
+          <MemberGradeCard
+            key={member.membershipId}
+            membershipId={member.membershipId}
+            name={member.name}
+            grade={grades[member.membershipId]}
+            groupGrade={groupGrade}
+            suggestion={suggestionFor.get(member.membershipId)}
+          />
+        ))}
+      </div>
+    </section>
   );
 }
 
@@ -460,27 +623,12 @@ export function ContributionPanel({
 
       <GroupGradeCard groupGrade={groupGrade} />
 
-      <section aria-labelledby="contribution-grades">
-        <h2 id="contribution-grades" className="mb-1 text-sm font-semibold">
-          Individual grades
-        </h2>
-        <p className="mb-3 text-xs text-muted-foreground">
-          Everyone takes the group grade unless you give them their own here,
-          for what they contributed — yours to decide, not calculated from the
-          numbers above. Students see nothing until you share it.
-        </p>
-        <div className="grid gap-3 md:grid-cols-2">
-          {members.map((member) => (
-            <MemberGradeCard
-              key={member.membershipId}
-              membershipId={member.membershipId}
-              name={member.name}
-              grade={grades[member.membershipId]}
-              groupGrade={groupGrade}
-            />
-          ))}
-        </div>
-      </section>
+      <MemberGradesSection
+        members={members}
+        grades={grades}
+        groupGrade={groupGrade}
+        hasWriting={breakdown.totalChars > 0}
+      />
 
       <section
         aria-labelledby="contribution-draft"
