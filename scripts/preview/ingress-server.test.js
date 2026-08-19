@@ -1,14 +1,19 @@
 import { afterEach, describe, expect, test } from 'bun:test';
+import { mkdtempSync, rmSync, symlinkSync } from 'node:fs';
 import { createServer, request as httpRequest } from 'node:http';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import { Duplex } from 'node:stream';
 import {
   createHttpRedirectHandler,
   createPreviewIngress,
   createWebSocketUpgradeHandler,
+  isDirectExecution,
   targetFromDockerInspect,
 } from './ingress-server.mjs';
 
 const servers = [];
+const roots = [];
 
 async function listen(server) {
   servers.push(server);
@@ -56,9 +61,20 @@ afterEach(async () => {
     server.closeAllConnections?.();
     server.close(resolve);
   })));
+  for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
 });
 
 describe('preview ingress', () => {
+  test('starts when systemd invokes the release through the current symlink', () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'preview-ingress-entrypoint-'));
+    roots.push(root);
+    const target = new URL('./ingress-server.mjs', import.meta.url);
+    const current = path.join(root, 'ingress-server.mjs');
+    symlinkSync(target, current);
+
+    expect(isDirectExecution(target.href, current)).toBe(true);
+  });
+
   test('proxies path, query, method, body, and trusted forwarding headers', async () => {
     let received;
     const upstreamPort = await listen(createServer(async (incoming, response) => {

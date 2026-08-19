@@ -1,7 +1,7 @@
 import { request as httpRequest, createServer } from 'node:http';
 import { createServer as createSecureServer } from 'node:https';
 import { readFile, readdir, stat } from 'node:fs/promises';
-import { readFileSync, statSync } from 'node:fs';
+import { readFileSync, realpathSync, statSync } from 'node:fs';
 import { connect as netConnect } from 'node:net';
 import { createSecureContext } from 'node:tls';
 import { fileURLToPath } from 'node:url';
@@ -10,6 +10,15 @@ import {
   createDefaultWakeOperations,
   parsePreviewPr,
 } from './wake-server.mjs';
+
+export function isDirectExecution(moduleUrl, argv1 = process.argv[1]) {
+  if (!argv1) return false;
+  try {
+    return realpathSync(argv1) === realpathSync(fileURLToPath(moduleUrl));
+  } catch {
+    return false;
+  }
+}
 
 const HOP_BY_HOP_HEADERS = new Set([
   'connection',
@@ -487,7 +496,7 @@ export function createCertificateStore({ certRoot, domain, defaultHostname }) {
   };
 }
 
-if (process.argv[1] === fileURLToPath(import.meta.url)) {
+if (isDirectExecution(import.meta.url)) {
   const root = process.env.PREVIEW_ROOT || '/srv/yawp-preview';
   const domain = process.env.PREVIEW_DOMAIN || '';
   const certRoot = process.env.PREVIEW_CERT_ROOT || path.join(root, 'ingress', 'certs');
