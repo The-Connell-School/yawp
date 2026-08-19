@@ -797,6 +797,13 @@ start_or_refresh_web() {
 }
 start_or_refresh_web
 
+if [[ "$SLUG" != "demo" && -z "${DIRECT_PORT:-}" && "${PREVIEW_TLS:-true}" == "true" ]]; then
+  PREVIEW_ROOT="$ROOT" \
+  PREVIEW_DOMAIN="$DOMAIN" \
+  PREVIEW_ACME_EMAIL="${PREVIEW_ACME_EMAIL:-admin@example.com}" \
+    node "$SCRIPT_DIR/certificate-manager.mjs" "$HOSTNAME"
+fi
+
 for attempt in $(seq 1 90); do
   if curl -fsS --connect-timeout 1 --max-time 2 "$health_url" >/dev/null; then
     PREVIEW_BASE_URL="$login_url" \
