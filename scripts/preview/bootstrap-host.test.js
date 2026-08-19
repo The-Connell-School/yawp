@@ -11,6 +11,8 @@ const previewWorkflow = readFileSync(
   path.join(import.meta.dir, '../../.github/workflows/preview-environments.yml'),
   'utf8',
 );
+const ingress = readFileSync(path.join(import.meta.dir, 'ingress-server.mjs'), 'utf8');
+const deploy = readFileSync(path.join(import.meta.dir, 'deploy.sh'), 'utf8');
 
 describe('bootstrap-host.sh', () => {
   test('does not recursively chown the lifecycle-managed preview root', () => {
@@ -38,17 +40,48 @@ describe('bootstrap-host.sh', () => {
     );
   });
 
-  test('logs only the non-secret authorization marker needed for activity leases', () => {
-    expect(script).toContain('--accesslog.fields.defaultmode=drop');
-    expect(script).toContain('--accesslog.fields.names.RequestHost=keep');
-    expect(script).toContain('--accesslog.fields.names.RequestMethod=keep');
-    expect(script).toContain('--accesslog.fields.names.DownstreamStatus=keep');
-    expect(script).toContain('--accesslog.fields.names.OriginStatus=keep');
-    expect(script).toContain('--accesslog.fields.names.RequestPath=drop');
-    expect(script).toContain('--accesslog.fields.headers.defaultmode=drop');
-    expect(script).toContain(
-      '--accesslog.fields.headers.names.X-Yawp-Preview-Authorized=keep'
+  test('records authorized activity directly without a proxy access log', () => {
+    expect(script).not.toContain('PREVIEW_ACCESS_LOG=');
+    expect(script).not.toContain('--accesslog');
+    expect(ingress).toContain("upstreamResponse.headers['x-yawp-preview-authorized']");
+    expect(ingress).toContain('recordAccess(pr)');
+  });
+
+  test('cuts over to the custom ingress with TLS canary and rollback', () => {
+    expect(script).toContain('yawp-preview-ingress.service');
+    expect(script).toContain('AmbientCapabilities=CAP_NET_BIND_SERVICE');
+    expect(script).toContain('PREVIEW_HTTP_PORT=19080');
+    expect(script).toContain('PREVIEW_HTTPS_PORT=19443');
+    expect(script).toContain('rollback_ingress');
+    expect(script).toContain('systemctl disable --now yawp-preview-ingress.service');
+    expect(script).toContain('previous-ingress.$$.service');
+    expect(script).toContain('cp -p -- "$previous_ingress_unit" "$ingress_unit"');
+    expect(script).toContain('^yawp-pr-([1-9][0-9]*)-web-1$');
+    expect(script).toContain('for public_hostname in "${running_hostnames[@]}"');
+    expect(script).toContain('"https://$public_hostname/api/healthcheck"');
+    expect(script).toContain('docker rm "$traefik_container"');
+    expect(script).not.toContain('image: traefik');
+    expect(script).not.toContain('docker-compose.yml" up -d');
+  });
+
+  test('migrates resident certificates and installs automatic renewal', () => {
+    expect(script).toContain('node "$certificate_manager" --import-traefik');
+    expect(script).toContain('yawp-preview-certificate-renewal.timer');
+    expect(script).toContain('$ROOT/ingress/current/certificate-manager.mjs --resident');
+    expect(previewWorkflow).toContain('PREVIEW_ACME_EMAIL');
+    expect(deploy).toContain('node "$SCRIPT_DIR/certificate-manager.mjs" "$HOSTNAME"');
+    expect(deploy.indexOf('certificate-manager.mjs" "$HOSTNAME"')).toBeLessThan(
+      deploy.indexOf('for attempt in $(seq 1 90)')
     );
+  });
+
+  test('keeps the pre-cutover Traefik host deployable during the migration PR', () => {
+    const detection = '-f "$ROOT/ingress/current/ingress-server.mjs"';
+    expect(deploy).toContain(detection);
+    expect(deploy.indexOf(detection)).toBeLessThan(
+      deploy.indexOf('node "$SCRIPT_DIR/render-compose.mjs"')
+    );
+    expect(deploy).toContain('"$PREVIEW_CUSTOM_INGRESS_ACTIVE" == "true"');
   });
 
   test('allows transactional wake rollback to finish before systemd force-kills the unit', () => {

@@ -17,6 +17,7 @@ function optionalEnv(name, fallback = '') {
 
 export function renderPreviewCompose({
   prNumber = process.env.PR_NUMBER,
+  slug = process.env.PREVIEW_SLUG,
   domain = process.env.PREVIEW_DOMAIN,
   root = process.env.PREVIEW_ROOT,
   sourceDir = process.env.SOURCE_DIR,
@@ -32,6 +33,7 @@ export function renderPreviewCompose({
   accessSecret = process.env.PREVIEW_ACCESS_SECRET,
   sessionSecret = process.env.PREVIEW_SESSION_SECRET,
   aiMode = process.env.PREVIEW_AI_MODE || 'live',
+  customIngressActive = process.env.PREVIEW_CUSTOM_INGRESS_ACTIVE !== 'false',
 } = {}) {
   const previewAccessSeats = requirePreviewAccessSeats(accessSeats);
   const previewMasterAccessCode = masterOrgGateEnabled
@@ -46,6 +48,7 @@ export function renderPreviewCompose({
     aiMode === 'live' ? optionalEnv('PREVIEW_ANTHROPIC_API_KEY') : '';
   const env = buildPreviewEnv({
     prNumber,
+    slug,
     domain,
     root,
     sourceDir,
@@ -56,12 +59,23 @@ export function renderPreviewCompose({
     databaseUser,
     databasePassword,
   });
-  const routerBase = env.composeProject;
   const directPortBlock = env.directPort
     ? `\n    ports:\n      - ${q(`127.0.0.1:${env.directPort}:8080`)}`
     : '';
+  const routerBase = env.composeProject;
   const tlsLabels = enableTls
     ? `\n      - ${q(`traefik.http.routers.${routerBase}-https.rule=Host(\`${env.hostname}\`)`)}\n      - ${q(`traefik.http.routers.${routerBase}-https.entrypoints=websecure`)}\n      - ${q(`traefik.http.routers.${routerBase}-https.tls.certresolver=letsencrypt`)}\n      - ${q(`traefik.http.routers.${routerBase}-https.service=${routerBase}`)}`
+    : '';
+  const legacyTraefikLabels = (!env.prNumber || !customIngressActive)
+    ? `    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=preview"
+      - ${q(`traefik.http.routers.${routerBase}-http.rule=Host(\`${env.hostname}\`)`)}
+      - ${q(`traefik.http.routers.${routerBase}-http.entrypoints=web`)}
+      - ${q(`traefik.http.routers.${routerBase}-http.service=${routerBase}`)}
+${tlsLabels}
+      - ${q(`traefik.http.services.${routerBase}.loadbalancer.server.port=8080`)}
+`
     : '';
   const cookieSecure = enableTls ? '"true"' : '"false"';
   // PREVIEW_ACCESS_GATE is consumed by the root route middleware itself. This render
@@ -149,15 +163,7 @@ ${commonEnvironment}
   return `name: ${env.composeProject}
 services:
 ${toolboxService}
-${webService}    labels:
-      - "traefik.enable=true"
-      - "traefik.docker.network=preview"
-      - ${q(`traefik.http.routers.${routerBase}-http.rule=Host(\`${env.hostname}\`)`)}
-      - ${q(`traefik.http.routers.${routerBase}-http.entrypoints=web`)}
-      - ${q(`traefik.http.routers.${routerBase}-http.service=${routerBase}`)}
-${tlsLabels}
-      - ${q(`traefik.http.services.${routerBase}.loadbalancer.server.port=8080`)}
-    restart: unless-stopped
+${webService}${legacyTraefikLabels}    restart: unless-stopped
     healthcheck:
       test: ["CMD", "bun", "-e", "fetch('http://127.0.0.1:8080/api/healthcheck').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
       interval: 15s

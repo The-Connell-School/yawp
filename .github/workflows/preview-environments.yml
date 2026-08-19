@@ -38,6 +38,7 @@ jobs:
       PREVIEW_ROOT: ${{ vars.PREVIEW_ROOT || '/srv/yawp-preview' }}
       PREVIEW_SSH_USER: ${{ vars.PREVIEW_SSH_USER || 'ec2-user' }}
       PREVIEW_TLS: ${{ vars.PREVIEW_TLS || 'true' }}
+      PREVIEW_ACME_EMAIL: ${{ vars.PREVIEW_ACME_EMAIL || 'bryant@brock.software' }}
       PREVIEW_RUNTIME: ${{ vars.PREVIEW_RUNTIME || 'fast' }}
       PREVIEW_MAX_ENVS: ${{ vars.PREVIEW_MAX_ENVS || '30' }}
       PREVIEW_MAX_RESIDENT: ${{ vars.PREVIEW_MAX_RESIDENT || vars.PREVIEW_MAX_ENVS || '20' }}
@@ -198,6 +199,7 @@ jobs:
             "PREVIEW_GITHUB_API_URL=$(shell_quote "$GITHUB_API_URL")"
             "PREVIEW_GITHUB_TOKEN=$(shell_quote "$GH_TOKEN")"
             "PREVIEW_TLS=$(shell_quote "$PREVIEW_TLS")"
+            "PREVIEW_ACME_EMAIL=$(shell_quote "$PREVIEW_ACME_EMAIL")"
             "PREVIEW_RUNTIME=$(shell_quote "$PREVIEW_RUNTIME")"
             "PREVIEW_DATA_MODE=$(shell_quote "$PREVIEW_DATA_MODE")"
             "PREVIEW_SEAT_COUNT=$(shell_quote "$PREVIEW_SEAT_COUNT")"

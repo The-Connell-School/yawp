@@ -714,30 +714,35 @@ describe('PR preview deployment contract', () => {
     expect(ci).toContain('bun test ./scripts/preview/ --timeout 180000');
   });
 
-  test('preview bootstrap installs a secret-protected first-request wake path', () => {
+  test('preview bootstrap installs custom TLS ingress with an authorized first-request wake path', () => {
     const workflow = readRepoFile(
       '.github/workflows/preview-host-bootstrap.yml'
     );
     const bootstrap = readRepoFile('scripts/preview/bootstrap-host.sh');
     const wakeServer = readRepoFile('scripts/preview/wake-server.mjs');
+    const ingressServer = readRepoFile('scripts/preview/ingress-server.mjs');
+    const certificateManager = readRepoFile('scripts/preview/certificate-manager.mjs');
     const wakeScript = readRepoFile('scripts/preview/wake-preview.sh');
     const wakeProof = readRepoFile('scripts/preview/prove-wake.sh');
 
     expect(workflow).toContain('scripts/preview/wake-server.mjs');
+    expect(workflow).toContain('scripts/preview/ingress-server.mjs');
+    expect(workflow).toContain('scripts/preview/certificate-manager.mjs');
     expect(workflow).toContain('scripts/preview/wake-preview.sh');
     expect(workflow).toContain('PREVIEW_MAX_RUNNING');
     expect(workflow).toContain('PREVIEW_DOMAIN');
-    expect(bootstrap).toContain('yawp-preview-wake.service');
-    expect(bootstrap).toContain('--accesslog.filepath=/logs/access.json');
-    expect(bootstrap).toContain('rateLimit');
-    expect(bootstrap).toContain('preview-wake-fallback');
-    expect(bootstrap).toContain('X-Preview-Wake-Secret');
-    expect(bootstrap).toContain('HostRegexp(`^pr-[1-9][0-9]*\\\\.');
+    expect(bootstrap).toContain('yawp-preview-ingress.service');
+    expect(bootstrap).toContain('AmbientCapabilities=CAP_NET_BIND_SERVICE');
+    expect(bootstrap).toContain('yawp-preview-certificate-renewal.timer');
+    expect(bootstrap).not.toContain('image: traefik');
     expect(bootstrap).not.toContain(
       '/var/run/docker.sock:/var/run/docker.sock:rw'
     );
     expect(wakeServer).toContain('timingSafeEqual');
-    expect(wakeServer).toContain('startAccessLogFollower');
+    expect(ingressServer).toContain('createWebSocketUpgradeHandler');
+    expect(ingressServer).toContain('authorizeWake(pr, request.url, request)');
+    expect(ingressServer).toContain("upstreamResponse.headers['x-yawp-preview-authorized']");
+    expect(certificateManager).toContain("type === 'http-01'");
     expect(wakeScript).toContain('docker compose');
     expect(wakeScript).toContain(' start');
     expect(wakeScript).not.toContain(' up ');
@@ -1047,6 +1052,7 @@ describe('PR preview deployment contract', () => {
   test('preview host migration keeps shared services attached to the preview network', () => {
     const bootstrapScript = readRepoFile('scripts/preview/bootstrap-host.sh');
     const deployScript = readRepoFile('scripts/preview/deploy.sh');
+    const ingressScript = readRepoFile('scripts/preview/ingress-server.mjs');
 
     expect(deployScript).toContain(
       'docker network connect preview "$POSTGRES_CONTAINER"'
@@ -1057,9 +1063,9 @@ describe('PR preview deployment contract', () => {
     expect(bootstrapScript).toContain(
       'connect_container_to_preview_network preview-postgres'
     );
-    expect(bootstrapScript).toContain(
-      'connect_container_to_preview_network traefik-traefik-1'
-    );
+    expect(ingressScript).toContain('NetworkSettings?.Networks?.preview?.IPAddress');
+    expect(ingressScript).toContain("socketPath = '/var/run/docker.sock'");
+    expect(bootstrapScript).not.toContain('connect_container_to_preview_network traefik');
   });
 
   test('preview GitHub config can publish dump location and login smoke secrets', () => {
