@@ -1,11 +1,14 @@
-import { rubricCategories, type RubricKey } from '~/domain/grading/rubric';
+import {
+  DEFAULT_INSIGHT_RUBRIC,
+  isHighScore,
+  isLowScore,
+  scoreFraction,
+  type InsightRubric,
+  type InsightRubricCategory,
+} from './insight-rubric';
 
 /** How many example comments to retain per category for LLM synthesis. */
 const SAMPLE_COMMENT_CAP = 5;
-/** Scores at or below this count as a class-wide weakness signal. */
-const LOW_SCORE_THRESHOLD = 2;
-/** Scores at or above this count as a class-wide strength signal. */
-const HIGH_SCORE_THRESHOLD = 4;
 
 export type SubmissionRubricScore = {
   score?: unknown;
@@ -26,7 +29,7 @@ export type GradedSubmissionInput = {
 export type ScoreBand = 1 | 2 | 3 | 4 | 5;
 
 export type CategoryAggregate = {
-  key: RubricKey;
+  key: string;
   label: string;
   weight: number;
   /** Mean score across submissions that scored this category; null when none did. */
@@ -41,8 +44,8 @@ export type CategoryAggregate = {
 export type ClassRubricAggregate = {
   submissionCount: number;
   categories: CategoryAggregate[];
-  strongest: RubricKey | null;
-  weakest: RubricKey | null;
+  strongest: string | null;
+  weakest: string | null;
 };
 
 function emptyDistribution(): Record<ScoreBand, number> {
@@ -68,16 +71,26 @@ export function readRubricEntryScore(
   return null;
 }
 
-function toBand(score: number): ScoreBand | null {
-  const rounded = Math.round(score);
-  if (rounded >= 1 && rounded <= 5) return rounded as ScoreBand;
-  return null;
+/**
+ * The five-band histogram, as a position in the category's own range rather
+ * than as the raw score. On the default one-to-five rubric this is still the
+ * rounded score; on anything else it is where in that rubric the score sits.
+ */
+function toBand(
+  category: Pick<InsightRubricCategory, 'minScore' | 'maxScore'>,
+  score: number
+): ScoreBand | null {
+  const fraction = scoreFraction(category, score);
+  if (fraction === null) return null;
+  return (Math.round(fraction * 4) + 1) as ScoreBand;
 }
 
 export function aggregateRubricPerformance(
-  submissions: GradedSubmissionInput[]
+  submissions: GradedSubmissionInput[],
+  /** The rubric the class was actually graded on. */
+  rubric: InsightRubric = DEFAULT_INSIGHT_RUBRIC
 ): ClassRubricAggregate {
-  const categories: CategoryAggregate[] = rubricCategories.map((category) => {
+  const categories: CategoryAggregate[] = rubric.categories.map((category) => {
     const scores: number[] = [];
     const comments: string[] = [];
     const distribution = emptyDistribution();
@@ -103,10 +116,10 @@ export function aggregateRubricPerformance(
 
       if (score !== null) {
         scores.push(score);
-        const band = toBand(score);
+        const band = toBand(category, score);
         if (band !== null) distribution[band] += 1;
-        if (score <= LOW_SCORE_THRESHOLD) lowCount += 1;
-        if (score >= HIGH_SCORE_THRESHOLD) highCount += 1;
+        if (isLowScore(category, score)) lowCount += 1;
+        if (isHighScore(category, score)) highCount += 1;
       }
 
       if (comment && comments.length < SAMPLE_COMMENT_CAP) {

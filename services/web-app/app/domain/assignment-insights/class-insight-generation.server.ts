@@ -13,6 +13,7 @@ import {
   type DifferentiationInput,
 } from '~/domain/assignment-insights/differentiate-students';
 import type { ClassInsightSummary } from '~/domain/assignment-insights/class-insight-synthesis';
+import { readInsightRubric } from '~/domain/assignment-insights/insight-rubric.server';
 import { prisma } from '~/utils/db.server';
 import {
   AiRateLimitError,
@@ -228,7 +229,13 @@ export async function generateClassAssignmentInsight(input: {
     };
   }
 
-  const aggregate = aggregateRubricPerformance(differentiationInputs);
+  // The rubric the class was graded on, not the five default categories. Read
+  // against the wrong rubric every category comes back "not scored", and the
+  // summary is a summary of nothing.
+  const rubric = await readInsightRubric({
+    classAssignmentId: classAssignment.id,
+  });
+  const aggregate = aggregateRubricPerformance(differentiationInputs, rubric);
   const generatedAt = new Date();
 
   if (input.generatedByMembershipId) {
@@ -266,6 +273,7 @@ export async function generateClassAssignmentInsight(input: {
         assignmentTitle: classAssignment.assignment.title,
         className: classLabel(classAssignment.class),
       },
+      rubric,
       metadata: { classAssignmentId: classAssignment.id },
     });
   } catch {
@@ -302,7 +310,7 @@ export async function generateClassAssignmentInsight(input: {
     };
   }
 
-  const differentiation = buildDifferentiation(differentiationInputs);
+  const differentiation = buildDifferentiation(differentiationInputs, rubric);
   const enrichedSummary = differentiation
     ? { ...summary, differentiation }
     : summary;

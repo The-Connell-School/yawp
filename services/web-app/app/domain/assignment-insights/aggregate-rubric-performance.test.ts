@@ -3,6 +3,21 @@ import {
   aggregateRubricPerformance,
   type GradedSubmissionInput,
 } from './aggregate-rubric-performance';
+import type { InsightRubric } from './insight-rubric';
+
+const GBA_RUBRIC: InsightRubric = {
+  categories: [
+    { key: 'budget', label: 'Budget', weight: 0.5, minScore: 0, maxScore: 100 },
+    {
+      key: 'recommendation',
+      label: 'Recommendation',
+      weight: 0.5,
+      minScore: 0,
+      maxScore: 100,
+    },
+  ],
+};
+
 
 function submission(
   id: string,
@@ -178,5 +193,64 @@ describe('aggregateRubricPerformance', () => {
     )!;
     expect(thesis.scoredCount).toBe(1);
     expect(thesis.averageScore).toBe(4);
+  });
+});
+
+describe('aggregating against an assignment type’s own rubric', () => {
+  test('scores the categories the class was actually graded on', () => {
+    // Before this the aggregate walked the five default categories no matter
+    // what, so a GBA brief scored on `budget` reported every category as unscored
+    // — a summary of nothing, indistinguishable from an ungraded class.
+    const aggregate = aggregateRubricPerformance(
+      [
+        { submissionId: 's1', rubricScores: { budget: { score: 88 }, recommendation: { score: 40 } } },
+        { submissionId: 's2', rubricScores: { budget: { score: 92 }, recommendation: { score: 20 } } },
+      ],
+      GBA_RUBRIC
+    );
+
+    expect(aggregate.categories.map((c) => c.key)).toEqual([
+      'budget',
+      'recommendation',
+    ]);
+    expect(aggregate.categories[0]!.averageScore).toBe(90);
+    expect(aggregate.categories[0]!.scoredCount).toBe(2);
+    expect(aggregate.strongest).toBe('budget');
+    expect(aggregate.weakest).toBe('recommendation');
+  });
+
+  test('strong and struggling are read against the category’s own range', () => {
+    // 88/100 is strong and 20/100 is struggling for the same reason 4/5 and 2/5
+    // are: where they sit in the range, not their raw size.
+    const aggregate = aggregateRubricPerformance(
+      [
+        { submissionId: 's1', rubricScores: { budget: { score: 88 }, recommendation: { score: 20 } } },
+      ],
+      GBA_RUBRIC
+    );
+
+    expect(aggregate.categories[0]!.highCount).toBe(1);
+    expect(aggregate.categories[0]!.lowCount).toBe(0);
+    expect(aggregate.categories[1]!.highCount).toBe(0);
+    expect(aggregate.categories[1]!.lowCount).toBe(1);
+  });
+
+  test('the histogram spreads a hundred-point score across the five bands', () => {
+    const aggregate = aggregateRubricPerformance(
+      [
+        { submissionId: 's1', rubricScores: { budget: { score: 0 } } },
+        { submissionId: 's2', rubricScores: { budget: { score: 50 } } },
+        { submissionId: 's3', rubricScores: { budget: { score: 100 } } },
+      ],
+      GBA_RUBRIC
+    );
+
+    expect(aggregate.categories[0]!.distribution).toEqual({
+      1: 1,
+      2: 0,
+      3: 1,
+      4: 0,
+      5: 1,
+    });
   });
 });

@@ -1,17 +1,18 @@
-import {
-  rubricCategories,
-  rubricKeys,
-  type RubricKey,
-} from '~/domain/grading/rubric';
 import { parseFirstJsonValue } from '~/utils/llm-json.server';
 import type { ClassRubricAggregate } from './aggregate-rubric-performance';
+import {
+  DEFAULT_INSIGHT_RUBRIC,
+  insightRubricKeys,
+  insightRubricLabels,
+  type InsightRubric,
+} from './insight-rubric';
 
 export type CategoryInsightStatus = 'strength' | 'mixed' | 'gap';
 
 const CATEGORY_STATUSES: CategoryInsightStatus[] = ['strength', 'mixed', 'gap'];
 
 export type CategoryInsight = {
-  key: RubricKey;
+  key: string;
   label: string;
   status: CategoryInsightStatus;
   summary: string;
@@ -25,7 +26,7 @@ export type CategoryInsight = {
 export type TeachingNextStep = {
   title: string;
   detail: string;
-  rubricCategory: RubricKey;
+  rubricCategory: string;
 };
 
 export type ClassInsightSummary = {
@@ -39,26 +40,37 @@ export type InsightPromptContext = {
   className?: string | null;
 };
 
-const rubricKeySet = new Set<string>(rubricKeys);
-const labelByKey = new Map<string, string>(
-  rubricCategories.map((c) => [c.key, c.label])
-);
-
-function formatAverage(average: number | null): string {
-  return average === null ? 'not scored' : `${average.toFixed(2)} / 5`;
+function formatAverage(average: number | null, outOf: number): string {
+  return average === null ? 'not scored' : `${average.toFixed(2)} / ${outOf}`;
 }
 
 export function buildInsightPrompt(
   aggregate: ClassRubricAggregate,
-  context: InsightPromptContext
+  context: InsightPromptContext,
+  /** The rubric the class was graded on; its keys are what the model may use. */
+  rubric: InsightRubric = DEFAULT_INSIGHT_RUBRIC
 ): { system: string; user: string } {
+  const labelByKey = insightRubricLabels(rubric);
+  const rangeByKey = new Map(
+    rubric.categories.map((category) => [category.key, category])
+  );
+  const rubricKeys = rubric.categories.map((category) => category.key);
+
+  // Thresholds are stated per category rather than once, because each category
+  // carries its own range — "strong" is a 4 on one rubric and a 75 on another,
+  // and a model told the wrong number reads the data backwards.
   const categoryLines = aggregate.categories
-    .map(
-      (category) =>
-        `- ${category.label} (${category.key}): avg ${formatAverage(
-          category.averageScore
-        )} across ${category.scoredCount} scored; ${category.highCount} strong (>=4), ${category.lowCount} struggling (<=2).`
-    )
+    .map((category) => {
+      const range = rangeByKey.get(category.key);
+      const max = range?.maxScore ?? 5;
+      const min = range?.minScore ?? 1;
+      const strongAt = min + (max - min) * 0.75;
+      const strugglingAt = min + (max - min) * 0.25;
+      return `- ${category.label} (${category.key}): avg ${formatAverage(
+        category.averageScore,
+        max
+      )} across ${category.scoredCount} scored; ${category.highCount} strong (>=${strongAt}), ${category.lowCount} struggling (<=${strugglingAt}).`;
+    })
     .join('\n');
 
   const contextLines = [
@@ -123,7 +135,13 @@ function asString(value: unknown): string | null {
     : null;
 }
 
-export function parseInsightResponse(text: string): ClassInsightSummary | null {
+export function parseInsightResponse(
+  text: string,
+  rubric: InsightRubric = DEFAULT_INSIGHT_RUBRIC
+): ClassInsightSummary | null {
+  const rubricKeySet = insightRubricKeys(rubric);
+  const labelByKey = insightRubricLabels(rubric);
+
   let parsed: unknown;
   try {
     parsed = parseFirstJsonValue(text);
@@ -152,7 +170,7 @@ export function parseInsightResponse(text: string): ClassInsightSummary | null {
     const summary = asString(entry.summary);
     if (!summary) continue;
     categories.push({
-      key: key as RubricKey,
+      key,
       label: labelByKey.get(key) ?? key,
       status: coerceStatus(entry.status),
       summary,
@@ -173,11 +191,7 @@ export function parseInsightResponse(text: string): ClassInsightSummary | null {
     const title = asString(entry.title);
     const detail = asString(entry.detail);
     if (!title || !detail) continue;
-    nextSteps.push({
-      title,
-      detail,
-      rubricCategory: rubricCategory as RubricKey,
-    });
+    nextSteps.push({ title, detail, rubricCategory });
   }
 
   return { overview, categories, nextSteps };
