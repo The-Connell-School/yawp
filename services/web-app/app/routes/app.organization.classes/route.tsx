@@ -117,6 +117,42 @@ type TeacherSchoolConnector = {
   };
 };
 
+function prismaUniqueConstraintTargets(error: unknown): string[] | null {
+  if (!error || typeof error !== 'object') return null;
+
+  const prismaError = error as {
+    code?: unknown;
+    meta?: {
+      target?: unknown;
+      driverAdapterError?: {
+        cause?: { constraint?: { fields?: unknown } };
+      };
+    };
+  };
+  if (prismaError.code !== 'P2002') return null;
+
+  const values = [
+    prismaError.meta?.target,
+    prismaError.meta?.driverAdapterError?.cause?.constraint?.fields,
+  ];
+
+  return values.flatMap((value) => {
+    if (Array.isArray(value)) {
+      return value.filter((item): item is string => typeof item === 'string');
+    }
+    return typeof value === 'string' ? [value] : [];
+  });
+}
+
+function uniqueConstraintIncludes(
+  targets: readonly string[],
+  field: string
+): boolean {
+  return targets.some((target) =>
+    target.replaceAll('"', '').split(',').some((part) => part.trim().includes(field))
+  );
+}
+
 async function connectTeachersToSchool(
   tx: TeacherSchoolConnector,
   teacherIds: string[],
@@ -328,11 +364,10 @@ export async function action({ request }: ActionFunctionArgs) {
       });
 
       return dataResponse({ success: true });
-    } catch (error: any) {
-      if (error.code === 'P2002') {
-        const target = error.meta?.target;
-        const targetText = Array.isArray(target) ? target.join(',') : String(target ?? '');
-        if (targetText.includes('code')) {
+    } catch (error: unknown) {
+      const uniqueTargets = prismaUniqueConstraintTargets(error);
+      if (uniqueTargets) {
+        if (uniqueConstraintIncludes(uniqueTargets, 'code')) {
           return dataResponse(
             { error: 'Class code already in use. Choose a different code.' },
             { status: 400 }
@@ -413,11 +448,10 @@ export async function action({ request }: ActionFunctionArgs) {
       });
 
       return dataResponse({ success: true });
-    } catch (error: any) {
-      if (error.code === 'P2002') {
-        const target = error.meta?.target;
-        const targetText = Array.isArray(target) ? target.join(',') : String(target ?? '');
-        if (targetText.includes('code')) {
+    } catch (error: unknown) {
+      const uniqueTargets = prismaUniqueConstraintTargets(error);
+      if (uniqueTargets) {
+        if (uniqueConstraintIncludes(uniqueTargets, 'code')) {
           return dataResponse(
             { error: 'Class code already in use. Choose a different code.' },
             { status: 400 }
