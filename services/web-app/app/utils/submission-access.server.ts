@@ -4,7 +4,6 @@ import { buildTeacherDocumentAccessWhere } from '~/utils/grading-auth.server';
 
 export function buildSubmissionTitleEditWhere(params: {
   submissionId: string;
-  userId: string;
   membershipId: string;
   organizationId: string;
   isAdmin: boolean;
@@ -15,7 +14,14 @@ export function buildSubmissionTitleEditWhere(params: {
       is: {
         deletedAt: null,
         OR: [
-          { membership: { is: { userId: params.userId } } },
+          {
+            membership: {
+              is: {
+                id: params.membershipId,
+                organizationId: params.organizationId,
+              },
+            },
+          },
           {
             ...buildTeacherDocumentAccessWhere({
               membershipId: params.membershipId,
@@ -32,7 +38,6 @@ export function buildSubmissionTitleEditWhere(params: {
 /** Owner, teacher of student's class, or admin — same visibility as submission page loader. */
 export async function findSubmissionForTitleEdit(params: {
   submissionId: string;
-  userId: string;
   membershipId: string;
   organizationId: string;
   isAdmin: boolean;

@@ -54,8 +54,52 @@ ALTER TABLE "SubmissionActivity"
 ADD CONSTRAINT "SubmissionActivity_actorMembershipId_fkey"
 FOREIGN KEY ("actorMembershipId", "organizationId")
 REFERENCES "OrgMembership"("id", "organizationId")
--- PostgreSQL 15+ column-specific SET NULL preserves the durable tenant link
--- and actor snapshot while allowing the membership itself to be deleted.
-ON DELETE SET NULL ("actorMembershipId") ON UPDATE CASCADE;
+ON DELETE NO ACTION ON UPDATE NO ACTION;
+
+-- Prisma cannot express column-specific SET NULL for a composite relation.
+-- Detach only the optional actor link before membership deletion while keeping
+-- the immutable tenant id and actor snapshot on the audit row.
+CREATE FUNCTION "detachSubmissionActivityActor"()
+RETURNS TRIGGER AS $$
+BEGIN
+  UPDATE "SubmissionActivity"
+  SET "actorMembershipId" = NULL
+  WHERE "actorMembershipId" = OLD.id
+    AND "organizationId" = OLD."organizationId";
+  RETURN OLD;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER "OrgMembership_detach_submission_activity_actor"
+BEFORE DELETE ON "OrgMembership"
+FOR EACH ROW EXECUTE FUNCTION "detachSubmissionActivityActor"();
+
+-- Submission does not duplicate organizationId. Enforce the immutable
+-- submission-to-tenant anchor against its document owner's membership.
+CREATE FUNCTION "enforceSubmissionActivityTenant"()
+RETURNS TRIGGER AS $$
+DECLARE
+  submission_organization_id TEXT;
+BEGIN
+  SELECT membership."organizationId"
+  INTO submission_organization_id
+  FROM "Submission" submission
+  JOIN "Document" document ON document.id = submission."documentId"
+  JOIN "OrgMembership" membership ON membership.id = document."membershipId"
+  WHERE submission.id = NEW."submissionId";
+
+  IF submission_organization_id IS NULL
+     OR submission_organization_id <> NEW."organizationId" THEN
+    RAISE EXCEPTION 'SubmissionActivity organization must match submission tenant'
+      USING ERRCODE = '23514';
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER "SubmissionActivity_tenant_guard"
+BEFORE INSERT OR UPDATE OF "submissionId", "organizationId"
+ON "SubmissionActivity"
+FOR EACH ROW EXECUTE FUNCTION "enforceSubmissionActivityTenant"();
 
 COMMIT;

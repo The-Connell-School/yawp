@@ -48,6 +48,11 @@ bun run --cwd packages/prisma prisma migrate deploy
 echo "Validating final Prisma schema and migration status"
 bun run --cwd packages/prisma prisma validate
 bun run --cwd packages/prisma prisma migrate status
+echo "Checking migrated database for Prisma-schema drift"
+bun run --cwd packages/prisma prisma migrate diff \
+  --from-config-datasource \
+  --to-schema schema.prisma \
+  --exit-code
 
 echo "Seeding isolated proof fixtures"
 bun run --cwd packages/prisma seed-local-dev

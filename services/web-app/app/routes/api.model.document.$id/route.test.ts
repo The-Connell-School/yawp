@@ -138,6 +138,9 @@ describe('api.model.document.$id', () => {
         document: { is: expect.any(Object) },
       })
     );
+    expect(
+      prisma.submission.updateMany.mock.calls[0][0].where.document.is
+    ).toEqual(prisma.submission.findFirst.mock.calls[0][0].where.document.is);
     expect(prisma.submissionActivity.create).toHaveBeenCalledTimes(1);
     const activity = prisma.submissionActivity.create.mock.calls[0][0].data;
     expect(activity.eventType).toBe('submission.body_updated');
@@ -180,6 +183,34 @@ describe('api.model.document.$id', () => {
         failureReason: 'stale_submission_snapshot',
       },
     });
+  });
+
+  test('reuses assignment-specific teacher access at the snapshot write', async () => {
+    prisma.submission.findFirst.mockResolvedValue({
+      id: 'sub-1',
+      text: 'Old body',
+      html: '<p>Old body</p>',
+      updatedAt: new Date('2026-08-20T08:00:00.000Z'),
+      releasedAt: null,
+      document: { membership: { organizationId: 'org-1' } },
+    });
+    prisma.submission.updateMany.mockResolvedValue({ count: 0 });
+    const form = new FormData();
+    form.append('text', 'New body');
+
+    const response = (await action({
+      request: new Request(
+        'https://example.com/api/model/document/doc-1?snapshotId=sub-1',
+        { method: 'PUT', body: form }
+      ),
+      params: { id: 'doc-1' },
+    } as any)) as Response;
+
+    expect(response.status).toBe(409);
+    expect(
+      prisma.submission.updateMany.mock.calls[0][0].where.document.is
+    ).toEqual(prisma.submission.findFirst.mock.calls[0][0].where.document.is);
+    expect(prisma.submissionActivity.create).not.toHaveBeenCalled();
   });
 
   test('rejects stale editor saves and records a rejected journal entry', async () => {

@@ -17,6 +17,8 @@ import {
 
 const POST = z.object({ documentId: z.string(), title: z.string().optional() });
 
+class SubmitDocumentConflictError extends Error {}
+
 function hashString(value: string) {
   return createHash('sha256').update(value).digest('hex');
 }
@@ -30,30 +32,32 @@ const actionImpl = async ({ request }: ActionFunctionArgs) => {
   });
   const { error, data } = await parseFormData(request, POST);
   if (error) return validationError(error);
-
-  const document = await prisma.document.findFirst({
-    where: {
-      id: data.documentId,
-      deletedAt: null,
-      ...(hasEffectivePlatformAdmin(user?.isAdmin)
-        ? {}
-        : {
-            OR: [
-              { membershipId: profile.id },
-              {
-                membership: {
-                  classesAsStudent: {
-                    some: {
-                      teachers: {
-                        some: { id: profile.id },
-                      },
+  const isAdmin = hasEffectivePlatformAdmin(user?.isAdmin);
+  const documentAccessWhere = {
+    id: data.documentId,
+    deletedAt: null,
+    ...(isAdmin
+      ? {}
+      : {
+          OR: [
+            { membershipId: profile.id },
+            {
+              membership: {
+                classesAsStudent: {
+                  some: {
+                    teachers: {
+                      some: { id: profile.id },
                     },
                   },
                 },
               },
-            ],
-          }),
-    },
+            },
+          ],
+        }),
+  };
+
+  const document = await prisma.document.findFirst({
+    where: documentAccessWhere,
     select: {
       id: true,
       html: true,
@@ -134,6 +138,19 @@ const actionImpl = async ({ request }: ActionFunctionArgs) => {
   try {
     const { submission: createdSubmission, document: finalDocument } =
       await prisma.$transaction(async (tx) => {
+        const updatedDocument = await tx.document.updateMany({
+          where: {
+            ...documentAccessWhere,
+            revision: document.revision,
+            html: document.html,
+            text: document.text,
+          },
+          data: { updatedAt: now },
+        });
+        if (updatedDocument.count !== 1) {
+          throw new SubmitDocumentConflictError();
+        }
+
         const submission = await tx.submission.create({
           data: {
             documentId: document.id,
@@ -145,11 +162,8 @@ const actionImpl = async ({ request }: ActionFunctionArgs) => {
           select: { id: true, title: true, submittedAt: true },
         });
 
-        const doc = await tx.document.update({
+        const doc = await tx.document.findUniqueOrThrow({
           where: { id: document.id },
-          data: {
-            updatedAt: now,
-          },
         });
 
         await recordSubmissionActivity(tx, {
@@ -206,6 +220,16 @@ const actionImpl = async ({ request }: ActionFunctionArgs) => {
           error instanceof Error ? error.message : 'submit_transaction_failed',
       },
     });
+    if (error instanceof SubmitDocumentConflictError) {
+      return dataResponse(
+        {
+          success: false,
+          message:
+            'This document changed before it could be submitted. Please refresh and try again.',
+        },
+        { status: 409 }
+      );
+    }
     throw error;
   }
 };

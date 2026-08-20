@@ -53,7 +53,6 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
     const titleAccess = {
       submissionId: params.id,
-      userId,
       membershipId: profile.id,
       organizationId: profile.organization.id,
       isAdmin: hasEffectivePlatformAdmin(user?.isAdmin),

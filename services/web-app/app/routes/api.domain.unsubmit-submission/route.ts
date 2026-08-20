@@ -82,6 +82,9 @@ export async function action({ request }: ActionFunctionArgs) {
           unsubmittedAt: null,
           gradedAt: null,
           releasedAt: null,
+          document: {
+            is: { membershipId: actor.membershipId },
+          },
         },
         data: {
           unsubmittedAt: now,

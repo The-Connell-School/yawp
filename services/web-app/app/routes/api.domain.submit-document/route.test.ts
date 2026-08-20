@@ -6,6 +6,8 @@ const prisma = {
   },
   document: {
     findFirst: mock(),
+    updateMany: mock(),
+    findUniqueOrThrow: mock(),
   },
   submission: {
     create: mock(),
@@ -40,6 +42,8 @@ describe('api.domain.submit-document', () => {
   beforeEach(() => {
     prisma.user.findUnique.mockReset();
     prisma.document.findFirst.mockReset();
+    prisma.document.updateMany.mockReset();
+    prisma.document.findUniqueOrThrow.mockReset();
     prisma.submission.create.mockReset();
     prisma.documentWriteJournal.create.mockReset();
     prisma.documentWriteJournal.update.mockReset();
@@ -80,22 +84,21 @@ describe('api.domain.submit-document', () => {
       id: 'journal-1',
       status: 'accepted',
     });
+    prisma.document.updateMany.mockResolvedValue({ count: 1 });
+    prisma.document.findUniqueOrThrow.mockResolvedValue({
+      id: 'doc-1',
+      revision: 4,
+    });
+    prisma.submission.create.mockResolvedValue({
+      id: 'sub-1',
+      title: 'Essay',
+      submittedAt: new Date('2026-08-20T12:00:00.000Z'),
+    });
     prisma.$transaction.mockImplementation(async (callback: any) => {
       const tx = {
         user: prisma.user,
-        submission: {
-          create: mock().mockResolvedValue({
-            id: 'sub-1',
-            title: 'Essay',
-            submittedAt: new Date('2026-08-20T12:00:00.000Z'),
-          }),
-        },
-        document: {
-          update: mock().mockResolvedValue({
-            id: 'doc-1',
-            revision: 4,
-          }),
-        },
+        submission: prisma.submission,
+        document: prisma.document,
         submissionActivity: prisma.submissionActivity,
       };
 
@@ -174,5 +177,27 @@ describe('api.domain.submit-document', () => {
         },
       }
     );
+  });
+
+  test('returns 409 with no submission or activity when access changes before commit', async () => {
+    prisma.document.updateMany.mockResolvedValue({ count: 0 });
+    const form = new FormData();
+    form.append('documentId', 'doc-1');
+
+    const response = (await action({
+      request: new Request('https://example.com/api/domain/submit-document', {
+        method: 'POST',
+        body: form,
+      }),
+    } as any)) as { data: { success: boolean }; init?: { status?: number } };
+
+    expect(response.init?.status).toBe(409);
+    expect(prisma.submission.create).not.toHaveBeenCalled();
+    expect(prisma.submissionActivity.create).not.toHaveBeenCalled();
+    expect(
+      prisma.documentWriteJournal.update.mock.calls.at(-1)?.[0]
+    ).toMatchObject({
+      data: { status: 'rejected' },
+    });
   });
 });

@@ -81,6 +81,18 @@ BEGIN
     RAISE EXCEPTION 'organization activity cleanup is not cascade-compatible';
   END IF;
 
+  IF (
+    SELECT count(*)
+    FROM pg_trigger
+    WHERE tgname IN (
+      'SubmissionActivity_tenant_guard',
+      'OrgMembership_detach_submission_activity_actor'
+    )
+      AND NOT tgisinternal
+  ) <> 2 THEN
+    RAISE EXCEPTION 'SubmissionActivity tenant or actor-detach trigger is missing';
+  END IF;
+
   IF EXISTS (SELECT 1 FROM "SubmissionActivity") THEN
     RAISE EXCEPTION 'fresh migration falsely backfilled submission activity';
   END IF;
@@ -160,7 +172,97 @@ BEGIN
   EXCEPTION
     WHEN foreign_key_violation THEN NULL;
   END;
+
+  BEGIN
+    INSERT INTO "SubmissionActivity" (
+      id,
+      "submissionId",
+      "organizationId",
+      "actorMembershipId",
+      "actorType",
+      "eventType",
+      source,
+      changes
+    ) VALUES (
+      'submission-activity-wrong-tenant-proof',
+      proof.submission_id,
+      'submission-activity-other-org',
+      NULL,
+      'system',
+      'submission.grade_updated',
+      'db-proof',
+      '{}'::jsonb
+    );
+    RAISE EXCEPTION 'submission/activity tenant mismatch unexpectedly succeeded';
+  EXCEPTION
+    WHEN check_violation THEN NULL;
+  END;
 END $$;
+
+INSERT INTO "User" (id, email, name)
+VALUES (
+  'submission-activity-detach-user',
+  'submission-activity-detach@example.test',
+  'Detachable Audit Actor'
+);
+INSERT INTO "OrgMembership" (id, "userId", "organizationId", role)
+SELECT
+  'submission-activity-detach-membership',
+  'submission-activity-detach-user',
+  proof.organization_id,
+  'TEACHER'
+FROM submission_activity_proof_state proof;
+INSERT INTO "SubmissionActivity" (
+  id,
+  "submissionId",
+  "organizationId",
+  "actorMembershipId",
+  "actorType",
+  "eventType",
+  source,
+  changes
+)
+SELECT
+  'submission-activity-detach-proof',
+  proof.submission_id,
+  proof.organization_id,
+  'submission-activity-detach-membership',
+  'human',
+  'submission.comment_created',
+  'db-proof',
+  '{}'::jsonb
+FROM submission_activity_proof_state proof;
+
+DO $$
+BEGIN
+  BEGIN
+    UPDATE "OrgMembership"
+    SET "organizationId" = 'submission-activity-other-org'
+    WHERE id = 'submission-activity-detach-membership';
+    RAISE EXCEPTION 'audited actor tenant reassignment unexpectedly succeeded';
+  EXCEPTION
+    WHEN foreign_key_violation THEN NULL;
+  END;
+END $$;
+
+DELETE FROM "OrgMembership"
+WHERE id = 'submission-activity-detach-membership';
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM "SubmissionActivity" activity
+    JOIN submission_activity_proof_state proof
+      ON proof.submission_id = activity."submissionId"
+    WHERE activity.id = 'submission-activity-detach-proof'
+      AND activity."actorMembershipId" IS NULL
+      AND activity."organizationId" = proof.organization_id
+  ) THEN
+    RAISE EXCEPTION 'membership deletion did not detach only the actor link';
+  END IF;
+END $$;
+DELETE FROM "SubmissionActivity" WHERE id = 'submission-activity-detach-proof';
+DELETE FROM "User" WHERE id = 'submission-activity-detach-user';
 
 CREATE TEMP TABLE submission_activity_tenant_negative AS
 WITH attempted AS (

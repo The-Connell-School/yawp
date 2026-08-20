@@ -1,6 +1,6 @@
 /**
  * Delete Submission rows that are not the canonical "real" submit (or are version-only snapshots).
- * `SubmissionComment` rows cascade; `LegacyGradeRedirect` is removed first (no FK to Submission).
+ * `SubmissionComment` rows cascade; `LegacyGradeRedirect` is removed after each confirmed deletion.
  * Submissions with durable `SubmissionActivity` history are always retained.
  *
  * Modes (`DERIVE_CANONICAL_FROM`):
@@ -26,7 +26,10 @@
  *   cd packages/prisma && DERIVE_CANONICAL_FROM=latest_submitted_at TARGET_DATABASE_URL=... bun ./scripts/archive-non-canonical-submissions.ts
  */
 import pg from 'pg';
-import { durableActivityExclusionSql } from './archive-non-canonical-submissions.helpers';
+import {
+  deleteSubmissionsAndRedirects,
+  durableActivityExclusionSql,
+} from './archive-non-canonical-submissions.helpers';
 
 const SOURCE_URL = process.env.SOURCE_DATABASE_URL;
 const TARGET_URL = process.env.TARGET_DATABASE_URL ?? process.env.DATABASE_URL;
@@ -122,7 +125,7 @@ function gradeSignalsSql(alias: string): string {
   `;
 }
 
-/** `LegacyGradeRedirect` has no FK; remove before deleting submissions. */
+/** Remove redirect rows only after their submissions were confirmed deleted. */
 async function deleteLegacyRedirectsForSubmissionIds(
   client: pg.PoolClient,
   ids: string[]
@@ -193,18 +196,25 @@ async function main() {
               AND s."archivedAt" IS NULL
               AND ${durableActivityExclusionSql('s')}
               AND NOT (${gradeSignalsSql('s')})
+            RETURNING s.id
             `
             : `
             DELETE FROM "Submission" s
             WHERE s.id = ANY($1::text[])
               AND s."archivedAt" IS NULL
               AND ${durableActivityExclusionSql('s')}
+            RETURNING s.id
             `;
           for (let i = 0; i < versionOnlyIds.length; i += chunkSize) {
             const chunk = versionOnlyIds.slice(i, i + chunkSize);
             if (chunk.length === 0) continue;
-            await deleteLegacyRedirectsForSubmissionIds(targetClient, chunk);
-            const res = await targetClient.query(deleteSql, [chunk]);
+            const res = await targetClient.query<{ id: string }>(deleteSql, [
+              chunk,
+            ]);
+            await deleteLegacyRedirectsForSubmissionIds(
+              targetClient,
+              res.rows.map((row) => row.id)
+            );
             deleted += res.rowCount ?? 0;
           }
 
@@ -354,12 +364,10 @@ async function main() {
         for (let i = 0; i < doomedIds.length; i += chunkSize) {
           const chunk = doomedIds.slice(i, i + chunkSize);
           if (chunk.length === 0) continue;
-          await deleteLegacyRedirectsForSubmissionIds(targetClient, chunk);
-          const delRes = await targetClient.query(
-            `DELETE FROM "Submission" WHERE id = ANY($1::text[])`,
-            [chunk]
+          deletedCanonical += await deleteSubmissionsAndRedirects(
+            targetClient,
+            chunk
           );
-          deletedCanonical += delRes.rowCount ?? 0;
         }
 
         if (
@@ -390,12 +398,10 @@ async function main() {
           for (let i = 0; i < doomedNcIds.length; i += chunkSize) {
             const chunk = doomedNcIds.slice(i, i + chunkSize);
             if (chunk.length === 0) continue;
-            await deleteLegacyRedirectsForSubmissionIds(targetClient, chunk);
-            const delRes = await targetClient.query(
-              `DELETE FROM "Submission" WHERE id = ANY($1::text[])`,
-              [chunk]
+            deletedNoCanonical += await deleteSubmissionsAndRedirects(
+              targetClient,
+              chunk
             );
-            deletedNoCanonical += delRes.rowCount ?? 0;
           }
         } else if (useSource && withoutCanonical.length > 0) {
           console.log(

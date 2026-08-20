@@ -218,6 +218,7 @@ describe('api.domain.unsubmit-submission', () => {
       unsubmittedAt: null,
       gradedAt: null,
       releasedAt: null,
+      document: { is: { membershipId: 'student-1' } },
     });
     expect(call.data).toEqual({
       unsubmittedAt: expect.any(Date),

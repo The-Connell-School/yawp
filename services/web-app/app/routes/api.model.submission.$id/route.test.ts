@@ -130,6 +130,15 @@ describe('api.model.submission.$id', () => {
     expect(updateArg.where.document).toEqual(
       expect.objectContaining({ is: expect.any(Object) })
     );
+    const ownerBranch = updateArg.where.document.is.OR[0];
+    expect(ownerBranch).toEqual({
+      membership: {
+        is: { id: 'profile-student', organizationId: 'org-1' },
+      },
+    });
+    expect(
+      prisma.submission.findFirst.mock.calls[0][0].where.document.is.OR[0]
+    ).toEqual(ownerBranch);
     expect(prisma.submissionActivity.create).toHaveBeenCalledTimes(1);
     expect(prisma.submissionActivity.create.mock.calls[0][0].data).toEqual(
       expect.objectContaining({

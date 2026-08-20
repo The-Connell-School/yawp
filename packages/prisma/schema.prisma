@@ -1021,9 +1021,9 @@ model SubmissionActivity {
   actorMembershipId    String?
   /// Composite tenant key prevents an actor membership from another
   /// organization being linked to this activity. The hand-written migration
-  /// uses PostgreSQL's column-specific SET NULL action so membership deletion
-  /// clears only actorMembershipId while retaining organizationId.
-  actorMembership      OrgMembership? @relation("SubmissionActivityActor", fields: [actorMembershipId, organizationId], references: [id, organizationId], onDelete: NoAction)
+  /// uses a database trigger to clear actorMembershipId before membership
+  /// deletion while retaining organizationId and the actor snapshot.
+  actorMembership      OrgMembership? @relation("SubmissionActivityActor", fields: [actorMembershipId, organizationId], references: [id, organizationId], onDelete: NoAction, onUpdate: NoAction)
   actorType            String
   actorName            String?
   actorEmail           String?
