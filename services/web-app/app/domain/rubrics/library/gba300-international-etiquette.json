@@ -1,0 +1,80 @@
+{
+  "name": "gba300-international-etiquette",
+  "title": "GBA 300: International Etiquette",
+  "scoringScale": {
+    "type": "weighted_percent",
+    "minScore": 0,
+    "maxScore": 20,
+    "step": 1,
+    "compositeMin": 0,
+    "compositeMax": 50
+  },
+  "rubric": {
+    "categories": [
+      {
+        "key": "introduction",
+        "label": "Introduction",
+        "weight": 0.1,
+        "description": "In no more than four sentences, name both countries and give a genuine, specific reason for the pairing that purposefully sets up the comparison.",
+        "grammarHighlighting": false,
+        "bands": [
+          { "min": 0, "max": 0, "label": "Absent", "description": "No introduction." },
+          { "min": 1, "max": 2, "label": "Struggling", "description": "A country is missing, the introduction is seriously over length, or it fails to establish the paper's purpose." },
+          { "min": 3, "max": 3, "label": "Developing", "description": "Present but generic, overlong, or missing a real reason for the pairing." },
+          { "min": 4, "max": 4, "label": "Proficient", "description": "No more than four sentences, names both countries, gives a plausible reason for interest, and reads clearly and professionally." },
+          { "min": 5, "max": 5, "label": "Exemplary", "description": "No more than four sentences, names both countries, and gives a genuine, specific reason—usually the contrast that makes the pairing interesting. Purposeful setup, not a formality." }
+        ]
+      },
+      {
+        "key": "country_1_its_two_topics",
+        "label": "Country 1 & Its Two Topics",
+        "weight": 0.4,
+        "description": "Analyze two interpersonal business-communication topics for Country 1, each in no more than six sentences with descriptive subheadings, specific researched detail, professional prose, practical significance, and respectful framing.",
+        "grammarHighlighting": false,
+        "bands": [
+          { "min": 0, "max": 0, "label": "Absent", "description": "Country section missing." },
+          { "min": 1, "max": 13, "label": "Struggling", "description": "A topic is off-task (economy, history, geography, tourism, politics, or similar), a required topic or subheading is missing, or content is inaccurate, judgmental, or stereotyping." },
+          { "min": 14, "max": 15, "label": "Developing", "description": "One topic drifts off-task, sections exceed the sentence cap, analysis stays surface-level, or subheadings are vague." },
+          { "min": 16, "max": 17, "label": "Proficient", "description": "Both topics are on-task and factual, sections stay within the cap, subheadings are clear, and description is solid with minor lapses in significance, specificity, or clarity." },
+          { "min": 18, "max": 20, "label": "Exemplary", "description": "Both topics are squarely interpersonal business communication. Each is specific, accurate, no more than six sentences, and explains what a businessperson should do or what a custom signals. Subheadings are descriptive; prose is natural and professional; cultural differences are framed respectfully." }
+        ]
+      },
+      {
+        "key": "country_2_its_two_topics",
+        "label": "Country 2 & Its Two Topics",
+        "weight": 0.4,
+        "description": "Apply the Country 1 standards to two topics for Country 2. At the exemplary level, topic choices should also create a genuine parallel or contrast that the conclusion can synthesize.",
+        "grammarHighlighting": false,
+        "bands": [
+          { "min": 0, "max": 0, "label": "Absent", "description": "Country section missing." },
+          { "min": 1, "max": 13, "label": "Struggling", "description": "A topic is off-task (economy, history, geography, tourism, politics, or similar), a required topic or subheading is missing, or content is inaccurate, judgmental, or stereotyping." },
+          { "min": 14, "max": 15, "label": "Developing", "description": "One topic drifts off-task, sections exceed the sentence cap, analysis stays surface-level, or subheadings are vague." },
+          { "min": 16, "max": 17, "label": "Proficient", "description": "Both topics are on-task and factual, sections stay within the cap, subheadings are clear, and description is solid with minor lapses in significance, specificity, or clarity." },
+          { "min": 18, "max": 20, "label": "Exemplary", "description": "Both topics meet the exemplary Country 1 standard and create a genuine parallel or contrast with Country 1, giving the conclusion something meaningful to compare." }
+        ]
+      },
+      {
+        "key": "conclusion",
+        "label": "Conclusion",
+        "weight": 0.1,
+        "description": "In no more than four sentences, synthesize a real comparison between the cultures and explain why the difference matters for global business.",
+        "grammarHighlighting": false,
+        "bands": [
+          { "min": 0, "max": 0, "label": "Absent", "description": "No conclusion." },
+          { "min": 1, "max": 2, "label": "Struggling", "description": "No comparison; treats the countries separately or trails off without a takeaway." },
+          { "min": 3, "max": 3, "label": "Developing", "description": "Mostly restates the four topics without synthesis, or exceeds the sentence limit." },
+          { "min": 4, "max": 4, "label": "Proficient", "description": "No more than four sentences and accurately compares the countries, though the insight is modest or partly repeats earlier sections." },
+          { "min": 5, "max": 5, "label": "Exemplary", "description": "No more than four sentences and draws a real comparative insight—what the differences reveal and why that matters for global business." }
+        ]
+      }
+    ]
+  },
+  "promptConfig": {
+    "gradingInstructions": "Course context: GBA 300, University of Alabama (Culverhouse College of Business). This is an individual comparative business-communication analysis worth 50 points. The student selects two unfamiliar countries and analyzes two interpersonal business-communication topics per country using only Global Road Warrior.\n\nGrade only the four scored categories against their declared raw-point bands and assign an integer inside the earned band. Their maxima are 5, 20, 20, and 5. Do not convert a section to a 0–100 score. Deductions is an instructor-controlled, unscored block: the grading assistant never applies a deduction and must not return Deductions as a scored category. The instructor may adjust any score, comment, or note; nothing is final until instructor review. Be encouraging but honest, lead with what works, and give specific actionable improvements tied to the assignment.\n\nCardinal topic rule: topics must concern interpersonal business communication, such as eye contact/body language, workplace hierarchy, negotiation, entertaining clients, greetings/forms of address, meeting etiquette, directness, or business gift-giving. Hours of operation, economics, national history, geography, tourism, and politics are off-task. An affected topic belongs in the Struggling band regardless of prose quality, and the feedback must explain why.\n\nSource discipline: Global Road Warrior is the only permitted source. Paraphrasing it is expected and should not be penalized. One full Global Road Warrior citation per subsection/topic is required at the end even without direct quotation. In-text citations are required only for direct quotations. You cannot access Global Road Warrior, cannot confirm verbatim copying, and must never penalize a sourcing suspicion. Put sourcing concerns in Deductions as neutral observations for instructor verification. Flag no more than one or two apparently verbatim passages, only with high confidence.\n\nOverall feedback must contain: (1) an overall impression in 2–3 sentences, leading with what works; (2) sections 1–4 with band, raw points earned out of the section maximum, and the single most useful improvement; (3) a Deductions block that explicitly addresses all three areas every time, even when everything is in order: citation status, source check, and visible formatting notes; and (4) one highest-leverage next step.\n\nCitation status: when complete, say \"Citations appear complete and correct; no deduction indicated.\" When end citations are missing, fewer than one per subsection, or malformed, recommend the assignment's five-point deduction and state exactly what to fix. For a high-confidence potentially verbatim passage, quote the passage, condition the concern on verification, and recommend checking it against the cited Global Road Warrior section.\n\nSource check: neutrally identify claims that may fall outside Global Road Warrior's business-culture sections; never deduct. Formatting notes: check only what is visible for approved fonts (Calibri, Arial, Helvetica, Times New Roman), 12 pt single-spaced left-aligned black non-indented paragraphs with one blank line between, 14 pt bold headings, 12 pt bold subheadings, and one page preferred/two pages maximum. Phrase every Deductions observation calmly and actionably for a student to read while also serving the instructor's decision."
+  },
+  "outputSchema": {
+    "responseShape": "categories_overall_comment",
+    "schemaVersion": 1
+  },
+  "calibrationNotes": "Student-visible assignment framework plus grading-assistant instructions supplied for GBA 300. Deductions remains unscored and instructor-controlled."
+}

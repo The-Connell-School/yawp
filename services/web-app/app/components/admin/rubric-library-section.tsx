@@ -1,5 +1,6 @@
 import { useFetcher } from 'react-router';
 import { Label } from '~/components/ui/label';
+import { Textarea } from '~/components/ui/textarea';
 import {
   Select,
   SelectContent,
@@ -22,10 +23,15 @@ export function RubricLibrarySection({
   assignmentTypeId,
   rubrics,
   selectedRubricId,
+  gradingInstructions,
+  onGradingInstructionsChange,
 }: {
   assignmentTypeId: string;
   rubrics: RubricOption[];
   selectedRubricId: string | null;
+  /** Per-assignment-type override layered on top of the resolved rubric's instructions. */
+  gradingInstructions: string;
+  onGradingInstructionsChange: (value: string) => void;
 }) {
   const fetcher = useFetcher();
   const selected =
@@ -94,6 +100,26 @@ export function RubricLibrarySection({
           {String((fetcher.data as { error: unknown }).error)}
         </p>
       ) : null}
+
+      <div className="space-y-2">
+        <Label htmlFor="grading-assistant-instructions">
+          Grading assistant instructions
+        </Label>
+        <Textarea
+          id="grading-assistant-instructions"
+          name="gradingInstructionsOverride"
+          data-testid="grading-assistant-instructions"
+          rows={4}
+          className="max-w-full"
+          placeholder="Tell the grading assistant how to apply this rubric to submissions."
+          value={gradingInstructions}
+          onChange={(event) => onGradingInstructionsChange(event.target.value)}
+        />
+        <p className="text-sm text-muted-foreground">
+          Optional. Replaces the default grading assistant instructions for
+          this assignment type. The rubric itself stays unchanged.
+        </p>
+      </div>
     </div>
   );
 }

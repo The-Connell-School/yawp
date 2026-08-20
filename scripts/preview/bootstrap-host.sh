@@ -7,8 +7,9 @@ DOMAIN="${PREVIEW_DOMAIN:-}"
 RUNNING_CAP="${PREVIEW_MAX_RUNNING:-4}"
 SLEEP_ENABLED="${PREVIEW_SLEEP_ENABLED:-true}"
 INFLIGHT_TTL_SECONDS="${PREVIEW_INFLIGHT_TTL_SECONDS:-3600}"
-WAKE_PORT="${PREVIEW_WAKE_PORT:-9876}"
 WAKE_USER="${PREVIEW_WAKE_USER:-$USER}"
+HTTP_PORT="${PREVIEW_HTTP_PORT:-80}"
+HTTPS_PORT="${PREVIEW_HTTPS_PORT:-443}"
 POSTGRES_PROJECT="${PREVIEW_POSTGRES_PROJECT:-yawp-preview-db}"
 METRICS_USER="${PREVIEW_METRICS_USER:-$USER}"
 
@@ -28,10 +29,12 @@ esac
   echo "PREVIEW_INFLIGHT_TTL_SECONDS must be a nonnegative integer" >&2
   exit 1
 }
-if ! [[ "$WAKE_PORT" =~ ^[1-9][0-9]*$ ]] || (( WAKE_PORT > 65535 )); then
-  echo "PREVIEW_WAKE_PORT must be a valid TCP port" >&2
-  exit 1
-fi
+for port in "$HTTP_PORT" "$HTTPS_PORT"; do
+  if ! [[ "$port" =~ ^[1-9][0-9]*$ ]] || (( port > 65535 )); then
+    echo "Preview ingress ports must be valid TCP ports" >&2
+    exit 1
+  fi
+done
 
 if command -v dnf >/dev/null 2>&1; then
   sudo dnf install -y docker git rsync nodejs jq awscli || sudo dnf install -y docker git rsync nodejs jq awscli2
@@ -61,9 +64,9 @@ fi
 
 sudo systemctl enable --now docker
 sudo mkdir -p \
-  "$ROOT/traefik/letsencrypt" \
-  "$ROOT/traefik/dynamic" \
-  "$ROOT/traefik/logs" \
+  "$ROOT/ingress/certs" \
+  "$ROOT/ingress/acme" \
+  "$ROOT/ingress/challenges" \
   "$ROOT/previews" \
   "$ROOT/sources" \
   "$ROOT/wake/access"
@@ -72,10 +75,10 @@ sudo mkdir -p \
 # the whole root races with teardown and makes a harmless disappearing PR path fatal.
 sudo chown "$USER":"$USER" \
   "$ROOT" \
-  "$ROOT/traefik" \
-  "$ROOT/traefik/letsencrypt" \
-  "$ROOT/traefik/dynamic" \
-  "$ROOT/traefik/logs" \
+  "$ROOT/ingress" \
+  "$ROOT/ingress/certs" \
+  "$ROOT/ingress/acme" \
+  "$ROOT/ingress/challenges" \
   "$ROOT/previews" \
   "$ROOT/sources" \
   "$ROOT/wake" \
@@ -162,140 +165,160 @@ env \
   bash "$database_role_migration"
 flock -u 8
 
-# Remove the legacy entrypoint-wide Basic auth configuration. Access control now belongs
-# to each React Router app so it can render the branded gate while still protecting its
-# loaders, actions, and APIs.
-rm -f "$ROOT/traefik/dynamic/access-gate.yml"
-
-wake_server="$ROOT/bootstrap/scripts/preview/wake-server.mjs"
-wake_script="$ROOT/bootstrap/scripts/preview/wake-preview.sh"
-[[ -f "$wake_server" && -f "$wake_script" ]] || {
-  echo "Preview wake server and script must be synced before bootstrap" >&2
+source_wake_server="$ROOT/bootstrap/scripts/preview/wake-server.mjs"
+source_ingress_server="$ROOT/bootstrap/scripts/preview/ingress-server.mjs"
+source_certificate_manager="$ROOT/bootstrap/scripts/preview/certificate-manager.mjs"
+source_wake_script="$ROOT/bootstrap/scripts/preview/wake-preview.sh"
+[[ -f "$source_wake_server" && -f "$source_ingress_server" && -f "$source_certificate_manager" && -f "$source_wake_script" ]] || {
+  echo "Preview ingress, certificate, wake server, and wake script must be synced before bootstrap" >&2
   exit 1
 }
-chmod +x "$wake_script"
-
-wake_env="$ROOT/wake/wake.env"
-if [[ ! -s "$wake_env" ]]; then
-  umask 077
-  wake_secret="$(node -e "process.stdout.write(require('node:crypto').randomBytes(32).toString('base64url'))")"
-  printf 'PREVIEW_WAKE_SECRET=%s\n' "$wake_secret" > "$wake_env"
+release_id="$(sha256sum \
+  "$source_wake_server" \
+  "$source_ingress_server" \
+  "$source_certificate_manager" \
+  "$source_wake_script" \
+  | sha256sum \
+  | awk '{print $1}')"
+release_dir="$ROOT/ingress/releases/$release_id"
+mkdir -p "$release_dir"
+install -m 0644 "$source_wake_server" "$release_dir/wake-server.mjs"
+install -m 0644 "$source_ingress_server" "$release_dir/ingress-server.mjs"
+install -m 0644 "$source_certificate_manager" "$release_dir/certificate-manager.mjs"
+install -m 0755 "$source_wake_script" "$release_dir/wake-preview.sh"
+ingress_server="$release_dir/ingress-server.mjs"
+certificate_manager="$release_dir/certificate-manager.mjs"
+wake_script="$release_dir/wake-preview.sh"
+current_release_link="$ROOT/ingress/current"
+previous_release=""
+if [[ -L "$current_release_link" ]]; then
+  previous_release="$(readlink "$current_release_link")"
 fi
-chmod 600 "$wake_env"
-IFS='=' read -r _ wake_secret < "$wake_env"
-[[ "$wake_secret" =~ ^[A-Za-z0-9_-]{32,}$ ]] || {
-  echo "Preview wake secret is invalid" >&2
+
+PREVIEW_ROOT="$ROOT" \
+PREVIEW_DOMAIN="$DOMAIN" \
+PREVIEW_TRAEFIK_ACME_PATH="$ROOT/traefik/letsencrypt/acme.json" \
+  node "$certificate_manager" --import-traefik
+
+default_hostname="$(
+  find "$ROOT/ingress/certs" -mindepth 1 -maxdepth 1 -type d -name "pr-*.$DOMAIN" -printf '%f\n' \
+    | sort -V \
+    | tail -1
+)"
+[[ -n "$default_hostname" ]] || {
+  echo "No resident preview TLS certificate was available for ingress cutover" >&2
+  exit 1
+}
+running_hostnames=()
+while IFS= read -r container_name; do
+  if [[ "$container_name" =~ ^yawp-pr-([1-9][0-9]*)-web-1$ ]]; then
+    running_hostname="pr-${BASH_REMATCH[1]}.$DOMAIN"
+    if [[ -f "$ROOT/ingress/certs/$running_hostname/privkey.pem" \
+      && -f "$ROOT/ingress/certs/$running_hostname/fullchain.pem" ]]; then
+      running_hostnames+=("$running_hostname")
+    fi
+  fi
+done < <(docker ps --format '{{.Names}}')
+(( ${#running_hostnames[@]} > 0 )) || {
+  echo "Custom ingress cutover requires at least one running preview with a migrated certificate" >&2
   exit 1
 }
 
-domain_regex="${DOMAIN//./\\.}"
-wake_host_rule="HostRegexp(\`^pr-[1-9][0-9]*\\.${domain_regex}$\`)"
-# Router rule shape: HostRegexp(`^pr-[1-9][0-9]*\\.<configured-domain>$`)
-cat > "$ROOT/traefik/dynamic/preview-wake.yml" <<YAML
-http:
-  middlewares:
-    preview-wake-secret:
-      headers:
-        customRequestHeaders:
-          X-Preview-Wake-Secret: "${wake_secret}"
-    preview-wake-rate-limit:
-      rateLimit:
-        average: 2
-        period: 1m
-        burst: 3
-  routers:
-    preview-wake-fallback:
-      rule: '${wake_host_rule}'
-      entryPoints:
-        - websecure
-      middlewares:
-        - preview-wake-rate-limit
-        - preview-wake-secret
-      service: preview-wake
-      priority: 1
-      tls:
-        certResolver: letsencrypt
-  services:
-    preview-wake:
-      loadBalancer:
-        servers:
-          - url: "http://host.docker.internal:${WAKE_PORT}"
-YAML
-chmod 600 "$ROOT/traefik/dynamic/preview-wake.yml"
-touch "$ROOT/traefik/logs/access.json"
-sudo chown "$WAKE_USER" "$ROOT/traefik/logs/access.json"
-chmod 640 "$ROOT/traefik/logs/access.json"
-
-cat > "$ROOT/traefik/docker-compose.yml" <<YAML
-services:
-  traefik:
-    image: traefik:v3.1
-    restart: unless-stopped
-    command:
-      - --providers.docker=true
-      - --providers.docker.exposedbydefault=false
-      - --providers.file.directory=/dynamic
-      - --providers.file.watch=true
-      - --accesslog=true
-      - --accesslog.filepath=/logs/access.json
-      - --accesslog.format=json
-      - --accesslog.fields.defaultmode=drop
-      - --accesslog.fields.names.RequestHost=keep
-      - --accesslog.fields.names.RequestMethod=keep
-      - --accesslog.fields.names.DownstreamStatus=keep
-      - --accesslog.fields.names.OriginStatus=keep
-      - --accesslog.fields.names.RequestPath=drop
-      - --accesslog.fields.headers.defaultmode=drop
-      - --accesslog.fields.headers.names.X-Yawp-Preview-Authorized=keep
-      - --entrypoints.web.address=:80
-      - --entrypoints.web.http.redirections.entrypoint.to=websecure
-      - --entrypoints.web.http.redirections.entrypoint.scheme=https
-      - --entrypoints.websecure.address=:443
-      - --certificatesresolvers.letsencrypt.acme.httpchallenge=true
-      - --certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web
-      - --certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json
-      - --certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL:-admin@example.com}
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-      - ./letsencrypt:/letsencrypt
-      - ./dynamic:/dynamic:ro
-      - ./logs:/logs
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    networks:
-      - preview
-
-networks:
-  preview:
-    external: true
-YAML
-
-docker compose -f "$ROOT/traefik/docker-compose.yml" up -d
-connect_container_to_preview_network traefik-traefik-1
+# Prove routing and TLS on alternate ports while the old ingress still owns 80/443.
+canary_log="$ROOT/ingress/canary.log"
+PREVIEW_ROOT="$ROOT" \
+PREVIEW_DOMAIN="$DOMAIN" \
+PREVIEW_MAX_RUNNING="$RUNNING_CAP" \
+PREVIEW_HTTP_PORT=19080 \
+PREVIEW_HTTPS_PORT=19443 \
+PREVIEW_TLS_DEFAULT_HOST="$default_hostname" \
+PREVIEW_WAKE_SCRIPT="$wake_script" \
+  node "$ingress_server" >"$canary_log" 2>&1 &
+canary_pid=$!
+stop_canary() {
+  kill "$canary_pid" >/dev/null 2>&1 || true
+  wait "$canary_pid" >/dev/null 2>&1 || true
+}
+trap stop_canary EXIT
+for canary_hostname in "${running_hostnames[@]}"; do
+  canary_ready=false
+  for attempt in {1..20}; do
+    canary_status="$(curl -sk --connect-timeout 1 --max-time 3 \
+      --resolve "$canary_hostname:19443:127.0.0.1" \
+      -o /dev/null -w '%{http_code}' \
+      "https://$canary_hostname:19443/api/healthcheck" 2>/dev/null || true)"
+    if [[ "$canary_status" == "200" ]]; then
+      canary_ready=true
+      break
+    fi
+    sleep 1
+  done
+  [[ "$canary_ready" == "true" ]] || {
+    echo "Custom preview ingress canary failed upstream health for $canary_hostname" >&2
+    tail -80 "$canary_log" >&2 || true
+    exit 1
+  }
+done
+stop_canary
+trap - EXIT
 
 node_path="$(command -v node)"
-sudo tee /etc/systemd/system/yawp-preview-wake.service >/dev/null <<UNIT
+ingress_unit=/etc/systemd/system/yawp-preview-ingress.service
+previous_ingress_unit="$ROOT/ingress/previous-ingress.$$.service"
+had_previous_ingress_unit=false
+if sudo test -f "$ingress_unit"; then
+  sudo cp -p -- "$ingress_unit" "$previous_ingress_unit"
+  sudo chown "$USER":"$USER" "$previous_ingress_unit"
+  had_previous_ingress_unit=true
+fi
+release_link_changed=false
+traefik_container=""
+traefik_was_running=false
+rollback_ingress() {
+  if [[ "$release_link_changed" == "true" ]]; then
+    if [[ -n "$previous_release" ]]; then
+      rollback_release_link="$ROOT/ingress/.current.rollback.$$.tmp"
+      ln -s "$previous_release" "$rollback_release_link"
+      mv -Tf -- "$rollback_release_link" "$current_release_link"
+    else
+      rm -f -- "$current_release_link"
+    fi
+  fi
+  if [[ "$had_previous_ingress_unit" == "true" ]]; then
+    sudo cp -p -- "$previous_ingress_unit" "$ingress_unit"
+  else
+    sudo rm -f -- "$ingress_unit"
+  fi
+  sudo systemctl daemon-reload >/dev/null 2>&1 || true
+  if [[ "$traefik_was_running" == "true" && -n "$traefik_container" ]]; then
+    sudo systemctl disable --now yawp-preview-ingress.service >/dev/null 2>&1 || true
+    docker start "$traefik_container" >/dev/null 2>&1 || true
+  elif [[ "$release_link_changed" == "true" && "$had_previous_ingress_unit" == "true" ]]; then
+    sudo systemctl enable yawp-preview-ingress.service >/dev/null 2>&1 || true
+    sudo systemctl restart yawp-preview-ingress.service >/dev/null 2>&1 || true
+  fi
+  rm -f -- "$previous_ingress_unit"
+}
+trap rollback_ingress EXIT
+sudo tee /etc/systemd/system/yawp-preview-ingress.service >/dev/null <<UNIT
 [Unit]
-Description=Wake sleeping Yawp preview environments on first request
+Description=Yawp preview HTTPS ingress and automatic wake service
 After=docker.service network-online.target
 Requires=docker.service
 
 [Service]
 Type=simple
 User=$WAKE_USER
-EnvironmentFile=$wake_env
 Environment=PREVIEW_ROOT=$ROOT
 Environment=PREVIEW_DOMAIN=$DOMAIN
 Environment=PREVIEW_MAX_RUNNING=$RUNNING_CAP
 Environment=PREVIEW_SLEEP_ENABLED=$SLEEP_ENABLED
 Environment=PREVIEW_INFLIGHT_TTL_SECONDS=$INFLIGHT_TTL_SECONDS
-Environment=PREVIEW_WAKE_PORT=$WAKE_PORT
-Environment=PREVIEW_WAKE_SCRIPT=$wake_script
-Environment=PREVIEW_ACCESS_LOG=$ROOT/traefik/logs/access.json
-ExecStart=$node_path $wake_server
+Environment=PREVIEW_HTTP_PORT=$HTTP_PORT
+Environment=PREVIEW_HTTPS_PORT=$HTTPS_PORT
+Environment=PREVIEW_TLS_DEFAULT_HOST=$default_hostname
+Environment=PREVIEW_WAKE_SCRIPT=$ROOT/ingress/current/wake-preview.sh
+ExecStart=$node_path $ROOT/ingress/current/ingress-server.mjs
 Restart=always
 RestartSec=2
 KillMode=control-group
@@ -303,14 +326,83 @@ TimeoutStopSec=1200
 UMask=0077
 NoNewPrivileges=true
 PrivateTmp=true
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
 
 [Install]
 WantedBy=multi-user.target
 UNIT
 
+sudo tee /etc/systemd/system/yawp-preview-certificate-renewal.service >/dev/null <<UNIT
+[Unit]
+Description=Renew resident Yawp preview TLS certificates
+After=yawp-preview-ingress.service network-online.target
+
+[Service]
+Type=oneshot
+User=$WAKE_USER
+Environment=PREVIEW_ROOT=$ROOT
+Environment=PREVIEW_DOMAIN=$DOMAIN
+Environment=PREVIEW_ACME_EMAIL=${ACME_EMAIL:-admin@example.com}
+ExecStart=/usr/bin/flock -w 900 $ROOT/preview-host.lock $node_path $ROOT/ingress/current/certificate-manager.mjs --resident
+TimeoutStartSec=900
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+UNIT
+
+sudo tee /etc/systemd/system/yawp-preview-certificate-renewal.timer >/dev/null <<'UNIT'
+[Unit]
+Description=Check Yawp preview TLS certificates daily
+
+[Timer]
+OnBootSec=15m
+OnUnitActiveSec=24h
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+UNIT
+
 sudo systemctl daemon-reload
-sudo systemctl enable --now yawp-preview-wake.service
-sudo systemctl restart yawp-preview-wake.service
+exec 8>"$ROOT/preview-host.lock"
+flock -w 900 8
+next_release_link="$ROOT/ingress/.current.$$.tmp"
+ln -s "releases/$release_id" "$next_release_link"
+mv -Tf -- "$next_release_link" "$current_release_link"
+release_link_changed=true
+traefik_container="$(docker ps -aq --filter 'name=^/traefik-traefik-1$' | head -1)"
+if [[ -n "$traefik_container" ]] && [[ "$(docker inspect -f '{{.State.Running}}' "$traefik_container")" == "true" ]]; then
+  traefik_was_running=true
+  docker stop "$traefik_container" >/dev/null
+fi
+sudo systemctl enable yawp-preview-ingress.service
+sudo systemctl restart yawp-preview-ingress.service
+for public_hostname in "${running_hostnames[@]}"; do
+  public_ready=false
+  for attempt in {1..30}; do
+    public_status="$(curl -sS --connect-timeout 1 --max-time 3 -o /dev/null -w '%{http_code}' \
+      "https://$public_hostname/api/healthcheck" 2>/dev/null || true)"
+    if [[ "$public_status" == "200" ]]; then
+      public_ready=true
+      break
+    fi
+    sleep 1
+  done
+  [[ "$public_ready" == "true" ]] || {
+    echo "Custom preview ingress failed public TLS smoke for $public_hostname; restoring previous ingress" >&2
+    sudo journalctl -u yawp-preview-ingress.service -n 80 --no-pager >&2 || true
+    exit 1
+  }
+done
+trap - EXIT
+rm -f -- "$previous_ingress_unit"
+if [[ -n "$traefik_container" ]]; then
+  docker rm "$traefik_container" >/dev/null
+fi
+sudo systemctl disable --now yawp-preview-wake.service >/dev/null 2>&1 || true
+sudo systemctl enable --now yawp-preview-certificate-renewal.timer
+flock -u 8
 
 metrics_script="$ROOT/bootstrap/scripts/preview/publish-host-metrics.sh"
 if [[ -f "$metrics_script" ]]; then

@@ -4,10 +4,14 @@ import {
   THESIS_DRIVEN_ESSAY,
   THESIS_DRIVEN_ESSAY_RUBRIC_NAME,
 } from './thesis-driven-essay';
+import {
+  GBA300_INTERNATIONAL_ETIQUETTE,
+  GBA300_INTERNATIONAL_EXPANSION,
+} from './gba300-rubrics';
 
 /**
- * The two rubrics the library starts with, taken from what production actually
- * grades with rather than from what the code makes convenient.
+ * Protected rubrics the library starts with. Thesis and Daily Pages preserve
+ * production exactly; GBA 300 rubrics are department-supplied definitions.
  *
  * Thesis deliberately uses the same preset as the production fallback instead
  * of copying and translating that text. Daily Pages carries the exact config
@@ -66,4 +70,6 @@ const dailyPagesEngagement: RubricSchema = {
 export const STARTER_RUBRICS: RubricSchema[] = [
   THESIS_DRIVEN_ESSAY,
   dailyPagesEngagement,
+  GBA300_INTERNATIONAL_EXPANSION,
+  GBA300_INTERNATIONAL_ETIQUETTE,
 ];

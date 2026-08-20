@@ -1,11 +1,36 @@
 import { describe, expect, test } from 'bun:test';
 import {
+  getCategoryScoreBounds,
   getCategoryScoreLabel,
+  isScoreInCategoryBands,
   isCategoryFeedbackEnabled,
   isGrammarHighlightCategory,
   parseRubricScoreLabels,
   resolveGrammarHighlightingEnabled,
 } from './rubric-category-options';
+
+describe('category-specific band score ranges', () => {
+  const category = {
+    key: 'introduction',
+    bands: [
+      { min: 0, max: 0, label: 'Absent', description: 'Missing.' },
+      { min: 1, max: 2, label: 'Struggling', description: 'Incomplete.' },
+      { min: 3, max: 3, label: 'Developing', description: 'Generic.' },
+      { min: 4, max: 4, label: 'Proficient', description: 'Clear.' },
+      { min: 5, max: 5, label: 'Exemplary', description: 'Purposeful.' },
+    ],
+  };
+
+  test('derives the raw point bounds from the declared bands', () => {
+    expect(getCategoryScoreBounds(category)).toEqual({ min: 0, max: 5 });
+  });
+
+  test('accepts only scores covered by a declared band', () => {
+    expect(isScoreInCategoryBands(category, 0)).toBe(true);
+    expect(isScoreInCategoryBands(category, 5)).toBe(true);
+    expect(isScoreInCategoryBands(category, 6)).toBe(false);
+  });
+});
 
 describe('isCategoryFeedbackEnabled', () => {
   test('defaults to enabled when the category says nothing', () => {

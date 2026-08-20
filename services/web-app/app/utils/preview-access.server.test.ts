@@ -1,13 +1,19 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 import {
   PREVIEW_ACCESS_COOKIE_NAME,
+  PREVIEW_MASTER_SELECTION_COOKIE_NAME,
   PREVIEW_AUTHORIZED_ACTIVITY_HEADER,
+  clearPreviewMasterSelectionCookie,
   clearPreviewAccessCookie,
   createPreviewAccessCookie,
   createPreviewAccessMiddleware,
+  findPreviewAccessCredentialByCode,
   findPreviewAccessSeatByCode,
+  getConfiguredPreviewOrganizationAccessCode,
   getPreviewAccessSeat,
+  hasPreviewMasterSelection,
   grantPreviewAccessCookie,
+  grantPreviewMasterSelectionCookie,
   isIsolatedPreviewSeatMode,
   isPreviewAccessConfigured,
   previewAccessMiddleware,
@@ -19,6 +25,7 @@ const originalEnv = {
   NODE_ENV: process.env.NODE_ENV,
   PREVIEW_ACCESS_CODES: process.env.PREVIEW_ACCESS_CODES,
   PREVIEW_ACCESS_GATE: process.env.PREVIEW_ACCESS_GATE,
+  PREVIEW_MASTER_ACCESS_CODE: process.env.PREVIEW_MASTER_ACCESS_CODE,
   PREVIEW_DATA_MODE: process.env.PREVIEW_DATA_MODE,
   PREVIEW_ACCESS_SEATS: process.env.PREVIEW_ACCESS_SEATS,
   PREVIEW_ACCESS_SECRET: process.env.PREVIEW_ACCESS_SECRET,
@@ -86,6 +93,7 @@ describe('preview access gate', () => {
     restore('NODE_ENV');
     restore('PREVIEW_ACCESS_CODES');
     restore('PREVIEW_ACCESS_GATE');
+    restore('PREVIEW_MASTER_ACCESS_CODE');
     restore('PREVIEW_DATA_MODE');
     restore('PREVIEW_ACCESS_SEATS');
     restore('PREVIEW_ACCESS_SECRET');
@@ -197,9 +205,9 @@ describe('preview access gate', () => {
       next
     );
     expect(await authenticated?.text()).toBe('private');
-    expect(
-      authenticated?.headers.get(PREVIEW_AUTHORIZED_ACTIVITY_HEADER)
-    ).toBe('1');
+    expect(authenticated?.headers.get(PREVIEW_AUTHORIZED_ACTIVITY_HEADER)).toBe(
+      '1'
+    );
 
     const tampered = `${cookiePair.slice(0, -1)}x`;
     const rejected = await middleware(
@@ -221,7 +229,8 @@ describe('preview access gate', () => {
   test('rejects signed access cookies after their embedded preview-access lifetime', async () => {
     const expiredAt = Math.floor(Date.now() / 1000) - 31 * 24 * 60 * 60;
     const expiredValue = `seat-v2:${expiredAt}:local-dev-org`;
-    const serialized = await createPreviewAccessCookie().serialize(expiredValue);
+    const serialized =
+      await createPreviewAccessCookie().serialize(expiredValue);
     const cookie = serialized.split(';', 1)[0];
 
     expect(
@@ -371,6 +380,25 @@ describe('preview access gate', () => {
   });
 
   describe('one-click ?code= entry', () => {
+    test('a generic master code in a URL is stripped without granting access', async () => {
+      process.env.PREVIEW_MASTER_ACCESS_CODE = 'yawp-rocks';
+      const next = mock(async () => new Response('private'));
+      const middleware = createPreviewAccessMiddleware(
+        async () => null,
+        repository()
+      );
+
+      const response = (await middleware(
+        middlewareArgs(request('/app/classes?code=yawp-rocks&tab=roster')),
+        next
+      )) as Response;
+
+      expect(response.status).toBe(303);
+      expect(response.headers.get('location')).toBe('/app/classes?tab=roster');
+      expect(response.headers.get('set-cookie')).toBeNull();
+      expect(next).not.toHaveBeenCalled();
+    });
+
     test('a valid code sets the cookie, 303s, and strips the param', async () => {
       const next = mock(async () => new Response('private'));
 
@@ -409,10 +437,8 @@ describe('preview access gate', () => {
         next
       )) as Response;
 
-      expect(response.status).toBe(302);
-      expect(response.headers.get('location')).toBe(
-        '/auth/preview-access?returnTo=%2Fapp%2Fclasses%3Fcode%3Dnot-a-real-code-9999'
-      );
+      expect(response.status).toBe(303);
+      expect(response.headers.get('location')).toBe('/app/classes');
       expect(response.headers.get('set-cookie')).toBeNull();
       expect(next).not.toHaveBeenCalled();
     });
@@ -477,6 +503,7 @@ describe('preview access codes', () => {
     restore('PREVIEW_ACCESS_CODES');
     restore('PREVIEW_ACCESS_SEATS');
     restore('PREVIEW_ACCESS_SECRET');
+    restore('PREVIEW_MASTER_ACCESS_CODE');
     restore('SESSION_SECRET');
   });
 
@@ -498,7 +525,7 @@ describe('preview access codes', () => {
     ).toBe(false);
   });
 
-  test('resolves the env master without a DB query', async () => {
+  test('resolves the configured organization code without a DB query', async () => {
     process.env.PREVIEW_ACCESS_SECRET = 'test-preview-access-secret';
     process.env.PREVIEW_ACCESS_SEATS = JSON.stringify([
       {
@@ -521,6 +548,196 @@ describe('preview access codes', () => {
       label: 'Master',
     });
     expect(runtimeRepository.findByCode).not.toHaveBeenCalled();
+  });
+
+  test('preserves the organization meaning when a database code collides with master', async () => {
+    process.env.PREVIEW_ACCESS_SECRET = 'test-preview-access-secret';
+    process.env.PREVIEW_MASTER_ACCESS_CODE = 'yawp-rocks';
+    process.env.PREVIEW_ACCESS_SEATS = JSON.stringify([
+      {
+        code: 'brave-otter-4193',
+        organizationId: 'local-dev-org',
+        label: 'Yawp Local Dev',
+      },
+    ]);
+    const runtimeRepository = repository({
+      byCode: {
+        'yawp-rocks': { id: 'existing-org', name: 'Existing Org' },
+      },
+    });
+
+    expect(
+      await findPreviewAccessCredentialByCode(
+        'yawp-rocks',
+        runtimeRepository
+      )
+    ).toEqual({
+      kind: 'organization',
+      seat: { organizationId: 'existing-org', label: 'Existing Org' },
+    });
+  });
+
+  test('distinguishes a generic master credential from an organization code', async () => {
+    process.env.PREVIEW_ACCESS_SECRET = 'test-preview-access-secret';
+    process.env.PREVIEW_MASTER_ACCESS_CODE = 'yawp-rocks';
+    process.env.PREVIEW_ACCESS_SEATS = JSON.stringify([
+      {
+        code: 'brave-otter-4193',
+        organizationId: 'local-dev-org',
+        label: 'Yawp Local Dev',
+      },
+    ]);
+    const runtimeRepository = repository();
+
+    expect(
+      await findPreviewAccessCredentialByCode(
+        ' YAWP-ROCKS ',
+        runtimeRepository
+      )
+    ).toEqual({ kind: 'master' });
+    expect(
+      await findPreviewAccessCredentialByCode(
+        'brave-otter-4193',
+        runtimeRepository
+      )
+    ).toEqual({
+      kind: 'organization',
+      seat: {
+        organizationId: 'local-dev-org',
+        label: 'Yawp Local Dev',
+      },
+    });
+    expect(
+      await findPreviewAccessSeatByCode('yawp-rocks', runtimeRepository)
+    ).toBeNull();
+    expect(runtimeRepository.findByCode).toHaveBeenCalledWith('yawp-rocks');
+  });
+
+  test('keeps the configured organization code distinct from the generic master', () => {
+    process.env.PREVIEW_MASTER_ACCESS_CODE = 'yawp-rocks';
+    process.env.PREVIEW_ACCESS_SEATS = JSON.stringify([
+      {
+        code: 'brave-otter-4193',
+        organizationId: 'local-dev-org',
+        label: 'Yawp Local Dev',
+      },
+    ]);
+
+    expect(getConfiguredPreviewOrganizationAccessCode('local-dev-org')).toBe(
+      'brave-otter-4193'
+    );
+    expect(
+      getConfiguredPreviewOrganizationAccessCode('preview-seat-2')
+    ).toBeNull();
+  });
+
+  test('uses a short-lived signed master-selection cookie without granting preview access', async () => {
+    process.env.PREVIEW_ACCESS_SECRET = 'test-preview-access-secret';
+    process.env.PREVIEW_MASTER_ACCESS_CODE = 'yawp-rocks';
+    process.env.PREVIEW_ACCESS_SEATS = JSON.stringify([
+      {
+        code: 'brave-otter-4193',
+        organizationId: 'local-dev-org',
+        label: 'Yawp Local Dev',
+      },
+    ]);
+
+    const serialized = await grantPreviewMasterSelectionCookie();
+    const cookie = serialized.split(';', 1)[0];
+    const pendingRequest = request('/auth/preview-access', {
+      headers: { cookie },
+    });
+
+    expect(serialized).toContain(`${PREVIEW_MASTER_SELECTION_COOKIE_NAME}=`);
+    expect(serialized).toContain('HttpOnly');
+    expect(serialized).toContain('Max-Age=600');
+    expect(serialized).toContain('Path=/');
+    expect(await hasPreviewMasterSelection(pendingRequest)).toBe(true);
+    expect(await getPreviewAccessSeat(pendingRequest)).toBeNull();
+    expect(await clearPreviewMasterSelectionCookie()).toContain('Max-Age=0');
+  });
+
+  test('accepts a master-selected organization without requiring an organization code', async () => {
+    process.env.PREVIEW_ACCESS_SECRET = 'test-preview-access-secret';
+    process.env.PREVIEW_MASTER_ACCESS_CODE = 'yawp-rocks';
+    process.env.PREVIEW_ACCESS_SEATS = JSON.stringify([
+      {
+        code: 'brave-otter-4193',
+        organizationId: 'local-dev-org',
+        label: 'Yawp Local Dev',
+      },
+    ]);
+    const selectedSeat = {
+      organizationId: 'another-org',
+      label: 'Another Organization',
+      accessKind: 'master' as const,
+    };
+    const cookie = (await grantPreviewAccessCookie(selectedSeat)).split(
+      ';',
+      1
+    )[0];
+
+    expect(
+      await getPreviewAccessSeat(
+        request('/app', { headers: { cookie } }),
+        repository({
+          byId: {
+            'another-org': {
+              id: 'another-org',
+              name: 'Another Organization',
+              previewSeatCode: null,
+            },
+          },
+        })
+      )
+    ).toEqual(selectedSeat);
+  });
+
+  test('revokes pending and selected master access when the master code rotates', async () => {
+    process.env.PREVIEW_ACCESS_SECRET = 'test-preview-access-secret';
+    process.env.PREVIEW_MASTER_ACCESS_CODE = 'yawp-rocks';
+    process.env.PREVIEW_ACCESS_SEATS = JSON.stringify([
+      {
+        code: 'brave-otter-4193',
+        organizationId: 'local-dev-org',
+        label: 'Yawp Local Dev',
+      },
+    ]);
+    const pendingCookie = (await grantPreviewMasterSelectionCookie()).split(
+      ';',
+      1
+    )[0];
+    const accessCookie = (
+      await grantPreviewAccessCookie({
+        organizationId: 'another-org',
+        label: 'Another Organization',
+        accessKind: 'master',
+      })
+    ).split(';', 1)[0];
+
+    process.env.PREVIEW_MASTER_ACCESS_CODE = 'yawp-rules';
+
+    expect(
+      await hasPreviewMasterSelection(
+        request('/auth/preview-access', {
+          headers: { cookie: pendingCookie },
+        })
+      )
+    ).toBe(false);
+    expect(
+      await getPreviewAccessSeat(
+        request('/app', { headers: { cookie: accessCookie } }),
+        repository({
+          byId: {
+            'another-org': {
+              id: 'another-org',
+              name: 'Another Organization',
+              previewSeatCode: null,
+            },
+          },
+        })
+      )
+    ).toBeNull();
   });
 
   test('resolves runtime seats by their unique DB code and rejects unknown codes', async () => {

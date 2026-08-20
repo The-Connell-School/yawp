@@ -39,7 +39,6 @@ import omit from 'lodash/omit';
 import { getMembershipId } from './cookies/membership-id.server.ts';
 import { LocalDevEnvironmentBar } from './components/local-dev-environment-bar.tsx';
 import { isLocalDevAuthEnabled } from './utils/local-dev-auth.server.ts';
-import { getLocalDevLoginOptions } from './routes/auth.dev-login/bound.server';
 import { useContrastPreference } from './routes/api.preferences.contrast/route.tsx';
 import {
   getEnvironmentBannerWarning,
@@ -111,7 +110,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
         },
         ENV: getEnv(),
         bannerWarning: null,
-        localDevQuickLogin: { enabled: false, options: [] },
+        localDevQuickLogin: { enabled: false },
         previewAccessGateEnabled: isPreviewAccessGateEnabled(),
         previewAccessSeat: null,
         impersonation: { isReadOnly: false, impersonatorUserId: null },
@@ -224,9 +223,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
       bannerWarning,
       localDevQuickLogin: {
         enabled: localDevQuickLoginEnabled,
-        options: localDevQuickLoginEnabled
-          ? await getLocalDevLoginOptions(previewAccessSeat?.organizationId)
-          : [],
       },
       previewAccessGateEnabled: isPreviewAccessGateEnabled(),
       previewAccessSeat,

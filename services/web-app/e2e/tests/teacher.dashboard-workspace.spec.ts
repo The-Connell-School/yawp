@@ -169,6 +169,79 @@ async function deleteAssignmentsByTitle(title: string) {
 }
 
 test.describe.serial('Teacher dashboard workspace', () => {
+  test('counts each document once when it has multiple submissions to grade', async ({
+    page,
+    e2eContext,
+    signIn,
+  }) => {
+    const prisma = createE2EPrismaClient();
+    const suffix = Date.now().toString(36);
+    const title = `Dashboard resubmission count ${suffix}`;
+    let documentId = '';
+
+    try {
+      await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
+      await page.goto('/app');
+      await page.waitForLoadState('networkidle');
+
+      const toGradeStat = page
+        .getByTestId('teacher-grading-grid')
+        .getByText('To grade', { exact: true })
+        .locator('..');
+      const before = Number(
+        (await toGradeStat.locator('p').nth(1).textContent()) ?? '0'
+      );
+
+      const document = await prisma.document.create({
+        data: {
+          title,
+          text: 'A student submitted several revisions of this document.',
+          html: '<p>A student submitted several revisions of this document.</p>',
+          membershipId: e2eContext.membershipId,
+          assignmentTypeId: e2eContext.assignmentTypeId,
+          assignmentId: e2eContext.assignmentId,
+          classAssignmentId: e2eContext.classAssignmentId,
+          submissions: {
+            create: [0, 1, 2].map((index) => ({
+              title,
+              text: `Submitted revision ${index + 1}`,
+              html: `<p>Submitted revision ${index + 1}</p>`,
+              submittedAt: new Date(Date.now() + index * 1_000),
+            })),
+          },
+        },
+        select: { id: true },
+      });
+      documentId = document.id;
+
+      await page.reload();
+      await page.waitForLoadState('networkidle');
+
+      await expect(
+        page
+          .getByTestId('teacher-grading-grid')
+          .getByText('To grade', { exact: true })
+          .locator('..')
+          .locator('p')
+          .nth(1)
+      ).toHaveText(String(before + 1));
+
+      await page
+        .getByTestId('teacher-grading-grid')
+        .getByText('To grade', { exact: true })
+        .locator('..')
+        .click();
+      await page.waitForURL(/\/app\/documents\?status=needs-grading/);
+      await expect(page.getByText(title, { exact: true })).toHaveCount(1);
+    } finally {
+      if (documentId) {
+        await prisma.submission.deleteMany({ where: { documentId } });
+        await prisma.document.delete({ where: { id: documentId } });
+      }
+      await prisma.$disconnect();
+    }
+  });
+
   test('shows Writing Practice in the teacher sidebar when enabled for the organization', async ({
     page,
     e2eContext,

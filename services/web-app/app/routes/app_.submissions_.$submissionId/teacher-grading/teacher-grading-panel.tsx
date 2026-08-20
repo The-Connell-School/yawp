@@ -45,6 +45,7 @@ import {
 import { rubricScaleGradeFieldsFromScores } from '~/domain/grading/recorded-grade';
 import {
   getCategoryScoreLabel,
+  getCategoryScoreBounds,
   isBandScoredRubric,
   isCategoryFeedbackEnabled,
   isGrammarHighlightCategory,
@@ -1202,10 +1203,13 @@ export function TeacherGradingPanel({
               const configuredScoreLabel = hasScore
                 ? getCategoryScoreLabel(item, current.score)
                 : null;
+              const categoryBounds = getCategoryScoreBounds(item);
+              const categoryMaxScore =
+                categoryBounds?.max ?? activeRubricConfig.maxScore;
               const scoreLabel = hasScore
                 ? configuredScoreLabel
-                  ? `${configuredScoreLabel} (${current.score}/${activeRubricConfig.maxScore})`
-                  : `${current.score}/${activeRubricConfig.maxScore}`
+                  ? `${configuredScoreLabel} (${current.score}/${categoryMaxScore})`
+                  : `${current.score}/${categoryMaxScore}`
                 : 'Not scored';
               const isGrammarCategory = isGrammarHighlightCategory(item);
               const showFeedback = isCategoryFeedbackEnabled(item);
@@ -1213,7 +1217,8 @@ export function TeacherGradingPanel({
                 activeRubricConfig.minScore,
                 activeRubricConfig.maxScore,
                 item.scoreLabels,
-                activeRubricConfig.step
+                activeRubricConfig.step,
+                item.bands
               );
 
               return (

@@ -1,7 +1,7 @@
 /* eslint-disable no-console */
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
-import type { PrismaClient } from '../../generated/prisma';
+import type { Prisma, PrismaClient } from '../../generated/prisma';
 import { LOCAL_DEV_ORG_ID } from './dev-personas';
 import {
   decodeBytes,
@@ -15,10 +15,20 @@ async function readJson<T>(filename: string): Promise<T> {
   return JSON.parse(raw) as T;
 }
 
+async function readOptionalJson<T>(filename: string, fallback: T): Promise<T> {
+  try {
+    return await readJson<T>(filename);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return fallback;
+    throw error;
+  }
+}
+
 export async function loadProdFidelityBundle(): Promise<ProdFidelityBundle> {
   const manifest = await readJson<ProdFidelityManifest>('manifest.json');
   return {
     manifest,
+    rubrics: await readOptionalJson('rubrics.json', []),
     assignmentTypes: await readJson('assignment-types.json'),
     assignmentTypeImages: await readJson('assignment-type-images.json'),
     assignmentModules: await readJson('assignment-modules.json'),
@@ -66,98 +76,224 @@ function stripProfileRefs(row: Record<string, unknown>) {
   delete next.createdById;
   delete next.updatedById;
   delete next.ownerTeacherId;
-  if ('ownerOrgId' in next) next.ownerOrgId = LOCAL_DEV_ORG_ID;
+  delete next.ownerMembershipId;
+  if ('ownerOrgId' in next) {
+    next.ownerOrgId = next.ownerOrgId == null ? null : LOCAL_DEV_ORG_ID;
+  }
   return next;
+}
+
+function withoutId(row: Record<string, unknown>) {
+  const { id: _id, ...data } = row;
+  return data;
+}
+
+type ProdFidelityClient = PrismaClient | Prisma.TransactionClient;
+
+export async function syncProdFidelityFixtures(
+  prisma: ProdFidelityClient,
+  bundle: ProdFidelityBundle
+) {
+  const rubricIds = new Map<string, string>();
+  for (const row of bundle.rubrics) {
+    const data = withTimestamps(row);
+    const rubric = await prisma.rubric.upsert({
+      where: { name: String(row.name) },
+      create: data as never,
+      update: withoutId(data) as never,
+    });
+    rubricIds.set(String(row.id), rubric.id);
+  }
+
+  for (const row of bundle.assignmentTypes) {
+    const data = withTimestamps(stripProfileRefs(row));
+    if (typeof data.rubricId === 'string') {
+      data.rubricId = rubricIds.get(data.rubricId) ?? null;
+    }
+    await prisma.assignmentType.upsert({
+      where: { id: String(row.id) },
+      create: data as never,
+      update: withoutId(data) as never,
+    });
+  }
+
+  for (const row of bundle.assignmentTypeImages) {
+    const { blob, ...rest } = row;
+    const data = {
+      ...withTimestamps(rest),
+      blob: decodeBytes(blob),
+    };
+    await prisma.assignmentTypeImage.upsert({
+      where: { id: String(row.id) },
+      create: data as never,
+      update: withoutId(data) as never,
+    });
+  }
+
+  for (const row of bundle.assignmentModules) {
+    const data = withTimestamps(row);
+    await prisma.assignmentModule.upsert({
+      where: { id: String(row.id) },
+      create: data as never,
+      update: withoutId(data) as never,
+    });
+  }
+
+  for (const row of bundle.assignmentModuleInstructions) {
+    const data = withTimestamps(row);
+    await prisma.assignmentModuleInstruction.upsert({
+      where: { id: String(row.id) },
+      create: data as never,
+      update: withoutId(data) as never,
+    });
+  }
+
+  const fixtureInstructionIds = bundle.assignmentModuleInstructions.map((row) =>
+    String(row.id)
+  );
+  const fixtureButtonIds = bundle.assignmentModuleInstructionButtons.map((row) =>
+    String(row.id)
+  );
+  if (fixtureInstructionIds.length > 0) {
+    await prisma.assignmentModuleInstructionButton.deleteMany({
+      where: {
+        assignmentModuleInstructionId: { in: fixtureInstructionIds },
+        ...(fixtureButtonIds.length > 0
+          ? { id: { notIn: fixtureButtonIds } }
+          : {}),
+      },
+    });
+  }
+
+  for (const row of bundle.assignmentModuleInstructionButtons) {
+    const data = withTimestamps(row);
+    await prisma.assignmentModuleInstructionButton.upsert({
+      where: { id: String(row.id) },
+      create: data as never,
+      update: withoutId(data) as never,
+    });
+  }
+
+  for (const row of bundle.teacherTrainings) {
+    const data = withTimestamps(row);
+    await prisma.teacherTraining.upsert({
+      where: { id: String(row.id) },
+      create: data as never,
+      update: withoutId(data) as never,
+    });
+  }
+
+  for (const row of bundle.teacherTrainingImages) {
+    const { blob, ...rest } = row;
+    const data = {
+      ...withTimestamps(rest),
+      blob: decodeBytes(blob),
+    };
+    await prisma.teacherTrainingImage.upsert({
+      where: { id: String(row.id) },
+      create: data as never,
+      update: withoutId(data) as never,
+    });
+  }
+
+  for (const row of bundle.teacherTrainingModules) {
+    const data = withTimestamps(row);
+    await prisma.teacherTrainingModule.upsert({
+      where: { id: String(row.id) },
+      create: data as never,
+      update: withoutId(data) as never,
+    });
+  }
+
+  for (const row of bundle.teacherTrainingModuleResources) {
+    const { blob, ...rest } = row;
+    const data = {
+      ...withTimestamps(rest),
+      blob: decodeBytes(blob),
+    };
+    await prisma.teacherTrainingModuleResource.upsert({
+      where: { id: String(row.id) },
+      create: data as never,
+      update: withoutId(data) as never,
+    });
+  }
+
+  for (const row of bundle.teacherTrainingResources) {
+    const data = withTimestamps(row);
+    await prisma.teacherTrainingResource.upsert({
+      where: { id: String(row.id) },
+      create: data as never,
+      update: withoutId(data) as never,
+    });
+  }
+
+  for (const row of bundle.apHistoryPromptLibraryEntries) {
+    const data = withTimestamps(row);
+    await prisma.apHistoryPromptLibraryEntry.upsert({
+      where: { id: String(row.id) },
+      create: data as never,
+      update: withoutId(data) as never,
+    });
+  }
+
+  for (const row of bundle.apHistoryPromptLibrarySources) {
+    const data = withTimestamps(row);
+    await prisma.apHistoryPromptLibrarySource.upsert({
+      where: { id: String(row.id) },
+      create: data as never,
+      update: withoutId(data) as never,
+    });
+  }
+
+  const organizations = await prisma.organization.findMany({
+    select: { id: true },
+  });
+  const globalAssignmentTypeIds = bundle.assignmentTypes
+    .filter((row) => row.ownerOrgId == null)
+    .map((row) => String(row.id));
+  const localOwnedAssignmentTypeIds = bundle.assignmentTypes
+    .filter((row) => row.ownerOrgId != null)
+    .map((row) => String(row.id));
+  for (const organization of organizations) {
+    const assignmentTypeIds = [
+      ...globalAssignmentTypeIds,
+      ...(organization.id === LOCAL_DEV_ORG_ID
+        ? localOwnedAssignmentTypeIds
+        : []),
+    ];
+    await prisma.organizationAssignmentType.createMany({
+      data: assignmentTypeIds.map((assignmentTypeId) => ({
+        organizationId: organization.id,
+        assignmentTypeId,
+      })),
+      skipDuplicates: true,
+    });
+    if (
+      organization.id !== LOCAL_DEV_ORG_ID &&
+      localOwnedAssignmentTypeIds.length > 0
+    ) {
+      await prisma.organizationAssignmentType.deleteMany({
+        where: {
+          organizationId: organization.id,
+          assignmentTypeId: { in: localOwnedAssignmentTypeIds },
+        },
+      });
+    }
+  }
+
+  return {
+    rubrics: bundle.rubrics.length,
+    assignmentTypes: bundle.assignmentTypes.length,
+    teacherTrainings: bundle.teacherTrainings.length,
+    organizations: organizations.length,
+  };
 }
 
 export async function importProdFidelityFixtures(
   prisma: PrismaClient,
   bundle: ProdFidelityBundle
 ) {
-  for (const row of bundle.assignmentTypes) {
-    await prisma.assignmentType.create({
-      data: withTimestamps(stripProfileRefs(row)) as never,
-    });
-  }
-
-  for (const row of bundle.assignmentTypeImages) {
-    const { blob, ...rest } = row;
-    await prisma.assignmentTypeImage.create({
-      data: {
-        ...(rest as Record<string, unknown>),
-        blob: decodeBytes(blob),
-      } as never,
-    });
-  }
-
-  for (const row of bundle.assignmentModules) {
-    await prisma.assignmentModule.create({ data: withTimestamps(row) as never });
-  }
-
-  for (const row of bundle.assignmentModuleInstructions) {
-    await prisma.assignmentModuleInstruction.create({
-      data: withTimestamps(row) as never,
-    });
-  }
-
-  for (const row of bundle.assignmentModuleInstructionButtons) {
-    await prisma.assignmentModuleInstructionButton.create({
-      data: withTimestamps(row) as never,
-    });
-  }
-
-  for (const row of bundle.teacherTrainings) {
-    await prisma.teacherTraining.create({ data: withTimestamps(row) as never });
-  }
-
-  for (const row of bundle.teacherTrainingImages) {
-    const { blob, ...rest } = row;
-    await prisma.teacherTrainingImage.create({
-      data: {
-        ...(rest as Record<string, unknown>),
-        blob: decodeBytes(blob),
-      } as never,
-    });
-  }
-
-  for (const row of bundle.teacherTrainingModules) {
-    await prisma.teacherTrainingModule.create({
-      data: withTimestamps(row) as never,
-    });
-  }
-
-  for (const row of bundle.teacherTrainingModuleResources) {
-    const { blob, ...rest } = row;
-    await prisma.teacherTrainingModuleResource.create({
-      data: {
-        ...(rest as Record<string, unknown>),
-        blob: decodeBytes(blob),
-      } as never,
-    });
-  }
-
-  for (const row of bundle.teacherTrainingResources) {
-    await prisma.teacherTrainingResource.create({ data: row as never });
-  }
-
-  for (const row of bundle.apHistoryPromptLibraryEntries) {
-    await prisma.apHistoryPromptLibraryEntry.create({
-      data: withTimestamps(row) as never,
-    });
-  }
-
-  for (const row of bundle.apHistoryPromptLibrarySources) {
-    await prisma.apHistoryPromptLibrarySource.create({ data: row as never });
-  }
-
-  for (const row of bundle.assignmentTypes) {
-    await prisma.organizationAssignmentType.create({
-      data: {
-        organizationId: LOCAL_DEV_ORG_ID,
-        assignmentTypeId: String(row.id),
-      },
-    });
-  }
+  await syncProdFidelityFixtures(prisma, bundle);
 
   console.log(
     `Imported prod-fidelity fixtures (${bundle.assignmentTypes.length} assignment types, ${bundle.teacherTrainings.length} teacher trainings).`

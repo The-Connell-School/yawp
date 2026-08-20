@@ -1,5 +1,7 @@
 import { rubricCategories } from './rubric';
 import type { RubricDisplayCategory } from './rubric-display';
+import { getCategoryScoreBounds } from '~/domain/assignment-types/rubric-category-options';
+import type { RubricScoreBand } from '~/domain/assignment-types/assignment-type-rubric.shared';
 
 export function scoreToPercent(score: number) {
   if (score === 5) return 100;
@@ -126,7 +128,7 @@ type RubricScoreValue = {
  */
 export function computeWeightedBandPercentage(
   rubricScores: Record<string, unknown> | null | undefined,
-  categories: readonly { key: string; weight: number }[]
+  categories: readonly { key: string; weight: number; bands?: RubricScoreBand[] }[]
 ) {
   if (!rubricScores || typeof rubricScores !== 'object') return null;
 
@@ -139,8 +141,15 @@ export function computeWeightedBandPercentage(
     ];
     const score = value?.score;
     if (typeof score !== 'number' || !Number.isFinite(score)) return null;
+    const bounds = getCategoryScoreBounds(category);
+    const categoryPercent = bounds
+      ? bounds.max > 0
+        ? (score / bounds.max) * 100
+        : null
+      : score;
+    if (categoryPercent === null) return null;
     totalWeight += category.weight;
-    weightedSum += score * category.weight;
+    weightedSum += categoryPercent * category.weight;
   }
 
   if (totalWeight <= 0) return null;
