@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, mock, test } from 'bun:test';
 const prisma = {
   user: { findUnique: mock() },
   submission: { findFirst: mock() },
+  submissionActivity: { findMany: mock() },
   assignmentType: { findUnique: mock() },
 };
 
@@ -72,6 +73,8 @@ function buildSubmission(
       },
       membership: {
         id: STUDENT_MEMBERSHIP_ID,
+        organizationId: 'org-1',
+        organization: { submissionActivityEnabled: true },
         userId: 'user-student',
         user: { name: 'Student' },
         classesAsStudent: [
@@ -105,12 +108,14 @@ describe('submission loader — unsubmitted redirect', () => {
   beforeEach(() => {
     prisma.user.findUnique.mockReset();
     prisma.submission.findFirst.mockReset();
+    prisma.submissionActivity.findMany.mockReset();
     requireUserId.mockReset();
     requireMembership.mockReset();
     prisma.assignmentType.findUnique.mockReset();
 
     prisma.user.findUnique.mockResolvedValue({ isAdmin: false });
     prisma.assignmentType.findUnique.mockResolvedValue(null);
+    prisma.submissionActivity.findMany.mockResolvedValue([]);
     requireUserId.mockResolvedValue('user-student');
   });
 
@@ -172,5 +177,56 @@ describe('submission loader — unsubmitted redirect', () => {
 
     expect(result).not.toBeInstanceOf(Response);
     expect((result as { isTeacher: boolean }).isTeacher).toBe(true);
+  });
+
+  test('loads newest-first tenant-scoped activity for staff only', async () => {
+    requireMembership.mockResolvedValue({
+      id: TEACHER_MEMBERSHIP_ID,
+      role: 'TEACHER',
+    });
+    prisma.submission.findFirst.mockResolvedValue(buildSubmission());
+    prisma.submissionActivity.findMany.mockResolvedValue([
+      {
+        id: 'activity-1',
+        eventType: 'submission.grade_updated',
+        source: 'update-submission',
+        occurredAfterRelease: true,
+        changes: { score: { before: '85% B', after: '92% A-' } },
+        metadata: null,
+        createdAt: new Date('2026-08-20T12:00:00.000Z'),
+        actorMembership: {
+          user: { name: 'Teacher One', email: 'teacher@example.test' },
+        },
+      },
+    ]);
+
+    const result = (await loader({
+      request: request(),
+      params: { submissionId: 'sub-1' },
+    })) as any;
+
+    expect(result.activities).toHaveLength(1);
+    expect(prisma.submissionActivity.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { submissionId: 'sub-1', organizationId: 'org-1' },
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      })
+    );
+  });
+
+  test('does not query or return staff activity to the submission owner', async () => {
+    requireMembership.mockResolvedValue({
+      id: STUDENT_MEMBERSHIP_ID,
+      role: 'STUDENT',
+    });
+    prisma.submission.findFirst.mockResolvedValue(buildSubmission());
+
+    const result = (await loader({
+      request: request(),
+      params: { submissionId: 'sub-1' },
+    })) as any;
+
+    expect(prisma.submissionActivity.findMany).not.toHaveBeenCalled();
+    expect(result).not.toHaveProperty('activities');
   });
 });
