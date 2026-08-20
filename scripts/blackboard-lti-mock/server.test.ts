@@ -1024,6 +1024,17 @@ describe('Learn student and teacher experience', () => {
       '/dev/blackboard-lti-mock/learn/courses/_4_1/content'
     );
   });
+
+  test('the public Blackboard host does not prefix Learn links', async () => {
+    const origin = await listen(
+      makePlatform({ publicBasePath: '/dev/blackboard-lti-mock' })
+    );
+    const home = await request(origin, '/', {
+      headers: { host: 'blackboard-pr-291.preview.yawp.school' },
+    });
+    expect(home.text).toContain('action="/learn/session"');
+    expect(home.text).not.toContain('/dev/blackboard-lti-mock/learn/session');
+  });
 });
 
 function cookieHeader(response) {

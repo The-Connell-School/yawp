@@ -749,7 +749,9 @@ describe('PR preview deployment contract', () => {
     expect(bootstrap).not.toContain(
       '/var/run/docker.sock:/var/run/docker.sock:rw'
     );
-    expect(wakeServer).toContain('timingSafeEqual');
+    expect(wakeServer).toContain('parsePreviewHost');
+    expect(ingressServer).toContain("service === 'blackboard'");
+    expect(ingressServer).toContain('yawp-pr-${pr}-blackboard-lti-mock-1');
     expect(ingressServer).toContain('createWebSocketUpgradeHandler');
     expect(ingressServer).toContain('authorizeWake(pr, request.url, request)');
     expect(ingressServer).toContain("upstreamResponse.headers['x-yawp-preview-authorized']");
@@ -1137,6 +1139,9 @@ describe('PR preview deployment contract', () => {
     expect(compose).toContain('BLACKBOARD_LTI_MOCK_URL: "http://blackboard-lti-mock:9473"');
     expect(deploy).toContain('start_blackboard_lti_mock_if_present');
     expect(deploy).toContain('blackboard-lti-mock:');
+    expect(deploy).toContain('BLACKBOARD_HOSTNAME');
+    expect(deploy).toContain('BLACKBOARD_URL');
+    expect(dockerfile).not.toContain('blackboard-lti-mock');
     expect(dockerfile).not.toContain('blackboard-lti-mock');
     expect(dockerfile).toContain('CMD ["bash", "services/web-app/start.sh"]');
   });
@@ -1150,7 +1155,7 @@ describe('PR preview deployment contract', () => {
       '- **Data:** `${{ env.PREVIEW_DATA_MODE }}` in an isolated PR database'
     );
     expect(previewWorkflow).toContain(
-      '- **Smoke:** in-app access gate + dev login'
+      '- **Blackboard:** `${{ steps.deploy.outputs.blackboard_url }}`'
     );
     expect(previewWorkflow).not.toContain('seed overlay');
   });

@@ -343,6 +343,7 @@ jobs:
 
             - **One-click:** ${{ steps.deploy.outputs.url }}/?code=${{ steps.deploy.outputs.access_code }}
             - **URL:** ${{ steps.deploy.outputs.url }}
+            - **Blackboard:** ${{ steps.deploy.outputs.blackboard_url }}
             - **Access code:** `${{ steps.deploy.outputs.access_code }}`
             - **Runtime:** Docker Compose on the preview environment host
             - **Data:** `${{ env.PREVIEW_DATA_MODE }}` in an isolated PR database
