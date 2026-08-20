@@ -148,6 +148,10 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           membership: {
             select: {
               id: true,
+              organizationId: true,
+              organization: {
+                select: { submissionActivityEnabled: true },
+              },
               userId: true,
               user: { select: { name: true } },
               classesAsStudent: {
@@ -204,6 +208,9 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       ));
 
   const isAdmin = hasEffectivePlatformAdmin(user?.isAdmin);
+  const submissionActivityEnabled =
+    submission.document.membership.organization.submissionActivityEnabled ===
+    true;
 
   // Unsubmitting is student-initiated and owner-only — /api/domain/unsubmit-
   // submission refuses teachers and admins — so the only way an owner reaches
@@ -234,6 +241,31 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       submission.document.assignmentTypeId
     ),
   ]);
+
+  const activities =
+    !isOwner && (isTeacher || isAdmin) && submissionActivityEnabled
+      ? await prisma.submissionActivity.findMany({
+          where: {
+            submissionId: submission.id,
+            organizationId: submission.document.membership.organizationId,
+          },
+          select: {
+            id: true,
+            eventType: true,
+            source: true,
+            occurredAfterRelease: true,
+            changes: true,
+            metadata: true,
+            createdAt: true,
+            actorMembership: {
+              select: {
+                user: { select: { name: true, email: true } },
+              },
+            },
+          },
+          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        })
+      : null;
 
   // Sort comments by document location
   const sortedComments = [...submission.comments].sort((a, b) => {
@@ -270,6 +302,8 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     },
     isOwner,
     isTeacher: isTeacher || isAdmin,
+    submissionActivityEnabled,
+    ...(activities == null ? {} : { activities }),
   };
 }
 
