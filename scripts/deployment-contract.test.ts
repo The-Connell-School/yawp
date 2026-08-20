@@ -242,6 +242,16 @@ describe('production deployment contract', () => {
     expect(remoteBackfillIndex).toBeGreaterThan(remoteMigrateIndex);
     expect(remoteReleaseGateIndex).toBeGreaterThan(remoteBackfillIndex);
   });
+
+  test('production QA verifies the bastion host key without unsupported latest console logs', () => {
+    const productionQaWorkflow = readRepoFile(
+      '.github/workflows/production-qa-profile.yml'
+    );
+
+    expect(productionQaWorkflow).toContain('aws ec2 get-console-output');
+    expect(productionQaWorkflow).toContain('bastion-console.txt');
+    expect(productionQaWorkflow).not.toContain('--latest');
+  });
 });
 
 describe('worktree local setup contract', () => {
