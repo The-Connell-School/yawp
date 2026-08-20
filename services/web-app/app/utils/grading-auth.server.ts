@@ -43,10 +43,12 @@ export function buildTeacherClassWhere(
 ): Prisma.DocumentWhereInput {
   if (actor.isAdmin) return {};
   return {
+    membership: { organizationId: actor.organizationId },
     OR: [
       {
         classAssignment: {
           class: {
+            school: { organizationId: actor.organizationId },
             teachers: {
               some: {
                 id: actor.membershipId,
@@ -59,6 +61,7 @@ export function buildTeacherClassWhere(
         membership: {
           classesAsStudent: {
             some: {
+              school: { organizationId: actor.organizationId },
               teachers: {
                 some: {
                   id: actor.membershipId,
