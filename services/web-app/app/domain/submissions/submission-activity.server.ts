@@ -58,6 +58,7 @@ function toAuditJson(value: unknown): Prisma.InputJsonValue | null {
     return Object.fromEntries(
       Object.entries(value as Record<string, unknown>)
         .filter(([, entry]) => entry !== undefined)
+        .sort(([left], [right]) => left.localeCompare(right))
         .map(([key, entry]) => [key, toAuditJson(entry)])
     ) as Prisma.InputJsonObject;
   }

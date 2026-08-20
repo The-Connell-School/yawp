@@ -1,3 +1,6 @@
+SET lock_timeout = '5s';
+SET statement_timeout = '30s';
+
 -- Additive rollout gate. Recording begins immediately; released-grade editing
 -- and staff-facing activity UI remain disabled until this flag is enabled.
 ALTER TABLE "Organization"
