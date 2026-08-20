@@ -40,13 +40,22 @@ describe('submission grade mode', () => {
     ).toBe(true);
   });
 
-  test('is locked read-only once released', () => {
+  test('keeps released grades read-only until the organization rollout is enabled', () => {
     expect(
       resolveSubmissionGradeMode({
         isGradingOther: true,
         lifecycleState: 'released',
         isEditingGrade: true,
+        submissionActivityEnabled: false,
       })
     ).toBe(false);
+    expect(
+      resolveSubmissionGradeMode({
+        isGradingOther: true,
+        lifecycleState: 'released',
+        isEditingGrade: true,
+        submissionActivityEnabled: true,
+      })
+    ).toBe(true);
   });
 });

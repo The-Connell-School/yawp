@@ -81,4 +81,34 @@ describe('canSaveGradingDraft', () => {
       })
     ).toBe(true);
   });
+
+  it('allows released saves only for enabled organizations with a real change', () => {
+    expect(
+      canSaveGradingDraft({
+        lifecycleState: 'released',
+        hasDraftToReplace: true,
+        hasUnsavedChanges: true,
+        hasGrade: true,
+        releasedEditEnabled: true,
+      })
+    ).toBe(true);
+    expect(
+      canSaveGradingDraft({
+        lifecycleState: 'released',
+        hasDraftToReplace: true,
+        hasUnsavedChanges: false,
+        hasGrade: true,
+        releasedEditEnabled: true,
+      })
+    ).toBe(false);
+    expect(
+      canSaveGradingDraft({
+        lifecycleState: 'released',
+        hasDraftToReplace: true,
+        hasUnsavedChanges: true,
+        hasGrade: true,
+        releasedEditEnabled: false,
+      })
+    ).toBe(false);
+  });
 });
