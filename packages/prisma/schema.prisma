@@ -593,6 +593,7 @@ model Organization {
   reporterEnabled           Boolean                      @default(false)
   classInsightsEnabled      Boolean                      @default(false)
   writingPracticeEnabled    Boolean                      @default(false)
+  submissionActivityEnabled Boolean                      @default(false)
   previewSeatCode           String?                      @unique
   memberships               OrgMembership[]
   invitations               Invitation[]
@@ -602,6 +603,7 @@ model Organization {
   reporterConversations     ReporterConversation[]
   reporterGrowthPlans       ReporterGrowthPlan[]
   aiRequestReservations     AiRequestReservation[]
+  submissionActivities      SubmissionActivity[]
 }
 
 model OrganizationAssignmentType {
@@ -635,6 +637,7 @@ model OrgMembership {
   pasteAlerts                   PasteAlert[]
   submissionsGraded             Submission[]                   @relation("SubmissionGradedBy")
   submissionsUnsubmitted        Submission[]                   @relation("SubmissionUnsubmittedBy")
+  submissionActivities          SubmissionActivity[]           @relation("SubmissionActivityActor")
   submissionComments            SubmissionComment[]            @relation("SubmissionCommentProfile")
   ownedAssignmentTypes          AssignmentType[]               @relation("AssignmentTypeOwner")
   classesAsTeacher              Class[]                        @relation("ClassTeachers")
@@ -995,6 +998,7 @@ model Submission {
   document                  Document                        @relation(fields: [documentId], references: [id], onDelete: Restrict)
   comments                  SubmissionComment[]
   gradingAssistantRuns      SubmissionGradingAssistantRun[]
+  activities                SubmissionActivity[]
 
   @@index([documentId, submittedAt(sort: Desc)])
   @@index([documentId, archivedAt])
@@ -1002,6 +1006,29 @@ model Submission {
   @@index([gradedByMembershipId])
   @@index([unsubmittedByMembershipId])
   @@index([releasedAt])
+}
+
+/// Append-only audit ledger for current and future submission mutations.
+/// Existing submissions are intentionally not backfilled: history begins
+/// when application dual-writes start after this table is deployed.
+model SubmissionActivity {
+  id                   String         @id @default(cuid())
+  createdAt            DateTime       @default(now()) @db.Timestamptz(6)
+  submissionId         String
+  submission           Submission     @relation(fields: [submissionId], references: [id], onDelete: Restrict)
+  organizationId       String
+  organization         Organization   @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  actorMembershipId    String?
+  actorMembership      OrgMembership? @relation("SubmissionActivityActor", fields: [actorMembershipId], references: [id], onDelete: SetNull)
+  eventType            String
+  source               String
+  occurredAfterRelease Boolean        @default(false)
+  changes              Json
+  metadata             Json?
+
+  @@index([submissionId, createdAt(sort: Desc)])
+  @@index([organizationId, createdAt(sort: Desc)])
+  @@index([actorMembershipId, createdAt(sort: Desc)])
 }
 
 model SubmissionGradingAssistantRun {
