@@ -49,7 +49,7 @@ beforeEach(() => {
   requireMembership.mockResolvedValue({
     id: 'teacher-1',
     role: 'TEACHER',
-    organization: { id: 'org-1', name: 'Org' },
+    organization: { id: 'org-1', name: 'Org', writingPracticeEnabled: true },
   });
   classFindMany.mockResolvedValue([{ id: 'class-a' }]);
   createWritingPracticeAssignmentForClasses.mockResolvedValue({ id: 'wpa-1' });
@@ -82,7 +82,7 @@ describe('writing-lessons assign action', () => {
     requireMembership.mockResolvedValue({
       id: 'student-1',
       role: 'STUDENT',
-      organization: { id: 'org-1', name: 'Org' },
+      organization: { id: 'org-1', name: 'Org', writingPracticeEnabled: true },
     });
 
     const result = (await run({

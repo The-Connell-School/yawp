@@ -15,6 +15,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import {
   Link,
   data as dataResponse,
+  redirect,
   useFetcher,
   useLoaderData,
   useSearchParams,
@@ -76,6 +77,12 @@ type TeacherClass = {
 export async function loader({ request, params }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
   const profile = await requireMembership(request, userId);
+
+  // Writing practice ships dark behind the org flag, so a direct lesson URL
+  // has to bounce too — otherwise the feature leaks past the pause.
+  if (!profile.organization.writingPracticeEnabled) {
+    throw redirect('/app');
+  }
 
   const lesson = getQuickWritingLessonBySlug(params.lessonSlug);
   if (!lesson) {

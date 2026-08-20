@@ -60,7 +60,7 @@ describe('writing lesson detail route', () => {
     requireMembership.mockResolvedValue({
       id: 'student-1',
       role: 'STUDENT',
-      organization: { id: 'org-1', name: 'Org' },
+      organization: { id: 'org-1', name: 'Org', writingPracticeEnabled: true },
     });
   });
 
@@ -82,7 +82,7 @@ describe('writing lesson detail route', () => {
     requireMembership.mockResolvedValue({
       id: 'teacher-1',
       role: 'TEACHER',
-      organization: { id: 'org-1', name: 'Org' },
+      organization: { id: 'org-1', name: 'Org', writingPracticeEnabled: true },
     });
     const link = {
       trainingId: 'training-1',
@@ -124,7 +124,7 @@ describe('writing lesson detail route', () => {
     requireMembership.mockResolvedValue({
       id: 'teacher-1',
       role: 'TEACHER',
-      organization: { id: 'org-1', name: 'Org' },
+      organization: { id: 'org-1', name: 'Org', writingPracticeEnabled: true },
     });
 
     const response = await loader({
@@ -211,7 +211,7 @@ describe('writing lesson practice action - check-composition intent', () => {
     requireMembership.mockResolvedValue({
       id: 'student-1',
       role: 'STUDENT',
-      organization: { id: 'org-1', name: 'Org' },
+      organization: { id: 'org-1', name: 'Org', writingPracticeEnabled: true },
     });
     process.env.COMPOSITION_PRACTICE_ENABLED = 'true';
   });
@@ -316,7 +316,7 @@ describe('writing lesson practice action - personalize-composition intent', () =
     requireMembership.mockResolvedValue({
       id: 'student-1',
       role: 'STUDENT',
-      organization: { id: 'org-1', name: 'Org' },
+      organization: { id: 'org-1', name: 'Org', writingPracticeEnabled: true },
     });
     process.env.COMPOSITION_PRACTICE_ENABLED = 'true';
   });

@@ -22,6 +22,12 @@ export async function action({ request }: ActionFunctionArgs) {
     return fail('Only teachers can assign writing practice.', 403);
   }
 
+  // Checked ahead of any field validation: while the feature is paused the
+  // answer is the same whatever the form says, and nothing may be written.
+  if (!profile.organization.writingPracticeEnabled) {
+    return fail('Writing practice is not enabled for your organization.', 404);
+  }
+
   const formData = await request.formData();
   const lessonSlugs = formData
     .getAll('lessonSlugs')

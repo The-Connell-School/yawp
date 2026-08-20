@@ -14,6 +14,8 @@ const requireUserId = mock();
 const requireMembership = mock();
 const classFindMany = mock();
 const createWritingPracticeAssignmentForClasses = mock();
+const listWritingPracticeAssignmentsForStudent = mock();
+const listWritingPracticeAssignmentsForTeacher = mock();
 
 mock.module('~/utils/auth.server', () => ({
   requireUserId,
@@ -24,22 +26,22 @@ mock.module('~/utils/db.server', () => ({
   prisma: { class: { findMany: classFindMany } },
 }));
 
+// bun's mock.module() swaps the whole namespace, so every export the routes
+// under test import has to be listed here or the import fails outright.
 mock.module('~/utils/writing-lessons/practice-assignments.server', () => ({
   createWritingPracticeAssignmentForClasses,
+  listWritingPracticeAssignmentsForStudent,
+  listWritingPracticeAssignmentsForTeacher,
 }));
 
-const { FLAT_SIDEBAR_SECTIONS, getVisibleSidebarSections } = await import(
-  './sidebar-nav'
-);
-const { loader: indexLoader } = await import(
-  '~/routes/app.writing-lessons._index/route'
-);
-const { loader: lessonLoader } = await import(
-  '~/routes/app.writing-lessons.$lessonSlug/route'
-);
-const { action: assignAction } = await import(
-  '~/routes/app.writing-lessons.assign/route'
-);
+const { FLAT_SIDEBAR_SECTIONS, getVisibleSidebarSections } =
+  await import('./sidebar-nav');
+const { loader: indexLoader } =
+  await import('~/routes/app.writing-lessons._index/route');
+const { loader: lessonLoader } =
+  await import('~/routes/app.writing-lessons.$lessonSlug/route');
+const { action: assignAction } =
+  await import('~/routes/app.writing-lessons.assign/route');
 
 afterAll(() => {
   mock.restore();
@@ -57,10 +59,9 @@ function pausedUser(role: 'TEACHER' | 'STUDENT') {
 }
 
 function destinationsFor(user: any) {
-  return getVisibleSidebarSections(
-    FLAT_SIDEBAR_SECTIONS,
-    user
-  ).flatMap((section) => section.links.map((link) => link.to));
+  return getVisibleSidebarSections(FLAT_SIDEBAR_SECTIONS, user).flatMap(
+    (section) => section.links.map((link) => link.to)
+  );
 }
 
 describe('Writing Practice is invisible while paused', () => {
@@ -81,7 +82,6 @@ describe('Writing Practice is invisible while paused', () => {
       destinations.some((to) => to.startsWith('/app/writing-lessons'))
     ).toBe(false);
   });
-
 });
 
 describe('Writing Practice routes refuse while paused', () => {
