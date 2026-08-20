@@ -51,7 +51,7 @@ FOREIGN KEY ("organizationId") REFERENCES "Organization"("id")
 ON DELETE CASCADE ON UPDATE CASCADE;
 
 ALTER TABLE "SubmissionActivity"
-ADD CONSTRAINT "SubmissionActivity_actorMembershipId_fkey"
+ADD CONSTRAINT "SubmissionActivity_actorMembershipId_organizationId_fkey"
 FOREIGN KEY ("actorMembershipId", "organizationId")
 REFERENCES "OrgMembership"("id", "organizationId")
 ON DELETE NO ACTION ON UPDATE NO ACTION;

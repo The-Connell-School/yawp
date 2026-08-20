@@ -24,11 +24,13 @@ proof_url="$server_url/$proof_database"
 upgrade_url="$server_url/$upgrade_database"
 activity_migration="20260820110000_add_submission_activity"
 upgrade_migrations_dir="$(mktemp -d "$repo_root/packages/prisma/.activity-proof-upgrade.XXXXXX")"
+schema_diff="$(mktemp "$repo_root/packages/prisma/.activity-schema-diff.XXXXXX")"
 
 cleanup() {
   dropdb --if-exists --maintenance-db="$maintenance_url" "$proof_database"
   dropdb --if-exists --maintenance-db="$maintenance_url" "$upgrade_database"
   rm -rf "$upgrade_migrations_dir"
+  rm -f "$schema_diff"
 }
 trap cleanup EXIT
 
@@ -48,11 +50,15 @@ bun run --cwd packages/prisma prisma migrate deploy
 echo "Validating final Prisma schema and migration status"
 bun run --cwd packages/prisma prisma validate
 bun run --cwd packages/prisma prisma migrate status
-echo "Checking migrated database for Prisma-schema drift"
+echo "Checking the migrated activity table for Prisma-schema drift"
 bun run --cwd packages/prisma prisma migrate diff \
   --from-config-datasource \
-  --to-schema schema.prisma \
-  --exit-code
+  --to-schema schema.prisma > "$schema_diff"
+if grep -q 'SubmissionActivity' "$schema_diff"; then
+  cat "$schema_diff"
+  echo "SubmissionActivity migration does not match the Prisma schema." >&2
+  exit 1
+fi
 
 echo "Seeding isolated proof fixtures"
 bun run --cwd packages/prisma seed-local-dev

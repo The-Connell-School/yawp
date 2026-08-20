@@ -54,7 +54,7 @@ BEGIN
     WHERE conname IN (
       'SubmissionActivity_submissionId_fkey',
       'SubmissionActivity_organizationId_fkey',
-      'SubmissionActivity_actorMembershipId_fkey'
+      'SubmissionActivity_actorMembershipId_organizationId_fkey'
     )
       AND contype = 'f'
   ) <> 3 THEN
@@ -64,7 +64,7 @@ BEGIN
   IF NOT EXISTS (
     SELECT 1
     FROM pg_constraint
-    WHERE conname = 'SubmissionActivity_actorMembershipId_fkey'
+    WHERE conname = 'SubmissionActivity_actorMembershipId_organizationId_fkey'
       AND array_length(conkey, 1) = 2
       AND array_length(confkey, 1) = 2
       AND pg_get_constraintdef(oid) LIKE '%actorMembershipId%organizationId%'
