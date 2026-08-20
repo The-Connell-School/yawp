@@ -793,30 +793,256 @@ describe('deep linking, event log, key rotation, and panel', () => {
     await verifyAgainstJwks(origin, previous.json.id_token);
   });
 
-  test('dev panel HTML exposes launch, score, and fault controls', async () => {
+  test('home page is a Learn sign-in, not a developer control panel', async () => {
     const origin = await listen(makePlatform());
-    const panel = await request(origin, '/');
-    expect(panel.status).toBe(200);
-    expect(panel.headers.get('content-type')).toContain('text/html');
-    expect(panel.text).toContain('data-launch="Learner"');
-    expect(panel.text).toContain('data-launch="Instructor"');
-    expect(panel.text).toContain('data-launch="Administrator"');
-    for (const fault of [
-      'expired_launch',
-      'replayed_nonce',
-      'invalid_jwt',
-      'mis_signed_jwt',
-      'unknown_deployment',
-      'wrong_audience',
-      'token_endpoint_failure',
-      'ags_403_missing_scope',
-      'ags_5xx',
-      'ags_timeout',
-    ]) {
-      expect(panel.text).toContain(`data-fault="${fault}"`);
-    }
+    const home = await request(origin, '/');
+    expect(home.status).toBe(200);
+    expect(home.headers.get('content-type')).toContain('text/html');
+    expect(home.text).toContain('data-persona="student"');
+    expect(home.text).toContain('data-persona="teacher"');
+    expect(home.text).toContain('Ada Student');
+    expect(home.text).toContain('Grace Instructor');
+    expect(home.text).not.toContain('data-launch=');
+    expect(home.text).not.toContain('data-fault=');
+    expect(home.text).not.toContain('Event log');
+    expect(home.text).not.toContain('Rotate keys');
+    expect(home.text).not.toContain('Administrator launch');
   });
 });
+
+describe('Learn student and teacher experience', () => {
+  test('unauthenticated course pages send the browser to sign-in', async () => {
+    const origin = await listen(makePlatform());
+    const courses = await request(origin, '/learn/courses', {
+      redirect: 'manual',
+    });
+    expect(courses.status).toBe(302);
+    expect(courses.headers.get('location')).toMatch(/\/learn\/signin$/);
+  });
+
+  test('signing in as a student shows the course and its LTI content link', async () => {
+    const origin = await listen(makePlatform());
+    const session = await signIn(origin, 'student');
+    const courses = await request(origin, '/learn/courses', {
+      headers: { cookie: session },
+    });
+    expect(courses.text).toContain('ENG-101');
+    expect(courses.text).toContain('English Composition');
+    expect(courses.text).not.toContain('data-fault=');
+
+    const content = await request(origin, '/learn/courses/_4_1/content', {
+      headers: { cookie: session },
+    });
+    expect(content.text).toContain('Yawp Assignment');
+    expect(content.text).toContain('data-content-launch="_99_1"');
+    expect(content.text).toContain('My Grades');
+    expect(content.text).not.toContain('Gradebook');
+    expect(content.text).not.toContain('data-deep-link');
+    expect(content.text).not.toContain('Add teaching tool');
+  });
+
+  test('signing in as a teacher shows content, gradebook, and add-tool in the course', async () => {
+    const origin = await listen(makePlatform());
+    const session = await signIn(origin, 'teacher');
+    const content = await request(origin, '/learn/courses/_4_1/content', {
+      headers: { cookie: session },
+    });
+    expect(content.text).toContain('Yawp Assignment');
+    expect(content.text).toContain('data-content-launch="_99_1"');
+    expect(content.text).toContain('Gradebook');
+    expect(content.text).toContain('data-deep-link');
+    expect(content.text).toContain('Add teaching tool');
+    expect(content.text).not.toContain('data-fault=');
+  });
+
+  test('opening a content item starts an OIDC login as the signed-in role', async () => {
+    const origin = await listen(makePlatform());
+    const student = await signIn(origin, 'student');
+    const studentLaunch = await request(
+      origin,
+      '/learn/courses/_4_1/content/_99_1',
+      { headers: { cookie: student }, redirect: 'manual' }
+    );
+    expect(studentLaunch.status).toBe(302);
+    const studentLogin = new URL(studentLaunch.headers.get('location') || '');
+    expect(studentLogin.pathname).toBe('/lti/login');
+    expect(studentLogin.searchParams.get('login_hint')).toBe('bb-user-student');
+
+    const teacher = await signIn(origin, 'teacher');
+    const teacherLaunch = await request(
+      origin,
+      '/learn/courses/_4_1/content/_99_1',
+      { headers: { cookie: teacher }, redirect: 'manual' }
+    );
+    const teacherLogin = new URL(teacherLaunch.headers.get('location') || '');
+    expect(teacherLogin.searchParams.get('login_hint')).toBe('bb-user-instructor');
+    expect(teacherLogin.searchParams.get('lti_message_hint')).toBeTruthy();
+  });
+
+  test('student grades show only that student after AGS passback', async () => {
+    const tool = generateToolKeys();
+    const origin = await listen(makePlatform({ toolPublicJwk: tool.publicJwk }));
+    const token = await mintToken(origin, tool, [
+      'https://purl.imsglobal.org/spec/lti-ags/scope/score',
+    ]);
+    const posted = await request(
+      origin,
+      '/learn/api/v1/lti/courses/_4_1/lineItems/_99_1_grade/scores',
+      {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${token}`,
+          'content-type': 'application/vnd.ims.lis.v2.score+json',
+        },
+        body: JSON.stringify({
+          userId: 'bb-user-student',
+          scoreGiven: 88,
+          scoreMaximum: 100,
+          activityProgress: 'Completed',
+          gradingProgress: 'FullyGraded',
+          timestamp: '2026-08-20T12:00:00.000Z',
+        }),
+      }
+    );
+    expect(posted.status).toBe(204);
+
+    const student = await signIn(origin, 'student');
+    const grades = await request(origin, '/learn/courses/_4_1/grades', {
+      headers: { cookie: student },
+    });
+    expect(grades.text).toContain('My Grades');
+    expect(grades.text).toContain('Yawp Assignment');
+    expect(grades.text).toContain('88');
+    expect(grades.text).toContain('Ada Student');
+    expect(grades.text).not.toContain('Lin Patel');
+    expect(grades.text).not.toContain('Gradebook');
+  });
+
+  test('teacher gradebook lists the roster and returned scores', async () => {
+    const tool = generateToolKeys();
+    const origin = await listen(makePlatform({ toolPublicJwk: tool.publicJwk }));
+    const token = await mintToken(origin, tool, [
+      'https://purl.imsglobal.org/spec/lti-ags/scope/score',
+    ]);
+    await request(
+      origin,
+      '/learn/api/v1/lti/courses/_4_1/lineItems/_99_1_grade/scores',
+      {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${token}`,
+          'content-type': 'application/vnd.ims.lis.v2.score+json',
+        },
+        body: JSON.stringify({
+          userId: 'bb-user-student',
+          scoreGiven: 91,
+          scoreMaximum: 100,
+          activityProgress: 'Completed',
+          gradingProgress: 'FullyGraded',
+          timestamp: '2026-08-20T12:00:00.000Z',
+        }),
+      }
+    );
+
+    const teacher = await signIn(origin, 'teacher');
+    const gradebook = await request(origin, '/learn/courses/_4_1/grades', {
+      headers: { cookie: teacher },
+    });
+    expect(gradebook.text).toContain('Gradebook');
+    expect(gradebook.text).toContain('Ada Student');
+    expect(gradebook.text).toContain('Lin Patel');
+    expect(gradebook.text).toContain('Yawp Assignment');
+    expect(gradebook.text).toContain('91');
+    expect(gradebook.text).toMatch(/—|–|-/);
+  });
+
+  test('deep-linked content items show up as course content links', async () => {
+    const tool = generateToolKeys();
+    const origin = await listen(makePlatform({ toolPublicJwk: tool.publicJwk }));
+    const launch = await completeOidcLaunch(origin, {
+      role: 'Instructor',
+      ltiMessageHint: Buffer.from(
+        JSON.stringify({ messageType: 'LtiDeepLinkingRequest' })
+      ).toString('base64url'),
+    });
+    const { payload } = await verifyAgainstJwks(origin, launch.json.id_token);
+    const settings =
+      payload['https://purl.imsglobal.org/spec/lti-dl/claim/deep_linking_settings'];
+    const responseJwt = signJwt(
+      {
+        iss: 'yawp-blackboard-mock',
+        aud: 'https://blackboard.com',
+        iat: Math.floor(Date.now() / 1000),
+        exp: Math.floor(Date.now() / 1000) + 300,
+        nonce: payload.nonce,
+        'https://purl.imsglobal.org/spec/lti/claim/message_type':
+          'LtiDeepLinkingResponse',
+        'https://purl.imsglobal.org/spec/lti/claim/version': '1.3.0',
+        'https://purl.imsglobal.org/spec/lti/claim/deployment_id':
+          'yawp-mock-deployment',
+        'https://purl.imsglobal.org/spec/lti-dl/claim/data': settings.data,
+        'https://purl.imsglobal.org/spec/lti-dl/claim/content_items': [
+          {
+            type: 'ltiResourceLink',
+            title: 'Yawp essay',
+            url: 'http://127.0.0.1:9/lti/launch',
+            lineItem: { scoreMaximum: 100, label: 'Yawp essay' },
+          },
+        ],
+      },
+      tool.privateKeyPem,
+      { kid: tool.kid }
+    );
+
+    const accepted = await request(origin, '/api/v1/lti/deep-linking', {
+      method: 'POST',
+      body: { JWT: responseJwt },
+    });
+    expect(accepted.status).toBe(200);
+
+    const teacher = await signIn(origin, 'teacher');
+    const content = await request(origin, '/learn/courses/_4_1/content', {
+      headers: { cookie: teacher },
+    });
+    expect(content.text).toContain('Yawp essay');
+  });
+
+  test('proxied Learn links stay under the public base path', async () => {
+    const origin = await listen(
+      makePlatform({ publicBasePath: '/dev/blackboard-lti-mock' })
+    );
+    const home = await request(origin, '/');
+    expect(home.text).toContain('/dev/blackboard-lti-mock/learn/session');
+
+    const session = await signIn(origin, 'student');
+    const courses = await request(origin, '/learn/courses', {
+      headers: { cookie: session },
+      redirect: 'manual',
+    });
+    expect(courses.status).toBe(200);
+    expect(courses.text).toContain(
+      '/dev/blackboard-lti-mock/learn/courses/_4_1/content'
+    );
+  });
+});
+
+function cookieHeader(response) {
+  const cookies = response.headers.getSetCookie?.() || [];
+  if (cookies.length) return cookies.map((value) => value.split(';')[0]).join('; ');
+  const fallback = response.headers.get('set-cookie');
+  return fallback ? fallback.split(';')[0] : '';
+}
+
+async function signIn(origin, persona) {
+  const login = await request(origin, '/learn/session', {
+    method: 'POST',
+    body: { persona },
+    redirect: 'manual',
+  });
+  expect(login.status).toBe(302);
+  expect(cookieHeader(login)).toContain('bb_learn=');
+  return cookieHeader(login);
+}
 
 function toolAssertion(origin, tool, extra = {}) {
   const now = Math.floor(Date.now() / 1000);

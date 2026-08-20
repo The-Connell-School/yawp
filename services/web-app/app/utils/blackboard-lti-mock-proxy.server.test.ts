@@ -74,4 +74,37 @@ describe('proxyBlackboardLtiMock', () => {
     expect(received.url).toBe('/dev/events');
     expect(received.body).toBe('hello');
   });
+
+  test('forwards cookies and login redirects from the mock', async () => {
+    process.env.NODE_ENV = 'development';
+    process.env.DATABASE_URL =
+      'postgresql://postgres:postgres@localhost:5432/yawp';
+    const upstream = await listenUpstream((incoming, response) => {
+      if (incoming.url?.startsWith('/learn/session')) {
+        response.writeHead(302, {
+          location: '/dev/blackboard-lti-mock/learn/courses',
+          'set-cookie': 'bb_learn=Learner; Path=/dev/blackboard-lti-mock; HttpOnly',
+        });
+        response.end();
+        return;
+      }
+      response.writeHead(200, { 'content-type': 'text/html' });
+      response.end('<html>ok</html>');
+    });
+    process.env.BLACKBOARD_LTI_MOCK_URL = upstream;
+
+    const response = await proxyBlackboardLtiMock(
+      new Request('http://localhost/dev/blackboard-lti-mock/learn/session', {
+        method: 'POST',
+        body: 'persona=student',
+        headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      }),
+      'learn/session'
+    );
+    expect(response.status).toBe(302);
+    expect(response.headers.get('location')).toBe(
+      '/dev/blackboard-lti-mock/learn/courses'
+    );
+    expect(response.headers.get('set-cookie')).toContain('bb_learn=Learner');
+  });
 });
