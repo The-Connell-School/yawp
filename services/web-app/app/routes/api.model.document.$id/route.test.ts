@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
 
 const prisma = {
+  $transaction: mock(),
   user: {
     findUniqueOrThrow: mock(),
   },
@@ -24,6 +25,7 @@ const prisma = {
     create: mock(),
     update: mock(),
   },
+  submissionActivity: { create: mock() },
 };
 
 const requireUserId = mock();
@@ -52,11 +54,16 @@ describe('api.model.document.$id', () => {
     prisma.documentWriteJournal.findFirst.mockReset();
     prisma.documentWriteJournal.create.mockReset();
     prisma.documentWriteJournal.update.mockReset();
+    prisma.submissionActivity.create.mockReset();
+    prisma.$transaction.mockReset();
     requireUserId.mockReset();
     requireMembership.mockReset();
 
     requireUserId.mockResolvedValue('user-1');
-    requireMembership.mockResolvedValue({ id: 'profile-1' });
+    requireMembership.mockResolvedValue({
+      id: 'profile-1',
+      organization: { id: 'org-1' },
+    });
     prisma.user.findUniqueOrThrow.mockResolvedValue({ isAdmin: false });
     // The route resolves the document through the access predicate
     // (`document.findFirst` + `documentReadWhere`) before it writes anything.
@@ -88,6 +95,40 @@ describe('api.model.document.$id', () => {
       id: 'journal-1',
       status: 'accepted',
     });
+    prisma.$transaction.mockImplementation(async (callback: any) =>
+      callback(prisma)
+    );
+  });
+
+  test('audits snapshot body changes with hashes and lengths only', async () => {
+    prisma.submission.findFirst.mockResolvedValue({
+      id: 'sub-1',
+      text: 'Old frozen body',
+      html: '<p>Old frozen body</p>',
+      releasedAt: new Date('2026-08-20T09:00:00.000Z'),
+      document: { membership: { organizationId: 'org-1' } },
+    });
+
+    const form = new FormData();
+    form.append('html', '<p>New frozen body</p>');
+    form.append('text', 'New frozen body');
+
+    const response = (await action({
+      request: new Request(
+        'https://example.com/api/model/document/doc-1?snapshotId=sub-1',
+        { method: 'PUT', body: form }
+      ),
+      params: { id: 'doc-1' },
+    } as any)) as Response;
+
+    expect(response.status).toBe(200);
+    expect(prisma.submissionActivity.create).toHaveBeenCalledTimes(1);
+    const activity = prisma.submissionActivity.create.mock.calls[0][0].data;
+    expect(activity.eventType).toBe('submission.body_updated');
+    expect(activity.occurredAfterRelease).toBe(true);
+    expect(JSON.stringify(activity)).not.toContain('frozen body');
+    expect(activity.changes.body.before.text.sha256).toHaveLength(64);
+    expect(activity.changes.body.after.html.length).toBe(22);
   });
 
   test('rejects stale editor saves and records a rejected journal entry', async () => {
