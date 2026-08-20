@@ -62,6 +62,11 @@ import {
   isGradingRequestDeadlineError,
   runWithGradingRequestDeadline,
 } from './grading-request-deadline.server';
+import {
+  buildSubmissionActivityChanges,
+  recordSubmissionActivity,
+  submissionActivityEventTypes,
+} from '~/domain/submissions/submission-activity.server';
 
 const POST = z.object({
   documentId: z.string().optional(),
@@ -527,7 +532,19 @@ export async function action({ request }: ActionFunctionArgs) {
     id: true,
     text: true,
     html: true,
+    updatedAt: true,
     gradedAt: true,
+    gradedByMembershipId: true,
+    releasedAt: true,
+    unsubmittedAt: true,
+    score: true,
+    feedback: true,
+    rubricScores: true,
+    overallScore: true,
+    overallComment: true,
+    numericPercentage: true,
+    letterGrade: true,
+    grammarIssues: true,
     document: {
       select: {
         id: true,
@@ -562,6 +579,10 @@ export async function action({ request }: ActionFunctionArgs) {
         },
         membership: {
           select: {
+            organizationId: true,
+            organization: {
+              select: { submissionActivityEnabled: true },
+            },
             classesAsStudent: {
               select: {
                 id: true,
@@ -640,6 +661,22 @@ export async function action({ request }: ActionFunctionArgs) {
     return dataResponse(
       { success: false, message: 'Submitted essay text not found.' },
       { status: 404 }
+    );
+  }
+
+  const organizationId =
+    submission.document.membership.organizationId ?? actor.organizationId;
+  if (
+    submission.releasedAt != null &&
+    submission.document.membership.organization
+      ?.submissionActivityEnabled !== true
+  ) {
+    return dataResponse(
+      {
+        success: false,
+        message: 'Released grades are read-only for this organization.',
+      },
+      { status: 403 }
     );
   }
 
@@ -858,9 +895,7 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
       return gradingDeadlineResponse();
     }
 
-    await prisma.submission.update({
-      where: { id: submission.id },
-      data: {
+    const apGradeData = {
         rubricScores,
         overallScore,
         overallComment,
@@ -878,7 +913,29 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
           ? { gradedAt: now, gradedByMembershipId: actor.membershipId }
           : {}),
         updatedAt: now,
-      },
+      };
+    await prisma.$transaction(async (tx) => {
+      await tx.submission.update({
+        where: {
+          id: submission.id,
+          updatedAt: submission.updatedAt,
+          unsubmittedAt: null,
+        },
+        data: apGradeData,
+      });
+      await recordSubmissionActivity(tx, {
+        submissionId: submission.id,
+        organizationId,
+        actorMembershipId:
+          actor.organizationId === organizationId ? actor.membershipId : null,
+        eventType: submissionActivityEventTypes.gradingAssistantUpdated,
+        source: 'grade-essay-ai',
+        occurredAfterRelease: submission.releasedAt != null,
+        changes: buildSubmissionActivityChanges({
+          before: submission,
+          after: { ...submission, ...apGradeData },
+        }),
+      });
     });
 
     return dataResponse({
@@ -1213,9 +1270,7 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
   }
 
   const now = new Date();
-  await prisma.submission.update({
-    where: { id: submission.id },
-    data: {
+  const gradeData = {
       rubricScores: rubricScores as Prisma.InputJsonValue,
       overallScore,
       overallComment,
@@ -1243,11 +1298,20 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
         ? { gradedAt: now, gradedByMembershipId: actor.membershipId }
         : {}),
       updatedAt: now,
-    },
-  });
+    };
 
-  await prisma.submissionGradingAssistantRun.create({
-    data: {
+  await prisma.$transaction(async (tx) => {
+    await tx.submission.update({
+      where: {
+        id: submission.id,
+        updatedAt: submission.updatedAt,
+        unsubmittedAt: null,
+      },
+      data: gradeData,
+    });
+
+    await tx.submissionGradingAssistantRun.create({
+      data: {
       submissionId: submission.id,
       assignmentTypeId: submission.document.assignmentTypeId,
       assignmentTypeGradingVersion: resolvedGradingConfig.version,
@@ -1288,7 +1352,22 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
         gradedAt: now.toISOString(),
         documentContext,
       } satisfies Prisma.InputJsonValue,
-    },
+      },
+    });
+
+    await recordSubmissionActivity(tx, {
+      submissionId: submission.id,
+      organizationId,
+      actorMembershipId:
+        actor.organizationId === organizationId ? actor.membershipId : null,
+      eventType: submissionActivityEventTypes.gradingAssistantUpdated,
+      source: 'grade-essay-ai',
+      occurredAfterRelease: submission.releasedAt != null,
+      changes: buildSubmissionActivityChanges({
+        before: submission,
+        after: { ...submission, ...gradeData },
+      }),
+    });
   });
 
   return dataResponse({
