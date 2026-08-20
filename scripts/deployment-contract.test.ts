@@ -243,18 +243,19 @@ describe('production deployment contract', () => {
     expect(remoteReleaseGateIndex).toBeGreaterThan(remoteBackfillIndex);
   });
 
-  test('production QA gets the bastion host key through authenticated AWS infrastructure', () => {
+  test('production QA pins and verifies the bastion host key before opening a tunnel', () => {
     const productionQaWorkflow = readRepoFile(
       '.github/workflows/production-qa-profile.yml'
     );
 
-    expect(productionQaWorkflow).toContain('aws ssm send-command');
-    expect(productionQaWorkflow).toContain('AWS-RunShellScript');
+    expect(productionQaWorkflow).toContain('PROD_SSH_HOST_FINGERPRINT');
+    expect(productionQaWorkflow).toContain('observed_fingerprint');
     expect(productionQaWorkflow).toContain(
-      'cat /etc/ssh/ssh_host_ed25519_key.pub'
+      '"${observed_fingerprint}" != "${PROD_SSH_HOST_FINGERPRINT}"'
     );
-    expect(productionQaWorkflow).toContain('aws ssm get-command-invocation');
-    expect(productionQaWorkflow).not.toContain('ssh-keyscan');
+    expect(productionQaWorkflow).not.toContain(
+      'ssh-keyscan -H "${PROD_SSH_HOST}" >> ~/.ssh/known_hosts'
+    );
   });
 });
 

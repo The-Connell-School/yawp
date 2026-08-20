@@ -21,13 +21,6 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v1
 
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-east-1
-
       - name: Install dependencies
         run: bun install
 
@@ -37,37 +30,27 @@ jobs:
           printf '%s\n' "${PROD_SSH_PRIVATE_KEY}" > "${PROD_SSH_KEY_PATH}"
           chmod 600 "${PROD_SSH_KEY_PATH}"
 
-          bastion_ip="$(getent ahostsv4 "${PROD_SSH_HOST}" | awk 'NR == 1 { print $1 }')"
-          instance_id="$(aws ec2 describe-instances \
-            --filters "Name=ip-address,Values=${bastion_ip}" "Name=instance-state-name,Values=running" \
-            --query 'Reservations[].Instances[].InstanceId' \
-            --output text)"
-          test -n "${instance_id}" && test "${instance_id}" != "None"
-
-          command_id="$(aws ssm send-command \
-            --instance-ids "${instance_id}" \
-            --document-name AWS-RunShellScript \
-            --comment "Yawp production QA bastion host-key verification" \
-            --parameters 'commands=["cat /etc/ssh/ssh_host_ed25519_key.pub"]' \
-            --query 'Command.CommandId' \
-            --output text)"
-          aws ssm wait command-executed \
-            --command-id "${command_id}" \
-            --instance-id "${instance_id}"
-          host_key="$(aws ssm get-command-invocation \
-            --command-id "${command_id}" \
-            --instance-id "${instance_id}" \
-            --query 'StandardOutputContent' \
-            --output text \
-            | tr -d '\r' \
-            | awk '$1 == "ssh-ed25519" { print $1 " " $2; exit }')"
-          test -n "${host_key}"
-          printf '%s %s\n' "${PROD_SSH_HOST}" "${host_key}" > ~/.ssh/known_hosts
+          scanned_key="$(ssh-keyscan -t ed25519 "${PROD_SSH_HOST}" 2>/dev/null \
+            | awk '$2 == "ssh-ed25519" { print; exit }')"
+          test -n "${scanned_key}"
+          observed_fingerprint="$(printf '%s\n' "${scanned_key}" \
+            | ssh-keygen -lf - -E sha256 \
+            | awk '{ print $2 }')"
+          if [[ -z "${PROD_SSH_HOST_FINGERPRINT}" ]]; then
+            echo "::error::PROD_SSH_HOST_FINGERPRINT is not configured. Observed ${observed_fingerprint}."
+            exit 1
+          fi
+          if [[ "${observed_fingerprint}" != "${PROD_SSH_HOST_FINGERPRINT}" ]]; then
+            echo "::error::Production bastion host key mismatch. Observed ${observed_fingerprint}."
+            exit 1
+          fi
+          printf '%s\n' "${scanned_key}" > ~/.ssh/known_hosts
           ssh-keygen -H -f ~/.ssh/known_hosts
           rm -f ~/.ssh/known_hosts.old
         env:
           PROD_SSH_KEY_PATH: ${{ runner.temp }}/yawp-production-bastion
           PROD_SSH_HOST: ${{ secrets.PROD_SSH_HOST }}
+          PROD_SSH_HOST_FINGERPRINT: ${{ secrets.PROD_SSH_HOST_FINGERPRINT }}
           PROD_SSH_PRIVATE_KEY: ${{ secrets.PROD_SSH_PRIVATE_KEY }}
 
       - name: Generate Prisma client
