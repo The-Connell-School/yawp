@@ -45,6 +45,15 @@ describe('submission activity', () => {
     expect(create).not.toHaveBeenCalled();
   });
 
+  test('does not treat JSON object key order as a change', () => {
+    expect(
+      buildSubmissionActivityChanges({
+        before: { rubricScores: { thesis: 4, evidence: 3 } },
+        after: { rubricScores: { evidence: 3, thesis: 4 } },
+      })
+    ).toEqual({});
+  });
+
   test('stores only hashes and lengths for submission bodies', () => {
     const metadata = buildSubmissionBodyAuditMetadata({
       text: 'private essay body',
