@@ -983,6 +983,12 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
             before: submission,
             after: { ...submission, ...apGradeData },
           }),
+          metadata: {
+            model,
+            rubricMode: 'ap_history',
+            rubricId: apHistorySnapshot.rubric.rubricId,
+            gradedAt: now.toISOString(),
+          },
         });
       });
     } catch (error) {

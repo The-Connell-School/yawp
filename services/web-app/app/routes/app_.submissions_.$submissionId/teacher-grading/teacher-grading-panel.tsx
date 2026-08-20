@@ -199,6 +199,7 @@ export function TeacherGradingPanel({
   existingGrade:
     | {
         id: string;
+        updatedAt?: Date | string | null;
         score: string | null;
         feedback: string | null;
         rubricScores?: unknown | null;
@@ -236,7 +237,8 @@ export function TeacherGradingPanel({
   const aiFetcher = useFetcher();
   const targetSubmissionId = existingGrade?.id ?? submissionId;
   const { save: autoSave, status: autoSaveStatus } = useUpdateSubmission(
-    targetSubmissionId ?? ''
+    targetSubmissionId ?? '',
+    existingGrade?.updatedAt ?? null
   );
   const propRubricConfig = useMemo(
     () => normalizeRubricDisplayConfig(rubricConfig),

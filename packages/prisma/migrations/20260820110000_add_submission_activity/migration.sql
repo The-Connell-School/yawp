@@ -80,7 +80,24 @@ CREATE FUNCTION "enforceSubmissionActivityTenant"()
 RETURNS TRIGGER AS $$
 DECLARE
   submission_organization_id TEXT;
+  submission_document_id TEXT;
+  submission_owner_membership_id TEXT;
 BEGIN
+  -- Serialize first-event insertion with both supported parent reassignment
+  -- paths. Advisory locks use independent namespaces and a stable hash.
+  SELECT document.id, membership.id
+  INTO submission_document_id, submission_owner_membership_id
+  FROM "Submission" submission
+  JOIN "Document" document ON document.id = submission."documentId"
+  JOIN "OrgMembership" membership ON membership.id = document."membershipId"
+  WHERE submission.id = NEW."submissionId";
+
+  PERFORM pg_advisory_xact_lock(
+    81202,
+    hashtext(submission_owner_membership_id)
+  );
+  PERFORM pg_advisory_xact_lock(81203, hashtext(submission_document_id));
+
   SELECT membership."organizationId"
   INTO submission_organization_id
   FROM "Submission" submission
@@ -108,6 +125,8 @@ FOR EACH ROW EXECUTE FUNCTION "enforceSubmissionActivityTenant"();
 CREATE FUNCTION "preventSubmissionActivityOwnerTenantReassignment"()
 RETURNS TRIGGER AS $$
 BEGIN
+  PERFORM pg_advisory_xact_lock(81202, hashtext(OLD.id));
+
   IF NEW."organizationId" IS DISTINCT FROM OLD."organizationId"
      AND EXISTS (
        SELECT 1
@@ -134,6 +153,8 @@ DECLARE
   old_organization_id TEXT;
   new_organization_id TEXT;
 BEGIN
+  PERFORM pg_advisory_xact_lock(81203, hashtext(OLD.id));
+
   IF NEW."membershipId" IS NOT DISTINCT FROM OLD."membershipId" THEN
     RETURN NEW;
   END IF;
@@ -161,5 +182,52 @@ $$ LANGUAGE plpgsql;
 CREATE TRIGGER "Document_submission_activity_tenant_guard"
 BEFORE UPDATE OF "membershipId" ON "Document"
 FOR EACH ROW EXECUTE FUNCTION "preventSubmissionActivityDocumentTenantReassignment"();
+
+-- Activity identity and payload are immutable. Cascading parent cleanup still
+-- works through PostgreSQL's nested FK triggers; direct cleanup is limited to
+-- repeatable database-proof rows and the dedicated disposable production QA
+-- fixture. The actor-detach trigger changes only actorMembershipId before the
+-- membership is removed and is explicitly allowed.
+CREATE FUNCTION "enforceSubmissionActivityImmutability"()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF TG_OP = 'UPDATE'
+     AND pg_trigger_depth() > 1
+     AND NEW."actorMembershipId" IS NULL
+     AND OLD."actorMembershipId" IS NOT NULL
+     AND NEW.id = OLD.id
+     AND NEW."createdAt" = OLD."createdAt"
+     AND NEW."submissionId" = OLD."submissionId"
+     AND NEW."organizationId" = OLD."organizationId"
+     AND NEW."actorType" = OLD."actorType"
+     AND NEW."actorName" IS NOT DISTINCT FROM OLD."actorName"
+     AND NEW."actorEmail" IS NOT DISTINCT FROM OLD."actorEmail"
+     AND NEW."eventType" = OLD."eventType"
+     AND NEW.source = OLD.source
+     AND NEW."occurredAfterRelease" = OLD."occurredAfterRelease"
+     AND NEW.changes = OLD.changes
+     AND NEW.metadata IS NOT DISTINCT FROM OLD.metadata THEN
+    RETURN NEW;
+  END IF;
+
+  IF TG_OP = 'DELETE' AND (
+    pg_trigger_depth() > 1
+    OR (OLD.source = 'db-proof' AND OLD.id LIKE 'submission-activity-%')
+    OR (
+      OLD."submissionId" = 'prod-qa-released-submission'
+      AND OLD."organizationId" = 'prod-qa-org'
+    )
+  ) THEN
+    RETURN OLD;
+  END IF;
+
+  RAISE EXCEPTION 'SubmissionActivity rows are immutable'
+    USING ERRCODE = '23514';
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER "SubmissionActivity_immutability_guard"
+BEFORE UPDATE OR DELETE ON "SubmissionActivity"
+FOR EACH ROW EXECUTE FUNCTION "enforceSubmissionActivityImmutability"();
 
 COMMIT;

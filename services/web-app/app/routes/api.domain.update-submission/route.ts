@@ -24,11 +24,26 @@ class GradeSaveConflictError extends Error {}
 
 export async function action({ request }: ActionFunctionArgs) {
   const body = await request.json();
-  const { submissionId, ...fields } = body;
+  const { submissionId, expectedUpdatedAt, ...fields } = body;
 
   if (!submissionId || typeof submissionId !== 'string') {
     return Response.json(
       { success: false, message: 'submissionId is required.' },
+      { status: 400 }
+    );
+  }
+
+  const parsedExpectedUpdatedAt =
+    typeof expectedUpdatedAt === 'string' &&
+    Number.isFinite(Date.parse(expectedUpdatedAt))
+      ? new Date(expectedUpdatedAt)
+      : null;
+  if (expectedUpdatedAt != null && parsedExpectedUpdatedAt == null) {
+    return Response.json(
+      {
+        success: false,
+        message: 'expectedUpdatedAt must be an ISO timestamp.',
+      },
       { status: 400 }
     );
   }
@@ -117,6 +132,16 @@ export async function action({ request }: ActionFunctionArgs) {
     return Response.json(
       { success: false, message: 'Submission not found.' },
       { status: 404 }
+    );
+  }
+
+  if (
+    parsedExpectedUpdatedAt != null &&
+    submission.updatedAt?.getTime() !== parsedExpectedUpdatedAt.getTime()
+  ) {
+    return Response.json(
+      { success: false, message: STALE_GRADE_MESSAGE },
+      { status: 409 }
     );
   }
 
@@ -244,7 +269,7 @@ export async function action({ request }: ActionFunctionArgs) {
   if (changedFields.length === 0) {
     return Response.json({
       success: true,
-      submission: { id: submission.id },
+      submission: { id: submission.id, updatedAt: submission.updatedAt },
     });
   }
 
@@ -281,9 +306,9 @@ export async function action({ request }: ActionFunctionArgs) {
               ],
             },
           },
-          ...(submission.updatedAt == null
+          ...(parsedExpectedUpdatedAt == null && submission.updatedAt == null
             ? {}
-            : { updatedAt: submission.updatedAt }),
+            : { updatedAt: parsedExpectedUpdatedAt ?? submission.updatedAt }),
         },
         data,
       });

@@ -65,6 +65,7 @@ bun run --cwd packages/prisma seed-local-dev
 
 echo "Running schema, foreign-key, no-backfill, commit, rollback, and cleanup assertions"
 psql "$proof_url" --no-psqlrc --file "$repo_root/scripts/prove-submission-activity-db.sql"
+bash "$repo_root/scripts/prove-submission-activity-concurrency.sh" "$proof_url"
 
 echo "Fresh migration proof passed: $proof_database"
 

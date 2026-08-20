@@ -88,11 +88,12 @@ BEGIN
       'SubmissionActivity_tenant_guard',
       'OrgMembership_detach_submission_activity_actor',
       'OrgMembership_submission_activity_owner_tenant_guard',
-      'Document_submission_activity_tenant_guard'
+      'Document_submission_activity_tenant_guard',
+      'SubmissionActivity_immutability_guard'
     )
       AND NOT tgisinternal
-  ) <> 4 THEN
-    RAISE EXCEPTION 'SubmissionActivity tenant, parent, or actor-detach trigger is missing';
+  ) <> 5 THEN
+    RAISE EXCEPTION 'SubmissionActivity tenant, parent, immutability, or actor-detach trigger is missing';
   END IF;
 
   IF EXISTS (SELECT 1 FROM "SubmissionActivity") THEN

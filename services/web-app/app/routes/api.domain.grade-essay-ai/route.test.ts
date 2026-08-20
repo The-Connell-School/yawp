@@ -1501,6 +1501,102 @@ describe('api.domain.grade-essay-ai', () => {
     expect(Object.hasOwn(updateData, 'grammarIssues')).toBe(false);
   });
 
+  test('records an AP History assistant rerun when identical grade values still persist', async () => {
+    const modelOutput = JSON.stringify({
+      rubricVersion: 'ap-history-dbq-2026',
+      points: {
+        thesis: { earned: true, comment: 'Defensible thesis.' },
+        contextualization: { earned: false, comment: 'Needs context.' },
+        document_use_describes: {
+          earned: false,
+          comment: 'Needs document description.',
+        },
+        document_use_supports_argument: {
+          earned: false,
+          comment: 'Needs document support.',
+        },
+        outside_evidence: { earned: false, comment: 'Needs evidence.' },
+        sourcing: { earned: false, comment: 'Needs sourcing.' },
+        complexity: { earned: false, comment: 'Needs complexity.' },
+      },
+      overallComment: 'Jordan, keep developing the AP History response.',
+    });
+    const apDocument = {
+      id: 'ap-repeat-doc',
+      membershipId: 'student-profile-1',
+      assignmentTypeId: 'ap-history-type',
+      assignmentType: {
+        id: 'ap-history-type',
+        kind: null,
+        title: 'AP History Essay',
+      },
+      assignment: {
+        apHistorySnapshot: dbqSnapshot,
+        class: { schoolId: 'school-1' },
+      },
+      membership: {
+        organizationId: 'org-1',
+        organization: { submissionActivityEnabled: true },
+        classesAsStudent: [],
+        user: { name: 'Jordan Student' },
+      },
+    };
+
+    getLLMCompletion.mockReset();
+    getLLMCompletion.mockResolvedValueOnce(modelOutput);
+    prisma.submission.findFirst.mockResolvedValueOnce(
+      mockSubmission({
+        id: 'ap-repeat-sub',
+        text: 'A repeated AP response.',
+        document: apDocument,
+      })
+    );
+    const form = new FormData();
+    form.append('submissionId', 'ap-repeat-sub');
+    await action({
+      request: new Request('https://example.com/api/domain/grade-essay-ai', {
+        method: 'POST',
+        body: form,
+      }),
+    } as any);
+    const persistedGrade = prisma.submission.update.mock.calls.at(-1)?.[0].data;
+
+    getLLMCompletion.mockResolvedValueOnce(modelOutput);
+    prisma.submissionActivity.create.mockReset();
+    prisma.submission.findFirst.mockResolvedValueOnce(
+      mockSubmission({
+        id: 'ap-repeat-sub',
+        text: 'A repeated AP response.',
+        ...persistedGrade,
+        updatedAt: new Date('2026-08-20T12:01:00.000Z'),
+        document: apDocument,
+      })
+    );
+    const repeatForm = new FormData();
+    repeatForm.append('submissionId', 'ap-repeat-sub');
+    const response = await action({
+      request: new Request('https://example.com/api/domain/grade-essay-ai', {
+        method: 'POST',
+        body: repeatForm,
+      }),
+    } as any);
+
+    expect((response as { data: { success: boolean } }).data.success).toBe(
+      true
+    );
+    expect(prisma.submissionActivity.create).toHaveBeenCalledTimes(1);
+    expect(prisma.submissionActivity.create.mock.calls[0][0].data).toEqual(
+      expect.objectContaining({
+        eventType: 'submission.grading_assistant_updated',
+        changes: {},
+        metadata: expect.objectContaining({
+          rubricMode: 'ap_history',
+          rubricId: 'ap-history-dbq-2026',
+        }),
+      })
+    );
+  });
+
   test('grades AP History LEQ with canonical keys, ignores DBQ-only keys, and caps scoring at snapshot total', async () => {
     getLLMCompletion.mockReset();
     getLLMCompletion.mockResolvedValueOnce(

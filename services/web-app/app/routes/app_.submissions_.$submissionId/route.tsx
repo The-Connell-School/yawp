@@ -107,6 +107,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     },
     select: {
       id: true,
+      updatedAt: true,
       title: true,
       text: true,
       html: true,
@@ -739,6 +740,7 @@ export default function SubmissionRoute() {
   const teacherExistingGrade = useMemo(
     () => ({
       id: submission.id,
+      updatedAt: submission.updatedAt,
       score: teacherGradeUi?.score ?? submission.score,
       feedback: submission.feedback,
       rubricScores: teacherGradeUi?.rubricScores ?? submission.rubricScores,
@@ -751,6 +753,7 @@ export default function SubmissionRoute() {
     }),
     [
       submission.id,
+      submission.updatedAt,
       submission.feedback,
       submission.releasedAt,
       submission.score,

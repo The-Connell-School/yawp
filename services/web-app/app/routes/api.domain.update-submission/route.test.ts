@@ -623,6 +623,44 @@ describe('api.domain.update-submission', () => {
     expect(prisma.submissionActivity.create).not.toHaveBeenCalled();
   });
 
+  test('rejects a second teacher save made from a stale page-load version', async () => {
+    const currentUpdatedAt = new Date('2026-08-20T12:01:00.000Z');
+    prisma.submission.findFirst.mockResolvedValue({
+      id: 'sub-1',
+      updatedAt: currentUpdatedAt,
+      gradedAt: new Date('2026-08-20T11:00:00.000Z'),
+      gradedByMembershipId: 'teacher-1',
+      releasedAt: new Date('2026-08-20T11:30:00.000Z'),
+      numericPercentage: 91,
+      score: '91% A-',
+      feedback: 'First teacher save',
+      unsubmittedAt: null,
+      document: {
+        membershipId: 'student-1',
+        assignment: null,
+        classAssignment: null,
+        membership: {
+          userId: 'student-user-1',
+          organizationId: 'org-1',
+          organization: { submissionActivityEnabled: true },
+          classesAsStudent: [],
+        },
+      },
+    });
+
+    const response = await action({
+      request: makeRequest({
+        submissionId: 'sub-1',
+        expectedUpdatedAt: '2026-08-20T12:00:00.000Z',
+        numericPercentage: 94,
+      }),
+    } as any);
+
+    expect(response.status).toBe(409);
+    expect(prisma.submission.updateMany).not.toHaveBeenCalled();
+    expect(prisma.submissionActivity.create).not.toHaveBeenCalled();
+  });
+
   test('suppresses no-op updates and activity', async () => {
     prisma.submission.findFirst.mockResolvedValue({
       id: 'sub-1',
