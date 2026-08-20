@@ -144,6 +144,47 @@ describe('api.model.submission-comment.$id', () => {
     expect(prisma.submissionActivity.create).not.toHaveBeenCalled();
   });
 
+  test('audits a post-release comment edit with exact before and after content', async () => {
+    prisma.submissionComment.findFirst.mockResolvedValue({
+      id: 'comment-1',
+      content: 'Original content',
+      excerpt: 'the thesis',
+      occurrence: 1,
+      updatedAt: new Date('2026-08-20T10:00:00.000Z'),
+      submission: {
+        id: 'sub-1',
+        releasedAt: new Date('2026-08-20T11:00:00.000Z'),
+        document: { membership: { organizationId: 'org-1' } },
+      },
+    });
+    const form = new FormData();
+    form.set('content', 'Changed content');
+
+    const response = await action({
+      request: new Request(
+        'https://example.com/api/model/submission-comment/comment-1',
+        { method: 'POST', body: form }
+      ),
+      params: { id: 'comment-1' },
+    } as any);
+
+    expect((response as { data: { success: boolean } }).data.success).toBe(
+      true
+    );
+    expect(prisma.submissionActivity.create.mock.calls[0][0].data).toEqual(
+      expect.objectContaining({
+        eventType: 'submission.comment_updated',
+        occurredAfterRelease: true,
+        changes: {
+          comment: {
+            before: { content: 'Original content' },
+            after: { content: 'Changed content' },
+          },
+        },
+      })
+    );
+  });
+
   test('returns 404 when comment not found', async () => {
     prisma.submissionComment.findFirst.mockResolvedValue(null);
 

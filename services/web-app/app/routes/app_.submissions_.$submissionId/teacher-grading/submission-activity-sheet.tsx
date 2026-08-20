@@ -18,6 +18,9 @@ export type SubmissionActivityItem = {
   changes: unknown;
   metadata: unknown;
   createdAt: Date | string;
+  actorType: string;
+  actorName: string | null;
+  actorEmail: string | null;
   actorMembership: {
     user: { name: string | null; email: string };
   } | null;
@@ -48,13 +51,58 @@ function fieldLabel(field: string) {
     .replace(/^./, (letter) => letter.toUpperCase());
 }
 
-function formatValue(value: unknown) {
+function formatNestedValue(field: string, value: unknown) {
+  if (field === 'rubricScores' && value && typeof value === 'object') {
+    return Object.entries(value as Record<string, unknown>)
+      .map(([category, raw]) => {
+        const detail =
+          raw && typeof raw === 'object' && !Array.isArray(raw)
+            ? (raw as { score?: unknown; comment?: unknown })
+            : { score: raw };
+        const score =
+          detail.score == null ? 'Not scored' : String(detail.score);
+        const comment =
+          typeof detail.comment === 'string' && detail.comment.trim()
+            ? ` — ${detail.comment.trim()}`
+            : '';
+        return `${fieldLabel(category)}: ${score}${comment}`;
+      })
+      .join('\n');
+  }
+
+  if (field === 'grammarIssues' && Array.isArray(value)) {
+    if (value.length === 0) return 'No issues';
+    return value
+      .map((raw, index) => {
+        if (!raw || typeof raw !== 'object') return `Issue ${index + 1}`;
+        const issue = raw as {
+          kind?: unknown;
+          excerpt?: unknown;
+          message?: unknown;
+        };
+        const label =
+          typeof issue.kind === 'string'
+            ? fieldLabel(issue.kind)
+            : `Issue ${index + 1}`;
+        const excerpt =
+          typeof issue.excerpt === 'string' ? ` “${issue.excerpt}”` : '';
+        const message =
+          typeof issue.message === 'string' ? ` — ${issue.message}` : '';
+        return `${label}:${excerpt}${message}`;
+      })
+      .join('\n');
+  }
+
+  return null;
+}
+
+function formatValue(field: string, value: unknown) {
   if (value == null || value === '') return 'None';
   if (typeof value === 'string') return value;
   if (typeof value === 'number' || typeof value === 'boolean') {
     return String(value);
   }
-  return JSON.stringify(value, null, 2);
+  return formatNestedValue(field, value) ?? JSON.stringify(value, null, 2);
 }
 
 function activityChanges(changes: unknown) {
@@ -111,9 +159,11 @@ export function SubmissionActivitySheet({
             activities.map((activity) => {
               const occurredAt = new Date(activity.createdAt);
               const actor =
+                activity.actorName?.trim() ||
+                activity.actorEmail ||
                 activity.actorMembership?.user.name?.trim() ||
                 activity.actorMembership?.user.email ||
-                'System';
+                (activity.actorType === 'human' ? 'Former user' : 'System');
               return (
                 <article
                   key={activity.id}
@@ -161,13 +211,13 @@ export function SubmissionActivitySheet({
                               Before
                             </span>
                             <pre className="mt-0.5 whitespace-pre-wrap break-words font-sans">
-                              {formatValue(change.before)}
+                              {formatValue(change.field, change.before)}
                             </pre>
                           </div>
                           <div className="min-w-0">
                             <span className="text-muted-foreground">After</span>
                             <pre className="mt-0.5 whitespace-pre-wrap break-words font-sans">
-                              {formatValue(change.after)}
+                              {formatValue(change.field, change.after)}
                             </pre>
                           </div>
                         </div>

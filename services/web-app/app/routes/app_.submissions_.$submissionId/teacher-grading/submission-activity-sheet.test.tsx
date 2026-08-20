@@ -15,10 +15,14 @@ import { createRoot, type Root } from 'react-dom/client';
 mock.module('~/components/ui/sheet', () => ({
   Sheet: ({ children }: { children: ReactNode }) => <>{children}</>,
   SheetTrigger: ({ children }: { children: ReactNode }) => <>{children}</>,
-  SheetContent: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+  SheetContent: ({ children }: { children: ReactNode }) => (
+    <div>{children}</div>
+  ),
   SheetHeader: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   SheetTitle: ({ children }: { children: ReactNode }) => <h2>{children}</h2>,
-  SheetDescription: ({ children }: { children: ReactNode }) => <p>{children}</p>,
+  SheetDescription: ({ children }: { children: ReactNode }) => (
+    <p>{children}</p>
+  ),
 }));
 
 const { SubmissionActivitySheet } = await import('./submission-activity-sheet');
@@ -53,6 +57,9 @@ describe('SubmissionActivitySheet', () => {
             },
             metadata: null,
             createdAt: '2026-08-20T12:34:56.000Z',
+            actorType: 'human',
+            actorName: 'Teacher One',
+            actorEmail: 'teacher@example.test',
             actorMembership: {
               user: {
                 name: 'Teacher One',
@@ -87,6 +94,9 @@ describe('SubmissionActivitySheet', () => {
             changes: {},
             metadata: null,
             createdAt: '2026-08-20T12:00:00.000Z',
+            actorType: 'system',
+            actorName: null,
+            actorEmail: null,
             actorMembership: null,
           },
         ]}
@@ -94,5 +104,52 @@ describe('SubmissionActivitySheet', () => {
     );
 
     expect(document.body.textContent).toContain('System');
+  });
+
+  test('renders nested rubric and grammar changes as readable lines', () => {
+    render(
+      <SubmissionActivitySheet
+        activities={[
+          {
+            id: 'activity-3',
+            eventType: 'submission.grade_updated',
+            source: 'update-submission',
+            occurredAfterRelease: true,
+            changes: {
+              rubricScores: {
+                before: { thesis_and_content: { score: 3, comment: '' } },
+                after: {
+                  thesis_and_content: { score: 5, comment: 'Clear claim' },
+                },
+              },
+              grammarIssues: {
+                before: [],
+                after: [
+                  {
+                    kind: 'comma_splice',
+                    excerpt: 'rain, we left',
+                    message: 'Use a period or conjunction.',
+                  },
+                ],
+              },
+            },
+            metadata: null,
+            createdAt: '2026-08-20T12:34:56.000Z',
+            actorType: 'human',
+            actorName: 'Teacher One',
+            actorEmail: 'teacher@example.test',
+            actorMembership: null,
+          },
+        ]}
+      />
+    );
+
+    expect(document.body.textContent).toContain('Thesis and content: 3');
+    expect(document.body.textContent).toContain(
+      'Thesis and content: 5 — Clear claim'
+    );
+    expect(document.body.textContent).toContain(
+      'Comma splice: “rain, we left” — Use a period or conjunction.'
+    );
   });
 });

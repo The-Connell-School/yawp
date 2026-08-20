@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, mock, test } from 'bun:test';
 
 const prisma = {
   $transaction: mock(),
+  user: { findUnique: mock() },
   submission: { findFirst: mock(), updateMany: mock() },
   submissionActivity: { create: mock() },
 };
@@ -35,6 +36,7 @@ function makeRequest(body: Record<string, unknown>) {
 describe('api.domain.update-submission', () => {
   beforeEach(() => {
     prisma.$transaction.mockReset();
+    prisma.user.findUnique.mockReset();
     prisma.submission.findFirst.mockReset();
     prisma.submission.updateMany.mockReset();
     prisma.submissionActivity.create.mockReset();
@@ -44,6 +46,7 @@ describe('api.domain.update-submission', () => {
     buildTeacherClassWhere.mockReset();
 
     getGradingActor.mockResolvedValue({
+      userId: 'teacher-user-1',
       membershipId: 'teacher-1',
       organizationId: 'org-1',
       teacherProfileId: 'teacher-1',
@@ -52,10 +55,21 @@ describe('api.domain.update-submission', () => {
     });
     canManageGrades.mockReturnValue(true);
     isGradingOwnDocument.mockImplementation(
-      (actorId: string, docMembershipId: string) => actorId === docMembershipId
+      (
+        actorId: string,
+        docMembershipId: string,
+        actorUserId?: string,
+        ownerUserId?: string
+      ) =>
+        actorId === docMembershipId ||
+        (actorUserId != null && actorUserId === ownerUserId)
     );
     buildTeacherClassWhere.mockReturnValue({});
     prisma.submission.updateMany.mockResolvedValue({ count: 1 });
+    prisma.user.findUnique.mockResolvedValue({
+      name: 'Teacher One',
+      email: 'teacher@example.test',
+    });
     prisma.$transaction.mockImplementation(async (callback: any) =>
       callback(prisma)
     );
@@ -121,7 +135,9 @@ describe('api.domain.update-submission', () => {
     expect(body.submission.score).toBe('85% B');
     expect(prisma.submission.updateMany).toHaveBeenCalledTimes(1);
     const updateCall = prisma.submission.updateMany.mock.calls[0][0];
-    expect(updateCall.where).toEqual({ id: 'sub-1', unsubmittedAt: null });
+    expect(updateCall.where).toEqual(
+      expect.objectContaining({ id: 'sub-1', unsubmittedAt: null })
+    );
     expect(updateCall.data.score).toBe('85% B');
     expect(prisma.submission.findFirst).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -156,12 +172,18 @@ describe('api.domain.update-submission', () => {
       id: 'sub-1',
       gradedAt: new Date(),
       gradedByMembershipId: 'teacher-1',
+      releasedAt: new Date('2026-08-20T11:00:00.000Z'),
       numericPercentage: null,
       unsubmittedAt: null,
       document: {
         membershipId: 'student-1',
         assignment: null,
-        membership: { classesAsStudent: [] },
+        membership: {
+          userId: 'student-user-1',
+          organizationId: 'org-1',
+          organization: { submissionActivityEnabled: true },
+          classesAsStudent: [],
+        },
       },
     });
 
@@ -173,6 +195,14 @@ describe('api.domain.update-submission', () => {
     const updateCall = prisma.submission.updateMany.mock.calls[0]?.[0];
     expect(body.success).toBe(true);
     expect(updateCall.data.grammarIssues).toEqual(grammarIssues);
+    expect(prisma.submissionActivity.create.mock.calls[0][0].data).toEqual(
+      expect.objectContaining({
+        occurredAfterRelease: true,
+        changes: {
+          grammarIssues: { before: null, after: grammarIssues },
+        },
+      })
+    );
   });
 
   test('sets gradedAt and gradedById on first grading edit with overall percentage', async () => {
@@ -316,6 +346,7 @@ describe('api.domain.update-submission', () => {
     });
     prisma.$transaction.mockImplementationOnce(async (callback: any) =>
       callback({
+        user: prisma.user,
         submission: prisma.submission,
         submissionActivity: { create: transactionActivityCreate },
       })
@@ -369,6 +400,9 @@ describe('api.domain.update-submission', () => {
         submissionId: 'sub-1',
         organizationId: 'org-1',
         actorMembershipId: 'teacher-1',
+        actorType: 'human',
+        actorName: 'Teacher One',
+        actorEmail: 'teacher@example.test',
         occurredAfterRelease: true,
         changes: {
           score: { before: '85% B', after: '92% A-' },
@@ -385,6 +419,90 @@ describe('api.domain.update-submission', () => {
     const updateCall = prisma.submission.updateMany.mock.calls[0][0];
     expect(updateCall.data.releasedAt).toBeUndefined();
     expect(updateCall.where.updatedAt).toEqual(updatedAt);
+    expect(updateCall.where.document.is.AND[0]).toEqual({
+      membership: {
+        is: {
+          userId: { not: 'teacher-user-1' },
+          organization: { is: { submissionActivityEnabled: true } },
+        },
+      },
+    });
+  });
+
+  test('fails the endpoint transaction when required audit writes are disabled', async () => {
+    const previous = process.env.SUBMISSION_ACTIVITY_WRITES_ENABLED;
+    process.env.SUBMISSION_ACTIVITY_WRITES_ENABLED = 'false';
+    prisma.submission.findFirst.mockResolvedValue({
+      id: 'sub-1',
+      updatedAt: new Date('2026-08-01T15:31:00.000Z'),
+      gradedAt: new Date('2026-08-01T15:00:00.000Z'),
+      gradedByMembershipId: 'teacher-1',
+      releasedAt: new Date('2026-08-01T15:30:00.000Z'),
+      score: '77% (C+)',
+      numericPercentage: 77,
+      unsubmittedAt: null,
+      document: {
+        membershipId: 'student-1',
+        assignment: null,
+        membership: {
+          userId: 'student-user-1',
+          organizationId: 'org-1',
+          organization: { submissionActivityEnabled: true },
+          classesAsStudent: [],
+        },
+      },
+    });
+
+    try {
+      await expect(
+        action({
+          request: makeRequest({ submissionId: 'sub-1', score: '92% (A)' }),
+        } as any)
+      ).rejects.toThrow(
+        'Submission activity recording is temporarily unavailable'
+      );
+      expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+      expect(prisma.submissionActivity.create).not.toHaveBeenCalled();
+    } finally {
+      if (previous === undefined) {
+        delete process.env.SUBMISSION_ACTIVITY_WRITES_ENABLED;
+      } else {
+        process.env.SUBMISSION_ACTIVITY_WRITES_ENABLED = previous;
+      }
+    }
+  });
+
+  test('rejects an admin grading their own document through another membership', async () => {
+    getGradingActor.mockResolvedValue({
+      userId: 'same-user',
+      membershipId: 'admin-membership-org-2',
+      organizationId: 'org-2',
+      teacherProfileId: null,
+      isTeacher: false,
+      isAdmin: true,
+    });
+    prisma.submission.findFirst.mockResolvedValue({
+      id: 'sub-1',
+      releasedAt: null,
+      unsubmittedAt: null,
+      document: {
+        membershipId: 'student-membership-org-1',
+        membership: {
+          userId: 'same-user',
+          organizationId: 'org-1',
+          organization: { submissionActivityEnabled: true },
+          classesAsStudent: [],
+        },
+      },
+    });
+
+    const response = (await action({
+      request: makeRequest({ submissionId: 'sub-1', score: '92% (A)' }),
+    } as any)) as Response;
+
+    expect(response.status).toBe(403);
+    expect(prisma.submission.updateMany).not.toHaveBeenCalled();
+    expect(prisma.submissionActivity.create).not.toHaveBeenCalled();
   });
 
   test('keeps released submissions read-only when the organization rollout is off', async () => {
@@ -683,7 +801,7 @@ describe('api.domain.update-submission', () => {
     expect(response.status).toBe(409);
     const body = await response.json();
     expect(body.success).toBe(false);
-    expect(body.message).toBe(UNSUBMITTED_BEFORE_GRADED_MESSAGE);
+    expect(body.message).toContain('changed before your grade could be saved');
   });
 
   test('enforces the guard inside the same transaction/predicate style as unsubmit', async () => {
@@ -706,6 +824,8 @@ describe('api.domain.update-submission', () => {
 
     expect(prisma.$transaction).toHaveBeenCalledTimes(1);
     const updateCall = prisma.submission.updateMany.mock.calls[0][0];
-    expect(updateCall.where).toEqual({ id: 'sub-1', unsubmittedAt: null });
+    expect(updateCall.where).toEqual(
+      expect.objectContaining({ id: 'sub-1', unsubmittedAt: null })
+    );
   });
 });

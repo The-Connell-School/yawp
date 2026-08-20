@@ -162,6 +162,7 @@ const actionImpl = async ({ request }: ActionFunctionArgs) => {
             submissionOrganizationId:
               document.membership.organizationId ?? profile.organization.id,
           }),
+          actorUserId: userId,
           eventType: submissionActivityEventTypes.created,
           source: 'submit-document',
           occurredAfterRelease: false,

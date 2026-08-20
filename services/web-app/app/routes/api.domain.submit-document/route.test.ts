@@ -82,6 +82,7 @@ describe('api.domain.submit-document', () => {
     });
     prisma.$transaction.mockImplementation(async (callback: any) => {
       const tx = {
+        user: prisma.user,
         submission: {
           create: mock().mockResolvedValue({
             id: 'sub-1',

@@ -582,6 +582,7 @@ export async function action({ request }: ActionFunctionArgs) {
         },
         membership: {
           select: {
+            userId: true,
             organizationId: true,
             organization: {
               select: { submissionActivityEnabled: true },
@@ -642,7 +643,12 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 
   if (
-    isGradingOwnDocument(actor.membershipId, submission.document.membershipId)
+    isGradingOwnDocument(
+      actor.membershipId,
+      submission.document.membershipId,
+      actor.userId,
+      submission.document.membership.userId
+    )
   ) {
     return dataResponse(
       {
@@ -916,6 +922,28 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
           id: submission.id,
           updatedAt: submission.updatedAt,
           unsubmittedAt: null,
+          document: {
+            is: {
+              deletedAt: null,
+              AND: [
+                {
+                  membership: {
+                    is: {
+                      userId: { not: actor.userId },
+                      ...(submission.releasedAt == null
+                        ? {}
+                        : {
+                            organization: {
+                              is: { submissionActivityEnabled: true },
+                            },
+                          }),
+                    },
+                  },
+                },
+                teacherClassWhere,
+              ],
+            },
+          },
         },
         data: apGradeData,
       });
@@ -927,6 +955,7 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
           actorOrganizationId: actor.organizationId,
           submissionOrganizationId: organizationId,
         }),
+        actorUserId: actor.userId,
         eventType: submissionActivityEventTypes.gradingAssistantUpdated,
         source: 'grade-essay-ai',
         occurredAfterRelease: submission.releasedAt != null,
@@ -1307,6 +1336,28 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
         id: submission.id,
         updatedAt: submission.updatedAt,
         unsubmittedAt: null,
+        document: {
+          is: {
+            deletedAt: null,
+            AND: [
+              {
+                membership: {
+                  is: {
+                    userId: { not: actor.userId },
+                    ...(submission.releasedAt == null
+                      ? {}
+                      : {
+                          organization: {
+                            is: { submissionActivityEnabled: true },
+                          },
+                        }),
+                  },
+                },
+              },
+              teacherClassWhere,
+            ],
+          },
+        },
       },
       data: gradeData,
     });
@@ -1365,6 +1416,7 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
         actorOrganizationId: actor.organizationId,
         submissionOrganizationId: organizationId,
       }),
+      actorUserId: actor.userId,
       eventType: submissionActivityEventTypes.gradingAssistantUpdated,
       source: 'grade-essay-ai',
       occurredAfterRelease: submission.releasedAt != null,

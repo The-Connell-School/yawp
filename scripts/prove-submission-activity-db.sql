@@ -34,6 +34,42 @@ BEGIN
     RAISE EXCEPTION 'SubmissionActivity indexes are incomplete';
   END IF;
 
+  IF (
+    SELECT count(*)
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'SubmissionActivity'
+      AND (
+        (column_name = 'actorType' AND data_type = 'text' AND is_nullable = 'NO')
+        OR (column_name = 'actorName' AND data_type = 'text' AND is_nullable = 'YES')
+        OR (column_name = 'actorEmail' AND data_type = 'text' AND is_nullable = 'YES')
+      )
+  ) <> 3 THEN
+    RAISE EXCEPTION 'SubmissionActivity actor snapshot columns are invalid';
+  END IF;
+
+  IF (
+    SELECT count(*)
+    FROM pg_constraint
+    WHERE conname IN (
+      'SubmissionActivity_submissionId_fkey',
+      'SubmissionActivity_organizationId_fkey',
+      'SubmissionActivity_actorMembershipId_fkey'
+    )
+      AND contype = 'f'
+  ) <> 3 THEN
+    RAISE EXCEPTION 'SubmissionActivity foreign keys are incomplete';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'SubmissionActivity_organizationId_fkey'
+      AND confdeltype = 'c'
+  ) THEN
+    RAISE EXCEPTION 'organization activity cleanup is not cascade-compatible';
+  END IF;
+
   IF EXISTS (SELECT 1 FROM "SubmissionActivity") THEN
     RAISE EXCEPTION 'fresh migration falsely backfilled submission activity';
   END IF;
@@ -73,6 +109,9 @@ INSERT INTO "SubmissionActivity" (
   "submissionId",
   "organizationId",
   "actorMembershipId",
+  "actorType",
+  "actorName",
+  "actorEmail",
   "eventType",
   source,
   "occurredAfterRelease",
@@ -83,6 +122,9 @@ SELECT
   proof.submission_id,
   proof.organization_id,
   proof.actor_membership_id,
+  'human',
+  'Database Proof Actor',
+  'db-proof@example.test',
   'submission.grade_updated',
   'db-proof',
   true,
@@ -105,6 +147,11 @@ BEGIN
       AND activity."organizationId" = proof.organization_id
       AND activity."actorMembershipId" = proof.actor_membership_id
       AND activity."occurredAfterRelease" = true
+      AND activity."actorType" = 'human'
+      AND activity."actorName" = 'Database Proof Actor'
+      AND activity."actorEmail" = 'db-proof@example.test'
+      AND activity.changes->'numericPercentage'->>'before'
+        IS NOT DISTINCT FROM proof.original_percentage::text
       AND activity.changes->'numericPercentage'->>'after' = '91'
   ) THEN
     RAISE EXCEPTION 'committed activity record did not persist exactly';
@@ -141,6 +188,7 @@ INSERT INTO "SubmissionActivity" (
   "submissionId",
   "organizationId",
   "actorMembershipId",
+  "actorType",
   "eventType",
   source,
   "occurredAfterRelease",
@@ -151,6 +199,7 @@ SELECT
   proof.submission_id,
   proof.organization_id,
   proof.actor_membership_id,
+  'human',
   'submission.grade_updated',
   'db-proof',
   true,

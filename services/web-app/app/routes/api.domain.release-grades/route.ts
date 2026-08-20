@@ -60,7 +60,10 @@ export async function action({ request }: ActionFunctionArgs) {
           document: {
             is: {
               membershipId: { not: actor.membershipId },
-              ...teacherClassWhere,
+              AND: [
+                { membership: { is: { userId: { not: actor.userId } } } },
+                teacherClassWhere,
+              ],
             },
           },
           ...(actor.isAdmin
@@ -91,6 +94,7 @@ export async function action({ request }: ActionFunctionArgs) {
               },
               membership: {
                 select: {
+                  userId: true,
                   organizationId: true,
                   classesAsStudent: {
                     select: {
@@ -132,7 +136,10 @@ export async function action({ request }: ActionFunctionArgs) {
           document: {
             is: {
               membershipId: { not: actor.membershipId },
-              ...teacherClassWhere,
+              AND: [
+                { membership: { is: { userId: { not: actor.userId } } } },
+                teacherClassWhere,
+              ],
             },
           },
           ...(actor.isAdmin
@@ -163,6 +170,7 @@ export async function action({ request }: ActionFunctionArgs) {
             actorOrganizationId: actor.organizationId,
             submissionOrganizationId: organizationId,
           }),
+          actorUserId: actor.userId,
           eventType: submissionActivityEventTypes.gradeReleased,
           source: 'release-grades',
           occurredAfterRelease: false,

@@ -88,6 +88,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
             actorOrganizationId: profile.organization.id,
             submissionOrganizationId: organizationId,
           }),
+          actorUserId: userId,
           eventType: submissionActivityEventTypes.titleUpdated,
           source: 'submission-title',
           occurredAfterRelease: submission.releasedAt != null,

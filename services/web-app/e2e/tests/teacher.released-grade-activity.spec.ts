@@ -54,6 +54,7 @@ test.describe('Released grade editing and submission activity', () => {
         gradedByMembershipId: e2eContext.teacherMembershipId,
         numericPercentage: 77,
         letterGrade: 'C+',
+        score: '77% (C+)',
         overallScore: 4,
         overallComment: 'Good effort with room for improvement.',
         rubricScores: {
@@ -76,6 +77,9 @@ test.describe('Released grade editing and submission activity', () => {
         overallComment: true,
         gradedAt: true,
         gradedByMembershipId: true,
+        score: true,
+        rubricScores: true,
+        grammarIssues: true,
       },
     });
 
@@ -140,6 +144,9 @@ test.describe('Released grade editing and submission activity', () => {
           releasedAt: true,
           numericPercentage: true,
           overallComment: true,
+          score: true,
+          rubricScores: true,
+          grammarIssues: true,
         },
       });
       expect(persisted.releasedAt?.toISOString()).toBe(
@@ -149,6 +156,8 @@ test.describe('Released grade editing and submission activity', () => {
       expect(persisted.overallComment).toBe(
         'Excellent revision after release.'
       );
+      expect(persisted.rubricScores).toEqual(original.rubricScores);
+      expect(persisted.grammarIssues).toEqual(original.grammarIssues);
 
       const activities = await prisma.submissionActivity.findMany({
         where: { submissionId: submission.id },
@@ -158,6 +167,8 @@ test.describe('Released grade editing and submission activity', () => {
       expect(activities[0]).toMatchObject({
         organizationId: e2eContext.organizationId,
         actorMembershipId: e2eContext.teacherMembershipId,
+        actorType: 'human',
+        actorName: e2eContext.teacherName,
         eventType: 'submission.grade_updated',
         source: 'update-submission',
         occurredAfterRelease: true,

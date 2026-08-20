@@ -168,6 +168,7 @@ describe('submission loader — unsubmitted redirect', () => {
   });
 
   test('does not redirect a teacher viewing an unsubmitted submission', async () => {
+    requireUserId.mockResolvedValue('user-teacher');
     requireMembership.mockResolvedValue(
       membership(TEACHER_MEMBERSHIP_ID, 'TEACHER')
     );
@@ -185,6 +186,7 @@ describe('submission loader — unsubmitted redirect', () => {
   });
 
   test('loads newest-first tenant-scoped activity for staff only', async () => {
+    requireUserId.mockResolvedValue('user-teacher');
     requireMembership.mockResolvedValue(
       membership(TEACHER_MEMBERSHIP_ID, 'TEACHER')
     );
@@ -234,6 +236,7 @@ describe('submission loader — unsubmitted redirect', () => {
   });
 
   test('authorizes teachers only through the submission assigned class and tenant', async () => {
+    requireUserId.mockResolvedValue('user-teacher');
     requireMembership.mockResolvedValue(
       membership(TEACHER_MEMBERSHIP_ID, 'TEACHER')
     );
@@ -270,6 +273,7 @@ describe('submission loader — unsubmitted redirect', () => {
   });
 
   test('preserves tenant-scoped teacher access for legacy submissions', async () => {
+    requireUserId.mockResolvedValue('user-teacher');
     requireMembership.mockResolvedValue(
       membership(TEACHER_MEMBERSHIP_ID, 'TEACHER')
     );
@@ -286,6 +290,7 @@ describe('submission loader — unsubmitted redirect', () => {
   });
 
   test('returns not found and never reads activity for an unrelated teacher', async () => {
+    requireUserId.mockResolvedValue('user-unrelated-teacher');
     requireMembership.mockResolvedValue(
       membership('membership-unrelated-teacher', 'TEACHER')
     );
@@ -303,6 +308,7 @@ describe('submission loader — unsubmitted redirect', () => {
   });
 
   test('scopes a teacher read to the active organization', async () => {
+    requireUserId.mockResolvedValue('user-teacher');
     requireMembership.mockResolvedValue(
       membership(TEACHER_MEMBERSHIP_ID, 'TEACHER', 'org-2')
     );

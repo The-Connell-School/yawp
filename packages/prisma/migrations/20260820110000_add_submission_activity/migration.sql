@@ -16,6 +16,9 @@ CREATE TABLE "SubmissionActivity" (
     "submissionId" TEXT NOT NULL,
     "organizationId" TEXT NOT NULL,
     "actorMembershipId" TEXT,
+    "actorType" TEXT NOT NULL,
+    "actorName" TEXT,
+    "actorEmail" TEXT,
     "eventType" TEXT NOT NULL,
     "source" TEXT NOT NULL,
     "occurredAfterRelease" BOOLEAN NOT NULL DEFAULT false,
@@ -45,7 +48,7 @@ ON DELETE RESTRICT ON UPDATE CASCADE;
 ALTER TABLE "SubmissionActivity"
 ADD CONSTRAINT "SubmissionActivity_organizationId_fkey"
 FOREIGN KEY ("organizationId") REFERENCES "Organization"("id")
-ON DELETE RESTRICT ON UPDATE CASCADE;
+ON DELETE CASCADE ON UPDATE CASCADE;
 
 ALTER TABLE "SubmissionActivity"
 ADD CONSTRAINT "SubmissionActivity_actorMembershipId_fkey"

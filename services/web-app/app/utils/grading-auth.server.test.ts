@@ -24,6 +24,7 @@ describe('grading auth helpers', () => {
   test('builds document class filters for current and legacy submissions', () => {
     expect(
       buildTeacherClassWhere({
+        userId: 'teacher-user-1',
         membershipId: 'teacher-membership-1',
         organizationId: 'org-1',
         teacherProfileId: 'teacher-1',
@@ -88,6 +89,7 @@ describe('grading auth helpers', () => {
   test('does not add class filtering for admins', () => {
     expect(
       buildTeacherClassWhere({
+        userId: 'admin-user-1',
         membershipId: 'admin-membership-1',
         organizationId: 'org-1',
         teacherProfileId: null,
@@ -100,6 +102,7 @@ describe('grading auth helpers', () => {
   test('allows teachers and admins to manage grades', () => {
     expect(
       canManageGrades({
+        userId: 'teacher-user-1',
         membershipId: 'teacher-membership-1',
         organizationId: 'org-1',
         teacherProfileId: 'teacher-1',
@@ -109,6 +112,7 @@ describe('grading auth helpers', () => {
     ).toBe(true);
     expect(
       canManageGrades({
+        userId: 'admin-user-1',
         membershipId: 'admin-membership-1',
         organizationId: 'org-1',
         teacherProfileId: null,
@@ -121,5 +125,13 @@ describe('grading auth helpers', () => {
   test('prevents grading own document', () => {
     expect(isGradingOwnDocument('membership-1', 'membership-1')).toBe(true);
     expect(isGradingOwnDocument('membership-1', 'membership-2')).toBe(false);
+    expect(
+      isGradingOwnDocument(
+        'membership-in-org-2',
+        'membership-in-org-1',
+        'same-user',
+        'same-user'
+      )
+    ).toBe(true);
   });
 });

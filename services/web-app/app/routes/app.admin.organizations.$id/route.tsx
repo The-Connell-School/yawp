@@ -130,16 +130,6 @@ export async function action({ request, params }: ActionFunctionArgs) {
       });
     }
 
-    const submissionActivityCount = await prisma.submissionActivity.count({
-      where: { organizationId: params.id },
-    });
-    if (submissionActivityCount > 0) {
-      throw new Response(
-        'Cannot delete an organization with retained submission activity.',
-        { status: 409 }
-      );
-    }
-
     await prisma.organization.delete({
       where: { id: params.id },
     });

@@ -8,6 +8,7 @@ import { prisma } from '~/utils/db.server';
 import { hasEffectivePlatformAdmin } from '~/utils/preview-access.server';
 
 export type GradingActor = {
+  userId: string;
   membershipId: string;
   organizationId: string;
   teacherProfileId: string | null;
@@ -26,6 +27,7 @@ export async function getGradingActor(request: Request): Promise<GradingActor> {
   ]);
 
   return {
+    userId,
     membershipId: membership.id,
     organizationId: membership.organization.id,
     teacherProfileId: isTeacherMembership(membership) ? membership.id : null,
@@ -99,7 +101,12 @@ export function buildTeacherDocumentAccessWhere({
 /** Document owner must never use teacher grading flows on that submission, including admins. */
 export function isGradingOwnDocument(
   actorMembershipId: string,
-  documentMembershipId: string
+  documentMembershipId: string,
+  actorUserId?: string,
+  documentOwnerUserId?: string
 ): boolean {
-  return actorMembershipId === documentMembershipId;
+  return (
+    actorMembershipId === documentMembershipId ||
+    (actorUserId != null && actorUserId === documentOwnerUserId)
+  );
 }

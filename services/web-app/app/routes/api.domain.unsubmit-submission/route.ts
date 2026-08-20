@@ -104,6 +104,7 @@ export async function action({ request }: ActionFunctionArgs) {
             submission.document.membership.organizationId ??
             actor.organizationId,
         }),
+        actorUserId: actor.userId,
         eventType: submissionActivityEventTypes.unsubmitted,
         source: 'unsubmit-submission',
         occurredAfterRelease: false,

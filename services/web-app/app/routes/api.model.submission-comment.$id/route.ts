@@ -31,13 +31,15 @@ export async function action({ request, params }: ActionFunctionArgs) {
           document: {
             is: {
               deletedAt: null,
-              membershipId: { not: profile.id },
-              ...(isAdmin
-                ? {}
-                : buildTeacherDocumentAccessWhere({
-                    membershipId: profile.id,
-                    organizationId: profile.organization.id,
-                  })),
+              AND: [
+                { membership: { is: { userId: { not: userId } } } },
+                isAdmin
+                  ? {}
+                  : buildTeacherDocumentAccessWhere({
+                      membershipId: profile.id,
+                      organizationId: profile.organization.id,
+                    }),
+              ],
             },
           },
         },
@@ -88,6 +90,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
             actorOrganizationId: profile.organization.id,
             submissionOrganizationId: organizationId,
           }),
+          actorUserId: userId,
           eventType: submissionActivityEventTypes.commentDeleted,
           source: 'submission-comment',
           occurredAfterRelease: comment.submission.releasedAt != null,
@@ -154,6 +157,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
           actorOrganizationId: profile.organization.id,
           submissionOrganizationId: organizationId,
         }),
+        actorUserId: userId,
         eventType: submissionActivityEventTypes.commentUpdated,
         source: 'submission-comment',
         occurredAfterRelease: comment.submission.releasedAt != null,

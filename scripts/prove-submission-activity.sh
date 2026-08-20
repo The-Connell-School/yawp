@@ -35,4 +35,5 @@ bun test \
   app/utils/grading-auth.server.test.ts \
   'app/routes/app.admin.organizations.$id/route.test.ts'
 
-psql "$DATABASE_URL" --file "$repo_root/scripts/prove-submission-activity-db.sql"
+cd "$repo_root"
+bash "$repo_root/scripts/prove-submission-activity-fresh-migration.sh"

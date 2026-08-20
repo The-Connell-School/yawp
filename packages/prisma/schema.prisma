@@ -1017,9 +1017,12 @@ model SubmissionActivity {
   submissionId         String
   submission           Submission     @relation(fields: [submissionId], references: [id], onDelete: Restrict)
   organizationId       String
-  organization         Organization   @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  organization         Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   actorMembershipId    String?
   actorMembership      OrgMembership? @relation("SubmissionActivityActor", fields: [actorMembershipId], references: [id], onDelete: SetNull)
+  actorType            String
+  actorName            String?
+  actorEmail           String?
   eventType            String
   source               String
   occurredAfterRelease Boolean        @default(false)

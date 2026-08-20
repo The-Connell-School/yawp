@@ -297,6 +297,7 @@ const actionImpl = async ({ request, params }: ActionFunctionArgs) => {
               actorOrganizationId: profile.organization.id,
               submissionOrganizationId: organizationId,
             }),
+            actorUserId: userId,
             eventType: submissionActivityEventTypes.bodyUpdated,
             source: 'document-snapshot',
             occurredAfterRelease: submission.releasedAt != null,

@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, mock, test } from 'bun:test';
 const prisma = {
   $transaction: mock(),
   user: {
+    findUnique: mock(),
     findUniqueOrThrow: mock(),
   },
   document: {
@@ -43,6 +44,7 @@ const { action } = await import('./route');
 describe('api.model.document.$id', () => {
   beforeEach(() => {
     prisma.user.findUniqueOrThrow.mockReset();
+    prisma.user.findUnique.mockReset();
     prisma.document.findUniqueOrThrow.mockReset();
     prisma.document.findUnique.mockReset();
     prisma.document.findFirst.mockReset();
@@ -67,6 +69,10 @@ describe('api.model.document.$id', () => {
       organization: { id: 'org-1' },
     });
     prisma.user.findUniqueOrThrow.mockResolvedValue({ isAdmin: false });
+    prisma.user.findUnique.mockResolvedValue({
+      name: 'Student One',
+      email: 'student@example.test',
+    });
     // The route resolves the document through the access predicate
     // (`document.findFirst` + `documentReadWhere`) before it writes anything.
     // These tests are about save ordering, not authorization: profile-1 owns

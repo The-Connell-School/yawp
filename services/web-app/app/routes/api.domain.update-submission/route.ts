@@ -17,6 +17,8 @@ import {
 
 const UNSUBMITTED_BEFORE_GRADED_MESSAGE =
   'This submission was unsubmitted before you could grade it. Please refresh the page.';
+const STALE_GRADE_MESSAGE =
+  'This submission changed before your grade could be saved. Please refresh and try again.';
 
 class GradeSaveConflictError extends Error {}
 
@@ -73,6 +75,7 @@ export async function action({ request }: ActionFunctionArgs) {
           membershipId: true,
           membership: {
             select: {
+              userId: true,
               organizationId: true,
               organization: {
                 select: { submissionActivityEnabled: true },
@@ -118,7 +121,12 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 
   if (
-    isGradingOwnDocument(actor.membershipId, submission.document.membershipId)
+    isGradingOwnDocument(
+      actor.membershipId,
+      submission.document.membershipId,
+      actor.userId,
+      submission.document.membership.userId
+    )
   ) {
     return Response.json(
       { success: false, message: 'You cannot grade your own submission.' },
@@ -246,6 +254,28 @@ export async function action({ request }: ActionFunctionArgs) {
         where: {
           id: submission.id,
           unsubmittedAt: null,
+          document: {
+            is: {
+              deletedAt: null,
+              AND: [
+                {
+                  membership: {
+                    is: {
+                      userId: { not: actor.userId },
+                      ...(submission.releasedAt == null
+                        ? {}
+                        : {
+                            organization: {
+                              is: { submissionActivityEnabled: true },
+                            },
+                          }),
+                    },
+                  },
+                },
+                teacherClassWhere,
+              ],
+            },
+          },
           ...(submission.updatedAt == null
             ? {}
             : { updatedAt: submission.updatedAt }),
@@ -265,6 +295,7 @@ export async function action({ request }: ActionFunctionArgs) {
           actorOrganizationId: actor.organizationId,
           submissionOrganizationId: organizationId,
         }),
+        actorUserId: actor.userId,
         eventType:
           activityChanges.gradedAt || activityChanges.gradedByMembershipId
             ? submissionActivityEventTypes.gradeFinalized
@@ -280,7 +311,7 @@ export async function action({ request }: ActionFunctionArgs) {
   } catch (err) {
     if (err instanceof GradeSaveConflictError) {
       return Response.json(
-        { success: false, message: UNSUBMITTED_BEFORE_GRADED_MESSAGE },
+        { success: false, message: STALE_GRADE_MESSAGE },
         { status: 409 }
       );
     }

@@ -201,7 +201,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   }
 
   // Determine if viewer is the owner (student) or a teacher
-  const isOwner = submission.document.membership.id === profile.id;
+  const isOwner = submission.document.membership.userId === userId;
 
   const isCurrentClassTeacher =
     submission.document.classAssignment?.class?.school.organizationId ===
@@ -271,6 +271,9 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
             changes: true,
             metadata: true,
             createdAt: true,
+            actorType: true,
+            actorName: true,
+            actorEmail: true,
             actorMembership: {
               select: {
                 user: { select: { name: true, email: true } },

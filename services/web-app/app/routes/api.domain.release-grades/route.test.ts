@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, mock, test } from 'bun:test';
 
 const prisma = {
   $transaction: mock(),
+  user: { findUnique: mock() },
   submission: {
     findMany: mock(),
     updateMany: mock(),
@@ -27,15 +28,21 @@ const { action } = await import('./route');
 describe('api.domain.release-grades', () => {
   beforeEach(() => {
     prisma.$transaction.mockReset();
+    prisma.user.findUnique.mockReset();
     prisma.submission.findMany.mockReset();
     prisma.submission.updateMany.mockReset();
     prisma.submissionActivity.create.mockReset();
+    prisma.user.findUnique.mockResolvedValue({
+      name: 'Teacher One',
+      email: 'teacher@example.test',
+    });
     getGradingActor.mockReset();
     canManageGrades.mockReset();
     buildTeacherClassWhere.mockReset();
     isGradingOwnDocument.mockReset();
 
     getGradingActor.mockResolvedValue({
+      userId: 'teacher-user-1',
       membershipId: 'teacher-1',
       organizationId: 'org-1',
       teacherProfileId: 'teacher-1',
@@ -103,7 +110,7 @@ describe('api.domain.release-grades', () => {
       })
     );
     expect(
-      prisma.submission.findMany.mock.calls[0][0].where.document.is
+      prisma.submission.findMany.mock.calls[0][0].where.document.is.AND[1]
     ).toEqual(expect.objectContaining({ OR: expect.any(Array) }));
   });
 

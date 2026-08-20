@@ -40,6 +40,12 @@ export type SubmissionActivityChanges = Record<
   }
 >;
 
+export class SubmissionActivityUnavailableError extends Error {
+  constructor() {
+    super('Submission activity recording is temporarily unavailable.');
+  }
+}
+
 /** Prevents a platform admin membership from being linked across tenants. */
 export function resolveSubmissionActivityActorMembershipId({
   actorMembershipId,
@@ -136,6 +142,7 @@ export async function recordSubmissionActivity(
     submissionId: string;
     organizationId: string;
     actorMembershipId: string | null;
+    actorUserId?: string | null;
     eventType: string;
     source: string;
     occurredAfterRelease: boolean;
@@ -143,20 +150,32 @@ export async function recordSubmissionActivity(
     metadata?: Prisma.InputJsonObject;
   }
 ) {
-  // Emergency rollback switch for the production-wide dual-write. The
-  // organization flag controls released-edit UI; this environment switch can
-  // independently stop ledger writes while the application is rolled back.
-  if (process.env.SUBMISSION_ACTIVITY_WRITES_ENABLED === 'false') return null;
+  // Audit-required mutations fail closed. The switch is an incident-response
+  // brake for writes, not permission to commit unaudited changes: throwing
+  // here rolls back the enclosing mutation transaction.
+  if (process.env.SUBMISSION_ACTIVITY_WRITES_ENABLED === 'false') {
+    throw new SubmissionActivityUnavailableError();
+  }
 
   if (Object.keys(input.changes).length === 0 && input.metadata == null) {
     return null;
   }
+
+  const actor = input.actorUserId
+    ? await tx.user.findUnique({
+        where: { id: input.actorUserId },
+        select: { name: true, email: true },
+      })
+    : null;
 
   return tx.submissionActivity.create({
     data: {
       submissionId: input.submissionId,
       organizationId: input.organizationId,
       actorMembershipId: input.actorMembershipId,
+      actorType: actor ? 'human' : 'system',
+      actorName: actor?.name ?? null,
+      actorEmail: actor?.email ?? null,
       eventType: input.eventType,
       source: input.source,
       occurredAfterRelease: input.occurredAfterRelease,

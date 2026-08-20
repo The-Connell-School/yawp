@@ -47,14 +47,13 @@ describe('submission activity', () => {
     expect(create).not.toHaveBeenCalled();
   });
 
-  test('supports an emergency dual-write kill switch', async () => {
+  test('fails closed when the emergency audit-write switch is disabled', async () => {
     const previous = process.env.SUBMISSION_ACTIVITY_WRITES_ENABLED;
     process.env.SUBMISSION_ACTIVITY_WRITES_ENABLED = 'false';
     const create = mock();
     try {
-      const result = await recordSubmissionActivity(
-        { submissionActivity: { create } } as any,
-        {
+      await expect(
+        recordSubmissionActivity({ submissionActivity: { create } } as any, {
           submissionId: 'sub-1',
           organizationId: 'org-1',
           actorMembershipId: 'teacher-1',
@@ -62,9 +61,10 @@ describe('submission activity', () => {
           source: 'test',
           occurredAfterRelease: true,
           changes: { score: { before: '77', after: '92' } },
-        }
+        })
+      ).rejects.toThrow(
+        'Submission activity recording is temporarily unavailable'
       );
-      expect(result).toBeNull();
       expect(create).not.toHaveBeenCalled();
     } finally {
       if (previous === undefined) {
@@ -99,6 +99,36 @@ describe('submission activity', () => {
         submissionOrganizationId: 'student-org',
       })
     ).toBe('teacher-membership');
+  });
+
+  test('snapshots a human actor even when no tenant membership can be linked', async () => {
+    const create = mock((args: unknown) => args);
+    const findUnique = mock(() => ({
+      name: 'Platform Admin',
+      email: 'admin@example.test',
+    }));
+    await recordSubmissionActivity(
+      { user: { findUnique }, submissionActivity: { create } } as any,
+      {
+        submissionId: 'sub-1',
+        organizationId: 'student-org',
+        actorMembershipId: null,
+        actorUserId: 'admin-user',
+        eventType: 'submission.grade_updated',
+        source: 'test',
+        occurredAfterRelease: true,
+        changes: { score: { before: '77', after: '92' } },
+      }
+    );
+
+    expect(create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        actorMembershipId: null,
+        actorType: 'human',
+        actorName: 'Platform Admin',
+        actorEmail: 'admin@example.test',
+      }),
+    });
   });
 
   test('exports the same canonical equality used by mutation routes', () => {
