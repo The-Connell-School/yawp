@@ -1,0 +1,13 @@
+{
+  "name": "yawp",
+  "user": "ubuntu",
+  "snapshot": "snapshot-20260819-85e64ceb-a338-4e7a-a307-a37fbc6c1448",
+  "install": "bash .cursor/install.sh",
+  "start": "bash .cursor/start.sh",
+  "ports": [
+    {
+      "name": "web-app",
+      "port": 5176
+    }
+  ]
+}
