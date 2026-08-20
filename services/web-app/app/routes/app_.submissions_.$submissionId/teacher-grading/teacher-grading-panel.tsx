@@ -900,7 +900,7 @@ export function TeacherGradingPanel({
       ...headerStateSnapshot,
       ...headerCallbacksRef.current,
     });
-  }, [headerStateSnapshot]);
+  }, [currentSnapshot, headerStateSnapshot]);
 
   const saveStatusLabel =
     autoSaveStatus === 'saving'
