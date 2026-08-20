@@ -45,6 +45,7 @@ describe('api.domain.update-submission', () => {
 
     getGradingActor.mockResolvedValue({
       membershipId: 'teacher-1',
+      organizationId: 'org-1',
       teacherProfileId: 'teacher-1',
       isTeacher: true,
       isAdmin: false,
@@ -309,6 +310,7 @@ describe('api.domain.update-submission', () => {
 
   test('atomically records exact before/after activity when a released grade is edited', async () => {
     const releasedAt = new Date('2026-08-01T15:30:00.000Z');
+    const updatedAt = new Date('2026-08-01T15:31:00.000Z');
     const transactionActivityCreate = mock().mockResolvedValue({
       id: 'activity-1',
     });
@@ -323,6 +325,7 @@ describe('api.domain.update-submission', () => {
       gradedAt: new Date('2026-07-31T14:00:00.000Z'),
       gradedByMembershipId: 'teacher-1',
       releasedAt,
+      updatedAt,
       score: '85% B',
       feedback: 'Strong opening.',
       numericPercentage: 85,
@@ -339,7 +342,11 @@ describe('api.domain.update-submission', () => {
             teachers: [{ id: 'teacher-1' }],
           },
         },
-        membership: { classesAsStudent: [] },
+        membership: {
+          organizationId: 'org-1',
+          organization: { submissionActivityEnabled: true },
+          classesAsStudent: [],
+        },
       },
     });
 
@@ -377,6 +384,73 @@ describe('api.domain.update-submission', () => {
 
     const updateCall = prisma.submission.updateMany.mock.calls[0][0];
     expect(updateCall.data.releasedAt).toBeUndefined();
+    expect(updateCall.where.updatedAt).toEqual(updatedAt);
+  });
+
+  test('keeps released submissions read-only when the organization rollout is off', async () => {
+    prisma.submission.findFirst.mockResolvedValue({
+      id: 'sub-1',
+      updatedAt: new Date('2026-08-01T15:31:00.000Z'),
+      gradedAt: new Date('2026-08-01T15:00:00.000Z'),
+      gradedByMembershipId: 'teacher-1',
+      releasedAt: new Date('2026-08-01T15:30:00.000Z'),
+      score: '85% B',
+      feedback: 'Before',
+      numericPercentage: 85,
+      overallScore: 85,
+      unsubmittedAt: null,
+      document: {
+        membershipId: 'student-1',
+        assignment: null,
+        classAssignment: null,
+        membership: {
+          organizationId: 'org-1',
+          organization: { submissionActivityEnabled: false },
+          classesAsStudent: [],
+        },
+      },
+    });
+
+    const response = (await action({
+      request: makeRequest({ submissionId: 'sub-1', score: '92% A-' }),
+    } as any)) as Response;
+
+    expect(response.status).toBe(403);
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+    expect(prisma.submissionActivity.create).not.toHaveBeenCalled();
+  });
+
+  test('suppresses no-op updates and activity', async () => {
+    prisma.submission.findFirst.mockResolvedValue({
+      id: 'sub-1',
+      updatedAt: new Date('2026-08-01T15:31:00.000Z'),
+      gradedAt: new Date('2026-08-01T15:00:00.000Z'),
+      gradedByMembershipId: 'teacher-1',
+      releasedAt: null,
+      score: '85% B',
+      feedback: 'Before',
+      numericPercentage: 85,
+      overallScore: 85,
+      unsubmittedAt: null,
+      document: {
+        membershipId: 'student-1',
+        assignment: null,
+        classAssignment: null,
+        membership: {
+          organizationId: 'org-1',
+          organization: { submissionActivityEnabled: false },
+          classesAsStudent: [],
+        },
+      },
+    });
+
+    const response = (await action({
+      request: makeRequest({ submissionId: 'sub-1', score: '85% B' }),
+    } as any)) as Response;
+
+    expect(response.status).toBe(200);
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+    expect(prisma.submissionActivity.create).not.toHaveBeenCalled();
   });
 
   test('assigns gradedByMembershipId when marking an already graded submission', async () => {
