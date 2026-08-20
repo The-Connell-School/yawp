@@ -169,6 +169,22 @@ export async function createPreviewSeat(
   }
 }
 
+export async function enableWritingPracticeForPreviewOrganizations(
+  prisma: PrismaClient,
+  organizationIds: string[]
+) {
+  const uniqueOrganizationIds = [...new Set(organizationIds)];
+  if (uniqueOrganizationIds.length === 0) return { count: 0 };
+
+  return prisma.organization.updateMany({
+    where: {
+      id: { in: uniqueOrganizationIds },
+      writingPracticeEnabled: false,
+    },
+    data: { writingPracticeEnabled: true },
+  });
+}
+
 export async function ensurePreviewSeats(
   prisma: PrismaClient,
   seats = buildPreviewSeatDefinitions(),
