@@ -1,4 +1,5 @@
 import { test, expect } from '../test-setup';
+import { createE2EPrismaClient } from '../prisma-client';
 
 // The Composition strand of Writing Fundamentals Practice is constructed
 // response, not ACT multiple choice: the student writes a topic sentence /
@@ -6,6 +7,31 @@ import { test, expect } from '../test-setup';
 // ANTHROPIC_API_KEY), so the feedback service degrades to its deterministic
 // self-check — which is exactly what we assert here.
 test.describe.serial('Writing Fundamentals Practice — Composition', () => {
+  // Writing practice ships dark behind the org flag (default false), so every
+  // route here 302s to /app until it is switched on.
+  test.beforeEach(async ({ e2eContext }) => {
+    const prisma = createE2EPrismaClient();
+    try {
+      await prisma.organization.update({
+        where: { id: e2eContext.organizationId },
+        data: { writingPracticeEnabled: true },
+      });
+    } finally {
+      await prisma.$disconnect();
+    }
+  });
+
+  test.afterEach(async ({ e2eContext }) => {
+    const prisma = createE2EPrismaClient();
+    try {
+      await prisma.organization.update({
+        where: { id: e2eContext.organizationId },
+        data: { writingPracticeEnabled: false },
+      });
+    } finally {
+      await prisma.$disconnect();
+    }
+  });
   test('surfaces a Composition section on the practice index', async ({
     page,
     e2eContext,
@@ -15,7 +41,7 @@ test.describe.serial('Writing Fundamentals Practice — Composition', () => {
     await page.goto('/app/writing-lessons');
 
     await expect(
-      page.getByRole('heading', { name: /writing fundamentals practice/i })
+      page.getByRole('heading', { name: /writing practice/i }).first()
     ).toBeVisible();
 
     // The two strands each get their own heading.
@@ -32,12 +58,20 @@ test.describe.serial('Writing Fundamentals Practice — Composition', () => {
     // Composition links through to the constructed-response lessons, grouped
     // into Making Claims (topic sentences, thesis) and Supporting Claims
     // (evidence, analysis).
+    // Match on the card testids: lesson descriptions overlap (the Analysis
+    // card's description mentions evidence), so a name regex is ambiguous.
     await expect(
-      page.getByRole('link', { name: /topic sentences/i })
+      page.getByTestId('writing-lesson-card-topic-sentences')
     ).toBeVisible();
-    await expect(page.getByRole('link', { name: /evidence/i })).toBeVisible();
-    await expect(page.getByRole('link', { name: /analysis/i })).toBeVisible();
-    await page.getByRole('link', { name: /thesis statements/i }).click();
+    await expect(
+      page.getByTestId('writing-lesson-card-evidence')
+    ).toBeVisible();
+    await expect(
+      page.getByTestId('writing-lesson-card-analysis')
+    ).toBeVisible();
+    await page
+      .locator('a[href="/app/writing-lessons/thesis-statements"]')
+      .click();
     await expect(
       page.getByRole('heading', { name: 'Thesis Statements' })
     ).toBeVisible();
@@ -53,6 +87,8 @@ test.describe.serial('Writing Fundamentals Practice — Composition', () => {
     await page.goto('/app/writing-lessons/topic-sentences');
     await page.locator('input[name="classIds"]').first().check();
     await page.locator('input[name="problemCount"]').fill('3');
+    // Due date is required, so the form will not submit without it.
+    await page.locator('input[name="dueAt"]').fill('2026-12-01');
     await page.getByRole('button', { name: /assign practice/i }).click();
     await expect(page.getByTestId('assign-result')).toContainText(
       /assigned to/i
@@ -63,7 +99,12 @@ test.describe.serial('Writing Fundamentals Practice — Composition', () => {
     await page.context().clearCookies();
     await signIn(e2eContext.userEmail, 'johndoe');
     await page.goto('/app/writing-lessons');
-    await page.getByTestId('assigned-practice-card').first().click();
+    // The card opens the assignment itself, not the generic lesson page.
+    await page
+      .getByRole('link', { name: /start practice/i })
+      .first()
+      .click();
+    await expect(page).toHaveURL(/\/app\/writing-lessons\/assigned\//);
     await expect(
       page.getByRole('heading', { name: /problem 1 of/i })
     ).toBeVisible();
@@ -110,7 +151,10 @@ test.describe.serial('Writing Fundamentals Practice — Composition', () => {
     await page.context().clearCookies();
     await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
     await page.goto('/app/writing-lessons');
-    await page.getByTestId('assigned-by-teacher-card').first().click();
+    await page
+      .getByRole('link', { name: /view results/i })
+      .first()
+      .click();
     await expect(
       page.getByRole('heading', { name: /student progress/i })
     ).toBeVisible();
@@ -128,29 +172,33 @@ test.describe.serial('Writing Fundamentals Practice — Composition', () => {
     ).toBeVisible();
   });
 
-  test('keeps Composition lessons out of the ACT session builder', async ({
+  test('keeps Composition lessons out of the ACT practice session', async ({
     page,
     e2eContext,
     signIn,
   }) => {
     await signIn(e2eContext.userEmail, 'johndoe');
-    await page.goto('/app/writing-lessons');
 
-    await page.getByRole('button', { name: /create practice/i }).click();
-    const dialog = page.getByRole('dialog');
-    await expect(dialog.getByText(/skills to practice/i)).toBeVisible();
+    // The self-directed session is ACT multiple choice only. A composition
+    // skill has no ACT items, so the session refuses it rather than building
+    // an empty set — even when the slug is supplied by hand in the URL.
+    await page.goto(
+      '/app/writing-lessons/practice?skills=topic-sentences&count=5'
+    );
+    await expect(page).toHaveURL(/\/app\/writing-lessons$/);
 
-    // The self-directed session is ACT multiple choice only, so composition
-    // skills must not be selectable there.
-    await expect(
-      dialog.getByText('Fixing Comma Splices', { exact: true })
-    ).toBeVisible();
-    await expect(
-      dialog.getByText('Topic Sentences', { exact: true })
-    ).toHaveCount(0);
-    await expect(
-      dialog.getByText('Thesis Statements', { exact: true })
-    ).toHaveCount(0);
+    // A grammar skill builds the session as normal.
+    await page.goto(
+      '/app/writing-lessons/practice?skills=fixing-comma-splices&count=5'
+    );
+    await expect(page.getByText(/choose the best answer/i)).toBeVisible();
+
+    // Mixing the two keeps only the grammar half.
+    await page.goto(
+      '/app/writing-lessons/practice?skills=topic-sentences,fixing-comma-splices&count=5'
+    );
+    await expect(page.getByText(/choose the best answer/i)).toBeVisible();
+    await expect(page.getByText('Topic Sentences')).toHaveCount(0);
   });
 
   test('lets a student make the practice about their own interest', async ({

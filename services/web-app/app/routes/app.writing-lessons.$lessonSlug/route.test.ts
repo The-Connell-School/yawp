@@ -189,6 +189,95 @@ describe('writing lesson practice action - generate-act intent', () => {
   });
 });
 
+describe('writing lesson practice action - check-rewrite intent', () => {
+  beforeEach(() => {
+    requireUserId.mockReset();
+    requireMembership.mockReset();
+    getLLMCompletion.mockReset();
+
+    requireUserId.mockResolvedValue('user-1');
+    requireMembership.mockResolvedValue({
+      id: 'student-1',
+      role: 'STUDENT',
+      organization: { id: 'org-1', name: 'Org', writingPracticeEnabled: true },
+    });
+  });
+
+  test('sends a written grammar correction to the tutor', async () => {
+    getLLMCompletion.mockResolvedValue(
+      JSON.stringify({
+        status: 'strong',
+        summary: 'You split the clauses cleanly.',
+        strengths: ['You used a semicolon to join two independent clauses.'],
+        focus: ['Try the same fix with a coordinating conjunction.'],
+        encouragement: 'Nice control.',
+      })
+    );
+
+    const result = (await run({
+      intent: 'check-rewrite',
+      questionId: 'act-1',
+      exercise: 'The phone costs a lot, students cannot afford it.',
+      instruction:
+        'Rewrite the whole sentence so the underlined part is correct.',
+      response: 'The phone costs a lot; students cannot afford it.',
+    })) as {
+      intent: string;
+      questionId: string;
+      feedback: { status: string; degraded: boolean };
+    };
+
+    expect(result.intent).toBe('check-rewrite');
+    expect(result.questionId).toBe('act-1');
+    expect(result.feedback.status).toBe('strong');
+    expect(result.feedback.degraded).toBe(false);
+    expect(getLLMCompletion).toHaveBeenCalledTimes(1);
+
+    // The tutor is grounded in this lesson's skill, not the generic prompt.
+    const call = getLLMCompletion.mock.calls[0][0] as {
+      messages: { content: string }[];
+    };
+    expect(call.messages[0].content).toContain('comma splices');
+  });
+
+  test('an unchanged sentence is refused before the tutor is called', async () => {
+    const sentence = 'The phone costs a lot, students cannot afford it.';
+    const result = (await run({
+      intent: 'check-rewrite',
+      questionId: 'act-1',
+      exercise: sentence,
+      instruction:
+        'Rewrite the whole sentence so the underlined part is correct.',
+      response: sentence,
+    })) as { feedback: { status: string; summary: string } };
+
+    expect(result.feedback.status).toBe('needs_revision');
+    expect(result.feedback.summary).toMatch(/still the original sentence/i);
+    expect(getLLMCompletion).not.toHaveBeenCalled();
+  });
+
+  test('a tutor outage never reports the rewrite as correct', async () => {
+    getLLMCompletion.mockRejectedValue(new Error('upstream 529'));
+
+    const result = (await run({
+      intent: 'check-rewrite',
+      questionId: 'act-1',
+      exercise: 'The phone costs a lot, students cannot afford it.',
+      instruction:
+        'Rewrite the whole sentence so the underlined part is correct.',
+      // Still a comma splice — the fallback cannot know that, so it must not
+      // imply the student got it right.
+      response: 'The phone costs a great deal, students cannot afford it.',
+    })) as {
+      feedback: { status: string; degraded: boolean; strengths: string[] };
+    };
+
+    expect(result.feedback.degraded).toBe(true);
+    expect(result.feedback.status).not.toBe('strong');
+    expect(result.feedback.strengths).toHaveLength(0);
+  });
+});
+
 describe('writing lesson practice action - check-composition intent', () => {
   async function runComposition(
     fields: Record<string, string | string[]>,

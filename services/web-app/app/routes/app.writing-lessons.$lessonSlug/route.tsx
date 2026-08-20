@@ -67,6 +67,13 @@ import {
 } from '~/utils/writing-lessons/static-lessons.server';
 import { safeAssignedReturnPath } from '~/utils/writing-lessons/return-path';
 
+/**
+ * The on-screen task for a grammar rewrite. The tutor is separately given the
+ * lesson's skill and rule, so this only has to say what to produce.
+ */
+const REWRITE_INSTRUCTION =
+  'Rewrite the whole sentence so the underlined part is correct.';
+
 type TeacherClass = {
   id: string;
   title: string | null;
@@ -142,6 +149,17 @@ type CompositionCheckActionData = {
   feedback: PracticeFeedbackResult;
 };
 
+/**
+ * Feedback on a grammar rewrite: multiple choice proves a student can spot the
+ * right fix, but producing it themselves is what builds the skill, so the
+ * grammar panel also takes a written correction and sends it to the tutor.
+ */
+type RewriteCheckActionData = {
+  intent: 'check-rewrite';
+  questionId: string;
+  feedback: PracticeFeedbackResult;
+};
+
 type CompositionPersonalizeActionData = {
   intent: 'personalize-composition';
   ok: boolean;
@@ -164,6 +182,24 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
   const formData = await request.formData();
   const intent = String(formData.get('intent') ?? '');
+
+  // A written correction of an ACT sentence on a grammar lesson. Graded by the
+  // same tutor service as composition, grounded in this lesson's skill + rule.
+  if (intent === 'check-rewrite') {
+    const feedback = await generatePracticeFeedback({
+      lessonTitle: context.title,
+      skill: context.skill,
+      rule: context.rule,
+      exercise: String(formData.get('exercise') ?? ''),
+      instruction: String(formData.get('instruction') ?? ''),
+      response: String(formData.get('response') ?? ''),
+    });
+    return dataResponse<RewriteCheckActionData>({
+      intent: 'check-rewrite',
+      questionId: String(formData.get('questionId') ?? ''),
+      feedback,
+    });
+  }
 
   // Composition lessons are constructed response: the student writes a topic
   // sentence / thesis and the tutor feedback service (grounded in the lesson's
@@ -428,12 +464,18 @@ function StudentPracticePanel({
   isTeacher: boolean;
 }) {
   const generateFetcher = useFetcher<ActGenerateActionData>();
+  const rewriteFetcher = useFetcher<RewriteCheckActionData>();
   const [extraQuestions, setExtraQuestions] = useState<ActPracticeQuestion[]>(
     []
   );
   const [questionIndex, setQuestionIndex] = useState(0);
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const [grade, setGrade] = useState<ActGradeResult | null>(null);
+  // Spotting the right choice and producing the fix are different skills, so
+  // the panel takes a written correction alongside the multiple choice.
+  const [rewrite, setRewrite] = useState('');
+  const [rewriteFeedback, setRewriteFeedback] =
+    useState<PracticeFeedbackResult | null>(null);
 
   // Offline bank first (instant), then fresh AI items appended as the student
   // works through them, so the well never runs dry.
@@ -441,6 +483,7 @@ function StudentPracticePanel({
   const activeQuestion = allQuestions[questionIndex] ?? null;
   const isGenerating = generateFetcher.state !== 'idle';
   const isGraded = grade !== null;
+  const isCheckingRewrite = rewriteFetcher.state !== 'idle';
 
   // Append freshly generated questions, skipping any ids we already hold.
   useEffect(() => {
@@ -460,6 +503,32 @@ function StudentPracticePanel({
       return fresh.length > 0 ? [...current, ...fresh] : current;
     });
   }, [generateFetcher.data, actQuestions]);
+
+  // Adopt feedback once it returns for the question still on screen — a late
+  // response for a question the student already moved past is ignored.
+  useEffect(() => {
+    const data = rewriteFetcher.data;
+    if (
+      data?.intent === 'check-rewrite' &&
+      data.questionId === activeQuestion?.id
+    ) {
+      setRewriteFeedback(data.feedback);
+    }
+  }, [rewriteFetcher.data, activeQuestion?.id]);
+
+  function checkRewrite() {
+    if (activeQuestion === null || isCheckingRewrite) return;
+    rewriteFetcher.submit(
+      {
+        intent: 'check-rewrite',
+        questionId: activeQuestion.id,
+        exercise: activeQuestion.sentence,
+        instruction: REWRITE_INSTRUCTION,
+        response: rewrite,
+      },
+      { method: 'post' }
+    );
+  }
 
   function requestMoreQuestions() {
     if (isGenerating) return;
@@ -488,6 +557,8 @@ function StudentPracticePanel({
     setQuestionIndex(nextIndex < allQuestions.length ? nextIndex : 0);
     setSelectedIndex(null);
     setGrade(null);
+    setRewrite('');
+    setRewriteFeedback(null);
   }
 
   const parts = activeQuestion
@@ -520,6 +591,9 @@ function StudentPracticePanel({
             onKeyDown={(event) => {
               // Enter checks the answer once a choice is picked — the
               // keyboard-first flow students expect on the ACT.
+              // Radios still check on Enter; only the rewrite textarea is
+              // exempt, where Enter has to stay a newline.
+              if ((event.target as HTMLElement).tagName === 'TEXTAREA') return;
               if (event.key === 'Enter' && !event.shiftKey) {
                 event.preventDefault();
                 checkAnswer();
@@ -610,6 +684,51 @@ function StudentPracticePanel({
             {grade ? (
               <ActResultPanel question={activeQuestion} grade={grade} />
             ) : null}
+
+            {/* Picking the right option and writing the fix are different
+                skills. This is where the student actually produces the
+                correction, graded by the tutor rather than by index. */}
+            <div
+              data-testid="grammar-rewrite"
+              className="space-y-3 rounded-xl border border-border/70 bg-muted/20 p-4"
+            >
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Now write it yourself
+                </p>
+                <p className="mt-1 text-base leading-relaxed text-foreground sm:text-sm">
+                  {REWRITE_INSTRUCTION}
+                </p>
+              </div>
+
+              <Textarea
+                data-testid="grammar-rewrite-response"
+                aria-label="Your rewritten sentence"
+                value={rewrite}
+                onChange={(event) => setRewrite(event.target.value)}
+                placeholder="Type the corrected sentence here…"
+                className="min-h-20 text-base sm:text-sm"
+              />
+
+              <Button
+                type="button"
+                variant="outline"
+                className="rounded-full"
+                disabled={isCheckingRewrite || rewrite.trim().length === 0}
+                onClick={checkRewrite}
+              >
+                {isCheckingRewrite ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <MessageSquareText className="mr-2 h-4 w-4" />
+                )}
+                Check my rewrite
+              </Button>
+
+              {rewriteFeedback ? (
+                <PracticeFeedbackPanel feedback={rewriteFeedback} />
+              ) : null}
+            </div>
           </div>
         ) : (
           <p className="text-base text-muted-foreground sm:text-sm">
