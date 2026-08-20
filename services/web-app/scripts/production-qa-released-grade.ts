@@ -60,6 +60,10 @@ try {
   ).toBeVisible();
   await expect(activityPanel).toContainText('77');
   await expect(activityPanel).toContainText('91');
+  // Radix marks the Sheet content visible before its entrance transition has
+  // finished. Let the production proof capture the settled audit panel rather
+  // than a translated off-screen frame.
+  await teacherPage.waitForTimeout(600);
 
   const screenshotPath = resolve(
     'test-results/production-released-grade-activity.png'
