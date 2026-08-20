@@ -243,14 +243,15 @@ describe('production deployment contract', () => {
     expect(remoteReleaseGateIndex).toBeGreaterThan(remoteBackfillIndex);
   });
 
-  test('production QA verifies the bastion host key without unsupported latest console logs', () => {
+  test('production QA prepares the bastion host key with the production deploy contract', () => {
     const productionQaWorkflow = readRepoFile(
       '.github/workflows/production-qa-profile.yml'
     );
 
-    expect(productionQaWorkflow).toContain('aws ec2 get-console-output');
-    expect(productionQaWorkflow).toContain('bastion-console.txt');
-    expect(productionQaWorkflow).not.toContain('--latest');
+    expect(productionQaWorkflow).toContain(
+      'ssh-keyscan -H "${PROD_SSH_HOST}" >> ~/.ssh/known_hosts'
+    );
+    expect(productionQaWorkflow).not.toContain('aws ec2 get-console-output');
   });
 });
 
