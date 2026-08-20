@@ -3,7 +3,16 @@ import { parseFormData, validationError } from '@rvf/react-router';
 import { z } from 'zod';
 import { prisma } from '~/utils/db.server';
 import { redirectWithToast } from '~/utils/toast.server';
-import { canManageGrades, getGradingActor } from '~/utils/grading-auth.server';
+import {
+  buildTeacherClassWhere,
+  canManageGrades,
+  getGradingActor,
+} from '~/utils/grading-auth.server';
+import {
+  buildSubmissionActivityChanges,
+  recordSubmissionActivity,
+  submissionActivityEventTypes,
+} from '~/domain/submissions/submission-activity.server';
 
 const POST = z.object({
   submissionIds: z.preprocess(
@@ -31,6 +40,7 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 
   const requestedSubmissionIds = Array.from(new Set(data.submissionIds));
+  const teacherClassWhere = buildTeacherClassWhere(actor);
 
   let result:
     | { kind: 'not-found'; message: string }
@@ -46,7 +56,12 @@ export async function action({ request }: ActionFunctionArgs) {
       const submissions = await tx.submission.findMany({
         where: {
           id: { in: requestedSubmissionIds },
-          document: { is: { membershipId: { not: actor.membershipId } } },
+          document: {
+            is: {
+              membershipId: { not: actor.membershipId },
+              ...teacherClassWhere,
+            },
+          },
           ...(actor.isAdmin ? {} : { gradedByMembershipId: actor.membershipId }),
           releasedAt: null,
           // A student can unsubmit after a teacher's grade is saved but
@@ -56,8 +71,10 @@ export async function action({ request }: ActionFunctionArgs) {
         },
         select: {
           id: true,
+          releasedAt: true,
           document: {
             select: {
+              membership: { select: { organizationId: true } },
               classAssignment: {
                 select: {
                   class: {
@@ -109,7 +126,15 @@ export async function action({ request }: ActionFunctionArgs) {
       const updateResult = await tx.submission.updateMany({
         where: {
           id: { in: submissions.map((s) => s.id) },
+          document: {
+            is: {
+              membershipId: { not: actor.membershipId },
+              ...teacherClassWhere,
+            },
+          },
+          ...(actor.isAdmin ? {} : { gradedByMembershipId: actor.membershipId }),
           releasedAt: null,
+          unsubmittedAt: null,
         },
         data: {
           releasedAt: now,
@@ -119,6 +144,28 @@ export async function action({ request }: ActionFunctionArgs) {
 
       if (updateResult.count !== submissions.length) {
         throw new ReleaseGradesConflictError();
+      }
+
+      for (const submission of submissions) {
+        const organizationId =
+          submission.document.membership?.organizationId ??
+          actor.organizationId;
+        await recordSubmissionActivity(tx, {
+          submissionId: submission.id,
+          organizationId,
+          actorMembershipId:
+            actor.organizationId === organizationId
+              ? actor.membershipId
+              : null,
+          eventType: submissionActivityEventTypes.gradeReleased,
+          source: 'release-grades',
+          occurredAfterRelease: false,
+          changes: buildSubmissionActivityChanges({
+            before: { releasedAt: submission.releasedAt },
+            after: { releasedAt: now },
+            fields: ['releasedAt'],
+          }),
+        });
       }
 
       return { kind: 'success' as const, releasedCount: submissions.length };
