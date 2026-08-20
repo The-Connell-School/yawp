@@ -86,11 +86,13 @@ BEGIN
     FROM pg_trigger
     WHERE tgname IN (
       'SubmissionActivity_tenant_guard',
-      'OrgMembership_detach_submission_activity_actor'
+      'OrgMembership_detach_submission_activity_actor',
+      'OrgMembership_submission_activity_owner_tenant_guard',
+      'Document_submission_activity_tenant_guard'
     )
       AND NOT tgisinternal
-  ) <> 2 THEN
-    RAISE EXCEPTION 'SubmissionActivity tenant or actor-detach trigger is missing';
+  ) <> 4 THEN
+    RAISE EXCEPTION 'SubmissionActivity tenant, parent, or actor-detach trigger is missing';
   END IF;
 
   IF EXISTS (SELECT 1 FROM "SubmissionActivity") THEN
@@ -111,7 +113,9 @@ ORDER BY conname;
 CREATE TEMP TABLE submission_activity_proof_state AS
 SELECT
   submission.id AS submission_id,
+  document.id AS document_id,
   membership."organizationId" AS organization_id,
+  membership.id AS owner_membership_id,
   membership.id AS actor_membership_id,
   submission."numericPercentage" AS original_percentage,
   submission."updatedAt" AS original_updated_at
@@ -263,6 +267,70 @@ BEGIN
 END $$;
 DELETE FROM "SubmissionActivity" WHERE id = 'submission-activity-detach-proof';
 DELETE FROM "User" WHERE id = 'submission-activity-detach-user';
+
+INSERT INTO "SubmissionActivity" (
+  id,
+  "submissionId",
+  "organizationId",
+  "actorMembershipId",
+  "actorType",
+  "eventType",
+  source,
+  changes
+)
+SELECT
+  'submission-activity-parent-anchor-proof',
+  proof.submission_id,
+  proof.organization_id,
+  NULL,
+  'system',
+  'submission.grade_updated',
+  'db-proof',
+  '{}'::jsonb
+FROM submission_activity_proof_state proof;
+
+DO $$
+DECLARE
+  proof submission_activity_proof_state%ROWTYPE;
+BEGIN
+  SELECT * INTO STRICT proof FROM submission_activity_proof_state;
+
+  BEGIN
+    UPDATE "OrgMembership"
+    SET "organizationId" = 'submission-activity-other-org'
+    WHERE id = proof.owner_membership_id;
+    RAISE EXCEPTION 'submission owner tenant reassignment unexpectedly succeeded';
+  EXCEPTION
+    WHEN check_violation THEN NULL;
+  END;
+
+  BEGIN
+    UPDATE "Document"
+    SET "membershipId" = 'submission-activity-other-membership'
+    WHERE id = proof.document_id;
+    RAISE EXCEPTION 'audited document tenant reassignment unexpectedly succeeded';
+  EXCEPTION
+    WHEN check_violation THEN NULL;
+  END;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM "Document" document
+    JOIN "OrgMembership" owner ON owner.id = document."membershipId"
+    JOIN "SubmissionActivity" activity
+      ON activity."submissionId" = proof.submission_id
+    WHERE document.id = proof.document_id
+      AND document."membershipId" = proof.owner_membership_id
+      AND owner."organizationId" = proof.organization_id
+      AND activity.id = 'submission-activity-parent-anchor-proof'
+      AND activity."organizationId" = proof.organization_id
+  ) THEN
+    RAISE EXCEPTION 'failed parent reassignment changed the durable tenant anchor';
+  END IF;
+END $$;
+
+DELETE FROM "SubmissionActivity"
+WHERE id = 'submission-activity-parent-anchor-proof';
 
 CREATE TEMP TABLE submission_activity_tenant_negative AS
 WITH attempted AS (

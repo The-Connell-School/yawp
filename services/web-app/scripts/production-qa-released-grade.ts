@@ -1,6 +1,7 @@
 import { mkdir } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { chromium, expect, type Page } from '@playwright/test';
+import { submissionActivityUiContract } from '../app/domain/submissions/submission-activity-ui-contract';
 
 const baseUrl = process.env.PROD_QA_BASE_URL ?? 'https://yawp.school';
 const password = process.env.PROD_QA_PASSWORD;
@@ -30,7 +31,7 @@ try {
     teacherPage.getByTestId('submission-lifecycle-edit')
   ).toBeVisible();
   await expect(
-    teacherPage.getByTestId('submission-activity-open')
+    teacherPage.getByTestId(submissionActivityUiContract.triggerTestId)
   ).toBeVisible();
 
   await teacherPage.getByTestId('submission-lifecycle-edit').click();
@@ -43,10 +44,20 @@ try {
     teacherPage.getByTestId('submission-lifecycle-edit')
   ).toBeVisible();
 
-  await teacherPage.getByTestId('submission-activity-open').click();
-  const activityPanel = teacherPage.getByTestId('submission-activity-panel');
-  await expect(activityPanel.getByText('Grade edited')).toBeVisible();
-  await expect(activityPanel.getByText('After release').first()).toBeVisible();
+  await teacherPage
+    .getByTestId(submissionActivityUiContract.triggerTestId)
+    .click();
+  const activityPanel = teacherPage.getByTestId(
+    submissionActivityUiContract.panelTestId
+  );
+  await expect(
+    activityPanel.getByText(submissionActivityUiContract.gradeUpdatedLabel)
+  ).toBeVisible();
+  await expect(
+    activityPanel
+      .getByTestId(submissionActivityUiContract.afterReleaseTestId)
+      .first()
+  ).toBeVisible();
   await expect(activityPanel).toContainText('77');
   await expect(activityPanel).toContainText('91');
 
@@ -68,9 +79,9 @@ try {
   await expect(
     studentPage.getByTestId('submission-lifecycle-edit')
   ).toHaveCount(0);
-  await expect(studentPage.getByTestId('submission-activity-open')).toHaveCount(
-    0
-  );
+  await expect(
+    studentPage.getByTestId(submissionActivityUiContract.triggerTestId)
+  ).toHaveCount(0);
   await studentContext.close();
   console.log('Production released-grade activity QA passed.');
 } finally {

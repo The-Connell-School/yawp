@@ -1,6 +1,7 @@
 import { History } from 'lucide-react';
 import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
+import { submissionActivityUiContract } from '~/domain/submissions/submission-activity-ui-contract';
 import {
   Sheet,
   SheetContent,
@@ -30,7 +31,7 @@ const eventLabels: Record<string, string> = {
   'submission.created': 'Submission created',
   'submission.title_updated': 'Title changed',
   'submission.body_updated': 'Submission body changed',
-  'submission.grade_updated': 'Grade or feedback changed',
+  'submission.grade_updated': submissionActivityUiContract.gradeUpdatedLabel,
   'submission.grade_finalized': 'Grade finalized',
   'submission.grade_released': 'Grade released',
   'submission.grading_assistant_updated': 'Grading Assistant suggestions saved',
@@ -131,7 +132,7 @@ export function SubmissionActivitySheet({
           size="sm"
           variant="outline"
           className="gap-1.5"
-          data-testid="submission-activity-trigger"
+          data-testid={submissionActivityUiContract.triggerTestId}
         >
           <History className="h-3.5 w-3.5" />
           Activity
@@ -140,7 +141,7 @@ export function SubmissionActivitySheet({
       <SheetContent
         side="right"
         className="w-full overflow-y-auto sm:max-w-lg"
-        data-testid="submission-activity-panel"
+        data-testid={submissionActivityUiContract.panelTestId}
       >
         <SheetHeader>
           <SheetTitle>Submission Activity</SheetTitle>
@@ -189,7 +190,9 @@ export function SubmissionActivitySheet({
                     {activity.occurredAfterRelease ? (
                       <Badge
                         variant="secondary"
-                        data-testid="submission-activity-after-release"
+                        data-testid={
+                          submissionActivityUiContract.afterReleaseTestId
+                        }
                       >
                         After release
                       </Badge>

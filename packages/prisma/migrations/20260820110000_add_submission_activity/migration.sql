@@ -102,4 +102,64 @@ BEFORE INSERT OR UPDATE OF "submissionId", "organizationId"
 ON "SubmissionActivity"
 FOR EACH ROW EXECUTE FUNCTION "enforceSubmissionActivityTenant"();
 
+-- The activity row guard cannot observe later changes to the parent chain.
+-- Reject cross-tenant moves of either the owner membership or document once a
+-- submission has durable activity, keeping historical rows reachable forever.
+CREATE FUNCTION "preventSubmissionActivityOwnerTenantReassignment"()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF NEW."organizationId" IS DISTINCT FROM OLD."organizationId"
+     AND EXISTS (
+       SELECT 1
+       FROM "Document" document
+       JOIN "Submission" submission ON submission."documentId" = document.id
+       JOIN "SubmissionActivity" activity
+         ON activity."submissionId" = submission.id
+       WHERE document."membershipId" = OLD.id
+     ) THEN
+    RAISE EXCEPTION 'Cannot move a submission owner with durable activity to another organization'
+      USING ERRCODE = '23514';
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER "OrgMembership_submission_activity_owner_tenant_guard"
+BEFORE UPDATE OF "organizationId" ON "OrgMembership"
+FOR EACH ROW EXECUTE FUNCTION "preventSubmissionActivityOwnerTenantReassignment"();
+
+CREATE FUNCTION "preventSubmissionActivityDocumentTenantReassignment"()
+RETURNS TRIGGER AS $$
+DECLARE
+  old_organization_id TEXT;
+  new_organization_id TEXT;
+BEGIN
+  IF NEW."membershipId" IS NOT DISTINCT FROM OLD."membershipId" THEN
+    RETURN NEW;
+  END IF;
+
+  SELECT "organizationId" INTO old_organization_id
+  FROM "OrgMembership" WHERE id = OLD."membershipId";
+  SELECT "organizationId" INTO new_organization_id
+  FROM "OrgMembership" WHERE id = NEW."membershipId";
+
+  IF new_organization_id IS DISTINCT FROM old_organization_id
+     AND EXISTS (
+       SELECT 1
+       FROM "Submission" submission
+       JOIN "SubmissionActivity" activity
+         ON activity."submissionId" = submission.id
+       WHERE submission."documentId" = OLD.id
+     ) THEN
+    RAISE EXCEPTION 'Cannot move a document with durable submission activity to another organization'
+      USING ERRCODE = '23514';
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER "Document_submission_activity_tenant_guard"
+BEFORE UPDATE OF "membershipId" ON "Document"
+FOR EACH ROW EXECUTE FUNCTION "preventSubmissionActivityDocumentTenantReassignment"();
+
 COMMIT;

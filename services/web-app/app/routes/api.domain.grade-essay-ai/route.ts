@@ -1387,52 +1387,55 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
         data: gradeData,
       });
 
-      await tx.submissionGradingAssistantRun.create({
-        data: {
-          submissionId: submission.id,
-          assignmentTypeId: submission.document.assignmentTypeId,
-          assignmentTypeGradingVersion: resolvedGradingConfig.version,
-          assignmentTypeRubricSnapshot:
-            resolvedGradingConfig.rubricSnapshot as Prisma.InputJsonValue,
-          assignmentTypePromptConfigSnapshot:
-            resolvedGradingConfig.promptConfigSnapshot as Prisma.InputJsonValue,
-          source: resolvedGradingConfig.source,
-          model,
-          status: 'succeeded',
-          metadata: {
-            // The suggestions exactly as the assistant produced them. A teacher
-            // edits the submission itself afterwards, so this is the only record
-            // of what was suggested — it is what "reset to the suggestions"
-            // restores, including after a reload.
-            output: {
-              rubricScores,
-              overallScore,
-              overallComment,
-              numericPercentage,
-              letterGrade,
-              score,
-              grammarIssues,
-              gradingAssistantStrictnessLevel,
-            },
-            assignmentTypeGradingLabel: resolvedGradingConfig.label,
-            assignmentTypeRubricSource: resolvedGradingConfig.source,
-            assignmentTypeSourceTemplateId:
-              resolvedGradingConfig.sourceTemplateId,
-            assignmentTypeSourceTemplateSlug:
-              resolvedGradingConfig.sourceTemplateSlug,
-            gradingAssistantStrictnessLevel,
+      const gradingAssistantRun = await tx.submissionGradingAssistantRun.create(
+        {
+          data: {
+            submissionId: submission.id,
             assignmentTypeId: submission.document.assignmentTypeId,
-            assignmentId: submission.document.assignment?.id ?? null,
-            assignmentTypeKind:
-              submission.document.assignmentType?.kind ?? null,
-            scoringType,
-            rubricKeys,
-            rubricCategoryKeys: rubricKeys,
-            gradedAt: now.toISOString(),
-            documentContext,
-          } satisfies Prisma.InputJsonValue,
-        },
-      });
+            assignmentTypeGradingVersion: resolvedGradingConfig.version,
+            assignmentTypeRubricSnapshot:
+              resolvedGradingConfig.rubricSnapshot as Prisma.InputJsonValue,
+            assignmentTypePromptConfigSnapshot:
+              resolvedGradingConfig.promptConfigSnapshot as Prisma.InputJsonValue,
+            source: resolvedGradingConfig.source,
+            model,
+            status: 'succeeded',
+            metadata: {
+              // The suggestions exactly as the assistant produced them. A teacher
+              // edits the submission itself afterwards, so this is the only record
+              // of what was suggested — it is what "reset to the suggestions"
+              // restores, including after a reload.
+              output: {
+                rubricScores,
+                overallScore,
+                overallComment,
+                numericPercentage,
+                letterGrade,
+                score,
+                grammarIssues,
+                gradingAssistantStrictnessLevel,
+              },
+              assignmentTypeGradingLabel: resolvedGradingConfig.label,
+              assignmentTypeRubricSource: resolvedGradingConfig.source,
+              assignmentTypeSourceTemplateId:
+                resolvedGradingConfig.sourceTemplateId,
+              assignmentTypeSourceTemplateSlug:
+                resolvedGradingConfig.sourceTemplateSlug,
+              gradingAssistantStrictnessLevel,
+              assignmentTypeId: submission.document.assignmentTypeId,
+              assignmentId: submission.document.assignment?.id ?? null,
+              assignmentTypeKind:
+                submission.document.assignmentType?.kind ?? null,
+              scoringType,
+              rubricKeys,
+              rubricCategoryKeys: rubricKeys,
+              gradedAt: now.toISOString(),
+              documentContext,
+            } satisfies Prisma.InputJsonValue,
+          },
+          select: { id: true },
+        }
+      );
 
       await recordSubmissionActivity(tx, {
         submissionId: submission.id,
@@ -1446,6 +1449,12 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
           before: submission,
           after: { ...submission, ...gradeData },
         }),
+        metadata: {
+          gradingAssistantRunId: gradingAssistantRun.id,
+          model,
+          gradingConfigSource: resolvedGradingConfig.source,
+          gradingConfigVersion: resolvedGradingConfig.version,
+        },
       });
     });
   } catch (error) {

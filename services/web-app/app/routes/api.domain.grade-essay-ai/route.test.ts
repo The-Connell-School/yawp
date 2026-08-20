@@ -301,6 +301,12 @@ describe('api.domain.grade-essay-ai', () => {
         actorMembershipId: 'teacher-1',
         eventType: 'submission.grading_assistant_updated',
         occurredAfterRelease: false,
+        metadata: expect.objectContaining({
+          gradingAssistantRunId: 'ga-run-1',
+          model: expect.any(String),
+          gradingConfigSource: 'thesis-default',
+          gradingConfigVersion: 1,
+        }),
       })
     );
     expect(prisma.assignmentType.findUnique).toHaveBeenCalledWith(
@@ -447,6 +453,81 @@ describe('api.domain.grade-essay-ai', () => {
     expect((response as { init?: { status?: number } }).init?.status).toBe(409);
     expect(prisma.submissionGradingAssistantRun.create).not.toHaveBeenCalled();
     expect(prisma.submissionActivity.create).not.toHaveBeenCalled();
+  });
+
+  test('records every persisted assistant run even when its grade values are unchanged', async () => {
+    const category = {
+      key: 'daily_habit',
+      label: 'Daily Habit',
+      description: 'Did the student write today?',
+      weight: 1,
+      grammarHighlighting: false,
+    };
+    prisma.assignmentType.findUnique.mockResolvedValue(
+      mockAssignmentType({
+        rubricJson: { categories: [category] },
+        gradingPromptConfigJson: {
+          gradingInstructions: 'Grade against this rubric.',
+        },
+      })
+    );
+    getLLMCompletion.mockReset();
+    getLLMCompletion.mockResolvedValueOnce(
+      JSON.stringify({
+        categories: [
+          {
+            key: 'daily_habit',
+            score: 3,
+            comment: 'Comment for daily_habit',
+          },
+        ],
+        overallComment: 'Jordan, this draft has clear progress.',
+      })
+    );
+    prisma.submission.findFirst.mockResolvedValue(
+      mockSubmission({
+        gradedAt: new Date('2026-08-19T10:00:00.000Z'),
+        rubricScores: {
+          daily_habit: {
+            score: 3,
+            comment: 'Comment for daily_habit',
+            isAi: true,
+          },
+        },
+        overallScore: 3,
+        overallComment: 'Jordan, this draft has clear progress.',
+        numericPercentage: 79,
+        letterGrade: 'C',
+        score: '79% (C)',
+        grammarIssues: { version: 1, issues: [] },
+      })
+    );
+
+    const form = new FormData();
+    form.append('submissionId', 'sub-1');
+    const response = await action({
+      request: new Request('https://example.com/api/domain/grade-essay-ai', {
+        method: 'POST',
+        body: form,
+      }),
+    } as any);
+
+    expect((response as { data: { success: boolean } }).data.success).toBe(
+      true
+    );
+    expect(prisma.submissionGradingAssistantRun.create).toHaveBeenCalledTimes(
+      1
+    );
+    expect(prisma.submissionActivity.create).toHaveBeenCalledTimes(1);
+    expect(prisma.submissionActivity.create.mock.calls[0][0].data).toEqual(
+      expect.objectContaining({
+        eventType: 'submission.grading_assistant_updated',
+        changes: {},
+        metadata: expect.objectContaining({
+          gradingAssistantRunId: 'ga-run-1',
+        }),
+      })
+    );
   });
 
   test('starts the grading deadline before request preflight work', async () => {
