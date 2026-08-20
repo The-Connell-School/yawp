@@ -28,7 +28,8 @@ import {
   documentReadWhere,
   getIsPlatformAdmin,
 } from '~/utils/document-access.server';
-import { CollabEditor, colorForMembership } from './collab-editor';
+import { CollabEditor } from './collab-editor';
+import { buildAuthorColorScale } from '~/domain/collaboration/author-colors';
 
 /**
  * The collaborative draft page: `/app/collab-documents/:id`.
@@ -340,6 +341,14 @@ export default function CollabDocumentRoute() {
   // reading their coaching over their shoulder.
   const tutor = isTutorEnabled(doc.assignment) && canWrite ? currentCms : null;
 
+  // One colour per writer, derived from the group as a set — the teacher's
+  // contribution panel builds the same scale from the same members, so a
+  // student is the same colour on both pages.
+  const members = doc.group?.members ?? [];
+  const colorScale = buildAuthorColorScale(
+    members.map((member) => member.membershipId)
+  );
+
   return (
     /* The page shell is deliberately the same shape as the solo editor's:
        full-height white page, a max-w-screen-2xl nav, and a content row holding
@@ -401,7 +410,7 @@ export default function CollabDocumentRoute() {
           className="flex shrink-0 items-center -space-x-1.5"
           aria-label="Writers in this draft"
         >
-          {(doc.group?.members ?? []).map((member) => {
+          {members.map((member) => {
             const name = member.membership.user.name?.trim() || 'Student';
             return (
               <li
@@ -410,7 +419,7 @@ export default function CollabDocumentRoute() {
                 aria-label={name}
                 className="grid h-7 w-7 place-items-center rounded-full text-[10px] font-medium text-white ring-2 ring-white"
                 style={{
-                  backgroundColor: colorForMembership(member.membershipId),
+                  backgroundColor: colorScale.get(member.membershipId),
                 }}
               >
                 {name

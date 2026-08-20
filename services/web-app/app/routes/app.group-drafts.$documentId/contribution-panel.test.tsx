@@ -13,7 +13,10 @@ import { act, type ReactElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 
 import { DraftColourKey } from './contribution-panel';
-import { colorForMembership } from '../app_.collab-documents_.$id/collab-editor';
+import {
+  authorColor,
+  buildAuthorColorScale,
+} from '~/domain/collaboration/author-colors';
 import type { ContributionMember } from '~/domain/collaboration/contribution.server';
 import type { AttributedRun } from '~/domain/collaboration/contribution';
 
@@ -68,6 +71,21 @@ function member(
   };
 }
 
+/** The scale the panel builds: current members first, then anyone who left. */
+function scaleFor(
+  members: ContributionMember[],
+  paragraphs: AttributedRun[][]
+) {
+  return buildAuthorColorScale([
+    ...members.map((m) => m.membershipId),
+    ...paragraphs.flatMap((runs) =>
+      runs
+        .map((run) => run.membershipId)
+        .filter((id): id is string => id !== null)
+    ),
+  ]);
+}
+
 function panel({
   members = [member()],
   paragraphs = [[{ membershipId: 'member-1', text: 'Ada wrote this.' }]],
@@ -75,7 +93,13 @@ function panel({
   members?: ContributionMember[];
   paragraphs?: AttributedRun[][];
 } = {}) {
-  return <DraftColourKey members={members} paragraphs={paragraphs} />;
+  return (
+    <DraftColourKey
+      members={members}
+      paragraphs={paragraphs}
+      colorScale={scaleFor(members, paragraphs)}
+    />
+  );
 }
 
 function key(container: HTMLElement) {
@@ -142,11 +166,12 @@ describe('the draft colour key', () => {
     ] as HTMLElement[];
 
     expect(swatches).toHaveLength(2);
+    const scale = buildAuthorColorScale(['member-1', 'member-2']);
     expect(swatches[0].style.backgroundColor).toBe(
-      colorForMembership('member-1')
+      authorColor(scale, 'member-1')
     );
     expect(swatches[1].style.backgroundColor).toBe(
-      colorForMembership('member-2')
+      authorColor(scale, 'member-2')
     );
   });
 

@@ -1,6 +1,10 @@
 import { useState } from 'react';
 import { useFetcher } from 'react-router';
-import { colorForMembership } from '../app_.collab-documents_.$id/collab-editor';
+import {
+  authorColor,
+  buildAuthorColorScale,
+  UNATTRIBUTED_COLOR,
+} from '~/domain/collaboration/author-colors';
 import { Button } from '~/components/ui/button';
 import type {
   ContributionBreakdown,
@@ -60,12 +64,14 @@ function initials(name: string) {
 function MemberGradeCard({
   membershipId,
   name,
+  color,
   grade,
   groupGrade,
   suggestion,
 }: {
   membershipId: string;
   name: string;
+  color: string;
   grade?: MemberGrade;
   groupGrade: GroupGrade | null;
   /** A draft waiting in the boxes, never something already recorded. */
@@ -122,7 +128,7 @@ function MemberGradeCard({
           <span
             aria-hidden
             className="grid size-6 shrink-0 place-items-center rounded-full text-[10px] font-medium text-white"
-            style={{ backgroundColor: colorForMembership(membershipId) }}
+            style={{ backgroundColor: color }}
           >
             {initials(name)}
           </span>
@@ -259,11 +265,13 @@ function MemberGradesSection({
   members,
   grades,
   groupGrade,
+  colorScale,
   hasWriting,
 }: {
   members: ContributionMember[];
   grades: Record<string, MemberGrade>;
   groupGrade: GroupGrade | null;
+  colorScale: Map<string, string>;
   hasWriting: boolean;
 }) {
   const fetcher = useFetcher<{
@@ -323,6 +331,7 @@ function MemberGradesSection({
             key={member.membershipId}
             membershipId={member.membershipId}
             name={member.name}
+            color={authorColor(colorScale, member.membershipId)}
             grade={grades[member.membershipId]}
             groupGrade={groupGrade}
             suggestion={suggestionFor.get(member.membershipId)}
@@ -436,9 +445,11 @@ function GroupGradeCard({ groupGrade }: { groupGrade: GroupGrade | null }) {
 export function DraftColourKey({
   members,
   paragraphs,
+  colorScale,
 }: {
   members: ContributionMember[];
   paragraphs: AttributedRun[][];
+  colorScale: Map<string, string>;
 }) {
   // Nothing written yet means no colour on the page to explain, and a key
   // listing three students beside "Nothing written yet" would imply otherwise.
@@ -471,7 +482,7 @@ export function DraftColourKey({
           <span
             aria-hidden
             className="size-2.5 shrink-0 rounded-full"
-            style={{ backgroundColor: colorForMembership(member.membershipId) }}
+            style={{ backgroundColor: authorColor(colorScale, member.membershipId) }}
           />
           {member.name}
         </span>
@@ -481,7 +492,7 @@ export function DraftColourKey({
           <span
             aria-hidden
             className="size-2.5 shrink-0 rounded-full"
-            style={{ backgroundColor: colorForMembership(id) }}
+            style={{ backgroundColor: authorColor(colorScale, id) }}
           />
           Former student
         </span>
@@ -502,6 +513,19 @@ export function ContributionPanel({
   const { members, paragraphs, unattributedChars } = breakdown;
   const nameFor = new Map(members.map((m) => [m.membershipId, m.name]));
   const silent = members.filter((m) => !m.hasWritten);
+
+  // One scale for the whole page, current members first so the people being
+  // graded get the colours that are hardest to confuse, and anyone who wrote and
+  // has since left the group after them. Built from the same member set the
+  // student's editor uses, so a colour means the same person on both pages.
+  const colorScale = buildAuthorColorScale([
+    ...members.map((member) => member.membershipId),
+    ...paragraphs.flatMap((runs) =>
+      runs
+        .map((run) => run.membershipId)
+        .filter((id): id is string => id !== null)
+    ),
+  ]);
 
   return (
     <div className="grid gap-6">
@@ -569,7 +593,8 @@ export function ContributionPanel({
                         aria-hidden
                         className="grid size-6 shrink-0 place-items-center rounded-full text-[10px] font-medium text-white"
                         style={{
-                          backgroundColor: colorForMembership(
+                          backgroundColor: authorColor(
+                            colorScale,
                             member.membershipId
                           ),
                         }}
@@ -598,7 +623,8 @@ export function ContributionPanel({
                           className="block h-full rounded-full"
                           style={{
                             width: `${member.survivingShare}%`,
-                            backgroundColor: colorForMembership(
+                            backgroundColor: authorColor(
+                              colorScale,
                               member.membershipId
                             ),
                           }}
@@ -629,6 +655,7 @@ export function ContributionPanel({
         members={members}
         grades={grades}
         groupGrade={groupGrade}
+        colorScale={colorScale}
         hasWriting={breakdown.totalChars > 0}
       />
 
@@ -643,7 +670,11 @@ export function ContributionPanel({
           The draft, coloured by who wrote it
         </h2>
 
-        <DraftColourKey members={members} paragraphs={paragraphs} />
+        <DraftColourKey
+          members={members}
+          paragraphs={paragraphs}
+          colorScale={colorScale}
+        />
 
         {unattributedChars > 0 ? (
           <p className="border-b bg-gray-50 px-4 py-2 text-xs text-muted-foreground">
@@ -671,13 +702,13 @@ export function ContributionPanel({
                       className="rounded-sm"
                       style={{
                         backgroundColor: run.membershipId
-                          ? `${colorForMembership(run.membershipId)}33`
+                          ? `${authorColor(colorScale, run.membershipId)}33`
                           : 'transparent',
                         // Grey and dashed rather than tinted, so unattributed
                         // text cannot be mistaken for someone's colour.
                         borderBottom: run.membershipId
                           ? 'none'
-                          : '1px dashed #9ca3af',
+                          : `1px dashed ${UNATTRIBUTED_COLOR}`,
                       }}
                     >
                       {run.text}

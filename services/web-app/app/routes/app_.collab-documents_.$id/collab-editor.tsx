@@ -35,25 +35,6 @@ import { ErrorBoundary } from '../app_.documents_.$id/document-editor/error-boun
  * from who has recently written, which is honest but coarser.
  */
 
-const CURSOR_COLORS = [
-  '#1F4FD8',
-  '#C2185B',
-  '#0F8A6A',
-  '#B4690E',
-  '#6D28D9',
-  '#0E7490',
-  '#B91C1C',
-  '#4D7C0F',
-];
-
-export function colorForMembership(seed: string) {
-  let hash = 0;
-  for (let i = 0; i < seed.length; i += 1) {
-    hash = (hash * 31 + seed.charCodeAt(i)) | 0;
-  }
-  return CURSOR_COLORS[Math.abs(hash) % CURSOR_COLORS.length];
-}
-
 type Props = {
   docId: string;
   /** False for a teacher: they follow the draft and comment, never write in it. */
