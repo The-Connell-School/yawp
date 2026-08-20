@@ -98,12 +98,16 @@ export function generatePreviewAccessSeats({
   count = 1,
   existingCodes = [],
   existingSeats = [],
+  reservedCodes = [],
+  generateCode = generatePreviewAccessCode,
   masterOrganizationId = 'local-dev-org',
   masterLabel = 'Master',
 }: {
   count?: number;
   existingCodes?: string[];
   existingSeats?: GeneratedPreviewAccessSeat[];
+  reservedCodes?: string[];
+  generateCode?: () => string;
   masterOrganizationId?: string;
   masterLabel?: string;
 } = {}): GeneratedPreviewAccessSeat[] {
@@ -122,11 +126,16 @@ export function generatePreviewAccessSeats({
     return match ? Math.max(maximum, Number(match[1])) : maximum;
   }, existingSeats.length);
   const effectiveCount = Math.max(count, retainedCount);
-  const usedCodes = new Set(
-    [...existingCodes, ...existingSeats.map((seat) => seat.code)].filter(
-      Boolean
-    )
+  const reserved = new Set(
+    reservedCodes.map((code) => code.trim().toLowerCase()).filter(Boolean)
   );
+  const usedCodes = new Set([
+    ...reserved,
+    ...existingCodes.filter((code) => !reserved.has(code)),
+    ...existingSeats
+      .map((seat) => seat.code)
+      .filter((code) => !reserved.has(code)),
+  ]);
 
   return Array.from({ length: effectiveCount }, (_, index) => {
     const identity = previewSeatIdentity(
@@ -136,10 +145,14 @@ export function generatePreviewAccessSeats({
     );
     const existing = byOrganization.get(identity.organizationId);
     const legacyCode = existingCodes[index];
+    const preservedCode = existing?.code || legacyCode;
+    if (preservedCode && reserved.has(preservedCode)) {
+      throw new Error(
+        `Generic master access code collides with the existing organization code for ${identity.organizationId}.`
+      );
+    }
     const code =
-      existing?.code ||
-      legacyCode ||
-      generateUniquePreviewAccessCode(usedCodes);
+      preservedCode ?? generateUniquePreviewAccessCode(usedCodes, generateCode);
     usedCodes.add(code);
     return { code, ...identity };
   });

@@ -1,0 +1,59 @@
+name: Demo host diagnostics
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-22.04
+    environment: demo
+    env:
+      DEMO_HOST: ${{ vars.DEMO_HOST }}
+      DEMO_SSH_USER: ${{ vars.DEMO_SSH_USER || 'ec2-user' }}
+    steps:
+      - name: Check diagnostic configuration
+        env:
+          DEMO_SSH_PRIVATE_KEY: ${{ secrets.DEMO_SSH_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          [[ "$DEMO_HOST" =~ ^[A-Za-z0-9.-]+$ ]] || { echo "Invalid DEMO_HOST"; exit 1; }
+          [[ "$DEMO_SSH_USER" =~ ^[A-Za-z0-9._-]+$ ]] || { echo "Invalid DEMO_SSH_USER"; exit 1; }
+          test -n "$DEMO_SSH_PRIVATE_KEY" || { echo "Missing DEMO_SSH_PRIVATE_KEY"; exit 1; }
+
+      - name: Prepare SSH
+        env:
+          DEMO_SSH_PRIVATE_KEY: ${{ secrets.DEMO_SSH_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$DEMO_SSH_PRIVATE_KEY" > ~/.ssh/demo_key
+          chmod 600 ~/.ssh/demo_key
+          ssh-keyscan -H "$DEMO_HOST" >> ~/.ssh/known_hosts
+
+      - name: Inspect reverse-proxy container metadata
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/demo_key "${DEMO_SSH_USER}@${DEMO_HOST}" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          docker ps --format 'name={{.Names}} image={{.Image}} status={{.Status}}'
+
+          candidate_count=0
+          while IFS= read -r container_id; do
+            name="$(docker inspect --format '{{.Name}}' "$container_id")"
+            image="$(docker inspect --format '{{.Config.Image}}' "$container_id")"
+            lower_name="${name,,}"
+            lower_image="${image,,}"
+            if [[ "$lower_name" != *traefik* && "$lower_image" != *traefik* ]]; then
+              continue
+            fi
+            candidate_count=$((candidate_count + 1))
+            printf 'candidate=%s image=%s\n' "$name" "$image"
+            docker inspect --format 'command={{json .Config.Cmd}}' "$container_id"
+            docker inspect --format '{{range .Mounts}}mount={{.Type}}:{{.Destination}}{{println}}{{end}}' "$container_id"
+          done < <(docker ps -q)
+          printf 'traefik_candidates=%d\n' "$candidate_count"
+          REMOTE

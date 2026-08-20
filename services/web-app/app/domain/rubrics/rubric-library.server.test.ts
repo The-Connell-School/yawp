@@ -68,7 +68,7 @@ describe('seedStarterRubrics', () => {
     });
   });
 
-  test('does not write when both protected rubrics already match production', async () => {
+  test('does not write when all protected rubrics already match their definitions', async () => {
     prisma.rubric.findMany.mockResolvedValue(
       STARTER_RUBRICS.map((schema, index) => ({
         id: `rubric-${index}`,

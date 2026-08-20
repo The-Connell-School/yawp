@@ -22,6 +22,7 @@ import { resolveAssignmentTypeGradingConfig } from '~/domain/assignment-types/as
 import type { RubricCategory as GradingRubricCategory } from '~/domain/assignment-types/assignment-type-rubric.shared';
 import {
   isGrammarHighlightCategory,
+  isScoreInCategoryBands,
   resolveGrammarHighlightingEnabled,
 } from '~/domain/assignment-types/rubric-category-options';
 import {
@@ -69,13 +70,26 @@ const POST = z.object({
   llmRetry: z.enum(['fallback']).optional(),
 });
 
+export function getRubricEvaluationMaxTokens(categoryCount: number) {
+  const baseCategoryCount = 5;
+  const baseMaxTokens = 900;
+  const tokensPerAdditionalCategory = 300;
+
+  return Math.min(
+    2400,
+    baseMaxTokens +
+      Math.max(0, categoryCount - baseCategoryCount) *
+        tokensPerAdditionalCategory
+  );
+}
+
 function buildAiSchemas({
-  rubricKeys,
+  rubricCategories,
   minScore,
   maxScore,
   categoryFeedbackEnabled = true,
 }: {
-  rubricKeys: string[];
+  rubricCategories: GradingRubricCategory[];
   minScore: number;
   maxScore: number;
   /**
@@ -85,6 +99,10 @@ function buildAiSchemas({
    */
   categoryFeedbackEnabled?: boolean;
 }) {
+  const rubricKeys = rubricCategories.map((category) => category.key);
+  const categoryByKey = new Map(
+    rubricCategories.map((category) => [category.key, category])
+  );
   const RubricKeySchema = z.enum(rubricKeys as [string, ...string[]]);
   const AiCategorySchema = z.object({
     key: RubricKeySchema,
@@ -113,6 +131,16 @@ function buildAiSchemas({
           continue;
         }
         seen.add(category.key);
+        const configuredCategory = categoryByKey.get(category.key);
+        if (
+          configuredCategory &&
+          !isScoreInCategoryBands(configuredCategory, category.score)
+        ) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: `Score ${category.score} is outside the declared bands for ${category.key}.`,
+          });
+        }
       }
 
       for (const key of rubricKeys) {
@@ -654,6 +682,11 @@ export async function action({ request }: ActionFunctionArgs) {
     source: resolvedGradingConfig.source,
   };
   const templateInstructions = resolvedGradingConfig.instructions;
+  const gradingInstructionsOverride =
+    typeof resolvedGradingConfig.promptConfigSnapshot
+      .gradingInstructionsOverride === 'string'
+      ? resolvedGradingConfig.promptConfigSnapshot.gradingInstructionsOverride.trim()
+      : '';
   const studentFirstName = firstNameFromFullName(
     submission.document.membership?.user?.name
   );
@@ -668,7 +701,7 @@ export async function action({ request }: ActionFunctionArgs) {
   });
   const categoryFeedbackEnabled = promptShape.categoryFeedbackEnabled;
   const { AiCategoriesSchema, AiResponseSchema } = buildAiSchemas({
-    rubricKeys,
+    rubricCategories,
     minScore,
     maxScore,
     categoryFeedbackEnabled,
@@ -724,11 +757,14 @@ For DBQ, score these point keys: ${apHistoryDbqPointKeys.join(', ')}.
 For LEQ, score these point keys: ${apHistoryLeqPointKeys.join(', ')}.
 In overallComment, start with "${studentFirstName}," and continue with concise, actionable AP History feedback.`;
 
-    const apUserPrompt = buildApHistoryPrompt({
+    const apUserPromptBase = buildApHistoryPrompt({
       snapshot: apHistorySnapshot,
       essayText: submission.text,
       studentFirstName,
     });
+    const apUserPrompt = gradingInstructionsOverride
+      ? `${apUserPromptBase}\n\nGrading instructions:\n${gradingInstructionsOverride}`
+      : apUserPromptBase;
 
     let parsedJson: Record<string, unknown>;
     let points: Prisma.InputJsonObject;
@@ -866,6 +902,9 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
     assignmentPrompt,
     essayText: submission.text,
   });
+  const rubricEvaluationMaxTokens = getRubricEvaluationMaxTokens(
+    rubricCategories.length
+  );
 
   let responseText = '';
 
@@ -883,7 +922,7 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
         model,
         system,
         messages: [{ role: 'user', content: userPrompt }],
-        maxTokens: 900,
+        maxTokens: rubricEvaluationMaxTokens,
         metadata: {
           feature: 'grading',
           kind: 'rubric-evaluation',
@@ -970,14 +1009,14 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
       model,
       system: `You repair grading assistant JSON. Return ONLY valid JSON with the schema:\n${buildGradingResponseSchemaText(
         { minScore, maxScore, categoryFeedbackEnabled }
-      )}\nRules:\n- Preserve valid category scores${categoryFeedbackEnabled ? '/comments' : ''} from the original output when possible.\n- Scores must be integers ${minScore}-${maxScore}.\n- Return exactly one category for each rubric key.\n- Use only these rubric keys: ${rubricKeys.join(', ')}.\n- overallComment must start with "${studentFirstName},".\n- Do not include markdown or explanation.`,
+      )}\nCategory-specific score bands:\n${promptShape.rubricText}\nRules:\n- Preserve valid category scores${categoryFeedbackEnabled ? '/comments' : ''} from the original output when possible.\n- Every score must fall inside one declared band for its category.\n- Return exactly one category for each rubric key.\n- Use only these rubric keys: ${rubricKeys.join(', ')}.\n- overallComment must start with "${studentFirstName},".\n- Do not include markdown or explanation.`,
       messages: [
         {
           role: 'user',
           content: `Original grading response:\n${rawResponseText}`,
         },
       ],
-      maxTokens: 900,
+      maxTokens: rubricEvaluationMaxTokens,
       temperature: 0.1,
       metadata: {
         feature: 'grading',

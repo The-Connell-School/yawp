@@ -68,7 +68,7 @@ export async function upsertRubric(schema: RubricSchema, title?: string) {
 
 /**
  * Puts the protected production rubrics in the library and repairs any drift.
- * These two definitions are compatibility fixtures, not editable templates.
+ * These definitions are compatibility fixtures, not editable templates.
  */
 export async function seedStarterRubrics() {
   const existing = await prisma.rubric.findMany({

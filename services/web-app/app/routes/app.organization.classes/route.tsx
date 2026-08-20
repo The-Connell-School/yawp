@@ -117,6 +117,45 @@ type TeacherSchoolConnector = {
   };
 };
 
+function prismaUniqueConstraintTargets(error: unknown): string[] | null {
+  if (!error || typeof error !== 'object') return null;
+
+  const prismaError = error as {
+    code?: unknown;
+    meta?: {
+      target?: unknown;
+      driverAdapterError?: {
+        cause?: { constraint?: { fields?: unknown } };
+      };
+    };
+  };
+  if (prismaError.code !== 'P2002') return null;
+
+  const values = [
+    prismaError.meta?.target,
+    prismaError.meta?.driverAdapterError?.cause?.constraint?.fields,
+  ];
+
+  return values.flatMap((value) => {
+    if (Array.isArray(value)) {
+      return value.filter((item): item is string => typeof item === 'string');
+    }
+    return typeof value === 'string' ? [value] : [];
+  });
+}
+
+function uniqueConstraintIncludes(
+  targets: readonly string[],
+  field: string
+): boolean {
+  return targets.some((target) =>
+    target
+      .replace(/[()"']/g, '')
+      .split(',')
+      .some((part) => part.trim() === field)
+  );
+}
+
 async function connectTeachersToSchool(
   tx: TeacherSchoolConnector,
   teacherIds: string[],
@@ -271,6 +310,8 @@ export async function action({ request }: ActionFunctionArgs) {
     const period = (formData.get('period') as string)?.trim() || null;
     const title = (formData.get('title') as string)?.trim() || null;
     let code = (formData.get('code') as string)?.trim().toUpperCase() || '';
+    const codeWasGenerated =
+      formData.get('codeWasGenerated') === 'true' || !code;
     const teacherIds = formData.getAll('teacherIds') as string[];
 
     if (!schoolId || !schoolYear) {
@@ -302,46 +343,61 @@ export async function action({ request }: ActionFunctionArgs) {
       return dataResponse({ error: 'Invalid school' }, { status: 400 });
     }
 
-    try {
-      const classArtKey = await pickClassArtKeyForOrganization(
-        profile.organization.id
-      );
+    const classArtKey = await pickClassArtKeyForOrganization(
+      profile.organization.id
+    );
+    const maxAttempts = codeWasGenerated ? 4 : 1;
 
-      await prisma.$transaction(async (tx) => {
-        await tx.class.create({
-          data: {
-            schoolId,
-            schoolYear,
-            grade,
-            period,
-            title,
-            code,
-            cardGradientKey: generateClassCardGradientKey(code),
-            classArtKey,
-            teachers: {
-              connect: teacherIds.map((id) => ({ id })),
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      try {
+        await prisma.$transaction(async (tx) => {
+          await tx.class.create({
+            data: {
+              schoolId,
+              schoolYear,
+              grade,
+              period,
+              title,
+              code,
+              cardGradientKey: generateClassCardGradientKey(code),
+              classArtKey,
+              teachers: {
+                connect: teacherIds.map((id) => ({ id })),
+              },
             },
-          },
+          });
+
+          await connectTeachersToSchool(tx, teacherIds, schoolId);
         });
 
-        await connectTeachersToSchool(tx, teacherIds, schoolId);
-      });
+        return dataResponse({ success: true });
+      } catch (error: unknown) {
+        const uniqueTargets = prismaUniqueConstraintTargets(error);
+        const isCodeCollision =
+          uniqueTargets && uniqueConstraintIncludes(uniqueTargets, 'code');
 
-      return dataResponse({ success: true });
-    } catch (error: any) {
-      if (error.code === 'P2002') {
-        const target = error.meta?.target;
-        const targetText = Array.isArray(target) ? target.join(',') : String(target ?? '');
-        if (targetText.includes('code')) {
+        if (isCodeCollision && attempt + 1 < maxAttempts) {
+          code = generateClassCode();
+          continue;
+        }
+
+        if (isCodeCollision) {
           return dataResponse(
             { error: 'Class code already in use. Choose a different code.' },
             { status: 400 }
           );
         }
-        return dataResponse({ error: 'Class could not be created.' }, { status: 400 });
+        if (uniqueTargets) {
+          return dataResponse(
+            { error: 'Class could not be created.' },
+            { status: 400 }
+          );
+        }
+        throw error;
       }
-      throw error;
     }
+
+    throw new Error('Class code retry loop exhausted unexpectedly');
   }
 
   if (intent === 'edit-class') {
@@ -413,11 +469,10 @@ export async function action({ request }: ActionFunctionArgs) {
       });
 
       return dataResponse({ success: true });
-    } catch (error: any) {
-      if (error.code === 'P2002') {
-        const target = error.meta?.target;
-        const targetText = Array.isArray(target) ? target.join(',') : String(target ?? '');
-        if (targetText.includes('code')) {
+    } catch (error: unknown) {
+      const uniqueTargets = prismaUniqueConstraintTargets(error);
+      if (uniqueTargets) {
+        if (uniqueConstraintIncludes(uniqueTargets, 'code')) {
           return dataResponse(
             { error: 'Class code already in use. Choose a different code.' },
             { status: 400 }
@@ -1014,6 +1069,7 @@ function ClassSheet({
   const [period, setPeriod] = useState('');
   const [title, setTitle] = useState('');
   const [code, setCode] = useState('');
+  const [generatedCode, setGeneratedCode] = useState('');
   const [selectedTeachers, setSelectedTeachers] = useState<string[]>([]);
 
   // Reset form when editingClass or duplicatingClass changes or sheet opens/closes
@@ -1025,10 +1081,9 @@ function ClassSheet({
     setPeriod(sourceClass?.period || '');
     setTitle(sourceClass?.title || '');
     // Generate new code for duplicates, use existing for edits
-    setCode(
-      editingClass?.code ||
-        (duplicatingClass ? generateClassCode() : generateClassCode())
-    );
+    const nextCode = editingClass?.code || generateClassCode();
+    setCode(nextCode);
+    setGeneratedCode(editingClass ? '' : nextCode);
     setSelectedTeachers(sourceClass?.teachers?.map((t: any) => t.id) || []);
   }, [editingClass, duplicatingClass, open]);
 
@@ -1045,6 +1100,9 @@ function ClassSheet({
     formData.append('period', period);
     formData.append('title', title);
     formData.append('code', code);
+    if (!editingClass && code === generatedCode) {
+      formData.append('codeWasGenerated', 'true');
+    }
     selectedTeachers.forEach((teacherId) => {
       formData.append('teacherIds', teacherId);
     });

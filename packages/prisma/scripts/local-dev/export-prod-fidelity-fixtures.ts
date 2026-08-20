@@ -41,10 +41,10 @@ function serializeRow<T extends Record<string, unknown>>(row: T): T {
 }
 
 export async function exportProdFidelityFixtures(
-  prisma: PrismaClient,
-  sourceDatabaseUrl: string
+  prisma: PrismaClient
 ): Promise<ProdFidelityBundle> {
   const [
+    rubrics,
     assignmentTypes,
     assignmentTypeImagesRaw,
     assignmentModules,
@@ -58,6 +58,7 @@ export async function exportProdFidelityFixtures(
     apHistoryPromptLibraryEntries,
     apHistoryPromptLibrarySources,
   ] = await Promise.all([
+    prisma.rubric.findMany({ orderBy: { name: 'asc' } }),
     prisma.assignmentType.findMany({ orderBy: { position: 'asc' } }),
     prisma.assignmentTypeImage.findMany(),
     prisma.assignmentModule.findMany({
@@ -106,10 +107,11 @@ export async function exportProdFidelityFixtures(
   );
 
   const manifest: ProdFidelityManifest = {
-    version: 1,
+    version: 2,
     exportedAt: new Date().toISOString(),
-    sourceDatabaseUrl,
+    sourceDatabaseUrl: 'production-config-export',
     counts: {
+      rubrics: rubrics.length,
       assignmentTypes: assignmentTypes.length,
       assignmentTypeImages: assignmentTypeImages.length,
       assignmentModules: assignmentModules.length,
@@ -128,6 +130,9 @@ export async function exportProdFidelityFixtures(
 
   return {
     manifest,
+    rubrics: rubrics.map((row) =>
+      serializeRow(row as unknown as Record<string, unknown>)
+    ),
     assignmentTypes: assignmentTypes.map((row) =>
       serializeRow(row as unknown as Record<string, unknown>)
     ),
@@ -165,6 +170,7 @@ export async function writeProdFidelityBundle(bundle: ProdFidelityBundle) {
   await mkdir(FIXTURE_DIR, { recursive: true });
   const files: Array<[string, unknown]> = [
     ['manifest.json', bundle.manifest],
+    ['rubrics.json', bundle.rubrics],
     ['assignment-types.json', bundle.assignmentTypes],
     ['assignment-type-images.json', bundle.assignmentTypeImages],
     ['assignment-modules.json', bundle.assignmentModules],
