@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import {
   PRODUCTION_QA_IDS,
+  PRODUCTION_QA_ORGANIZATION_FLAGS,
   assertProductionQaPassword,
   redactedProductionQaSummary,
 } from './production-qa-profile';
@@ -41,6 +42,13 @@ describe('production QA profile guardrails', () => {
     );
   });
 
+  test('enables released-grade activity only for the disposable QA organization', () => {
+    expect(PRODUCTION_QA_IDS.organizationId).toBe('prod-qa-org');
+    expect(PRODUCTION_QA_ORGANIZATION_FLAGS).toEqual({
+      submissionActivityEnabled: true,
+    });
+  });
+
   test('redacts password material from result summaries', () => {
     const redacted = redactedProductionQaSummary({
       organizationId: PRODUCTION_QA_IDS.organizationId,
@@ -52,6 +60,7 @@ describe('production QA profile guardrails', () => {
       assignmentId: PRODUCTION_QA_IDS.assignmentId,
       classAssignmentId: PRODUCTION_QA_IDS.classAssignmentId,
       documentId: PRODUCTION_QA_IDS.documentId,
+      submissionId: PRODUCTION_QA_IDS.submissionId,
       password: 'secret-password',
       passwordHash: '$2a$10$secret',
     });

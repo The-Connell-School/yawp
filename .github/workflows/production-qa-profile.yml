@@ -48,3 +48,20 @@ jobs:
           PROD_QA_PASSWORD: ${{ secrets.PROD_QA_PASSWORD }}
           PROD_SSH_HOST: ${{ secrets.PROD_SSH_HOST }}
           PROD_SSH_KEY_PATH: ${{ runner.temp }}/yawp-production-bastion
+
+      - name: Install Chromium
+        run: bunx playwright install --with-deps chromium
+
+      - name: Verify released-grade editing and activity in production
+        run: bun run --cwd services/web-app production-qa-released-grade
+        env:
+          PROD_QA_BASE_URL: https://yawp.school
+          PROD_QA_PASSWORD: ${{ secrets.PROD_QA_PASSWORD }}
+
+      - name: Upload production QA evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-released-grade-activity
+          path: services/web-app/test-results/production-released-grade-activity.png
+          if-no-files-found: warn

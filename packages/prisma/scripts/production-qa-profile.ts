@@ -19,6 +19,11 @@ export const PRODUCTION_QA_IDS = {
   assignmentId: 'prod-qa-writing-assignment',
   classAssignmentId: 'prod-qa-class-assignment',
   documentId: 'prod-qa-student-document',
+  submissionId: 'prod-qa-released-submission',
+} as const;
+
+export const PRODUCTION_QA_ORGANIZATION_FLAGS = {
+  submissionActivityEnabled: true,
 } as const;
 
 const DEFAULT_FIXTURE_PASSWORDS = new Set([
@@ -75,6 +80,7 @@ export type ProductionQaProfileResult = {
   assignmentId: string;
   classAssignmentId: string;
   documentId: string;
+  submissionId: string;
   password?: string;
   passwordHash?: string;
 };
@@ -103,6 +109,7 @@ export function redactedProductionQaSummary(result: ProductionQaProfileResult) {
     assignmentId: result.assignmentId,
     classAssignmentId: result.classAssignmentId,
     documentId: result.documentId,
+    submissionId: result.submissionId,
     passwordConfigured: Boolean(result.password || result.passwordHash),
   };
 }
@@ -194,6 +201,7 @@ export async function ensureProductionQaProfile(
       numOfTeacherSeats: 5,
       numOfStudentSeats: 10,
       accessExpiresAt: new Date('2035-01-01T00:00:00.000Z'),
+      ...PRODUCTION_QA_ORGANIZATION_FLAGS,
     },
     create: {
       id: ids.organizationId,
@@ -201,6 +209,7 @@ export async function ensureProductionQaProfile(
       numOfTeacherSeats: 5,
       numOfStudentSeats: 10,
       accessExpiresAt: new Date('2035-01-01T00:00:00.000Z'),
+      ...PRODUCTION_QA_ORGANIZATION_FLAGS,
     },
   });
 
@@ -306,7 +315,8 @@ export async function ensureProductionQaProfile(
     where: { id: ids.assignmentTypeId },
     update: {
       title: 'Production QA Writing',
-      description: 'QA-only fixture assignment type for production smoke tests.',
+      description:
+        'QA-only fixture assignment type for production smoke tests.',
       position: 9000,
       archivedAt: null,
       ownerOrgId: org.id,
@@ -322,7 +332,8 @@ export async function ensureProductionQaProfile(
     create: {
       id: ids.assignmentTypeId,
       title: 'Production QA Writing',
-      description: 'QA-only fixture assignment type for production smoke tests.',
+      description:
+        'QA-only fixture assignment type for production smoke tests.',
       position: 9000,
       ownerOrgId: org.id,
       scoringScaleJson: QA_SCORING_SCALE,
@@ -411,6 +422,63 @@ export async function ensureProductionQaProfile(
     },
   });
 
+  // Reset only the disposable QA submission. Durable activity elsewhere,
+  // including real classroom data, remains untouched.
+  await prisma.submissionActivity.deleteMany({
+    where: {
+      submissionId: ids.submissionId,
+      organizationId: ids.organizationId,
+    },
+  });
+  const releasedAt = new Date('2026-08-20T12:00:00.000Z');
+  const submission = await prisma.submission.upsert({
+    where: { id: ids.submissionId },
+    update: {
+      documentId: document.id,
+      title: 'Production QA Released Submission',
+      text: documentText,
+      html: `<p>${documentText}</p>`,
+      submittedAt: new Date('2026-08-20T11:00:00.000Z'),
+      gradedAt: releasedAt,
+      gradedByMembershipId: teacherMembership.id,
+      releasedAt,
+      numericPercentage: 77,
+      letterGrade: 'C+',
+      score: '77% (C+)',
+      overallComment: 'Production QA baseline feedback.',
+      feedback: 'Production QA baseline feedback.',
+      rubricScores: {
+        clarity: { score: 4, comment: 'Clear baseline.' },
+        evidence: { score: 3, comment: 'Add detail.' },
+        mechanics: { score: 4, comment: 'Readable.' },
+      },
+      archivedAt: null,
+      unsubmittedAt: null,
+      unsubmittedByMembershipId: null,
+    },
+    create: {
+      id: ids.submissionId,
+      documentId: document.id,
+      title: 'Production QA Released Submission',
+      text: documentText,
+      html: `<p>${documentText}</p>`,
+      submittedAt: new Date('2026-08-20T11:00:00.000Z'),
+      gradedAt: releasedAt,
+      gradedByMembershipId: teacherMembership.id,
+      releasedAt,
+      numericPercentage: 77,
+      letterGrade: 'C+',
+      score: '77% (C+)',
+      overallComment: 'Production QA baseline feedback.',
+      feedback: 'Production QA baseline feedback.',
+      rubricScores: {
+        clarity: { score: 4, comment: 'Clear baseline.' },
+        evidence: { score: 3, comment: 'Add detail.' },
+        mechanics: { score: 4, comment: 'Readable.' },
+      },
+    },
+  });
+
   return {
     organizationId: org.id,
     teacherEmail: ids.teacherEmail,
@@ -421,6 +489,7 @@ export async function ensureProductionQaProfile(
     assignmentId: assignment.id,
     classAssignmentId: classAssignment.id,
     documentId: document.id,
+    submissionId: submission.id,
     password,
   };
 }
