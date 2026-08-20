@@ -111,6 +111,46 @@ run_race \
   'UPDATE "Submission" SET "documentId" = '\''activity-concurrency-other-document'\'' WHERE id = '\''activity-concurrency-submission'\'';' \
   'audited submission'
 
+stale_grade_revision="$(psql "$proof_url" --no-psqlrc --tuples-only --no-align \
+  --command 'SELECT "updatedAt" FROM "Submission" WHERE id = '\''activity-concurrency-submission'\'';')"
+
+# A separate committed database session changes the grade after the release
+# request captured its preimage. The route's one-statement batch predicate must
+# reject that stale revision instead of releasing a grade the teacher did not
+# validate.
+psql "$proof_url" --no-psqlrc --set ON_ERROR_STOP=on \
+  --command 'UPDATE "Submission" SET score = '\''91% (A)'\'', "updatedAt" = "updatedAt" + interval '\''1 second'\'' WHERE id = '\''activity-concurrency-submission'\'';' \
+  >/dev/null
+
+stale_release_count="$(psql "$proof_url" --no-psqlrc --tuples-only --no-align \
+  --command "WITH released AS (UPDATE \"Submission\" SET \"releasedAt\" = clock_timestamp(), \"updatedAt\" = clock_timestamp() WHERE id = 'activity-concurrency-submission' AND \"releasedAt\" IS NULL AND \"unsubmittedAt\" IS NULL AND \"updatedAt\" = '$stale_grade_revision'::timestamp RETURNING id) SELECT count(*) FROM released;")"
+
+[[ "$stale_release_count" == "0" ]] || {
+  echo "Stale grade revision unexpectedly released." >&2
+  exit 1
+}
+
+psql "$proof_url" --no-psqlrc --set ON_ERROR_STOP=on <<'SQL'
+DO $$
+BEGIN
+  IF (SELECT "releasedAt" FROM "Submission" WHERE id = 'activity-concurrency-submission') IS NOT NULL THEN
+    RAISE EXCEPTION 'stale grade revision changed releasedAt';
+  END IF;
+  IF (SELECT score FROM "Submission" WHERE id = 'activity-concurrency-submission') IS DISTINCT FROM '91% (A)' THEN
+    RAISE EXCEPTION 'concurrent grade change was not preserved';
+  END IF;
+  IF EXISTS (
+    SELECT 1 FROM "SubmissionActivity"
+    WHERE "submissionId" = 'activity-concurrency-submission'
+      AND "eventType" = 'submission.grade_released'
+  ) THEN
+    RAISE EXCEPTION 'stale release wrote an activity row';
+  END IF;
+END $$;
+SQL
+
+echo "Committed grade-change versus stale-release predicate proof passed."
+
 psql "$proof_url" --no-psqlrc --set ON_ERROR_STOP=on <<'SQL'
 INSERT INTO "SubmissionActivity" (
   id, "submissionId", "organizationId", "actorType", "eventType", source, changes
