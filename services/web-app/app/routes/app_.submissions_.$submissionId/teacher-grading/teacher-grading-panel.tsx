@@ -786,9 +786,11 @@ export function TeacherGradingPanel({
     generateAiSuggestionsAtLevel(gradingAssistantStrictnessLevel);
   }, [generateAiSuggestionsAtLevel, gradingAssistantStrictnessLevel]);
 
-  const saveDraft = () => saveAll();
+  const saveAllRef = useRef(saveAll);
+  saveAllRef.current = saveAll;
+  const saveDraft = useCallback(() => saveAllRef.current(), []);
 
-  const getSavedGradeSnapshot = useCallback((): SavedGradeSnapshot => {
+  const buildSavedGradeSnapshot = useCallback((): SavedGradeSnapshot => {
     const letter =
       resolvedNumericPercentage === null
         ? null
@@ -823,6 +825,12 @@ export function TeacherGradingPanel({
     rubricScores,
     scaleScoreOutOf,
   ]);
+  const savedGradeSnapshotRef = useRef(buildSavedGradeSnapshot);
+  savedGradeSnapshotRef.current = buildSavedGradeSnapshot;
+  const getSavedGradeSnapshot = useCallback(
+    () => savedGradeSnapshotRef.current(),
+    []
+  );
 
   const discardDraft = useCallback(() => {
     if (!savedSnapshot) return;
@@ -900,7 +908,7 @@ export function TeacherGradingPanel({
       ...headerStateSnapshot,
       ...headerCallbacksRef.current,
     });
-  }, [currentSnapshot, headerStateSnapshot]);
+  }, [headerStateSnapshot]);
 
   const saveStatusLabel =
     autoSaveStatus === 'saving'
