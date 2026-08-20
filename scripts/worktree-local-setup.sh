@@ -237,12 +237,12 @@ Dev logins (password: yawp-dev):
 Commands:
   bash scripts/worktree-local-setup.sh          # ensure db + env
   bash scripts/worktree-local-setup.sh --fresh  # reset + re-seed
-  bun blackboard-lti-mock                       # Blackboard LTI 1.3 platform mock
+  bun blackboard-lti-mock                       # Blackboard Learn mock (student/teacher)
   bun dev                                       # start app
 
-Blackboard LTI mock:
+Blackboard Learn mock:
   BLACKBOARD_LTI_MOCK_ENABLED=true BLACKBOARD_LTI_MOCK_PORT=${LTI_MOCK_PORT} bun blackboard-lti-mock
-  Panel:      http://localhost:${LTI_MOCK_PORT}/
+  Learn:       http://localhost:${LTI_MOCK_PORT}/
   Same-origin: http://localhost:${DEV_PORT:-5176}/dev/blackboard-lti-mock/
 
 Class insights mock mode (services/web-app/.env):

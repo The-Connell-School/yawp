@@ -15,10 +15,12 @@ bun dev
 
 The setup script writes `BLACKBOARD_LTI_MOCK_URL` into `services/web-app/.env` and prints the mock port.
 
-- Direct panel: `http://localhost:<LTI_MOCK_PORT>/`
-- Same-origin panel (dev flask menu): `http://localhost:<DEV_PORT>/dev/blackboard-lti-mock/`
+- Direct Learn UI: `http://localhost:<LTI_MOCK_PORT>/`
+- Same-origin Learn UI (dev flask menu **Blackboard**): `http://localhost:<DEV_PORT>/dev/blackboard-lti-mock/`
 
 `bun blackboard-lti-mock` sets `BLACKBOARD_LTI_MOCK_ENABLED=true`. The process refuses to start without that flag.
+
+Sign in as **Ada Student** or **Grace Instructor**. There is one seeded course, ENG-101 English Composition, with a Yawp Assignment content link. Students open that link and check **My Grades**. Teachers open the same link, see **Gradebook**, and can **Add teaching tool** (Deep Linking). Fault injection is not in the UI; use query `?fault=` or header `X-Yawp-Lti-Fault` on the protocol endpoints.
 
 ## Run it in a preview
 
@@ -31,7 +33,7 @@ This mock is a sibling Compose service named `blackboard-lti-mock`:
 - The web container receives `BLACKBOARD_LTI_MOCK_URL=http://blackboard-lti-mock:9473`
 - After `web` is recreated, deploy starts the mock only when the rendered compose file contains that service, so older application refs stay deployable
 
-Open the flask menu in the preview and choose **Blackboard LTI mock**, or go to `/dev/blackboard-lti-mock/`. That path is an app-side reverse proxy, so the existing preview access gate stays in front of the panel. The production App Runner image does not copy `scripts/` and does not start this process.
+Open the flask menu in the preview and choose **Blackboard**, or go to `/dev/blackboard-lti-mock/`. That path is an app-side reverse proxy, so the existing preview access gate stays in front of Learn. Sign in as a student or a teacher; the preview does not show a harness control panel. The production App Runner image does not copy `scripts/` and does not start this process.
 
 ## Environment variables
 
@@ -45,14 +47,14 @@ Open the flask menu in the preview and choose **Blackboard LTI mock**, or go to 
 | `BLACKBOARD_LTI_MOCK_DEPLOYMENT_ID` | `yawp-mock-deployment` | `deployment_id` |
 | `BLACKBOARD_LTI_MOCK_PLATFORM_GUID` | `yawp-blackboard-mock-guid` | `tool_platform.guid` |
 | `BLACKBOARD_LTI_MOCK_PUBLIC_URL` | request-derived | Public origin used inside AGS/NRPS/Deep Linking URLs |
-| `BLACKBOARD_LTI_MOCK_PUBLIC_BASE_PATH` | empty | Prefix when the panel is reverse-proxied (`/dev/blackboard-lti-mock` in preview) |
+| `BLACKBOARD_LTI_MOCK_PUBLIC_BASE_PATH` | empty | Prefix when Learn is reverse-proxied (`/dev/blackboard-lti-mock` in preview) |
 | `BLACKBOARD_LTI_MOCK_TOOL_REDIRECT_URI` | `http://127.0.0.1:5176/lti/launch` | Tool redirect URI (YAWP's future launch URL) |
 | `BLACKBOARD_LTI_MOCK_TOOL_OIDC_LOGIN_URL` | `http://127.0.0.1:5176/lti/login` | Tool OIDC login initiation URL |
 | `BLACKBOARD_LTI_MOCK_TOOL_JWKS_URL` | empty | Tool JWKS used to verify client assertions and Deep Linking responses |
 | `BLACKBOARD_LTI_MOCK_TOOL_JWK` | empty | Inline Tool public JWK JSON (tests / local without a JWKS server) |
 | `BLACKBOARD_LTI_MOCK_TOKEN_TTL_SECONDS` | `60` | AGS access-token lifetime so expiry/caching is exercisable |
 | `BLACKBOARD_LTI_MOCK_TIMEOUT_MS` | `35000` | Delay used by the `ags_timeout` fault |
-| `BLACKBOARD_LTI_MOCK_URL` | unset | Web app only: upstream URL for the same-origin panel proxy |
+| `BLACKBOARD_LTI_MOCK_URL` | unset | Web app only: upstream URL for the same-origin Learn proxy |
 | `YAWP_ENVIRONMENT` | unset | `production` is always refused; `preview` is allowed even when `NODE_ENV=production` |
 | `NODE_ENV` | unset | `production` is refused unless `YAWP_ENVIRONMENT=preview` |
 
@@ -88,7 +90,12 @@ Local `{origin}` is `http://127.0.0.1:<LTI_MOCK_PORT>`. In a preview, server-sid
 | `POST /learn/api/v1/lti/courses/{contextId}/lineItems/{id}/scores` | Learn AGS score POST |
 | `GET /learn/api/v1/lti/courses/{contextId}/lineItems/{id}/results` | Learn AGS results |
 | `POST /api/v1/lti/deep-linking` | Deep Linking return URL from `deep_linking_settings.deep_link_return_url` |
-| `GET /` | Mock-only HTML panel |
+| `GET /` | Learn sign-in (Ada Student / Grace Instructor) |
+| `POST /learn/session` | Set the student or teacher session cookie |
+| `GET /learn/courses` | Course list |
+| `GET /learn/courses/{id}/content` | Course content; LTI items launch the Tool |
+| `GET /learn/courses/{id}/grades` | Student My Grades or teacher Gradebook |
+| `GET /learn/courses/{id}/tools/lti` | Instructor Deep Linking launch |
 | `GET /dev/events` | Mock-only inspectable request log |
 | `GET /dev/scores` | Mock-only received/current scores |
 | `GET /dev/deep-links` | Mock-only recorded Deep Linking content items |
@@ -106,11 +113,11 @@ Drive user, role, course, and resource link with query parameters on `/dev/launc
 - `kid` — sign with a specific published key (key-rotation tests)
 - `format=json` — return `{ id_token, state }` instead of the auto-submitting form
 
-The panel buttons for student / instructor / administrator launch set these for you.
+The Learn UI signs in as Ada Student or Grace Instructor and opens those values from course content. `/dev/launch` still accepts the query parameters below for tests.
 
 ## Fault triggers
 
-Set **one** of: query `?fault=...`, header `X-Yawp-Lti-Fault: ...`, or the matching panel button. Names are stable:
+Set **one** of: query `?fault=...` or header `X-Yawp-Lti-Fault: ...`. Names are stable:
 
 | Fault | What the mock does |
 | --- | --- |
@@ -136,7 +143,7 @@ Enforced in `scripts/blackboard-lti-mock/production-guard.mjs`, not by conventio
 3. Refuses to start unless `BLACKBOARD_LTI_MOCK_ENABLED=true`
 4. The production Dockerfile `CMD` is still `services/web-app/start.sh` and does not copy `scripts/`
 
-The same-origin panel proxy additionally returns 404 unless local-dev/preview auth is enabled and `BLACKBOARD_LTI_MOCK_URL` is set.
+The same-origin Learn proxy additionally returns 404 unless local-dev/preview auth is enabled and `BLACKBOARD_LTI_MOCK_URL` is set.
 
 ## Tests
 
