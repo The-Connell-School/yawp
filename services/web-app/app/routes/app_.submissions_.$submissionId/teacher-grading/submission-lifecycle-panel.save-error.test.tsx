@@ -197,4 +197,42 @@ describe('SubmissionLifecyclePanel save error handling', () => {
     expect(toastError).toHaveBeenCalledWith(UNSUBMITTED_MESSAGE);
     expect(onEditingGradeChange).toHaveBeenCalledWith(false);
   });
+
+  it('shows the released edit warning, keeps save disabled until changed, and hides the assistant', () => {
+    currentHeaderState = headerState({ hasUnsavedChanges: false });
+
+    ({ root } = render(
+      <SubmissionLifecyclePanel
+        lifecycleState="released"
+        submissionActivityEnabled
+        isEditingGrade
+        onEditingGradeChange={() => {}}
+        onMarkGraded={async () => {}}
+        onGradeSaved={() => {}}
+        isSavingGrade={false}
+        onRelease={() => {}}
+        isReleasing={false}
+        submissionForView={{} as any}
+        documentId="doc-1"
+        submissionId="sub-1"
+        existingGrade={{ id: 'sub-1' } as any}
+        grammarIssues={[]}
+        hiddenGrammarIssueIds={[]}
+        onToggleGrammarIssue={() => {}}
+        onRemoveGrammarIssue={() => {}}
+        onGrammarIssuesChange={() => {}}
+      />
+    ));
+
+    expect(document.body.textContent).toContain('visible to the student');
+    expect(document.body.textContent).toContain('records the change in Activity');
+    expect(
+      document.querySelector('[data-testid="grading-assistant-generate"]')
+    ).toBeNull();
+    expect(
+      document.querySelector<HTMLButtonElement>(
+        '[data-testid="submission-lifecycle-save"]'
+      )?.disabled
+    ).toBe(true);
+  });
 });
