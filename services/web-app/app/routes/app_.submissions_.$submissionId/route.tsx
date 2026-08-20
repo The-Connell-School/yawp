@@ -44,6 +44,7 @@ import { SelectionToolbar } from './teacher-grading/selection-toolbar';
 import { GradeHighlightsOverlay } from './teacher-grading/grade-highlights-overlay';
 import { SubmissionLifecyclePanel } from './teacher-grading/submission-lifecycle-panel';
 import { GradeSummaryReleasedLabel } from './teacher-grading/grade-summary-released-label';
+import { SubmissionActivitySheet } from './teacher-grading/submission-activity-sheet';
 import { ViewPanel } from './teacher-grading/view-panel';
 import { resolveSubmissionGradeMode } from './submission-grade-mode';
 import { resolveSubmissionLifecycleState } from './submission-lifecycle-state';
@@ -310,7 +311,15 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 // ── Component ────────────────────────────────────────────────────────
 
 export default function SubmissionRoute() {
-  const { submission, isOwner, isTeacher } = useLoaderData<typeof loader>();
+  const loaderData = useLoaderData<typeof loader>();
+  const {
+    submission,
+    isOwner,
+    isTeacher,
+    submissionActivityEnabled,
+  } = loaderData;
+  const activities =
+    'activities' in loaderData ? loaderData.activities : [];
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const location = useLocation();
@@ -385,6 +394,7 @@ export default function SubmissionRoute() {
     isGradingOther,
     lifecycleState,
     isEditingGrade,
+    submissionActivityEnabled,
   });
   // Students viewing a submission whose grade hasn't been released yet
   const isPending = isOwner && !effectiveReleasedAt;
@@ -452,19 +462,28 @@ export default function SubmissionRoute() {
 
   // ── Local comments state (optimistic, no revalidation) ─────────────
   const [comments, setComments] = useState(submission.comments);
-  const handleCommentCreated = useCallback((comment: any) => {
-    setComments((prev) => [...prev, comment]);
-  }, []);
-  const handleCommentDeleted = useCallback((commentId: string) => {
-    setComments((prev) => prev.filter((c) => c.id !== commentId));
-  }, []);
+  const handleCommentCreated = useCallback(
+    (comment: any) => {
+      setComments((prev) => [...prev, comment]);
+      revalidator.revalidate();
+    },
+    [revalidator]
+  );
+  const handleCommentDeleted = useCallback(
+    (commentId: string) => {
+      setComments((prev) => prev.filter((c) => c.id !== commentId));
+      revalidator.revalidate();
+    },
+    [revalidator]
+  );
   const handleCommentUpdated = useCallback(
     (commentId: string, content: string) => {
       setComments((prev) =>
         prev.map((c) => (c.id === commentId ? { ...c, content } : c))
       );
+      revalidator.revalidate();
     },
-    []
+    [revalidator]
   );
 
   // ── Grade mode state ───────────────────────────────────────────────
@@ -676,8 +695,9 @@ export default function SubmissionRoute() {
       rubricConfig?: RubricDisplayConfig | null;
     }) => {
       setTeacherGradeUi({ overallScore: null, ...payload });
+      revalidator.revalidate();
     },
-    []
+    [revalidator]
   );
 
   const handleGradeSaved = useCallback(
@@ -698,8 +718,9 @@ export default function SubmissionRoute() {
         rubricScores: snapshot.rubricScores,
         rubricConfig: prev?.rubricConfig ?? null,
       }));
+      revalidator.revalidate();
     },
-    []
+    [revalidator]
   );
 
   const teacherExistingGrade = useMemo(
@@ -746,7 +767,7 @@ export default function SubmissionRoute() {
 
   const persistGrammarIssues = useCallback(
     async (issues: GrammarIssue[]) => {
-      if (!isGradingOther || !isGradeMode) return;
+      if (!isGradingOther || !isGradeMode || isReleased) return;
       const res = await fetch('/api/domain/update-submission', {
         method: 'POST',
         keepalive: true,
@@ -759,8 +780,9 @@ export default function SubmissionRoute() {
       if (!res.ok) {
         throw new Error('Failed to save grammar issue removal.');
       }
+      revalidator.revalidate();
     },
-    [isGradeMode, isGradingOther, submission.id]
+    [isGradeMode, isGradingOther, isReleased, revalidator, submission.id]
   );
 
   const handleRemoveGrammarIssue = useCallback(
@@ -809,11 +831,12 @@ export default function SubmissionRoute() {
       const body = (await res.json()) as { success?: boolean };
       if (body.success) {
         setLocalReleasedAt(new Date().toISOString());
+        revalidator.revalidate();
       }
     } finally {
       setIsReleasing(false);
     }
-  }, [submission.id]);
+  }, [revalidator, submission.id]);
 
   const [isSavingGrade, setIsSavingGrade] = useState(false);
 
@@ -915,6 +938,9 @@ export default function SubmissionRoute() {
         ) : null}
 
         <div className="ml-auto flex items-center gap-2">
+          {isGradingOther && submissionActivityEnabled ? (
+            <SubmissionActivitySheet activities={activities as any} />
+          ) : null}
           {isGradingOther ? (
             <Button size="sm" variant="outline" asChild>
               <Link
@@ -972,6 +998,7 @@ export default function SubmissionRoute() {
           {isGradingOther ? (
             <SubmissionLifecyclePanel
               lifecycleState={lifecycleState}
+              submissionActivityEnabled={submissionActivityEnabled}
               isEditingGrade={isEditingGrade}
               onEditingGradeChange={setIsEditingGrade}
               onMarkGraded={handleMarkGraded}
