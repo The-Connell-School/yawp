@@ -702,9 +702,20 @@ function AssignedCompositionFeedback({
       data-testid="assigned-composition-feedback"
       className="space-y-2 rounded-xl border border-border/70 bg-muted/30 p-4"
     >
-      <p className="text-sm font-semibold text-foreground">
-        {practiceFeedbackStatusLabel(feedback.status)}
-      </p>
+      <div className="flex flex-wrap items-center gap-2">
+        <p className="text-sm font-semibold text-foreground">
+          {feedback.degraded
+            ? 'Not checked yet'
+            : practiceFeedbackStatusLabel(feedback.status)}
+        </p>
+        {/* The offline fallback never evaluated correctness, so say so rather
+            than letting its status read as a verdict. */}
+        {feedback.degraded ? (
+          <span className="rounded-full bg-background px-2 py-0.5 text-[11px] font-medium text-muted-foreground ring-1 ring-border">
+            Tutor offline — correctness not checked
+          </span>
+        ) : null}
+      </div>
       <p className="text-sm leading-relaxed text-foreground">
         {feedback.summary}
       </p>

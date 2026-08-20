@@ -291,9 +291,9 @@ export default function WritingLessonDetailRoute() {
   // Grammar lessons drill ACT multiple choice; composition lessons are
   // constructed response graded by the tutor feedback service.
   const practicePanel = isComposition ? (
-    <CompositionPracticePanel prompts={practicePrompts} />
+    <CompositionPracticePanel prompts={practicePrompts} isTeacher={isTeacher} />
   ) : (
-    <StudentPracticePanel actQuestions={actQuestions} />
+    <StudentPracticePanel actQuestions={actQuestions} isTeacher={isTeacher} />
   );
 
   // If the student opened this lesson to review it mid-assignment, "Back to
@@ -329,6 +329,28 @@ export default function WritingLessonDetailRoute() {
             <p className="mt-2 max-w-[620px] text-base text-muted-foreground sm:text-sm">
               {lesson.description}
             </p>
+            {/* The same lesson reads differently to the two audiences: a
+                teacher is deciding whether to assign it, a student is about
+                to practice it. */}
+            {isTeacher ? (
+              <p
+                data-testid="lesson-teacher-intro"
+                className="mt-3 max-w-[620px] text-pretty text-base text-muted-foreground sm:text-sm"
+              >
+                This is the lesson your students will read. Below it you can try
+                the practice yourself to see exactly what they get, then assign
+                it to your classes from the panel on the right.
+              </p>
+            ) : (
+              <p
+                data-testid="lesson-student-intro"
+                className="mt-3 max-w-[620px] text-pretty text-base text-muted-foreground sm:text-sm"
+              >
+                {isComposition
+                  ? 'Read the lesson, then write your own response in the practice panel. You will get feedback on what is working and what to try next.'
+                  : 'Read the lesson, then work the practice questions on the right. This is practice, not graded work — your answers stay on your screen.'}
+              </p>
+            )}
           </div>
         </div>
       </div>
@@ -400,8 +422,10 @@ function LoungeModuleCard({
 
 function StudentPracticePanel({
   actQuestions,
+  isTeacher,
 }: {
   actQuestions: ActPracticeQuestion[];
+  isTeacher: boolean;
 }) {
   const generateFetcher = useFetcher<ActGenerateActionData>();
   const [extraQuestions, setExtraQuestions] = useState<ActPracticeQuestion[]>(
@@ -478,7 +502,9 @@ function StudentPracticePanel({
             <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
               <PenLine className="h-4 w-4" />
             </span>
-            <CardTitle className="text-lg">Try it yourself</CardTitle>
+            <CardTitle className="text-lg">
+              {isTeacher ? 'Preview the practice' : 'Try it yourself'}
+            </CardTitle>
           </div>
           {activeQuestion ? (
             <span className="text-xs font-medium text-muted-foreground">
@@ -597,8 +623,10 @@ function StudentPracticePanel({
 
 function CompositionPracticePanel({
   prompts: defaultPrompts,
+  isTeacher,
 }: {
   prompts: QuickWritingPracticePrompt[];
+  isTeacher: boolean;
 }) {
   const feedbackFetcher = useFetcher<CompositionCheckActionData>();
   const personalizeFetcher = useFetcher<CompositionPersonalizeActionData>();
@@ -696,7 +724,9 @@ function CompositionPracticePanel({
             <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
               <PenLine className="h-4 w-4" />
             </span>
-            <CardTitle className="text-lg">Try it yourself</CardTitle>
+            <CardTitle className="text-lg">
+              {isTeacher ? 'Preview the practice' : 'Try it yourself'}
+            </CardTitle>
           </div>
           {activePrompt ? (
             <span className="text-xs font-medium text-muted-foreground">
@@ -849,8 +879,12 @@ function PracticeFeedbackPanel({
 }: {
   feedback: PracticeFeedbackResult;
 }) {
-  const tone =
-    feedback.status === 'strong'
+  // Degraded feedback is not a verdict — the deterministic fallback never
+  // evaluated correctness. Render it neutrally so it cannot be mistaken for a
+  // pass, whatever status it carries.
+  const tone = feedback.degraded
+    ? 'border-border bg-muted/40'
+    : feedback.status === 'strong'
       ? 'border-emerald-300 bg-emerald-50'
       : feedback.status === 'developing'
         ? 'border-amber-300 bg-amber-50'
@@ -864,11 +898,13 @@ function PracticeFeedbackPanel({
       <div className="flex items-center gap-2">
         <MessageSquareText className="h-4 w-4 text-foreground" />
         <span className="text-sm font-semibold text-foreground">
-          {practiceFeedbackStatusLabel(feedback.status)}
+          {feedback.degraded
+            ? 'Not checked yet'
+            : practiceFeedbackStatusLabel(feedback.status)}
         </span>
         {feedback.degraded ? (
-          <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
-            Quick self-check
+          <span className="rounded-full bg-background px-2 py-0.5 text-[11px] font-medium text-muted-foreground ring-1 ring-border">
+            Tutor offline — correctness not checked
           </span>
         ) : null}
       </div>

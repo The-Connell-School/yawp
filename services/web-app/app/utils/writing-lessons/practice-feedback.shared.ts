@@ -135,9 +135,14 @@ export function detectPracticeGuardrail(
 }
 
 /**
- * Deterministic feedback used when the AI tutor is unavailable. It is
- * intentionally modest: it confirms the student engaged and nudges them back
- * to the lesson's rule, without pretending to grade the specific edit.
+ * Deterministic feedback used when the AI tutor is unavailable.
+ *
+ * This path cannot tell a correct revision from an incorrect one — it only
+ * knows the response is non-empty and changed. So it must never read as a
+ * verdict: no "strengths" (praising a revision the check never evaluated is
+ * what made a wrong answer look right), and a summary that says plainly it was
+ * not checked. The status stays `needs_revision` so an unevaluated attempt can
+ * never count as mastery in assigned practice, where only `strong` does.
  */
 export function buildFallbackPracticeFeedback(
   input: PracticeFeedbackInput
@@ -145,21 +150,16 @@ export function buildFallbackPracticeFeedback(
   const guardrail = detectPracticeGuardrail(input);
   if (guardrail) return guardrail;
 
-  const wordCount = input.response.trim().split(/\s+/).filter(Boolean).length;
-  const looksSubstantial = wordCount >= 3;
-
   return {
-    status: 'developing',
-    summary: looksSubstantial
-      ? "Thanks — you made a real revision. The tutor is offline, so here's a quick self-check."
-      : "That's a start. The tutor is offline, so here's a quick self-check.",
-    strengths: looksSubstantial
-      ? ['You revised the sentence instead of leaving it unchanged.']
-      : [],
+    status: 'needs_revision',
+    summary:
+      'Your response was recorded, but the tutor is offline — nobody has checked whether it is correct yet.',
+    strengths: [],
     focus: [
-      `Re-read the rule for ${input.skill} and confirm your edit follows it.`,
-      'Read your sentence aloud — does it sound complete and controlled?',
+      `Re-read the rule for ${input.skill} and check your response against it yourself.`,
+      'Read it aloud — does it sound complete and controlled?',
     ],
-    encouragement: 'Check again once the tutor is back for detailed feedback.',
+    encouragement:
+      'Check again once the tutor is back to find out how you did.',
   };
 }

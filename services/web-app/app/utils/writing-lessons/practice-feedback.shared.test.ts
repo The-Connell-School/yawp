@@ -53,12 +53,39 @@ describe('detectPracticeGuardrail', () => {
 });
 
 describe('buildFallbackPracticeFeedback', () => {
-  test('produces schema-valid, non-empty feedback for a real revision', () => {
+  test('produces schema-valid feedback that never implies the answer was right', () => {
+    // This path cannot tell a correct revision from an incorrect one. It used
+    // to answer a wrong revision with "developing" and a strength of "you
+    // revised the sentence", which read to students as a pass.
     const feedback = buildFallbackPracticeFeedback(baseInput);
 
     expect(() => practiceFeedbackSchema.parse(feedback)).not.toThrow();
-    expect(feedback.strengths.length).toBeGreaterThan(0);
+    expect(feedback.strengths).toHaveLength(0);
+    expect(feedback.status).toBe('needs_revision');
+    expect(feedback.summary.toLowerCase()).toContain(
+      'checked whether it is correct'
+    );
     expect(feedback.focus.join(' ')).toContain('comma splices');
+  });
+
+  test('gives an incorrect revision no more credit than a correct one', () => {
+    // The fallback is blind to correctness, so both must land in the same
+    // unevaluated state — never a verdict on one and not the other.
+    const correct = buildFallbackPracticeFeedback(baseInput);
+    const incorrect = buildFallbackPracticeFeedback({
+      ...baseInput,
+      response:
+        'The new phone costs over a thousand dollars, most students can’t afford it either.',
+    });
+
+    expect(incorrect.status).toBe(correct.status);
+    expect(incorrect.strengths).toEqual(correct.strengths);
+  });
+
+  test('never counts as mastery in assigned practice', () => {
+    // Assigned composition problems are mastered only on a `strong` verdict.
+    // An unevaluated attempt must not clear that bar.
+    expect(buildFallbackPracticeFeedback(baseInput).status).not.toBe('strong');
   });
 
   test('defers to guardrails for an empty response', () => {

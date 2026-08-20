@@ -16,6 +16,7 @@ import {
 
 import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { Badge } from '~/components/ui/badge';
+import { Button } from '~/components/ui/button';
 import {
   Collapsible,
   CollapsibleContent,
@@ -57,6 +58,7 @@ function toAssignmentCard(assignment: WritingPracticeAssignmentSummary) {
     classes: assignment.classes.map((klass) => ({
       id: klass.id,
       label: formatClassLabel(klass),
+      classAssignmentId: klass.classAssignmentId,
     })),
   };
 }
@@ -243,17 +245,49 @@ export default function WritingLessonsIndexRoute() {
                     {assignment.problemCount} problems
                   </span>
                 </div>
-                <div className="mt-3 flex flex-wrap gap-2">
+                <div className="mt-3 flex flex-wrap gap-1.5">
                   {assignment.lessons.map((lesson) => (
-                    <Link
+                    <span
                       key={lesson.slug}
-                      to={`/app/writing-lessons/${lesson.slug}`}
-                      className="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-base font-medium transition-colors hover:bg-muted sm:text-sm"
+                      className="inline-flex items-center rounded-full border px-2.5 py-1 text-base font-medium text-muted-foreground sm:text-sm"
                     >
                       {lesson.title}
-                      <ChevronRight className="size-3.5 shrink-0" />
-                    </Link>
+                    </span>
                   ))}
+                </div>
+                {/* The assignment is a specific set of problems, not the
+                    lesson page — so this opens the runner (student) or the
+                    results roll-up (teacher), never the generic lesson. */}
+                <div className="mt-4 flex flex-wrap gap-2">
+                  {isTeacher
+                    ? assignment.classes.map((klass) => (
+                        <Button
+                          key={klass.id}
+                          asChild
+                          variant="outline"
+                          size="sm"
+                        >
+                          <Link
+                            to={`/app/writing-lessons/results/${klass.classAssignmentId}`}
+                          >
+                            {assignment.classes.length > 1
+                              ? `${klass.label} results`
+                              : 'View results'}
+                            <ChevronRight className="ml-1 size-3.5 shrink-0" />
+                          </Link>
+                        </Button>
+                      ))
+                    : assignment.classes.slice(0, 1).map((klass) => (
+                        <Button key={klass.id} asChild size="sm">
+                          <Link
+                            data-testid={`writing-practice-start-${assignment.id}`}
+                            to={`/app/writing-lessons/assigned/${klass.classAssignmentId}`}
+                          >
+                            Start practice
+                            <ChevronRight className="ml-1 size-3.5 shrink-0" />
+                          </Link>
+                        </Button>
+                      ))}
                 </div>
               </div>
             ))}

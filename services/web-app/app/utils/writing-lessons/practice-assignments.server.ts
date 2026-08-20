@@ -518,6 +518,13 @@ export type WritingPracticeAssignmentClassSummary = {
   title: string | null;
   grade: string | null;
   period: string | null;
+  /**
+   * The WritingPracticeClassAssignment id for this class — the id the assigned
+   * practice runner and the teacher results page are keyed by. Without it the
+   * index can only link to the generic lesson page, which is not the
+   * assignment.
+   */
+  classAssignmentId: string;
 };
 
 export type WritingPracticeAssignmentSummary = {
@@ -544,6 +551,7 @@ function assignmentSummarySelect(classFilter: ClassFilter) {
       where: { class: classFilter },
       orderBy: { createdAt: 'asc' },
       select: {
+        id: true,
         class: {
           select: { id: true, title: true, grade: true, period: true },
         },
@@ -559,7 +567,10 @@ type AssignmentSummaryRow = {
   problemCount: number;
   dueAt: Date;
   instructions: string | null;
-  classAssignments: { class: WritingPracticeAssignmentClassSummary }[];
+  classAssignments: {
+    id: string;
+    class: Omit<WritingPracticeAssignmentClassSummary, 'classAssignmentId'>;
+  }[];
 };
 
 function toAssignmentSummary(
@@ -568,7 +579,10 @@ function toAssignmentSummary(
   const { classAssignments, ...assignment } = row;
   return {
     ...assignment,
-    classes: classAssignments.map((classAssignment) => classAssignment.class),
+    classes: classAssignments.map((classAssignment) => ({
+      ...classAssignment.class,
+      classAssignmentId: classAssignment.id,
+    })),
   };
 }
 

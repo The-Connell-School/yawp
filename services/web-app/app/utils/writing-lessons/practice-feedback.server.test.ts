@@ -104,7 +104,10 @@ describe('generatePracticeFeedback', () => {
     const result = await generatePracticeFeedback(baseInput);
 
     expect(result.degraded).toBe(true);
-    expect(result.status).toBe('developing');
+    // Unparseable tutor output means nothing was actually evaluated, so the
+    // result must not read as partial credit.
+    expect(result.status).toBe('needs_revision');
+    expect(result.strengths).toHaveLength(0);
   });
 
   test('falls back when the tutor call throws', async () => {

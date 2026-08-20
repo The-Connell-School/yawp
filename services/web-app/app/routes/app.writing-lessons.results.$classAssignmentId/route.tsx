@@ -437,7 +437,7 @@ function CompositionAttemptCard({
         <p className="text-sm leading-relaxed text-muted-foreground">
           {record.summary}
           {record.degraded
-            ? ' (Quick self-check — the tutor was offline for this attempt.)'
+            ? ' (The tutor was offline for this attempt, so it was never checked for correctness.)'
             : ''}
         </p>
       </div>
