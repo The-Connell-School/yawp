@@ -73,6 +73,8 @@ describe('bootstrap-host.sh', () => {
     expect(deploy.indexOf('certificate-manager.mjs" "$HOSTNAME"')).toBeLessThan(
       deploy.indexOf('for attempt in $(seq 1 90)')
     );
+    expect(deploy).toContain('PREVIEW_DOMAIN="$PREVIEW_DOMAIN"');
+    expect(deploy).not.toContain('PREVIEW_DOMAIN="$DOMAIN"');
   });
 
   test('keeps the pre-cutover Traefik host deployable during the migration PR', () => {
