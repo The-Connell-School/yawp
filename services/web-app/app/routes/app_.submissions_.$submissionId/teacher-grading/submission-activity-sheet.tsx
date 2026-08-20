@@ -46,6 +46,9 @@ export function formatSubmissionActivityEvent(eventType: string) {
 }
 
 function fieldLabel(field: string) {
+  if (field === 'feedback' || field === 'overallComment') {
+    return 'Overall feedback';
+  }
   return field
     .replace(/([a-z])([A-Z])/g, '$1 $2')
     .replaceAll('_', ' ')
@@ -116,8 +119,13 @@ function activityChanges(changes: unknown) {
   if (!changes || typeof changes !== 'object' || Array.isArray(changes)) {
     return [];
   }
-  return Object.entries(changes as Record<string, unknown>).flatMap(
+  const entries = Object.entries(changes as Record<string, unknown>);
+  const hasCanonicalOverallFeedback = entries.some(
+    ([field]) => field === 'overallComment'
+  );
+  return entries.flatMap(
     ([field, raw]) => {
+      if (field === 'feedback' && hasCanonicalOverallFeedback) return [];
       if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return [];
       const change = raw as { before?: unknown; after?: unknown };
       return [{ field, before: change.before, after: change.after }];
