@@ -1029,6 +1029,7 @@ model SubmissionActivity {
   @@index([submissionId, createdAt(sort: Desc)])
   @@index([organizationId, createdAt(sort: Desc)])
   @@index([actorMembershipId, createdAt(sort: Desc)])
+  @@index([eventType, createdAt(sort: Desc)])
 }
 
 model SubmissionGradingAssistantRun {

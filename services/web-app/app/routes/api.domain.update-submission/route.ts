@@ -10,6 +10,8 @@ import {
 import {
   buildSubmissionActivityChanges,
   recordSubmissionActivity,
+  resolveSubmissionActivityActorMembershipId,
+  submissionAuditValuesEqual,
   submissionActivityEventTypes,
 } from '~/domain/submissions/submission-activity.server';
 
@@ -116,10 +118,7 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 
   if (
-    isGradingOwnDocument(
-      actor.membershipId,
-      submission.document.membershipId
-    )
+    isGradingOwnDocument(actor.membershipId, submission.document.membershipId)
   ) {
     return Response.json(
       { success: false, message: 'You cannot grade your own submission.' },
@@ -226,7 +225,7 @@ export async function action({ request }: ActionFunctionArgs) {
   const changedFields = Object.keys(data).filter((field) => {
     const before = submission[field as keyof typeof submission];
     const after = data[field];
-    return JSON.stringify(before ?? null) !== JSON.stringify(after ?? null);
+    return !submissionAuditValuesEqual(before, after);
   });
 
   if (changedFields.length === 0) {
@@ -261,8 +260,11 @@ export async function action({ request }: ActionFunctionArgs) {
       await recordSubmissionActivity(tx, {
         submissionId: submission.id,
         organizationId,
-        actorMembershipId:
-          actor.organizationId === organizationId ? actor.membershipId : null,
+        actorMembershipId: resolveSubmissionActivityActorMembershipId({
+          actorMembershipId: actor.membershipId,
+          actorOrganizationId: actor.organizationId,
+          submissionOrganizationId: organizationId,
+        }),
         eventType:
           activityChanges.gradedAt || activityChanges.gradedByMembershipId
             ? submissionActivityEventTypes.gradeFinalized

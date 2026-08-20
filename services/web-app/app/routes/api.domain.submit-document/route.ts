@@ -11,6 +11,7 @@ import {
   buildSubmissionActivityChanges,
   buildSubmissionBodyAuditMetadata,
   recordSubmissionActivity,
+  resolveSubmissionActivityActorMembershipId,
   submissionActivityEventTypes,
 } from '~/domain/submissions/submission-activity.server';
 
@@ -155,7 +156,12 @@ const actionImpl = async ({ request }: ActionFunctionArgs) => {
           submissionId: submission.id,
           organizationId:
             document.membership.organizationId ?? profile.organization.id,
-          actorMembershipId: profile.id,
+          actorMembershipId: resolveSubmissionActivityActorMembershipId({
+            actorMembershipId: profile.id,
+            actorOrganizationId: profile.organization.id,
+            submissionOrganizationId:
+              document.membership.organizationId ?? profile.organization.id,
+          }),
           eventType: submissionActivityEventTypes.created,
           source: 'submit-document',
           occurredAfterRelease: false,

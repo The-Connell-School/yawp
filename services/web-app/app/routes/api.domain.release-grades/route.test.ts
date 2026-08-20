@@ -44,7 +44,13 @@ describe('api.domain.release-grades', () => {
     });
     canManageGrades.mockReturnValue(true);
     buildTeacherClassWhere.mockReturnValue({
-      OR: [{ classAssignment: { class: { teachers: { some: { id: 'teacher-1' } } } } }],
+      OR: [
+        {
+          classAssignment: {
+            class: { teachers: { some: { id: 'teacher-1' } } },
+          },
+        },
+      ],
     });
     isGradingOwnDocument.mockReturnValue(false);
     prisma.submission.updateMany.mockResolvedValue({ count: 1 });
@@ -96,9 +102,9 @@ describe('api.domain.release-grades', () => {
         occurredAfterRelease: false,
       })
     );
-    expect(prisma.submission.findMany.mock.calls[0][0].where.document.is).toEqual(
-      expect.objectContaining({ OR: expect.any(Array) })
-    );
+    expect(
+      prisma.submission.findMany.mock.calls[0][0].where.document.is
+    ).toEqual(expect.objectContaining({ OR: expect.any(Array) }));
   });
 
   test('returns 404 when no unreleased submissions found', async () => {
@@ -121,6 +127,65 @@ describe('api.domain.release-grades', () => {
       init?: { status?: number };
     };
     expect(payload.init?.status).toBe(404);
+  });
+
+  test('records exactly one release event for each submission in a batch', async () => {
+    prisma.submission.findMany.mockResolvedValue([
+      {
+        id: 'sub-1',
+        releasedAt: null,
+        document: { membership: { organizationId: 'org-1' } },
+      },
+      {
+        id: 'sub-2',
+        releasedAt: null,
+        document: { membership: { organizationId: 'org-1' } },
+      },
+    ]);
+    prisma.submission.updateMany.mockResolvedValue({ count: 2 });
+    const form = new FormData();
+    form.append('submissionIds', 'sub-1');
+    form.append('submissionIds', 'sub-2');
+
+    const response = await action({
+      request: new Request('https://example.com/api/domain/release-grades', {
+        method: 'POST',
+        body: form,
+      }),
+    } as any);
+
+    expect((response as any).data.releasedCount).toBe(2);
+    expect(prisma.submissionActivity.create).toHaveBeenCalledTimes(2);
+    expect(
+      prisma.submissionActivity.create.mock.calls.map(
+        (call: any[]) => call[0].data.submissionId
+      )
+    ).toEqual(['sub-1', 'sub-2']);
+  });
+
+  test('rejects a mixed authorized and cross-tenant batch before any write', async () => {
+    // The tenant-scoped eligibility query can resolve only the authorized row.
+    prisma.submission.findMany.mockResolvedValue([
+      {
+        id: 'sub-1',
+        releasedAt: null,
+        document: { membership: { organizationId: 'org-1' } },
+      },
+    ]);
+    const form = new FormData();
+    form.append('submissionIds', 'sub-1');
+    form.append('submissionIds', 'cross-org-sub');
+
+    const response = await action({
+      request: new Request('https://example.com/api/domain/release-grades', {
+        method: 'POST',
+        body: form,
+      }),
+    } as any);
+
+    expect((response as any).init?.status).toBe(404);
+    expect(prisma.submission.updateMany).not.toHaveBeenCalled();
+    expect(prisma.submissionActivity.create).not.toHaveBeenCalled();
   });
 
   test('rejects mixed valid and missing submission IDs without partial release', async () => {

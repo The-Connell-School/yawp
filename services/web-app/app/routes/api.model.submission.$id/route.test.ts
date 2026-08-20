@@ -4,7 +4,7 @@ const prisma = {
   $transaction: mock(),
   submission: {
     findFirst: mock(),
-    update: mock(),
+    updateMany: mock(),
   },
   user: {
     findUnique: mock(),
@@ -26,7 +26,7 @@ const { action } = await import('./route');
 describe('api.model.submission.$id', () => {
   beforeEach(() => {
     prisma.submission.findFirst.mockReset();
-    prisma.submission.update.mockReset();
+    prisma.submission.updateMany.mockReset();
     prisma.user.findUnique.mockReset();
     prisma.$transaction.mockReset();
     prisma.submissionActivity.create.mockReset();
@@ -38,6 +38,7 @@ describe('api.model.submission.$id', () => {
       organization: { id: 'org-1' },
     });
     prisma.user.findUnique.mockResolvedValue({ isAdmin: false });
+    prisma.submission.updateMany.mockResolvedValue({ count: 1 });
     prisma.$transaction.mockImplementation(async (callback: any) =>
       callback(prisma)
     );
@@ -62,7 +63,7 @@ describe('api.model.submission.$id', () => {
     const body = await res.json();
     expect(body.success).toBe(false);
     expect(prisma.submission.findFirst).not.toHaveBeenCalled();
-    expect(prisma.submission.update).not.toHaveBeenCalled();
+    expect(prisma.submission.updateMany).not.toHaveBeenCalled();
   });
 
   test('intent=unarchive is no longer supported', async () => {
@@ -81,7 +82,7 @@ describe('api.model.submission.$id', () => {
     const body = await res.json();
     expect(body.success).toBe(false);
     expect(prisma.submission.findFirst).not.toHaveBeenCalled();
-    expect(prisma.submission.update).not.toHaveBeenCalled();
+    expect(prisma.submission.updateMany).not.toHaveBeenCalled();
   });
 
   test('400 when intent=updateTitle but title is not a string', async () => {
@@ -103,10 +104,10 @@ describe('api.model.submission.$id', () => {
     prisma.submission.findFirst.mockResolvedValue({
       id: 'sub-1',
       title: 'Old title',
+      updatedAt: new Date('2026-08-20T10:00:00.000Z'),
       releasedAt: new Date('2026-08-20T11:00:00.000Z'),
       document: { membership: { organizationId: 'org-1' } },
     });
-    prisma.submission.update.mockResolvedValue({} as any);
 
     const form = new FormData();
     form.set('intent', 'updateTitle');
@@ -123,8 +124,8 @@ describe('api.model.submission.$id', () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.success).toBe(true);
-    expect(prisma.submission.update).toHaveBeenCalled();
-    const updateArg = prisma.submission.update.mock.calls[0][0];
+    expect(prisma.submission.updateMany).toHaveBeenCalled();
+    const updateArg = prisma.submission.updateMany.mock.calls[0][0];
     expect(updateArg.data.title).toBe('My essay');
     expect(prisma.submissionActivity.create).toHaveBeenCalledTimes(1);
     expect(prisma.submissionActivity.create.mock.calls[0][0].data).toEqual(
@@ -136,6 +137,32 @@ describe('api.model.submission.$id', () => {
         },
       })
     );
+  });
+
+  test('returns 409 and writes no activity when the title preimage is stale', async () => {
+    prisma.submission.findFirst.mockResolvedValue({
+      id: 'sub-1',
+      title: 'Old title',
+      updatedAt: new Date('2026-08-20T10:00:00.000Z'),
+      releasedAt: null,
+      document: { membership: { organizationId: 'org-1' } },
+    });
+    prisma.submission.updateMany.mockResolvedValue({ count: 0 });
+    const form = new FormData();
+    form.set('intent', 'updateTitle');
+    form.set('title', 'Concurrent title');
+
+    const response = await action({
+      request: new Request('https://example.com/api/model/submission/sub-1', {
+        method: 'POST',
+        body: form,
+      }),
+      params: { id: 'sub-1' },
+      context: {},
+    } as any);
+
+    expect(response.status).toBe(409);
+    expect(prisma.submissionActivity.create).not.toHaveBeenCalled();
   });
 
   test('404 updateTitle when submission not accessible', async () => {

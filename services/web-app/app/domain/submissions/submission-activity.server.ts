@@ -40,6 +40,21 @@ export type SubmissionActivityChanges = Record<
   }
 >;
 
+/** Prevents a platform admin membership from being linked across tenants. */
+export function resolveSubmissionActivityActorMembershipId({
+  actorMembershipId,
+  actorOrganizationId,
+  submissionOrganizationId,
+}: {
+  actorMembershipId: string;
+  actorOrganizationId: string;
+  submissionOrganizationId: string;
+}) {
+  return actorOrganizationId === submissionOrganizationId
+    ? actorMembershipId
+    : null;
+}
+
 function toAuditJson(value: unknown): Prisma.InputJsonValue | null {
   if (value === undefined || value === null) return null;
   if (value instanceof Date) return value.toISOString();
@@ -70,6 +85,11 @@ function auditValuesEqual(
   right: Prisma.InputJsonValue | null
 ) {
   return JSON.stringify(left) === JSON.stringify(right);
+}
+
+/** Semantic equality used by both mutation no-op detection and audit diffs. */
+export function submissionAuditValuesEqual(left: unknown, right: unknown) {
+  return auditValuesEqual(toAuditJson(left), toAuditJson(right));
 }
 
 export function buildSubmissionActivityChanges({
@@ -123,6 +143,11 @@ export async function recordSubmissionActivity(
     metadata?: Prisma.InputJsonObject;
   }
 ) {
+  // Emergency rollback switch for the production-wide dual-write. The
+  // organization flag controls released-edit UI; this environment switch can
+  // independently stop ledger writes while the application is rolled back.
+  if (process.env.SUBMISSION_ACTIVITY_WRITES_ENABLED === 'false') return null;
+
   if (Object.keys(input.changes).length === 0 && input.metadata == null) {
     return null;
   }

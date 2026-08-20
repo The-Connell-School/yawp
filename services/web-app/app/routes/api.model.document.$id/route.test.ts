@@ -19,6 +19,7 @@ const prisma = {
     findFirst: mock(),
     create: mock(),
     update: mock(),
+    updateMany: mock(),
   },
   documentWriteJournal: {
     findFirst: mock(),
@@ -51,6 +52,7 @@ describe('api.model.document.$id', () => {
     prisma.submission.findFirst.mockReset();
     prisma.submission.create.mockReset();
     prisma.submission.update.mockReset();
+    prisma.submission.updateMany.mockReset();
     prisma.documentWriteJournal.findFirst.mockReset();
     prisma.documentWriteJournal.create.mockReset();
     prisma.documentWriteJournal.update.mockReset();
@@ -95,6 +97,7 @@ describe('api.model.document.$id', () => {
       id: 'journal-1',
       status: 'accepted',
     });
+    prisma.submission.updateMany.mockResolvedValue({ count: 1 });
     prisma.$transaction.mockImplementation(async (callback: any) =>
       callback(prisma)
     );
@@ -105,6 +108,7 @@ describe('api.model.document.$id', () => {
       id: 'sub-1',
       text: 'Old frozen body',
       html: '<p>Old frozen body</p>',
+      updatedAt: new Date('2026-08-20T08:00:00.000Z'),
       releasedAt: new Date('2026-08-20T09:00:00.000Z'),
       document: { membership: { organizationId: 'org-1' } },
     });
@@ -131,6 +135,41 @@ describe('api.model.document.$id', () => {
     expect(activity.changes.body.after.html.length).toBe(22);
   });
 
+  test('rejects stale snapshot preimages and records no activity', async () => {
+    prisma.submission.findFirst.mockResolvedValue({
+      id: 'sub-1',
+      text: 'Old frozen body',
+      html: '<p>Old frozen body</p>',
+      updatedAt: new Date('2026-08-20T08:00:00.000Z'),
+      releasedAt: null,
+      document: { membership: { organizationId: 'org-1' } },
+    });
+    prisma.submission.updateMany.mockResolvedValue({ count: 0 });
+    const form = new FormData();
+    form.append('html', '<p>Concurrent frozen body</p>');
+    form.append('text', 'Concurrent frozen body');
+
+    const response = (await action({
+      request: new Request(
+        'https://example.com/api/model/document/doc-1?snapshotId=sub-1',
+        { method: 'PUT', body: form }
+      ),
+      params: { id: 'doc-1' },
+    } as any)) as Response;
+
+    expect(response.status).toBe(409);
+    expect(prisma.submissionActivity.create).not.toHaveBeenCalled();
+    expect(
+      prisma.documentWriteJournal.update.mock.calls.at(-1)?.[0]
+    ).toMatchObject({
+      where: { id: 'journal-1' },
+      data: {
+        status: 'rejected',
+        failureReason: 'stale_submission_snapshot',
+      },
+    });
+  });
+
   test('rejects stale editor saves and records a rejected journal entry', async () => {
     prisma.documentWriteJournal.findFirst.mockResolvedValue({
       id: 'journal-old',
@@ -147,10 +186,13 @@ describe('api.model.document.$id', () => {
     form.append('baseRevision', '4');
 
     const response = (await action({
-      request: new Request('https://example.com/api/model/document/doc-1?from=editor', {
-        method: 'PUT',
-        body: form,
-      }),
+      request: new Request(
+        'https://example.com/api/model/document/doc-1?from=editor',
+        {
+          method: 'PUT',
+          body: form,
+        }
+      ),
       params: { id: 'doc-1' },
     } as any)) as Response;
 
@@ -158,13 +200,15 @@ describe('api.model.document.$id', () => {
     expect(prisma.document.update).not.toHaveBeenCalled();
     expect(prisma.documentWriteJournal.create).toHaveBeenCalledTimes(1);
     expect(prisma.documentWriteJournal.update).toHaveBeenCalledTimes(1);
-    expect(prisma.documentWriteJournal.update.mock.calls[0]?.[0]).toMatchObject({
-      where: { id: 'journal-1' },
-      data: {
-        status: 'rejected',
-        failureReason: 'stale_client_sequence',
-      },
-    });
+    expect(prisma.documentWriteJournal.update.mock.calls[0]?.[0]).toMatchObject(
+      {
+        where: { id: 'journal-1' },
+        data: {
+          status: 'rejected',
+          failureReason: 'stale_client_sequence',
+        },
+      }
+    );
   });
 
   test('accepts ordered editor saves, increments revision, and returns the new revision', async () => {
@@ -187,10 +231,13 @@ describe('api.model.document.$id', () => {
     form.append('baseRevision', '4');
 
     const response = (await action({
-      request: new Request('https://example.com/api/model/document/doc-1?from=editor', {
-        method: 'PUT',
-        body: form,
-      }),
+      request: new Request(
+        'https://example.com/api/model/document/doc-1?from=editor',
+        {
+          method: 'PUT',
+          body: form,
+        }
+      ),
       params: { id: 'doc-1' },
     } as any)) as Response;
 
@@ -215,13 +262,15 @@ describe('api.model.document.$id', () => {
       ok: true,
       revision: 5,
     });
-    expect(prisma.documentWriteJournal.update.mock.calls[0]?.[0]).toMatchObject({
-      where: { id: 'journal-1' },
-      data: {
-        status: 'accepted',
-        resultingRevision: 5,
-      },
-    });
+    expect(prisma.documentWriteJournal.update.mock.calls[0]?.[0]).toMatchObject(
+      {
+        where: { id: 'journal-1' },
+        data: {
+          status: 'accepted',
+          resultingRevision: 5,
+        },
+      }
+    );
   });
 
   test('returns a stale revision conflict when the guarded update loses the race', async () => {
@@ -245,15 +294,20 @@ describe('api.model.document.$id', () => {
     form.append('baseRevision', '4');
 
     const response = (await action({
-      request: new Request('https://example.com/api/model/document/doc-1?from=editor', {
-        method: 'PUT',
-        body: form,
-      }),
+      request: new Request(
+        'https://example.com/api/model/document/doc-1?from=editor',
+        {
+          method: 'PUT',
+          body: form,
+        }
+      ),
       params: { id: 'doc-1' },
     } as any)) as Response;
 
     expect(response.status).toBe(409);
-    expect(prisma.documentWriteJournal.update.mock.calls.at(-1)?.[0]).toMatchObject({
+    expect(
+      prisma.documentWriteJournal.update.mock.calls.at(-1)?.[0]
+    ).toMatchObject({
       where: { id: 'journal-1' },
       data: {
         status: 'rejected',

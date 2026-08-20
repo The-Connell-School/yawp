@@ -1,5 +1,8 @@
 import { invariant } from '@epic-web/invariant';
-import { type LoaderFunctionArgs } from 'react-router';
+import {
+  type LoaderFunctionArgs,
+  type ShouldRevalidateFunctionArgs,
+} from 'react-router';
 import {
   useLoaderData,
   Link,
@@ -23,6 +26,7 @@ import { Input } from '~/components/ui/input';
 import { requireUserId, requireMembership } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { hasEffectivePlatformAdmin } from '~/utils/preview-access.server';
+import { buildTeacherDocumentAccessWhere } from '~/utils/grading-auth.server';
 import { redirectWithToast } from '~/utils/toast.server';
 import { formatAssignmentGrade } from '~/domain/grading/gradeMath';
 import { hasRecordedGrade } from '~/domain/grading/recorded-grade';
@@ -59,8 +63,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 // ── Revalidation ─────────────────────────────────────────────────────
 
-export function shouldRevalidate() {
-  return false;
+export function shouldRevalidate({
+  defaultShouldRevalidate,
+}: ShouldRevalidateFunctionArgs) {
+  return defaultShouldRevalidate;
 }
 
 // ── Loader ───────────────────────────────────────────────────────────
@@ -76,6 +82,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     where: { id: userId },
     select: { isAdmin: true },
   });
+  const isAdmin = hasEffectivePlatformAdmin(user?.isAdmin);
 
   const submission = await prisma.submission.findFirst({
     where: {
@@ -88,15 +95,12 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
               membership: { organizationId: profile.organization.id },
             },
             {
-              membership: { organizationId: profile.organization.id },
-              classAssignment: {
-                class: {
-                  school: { organizationId: profile.organization.id },
-                  teachers: { some: { id: profile.id } },
-                },
-              },
+              ...buildTeacherDocumentAccessWhere({
+                membershipId: profile.id,
+                organizationId: profile.organization.id,
+              }),
             },
-            ...(hasEffectivePlatformAdmin(user?.isAdmin) ? [{}] : []),
+            ...(isAdmin ? [{}] : []),
           ],
         },
       },
@@ -199,17 +203,25 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   // Determine if viewer is the owner (student) or a teacher
   const isOwner = submission.document.membership.id === profile.id;
 
-  const isTeacher =
-    !isOwner &&
-    profile.role === 'TEACHER' &&
-    submission.document.membership.organizationId === profile.organization.id &&
+  const isCurrentClassTeacher =
     submission.document.classAssignment?.class?.school.organizationId ===
       profile.organization.id &&
     submission.document.classAssignment.class.teachers.some(
       (teacher) => teacher.id === profile.id
     );
+  const isLegacyClassTeacher =
+    submission.document.classAssignment == null &&
+    submission.document.membership.classesAsStudent.some(
+      (klass) =>
+        klass.school.organizationId === profile.organization.id &&
+        klass.teachers.some((teacher) => teacher.id === profile.id)
+    );
+  const isTeacher =
+    !isOwner &&
+    profile.role === 'TEACHER' &&
+    submission.document.membership.organizationId === profile.organization.id &&
+    (isCurrentClassTeacher || isLegacyClassTeacher);
 
-  const isAdmin = hasEffectivePlatformAdmin(user?.isAdmin);
   const submissionActivityEnabled =
     submission.document.membership.organization.submissionActivityEnabled ===
     true;
@@ -313,14 +325,9 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
 export default function SubmissionRoute() {
   const loaderData = useLoaderData<typeof loader>();
-  const {
-    submission,
-    isOwner,
-    isTeacher,
-    submissionActivityEnabled,
-  } = loaderData;
-  const activities =
-    'activities' in loaderData ? loaderData.activities : [];
+  const { submission, isOwner, isTeacher, submissionActivityEnabled } =
+    loaderData;
+  const activities = 'activities' in loaderData ? loaderData.activities : [];
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const location = useLocation();
@@ -530,7 +537,8 @@ export default function SubmissionRoute() {
       return submission.grammarHighlightingEnabled;
     }
     return resolveGrammarHighlightingEnabled(
-      (teacherGradeUi?.rubricConfig ?? submission.rubricConfig)?.categories ?? []
+      (teacherGradeUi?.rubricConfig ?? submission.rubricConfig)?.categories ??
+        []
     );
   }, [
     submission.grammarHighlightingEnabled,
@@ -880,7 +888,7 @@ export default function SubmissionRoute() {
   return (
     <main className="flex h-screen flex-col bg-background">
       {/* ── Nav ─────────────────────────────────────────────────────── */}
-      <nav className="flex w-full items-center gap-3 border-b bg-white px-3 py-2">
+      <nav className="flex w-full flex-wrap items-center gap-3 border-b bg-white px-3 py-2">
         <Button
           variant="ghost"
           size="sm"
@@ -938,7 +946,7 @@ export default function SubmissionRoute() {
           </Badge>
         ) : null}
 
-        <div className="ml-auto flex items-center gap-2">
+        <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
           {isGradingOther && submissionActivityEnabled ? (
             <SubmissionActivitySheet activities={activities as any} />
           ) : null}
@@ -990,12 +998,9 @@ export default function SubmissionRoute() {
       ) : null}
 
       {/* ── Body ────────────────────────────────────────────────────── */}
-      <div className="flex grow overflow-hidden">
+      <div className="flex min-h-0 grow flex-col overflow-y-auto md:flex-row md:overflow-hidden">
         {/* Left panel: grading (edit/view toggle for teachers) or view-only summary */}
-        <div
-          className="no-scrollbar flex shrink-0 flex-col overflow-hidden border-r bg-white"
-          style={{ width: 380 }}
-        >
+        <div className="no-scrollbar flex h-[70vh] w-full shrink-0 flex-col overflow-hidden border-b bg-white md:h-auto md:w-[380px] md:border-r md:border-b-0">
           {isGradingOther ? (
             <SubmissionLifecyclePanel
               lifecycleState={lifecycleState}
@@ -1043,11 +1048,8 @@ export default function SubmissionRoute() {
         </div>
 
         {/* Center: Essay */}
-        <div className="flex min-w-0 grow flex-col overflow-hidden bg-white md:h-full">
-          <EssayPanel
-            ref={setEssayRef}
-            html={submission.html ?? ''}
-          />
+        <div className="flex min-h-[60vh] min-w-0 grow flex-col overflow-hidden bg-white md:h-full md:min-h-0">
+          <EssayPanel ref={setEssayRef} html={submission.html ?? ''} />
           {isGradingOther && essayElement ? (
             <SelectionToolbar contentRoot={essayElement} />
           ) : null}
@@ -1063,10 +1065,7 @@ export default function SubmissionRoute() {
         </div>
 
         {/* Right: Feedback comments */}
-        <div
-          className="no-scrollbar shrink-0 overflow-y-auto border-l bg-white"
-          style={{ width: 320 }}
-        >
+        <div className="no-scrollbar max-h-[60vh] w-full shrink-0 overflow-y-auto border-t bg-white md:max-h-none md:w-[320px] md:border-t-0 md:border-l">
           <GradingCommentsSidebar
             submissionComments={isPending ? [] : (comments as any)}
             submissionId={submission.id}

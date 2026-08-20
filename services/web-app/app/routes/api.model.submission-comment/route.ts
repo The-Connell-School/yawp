@@ -4,9 +4,11 @@ import { z } from 'zod';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { hasEffectivePlatformAdmin } from '~/utils/preview-access.server';
+import { buildTeacherDocumentAccessWhere } from '~/utils/grading-auth.server';
 import {
   buildSubmissionActivityChanges,
   recordSubmissionActivity,
+  resolveSubmissionActivityActorMembershipId,
   submissionActivityEventTypes,
 } from '~/domain/submissions/submission-activity.server';
 
@@ -26,35 +28,6 @@ const POST = z
       'Comments must be tied to specific text. Select text and use Comment.',
     path: ['excerpt'],
   });
-
-function teacherDocumentAccessWhere(
-  membershipId: string,
-  organizationId: string
-) {
-  return {
-    membership: { organizationId },
-    OR: [
-      {
-        classAssignment: {
-          class: {
-            school: { organizationId },
-            teachers: { some: { id: membershipId } },
-          },
-        },
-      },
-      {
-        membership: {
-          classesAsStudent: {
-            some: {
-              school: { organizationId },
-              teachers: { some: { id: membershipId } },
-            },
-          },
-        },
-      },
-    ],
-  };
-}
 
 export async function action({ request }: ActionFunctionArgs) {
   const userId = await requireUserId(request);
@@ -77,10 +50,10 @@ export async function action({ request }: ActionFunctionArgs) {
           membershipId: { not: profile.id },
           ...(isAdmin
             ? {}
-            : teacherDocumentAccessWhere(
-                profile.id,
-                profile.organization.id
-              )),
+            : buildTeacherDocumentAccessWhere({
+                membershipId: profile.id,
+                organizationId: profile.organization.id,
+              })),
         },
       },
     },
@@ -122,13 +95,15 @@ export async function action({ request }: ActionFunctionArgs) {
       },
     });
     const organizationId =
-      submission.document.membership.organizationId ??
-      profile.organization.id;
+      submission.document.membership.organizationId ?? profile.organization.id;
     await recordSubmissionActivity(tx, {
       submissionId: submission.id,
       organizationId,
-      actorMembershipId:
-        profile.organization.id === organizationId ? profile.id : null,
+      actorMembershipId: resolveSubmissionActivityActorMembershipId({
+        actorMembershipId: profile.id,
+        actorOrganizationId: profile.organization.id,
+        submissionOrganizationId: organizationId,
+      }),
       eventType: submissionActivityEventTypes.commentCreated,
       source: 'submission-comment',
       occurredAfterRelease: submission.releasedAt != null,

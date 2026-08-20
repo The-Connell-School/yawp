@@ -30,8 +30,7 @@ const eventLabels: Record<string, string> = {
   'submission.grade_updated': 'Grade or feedback changed',
   'submission.grade_finalized': 'Grade finalized',
   'submission.grade_released': 'Grade released',
-  'submission.grading_assistant_updated':
-    'Grading Assistant suggestions saved',
+  'submission.grading_assistant_updated': 'Grading Assistant suggestions saved',
   'submission.comment_created': 'Comment added',
   'submission.comment_updated': 'Comment changed',
   'submission.comment_deleted': 'Comment deleted',
@@ -90,7 +89,11 @@ export function SubmissionActivitySheet({
           Activity
         </Button>
       </SheetTrigger>
-      <SheetContent side="right" className="w-full sm:max-w-lg">
+      <SheetContent
+        side="right"
+        className="w-full overflow-y-auto sm:max-w-lg"
+        data-testid="submission-activity-panel"
+      >
         <SheetHeader>
           <SheetTitle>Submission Activity</SheetTitle>
           <SheetDescription>
@@ -116,6 +119,7 @@ export function SubmissionActivitySheet({
                   key={activity.id}
                   className="rounded-lg border bg-background p-4 shadow-sm"
                   data-testid={`submission-activity-${activity.id}`}
+                  data-activity-item="true"
                 >
                   <div className="flex flex-wrap items-start justify-between gap-2">
                     <div>
@@ -133,7 +137,12 @@ export function SubmissionActivitySheet({
                       </p>
                     </div>
                     {activity.occurredAfterRelease ? (
-                      <Badge variant="secondary">After release</Badge>
+                      <Badge
+                        variant="secondary"
+                        data-testid="submission-activity-after-release"
+                      >
+                        After release
+                      </Badge>
                     ) : null}
                   </div>
 
@@ -143,10 +152,14 @@ export function SubmissionActivitySheet({
                         key={change.field}
                         className="rounded-md bg-muted/50 px-3 py-2 text-xs"
                       >
-                        <p className="font-medium">{fieldLabel(change.field)}</p>
+                        <p className="font-medium">
+                          {fieldLabel(change.field)}
+                        </p>
                         <div className="mt-1 grid gap-2 sm:grid-cols-2">
                           <div className="min-w-0">
-                            <span className="text-muted-foreground">Before</span>
+                            <span className="text-muted-foreground">
+                              Before
+                            </span>
                             <pre className="mt-0.5 whitespace-pre-wrap break-words font-sans">
                               {formatValue(change.before)}
                             </pre>

@@ -7,9 +7,11 @@ import { requireMembership, requireUserId } from '~/utils/auth.server.js';
 import { prisma } from '~/utils/db.server.js';
 import { documentReadWhere } from '~/utils/document-access.server';
 import { hasEffectivePlatformAdmin } from '~/utils/preview-access.server';
+import { buildTeacherDocumentAccessWhere } from '~/utils/grading-auth.server';
 import {
   buildSubmissionBodyAuditMetadata,
   recordSubmissionActivity,
+  resolveSubmissionActivityActorMembershipId,
   submissionActivityEventTypes,
 } from '~/domain/submissions/submission-activity.server';
 
@@ -21,6 +23,8 @@ const PUT = z.object({
   clientSeq: z.coerce.number().int().nonnegative().optional(),
   baseRevision: z.coerce.number().int().nonnegative().optional(),
 });
+
+class SubmissionSnapshotConflictError extends Error {}
 
 function hashString(value: string) {
   return createHash('sha256').update(value).digest('hex');
@@ -146,21 +150,14 @@ const actionImpl = async ({ request, params }: ActionFunctionArgs) => {
     },
   });
 
-  if (
-    data.editorSessionId &&
-    data.clientSeq !== undefined &&
-    hasBodyMutation
-  ) {
+  if (data.editorSessionId && data.clientSeq !== undefined && hasBodyMutation) {
     const lastAccepted = await prisma.documentWriteJournal.findFirst({
       where: {
         documentId: document.id,
         editorSessionId: data.editorSessionId,
         status: 'accepted',
       },
-      orderBy: [
-        { clientSeq: 'desc' },
-        { createdAt: 'desc' },
-      ],
+      orderBy: [{ clientSeq: 'desc' }, { createdAt: 'desc' }],
       select: { clientSeq: true },
     });
 
@@ -225,11 +222,10 @@ const actionImpl = async ({ request, params }: ActionFunctionArgs) => {
           : {
               document: {
                 is: {
-                  classAssignment: {
-                    class: {
-                      teachers: { some: { id: profile.id } },
-                    },
-                  },
+                  ...buildTeacherDocumentAccessWhere({
+                    membershipId: profile.id,
+                    organizationId: profile.organization.id,
+                  }),
                 },
               },
             }),
@@ -238,6 +234,7 @@ const actionImpl = async ({ request, params }: ActionFunctionArgs) => {
         id: true,
         text: true,
         html: true,
+        updatedAt: true,
         releasedAt: true,
         document: {
           select: {
@@ -282,27 +279,48 @@ const actionImpl = async ({ request, params }: ActionFunctionArgs) => {
     });
 
     if (JSON.stringify(previousBody) !== JSON.stringify(nextBody)) {
-      await prisma.$transaction(async (tx) => {
-        await tx.submission.update({
-          where: { id: submission.id },
-          data: submissionData,
+      try {
+        await prisma.$transaction(async (tx) => {
+          const updated = await tx.submission.updateMany({
+            where: { id: submission.id, updatedAt: submission.updatedAt },
+            data: { ...submissionData, updatedAt: new Date() },
+          });
+          if (updated.count !== 1) throw new SubmissionSnapshotConflictError();
+          const organizationId =
+            submission.document.membership.organizationId ??
+            profile.organization.id;
+          await recordSubmissionActivity(tx, {
+            submissionId: submission.id,
+            organizationId,
+            actorMembershipId: resolveSubmissionActivityActorMembershipId({
+              actorMembershipId: profile.id,
+              actorOrganizationId: profile.organization.id,
+              submissionOrganizationId: organizationId,
+            }),
+            eventType: submissionActivityEventTypes.bodyUpdated,
+            source: 'document-snapshot',
+            occurredAfterRelease: submission.releasedAt != null,
+            changes: {
+              body: { before: previousBody, after: nextBody },
+            },
+          });
         });
-        const organizationId =
-          submission.document.membership.organizationId ??
-          profile.organization.id;
-        await recordSubmissionActivity(tx, {
-          submissionId: submission.id,
-          organizationId,
-          actorMembershipId:
-            profile.organization.id === organizationId ? profile.id : null,
-          eventType: submissionActivityEventTypes.bodyUpdated,
-          source: 'document-snapshot',
-          occurredAfterRelease: submission.releasedAt != null,
-          changes: {
-            body: { before: previousBody, after: nextBody },
-          },
-        });
-      });
+      } catch (error) {
+        if (error instanceof SubmissionSnapshotConflictError) {
+          await prisma.documentWriteJournal.update({
+            where: { id: journal.id },
+            data: {
+              status: 'rejected',
+              failureReason: 'stale_submission_snapshot',
+            },
+          });
+          return new Response(
+            JSON.stringify({ ok: false, error: 'stale_submission_snapshot' }),
+            { status: 409, headers: { 'Content-Type': 'application/json' } }
+          );
+        }
+        throw error;
+      }
     }
 
     await prisma.documentWriteJournal.update({
@@ -361,7 +379,11 @@ const actionImpl = async ({ request, params }: ActionFunctionArgs) => {
       data: documentUpdateData,
     });
   } catch (error) {
-    if (hasBodyMutation && data.baseRevision !== undefined && isRecordNotFoundError(error)) {
+    if (
+      hasBodyMutation &&
+      data.baseRevision !== undefined &&
+      isRecordNotFoundError(error)
+    ) {
       await prisma.documentWriteJournal.update({
         where: { id: journal.id },
         data: {

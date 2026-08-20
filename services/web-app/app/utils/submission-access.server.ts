@@ -1,9 +1,11 @@
 import { prisma } from '~/utils/db.server';
+import { buildTeacherDocumentAccessWhere } from '~/utils/grading-auth.server';
 
 /** Owner, teacher of student's class, or admin — same visibility as submission page loader. */
 export async function findSubmissionForTitleEdit(params: {
   submissionId: string;
   membershipId: string;
+  organizationId: string;
   isAdmin: boolean;
 }) {
   return prisma.submission.findFirst({
@@ -15,15 +17,10 @@ export async function findSubmissionForTitleEdit(params: {
           OR: [
             { membershipId: params.membershipId },
             {
-              membership: {
-                classesAsStudent: {
-                  some: {
-                    teachers: {
-                      some: { id: params.membershipId },
-                    },
-                  },
-                },
-              },
+              ...buildTeacherDocumentAccessWhere({
+                membershipId: params.membershipId,
+                organizationId: params.organizationId,
+              }),
             },
             ...(params.isAdmin ? [{}] : []),
           ],
@@ -33,6 +30,7 @@ export async function findSubmissionForTitleEdit(params: {
     select: {
       id: true,
       title: true,
+      updatedAt: true,
       releasedAt: true,
       document: {
         select: {

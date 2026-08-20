@@ -420,6 +420,43 @@ describe('api.domain.update-submission', () => {
     expect(prisma.submissionActivity.create).not.toHaveBeenCalled();
   });
 
+  test('returns 409 and records no event when a released grade preimage is stale', async () => {
+    const updatedAt = new Date('2026-08-01T15:31:00.000Z');
+    prisma.submission.findFirst.mockResolvedValue({
+      id: 'sub-1',
+      updatedAt,
+      gradedAt: new Date('2026-08-01T15:00:00.000Z'),
+      gradedByMembershipId: 'teacher-1',
+      releasedAt: new Date('2026-08-01T15:30:00.000Z'),
+      score: '85% B',
+      feedback: 'Before',
+      numericPercentage: 85,
+      overallScore: 85,
+      unsubmittedAt: null,
+      document: {
+        membershipId: 'student-1',
+        assignment: null,
+        classAssignment: null,
+        membership: {
+          organizationId: 'org-1',
+          organization: { submissionActivityEnabled: true },
+          classesAsStudent: [],
+        },
+      },
+    });
+    prisma.submission.updateMany.mockResolvedValue({ count: 0 });
+
+    const response = (await action({
+      request: makeRequest({ submissionId: 'sub-1', score: '92% A-' }),
+    } as any)) as Response;
+
+    expect(response.status).toBe(409);
+    expect(
+      prisma.submission.updateMany.mock.calls[0][0].where.updatedAt
+    ).toEqual(updatedAt);
+    expect(prisma.submissionActivity.create).not.toHaveBeenCalled();
+  });
+
   test('suppresses no-op updates and activity', async () => {
     prisma.submission.findFirst.mockResolvedValue({
       id: 'sub-1',
@@ -449,6 +486,42 @@ describe('api.domain.update-submission', () => {
     } as any)) as Response;
 
     expect(response.status).toBe(200);
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+    expect(prisma.submissionActivity.create).not.toHaveBeenCalled();
+  });
+
+  test('suppresses reordered JSON no-ops without touching the submission or ledger', async () => {
+    prisma.submission.findFirst.mockResolvedValue({
+      id: 'sub-1',
+      updatedAt: new Date('2026-08-01T15:31:00.000Z'),
+      gradedAt: new Date('2026-08-01T15:00:00.000Z'),
+      gradedByMembershipId: 'teacher-1',
+      releasedAt: null,
+      rubricScores: { thesis: 4, evidence: 3 },
+      grammarIssues: { issues: [{ id: 'g-1', message: 'Fix' }], version: 1 },
+      unsubmittedAt: null,
+      document: {
+        membershipId: 'student-1',
+        assignment: null,
+        classAssignment: null,
+        membership: {
+          organizationId: 'org-1',
+          organization: { submissionActivityEnabled: false },
+          classesAsStudent: [],
+        },
+      },
+    });
+
+    const response = (await action({
+      request: makeRequest({
+        submissionId: 'sub-1',
+        rubricScores: { evidence: 3, thesis: 4 },
+        grammarIssues: { version: 1, issues: [{ message: 'Fix', id: 'g-1' }] },
+      }),
+    } as any)) as Response;
+
+    expect(response.status).toBe(200);
+    expect(prisma.submission.updateMany).not.toHaveBeenCalled();
     expect(prisma.$transaction).not.toHaveBeenCalled();
     expect(prisma.submissionActivity.create).not.toHaveBeenCalled();
   });

@@ -41,30 +41,51 @@ export function canManageGrades(actor: GradingActor): boolean {
 export function buildTeacherClassWhere(
   actor: GradingActor
 ): Prisma.DocumentWhereInput {
-  if (actor.isAdmin) return {};
+  return buildTeacherDocumentAccessWhere({
+    membershipId: actor.membershipId,
+    organizationId: actor.organizationId,
+    isAdmin: actor.isAdmin,
+  });
+}
+
+export function buildTeacherDocumentAccessWhere({
+  membershipId,
+  organizationId,
+  isAdmin = false,
+}: {
+  membershipId: string;
+  organizationId: string;
+  isAdmin?: boolean;
+}): Prisma.DocumentWhereInput {
+  if (isAdmin) return {};
   return {
-    membership: { organizationId: actor.organizationId },
+    membership: { organizationId },
     OR: [
       {
         classAssignment: {
           class: {
-            school: { organizationId: actor.organizationId },
+            school: { organizationId },
             teachers: {
               some: {
-                id: actor.membershipId,
+                id: membershipId,
               },
             },
           },
         },
       },
       {
+        // Only submissions from before ClassAssignment existed use the
+        // student's class memberships as their source of teacher access.
+        // Applying this fallback to current submissions would let a teacher
+        // from an unrelated class of the same student read the submission.
+        classAssignment: { is: null },
         membership: {
           classesAsStudent: {
             some: {
-              school: { organizationId: actor.organizationId },
+              school: { organizationId },
               teachers: {
                 some: {
-                  id: actor.membershipId,
+                  id: membershipId,
                 },
               },
             },

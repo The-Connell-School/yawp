@@ -245,14 +245,44 @@ describe('submission loader — unsubmitted redirect', () => {
     const teacherBranch = query.where.document.is.OR[1];
     expect(teacherBranch).toEqual({
       membership: { organizationId: 'org-1' },
-      classAssignment: {
-        class: {
-          school: { organizationId: 'org-1' },
-          teachers: { some: { id: TEACHER_MEMBERSHIP_ID } },
+      OR: [
+        {
+          classAssignment: {
+            class: {
+              school: { organizationId: 'org-1' },
+              teachers: { some: { id: TEACHER_MEMBERSHIP_ID } },
+            },
+          },
         },
-      },
+        {
+          classAssignment: { is: null },
+          membership: {
+            classesAsStudent: {
+              some: {
+                school: { organizationId: 'org-1' },
+                teachers: { some: { id: TEACHER_MEMBERSHIP_ID } },
+              },
+            },
+          },
+        },
+      ],
     });
-    expect(JSON.stringify(teacherBranch)).not.toContain('classesAsStudent');
+  });
+
+  test('preserves tenant-scoped teacher access for legacy submissions', async () => {
+    requireMembership.mockResolvedValue(
+      membership(TEACHER_MEMBERSHIP_ID, 'TEACHER')
+    );
+    const legacySubmission = buildSubmission() as any;
+    legacySubmission.document.classAssignment = null;
+    prisma.submission.findFirst.mockResolvedValue(legacySubmission);
+
+    const result = (await loader({
+      request: request(),
+      params: { submissionId: 'sub-1' },
+    })) as any;
+
+    expect(result.isTeacher).toBe(true);
   });
 
   test('returns not found and never reads activity for an unrelated teacher', async () => {
@@ -281,15 +311,14 @@ describe('submission loader — unsubmitted redirect', () => {
     await loader({ request: request(), params: { submissionId: 'sub-1' } });
 
     const query = prisma.submission.findFirst.mock.calls[0]?.[0] as any;
-    expect(query.where.document.is.OR[1]).toEqual(
-      expect.objectContaining({
-        membership: { organizationId: 'org-2' },
-        classAssignment: {
-          class: expect.objectContaining({
-            school: { organizationId: 'org-2' },
-          }),
-        },
-      })
+    const teacherBranch = query.where.document.is.OR[1];
+    expect(teacherBranch.membership).toEqual({ organizationId: 'org-2' });
+    expect(teacherBranch.OR[0].classAssignment.class.school).toEqual({
+      organizationId: 'org-2',
+    });
+    expect(teacherBranch.OR[1].classAssignment).toEqual({ is: null });
+    expect(teacherBranch.OR[1].membership.classesAsStudent.some.school).toEqual(
+      { organizationId: 'org-2' }
     );
     expect(prisma.submissionActivity.findMany).not.toHaveBeenCalled();
   });

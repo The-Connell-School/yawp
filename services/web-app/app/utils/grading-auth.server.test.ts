@@ -5,10 +5,20 @@ mock.module('~/utils/auth.server', () => ({
   requireMembership: mock(),
   requireUserId: mock(),
 }));
+mock.module('~/utils/auth.server.js', () => ({
+  requireAdmin: mock(),
+  requireMembership: mock(),
+  requireUserId: mock(),
+}));
 mock.module('~/utils/db.server', () => ({ prisma: {} }));
+mock.module('~/utils/db.server.js', () => ({ prisma: {} }));
 
-const { buildTeacherClassWhere, canManageGrades, isGradingOwnDocument } =
-  await import('./grading-auth.server');
+const {
+  buildTeacherClassWhere,
+  buildTeacherDocumentAccessWhere,
+  canManageGrades,
+  isGradingOwnDocument,
+} = await import('./grading-auth.server');
 
 describe('grading auth helpers', () => {
   test('builds document class filters for current and legacy submissions', () => {
@@ -36,6 +46,7 @@ describe('grading auth helpers', () => {
           },
         },
         {
+          classAssignment: { is: null },
           membership: {
             classesAsStudent: {
               some: {
@@ -51,6 +62,27 @@ describe('grading auth helpers', () => {
         },
       ],
     });
+  });
+
+  test('keeps the legacy fallback tenant-scoped and limited to unassigned submissions', () => {
+    const where = buildTeacherDocumentAccessWhere({
+      membershipId: 'teacher-1',
+      organizationId: 'org-1',
+    }) as any;
+
+    expect(where.membership).toEqual({ organizationId: 'org-1' });
+    expect(where.OR[1]).toEqual(
+      expect.objectContaining({
+        classAssignment: { is: null },
+        membership: {
+          classesAsStudent: {
+            some: expect.objectContaining({
+              school: { organizationId: 'org-1' },
+            }),
+          },
+        },
+      })
+    );
   });
 
   test('does not add class filtering for admins', () => {

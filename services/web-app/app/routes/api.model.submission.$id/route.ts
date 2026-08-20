@@ -7,10 +7,13 @@ import { hasEffectivePlatformAdmin } from '~/utils/preview-access.server';
 import {
   buildSubmissionActivityChanges,
   recordSubmissionActivity,
+  resolveSubmissionActivityActorMembershipId,
   submissionActivityEventTypes,
 } from '~/domain/submissions/submission-activity.server';
 
 const MAX_TITLE_LEN = 500;
+
+class SubmissionTitleConflictError extends Error {}
 
 function normalizeSubmissionTitle(raw: unknown) {
   if (typeof raw !== 'string') {
@@ -48,6 +51,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
     const submission = await findSubmissionForTitleEdit({
       submissionId: params.id,
       membershipId: profile.id,
+      organizationId: profile.organization.id,
       isAdmin: hasEffectivePlatformAdmin(user?.isAdmin),
     });
 
@@ -62,32 +66,50 @@ export async function action({ request, params }: ActionFunctionArgs) {
       return Response.json({ success: true, title: normalized.title });
     }
 
-    await prisma.$transaction(async (tx) => {
-      await tx.submission.update({
-        where: { id: submission.id },
-        data: {
-          title: normalized.title,
-          updatedAt: new Date(),
-        },
+    try {
+      await prisma.$transaction(async (tx) => {
+        const update = await tx.submission.updateMany({
+          where: { id: submission.id, updatedAt: submission.updatedAt },
+          data: {
+            title: normalized.title,
+            updatedAt: new Date(),
+          },
+        });
+        if (update.count !== 1) throw new SubmissionTitleConflictError();
+
+        const organizationId =
+          submission.document.membership.organizationId ??
+          profile.organization.id;
+        await recordSubmissionActivity(tx, {
+          submissionId: submission.id,
+          organizationId,
+          actorMembershipId: resolveSubmissionActivityActorMembershipId({
+            actorMembershipId: profile.id,
+            actorOrganizationId: profile.organization.id,
+            submissionOrganizationId: organizationId,
+          }),
+          eventType: submissionActivityEventTypes.titleUpdated,
+          source: 'submission-title',
+          occurredAfterRelease: submission.releasedAt != null,
+          changes: buildSubmissionActivityChanges({
+            before: { title: submission.title },
+            after: { title: normalized.title },
+            fields: ['title'],
+          }),
+        });
       });
-      const organizationId =
-        submission.document.membership.organizationId ??
-        profile.organization.id;
-      await recordSubmissionActivity(tx, {
-        submissionId: submission.id,
-        organizationId,
-        actorMembershipId:
-          profile.organization.id === organizationId ? profile.id : null,
-        eventType: submissionActivityEventTypes.titleUpdated,
-        source: 'submission-title',
-        occurredAfterRelease: submission.releasedAt != null,
-        changes: buildSubmissionActivityChanges({
-          before: { title: submission.title },
-          after: { title: normalized.title },
-          fields: ['title'],
-        }),
-      });
-    });
+    } catch (error) {
+      if (error instanceof SubmissionTitleConflictError) {
+        return Response.json(
+          {
+            success: false,
+            message: 'The submission changed before the title could be saved.',
+          },
+          { status: 409 }
+        );
+      }
+      throw error;
+    }
 
     return Response.json({ success: true, title: normalized.title });
   }

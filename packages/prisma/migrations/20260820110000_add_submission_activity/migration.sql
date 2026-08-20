@@ -1,5 +1,7 @@
-SET lock_timeout = '5s';
-SET statement_timeout = '30s';
+BEGIN;
+
+SET LOCAL lock_timeout = '5s';
+SET LOCAL statement_timeout = '30s';
 
 -- Additive rollout gate. Recording begins immediately; released-grade editing
 -- and staff-facing activity UI remain disabled until this flag is enabled.
@@ -32,6 +34,9 @@ ON "SubmissionActivity"("organizationId", "createdAt" DESC);
 CREATE INDEX "SubmissionActivity_actorMembershipId_createdAt_idx"
 ON "SubmissionActivity"("actorMembershipId", "createdAt" DESC);
 
+CREATE INDEX "SubmissionActivity_eventType_createdAt_idx"
+ON "SubmissionActivity"("eventType", "createdAt" DESC);
+
 ALTER TABLE "SubmissionActivity"
 ADD CONSTRAINT "SubmissionActivity_submissionId_fkey"
 FOREIGN KEY ("submissionId") REFERENCES "Submission"("id")
@@ -46,3 +51,5 @@ ALTER TABLE "SubmissionActivity"
 ADD CONSTRAINT "SubmissionActivity_actorMembershipId_fkey"
 FOREIGN KEY ("actorMembershipId") REFERENCES "OrgMembership"("id")
 ON DELETE SET NULL ON UPDATE CASCADE;
+
+COMMIT;

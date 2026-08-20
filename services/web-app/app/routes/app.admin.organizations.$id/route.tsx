@@ -45,43 +45,38 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const currentUser = await requireAdmin(request);
   const profile = await requireMembership(request, currentUser.id);
 
-  const [
-    organization,
-    invitations,
-    totalOrganizations,
-    assignmentTypes,
-  ] =
+  const [organization, invitations, totalOrganizations, assignmentTypes] =
     await Promise.all([
-    prisma.organization.findUnique({
-      where: { id: params.id },
-      include: {
-        memberships: {
-          where: { isOrgOwner: true },
-          include: { user: { select: { name: true, email: true } } },
-        },
-        assignmentTypeAssignments: {
-          include: {
-            assignmentType: {
-              select: { id: true, title: true, description: true },
-            },
+      prisma.organization.findUnique({
+        where: { id: params.id },
+        include: {
+          memberships: {
+            where: { isOrgOwner: true },
+            include: { user: { select: { name: true, email: true } } },
           },
-          orderBy: { assignmentType: { position: 'asc' } },
+          assignmentTypeAssignments: {
+            include: {
+              assignmentType: {
+                select: { id: true, title: true, description: true },
+              },
+            },
+            orderBy: { assignmentType: { position: 'asc' } },
+          },
         },
-      },
-    }),
-    prisma.invitation.findMany({
-      where: {
-        metadata: JSON.stringify({ organizationId: params.id }),
-        type: 'onboard-owner',
-      },
-    }),
-    prisma.organization.count(),
-    prisma.assignmentType.findMany({
-      where: { archivedAt: null },
-      select: { id: true, title: true, description: true },
-      orderBy: { position: 'asc' },
-    }),
-  ]);
+      }),
+      prisma.invitation.findMany({
+        where: {
+          metadata: JSON.stringify({ organizationId: params.id }),
+          type: 'onboard-owner',
+        },
+      }),
+      prisma.organization.count(),
+      prisma.assignmentType.findMany({
+        where: { archivedAt: null },
+        select: { id: true, title: true, description: true },
+        orderBy: { position: 'asc' },
+      }),
+    ]);
 
   if (!organization) {
     throw new Response('Not Found', { status: 404 });
@@ -133,6 +128,16 @@ export async function action({ request, params }: ActionFunctionArgs) {
       throw new Response('Cannot delete the only organization', {
         status: 400,
       });
+    }
+
+    const submissionActivityCount = await prisma.submissionActivity.count({
+      where: { organizationId: params.id },
+    });
+    if (submissionActivityCount > 0) {
+      throw new Response(
+        'Cannot delete an organization with retained submission activity.',
+        { status: 409 }
+      );
     }
 
     await prisma.organization.delete({
@@ -345,12 +350,7 @@ function OrganizationInviteEmail({
 }
 
 export default function OrganizationRoute() {
-  const {
-    organization,
-    invitations,
-    assignmentTypes,
-    canDelete,
-  } =
+  const { organization, invitations, assignmentTypes, canDelete } =
     useLoaderData<typeof loader>();
   const fetcher = useFetcher();
   const inviteFetcher = useFetcher();
@@ -487,9 +487,7 @@ export default function OrganizationRoute() {
                         className="mt-1 h-4 w-4"
                       />
                       <span className="min-w-0">
-                        <span className="block font-medium">
-                          Yawp Reporter
-                        </span>
+                        <span className="block font-medium">Yawp Reporter</span>
                         <span className="block text-xs text-muted-foreground">
                           Adds Reporter to the teacher sidebar.
                         </span>
@@ -539,9 +537,7 @@ export default function OrganizationRoute() {
                   data-testid="organization-assignment-types-manager"
                 >
                   <div className="space-y-1">
-                    <h3 className="text-sm font-semibold">
-                      Assignment Types
-                    </h3>
+                    <h3 className="text-sm font-semibold">Assignment Types</h3>
                     <p className="text-sm text-muted-foreground">
                       Select the assignment types teachers in this organization
                       can see and use.
@@ -776,7 +772,6 @@ export default function OrganizationRoute() {
           </Table>
         </CardContent>
       </Card>
-
     </div>
   );
 }

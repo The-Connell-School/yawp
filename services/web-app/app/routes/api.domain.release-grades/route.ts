@@ -11,6 +11,7 @@ import {
 import {
   buildSubmissionActivityChanges,
   recordSubmissionActivity,
+  resolveSubmissionActivityActorMembershipId,
   submissionActivityEventTypes,
 } from '~/domain/submissions/submission-activity.server';
 
@@ -62,7 +63,9 @@ export async function action({ request }: ActionFunctionArgs) {
               ...teacherClassWhere,
             },
           },
-          ...(actor.isAdmin ? {} : { gradedByMembershipId: actor.membershipId }),
+          ...(actor.isAdmin
+            ? {}
+            : { gradedByMembershipId: actor.membershipId }),
           releasedAt: null,
           // A student can unsubmit after a teacher's grade is saved but
           // before it's released. Exclude it from eligibility so it fails
@@ -132,7 +135,9 @@ export async function action({ request }: ActionFunctionArgs) {
               ...teacherClassWhere,
             },
           },
-          ...(actor.isAdmin ? {} : { gradedByMembershipId: actor.membershipId }),
+          ...(actor.isAdmin
+            ? {}
+            : { gradedByMembershipId: actor.membershipId }),
           releasedAt: null,
           unsubmittedAt: null,
         },
@@ -153,10 +158,11 @@ export async function action({ request }: ActionFunctionArgs) {
         await recordSubmissionActivity(tx, {
           submissionId: submission.id,
           organizationId,
-          actorMembershipId:
-            actor.organizationId === organizationId
-              ? actor.membershipId
-              : null,
+          actorMembershipId: resolveSubmissionActivityActorMembershipId({
+            actorMembershipId: actor.membershipId,
+            actorOrganizationId: actor.organizationId,
+            submissionOrganizationId: organizationId,
+          }),
           eventType: submissionActivityEventTypes.gradeReleased,
           source: 'release-grades',
           occurredAfterRelease: false,

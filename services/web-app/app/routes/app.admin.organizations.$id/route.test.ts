@@ -18,6 +18,9 @@ const prisma = {
     createMany: mock(),
     deleteMany: mock(),
   },
+  submissionActivity: {
+    count: mock(),
+  },
   user: {
     findUnique: mock(),
   },
@@ -90,6 +93,7 @@ describe('admin organization detail route', () => {
     prisma.organization.update.mockReset();
     prisma.organizationAssignmentType.createMany.mockReset();
     prisma.organizationAssignmentType.deleteMany.mockReset();
+    prisma.submissionActivity.count.mockReset();
     prisma.user.findUnique.mockReset();
     requireAdmin.mockReset();
     requireMembership.mockReset();
@@ -109,12 +113,36 @@ describe('admin organization detail route', () => {
       operation: 'delete-org-assignment-types',
     });
     prisma.user.findUnique.mockResolvedValue({ isAdmin: true });
+    prisma.submissionActivity.count.mockResolvedValue(0);
     prisma.$transaction.mockResolvedValue([]);
+  });
+
+  test('retains audit history by refusing to hard-delete an organization with activity', async () => {
+    prisma.submissionActivity.count.mockResolvedValue(1);
+    const form = new URLSearchParams();
+    form.set('intent', 'deleteOrganization');
+
+    let thrown: unknown;
+    try {
+      await action({
+        request: updateRequest(form),
+        params: { id: 'org-1' },
+        context: {} as never,
+      });
+    } catch (error) {
+      thrown = error;
+    }
+
+    expect(thrown).toBeInstanceOf(Response);
+    expect((thrown as Response).status).toBe(409);
+    expect(prisma.organization.delete).not.toHaveBeenCalled();
   });
 
   test('does not load writing practice state for the organization edit sheet', async () => {
     const response = await loader({
-      request: new Request('https://example.test/app/admin/organizations/org-1'),
+      request: new Request(
+        'https://example.test/app/admin/organizations/org-1'
+      ),
       params: { id: 'org-1' },
       context: {} as never,
     });

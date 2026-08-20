@@ -6,6 +6,7 @@ import { getGradingActor } from '~/utils/grading-auth.server';
 import {
   buildSubmissionActivityChanges,
   recordSubmissionActivity,
+  resolveSubmissionActivityActorMembershipId,
   submissionActivityEventTypes,
 } from '~/domain/submissions/submission-activity.server';
 
@@ -95,9 +96,14 @@ export async function action({ request }: ActionFunctionArgs) {
       await recordSubmissionActivity(tx, {
         submissionId: submission.id,
         organizationId:
-          submission.document.membership.organizationId ??
-          actor.organizationId,
-        actorMembershipId: actor.membershipId,
+          submission.document.membership.organizationId ?? actor.organizationId,
+        actorMembershipId: resolveSubmissionActivityActorMembershipId({
+          actorMembershipId: actor.membershipId,
+          actorOrganizationId: actor.organizationId,
+          submissionOrganizationId:
+            submission.document.membership.organizationId ??
+            actor.organizationId,
+        }),
         eventType: submissionActivityEventTypes.unsubmitted,
         source: 'unsubmit-submission',
         occurredAfterRelease: false,

@@ -65,6 +65,7 @@ import {
 import {
   buildSubmissionActivityChanges,
   recordSubmissionActivity,
+  resolveSubmissionActivityActorMembershipId,
   submissionActivityEventTypes,
 } from '~/domain/submissions/submission-activity.server';
 
@@ -246,7 +247,9 @@ function buildApHistoryPrompt({
     snapshot.essayType === 'dbq'
       ? snapshot.sources
           .map((source) => {
-            const caption = source.caption ? `\nCaption: ${source.caption}` : '';
+            const caption = source.caption
+              ? `\nCaption: ${source.caption}`
+              : '';
             return `Document ${source.position}: ${source.title}\nAttribution: ${source.attribution}${caption}\nBody: ${source.body}`;
           })
           .join('\n\n')
@@ -639,10 +642,7 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 
   if (
-    isGradingOwnDocument(
-      actor.membershipId,
-      submission.document.membershipId
-    )
+    isGradingOwnDocument(actor.membershipId, submission.document.membershipId)
   ) {
     return dataResponse(
       {
@@ -668,8 +668,8 @@ export async function action({ request }: ActionFunctionArgs) {
     submission.document.membership.organizationId ?? actor.organizationId;
   if (
     submission.releasedAt != null &&
-    submission.document.membership.organization
-      ?.submissionActivityEnabled !== true
+    submission.document.membership.organization?.submissionActivityEnabled !==
+      true
   ) {
     return dataResponse(
       {
@@ -681,10 +681,10 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 
   const resolvedGradingConfig = await resolveAssignmentTypeGradingConfig({
-      assignmentTypeId: submission.document.assignmentTypeId,
-      assignmentTypeKind: submission.document.assignmentType?.kind ?? null,
-      assignmentTypeTitle: submission.document.assignmentType?.title ?? null,
-    });
+    assignmentTypeId: submission.document.assignmentTypeId,
+    assignmentTypeKind: submission.document.assignmentType?.kind ?? null,
+    assignmentTypeTitle: submission.document.assignmentType?.title ?? null,
+  });
   const requestedStrictnessLevel = data.gradingAssistantStrictnessLevel
     ? parseGradingAssistantStrictnessLevel(data.gradingAssistantStrictnessLevel)
     : null;
@@ -752,8 +752,7 @@ export async function action({ request }: ActionFunctionArgs) {
     forceFallback,
     signalFallbackRetry: !forceFallback,
   };
-  const retryResponse = () =>
-    dataResponse({ retrying: true }, { status: 202 });
+  const retryResponse = () => dataResponse({ retrying: true }, { status: 202 });
   const getGradingLlmCompletion = (
     params: Parameters<typeof getLLMCompletion>[0]
   ) =>
@@ -865,24 +864,21 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
       earnedPoints,
       points,
     } satisfies Prisma.InputJsonObject;
-    const {
-      numericPercentage,
-      letterGrade,
-      score,
-      overallScore,
-    } = applyStrictnessToGradeFields({
-      overallScore: earnedPoints,
-      numericPercentage: Math.round((earnedPoints / totalPoints) * 100),
-      letterGrade: letterFromPercent(
-        Math.round((earnedPoints / totalPoints) * 100)
-      ),
-      score: formatGrade(
-        Math.round((earnedPoints / totalPoints) * 100),
-        letterFromPercent(Math.round((earnedPoints / totalPoints) * 100))
-      ) ?? '',
-      scoringType: 'percentage',
-      gradingAssistantStrictnessLevel,
-    });
+    const { numericPercentage, letterGrade, score, overallScore } =
+      applyStrictnessToGradeFields({
+        overallScore: earnedPoints,
+        numericPercentage: Math.round((earnedPoints / totalPoints) * 100),
+        letterGrade: letterFromPercent(
+          Math.round((earnedPoints / totalPoints) * 100)
+        ),
+        score:
+          formatGrade(
+            Math.round((earnedPoints / totalPoints) * 100),
+            letterFromPercent(Math.round((earnedPoints / totalPoints) * 100))
+          ) ?? '',
+        scoringType: 'percentage',
+        gradingAssistantStrictnessLevel,
+      });
     const overallComment =
       typeof parsedJson.overallComment === 'string' &&
       parsedJson.overallComment.trim()
@@ -896,24 +892,24 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
     }
 
     const apGradeData = {
-        rubricScores,
-        overallScore,
-        overallComment,
-        numericPercentage,
-        letterGrade,
-        score,
-        aiMeta: {
-          model,
-          rubricMode: 'ap_history',
-          gradingAssistantStrictnessLevel,
-          gradedAt: now.toISOString(),
-          documentContext,
-        } satisfies Prisma.InputJsonValue,
-        ...(!submission.gradedAt
-          ? { gradedAt: now, gradedByMembershipId: actor.membershipId }
-          : {}),
-        updatedAt: now,
-      };
+      rubricScores,
+      overallScore,
+      overallComment,
+      numericPercentage,
+      letterGrade,
+      score,
+      aiMeta: {
+        model,
+        rubricMode: 'ap_history',
+        gradingAssistantStrictnessLevel,
+        gradedAt: now.toISOString(),
+        documentContext,
+      } satisfies Prisma.InputJsonValue,
+      ...(!submission.gradedAt
+        ? { gradedAt: now, gradedByMembershipId: actor.membershipId }
+        : {}),
+      updatedAt: now,
+    };
     await prisma.$transaction(async (tx) => {
       await tx.submission.update({
         where: {
@@ -926,8 +922,11 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
       await recordSubmissionActivity(tx, {
         submissionId: submission.id,
         organizationId,
-        actorMembershipId:
-          actor.organizationId === organizationId ? actor.membershipId : null,
+        actorMembershipId: resolveSubmissionActivityActorMembershipId({
+          actorMembershipId: actor.membershipId,
+          actorOrganizationId: actor.organizationId,
+          submissionOrganizationId: organizationId,
+        }),
         eventType: submissionActivityEventTypes.gradingAssistantUpdated,
         source: 'grade-essay-ai',
         occurredAfterRelease: submission.releasedAt != null,
@@ -986,7 +985,8 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
           gradingConfigSource: resolvedGradingConfig.source,
           ...gradingAiContextMetadata,
           assignmentTypeGradingLabel: resolvedGradingConfig.label,
-          assignmentTypeSourceTemplateId: resolvedGradingConfig.sourceTemplateId,
+          assignmentTypeSourceTemplateId:
+            resolvedGradingConfig.sourceTemplateId,
           assignmentTypeSourceTemplateSlug:
             resolvedGradingConfig.sourceTemplateSlug,
           gradingAssistantStrictnessLevel,
@@ -1271,34 +1271,35 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
 
   const now = new Date();
   const gradeData = {
-      rubricScores: rubricScores as Prisma.InputJsonValue,
-      overallScore,
-      overallComment,
-      numericPercentage,
-      letterGrade,
-      score,
-      ...(grammarIssues !== null ? { grammarIssues } : {}),
-      aiMeta: {
-        model,
-        gradedAt: now.toISOString(),
-        gradingConfigSource: resolvedGradingConfig.source,
-        assignmentTypeRubricSource: resolvedGradingConfig.source,
-        assignmentTypeGradingVersion: resolvedGradingConfig.version,
-        assignmentTypeGradingLabel: resolvedGradingConfig.label,
-        assignmentTypeSourceTemplateId: resolvedGradingConfig.sourceTemplateId,
-        assignmentTypeSourceTemplateSlug: resolvedGradingConfig.sourceTemplateSlug,
-        gradingAssistantStrictnessLevel,
-        assignmentTypeId: submission.document.assignmentTypeId,
-        assignmentId: submission.document.assignment?.id ?? null,
-        assignmentTypeKind: submission.document.assignmentType?.kind ?? null,
-        rubricCategoryKeys: rubricKeys,
-        documentContext,
-      } satisfies Prisma.InputJsonValue,
-      ...(!submission.gradedAt
-        ? { gradedAt: now, gradedByMembershipId: actor.membershipId }
-        : {}),
-      updatedAt: now,
-    };
+    rubricScores: rubricScores as Prisma.InputJsonValue,
+    overallScore,
+    overallComment,
+    numericPercentage,
+    letterGrade,
+    score,
+    ...(grammarIssues !== null ? { grammarIssues } : {}),
+    aiMeta: {
+      model,
+      gradedAt: now.toISOString(),
+      gradingConfigSource: resolvedGradingConfig.source,
+      assignmentTypeRubricSource: resolvedGradingConfig.source,
+      assignmentTypeGradingVersion: resolvedGradingConfig.version,
+      assignmentTypeGradingLabel: resolvedGradingConfig.label,
+      assignmentTypeSourceTemplateId: resolvedGradingConfig.sourceTemplateId,
+      assignmentTypeSourceTemplateSlug:
+        resolvedGradingConfig.sourceTemplateSlug,
+      gradingAssistantStrictnessLevel,
+      assignmentTypeId: submission.document.assignmentTypeId,
+      assignmentId: submission.document.assignment?.id ?? null,
+      assignmentTypeKind: submission.document.assignmentType?.kind ?? null,
+      rubricCategoryKeys: rubricKeys,
+      documentContext,
+    } satisfies Prisma.InputJsonValue,
+    ...(!submission.gradedAt
+      ? { gradedAt: now, gradedByMembershipId: actor.membershipId }
+      : {}),
+    updatedAt: now,
+  };
 
   await prisma.$transaction(async (tx) => {
     await tx.submission.update({
@@ -1312,54 +1313,58 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
 
     await tx.submissionGradingAssistantRun.create({
       data: {
-      submissionId: submission.id,
-      assignmentTypeId: submission.document.assignmentTypeId,
-      assignmentTypeGradingVersion: resolvedGradingConfig.version,
-      assignmentTypeRubricSnapshot:
-        resolvedGradingConfig.rubricSnapshot as Prisma.InputJsonValue,
-      assignmentTypePromptConfigSnapshot:
-        resolvedGradingConfig.promptConfigSnapshot as Prisma.InputJsonValue,
-      source: resolvedGradingConfig.source,
-      model,
-      status: 'succeeded',
-      metadata: {
-        // The suggestions exactly as the assistant produced them. A teacher
-        // edits the submission itself afterwards, so this is the only record
-        // of what was suggested — it is what "reset to the suggestions"
-        // restores, including after a reload.
-        output: {
-          rubricScores,
-          overallScore,
-          overallComment,
-          numericPercentage,
-          letterGrade,
-          score,
-          grammarIssues,
-          gradingAssistantStrictnessLevel,
-        },
-        assignmentTypeGradingLabel: resolvedGradingConfig.label,
-        assignmentTypeRubricSource: resolvedGradingConfig.source,
-        assignmentTypeSourceTemplateId: resolvedGradingConfig.sourceTemplateId,
-        assignmentTypeSourceTemplateSlug:
-          resolvedGradingConfig.sourceTemplateSlug,
-        gradingAssistantStrictnessLevel,
+        submissionId: submission.id,
         assignmentTypeId: submission.document.assignmentTypeId,
-        assignmentId: submission.document.assignment?.id ?? null,
-        assignmentTypeKind: submission.document.assignmentType?.kind ?? null,
-        scoringType,
-        rubricKeys,
-        rubricCategoryKeys: rubricKeys,
-        gradedAt: now.toISOString(),
-        documentContext,
-      } satisfies Prisma.InputJsonValue,
+        assignmentTypeGradingVersion: resolvedGradingConfig.version,
+        assignmentTypeRubricSnapshot:
+          resolvedGradingConfig.rubricSnapshot as Prisma.InputJsonValue,
+        assignmentTypePromptConfigSnapshot:
+          resolvedGradingConfig.promptConfigSnapshot as Prisma.InputJsonValue,
+        source: resolvedGradingConfig.source,
+        model,
+        status: 'succeeded',
+        metadata: {
+          // The suggestions exactly as the assistant produced them. A teacher
+          // edits the submission itself afterwards, so this is the only record
+          // of what was suggested — it is what "reset to the suggestions"
+          // restores, including after a reload.
+          output: {
+            rubricScores,
+            overallScore,
+            overallComment,
+            numericPercentage,
+            letterGrade,
+            score,
+            grammarIssues,
+            gradingAssistantStrictnessLevel,
+          },
+          assignmentTypeGradingLabel: resolvedGradingConfig.label,
+          assignmentTypeRubricSource: resolvedGradingConfig.source,
+          assignmentTypeSourceTemplateId:
+            resolvedGradingConfig.sourceTemplateId,
+          assignmentTypeSourceTemplateSlug:
+            resolvedGradingConfig.sourceTemplateSlug,
+          gradingAssistantStrictnessLevel,
+          assignmentTypeId: submission.document.assignmentTypeId,
+          assignmentId: submission.document.assignment?.id ?? null,
+          assignmentTypeKind: submission.document.assignmentType?.kind ?? null,
+          scoringType,
+          rubricKeys,
+          rubricCategoryKeys: rubricKeys,
+          gradedAt: now.toISOString(),
+          documentContext,
+        } satisfies Prisma.InputJsonValue,
       },
     });
 
     await recordSubmissionActivity(tx, {
       submissionId: submission.id,
       organizationId,
-      actorMembershipId:
-        actor.organizationId === organizationId ? actor.membershipId : null,
+      actorMembershipId: resolveSubmissionActivityActorMembershipId({
+        actorMembershipId: actor.membershipId,
+        actorOrganizationId: actor.organizationId,
+        submissionOrganizationId: organizationId,
+      }),
       eventType: submissionActivityEventTypes.gradingAssistantUpdated,
       source: 'grade-essay-ai',
       occurredAfterRelease: submission.releasedAt != null,
