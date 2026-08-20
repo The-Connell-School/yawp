@@ -39,6 +39,7 @@ import omit from 'lodash/omit';
 import { getMembershipId } from './cookies/membership-id.server.ts';
 import { LocalDevEnvironmentBar } from './components/local-dev-environment-bar.tsx';
 import { isLocalDevAuthEnabled } from './utils/local-dev-auth.server.ts';
+import { isBlackboardLtiMockUiEnabled } from './utils/blackboard-lti-mock-ui.server.ts';
 import { useContrastPreference } from './routes/api.preferences.contrast/route.tsx';
 import {
   getEnvironmentBannerWarning,
@@ -113,6 +114,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
         localDevQuickLogin: { enabled: false },
         previewAccessGateEnabled: isPreviewAccessGateEnabled(),
         previewAccessSeat: null,
+        blackboardLtiMockEnabled: false,
         impersonation: { isReadOnly: false, impersonatorUserId: null },
         toast: null,
       },
@@ -225,6 +227,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       },
       previewAccessGateEnabled: isPreviewAccessGateEnabled(),
       previewAccessSeat,
+      blackboardLtiMockEnabled: isBlackboardLtiMockUiEnabled(),
       impersonation,
       toast,
     },
@@ -377,6 +380,7 @@ export default function App({ loaderData: data }: Route.ComponentProps) {
           localDevQuickLogin={data.localDevQuickLogin}
           previewAccessGateEnabled={data.previewAccessGateEnabled}
           previewAccessSeatLabel={data.previewAccessSeat?.label ?? null}
+          blackboardLtiMockEnabled={data.blackboardLtiMockEnabled}
         />
       ) : null}
       <GlobalLoading />

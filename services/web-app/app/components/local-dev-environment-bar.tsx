@@ -32,6 +32,7 @@ type LocalDevEnvironmentBarProps = {
   };
   previewAccessGateEnabled?: boolean;
   previewAccessSeatLabel?: string | null;
+  blackboardLtiMockEnabled?: boolean;
 };
 
 const STAFF_ROLES = new Set(['admin', 'owner', 'teacher', 'teacher-multi']);
@@ -167,10 +168,12 @@ function LocalDevQuickLoginPanel({
   isOpen,
   previewAccessGateEnabled,
   previewAccessSeatLabel,
+  blackboardLtiMockEnabled,
 }: {
   isOpen: boolean;
   previewAccessGateEnabled: boolean;
   previewAccessSeatLabel: string | null;
+  blackboardLtiMockEnabled: boolean;
 }) {
   const loginFetcher = useFetcher();
   const [options, setOptions] = useState<LocalDevLoginOption[]>([]);
@@ -289,27 +292,44 @@ function LocalDevQuickLoginPanel({
           Unable to load preview users.
         </p>
       ) : null}
-      {previewAccessGateEnabled ? (
+      {blackboardLtiMockEnabled || previewAccessGateEnabled ? (
         <>
-          {options.length > 0 ? (
+          {options.length > 0 || blackboardLtiMockEnabled ? (
             <div className="my-1.5 h-px bg-border/60" aria-hidden="true" />
           ) : null}
           {previewAccessSeatLabel ? (
             <PreviewSeatIdentity label={previewAccessSeatLabel} />
           ) : null}
-          <Form method="post" action="/auth/preview-access">
-            <input type="hidden" name="intent" value="sign-out" />
-            <button
-              type="submit"
-              className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:bg-accent focus-visible:outline-none"
-            >
-              <KeyRound className="size-4" aria-hidden="true" />
-              Re-enter access code
-            </button>
-          </Form>
+          {blackboardLtiMockEnabled ? (
+            <BlackboardLtiMockLink />
+          ) : null}
+          {previewAccessGateEnabled ? (
+            <Form method="post" action="/auth/preview-access">
+              <input type="hidden" name="intent" value="sign-out" />
+              <button
+                type="submit"
+                className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:bg-accent focus-visible:outline-none"
+              >
+                <KeyRound className="size-4" aria-hidden="true" />
+                Re-enter access code
+              </button>
+            </Form>
+          ) : null}
         </>
       ) : null}
     </div>
+  );
+}
+
+export function BlackboardLtiMockLink() {
+  return (
+    <a
+      href="/dev/blackboard-lti-mock/"
+      className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:bg-accent focus-visible:outline-none"
+    >
+      <FlaskConical className="size-4" aria-hidden="true" />
+      Blackboard LTI mock
+    </a>
   );
 }
 
@@ -327,6 +347,7 @@ export function LocalDevEnvironmentBar({
   localDevQuickLogin,
   previewAccessGateEnabled = false,
   previewAccessSeatLabel = null,
+  blackboardLtiMockEnabled = false,
 }: LocalDevEnvironmentBarProps) {
   const [isQuickLoginOpen, setIsQuickLoginOpen] = useState(false);
 
@@ -384,6 +405,7 @@ export function LocalDevEnvironmentBar({
             isOpen={isQuickLoginOpen}
             previewAccessGateEnabled={previewAccessGateEnabled}
             previewAccessSeatLabel={previewAccessSeatLabel}
+            blackboardLtiMockEnabled={blackboardLtiMockEnabled}
           />
         </PopoverContent>
       </Popover>
