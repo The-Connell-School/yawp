@@ -30,6 +30,15 @@ export async function findSubmissionForTitleEdit(params: {
         },
       },
     },
-    select: { id: true },
+    select: {
+      id: true,
+      title: true,
+      releasedAt: true,
+      document: {
+        select: {
+          membership: { select: { organizationId: true } },
+        },
+      },
+    },
   });
 }

@@ -3,6 +3,11 @@ import { parseFormData, validationError } from '@rvf/react-router';
 import { z } from 'zod';
 import { prisma } from '~/utils/db.server';
 import { getGradingActor } from '~/utils/grading-auth.server';
+import {
+  buildSubmissionActivityChanges,
+  recordSubmissionActivity,
+  submissionActivityEventTypes,
+} from '~/domain/submissions/submission-activity.server';
 
 const POST = z.object({ submissionId: z.string().min(1) });
 
@@ -41,7 +46,18 @@ export async function action({ request }: ActionFunctionArgs) {
             is: { membershipId: actor.membershipId },
           },
         },
-        select: { id: true, gradedAt: true, releasedAt: true },
+        select: {
+          id: true,
+          gradedAt: true,
+          releasedAt: true,
+          unsubmittedAt: true,
+          unsubmittedByMembershipId: true,
+          document: {
+            select: {
+              membership: { select: { organizationId: true } },
+            },
+          },
+        },
       });
 
       if (!submission) {
@@ -75,6 +91,26 @@ export async function action({ request }: ActionFunctionArgs) {
       if (updateResult.count !== 1) {
         throw new UnsubmitConflictError();
       }
+
+      await recordSubmissionActivity(tx, {
+        submissionId: submission.id,
+        organizationId:
+          submission.document.membership.organizationId ??
+          actor.organizationId,
+        actorMembershipId: actor.membershipId,
+        eventType: submissionActivityEventTypes.unsubmitted,
+        source: 'unsubmit-submission',
+        occurredAfterRelease: false,
+        changes: buildSubmissionActivityChanges({
+          before: submission,
+          after: {
+            ...submission,
+            unsubmittedAt: now,
+            unsubmittedByMembershipId: actor.membershipId,
+          },
+          fields: ['unsubmittedAt', 'unsubmittedByMembershipId'],
+        }),
+      });
 
       return { kind: 'success' as const };
     });

@@ -7,6 +7,12 @@ import { prisma } from '~/utils/db.server';
 import { isDocumentSubmittableContent } from '~/utils/document-submittable';
 import { redirectWithToast } from '~/utils/toast.server';
 import { hasEffectivePlatformAdmin } from '~/utils/preview-access.server';
+import {
+  buildSubmissionActivityChanges,
+  buildSubmissionBodyAuditMetadata,
+  recordSubmissionActivity,
+  submissionActivityEventTypes,
+} from '~/domain/submissions/submission-activity.server';
 
 const POST = z.object({ documentId: z.string(), title: z.string().optional() });
 
@@ -67,6 +73,7 @@ const actionImpl = async ({ request }: ActionFunctionArgs) => {
       },
       membership: {
         select: {
+          organizationId: true,
           classesAsStudent: {
             select: {
               id: true,
@@ -141,6 +148,28 @@ const actionImpl = async ({ request }: ActionFunctionArgs) => {
           where: { id: document.id },
           data: {
             updatedAt: now,
+          },
+        });
+
+        await recordSubmissionActivity(tx, {
+          submissionId: submission.id,
+          organizationId:
+            document.membership.organizationId ?? profile.organization.id,
+          actorMembershipId: profile.id,
+          eventType: submissionActivityEventTypes.created,
+          source: 'submit-document',
+          occurredAfterRelease: false,
+          changes: buildSubmissionActivityChanges({
+            before: { title: null, submittedAt: null },
+            after: {
+              title: submission.title,
+              submittedAt: submission.submittedAt,
+            },
+            fields: ['title', 'submittedAt'],
+          }),
+          metadata: {
+            body: buildSubmissionBodyAuditMetadata({ text, html }),
+            documentId: document.id,
           },
         });
 

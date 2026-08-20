@@ -4,6 +4,11 @@ import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { findSubmissionForTitleEdit } from '~/utils/submission-access.server';
 import { hasEffectivePlatformAdmin } from '~/utils/preview-access.server';
+import {
+  buildSubmissionActivityChanges,
+  recordSubmissionActivity,
+  submissionActivityEventTypes,
+} from '~/domain/submissions/submission-activity.server';
 
 const MAX_TITLE_LEN = 500;
 
@@ -53,12 +58,35 @@ export async function action({ request, params }: ActionFunctionArgs) {
       );
     }
 
-    await prisma.submission.update({
-      where: { id: submission.id },
-      data: {
-        title: normalized.title,
-        updatedAt: new Date(),
-      },
+    if (submission.title === normalized.title) {
+      return Response.json({ success: true, title: normalized.title });
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await tx.submission.update({
+        where: { id: submission.id },
+        data: {
+          title: normalized.title,
+          updatedAt: new Date(),
+        },
+      });
+      const organizationId =
+        submission.document.membership.organizationId ??
+        profile.organization.id;
+      await recordSubmissionActivity(tx, {
+        submissionId: submission.id,
+        organizationId,
+        actorMembershipId:
+          profile.organization.id === organizationId ? profile.id : null,
+        eventType: submissionActivityEventTypes.titleUpdated,
+        source: 'submission-title',
+        occurredAfterRelease: submission.releasedAt != null,
+        changes: buildSubmissionActivityChanges({
+          before: { title: submission.title },
+          after: { title: normalized.title },
+          fields: ['title'],
+        }),
+      });
     });
 
     return Response.json({ success: true, title: normalized.title });

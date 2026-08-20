@@ -4,6 +4,11 @@ import { z } from 'zod';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { hasEffectivePlatformAdmin } from '~/utils/preview-access.server';
+import {
+  buildSubmissionActivityChanges,
+  recordSubmissionActivity,
+  submissionActivityEventTypes,
+} from '~/domain/submissions/submission-activity.server';
 
 const POST = z
   .object({
@@ -22,18 +27,28 @@ const POST = z
     path: ['excerpt'],
   });
 
-function teacherDocumentAccessWhere(membershipId: string) {
+function teacherDocumentAccessWhere(
+  membershipId: string,
+  organizationId: string
+) {
   return {
+    membership: { organizationId },
     OR: [
       {
         classAssignment: {
-          class: { teachers: { some: { id: membershipId } } },
+          class: {
+            school: { organizationId },
+            teachers: { some: { id: membershipId } },
+          },
         },
       },
       {
         membership: {
           classesAsStudent: {
-            some: { teachers: { some: { id: membershipId } } },
+            some: {
+              school: { organizationId },
+              teachers: { some: { id: membershipId } },
+            },
           },
         },
       },
@@ -60,11 +75,24 @@ export async function action({ request }: ActionFunctionArgs) {
         is: {
           deletedAt: null,
           membershipId: { not: profile.id },
-          ...(isAdmin ? {} : teacherDocumentAccessWhere(profile.id)),
+          ...(isAdmin
+            ? {}
+            : teacherDocumentAccessWhere(
+                profile.id,
+                profile.organization.id
+              )),
         },
       },
     },
-    select: { id: true },
+    select: {
+      id: true,
+      releasedAt: true,
+      document: {
+        select: {
+          membership: { select: { organizationId: true } },
+        },
+      },
+    },
   });
 
   if (!submission) {
@@ -77,20 +105,47 @@ export async function action({ request }: ActionFunctionArgs) {
     );
   }
 
-  const created = await prisma.submissionComment.create({
-    data: {
-      submission: { connect: { id: submission.id } },
-      membership: { connect: { id: profile.id } },
-      content: data.content,
-      occurrence: data.occurrence,
-      ...(data.excerpt != null &&
-        data.excerpt !== '' && { excerpt: data.excerpt }),
-    },
-    include: {
-      membership: {
-        include: { user: { select: { name: true, email: true } } },
+  const created = await prisma.$transaction(async (tx) => {
+    const comment = await tx.submissionComment.create({
+      data: {
+        submission: { connect: { id: submission.id } },
+        membership: { connect: { id: profile.id } },
+        content: data.content,
+        occurrence: data.occurrence,
+        ...(data.excerpt != null &&
+          data.excerpt !== '' && { excerpt: data.excerpt }),
       },
-    },
+      include: {
+        membership: {
+          include: { user: { select: { name: true, email: true } } },
+        },
+      },
+    });
+    const organizationId =
+      submission.document.membership.organizationId ??
+      profile.organization.id;
+    await recordSubmissionActivity(tx, {
+      submissionId: submission.id,
+      organizationId,
+      actorMembershipId:
+        profile.organization.id === organizationId ? profile.id : null,
+      eventType: submissionActivityEventTypes.commentCreated,
+      source: 'submission-comment',
+      occurredAfterRelease: submission.releasedAt != null,
+      changes: buildSubmissionActivityChanges({
+        before: { comment: null },
+        after: {
+          comment: {
+            id: comment.id,
+            content: data.content,
+            excerpt: data.excerpt ?? null,
+            occurrence: data.occurrence,
+          },
+        },
+        fields: ['comment'],
+      }),
+    });
+    return comment;
   });
 
   return dataResponse({ success: true, comment: created }, { status: 201 });
