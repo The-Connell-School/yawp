@@ -43,7 +43,7 @@ try {
 
   await teacherPage.getByTestId('submission-lifecycle-edit').click();
   await expect(
-    teacherPage.getByText('This grade is already visible to the student.')
+    teacherPage.getByTestId('released-grade-edit-warning')
   ).toBeVisible();
   const warningScreenshotPath = resolve(
     'test-results/production-released-grade-edit-warning.png'
