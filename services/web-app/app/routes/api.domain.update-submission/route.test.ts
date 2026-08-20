@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, mock, test } from 'bun:test';
 const prisma = {
   $transaction: mock(),
   submission: { findFirst: mock(), updateMany: mock() },
+  submissionActivity: { create: mock() },
 };
 
 const getGradingActor = mock();
@@ -36,6 +37,7 @@ describe('api.domain.update-submission', () => {
     prisma.$transaction.mockReset();
     prisma.submission.findFirst.mockReset();
     prisma.submission.updateMany.mockReset();
+    prisma.submissionActivity.create.mockReset();
     getGradingActor.mockReset();
     canManageGrades.mockReset();
     isGradingOwnDocument.mockReset();
@@ -303,6 +305,78 @@ describe('api.domain.update-submission', () => {
     const updateCall = prisma.submission.updateMany.mock.calls[0]?.[0];
     expect(updateCall.data.gradedAt).toBeUndefined();
     expect(updateCall.data.gradedByMembershipId).toBeUndefined();
+  });
+
+  test('atomically records exact before/after activity when a released grade is edited', async () => {
+    const releasedAt = new Date('2026-08-01T15:30:00.000Z');
+    const transactionActivityCreate = mock().mockResolvedValue({
+      id: 'activity-1',
+    });
+    prisma.$transaction.mockImplementationOnce(async (callback: any) =>
+      callback({
+        submission: prisma.submission,
+        submissionActivity: { create: transactionActivityCreate },
+      })
+    );
+    prisma.submission.findFirst.mockResolvedValue({
+      id: 'sub-1',
+      gradedAt: new Date('2026-07-31T14:00:00.000Z'),
+      gradedByMembershipId: 'teacher-1',
+      releasedAt,
+      score: '85% B',
+      feedback: 'Strong opening.',
+      numericPercentage: 85,
+      overallScore: 85,
+      unsubmittedAt: null,
+      document: {
+        membershipId: 'student-1',
+        assignment: null,
+        classAssignment: {
+          class: {
+            id: 'class-1',
+            schoolId: 'school-1',
+            school: { organizationId: 'org-1' },
+            teachers: [{ id: 'teacher-1' }],
+          },
+        },
+        membership: { classesAsStudent: [] },
+      },
+    });
+
+    const response = (await action({
+      request: makeRequest({
+        submissionId: 'sub-1',
+        score: '92% A-',
+        feedback: 'Stronger evidence and analysis.',
+      }),
+    } as any)) as Response;
+
+    expect(response.status).toBe(200);
+    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+    expect(transactionActivityCreate).toHaveBeenCalledTimes(1);
+    expect(prisma.submissionActivity.create).not.toHaveBeenCalled();
+
+    const activity = transactionActivityCreate.mock.calls[0][0].data;
+    expect(activity).toEqual(
+      expect.objectContaining({
+        submissionId: 'sub-1',
+        organizationId: 'org-1',
+        actorMembershipId: 'teacher-1',
+        occurredAfterRelease: true,
+        changes: {
+          score: { before: '85% B', after: '92% A-' },
+          feedback: {
+            before: 'Strong opening.',
+            after: 'Stronger evidence and analysis.',
+          },
+        },
+      })
+    );
+    expect(activity.eventType).toEqual(expect.any(String));
+    expect(activity.source).toEqual(expect.any(String));
+
+    const updateCall = prisma.submission.updateMany.mock.calls[0][0];
+    expect(updateCall.data.releasedAt).toBeUndefined();
   });
 
   test('assigns gradedByMembershipId when marking an already graded submission', async () => {
