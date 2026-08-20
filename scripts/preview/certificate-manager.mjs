@@ -446,10 +446,13 @@ export async function ensureCertificate({
 
 async function residentHostnames(root, domain) {
   const entries = await readdir(path.join(root, 'previews'), { withFileTypes: true });
-  return entries
-    .filter((entry) => entry.isDirectory() && /^pr-[1-9][0-9]*$/.test(entry.name))
-    .map((entry) => `${entry.name}.${domain}`)
-    .sort((a, b) => parsePreviewPr(a, domain) - parsePreviewPr(b, domain));
+  const hostnames = [];
+  for (const entry of entries) {
+    if (!entry.isDirectory() || !/^pr-[1-9][0-9]*$/.test(entry.name)) continue;
+    hostnames.push(`${entry.name}.${domain}`);
+    hostnames.push(`blackboard-${entry.name}.${domain}`);
+  }
+  return hostnames.sort((a, b) => parsePreviewPr(a, domain) - parsePreviewPr(b, domain));
 }
 
 export async function maintainCertificates({ hostnames, ensure = ensureCertificate, options }) {

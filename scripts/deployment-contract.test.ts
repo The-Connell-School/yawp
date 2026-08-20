@@ -753,7 +753,7 @@ describe('PR preview deployment contract', () => {
     expect(ingressServer).toContain("service === 'blackboard'");
     expect(ingressServer).toContain('yawp-pr-${pr}-blackboard-lti-mock-1');
     expect(ingressServer).toContain('createWebSocketUpgradeHandler');
-    expect(ingressServer).toContain('authorizeWake(pr, request.url, request)');
+    expect(ingressServer).toContain('authorizeWake(parsed.pr, request.url, request)');
     expect(ingressServer).toContain("upstreamResponse.headers['x-yawp-preview-authorized']");
     expect(certificateManager).toContain("type === 'http-01'");
     expect(wakeScript).toContain('docker compose');
@@ -1155,7 +1155,7 @@ describe('PR preview deployment contract', () => {
       '- **Data:** `${{ env.PREVIEW_DATA_MODE }}` in an isolated PR database'
     );
     expect(previewWorkflow).toContain(
-      '- **Blackboard:** `${{ steps.deploy.outputs.blackboard_url }}`'
+      '- **Blackboard:** ${{ steps.deploy.outputs.blackboard_url }}'
     );
     expect(previewWorkflow).not.toContain('seed overlay');
   });

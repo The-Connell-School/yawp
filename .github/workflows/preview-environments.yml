@@ -252,6 +252,7 @@ jobs:
           fi
 
           preview_url="$(awk -F= '/^PREVIEW_URL=/{print $2}' /tmp/preview-deploy.log | tail -1)"
+          blackboard_url="$(awk -F= '/^BLACKBOARD_URL=/{print $2}' /tmp/preview-deploy.log | tail -1)"
           access_code="$(awk -F= '/^PREVIEW_ACCESS_CODE=/{print $2}' /tmp/preview-deploy.log | tail -1)"
           elapsed_ms="$(awk -F= '/^PREVIEW_ELAPSED_MS=/{print $2}' /tmp/preview-deploy.log | tail -1)"
           master_org_gate_enabled="$(awk -F= '/^PREVIEW_MASTER_ORG_GATE_ENABLED=/{print $2}' /tmp/preview-deploy.log | tail -1)"
@@ -260,6 +261,7 @@ jobs:
           echo "Preview capacity OK: ${running}/${PREVIEW_MAX_RUNNING} running before deploy, ${resident}/${PREVIEW_MAX_RESIDENT} resident."
           {
             echo "url=$preview_url"
+            echo "blackboard_url=${blackboard_url:-}"
             echo "access_code=$access_code"
             echo "elapsed_ms=${elapsed_ms:-unknown}"
             echo "master_org_gate_enabled=${master_org_gate_enabled:-false}"
