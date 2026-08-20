@@ -35,6 +35,9 @@ try {
       numOfStudentSeats: 200,
       numOfTeacherSeats: 40,
       reporterEnabled: true,
+      // Writing practice defaults off so it stays dark in production. Local dev
+      // and previews exist to look at it, so they seed it on.
+      writingPracticeEnabled: true,
       classInsightsEnabled: false,
     },
   });

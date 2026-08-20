@@ -118,6 +118,9 @@ export async function createPreviewSeat(
       numOfStudentSeats: 200,
       numOfTeacherSeats: 40,
       reporterEnabled: true,
+      // Same reasoning as the local-dev seed: a preview seat is for looking at
+      // the build, so the dark-by-default flag is on here.
+      writingPracticeEnabled: true,
       classInsightsEnabled: false,
       previewSeatCode: seat.previewSeatCode,
     },
