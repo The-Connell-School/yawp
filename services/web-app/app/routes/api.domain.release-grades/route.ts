@@ -74,7 +74,6 @@ export async function action({ request }: ActionFunctionArgs) {
           releasedAt: true,
           document: {
             select: {
-              membership: { select: { organizationId: true } },
               classAssignment: {
                 select: {
                   class: {
@@ -89,6 +88,7 @@ export async function action({ request }: ActionFunctionArgs) {
               },
               membership: {
                 select: {
+                  organizationId: true,
                   classesAsStudent: {
                     select: {
                       id: true,

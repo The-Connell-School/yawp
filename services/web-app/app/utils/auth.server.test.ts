@@ -53,6 +53,7 @@ const membershipFixture = {
     reporterEnabled: false,
     classInsightsEnabled: false,
     writingPracticeEnabled: false,
+    submissionActivityEnabled: false,
   },
 };
 
@@ -97,6 +98,7 @@ describe('membership auth helpers', () => {
             reporterEnabled: true,
             classInsightsEnabled: true,
             writingPracticeEnabled: true,
+            submissionActivityEnabled: true,
           },
         },
       },
@@ -127,6 +129,7 @@ describe('membership auth helpers', () => {
             reporterEnabled: true,
             classInsightsEnabled: true,
             writingPracticeEnabled: true,
+            submissionActivityEnabled: true,
           },
         },
       },

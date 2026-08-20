@@ -34,10 +34,13 @@ export const auditableSubmissionFields = [
 
 export type SubmissionActivityChanges = Record<
   string,
-  { before: Prisma.InputJsonValue; after: Prisma.InputJsonValue }
+  {
+    before: Prisma.InputJsonValue | null;
+    after: Prisma.InputJsonValue | null;
+  }
 >;
 
-function toAuditJson(value: unknown): Prisma.InputJsonValue {
+function toAuditJson(value: unknown): Prisma.InputJsonValue | null {
   if (value === undefined || value === null) return null;
   if (value instanceof Date) return value.toISOString();
   if (
@@ -48,20 +51,22 @@ function toAuditJson(value: unknown): Prisma.InputJsonValue {
     return value;
   }
   if (typeof value === 'bigint') return value.toString();
-  if (Array.isArray(value)) return value.map(toAuditJson);
+  if (Array.isArray(value)) {
+    return value.map(toAuditJson) as Prisma.InputJsonArray;
+  }
   if (typeof value === 'object') {
     return Object.fromEntries(
       Object.entries(value as Record<string, unknown>)
         .filter(([, entry]) => entry !== undefined)
         .map(([key, entry]) => [key, toAuditJson(entry)])
-    );
+    ) as Prisma.InputJsonObject;
   }
   return String(value);
 }
 
 function auditValuesEqual(
-  left: Prisma.InputJsonValue,
-  right: Prisma.InputJsonValue
+  left: Prisma.InputJsonValue | null,
+  right: Prisma.InputJsonValue | null
 ) {
   return JSON.stringify(left) === JSON.stringify(right);
 }
