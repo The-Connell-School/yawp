@@ -1,9 +1,11 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
 
 const prisma = {
+  $transaction: mock(),
   user: { findUnique: mock() },
   submission: { findFirst: mock() },
   submissionComment: { create: mock() },
+  submissionActivity: { create: mock() },
 };
 
 const requireUserId = mock();
@@ -19,16 +21,28 @@ describe('api.model.submission-comment', () => {
     prisma.user.findUnique.mockReset();
     prisma.submission.findFirst.mockReset();
     prisma.submissionComment.create.mockReset();
+    prisma.submissionActivity.create.mockReset();
+    prisma.$transaction.mockReset();
     requireUserId.mockReset();
     requireMembership.mockReset();
 
     requireUserId.mockResolvedValue('user-1');
-    requireMembership.mockResolvedValue({ id: 'profile-1' });
+    requireMembership.mockResolvedValue({
+      id: 'profile-1',
+      organization: { id: 'org-1' },
+    });
     prisma.user.findUnique.mockResolvedValue({ isAdmin: false });
+    prisma.$transaction.mockImplementation(async (callback: any) =>
+      callback(prisma)
+    );
   });
 
   test('creates a submission comment', async () => {
-    prisma.submission.findFirst.mockResolvedValue({ id: 'sub-1' });
+    prisma.submission.findFirst.mockResolvedValue({
+      id: 'sub-1',
+      releasedAt: new Date('2026-08-20T11:00:00.000Z'),
+      document: { membership: { organizationId: 'org-1' } },
+    });
     prisma.submissionComment.create.mockResolvedValue({
       id: 'comment-1',
       content: 'Great point here.',
@@ -55,6 +69,19 @@ describe('api.model.submission-comment', () => {
     expect(payload.data.success).toBe(true);
     expect((payload.data.comment as any).id).toBe('comment-1');
     expect(prisma.submissionComment.create).toHaveBeenCalledTimes(1);
+    expect(prisma.submissionActivity.create).toHaveBeenCalledTimes(1);
+    expect(prisma.submissionActivity.create.mock.calls[0][0].data).toEqual(
+      expect.objectContaining({
+        eventType: 'submission.comment_created',
+        occurredAfterRelease: true,
+        changes: {
+          comment: {
+            before: null,
+            after: expect.objectContaining({ content: 'Great point here.' }),
+          },
+        },
+      })
+    );
   });
 
   test('returns 403 when submission not found or user not authorized', async () => {

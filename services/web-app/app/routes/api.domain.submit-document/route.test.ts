@@ -14,6 +14,7 @@ const prisma = {
     create: mock(),
     update: mock(),
   },
+  submissionActivity: { create: mock() },
   $transaction: mock(),
 };
 
@@ -42,6 +43,7 @@ describe('api.domain.submit-document', () => {
     prisma.submission.create.mockReset();
     prisma.documentWriteJournal.create.mockReset();
     prisma.documentWriteJournal.update.mockReset();
+    prisma.submissionActivity.create.mockReset();
     prisma.$transaction.mockReset();
     requireUserId.mockReset();
     requireMembership.mockReset();
@@ -81,7 +83,11 @@ describe('api.domain.submit-document', () => {
     prisma.$transaction.mockImplementation(async (callback: any) => {
       const tx = {
         submission: {
-          create: mock().mockResolvedValue({ id: 'sub-1' }),
+          create: mock().mockResolvedValue({
+            id: 'sub-1',
+            title: 'Essay',
+            submittedAt: new Date('2026-08-20T12:00:00.000Z'),
+          }),
         },
         document: {
           update: mock().mockResolvedValue({
@@ -89,6 +95,7 @@ describe('api.domain.submit-document', () => {
             revision: 4,
           }),
         },
+        submissionActivity: prisma.submissionActivity,
       };
 
       return callback(tx);
@@ -111,6 +118,18 @@ describe('api.domain.submit-document', () => {
     };
 
     expect(response.data.success).toBe(true);
+    expect(prisma.submissionActivity.create).toHaveBeenCalledTimes(1);
+    const activity = prisma.submissionActivity.create.mock.calls[0][0].data;
+    expect(activity).toEqual(
+      expect.objectContaining({
+        submissionId: 'sub-1',
+        organizationId: 'org-1',
+        actorMembershipId: 'profile-1',
+        eventType: 'submission.created',
+        occurredAfterRelease: false,
+      })
+    );
+    expect(JSON.stringify(activity.metadata)).not.toContain('Draft');
   });
 
   test('records a document submit journal entry with the full document payload', async () => {
