@@ -299,7 +299,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
   // dashboard alongside their classes (each card links into the practice
   // runner). Grammar sets report answered progress; composition sets report
   // mastery.
-  const writingPracticeAssignments = useStudentExperience
+  const writingPracticeAssignments =
+    useStudentExperience && profile.organization.writingPracticeEnabled
     ? (await getAssignedPracticeForStudent(profile.id)).map(
         (classAssignment) => {
           const { assignment } = classAssignment;

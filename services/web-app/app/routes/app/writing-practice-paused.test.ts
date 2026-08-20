@@ -8,12 +8,28 @@
  * instead of rendering. Deleting or weakening these assertions is how the
  * feature would leak into a release it was pulled from.
  */
-import { afterAll, beforeEach, describe, expect, mock, test } from 'bun:test';
+import {
+  afterAll,
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  mock,
+  test,
+} from 'bun:test';
+
+const ORIGINAL_COMPOSITION_FLAG = process.env.COMPOSITION_PRACTICE_ENABLED;
 
 const requireUserId = mock();
 const requireMembership = mock();
 const classFindMany = mock();
 const createWritingPracticeAssignmentForClasses = mock();
+const buildActPracticeSequence = mock();
+const getAssignedPracticeForStudentById = mock();
+const getOrCreateStudentPracticeSet = mock();
+const getWritingPracticeResultsForTeacher = mock();
+const recordCompositionPracticeAttempt = mock();
+const recordWritingPracticeAttempt = mock();
 const listWritingPracticeAssignmentsForStudent = mock();
 const listWritingPracticeAssignmentsForTeacher = mock();
 
@@ -29,9 +45,15 @@ mock.module('~/utils/db.server', () => ({
 // bun's mock.module() swaps the whole namespace, so every export the routes
 // under test import has to be listed here or the import fails outright.
 mock.module('~/utils/writing-lessons/practice-assignments.server', () => ({
+  buildActPracticeSequence,
   createWritingPracticeAssignmentForClasses,
+  getAssignedPracticeForStudentById,
+  getOrCreateStudentPracticeSet,
+  getWritingPracticeResultsForTeacher,
   listWritingPracticeAssignmentsForStudent,
   listWritingPracticeAssignmentsForTeacher,
+  recordCompositionPracticeAttempt,
+  recordWritingPracticeAttempt,
 }));
 
 const { FLAT_SIDEBAR_SECTIONS, getVisibleSidebarSections } =
@@ -40,11 +62,27 @@ const { loader: indexLoader } =
   await import('~/routes/app.writing-lessons._index/route');
 const { loader: lessonLoader } =
   await import('~/routes/app.writing-lessons.$lessonSlug/route');
+const { action: lessonAction } =
+  await import('~/routes/app.writing-lessons.$lessonSlug/route');
 const { action: assignAction } =
   await import('~/routes/app.writing-lessons.assign/route');
+const { loader: practiceLoader, action: practiceAction } =
+  await import('~/routes/app.writing-lessons.practice/route');
+const { loader: assignedLoader, action: assignedAction } =
+  await import('~/routes/app.writing-lessons.assigned.$classAssignmentId/route');
+const { loader: resultsLoader } =
+  await import('~/routes/app.writing-lessons.results.$classAssignmentId/route');
 
 afterAll(() => {
   mock.restore();
+});
+
+afterEach(() => {
+  if (ORIGINAL_COMPOSITION_FLAG === undefined) {
+    delete process.env.COMPOSITION_PRACTICE_ENABLED;
+  } else {
+    process.env.COMPOSITION_PRACTICE_ENABLED = ORIGINAL_COMPOSITION_FLAG;
+  }
 });
 
 function pausedUser(role: 'TEACHER' | 'STUDENT') {
@@ -90,9 +128,16 @@ describe('Writing Practice routes refuse while paused', () => {
     requireMembership.mockReset();
     classFindMany.mockReset();
     createWritingPracticeAssignmentForClasses.mockReset();
+    buildActPracticeSequence.mockReset();
+    getAssignedPracticeForStudentById.mockReset();
+    getOrCreateStudentPracticeSet.mockReset();
+    getWritingPracticeResultsForTeacher.mockReset();
+    recordCompositionPracticeAttempt.mockReset();
+    recordWritingPracticeAttempt.mockReset();
 
     requireUserId.mockResolvedValue('user-1');
     classFindMany.mockResolvedValue([{ id: 'class-1' }]);
+    buildActPracticeSequence.mockReturnValue([]);
   });
 
   test('the library index refuses for a student', async () => {
@@ -146,6 +191,111 @@ describe('Writing Practice routes refuse while paused', () => {
     ).rejects.toMatchObject({ status: 302 });
   });
 
+  test('a lesson action refuses before tutor work', async () => {
+    requireMembership.mockResolvedValue({
+      id: 'student-1',
+      role: 'STUDENT',
+      organization: { id: 'org-1', writingPracticeEnabled: false },
+    });
+
+    await expect(
+      lessonAction({
+        request: new Request(
+          'https://example.test/app/writing-lessons/fixing-comma-splices',
+          {
+            method: 'POST',
+            body: new URLSearchParams([['intent', 'unsupported']]),
+          }
+        ),
+        params: { lessonSlug: 'fixing-comma-splices' },
+        context: {} as never,
+      } as any)
+    ).rejects.toMatchObject({ status: 404 });
+  });
+
+  test('the self-directed session loader and action refuse', async () => {
+    requireMembership.mockResolvedValue({
+      id: 'student-1',
+      role: 'STUDENT',
+      organization: { id: 'org-1', writingPracticeEnabled: false },
+    });
+
+    await expect(
+      practiceLoader({
+        request: new Request(
+          'https://example.test/app/writing-lessons/practice?skills=fixing-comma-splices&count=5'
+        ),
+        params: {},
+        context: {} as never,
+      } as any)
+    ).rejects.toMatchObject({ status: 302 });
+    expect(buildActPracticeSequence).not.toHaveBeenCalled();
+
+    await expect(
+      practiceAction({
+        request: new Request(
+          'https://example.test/app/writing-lessons/practice',
+          {
+            method: 'POST',
+            body: new URLSearchParams([['intent', 'unsupported']]),
+          }
+        ),
+        params: {},
+        context: {} as never,
+      } as any)
+    ).rejects.toMatchObject({ status: 404 });
+  });
+
+  test('the assigned-practice loader and action refuse before reading or writing', async () => {
+    requireMembership.mockResolvedValue({
+      id: 'student-1',
+      role: 'STUDENT',
+      organization: { id: 'org-1', writingPracticeEnabled: false },
+    });
+
+    await expect(
+      assignedLoader({
+        request: new Request(
+          'https://example.test/app/writing-lessons/assigned/class-assignment-1'
+        ),
+        params: { classAssignmentId: 'class-assignment-1' },
+        context: {} as never,
+      } as any)
+    ).rejects.toMatchObject({ status: 302 });
+    await expect(
+      assignedAction({
+        request: new Request(
+          'https://example.test/app/writing-lessons/assigned/class-assignment-1',
+          { method: 'POST', body: new URLSearchParams() }
+        ),
+        params: { classAssignmentId: 'class-assignment-1' },
+        context: {} as never,
+      } as any)
+    ).rejects.toMatchObject({ status: 404 });
+    expect(getAssignedPracticeForStudentById).not.toHaveBeenCalled();
+    expect(recordWritingPracticeAttempt).not.toHaveBeenCalled();
+    expect(recordCompositionPracticeAttempt).not.toHaveBeenCalled();
+  });
+
+  test('the teacher results route refuses before reading results', async () => {
+    requireMembership.mockResolvedValue({
+      id: 'teacher-1',
+      role: 'TEACHER',
+      organization: { id: 'org-1', writingPracticeEnabled: false },
+    });
+
+    await expect(
+      resultsLoader({
+        request: new Request(
+          'https://example.test/app/writing-lessons/results/class-assignment-1'
+        ),
+        params: { classAssignmentId: 'class-assignment-1' },
+        context: {} as never,
+      } as any)
+    ).rejects.toMatchObject({ status: 302 });
+    expect(getWritingPracticeResultsForTeacher).not.toHaveBeenCalled();
+  });
+
   test('the assign action refuses for a teacher and writes nothing', async () => {
     requireMembership.mockResolvedValue({
       id: 'teacher-1',
@@ -174,5 +324,99 @@ describe('Writing Practice routes refuse while paused', () => {
       'Writing practice is not enabled for your organization.'
     );
     expect(createWritingPracticeAssignmentForClasses).not.toHaveBeenCalled();
+  });
+});
+
+describe('Composition routes refuse while their rollout flag is off', () => {
+  beforeEach(() => {
+    process.env.COMPOSITION_PRACTICE_ENABLED = 'false';
+    requireUserId.mockReset();
+    requireMembership.mockReset();
+    getAssignedPracticeForStudentById.mockReset();
+    getOrCreateStudentPracticeSet.mockReset();
+    getWritingPracticeResultsForTeacher.mockReset();
+
+    requireUserId.mockResolvedValue('user-1');
+  });
+
+  test('the assigned student loader and action refuse composition sets', async () => {
+    requireMembership.mockResolvedValue({
+      id: 'student-1',
+      role: 'STUDENT',
+      organization: { id: 'org-1', writingPracticeEnabled: true },
+    });
+    getAssignedPracticeForStudentById.mockResolvedValue({
+      id: 'class-assignment-1',
+      assignment: {
+        title: 'Composition set',
+        lessonSlugs: ['topic-sentences'],
+        problemCount: 1,
+        instructions: null,
+        dueAt: null,
+      },
+      attempts: [],
+    });
+    getOrCreateStudentPracticeSet.mockResolvedValue([
+      {
+        kind: 'composition',
+        lessonSlug: 'topic-sentences',
+        prompt: {
+          id: 'topic-sentences-1',
+          exercise: 'Write a claim.',
+          instruction: 'Write one sentence.',
+        },
+      },
+    ]);
+
+    await expect(
+      assignedLoader({
+        request: new Request(
+          'https://example.test/app/writing-lessons/assigned/class-assignment-1'
+        ),
+        params: { classAssignmentId: 'class-assignment-1' },
+        context: {} as never,
+      } as any)
+    ).rejects.toMatchObject({ status: 404 });
+    await expect(
+      assignedAction({
+        request: new Request(
+          'https://example.test/app/writing-lessons/assigned/class-assignment-1',
+          { method: 'POST', body: new URLSearchParams([['kind', 'act']]) }
+        ),
+        params: { classAssignmentId: 'class-assignment-1' },
+        context: {} as never,
+      } as any)
+    ).rejects.toMatchObject({ status: 404 });
+  });
+
+  test('the teacher results route refuses composition sets', async () => {
+    requireMembership.mockResolvedValue({
+      id: 'teacher-1',
+      role: 'TEACHER',
+      organization: { id: 'org-1', writingPracticeEnabled: true },
+    });
+    getWritingPracticeResultsForTeacher.mockResolvedValue({
+      classAssignment: {
+        assignment: {
+          title: 'Composition set',
+          lessonSlugs: ['topic-sentences'],
+          problemCount: 1,
+          dueAt: null,
+        },
+        class: { title: 'English', grade: '10', period: '3' },
+      },
+      results: [],
+      attemptsByStudent: {},
+    });
+
+    await expect(
+      resultsLoader({
+        request: new Request(
+          'https://example.test/app/writing-lessons/results/class-assignment-1'
+        ),
+        params: { classAssignmentId: 'class-assignment-1' },
+        context: {} as never,
+      } as any)
+    ).rejects.toMatchObject({ status: 404 });
   });
 });

@@ -11,6 +11,7 @@ import { useEffect, useRef, useState } from 'react';
 import {
   Link,
   data as dataResponse,
+  redirect,
   useFetcher,
   useLoaderData,
   type ActionFunctionArgs,
@@ -30,6 +31,7 @@ import {
   type ActGradeResult,
 } from '~/utils/writing-lessons/act-practice.shared';
 import { writingPracticeAssignmentTitle } from '~/utils/writing-lessons/assignment-title';
+import { isCompositionPracticeEnabled } from '~/utils/writing-lessons/composition-flag.server';
 import {
   getAssignedPracticeForStudentById,
   getOrCreateStudentPracticeSet,
@@ -42,11 +44,23 @@ import {
   practiceFeedbackStatusLabel,
   type PracticeFeedbackResult,
 } from '~/utils/writing-lessons/practice-feedback.shared';
-import { getQuickWritingLessonContext } from '~/utils/writing-lessons/static-lessons.server';
+import {
+  getQuickWritingLessonBySlug,
+  getQuickWritingLessonContext,
+} from '~/utils/writing-lessons/static-lessons.server';
+
+function assignmentIncludesComposition(lessonSlugs: string[]) {
+  return lessonSlugs.some(
+    (slug) => getQuickWritingLessonBySlug(slug)?.section === 'Composition'
+  );
+}
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
   const profile = await requireMembership(request, userId);
+  if (!profile.organization.writingPracticeEnabled) {
+    throw redirect('/app');
+  }
 
   const classAssignment = await getAssignedPracticeForStudentById(
     params.classAssignmentId ?? '',
@@ -57,6 +71,12 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   }
 
   const { assignment } = classAssignment;
+  if (
+    assignmentIncludesComposition(assignment.lessonSlugs) &&
+    !isCompositionPracticeEnabled()
+  ) {
+    throw new Response('Assigned practice not found', { status: 404 });
+  }
   const sequence = await getOrCreateStudentPracticeSet({
     classAssignmentId: classAssignment.id,
     membershipId: profile.id,
@@ -122,12 +142,21 @@ type AssignedActionData =
 export async function action({ request, params }: ActionFunctionArgs) {
   const userId = await requireUserId(request);
   const profile = await requireMembership(request, userId);
+  if (!profile.organization.writingPracticeEnabled) {
+    throw new Response('Writing practice not found', { status: 404 });
+  }
 
   const classAssignment = await getAssignedPracticeForStudentById(
     params.classAssignmentId ?? '',
     profile.id
   );
   if (!classAssignment) {
+    throw new Response('Assigned practice not found', { status: 404 });
+  }
+  if (
+    assignmentIncludesComposition(classAssignment.assignment.lessonSlugs) &&
+    !isCompositionPracticeEnabled()
+  ) {
     throw new Response('Assigned practice not found', { status: 404 });
   }
 

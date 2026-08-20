@@ -24,6 +24,7 @@ import {
   splitAroundUnderline,
 } from '~/utils/writing-lessons/act-practice.shared';
 import { writingPracticeAssignmentTitle } from '~/utils/writing-lessons/assignment-title';
+import { isCompositionPracticeEnabled } from '~/utils/writing-lessons/composition-flag.server';
 import { getWritingPracticeResultsForTeacher } from '~/utils/writing-lessons/practice-assignments.server';
 import {
   isCompositionAttemptRecord,
@@ -42,6 +43,9 @@ function choiceLabel(choices: string[], index: number): string {
 export async function loader({ request, params }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
   const profile = await requireMembership(request, userId);
+  if (!profile.organization.writingPracticeEnabled) {
+    throw redirect('/app');
+  }
   if (profile.role !== 'TEACHER') {
     return redirect('/app/writing-lessons');
   }
@@ -55,6 +59,14 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   }
 
   const { classAssignment, results, attemptsByStudent } = data;
+  if (
+    !isCompositionPracticeEnabled() &&
+    classAssignment.assignment.lessonSlugs.some(
+      (slug) => getQuickWritingLessonBySlug(slug)?.section === 'Composition'
+    )
+  ) {
+    throw new Response('Assigned practice not found', { status: 404 });
+  }
   const lessonTitles = classAssignment.assignment.lessonSlugs
     .map((slug) => getQuickWritingLessonBySlug(slug)?.title)
     .filter((title): title is string => Boolean(title));

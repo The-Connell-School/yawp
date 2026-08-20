@@ -99,7 +99,11 @@ describe('app index loader assignments', () => {
       id: 'profile-1',
       role: 'STUDENT',
       isOrgOwner: false,
-      organization: { id: 'org-1', name: 'Org' },
+      organization: {
+        id: 'org-1',
+        name: 'Org',
+        writingPracticeEnabled: true,
+      },
     });
     prisma.orgMembership.findUnique.mockResolvedValue({
       _count: { classesAsStudent: 2 },
@@ -242,6 +246,29 @@ describe('app index loader assignments', () => {
     expect(practice.hasComposition).toBe(true);
     expect(practice.masteredCount).toBe(1);
     expect(practice.classLabel.title).toBe('English 10');
+  });
+
+  test('does not load assigned writing practice while the organization flag is off', async () => {
+    requireMembership.mockResolvedValue({
+      id: 'profile-1',
+      role: 'STUDENT',
+      isOrgOwner: false,
+      organization: {
+        id: 'org-1',
+        name: 'Org',
+        writingPracticeEnabled: false,
+      },
+    });
+
+    const response = await loader({
+      request: new Request('https://example.test/app'),
+      params: {},
+      context: {} as never,
+    } as any);
+    const data = (response as { data: any }).data;
+
+    expect(getAssignedPracticeForStudent).not.toHaveBeenCalled();
+    expect(data.writingPracticeAssignments).toEqual([]);
   });
 
   test('keeps all teacher classes navigable while scoping assignment data to available classes', async () => {

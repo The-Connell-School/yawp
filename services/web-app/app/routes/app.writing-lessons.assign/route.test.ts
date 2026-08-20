@@ -1,4 +1,14 @@
-import { beforeEach, describe, expect, mock, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
+
+const ORIGINAL_COMPOSITION_FLAG = process.env.COMPOSITION_PRACTICE_ENABLED;
+
+afterEach(() => {
+  if (ORIGINAL_COMPOSITION_FLAG === undefined) {
+    delete process.env.COMPOSITION_PRACTICE_ENABLED;
+  } else {
+    process.env.COMPOSITION_PRACTICE_ENABLED = ORIGINAL_COMPOSITION_FLAG;
+  }
+});
 
 const requireUserId = mock();
 const requireMembership = mock();
@@ -108,6 +118,22 @@ describe('writing-lessons assign action', () => {
 
     expect(result.success).toBe(false);
     expect(result.message).toContain('Unknown lesson');
+    expect(createWritingPracticeAssignmentForClasses).not.toHaveBeenCalled();
+  });
+
+  test('rejects composition lessons while their rollout flag is off', async () => {
+    process.env.COMPOSITION_PRACTICE_ENABLED = 'false';
+
+    const result = (await run({
+      title: 'Topic sentence practice',
+      lessonSlugs: 'topic-sentences',
+      classIds: 'class-a',
+      problemCount: '5',
+      dueAt: '2026-09-01',
+    })) as { success: boolean; message: string };
+
+    expect(result.success).toBe(false);
+    expect(result.message).toContain('Composition practice is not enabled');
     expect(createWritingPracticeAssignmentForClasses).not.toHaveBeenCalled();
   });
 

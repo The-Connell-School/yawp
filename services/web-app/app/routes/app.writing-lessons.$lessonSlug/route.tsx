@@ -173,7 +173,10 @@ type CompositionPersonalizeActionData = {
 
 export async function action({ request, params }: ActionFunctionArgs) {
   const userId = await requireUserId(request);
-  await requireMembership(request, userId);
+  const profile = await requireMembership(request, userId);
+  if (!profile.organization.writingPracticeEnabled) {
+    throw new Response('Writing practice not found', { status: 404 });
+  }
 
   const context = getQuickWritingLessonContext(params.lessonSlug);
   if (!context) {
