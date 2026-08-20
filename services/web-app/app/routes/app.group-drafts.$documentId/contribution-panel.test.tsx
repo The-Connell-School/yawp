@@ -12,7 +12,7 @@ import { afterEach, describe, expect, test } from 'bun:test';
 import { act, type ReactElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 
-import { DraftColourKey } from './contribution-panel';
+import { AttributedDraft, DraftColourKey } from './contribution-panel';
 import {
   authorColor,
   buildAuthorColorScale,
@@ -265,5 +265,74 @@ describe('the draft colour key', () => {
     const text = key(container)?.textContent ?? '';
     expect(text).not.toContain('No recorded author');
     expect(text).toContain('Ada Okonkwo');
+  });
+});
+
+describe('the tinted draft', () => {
+  function draft(paragraphs: AttributedRun[][], members = ['member-1', 'member-2']) {
+    const scale = buildAuthorColorScale(members);
+    return render(
+      <AttributedDraft
+        paragraphs={paragraphs}
+        colorScale={scale}
+        nameFor={new Map(members.map((id, i) => [id, `Student ${i + 1}`]))}
+      />
+    );
+  }
+
+  function runs(container: HTMLElement) {
+    return [
+      ...container.querySelectorAll(
+        '[data-testid="contribution-draft-body"] span[style]'
+      ),
+    ] as HTMLElement[];
+  }
+
+  test('underlines each run in the writer’s colour at full strength', () => {
+    // The tint alone cannot carry this. A wash light enough to read black text
+    // through has almost no chroma left, so two writers in a group sit ~10 ΔE
+    // apart tinted and ~4 with colour blindness simulated — which is what "two
+    // colours were almost identical" was. The underline is the full colour.
+    const scale = buildAuthorColorScale(['member-1', 'member-2']);
+    const container = draft([
+      [
+        { membershipId: 'member-1', text: 'Lisbon is cheapest. ' },
+        { membershipId: 'member-2', text: 'Hiring is the risk.' },
+      ],
+    ]);
+
+    const [first, second] = runs(container);
+    expect(first!.style.borderBottom).toBe(
+      `2px solid ${authorColor(scale, 'member-1')}`
+    );
+    expect(second!.style.borderBottom).toBe(
+      `2px solid ${authorColor(scale, 'member-2')}`
+    );
+  });
+
+  test('keeps the tint light enough to read the draft through', () => {
+    // It is the glance, not the answer: a tint dark enough to be unambiguous on
+    // its own would make the paragraph hard to read.
+    const container = draft([
+      [{ membershipId: 'member-1', text: 'Lisbon is cheapest.' }],
+    ]);
+
+    expect(runs(container)[0]!.style.backgroundColor).toMatch(/2E$/);
+  });
+
+  test('marks unattributed text grey and dashed, never as a person', () => {
+    const container = draft([
+      [{ membershipId: null, text: 'Pasted from the old brief.' }],
+    ]);
+
+    const [only] = runs(container);
+    expect(only!.style.backgroundColor).toBe('transparent');
+    expect(only!.style.borderBottom).toContain('dashed');
+  });
+
+  test('says so plainly when there is nothing written', () => {
+    const container = draft([]);
+
+    expect(container.textContent).toContain('Nothing written yet');
   });
 });

@@ -501,6 +501,82 @@ export function DraftColourKey({
   );
 }
 
+/**
+ * The draft itself, every run marked with who wrote it.
+ *
+ * Two channels, deliberately. The tint is the glance — it shows the shape of who
+ * wrote what without anyone having to read anything. The underline is the answer
+ * — full-strength colour, where two writers are far enough apart to actually
+ * tell apart, including for a reader with colour blindness. Relying on the tint
+ * alone was the bug: a wash light enough to read black text through has almost
+ * no chroma left, so every hue drifts toward the same pale grey.
+ *
+ * Its own component so it can be tested without a router or a fetcher, the same
+ * reason `DraftColourKey` is.
+ */
+export function AttributedDraft({
+  paragraphs,
+  colorScale,
+  nameFor,
+}: {
+  paragraphs: AttributedRun[][];
+  colorScale: Map<string, string>;
+  nameFor: Map<string, string>;
+}) {
+  if (paragraphs.length === 0) {
+    return (
+      <p className="px-4 py-6 text-sm text-muted-foreground">
+        Nothing written yet.
+      </p>
+    );
+  }
+
+  return (
+    <div
+      className="px-4 py-4 font-times text-base leading-relaxed"
+      data-testid="contribution-draft-body"
+    >
+      {paragraphs.map((runs, index) => (
+        <p key={index} className="mb-3 last:mb-0">
+          {runs.map((run, runIndex) => {
+            const name = run.membershipId
+              ? (nameFor.get(run.membershipId) ?? 'Former student')
+              : 'No recorded author';
+            const color = run.membershipId
+              ? authorColor(colorScale, run.membershipId)
+              : null;
+            return (
+              <span
+                key={runIndex}
+                title={name}
+                className="rounded-sm"
+                style={{
+                  // Light enough to read black text through, which is exactly
+                  // why it cannot be the only cue.
+                  backgroundColor: color ? `${color}2E` : 'transparent',
+                  // The underline is what actually tells two writers apart. A
+                  // wash that pale has almost no chroma left: at 20% over white
+                  // the closest pair in a group of three sits about 10 ΔE apart
+                  // in normal vision and 4 with colour blindness simulated,
+                  // which is the "these two look the same" complaint. At full
+                  // strength the same pair is 27 apart. Grey and dashed for text
+                  // nobody is recorded as writing, so it cannot be mistaken for
+                  // a person.
+                  borderBottom: color
+                    ? `2px solid ${color}`
+                    : `1px dashed ${UNATTRIBUTED_COLOR}`,
+                }}
+              >
+                {run.text}
+              </span>
+            );
+          })}
+        </p>
+      ))}
+    </div>
+  );
+}
+
 export function ContributionPanel({
   breakdown,
   grades,
@@ -683,42 +759,11 @@ export function ContributionPanel({
           </p>
         ) : null}
 
-        {paragraphs.length === 0 ? (
-          <p className="px-4 py-6 text-sm text-muted-foreground">
-            Nothing written yet.
-          </p>
-        ) : (
-          <div className="px-4 py-4 font-times text-base leading-relaxed">
-            {paragraphs.map((runs, index) => (
-              <p key={index} className="mb-3 last:mb-0">
-                {runs.map((run, runIndex) => {
-                  const name = run.membershipId
-                    ? (nameFor.get(run.membershipId) ?? 'Former student')
-                    : 'No recorded author';
-                  return (
-                    <span
-                      key={runIndex}
-                      title={name}
-                      className="rounded-sm"
-                      style={{
-                        backgroundColor: run.membershipId
-                          ? `${authorColor(colorScale, run.membershipId)}33`
-                          : 'transparent',
-                        // Grey and dashed rather than tinted, so unattributed
-                        // text cannot be mistaken for someone's colour.
-                        borderBottom: run.membershipId
-                          ? 'none'
-                          : `1px dashed ${UNATTRIBUTED_COLOR}`,
-                      }}
-                    >
-                      {run.text}
-                    </span>
-                  );
-                })}
-              </p>
-            ))}
-          </div>
-        )}
+        <AttributedDraft
+          paragraphs={paragraphs}
+          colorScale={colorScale}
+          nameFor={nameFor}
+        />
       </section>
     </div>
   );
