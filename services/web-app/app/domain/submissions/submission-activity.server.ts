@@ -184,3 +184,61 @@ export async function recordSubmissionActivity(
     },
   });
 }
+
+type SubmissionActivityInput = Parameters<typeof recordSubmissionActivity>[1];
+
+/**
+ * Records one transaction's homogeneous or mixed submission events with a
+ * bounded query count. This is used by bulk release so the 500-item contract
+ * does not turn into an actor lookup and insert for every submission.
+ */
+export async function recordSubmissionActivities(
+  tx: Prisma.TransactionClient,
+  inputs: SubmissionActivityInput[]
+) {
+  if (process.env.SUBMISSION_ACTIVITY_WRITES_ENABLED === 'false') {
+    throw new SubmissionActivityUnavailableError();
+  }
+
+  const auditableInputs = inputs.filter(
+    (input) => Object.keys(input.changes).length > 0 || input.metadata != null
+  );
+  if (auditableInputs.length === 0) return { count: 0 };
+
+  const actorUserIds = Array.from(
+    new Set(
+      auditableInputs
+        .map((input) => input.actorUserId)
+        .filter((id): id is string => typeof id === 'string')
+    )
+  );
+  const actors =
+    actorUserIds.length > 0
+      ? await tx.user.findMany({
+          where: { id: { in: actorUserIds } },
+          select: { id: true, name: true, email: true },
+        })
+      : [];
+  const actorByUserId = new Map(actors.map((actor) => [actor.id, actor]));
+
+  return tx.submissionActivity.createMany({
+    data: auditableInputs.map((input) => {
+      const actor = input.actorUserId
+        ? actorByUserId.get(input.actorUserId)
+        : null;
+      return {
+        submissionId: input.submissionId,
+        organizationId: input.organizationId,
+        actorMembershipId: input.actorMembershipId,
+        actorType: actor ? 'human' : 'system',
+        actorName: actor?.name ?? null,
+        actorEmail: actor?.email ?? null,
+        eventType: input.eventType,
+        source: input.source,
+        occurredAfterRelease: input.occurredAfterRelease,
+        changes: input.changes,
+        ...(input.metadata == null ? {} : { metadata: input.metadata }),
+      };
+    }),
+  });
+}

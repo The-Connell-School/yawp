@@ -47,6 +47,7 @@ const membershipFixture = {
   id: 'membership-1',
   role: 'TEACHER' as const,
   isOrgOwner: false,
+  isActive: true,
   organization: {
     id: 'org-1',
     name: 'Yawp Org',
@@ -86,11 +87,12 @@ describe('membership auth helpers', () => {
     );
 
     expect(prisma.orgMembership.findUnique).toHaveBeenCalledWith({
-      where: { id: 'membership-1', userId: 'user-1' },
+      where: { id: 'membership-1', userId: 'user-1', isActive: true },
       select: {
         id: true,
         role: true,
         isOrgOwner: true,
+        isActive: true,
         organization: {
           select: {
             id: true,
@@ -116,12 +118,13 @@ describe('membership auth helpers', () => {
     );
 
     expect(prisma.orgMembership.findFirst).toHaveBeenCalledWith({
-      where: { userId: 'user-1' },
+      where: { userId: 'user-1', isActive: true },
       orderBy: { createdAt: 'asc' },
       select: {
         id: true,
         role: true,
         isOrgOwner: true,
+        isActive: true,
         organization: {
           select: {
             id: true,
@@ -135,6 +138,42 @@ describe('membership auth helpers', () => {
       },
     });
     expect(membership).toEqual(membershipFixture);
+  });
+
+  test('requireMembership rejects a cookie-selected inactive membership and clears the scope cookie', async () => {
+    getMembershipId.mockResolvedValue('inactive-membership');
+    prisma.orgMembership.findUnique.mockResolvedValue(null);
+
+    await expect(
+      requireMembership(new Request('https://example.com/app'), 'user-1')
+    ).rejects.toMatchObject({
+      status: 302,
+      headers: expect.any(Headers),
+    });
+
+    expect(prisma.orgMembership.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          id: 'inactive-membership',
+          userId: 'user-1',
+          isActive: true,
+        },
+      })
+    );
+    expect(setMembershipId).toHaveBeenCalledWith('');
+  });
+
+  test('requireMembership never falls back to an inactive membership', async () => {
+    getMembershipId.mockResolvedValue('');
+    prisma.orgMembership.findFirst.mockResolvedValue(null);
+
+    await expect(
+      requireMembership(new Request('https://example.com/app'), 'user-1')
+    ).rejects.toMatchObject({ status: 302 });
+
+    expect(prisma.orgMembership.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { userId: 'user-1', isActive: true } })
+    );
   });
 
   test('requireOwner checks isOrgOwner on the active membership', async () => {

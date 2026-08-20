@@ -41,6 +41,7 @@ describe('grading auth helpers', () => {
               teachers: {
                 some: {
                   id: 'teacher-membership-1',
+                  isActive: true,
                 },
               },
             },
@@ -55,6 +56,7 @@ describe('grading auth helpers', () => {
                 teachers: {
                   some: {
                     id: 'teacher-membership-1',
+                    isActive: true,
                   },
                 },
               },

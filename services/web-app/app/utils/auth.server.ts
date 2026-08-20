@@ -20,6 +20,7 @@ const membershipSelect = {
   id: true,
   role: true,
   isOrgOwner: true,
+  isActive: true,
   organization: {
     select: {
       id: true,
@@ -152,7 +153,7 @@ export async function requireMembership(
 
   if (membershipId) {
     const membership = await prisma.orgMembership.findUnique({
-      where: { id: membershipId, userId },
+      where: { id: membershipId, userId, isActive: true },
       select: membershipSelect,
     });
 
@@ -166,7 +167,7 @@ export async function requireMembership(
   }
 
   const membership = await prisma.orgMembership.findFirst({
-    where: { userId },
+    where: { userId, isActive: true },
     orderBy: { createdAt: 'asc' },
     select: membershipSelect,
   });

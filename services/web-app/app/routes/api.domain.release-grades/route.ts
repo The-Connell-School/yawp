@@ -10,7 +10,7 @@ import {
 } from '~/utils/grading-auth.server';
 import {
   buildSubmissionActivityChanges,
-  recordSubmissionActivity,
+  recordSubmissionActivities,
   resolveSubmissionActivityActorMembershipId,
   submissionActivityEventTypes,
 } from '~/domain/submissions/submission-activity.server';
@@ -161,29 +161,32 @@ export async function action({ request }: ActionFunctionArgs) {
         throw new ReleaseGradesConflictError();
       }
 
-      for (const submission of submissions) {
-        const organizationId =
-          submission.document.membership?.organizationId ??
-          actor.organizationId;
-        await recordSubmissionActivity(tx, {
-          submissionId: submission.id,
-          organizationId,
-          actorMembershipId: resolveSubmissionActivityActorMembershipId({
-            actorMembershipId: actor.membershipId,
-            actorOrganizationId: actor.organizationId,
-            submissionOrganizationId: organizationId,
-          }),
-          actorUserId: actor.userId,
-          eventType: submissionActivityEventTypes.gradeReleased,
-          source: 'release-grades',
-          occurredAfterRelease: false,
-          changes: buildSubmissionActivityChanges({
-            before: { releasedAt: submission.releasedAt },
-            after: { releasedAt: now },
-            fields: ['releasedAt'],
-          }),
-        });
-      }
+      await recordSubmissionActivities(
+        tx,
+        submissions.map((submission) => {
+          const organizationId =
+            submission.document.membership?.organizationId ??
+            actor.organizationId;
+          return {
+            submissionId: submission.id,
+            organizationId,
+            actorMembershipId: resolveSubmissionActivityActorMembershipId({
+              actorMembershipId: actor.membershipId,
+              actorOrganizationId: actor.organizationId,
+              submissionOrganizationId: organizationId,
+            }),
+            actorUserId: actor.userId,
+            eventType: submissionActivityEventTypes.gradeReleased,
+            source: 'release-grades',
+            occurredAfterRelease: false,
+            changes: buildSubmissionActivityChanges({
+              before: { releasedAt: submission.releasedAt },
+              after: { releasedAt: now },
+              fields: ['releasedAt'],
+            }),
+          };
+        })
+      );
 
       return { kind: 'success' as const, releasedCount: submissions.length };
     });

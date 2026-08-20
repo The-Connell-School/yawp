@@ -299,7 +299,9 @@ describe('submission loader — unsubmitted redirect', () => {
           classAssignment: {
             class: {
               school: { organizationId: 'org-1' },
-              teachers: { some: { id: TEACHER_MEMBERSHIP_ID } },
+              teachers: {
+                some: { id: TEACHER_MEMBERSHIP_ID, isActive: true },
+              },
             },
           },
         },
@@ -309,7 +311,9 @@ describe('submission loader — unsubmitted redirect', () => {
             classesAsStudent: {
               some: {
                 school: { organizationId: 'org-1' },
-                teachers: { some: { id: TEACHER_MEMBERSHIP_ID } },
+                teachers: {
+                  some: { id: TEACHER_MEMBERSHIP_ID, isActive: true },
+                },
               },
             },
           },

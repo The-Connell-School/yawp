@@ -70,6 +70,7 @@ export function buildTeacherDocumentAccessWhere({
             teachers: {
               some: {
                 id: membershipId,
+                isActive: true,
               },
             },
           },
@@ -88,6 +89,7 @@ export function buildTeacherDocumentAccessWhere({
               teachers: {
                 some: {
                   id: membershipId,
+                  isActive: true,
                 },
               },
             },

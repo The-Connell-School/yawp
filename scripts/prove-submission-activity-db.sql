@@ -121,11 +121,14 @@ SELECT
   membership."organizationId" AS organization_id,
   membership.id AS owner_membership_id,
   membership.id AS actor_membership_id,
+  class_assignment."classId" AS class_id,
   submission."numericPercentage" AS original_percentage,
   submission."updatedAt" AS original_updated_at
 FROM "Submission" submission
 JOIN "Document" document ON document.id = submission."documentId"
 JOIN "OrgMembership" membership ON membership.id = document."membershipId"
+JOIN "ClassAssignment" class_assignment
+  ON class_assignment.id = document."classAssignmentId"
 WHERE membership."organizationId" IS NOT NULL
 ORDER BY submission."createdAt"
 LIMIT 1;
@@ -346,12 +349,46 @@ BEGIN
     WHEN integrity_constraint_violation THEN NULL;
   END;
 
+  -- Document and owner-membership hard deletion were already restricted by
+  -- Document <- Submission before the activity migration. The new ledger does
+  -- not change either result.
+  BEGIN
+    DELETE FROM "Document" WHERE id = proof.document_id;
+    RAISE EXCEPTION 'submitted document deletion unexpectedly succeeded';
+  EXCEPTION
+    WHEN integrity_constraint_violation THEN NULL;
+  END;
+
+  BEGIN
+    DELETE FROM "OrgMembership" WHERE id = proof.owner_membership_id;
+    RAISE EXCEPTION 'submitted document owner deletion unexpectedly succeeded';
+  EXCEPTION
+    WHEN integrity_constraint_violation THEN NULL;
+  END;
+
   BEGIN
     DELETE FROM "Organization" WHERE id = proof.organization_id;
     RAISE EXCEPTION 'organization with an audited submission unexpectedly deleted';
   EXCEPTION
     WHEN integrity_constraint_violation THEN NULL;
   END;
+
+  -- Class deletion is a supported production hard-delete path. It removes the
+  -- ClassAssignment and detaches the document, while preserving the document,
+  -- submission, and durable activity.
+  DELETE FROM "Class" WHERE id = proof.class_id;
+
+  IF EXISTS (SELECT 1 FROM "Class" WHERE id = proof.class_id)
+     OR EXISTS (
+       SELECT 1 FROM "Document"
+       WHERE id = proof.document_id AND "classAssignmentId" IS NOT NULL
+     )
+     OR NOT EXISTS (
+       SELECT 1 FROM "SubmissionActivity"
+       WHERE id = 'submission-activity-parent-anchor-proof'
+     ) THEN
+    RAISE EXCEPTION 'class deletion did not preserve the audited submission graph';
+  END IF;
 
   IF NOT EXISTS (
     SELECT 1
@@ -476,6 +513,26 @@ BEGIN
     WHERE submission."numericPercentage" = 91
   ) THEN
     RAISE EXCEPTION 'committed grade mutation did not persist';
+  END IF;
+
+  UPDATE "Organization"
+  SET "submissionActivityEnabled" = true
+  WHERE id = (SELECT organization_id FROM submission_activity_proof_state);
+  UPDATE "Organization"
+  SET "submissionActivityEnabled" = false
+  WHERE id = (SELECT organization_id FROM submission_activity_proof_state);
+
+  IF EXISTS (
+    SELECT 1
+    FROM "Organization" organization
+    JOIN submission_activity_proof_state proof
+      ON proof.organization_id = organization.id
+    WHERE organization."submissionActivityEnabled" = true
+  ) OR NOT EXISTS (
+    SELECT 1 FROM "SubmissionActivity"
+    WHERE id = 'submission-activity-db-proof'
+  ) THEN
+    RAISE EXCEPTION 'rollout flag disablement lost or exposed durable activity';
   END IF;
 END $$;
 
