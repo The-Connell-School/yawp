@@ -6,6 +6,7 @@ const prisma = {
     findMany: mock(),
     updateMany: mock(),
   },
+  submissionActivity: { create: mock() },
 };
 
 const getGradingActor = mock();
@@ -28,6 +29,7 @@ describe('api.domain.release-grades', () => {
     prisma.$transaction.mockReset();
     prisma.submission.findMany.mockReset();
     prisma.submission.updateMany.mockReset();
+    prisma.submissionActivity.create.mockReset();
     getGradingActor.mockReset();
     canManageGrades.mockReset();
     buildTeacherClassWhere.mockReset();
@@ -35,12 +37,15 @@ describe('api.domain.release-grades', () => {
 
     getGradingActor.mockResolvedValue({
       membershipId: 'teacher-1',
+      organizationId: 'org-1',
       teacherProfileId: 'teacher-1',
       isTeacher: true,
       isAdmin: false,
     });
     canManageGrades.mockReturnValue(true);
-    buildTeacherClassWhere.mockReturnValue({});
+    buildTeacherClassWhere.mockReturnValue({
+      OR: [{ classAssignment: { class: { teachers: { some: { id: 'teacher-1' } } } } }],
+    });
     isGradingOwnDocument.mockReturnValue(false);
     prisma.submission.updateMany.mockResolvedValue({ count: 1 });
     prisma.$transaction.mockImplementation(async (callback: any) =>
@@ -52,7 +57,9 @@ describe('api.domain.release-grades', () => {
     prisma.submission.findMany.mockResolvedValue([
       {
         id: 'sub-1',
+        releasedAt: null,
         document: {
+          membership: { organizationId: 'org-1' },
           classAssignment: {
             class: {
               id: 'class-1',
@@ -79,6 +86,19 @@ describe('api.domain.release-grades', () => {
     await action({ request } as any);
 
     expect(prisma.submission.updateMany).toHaveBeenCalledTimes(1);
+    expect(prisma.submissionActivity.create).toHaveBeenCalledTimes(1);
+    expect(prisma.submissionActivity.create.mock.calls[0][0].data).toEqual(
+      expect.objectContaining({
+        submissionId: 'sub-1',
+        organizationId: 'org-1',
+        actorMembershipId: 'teacher-1',
+        eventType: 'submission.grade_released',
+        occurredAfterRelease: false,
+      })
+    );
+    expect(prisma.submission.findMany.mock.calls[0][0].where.document.is).toEqual(
+      expect.objectContaining({ OR: expect.any(Array) })
+    );
   });
 
   test('returns 404 when no unreleased submissions found', async () => {
@@ -195,6 +215,7 @@ describe('api.domain.release-grades', () => {
     expect(payload.data.message).toBe(
       'Submissions changed while releasing grades. Please refresh and try again.'
     );
+    expect(prisma.submissionActivity.create).not.toHaveBeenCalled();
   });
 
   test('excludes unsubmitted submissions from the eligibility query, closing the grading race on release', async () => {
