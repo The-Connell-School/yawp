@@ -38,11 +38,18 @@ import {
 const MAX_PROBLEMS = 20;
 
 function parseSkills(raw: string | null): string[] {
-  return (raw ?? '')
-    .split(',')
-    .map((slug) => slug.trim())
-    .filter(Boolean)
-    .filter((slug) => Boolean(getQuickWritingLessonBySlug(slug)));
+  return (
+    (raw ?? '')
+      .split(',')
+      .map((slug) => slug.trim())
+      .filter(Boolean)
+      // The self-directed session is ACT multiple-choice only, so composition
+      // lessons (constructed response) can never be pulled into one.
+      .filter(
+        (slug) =>
+          getQuickWritingLessonBySlug(slug)?.section === 'Grammar & Mechanics'
+      )
+  );
 }
 
 function clampCount(raw: string | null): number {

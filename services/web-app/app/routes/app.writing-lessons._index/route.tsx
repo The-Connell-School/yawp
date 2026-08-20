@@ -1,4 +1,10 @@
-import { CalendarDays, ChevronRight, Plus, Zap } from 'lucide-react';
+import {
+  CalendarDays,
+  ChevronDown,
+  ChevronRight,
+  Plus,
+  Zap,
+} from 'lucide-react';
 import { useState } from 'react';
 import {
   Link,
@@ -9,12 +15,19 @@ import {
 } from 'react-router';
 
 import { GeneralErrorBoundary } from '~/components/error-boundary';
+import { Badge } from '~/components/ui/badge';
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '~/components/ui/collapsible';
 import { Tooltip } from '~/components/ui/tooltip';
 import { WritingPracticeAssignmentSheet } from '~/components/writing-lessons/writing-practice-assignment-sheet';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { formatClassLabel } from '~/utils/class-display';
 import { formatDateOnly } from '~/utils/date-only';
 import { prisma } from '~/utils/db.server';
+import { isCompositionPracticeEnabled } from '~/utils/writing-lessons/composition-flag.server';
 import {
   resolveTeacherSchoolYearScope,
   schoolYearWhere,
@@ -26,7 +39,7 @@ import {
 } from '~/utils/writing-lessons/practice-assignments.server';
 import {
   getQuickWritingLessonBySlug,
-  getQuickWritingLessonGroups,
+  getQuickWritingLessonSections,
   getQuickWritingPracticePrompts,
 } from '~/utils/writing-lessons/static-lessons.server';
 
@@ -56,24 +69,33 @@ export async function loader({ request }: LoaderFunctionArgs) {
     throw redirect('/app');
   }
 
-  const groups = getQuickWritingLessonGroups().map((group) => ({
-    ...group,
-    lessons: group.lessons.map((lesson) => ({
-      ...lesson,
-      promptCount: getQuickWritingPracticePrompts(lesson.slug).length,
-    })),
-  }));
-  const lessonCount = groups.reduce(
-    (count, group) => count + group.lessons.length,
+  // Composition is behind its rollout flag; hide the whole section until on.
+  const compositionEnabled = isCompositionPracticeEnabled();
+  const sections = getQuickWritingLessonSections()
+    .filter(
+      (section) => compositionEnabled || section.section !== 'Composition'
+    )
+    .map((section) => ({
+      ...section,
+      groups: section.groups.map((group) => ({
+        ...group,
+        lessons: group.lessons.map((lesson) => ({
+          ...lesson,
+          promptCount: getQuickWritingPracticePrompts(lesson.slug).length,
+        })),
+      })),
+    }));
+
+  const allLessons = sections
+    .flatMap((section) => section.groups)
+    .flatMap((group) => group.lessons);
+  const lessonCount = allLessons.length;
+  const promptCount = allLessons.reduce(
+    (total, lesson) => total + lesson.promptCount,
     0
   );
-  const promptCount = groups.reduce(
-    (count, group) =>
-      count +
-      group.lessons.reduce(
-        (lessonTotal, lesson) => lessonTotal + lesson.promptCount,
-        0
-      ),
+  const topicCount = sections.reduce(
+    (total, section) => total + section.groups.length,
     0
   );
 
@@ -99,9 +121,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
   ).map(toAssignmentCard);
 
   return dataResponse({
-    groups,
+    sections,
     lessonCount,
     promptCount,
+    topicCount,
     isTeacher,
     teacherClasses,
     assignments,
@@ -110,9 +133,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
 export default function WritingLessonsIndexRoute() {
   const {
-    groups,
+    sections,
     lessonCount,
     promptCount,
+    topicCount,
     isTeacher,
     teacherClasses,
     assignments,
@@ -172,9 +196,7 @@ export default function WritingLessonsIndexRoute() {
               </p>
             </div>
             <div className="flex flex-col gap-0.5 bg-popover px-4 py-3 sm:px-6">
-              <p className="text-xl font-semibold tabular-nums">
-                {groups.length}
-              </p>
+              <p className="text-xl font-semibold tabular-nums">{topicCount}</p>
               <p className="text-base text-muted-foreground sm:text-sm">
                 Topics
               </p>
@@ -203,9 +225,8 @@ export default function WritingLessonsIndexRoute() {
                   {assignment.title}
                 </p>
                 <p className="mt-1 text-pretty text-base text-muted-foreground sm:text-sm">
-                  {assignment.classes
-                    .map((klass) => klass.label)
-                    .join(' • ') || 'No active classes'}
+                  {assignment.classes.map((klass) => klass.label).join(' • ') ||
+                    'No active classes'}
                 </p>
                 {assignment.instructions ? (
                   <p className="mt-2 text-pretty text-base text-muted-foreground sm:text-sm">
@@ -240,65 +261,88 @@ export default function WritingLessonsIndexRoute() {
         </div>
       ) : null}
 
-      {/* Flat lesson grid */}
-      <div className="mx-auto w-full min-w-0 max-w-screen-lg px-3 py-8 pb-24 sm:px-5">
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {groups.flatMap((group) =>
-            group.lessons.map((lesson) => (
-              <div
-                key={lesson.slug}
-                data-testid={`writing-lesson-card-${lesson.slug}`}
-                className="relative overflow-hidden rounded-xl border bg-popover shadow-sm ring-1 ring-black/5 transition-shadow hover:shadow-md"
-              >
-                <Link
-                  to={`/app/writing-lessons/${lesson.slug}`}
-                  className="flex h-full flex-col p-5"
-                >
-                  <p className="pr-9 font-mono text-[0.6rem] font-medium uppercase tracking-widest text-primary">
-                    {group.category}
-                  </p>
-                  <p className="mt-1.5 line-clamp-2 pr-9 text-balance text-base font-semibold">
-                    {lesson.title}
-                  </p>
-                  <p className="mt-1 line-clamp-2 text-pretty text-base text-muted-foreground sm:text-sm">
-                    {lesson.description}
-                  </p>
-                  <div className="mt-4 flex items-center justify-between text-base text-muted-foreground sm:text-sm">
-                    <span className="inline-flex items-center gap-1">
-                      <Zap className="size-3.5 shrink-0" />
-                      {lesson.promptCount} prompts
-                    </span>
-                    <span className="inline-flex items-center gap-1 font-medium text-foreground">
-                      Start
-                      <ChevronRight className="size-4 shrink-0" />
-                    </span>
-                  </div>
-                </Link>
-                {isTeacher ? (
-                  <Tooltip text={`New ${lesson.title} assignment`}>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setLessonToAssign({
-                          slug: lesson.slug,
-                          title: lesson.title,
-                        })
-                      }
-                      aria-label={`New ${lesson.title} assignment`}
-                      className="absolute right-2 top-2 inline-flex size-7 items-center justify-center rounded-full bg-background text-foreground shadow-sm ring-1 ring-black/10 transition-colors hover:bg-muted"
-                    >
-                      <Plus className="size-4" />
-                      <span
-                        className="pointer-fine:hidden absolute left-1/2 top-1/2 size-[max(100%,3rem)] -translate-x-1/2 -translate-y-1/2"
-                        aria-hidden="true"
-                      />
-                    </button>
-                  </Tooltip>
-                ) : null}
+      {/* Lessons, grouped by section. Sections start collapsed so the index
+          stays compact as Composition adds more lessons. */}
+      <div className="mx-auto flex w-full min-w-0 max-w-screen-lg flex-col gap-6 px-3 py-8 pb-24 sm:px-5">
+        {sections.map((section) => {
+          const sectionLessons = section.groups.flatMap(
+            (group) => group.lessons
+          );
+          return (
+            <Collapsible key={section.section} className="flex flex-col gap-4">
+              <div className="flex items-center gap-2 border-b pb-2">
+                <h3 className="flex-1 text-lg font-semibold tracking-tight">
+                  <CollapsibleTrigger className="group flex w-full items-center gap-2 text-left">
+                    <ChevronDown className="size-5 shrink-0 text-muted-foreground transition-transform group-data-[state=closed]:-rotate-90" />
+                    {section.section}
+                  </CollapsibleTrigger>
+                </h3>
+                <Badge variant="secondary" size="sm">
+                  {sectionLessons.length}
+                </Badge>
               </div>
-            ))
-          )}
-        </div>
+              <CollapsibleContent>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {section.groups.flatMap((group) =>
+                    group.lessons.map((lesson) => (
+                      <div
+                        key={lesson.slug}
+                        data-testid={`writing-lesson-card-${lesson.slug}`}
+                        className="relative overflow-hidden rounded-xl border bg-popover shadow-sm ring-1 ring-black/5 transition-shadow hover:shadow-md"
+                      >
+                        <Link
+                          to={`/app/writing-lessons/${lesson.slug}`}
+                          className="flex h-full flex-col p-5"
+                        >
+                          <p className="pr-9 font-mono text-[0.6rem] font-medium uppercase tracking-widest text-primary">
+                            {group.category}
+                          </p>
+                          <p className="mt-1.5 line-clamp-2 pr-9 text-balance text-base font-semibold">
+                            {lesson.title}
+                          </p>
+                          <p className="mt-1 line-clamp-2 text-pretty text-base text-muted-foreground sm:text-sm">
+                            {lesson.description}
+                          </p>
+                          <div className="mt-4 flex items-center justify-between text-base text-muted-foreground sm:text-sm">
+                            <span className="inline-flex items-center gap-1">
+                              <Zap className="size-3.5 shrink-0" />
+                              {lesson.promptCount} prompts
+                            </span>
+                            <span className="inline-flex items-center gap-1 font-medium text-foreground">
+                              Start
+                              <ChevronRight className="size-4 shrink-0" />
+                            </span>
+                          </div>
+                        </Link>
+                        {isTeacher ? (
+                          <Tooltip text={`New ${lesson.title} assignment`}>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setLessonToAssign({
+                                  slug: lesson.slug,
+                                  title: lesson.title,
+                                })
+                              }
+                              aria-label={`New ${lesson.title} assignment`}
+                              className="absolute right-2 top-2 inline-flex size-7 items-center justify-center rounded-full bg-background text-foreground shadow-sm ring-1 ring-black/10 transition-colors hover:bg-muted"
+                            >
+                              <Plus className="size-4" />
+                              <span
+                                className="pointer-fine:hidden absolute left-1/2 top-1/2 size-[max(100%,3rem)] -translate-x-1/2 -translate-y-1/2"
+                                aria-hidden="true"
+                              />
+                            </button>
+                          </Tooltip>
+                        ) : null}
+                      </div>
+                    ))
+                  )}
+                </div>
+              </CollapsibleContent>
+            </Collapsible>
+          );
+        })}
       </div>
 
       {lessonToAssign ? (

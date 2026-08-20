@@ -10,28 +10,51 @@ test.describe.serial('Writing Fundamentals Practice', () => {
     await page.goto('/app');
     await expect(page.getByTestId('app._index')).toBeVisible();
 
-    // Students get a persistent "Practice" entry in the side menu.
-    await expect(
-      page.locator('nav a[href="/app/writing-lessons"]').first()
-    ).toBeVisible();
+    // Students reach the practice library from the persistent "Practice" entry
+    // in the side menu.
+    const practiceNav = page
+      .locator('nav a[href="/app/writing-lessons"]')
+      .first();
+    await expect(practiceNav).toBeVisible();
 
-    // ...plus a discovery card on the dashboard, illustrated with the
-    // café-cat artwork.
-    const practiceLink = page.getByRole('link', {
-      name: /writing fundamentals practice/i,
-    });
-    await expect(practiceLink).toBeVisible();
-    await expect(
-      page.getByTestId('writing-fundamentals-card-image')
-    ).toBeVisible();
-
-    await practiceLink.click();
+    await practiceNav.click();
     await expect(
       page.getByRole('heading', { name: /writing fundamentals practice/i })
     ).toBeVisible();
+    // Sections are collapsed by default; open Grammar & Mechanics to reach a lesson.
+    await page.getByRole('button', { name: 'Grammar & Mechanics' }).click();
     await expect(
       page.getByRole('link', { name: /revising for wordiness/i })
     ).toBeVisible();
+  });
+
+  test('lets a student expand and collapse a practice section', async ({
+    page,
+    e2eContext,
+    signIn,
+  }) => {
+    await signIn(e2eContext.userEmail, 'johndoe');
+    await page.goto('/app/writing-lessons');
+
+    // Sections start collapsed so the index stays compact: the section heading
+    // is visible but its lessons are hidden until you open it.
+    const lessonLink = page.getByRole('link', {
+      name: /revising for wordiness/i,
+    });
+    await expect(lessonLink).toBeHidden();
+
+    // The section heading doubles as a toggle. Opening it reveals the lessons.
+    const toggle = page.getByRole('button', { name: 'Grammar & Mechanics' });
+    await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+
+    await toggle.click();
+    await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    await expect(lessonLink).toBeVisible();
+
+    // Collapsing it again hides the lessons and reclaims the space.
+    await toggle.click();
+    await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    await expect(lessonLink).toBeHidden();
   });
 
   test('lets a student create their own mixed practice set', async ({
@@ -77,10 +100,10 @@ test.describe.serial('Writing Fundamentals Practice', () => {
       page.getByRole('heading', { name: /writing fundamentals practice/i })
     ).toBeVisible();
     // The practice page leads with the café-cat banner artwork.
-    await expect(
-      page.getByTestId('writing-fundamentals-banner')
-    ).toBeVisible();
+    await expect(page.getByTestId('writing-fundamentals-banner')).toBeVisible();
     await expect(page.getByText(/quick rewrite drills/i)).toBeVisible();
+    // Sections start collapsed; open Grammar & Mechanics to see its lessons.
+    await page.getByRole('button', { name: 'Grammar & Mechanics' }).click();
     await expect(
       page.getByRole('link', { name: /revising for wordiness/i })
     ).toBeVisible();
@@ -192,12 +215,20 @@ test.describe.serial('Writing Fundamentals Practice', () => {
       /assigned to/i
     );
 
-    // Student sees it under "Assigned to you" and works a problem.
+    // The assignment also surfaces on the student dashboard's Assignments tab,
+    // listed alongside their other assignments (not as a generic practice
+    // banner).
     await page.request.post('/auth/logout');
     await page.context().clearCookies();
     await signIn(e2eContext.userEmail, 'johndoe');
-    await page.goto('/app/writing-lessons');
+    await page.goto('/app?tab=assignments');
+    const dashboardCard = page
+      .getByTestId('writing-practice-assignment-card')
+      .first();
+    await expect(dashboardCard).toBeVisible();
 
+    // And under "Assigned to you" on the practice page, where they work a problem.
+    await page.goto('/app/writing-lessons');
     const assignedCard = page.getByTestId('assigned-practice-card').first();
     await expect(assignedCard).toBeVisible();
     await assignedCard.click();
@@ -276,6 +307,9 @@ test.describe.serial('Writing Fundamentals Practice', () => {
       .click();
 
     const dialog = page.getByRole('dialog');
+    // Title and due date are required for a practice assignment.
+    await dialog.getByLabel(/^title/i).fill('Interleaved grammar set');
+    await dialog.getByLabel(/due date/i).fill('2026-12-01');
     // First checkbox is the class; then pick two skills to interleave.
     await dialog.getByRole('checkbox').first().click();
     await dialog.getByText('Fixing Comma Splices', { exact: true }).click();

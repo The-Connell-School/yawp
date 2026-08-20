@@ -4,8 +4,11 @@ import {
   ClipboardCheck,
   Lightbulb,
   Loader2,
+  MessageSquareText,
+  MonitorPlay,
   PenLine,
   RotateCcw,
+  Sparkles,
   XCircle,
 } from 'lucide-react';
 import { useEffect, useState, type ReactNode } from 'react';
@@ -14,14 +17,17 @@ import {
   data as dataResponse,
   useFetcher,
   useLoaderData,
+  useSearchParams,
   type ActionFunctionArgs,
   type LoaderFunctionArgs,
 } from 'react-router';
 
 import { GeneralErrorBoundary } from '~/components/error-boundary';
+import { CompositionPrompt } from '~/components/writing-lessons/composition-prompt';
 import { Button } from '~/components/ui/button';
 import { Badge } from '~/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
+import { Input } from '~/components/ui/input';
 import { Textarea } from '~/components/ui/textarea';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { formatClassLabel } from '~/utils/class-display';
@@ -35,12 +41,30 @@ import {
   type ActGradeResult,
   type ActPracticeQuestion,
 } from '~/utils/writing-lessons/act-practice.shared';
+import { isCompositionPracticeEnabled } from '~/utils/writing-lessons/composition-flag.server';
+import {
+  COMPOSITION_TOPIC_SUGGESTIONS,
+  buildTopicFallbackPrompts,
+  sanitizeCompositionTopic,
+} from '~/utils/writing-lessons/composition-topic-prompts';
+import {
+  getLoungeModuleLinkForLesson,
+  type LoungeModuleLink,
+} from '~/utils/writing-lessons/lounge-links.server';
+import { generatePracticeFeedback } from '~/utils/writing-lessons/practice-feedback.server';
+import { generatePracticePrompts } from '~/utils/writing-lessons/practice-prompt-generation.server';
+import {
+  practiceFeedbackStatusLabel,
+  type PracticeFeedbackResult,
+} from '~/utils/writing-lessons/practice-feedback.shared';
 import {
   getQuickWritingLessonBody,
   getQuickWritingLessonBySlug,
   getQuickWritingLessonContext,
   getQuickWritingPracticePrompts,
+  type QuickWritingPracticePrompt,
 } from '~/utils/writing-lessons/static-lessons.server';
+import { safeAssignedReturnPath } from '~/utils/writing-lessons/return-path';
 
 type TeacherClass = {
   id: string;
@@ -58,6 +82,13 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     throw new Response('Lesson not found', { status: 404 });
   }
 
+  const isComposition = lesson.section === 'Composition';
+  // Composition is still behind its rollout flag: hide the lessons entirely
+  // (even by direct URL) until it is switched on.
+  if (isComposition && !isCompositionPracticeEnabled()) {
+    throw new Response('Lesson not found', { status: 404 });
+  }
+
   const isTeacher = profile.role === 'TEACHER';
   const teacherClasses: TeacherClass[] = isTeacher
     ? await prisma.class.findMany({
@@ -67,22 +98,52 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       })
     : [];
 
+  // Composition skills are taught on video in the Teacher's Lounge; link
+  // teachers straight to Brian's matching module. Null (student, grammar
+  // lesson, or module absent in this environment) simply omits the link.
+  const loungeModule: LoungeModuleLink | null =
+    isComposition && isTeacher
+      ? await getLoungeModuleLinkForLesson(lesson.slug, profile.id)
+      : null;
+
   return dataResponse({
     lesson,
+    isComposition,
     lessonBody: getQuickWritingLessonBody(lesson.content),
-    // Kept for the teacher assign panel's default problem count.
+    // For grammar this feeds the teacher assign panel's default problem count;
+    // for composition these are the constructed-response prompts the panel
+    // works through.
     practicePrompts: getQuickWritingPracticePrompts(params.lessonSlug),
-    // The offline ACT bank powers the "Try it yourself" panel and is the
-    // fallback whenever AI generation is unavailable.
+    // The offline ACT bank powers the grammar "Try it yourself" panel and is
+    // the fallback whenever AI generation is unavailable. Composition lessons
+    // have no ACT bank (they are constructed response), so this is empty.
     actQuestions: getActPracticeQuestions(params.lessonSlug),
     isTeacher,
     teacherClasses,
+    loungeModule,
   });
 }
 
 type ActGenerateActionData = {
   intent: 'generate-act';
   questions: ActPracticeQuestion[];
+};
+
+type CompositionCheckActionData = {
+  intent: 'check-composition';
+  promptId: string;
+  feedback: PracticeFeedbackResult;
+};
+
+type CompositionPersonalizeActionData = {
+  intent: 'personalize-composition';
+  ok: boolean;
+  /** Set when ok is false: why the topic was declined. */
+  message?: string;
+  topic?: string;
+  /** 'ai' when the model generated the set, 'template' for the offline fallback. */
+  source?: 'ai' | 'template';
+  prompts?: QuickWritingPracticePrompt[];
 };
 
 export async function action({ request, params }: ActionFunctionArgs) {
@@ -97,10 +158,91 @@ export async function action({ request, params }: ActionFunctionArgs) {
   const formData = await request.formData();
   const intent = String(formData.get('intent') ?? '');
 
-  // Self-serve students can keep drilling a skill indefinitely: once they work
-  // through the offline ACT bank we generate fresh items grounded in the same
-  // rule and examples, so the panel never runs dry. Grading itself is done on
-  // the client (a deterministic index comparison), so there is no check intent.
+  // Composition lessons are constructed response: the student writes a topic
+  // sentence / thesis and the tutor feedback service (grounded in the lesson's
+  // skill + rule) responds. It degrades to a deterministic self-check when the
+  // tutor is unavailable, so this works with no ANTHROPIC_API_KEY too.
+  if (intent === 'check-composition') {
+    if (!isCompositionPracticeEnabled()) {
+      throw new Response('Composition practice is not enabled', {
+        status: 400,
+      });
+    }
+    const feedback = await generatePracticeFeedback({
+      lessonTitle: context.title,
+      skill: context.skill,
+      rule: context.rule,
+      exercise: String(formData.get('exercise') ?? ''),
+      instruction: String(formData.get('instruction') ?? ''),
+      response: String(formData.get('response') ?? ''),
+    });
+    return dataResponse<CompositionCheckActionData>({
+      intent: 'check-composition',
+      promptId: String(formData.get('promptId') ?? ''),
+      feedback,
+    });
+  }
+
+  // Interest-driven practice: the student names what the practice should be
+  // about and gets a fresh prompt set grounded in it. AI generation is
+  // preferred; the deterministic topic templates keep choice working with no
+  // ANTHROPIC_API_KEY, so personalizing never dead-ends.
+  if (intent === 'personalize-composition') {
+    if (!isCompositionPracticeEnabled()) {
+      throw new Response('Composition practice is not enabled', {
+        status: 400,
+      });
+    }
+    const lesson = getQuickWritingLessonBySlug(params.lessonSlug);
+    if (lesson?.section !== 'Composition') {
+      throw new Response('Only composition practice can be personalized', {
+        status: 400,
+      });
+    }
+
+    const topic = sanitizeCompositionTopic(String(formData.get('topic') ?? ''));
+    if (!topic) {
+      return dataResponse<CompositionPersonalizeActionData>({
+        intent: 'personalize-composition',
+        ok: false,
+        message:
+          'Let’s keep practice topics classroom-friendly — try a different one.',
+      });
+    }
+
+    const staticPrompts = getQuickWritingPracticePrompts(lesson.slug);
+    const generated = await generatePracticePrompts({
+      skill: context.skill,
+      lessonTitle: context.title,
+      rule: context.rule,
+      exampleExercises: staticPrompts
+        .slice(0, 4)
+        .map((prompt) => prompt.exercise),
+      count: 5,
+      topic,
+    });
+    const prompts: QuickWritingPracticePrompt[] =
+      generated.length > 0
+        ? generated.map((prompt, index) => ({
+            id: `${lesson.slug}-personal-${index + 1}`,
+            ...prompt,
+          }))
+        : buildTopicFallbackPrompts(lesson.slug, topic);
+
+    return dataResponse<CompositionPersonalizeActionData>({
+      intent: 'personalize-composition',
+      ok: true,
+      topic,
+      source: generated.length > 0 ? 'ai' : 'template',
+      prompts,
+    });
+  }
+
+  // Self-serve grammar students can keep drilling a skill indefinitely: once
+  // they work through the offline ACT bank we generate fresh items grounded in
+  // the same rule and examples, so the panel never runs dry. Grading itself is
+  // done on the client (a deterministic index comparison), so there is no check
+  // intent for grammar.
   if (intent !== 'generate-act') {
     throw new Response('Unsupported action', { status: 400 });
   }
@@ -130,21 +272,40 @@ export async function action({ request, params }: ActionFunctionArgs) {
 export default function WritingLessonDetailRoute() {
   const {
     lesson,
+    isComposition,
     lessonBody,
     practicePrompts,
     actQuestions,
     isTeacher,
     teacherClasses,
+    loungeModule,
   } = useLoaderData<typeof loader>();
+
+  // Grammar lessons drill ACT multiple choice; composition lessons are
+  // constructed response graded by the tutor feedback service.
+  const practicePanel = isComposition ? (
+    <CompositionPracticePanel prompts={practicePrompts} />
+  ) : (
+    <StudentPracticePanel actQuestions={actQuestions} />
+  );
+
+  // If the student opened this lesson to review it mid-assignment, "Back to
+  // practice" returns them to that exact exercise instead of the index.
+  const [searchParams] = useSearchParams();
+  const returnToAssignment = safeAssignedReturnPath(searchParams.get('from'));
+  const backTo = returnToAssignment ?? '/app/writing-lessons';
+  const backLabel = returnToAssignment
+    ? 'Back to assignment'
+    : 'Back to practice';
 
   return (
     <section className="no-scrollbar flex h-full w-full flex-col overflow-y-scroll">
       <div className="w-full border-b bg-secondary">
         <div className="mx-auto w-full max-w-screen-lg p-3 sm:p-5">
           <Button asChild variant="ghost" size="sm" className="mb-4 -ml-2">
-            <Link to="/app/writing-lessons">
+            <Link to={backTo}>
               <ArrowLeft className="mr-2 h-4 w-4" />
-              Back to practice
+              {backLabel}
             </Link>
           </Button>
           <div className="flex flex-col">
@@ -176,20 +337,57 @@ export default function WritingLessonDetailRoute() {
             // practice students see, so they can test-drive a lesson before
             // assigning it.
             <div className="space-y-6">
+              {loungeModule ? (
+                <LoungeModuleCard loungeModule={loungeModule} />
+              ) : null}
               <TeacherAssignPanel
                 lessonSlug={lesson.slug}
                 lessonTitle={lesson.title}
                 classes={teacherClasses}
                 promptCount={practicePrompts.length}
               />
-              <StudentPracticePanel actQuestions={actQuestions} />
+              {practicePanel}
             </div>
           ) : (
-            <StudentPracticePanel actQuestions={actQuestions} />
+            practicePanel
           )}
         </aside>
       </div>
     </section>
+  );
+}
+
+function LoungeModuleCard({
+  loungeModule,
+}: {
+  loungeModule: LoungeModuleLink;
+}) {
+  return (
+    <Card className="shadow-none" data-testid="lounge-module-card">
+      <CardHeader className="pb-2">
+        <CardTitle className="flex items-center gap-2 text-base">
+          <MonitorPlay className="h-4 w-4 shrink-0 text-primary" />
+          Watch Brian teach this
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3 text-base sm:text-sm">
+        <p className="text-muted-foreground">
+          This skill is covered in{' '}
+          <span className="font-medium text-foreground">
+            {loungeModule.moduleTitle}
+          </span>{' '}
+          from {loungeModule.trainingTitle} — with the lesson plan and slide
+          deck ready to download.
+        </p>
+        <Button asChild variant="outline" size="sm" className="w-full">
+          <Link
+            to={`/app/teacher-trainings/${loungeModule.trainingId}/modules/${loungeModule.moduleId}`}
+          >
+            Open in the Teacher&rsquo;s Lounge
+          </Link>
+        </Button>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -387,6 +585,321 @@ function StudentPracticePanel({
         )}
       </CardContent>
     </Card>
+  );
+}
+
+function CompositionPracticePanel({
+  prompts: defaultPrompts,
+}: {
+  prompts: QuickWritingPracticePrompt[];
+}) {
+  const feedbackFetcher = useFetcher<CompositionCheckActionData>();
+  const personalizeFetcher = useFetcher<CompositionPersonalizeActionData>();
+  const [promptIndex, setPromptIndex] = useState(0);
+  const [response, setResponse] = useState('');
+  const [feedback, setFeedback] = useState<PracticeFeedbackResult | null>(null);
+  // Interest-driven practice: once the student names a topic, their prompt set
+  // is rebuilt around it and replaces the archived defaults until cleared.
+  const [personalPrompts, setPersonalPrompts] = useState<
+    QuickWritingPracticePrompt[] | null
+  >(null);
+  const [activeTopic, setActiveTopic] = useState<string | null>(null);
+  const [topicInput, setTopicInput] = useState('');
+  const [topicMessage, setTopicMessage] = useState<string | null>(null);
+
+  const prompts = personalPrompts ?? defaultPrompts;
+  const activePrompt = prompts[promptIndex] ?? null;
+  const isChecking = feedbackFetcher.state !== 'idle';
+  const isPersonalizing = personalizeFetcher.state !== 'idle';
+
+  // Adopt feedback once it comes back for the prompt currently on screen — a
+  // late response for a prompt the student already moved past is ignored.
+  useEffect(() => {
+    const data = feedbackFetcher.data;
+    if (
+      data?.intent === 'check-composition' &&
+      data.promptId === activePrompt?.id
+    ) {
+      setFeedback(data.feedback);
+    }
+  }, [feedbackFetcher.data, activePrompt?.id]);
+
+  // Adopt a personalized prompt set (or the reason the topic was declined).
+  useEffect(() => {
+    const data = personalizeFetcher.data;
+    if (data?.intent !== 'personalize-composition') return;
+    if (data.ok && data.prompts && data.prompts.length > 0 && data.topic) {
+      setPersonalPrompts(data.prompts);
+      setActiveTopic(data.topic);
+      setTopicMessage(null);
+      setTopicInput('');
+      setPromptIndex(0);
+      setResponse('');
+      setFeedback(null);
+    } else if (!data.ok) {
+      setTopicMessage(data.message ?? 'Try a different topic.');
+    }
+  }, [personalizeFetcher.data]);
+
+  function personalize(topic: string) {
+    if (isPersonalizing) return;
+    const trimmed = topic.trim();
+    if (!trimmed) return;
+    personalizeFetcher.submit(
+      { intent: 'personalize-composition', topic: trimmed },
+      { method: 'post' }
+    );
+  }
+
+  function clearTopic() {
+    setPersonalPrompts(null);
+    setActiveTopic(null);
+    setTopicMessage(null);
+    setPromptIndex(0);
+    setResponse('');
+    setFeedback(null);
+  }
+
+  function checkResponse() {
+    if (activePrompt === null || isChecking) return;
+    feedbackFetcher.submit(
+      {
+        intent: 'check-composition',
+        promptId: activePrompt.id,
+        exercise: activePrompt.exercise,
+        instruction: activePrompt.instruction,
+        response,
+      },
+      { method: 'post' }
+    );
+  }
+
+  function showNextPrompt() {
+    if (prompts.length === 0) return;
+    setPromptIndex((current) => (current + 1) % prompts.length);
+    setResponse('');
+    setFeedback(null);
+  }
+
+  return (
+    <Card className="overflow-hidden rounded-2xl border-border/70 shadow-sm">
+      <CardHeader className="border-b bg-muted/40 pb-4">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
+              <PenLine className="h-4 w-4" />
+            </span>
+            <CardTitle className="text-lg">Try it yourself</CardTitle>
+          </div>
+          {activePrompt ? (
+            <span className="text-xs font-medium text-muted-foreground">
+              Prompt {promptIndex + 1}
+            </span>
+          ) : null}
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4 p-5">
+        {activeTopic ? (
+          <div
+            data-testid="composition-topic-active"
+            className="flex flex-wrap items-center gap-2 rounded-xl border border-primary/30 bg-primary/5 px-3 py-2"
+          >
+            <Sparkles className="h-4 w-4 shrink-0 text-primary" />
+            <span className="text-sm text-foreground">
+              Practicing with <span className="font-medium">{activeTopic}</span>
+            </span>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="ml-auto h-7 rounded-full px-2 text-xs text-muted-foreground"
+              onClick={clearTopic}
+            >
+              Use standard prompts
+            </Button>
+          </div>
+        ) : (
+          <div
+            data-testid="composition-topic-picker"
+            className="space-y-2 rounded-xl border border-dashed border-border/70 p-3"
+          >
+            <p className="text-sm font-medium text-foreground">
+              Make it about you
+            </p>
+            <p className="text-sm text-muted-foreground">
+              Pick something you care about and the prompts will be built around
+              it.
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {COMPOSITION_TOPIC_SUGGESTIONS.map((suggestion) => (
+                <button
+                  key={suggestion}
+                  type="button"
+                  disabled={isPersonalizing}
+                  onClick={() => personalize(suggestion)}
+                  className="rounded-full border border-border bg-background px-2.5 py-1 text-xs text-foreground transition hover:bg-muted disabled:opacity-50"
+                >
+                  {suggestion}
+                </button>
+              ))}
+            </div>
+            <div className="flex items-center gap-2">
+              <Input
+                data-testid="composition-topic-input"
+                aria-label="Your own topic"
+                value={topicInput}
+                onChange={(event) => setTopicInput(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    event.preventDefault();
+                    personalize(topicInput);
+                  }
+                }}
+                placeholder="…or your own topic"
+                className="h-8 text-base sm:text-sm"
+              />
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="h-8 shrink-0 rounded-full"
+                disabled={isPersonalizing || topicInput.trim().length === 0}
+                onClick={() => personalize(topicInput)}
+              >
+                {isPersonalizing ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  'Make it mine'
+                )}
+              </Button>
+            </div>
+            {topicMessage ? (
+              <p
+                data-testid="composition-topic-message"
+                className="text-sm text-destructive"
+              >
+                {topicMessage}
+              </p>
+            ) : null}
+          </div>
+        )}
+
+        {activePrompt ? (
+          <div className="space-y-4">
+            <CompositionPrompt
+              exercise={activePrompt.exercise}
+              instruction={activePrompt.instruction}
+            />
+
+            <Textarea
+              data-testid="composition-response"
+              aria-label="Your response"
+              value={response}
+              onChange={(event) => setResponse(event.target.value)}
+              placeholder="Write your response here…"
+              className="min-h-28 text-base sm:text-sm"
+            />
+
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                className="rounded-full"
+                disabled={isChecking}
+                onClick={checkResponse}
+              >
+                {isChecking ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <MessageSquareText className="mr-2 h-4 w-4" />
+                )}
+                Check my answer
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                className="rounded-full text-muted-foreground"
+                onClick={showNextPrompt}
+              >
+                <RotateCcw className="mr-2 h-4 w-4" />
+                New prompt
+              </Button>
+            </div>
+
+            {feedback ? <PracticeFeedbackPanel feedback={feedback} /> : null}
+          </div>
+        ) : (
+          <p className="text-base text-muted-foreground sm:text-sm">
+            This lesson does not have practice prompts yet.
+          </p>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function PracticeFeedbackPanel({
+  feedback,
+}: {
+  feedback: PracticeFeedbackResult;
+}) {
+  const tone =
+    feedback.status === 'strong'
+      ? 'border-emerald-300 bg-emerald-50'
+      : feedback.status === 'developing'
+        ? 'border-amber-300 bg-amber-50'
+        : 'border-rose-300 bg-rose-50';
+
+  return (
+    <div
+      data-testid="composition-result"
+      className={`space-y-3 rounded-xl border p-4 ${tone}`}
+    >
+      <div className="flex items-center gap-2">
+        <MessageSquareText className="h-4 w-4 text-foreground" />
+        <span className="text-sm font-semibold text-foreground">
+          {practiceFeedbackStatusLabel(feedback.status)}
+        </span>
+        {feedback.degraded ? (
+          <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+            Quick self-check
+          </span>
+        ) : null}
+      </div>
+
+      <p className="text-sm leading-relaxed text-foreground">
+        {feedback.summary}
+      </p>
+
+      {feedback.strengths.length > 0 ? (
+        <div className="space-y-1">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            What's working
+          </p>
+          <ul className="ml-1 space-y-1 border-l-2 border-border pl-3 text-sm text-foreground">
+            {feedback.strengths.map((item, index) => (
+              <li key={index}>{item}</li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      {feedback.focus.length > 0 ? (
+        <div className="space-y-1">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Try next
+          </p>
+          <ul className="ml-1 space-y-1 border-l-2 border-border pl-3 text-sm text-foreground">
+            {feedback.focus.map((item, index) => (
+              <li key={index}>{item}</li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      <p className="text-sm font-medium italic text-muted-foreground">
+        {feedback.encouragement}
+      </p>
+    </div>
   );
 }
 

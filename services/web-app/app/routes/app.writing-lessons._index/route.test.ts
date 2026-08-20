@@ -26,6 +26,7 @@ const { loader } = await import('./route');
 
 afterAll(() => {
   mock.restore();
+  delete process.env.COMPOSITION_PRACTICE_ENABLED;
 });
 
 describe('writing lessons index route', () => {
@@ -45,6 +46,7 @@ describe('writing lessons index route', () => {
       organization: { id: 'org-1', writingPracticeEnabled: true },
     });
     classFindMany.mockResolvedValue([]);
+    delete process.env.COMPOSITION_PRACTICE_ENABLED;
   });
 
   test('loads by direct URL when the org has writing practice enabled', async () => {
@@ -56,6 +58,17 @@ describe('writing lessons index route', () => {
 
     expect(response.data.lessonCount).toBeGreaterThan(0);
     expect(response.data.promptCount).toBeGreaterThan(0);
+    // Grammar & Mechanics is always present; Composition appears when enabled.
+    expect(
+      response.data.sections.some(
+        (section) => section.section === 'Grammar & Mechanics'
+      )
+    ).toBe(true);
+    expect(
+      response.data.sections.some((section) =>
+        section.groups.some((group) => group.lessons.length > 0)
+      )
+    ).toBe(true);
   });
 
   test('redirects to the dashboard when the org has writing practice disabled', async () => {
@@ -189,5 +202,31 @@ describe('writing lessons index route', () => {
         classes: [{ id: 'class-1', label: 'Grade 9 • Period 2' }],
       },
     ]);
+  });
+
+  test('hides the Composition section until its rollout flag is on', async () => {
+    process.env.COMPOSITION_PRACTICE_ENABLED = 'false';
+
+    const offResponse = await loader({
+      request: new Request('https://example.test/app/writing-lessons'),
+      params: {},
+      context: {} as never,
+    } as any);
+
+    expect(
+      offResponse.data.sections.map((section) => section.section)
+    ).not.toContain('Composition');
+
+    process.env.COMPOSITION_PRACTICE_ENABLED = 'true';
+
+    const onResponse = await loader({
+      request: new Request('https://example.test/app/writing-lessons'),
+      params: {},
+      context: {} as never,
+    } as any);
+
+    expect(
+      onResponse.data.sections.map((section) => section.section)
+    ).toContain('Composition');
   });
 });

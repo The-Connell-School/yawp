@@ -24,10 +24,13 @@ const {
   listWritingPracticeAssignmentsForStudent,
   listWritingPracticeAssignmentsForTeacher,
   recordWritingPracticeAttempt,
+  recordCompositionPracticeAttempt,
   getAssignedPracticeForStudent,
   buildAssignedPracticeSequence,
   summarizeWritingPracticeResults,
+  computeAssignedProgress,
   buildGeneratedPracticeSequence,
+  buildMixedGeneratedPracticeSequence,
   getOrCreateStudentPracticeSet,
   getWritingPracticeResultsForTeacher,
 } = await import('./practice-assignments.server');
@@ -131,9 +134,7 @@ describe('listing writing practice assignments', () => {
     expect(assignments[0]).toMatchObject({
       id: 'practice-1',
       title: 'Wordiness warm-up',
-      classes: [
-        { id: 'class-1', title: 'English 9', grade: '9', period: '2' },
-      ],
+      classes: [{ id: 'class-1', title: 'English 9', grade: '9', period: '2' }],
     });
 
     const [args] = writingPracticeAssignment.findMany.mock.calls[0];
@@ -390,8 +391,12 @@ describe('getOrCreateStudentPracticeSet', () => {
     const createArg = writingPracticePromptSet.create.mock.calls[0][0];
     expect(createArg.data.source).toBe('ai');
     expect(items).toHaveLength(2);
-    expect(items[0].question.sentence).toContain('comet');
-    expect(items[0].question.choices).toHaveLength(4);
+    const first = items[0];
+    expect(first.kind).toBe('act');
+    if (first.kind !== 'composition') {
+      expect(first.question.sentence).toContain('comet');
+      expect(first.question.choices).toHaveLength(4);
+    }
   });
 });
 
@@ -479,18 +484,25 @@ describe('summarizeWritingPracticeResults', () => {
       students,
       problemCount: 2,
       attempts: [
+        // Aaron answered two distinct grammar problems.
         {
           membershipId: 's-1',
+          promptId: 'fixing-comma-splices-1',
+          lessonSlug: 'fixing-comma-splices',
           status: 'developing',
           createdAt: new Date('2026-07-01T10:00:00Z'),
         },
         {
           membershipId: 's-1',
+          promptId: 'fixing-comma-splices-2',
+          lessonSlug: 'fixing-comma-splices',
           status: 'strong',
           createdAt: new Date('2026-07-01T11:00:00Z'),
         },
         {
           membershipId: 's-2',
+          promptId: 'fixing-comma-splices-1',
+          lessonSlug: 'fixing-comma-splices',
           status: 'needs_revision',
           createdAt: new Date('2026-07-01T09:00:00Z'),
         },
@@ -505,6 +517,7 @@ describe('summarizeWritingPracticeResults', () => {
 
     const aaron = results[0];
     expect(aaron.attemptCount).toBe(2);
+    // Grammar problems are done as soon as they're answered.
     expect(aaron.completed).toBe(true);
     expect(aaron.latestStatus).toBe('strong'); // most recent wins
 
@@ -516,5 +529,191 @@ describe('summarizeWritingPracticeResults', () => {
     expect(cara.attemptCount).toBe(0);
     expect(cara.completed).toBe(false);
     expect(cara.latestStatus).toBeNull();
+  });
+
+  test('collapses composition revisions and gates completion on mastery', () => {
+    const results = summarizeWritingPracticeResults({
+      students: [students[1]], // just Aaron (s-1)
+      problemCount: 2,
+      attempts: [
+        // Problem 1: revised twice, then mastered — one problem, mastered.
+        {
+          membershipId: 's-1',
+          promptId: 'topic-sentences-1',
+          lessonSlug: 'topic-sentences',
+          status: 'needs_revision',
+          createdAt: new Date('2026-07-01T10:00:00Z'),
+        },
+        {
+          membershipId: 's-1',
+          promptId: 'topic-sentences-1',
+          lessonSlug: 'topic-sentences',
+          status: 'developing',
+          createdAt: new Date('2026-07-01T10:05:00Z'),
+        },
+        {
+          membershipId: 's-1',
+          promptId: 'topic-sentences-1',
+          lessonSlug: 'topic-sentences',
+          status: 'strong',
+          createdAt: new Date('2026-07-01T10:10:00Z'),
+        },
+        // Problem 2: attempted but never mastered.
+        {
+          membershipId: 's-1',
+          promptId: 'topic-sentences-2',
+          lessonSlug: 'topic-sentences',
+          status: 'developing',
+          createdAt: new Date('2026-07-01T10:20:00Z'),
+        },
+      ],
+    });
+
+    const aaron = results[0];
+    // Two distinct problems attempted (three revisions of #1 collapse to one).
+    expect(aaron.attemptCount).toBe(2);
+    expect(aaron.masteredCount).toBe(1);
+    // Not complete: composition problem #2 was never mastered.
+    expect(aaron.completed).toBe(false);
+    expect(aaron.latestStatus).toBe('developing');
+  });
+});
+
+describe('computeAssignedProgress', () => {
+  test('composition done requires mastery; ACT done on any attempt', () => {
+    const progress = computeAssignedProgress([
+      // Composition mastered
+      {
+        promptId: 'topic-sentences-1',
+        lessonSlug: 'topic-sentences',
+        status: 'strong',
+      },
+      // Composition attempted, not mastered
+      {
+        promptId: 'topic-sentences-2',
+        lessonSlug: 'topic-sentences',
+        status: 'needs_revision',
+      },
+      // Grammar answered (done regardless of correctness)
+      {
+        promptId: 'fixing-comma-splices-1',
+        lessonSlug: 'fixing-comma-splices',
+        status: 'needs_revision',
+      },
+    ]);
+
+    expect(progress.attemptedCount).toBe(3);
+    expect(progress.masteredCount).toBe(1);
+    // topic-sentences-1 (mastered) + fixing-comma-splices-1 (answered) = 2 done.
+    expect(progress.doneCount).toBe(2);
+  });
+});
+
+describe('buildMixedGeneratedPracticeSequence', () => {
+  test('composition-only slugs produce constructed-response items', async () => {
+    getLLMCompletion.mockRejectedValue(new Error('offline'));
+
+    const { items, source } = await buildMixedGeneratedPracticeSequence(
+      ['topic-sentences', 'thesis-statements'],
+      4
+    );
+
+    expect(source).toBe('static');
+    expect(items).toHaveLength(4);
+    expect(items.map((item) => item.position)).toEqual([1, 2, 3, 4]);
+    for (const item of items) {
+      expect(item.kind).toBe('composition');
+      if (item.kind === 'composition') {
+        expect(item.prompt.exercise.length).toBeGreaterThan(0);
+        expect(item.prompt.instruction.length).toBeGreaterThan(0);
+      }
+    }
+    // Skills interleave round-robin.
+    expect(items[0].lessonSlug).toBe('topic-sentences');
+    expect(items[1].lessonSlug).toBe('thesis-statements');
+  });
+
+  test('grammar-only slugs keep producing ACT items', async () => {
+    getLLMCompletion.mockRejectedValue(new Error('offline'));
+
+    const { items } = await buildMixedGeneratedPracticeSequence(
+      ['fixing-comma-splices'],
+      3
+    );
+
+    expect(items).toHaveLength(3);
+    for (const item of items) {
+      expect(item.kind).toBe('act');
+      if (item.kind === 'act') {
+        expect(item.question.choices).toHaveLength(4);
+      }
+    }
+  });
+
+  test('mixed slugs interleave ACT and constructed-response items', async () => {
+    getLLMCompletion.mockRejectedValue(new Error('offline'));
+
+    const { items } = await buildMixedGeneratedPracticeSequence(
+      ['fixing-comma-splices', 'topic-sentences'],
+      6
+    );
+
+    expect(items).toHaveLength(6);
+    expect(items.map((item) => item.position)).toEqual([1, 2, 3, 4, 5, 6]);
+    const kinds = new Set(items.map((item) => item.kind));
+    expect(kinds.has('act')).toBe(true);
+    expect(kinds.has('composition')).toBe(true);
+    // Kinds alternate rather than clustering all of one skill first.
+    expect(items[0].kind).not.toBe(items[1].kind);
+  });
+
+  test('a single problem with mixed slugs still yields exactly one item', async () => {
+    getLLMCompletion.mockRejectedValue(new Error('offline'));
+
+    const { items } = await buildMixedGeneratedPracticeSequence(
+      ['fixing-comma-splices', 'topic-sentences'],
+      1
+    );
+
+    expect(items).toHaveLength(1);
+    expect(items[0].position).toBe(1);
+  });
+});
+
+describe('recordCompositionPracticeAttempt', () => {
+  test('persists the prompt snapshot, response, and feedback', async () => {
+    writingPracticeAttempt.create.mockResolvedValue({ id: 'attempt-1' });
+
+    await recordCompositionPracticeAttempt({
+      classAssignmentId: 'ca-1',
+      membershipId: 'student-1',
+      lessonSlug: 'topic-sentences',
+      prompt: {
+        id: 'topic-sentences-1',
+        exercise: 'Rewrite this announcement as a claim.',
+        instruction: 'Write a topic sentence.',
+      },
+      response: 'The cafeteria menu punishes the students who need lunch most.',
+      feedback: {
+        status: 'strong',
+        summary: 'A clear, arguable claim.',
+        strengths: ['Specific and arguable.'],
+        focus: ['Now prove it in a paragraph.'],
+        encouragement: 'Nice work.',
+        degraded: false,
+      },
+    });
+
+    const data = writingPracticeAttempt.create.mock.calls[0][0].data;
+    expect(data.classAssignmentId).toBe('ca-1');
+    expect(data.lessonSlug).toBe('topic-sentences');
+    expect(data.promptId).toBe('topic-sentences-1');
+    expect(data.exercise).toBe('Rewrite this announcement as a claim.');
+    expect(data.response).toBe(
+      'The cafeteria menu punishes the students who need lunch most.'
+    );
+    expect(data.status).toBe('strong');
+    expect(data.feedbackJson.kind).toBe('composition');
+    expect(data.feedbackJson.summary).toBe('A clear, arguable claim.');
   });
 });

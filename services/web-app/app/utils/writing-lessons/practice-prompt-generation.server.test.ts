@@ -57,6 +57,30 @@ describe('generatePracticePrompts', () => {
     expect(serialized).toContain('The album dropped');
   });
 
+  test('weaves a student topic into the request when one is given', async () => {
+    getLLMCompletion.mockResolvedValueOnce(
+      JSON.stringify({ prompts: [{ exercise: 'A, B.', instruction: 'Fix.' }] })
+    );
+
+    await generatePracticePrompts({ ...baseInput, topic: 'women’s soccer' });
+
+    const userMessage = getLLMCompletion.mock.calls[0][0].messages[0].content;
+    expect(userMessage).toContain('women’s soccer');
+    // Every generated item should be grounded in the student's interest.
+    expect(userMessage).toContain('chosen topic');
+  });
+
+  test('makes no topic demands when none is given', async () => {
+    getLLMCompletion.mockResolvedValueOnce(
+      JSON.stringify({ prompts: [{ exercise: 'A, B.', instruction: 'Fix.' }] })
+    );
+
+    await generatePracticePrompts(baseInput);
+
+    const userMessage = getLLMCompletion.mock.calls[0][0].messages[0].content;
+    expect(userMessage).not.toContain('chosen topic');
+  });
+
   test('caps the result to the requested count', async () => {
     getLLMCompletion.mockResolvedValueOnce(
       JSON.stringify({

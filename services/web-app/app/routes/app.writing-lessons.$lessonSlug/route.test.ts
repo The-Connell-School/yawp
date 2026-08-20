@@ -3,13 +3,17 @@ import { afterAll, beforeEach, describe, expect, mock, test } from 'bun:test';
 const requireUserId = mock();
 const requireMembership = mock();
 const getLLMCompletion = mock();
+const getLoungeModuleLinkForLesson = mock();
 
 mock.module('~/utils/auth.server', () => ({
   requireUserId,
   requireMembership,
 }));
 mock.module('~/utils/db.server', () => ({
-  prisma: { class: { findMany: mock() } },
+  prisma: { class: { findMany: mock().mockResolvedValue([]) } },
+}));
+mock.module('~/utils/writing-lessons/lounge-links.server', () => ({
+  getLoungeModuleLinkForLesson,
 }));
 // Mock the leaf LLM call (not the generation/feedback modules) so this test
 // never clobbers the module-as-subject in the generation/feedback unit tests.
@@ -50,6 +54,7 @@ describe('writing lesson detail route', () => {
     requireUserId.mockReset();
     requireMembership.mockReset();
     getLLMCompletion.mockReset();
+    getLoungeModuleLinkForLesson.mockReset();
 
     requireUserId.mockResolvedValue('user-1');
     requireMembership.mockResolvedValue({
@@ -71,6 +76,67 @@ describe('writing lesson detail route', () => {
     expect(response.data.lesson.slug).toBe('revising-for-wordiness');
     expect(response.data.actQuestions.length).toBeGreaterThan(0);
     expect(response.data.actQuestions[0].choices).toHaveLength(4);
+  });
+
+  test('links teachers on a composition lesson to the Lounge module', async () => {
+    requireMembership.mockResolvedValue({
+      id: 'teacher-1',
+      role: 'TEACHER',
+      organization: { id: 'org-1', name: 'Org' },
+    });
+    const link = {
+      trainingId: 'training-1',
+      trainingTitle: 'The Thesis-Driven Essay',
+      moduleId: 'module-1',
+      moduleTitle: 'Lesson 3: Developing a Thesis Statement',
+    };
+    getLoungeModuleLinkForLesson.mockResolvedValue(link);
+
+    const response = await loader({
+      request: new Request(
+        'https://example.test/app/writing-lessons/thesis-statements'
+      ),
+      params: { lessonSlug: 'thesis-statements' },
+      context: {} as never,
+    } as never);
+
+    expect(response.data.loungeModule).toEqual(link);
+    expect(getLoungeModuleLinkForLesson).toHaveBeenCalledWith(
+      'thesis-statements',
+      'teacher-1'
+    );
+  });
+
+  test('does not resolve a Lounge link for students', async () => {
+    const response = await loader({
+      request: new Request(
+        'https://example.test/app/writing-lessons/thesis-statements'
+      ),
+      params: { lessonSlug: 'thesis-statements' },
+      context: {} as never,
+    } as never);
+
+    expect(response.data.loungeModule).toBeNull();
+    expect(getLoungeModuleLinkForLesson).not.toHaveBeenCalled();
+  });
+
+  test('does not resolve a Lounge link on grammar lessons', async () => {
+    requireMembership.mockResolvedValue({
+      id: 'teacher-1',
+      role: 'TEACHER',
+      organization: { id: 'org-1', name: 'Org' },
+    });
+
+    const response = await loader({
+      request: new Request(
+        'https://example.test/app/writing-lessons/revising-for-wordiness'
+      ),
+      params: { lessonSlug: 'revising-for-wordiness' },
+      context: {} as never,
+    } as never);
+
+    expect(response.data.loungeModule).toBeNull();
+    expect(getLoungeModuleLinkForLesson).not.toHaveBeenCalled();
   });
 });
 
@@ -120,5 +186,221 @@ describe('writing lesson practice action - generate-act intent', () => {
     await expect(run({ intent: 'check', promptId: 'x' })).rejects.toMatchObject(
       { status: 400 }
     );
+  });
+});
+
+describe('writing lesson practice action - check-composition intent', () => {
+  async function runComposition(
+    fields: Record<string, string | string[]>,
+    lessonSlug = 'topic-sentences'
+  ) {
+    const response = await action({
+      request: buildRequest(fields),
+      params: { lessonSlug },
+      context: {},
+    } as never);
+    return (response as unknown as { data?: any }).data ?? response;
+  }
+
+  beforeEach(() => {
+    requireUserId.mockReset();
+    requireMembership.mockReset();
+    getLLMCompletion.mockReset();
+
+    requireUserId.mockResolvedValue('user-1');
+    requireMembership.mockResolvedValue({
+      id: 'student-1',
+      role: 'STUDENT',
+      organization: { id: 'org-1', name: 'Org' },
+    });
+    process.env.COMPOSITION_PRACTICE_ENABLED = 'true';
+  });
+
+  afterAll(() => {
+    delete process.env.COMPOSITION_PRACTICE_ENABLED;
+  });
+
+  test('a blank response is caught by the guardrail before the tutor', async () => {
+    const result = (await runComposition({
+      intent: 'check-composition',
+      promptId: 'topic-sentences-1',
+      exercise: 'Rewrite this announcement as a claim.',
+      instruction: 'Write a topic sentence.',
+      response: '',
+    })) as {
+      intent: string;
+      promptId: string;
+      feedback: { status: string; summary: string; degraded: boolean };
+    };
+
+    expect(result.intent).toBe('check-composition');
+    expect(result.promptId).toBe('topic-sentences-1');
+    expect(result.feedback.status).toBe('needs_revision');
+    expect(result.feedback.summary).toMatch(/add your revision/i);
+    // The guardrail is deterministic — the tutor is never called.
+    expect(getLLMCompletion).not.toHaveBeenCalled();
+  });
+
+  test('a real response returns offline-degraded tutor feedback', async () => {
+    getLLMCompletion.mockRejectedValueOnce(new Error('tutor offline'));
+
+    const result = (await runComposition({
+      intent: 'check-composition',
+      promptId: 'topic-sentences-1',
+      exercise: 'Rewrite this announcement as a claim.',
+      instruction: 'Write a topic sentence.',
+      response:
+        'The cafeteria menu punishes the students who most need a real lunch.',
+    })) as { feedback: { degraded: boolean; summary: string } };
+
+    expect(getLLMCompletion).toHaveBeenCalledTimes(1);
+    expect(result.feedback.degraded).toBe(true);
+    expect(result.feedback.summary).toMatch(/tutor is offline/i);
+  });
+
+  test('a configured tutor produces graded, non-degraded feedback', async () => {
+    getLLMCompletion.mockResolvedValueOnce(
+      JSON.stringify({
+        status: 'strong',
+        summary: 'This lands as a clear, arguable claim.',
+        strengths: ['You made a specific claim a paragraph can prove.'],
+        focus: ['Make sure the rest of the paragraph delivers on it.'],
+        encouragement: 'Nice work — keep that edge.',
+      })
+    );
+
+    const result = (await runComposition({
+      intent: 'check-composition',
+      promptId: 'topic-sentences-2',
+      exercise: 'Turn this fact into a claim.',
+      instruction: 'Write a topic sentence.',
+      response:
+        'The new skate park has quietly become the town’s only free hangout.',
+    })) as { feedback: { degraded: boolean; status: string } };
+
+    expect(result.feedback.degraded).toBe(false);
+    expect(result.feedback.status).toBe('strong');
+  });
+
+  test('is rejected when the composition flag is off', async () => {
+    process.env.COMPOSITION_PRACTICE_ENABLED = 'false';
+    await expect(
+      runComposition({
+        intent: 'check-composition',
+        promptId: 'topic-sentences-1',
+        response: 'a real revision attempt',
+      })
+    ).rejects.toMatchObject({ status: 400 });
+  });
+});
+
+describe('writing lesson practice action - personalize-composition intent', () => {
+  async function runPersonalize(
+    fields: Record<string, string | string[]>,
+    lessonSlug = 'topic-sentences'
+  ) {
+    const response = await action({
+      request: buildRequest(fields),
+      params: { lessonSlug },
+      context: {},
+    } as never);
+    return (response as unknown as { data?: any }).data ?? response;
+  }
+
+  beforeEach(() => {
+    requireUserId.mockReset();
+    requireMembership.mockReset();
+    getLLMCompletion.mockReset();
+
+    requireUserId.mockResolvedValue('user-1');
+    requireMembership.mockResolvedValue({
+      id: 'student-1',
+      role: 'STUDENT',
+      organization: { id: 'org-1', name: 'Org' },
+    });
+    process.env.COMPOSITION_PRACTICE_ENABLED = 'true';
+  });
+
+  afterAll(() => {
+    delete process.env.COMPOSITION_PRACTICE_ENABLED;
+  });
+
+  test('returns AI prompts grounded in the student topic', async () => {
+    getLLMCompletion.mockResolvedValueOnce(
+      JSON.stringify({
+        prompts: [
+          {
+            exercise: 'Your team just lost a final. Make a claim about it.',
+            instruction: 'Write a topic sentence about your team.',
+          },
+          {
+            exercise: 'A fan says the team is cursed.',
+            instruction: 'Turn that into an arguable claim.',
+          },
+        ],
+      })
+    );
+
+    const result = await runPersonalize({
+      intent: 'personalize-composition',
+      topic: 'my basketball team',
+    });
+
+    expect(result.intent).toBe('personalize-composition');
+    expect(result.ok).toBe(true);
+    expect(result.topic).toBe('my basketball team');
+    expect(result.source).toBe('ai');
+    expect(result.prompts.length).toBeGreaterThan(1);
+    expect(new Set(result.prompts.map((p: { id: string }) => p.id)).size).toBe(
+      result.prompts.length
+    );
+    // The model call was grounded in the student's topic.
+    const userMessage = getLLMCompletion.mock.calls[0][0].messages[0].content;
+    expect(userMessage).toContain('my basketball team');
+  });
+
+  test('falls back to topic templates when generation is unavailable', async () => {
+    getLLMCompletion.mockRejectedValueOnce(new Error('no provider'));
+
+    const result = await runPersonalize({
+      intent: 'personalize-composition',
+      topic: 'skateboarding',
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.source).toBe('template');
+    expect(result.prompts.length).toBeGreaterThanOrEqual(3);
+    for (const prompt of result.prompts) {
+      expect(`${prompt.exercise} ${prompt.instruction}`).toContain(
+        'skateboarding'
+      );
+    }
+  });
+
+  test('asks for a different topic when the topic trips the safety screen', async () => {
+    const result = await runPersonalize({
+      intent: 'personalize-composition',
+      topic: 'how to buy meth',
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.message).toMatch(/topic/i);
+    expect(getLLMCompletion).not.toHaveBeenCalled();
+  });
+
+  test('rejects the intent on grammar lessons', async () => {
+    await expect(
+      runPersonalize(
+        { intent: 'personalize-composition', topic: 'music' },
+        'fixing-comma-splices'
+      )
+    ).rejects.toMatchObject({ status: 400 });
+  });
+
+  test('is rejected when the composition flag is off', async () => {
+    process.env.COMPOSITION_PRACTICE_ENABLED = 'false';
+    await expect(
+      runPersonalize({ intent: 'personalize-composition', topic: 'music' })
+    ).rejects.toMatchObject({ status: 400 });
   });
 });

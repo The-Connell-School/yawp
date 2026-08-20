@@ -35,6 +35,9 @@ const SYSTEM_PROMPT = [
   '',
   'Vary the topics widely (music, sports, school life, technology, social issues,',
   'food, travel) and keep them engaging and age-appropriate for high schoolers.',
+  'EXCEPTION: when the request names a student-chosen topic, ground every item',
+  'in that topic instead — the student asked for practice about their own',
+  'interest, and specificity to it is the point.',
   '',
   'CONTENT POLICY — these sentences are shown to students in a classroom, so',
   'every item MUST be school-appropriate. Never include profanity, slurs, sexual',
@@ -51,6 +54,7 @@ function buildUserPrompt(input: {
   rule: string;
   exampleExercises: string[];
   count: number;
+  topic?: string;
 }): string {
   const examples = input.exampleExercises
     .slice(0, 6)
@@ -67,6 +71,14 @@ function buildUserPrompt(input: {
     'Example practice sentences (for style only — do not repeat them):',
     examples || '(none)',
     '',
+    ...(input.topic
+      ? [
+          `The student's chosen topic: ${input.topic}`,
+          'Ground every item in that topic — it is what this student cares',
+          'about. Stay school-appropriate even if the topic invites edginess.',
+          '',
+        ]
+      : []),
     `Generate ${input.count} new, distinct practice items for this skill.`,
   ].join('\n');
 }
@@ -82,6 +94,8 @@ export async function generatePracticePrompts(input: {
   rule: string;
   exampleExercises: string[];
   count: number;
+  /** Optional student-chosen interest every generated item is grounded in. */
+  topic?: string;
 }): Promise<GeneratedPracticePrompt[]> {
   if (input.count <= 0) return [];
 
