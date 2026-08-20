@@ -8,13 +8,17 @@ export function resolveSubmissionGradeMode({
   isGradingOther,
   lifecycleState,
   isEditingGrade,
+  submissionActivityEnabled = false,
 }: {
   isGradingOther: boolean;
   lifecycleState: SubmissionLifecycleState;
   isEditingGrade: boolean;
+  submissionActivityEnabled?: boolean;
 }) {
   if (!isGradingOther) return false;
-  if (lifecycleState === 'released') return false;
+  if (lifecycleState === 'released') {
+    return submissionActivityEnabled && isEditingGrade;
+  }
   if (lifecycleState === 'needs_grading') return true;
   if (lifecycleState === 'graded') return isEditingGrade;
   return false;
