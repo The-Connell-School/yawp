@@ -76,6 +76,15 @@ const POST = z.object({
   llmRetry: z.enum(['fallback']).optional(),
 });
 
+function isPrismaRecordNotFoundError(error: unknown) {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    (error as { code?: unknown }).code === 'P2025'
+  );
+}
+
 export function getRubricEvaluationMaxTokens(categoryCount: number) {
   const baseCategoryCount = 5;
   const baseMaxTokens = 900;
@@ -509,6 +518,15 @@ export async function action({ request }: ActionFunctionArgs) {
       },
       { status: 504 }
     );
+  const staleGradeResponse = () =>
+    dataResponse(
+      {
+        success: false,
+        message:
+          'This submission changed before the grading suggestions could be saved. Please refresh and try again.',
+      },
+      { status: 409 }
+    );
 
   const { error, data } = await parseFormData(request, POST);
   if (error) return validationError(error);
@@ -672,6 +690,11 @@ export async function action({ request }: ActionFunctionArgs) {
 
   const organizationId =
     submission.document.membership.organizationId ?? actor.organizationId;
+  const gradeActorMembershipId = resolveSubmissionActivityActorMembershipId({
+    actorMembershipId: actor.membershipId,
+    actorOrganizationId: actor.organizationId,
+    submissionOrganizationId: organizationId,
+  });
   if (
     submission.releasedAt != null &&
     submission.document.membership.organization?.submissionActivityEnabled !==
@@ -912,59 +935,60 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
         documentContext,
       } satisfies Prisma.InputJsonValue,
       ...(!submission.gradedAt
-        ? { gradedAt: now, gradedByMembershipId: actor.membershipId }
+        ? { gradedAt: now, gradedByMembershipId: gradeActorMembershipId }
         : {}),
       updatedAt: now,
     };
-    await prisma.$transaction(async (tx) => {
-      await tx.submission.update({
-        where: {
-          id: submission.id,
-          updatedAt: submission.updatedAt,
-          unsubmittedAt: null,
-          document: {
-            is: {
-              deletedAt: null,
-              AND: [
-                {
-                  membership: {
-                    is: {
-                      userId: { not: actor.userId },
-                      ...(submission.releasedAt == null
-                        ? {}
-                        : {
-                            organization: {
-                              is: { submissionActivityEnabled: true },
-                            },
-                          }),
+    try {
+      await prisma.$transaction(async (tx) => {
+        await tx.submission.update({
+          where: {
+            id: submission.id,
+            updatedAt: submission.updatedAt,
+            unsubmittedAt: null,
+            document: {
+              is: {
+                deletedAt: null,
+                AND: [
+                  {
+                    membership: {
+                      is: {
+                        userId: { not: actor.userId },
+                        ...(submission.releasedAt == null
+                          ? {}
+                          : {
+                              organization: {
+                                is: { submissionActivityEnabled: true },
+                              },
+                            }),
+                      },
                     },
                   },
-                },
-                teacherClassWhere,
-              ],
+                  teacherClassWhere,
+                ],
+              },
             },
           },
-        },
-        data: apGradeData,
+          data: apGradeData,
+        });
+        await recordSubmissionActivity(tx, {
+          submissionId: submission.id,
+          organizationId,
+          actorMembershipId: gradeActorMembershipId,
+          actorUserId: actor.userId,
+          eventType: submissionActivityEventTypes.gradingAssistantUpdated,
+          source: 'grade-essay-ai',
+          occurredAfterRelease: submission.releasedAt != null,
+          changes: buildSubmissionActivityChanges({
+            before: submission,
+            after: { ...submission, ...apGradeData },
+          }),
+        });
       });
-      await recordSubmissionActivity(tx, {
-        submissionId: submission.id,
-        organizationId,
-        actorMembershipId: resolveSubmissionActivityActorMembershipId({
-          actorMembershipId: actor.membershipId,
-          actorOrganizationId: actor.organizationId,
-          submissionOrganizationId: organizationId,
-        }),
-        actorUserId: actor.userId,
-        eventType: submissionActivityEventTypes.gradingAssistantUpdated,
-        source: 'grade-essay-ai',
-        occurredAfterRelease: submission.releasedAt != null,
-        changes: buildSubmissionActivityChanges({
-          before: submission,
-          after: { ...submission, ...apGradeData },
-        }),
-      });
-    });
+    } catch (error) {
+      if (isPrismaRecordNotFoundError(error)) return staleGradeResponse();
+      throw error;
+    }
 
     return dataResponse({
       success: true,
@@ -1325,107 +1349,109 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
       documentContext,
     } satisfies Prisma.InputJsonValue,
     ...(!submission.gradedAt
-      ? { gradedAt: now, gradedByMembershipId: actor.membershipId }
+      ? { gradedAt: now, gradedByMembershipId: gradeActorMembershipId }
       : {}),
     updatedAt: now,
   };
 
-  await prisma.$transaction(async (tx) => {
-    await tx.submission.update({
-      where: {
-        id: submission.id,
-        updatedAt: submission.updatedAt,
-        unsubmittedAt: null,
-        document: {
-          is: {
-            deletedAt: null,
-            AND: [
-              {
-                membership: {
-                  is: {
-                    userId: { not: actor.userId },
-                    ...(submission.releasedAt == null
-                      ? {}
-                      : {
-                          organization: {
-                            is: { submissionActivityEnabled: true },
-                          },
-                        }),
+  try {
+    await prisma.$transaction(async (tx) => {
+      await tx.submission.update({
+        where: {
+          id: submission.id,
+          updatedAt: submission.updatedAt,
+          unsubmittedAt: null,
+          document: {
+            is: {
+              deletedAt: null,
+              AND: [
+                {
+                  membership: {
+                    is: {
+                      userId: { not: actor.userId },
+                      ...(submission.releasedAt == null
+                        ? {}
+                        : {
+                            organization: {
+                              is: { submissionActivityEnabled: true },
+                            },
+                          }),
+                    },
                   },
                 },
-              },
-              teacherClassWhere,
-            ],
+                teacherClassWhere,
+              ],
+            },
           },
         },
-      },
-      data: gradeData,
-    });
+        data: gradeData,
+      });
 
-    await tx.submissionGradingAssistantRun.create({
-      data: {
-        submissionId: submission.id,
-        assignmentTypeId: submission.document.assignmentTypeId,
-        assignmentTypeGradingVersion: resolvedGradingConfig.version,
-        assignmentTypeRubricSnapshot:
-          resolvedGradingConfig.rubricSnapshot as Prisma.InputJsonValue,
-        assignmentTypePromptConfigSnapshot:
-          resolvedGradingConfig.promptConfigSnapshot as Prisma.InputJsonValue,
-        source: resolvedGradingConfig.source,
-        model,
-        status: 'succeeded',
-        metadata: {
-          // The suggestions exactly as the assistant produced them. A teacher
-          // edits the submission itself afterwards, so this is the only record
-          // of what was suggested — it is what "reset to the suggestions"
-          // restores, including after a reload.
-          output: {
-            rubricScores,
-            overallScore,
-            overallComment,
-            numericPercentage,
-            letterGrade,
-            score,
-            grammarIssues,
-            gradingAssistantStrictnessLevel,
-          },
-          assignmentTypeGradingLabel: resolvedGradingConfig.label,
-          assignmentTypeRubricSource: resolvedGradingConfig.source,
-          assignmentTypeSourceTemplateId:
-            resolvedGradingConfig.sourceTemplateId,
-          assignmentTypeSourceTemplateSlug:
-            resolvedGradingConfig.sourceTemplateSlug,
-          gradingAssistantStrictnessLevel,
+      await tx.submissionGradingAssistantRun.create({
+        data: {
+          submissionId: submission.id,
           assignmentTypeId: submission.document.assignmentTypeId,
-          assignmentId: submission.document.assignment?.id ?? null,
-          assignmentTypeKind: submission.document.assignmentType?.kind ?? null,
-          scoringType,
-          rubricKeys,
-          rubricCategoryKeys: rubricKeys,
-          gradedAt: now.toISOString(),
-          documentContext,
-        } satisfies Prisma.InputJsonValue,
-      },
-    });
+          assignmentTypeGradingVersion: resolvedGradingConfig.version,
+          assignmentTypeRubricSnapshot:
+            resolvedGradingConfig.rubricSnapshot as Prisma.InputJsonValue,
+          assignmentTypePromptConfigSnapshot:
+            resolvedGradingConfig.promptConfigSnapshot as Prisma.InputJsonValue,
+          source: resolvedGradingConfig.source,
+          model,
+          status: 'succeeded',
+          metadata: {
+            // The suggestions exactly as the assistant produced them. A teacher
+            // edits the submission itself afterwards, so this is the only record
+            // of what was suggested — it is what "reset to the suggestions"
+            // restores, including after a reload.
+            output: {
+              rubricScores,
+              overallScore,
+              overallComment,
+              numericPercentage,
+              letterGrade,
+              score,
+              grammarIssues,
+              gradingAssistantStrictnessLevel,
+            },
+            assignmentTypeGradingLabel: resolvedGradingConfig.label,
+            assignmentTypeRubricSource: resolvedGradingConfig.source,
+            assignmentTypeSourceTemplateId:
+              resolvedGradingConfig.sourceTemplateId,
+            assignmentTypeSourceTemplateSlug:
+              resolvedGradingConfig.sourceTemplateSlug,
+            gradingAssistantStrictnessLevel,
+            assignmentTypeId: submission.document.assignmentTypeId,
+            assignmentId: submission.document.assignment?.id ?? null,
+            assignmentTypeKind:
+              submission.document.assignmentType?.kind ?? null,
+            scoringType,
+            rubricKeys,
+            rubricCategoryKeys: rubricKeys,
+            gradedAt: now.toISOString(),
+            documentContext,
+          } satisfies Prisma.InputJsonValue,
+        },
+      });
 
-    await recordSubmissionActivity(tx, {
-      submissionId: submission.id,
-      organizationId,
-      actorMembershipId: resolveSubmissionActivityActorMembershipId({
-        actorMembershipId: actor.membershipId,
-        actorOrganizationId: actor.organizationId,
-        submissionOrganizationId: organizationId,
-      }),
-      actorUserId: actor.userId,
-      eventType: submissionActivityEventTypes.gradingAssistantUpdated,
-      source: 'grade-essay-ai',
-      occurredAfterRelease: submission.releasedAt != null,
-      changes: buildSubmissionActivityChanges({
-        before: submission,
-        after: { ...submission, ...gradeData },
-      }),
+      await recordSubmissionActivity(tx, {
+        submissionId: submission.id,
+        organizationId,
+        actorMembershipId: gradeActorMembershipId,
+        actorUserId: actor.userId,
+        eventType: submissionActivityEventTypes.gradingAssistantUpdated,
+        source: 'grade-essay-ai',
+        occurredAfterRelease: submission.releasedAt != null,
+        changes: buildSubmissionActivityChanges({
+          before: submission,
+          after: { ...submission, ...gradeData },
+        }),
+      });
     });
-  });
+  } catch (error) {
+    if (isPrismaRecordNotFoundError(error)) return staleGradeResponse();
+    throw error;
+  }
 
   return dataResponse({
     success: true,

@@ -233,6 +233,54 @@ describe('api.domain.update-submission', () => {
     expect(updateCall.data.gradedByMembershipId).toBe('teacher-1');
   });
 
+  test('never stores a cross-tenant admin membership as the grader', async () => {
+    getGradingActor.mockResolvedValue({
+      userId: 'admin-user',
+      membershipId: 'admin-membership',
+      organizationId: 'admin-org',
+      teacherProfileId: null,
+      isTeacher: false,
+      isAdmin: true,
+    });
+    prisma.submission.findFirst.mockResolvedValue({
+      id: 'sub-1',
+      gradedAt: null,
+      gradedByMembershipId: null,
+      numericPercentage: null,
+      releasedAt: null,
+      unsubmittedAt: null,
+      document: {
+        membershipId: 'student-1',
+        assignment: null,
+        classAssignment: null,
+        membership: {
+          userId: 'student-user',
+          organizationId: 'org-1',
+          organization: { submissionActivityEnabled: true },
+          classesAsStudent: [],
+        },
+      },
+    });
+
+    await action({
+      request: makeRequest({
+        submissionId: 'sub-1',
+        numericPercentage: 90,
+        markAsGraded: true,
+      }),
+    } as any);
+
+    expect(prisma.submission.updateMany.mock.calls[0][0].data).toEqual(
+      expect.objectContaining({ gradedByMembershipId: null })
+    );
+    expect(prisma.submissionActivity.create.mock.calls[0][0].data).toEqual(
+      expect.objectContaining({
+        organizationId: 'org-1',
+        actorMembershipId: null,
+      })
+    );
+  });
+
   test('rejects markAsGraded without an overall percentage', async () => {
     prisma.submission.findFirst.mockResolvedValue({
       id: 'sub-1',

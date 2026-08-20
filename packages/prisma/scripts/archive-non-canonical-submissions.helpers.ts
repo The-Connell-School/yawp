@@ -21,3 +21,9 @@ export function submissionHasGradeSignals(row: SubmissionGradeFields): boolean {
   if (row.feedback != null && row.feedback.trim() !== '') return true;
   return false;
 }
+
+export function durableActivityExclusionSql(alias: string): string {
+  return `NOT EXISTS (
+    SELECT 1 FROM "SubmissionActivity" sa WHERE sa."submissionId" = ${alias}.id
+  )`;
+}

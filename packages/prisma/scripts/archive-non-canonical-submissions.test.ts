@@ -1,5 +1,8 @@
 import { describe, expect, test } from 'bun:test';
-import { submissionHasGradeSignals } from './archive-non-canonical-submissions.helpers';
+import {
+  durableActivityExclusionSql,
+  submissionHasGradeSignals,
+} from './archive-non-canonical-submissions.helpers';
 
 describe('submissionHasGradeSignals', () => {
   test('false when all empty', () => {
@@ -11,7 +14,7 @@ describe('submissionHasGradeSignals', () => {
         letterGrade: null,
         score: null,
         feedback: null,
-      }),
+      })
     ).toBe(false);
   });
 
@@ -24,7 +27,7 @@ describe('submissionHasGradeSignals', () => {
         letterGrade: null,
         score: null,
         feedback: null,
-      }),
+      })
     ).toBe(true);
   });
 
@@ -37,7 +40,13 @@ describe('submissionHasGradeSignals', () => {
         letterGrade: null,
         score: null,
         feedback: 'Nice work.',
-      }),
+      })
     ).toBe(true);
   });
+});
+
+test('durable activity prevents operational cleanup from deleting a submission', () => {
+  expect(durableActivityExclusionSql('candidate')).toContain(
+    'sa."submissionId" = candidate.id'
+  );
 });

@@ -70,10 +70,10 @@ describe('api.model.submission-comment.$id', () => {
     const payload = response as { data: Record<string, unknown> };
     expect(payload.data.success).toBe(true);
     expect(prisma.submissionComment.deleteMany).toHaveBeenCalledWith({
-      where: {
+      where: expect.objectContaining({
         id: 'comment-1',
         updatedAt: new Date('2026-08-20T10:00:00.000Z'),
-      },
+      }),
     });
     expect(prisma.submissionActivity.create).toHaveBeenCalledTimes(1);
     expect(
@@ -84,6 +84,12 @@ describe('api.model.submission-comment.$id', () => {
         after: null,
       },
     });
+    expect(prisma.submissionActivity.create.mock.calls[0][0].data).toEqual(
+      expect.objectContaining({
+        eventType: 'submission.comment_deleted',
+        occurredAfterRelease: true,
+      })
+    );
   });
 
   test('returns 409 and writes no activity when delete preimage is stale', async () => {
@@ -111,6 +117,37 @@ describe('api.model.submission-comment.$id', () => {
 
     const payload = response as { init?: { status?: number } };
     expect(payload.init?.status).toBe(409);
+    expect(prisma.submissionActivity.create).not.toHaveBeenCalled();
+  });
+
+  test('revalidates teacher access in the delete predicate', async () => {
+    prisma.submissionComment.findFirst.mockResolvedValue({
+      id: 'comment-1',
+      content: 'Original',
+      excerpt: 'the thesis',
+      occurrence: 1,
+      updatedAt: new Date('2026-08-20T10:00:00.000Z'),
+      submission: {
+        id: 'sub-1',
+        releasedAt: null,
+        document: { membership: { organizationId: 'org-1' } },
+      },
+    });
+    prisma.submissionComment.deleteMany.mockResolvedValue({ count: 0 });
+
+    await action({
+      request: new Request(
+        'https://example.com/api/model/submission-comment/comment-1',
+        { method: 'DELETE' }
+      ),
+      params: { id: 'comment-1' },
+    } as any);
+
+    expect(prisma.submissionComment.deleteMany.mock.calls[0][0].where).toEqual(
+      expect.objectContaining({
+        submission: { is: { document: { is: expect.any(Object) } } },
+      })
+    );
     expect(prisma.submissionActivity.create).not.toHaveBeenCalled();
   });
 

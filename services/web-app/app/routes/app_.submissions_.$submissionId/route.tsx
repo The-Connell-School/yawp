@@ -281,6 +281,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
             },
           },
           orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+          take: 100,
         })
       : null;
 

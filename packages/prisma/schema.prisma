@@ -1019,7 +1019,11 @@ model SubmissionActivity {
   organizationId       String
   organization         Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   actorMembershipId    String?
-  actorMembership      OrgMembership? @relation("SubmissionActivityActor", fields: [actorMembershipId], references: [id], onDelete: SetNull)
+  /// Composite tenant key prevents an actor membership from another
+  /// organization being linked to this activity. The hand-written migration
+  /// uses PostgreSQL's column-specific SET NULL action so membership deletion
+  /// clears only actorMembershipId while retaining organizationId.
+  actorMembership      OrgMembership? @relation("SubmissionActivityActor", fields: [actorMembershipId, organizationId], references: [id, organizationId], onDelete: NoAction)
   actorType            String
   actorName            String?
   actorEmail           String?

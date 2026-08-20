@@ -12,7 +12,10 @@ const requireUserId = mock();
 const requireMembership = mock();
 
 mock.module('~/utils/db.server', () => ({ prisma }));
-mock.module('~/utils/auth.server', () => ({ requireUserId, requireMembership }));
+mock.module('~/utils/auth.server', () => ({
+  requireUserId,
+  requireMembership,
+}));
 
 const { action } = await import('./route');
 
@@ -64,7 +67,10 @@ describe('api.model.submission-comment', () => {
       }),
     } as any);
 
-    const payload = (response as { data: Record<string, unknown>; init?: { status?: number } });
+    const payload = response as {
+      data: Record<string, unknown>;
+      init?: { status?: number };
+    };
     expect(payload.init?.status).toBe(201);
     expect(payload.data.success).toBe(true);
     expect((payload.data.comment as any).id).toBe('comment-1');
@@ -99,7 +105,70 @@ describe('api.model.submission-comment', () => {
       }),
     } as any);
 
-    const payload = (response as { data: Record<string, unknown>; init?: { status?: number } });
+    const payload = response as {
+      data: Record<string, unknown>;
+      init?: { status?: number };
+    };
     expect(payload.init?.status).toBe(403);
+  });
+
+  test('returns 409 and writes nothing when teacher access is revoked before create', async () => {
+    prisma.submission.findFirst
+      .mockResolvedValueOnce({
+        id: 'sub-1',
+        releasedAt: null,
+        document: { membership: { organizationId: 'org-1' } },
+      })
+      .mockResolvedValueOnce(null);
+
+    const form = new FormData();
+    form.append('submissionId', 'sub-1');
+    form.append('content', 'A comment');
+    form.append('excerpt', 'some text');
+
+    const response = await action({
+      request: new Request('https://example.com/api/model/submission-comment', {
+        method: 'POST',
+        body: form,
+      }),
+    } as any);
+
+    expect((response as { init?: { status?: number } }).init?.status).toBe(409);
+    expect(prisma.submissionComment.create).not.toHaveBeenCalled();
+    expect(prisma.submissionActivity.create).not.toHaveBeenCalled();
+  });
+
+  test('tenant-scopes platform-admin comment creation', async () => {
+    prisma.user.findUnique.mockResolvedValue({ isAdmin: true });
+    prisma.submission.findFirst.mockResolvedValue(null);
+
+    const form = new FormData();
+    form.append('submissionId', 'sub-cross-tenant');
+    form.append('content', 'A comment');
+    form.append('excerpt', 'some text');
+
+    await action({
+      request: new Request('https://example.com/api/model/submission-comment', {
+        method: 'POST',
+        body: form,
+      }),
+    } as any);
+
+    expect(prisma.submission.findFirst.mock.calls[0][0].where).toEqual(
+      expect.objectContaining({
+        document: {
+          is: expect.objectContaining({
+            AND: expect.arrayContaining([
+              {
+                membership: {
+                  is: expect.objectContaining({ organizationId: 'org-1' }),
+                },
+              },
+            ]),
+          }),
+        },
+      })
+    );
+    expect(prisma.submissionComment.create).not.toHaveBeenCalled();
   });
 });

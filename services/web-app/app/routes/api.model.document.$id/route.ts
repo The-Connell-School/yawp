@@ -282,7 +282,20 @@ const actionImpl = async ({ request, params }: ActionFunctionArgs) => {
       try {
         await prisma.$transaction(async (tx) => {
           const updated = await tx.submission.updateMany({
-            where: { id: submission.id, updatedAt: submission.updatedAt },
+            where: {
+              id: submission.id,
+              documentId: document.id,
+              updatedAt: submission.updatedAt,
+              document: {
+                is: {
+                  deletedAt: null,
+                  ...documentReadWhere({
+                    profileId: profile.id,
+                    isAdmin: user.isAdmin,
+                  }),
+                },
+              },
+            },
             data: { ...submissionData, updatedAt: new Date() },
           });
           if (updated.count !== 1) throw new SubmissionSnapshotConflictError();

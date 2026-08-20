@@ -127,6 +127,9 @@ describe('api.model.submission.$id', () => {
     expect(prisma.submission.updateMany).toHaveBeenCalled();
     const updateArg = prisma.submission.updateMany.mock.calls[0][0];
     expect(updateArg.data.title).toBe('My essay');
+    expect(updateArg.where.document).toEqual(
+      expect.objectContaining({ is: expect.any(Object) })
+    );
     expect(prisma.submissionActivity.create).toHaveBeenCalledTimes(1);
     expect(prisma.submissionActivity.create.mock.calls[0][0].data).toEqual(
       expect.objectContaining({

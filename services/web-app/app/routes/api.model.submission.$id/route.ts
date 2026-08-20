@@ -2,7 +2,10 @@ import { invariant } from '@epic-web/invariant';
 import { type ActionFunctionArgs } from 'react-router';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
-import { findSubmissionForTitleEdit } from '~/utils/submission-access.server';
+import {
+  buildSubmissionTitleEditWhere,
+  findSubmissionForTitleEdit,
+} from '~/utils/submission-access.server';
 import { hasEffectivePlatformAdmin } from '~/utils/preview-access.server';
 import {
   buildSubmissionActivityChanges,
@@ -48,12 +51,14 @@ export async function action({ request, params }: ActionFunctionArgs) {
       select: { isAdmin: true },
     });
 
-    const submission = await findSubmissionForTitleEdit({
+    const titleAccess = {
       submissionId: params.id,
+      userId,
       membershipId: profile.id,
       organizationId: profile.organization.id,
       isAdmin: hasEffectivePlatformAdmin(user?.isAdmin),
-    });
+    };
+    const submission = await findSubmissionForTitleEdit(titleAccess);
 
     if (!submission) {
       return Response.json(
@@ -69,7 +74,10 @@ export async function action({ request, params }: ActionFunctionArgs) {
     try {
       await prisma.$transaction(async (tx) => {
         const update = await tx.submission.updateMany({
-          where: { id: submission.id, updatedAt: submission.updatedAt },
+          where: {
+            ...buildSubmissionTitleEditWhere(titleAccess),
+            updatedAt: submission.updatedAt,
+          },
           data: {
             title: normalized.title,
             updatedAt: new Date(),

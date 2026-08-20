@@ -64,6 +64,17 @@ BEGIN
   IF NOT EXISTS (
     SELECT 1
     FROM pg_constraint
+    WHERE conname = 'SubmissionActivity_actorMembershipId_fkey'
+      AND array_length(conkey, 1) = 2
+      AND array_length(confkey, 1) = 2
+      AND pg_get_constraintdef(oid) LIKE '%actorMembershipId%organizationId%'
+  ) THEN
+    RAISE EXCEPTION 'actor membership is not constrained to the activity tenant';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
     WHERE conname = 'SubmissionActivity_organizationId_fkey'
       AND confdeltype = 'c'
   ) THEN
@@ -74,6 +85,16 @@ BEGIN
     RAISE EXCEPTION 'fresh migration falsely backfilled submission activity';
   END IF;
 END $$;
+
+SELECT 'activity index' AS kind, indexname AS name
+FROM pg_indexes
+WHERE tablename = 'SubmissionActivity'
+ORDER BY indexname;
+
+SELECT 'activity foreign key' AS kind, conname AS name, pg_get_constraintdef(oid) AS definition
+FROM pg_constraint
+WHERE conname LIKE 'SubmissionActivity%fkey'
+ORDER BY conname;
 
 CREATE TEMP TABLE submission_activity_proof_state AS
 SELECT
@@ -93,6 +114,84 @@ DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM submission_activity_proof_state) THEN
     RAISE EXCEPTION 'seeded proof submission is missing';
+  END IF;
+END $$;
+
+INSERT INTO "Organization" (id, name)
+VALUES ('submission-activity-other-org', 'Submission Activity Other Tenant');
+INSERT INTO "User" (id, email, name)
+VALUES ('submission-activity-other-user', 'submission-activity-other@example.test', 'Other Tenant Teacher');
+INSERT INTO "OrgMembership" (id, "userId", "organizationId", role)
+VALUES (
+  'submission-activity-other-membership',
+  'submission-activity-other-user',
+  'submission-activity-other-org',
+  'TEACHER'
+);
+
+DO $$
+DECLARE
+  proof submission_activity_proof_state%ROWTYPE;
+BEGIN
+  SELECT * INTO STRICT proof FROM submission_activity_proof_state;
+  BEGIN
+    INSERT INTO "SubmissionActivity" (
+      id,
+      "submissionId",
+      "organizationId",
+      "actorMembershipId",
+      "actorType",
+      "eventType",
+      source,
+      "occurredAfterRelease",
+      changes
+    ) VALUES (
+      'submission-activity-cross-tenant-proof',
+      proof.submission_id,
+      proof.organization_id,
+      'submission-activity-other-membership',
+      'human',
+      'submission.grade_updated',
+      'db-proof',
+      true,
+      '{}'::jsonb
+    );
+    RAISE EXCEPTION 'cross-tenant actor membership unexpectedly succeeded';
+  EXCEPTION
+    WHEN foreign_key_violation THEN NULL;
+  END;
+END $$;
+
+CREATE TEMP TABLE submission_activity_tenant_negative AS
+WITH attempted AS (
+  UPDATE "Submission" submission
+  SET score = 'forbidden-cross-tenant-write'
+  FROM submission_activity_proof_state proof
+  WHERE submission.id = proof.submission_id
+    AND EXISTS (
+      SELECT 1
+      FROM "Document" document
+      JOIN "OrgMembership" owner ON owner.id = document."membershipId"
+      WHERE document.id = submission."documentId"
+        AND owner."organizationId" = 'submission-activity-other-org'
+    )
+  RETURNING submission.id
+)
+SELECT count(*)::int AS mutated_count FROM attempted;
+
+DO $$
+BEGIN
+  IF (SELECT mutated_count FROM submission_activity_tenant_negative) <> 0 THEN
+    RAISE EXCEPTION 'cross-tenant released-grade mutation unexpectedly matched';
+  END IF;
+  IF EXISTS (
+    SELECT 1
+    FROM "SubmissionActivity" activity
+    JOIN submission_activity_proof_state proof
+      ON proof.submission_id = activity."submissionId"
+    WHERE activity."organizationId" = 'submission-activity-other-org'
+  ) THEN
+    RAISE EXCEPTION 'cross-tenant activity read unexpectedly returned rows';
   END IF;
 END $$;
 
@@ -168,6 +267,18 @@ BEGIN
   END IF;
 END $$;
 
+SELECT
+  activity."organizationId",
+  activity."actorMembershipId",
+  activity."actorType",
+  activity."actorName",
+  activity."actorEmail",
+  activity."eventType",
+  activity."occurredAfterRelease",
+  activity.changes
+FROM "SubmissionActivity" activity
+WHERE activity.id = 'submission-activity-db-proof';
+
 BEGIN;
 DELETE FROM "SubmissionActivity"
 WHERE id = 'submission-activity-db-proof';
@@ -177,6 +288,10 @@ SET "numericPercentage" = proof.original_percentage,
 FROM submission_activity_proof_state proof
 WHERE submission.id = proof.submission_id;
 COMMIT;
+
+DELETE FROM "OrgMembership" WHERE id = 'submission-activity-other-membership';
+DELETE FROM "User" WHERE id = 'submission-activity-other-user';
+DELETE FROM "Organization" WHERE id = 'submission-activity-other-org';
 
 BEGIN;
 UPDATE "Submission" submission
@@ -233,4 +348,5 @@ END $$;
 
 SELECT
   'submission activity database proof passed' AS result,
-  (SELECT count(*) FROM "SubmissionActivity") AS final_activity_count;
+  (SELECT count(*) FROM "SubmissionActivity") AS final_activity_count,
+  (SELECT mutated_count FROM submission_activity_tenant_negative) AS cross_tenant_mutation_count;

@@ -132,6 +132,12 @@ describe('api.model.document.$id', () => {
     } as any)) as Response;
 
     expect(response.status).toBe(200);
+    expect(prisma.submission.updateMany.mock.calls[0][0].where).toEqual(
+      expect.objectContaining({
+        documentId: 'doc-1',
+        document: { is: expect.any(Object) },
+      })
+    );
     expect(prisma.submissionActivity.create).toHaveBeenCalledTimes(1);
     const activity = prisma.submissionActivity.create.mock.calls[0][0].data;
     expect(activity.eventType).toBe('submission.body_updated');

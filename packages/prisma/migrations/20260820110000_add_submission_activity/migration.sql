@@ -52,7 +52,10 @@ ON DELETE CASCADE ON UPDATE CASCADE;
 
 ALTER TABLE "SubmissionActivity"
 ADD CONSTRAINT "SubmissionActivity_actorMembershipId_fkey"
-FOREIGN KEY ("actorMembershipId") REFERENCES "OrgMembership"("id")
-ON DELETE SET NULL ON UPDATE CASCADE;
+FOREIGN KEY ("actorMembershipId", "organizationId")
+REFERENCES "OrgMembership"("id", "organizationId")
+-- PostgreSQL 15+ column-specific SET NULL preserves the durable tenant link
+-- and actor snapshot while allowing the membership itself to be deleted.
+ON DELETE SET NULL ("actorMembershipId") ON UPDATE CASCADE;
 
 COMMIT;

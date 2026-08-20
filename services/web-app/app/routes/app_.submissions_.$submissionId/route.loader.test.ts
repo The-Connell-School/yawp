@@ -216,6 +216,7 @@ describe('submission loader — unsubmitted redirect', () => {
       expect.objectContaining({
         where: { submissionId: 'sub-1', organizationId: 'org-1' },
         orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        take: 100,
       })
     );
   });

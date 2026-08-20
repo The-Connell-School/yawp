@@ -136,6 +136,11 @@ export async function action({ request }: ActionFunctionArgs) {
 
   const organizationId =
     submission.document.membership.organizationId ?? actor.organizationId;
+  const gradeActorMembershipId = resolveSubmissionActivityActorMembershipId({
+    actorMembershipId: actor.membershipId,
+    actorOrganizationId: actor.organizationId,
+    submissionOrganizationId: organizationId,
+  });
   const submissionActivityEnabled =
     submission.document.membership.organization?.submissionActivityEnabled ===
     true;
@@ -223,7 +228,7 @@ export async function action({ request }: ActionFunctionArgs) {
     if (!submission.gradedAt) {
       data.gradedAt = new Date();
     }
-    data.gradedByMembershipId = actor.membershipId;
+    data.gradedByMembershipId = gradeActorMembershipId;
   }
 
   const activityChanges = buildSubmissionActivityChanges({
@@ -290,11 +295,7 @@ export async function action({ request }: ActionFunctionArgs) {
       await recordSubmissionActivity(tx, {
         submissionId: submission.id,
         organizationId,
-        actorMembershipId: resolveSubmissionActivityActorMembershipId({
-          actorMembershipId: actor.membershipId,
-          actorOrganizationId: actor.organizationId,
-          submissionOrganizationId: organizationId,
-        }),
+        actorMembershipId: gradeActorMembershipId,
         actorUserId: actor.userId,
         eventType:
           activityChanges.gradedAt || activityChanges.gradedByMembershipId

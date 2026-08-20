@@ -1,4 +1,5 @@
 import { data as dataResponse, type ActionFunctionArgs } from 'react-router';
+import type { Prisma } from '@app/prisma';
 import { parseFormData, validationError } from '@rvf/react-router';
 import { z } from 'zod';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
@@ -8,7 +9,6 @@ import { buildTeacherDocumentAccessWhere } from '~/utils/grading-auth.server';
 import {
   buildSubmissionActivityChanges,
   recordSubmissionActivity,
-  resolveSubmissionActivityActorMembershipId,
   submissionActivityEventTypes,
 } from '~/domain/submissions/submission-activity.server';
 
@@ -29,6 +29,42 @@ const POST = z
     path: ['excerpt'],
   });
 
+class SubmissionCommentAccessConflictError extends Error {}
+
+function buildCommentDocumentAccessWhere({
+  userId,
+  membershipId,
+  organizationId,
+  isAdmin,
+}: {
+  userId: string;
+  membershipId: string;
+  organizationId: string;
+  isAdmin: boolean;
+}): Prisma.DocumentWhereInput {
+  return {
+    deletedAt: null,
+    AND: [
+      {
+        membership: {
+          is: {
+            userId: { not: userId },
+            ...(isAdmin ? { organizationId } : {}),
+          },
+        },
+      },
+      ...(isAdmin
+        ? []
+        : [
+            buildTeacherDocumentAccessWhere({
+              membershipId,
+              organizationId,
+            }),
+          ]),
+    ],
+  };
+}
+
 export async function action({ request }: ActionFunctionArgs) {
   const userId = await requireUserId(request);
   const profile = await requireMembership(request, userId);
@@ -37,6 +73,12 @@ export async function action({ request }: ActionFunctionArgs) {
     select: { isAdmin: true },
   });
   const isAdmin = hasEffectivePlatformAdmin(user?.isAdmin);
+  const documentAccessWhere = buildCommentDocumentAccessWhere({
+    userId,
+    membershipId: profile.id,
+    organizationId: profile.organization.id,
+    isAdmin,
+  });
 
   const { error, data } = await parseFormData(request, POST);
   if (error) return validationError(error);
@@ -45,18 +87,7 @@ export async function action({ request }: ActionFunctionArgs) {
     where: {
       id: data.submissionId,
       document: {
-        is: {
-          deletedAt: null,
-          AND: [
-            { membership: { is: { userId: { not: userId } } } },
-            isAdmin
-              ? {}
-              : buildTeacherDocumentAccessWhere({
-                  membershipId: profile.id,
-                  organizationId: profile.organization.id,
-                }),
-          ],
-        },
+        is: documentAccessWhere,
       },
     },
     select: {
@@ -80,51 +111,80 @@ export async function action({ request }: ActionFunctionArgs) {
     );
   }
 
-  const created = await prisma.$transaction(async (tx) => {
-    const comment = await tx.submissionComment.create({
-      data: {
-        submission: { connect: { id: submission.id } },
-        membership: { connect: { id: profile.id } },
-        content: data.content,
-        occurrence: data.occurrence,
-        ...(data.excerpt != null &&
-          data.excerpt !== '' && { excerpt: data.excerpt }),
-      },
-      include: {
-        membership: {
-          include: { user: { select: { name: true, email: true } } },
+  try {
+    const created = await prisma.$transaction(async (tx) => {
+      const currentSubmission = await tx.submission.findFirst({
+        where: {
+          id: submission.id,
+          document: { is: documentAccessWhere },
         },
-      },
-    });
-    const organizationId =
-      submission.document.membership.organizationId ?? profile.organization.id;
-    await recordSubmissionActivity(tx, {
-      submissionId: submission.id,
-      organizationId,
-      actorMembershipId: resolveSubmissionActivityActorMembershipId({
-        actorMembershipId: profile.id,
-        actorOrganizationId: profile.organization.id,
-        submissionOrganizationId: organizationId,
-      }),
-      actorUserId: userId,
-      eventType: submissionActivityEventTypes.commentCreated,
-      source: 'submission-comment',
-      occurredAfterRelease: submission.releasedAt != null,
-      changes: buildSubmissionActivityChanges({
-        before: { comment: null },
-        after: {
-          comment: {
-            id: comment.id,
-            content: data.content,
-            excerpt: data.excerpt ?? null,
-            occurrence: data.occurrence,
+        select: {
+          id: true,
+          releasedAt: true,
+          document: {
+            select: {
+              membership: { select: { organizationId: true } },
+            },
           },
         },
-        fields: ['comment'],
-      }),
-    });
-    return comment;
-  });
+      });
+      if (!currentSubmission) {
+        throw new SubmissionCommentAccessConflictError();
+      }
 
-  return dataResponse({ success: true, comment: created }, { status: 201 });
+      const comment = await tx.submissionComment.create({
+        data: {
+          submission: { connect: { id: currentSubmission.id } },
+          membership: { connect: { id: profile.id } },
+          content: data.content,
+          occurrence: data.occurrence,
+          ...(data.excerpt != null &&
+            data.excerpt !== '' && { excerpt: data.excerpt }),
+        },
+        include: {
+          membership: {
+            include: { user: { select: { name: true, email: true } } },
+          },
+        },
+      });
+      const currentOrganizationId =
+        currentSubmission.document.membership.organizationId ??
+        profile.organization.id;
+      await recordSubmissionActivity(tx, {
+        submissionId: currentSubmission.id,
+        organizationId: currentOrganizationId,
+        actorMembershipId: profile.id,
+        actorUserId: userId,
+        eventType: submissionActivityEventTypes.commentCreated,
+        source: 'submission-comment',
+        occurredAfterRelease: currentSubmission.releasedAt != null,
+        changes: buildSubmissionActivityChanges({
+          before: { comment: null },
+          after: {
+            comment: {
+              id: comment.id,
+              content: data.content,
+              excerpt: data.excerpt ?? null,
+              occurrence: data.occurrence,
+            },
+          },
+          fields: ['comment'],
+        }),
+      });
+      return comment;
+    });
+
+    return dataResponse({ success: true, comment: created }, { status: 201 });
+  } catch (error) {
+    if (error instanceof SubmissionCommentAccessConflictError) {
+      return dataResponse(
+        {
+          success: false,
+          message: 'Your access changed before the comment could be saved.',
+        },
+        { status: 409 }
+      );
+    }
+    throw error;
+  }
 }
