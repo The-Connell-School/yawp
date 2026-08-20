@@ -45,6 +45,9 @@ test.describe('Released grade editing and submission activity', () => {
     const releasedAt = new Date('2026-08-20T12:00:00.000Z');
     const submission = await prisma.submission.create({
       data: {
+        // The database immutability guard permits cleanup only for this
+        // unmistakably disposable E2E namespace and the production QA fixture.
+        id: `e2e-released-grade-audit-${Date.now()}`,
         documentId: document.id,
         title: document.title,
         text: document.text ?? '',

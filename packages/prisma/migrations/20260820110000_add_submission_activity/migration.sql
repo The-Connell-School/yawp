@@ -213,6 +213,7 @@ BEGIN
   IF TG_OP = 'DELETE' AND (
     pg_trigger_depth() > 1
     OR (OLD.source = 'db-proof' AND OLD.id LIKE 'submission-activity-%')
+    OR OLD."submissionId" LIKE 'e2e-released-grade-audit-%'
     OR (
       OLD."submissionId" = 'prod-qa-released-submission'
       AND OLD."organizationId" = 'prod-qa-org'
