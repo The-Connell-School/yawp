@@ -80,6 +80,7 @@ export async function action({ request }: ActionFunctionArgs) {
         },
         select: {
           id: true,
+          updatedAt: true,
           releasedAt: true,
           document: {
             select: {
@@ -136,6 +137,10 @@ export async function action({ request }: ActionFunctionArgs) {
       const updateResult = await tx.submission.updateMany({
         where: {
           id: { in: submissions.map((s) => s.id) },
+          OR: submissions.map((submission) => ({
+            id: submission.id,
+            updatedAt: submission.updatedAt,
+          })),
           document: {
             is: {
               membershipId: { not: actor.membershipId },

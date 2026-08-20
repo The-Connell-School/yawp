@@ -342,6 +342,41 @@ describe('api.domain.release-grades', () => {
     expect(prisma.submissionActivity.createMany).not.toHaveBeenCalled();
   });
 
+  test('binds every release to the validated grade revision', async () => {
+    const firstRevision = new Date('2026-08-20T12:00:00.000Z');
+    const secondRevision = new Date('2026-08-20T12:01:00.000Z');
+    prisma.submission.findMany.mockResolvedValue([
+      {
+        id: 'sub-1',
+        updatedAt: firstRevision,
+        releasedAt: null,
+        document: { membership: { organizationId: 'org-1' } },
+      },
+      {
+        id: 'sub-2',
+        updatedAt: secondRevision,
+        releasedAt: null,
+        document: { membership: { organizationId: 'org-1' } },
+      },
+    ]);
+    prisma.submission.updateMany.mockResolvedValue({ count: 2 });
+
+    const form = new FormData();
+    form.append('submissionIds', 'sub-1');
+    form.append('submissionIds', 'sub-2');
+    await action({
+      request: new Request('https://example.com/api/domain/release-grades', {
+        method: 'POST',
+        body: form,
+      }),
+    } as any);
+
+    expect(prisma.submission.updateMany.mock.calls[0][0].where.OR).toEqual([
+      { id: 'sub-1', updatedAt: firstRevision },
+      { id: 'sub-2', updatedAt: secondRevision },
+    ]);
+  });
+
   test('excludes unsubmitted submissions from the eligibility query, closing the grading race on release', async () => {
     prisma.submission.findMany.mockResolvedValue([
       {
