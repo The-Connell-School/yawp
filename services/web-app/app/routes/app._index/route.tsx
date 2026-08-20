@@ -35,6 +35,7 @@ import {
   getAssignedPracticeForStudent,
 } from '~/utils/writing-lessons/practice-assignments.server';
 import { getQuickWritingLessonBySlug } from '~/utils/writing-lessons/static-lessons.server';
+import { isCompositionPracticeEnabled } from '~/utils/writing-lessons/composition-flag.server';
 
 const DASHBOARD_MAX_TEACHER_CLASSES = 6;
 
@@ -299,9 +300,19 @@ export async function loader({ request }: LoaderFunctionArgs) {
   // dashboard alongside their classes (each card links into the practice
   // runner). Grammar sets report answered progress; composition sets report
   // mastery.
+  const compositionPracticeEnabled = isCompositionPracticeEnabled();
   const writingPracticeAssignments =
     useStudentExperience && profile.organization.writingPracticeEnabled
-    ? (await getAssignedPracticeForStudent(profile.id)).map(
+    ? (await getAssignedPracticeForStudent(profile.id))
+        .filter(
+          ({ assignment }) =>
+            compositionPracticeEnabled ||
+            !assignment.lessonSlugs.some(
+              (slug) =>
+                getQuickWritingLessonBySlug(slug)?.section === 'Composition'
+            )
+        )
+        .map(
         (classAssignment) => {
           const { assignment } = classAssignment;
           const progress = computeAssignedProgress(
@@ -333,7 +344,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
             },
           };
         }
-      )
+        )
     : [];
 
   return dataResponse({

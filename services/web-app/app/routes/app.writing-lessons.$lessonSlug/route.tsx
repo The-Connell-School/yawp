@@ -182,6 +182,13 @@ export async function action({ request, params }: ActionFunctionArgs) {
   if (!context) {
     throw new Response('Lesson not found', { status: 404 });
   }
+  const lesson = getQuickWritingLessonBySlug(params.lessonSlug);
+  if (
+    lesson?.section === 'Composition' &&
+    !isCompositionPracticeEnabled()
+  ) {
+    throw new Response('Lesson not found', { status: 404 });
+  }
 
   const formData = await request.formData();
   const intent = String(formData.get('intent') ?? '');
@@ -239,7 +246,6 @@ export async function action({ request, params }: ActionFunctionArgs) {
         status: 400,
       });
     }
-    const lesson = getQuickWritingLessonBySlug(params.lessonSlug);
     if (lesson?.section !== 'Composition') {
       throw new Response('Only composition practice can be personalized', {
         status: 400,

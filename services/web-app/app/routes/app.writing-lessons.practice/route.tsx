@@ -102,7 +102,8 @@ export async function action({ request }: ActionFunctionArgs) {
   const intent = String(formData.get('intent') ?? '');
   const lessonSlug = String(formData.get('lessonSlug') ?? '');
   const context = getQuickWritingLessonContext(lessonSlug);
-  if (!context) {
+  const lesson = getQuickWritingLessonBySlug(lessonSlug);
+  if (!context || lesson?.section !== 'Grammar & Mechanics') {
     throw new Response('Unknown practice skill', { status: 400 });
   }
 

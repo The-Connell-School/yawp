@@ -291,4 +291,38 @@ describe('writing lessons index route', () => {
       onResponse.data.sections.map((section) => section.section)
     ).toContain('Composition');
   });
+
+  test('hides assignments containing Composition until its rollout flag is on', async () => {
+    process.env.COMPOSITION_PRACTICE_ENABLED = 'false';
+    listWritingPracticeAssignmentsForStudent.mockResolvedValue([
+      {
+        id: 'grammar-practice',
+        title: 'Comma splices',
+        lessonSlugs: ['fixing-comma-splices'],
+        problemCount: 3,
+        dueAt: null,
+        instructions: null,
+        classes: [],
+      },
+      {
+        id: 'composition-practice',
+        title: 'Topic sentences',
+        lessonSlugs: ['topic-sentences'],
+        problemCount: 3,
+        dueAt: null,
+        instructions: null,
+        classes: [],
+      },
+    ]);
+
+    const response = await loader({
+      request: new Request('https://example.test/app/writing-lessons'),
+      params: {},
+      context: {} as never,
+    } as any);
+
+    expect(response.data.assignments.map((assignment) => assignment.id)).toEqual(
+      ['grammar-practice']
+    );
+  });
 });

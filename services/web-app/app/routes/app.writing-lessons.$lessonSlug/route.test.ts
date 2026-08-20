@@ -1,4 +1,14 @@
-import { afterAll, beforeEach, describe, expect, mock, test } from 'bun:test';
+import {
+  afterAll,
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  mock,
+  test,
+} from 'bun:test';
+
+const ORIGINAL_COMPOSITION_FLAG = process.env.COMPOSITION_PRACTICE_ENABLED;
 
 const requireUserId = mock();
 const requireMembership = mock();
@@ -40,14 +50,25 @@ function buildRequest(fields: Record<string, string | string[]>) {
   );
 }
 
-async function run(fields: Record<string, string | string[]>) {
+async function run(
+  fields: Record<string, string | string[]>,
+  lessonSlug = 'fixing-comma-splices'
+) {
   const response = await action({
     request: buildRequest(fields),
-    params: { lessonSlug: 'fixing-comma-splices' },
+    params: { lessonSlug },
     context: {},
   } as never);
   return (response as unknown as { data?: unknown }).data ?? response;
 }
+
+afterEach(() => {
+  if (ORIGINAL_COMPOSITION_FLAG === undefined) {
+    delete process.env.COMPOSITION_PRACTICE_ENABLED;
+  } else {
+    process.env.COMPOSITION_PRACTICE_ENABLED = ORIGINAL_COMPOSITION_FLAG;
+  }
+});
 
 describe('writing lesson detail route', () => {
   beforeEach(() => {
@@ -187,6 +208,31 @@ describe('writing lesson practice action - generate-act intent', () => {
       { status: 400 }
     );
   });
+});
+
+describe('writing lesson action Composition rollout gate', () => {
+  beforeEach(() => {
+    requireUserId.mockReset();
+    requireMembership.mockReset();
+    getLLMCompletion.mockReset();
+    requireUserId.mockResolvedValue('user-1');
+    requireMembership.mockResolvedValue({
+      id: 'student-1',
+      role: 'STUDENT',
+      organization: { id: 'org-1', name: 'Org', writingPracticeEnabled: true },
+    });
+    process.env.COMPOSITION_PRACTICE_ENABLED = 'false';
+  });
+
+  test.each(['check-rewrite', 'generate-act'])(
+    'rejects %s for a Composition lesson before AI work',
+    async (intent) => {
+      await expect(
+        run({ intent, response: 'A real response.' }, 'topic-sentences')
+      ).rejects.toMatchObject({ status: 404 });
+      expect(getLLMCompletion).not.toHaveBeenCalled();
+    }
+  );
 });
 
 describe('writing lesson practice action - check-rewrite intent', () => {
@@ -379,7 +425,7 @@ describe('writing lesson practice action - check-composition intent', () => {
         promptId: 'topic-sentences-1',
         response: 'a real revision attempt',
       })
-    ).rejects.toMatchObject({ status: 400 });
+    ).rejects.toMatchObject({ status: 404 });
   });
 });
 
@@ -490,6 +536,6 @@ describe('writing lesson practice action - personalize-composition intent', () =
     process.env.COMPOSITION_PRACTICE_ENABLED = 'false';
     await expect(
       runPersonalize({ intent: 'personalize-composition', topic: 'music' })
-    ).rejects.toMatchObject({ status: 400 });
+    ).rejects.toMatchObject({ status: 404 });
   });
 });

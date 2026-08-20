@@ -389,6 +389,31 @@ describe('Composition routes refuse while their rollout flag is off', () => {
     ).rejects.toMatchObject({ status: 404 });
   });
 
+  test('the self-directed action refuses a Composition lesson', async () => {
+    requireMembership.mockResolvedValue({
+      id: 'student-1',
+      role: 'STUDENT',
+      organization: { id: 'org-1', writingPracticeEnabled: true },
+    });
+
+    await expect(
+      practiceAction({
+        request: new Request(
+          'https://example.test/app/writing-lessons/practice',
+          {
+            method: 'POST',
+            body: new URLSearchParams([
+              ['intent', 'generate-act'],
+              ['lessonSlug', 'topic-sentences'],
+            ]),
+          }
+        ),
+        params: {},
+        context: {} as never,
+      } as any)
+    ).rejects.toMatchObject({ status: 400 });
+  });
+
   test('the teacher results route refuses composition sets', async () => {
     requireMembership.mockResolvedValue({
       id: 'teacher-1',

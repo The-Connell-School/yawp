@@ -1,4 +1,14 @@
-import { afterAll, beforeEach, describe, expect, mock, test } from 'bun:test';
+import {
+  afterAll,
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  mock,
+  test,
+} from 'bun:test';
+
+const ORIGINAL_COMPOSITION_FLAG = process.env.COMPOSITION_PRACTICE_ENABLED;
 
 const prisma = {
   classAssignment: { findMany: mock() },
@@ -64,6 +74,14 @@ afterAll(() => {
     '~/utils/assignment-type-access.server',
     () => actualAssignmentTypeAccess
   );
+});
+
+afterEach(() => {
+  if (ORIGINAL_COMPOSITION_FLAG === undefined) {
+    delete process.env.COMPOSITION_PRACTICE_ENABLED;
+  } else {
+    process.env.COMPOSITION_PRACTICE_ENABLED = ORIGINAL_COMPOSITION_FLAG;
+  }
 });
 
 describe('app index loader assignments', () => {
@@ -211,6 +229,7 @@ describe('app index loader assignments', () => {
   });
 
   test('surfaces assigned writing practice on the student dashboard', async () => {
+    process.env.COMPOSITION_PRACTICE_ENABLED = 'true';
     getAssignedPracticeForStudent.mockResolvedValue([
       {
         id: 'wpca-1',
@@ -246,6 +265,47 @@ describe('app index loader assignments', () => {
     expect(practice.hasComposition).toBe(true);
     expect(practice.masteredCount).toBe(1);
     expect(practice.classLabel.title).toBe('English 10');
+  });
+
+  test('hides Composition assignments while their rollout flag is off', async () => {
+    process.env.COMPOSITION_PRACTICE_ENABLED = 'false';
+    getAssignedPracticeForStudent.mockResolvedValue([
+      {
+        id: 'grammar-assignment',
+        assignment: {
+          title: 'Comma splices',
+          lessonSlugs: ['fixing-comma-splices'],
+          problemCount: 3,
+          dueAt: null,
+        },
+        class: { id: 'class-1', grade: '10', period: '3', title: 'English 10' },
+        attempts: [],
+      },
+      {
+        id: 'composition-assignment',
+        assignment: {
+          title: 'Topic sentences',
+          lessonSlugs: ['topic-sentences'],
+          problemCount: 3,
+          dueAt: null,
+        },
+        class: { id: 'class-1', grade: '10', period: '3', title: 'English 10' },
+        attempts: [],
+      },
+    ]);
+
+    const response = await loader({
+      request: new Request('https://example.test/app'),
+      params: {},
+      context: {} as never,
+    } as any);
+    const data = (response as { data: any }).data;
+
+    expect(
+      data.writingPracticeAssignments.map(
+        (assignment: { id: string }) => assignment.id
+      )
+    ).toEqual(['grammar-assignment']);
   });
 
   test('does not load assigned writing practice while the organization flag is off', async () => {

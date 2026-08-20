@@ -63,6 +63,14 @@ function toAssignmentCard(assignment: WritingPracticeAssignmentSummary) {
   };
 }
 
+function assignmentIncludesComposition(
+  assignment: WritingPracticeAssignmentSummary
+) {
+  return assignment.lessonSlugs.some(
+    (slug) => getQuickWritingLessonBySlug(slug)?.section === 'Composition'
+  );
+}
+
 export async function loader({ request }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
   const membership = await requireMembership(request, userId);
@@ -120,7 +128,12 @@ export async function loader({ request }: LoaderFunctionArgs) {
     isTeacher
       ? await listWritingPracticeAssignmentsForTeacher(membership.id)
       : await listWritingPracticeAssignmentsForStudent(membership.id)
-  ).map(toAssignmentCard);
+  )
+    .filter(
+      (assignment) =>
+        compositionEnabled || !assignmentIncludesComposition(assignment)
+    )
+    .map(toAssignmentCard);
 
   return dataResponse({
     sections,
