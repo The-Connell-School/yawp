@@ -46,7 +46,6 @@ jobs:
 
           aws ec2 get-console-output \
             --instance-id "${instance_id}" \
-            --latest \
             --query Output \
             --output text > "${RUNNER_TEMP}/bastion-console.txt"
           ssh-keyscan -t ed25519,ecdsa,rsa "${PROD_SSH_HOST}" \
