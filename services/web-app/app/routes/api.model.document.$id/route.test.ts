@@ -213,6 +213,54 @@ describe('api.model.document.$id', () => {
     expect(prisma.submissionActivity.create).not.toHaveBeenCalled();
   });
 
+  test('rejects a teacher snapshot write to their own document across memberships', async () => {
+    prisma.submission.findFirst.mockResolvedValue(null);
+    const form = new FormData();
+    form.append('text', 'Forbidden own-document body');
+
+    const response = (await action({
+      request: new Request(
+        'https://example.com/api/model/document/doc-1?snapshotId=sub-own',
+        { method: 'PUT', body: form }
+      ),
+      params: { id: 'doc-1' },
+    } as any)) as Response;
+
+    expect(response.status).toBe(404);
+    expect(
+      prisma.submission.findFirst.mock.calls[0][0].where.document.is.AND
+    ).toContainEqual({
+      membership: { is: { userId: { not: 'user-1' } } },
+    });
+    expect(prisma.submission.updateMany).not.toHaveBeenCalled();
+    expect(prisma.submissionActivity.create).not.toHaveBeenCalled();
+  });
+
+  test('rejects an admin snapshot write to their own document', async () => {
+    prisma.user.findUniqueOrThrow.mockResolvedValue({ isAdmin: true });
+    prisma.submission.findFirst.mockResolvedValue(null);
+    const form = new FormData();
+    form.append('text', 'Forbidden admin own-document body');
+
+    const response = (await action({
+      request: new Request(
+        'https://example.com/api/model/document/doc-1?snapshotId=sub-own',
+        { method: 'PUT', body: form }
+      ),
+      params: { id: 'doc-1' },
+    } as any)) as Response;
+
+    expect(response.status).toBe(404);
+    expect(
+      prisma.submission.findFirst.mock.calls[0][0].where.document.is
+    ).toEqual({
+      deletedAt: null,
+      AND: [{ membership: { is: { userId: { not: 'user-1' } } } }],
+    });
+    expect(prisma.submission.updateMany).not.toHaveBeenCalled();
+    expect(prisma.submissionActivity.create).not.toHaveBeenCalled();
+  });
+
   test('rejects stale editor saves and records a rejected journal entry', async () => {
     prisma.documentWriteJournal.findFirst.mockResolvedValue({
       id: 'journal-old',

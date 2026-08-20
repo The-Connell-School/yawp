@@ -1,5 +1,7 @@
 \set ON_ERROR_STOP on
 
+SELECT set_config('yawp.submission_activity_cleanup', 'on', false);
+
 DO $$
 BEGIN
   IF to_regclass('public."SubmissionActivity"') IS NULL THEN
@@ -332,6 +334,23 @@ BEGIN
     RAISE EXCEPTION 'audited submission document reassignment unexpectedly succeeded';
   EXCEPTION
     WHEN check_violation THEN NULL;
+  END;
+
+  -- Durable activity intentionally makes an audited submission non-deletable.
+  -- Operational organization removal likewise remains blocked while that
+  -- active submission exists; neither path may partially erase the ledger.
+  BEGIN
+    DELETE FROM "Submission" WHERE id = proof.submission_id;
+    RAISE EXCEPTION 'audited submission deletion unexpectedly succeeded';
+  EXCEPTION
+    WHEN integrity_constraint_violation THEN NULL;
+  END;
+
+  BEGIN
+    DELETE FROM "Organization" WHERE id = proof.organization_id;
+    RAISE EXCEPTION 'organization with an audited submission unexpectedly deleted';
+  EXCEPTION
+    WHEN integrity_constraint_violation THEN NULL;
   END;
 
   IF NOT EXISTS (

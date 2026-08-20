@@ -93,7 +93,7 @@ run_race() {
   grep -q "$expected_error" "$update_log"
 
   psql "$proof_url" --no-psqlrc --set ON_ERROR_STOP=on \
-    --command "DELETE FROM \"SubmissionActivity\" WHERE id = '$activity_id';" >/dev/null
+    --command "BEGIN; SET LOCAL yawp.submission_activity_cleanup = 'on'; DELETE FROM \"SubmissionActivity\" WHERE id = '$activity_id'; COMMIT;" >/dev/null
 }
 
 run_race \

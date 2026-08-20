@@ -212,15 +212,20 @@ const actionImpl = async ({ request, params }: ActionFunctionArgs) => {
   }
 
   if (snapshotId) {
-    const snapshotDocumentAccessWhere = hasEffectivePlatformAdmin(user.isAdmin)
-      ? { deletedAt: null }
-      : {
-          deletedAt: null,
-          ...buildTeacherDocumentAccessWhere({
-            membershipId: profile.id,
-            organizationId: profile.organization.id,
-          }),
-        };
+    const snapshotDocumentAccessWhere = {
+      deletedAt: null,
+      AND: [
+        { membership: { is: { userId: { not: userId } } } },
+        ...(hasEffectivePlatformAdmin(user.isAdmin)
+          ? []
+          : [
+              buildTeacherDocumentAccessWhere({
+                membershipId: profile.id,
+                organizationId: profile.organization.id,
+              }),
+            ]),
+      ],
+    };
     // snapshotId now refers to a Submission id
     const submission = await prisma.submission.findFirst({
       where: {

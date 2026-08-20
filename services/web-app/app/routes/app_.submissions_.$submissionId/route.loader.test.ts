@@ -212,11 +212,56 @@ describe('submission loader — unsubmitted redirect', () => {
     })) as any;
 
     expect(result.activities).toHaveLength(1);
+    expect(result.activityHasMore).toBe(false);
     expect(prisma.submissionActivity.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { submissionId: 'sub-1', organizationId: 'org-1' },
         orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-        take: 100,
+        take: 101,
+      })
+    );
+  });
+
+  test('returns only the newest 100 activity rows and reports older history', async () => {
+    requireUserId.mockResolvedValue('user-teacher');
+    requireMembership.mockResolvedValue(
+      membership(TEACHER_MEMBERSHIP_ID, 'TEACHER')
+    );
+    prisma.submission.findFirst.mockResolvedValue(buildSubmission());
+    prisma.submissionActivity.findMany.mockResolvedValue(
+      Array.from({ length: 101 }, (_, index) => ({ id: `activity-${index}` }))
+    );
+
+    const result = (await loader({
+      request: request(),
+      params: { submissionId: 'sub-1' },
+    })) as any;
+
+    expect(result.activities).toHaveLength(100);
+    expect(result.activityHasMore).toBe(true);
+  });
+
+  test('lets a platform admin read tenant-scoped staff activity', async () => {
+    requireUserId.mockResolvedValue('user-admin');
+    requireMembership.mockResolvedValue(
+      membership(TEACHER_MEMBERSHIP_ID, 'TEACHER', 'org-2')
+    );
+    prisma.user.findUnique.mockResolvedValue({ isAdmin: true });
+    prisma.submission.findFirst.mockResolvedValue(buildSubmission());
+    prisma.submissionActivity.findMany.mockResolvedValue([
+      { id: 'activity-admin-visible' },
+    ]);
+
+    const result = (await loader({
+      request: request(),
+      params: { submissionId: 'sub-1' },
+    })) as any;
+
+    expect(result.isTeacher).toBe(true);
+    expect(result.activities).toHaveLength(1);
+    expect(prisma.submissionActivity.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { submissionId: 'sub-1', organizationId: 'org-1' },
       })
     );
   });

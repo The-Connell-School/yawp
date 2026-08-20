@@ -123,14 +123,17 @@ describe('SubmissionActivitySheet', () => {
                 },
               },
               grammarIssues: {
-                before: [],
-                after: [
-                  {
-                    kind: 'comma_splice',
-                    excerpt: 'rain, we left',
-                    message: 'Use a period or conjunction.',
-                  },
-                ],
+                before: { version: 1, issues: [] },
+                after: {
+                  version: 1,
+                  issues: [
+                    {
+                      kind: 'comma_splice',
+                      excerpt: 'rain, we left',
+                      message: 'Use a period or conjunction.',
+                    },
+                  ],
+                },
               },
             },
             metadata: null,

@@ -71,9 +71,15 @@ function formatNestedValue(field: string, value: unknown) {
       .join('\n');
   }
 
-  if (field === 'grammarIssues' && Array.isArray(value)) {
-    if (value.length === 0) return 'No issues';
-    return value
+  if (field === 'grammarIssues') {
+    const issues = Array.isArray(value)
+      ? value
+      : value && typeof value === 'object' && !Array.isArray(value)
+        ? (value as { issues?: unknown }).issues
+        : null;
+    if (!Array.isArray(issues)) return null;
+    if (issues.length === 0) return 'No issues';
+    return issues
       .map((raw, index) => {
         if (!raw || typeof raw !== 'object') return `Issue ${index + 1}`;
         const issue = raw as {
@@ -121,8 +127,10 @@ function activityChanges(changes: unknown) {
 
 export function SubmissionActivitySheet({
   activities,
+  hasMore = false,
 }: {
   activities: SubmissionActivityItem[];
+  hasMore?: boolean;
 }) {
   return (
     <Sheet>
@@ -147,9 +155,16 @@ export function SubmissionActivitySheet({
           <SheetTitle>Submission Activity</SheetTitle>
           <SheetDescription>
             A durable record of actions taken on this submission. Newest
-            activity appears first; up to 100 recent events are shown.
+            activity appears first.
           </SheetDescription>
         </SheetHeader>
+
+        {hasMore ? (
+          <p className="mt-4 text-xs text-muted-foreground">
+            Showing the newest 100 events. Older activity remains in the audit
+            ledger.
+          </p>
+        ) : null}
 
         <div className="mt-6 space-y-4" data-testid="submission-activity-list">
           {activities.length === 0 ? (

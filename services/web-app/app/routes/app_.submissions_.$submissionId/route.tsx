@@ -257,7 +257,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     ),
   ]);
 
-  const activities =
+  const activityPage =
     !isOwner && (isTeacher || isAdmin) && submissionActivityEnabled
       ? await prisma.submissionActivity.findMany({
           where: {
@@ -282,9 +282,11 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
             },
           },
           orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-          take: 100,
+          take: 101,
         })
       : null;
+  const activities = activityPage?.slice(0, 100) ?? null;
+  const activityHasMore = (activityPage?.length ?? 0) > 100;
 
   // Sort comments by document location
   const sortedComments = [...submission.comments].sort((a, b) => {
@@ -322,7 +324,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     isOwner,
     isTeacher: isTeacher || isAdmin,
     submissionActivityEnabled,
-    ...(activities == null ? {} : { activities }),
+    ...(activities == null ? {} : { activities, activityHasMore }),
   };
 }
 
@@ -333,6 +335,8 @@ export default function SubmissionRoute() {
   const { submission, isOwner, isTeacher, submissionActivityEnabled } =
     loaderData;
   const activities = 'activities' in loaderData ? loaderData.activities : [];
+  const activityHasMore =
+    'activityHasMore' in loaderData ? loaderData.activityHasMore : false;
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const location = useLocation();
@@ -955,7 +959,10 @@ export default function SubmissionRoute() {
 
         <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
           {isGradingOther && submissionActivityEnabled ? (
-            <SubmissionActivitySheet activities={activities as any} />
+            <SubmissionActivitySheet
+              activities={activities as any}
+              hasMore={activityHasMore}
+            />
           ) : null}
           {isGradingOther ? (
             <Button size="sm" variant="outline" asChild>

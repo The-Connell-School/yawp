@@ -424,11 +424,16 @@ export async function ensureProductionQaProfile(
 
   // Reset only the disposable QA submission. Durable activity elsewhere,
   // including real classroom data, remains untouched.
-  await prisma.submissionActivity.deleteMany({
-    where: {
-      submissionId: ids.submissionId,
-      organizationId: ids.organizationId,
-    },
+  await prisma.$transaction(async (tx) => {
+    await tx.$executeRawUnsafe(
+      "SET LOCAL yawp.submission_activity_cleanup = 'on'"
+    );
+    await tx.submissionActivity.deleteMany({
+      where: {
+        submissionId: ids.submissionId,
+        organizationId: ids.organizationId,
+      },
+    });
   });
   const releasedAt = new Date('2026-08-20T12:00:00.000Z');
   const submission = await prisma.submission.upsert({

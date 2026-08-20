@@ -225,10 +225,11 @@ BEFORE UPDATE OF "documentId" ON "Submission"
 FOR EACH ROW EXECUTE FUNCTION "preventSubmissionActivitySubmissionDocumentReassignment"();
 
 -- Activity identity and payload are immutable. Cascading parent cleanup still
--- works through PostgreSQL's nested FK triggers; direct cleanup is limited to
--- repeatable database-proof rows and the dedicated disposable production QA
--- fixture. The actor-detach trigger changes only actorMembershipId before the
--- membership is removed and is explicitly allowed.
+-- works through PostgreSQL's nested FK triggers. Direct cleanup is allowed only
+-- for tightly scoped proof/E2E/production-QA rows after that session explicitly
+-- enables yawp.submission_activity_cleanup. The actor-detach trigger changes
+-- only actorMembershipId before the membership is removed and is explicitly
+-- allowed.
 CREATE FUNCTION "enforceSubmissionActivityImmutability"()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -253,11 +254,16 @@ BEGIN
 
   IF TG_OP = 'DELETE' AND (
     pg_trigger_depth() > 1
-    OR (OLD.source = 'db-proof' AND OLD.id LIKE 'submission-activity-%')
-    OR OLD."submissionId" LIKE 'e2e-released-grade-audit-%'
     OR (
-      OLD."submissionId" = 'prod-qa-released-submission'
-      AND OLD."organizationId" = 'prod-qa-org'
+      current_setting('yawp.submission_activity_cleanup', true) = 'on'
+      AND (
+        (OLD.source = 'db-proof' AND OLD.id LIKE 'submission-activity-%')
+        OR OLD."submissionId" LIKE 'e2e-released-grade-audit-%'
+        OR (
+          OLD."submissionId" = 'prod-qa-released-submission'
+          AND OLD."organizationId" = 'prod-qa-org'
+        )
+      )
     )
   ) THEN
     RETURN OLD;

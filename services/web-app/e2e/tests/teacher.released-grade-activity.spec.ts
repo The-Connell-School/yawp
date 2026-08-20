@@ -23,6 +23,12 @@ async function captureCheckpoint(page: Page, name: string) {
   await page.waitForTimeout(750);
 }
 
+async function lingerForQa(page: Page, milliseconds: number) {
+  if (process.env.QA_CAPTURE_DIR) {
+    await page.waitForTimeout(milliseconds);
+  }
+}
+
 test.describe('Released grade editing and submission activity', () => {
   test('records the teacher edit and never exposes activity to the student', async ({
     page,
@@ -106,6 +112,7 @@ test.describe('Released grade editing and submission activity', () => {
         page.getByTestId('submission-activity-trigger')
       ).toBeVisible();
       await captureCheckpoint(page, '01-released-grade');
+      await lingerForQa(page, 3500);
 
       await panel.getByTestId('submission-lifecycle-edit').click();
       await expect(
@@ -115,6 +122,7 @@ test.describe('Released grade editing and submission activity', () => {
         0
       );
       await captureCheckpoint(page, '02-edit-warning');
+      await lingerForQa(page, 4500);
 
       const saveButton = panel.getByTestId('submission-lifecycle-save');
       await expect(saveButton).toBeDisabled();
@@ -123,6 +131,7 @@ test.describe('Released grade editing and submission activity', () => {
         .getByTestId('grading-overall-comment')
         .fill('Excellent revision after release.');
       await expect(saveButton).toBeEnabled();
+      await lingerForQa(page, 3000);
       await saveButton.click();
       await expect(page.getByTestId('released-grade-edit-warning')).toHaveCount(
         0,
@@ -139,6 +148,7 @@ test.describe('Released grade editing and submission activity', () => {
         liveActivityList.getByText('Grade or feedback changed')
       ).toBeVisible({ timeout: 15000 });
       await captureCheckpoint(page, '03-live-activity');
+      await lingerForQa(page, 5000);
       await page.keyboard.press('Escape');
 
       const persisted = await prisma.submission.findUniqueOrThrow({
@@ -206,6 +216,7 @@ test.describe('Released grade editing and submission activity', () => {
       ).toBeVisible();
       await expect(activityList.getByText('77', { exact: true })).toBeVisible();
       await expect(activityList.getByText('92', { exact: true })).toBeVisible();
+      await lingerForQa(page, 3500);
 
       await page.keyboard.press('Escape');
       await page.setViewportSize({ width: 390, height: 844 });
@@ -231,6 +242,7 @@ test.describe('Released grade editing and submission activity', () => {
       expect(panelBounds!.x).toBeGreaterThanOrEqual(0);
       expect(panelBounds!.x + panelBounds!.width).toBeLessThanOrEqual(390);
       await captureCheckpoint(page, '04-mobile-activity');
+      await lingerForQa(page, 4000);
       await page.keyboard.press('Escape');
 
       const createdComment = await page.evaluate(
@@ -324,13 +336,17 @@ test.describe('Released grade editing and submission activity', () => {
         0
       );
       await captureCheckpoint(page, '05-student-view');
+      await lingerForQa(page, 5000);
     } finally {
-      await prisma.$transaction([
-        prisma.submissionActivity.deleteMany({
+      await prisma.$transaction(async (tx) => {
+        await tx.$executeRawUnsafe(
+          "SET LOCAL yawp.submission_activity_cleanup = 'on'"
+        );
+        await tx.submissionActivity.deleteMany({
           where: { submissionId: submission.id },
-        }),
-        prisma.submission.delete({ where: { id: submission.id } }),
-      ]);
+        });
+        await tx.submission.delete({ where: { id: submission.id } });
+      });
       await prisma.document.delete({ where: { id: document.id } });
       await prisma.$disconnect();
     }
