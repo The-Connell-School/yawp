@@ -21,10 +21,12 @@ describe('grading auth helpers', () => {
         isAdmin: false,
       })
     ).toEqual({
+      membership: { organizationId: 'org-1' },
       OR: [
         {
           classAssignment: {
             class: {
+              school: { organizationId: 'org-1' },
               teachers: {
                 some: {
                   id: 'teacher-membership-1',
@@ -37,6 +39,7 @@ describe('grading auth helpers', () => {
           membership: {
             classesAsStudent: {
               some: {
+                school: { organizationId: 'org-1' },
                 teachers: {
                   some: {
                     id: 'teacher-membership-1',
