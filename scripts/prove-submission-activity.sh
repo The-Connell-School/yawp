@@ -2,6 +2,20 @@
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+if [[ -z "${DATABASE_URL:-}" && -f "$repo_root/.worktree-local/config.env" ]]; then
+  # shellcheck disable=SC1091
+  source "$repo_root/.worktree-local/config.env"
+fi
+
+case "${DATABASE_URL:-}" in
+  postgresql://*@127.0.0.1:*/*) ;;
+  *)
+    echo "Refusing database proof outside an isolated 127.0.0.1 database." >&2
+    exit 1
+    ;;
+esac
+
 cd "$repo_root/services/web-app"
 
 # Repeatable backend proof for the positive mutation contract, transaction
@@ -20,3 +34,5 @@ bun test \
   'app/routes/app_.submissions_.$submissionId/route.loader.test.ts' \
   app/utils/grading-auth.server.test.ts \
   'app/routes/app.admin.organizations.$id/route.test.ts'
+
+psql "$DATABASE_URL" --file "$repo_root/scripts/prove-submission-activity-db.sql"
