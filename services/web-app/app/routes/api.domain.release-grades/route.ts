@@ -22,7 +22,10 @@ const POST = z.object({
       if (typeof value === 'string') return [value];
       return value;
     },
-    z.array(z.string()).min(1, 'At least one submission is required')
+    z
+      .array(z.string())
+      .min(1, 'At least one submission is required')
+      .max(500, 'No more than 500 submissions can be released at once')
   ),
 });
 

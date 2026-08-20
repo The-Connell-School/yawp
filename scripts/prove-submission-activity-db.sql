@@ -89,10 +89,11 @@ BEGIN
       'OrgMembership_detach_submission_activity_actor',
       'OrgMembership_submission_activity_owner_tenant_guard',
       'Document_submission_activity_tenant_guard',
+      'Submission_submission_activity_document_tenant_guard',
       'SubmissionActivity_immutability_guard'
     )
       AND NOT tgisinternal
-  ) <> 5 THEN
+  ) <> 6 THEN
     RAISE EXCEPTION 'SubmissionActivity tenant, parent, immutability, or actor-detach trigger is missing';
   END IF;
 
@@ -145,6 +146,16 @@ VALUES (
   'submission-activity-other-org',
   'TEACHER'
 );
+INSERT INTO "Document" (id, title, text, html, "membershipId", "assignmentTypeId")
+SELECT
+  'submission-activity-other-document',
+  'Submission Activity Other Tenant Document',
+  'Other tenant proof',
+  '<p>Other tenant proof</p>',
+  'submission-activity-other-membership',
+  document."assignmentTypeId"
+FROM submission_activity_proof_state proof
+JOIN "Document" document ON document.id = proof.document_id;
 
 DO $$
 DECLARE
@@ -314,13 +325,24 @@ BEGIN
     WHEN check_violation THEN NULL;
   END;
 
+  BEGIN
+    UPDATE "Submission"
+    SET "documentId" = 'submission-activity-other-document'
+    WHERE id = proof.submission_id;
+    RAISE EXCEPTION 'audited submission document reassignment unexpectedly succeeded';
+  EXCEPTION
+    WHEN check_violation THEN NULL;
+  END;
+
   IF NOT EXISTS (
     SELECT 1
     FROM "Document" document
+    JOIN "Submission" submission ON submission.id = proof.submission_id
     JOIN "OrgMembership" owner ON owner.id = document."membershipId"
     JOIN "SubmissionActivity" activity
       ON activity."submissionId" = proof.submission_id
     WHERE document.id = proof.document_id
+      AND submission."documentId" = proof.document_id
       AND document."membershipId" = proof.owner_membership_id
       AND owner."organizationId" = proof.organization_id
       AND activity.id = 'submission-activity-parent-anchor-proof'

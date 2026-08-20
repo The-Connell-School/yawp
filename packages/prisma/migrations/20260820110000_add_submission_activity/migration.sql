@@ -83,8 +83,10 @@ DECLARE
   submission_document_id TEXT;
   submission_owner_membership_id TEXT;
 BEGIN
-  -- Serialize first-event insertion with both supported parent reassignment
-  -- paths. Advisory locks use independent namespaces and a stable hash.
+  -- Serialize first-event insertion with every supported parent reassignment
+  -- path. Advisory locks use independent namespaces and a stable hash.
+  PERFORM pg_advisory_xact_lock(81204, hashtext(NEW."submissionId"));
+
   SELECT document.id, membership.id
   INTO submission_document_id, submission_owner_membership_id
   FROM "Submission" submission
@@ -182,6 +184,45 @@ $$ LANGUAGE plpgsql;
 CREATE TRIGGER "Document_submission_activity_tenant_guard"
 BEFORE UPDATE OF "membershipId" ON "Document"
 FOR EACH ROW EXECUTE FUNCTION "preventSubmissionActivityDocumentTenantReassignment"();
+
+CREATE FUNCTION "preventSubmissionActivitySubmissionDocumentReassignment"()
+RETURNS TRIGGER AS $$
+DECLARE
+  old_organization_id TEXT;
+  new_organization_id TEXT;
+BEGIN
+  PERFORM pg_advisory_xact_lock(81204, hashtext(OLD.id));
+
+  IF NEW."documentId" IS NOT DISTINCT FROM OLD."documentId" THEN
+    RETURN NEW;
+  END IF;
+
+  SELECT membership."organizationId" INTO old_organization_id
+  FROM "Document" document
+  JOIN "OrgMembership" membership ON membership.id = document."membershipId"
+  WHERE document.id = OLD."documentId";
+
+  SELECT membership."organizationId" INTO new_organization_id
+  FROM "Document" document
+  JOIN "OrgMembership" membership ON membership.id = document."membershipId"
+  WHERE document.id = NEW."documentId";
+
+  IF new_organization_id IS DISTINCT FROM old_organization_id
+     AND EXISTS (
+       SELECT 1
+       FROM "SubmissionActivity" activity
+       WHERE activity."submissionId" = OLD.id
+     ) THEN
+    RAISE EXCEPTION 'Cannot move an audited submission to a document in another organization'
+      USING ERRCODE = '23514';
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER "Submission_submission_activity_document_tenant_guard"
+BEFORE UPDATE OF "documentId" ON "Submission"
+FOR EACH ROW EXECUTE FUNCTION "preventSubmissionActivitySubmissionDocumentReassignment"();
 
 -- Activity identity and payload are immutable. Cascading parent cleanup still
 -- works through PostgreSQL's nested FK triggers; direct cleanup is limited to

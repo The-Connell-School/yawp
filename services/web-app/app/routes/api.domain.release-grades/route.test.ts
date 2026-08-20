@@ -136,6 +136,23 @@ describe('api.domain.release-grades', () => {
     expect(payload.init?.status).toBe(404);
   });
 
+  test('rejects oversized release batches before opening a transaction', async () => {
+    const form = new FormData();
+    for (let index = 0; index < 501; index += 1) {
+      form.append('submissionIds', `sub-${index}`);
+    }
+
+    const response = await action({
+      request: new Request('https://example.com/api/domain/release-grades', {
+        method: 'POST',
+        body: form,
+      }),
+    } as any);
+
+    expect((response as any).init?.status).toBe(422);
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
   test('records exactly one release event for each submission in a batch', async () => {
     prisma.submission.findMany.mockResolvedValue([
       {

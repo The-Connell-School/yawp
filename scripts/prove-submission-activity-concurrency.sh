@@ -35,6 +35,10 @@ INSERT INTO "Document" (id, title, text, html, "membershipId", "assignmentTypeId
 VALUES (
   'activity-concurrency-document', 'Concurrency Proof', 'Proof', '<p>Proof</p>',
   'activity-concurrency-owner-membership', 'activity-concurrency-assignment-type'
+), (
+  'activity-concurrency-other-document', 'Other Tenant Concurrency Proof',
+  'Other proof', '<p>Other proof</p>',
+  'activity-concurrency-other-membership', 'activity-concurrency-assignment-type'
 );
 INSERT INTO "Submission" (id, title, text, html, "submittedAt", "documentId")
 VALUES (
@@ -102,6 +106,11 @@ run_race \
   'UPDATE "Document" SET "membershipId" = '\''activity-concurrency-other-membership'\'' WHERE id = '\''activity-concurrency-document'\'';' \
   'durable submission activity'
 
+run_race \
+  'submission-activity-submission-document-race-proof' \
+  'UPDATE "Submission" SET "documentId" = '\''activity-concurrency-other-document'\'' WHERE id = '\''activity-concurrency-submission'\'';' \
+  'audited submission'
+
 psql "$proof_url" --no-psqlrc --set ON_ERROR_STOP=on <<'SQL'
 INSERT INTO "SubmissionActivity" (
   id, "submissionId", "organizationId", "actorType", "eventType", source, changes
@@ -140,4 +149,4 @@ BEGIN
 END $$;
 SQL
 
-echo "Two-session tenant serialization and immutable-ledger proof passed."
+echo "Two-session tenant-anchor serialization and immutable-ledger proof passed."

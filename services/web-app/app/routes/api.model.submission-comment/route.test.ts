@@ -138,37 +138,52 @@ describe('api.model.submission-comment', () => {
     expect(prisma.submissionActivity.create).not.toHaveBeenCalled();
   });
 
-  test('tenant-scopes platform-admin comment creation', async () => {
-    prisma.user.findUnique.mockResolvedValue({ isAdmin: true });
-    prisma.submission.findFirst.mockResolvedValue(null);
+  test('preserves platform-admin cross-tenant comment creation with tenant-safe activity attribution', async () => {
+    prisma.user.findUnique
+      .mockResolvedValueOnce({ isAdmin: true })
+      .mockResolvedValueOnce({
+        name: 'Platform Admin',
+        email: 'platform-admin@example.test',
+      });
+    prisma.submission.findFirst.mockResolvedValue({
+      id: 'sub-cross-tenant',
+      releasedAt: new Date('2026-08-20T11:00:00.000Z'),
+      document: { membership: { organizationId: 'org-2' } },
+    });
+    prisma.submissionComment.create.mockResolvedValue({
+      id: 'comment-cross-tenant',
+      content: 'A comment',
+      excerpt: 'some text',
+      occurrence: 1,
+      submissionId: 'sub-cross-tenant',
+      profileId: 'profile-1',
+    });
 
     const form = new FormData();
     form.append('submissionId', 'sub-cross-tenant');
     form.append('content', 'A comment');
     form.append('excerpt', 'some text');
 
-    await action({
+    const response = await action({
       request: new Request('https://example.com/api/model/submission-comment', {
         method: 'POST',
         body: form,
       }),
     } as any);
 
-    expect(prisma.submission.findFirst.mock.calls[0][0].where).toEqual(
+    expect((response as { init?: { status?: number } }).init?.status).toBe(201);
+    expect(
+      JSON.stringify(prisma.submission.findFirst.mock.calls[0][0].where)
+    ).not.toContain('organizationId');
+    expect(prisma.submissionActivity.create.mock.calls[0][0].data).toEqual(
       expect.objectContaining({
-        document: {
-          is: expect.objectContaining({
-            AND: expect.arrayContaining([
-              {
-                membership: {
-                  is: expect.objectContaining({ organizationId: 'org-1' }),
-                },
-              },
-            ]),
-          }),
-        },
+        organizationId: 'org-2',
+        actorMembershipId: null,
+        actorType: 'human',
+        actorName: 'Platform Admin',
+        actorEmail: 'platform-admin@example.test',
       })
     );
-    expect(prisma.submissionComment.create).not.toHaveBeenCalled();
+    expect(prisma.submissionComment.create).toHaveBeenCalledTimes(1);
   });
 });

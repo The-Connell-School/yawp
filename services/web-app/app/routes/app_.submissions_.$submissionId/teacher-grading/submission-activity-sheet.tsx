@@ -147,7 +147,7 @@ export function SubmissionActivitySheet({
           <SheetTitle>Submission Activity</SheetTitle>
           <SheetDescription>
             A durable record of actions taken on this submission. Newest
-            activity appears first.
+            activity appears first; up to 100 recent events are shown.
           </SheetDescription>
         </SheetHeader>
 

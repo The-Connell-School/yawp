@@ -9,6 +9,7 @@ import { buildTeacherDocumentAccessWhere } from '~/utils/grading-auth.server';
 import {
   buildSubmissionActivityChanges,
   recordSubmissionActivity,
+  resolveSubmissionActivityActorMembershipId,
   submissionActivityEventTypes,
 } from '~/domain/submissions/submission-activity.server';
 
@@ -49,7 +50,6 @@ function buildCommentDocumentAccessWhere({
         membership: {
           is: {
             userId: { not: userId },
-            ...(isAdmin ? { organizationId } : {}),
           },
         },
       },
@@ -153,7 +153,11 @@ export async function action({ request }: ActionFunctionArgs) {
       await recordSubmissionActivity(tx, {
         submissionId: currentSubmission.id,
         organizationId: currentOrganizationId,
-        actorMembershipId: profile.id,
+        actorMembershipId: resolveSubmissionActivityActorMembershipId({
+          actorMembershipId: profile.id,
+          actorOrganizationId: profile.organization.id,
+          submissionOrganizationId: currentOrganizationId,
+        }),
         actorUserId: userId,
         eventType: submissionActivityEventTypes.commentCreated,
         source: 'submission-comment',
