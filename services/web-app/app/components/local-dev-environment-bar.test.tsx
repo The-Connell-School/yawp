@@ -17,10 +17,10 @@ describe('preview seat identity', () => {
 });
 
 describe('blackboard LTI mock entry', () => {
-  test('links the flask menu to the mock panel', () => {
+  test('links the flask menu to the Blackboard mock', () => {
     const html = renderToStaticMarkup(<BlackboardLtiMockLink />);
 
     expect(html).toContain('/dev/blackboard-lti-mock/');
-    expect(html).toContain('Blackboard LTI mock');
+    expect(html).toContain('Blackboard');
   });
 });

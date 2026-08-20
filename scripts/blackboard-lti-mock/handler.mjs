@@ -8,7 +8,7 @@ import {
   scoreKey,
 } from './config.mjs';
 import { ROLE_URIS, buildLaunchProfile } from './claims.mjs';
-import { renderDevPanel } from './panel.mjs';
+import { rememberDeepLinkedContent, tryLearnRoute } from './learn-routes.mjs';
 
 function send(response, status, body, headers = {}) {
   if (response.headersSent || response.destroyed) return;
@@ -118,6 +118,8 @@ export function createMockHandler({ config, store, keys, listenOrigin }) {
         store,
         keys,
         publicOrigin,
+        send,
+        handleDevLaunch,
       });
       status = result?.status ?? response.statusCode ?? 200;
       detail = result?.detail || {};
@@ -148,10 +150,8 @@ async function route(ctx) {
     send(response, 200, 'ok');
     return { status: 200 };
   }
-  if (pathname === '/' || pathname === '/dev') {
-    send(response, 200, renderDevPanel({ publicBasePath: config.publicBasePath }));
-    return { status: 200 };
-  }
+  const learn = tryLearnRoute(ctx, { handleDevLaunch, send });
+  if (learn) return learn;
   if (pathname.endsWith('/jwks.json') || pathname === '/jwks') {
     send(response, 200, keys.jwks());
     return { status: 200 };
@@ -622,6 +622,7 @@ async function handleDeepLinking(ctx) {
       contentItems,
     };
     store.deepLinks.push(record);
+    rememberDeepLinkedContent(store, contentItems);
     send(response, 200, record);
     return { status: 200, detail: { count: contentItems.length } };
   } catch (error) {

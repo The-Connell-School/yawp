@@ -328,7 +328,7 @@ export function BlackboardLtiMockLink() {
       className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:bg-accent focus-visible:outline-none"
     >
       <FlaskConical className="size-4" aria-hidden="true" />
-      Blackboard LTI mock
+      Blackboard
     </a>
   );
 }

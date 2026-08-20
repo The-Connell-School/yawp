@@ -73,7 +73,7 @@ if (isDirectExecution(import.meta.url)) {
   const host = process.env.BLACKBOARD_LTI_MOCK_HOST || '0.0.0.0';
   const { origin } = await platform.listen(port, host);
   console.log(`Blackboard LTI mock listening on ${origin}`);
-  console.log(`Dev panel: ${origin}/`);
+  console.log(`Learn: ${origin}/`);
   console.log(`JWKS: ${origin}/api/v1/management/applications/${platform.config.clientId}/jwks.json`);
   console.log(`OIDC auth: ${origin}/api/v1/gateway/oidcauth`);
   console.log(`Token: ${origin}/api/v1/gateway/oauth2/jwttoken`);

@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { COURSE, defaultContentItems } from './catalog.mjs';
 
 const DEFAULT_CLIENT_ID = 'yawp-blackboard-mock';
 const DEFAULT_DEPLOYMENT_ID = 'yawp-mock-deployment';
@@ -103,7 +104,8 @@ export function createStore() {
     scoresCurrent: new Map(),
     deepLinks: [],
     accessTokens: new Map(),
-    defaultLineItemIdByContext: new Map(),
+    defaultLineItemIdByContext: new Map([[COURSE.id, '_99_1_grade']]),
+    contentItems: new Map([[COURSE.id, defaultContentItems()]]),
   };
 }
 
