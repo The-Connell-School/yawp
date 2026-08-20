@@ -15,11 +15,12 @@ async function captureCheckpoint(page: Page, name: string) {
   const captureDir = process.env.QA_CAPTURE_DIR;
   if (!captureDir) return;
   await mkdir(captureDir, { recursive: true });
+  await page.waitForTimeout(750);
   await page.screenshot({
     path: path.join(captureDir, `${name}.png`),
     fullPage: true,
   });
-  await page.waitForTimeout(1500);
+  await page.waitForTimeout(750);
 }
 
 test.describe('Released grade editing and submission activity', () => {
