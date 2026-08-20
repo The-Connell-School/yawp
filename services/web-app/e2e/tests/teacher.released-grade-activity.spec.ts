@@ -1,8 +1,26 @@
 import { test, expect } from '../test-setup';
 import { createE2EPrismaClient } from '../prisma-client';
+import { mkdir } from 'node:fs/promises';
+import path from 'node:path';
+import type { Page } from '@playwright/test';
 
 const TEACHER_PASSWORD = 'teacher-e2e-password';
 const STUDENT_PASSWORD = 'johndoe';
+
+test.use({
+  video: process.env.QA_CAPTURE_DIR ? 'on' : 'retain-on-failure',
+});
+
+async function captureCheckpoint(page: Page, name: string) {
+  const captureDir = process.env.QA_CAPTURE_DIR;
+  if (!captureDir) return;
+  await mkdir(captureDir, { recursive: true });
+  await page.screenshot({
+    path: path.join(captureDir, `${name}.png`),
+    fullPage: true,
+  });
+  await page.waitForTimeout(1500);
+}
 
 test.describe('Released grade editing and submission activity', () => {
   test('records the teacher edit and never exposes activity to the student', async ({
@@ -79,6 +97,7 @@ test.describe('Released grade editing and submission activity', () => {
       await expect(
         page.getByTestId('submission-activity-trigger')
       ).toBeVisible();
+      await captureCheckpoint(page, '01-released-grade');
 
       await panel.getByTestId('submission-lifecycle-edit').click();
       await expect(
@@ -87,6 +106,7 @@ test.describe('Released grade editing and submission activity', () => {
       await expect(page.getByTestId('grading-assistant-generate')).toHaveCount(
         0
       );
+      await captureCheckpoint(page, '02-edit-warning');
 
       const saveButton = panel.getByTestId('submission-lifecycle-save');
       await expect(saveButton).toBeDisabled();
@@ -110,6 +130,7 @@ test.describe('Released grade editing and submission activity', () => {
       await expect(
         liveActivityList.getByText('Grade or feedback changed')
       ).toBeVisible({ timeout: 15000 });
+      await captureCheckpoint(page, '03-live-activity');
       await page.keyboard.press('Escape');
 
       const persisted = await prisma.submission.findUniqueOrThrow({
@@ -194,6 +215,7 @@ test.describe('Released grade editing and submission activity', () => {
       expect(panelBounds).not.toBeNull();
       expect(panelBounds!.x).toBeGreaterThanOrEqual(0);
       expect(panelBounds!.x + panelBounds!.width).toBeLessThanOrEqual(390);
+      await captureCheckpoint(page, '04-mobile-activity');
       await page.keyboard.press('Escape');
 
       const createdComment = await page.evaluate(
@@ -286,6 +308,7 @@ test.describe('Released grade editing and submission activity', () => {
       await expect(page.getByTestId('submission-lifecycle-edit')).toHaveCount(
         0
       );
+      await captureCheckpoint(page, '05-student-view');
     } finally {
       await prisma.$transaction([
         prisma.submissionActivity.deleteMany({
