@@ -96,7 +96,7 @@ test.describe('Released grade editing and submission activity', () => {
         organizationId: e2eContext.organizationId,
         actorMembershipId: e2eContext.teacherMembershipId,
         eventType: 'submission.grade_updated',
-        source: 'teacher.grade_form',
+        source: 'update-submission',
         occurredAfterRelease: true,
         changes: {
           numericPercentage: {
@@ -124,7 +124,9 @@ test.describe('Released grade editing and submission activity', () => {
       await expect(
         activityList.getByText(e2eContext.teacherName)
       ).toBeVisible();
-      await expect(activityList.getByText('After release')).toBeVisible();
+      await expect(
+        activityList.getByText('After release', { exact: true })
+      ).toBeVisible();
       await expect(activityList.getByText('77', { exact: true })).toBeVisible();
       await expect(activityList.getByText('92', { exact: true })).toBeVisible();
 
