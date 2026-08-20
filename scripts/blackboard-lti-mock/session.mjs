@@ -20,6 +20,14 @@ export function clearSessionCookie(publicBasePath = '') {
   return `${COOKIE}=; Path=${path}; HttpOnly; SameSite=Lax; Max-Age=0`;
 }
 
+export function requestPublicBasePath(config, request) {
+  const host = String(request.headers['x-forwarded-host'] || request.headers.host || '')
+    .split(':')[0]
+    .toLowerCase();
+  if (host.startsWith('blackboard-pr-')) return '';
+  return config.publicBasePath || '';
+}
+
 export function appPath(publicBasePath, path) {
   const base = String(publicBasePath || '').replace(/\/$/, '');
   const suffix = path.startsWith('/') ? path : `/${path}`;

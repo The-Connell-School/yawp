@@ -33,7 +33,7 @@ This mock is a sibling Compose service named `blackboard-lti-mock`:
 - The web container receives `BLACKBOARD_LTI_MOCK_URL=http://blackboard-lti-mock:9473`
 - After `web` is recreated, deploy starts the mock only when the rendered compose file contains that service, so older application refs stay deployable
 
-Open the flask menu in the preview and choose **Blackboard**, or go to `/dev/blackboard-lti-mock/`. That path is an app-side reverse proxy, so the existing preview access gate stays in front of Learn. Sign in as a student or a teacher; the preview does not show a harness control panel. The production App Runner image does not copy `scripts/` and does not start this process.
+Open the flask menu in the preview and choose **Blackboard**, or go to `/dev/blackboard-lti-mock/`. That path is an app-side reverse proxy, so the existing preview access gate stays in front of Learn. Each preview also gets a public Learn host, `https://blackboard-pr-<number>.$PREVIEW_DOMAIN` (for example `https://blackboard-pr-291.preview.yawp.school`). Sign in as a student or a teacher; the preview does not show a harness control panel. The production App Runner image does not copy `scripts/` and does not start this process.
 
 ## Environment variables
 

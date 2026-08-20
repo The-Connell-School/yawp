@@ -4,6 +4,7 @@ import {
   appPath,
   clearSessionCookie,
   readSession,
+  requestPublicBasePath,
   sessionCookie,
 } from './session.mjs';
 import {
@@ -19,7 +20,7 @@ export function tryLearnRoute(ctx, { handleDevLaunch, send }) {
   if (pathname.startsWith('/learn/api/')) return null;
 
   const session = readSession(request.headers.cookie);
-  const base = config.publicBasePath;
+  const base = requestPublicBasePath(config, request);
 
   if (pathname === '/' || pathname === '/learn' || pathname === '/learn/signin' || pathname === '/dev') {
     if (session && pathname !== '/learn/signin') {
