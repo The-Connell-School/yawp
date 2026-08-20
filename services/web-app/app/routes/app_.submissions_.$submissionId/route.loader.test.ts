@@ -33,6 +33,14 @@ const loader = routeLoader as any;
 const STUDENT_MEMBERSHIP_ID = 'membership-student';
 const TEACHER_MEMBERSHIP_ID = 'membership-teacher';
 
+function membership(
+  id: string,
+  role: 'STUDENT' | 'TEACHER',
+  organizationId = 'org-1'
+) {
+  return { id, role, organization: { id: organizationId } };
+}
+
 function buildSubmission(
   overrides: { unsubmittedAt?: Date | null } = {}
 ): Record<string, unknown> {
@@ -123,10 +131,9 @@ describe('submission loader — unsubmitted redirect', () => {
   // /api/domain/unsubmit-submission, which 403s teachers and admins. The
   // message must therefore be in the student's own frame.
   test('tells the student they unsubmitted it themselves', async () => {
-    requireMembership.mockResolvedValue({
-      id: STUDENT_MEMBERSHIP_ID,
-      role: 'STUDENT',
-    });
+    requireMembership.mockResolvedValue(
+      membership(STUDENT_MEMBERSHIP_ID, 'STUDENT')
+    );
     prisma.submission.findFirst.mockResolvedValue(
       buildSubmission({ unsubmittedAt: new Date('2026-08-02T00:00:00Z') })
     );
@@ -146,10 +153,9 @@ describe('submission loader — unsubmitted redirect', () => {
   });
 
   test('does not redirect the owning student when the submission is still active', async () => {
-    requireMembership.mockResolvedValue({
-      id: STUDENT_MEMBERSHIP_ID,
-      role: 'STUDENT',
-    });
+    requireMembership.mockResolvedValue(
+      membership(STUDENT_MEMBERSHIP_ID, 'STUDENT')
+    );
     prisma.submission.findFirst.mockResolvedValue(buildSubmission());
 
     const result = await loader({
@@ -162,10 +168,9 @@ describe('submission loader — unsubmitted redirect', () => {
   });
 
   test('does not redirect a teacher viewing an unsubmitted submission', async () => {
-    requireMembership.mockResolvedValue({
-      id: TEACHER_MEMBERSHIP_ID,
-      role: 'TEACHER',
-    });
+    requireMembership.mockResolvedValue(
+      membership(TEACHER_MEMBERSHIP_ID, 'TEACHER')
+    );
     prisma.submission.findFirst.mockResolvedValue(
       buildSubmission({ unsubmittedAt: new Date('2026-08-02T00:00:00Z') })
     );
@@ -180,10 +185,9 @@ describe('submission loader — unsubmitted redirect', () => {
   });
 
   test('loads newest-first tenant-scoped activity for staff only', async () => {
-    requireMembership.mockResolvedValue({
-      id: TEACHER_MEMBERSHIP_ID,
-      role: 'TEACHER',
-    });
+    requireMembership.mockResolvedValue(
+      membership(TEACHER_MEMBERSHIP_ID, 'TEACHER')
+    );
     prisma.submission.findFirst.mockResolvedValue(buildSubmission());
     prisma.submissionActivity.findMany.mockResolvedValue([
       {
@@ -215,10 +219,9 @@ describe('submission loader — unsubmitted redirect', () => {
   });
 
   test('does not query or return staff activity to the submission owner', async () => {
-    requireMembership.mockResolvedValue({
-      id: STUDENT_MEMBERSHIP_ID,
-      role: 'STUDENT',
-    });
+    requireMembership.mockResolvedValue(
+      membership(STUDENT_MEMBERSHIP_ID, 'STUDENT')
+    );
     prisma.submission.findFirst.mockResolvedValue(buildSubmission());
 
     const result = (await loader({
@@ -228,5 +231,66 @@ describe('submission loader — unsubmitted redirect', () => {
 
     expect(prisma.submissionActivity.findMany).not.toHaveBeenCalled();
     expect(result).not.toHaveProperty('activities');
+  });
+
+  test('authorizes teachers only through the submission assigned class and tenant', async () => {
+    requireMembership.mockResolvedValue(
+      membership(TEACHER_MEMBERSHIP_ID, 'TEACHER')
+    );
+    prisma.submission.findFirst.mockResolvedValue(buildSubmission());
+
+    await loader({ request: request(), params: { submissionId: 'sub-1' } });
+
+    const query = prisma.submission.findFirst.mock.calls[0]?.[0] as any;
+    const teacherBranch = query.where.document.is.OR[1];
+    expect(teacherBranch).toEqual({
+      membership: { organizationId: 'org-1' },
+      classAssignment: {
+        class: {
+          school: { organizationId: 'org-1' },
+          teachers: { some: { id: TEACHER_MEMBERSHIP_ID } },
+        },
+      },
+    });
+    expect(JSON.stringify(teacherBranch)).not.toContain('classesAsStudent');
+  });
+
+  test('returns not found and never reads activity for an unrelated teacher', async () => {
+    requireMembership.mockResolvedValue(
+      membership('membership-unrelated-teacher', 'TEACHER')
+    );
+    prisma.submission.findFirst.mockResolvedValue(null);
+
+    const result = await loader({
+      request: request(),
+      params: { submissionId: 'sub-1' },
+    });
+    const redirect = await readRedirect(result);
+
+    expect(redirect.to).toBe('/app');
+    expect(redirect.payload.description).toBe('Submission not found.');
+    expect(prisma.submissionActivity.findMany).not.toHaveBeenCalled();
+  });
+
+  test('scopes a teacher read to the active organization', async () => {
+    requireMembership.mockResolvedValue(
+      membership(TEACHER_MEMBERSHIP_ID, 'TEACHER', 'org-2')
+    );
+    prisma.submission.findFirst.mockResolvedValue(null);
+
+    await loader({ request: request(), params: { submissionId: 'sub-1' } });
+
+    const query = prisma.submission.findFirst.mock.calls[0]?.[0] as any;
+    expect(query.where.document.is.OR[1]).toEqual(
+      expect.objectContaining({
+        membership: { organizationId: 'org-2' },
+        classAssignment: {
+          class: expect.objectContaining({
+            school: { organizationId: 'org-2' },
+          }),
+        },
+      })
+    );
+    expect(prisma.submissionActivity.findMany).not.toHaveBeenCalled();
   });
 });

@@ -83,15 +83,16 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       document: {
         is: {
           OR: [
-            { membershipId: profile.id },
             {
-              membership: {
-                classesAsStudent: {
-                  some: {
-                    teachers: {
-                      some: { id: profile.id },
-                    },
-                  },
+              membershipId: profile.id,
+              membership: { organizationId: profile.organization.id },
+            },
+            {
+              membership: { organizationId: profile.organization.id },
+              classAssignment: {
+                class: {
+                  school: { organizationId: profile.organization.id },
+                  teachers: { some: { id: profile.id } },
                 },
               },
             },
@@ -201,12 +202,12 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const isTeacher =
     !isOwner &&
     profile.role === 'TEACHER' &&
-    (submission.document.classAssignment?.class?.teachers.some(
+    submission.document.membership.organizationId === profile.organization.id &&
+    submission.document.classAssignment?.class?.school.organizationId ===
+      profile.organization.id &&
+    submission.document.classAssignment.class.teachers.some(
       (teacher) => teacher.id === profile.id
-    ) ||
-      submission.document.membership.classesAsStudent.some((klass) =>
-        klass.teachers.some((teacher) => teacher.id === profile.id)
-      ));
+    );
 
   const isAdmin = hasEffectivePlatformAdmin(user?.isAdmin);
   const submissionActivityEnabled =

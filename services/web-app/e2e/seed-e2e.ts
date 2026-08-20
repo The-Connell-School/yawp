@@ -129,6 +129,7 @@ export async function seedE2E(): Promise<E2EContext> {
       id: 'the-connell-school',
       name: 'The Connell School',
       classInsightsEnabled: true,
+      submissionActivityEnabled: true,
     },
   });
 

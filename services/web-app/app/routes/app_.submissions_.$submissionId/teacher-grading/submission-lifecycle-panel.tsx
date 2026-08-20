@@ -282,8 +282,10 @@ export function SubmissionLifecyclePanel({
 
   const handleSave = async () => {
     if (!headerState || !saveEnabled) return;
+    let draftSaved = false;
     try {
       await headerState.saveDraft();
+      draftSaved = true;
       onGradeSaved(headerState.getSavedGradeSnapshot());
       if (
         lifecycleState === 'needs_grading' &&
@@ -297,6 +299,9 @@ export function SubmissionLifecyclePanel({
       // back out of a form that will never save rather than leaving them
       // stuck retrying it.
       toast.error(err instanceof Error ? err.message : 'Save failed.');
+      if (!draftSaved) {
+        headerState.discardDraft();
+      }
       exitEditMode();
       return;
     }

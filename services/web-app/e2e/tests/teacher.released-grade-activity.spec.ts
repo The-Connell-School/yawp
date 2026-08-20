@@ -11,8 +11,45 @@ test.describe('Released grade editing and submission activity', () => {
     signIn,
   }) => {
     const prisma = createE2EPrismaClient();
+    const document = await prisma.document.create({
+      data: {
+        title: `Released grade audit ${Date.now()}`,
+        text: 'A dedicated released submission for audit testing.',
+        html: '<p>A dedicated released submission for audit testing.</p>',
+        membershipId: e2eContext.membershipId,
+        assignmentTypeId: e2eContext.assignmentTypeId,
+        assignmentId: e2eContext.assignmentId,
+        classAssignmentId: e2eContext.classAssignmentId,
+      },
+      select: { id: true, title: true, text: true, html: true },
+    });
+    const releasedAt = new Date('2026-08-20T12:00:00.000Z');
+    const submission = await prisma.submission.create({
+      data: {
+        documentId: document.id,
+        title: document.title,
+        text: document.text ?? '',
+        html: document.html ?? '',
+        submittedAt: new Date('2026-08-19T12:00:00.000Z'),
+        gradedAt: new Date('2026-08-20T11:00:00.000Z'),
+        gradedByMembershipId: e2eContext.teacherMembershipId,
+        numericPercentage: 77,
+        letterGrade: 'C+',
+        overallScore: 4,
+        overallComment: 'Good effort with room for improvement.',
+        rubricScores: {
+          thesis_and_content: 5,
+          organization_and_structure: 1,
+          evidence_and_support: 5,
+          voice_and_style: 1,
+          grammar_and_mechanics: 1,
+        },
+        releasedAt,
+      },
+      select: { id: true },
+    });
     const original = await prisma.submission.findUniqueOrThrow({
-      where: { id: e2eContext.gradeId },
+      where: { id: submission.id },
       select: {
         releasedAt: true,
         numericPercentage: true,
@@ -27,17 +64,12 @@ test.describe('Released grade editing and submission activity', () => {
       expect(original.releasedAt).not.toBeNull();
       await expect(
         prisma.submissionActivity.count({
-          where: { submissionId: e2eContext.gradeId },
+          where: { submissionId: submission.id },
         })
       ).resolves.toBe(0);
 
-      await prisma.organization.update({
-        where: { id: e2eContext.organizationId },
-        data: { submissionActivityEnabled: true },
-      });
-
       await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
-      await page.goto(`/app/submissions/${e2eContext.gradeId}`);
+      await page.goto(`/app/submissions/${submission.id}`);
       await page.waitForLoadState('networkidle');
 
       const panel = page.getByTestId('submission-lifecycle-panel');
@@ -72,7 +104,7 @@ test.describe('Released grade editing and submission activity', () => {
       );
 
       const persisted = await prisma.submission.findUniqueOrThrow({
-        where: { id: e2eContext.gradeId },
+        where: { id: submission.id },
         select: {
           releasedAt: true,
           numericPercentage: true,
@@ -88,7 +120,7 @@ test.describe('Released grade editing and submission activity', () => {
       );
 
       const activities = await prisma.submissionActivity.findMany({
-        where: { submissionId: e2eContext.gradeId },
+        where: { submissionId: submission.id },
         orderBy: { createdAt: 'asc' },
       });
       expect(activities).toHaveLength(1);
@@ -132,7 +164,7 @@ test.describe('Released grade editing and submission activity', () => {
 
       await page.context().clearCookies();
       await signIn(e2eContext.userEmail, STUDENT_PASSWORD);
-      await page.goto(`/app/submissions/${e2eContext.gradeId}`);
+      await page.goto(`/app/submissions/${submission.id}`);
       await page.waitForLoadState('networkidle');
       await expect(page.getByText(/92%/).first()).toBeVisible();
       await expect(
@@ -147,17 +179,11 @@ test.describe('Released grade editing and submission activity', () => {
     } finally {
       await prisma.$transaction([
         prisma.submissionActivity.deleteMany({
-          where: { submissionId: e2eContext.gradeId },
+          where: { submissionId: submission.id },
         }),
-        prisma.submission.update({
-          where: { id: e2eContext.gradeId },
-          data: original,
-        }),
-        prisma.organization.update({
-          where: { id: e2eContext.organizationId },
-          data: { submissionActivityEnabled: false },
-        }),
+        prisma.submission.delete({ where: { id: submission.id } }),
       ]);
+      await prisma.document.delete({ where: { id: document.id } });
       await prisma.$disconnect();
     }
   });
