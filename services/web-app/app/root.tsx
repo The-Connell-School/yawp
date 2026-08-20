@@ -165,6 +165,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
                       reporterEnabled: true,
                       classInsightsEnabled: true,
                       writingPracticeEnabled: true,
+                      submissionActivityEnabled: true,
                     },
                   },
                 },

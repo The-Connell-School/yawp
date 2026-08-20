@@ -156,6 +156,8 @@ export async function action({ request, params }: ActionFunctionArgs) {
       formData.get('classInsightsEnabled') === 'true';
     const writingPracticeEnabled =
       formData.get('writingPracticeEnabled') === 'true';
+    const submissionActivityEnabled =
+      formData.get('submissionActivityEnabled') === 'true';
     const assignmentTypeIds = Array.from(
       new Set(
         formData
@@ -189,6 +191,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
           reporterEnabled,
           classInsightsEnabled,
           writingPracticeEnabled,
+          submissionActivityEnabled,
         },
       }),
       prisma.organizationAssignmentType.deleteMany({
@@ -456,8 +459,7 @@ export default function OrganizationRoute() {
                       Production pilot features
                     </h3>
                     <p className="text-sm text-muted-foreground">
-                      Roll out Class Summary and Yawp Reporter independently by
-                      organization.
+                      Roll out pilot features independently by organization.
                     </p>
                   </div>
                   <div className="mt-3 grid gap-2 sm:grid-cols-2">
@@ -508,6 +510,24 @@ export default function OrganizationRoute() {
                         <span className="block text-xs text-muted-foreground">
                           Adds Writing Practice to the teacher and student
                           sidebars. Off by default while the feature is paused.
+                        </span>
+                      </span>
+                    </label>
+                    <label className="flex min-h-12 items-start gap-3 rounded-md border bg-background px-3 py-2 text-sm">
+                      <input
+                        type="checkbox"
+                        name="submissionActivityEnabled"
+                        value="true"
+                        defaultChecked={organization.submissionActivityEnabled}
+                        className="mt-1 h-4 w-4"
+                      />
+                      <span className="min-w-0">
+                        <span className="block font-medium">
+                          Released grade activity
+                        </span>
+                        <span className="block text-xs text-muted-foreground">
+                          Enables released-grade editing and staff-only
+                          submission activity history.
                         </span>
                       </span>
                     </label>

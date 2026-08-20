@@ -27,6 +27,7 @@ const membershipSelect = {
       reporterEnabled: true,
       classInsightsEnabled: true,
       writingPracticeEnabled: true,
+      submissionActivityEnabled: true,
     },
   },
 } as const;
