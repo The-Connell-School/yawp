@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, mock, test } from 'bun:test';
 import { rubricKeys } from '~/domain/grading/rubric';
 
 const prisma = {
+  $transaction: mock(),
   submission: {
     findFirst: mock(),
     update: mock(),
@@ -12,6 +13,7 @@ const prisma = {
   submissionGradingAssistantRun: {
     create: mock(),
   },
+  submissionActivity: { create: mock() },
 };
 
 const getLLMCompletion = mock();
@@ -88,6 +90,17 @@ function mockSubmission(overrides: Record<string, unknown> = {}) {
     text: 'Frozen AI essay text',
     html: '<p>Frozen AI essay text</p>',
     gradedAt: null,
+    updatedAt: new Date('2026-08-20T10:00:00.000Z'),
+    releasedAt: null,
+    unsubmittedAt: null,
+    score: null,
+    feedback: null,
+    rubricScores: null,
+    overallScore: null,
+    overallComment: null,
+    numericPercentage: null,
+    letterGrade: null,
+    grammarIssues: null,
     document: {
       id: 'doc-1',
       membershipId: 'student-profile-1',
@@ -99,6 +112,8 @@ function mockSubmission(overrides: Record<string, unknown> = {}) {
       },
       classAssignment: { class: { schoolId: 'school-1' } },
       membership: {
+        organizationId: 'org-1',
+        organization: { submissionActivityEnabled: false },
         classesAsStudent: [],
         user: { name: 'Jordan Student' },
       },
@@ -197,6 +212,8 @@ describe('api.domain.grade-essay-ai', () => {
     prisma.submission.update.mockReset();
     prisma.assignmentType.findUnique.mockReset();
     prisma.submissionGradingAssistantRun.create.mockReset();
+    prisma.submissionActivity.create.mockReset();
+    prisma.$transaction.mockReset();
     getLLMCompletion.mockReset();
     getGradingActor.mockReset();
     canManageGrades.mockReset();
@@ -206,6 +223,7 @@ describe('api.domain.grade-essay-ai', () => {
 
     getGradingActor.mockResolvedValue({
       membershipId: 'teacher-1',
+      organizationId: 'org-1',
       teacherProfileId: 'teacher-1',
       isTeacher: true,
       isAdmin: false,
@@ -221,6 +239,9 @@ describe('api.domain.grade-essay-ai', () => {
     prisma.submissionGradingAssistantRun.create.mockResolvedValue({
       id: 'ga-run-1',
     });
+    prisma.$transaction.mockImplementation(async (callback: any) =>
+      callback(prisma)
+    );
 
     getLLMCompletion
       .mockResolvedValueOnce(buildRubricResponseJson())
@@ -266,6 +287,17 @@ describe('api.domain.grade-essay-ai', () => {
       (payload.rubricConfig as { source?: string } | undefined)?.source
     ).toBe('thesis-default');
     expect(prisma.submission.update).toHaveBeenCalledTimes(1);
+    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+    expect(prisma.submissionActivity.create).toHaveBeenCalledTimes(1);
+    expect(prisma.submissionActivity.create.mock.calls[0][0].data).toEqual(
+      expect.objectContaining({
+        submissionId: 'sub-1',
+        organizationId: 'org-1',
+        actorMembershipId: 'teacher-1',
+        eventType: 'submission.grading_assistant_updated',
+        occurredAfterRelease: false,
+      })
+    );
     expect(prisma.assignmentType.findUnique).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { id: 'assignment-type-legacy' },
