@@ -7,6 +7,11 @@ import {
   getGradingActor,
   isGradingOwnDocument,
 } from '~/utils/grading-auth.server';
+import {
+  buildSubmissionActivityChanges,
+  recordSubmissionActivity,
+  submissionActivityEventTypes,
+} from '~/domain/submissions/submission-activity.server';
 
 const UNSUBMITTED_BEFORE_GRADED_MESSAGE =
   'This submission was unsubmitted before you could grade it. Please refresh the page.';
@@ -46,24 +51,31 @@ export async function action({ request }: ActionFunctionArgs) {
     },
     select: {
       id: true,
+      updatedAt: true,
       gradedAt: true,
       gradedByMembershipId: true,
+      releasedAt: true,
+      feedback: true,
+      rubricScores: true,
       numericPercentage: true,
       overallScore: true,
       score: true,
+      overallComment: true,
+      letterGrade: true,
+      grammarIssues: true,
+      promptConfig: true,
+      aiMeta: true,
       unsubmittedAt: true,
       document: {
         select: {
           membershipId: true,
-          assignment: {
+          membership: {
             select: {
-              submitForGrade: true,
-              pointValue: true,
-            },
-          },
-          classAssignment: {
-            select: {
-              class: {
+              organizationId: true,
+              organization: {
+                select: { submissionActivityEnabled: true },
+              },
+              classesAsStudent: {
                 select: {
                   id: true,
                   schoolId: true,
@@ -73,9 +85,15 @@ export async function action({ request }: ActionFunctionArgs) {
               },
             },
           },
-          membership: {
+          assignment: {
             select: {
-              classesAsStudent: {
+              submitForGrade: true,
+              pointValue: true,
+            },
+          },
+          classAssignment: {
+            select: {
+              class: {
                 select: {
                   id: true,
                   schoolId: true,
@@ -105,6 +123,29 @@ export async function action({ request }: ActionFunctionArgs) {
   ) {
     return Response.json(
       { success: false, message: 'You cannot grade your own submission.' },
+      { status: 403 }
+    );
+  }
+
+  const organizationId =
+    submission.document.membership.organizationId ?? actor.organizationId;
+  const submissionActivityEnabled =
+    submission.document.membership.organization?.submissionActivityEnabled ===
+    true;
+
+  if (!actor.isAdmin && organizationId !== actor.organizationId) {
+    return Response.json(
+      { success: false, message: 'Submission not found.' },
+      { status: 404 }
+    );
+  }
+
+  if (submission.releasedAt != null && !submissionActivityEnabled) {
+    return Response.json(
+      {
+        success: false,
+        message: 'Released grades are read-only for this organization.',
+      },
       { status: 403 }
     );
   }
@@ -178,6 +219,23 @@ export async function action({ request }: ActionFunctionArgs) {
     data.gradedByMembershipId = actor.membershipId;
   }
 
+  const activityChanges = buildSubmissionActivityChanges({
+    before: submission,
+    after: { ...submission, ...data },
+  });
+  const changedFields = Object.keys(data).filter((field) => {
+    const before = submission[field as keyof typeof submission];
+    const after = data[field];
+    return JSON.stringify(before ?? null) !== JSON.stringify(after ?? null);
+  });
+
+  if (changedFields.length === 0) {
+    return Response.json({
+      success: true,
+      submission: { id: submission.id },
+    });
+  }
+
   data.updatedAt = new Date();
 
   // Keep unsubmittedAt in the write predicate (same style as unsubmit's own
@@ -186,13 +244,36 @@ export async function action({ request }: ActionFunctionArgs) {
   try {
     await prisma.$transaction(async (tx) => {
       const updateResult = await tx.submission.updateMany({
-        where: { id: submission.id, unsubmittedAt: null },
+        where: {
+          id: submission.id,
+          unsubmittedAt: null,
+          ...(submission.updatedAt == null
+            ? {}
+            : { updatedAt: submission.updatedAt }),
+        },
         data,
       });
 
       if (updateResult.count !== 1) {
         throw new GradeSaveConflictError();
       }
+
+      await recordSubmissionActivity(tx, {
+        submissionId: submission.id,
+        organizationId,
+        actorMembershipId:
+          actor.organizationId === organizationId ? actor.membershipId : null,
+        eventType:
+          activityChanges.gradedAt || activityChanges.gradedByMembershipId
+            ? submissionActivityEventTypes.gradeFinalized
+            : submissionActivityEventTypes.gradeUpdated,
+        source: 'update-submission',
+        occurredAfterRelease: submission.releasedAt != null,
+        changes: activityChanges,
+        ...(Object.keys(activityChanges).length === 0
+          ? { metadata: { changedFields } }
+          : {}),
+      });
     });
   } catch (err) {
     if (err instanceof GradeSaveConflictError) {
