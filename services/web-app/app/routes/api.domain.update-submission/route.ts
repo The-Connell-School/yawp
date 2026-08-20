@@ -7,19 +7,43 @@ import {
   getGradingActor,
   isGradingOwnDocument,
 } from '~/utils/grading-auth.server';
+import {
+  buildSubmissionActivityChanges,
+  recordSubmissionActivity,
+  resolveSubmissionActivityActorMembershipId,
+  submissionAuditValuesEqual,
+  submissionActivityEventTypes,
+} from '~/domain/submissions/submission-activity.server';
 
 const UNSUBMITTED_BEFORE_GRADED_MESSAGE =
   'This submission was unsubmitted before you could grade it. Please refresh the page.';
+const STALE_GRADE_MESSAGE =
+  'This submission changed before your grade could be saved. Please refresh and try again.';
 
 class GradeSaveConflictError extends Error {}
 
 export async function action({ request }: ActionFunctionArgs) {
   const body = await request.json();
-  const { submissionId, ...fields } = body;
+  const { submissionId, expectedUpdatedAt, ...fields } = body;
 
   if (!submissionId || typeof submissionId !== 'string') {
     return Response.json(
       { success: false, message: 'submissionId is required.' },
+      { status: 400 }
+    );
+  }
+
+  const parsedExpectedUpdatedAt =
+    typeof expectedUpdatedAt === 'string' &&
+    Number.isFinite(Date.parse(expectedUpdatedAt))
+      ? new Date(expectedUpdatedAt)
+      : null;
+  if (expectedUpdatedAt != null && parsedExpectedUpdatedAt == null) {
+    return Response.json(
+      {
+        success: false,
+        message: 'expectedUpdatedAt must be an ISO timestamp.',
+      },
       { status: 400 }
     );
   }
@@ -46,24 +70,32 @@ export async function action({ request }: ActionFunctionArgs) {
     },
     select: {
       id: true,
+      updatedAt: true,
       gradedAt: true,
       gradedByMembershipId: true,
+      releasedAt: true,
+      feedback: true,
+      rubricScores: true,
       numericPercentage: true,
       overallScore: true,
       score: true,
+      overallComment: true,
+      letterGrade: true,
+      grammarIssues: true,
+      promptConfig: true,
+      aiMeta: true,
       unsubmittedAt: true,
       document: {
         select: {
           membershipId: true,
-          assignment: {
+          membership: {
             select: {
-              submitForGrade: true,
-              pointValue: true,
-            },
-          },
-          classAssignment: {
-            select: {
-              class: {
+              userId: true,
+              organizationId: true,
+              organization: {
+                select: { submissionActivityEnabled: true },
+              },
+              classesAsStudent: {
                 select: {
                   id: true,
                   schoolId: true,
@@ -73,9 +105,15 @@ export async function action({ request }: ActionFunctionArgs) {
               },
             },
           },
-          membership: {
+          assignment: {
             select: {
-              classesAsStudent: {
+              submitForGrade: true,
+              pointValue: true,
+            },
+          },
+          classAssignment: {
+            select: {
+              class: {
                 select: {
                   id: true,
                   schoolId: true,
@@ -98,13 +136,53 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 
   if (
+    parsedExpectedUpdatedAt != null &&
+    submission.updatedAt?.getTime() !== parsedExpectedUpdatedAt.getTime()
+  ) {
+    return Response.json(
+      { success: false, message: STALE_GRADE_MESSAGE },
+      { status: 409 }
+    );
+  }
+
+  if (
     isGradingOwnDocument(
       actor.membershipId,
-      submission.document.membershipId
+      submission.document.membershipId,
+      actor.userId,
+      submission.document.membership.userId
     )
   ) {
     return Response.json(
       { success: false, message: 'You cannot grade your own submission.' },
+      { status: 403 }
+    );
+  }
+
+  const organizationId =
+    submission.document.membership.organizationId ?? actor.organizationId;
+  const gradeActorMembershipId = resolveSubmissionActivityActorMembershipId({
+    actorMembershipId: actor.membershipId,
+    actorOrganizationId: actor.organizationId,
+    submissionOrganizationId: organizationId,
+  });
+  const submissionActivityEnabled =
+    submission.document.membership.organization?.submissionActivityEnabled ===
+    true;
+
+  if (!actor.isAdmin && organizationId !== actor.organizationId) {
+    return Response.json(
+      { success: false, message: 'Submission not found.' },
+      { status: 404 }
+    );
+  }
+
+  if (submission.releasedAt != null && !submissionActivityEnabled) {
+    return Response.json(
+      {
+        success: false,
+        message: 'Released grades are read-only for this organization.',
+      },
       { status: 403 }
     );
   }
@@ -175,7 +253,24 @@ export async function action({ request }: ActionFunctionArgs) {
     if (!submission.gradedAt) {
       data.gradedAt = new Date();
     }
-    data.gradedByMembershipId = actor.membershipId;
+    data.gradedByMembershipId = gradeActorMembershipId;
+  }
+
+  const activityChanges = buildSubmissionActivityChanges({
+    before: submission,
+    after: { ...submission, ...data },
+  });
+  const changedFields = Object.keys(data).filter((field) => {
+    const before = submission[field as keyof typeof submission];
+    const after = data[field];
+    return !submissionAuditValuesEqual(before, after);
+  });
+
+  if (changedFields.length === 0) {
+    return Response.json({
+      success: true,
+      submission: { id: submission.id, updatedAt: submission.updatedAt },
+    });
   }
 
   data.updatedAt = new Date();
@@ -186,18 +281,63 @@ export async function action({ request }: ActionFunctionArgs) {
   try {
     await prisma.$transaction(async (tx) => {
       const updateResult = await tx.submission.updateMany({
-        where: { id: submission.id, unsubmittedAt: null },
+        where: {
+          id: submission.id,
+          unsubmittedAt: null,
+          document: {
+            is: {
+              deletedAt: null,
+              AND: [
+                {
+                  membership: {
+                    is: {
+                      userId: { not: actor.userId },
+                      ...(submission.releasedAt == null
+                        ? {}
+                        : {
+                            organization: {
+                              is: { submissionActivityEnabled: true },
+                            },
+                          }),
+                    },
+                  },
+                },
+                teacherClassWhere,
+              ],
+            },
+          },
+          ...(parsedExpectedUpdatedAt == null && submission.updatedAt == null
+            ? {}
+            : { updatedAt: parsedExpectedUpdatedAt ?? submission.updatedAt }),
+        },
         data,
       });
 
       if (updateResult.count !== 1) {
         throw new GradeSaveConflictError();
       }
+
+      await recordSubmissionActivity(tx, {
+        submissionId: submission.id,
+        organizationId,
+        actorMembershipId: gradeActorMembershipId,
+        actorUserId: actor.userId,
+        eventType:
+          activityChanges.gradedAt || activityChanges.gradedByMembershipId
+            ? submissionActivityEventTypes.gradeFinalized
+            : submissionActivityEventTypes.gradeUpdated,
+        source: 'update-submission',
+        occurredAfterRelease: submission.releasedAt != null,
+        changes: activityChanges,
+        ...(Object.keys(activityChanges).length === 0
+          ? { metadata: { changedFields } }
+          : {}),
+      });
     });
   } catch (err) {
     if (err instanceof GradeSaveConflictError) {
       return Response.json(
-        { success: false, message: UNSUBMITTED_BEFORE_GRADED_MESSAGE },
+        { success: false, message: STALE_GRADE_MESSAGE },
         { status: 409 }
       );
     }

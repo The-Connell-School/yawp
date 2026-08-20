@@ -221,6 +221,7 @@ export function SubmissionLifecyclePanel({
   onRelease,
   isReleasing,
   submissionForView,
+  submissionActivityEnabled = false,
   ...teacherGradingPanelProps
 }: {
   lifecycleState: SubmissionLifecycleState;
@@ -232,13 +233,17 @@ export function SubmissionLifecyclePanel({
   onRelease: () => void;
   isReleasing: boolean;
   submissionForView: ViewPanelSubmission;
+  submissionActivityEnabled?: boolean;
 } & ComponentProps<typeof TeacherGradingPanel>) {
   const label = lifecycleState === 'needs_grading' ? 'Grading' : 'Grade Summary';
   const isReadyToRelease =
     lifecycleState === 'graded' && !isEditingGrade;
+  const releasedEditEnabled =
+    lifecycleState === 'released' && submissionActivityEnabled;
   const showEditingForm =
     lifecycleState === 'needs_grading' ||
-    (lifecycleState === 'graded' && isEditingGrade);
+    (lifecycleState === 'graded' && isEditingGrade) ||
+    (releasedEditEnabled && isEditingGrade);
   const [headerState, setHeaderState] =
     useState<TeacherGradingPanelHeaderState | null>(null);
   const [isGradingAssistantPending, setIsGradingAssistantPending] =
@@ -267,6 +272,7 @@ export function SubmissionLifecyclePanel({
         hasDraftToReplace: headerState.hasDraftToReplace,
         hasUnsavedChanges: headerState.hasUnsavedChanges,
         hasGrade: headerState.hasGrade,
+        releasedEditEnabled,
       })
     : false;
 
@@ -276,8 +282,10 @@ export function SubmissionLifecyclePanel({
 
   const handleSave = async () => {
     if (!headerState || !saveEnabled) return;
+    let draftSaved = false;
     try {
       await headerState.saveDraft();
+      draftSaved = true;
       onGradeSaved(headerState.getSavedGradeSnapshot());
       if (
         lifecycleState === 'needs_grading' &&
@@ -291,6 +299,9 @@ export function SubmissionLifecyclePanel({
       // back out of a form that will never save rather than leaving them
       // stuck retrying it.
       toast.error(err instanceof Error ? err.message : 'Save failed.');
+      if (!draftSaved) {
+        headerState.discardDraft();
+      }
       exitEditMode();
       return;
     }
@@ -320,6 +331,17 @@ export function SubmissionLifecyclePanel({
             {lifecycleState === 'released' ? (
               <GradeSummaryReleasedLabel />
             ) : null}
+            {releasedEditEnabled && !isEditingGrade ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                data-testid="submission-lifecycle-edit"
+                onClick={() => onEditingGradeChange(true)}
+              >
+                Edit
+              </Button>
+            ) : null}
             {isReadyToRelease ? (
               <>
                 <ConfirmationDialog
@@ -348,7 +370,7 @@ export function SubmissionLifecyclePanel({
                 </Button>
               </>
             ) : null}
-            {showEditingForm ? (
+            {showEditingForm && lifecycleState !== 'released' ? (
               <GradingAssistantSplitButton
                 headerState={headerState}
                 isPendingStart={isGradingAssistantPending}
@@ -368,11 +390,23 @@ export function SubmissionLifecyclePanel({
 
       <div className="no-scrollbar min-h-0 flex-1 overflow-y-auto">
         {showEditingForm ? (
-          <TeacherGradingPanel
-            {...teacherGradingPanelProps}
-            hideHeader
-            onHeaderStateChange={setHeaderState}
-          />
+          <>
+            {lifecycleState === 'released' ? (
+              <div
+                className="border-b border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950"
+                role="status"
+                data-testid="released-grade-edit-warning"
+              >
+                Saving immediately changes the grade and feedback visible to
+                the student and records the change in Activity.
+              </div>
+            ) : null}
+            <TeacherGradingPanel
+              {...teacherGradingPanelProps}
+              hideHeader
+              onHeaderStateChange={setHeaderState}
+            />
+          </>
         ) : isReadyToRelease || lifecycleState === 'released' ? (
           <ViewPanel submission={submissionForView} />
         ) : null}

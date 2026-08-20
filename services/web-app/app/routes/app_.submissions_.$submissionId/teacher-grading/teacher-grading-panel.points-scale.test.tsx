@@ -194,16 +194,13 @@ describe('TeacherGradingPanel on a points scale', () => {
     expect(lastPayload()).toMatchObject({ score: '0/3', overallScore: 0 });
   });
 
-  it('never writes the not-yet-scored sentinel into the stored rubric', () => {
+  it('does not rewrite an untouched unscored rubric during a feedback edit', () => {
     ({ root } = renderPanel({ rubricConfig: dailyPagesConfig }));
 
     saveViaOverallFeedback('Started reading.');
 
     const payload = lastPayload();
-    expect(
-      (payload.rubricScores as Record<string, { score: number | null }>)
-        .engagement.score
-    ).toBeNull();
+    expect(payload.rubricScores).toBeUndefined();
     // An unscored rubric produces no grade at all.
     expect(payload.overallScore).toBeUndefined();
     expect(payload.score).toBeUndefined();
@@ -218,9 +215,7 @@ describe('TeacherGradingPanel on a points scale', () => {
       },
     }));
 
-    const badge = document.querySelector(
-      '[data-testid="grading-grade-badge"]'
-    );
+    const badge = document.querySelector('[data-testid="grading-grade-badge"]');
     expect(badge?.textContent).toBe('1/3');
   });
 });

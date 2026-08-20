@@ -6,6 +6,8 @@ const prisma = {
   },
   document: {
     findFirst: mock(),
+    updateMany: mock(),
+    findUniqueOrThrow: mock(),
   },
   submission: {
     create: mock(),
@@ -14,6 +16,7 @@ const prisma = {
     create: mock(),
     update: mock(),
   },
+  submissionActivity: { create: mock() },
   $transaction: mock(),
 };
 
@@ -39,9 +42,12 @@ describe('api.domain.submit-document', () => {
   beforeEach(() => {
     prisma.user.findUnique.mockReset();
     prisma.document.findFirst.mockReset();
+    prisma.document.updateMany.mockReset();
+    prisma.document.findUniqueOrThrow.mockReset();
     prisma.submission.create.mockReset();
     prisma.documentWriteJournal.create.mockReset();
     prisma.documentWriteJournal.update.mockReset();
+    prisma.submissionActivity.create.mockReset();
     prisma.$transaction.mockReset();
     requireUserId.mockReset();
     requireMembership.mockReset();
@@ -78,17 +84,22 @@ describe('api.domain.submit-document', () => {
       id: 'journal-1',
       status: 'accepted',
     });
+    prisma.document.updateMany.mockResolvedValue({ count: 1 });
+    prisma.document.findUniqueOrThrow.mockResolvedValue({
+      id: 'doc-1',
+      revision: 4,
+    });
+    prisma.submission.create.mockResolvedValue({
+      id: 'sub-1',
+      title: 'Essay',
+      submittedAt: new Date('2026-08-20T12:00:00.000Z'),
+    });
     prisma.$transaction.mockImplementation(async (callback: any) => {
       const tx = {
-        submission: {
-          create: mock().mockResolvedValue({ id: 'sub-1' }),
-        },
-        document: {
-          update: mock().mockResolvedValue({
-            id: 'doc-1',
-            revision: 4,
-          }),
-        },
+        user: prisma.user,
+        submission: prisma.submission,
+        document: prisma.document,
+        submissionActivity: prisma.submissionActivity,
       };
 
       return callback(tx);
@@ -111,6 +122,18 @@ describe('api.domain.submit-document', () => {
     };
 
     expect(response.data.success).toBe(true);
+    expect(prisma.submissionActivity.create).toHaveBeenCalledTimes(1);
+    const activity = prisma.submissionActivity.create.mock.calls[0][0].data;
+    expect(activity).toEqual(
+      expect.objectContaining({
+        submissionId: 'sub-1',
+        organizationId: 'org-1',
+        actorMembershipId: 'profile-1',
+        eventType: 'submission.created',
+        occurredAfterRelease: false,
+      })
+    );
+    expect(JSON.stringify(activity.metadata)).not.toContain('Draft');
   });
 
   test('records a document submit journal entry with the full document payload', async () => {
@@ -154,5 +177,27 @@ describe('api.domain.submit-document', () => {
         },
       }
     );
+  });
+
+  test('returns 409 with no submission or activity when access changes before commit', async () => {
+    prisma.document.updateMany.mockResolvedValue({ count: 0 });
+    const form = new FormData();
+    form.append('documentId', 'doc-1');
+
+    const response = (await action({
+      request: new Request('https://example.com/api/domain/submit-document', {
+        method: 'POST',
+        body: form,
+      }),
+    } as any)) as { data: { success: boolean }; init?: { status?: number } };
+
+    expect(response.init?.status).toBe(409);
+    expect(prisma.submission.create).not.toHaveBeenCalled();
+    expect(prisma.submissionActivity.create).not.toHaveBeenCalled();
+    expect(
+      prisma.documentWriteJournal.update.mock.calls.at(-1)?.[0]
+    ).toMatchObject({
+      data: { status: 'rejected' },
+    });
   });
 });

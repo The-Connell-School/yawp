@@ -62,6 +62,12 @@ import {
   isGradingRequestDeadlineError,
   runWithGradingRequestDeadline,
 } from './grading-request-deadline.server';
+import {
+  buildSubmissionActivityChanges,
+  recordSubmissionActivity,
+  resolveSubmissionActivityActorMembershipId,
+  submissionActivityEventTypes,
+} from '~/domain/submissions/submission-activity.server';
 
 const POST = z.object({
   documentId: z.string().optional(),
@@ -69,6 +75,15 @@ const POST = z.object({
   gradingAssistantStrictnessLevel: z.string().optional(),
   llmRetry: z.enum(['fallback']).optional(),
 });
+
+function isPrismaRecordNotFoundError(error: unknown) {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    (error as { code?: unknown }).code === 'P2025'
+  );
+}
 
 export function getRubricEvaluationMaxTokens(categoryCount: number) {
   const baseCategoryCount = 5;
@@ -241,7 +256,9 @@ function buildApHistoryPrompt({
     snapshot.essayType === 'dbq'
       ? snapshot.sources
           .map((source) => {
-            const caption = source.caption ? `\nCaption: ${source.caption}` : '';
+            const caption = source.caption
+              ? `\nCaption: ${source.caption}`
+              : '';
             return `Document ${source.position}: ${source.title}\nAttribution: ${source.attribution}${caption}\nBody: ${source.body}`;
           })
           .join('\n\n')
@@ -501,6 +518,15 @@ export async function action({ request }: ActionFunctionArgs) {
       },
       { status: 504 }
     );
+  const staleGradeResponse = () =>
+    dataResponse(
+      {
+        success: false,
+        message:
+          'This submission changed before the grading suggestions could be saved. Please refresh and try again.',
+      },
+      { status: 409 }
+    );
 
   const { error, data } = await parseFormData(request, POST);
   if (error) return validationError(error);
@@ -527,7 +553,19 @@ export async function action({ request }: ActionFunctionArgs) {
     id: true,
     text: true,
     html: true,
+    updatedAt: true,
     gradedAt: true,
+    gradedByMembershipId: true,
+    releasedAt: true,
+    unsubmittedAt: true,
+    score: true,
+    feedback: true,
+    rubricScores: true,
+    overallScore: true,
+    overallComment: true,
+    numericPercentage: true,
+    letterGrade: true,
+    grammarIssues: true,
     document: {
       select: {
         id: true,
@@ -562,6 +600,11 @@ export async function action({ request }: ActionFunctionArgs) {
         },
         membership: {
           select: {
+            userId: true,
+            organizationId: true,
+            organization: {
+              select: { submissionActivityEnabled: true },
+            },
             classesAsStudent: {
               select: {
                 id: true,
@@ -620,7 +663,9 @@ export async function action({ request }: ActionFunctionArgs) {
   if (
     isGradingOwnDocument(
       actor.membershipId,
-      submission.document.membershipId
+      submission.document.membershipId,
+      actor.userId,
+      submission.document.membership.userId
     )
   ) {
     return dataResponse(
@@ -643,11 +688,32 @@ export async function action({ request }: ActionFunctionArgs) {
     );
   }
 
+  const organizationId =
+    submission.document.membership.organizationId ?? actor.organizationId;
+  const gradeActorMembershipId = resolveSubmissionActivityActorMembershipId({
+    actorMembershipId: actor.membershipId,
+    actorOrganizationId: actor.organizationId,
+    submissionOrganizationId: organizationId,
+  });
+  if (
+    submission.releasedAt != null &&
+    submission.document.membership.organization?.submissionActivityEnabled !==
+      true
+  ) {
+    return dataResponse(
+      {
+        success: false,
+        message: 'Released grades are read-only for this organization.',
+      },
+      { status: 403 }
+    );
+  }
+
   const resolvedGradingConfig = await resolveAssignmentTypeGradingConfig({
-      assignmentTypeId: submission.document.assignmentTypeId,
-      assignmentTypeKind: submission.document.assignmentType?.kind ?? null,
-      assignmentTypeTitle: submission.document.assignmentType?.title ?? null,
-    });
+    assignmentTypeId: submission.document.assignmentTypeId,
+    assignmentTypeKind: submission.document.assignmentType?.kind ?? null,
+    assignmentTypeTitle: submission.document.assignmentType?.title ?? null,
+  });
   const requestedStrictnessLevel = data.gradingAssistantStrictnessLevel
     ? parseGradingAssistantStrictnessLevel(data.gradingAssistantStrictnessLevel)
     : null;
@@ -715,8 +781,7 @@ export async function action({ request }: ActionFunctionArgs) {
     forceFallback,
     signalFallbackRetry: !forceFallback,
   };
-  const retryResponse = () =>
-    dataResponse({ retrying: true }, { status: 202 });
+  const retryResponse = () => dataResponse({ retrying: true }, { status: 202 });
   const getGradingLlmCompletion = (
     params: Parameters<typeof getLLMCompletion>[0]
   ) =>
@@ -828,24 +893,21 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
       earnedPoints,
       points,
     } satisfies Prisma.InputJsonObject;
-    const {
-      numericPercentage,
-      letterGrade,
-      score,
-      overallScore,
-    } = applyStrictnessToGradeFields({
-      overallScore: earnedPoints,
-      numericPercentage: Math.round((earnedPoints / totalPoints) * 100),
-      letterGrade: letterFromPercent(
-        Math.round((earnedPoints / totalPoints) * 100)
-      ),
-      score: formatGrade(
-        Math.round((earnedPoints / totalPoints) * 100),
-        letterFromPercent(Math.round((earnedPoints / totalPoints) * 100))
-      ) ?? '',
-      scoringType: 'percentage',
-      gradingAssistantStrictnessLevel,
-    });
+    const { numericPercentage, letterGrade, score, overallScore } =
+      applyStrictnessToGradeFields({
+        overallScore: earnedPoints,
+        numericPercentage: Math.round((earnedPoints / totalPoints) * 100),
+        letterGrade: letterFromPercent(
+          Math.round((earnedPoints / totalPoints) * 100)
+        ),
+        score:
+          formatGrade(
+            Math.round((earnedPoints / totalPoints) * 100),
+            letterFromPercent(Math.round((earnedPoints / totalPoints) * 100))
+          ) ?? '',
+        scoringType: 'percentage',
+        gradingAssistantStrictnessLevel,
+      });
     const overallComment =
       typeof parsedJson.overallComment === 'string' &&
       parsedJson.overallComment.trim()
@@ -858,28 +920,81 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
       return gradingDeadlineResponse();
     }
 
-    await prisma.submission.update({
-      where: { id: submission.id },
-      data: {
-        rubricScores,
-        overallScore,
-        overallComment,
-        numericPercentage,
-        letterGrade,
-        score,
-        aiMeta: {
-          model,
-          rubricMode: 'ap_history',
-          gradingAssistantStrictnessLevel,
-          gradedAt: now.toISOString(),
-          documentContext,
-        } satisfies Prisma.InputJsonValue,
-        ...(!submission.gradedAt
-          ? { gradedAt: now, gradedByMembershipId: actor.membershipId }
-          : {}),
-        updatedAt: now,
-      },
-    });
+    const apGradeData = {
+      rubricScores,
+      overallScore,
+      overallComment,
+      numericPercentage,
+      letterGrade,
+      score,
+      aiMeta: {
+        model,
+        rubricMode: 'ap_history',
+        gradingAssistantStrictnessLevel,
+        gradedAt: now.toISOString(),
+        documentContext,
+      } satisfies Prisma.InputJsonValue,
+      ...(!submission.gradedAt
+        ? { gradedAt: now, gradedByMembershipId: gradeActorMembershipId }
+        : {}),
+      updatedAt: now,
+    };
+    try {
+      await prisma.$transaction(async (tx) => {
+        await tx.submission.update({
+          where: {
+            id: submission.id,
+            updatedAt: submission.updatedAt,
+            unsubmittedAt: null,
+            document: {
+              is: {
+                deletedAt: null,
+                AND: [
+                  {
+                    membership: {
+                      is: {
+                        userId: { not: actor.userId },
+                        ...(submission.releasedAt == null
+                          ? {}
+                          : {
+                              organization: {
+                                is: { submissionActivityEnabled: true },
+                              },
+                            }),
+                      },
+                    },
+                  },
+                  teacherClassWhere,
+                ],
+              },
+            },
+          },
+          data: apGradeData,
+        });
+        await recordSubmissionActivity(tx, {
+          submissionId: submission.id,
+          organizationId,
+          actorMembershipId: gradeActorMembershipId,
+          actorUserId: actor.userId,
+          eventType: submissionActivityEventTypes.gradingAssistantUpdated,
+          source: 'grade-essay-ai',
+          occurredAfterRelease: submission.releasedAt != null,
+          changes: buildSubmissionActivityChanges({
+            before: submission,
+            after: { ...submission, ...apGradeData },
+          }),
+          metadata: {
+            model,
+            rubricMode: 'ap_history',
+            rubricId: apHistorySnapshot.rubric.rubricId,
+            gradedAt: now.toISOString(),
+          },
+        });
+      });
+    } catch (error) {
+      if (isPrismaRecordNotFoundError(error)) return staleGradeResponse();
+      throw error;
+    }
 
     return dataResponse({
       success: true,
@@ -929,7 +1044,8 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
           gradingConfigSource: resolvedGradingConfig.source,
           ...gradingAiContextMetadata,
           assignmentTypeGradingLabel: resolvedGradingConfig.label,
-          assignmentTypeSourceTemplateId: resolvedGradingConfig.sourceTemplateId,
+          assignmentTypeSourceTemplateId:
+            resolvedGradingConfig.sourceTemplateId,
           assignmentTypeSourceTemplateSlug:
             resolvedGradingConfig.sourceTemplateSlug,
           gradingAssistantStrictnessLevel,
@@ -1213,83 +1329,144 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
   }
 
   const now = new Date();
-  await prisma.submission.update({
-    where: { id: submission.id },
-    data: {
-      rubricScores: rubricScores as Prisma.InputJsonValue,
-      overallScore,
-      overallComment,
-      numericPercentage,
-      letterGrade,
-      score,
-      ...(grammarIssues !== null ? { grammarIssues } : {}),
-      aiMeta: {
-        model,
-        gradedAt: now.toISOString(),
-        gradingConfigSource: resolvedGradingConfig.source,
-        assignmentTypeRubricSource: resolvedGradingConfig.source,
-        assignmentTypeGradingVersion: resolvedGradingConfig.version,
-        assignmentTypeGradingLabel: resolvedGradingConfig.label,
-        assignmentTypeSourceTemplateId: resolvedGradingConfig.sourceTemplateId,
-        assignmentTypeSourceTemplateSlug: resolvedGradingConfig.sourceTemplateSlug,
-        gradingAssistantStrictnessLevel,
-        assignmentTypeId: submission.document.assignmentTypeId,
-        assignmentId: submission.document.assignment?.id ?? null,
-        assignmentTypeKind: submission.document.assignmentType?.kind ?? null,
-        rubricCategoryKeys: rubricKeys,
-        documentContext,
-      } satisfies Prisma.InputJsonValue,
-      ...(!submission.gradedAt
-        ? { gradedAt: now, gradedByMembershipId: actor.membershipId }
-        : {}),
-      updatedAt: now,
-    },
-  });
-
-  await prisma.submissionGradingAssistantRun.create({
-    data: {
-      submissionId: submission.id,
-      assignmentTypeId: submission.document.assignmentTypeId,
-      assignmentTypeGradingVersion: resolvedGradingConfig.version,
-      assignmentTypeRubricSnapshot:
-        resolvedGradingConfig.rubricSnapshot as Prisma.InputJsonValue,
-      assignmentTypePromptConfigSnapshot:
-        resolvedGradingConfig.promptConfigSnapshot as Prisma.InputJsonValue,
-      source: resolvedGradingConfig.source,
+  const gradeData = {
+    rubricScores: rubricScores as Prisma.InputJsonValue,
+    overallScore,
+    overallComment,
+    numericPercentage,
+    letterGrade,
+    score,
+    ...(grammarIssues !== null ? { grammarIssues } : {}),
+    aiMeta: {
       model,
-      status: 'succeeded',
-      metadata: {
-        // The suggestions exactly as the assistant produced them. A teacher
-        // edits the submission itself afterwards, so this is the only record
-        // of what was suggested — it is what "reset to the suggestions"
-        // restores, including after a reload.
-        output: {
-          rubricScores,
-          overallScore,
-          overallComment,
-          numericPercentage,
-          letterGrade,
-          score,
-          grammarIssues,
-          gradingAssistantStrictnessLevel,
+      gradedAt: now.toISOString(),
+      gradingConfigSource: resolvedGradingConfig.source,
+      assignmentTypeRubricSource: resolvedGradingConfig.source,
+      assignmentTypeGradingVersion: resolvedGradingConfig.version,
+      assignmentTypeGradingLabel: resolvedGradingConfig.label,
+      assignmentTypeSourceTemplateId: resolvedGradingConfig.sourceTemplateId,
+      assignmentTypeSourceTemplateSlug:
+        resolvedGradingConfig.sourceTemplateSlug,
+      gradingAssistantStrictnessLevel,
+      assignmentTypeId: submission.document.assignmentTypeId,
+      assignmentId: submission.document.assignment?.id ?? null,
+      assignmentTypeKind: submission.document.assignmentType?.kind ?? null,
+      rubricCategoryKeys: rubricKeys,
+      documentContext,
+    } satisfies Prisma.InputJsonValue,
+    ...(!submission.gradedAt
+      ? { gradedAt: now, gradedByMembershipId: gradeActorMembershipId }
+      : {}),
+    updatedAt: now,
+  };
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      await tx.submission.update({
+        where: {
+          id: submission.id,
+          updatedAt: submission.updatedAt,
+          unsubmittedAt: null,
+          document: {
+            is: {
+              deletedAt: null,
+              AND: [
+                {
+                  membership: {
+                    is: {
+                      userId: { not: actor.userId },
+                      ...(submission.releasedAt == null
+                        ? {}
+                        : {
+                            organization: {
+                              is: { submissionActivityEnabled: true },
+                            },
+                          }),
+                    },
+                  },
+                },
+                teacherClassWhere,
+              ],
+            },
+          },
         },
-        assignmentTypeGradingLabel: resolvedGradingConfig.label,
-        assignmentTypeRubricSource: resolvedGradingConfig.source,
-        assignmentTypeSourceTemplateId: resolvedGradingConfig.sourceTemplateId,
-        assignmentTypeSourceTemplateSlug:
-          resolvedGradingConfig.sourceTemplateSlug,
-        gradingAssistantStrictnessLevel,
-        assignmentTypeId: submission.document.assignmentTypeId,
-        assignmentId: submission.document.assignment?.id ?? null,
-        assignmentTypeKind: submission.document.assignmentType?.kind ?? null,
-        scoringType,
-        rubricKeys,
-        rubricCategoryKeys: rubricKeys,
-        gradedAt: now.toISOString(),
-        documentContext,
-      } satisfies Prisma.InputJsonValue,
-    },
-  });
+        data: gradeData,
+      });
+
+      const gradingAssistantRun = await tx.submissionGradingAssistantRun.create(
+        {
+          data: {
+            submissionId: submission.id,
+            assignmentTypeId: submission.document.assignmentTypeId,
+            assignmentTypeGradingVersion: resolvedGradingConfig.version,
+            assignmentTypeRubricSnapshot:
+              resolvedGradingConfig.rubricSnapshot as Prisma.InputJsonValue,
+            assignmentTypePromptConfigSnapshot:
+              resolvedGradingConfig.promptConfigSnapshot as Prisma.InputJsonValue,
+            source: resolvedGradingConfig.source,
+            model,
+            status: 'succeeded',
+            metadata: {
+              // The suggestions exactly as the assistant produced them. A teacher
+              // edits the submission itself afterwards, so this is the only record
+              // of what was suggested — it is what "reset to the suggestions"
+              // restores, including after a reload.
+              output: {
+                rubricScores,
+                overallScore,
+                overallComment,
+                numericPercentage,
+                letterGrade,
+                score,
+                grammarIssues,
+                gradingAssistantStrictnessLevel,
+              },
+              assignmentTypeGradingLabel: resolvedGradingConfig.label,
+              assignmentTypeRubricSource: resolvedGradingConfig.source,
+              assignmentTypeSourceTemplateId:
+                resolvedGradingConfig.sourceTemplateId,
+              assignmentTypeSourceTemplateSlug:
+                resolvedGradingConfig.sourceTemplateSlug,
+              gradingAssistantStrictnessLevel,
+              assignmentTypeId: submission.document.assignmentTypeId,
+              assignmentId: submission.document.assignment?.id ?? null,
+              assignmentTypeKind:
+                submission.document.assignmentType?.kind ?? null,
+              scoringType,
+              rubricKeys,
+              rubricCategoryKeys: rubricKeys,
+              gradedAt: now.toISOString(),
+              documentContext,
+            } satisfies Prisma.InputJsonValue,
+          },
+          select: { id: true },
+        }
+      );
+
+      await recordSubmissionActivity(tx, {
+        submissionId: submission.id,
+        organizationId,
+        actorMembershipId: gradeActorMembershipId,
+        actorUserId: actor.userId,
+        eventType: submissionActivityEventTypes.gradingAssistantUpdated,
+        source: 'grade-essay-ai',
+        occurredAfterRelease: submission.releasedAt != null,
+        changes: buildSubmissionActivityChanges({
+          before: submission,
+          after: { ...submission, ...gradeData },
+        }),
+        metadata: {
+          gradingAssistantRunId: gradingAssistantRun.id,
+          model,
+          gradingConfigSource: resolvedGradingConfig.source,
+          gradingConfigVersion: resolvedGradingConfig.version,
+        },
+      });
+    });
+  } catch (error) {
+    if (isPrismaRecordNotFoundError(error)) return staleGradeResponse();
+    throw error;
+  }
 
   return dataResponse({
     success: true,

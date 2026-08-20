@@ -197,4 +197,89 @@ describe('SubmissionLifecyclePanel save error handling', () => {
     expect(toastError).toHaveBeenCalledWith(UNSUBMITTED_MESSAGE);
     expect(onEditingGradeChange).toHaveBeenCalledWith(false);
   });
+
+  it('shows the released edit warning, keeps save disabled until changed, and hides the assistant', () => {
+    currentHeaderState = headerState({ hasUnsavedChanges: false });
+
+    ({ root } = render(
+      <SubmissionLifecyclePanel
+        lifecycleState="released"
+        submissionActivityEnabled
+        isEditingGrade
+        onEditingGradeChange={() => {}}
+        onMarkGraded={async () => {}}
+        onGradeSaved={() => {}}
+        isSavingGrade={false}
+        onRelease={() => {}}
+        isReleasing={false}
+        submissionForView={{} as any}
+        documentId="doc-1"
+        submissionId="sub-1"
+        existingGrade={{ id: 'sub-1' } as any}
+        grammarIssues={[]}
+        hiddenGrammarIssueIds={[]}
+        onToggleGrammarIssue={() => {}}
+        onRemoveGrammarIssue={() => {}}
+        onGrammarIssuesChange={() => {}}
+      />
+    ));
+
+    expect(document.body.textContent).toContain('visible to the student');
+    expect(document.body.textContent).toContain('records the change in Activity');
+    expect(
+      document.querySelector('[data-testid="grading-assistant-generate"]')
+    ).toBeNull();
+    expect(
+      document.querySelector<HTMLButtonElement>(
+        '[data-testid="submission-lifecycle-save"]'
+      )?.disabled
+    ).toBe(true);
+  });
+
+  it('restores staged released-grade changes when the save is rejected', async () => {
+    const discardDraft = mock();
+    currentHeaderState = headerState({
+      saveDraft: async () => {
+        throw new Error('Save failed.');
+      },
+      discardDraft,
+    });
+    const onEditingGradeChange = mock();
+
+    ({ root } = render(
+      <SubmissionLifecyclePanel
+        lifecycleState="released"
+        submissionActivityEnabled
+        isEditingGrade
+        onEditingGradeChange={onEditingGradeChange}
+        onMarkGraded={async () => {}}
+        onGradeSaved={() => {}}
+        isSavingGrade={false}
+        onRelease={() => {}}
+        isReleasing={false}
+        submissionForView={{} as any}
+        documentId="doc-1"
+        submissionId="sub-1"
+        existingGrade={{ id: 'sub-1' } as any}
+        grammarIssues={[]}
+        hiddenGrammarIssueIds={[]}
+        onToggleGrammarIssue={() => {}}
+        onRemoveGrammarIssue={() => {}}
+        onGrammarIssuesChange={() => {}}
+      />
+    ));
+
+    await act(async () => {
+      document
+        .querySelector<HTMLButtonElement>(
+          '[data-testid="submission-lifecycle-save"]'
+        )
+        ?.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(discardDraft).toHaveBeenCalledTimes(1);
+    expect(onEditingGradeChange).toHaveBeenCalledWith(false);
+  });
 });

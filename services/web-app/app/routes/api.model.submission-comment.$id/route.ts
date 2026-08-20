@@ -1,24 +1,42 @@
 import { invariant } from '@epic-web/invariant';
+import type { Prisma } from '@app/prisma';
 import { data as dataResponse, type ActionFunctionArgs } from 'react-router';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { hasEffectivePlatformAdmin } from '~/utils/preview-access.server';
+import { buildTeacherDocumentAccessWhere } from '~/utils/grading-auth.server';
+import {
+  buildSubmissionActivityChanges,
+  recordSubmissionActivity,
+  resolveSubmissionActivityActorMembershipId,
+  submissionActivityEventTypes,
+} from '~/domain/submissions/submission-activity.server';
 
-function teacherDocumentAccessWhere(membershipId: string) {
+class SubmissionCommentConflictError extends Error {}
+
+function buildCommentDocumentAccessWhere({
+  userId,
+  membershipId,
+  organizationId,
+  isAdmin,
+}: {
+  userId: string;
+  membershipId: string;
+  organizationId: string;
+  isAdmin: boolean;
+}): Prisma.DocumentWhereInput {
   return {
-    OR: [
-      {
-        classAssignment: {
-          class: { teachers: { some: { id: membershipId } } },
-        },
-      },
-      {
-        membership: {
-          classesAsStudent: {
-            some: { teachers: { some: { id: membershipId } } },
-          },
-        },
-      },
+    deletedAt: null,
+    AND: [
+      { membership: { is: { userId: { not: userId } } } },
+      ...(isAdmin
+        ? []
+        : [
+            buildTeacherDocumentAccessWhere({
+              membershipId,
+              organizationId,
+            }),
+          ]),
     ],
   };
 }
@@ -32,6 +50,12 @@ export async function action({ request, params }: ActionFunctionArgs) {
     select: { isAdmin: true },
   });
   const isAdmin = hasEffectivePlatformAdmin(user?.isAdmin);
+  const documentAccessWhere = buildCommentDocumentAccessWhere({
+    userId,
+    membershipId: profile.id,
+    organizationId: profile.organization.id,
+    isAdmin,
+  });
 
   const comment = await prisma.submissionComment.findFirst({
     where: {
@@ -39,16 +63,29 @@ export async function action({ request, params }: ActionFunctionArgs) {
       submission: {
         is: {
           document: {
-            is: {
-              deletedAt: null,
-              membershipId: { not: profile.id },
-              ...(isAdmin ? {} : teacherDocumentAccessWhere(profile.id)),
+            is: documentAccessWhere,
+          },
+        },
+      },
+    },
+    select: {
+      id: true,
+      content: true,
+      updatedAt: true,
+      excerpt: true,
+      occurrence: true,
+      submission: {
+        select: {
+          id: true,
+          releasedAt: true,
+          document: {
+            select: {
+              membership: { select: { organizationId: true } },
             },
           },
         },
       },
     },
-    select: { id: true },
   });
 
   if (!comment) {
@@ -59,8 +96,63 @@ export async function action({ request, params }: ActionFunctionArgs) {
   }
 
   if (request.method === 'DELETE') {
-    await prisma.submissionComment.delete({ where: { id: params.id } });
-    return dataResponse({ success: true, commentId: params.id }, { status: 200 });
+    try {
+      await prisma.$transaction(async (tx) => {
+        const deleted = await tx.submissionComment.deleteMany({
+          where: {
+            id: params.id,
+            updatedAt: comment.updatedAt,
+            submission: {
+              is: { document: { is: documentAccessWhere } },
+            },
+          },
+        });
+        if (deleted.count !== 1) throw new SubmissionCommentConflictError();
+        const organizationId =
+          comment.submission.document.membership.organizationId ??
+          profile.organization.id;
+        await recordSubmissionActivity(tx, {
+          submissionId: comment.submission.id,
+          organizationId,
+          actorMembershipId: resolveSubmissionActivityActorMembershipId({
+            actorMembershipId: profile.id,
+            actorOrganizationId: profile.organization.id,
+            submissionOrganizationId: organizationId,
+          }),
+          actorUserId: userId,
+          eventType: submissionActivityEventTypes.commentDeleted,
+          source: 'submission-comment',
+          occurredAfterRelease: comment.submission.releasedAt != null,
+          changes: buildSubmissionActivityChanges({
+            before: {
+              comment: {
+                id: comment.id,
+                content: comment.content,
+                excerpt: comment.excerpt,
+                occurrence: comment.occurrence,
+              },
+            },
+            after: { comment: null },
+            fields: ['comment'],
+          }),
+        });
+      });
+    } catch (error) {
+      if (error instanceof SubmissionCommentConflictError) {
+        return dataResponse(
+          {
+            success: false,
+            message: 'The comment changed before it could be deleted.',
+          },
+          { status: 409 }
+        );
+      }
+      throw error;
+    }
+    return dataResponse(
+      { success: true, commentId: params.id },
+      { status: 200 }
+    );
   }
 
   const formData = await request.formData();
@@ -72,10 +164,57 @@ export async function action({ request, params }: ActionFunctionArgs) {
     );
   }
 
-  await prisma.submissionComment.update({
-    where: { id: params.id },
-    data: { content },
-  });
+  if (content === comment.content) {
+    return dataResponse({ success: true }, { status: 200 });
+  }
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      const updated = await tx.submissionComment.updateMany({
+        where: {
+          id: params.id,
+          updatedAt: comment.updatedAt,
+          submission: {
+            is: { document: { is: documentAccessWhere } },
+          },
+        },
+        data: { content, updatedAt: new Date() },
+      });
+      if (updated.count !== 1) throw new SubmissionCommentConflictError();
+      const organizationId =
+        comment.submission.document.membership.organizationId ??
+        profile.organization.id;
+      await recordSubmissionActivity(tx, {
+        submissionId: comment.submission.id,
+        organizationId,
+        actorMembershipId: resolveSubmissionActivityActorMembershipId({
+          actorMembershipId: profile.id,
+          actorOrganizationId: profile.organization.id,
+          submissionOrganizationId: organizationId,
+        }),
+        actorUserId: userId,
+        eventType: submissionActivityEventTypes.commentUpdated,
+        source: 'submission-comment',
+        occurredAfterRelease: comment.submission.releasedAt != null,
+        changes: buildSubmissionActivityChanges({
+          before: { comment: { content: comment.content } },
+          after: { comment: { content } },
+          fields: ['comment'],
+        }),
+      });
+    });
+  } catch (error) {
+    if (error instanceof SubmissionCommentConflictError) {
+      return dataResponse(
+        {
+          success: false,
+          message: 'The comment changed before it could be saved.',
+        },
+        { status: 409 }
+      );
+    }
+    throw error;
+  }
 
   return dataResponse({ success: true }, { status: 200 });
 }

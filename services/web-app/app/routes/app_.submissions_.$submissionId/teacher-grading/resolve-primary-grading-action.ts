@@ -16,18 +16,23 @@ export function canSaveGradingDraft({
   hasDraftToReplace,
   hasUnsavedChanges,
   hasGrade,
+  releasedEditEnabled = false,
 }: {
   lifecycleState: SubmissionLifecycleState;
   hasDraftToReplace: boolean;
   hasUnsavedChanges: boolean;
   /** An overall grade exists on this rubric's own scale -- see hasRecordedGrade. */
   hasGrade: boolean;
+  releasedEditEnabled?: boolean;
 }) {
   if (lifecycleState === 'needs_grading') {
     return (hasDraftToReplace || hasUnsavedChanges) && hasGrade;
   }
   if (lifecycleState === 'graded') {
     return hasUnsavedChanges;
+  }
+  if (lifecycleState === 'released') {
+    return releasedEditEnabled && hasUnsavedChanges && hasGrade;
   }
   return false;
 }

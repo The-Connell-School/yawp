@@ -34,6 +34,19 @@ describe('normalizeRubricScoresForCategories', () => {
 
     expect(normalized.ideas_and_analysis.score).toBe(0);
   });
+
+  test('preserves legacy bare-number category scores', () => {
+    expect(
+      normalizeRubricScoresForCategories({
+        raw: { ideas_and_analysis: 5 },
+        categories: actCategories,
+        minScore: 1,
+        maxScore: 6,
+      })
+    ).toEqual({
+      ideas_and_analysis: { score: 5, comment: '', isAi: false },
+    });
+  });
 });
 
 describe('normalizeRubricDisplayConfig', () => {
@@ -177,9 +190,9 @@ describe('buildScoreOptions', () => {
 
   test('ignores labels for score values outside the configured range', () => {
     expect(
-      buildScoreOptions(1, 2, [
-        { value: 9, label: 'Off the chart' },
-      ]).map((option) => option.label)
+      buildScoreOptions(1, 2, [{ value: 9, label: 'Off the chart' }]).map(
+        (option) => option.label
+      )
     ).toEqual(['1', '2']);
   });
 
@@ -244,7 +257,9 @@ describe('an unscored value on a scale that starts below 1', () => {
   });
 
   test('offers Absent as a pickable option', () => {
-    expect(buildScoreOptions(0, 3, engagementCategories[0].scoreLabels)).toEqual([
+    expect(
+      buildScoreOptions(0, 3, engagementCategories[0].scoreLabels)
+    ).toEqual([
       { value: '0', label: '0 - Absent' },
       { value: '1', label: '1' },
       { value: '2', label: '2' },
@@ -280,11 +295,21 @@ describe('toPersistedRubricScores', () => {
   test('keeps a comment written before a score was chosen', () => {
     expect(
       toPersistedRubricScores(
-        { thesis_and_content: { score: 0, comment: 'clearer claim', isAi: false } },
+        {
+          thesis_and_content: {
+            score: 0,
+            comment: 'clearer claim',
+            isAi: false,
+          },
+        },
         1
       )
     ).toEqual({
-      thesis_and_content: { score: null, comment: 'clearer claim', isAi: false },
+      thesis_and_content: {
+        score: null,
+        comment: 'clearer claim',
+        isAi: false,
+      },
     });
   });
 });

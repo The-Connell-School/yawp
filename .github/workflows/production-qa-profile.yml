@@ -21,6 +21,13 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v1
 
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
       - name: Install dependencies
         run: bun install
 
@@ -29,7 +36,33 @@ jobs:
           mkdir -p ~/.ssh "$(dirname "${PROD_SSH_KEY_PATH}")"
           printf '%s\n' "${PROD_SSH_PRIVATE_KEY}" > "${PROD_SSH_KEY_PATH}"
           chmod 600 "${PROD_SSH_KEY_PATH}"
-          ssh-keyscan -H "${PROD_SSH_HOST}" >> ~/.ssh/known_hosts
+
+          bastion_ip="$(getent ahostsv4 "${PROD_SSH_HOST}" | awk 'NR == 1 { print $1 }')"
+          instance_id="$(aws ec2 describe-instances \
+            --filters "Name=ip-address,Values=${bastion_ip}" "Name=instance-state-name,Values=running" \
+            --query 'Reservations[].Instances[].InstanceId' \
+            --output text)"
+          test -n "${instance_id}" && test "${instance_id}" != "None"
+
+          aws ec2 get-console-output \
+            --instance-id "${instance_id}" \
+            --latest \
+            --query Output \
+            --output text > "${RUNNER_TEMP}/bastion-console.txt"
+          ssh-keyscan -t ed25519,ecdsa,rsa "${PROD_SSH_HOST}" \
+            > "${RUNNER_TEMP}/bastion-scanned-keys"
+
+          : > ~/.ssh/known_hosts
+          while IFS= read -r key_line; do
+            fingerprint="$(printf '%s\n' "${key_line}" | ssh-keygen -lf - -E sha256 | awk '{ print $2 }')"
+            if grep -Fq "${fingerprint}" "${RUNNER_TEMP}/bastion-console.txt"; then
+              printf '%s\n' "${key_line}" >> ~/.ssh/known_hosts
+            fi
+          done < "${RUNNER_TEMP}/bastion-scanned-keys"
+
+          test -s ~/.ssh/known_hosts
+          ssh-keygen -H -f ~/.ssh/known_hosts
+          rm -f ~/.ssh/known_hosts.old
         env:
           PROD_SSH_KEY_PATH: ${{ runner.temp }}/yawp-production-bastion
           PROD_SSH_HOST: ${{ secrets.PROD_SSH_HOST }}
@@ -48,3 +81,20 @@ jobs:
           PROD_QA_PASSWORD: ${{ secrets.PROD_QA_PASSWORD }}
           PROD_SSH_HOST: ${{ secrets.PROD_SSH_HOST }}
           PROD_SSH_KEY_PATH: ${{ runner.temp }}/yawp-production-bastion
+
+      - name: Install Chromium
+        run: bunx playwright install --with-deps chromium
+
+      - name: Verify released-grade editing and activity in production
+        run: bun run --cwd services/web-app production-qa-released-grade
+        env:
+          PROD_QA_BASE_URL: https://yawp.school
+          PROD_QA_PASSWORD: ${{ secrets.PROD_QA_PASSWORD }}
+
+      - name: Upload production QA evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-released-grade-activity
+          path: services/web-app/test-results/production-released-grade-activity.png
+          if-no-files-found: warn

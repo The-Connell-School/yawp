@@ -80,10 +80,7 @@ test.describe.serial('Teacher submission lifecycle panel', () => {
     await expect(saveButton).toBeVisible();
     await expect(saveButton).toBeDisabled();
 
-    await page.getByTestId('grading-assistant-generate').click();
-    await expect(
-      page.getByTestId('grading-overall-comment')
-    ).not.toHaveValue('', { timeout: 20000 });
+    await page.getByTestId('grading-overall-percentage').fill('88');
 
     await expect(saveButton).toBeEnabled();
     await saveButton.click();
@@ -109,7 +106,9 @@ test.describe.serial('Teacher submission lifecycle panel', () => {
 
     const panel = page.getByTestId('submission-lifecycle-panel');
 
-    await expect(panel.getByTestId('submission-lifecycle-release')).toBeVisible();
+    await expect(
+      panel.getByTestId('submission-lifecycle-release')
+    ).toBeVisible();
     await expect(panel.getByTestId('submission-lifecycle-edit')).toBeVisible();
     await expect(page.getByTestId('grading-assistant-generate')).toHaveCount(0);
 
@@ -120,23 +119,30 @@ test.describe.serial('Teacher submission lifecycle panel', () => {
     const generateButton = page.getByTestId('grading-assistant-generate');
     await generateButton.click();
     await page.getByRole('button', { name: /^replace$/i }).click();
-    await expect(generateButton).toContainText('Grading Assistant Suggestions', {
-      timeout: 20000,
-    });
-    await expect(
-      panel.getByTestId('submission-lifecycle-cancel')
-    ).toHaveText('Cancel');
+    await expect(generateButton).toContainText(
+      'Grading Assistant Suggestions',
+      {
+        timeout: 20000,
+      }
+    );
+    await expect(panel.getByTestId('submission-lifecycle-cancel')).toHaveText(
+      'Done'
+    );
 
     await panel.getByTestId('submission-lifecycle-cancel').click();
     await expect(page.getByTestId('grading-assistant-generate')).toHaveCount(0);
-    await expect(panel.getByTestId('submission-lifecycle-release')).toBeVisible();
+    await expect(
+      panel.getByTestId('submission-lifecycle-release')
+    ).toBeVisible();
 
     await panel.getByTestId('submission-lifecycle-edit').click();
-    await expect(
-      panel.getByTestId('submission-lifecycle-cancel')
-    ).toHaveText('Done');
+    await expect(panel.getByTestId('submission-lifecycle-cancel')).toHaveText(
+      'Done'
+    );
     await panel.getByTestId('submission-lifecycle-cancel').click();
-    await expect(panel.getByTestId('submission-lifecycle-release')).toBeVisible();
+    await expect(
+      panel.getByTestId('submission-lifecycle-release')
+    ).toBeVisible();
 
     await panel.getByTestId('submission-lifecycle-release').click();
     const releaseDialog = page.getByRole('alertdialog', {
@@ -144,11 +150,16 @@ test.describe.serial('Teacher submission lifecycle panel', () => {
     });
     await expect(releaseDialog).toBeVisible();
     await releaseDialog.getByRole('button', { name: /^release$/i }).click();
-    await expect(panel.getByTestId('submission-lifecycle-release')).toHaveCount(0, {
-      timeout: 15000,
-    });
+    await expect(panel.getByTestId('submission-lifecycle-release')).toHaveCount(
+      0,
+      {
+        timeout: 15000,
+      }
+    );
     await expect(page.getByTestId('grading-assistant-generate')).toHaveCount(0);
-    await expect(panel.getByTestId('grade-summary-released-label')).toBeVisible();
+    await expect(
+      panel.getByTestId('grade-summary-released-label')
+    ).toBeVisible();
     await expect(panel.getByTestId('grade-summary-released-label')).toHaveText(
       'Released'
     );

@@ -27,9 +27,7 @@ export type RubricDisplayCategory = {
 };
 
 export type RubricDisplaySource =
-  | 'assignment-type'
-  | 'thesis-default'
-  | 'daily-pages-default';
+  'assignment-type' | 'thesis-default' | 'daily-pages-default';
 
 export type RubricDisplayConfig = {
   categories: RubricDisplayCategory[];
@@ -59,7 +57,9 @@ const rubricDisplaySources = new Set<string>([
   'daily-pages-default',
 ]);
 
-function parseRubricDisplaySource(value: unknown): RubricDisplaySource | undefined {
+function parseRubricDisplaySource(
+  value: unknown
+): RubricDisplaySource | undefined {
   return typeof value === 'string' && rubricDisplaySources.has(value)
     ? (value as RubricDisplaySource)
     : undefined;
@@ -203,7 +203,9 @@ export function isScored(
   score: number | null | undefined,
   minScore: number
 ): score is number {
-  return typeof score === 'number' && Number.isFinite(score) && score >= minScore;
+  return (
+    typeof score === 'number' && Number.isFinite(score) && score >= minScore
+  );
 }
 
 /**
@@ -261,10 +263,16 @@ export function normalizeRubricScoresForCategories({
 
   for (const item of categories) {
     const candidate = raw[item.key];
-    if (!isRecord(candidate)) continue;
-
-    const scoreValue = candidate.score;
-    const commentValue = candidate.comment;
+    // Early rubric payloads persisted the category value as a bare number.
+    // Preserve that score when opening the modern grading form so saving an
+    // unrelated field cannot normalize valid legacy scores to null.
+    const scoreValue =
+      typeof candidate === 'number'
+        ? candidate
+        : isRecord(candidate)
+          ? candidate.score
+          : undefined;
+    const commentValue = isRecord(candidate) ? candidate.comment : undefined;
 
     const roundedScore =
       typeof scoreValue === 'number' && Number.isFinite(scoreValue)
@@ -279,7 +287,7 @@ export function normalizeRubricScoresForCategories({
         ? Math.max(categoryMin, Math.min(categoryMax, roundedScore))
         : unscored,
       comment: typeof commentValue === 'string' ? commentValue : '',
-      isAi: Boolean(candidate.isAi),
+      isAi: isRecord(candidate) && Boolean(candidate.isAi),
     };
   }
 
@@ -305,7 +313,11 @@ export function buildScoreOptions(
   const categoryBounds = getCategoryScoreBounds({ key: '', bands });
   const optionMin = categoryBounds?.min ?? minScore;
   const optionMax = categoryBounds?.max ?? maxScore;
-  return buildScoreScaleValues({ minScore: optionMin, maxScore: optionMax, step }).map((score) => {
+  return buildScoreScaleValues({
+    minScore: optionMin,
+    maxScore: optionMax,
+    step,
+  }).map((score) => {
     const configured = scoreLabels
       ? getCategoryScoreLabel({ scoreLabels }, score)
       : null;

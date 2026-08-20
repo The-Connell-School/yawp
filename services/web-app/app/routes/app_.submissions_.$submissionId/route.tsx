@@ -1,5 +1,8 @@
 import { invariant } from '@epic-web/invariant';
-import { type LoaderFunctionArgs } from 'react-router';
+import {
+  type LoaderFunctionArgs,
+  type ShouldRevalidateFunctionArgs,
+} from 'react-router';
 import {
   useLoaderData,
   Link,
@@ -23,6 +26,7 @@ import { Input } from '~/components/ui/input';
 import { requireUserId, requireMembership } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { hasEffectivePlatformAdmin } from '~/utils/preview-access.server';
+import { buildTeacherDocumentAccessWhere } from '~/utils/grading-auth.server';
 import { redirectWithToast } from '~/utils/toast.server';
 import { formatAssignmentGrade } from '~/domain/grading/gradeMath';
 import { hasRecordedGrade } from '~/domain/grading/recorded-grade';
@@ -44,6 +48,7 @@ import { SelectionToolbar } from './teacher-grading/selection-toolbar';
 import { GradeHighlightsOverlay } from './teacher-grading/grade-highlights-overlay';
 import { SubmissionLifecyclePanel } from './teacher-grading/submission-lifecycle-panel';
 import { GradeSummaryReleasedLabel } from './teacher-grading/grade-summary-released-label';
+import { SubmissionActivitySheet } from './teacher-grading/submission-activity-sheet';
 import { ViewPanel } from './teacher-grading/view-panel';
 import { resolveSubmissionGradeMode } from './submission-grade-mode';
 import { resolveSubmissionLifecycleState } from './submission-lifecycle-state';
@@ -58,8 +63,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 // ── Revalidation ─────────────────────────────────────────────────────
 
-export function shouldRevalidate() {
-  return false;
+export function shouldRevalidate({
+  defaultShouldRevalidate,
+}: ShouldRevalidateFunctionArgs) {
+  return defaultShouldRevalidate;
 }
 
 // ── Loader ───────────────────────────────────────────────────────────
@@ -75,6 +82,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     where: { id: userId },
     select: { isAdmin: true },
   });
+  const isAdmin = hasEffectivePlatformAdmin(user?.isAdmin);
 
   const submission = await prisma.submission.findFirst({
     where: {
@@ -82,25 +90,24 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       document: {
         is: {
           OR: [
-            { membershipId: profile.id },
             {
-              membership: {
-                classesAsStudent: {
-                  some: {
-                    teachers: {
-                      some: { id: profile.id },
-                    },
-                  },
-                },
-              },
+              membershipId: profile.id,
+              membership: { organizationId: profile.organization.id },
             },
-            ...(hasEffectivePlatformAdmin(user?.isAdmin) ? [{}] : []),
+            {
+              ...buildTeacherDocumentAccessWhere({
+                membershipId: profile.id,
+                organizationId: profile.organization.id,
+              }),
+            },
+            ...(isAdmin ? [{}] : []),
           ],
         },
       },
     },
     select: {
       id: true,
+      updatedAt: true,
       title: true,
       text: true,
       html: true,
@@ -148,6 +155,10 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           membership: {
             select: {
               id: true,
+              organizationId: true,
+              organization: {
+                select: { submissionActivityEnabled: true },
+              },
               userId: true,
               user: { select: { name: true } },
               classesAsStudent: {
@@ -191,19 +202,30 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   }
 
   // Determine if viewer is the owner (student) or a teacher
-  const isOwner = submission.document.membership.id === profile.id;
+  const isOwner = submission.document.membership.userId === userId;
 
+  const isCurrentClassTeacher =
+    submission.document.classAssignment?.class?.school.organizationId ===
+      profile.organization.id &&
+    submission.document.classAssignment.class.teachers.some(
+      (teacher) => teacher.id === profile.id
+    );
+  const isLegacyClassTeacher =
+    submission.document.classAssignment == null &&
+    submission.document.membership.classesAsStudent.some(
+      (klass) =>
+        klass.school.organizationId === profile.organization.id &&
+        klass.teachers.some((teacher) => teacher.id === profile.id)
+    );
   const isTeacher =
     !isOwner &&
     profile.role === 'TEACHER' &&
-    (submission.document.classAssignment?.class?.teachers.some(
-      (teacher) => teacher.id === profile.id
-    ) ||
-      submission.document.membership.classesAsStudent.some((klass) =>
-        klass.teachers.some((teacher) => teacher.id === profile.id)
-      ));
+    submission.document.membership.organizationId === profile.organization.id &&
+    (isCurrentClassTeacher || isLegacyClassTeacher);
 
-  const isAdmin = hasEffectivePlatformAdmin(user?.isAdmin);
+  const submissionActivityEnabled =
+    submission.document.membership.organization.submissionActivityEnabled ===
+    true;
 
   // Unsubmitting is student-initiated and owner-only — /api/domain/unsubmit-
   // submission refuses teachers and admins — so the only way an owner reaches
@@ -234,6 +256,37 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       submission.document.assignmentTypeId
     ),
   ]);
+
+  const activityPage =
+    !isOwner && (isTeacher || isAdmin) && submissionActivityEnabled
+      ? await prisma.submissionActivity.findMany({
+          where: {
+            submissionId: submission.id,
+            organizationId: submission.document.membership.organizationId,
+          },
+          select: {
+            id: true,
+            eventType: true,
+            source: true,
+            occurredAfterRelease: true,
+            changes: true,
+            metadata: true,
+            createdAt: true,
+            actorType: true,
+            actorName: true,
+            actorEmail: true,
+            actorMembership: {
+              select: {
+                user: { select: { name: true, email: true } },
+              },
+            },
+          },
+          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+          take: 101,
+        })
+      : null;
+  const activities = activityPage?.slice(0, 100) ?? null;
+  const activityHasMore = (activityPage?.length ?? 0) > 100;
 
   // Sort comments by document location
   const sortedComments = [...submission.comments].sort((a, b) => {
@@ -270,13 +323,20 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     },
     isOwner,
     isTeacher: isTeacher || isAdmin,
+    submissionActivityEnabled,
+    ...(activities == null ? {} : { activities, activityHasMore }),
   };
 }
 
 // ── Component ────────────────────────────────────────────────────────
 
 export default function SubmissionRoute() {
-  const { submission, isOwner, isTeacher } = useLoaderData<typeof loader>();
+  const loaderData = useLoaderData<typeof loader>();
+  const { submission, isOwner, isTeacher, submissionActivityEnabled } =
+    loaderData;
+  const activities = 'activities' in loaderData ? loaderData.activities : [];
+  const activityHasMore =
+    'activityHasMore' in loaderData ? loaderData.activityHasMore : false;
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const location = useLocation();
@@ -351,6 +411,7 @@ export default function SubmissionRoute() {
     isGradingOther,
     lifecycleState,
     isEditingGrade,
+    submissionActivityEnabled,
   });
   // Students viewing a submission whose grade hasn't been released yet
   const isPending = isOwner && !effectiveReleasedAt;
@@ -418,19 +479,28 @@ export default function SubmissionRoute() {
 
   // ── Local comments state (optimistic, no revalidation) ─────────────
   const [comments, setComments] = useState(submission.comments);
-  const handleCommentCreated = useCallback((comment: any) => {
-    setComments((prev) => [...prev, comment]);
-  }, []);
-  const handleCommentDeleted = useCallback((commentId: string) => {
-    setComments((prev) => prev.filter((c) => c.id !== commentId));
-  }, []);
+  const handleCommentCreated = useCallback(
+    (comment: any) => {
+      setComments((prev) => [...prev, comment]);
+      revalidator.revalidate();
+    },
+    [revalidator]
+  );
+  const handleCommentDeleted = useCallback(
+    (commentId: string) => {
+      setComments((prev) => prev.filter((c) => c.id !== commentId));
+      revalidator.revalidate();
+    },
+    [revalidator]
+  );
   const handleCommentUpdated = useCallback(
     (commentId: string, content: string) => {
       setComments((prev) =>
         prev.map((c) => (c.id === commentId ? { ...c, content } : c))
       );
+      revalidator.revalidate();
     },
-    []
+    [revalidator]
   );
 
   // ── Grade mode state ───────────────────────────────────────────────
@@ -476,7 +546,8 @@ export default function SubmissionRoute() {
       return submission.grammarHighlightingEnabled;
     }
     return resolveGrammarHighlightingEnabled(
-      (teacherGradeUi?.rubricConfig ?? submission.rubricConfig)?.categories ?? []
+      (teacherGradeUi?.rubricConfig ?? submission.rubricConfig)?.categories ??
+        []
     );
   }, [
     submission.grammarHighlightingEnabled,
@@ -642,8 +713,9 @@ export default function SubmissionRoute() {
       rubricConfig?: RubricDisplayConfig | null;
     }) => {
       setTeacherGradeUi({ overallScore: null, ...payload });
+      revalidator.revalidate();
     },
-    []
+    [revalidator]
   );
 
   const handleGradeSaved = useCallback(
@@ -664,13 +736,15 @@ export default function SubmissionRoute() {
         rubricScores: snapshot.rubricScores,
         rubricConfig: prev?.rubricConfig ?? null,
       }));
+      revalidator.revalidate();
     },
-    []
+    [revalidator]
   );
 
   const teacherExistingGrade = useMemo(
     () => ({
       id: submission.id,
+      updatedAt: submission.updatedAt,
       score: teacherGradeUi?.score ?? submission.score,
       feedback: submission.feedback,
       rubricScores: teacherGradeUi?.rubricScores ?? submission.rubricScores,
@@ -683,6 +757,7 @@ export default function SubmissionRoute() {
     }),
     [
       submission.id,
+      submission.updatedAt,
       submission.feedback,
       submission.releasedAt,
       submission.score,
@@ -712,7 +787,7 @@ export default function SubmissionRoute() {
 
   const persistGrammarIssues = useCallback(
     async (issues: GrammarIssue[]) => {
-      if (!isGradingOther || !isGradeMode) return;
+      if (!isGradingOther || !isGradeMode || isReleased) return;
       const res = await fetch('/api/domain/update-submission', {
         method: 'POST',
         keepalive: true,
@@ -725,8 +800,9 @@ export default function SubmissionRoute() {
       if (!res.ok) {
         throw new Error('Failed to save grammar issue removal.');
       }
+      revalidator.revalidate();
     },
-    [isGradeMode, isGradingOther, submission.id]
+    [isGradeMode, isGradingOther, isReleased, revalidator, submission.id]
   );
 
   const handleRemoveGrammarIssue = useCallback(
@@ -775,11 +851,12 @@ export default function SubmissionRoute() {
       const body = (await res.json()) as { success?: boolean };
       if (body.success) {
         setLocalReleasedAt(new Date().toISOString());
+        revalidator.revalidate();
       }
     } finally {
       setIsReleasing(false);
     }
-  }, [submission.id]);
+  }, [revalidator, submission.id]);
 
   const [isSavingGrade, setIsSavingGrade] = useState(false);
 
@@ -822,7 +899,7 @@ export default function SubmissionRoute() {
   return (
     <main className="flex h-screen flex-col bg-background">
       {/* ── Nav ─────────────────────────────────────────────────────── */}
-      <nav className="flex w-full items-center gap-3 border-b bg-white px-3 py-2">
+      <nav className="flex w-full flex-wrap items-center gap-3 border-b bg-white px-3 py-2">
         <Button
           variant="ghost"
           size="sm"
@@ -880,7 +957,13 @@ export default function SubmissionRoute() {
           </Badge>
         ) : null}
 
-        <div className="ml-auto flex items-center gap-2">
+        <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
+          {isGradingOther && submissionActivityEnabled ? (
+            <SubmissionActivitySheet
+              activities={activities as any}
+              hasMore={activityHasMore}
+            />
+          ) : null}
           {isGradingOther ? (
             <Button size="sm" variant="outline" asChild>
               <Link
@@ -929,15 +1012,13 @@ export default function SubmissionRoute() {
       ) : null}
 
       {/* ── Body ────────────────────────────────────────────────────── */}
-      <div className="flex grow overflow-hidden">
+      <div className="flex min-h-0 grow flex-col overflow-y-auto md:flex-row md:overflow-hidden">
         {/* Left panel: grading (edit/view toggle for teachers) or view-only summary */}
-        <div
-          className="no-scrollbar flex shrink-0 flex-col overflow-hidden border-r bg-white"
-          style={{ width: 380 }}
-        >
+        <div className="no-scrollbar flex h-[70vh] w-full shrink-0 flex-col overflow-hidden border-b bg-white md:h-auto md:w-[380px] md:border-r md:border-b-0">
           {isGradingOther ? (
             <SubmissionLifecyclePanel
               lifecycleState={lifecycleState}
+              submissionActivityEnabled={submissionActivityEnabled}
               isEditingGrade={isEditingGrade}
               onEditingGradeChange={setIsEditingGrade}
               onMarkGraded={handleMarkGraded}
@@ -981,11 +1062,8 @@ export default function SubmissionRoute() {
         </div>
 
         {/* Center: Essay */}
-        <div className="flex min-w-0 grow flex-col overflow-hidden bg-white md:h-full">
-          <EssayPanel
-            ref={setEssayRef}
-            html={submission.html ?? ''}
-          />
+        <div className="flex min-h-[60vh] min-w-0 grow flex-col overflow-hidden bg-white md:h-full md:min-h-0">
+          <EssayPanel ref={setEssayRef} html={submission.html ?? ''} />
           {isGradingOther && essayElement ? (
             <SelectionToolbar contentRoot={essayElement} />
           ) : null}
@@ -1001,10 +1079,7 @@ export default function SubmissionRoute() {
         </div>
 
         {/* Right: Feedback comments */}
-        <div
-          className="no-scrollbar shrink-0 overflow-y-auto border-l bg-white"
-          style={{ width: 320 }}
-        >
+        <div className="no-scrollbar max-h-[60vh] w-full shrink-0 overflow-y-auto border-t bg-white md:max-h-none md:w-[320px] md:border-t-0 md:border-l">
           <GradingCommentsSidebar
             submissionComments={isPending ? [] : (comments as any)}
             submissionId={submission.id}
