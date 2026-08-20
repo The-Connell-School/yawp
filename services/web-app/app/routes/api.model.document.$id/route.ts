@@ -7,6 +7,11 @@ import { requireMembership, requireUserId } from '~/utils/auth.server.js';
 import { prisma } from '~/utils/db.server.js';
 import { documentReadWhere } from '~/utils/document-access.server';
 import { hasEffectivePlatformAdmin } from '~/utils/preview-access.server';
+import {
+  buildSubmissionBodyAuditMetadata,
+  recordSubmissionActivity,
+  submissionActivityEventTypes,
+} from '~/domain/submissions/submission-activity.server';
 
 const PUT = z.object({
   text: z.string().optional(),
@@ -229,7 +234,17 @@ const actionImpl = async ({ request, params }: ActionFunctionArgs) => {
               },
             }),
       },
-      select: { id: true },
+      select: {
+        id: true,
+        text: true,
+        html: true,
+        releasedAt: true,
+        document: {
+          select: {
+            membership: { select: { organizationId: true } },
+          },
+        },
+      },
     });
 
     if (!submission) {
@@ -257,10 +272,38 @@ const actionImpl = async ({ request, params }: ActionFunctionArgs) => {
       );
     }
 
-    await prisma.submission.update({
-      where: { id: submission.id },
-      data: submissionData,
+    const previousBody = buildSubmissionBodyAuditMetadata({
+      text: submission.text,
+      html: submission.html,
     });
+    const nextBody = buildSubmissionBodyAuditMetadata({
+      text: submissionData.text ?? submission.text,
+      html: submissionData.html ?? submission.html,
+    });
+
+    if (JSON.stringify(previousBody) !== JSON.stringify(nextBody)) {
+      await prisma.$transaction(async (tx) => {
+        await tx.submission.update({
+          where: { id: submission.id },
+          data: submissionData,
+        });
+        const organizationId =
+          submission.document.membership.organizationId ??
+          profile.organization.id;
+        await recordSubmissionActivity(tx, {
+          submissionId: submission.id,
+          organizationId,
+          actorMembershipId:
+            profile.organization.id === organizationId ? profile.id : null,
+          eventType: submissionActivityEventTypes.bodyUpdated,
+          source: 'document-snapshot',
+          occurredAfterRelease: submission.releasedAt != null,
+          changes: {
+            body: { before: previousBody, after: nextBody },
+          },
+        });
+      });
+    }
 
     await prisma.documentWriteJournal.update({
       where: { id: journal.id },

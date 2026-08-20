@@ -4,6 +4,7 @@ import type { Prisma } from '@app/prisma';
 export const submissionActivityEventTypes = {
   created: 'submission.created',
   titleUpdated: 'submission.title_updated',
+  bodyUpdated: 'submission.body_updated',
   gradeUpdated: 'submission.grade_updated',
   gradeFinalized: 'submission.grade_finalized',
   gradeReleased: 'submission.grade_released',
