@@ -264,6 +264,17 @@ describe('worktree local setup contract', () => {
     expect(viteConfig).toContain('strictPort: true');
   });
 
+  test('worktree setup writes a Blackboard LTI mock URL and bun script', () => {
+    const setupScript = readRepoFile('scripts/worktree-local-setup.sh');
+    const rootPackage = JSON.parse(readRepoFile('package.json'));
+
+    expect(setupScript).toContain('BLACKBOARD_LTI_MOCK_URL=');
+    expect(setupScript).toContain('LTI_MOCK_PORT');
+    expect(rootPackage.scripts['blackboard-lti-mock']).toContain(
+      'BLACKBOARD_LTI_MOCK_ENABLED=true'
+    );
+  });
+
   test('worktree setup backfills class art keys before local seed verification', () => {
     const setupScript = readRepoFile('scripts/worktree-local-setup.sh');
     const migrateIndex = setupScript.indexOf('prisma migrate deploy');
@@ -1114,6 +1125,20 @@ describe('PR preview deployment contract', () => {
       expect(file).not.toContain(deprecatedPreviewSlug);
       expect(file).not.toContain(deprecatedPreviewSnake);
     }
+  });
+
+  test('preview compose starts the Blackboard LTI mock as a sibling service', () => {
+    const compose = readRepoFile('scripts/preview/render-compose.mjs');
+    const deploy = readRepoFile('scripts/preview/deploy.sh');
+    const dockerfile = readRepoFile('services/web-app/Dockerfile');
+
+    expect(compose).toContain('blackboard-lti-mock:');
+    expect(compose).toContain('BLACKBOARD_LTI_MOCK_ENABLED: "true"');
+    expect(compose).toContain('BLACKBOARD_LTI_MOCK_URL: "http://blackboard-lti-mock:9473"');
+    expect(deploy).toContain('start_blackboard_lti_mock_if_present');
+    expect(deploy).toContain('blackboard-lti-mock:');
+    expect(dockerfile).not.toContain('blackboard-lti-mock');
+    expect(dockerfile).toContain('CMD ["bash", "services/web-app/start.sh"]');
   });
 
   test('preview comment describes selected data and dev-login smoke', () => {

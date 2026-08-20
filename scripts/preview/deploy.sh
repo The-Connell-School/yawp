@@ -728,7 +728,14 @@ remove_legacy_project_postgres() {
 
 refresh_web_container_if_needed() {
   "${compose[@]}" up -d --force-recreate web
+  start_blackboard_lti_mock_if_present
   remove_legacy_project_postgres
+}
+
+start_blackboard_lti_mock_if_present() {
+  if grep -qE '^[[:space:]]*blackboard-lti-mock:' "$PREVIEW_DIR/docker-compose.yml"; then
+    "${compose[@]}" up -d --force-recreate blackboard-lti-mock
+  fi
 }
 
 rollout_demo_web_without_downtime() {
@@ -800,6 +807,9 @@ start_or_refresh_web() {
     rollout_demo_web_without_downtime
   else
     refresh_web_container_if_needed
+  fi
+  if [[ "$SLUG" == "demo" && "$RUNTIME" == "production" && -z "${DIRECT_PORT:-}" ]]; then
+    start_blackboard_lti_mock_if_present
   fi
 }
 start_or_refresh_web
