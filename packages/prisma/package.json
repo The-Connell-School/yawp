@@ -34,6 +34,7 @@
     "backfill-class-art-key": "bun run scripts/backfill-class-art-key.ts",
     "production-qa-profile": "bun run scripts/production-qa-profile.ts",
     "production-qa-profile-remote": "bun run scripts/production-qa-profile-remote.ts",
+    "production-qa-postcheck": "bun run scripts/production-qa-postcheck.ts",
     "sanitize-preview-production-data": "bun run scripts/sanitize-preview-production-data.ts",
     "org-membership:precheck": "bun run scripts/org-membership-precheck.ts",
     "org-membership:postcheck": "bun run scripts/org-membership-postcheck.ts",

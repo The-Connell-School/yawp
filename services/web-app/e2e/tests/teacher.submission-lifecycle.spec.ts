@@ -93,6 +93,18 @@ test.describe.serial('Teacher submission lifecycle panel', () => {
     await expect(page.getByTestId('grading-assistant-generate')).toHaveCount(0);
     await expect(page.getByTestId('grading-overall-comment')).toHaveCount(0);
     await expect(panel.getByText('Overall Grade')).toBeVisible();
+
+    // Finalization advances Submission.updatedAt after the draft save. Reopen
+    // immediately, without navigation or reload, to prove the revalidation
+    // picked up that authoritative revision before the next write.
+    await panel.getByTestId('submission-lifecycle-edit').click();
+    await page
+      .getByTestId('grading-overall-comment')
+      .fill('Immediate post-finalization edit persisted.');
+    await panel.getByTestId('submission-lifecycle-save').click();
+    await expect(
+      panel.getByText('Immediate post-finalization edit persisted.')
+    ).toBeVisible();
   });
 
   test('graded: ready-to-release view with edit flow and release', async ({

@@ -257,6 +257,31 @@ describe('production deployment contract', () => {
       'ssh-keyscan -H "${PROD_SSH_HOST}" >> ~/.ssh/known_hosts'
     );
   });
+
+  test('production QA captures responsive evidence and verifies the database post-state', () => {
+    const productionQaWorkflow = readRepoFile(
+      '.github/workflows/production-qa-profile.yml'
+    );
+    const browserProof = readRepoFile(
+      'services/web-app/scripts/production-qa-released-grade.ts'
+    );
+
+    expect(productionQaWorkflow).toContain(
+      'production-qa-profile-remote production-postcheck'
+    );
+    expect(productionQaWorkflow).toContain(
+      'services/web-app/test-results/production-*'
+    );
+    expect(browserProof).toContain(
+      'production-released-grade-activity-mobile.png'
+    );
+    expect(browserProof).toContain(
+      'production-released-grade-student-mobile.png'
+    );
+    expect(browserProof).toContain(
+      'production-released-grade-walkthrough.webm'
+    );
+  });
 });
 
 describe('worktree local setup contract', () => {

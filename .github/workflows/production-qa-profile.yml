@@ -76,10 +76,21 @@ jobs:
           PROD_QA_BASE_URL: https://yawp.school
           PROD_QA_PASSWORD: ${{ secrets.PROD_QA_PASSWORD }}
 
+      - name: Verify production migration and disposable fixture post-state
+        run: bun run --cwd packages/prisma production-qa-profile-remote production-postcheck
+        env:
+          PROD_DB_HOST: ${{ secrets.PROD_DB_HOST }}
+          PROD_DB_NAME: ${{ secrets.PROD_DB_NAME }}
+          PROD_DB_PASSWORD: ${{ secrets.PROD_DB_PASSWORD }}
+          PROD_DB_USER: ${{ secrets.PROD_DB_USER }}
+          PROD_QA_PASSWORD: ${{ secrets.PROD_QA_PASSWORD }}
+          PROD_SSH_HOST: ${{ secrets.PROD_SSH_HOST }}
+          PROD_SSH_KEY_PATH: ${{ runner.temp }}/yawp-production-bastion
+
       - name: Upload production QA evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: production-released-grade-activity
-          path: services/web-app/test-results/production-released-grade-activity.png
+          path: services/web-app/test-results/production-*
           if-no-files-found: warn

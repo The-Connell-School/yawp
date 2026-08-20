@@ -23,8 +23,15 @@ async function signIn(page: Page, email: string) {
 
 const browser = await chromium.launch();
 try {
-  const teacherContext = await browser.newContext();
+  const teacherContext = await browser.newContext({
+    viewport: { width: 1440, height: 900 },
+    recordVideo: {
+      dir: resolve('test-results/production-video'),
+      size: { width: 1440, height: 900 },
+    },
+  });
   const teacherPage = await teacherContext.newPage();
+  const teacherVideo = teacherPage.video();
   await signIn(teacherPage, 'prod.qa.teacher@brock.software');
   await teacherPage.goto(`${baseUrl}${submissionPath}`);
   await expect(
@@ -35,6 +42,18 @@ try {
   ).toBeVisible();
 
   await teacherPage.getByTestId('submission-lifecycle-edit').click();
+  await expect(
+    teacherPage.getByText('This grade is already visible to the student.')
+  ).toBeVisible();
+  const warningScreenshotPath = resolve(
+    'test-results/production-released-grade-edit-warning.png'
+  );
+  await mkdir(dirname(warningScreenshotPath), { recursive: true });
+  await teacherPage.screenshot({
+    path: warningScreenshotPath,
+    fullPage: true,
+  });
+  await teacherPage.waitForTimeout(2_000);
   await teacherPage.getByTestId('grading-overall-percentage').fill('91');
   await teacherPage
     .getByTestId('grading-overall-comment')
@@ -43,6 +62,7 @@ try {
   await expect(
     teacherPage.getByTestId('submission-lifecycle-edit')
   ).toBeVisible();
+  await teacherPage.waitForTimeout(1_500);
 
   await teacherPage
     .getByTestId(submissionActivityUiContract.triggerTestId)
@@ -63,7 +83,7 @@ try {
   // Radix marks the Sheet content visible before its entrance transition has
   // finished. Let the production proof capture the settled audit panel rather
   // than a translated off-screen frame.
-  await teacherPage.waitForTimeout(600);
+  await teacherPage.waitForTimeout(2_500);
 
   const screenshotPath = resolve(
     'test-results/production-released-grade-activity.png'
@@ -71,8 +91,34 @@ try {
   await mkdir(dirname(screenshotPath), { recursive: true });
   await teacherPage.screenshot({ path: screenshotPath, fullPage: true });
   await teacherContext.close();
+  await teacherVideo?.saveAs(
+    resolve('test-results/production-released-grade-walkthrough.webm')
+  );
 
-  const studentContext = await browser.newContext();
+  const mobileTeacherContext = await browser.newContext({
+    viewport: { width: 390, height: 844 },
+  });
+  const mobileTeacherPage = await mobileTeacherContext.newPage();
+  await signIn(mobileTeacherPage, 'prod.qa.teacher@brock.software');
+  await mobileTeacherPage.goto(`${baseUrl}${submissionPath}`);
+  await mobileTeacherPage
+    .getByTestId(submissionActivityUiContract.triggerTestId)
+    .click();
+  const mobileActivityPanel = mobileTeacherPage.getByTestId(
+    submissionActivityUiContract.panelTestId
+  );
+  await expect(mobileActivityPanel).toContainText('77');
+  await expect(mobileActivityPanel).toContainText('91');
+  await mobileTeacherPage.waitForTimeout(600);
+  await mobileTeacherPage.screenshot({
+    path: resolve('test-results/production-released-grade-activity-mobile.png'),
+    fullPage: true,
+  });
+  await mobileTeacherContext.close();
+
+  const studentContext = await browser.newContext({
+    viewport: { width: 390, height: 844 },
+  });
   const studentPage = await studentContext.newPage();
   await signIn(studentPage, 'prod.qa.student@brock.software');
   await studentPage.goto(`${baseUrl}${submissionPath}`);
@@ -86,6 +132,10 @@ try {
   await expect(
     studentPage.getByTestId(submissionActivityUiContract.triggerTestId)
   ).toHaveCount(0);
+  await studentPage.screenshot({
+    path: resolve('test-results/production-released-grade-student-mobile.png'),
+    fullPage: true,
+  });
   await studentContext.close();
   console.log('Production released-grade activity QA passed.');
 } finally {

@@ -286,13 +286,16 @@ export function SubmissionLifecyclePanel({
     try {
       await headerState.saveDraft();
       draftSaved = true;
-      onGradeSaved(headerState.getSavedGradeSnapshot());
       if (
         lifecycleState === 'needs_grading' &&
         headerState.hasGrade
       ) {
         await onMarkGraded();
       }
+      // Revalidate only after the final lifecycle mutation. Marking graded
+      // advances Submission.updatedAt, so revalidating after saveDraft but
+      // before onMarkGraded could leave the next edit with a stale token.
+      onGradeSaved(headerState.getSavedGradeSnapshot());
     } catch (err) {
       // The server refuses this write (e.g. the student unsubmitted while
       // this panel was open). Surface exactly why, and kick the teacher
