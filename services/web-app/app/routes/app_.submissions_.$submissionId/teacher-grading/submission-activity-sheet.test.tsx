@@ -155,4 +155,40 @@ describe('SubmissionActivitySheet', () => {
       'Comma splice: “rain, we left” — Use a period or conjunction.'
     );
   });
+
+  test('collapses legacy feedback synchronization into one overall feedback change', () => {
+    render(
+      <SubmissionActivitySheet
+        activities={[
+          {
+            id: 'activity-4',
+            eventType: 'submission.grade_updated',
+            source: 'update-submission',
+            occurredAfterRelease: true,
+            changes: {
+              feedback: { before: null, after: 'Excellent revision.' },
+              overallComment: {
+                before: 'Good effort.',
+                after: 'Excellent revision.',
+              },
+            },
+            metadata: null,
+            createdAt: '2026-08-20T12:34:56.000Z',
+            actorType: 'human',
+            actorName: 'Teacher One',
+            actorEmail: 'teacher@example.test',
+            actorMembership: null,
+          },
+        ]}
+      />
+    );
+
+    const labels = Array.from(
+      document.querySelectorAll('p.font-medium'),
+      (element) => element.textContent
+    );
+    expect(labels).toEqual(['Overall feedback']);
+    expect(document.body.textContent).toContain('Good effort.');
+    expect(document.body.textContent).toContain('Excellent revision.');
+  });
 });

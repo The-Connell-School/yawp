@@ -243,15 +243,18 @@ describe('production deployment contract', () => {
     expect(remoteReleaseGateIndex).toBeGreaterThan(remoteBackfillIndex);
   });
 
-  test('production QA prepares the bastion host key with the production deploy contract', () => {
+  test('production QA gets the bastion host key through authenticated AWS infrastructure', () => {
     const productionQaWorkflow = readRepoFile(
       '.github/workflows/production-qa-profile.yml'
     );
 
+    expect(productionQaWorkflow).toContain('aws ssm send-command');
+    expect(productionQaWorkflow).toContain('AWS-RunShellScript');
     expect(productionQaWorkflow).toContain(
-      'ssh-keyscan -H "${PROD_SSH_HOST}" >> ~/.ssh/known_hosts'
+      'cat /etc/ssh/ssh_host_ed25519_key.pub'
     );
-    expect(productionQaWorkflow).not.toContain('aws ec2 get-console-output');
+    expect(productionQaWorkflow).toContain('aws ssm get-command-invocation');
+    expect(productionQaWorkflow).not.toContain('ssh-keyscan');
   });
 });
 
