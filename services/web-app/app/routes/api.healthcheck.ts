@@ -1,5 +1,5 @@
 import { type LoaderFunctionArgs } from 'react-router';
-import { prisma } from '~/utils/db.server.ts';
+import { prisma } from '~/utils/db.server';
 
 export async function loader(_args: LoaderFunctionArgs) {
   try {
