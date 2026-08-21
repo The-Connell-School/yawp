@@ -11,10 +11,10 @@ describe('production QA profile guardrails', () => {
   test('uses obvious QA-only identifiers', () => {
     expect(PRODUCTION_QA_IDS.organizationId).toBe('prod-qa-org');
     expect(PRODUCTION_QA_IDS.teacherEmail).toBe(
-      'prod.qa.teacher@brock.software'
+      'prod.qa.teacher.v2@brock.software'
     );
     expect(PRODUCTION_QA_IDS.studentEmail).toBe(
-      'prod.qa.student@brock.software'
+      'prod.qa.student.v2@brock.software'
     );
 
     for (const id of Object.values(PRODUCTION_QA_IDS)) {
