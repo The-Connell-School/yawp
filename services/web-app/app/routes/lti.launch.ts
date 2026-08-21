@@ -72,6 +72,7 @@ async function handlePost(request: Request) {
     payload?.['https://purl.imsglobal.org/spec/lti/claim/message_type'] || '';
   if (messageType === 'LtiDeepLinkingRequest') {
     const returnUrl = getPlatformDeepLinkReturnUrl(request);
+    const previewOrigin = new URL(returnUrl).origin;
     const now = Math.floor(Date.now() / 1000);
     const deepLink = {
       iss: clientId || 'yawp-tool',
@@ -89,7 +90,7 @@ async function handlePost(request: Request) {
           title:
             payload?.['https://purl.imsglobal.org/spec/lti/claim/resource_link']
               ?.title || 'Yawp Assignment',
-          url: `${getDomainUrl(request)}/lti/login?target_link_uri=${encodeURIComponent(`${getDomainUrl(request)}/lti/launch`)}&client_id=${encodeURIComponent(
+          url: `${previewOrigin}/lti/login?target_link_uri=${encodeURIComponent(`${previewOrigin}/lti/launch`)}&client_id=${encodeURIComponent(
             clientId
           )}&iss=${encodeURIComponent(
             'https://blackboard.com'
