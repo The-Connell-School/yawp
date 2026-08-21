@@ -101,8 +101,9 @@ export async function action({ request }: ActionFunctionArgs) {
     return redirect('/dev/blackboard-lti-mock/learn/courses');
   }
 
-  // For a normal resource-link launch, establish a preview session as the mock user
-  if (messageType === 'LtiResourceLinkRequest' && isPreviewAccessGateEnabled()) {
+  // For a normal resource-link launch, establish a session as the mock user
+  // Always allow during LTI launch so the LMS user takes effect on redirect.
+  if (messageType === 'LtiResourceLinkRequest') {
     const roles: string[] =
       claims?.['https://purl.imsglobal.org/spec/lti/claim/roles'] || [];
     const isLearner = roles.some((r) =>
@@ -237,40 +238,23 @@ export async function action({ request }: ActionFunctionArgs) {
       } catch {
         // Best-effort only: do not block launch if preview data is thin
       }
-      // Load any existing cookie session to destroy it first
-      const authSession = await authSessionStorage.getSession(
-        request.headers.get('cookie')
-      );
-      const previousSessionId = authSession.get(sessionKey);
-      if (previousSessionId) {
-        void prisma.session.deleteMany({ where: { id: previousSessionId } });
-      }
-      const clearAuthCookie = await authSessionStorage.destroySession(authSession);
-      // Start a fresh cookie-session with the new DB session id
+      // Start a fresh cookie-session with the new DB session id (no separate clear cookie)
       const newAuthSession = await authSessionStorage.getSession();
       newAuthSession.set(sessionKey, session.id);
       newAuthSession.unset('impersonationMode');
       newAuthSession.unset('impersonatorUserId');
       const membershipId = user.memberships[0]?.id ?? '';
-      return redirect(
-        '/app',
-        {
-          headers: combineHeaders(
-            { 'set-cookie': clearAuthCookie },
-            {
-              'set-cookie': await authSessionStorage.commitSession(
-                newAuthSession,
-                { expires: session.expirationDate }
-              ),
-            },
-            // Clear any prior membership cookie before setting the target one
-            {
-              'set-cookie': (await import('~/cookies/membership-id.server')).destroyMembershipId(),
-            },
-            { 'set-cookie': await setMembershipId(membershipId) }
-          ),
-        }
-      );
+      return redirect('/app', {
+        status: 303,
+        headers: combineHeaders(
+          {
+            'set-cookie': await authSessionStorage.commitSession(newAuthSession, {
+              expires: session.expirationDate,
+            }),
+          },
+          { 'set-cookie': await setMembershipId(membershipId) }
+        ),
+      });
     }
   }
 
