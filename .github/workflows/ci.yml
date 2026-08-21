@@ -186,7 +186,7 @@ jobs:
 
       - name: Install Playwright browsers
         working-directory: services/web-app
-        run: npx --yes playwright install --with-deps chromium firefox
+        run: npx --yes playwright install --with-deps chromium firefox webkit
 
       - name: 🧪 Run Playwright tests
         working-directory: services/web-app
