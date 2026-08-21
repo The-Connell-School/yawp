@@ -107,13 +107,8 @@ async function handlePost(request: Request) {
       ],
     };
     const jwt = await signToolJwt(deepLink, { typ: 'JWT' });
-    const esc = (v: string) =>
-      v.replaceAll('&', '&amp;').replaceAll('"', '&quot;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
-    const html = `<!doctype html><form id="dl" method="POST" enctype="application/x-www-form-urlencoded" accept-charset="UTF-8" action="${esc(
-      returnUrl
-    )}">
-<input type="hidden" name="JWT" value="${esc(jwt)}" />
-<input type="hidden" name="jwt" value="${esc(jwt)}" />
+    const html = `<!doctype html><form id="dl" method="POST" enctype="application/x-www-form-urlencoded" action="${returnUrl}">
+<input type="hidden" name="JWT" value="${jwt}" />
 </form><script>document.getElementById('dl').submit()</script>`;
     return new Response(html, {
       status: 200,
