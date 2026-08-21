@@ -43,8 +43,9 @@ describe('student start is rejected when postAt is in the future', () => {
     } as any);
 
     // Redirect back to assignments with a toast
-    expect(response.status).toBe(302);
-    const location = response.headers.get('Location') || '';
+    expect((response as any).init?.status ?? 200).toBe(302);
+    const location =
+      ((response as any).init?.headers?.get?.('Location') as string) || '';
     expect(location).toContain('/app?tab=assignments');
 
     // The query included the visibility gate on postAt
