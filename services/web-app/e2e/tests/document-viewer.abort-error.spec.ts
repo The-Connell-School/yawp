@@ -25,10 +25,9 @@ test.describe('Document viewer should not surface unhandled AbortError', () => {
     const url = `/app/documents/${e2eContext.editedDocumentId}?${params.toString()}`;
 
     // Start the navigation and, without waiting for full load, redirect away.
-    const nav = page.goto(url);
-    await page.goto('/app?tab=assignments');
-    await page.waitForLoadState('networkidle');
-    await nav.catch(() => {}); // ignore the aborted navigation promise
+    // Attach a catch immediately so Playwright does not surface the aborted goto.
+    const nav = page.goto(url).catch(() => null);
+    await page.goto('/app?tab=assignments', { waitUntil: 'domcontentloaded' });
 
     // The viewer must not leak an unhandled AbortError to the global scope.
     const hadAbortError = pageErrors.some((m) => /AbortError/i.test(m));
@@ -76,10 +75,8 @@ test.describe('Document viewer should not surface unhandled AbortError', () => {
     const params = new URLSearchParams({ spa: '1', exitTo: '/app?tab=assignments' });
     const url = `/app/documents/${e2eContext.editedDocumentId}?${params.toString()}`;
 
-    const nav = page.goto(url);
-    await page.goto('/app');
-    await page.waitForLoadState('networkidle');
-    await nav.catch(() => {});
+    const nav = page.goto(url).catch(() => null);
+    await page.goto('/app', { waitUntil: 'domcontentloaded' });
 
     const hadAbortError = pageErrors.some((m) => /AbortError/i.test(m));
     expect(hadAbortError).toBeFalsy();
