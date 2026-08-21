@@ -107,9 +107,13 @@ async function handlePost(request: Request) {
       ],
     };
     const jwt = await signToolJwt(deepLink, { typ: 'JWT' });
-    const html = `<!doctype html><form id="dl" method="POST" enctype="application/x-www-form-urlencoded" action="${returnUrl}">
-<input type="hidden" name="JWT" value="${jwt}" />
-</form><script>document.getElementById('dl').submit()</script>`;
+    // Post JSON to the mock's deep_link_return_url to avoid any form/urlencoding quirks.
+    const html = `<!doctype html><script>
+const jwt='${jwt}';
+fetch('${returnUrl}',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({JWT:jwt})})
+.then(()=>{ window.location.href='/dev/blackboard-lti-mock/dev/deep-links'; })
+.catch(()=>{ document.body.textContent='Deep Linking post failed'; });
+</script>`;
     return new Response(html, {
       status: 200,
       headers: {
