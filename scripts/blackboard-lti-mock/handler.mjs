@@ -227,8 +227,13 @@ function handleDevLaunch({ url, response, config, store, publicOrigin }, fault) 
   });
   const hintId = `hint_${randomUUID()}`;
   store.launchHints.set(hintId, profile);
-  // Prefer the same preview host that served this page to avoid cross-preview hops.
-  const hostOrigin = new URL(publicOrigin).origin;
+  // Prefer the same preview host that served this page to avoid cross-preview hops
+  // and avoid internal Docker hostnames in browser redirects.
+  const xfProto = request.headers['x-forwarded-proto'] || '';
+  const xfHost = request.headers['x-forwarded-host'] || '';
+  const hostOrigin =
+    (xfHost ? `${xfProto || 'https'}://${xfHost}` : null) ||
+    new URL(publicOrigin).origin;
   const login = new URL('/lti/login', hostOrigin);
   login.searchParams.set('iss', config.issuer);
   login.searchParams.set('login_hint', profile.user.sub);

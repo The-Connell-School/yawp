@@ -30,6 +30,11 @@ export async function proxyBlackboardLtiMock(request: Request, splat = '') {
   request.headers.forEach((value, name) => {
     if (!HOP_BY_HOP.has(name.toLowerCase())) headers.set(name, value);
   });
+  // Preserve the public preview host/proto for the mock to construct browser-facing URLs.
+  const publicUrl = new URL(request.url);
+  headers.set('x-forwarded-host', publicUrl.host);
+  headers.set('x-forwarded-proto', publicUrl.protocol.replace(/:$/, ''));
+  headers.set('x-forwarded-port', publicUrl.protocol === 'https:' ? '443' : (publicUrl.port || '80'));
 
   const init: RequestInit = {
     method: request.method,
