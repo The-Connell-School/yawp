@@ -13,11 +13,15 @@ const prisma = {
 
 const requireUserId = mock();
 const requireMembership = mock();
+const lockSubmissionCommentAccess = mock();
 
 mock.module('~/utils/db.server', () => ({ prisma }));
 mock.module('~/utils/auth.server', () => ({
   requireUserId,
   requireMembership,
+}));
+mock.module('~/domain/submissions/submission-comment-access.server', () => ({
+  lockSubmissionCommentAccess,
 }));
 
 const { action } = await import('./route');
@@ -32,6 +36,7 @@ describe('api.model.submission-comment.$id', () => {
     prisma.$transaction.mockReset();
     requireUserId.mockReset();
     requireMembership.mockReset();
+    lockSubmissionCommentAccess.mockReset();
 
     requireUserId.mockResolvedValue('user-1');
     requireMembership.mockResolvedValue({
@@ -44,6 +49,7 @@ describe('api.model.submission-comment.$id', () => {
     prisma.$transaction.mockImplementation(async (callback: any) =>
       callback(prisma)
     );
+    lockSubmissionCommentAccess.mockResolvedValue(true);
   });
 
   test('deletes a submission comment', async () => {
@@ -120,6 +126,35 @@ describe('api.model.submission-comment.$id', () => {
     expect(prisma.submissionActivity.create).not.toHaveBeenCalled();
   });
 
+  test('returns 409 and writes nothing when locked delete access was revoked', async () => {
+    prisma.submissionComment.findFirst.mockResolvedValue({
+      id: 'comment-1',
+      content: 'Original',
+      excerpt: 'the thesis',
+      occurrence: 1,
+      updatedAt: new Date('2026-08-20T10:00:00.000Z'),
+      submission: {
+        id: 'sub-1',
+        releasedAt: null,
+        document: { membership: { organizationId: 'org-1' } },
+      },
+    });
+    lockSubmissionCommentAccess.mockResolvedValue(false);
+
+    const response = await action({
+      request: new Request(
+        'https://example.com/api/model/submission-comment/comment-1',
+        { method: 'DELETE' }
+      ),
+      params: { id: 'comment-1' },
+    } as any);
+
+    expect((response as { init?: { status?: number } }).init?.status).toBe(409);
+    expect(prisma.submissionComment.findFirst).toHaveBeenCalledTimes(1);
+    expect(prisma.submissionComment.deleteMany).not.toHaveBeenCalled();
+    expect(prisma.submissionActivity.create).not.toHaveBeenCalled();
+  });
+
   test('revalidates teacher access in the delete predicate', async () => {
     prisma.submissionComment.findFirst.mockResolvedValue({
       id: 'comment-1',
@@ -178,6 +213,37 @@ describe('api.model.submission-comment.$id', () => {
 
     const payload = response as { init?: { status?: number } };
     expect(payload.init?.status).toBe(409);
+    expect(prisma.submissionActivity.create).not.toHaveBeenCalled();
+  });
+
+  test('returns 409 and writes nothing when locked update access was revoked', async () => {
+    prisma.submissionComment.findFirst.mockResolvedValue({
+      id: 'comment-1',
+      content: 'Original content',
+      excerpt: 'the thesis',
+      occurrence: 1,
+      updatedAt: new Date('2026-08-20T10:00:00.000Z'),
+      submission: {
+        id: 'sub-1',
+        releasedAt: null,
+        document: { membership: { organizationId: 'org-1' } },
+      },
+    });
+    lockSubmissionCommentAccess.mockResolvedValue(false);
+    const form = new FormData();
+    form.set('content', 'Changed content');
+
+    const response = await action({
+      request: new Request(
+        'https://example.com/api/model/submission-comment/comment-1',
+        { method: 'POST', body: form }
+      ),
+      params: { id: 'comment-1' },
+    } as any);
+
+    expect((response as { init?: { status?: number } }).init?.status).toBe(409);
+    expect(prisma.submissionComment.findFirst).toHaveBeenCalledTimes(1);
+    expect(prisma.submissionComment.updateMany).not.toHaveBeenCalled();
     expect(prisma.submissionActivity.create).not.toHaveBeenCalled();
   });
 

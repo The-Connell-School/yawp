@@ -11,6 +11,7 @@ import {
   resolveSubmissionActivityActorMembershipId,
   submissionActivityEventTypes,
 } from '~/domain/submissions/submission-activity.server';
+import { lockSubmissionCommentAccess } from '~/domain/submissions/submission-comment-access.server';
 
 class SubmissionCommentConflictError extends Error {}
 
@@ -98,10 +99,43 @@ export async function action({ request, params }: ActionFunctionArgs) {
   if (request.method === 'DELETE') {
     try {
       await prisma.$transaction(async (tx) => {
+        const stillAuthorized = await lockSubmissionCommentAccess(tx, {
+          submissionId: comment.submission.id,
+          actorMembershipId: profile.id,
+          actorUserId: userId,
+        });
+        if (!stillAuthorized) throw new SubmissionCommentConflictError();
+
+        const currentComment = await tx.submissionComment.findFirst({
+          where: {
+            id: params.id,
+            submissionId: comment.submission.id,
+          },
+          select: {
+            id: true,
+            content: true,
+            updatedAt: true,
+            excerpt: true,
+            occurrence: true,
+            submission: {
+              select: {
+                id: true,
+                releasedAt: true,
+                document: {
+                  select: {
+                    membership: { select: { organizationId: true } },
+                  },
+                },
+              },
+            },
+          },
+        });
+        if (!currentComment) throw new SubmissionCommentConflictError();
+
         const deleted = await tx.submissionComment.deleteMany({
           where: {
             id: params.id,
-            updatedAt: comment.updatedAt,
+            updatedAt: currentComment.updatedAt,
             submission: {
               is: { document: { is: documentAccessWhere } },
             },
@@ -109,10 +143,10 @@ export async function action({ request, params }: ActionFunctionArgs) {
         });
         if (deleted.count !== 1) throw new SubmissionCommentConflictError();
         const organizationId =
-          comment.submission.document.membership.organizationId ??
+          currentComment.submission.document.membership.organizationId ??
           profile.organization.id;
         await recordSubmissionActivity(tx, {
-          submissionId: comment.submission.id,
+          submissionId: currentComment.submission.id,
           organizationId,
           actorMembershipId: resolveSubmissionActivityActorMembershipId({
             actorMembershipId: profile.id,
@@ -122,14 +156,14 @@ export async function action({ request, params }: ActionFunctionArgs) {
           actorUserId: userId,
           eventType: submissionActivityEventTypes.commentDeleted,
           source: 'submission-comment',
-          occurredAfterRelease: comment.submission.releasedAt != null,
+          occurredAfterRelease: currentComment.submission.releasedAt != null,
           changes: buildSubmissionActivityChanges({
             before: {
               comment: {
-                id: comment.id,
-                content: comment.content,
-                excerpt: comment.excerpt,
-                occurrence: comment.occurrence,
+                id: currentComment.id,
+                content: currentComment.content,
+                excerpt: currentComment.excerpt,
+                occurrence: currentComment.occurrence,
               },
             },
             after: { comment: null },
@@ -164,16 +198,44 @@ export async function action({ request, params }: ActionFunctionArgs) {
     );
   }
 
-  if (content === comment.content) {
-    return dataResponse({ success: true }, { status: 200 });
-  }
-
   try {
     await prisma.$transaction(async (tx) => {
+      const stillAuthorized = await lockSubmissionCommentAccess(tx, {
+        submissionId: comment.submission.id,
+        actorMembershipId: profile.id,
+        actorUserId: userId,
+      });
+      if (!stillAuthorized) throw new SubmissionCommentConflictError();
+
+      const currentComment = await tx.submissionComment.findFirst({
+        where: {
+          id: params.id,
+          submissionId: comment.submission.id,
+        },
+        select: {
+          id: true,
+          content: true,
+          updatedAt: true,
+          submission: {
+            select: {
+              id: true,
+              releasedAt: true,
+              document: {
+                select: {
+                  membership: { select: { organizationId: true } },
+                },
+              },
+            },
+          },
+        },
+      });
+      if (!currentComment) throw new SubmissionCommentConflictError();
+      if (content === currentComment.content) return;
+
       const updated = await tx.submissionComment.updateMany({
         where: {
           id: params.id,
-          updatedAt: comment.updatedAt,
+          updatedAt: currentComment.updatedAt,
           submission: {
             is: { document: { is: documentAccessWhere } },
           },
@@ -182,10 +244,10 @@ export async function action({ request, params }: ActionFunctionArgs) {
       });
       if (updated.count !== 1) throw new SubmissionCommentConflictError();
       const organizationId =
-        comment.submission.document.membership.organizationId ??
+        currentComment.submission.document.membership.organizationId ??
         profile.organization.id;
       await recordSubmissionActivity(tx, {
-        submissionId: comment.submission.id,
+        submissionId: currentComment.submission.id,
         organizationId,
         actorMembershipId: resolveSubmissionActivityActorMembershipId({
           actorMembershipId: profile.id,
@@ -195,9 +257,9 @@ export async function action({ request, params }: ActionFunctionArgs) {
         actorUserId: userId,
         eventType: submissionActivityEventTypes.commentUpdated,
         source: 'submission-comment',
-        occurredAfterRelease: comment.submission.releasedAt != null,
+        occurredAfterRelease: currentComment.submission.releasedAt != null,
         changes: buildSubmissionActivityChanges({
-          before: { comment: { content: comment.content } },
+          before: { comment: { content: currentComment.content } },
           after: { comment: { content } },
           fields: ['comment'],
         }),
