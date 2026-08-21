@@ -1,8 +1,11 @@
 import { Form } from 'react-router';
+import { formatDateOnly } from '~/utils/date-only';
 
 export type StudentAssignmentCardAssignment = {
   /** ClassAssignment id — what the start action is posted against. */
   id: string;
+  /** Optional due date for this class assignment. */
+  dueAt?: Date | string | null;
   assignment: {
     title: string | null;
     prompt: string | null;
@@ -43,6 +46,11 @@ export function StudentAssignmentCard({
           <p className="text-xs text-muted-foreground">
             {classAssignment.assignment.assignmentType.title}
           </p>
+          {classAssignment.dueAt ? (
+            <p className="text-xs text-muted-foreground">
+              Due {formatDateOnly(classAssignment.dueAt)}
+            </p>
+          ) : null}
           {classLabel ? (
             <p className="text-xs text-muted-foreground">{classLabel}</p>
           ) : null}

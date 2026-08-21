@@ -78,6 +78,8 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     },
     select: {
       id: true,
+      postAt: true,
+      dueAt: true,
       classId: true,
       class: {
         select: {
@@ -186,6 +188,8 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     assignment: {
       id: active.assignment.id,
       classAssignmentId: active.id,
+      postAt: active.postAt,
+      dueAt: active.dueAt,
       title: active.assignment.title,
       prompt: active.assignment.prompt,
       promptAttachmentName: active.assignment.promptAttachmentName,
@@ -403,6 +407,8 @@ export default function AssignmentDetailRoute() {
           initialAssignmentTypeId={assignment.assignmentTypeId}
           initialTitle={assignment.title ?? ''}
           initialPrompt={assignment.prompt}
+          initialPostAt={assignment.postAt ?? null}
+          initialDueAt={assignment.dueAt ?? null}
           initialSubmitForGrade={assignment.submitForGrade}
           initialPointValue={assignment.pointValue}
           initialTutorEnabled={assignment.tutorEnabled}
