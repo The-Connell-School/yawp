@@ -151,6 +151,44 @@ describe('api.model.submission.$id', () => {
     );
   });
 
+  test('fails closed when the required title audit write is unavailable', async () => {
+    const previous = process.env.SUBMISSION_ACTIVITY_WRITES_ENABLED;
+    process.env.SUBMISSION_ACTIVITY_WRITES_ENABLED = 'false';
+    prisma.submission.findFirst.mockResolvedValue({
+      id: 'sub-1',
+      title: 'Old title',
+      updatedAt: new Date('2026-08-20T10:00:00.000Z'),
+      releasedAt: null,
+      document: { membership: { organizationId: 'org-1' } },
+    });
+    const form = new FormData();
+    form.set('intent', 'updateTitle');
+    form.set('title', 'New title');
+
+    try {
+      await expect(
+        action({
+          request: new Request(
+            'https://example.com/api/model/submission/sub-1',
+            { method: 'POST', body: form }
+          ),
+          params: { id: 'sub-1' },
+          context: {},
+        } as any)
+      ).rejects.toThrow(
+        'Submission activity recording is temporarily unavailable'
+      );
+      expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+      expect(prisma.submissionActivity.create).not.toHaveBeenCalled();
+    } finally {
+      if (previous === undefined) {
+        delete process.env.SUBMISSION_ACTIVITY_WRITES_ENABLED;
+      } else {
+        process.env.SUBMISSION_ACTIVITY_WRITES_ENABLED = previous;
+      }
+    }
+  });
+
   test('returns 409 and writes no activity when the title preimage is stale', async () => {
     prisma.submission.findFirst.mockResolvedValue({
       id: 'sub-1',

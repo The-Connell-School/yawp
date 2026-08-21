@@ -90,6 +90,49 @@ describe('api.model.submission-comment', () => {
     );
   });
 
+  test('fails closed when the required comment audit write is unavailable', async () => {
+    const previous = process.env.SUBMISSION_ACTIVITY_WRITES_ENABLED;
+    process.env.SUBMISSION_ACTIVITY_WRITES_ENABLED = 'false';
+    prisma.submission.findFirst.mockResolvedValue({
+      id: 'sub-1',
+      releasedAt: null,
+      document: { membership: { organizationId: 'org-1' } },
+    });
+    prisma.submissionComment.create.mockResolvedValue({
+      id: 'comment-1',
+      content: 'Required audit',
+      excerpt: 'evidence',
+      occurrence: 1,
+      submissionId: 'sub-1',
+      profileId: 'profile-1',
+    });
+    const form = new FormData();
+    form.append('submissionId', 'sub-1');
+    form.append('content', 'Required audit');
+    form.append('excerpt', 'evidence');
+
+    try {
+      await expect(
+        action({
+          request: new Request(
+            'https://example.com/api/model/submission-comment',
+            { method: 'POST', body: form }
+          ),
+        } as any)
+      ).rejects.toThrow(
+        'Submission activity recording is temporarily unavailable'
+      );
+      expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+      expect(prisma.submissionActivity.create).not.toHaveBeenCalled();
+    } finally {
+      if (previous === undefined) {
+        delete process.env.SUBMISSION_ACTIVITY_WRITES_ENABLED;
+      } else {
+        process.env.SUBMISSION_ACTIVITY_WRITES_ENABLED = previous;
+      }
+    }
+  });
+
   test('returns 403 when submission not found or user not authorized', async () => {
     prisma.submission.findFirst.mockResolvedValue(null);
 
