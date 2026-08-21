@@ -1,6 +1,9 @@
 /* eslint-disable no-console */
 import { createPrismaClient } from './local-dev/connection';
-import { PRODUCTION_QA_IDS } from './production-qa-profile';
+import {
+  PRODUCTION_QA_IDS,
+  assertProductionQaIdentitySafety,
+} from './production-qa-profile';
 
 type MigrationRow = {
   migration_name: string;
@@ -68,7 +71,13 @@ try {
     throw new Error('Historical submission activity was backfilled.');
   }
 
-  const [organization, submission, fixtureActivityCount] = await Promise.all([
+  const [
+    organization,
+    submission,
+    fixtureActivityCount,
+    fixtureUsers,
+    fixtureMemberships,
+  ] = await Promise.all([
     prisma.organization.findUnique({
       where: { id: PRODUCTION_QA_IDS.organizationId },
       select: { id: true, submissionActivityEnabled: true },
@@ -88,7 +97,55 @@ try {
         submissionId: PRODUCTION_QA_IDS.submissionId,
       },
     }),
+    prisma.user.findMany({
+      where: {
+        id: {
+          in: [
+            PRODUCTION_QA_IDS.teacherUserId,
+            PRODUCTION_QA_IDS.studentUserId,
+          ],
+        },
+      },
+      select: {
+        id: true,
+        email: true,
+        memberships: {
+          select: {
+            id: true,
+            userId: true,
+            organizationId: true,
+            role: true,
+            isOrgOwner: true,
+          },
+        },
+      },
+    }),
+    prisma.orgMembership.findMany({
+      where: {
+        id: {
+          in: [
+            PRODUCTION_QA_IDS.teacherMembershipId,
+            PRODUCTION_QA_IDS.studentMembershipId,
+          ],
+        },
+      },
+      select: {
+        id: true,
+        userId: true,
+        organizationId: true,
+        role: true,
+        isOrgOwner: true,
+      },
+    }),
   ]);
+
+  assertProductionQaIdentitySafety({
+    users: fixtureUsers,
+    memberships: fixtureMemberships,
+  });
+  if (fixtureUsers.length !== 2 || fixtureMemberships.length !== 2) {
+    throw new Error('Production QA identity graph is incomplete.');
+  }
 
   if (!organization?.submissionActivityEnabled) {
     throw new Error('Disposable production QA organization is not enabled.');
@@ -126,6 +183,8 @@ try {
           fixtureOrganizationId: organization.id,
           fixtureSubmissionId: submission.id,
           fixtureActivityCount,
+          fixtureUserIds: fixtureUsers.map(({ id }) => id).sort(),
+          fixtureMembershipIds: fixtureMemberships.map(({ id }) => id).sort(),
           acceptedResidue:
             'One exact-ID QA ledger row is retained until the next run resets the disposable fixture with its session-scoped cleanup capability.',
         },

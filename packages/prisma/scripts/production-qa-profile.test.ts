@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import {
   PRODUCTION_QA_IDS,
   PRODUCTION_QA_ORGANIZATION_FLAGS,
+  assertProductionQaIdentitySafety,
   assertProductionQaPassword,
   redactedProductionQaSummary,
 } from './production-qa-profile';
@@ -68,5 +69,69 @@ describe('production QA profile guardrails', () => {
     expect(JSON.stringify(redacted)).not.toContain('secret-password');
     expect(JSON.stringify(redacted)).not.toContain('$2a$10$secret');
     expect(redacted.passwordConfigured).toBe(true);
+  });
+
+  test('fails closed when a reserved email belongs to another user', () => {
+    expect(() =>
+      assertProductionQaIdentitySafety({
+        users: [
+          {
+            id: 'real-teacher-user',
+            email: PRODUCTION_QA_IDS.teacherEmail,
+            memberships: [],
+          },
+        ],
+        memberships: [],
+      })
+    ).toThrow(/reserved email or user ID collision/);
+  });
+
+  test('fails closed when an exact fixture user has a non-QA membership', () => {
+    expect(() =>
+      assertProductionQaIdentitySafety({
+        users: [
+          {
+            id: PRODUCTION_QA_IDS.teacherUserId,
+            email: PRODUCTION_QA_IDS.teacherEmail,
+            memberships: [
+              {
+                id: 'real-org-membership',
+                userId: PRODUCTION_QA_IDS.teacherUserId,
+                organizationId: 'real-org',
+                role: 'TEACHER',
+                isOrgOwner: false,
+              },
+            ],
+          },
+        ],
+        memberships: [],
+      })
+    ).toThrow(/non-QA membership graph/);
+  });
+
+  test('accepts absent identities or the exact QA-only identity graph', () => {
+    expect(() =>
+      assertProductionQaIdentitySafety({ users: [], memberships: [] })
+    ).not.toThrow();
+
+    const teacherMembership = {
+      id: PRODUCTION_QA_IDS.teacherMembershipId,
+      userId: PRODUCTION_QA_IDS.teacherUserId,
+      organizationId: PRODUCTION_QA_IDS.organizationId,
+      role: 'TEACHER' as const,
+      isOrgOwner: true,
+    };
+    expect(() =>
+      assertProductionQaIdentitySafety({
+        users: [
+          {
+            id: PRODUCTION_QA_IDS.teacherUserId,
+            email: PRODUCTION_QA_IDS.teacherEmail,
+            memberships: [teacherMembership],
+          },
+        ],
+        memberships: [teacherMembership],
+      })
+    ).not.toThrow();
   });
 });
