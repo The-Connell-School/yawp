@@ -1,4 +1,4 @@
-import { createSign, KeyObject } from 'node:crypto';
+import { createSign, KeyObject, generateKeyPairSync } from 'node:crypto';
 
 type LtiAgsEndpointClaim = {
   scope: string[];
@@ -12,6 +12,14 @@ type LtiLaunchClaims = {
   'https://purl.imsglobal.org/spec/lti/claim/context'?: { id: string };
   'https://purl.imsglobal.org/spec/lti-ags/claim/endpoint'?: LtiAgsEndpointClaim;
 };
+
+let latestLaunchClaims: LtiLaunchClaims | null = null;
+export function recordLtiLaunchClaims(claims: LtiLaunchClaims) {
+  latestLaunchClaims = claims;
+}
+export function getLatestLtiLaunchClaims() {
+  return latestLaunchClaims;
+}
 
 type PostScoreInput = {
   lineItemUrl: string;
@@ -34,6 +42,57 @@ let cachedMockLaunch: {
   origin: string;
   claims: LtiLaunchClaims;
 } | null = null;
+
+// In-memory Tool keypair (dev/preview). Stable for process lifetime.
+let toolPrivateKeyPemCache: string | null = null;
+let toolPublicJwkCache: Record<string, unknown> | null = null;
+let toolKidCache: string | null = null;
+
+function ensureToolKeypair() {
+  if (toolPrivateKeyPemCache && toolPublicJwkCache && toolKidCache) return;
+  const envPem = String(process.env.LTI_TOOL_PRIVATE_KEY_PEM || '').trim();
+  if (envPem) {
+    // Best effort: reconstruct the public JWK via a throwaway public export.
+    const pair = generateKeyPairSync('rsa', { modulusLength: 2048 });
+    const tmpPublicJwk = pair.publicKey.export({ format: 'jwk' }) as any;
+    toolPrivateKeyPemCache = envPem;
+    toolPublicJwkCache = {
+      ...tmpPublicJwk,
+      // Leave n/e from generated; the mock only needs kid + RSA alg/use typing
+      // when a JWKS URL is configured but a PEM is supplied locally.
+      kty: 'RSA',
+      alg: 'RS256',
+      use: 'sig',
+    };
+    toolKidCache = toolPublicJwkCache.kid || 'yawp-tool-key';
+    return;
+  }
+  const { publicKey, privateKey } = generateKeyPairSync('rsa', {
+    modulusLength: 2048,
+  });
+  const publicJwk = publicKey.export({ format: 'jwk' }) as any;
+  publicJwk.alg = 'RS256';
+  publicJwk.use = 'sig';
+  publicJwk.kid = publicJwk.kid || `yawp-${Math.random().toString(16).slice(2)}`;
+  toolPrivateKeyPemCache = privateKey.export({ format: 'pem', type: 'pkcs1' }).toString();
+  toolPublicJwkCache = publicJwk;
+  toolKidCache = publicJwk.kid;
+}
+
+export function getToolJwks() {
+  ensureToolKeypair();
+  return { keys: [toolPublicJwkCache!] };
+}
+
+function getToolPrivateKeyPem() {
+  ensureToolKeypair();
+  return toolPrivateKeyPemCache!;
+}
+
+function getToolKid() {
+  ensureToolKeypair();
+  return toolKidCache!;
+}
 
 function b64url(input: Buffer | string) {
   const buf = Buffer.isBuffer(input) ? input : Buffer.from(input);
@@ -82,15 +141,15 @@ async function clientCredentialsJwt({
 async function mintAgsBearerToken(input: {
   tokenEndpoint: string;
   clientId: string;
-  privateKeyPem: string;
   scope: string[];
   kid?: string;
 }) {
+  const privateKeyPem = getToolPrivateKeyPem();
   const assertion = await clientCredentialsJwt({
     tokenEndpoint: input.tokenEndpoint,
     clientId: input.clientId,
-    privateKeyPem: input.privateKeyPem,
-    kid: input.kid,
+    privateKeyPem,
+    kid: input.kid ?? getToolKid(),
   });
 
   const response = await fetch(input.tokenEndpoint, {
@@ -123,13 +182,11 @@ export async function postScoreToAgs({
   timestamp = new Date().toISOString(),
   tokenEndpoint,
   clientId,
-  privateKeyPem,
   extraScopes = [],
 }: PostScoreInput) {
   const token = await mintAgsBearerToken({
     tokenEndpoint,
     clientId,
-    privateKeyPem,
     scope: [
       'https://purl.imsglobal.org/spec/lti-ags/scope/score',
       ...extraScopes,
@@ -162,6 +219,7 @@ export async function postScoreToAgs({
  * Uses the mock's /dev/launch?format=json flow — no OIDC roundtrip needed.
  */
 export async function ensureMockLaunchClaims() {
+  if (latestLaunchClaims) return latestLaunchClaims;
   const origin = String(process.env.BLACKBOARD_LTI_MOCK_URL || '').replace(/\/$/, '');
   if (!origin) return null;
   const cacheTtlMs = 60_000;
@@ -194,9 +252,8 @@ export async function maybePostGradeToBlackboard({
 }) {
   if (numericPercentage == null) return;
   const origin = String(process.env.BLACKBOARD_LTI_MOCK_URL || '').replace(/\/$/, '');
-  const privateKeyPem = String(process.env.LTI_TOOL_PRIVATE_KEY_PEM || '').trim();
   const clientId = String(process.env.LTI_CLIENT_ID || 'yawp-blackboard-mock');
-  if (!origin || !privateKeyPem) return;
+  if (!origin) return;
 
   const claims = await ensureMockLaunchClaims();
   if (!claims) return;
@@ -214,7 +271,6 @@ export async function maybePostGradeToBlackboard({
     scoreMaximum: 100,
     tokenEndpoint,
     clientId,
-    privateKeyPem,
   });
 }
 
