@@ -1,4 +1,4 @@
-import { type ActionFunctionArgs } from 'react-router';
+import { type ActionFunctionArgs, type LoaderFunctionArgs, redirect } from 'react-router';
 import { parseFormData, validationError } from '@rvf/react-router';
 import { z } from 'zod';
 import {
@@ -89,4 +89,10 @@ export async function action({ request, params }: ActionFunctionArgs) {
     type: 'success',
     description: 'Document created successfully.',
   });
+}
+
+export async function loader({ request }: LoaderFunctionArgs) {
+  // GET requests to the start endpoint should be handled (not error).
+  // Redirect users back to the assignments tab where they can initiate the start flow.
+  return redirect('/app?tab=assignments');
 }
