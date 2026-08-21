@@ -36,6 +36,10 @@ const QA_RESIDUE_DECISION = {
 } as const;
 const KNOWN_QA_ORGANIZATION_IDS = ['prod-qa-org', 'prod-qa-v3-org'] as const;
 const KNOWN_QA_USER_IDS = [
+  // v1 adopted these pre-existing reserved-email users before fixture IDs were
+  // made collision-safe. Keep their exact IDs visible until QA cleanup.
+  'c8f1ypumy0kllbpjyp8r2rs4',
+  'bqaea3v1thrx7gm8vh054aix',
   'prod-qa-teacher-user',
   'prod-qa-student-user',
   'prod-qa-v2-teacher-user',
@@ -52,6 +56,9 @@ const KNOWN_QA_USER_EMAILS = [
   'prod.qa.student.v3@brock.software',
 ] as const;
 const KNOWN_QA_MEMBERSHIP_IDS = [
+  // v1 memberships belonging to the exact reserved-email users above.
+  'amxz70x2aulax4p9f1aa1ueh',
+  'yqbzjep0qakm5bc3y2pi7akf',
   'prod-qa-teacher-membership',
   'prod-qa-student-membership',
   'prod-qa-v2-teacher-membership',
@@ -60,6 +67,8 @@ const KNOWN_QA_MEMBERSHIP_IDS = [
   'prod-qa-v3-student-membership',
 ] as const;
 const KNOWN_QA_SUBMISSION_IDS = [
+  // v1 browser-created submission retained as disposable QA residue.
+  'ut46ypfe6bpj2i52o37pp7o7',
   'prod-qa-released-submission',
   'prod-qa-v3-released-submission',
 ] as const;
