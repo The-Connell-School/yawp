@@ -1,6 +1,8 @@
 import { useState, type MouseEvent, type ReactNode } from 'react';
 import {
   type LoaderFunctionArgs,
+  type ActionFunctionArgs,
+  data as dataResponse,
   Link,
   redirect,
   useLoaderData,
@@ -22,7 +24,11 @@ import {
 } from '~/components/ui/select';
 import { AP_HISTORY_ASSIGNMENT_TYPE_KEY } from '~/domain/ap-history/schema';
 import { AssignmentCreationSheet } from '~/components/assignments/assignment-creation-sheet';
-import type { GradingAssistantStrictnessLevel } from '~/domain/grading/grading-assistant-strictness';
+import {
+  DEFAULT_GRADING_ASSISTANT_STRICTNESS_LEVEL,
+  parseGradingAssistantStrictnessLevel,
+  type GradingAssistantStrictnessLevel,
+} from '~/domain/grading/grading-assistant-strictness';
 import { formatClassLabel } from '~/utils/class-display';
 import { getAvailableAssignmentTypesForScopes } from '~/utils/assignment-type-access.server';
 import {
@@ -31,6 +37,19 @@ import {
 } from '../app.my-classes.$classId/assignment-summary-sheet';
 import { mergeClassDocumentsViewPreferences } from '../app.my-classes.$classId/class-documents-view-preferences';
 import type { ClassInsightSummary } from '~/domain/assignment-insights/class-insight-synthesis';
+import {
+  AssignmentPromptAttachmentError,
+  assignmentPromptAttachmentRequestTooLarge,
+  deleteAssignmentPromptAttachment,
+  uploadAssignmentPromptAttachment,
+} from '~/domain/assignments/assignment-prompt-attachment.server';
+import {
+  DEFAULT_ASSIGNMENT_POINT_VALUE,
+  parseAssignmentGradingIntent,
+} from '~/utils/assignment-grading-intent.server';
+import { parseAssignmentTutorEnabled } from '~/utils/assignment-tutor-enabled.server';
+import { createAssignmentDeployedToClasses } from '~/utils/assignment-deployment.server';
+import { isAssignmentTypeAvailableForEveryScope } from '~/utils/assignment-type-access.server';
 
 /**
  * Page chrome the class route used to provide while this page was nested
@@ -205,6 +224,316 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       insight,
     },
   };
+}
+
+export async function action({ request, params }: ActionFunctionArgs) {
+  const userId = await requireUserId(request);
+  const profile = await requireMembership(request, userId);
+  if (profile.role !== 'TEACHER') {
+    return dataResponse(
+      { success: false, message: 'Only teachers can manage assignments.' },
+      { status: 403 }
+    );
+  }
+
+  const url = new URL(request.url);
+  const classId = url.searchParams.get('classId');
+  if (!classId) {
+    return dataResponse(
+      { success: false, message: 'Class is required.' },
+      { status: 400 }
+    );
+  }
+
+  // Verify the teacher has access to this class
+  const classAccess = await prisma.class.findFirst({
+    where: { id: classId, teachers: { some: { id: profile.id } } },
+    select: {
+      id: true,
+      school: { select: { id: true, organizationId: true } },
+    },
+  });
+  if (!classAccess) {
+    return dataResponse(
+      { success: false, message: 'Class not found.' },
+      { status: 404 }
+    );
+  }
+
+  const formData = await request.formData();
+  const intent = formData.get('intent')?.toString();
+
+  if (assignmentPromptAttachmentRequestTooLarge(request)) {
+    return dataResponse(
+      { success: false, message: 'PDF is too large. Maximum size is 10 MB.' },
+      { status: 413 }
+    );
+  }
+
+  if (intent === 'create-assignment' || intent === 'update-assignment') {
+    const assignmentIdParam = params.assignmentId;
+    const assignmentId = formData.get('assignmentId')?.toString() ?? assignmentIdParam ?? '';
+    const assignmentTypeId = formData.get('assignmentTypeId')?.toString();
+    const titleRaw = formData.get('title')?.toString() ?? '';
+    const promptRaw = formData.get('prompt')?.toString() ?? '';
+    const strictnessRaw = formData.get('gradingAssistantStrictnessLevel');
+    const postAtRaw = formData.get('postAt')?.toString()?.trim() ?? '';
+    const dueAtRaw = formData.get('dueAt')?.toString()?.trim() ?? '';
+
+    const title = titleRaw.trim() || null;
+    const prompt = promptRaw.trim();
+    const gradingAssistantStrictnessLevel =
+      intent === 'create-assignment'
+        ? strictnessRaw
+          ? parseGradingAssistantStrictnessLevel(strictnessRaw)
+          : DEFAULT_GRADING_ASSISTANT_STRICTNESS_LEVEL
+        : null;
+
+    if (!assignmentTypeId) {
+      return dataResponse(
+        { success: false, message: 'Assignment type is required.' },
+        { status: 400 }
+      );
+    }
+
+    // Scope assignment type availability to this teacher+class
+    const allowedAssignmentTypes = await getAvailableAssignmentTypesForScopes<{
+      id: string;
+      systemKey: string | null;
+    }>({
+      scopes: [
+        {
+          organizationId: classAccess.school.organizationId,
+          schoolId: classAccess.school.id,
+          teacherProfileId: profile.id,
+        },
+      ],
+      select: { id: true, systemKey: true },
+    });
+    const selectedAssignmentType = allowedAssignmentTypes.find(
+      (type) => type.id === assignmentTypeId
+    );
+    if (
+      selectedAssignmentType?.systemKey === AP_HISTORY_ASSIGNMENT_TYPE_KEY
+    ) {
+      return dataResponse(
+        {
+          success: false,
+          message: 'Choose an APUSH prompt from the library first.',
+        },
+        { status: 400 }
+      );
+    }
+
+    if (!prompt) {
+      return dataResponse(
+        { success: false, message: 'Prompt is required.' },
+        { status: 400 }
+      );
+    }
+    if (
+      intent === 'create-assignment' &&
+      !gradingAssistantStrictnessLevel
+    ) {
+      return dataResponse(
+        {
+          success: false,
+          message: 'Grading assistant strictness level is invalid.',
+        },
+        { status: 400 }
+      );
+    }
+
+    const gradingIntent = parseAssignmentGradingIntent(formData);
+    if (!gradingIntent.success) {
+      return dataResponse(
+        { success: false, message: gradingIntent.message },
+        { status: 400 }
+      );
+    }
+
+    const promptAttachment = formData.get('promptAttachment');
+    let promptAttachmentData:
+      | {
+          promptAttachmentKey: string | null;
+          promptAttachmentName: string | null;
+          promptAttachmentSize: number | null;
+        }
+      | undefined =
+      formData.get('removePromptAttachment') === 'true'
+        ? {
+            promptAttachmentKey: null,
+            promptAttachmentName: null,
+            promptAttachmentSize: null,
+          }
+        : undefined;
+    if (promptAttachment instanceof File && promptAttachment.size > 0) {
+      try {
+        promptAttachmentData =
+          await uploadAssignmentPromptAttachment(promptAttachment);
+      } catch (error) {
+        if (error instanceof AssignmentPromptAttachmentError) {
+          return dataResponse(
+            { success: false, message: error.message },
+            { status: 400 }
+          );
+        }
+        throw error;
+      }
+    }
+
+    const tutorEnabledResult = parseAssignmentTutorEnabled(formData);
+    if (!tutorEnabledResult.success) {
+      return dataResponse(
+        { success: false, message: tutorEnabledResult.message },
+        { status: 400 }
+      );
+    }
+
+    // Parse optional deployment dates (per-class)
+    let postAt: Date | null | undefined = undefined;
+    let dueAt: Date | null | undefined = undefined;
+    if (postAtRaw) {
+      const parsed = new Date(postAtRaw);
+      if (Number.isNaN(parsed.getTime())) {
+        return dataResponse(
+          { success: false, message: 'The post date is invalid.' },
+          { status: 400 }
+        );
+      }
+      postAt = parsed;
+    } else if (formData.has('postAt')) {
+      postAt = null;
+    }
+    if (dueAtRaw) {
+      const parsed = new Date(dueAtRaw);
+      if (Number.isNaN(parsed.getTime())) {
+        return dataResponse(
+          { success: false, message: 'The due date is invalid.' },
+          { status: 400 }
+        );
+      }
+      dueAt = parsed;
+    } else if (formData.has('dueAt')) {
+      dueAt = null;
+    }
+
+    if (intent === 'create-assignment') {
+      try {
+        await createAssignmentDeployedToClasses({
+          data: {
+            assignmentTypeId,
+            title,
+            prompt,
+            submitForGrade: gradingIntent.data.submitForGrade,
+            pointValue: gradingIntent.data.pointValue,
+            gradingAssistantStrictnessLevel:
+              gradingAssistantStrictnessLevel!,
+            tutorEnabled: tutorEnabledResult.value,
+            ...promptAttachmentData,
+          },
+          classIds: [classId],
+          deployment: {
+            postAt: postAt ?? null,
+            dueAt: dueAt ?? null,
+          },
+        });
+      } catch (error) {
+        if (promptAttachmentData?.promptAttachmentKey) {
+          await deleteAssignmentPromptAttachment(
+            promptAttachmentData.promptAttachmentKey
+          ).catch(() => {});
+        }
+        throw error;
+      }
+
+      return dataResponse({
+        success: true,
+        message: 'Assignment created successfully.',
+      });
+    }
+
+    // Update path
+    // Load current to validate and to cleanup attachments if needed
+    const existingAssignment = await prisma.assignment.findFirst({
+      where: {
+        id: assignmentId,
+        classAssignments: { some: { classId } },
+      },
+      select: {
+        id: true,
+        assignmentTypeId: true,
+        promptAttachmentKey: true,
+        assignmentType: { select: { systemKey: true } },
+      },
+    });
+    if (!existingAssignment) {
+      return dataResponse(
+        { success: false, message: 'Assignment not found.' },
+        { status: 404 }
+      );
+    }
+
+    try {
+      await prisma.assignment.update({
+        where: { id: existingAssignment.id },
+        data: {
+          assignmentTypeId,
+          title,
+          prompt,
+          submitForGrade: gradingIntent.data.submitForGrade,
+          pointValue: gradingIntent.data.pointValue,
+          ...(gradingAssistantStrictnessLevel
+            ? { gradingAssistantStrictnessLevel }
+            : {}),
+          ...(formData.has('tutorEnabled')
+            ? { tutorEnabled: tutorEnabledResult.value }
+            : {}),
+          ...promptAttachmentData,
+        },
+      });
+      if (postAt !== undefined || dueAt !== undefined) {
+        await prisma.classAssignment.updateMany({
+          where: { assignmentId: existingAssignment.id, classId },
+          data: {
+            ...(postAt !== undefined ? { postAt } : {}),
+            ...(dueAt !== undefined ? { dueAt } : {}),
+          },
+        });
+      }
+    } catch (error) {
+      if (
+        promptAttachmentData?.promptAttachmentKey &&
+        promptAttachmentData.promptAttachmentKey !==
+          existingAssignment.promptAttachmentKey
+      ) {
+        await deleteAssignmentPromptAttachment(
+          promptAttachmentData.promptAttachmentKey
+        ).catch(() => {});
+      }
+      throw error;
+    }
+    if (
+      promptAttachmentData &&
+      existingAssignment.promptAttachmentKey &&
+      existingAssignment.promptAttachmentKey !==
+        promptAttachmentData.promptAttachmentKey
+    ) {
+      await deleteAssignmentPromptAttachment(
+        existingAssignment.promptAttachmentKey
+      ).catch(() => {});
+    }
+
+    return dataResponse({
+      success: true,
+      message: 'Assignment updated successfully.',
+    });
+  }
+
+  return dataResponse(
+    { success: false, message: 'Unsupported action.' },
+    { status: 400 }
+  );
 }
 
 export default function AssignmentDetailRoute() {
