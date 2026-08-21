@@ -94,6 +94,16 @@ function getToolKid() {
   return toolKidCache!;
 }
 
+export function signToolJwt(payload: Record<string, unknown>) {
+  const header = { alg: 'RS256' as const, typ: 'JWT' as const, kid: getToolKid() };
+  const signingInput = `${b64url(JSON.stringify(header))}.${b64url(JSON.stringify(payload))}`;
+  const signer = createSign('RSA-SHA256');
+  signer.update(signingInput);
+  signer.end();
+  const signature = signer.sign(getToolPrivateKeyPem());
+  return `${signingInput}.${b64url(signature)}`;
+}
+
 function b64url(input: Buffer | string) {
   const buf = Buffer.isBuffer(input) ? input : Buffer.from(input);
   return buf

@@ -4,7 +4,12 @@ import {
   type ActionFunctionArgs,
   type LoaderFunctionArgs,
 } from 'react-router';
-import { recordLtiLaunchClaims } from '~/integrations/blackboard-ags.server';
+import { recordLtiLaunchClaims, signToolJwt } from '~/integrations/blackboard-ags.server';
+import { getPreviewAccessSeat, isPreviewAccessGateEnabled } from '~/utils/preview-access.server';
+import { prisma } from '~/utils/db.server';
+import { authSessionStorage } from '~/cookie-session-storages/authentication.server';
+import { setMembershipId } from '~/cookies/membership-id.server';
+import { combineHeaders } from '~/utils/misc';
 
 export async function loader() {
   // Launch is a POST; GET can confirm endpoint is up
@@ -17,15 +22,131 @@ export async function action({ request }: ActionFunctionArgs) {
   if (!idToken) {
     return dataResponse({ error: 'missing id_token' }, { status: 400 });
   }
+  let claims: any = null;
   try {
     const parts = idToken.split('.');
     if (parts.length < 2) throw new Error('malformed jwt');
-    const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString('utf8'));
-    recordLtiLaunchClaims(payload);
+    claims = JSON.parse(Buffer.from(parts[1], 'base64').toString('utf8'));
+    recordLtiLaunchClaims(claims);
   } catch (error) {
     return dataResponse({ error: 'invalid id_token' }, { status: 400 });
   }
-  // Hand control back to the app — devs can navigate to class/assignment.
+
+  const messageType =
+    claims?.['https://purl.imsglobal.org/spec/lti/claim/message_type'];
+
+  // Handle Deep Linking immediately by returning a signed content item
+  if (messageType === 'LtiDeepLinkingRequest') {
+    const settings =
+      claims?.['https://purl.imsglobal.org/spec/lti-dl/claim/deep_linking_settings'] ??
+      {};
+    const returnUrl = String(settings.deep_link_return_url || '');
+    if (returnUrl) {
+      const now = Math.floor(Date.now() / 1000);
+      const responseJwt = signToolJwt({
+        iss: process.env.LTI_CLIENT_ID || 'yawp-blackboard-mock',
+        iat: now,
+        exp: now + 300,
+        nonce: claims.nonce,
+        'https://purl.imsglobal.org/spec/lti/claim/message_type':
+          'LtiDeepLinkingResponse',
+        'https://purl.imsglobal.org/spec/lti/claim/version': '1.3.0',
+        'https://purl.imsglobal.org/spec/lti/claim/deployment_id':
+          claims['https://purl.imsglobal.org/spec/lti/claim/deployment_id'],
+        'https://purl.imsglobal.org/spec/lti-dl/claim/data': settings.data,
+        'https://purl.imsglobal.org/spec/lti-dl/claim/content_items': [
+          {
+            type: 'ltiResourceLink',
+            title: 'Yawp essay',
+            url: new URL('/lti/launch', new URL(request.url).origin).toString(),
+            lineItem: { scoreMaximum: 100, label: 'Yawp essay' },
+          },
+        ],
+      });
+      await fetch(returnUrl, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ JWT: responseJwt }),
+      }).catch(() => {});
+    }
+    return redirect('/dev/blackboard-lti-mock/learn/courses');
+  }
+
+  // For a normal resource-link launch, establish a preview session as the mock user
+  if (messageType === 'LtiResourceLinkRequest' && isPreviewAccessGateEnabled()) {
+    const roles: string[] =
+      claims?.['https://purl.imsglobal.org/spec/lti/claim/roles'] || [];
+    const isLearner = roles.some((r) =>
+      /membership#Learner$/i.test(String(r))
+    );
+    const desiredEmail = isLearner
+      ? 'dev.student@yawp.local'
+      : 'dev.teacher@yawp.local';
+
+    const previewSeat = await getPreviewAccessSeat(request);
+    const user = previewSeat
+      ? await prisma.user.findFirst({
+          where: {
+            email: desiredEmail,
+            memberships: { some: { organizationId: previewSeat.organizationId } },
+          },
+          select: {
+            id: true,
+            memberships: {
+              where: { organizationId: previewSeat.organizationId },
+              select: { id: true, role: true },
+              orderBy: { createdAt: 'asc' },
+              take: 1,
+            },
+          },
+        })
+      : await prisma.user.findUnique({
+          where: { email: desiredEmail },
+          select: {
+            id: true,
+            memberships: {
+              select: { id: true, role: true },
+              orderBy: { createdAt: 'asc' },
+              take: 1,
+            },
+          },
+        });
+
+    if (user) {
+      const session = await prisma.session.create({
+        select: { id: true, expirationDate: true, userId: true },
+        data: {
+          expirationDate: new Date(Date.now() + 1000 * 60 * 60 * 8),
+          userId: user.id,
+        },
+      });
+      const authSession = await authSessionStorage.getSession(
+        request.headers.get('cookie')
+      );
+      const previousSessionId = authSession.get('en_session');
+      if (previousSessionId) {
+        void prisma.session.deleteMany({ where: { id: previousSessionId } });
+      }
+      authSession.set('en_session', session.id);
+      authSession.unset('impersonationMode');
+      authSession.unset('impersonatorUserId');
+      const membershipId = user.memberships[0]?.id ?? '';
+      return redirect(
+        '/app',
+        {
+          headers: combineHeaders(
+            {
+              'set-cookie': await authSessionStorage.commitSession(authSession, {
+                expires: session.expirationDate,
+              }),
+            },
+            { 'set-cookie': await setMembershipId(membershipId) }
+          ),
+        }
+      );
+    }
+  }
+
   return redirect('/app');
 }
 
