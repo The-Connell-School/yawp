@@ -174,6 +174,69 @@ export async function action({ request }: ActionFunctionArgs) {
           userId: user.id,
         },
       });
+      // If this is a learner launch, ensure a gradeable submission exists for this student.
+      try {
+        if (isLearner && user.memberships[0]?.id) {
+          const membershipId = user.memberships[0]!.id;
+          // Prefer keeping one per resource link per student
+          const resourceLink =
+            claims?.['https://purl.imsglobal.org/spec/lti/claim/resource_link']
+              ?.id || '_99_1';
+          const docTitle = `LTI: ${resourceLink}`;
+          let doc = await prisma.document.findFirst({
+            where: { membershipId, title: docTitle },
+            select: { id: true },
+          });
+          if (!doc) {
+            // Pick any visible assignment type as a minimal viable default
+            const assignmentType =
+              (await prisma.assignmentType.findFirst({
+                where: { archivedAt: null },
+                select: { id: true },
+                orderBy: { createdAt: 'asc' },
+              })) || (await prisma.assignmentType.findFirst({ select: { id: true } }));
+            if (assignmentType) {
+              doc = await prisma.document.create({
+                data: {
+                  title: docTitle,
+                  text: 'LTI submission body',
+                  html: '<p>LTI submission body</p>',
+                  membershipId,
+                  assignmentTypeId: assignmentType.id,
+                  submissions: {
+                    create: {
+                      title: docTitle,
+                      text: 'LTI submission body',
+                      html: '<p>LTI submission body</p>',
+                      submittedAt: new Date(),
+                    },
+                  },
+                },
+                select: { id: true },
+              });
+            }
+          } else {
+            // Ensure at least one submitted, ungraded attempt exists
+            const ungraded = await prisma.submission.findFirst({
+              where: { documentId: doc.id, gradedAt: null, archivedAt: null },
+              select: { id: true },
+            });
+            if (!ungraded) {
+              await prisma.submission.create({
+                data: {
+                  documentId: doc.id,
+                  title: docTitle,
+                  text: 'LTI submission body',
+                  html: '<p>LTI submission body</p>',
+                  submittedAt: new Date(),
+                },
+              });
+            }
+          }
+        }
+      } catch {
+        // Best-effort only: do not block launch if preview data is thin
+      }
       // Load any existing cookie session to destroy it first
       const authSession = await authSessionStorage.getSession(
         request.headers.get('cookie')
