@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { loader } from './lti.jwks.ts';
+import { loader } from '~/routes/lti.jwks.ts';
 
 function req(): Request {
   return new Request('https://example.test/lti/jwks');

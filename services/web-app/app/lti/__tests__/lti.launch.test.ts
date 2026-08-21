@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, test } from 'bun:test';
-import { action, loader } from './lti.launch.ts';
+import { action, loader } from '~/routes/lti.launch.ts';
 
 beforeAll(() => {
   process.env.BLACKBOARD_LTI_MOCK_URL = 'http://127.0.0.1:9473';
