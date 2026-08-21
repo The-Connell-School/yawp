@@ -1,4 +1,4 @@
-import { isBlackboardLtiMockUiEnabled } from '../blackboard-lti-mock-ui.server';
+import { getDomainUrl } from '../misc.tsx';
 
 function trimSlash(value: string) {
   return value.replace(/\/+$/, '');
@@ -17,27 +17,22 @@ export function getPlatformOidcAuthUrl(
   request: Request,
   env: NodeJS.ProcessEnv = process.env
 ): string {
-  // Prefer same-origin proxy in dev/preview so the access gate remains enforced.
-  if (isBlackboardLtiMockUiEnabled(env)) {
-    const proxyBase = new URL(request.url);
-    proxyBase.pathname = '/dev/blackboard-lti-mock/api/v1/gateway/oidcauth';
-    proxyBase.search = '';
-    return proxyBase.toString();
-  }
-  return `${getPlatformBaseUrl(env)}/api/v1/gateway/oidcauth`;
+  // Always prefer the same-origin proxy so HTTPS previews avoid mixed content,
+  // and the preview access gate remains enforced.
+  const base = new URL(getDomainUrl(request));
+  base.pathname = '/dev/blackboard-lti-mock/api/v1/gateway/oidcauth';
+  base.search = '';
+  return base.toString();
 }
 
 export function getPlatformDeepLinkReturnUrl(
   request: Request,
   env: NodeJS.ProcessEnv = process.env
 ): string {
-  if (isBlackboardLtiMockUiEnabled(env)) {
-    const proxyBase = new URL(request.url);
-    proxyBase.pathname = '/dev/blackboard-lti-mock/api/v1/lti/deep-linking';
-    proxyBase.search = '';
-    return proxyBase.toString();
-  }
-  return `${getPlatformBaseUrl(env)}/api/v1/lti/deep-linking`;
+  const base = new URL(getDomainUrl(request));
+  base.pathname = '/dev/blackboard-lti-mock/api/v1/lti/deep-linking';
+  base.search = '';
+  return base.toString();
 }
 
 export function getPlatformJwksUrl(

@@ -103,9 +103,9 @@ async function handlePost(request: Request) {
         },
       ],
     };
-    const jwt = await signToolJwt(deepLink);
-    const html = `<!doctype html><form id="dl" method="POST" action="${returnUrl}">
-<input type="hidden" name="JWT" value="${jwt}" />
+    const jwt = await signToolJwt(deepLink, { typ: 'JWT' });
+    const html = `<!doctype html><form id="dl" method="POST" enctype="application/x-www-form-urlencoded" accept-charset="UTF-8" action="${returnUrl}">
+<input type="hidden" name="jwt" value="${jwt}" />
 </form><script>document.getElementById('dl').submit()</script>`;
     return new Response(html, {
       status: 200,
@@ -133,7 +133,11 @@ async function handlePost(request: Request) {
 
 export async function loader(args: LoaderFunctionArgs) {
   if (args.request.method === 'POST') return handlePost(args.request);
-  return new Response('method not allowed', { status: 405 });
+  // Some environments may navigate directly here (GET). Be lenient and land the user in-app.
+  return new Response(null, {
+    status: 302,
+    headers: { location: `${getDomainUrl(args.request)}${DEFAULT_ROUTE}`, 'cache-control': 'no-store' },
+  });
 }
 
 export async function action(args: ActionFunctionArgs) {
