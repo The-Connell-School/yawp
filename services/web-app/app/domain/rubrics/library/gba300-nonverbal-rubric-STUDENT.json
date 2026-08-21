@@ -1,0 +1,154 @@
+{
+  "name": "gba300-nonverbal-rubric-STUDENT",
+  "title": "GBA 300 — Nonverbal Assignment",
+  "scoringScale": {
+    "type": "weighted_percent",
+    "minScore": 0,
+    "maxScore": 6,
+    "step": 1,
+    "compositeMin": 0,
+    "compositeMax": 20
+  },
+  "rubric": {
+    "categories": [
+      {
+        "key": "observation",
+        "label": "Observation",
+        "weight": 0.3,
+        "description": "What did you actually see and hear?",
+        "grammarHighlighting": false,
+        "bands": [
+          { "min": 0, "max": 0, "label": "Absent", "description": "Missing." },
+          {
+            "min": 1,
+            "max": 3,
+            "label": "Struggling",
+            "description": "Mostly plot summary — what characters said and did as narrative, rather than how they communicated without words."
+          },
+          {
+            "min": 4,
+            "max": 4,
+            "label": "Developing",
+            "description": "Observation leans on impression more than detail, or one scene is well observed and the others are thin. The reader can't reliably picture what happened."
+          },
+          {
+            "min": 5,
+            "max": 5,
+            "label": "Proficient",
+            "description": "Observations are concrete in most places, with occasional slippage into impression (\"he looked confident\") where a specific detail was available and would have been stronger."
+          },
+          {
+            "min": 6,
+            "max": 6,
+            "label": "Exemplary",
+            "description": "Across all three scenes, observations are specific and physical — things a viewer could point to. Gestures, posture, facial expression, use of space, and vocal delivery are described precisely enough that a reader who has never seen the scene can picture it. Nothing is presented as observed that is actually inferred."
+          }
+        ]
+      },
+      {
+        "key": "interpretation_and_analysis",
+        "label": "Interpretation and Analysis",
+        "weight": 0.3,
+        "description": "What did those cues do, and how do you know?",
+        "grammarHighlighting": false,
+        "bands": [
+          { "min": 0, "max": 0, "label": "Absent", "description": "Missing." },
+          {
+            "min": 1,
+            "max": 3,
+            "label": "Struggling",
+            "description": "Little interpretation beyond restating what happened, or conclusions the described evidence doesn't support."
+          },
+          {
+            "min": 4,
+            "max": 4,
+            "label": "Developing",
+            "description": "Interpretation is asserted rather than argued, or the same lens is applied mechanically to all three scenes regardless of fit. Reads as coverage rather than thinking."
+          },
+          {
+            "min": 5,
+            "max": 5,
+            "label": "Proficient",
+            "description": "Interpretations are reasonable and generally supported, though some claims float free of the observation that would prove them. Lens choice is sensible if not always the sharpest available."
+          },
+          {
+            "min": 6,
+            "max": 6,
+            "label": "Exemplary",
+            "description": "Every claim traces back to something observed. The analysis explains how the nonverbal cues shaped the verbal message or the storytelling — whether they repeated, modified, or contradicted what was said. The analysis questions are used as lenses, chosen because they fit the scene, and at least one is pursued with real depth."
+          }
+        ]
+      },
+      {
+        "key": "connection_to_course_concepts",
+        "label": "Connection to Course Concepts",
+        "weight": 0.25,
+        "description": "Name the concept, and show it working.",
+        "grammarHighlighting": false,
+        "bands": [
+          { "min": 0, "max": 0, "label": "Absent", "description": "Missing." },
+          {
+            "min": 1,
+            "max": 2,
+            "label": "Struggling",
+            "description": "Concepts named without connection to what was observed, or absent from most of the submission."
+          },
+          {
+            "min": 3,
+            "max": 3,
+            "label": "Developing",
+            "description": "Terms appear but are used loosely or imprecisely, or only one of the three scenes makes a genuine connection."
+          },
+          {
+            "min": 4,
+            "max": 4,
+            "label": "Proficient",
+            "description": "Concepts are named correctly and connected to the scene, though the explanation stays general — the term is applied rather than demonstrated."
+          },
+          {
+            "min": 5,
+            "max": 5,
+            "label": "Exemplary",
+            "description": "Each scene names at least one course concept correctly and explains how it operates in that specific moment — not merely labeled, but shown working. Where a neighboring concept might also have applied, the choice is defensible."
+          }
+        ]
+      },
+      {
+        "key": "communication_and_craft",
+        "label": "Communication and Craft",
+        "weight": 0.15,
+        "description": "This is a business communication course. How you write it counts.",
+        "grammarHighlighting": false,
+        "bands": [
+          { "min": 0, "max": 0, "label": "Absent", "description": "Missing." },
+          {
+            "min": 1,
+            "max": 1,
+            "label": "Developing",
+            "description": "Substantially over or under length, disorganized, scenes unlabeled, or errors that interfere with reading."
+          },
+          {
+            "min": 2,
+            "max": 2,
+            "label": "Proficient",
+            "description": "Generally clear and within range, with some wordiness or padding, or scattered mechanical errors."
+          },
+          {
+            "min": 3,
+            "max": 3,
+            "label": "Exemplary",
+            "description": "Each analysis lands close to 200 words and earns every one of them. Scenes are clearly labeled. The prose is professional, concise, and clean. Nothing is padded."
+          }
+        ]
+      }
+    ]
+  },
+  "promptConfig": {
+    "gradingInstructions": "# GBA 300 — Nonverbal Communication Analysis: Grading Assistant Instructions\n\nROLE OF THIS FILE: Back-end instructions for the Grading Assistant. Students never see this file. It pairs with the student rubric above. This file governs behavior; the student rubric governs scoring. Where they conflict, the student rubric's point values win.\n\nCourse context: GBA 300, University of Alabama (Culverhouse College of Business). Several professors teach it — never name a specific instructor. Refer to \"your professor\" or \"your instructor.\"\n\nAssignment: individual, 20 points. Three scenes, ~200 words each, one document. Scenes from the instructor list of nine (The Godfather, The Wolf of Wall Street, Suits, Steve Jobs, Erin Brockovich, Mad Men, Moneyball, The Big Short, The Internship) OR any other business-oriented visual media.\n\nCore behavior: Grade against the four categories, assign a point value within the earned band, then complete the Instructor Notes block. Holistic feedback: name what worked, give specific next steps. Instructor can adjust anything; nothing is final until they review. Short assignment — tight feedback, not a page of commentary on a 600-word submission.\n\nTone: model on Great British Baking Show judges but NEVER mention that to students. High explicit standards, never inflate. Critique the work not the writer. Delight when work is good. Superlatives only when earned. Warmth especially in the sentence that names what went wrong. Every shortfall ends in a specific next move. Lead with what works; name the scene.\n\nCentral judgment: observation vs interpretation. Test: could a viewer point at it? \"He looked confident\" is interpretation. \"He leaned back and laced both hands behind his head\" is observation. Physical detail = Observation; meaning = Interpretation. Do not penalize the same slip twice.\n\nFour analysis questions are lenses not a checklist. Do not reward marching through all four. Mechanical coverage is Developing under Interpretation.\n\nCourse concepts: kinesics (adaptors, emblems, illustrators; posture, head, face, gestures, eye contact), haptics (four levels), proxemics (Hall zones), vocalics, chronemics, oculesics, repeat/modify/contradict framing, 7-second first impressions, Mehrabian 7/38/55 presented as 93% nonverbal. ACCEPT Mehrabian without qualification. Never correct the course. Other lecture frameworks also count.\n\nScoring: whole numbers only. Observation and Interpretation: 6/5/4/1–3/0 with struggling anchors 3/2/1. Concepts: 5/4/3/1–2/0. Craft: 3/2/1/0 — no Struggling band, 0 only if missing. Absent means missing not bad. Score three scenes as ONE submission; never average. Exemplary requires all three scenes. Fewer than three scenes: cap every category at Developing and flag in Instructor Notes. Two scenes from same title is allowed.\n\nWord count: 170–230 per scene is in range. Length only affects Craft. Do not reward padding.\n\nDoes NOT require: citations, cover page, all four questions, scenes from the list, a min number of concepts beyond one per scene as the rubric names.\n\nInstructor Notes (unbanded, no deductions) every time: (1) requirements check (2) scene selection (3) authorship/anomaly observations — never accuse, verification language only (4) anything else. Absence of anomalies should be stated.\n\nFeedback structure: overall impression 2–3 sentences; four categories with band/points and one improvement each; Instructor Notes; one next step.\n\nBoundaries: never name a professor; never accuse dishonesty; never invent requirements; never present scores as final; never correct course content including Mehrabian; never rewrite the student's analysis.\n\nDone when: the new rubric is in the codebase following existing GA rubric patterns, is selectable but not assigned to any assignment type, is on production (main/yawp.school) and demo (demo.yawp.school), and you report URLs/status."
+  },
+  "outputSchema": {
+    "responseShape": "categories_overall_comment",
+    "schemaVersion": 1
+  },
+  "calibrationNotes": "Student rubric and GA instructions supplied for GBA 300 Nonverbal Communication Analysis. Whole-number scores; category maxima 6/6/5/3; total 20."
+}
