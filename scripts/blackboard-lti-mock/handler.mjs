@@ -232,18 +232,29 @@ function handleDevLaunch(
   store.launchHints.set(hintId, profile);
   // publicOrigin already incorporates X-Forwarded-* via originFrom(), so derive the
   // browser-facing origin from it to avoid internal Docker hostnames and cross-preview hops.
-  const xfProto = request?.headers?.['x-forwarded-proto'] || '';
-  const xfHost = request?.headers?.['x-forwarded-host'] || '';
+  const xfProto = String(request?.headers?.['x-forwarded-proto'] || '').toLowerCase();
+  const xfHost = String(request?.headers?.['x-forwarded-host'] || '').toLowerCase();
+  const ref = String(request?.headers?.referer || request?.headers?.referrer || '');
+  const refOrigin = (() => {
+    try {
+      return ref ? new URL(ref).origin : '';
+    } catch {
+      return '';
+    }
+  })();
+  const forceHttps = (host) =>
+    host ? `https://${host.replace(/^https?:\/\//, '')}` : '';
+  const fromXf =
+    xfHost &&
+    `${(xfProto === 'https' ? 'https' : xfProto === 'http' ? 'http' : 'https')}://${xfHost}`;
   const hostOrigin =
-    (xfHost ? `${xfProto || 'https'}://${xfHost}` : null) ||
-    new URL(publicOrigin).origin;
+    fromXf ||
+    (refOrigin && forceHttps(refOrigin)) ||
+    new URL(publicOrigin).origin.replace(/^http:\/\//, 'https://');
   const login = new URL('/lti/login', hostOrigin);
   login.searchParams.set('iss', config.issuer);
   login.searchParams.set('login_hint', profile.user.sub);
-  login.searchParams.set(
-    'target_link_uri',
-    new URL('/lti/launch', hostOrigin).toString()
-  );
+  login.searchParams.set('target_link_uri', new URL('/lti/launch', hostOrigin).toString());
   login.searchParams.set('lti_message_hint', hintId);
   login.searchParams.set('client_id', config.clientId);
   login.searchParams.set('lti_deployment_id', config.deploymentId);
