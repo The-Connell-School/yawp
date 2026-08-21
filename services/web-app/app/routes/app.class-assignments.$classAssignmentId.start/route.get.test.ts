@@ -1,8 +1,18 @@
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, mock, test } from 'bun:test';
 import { createStaticHandler } from 'react-router';
 
 describe('GET /app/class-assignments/:id/start is handled as a data/resource request', () => {
   test('React Router throws missing-loader error for route id routes/app.class-assignments.$classAssignmentId.start', async () => {
+    // Guard against DB/Auth side-effects when importing the real route module
+    mock.module('~/utils/db.server', () => ({ prisma: {} }));
+    mock.module('~/utils/auth.server', () => ({ requireUserId: () => {}, requireMembership: () => ({}) }));
+    mock.module('~/domain/documents.server', () => ({
+      createDocumentForAssignmentType: async () => ({ documentId: 'doc-1' }),
+      DocumentCreationError: class DocumentCreationError extends Error {},
+    }));
+
+    const mod: Record<string, unknown> = await import('./route');
+
     const routes = [
       {
         id: 'root',
@@ -15,6 +25,7 @@ describe('GET /app/class-assignments/:id/start is handled as a data/resource req
               {
                 id: 'routes/app.class-assignments.$classAssignmentId.start',
                 path: 'class-assignments/:classAssignmentId/start',
+                loader: (mod as any).loader,
               },
             ],
           },
@@ -32,6 +43,7 @@ describe('GET /app/class-assignments/:id/start is handled as a data/resource req
       });
       expect(res).toBeInstanceOf(Response);
     } catch (e: any) {
+      // Re-throw the inner Error to surface the exact RR message in output
       if (e && typeof e === 'object' && 'error' in e && e.error instanceof Error) {
         throw e.error;
       }
