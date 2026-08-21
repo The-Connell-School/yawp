@@ -118,6 +118,44 @@ describe('resolveDocumentLinkTarget', () => {
     ).toBe('/app/documents/doc-1?ssv=1&exitTo=%2Fapp');
   });
 
+  test('ignores a teacher-unsubmitted submission when picking released grade', () => {
+    expect(
+      resolveDocumentLinkTarget({
+        documentId: 'doc-1',
+        exitTo: '/app',
+        isStudentView: true,
+        submissions: [
+          {
+            id: 'sub-unsubmitted',
+            releasedAt: '2024-03-01T00:00:00.000Z',
+            unsubmittedAt: '2024-03-02T00:00:00.000Z',
+          },
+          {
+            id: 'sub-active',
+            releasedAt: '2024-02-01T00:00:00.000Z',
+          },
+        ],
+      })
+    ).toBe('/app/submissions/sub-active?exitTo=%2Fapp');
+  });
+
+  test('links to the document editor when the only submission was unsubmitted', () => {
+    expect(
+      resolveDocumentLinkTarget({
+        documentId: 'doc-1',
+        exitTo: '/app',
+        isStudentView: true,
+        submissions: [
+          {
+            id: 'sub-unsubmitted',
+            releasedAt: '2024-03-01T00:00:00.000Z',
+            unsubmittedAt: '2024-03-02T00:00:00.000Z',
+          },
+        ],
+      })
+    ).toBe('/app/documents/doc-1?ssv=1&exitTo=%2Fapp');
+  });
+
   test('ignores archived submissions when picking released grade', () => {
     expect(
       resolveDocumentLinkTarget({

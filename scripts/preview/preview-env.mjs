@@ -3,10 +3,10 @@ import { fileURLToPath } from 'node:url';
 
 const DEFAULT_ROOT = '/srv/yawp-preview';
 const DEFAULT_DATABASE_HOST = 'preview-postgres';
-const DEFAULT_DATABASE_USER = 'postgres';
-const DEFAULT_DATABASE_PASSWORD = 'postgres';
 const DEFAULT_DATABASE_PORT = '5432';
 const DEFAULT_TEMPLATE_DATABASE_NAME = 'yawp_template';
+export const PREVIEW_MASTER_ACCESS_CODE_PATTERN =
+  /^(?=.{8,64}$)[a-z][a-z0-9]*(?:-[a-z0-9]+)+$/;
 
 function trimSlashes(value) {
   return value.replace(/^\/+|\/+$/g, '');
@@ -21,15 +21,21 @@ function requirePositiveInteger(value) {
 }
 
 function requireDomain(value) {
-  const domain = String(value ?? '').trim().toLowerCase();
+  const domain = String(value ?? '')
+    .trim()
+    .toLowerCase();
   if (!domain || domain.includes('/') || domain.includes(':')) {
-    throw new Error('PREVIEW_DOMAIN must be a bare domain like preview.yawp.school');
+    throw new Error(
+      'PREVIEW_DOMAIN must be a bare domain like preview.yawp.school'
+    );
   }
   return trimSlashes(domain);
 }
 
 function requireRuntime(value) {
-  const runtime = String(value || 'fast').trim().toLowerCase();
+  const runtime = String(value || 'fast')
+    .trim()
+    .toLowerCase();
   if (!['fast', 'production'].includes(runtime)) {
     throw new Error('PREVIEW_RUNTIME must be fast or production');
   }
@@ -37,14 +43,135 @@ function requireRuntime(value) {
 }
 
 function requireDataMode(value) {
-  const dataMode = String(value || 'seed').trim().toLowerCase();
-  if (!['seed', 'production-dump'].includes(dataMode)) {
-    throw new Error('PREVIEW_DATA_MODE must be seed or production-dump');
+  const dataMode = String(value || 'seed')
+    .trim()
+    .toLowerCase();
+  if (!['seed', 'production-dump', 'sanitized-production'].includes(dataMode)) {
+    throw new Error(
+      'PREVIEW_DATA_MODE must be seed, production-dump, or sanitized-production'
+    );
   }
   return dataMode;
 }
 
+export function requirePreviewAccessCodes(value) {
+  const codes = String(value ?? '')
+    .split(/[;,\n]/)
+    .map((code) => code.trim().toLowerCase())
+    .filter(Boolean);
+  if (codes.length === 0) {
+    throw new Error('PREVIEW_ACCESS_CODES is required for preview deployments');
+  }
+  if (codes.some((code) => !/^[a-z]+-[a-z]+-[1-9][0-9]{3}$/.test(code))) {
+    throw new Error(
+      'PREVIEW_ACCESS_CODES must contain two-word, four-digit codes'
+    );
+  }
+  return codes.join(',');
+}
+
+export function requirePreviewMasterAccessCode(value) {
+  const code = String(value ?? '')
+    .trim()
+    .toLowerCase();
+  if (!code) {
+    throw new Error('PREVIEW_MASTER_ACCESS_CODE is required');
+  }
+  if (!PREVIEW_MASTER_ACCESS_CODE_PATTERN.test(code)) {
+    throw new Error(
+      'PREVIEW_MASTER_ACCESS_CODE must be a lowercase hyphenated code between 8 and 64 characters'
+    );
+  }
+  return code;
+}
+
+export function requirePreviewAccessSeats(value) {
+  const raw = String(value ?? '').trim();
+  if (!raw) {
+    throw new Error('PREVIEW_ACCESS_SEATS is required for preview deployments');
+  }
+
+  let parsed;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    throw new Error('PREVIEW_ACCESS_SEATS must be valid JSON');
+  }
+  if (!Array.isArray(parsed) || parsed.length === 0) {
+    throw new Error('PREVIEW_ACCESS_SEATS is required for preview deployments');
+  }
+
+  const seats = parsed.map((seat) => {
+    const code = String(seat?.code ?? '')
+      .trim()
+      .toLowerCase();
+    const organizationId = String(seat?.organizationId ?? '').trim();
+    const label = String(seat?.label ?? '').trim();
+    if (
+      !/^[a-z]+-[a-z]+-[1-9][0-9]{3}$/.test(code) ||
+      !/^[a-z0-9][a-z0-9-]{0,127}$/.test(organizationId) ||
+      !label ||
+      label.length > 100
+    ) {
+      throw new Error(
+        'PREVIEW_ACCESS_SEATS must contain valid code, organizationId, and label values'
+      );
+    }
+    return { code, organizationId, label };
+  });
+  if (
+    new Set(seats.map(({ code }) => code)).size !== seats.length ||
+    new Set(seats.map(({ organizationId }) => organizationId)).size !==
+      seats.length
+  ) {
+    throw new Error(
+      'PREVIEW_ACCESS_SEATS must use a unique code and organization for every seat'
+    );
+  }
+  return JSON.stringify(seats);
+}
+
+export function requirePreviewSessionSecret(value) {
+  const secret = String(value ?? '').trim();
+  if (!secret) {
+    throw new Error(
+      'PREVIEW_SESSION_SECRET is required for preview deployments'
+    );
+  }
+  if (secret.length < 32) {
+    throw new Error('PREVIEW_SESSION_SECRET must be at least 32 characters');
+  }
+  return secret;
+}
+
+export function requirePreviewAccessSecret(value) {
+  const secret = String(value ?? '').trim();
+  if (!secret) {
+    throw new Error(
+      'PREVIEW_ACCESS_SECRET is required for preview deployments'
+    );
+  }
+  if (secret.length < 32) {
+    throw new Error('PREVIEW_ACCESS_SECRET must be at least 32 characters');
+  }
+  return secret;
+}
+
+// A named environment (the long-lived demo box) reuses this whole pipeline; only the
+// slug differs. Without the override every environment is forced to be "pr-<n>", which
+// would mean a second, divergent deploy path for the one environment that must not drift.
+function normaliseSlug(value) {
+  const slug = String(value ?? '')
+    .trim()
+    .toLowerCase();
+  if (!/^[a-z][a-z0-9-]{0,30}$/.test(slug)) {
+    throw new Error('PREVIEW_SLUG must be a short lowercase name like demo');
+  }
+  return slug;
+}
+
 export function buildPreviewEnv({
+  slug: slugOverride = process.env.PREVIEW_SLUG,
   prNumber = process.env.PR_NUMBER,
   domain = process.env.PREVIEW_DOMAIN,
   root = process.env.PREVIEW_ROOT || DEFAULT_ROOT,
@@ -54,23 +181,35 @@ export function buildPreviewEnv({
   runtime = process.env.PREVIEW_RUNTIME || 'fast',
   dataMode = process.env.PREVIEW_DATA_MODE || 'seed',
   databaseHost = process.env.PREVIEW_DB_HOST || DEFAULT_DATABASE_HOST,
-  databaseUser = process.env.PREVIEW_DB_USER || DEFAULT_DATABASE_USER,
-  databasePassword =
-    process.env.PREVIEW_DB_PASSWORD || DEFAULT_DATABASE_PASSWORD,
+  databaseUser = process.env.PREVIEW_DB_USER,
+  databasePassword = process.env.PREVIEW_DB_PASSWORD,
   databasePort = process.env.PREVIEW_DB_PORT || DEFAULT_DATABASE_PORT,
-  templateDatabaseName =
-    process.env.PREVIEW_DB_TEMPLATE_DB || DEFAULT_TEMPLATE_DATABASE_NAME,
+  templateDatabaseName = process.env.PREVIEW_DB_TEMPLATE_DB ||
+    DEFAULT_TEMPLATE_DATABASE_NAME,
   databaseUrl = process.env.PREVIEW_DATABASE_URL,
 } = {}) {
-  const safePrNumber = requirePositiveInteger(prNumber);
+  const namedSlug = slugOverride ? normaliseSlug(slugOverride) : '';
+  // A named environment has no PR behind it, so PR_NUMBER stops being required.
+  const safePrNumber = namedSlug ? '' : requirePositiveInteger(prNumber);
   const safeDomain = requireDomain(domain);
   const safeRuntime = requireRuntime(runtime);
   const safeDataMode = requireDataMode(dataMode);
   const safeRoot = trimSlashes(String(root || DEFAULT_ROOT));
-  const slug = `pr-${safePrNumber}`;
+  const slug = namedSlug || `pr-${safePrNumber}`;
   const composeProject = `yawp-${slug}`;
-  const databaseName = `yawp_pr_${safePrNumber}`;
+  const databaseName = `yawp_${slug.replace(/-/g, '_')}`;
+  const resolvedDatabaseUser = String(databaseUser || `${databaseName}_app`);
+  const resolvedDatabasePassword = String(databasePassword || '');
+  if (!/^[a-z_][a-z0-9_]{0,62}$/.test(resolvedDatabaseUser)) {
+    throw new Error('PREVIEW_DB_USER must be a valid Postgres role name');
+  }
+  if (!databaseUrl && !/^[A-Za-z0-9_-]{32,}$/.test(resolvedDatabasePassword)) {
+    throw new Error('PREVIEW_DB_PASSWORD must be a 32-character URL-safe secret');
+  }
   const hostname = `${slug}.${safeDomain}`;
+  const blackboardHostname = safePrNumber
+    ? `blackboard-pr-${safePrNumber}.${safeDomain}`
+    : `blackboard-${slug}.${safeDomain}`;
   const previewRoot = safeRoot.startsWith('/') ? safeRoot : `/${safeRoot}`;
   const previewDir = path.posix.join(previewRoot, 'previews', slug);
   const resolvedSourceDir =
@@ -81,7 +220,7 @@ export function buildPreviewEnv({
     : `${scheme}://${hostname}`;
   const resolvedDatabaseUrl =
     databaseUrl ||
-    `postgresql://${databaseUser}:${databasePassword}@${databaseHost}:${databasePort}/${databaseName}`;
+    `postgresql://${resolvedDatabaseUser}:${resolvedDatabasePassword}@${databaseHost}:${databasePort}/${databaseName}`;
 
   return {
     prNumber: safePrNumber,
@@ -90,11 +229,15 @@ export function buildPreviewEnv({
     databaseName,
     databaseHost,
     databasePort,
-    databaseUser,
-    databasePassword,
+    databaseUser: resolvedDatabaseUser,
+    databasePassword: resolvedDatabasePassword,
     templateDatabaseName,
     hostname,
+    blackboardHostname,
     url,
+    blackboardUrl: directPort
+      ? `http://127.0.0.1:${directPort}`
+      : `${scheme}://${blackboardHostname}`,
     root: previewRoot,
     previewDir,
     sourceDir: resolvedSourceDir,

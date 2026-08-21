@@ -31,6 +31,7 @@ import { Button } from '~/components/ui/button';
 import { Card, CardContent } from '~/components/ui/card';
 import { Input } from '~/components/ui/input';
 import { Label } from '~/components/ui/label';
+import { Switch } from '~/components/ui/switch';
 import { Textarea } from '~/components/ui/textarea';
 import {
   Select,
@@ -42,9 +43,15 @@ import {
 import {
   Sheet,
   SheetContent,
+  SheetFooter,
   SheetHeader,
   SheetTitle,
+  SHEET_SCROLL_BODY_CLASS_NAME,
+  SHEET_STICKY_FOOTER_CLASS_NAME,
 } from '~/components/ui/sheet';
+import { UnsavedChangesDialog } from '~/components/unsaved-changes-dialog';
+import { useUnsavedChangesGuard } from '~/hooks/useUnsavedChangesGuard';
+import { cn } from '~/utils/misc';
 import {
   DEFAULT_SCORING_SCALE,
   type PromptConfigData,
@@ -52,6 +59,20 @@ import {
   type RubricData,
   type ScoringScaleData,
 } from '~/domain/assignment-types/assignment-type-rubric.shared';
+import { resolveGrammarHighlightingEnabled } from '~/domain/assignment-types/rubric-category-options';
+import {
+  DEFAULT_SCORE_STEP,
+  buildScoreScaleValues,
+  buildStepOptions,
+  describeScoreScale,
+  validateScoreScale,
+} from '~/domain/assignment-types/score-scale-steps';
+
+/** SheetContent override that lets the footer pin to the bottom while the
+ * body scrolls — pairs with SHEET_SCROLL_BODY_CLASS_NAME / SHEET_STICKY_FOOTER_CLASS_NAME.
+ * Mirrors ASSIGNMENT_SUMMARY_SHEET_CONTENT_CLASS_NAME. */
+const PINNED_FOOTER_SHEET_CONTENT_CLASS_NAME =
+  'flex h-full w-full flex-col gap-0 overflow-hidden p-0';
 
 const SCORING_SCALE_TYPES = [
   { value: 'weighted_1_5', label: 'Weighted 1–5' },
@@ -77,6 +98,13 @@ function createRubricCategoryRow(
     label: category.label ?? '',
     weight: category.weight ?? 0,
     description: category.description ?? '',
+    ...(category.scoreLabels ? { scoreLabels: category.scoreLabels } : {}),
+    ...(category.feedbackEnabled === undefined
+      ? {}
+      : { feedbackEnabled: category.feedbackEnabled }),
+    ...(category.grammarHighlighting === undefined
+      ? {}
+      : { grammarHighlighting: category.grammarHighlighting }),
   };
 }
 
@@ -86,6 +114,37 @@ function rowsFromCategories(categories: RubricCategory[]): RubricCategoryRow[] {
 
 function pct(weight: number) {
   return Math.round(weight * 100);
+}
+
+/**
+ * Serializes one category for storage. The optional per-category settings are
+ * omitted entirely when unset, so a rubric that never touched them round-trips
+ * byte-identically to how it was stored.
+ */
+function serializeCategory(category: RubricCategory): RubricCategory {
+  const scoreLabels = category.scoreLabels?.filter((entry) =>
+    entry.label.trim()
+  );
+  return {
+    key: labelToKey(category.label) || category.key,
+    label: category.label,
+    weight: category.weight,
+    description: category.description,
+    ...(scoreLabels?.length
+      ? {
+          scoreLabels: scoreLabels.map((entry) => ({
+            value: entry.value,
+            label: entry.label.trim(),
+          })),
+        }
+      : {}),
+    ...(category.feedbackEnabled === undefined
+      ? {}
+      : { feedbackEnabled: category.feedbackEnabled }),
+    ...(category.grammarHighlighting === undefined
+      ? {}
+      : { grammarHighlighting: category.grammarHighlighting }),
+  };
 }
 
 export function ScoringScaleEditor({
@@ -113,6 +172,32 @@ export function ScoringScaleEditor({
     }
   };
   const isAct = scale.type === 'act_writing_2_12';
+  const stepOptions = buildStepOptions(scale);
+  /**
+   * Changing min or max can strip the configured step of its meaning — 10 is
+   * fine over 0-30 and impossible over 0-6. Rather than leave an unreachable
+   * max configured, the scale falls back to every value until the teacher
+   * picks a step the new range supports.
+   */
+  const effectiveStep = stepOptions.includes(scale.step ?? DEFAULT_SCORE_STEP)
+    ? (scale.step ?? DEFAULT_SCORE_STEP)
+    : DEFAULT_SCORE_STEP;
+  const scoreScaleDescription = describeScoreScale({
+    ...scale,
+    step: effectiveStep,
+  });
+  const scoreScaleError = validateScoreScale({
+    ...scale,
+    step: effectiveStep,
+  });
+
+  useEffect(() => {
+    if ((scale.step ?? DEFAULT_SCORE_STEP) !== effectiveStep) {
+      setScale((s) => ({ ...s, step: effectiveStep }));
+    }
+    // Only the mismatch matters; setScale is stable enough for this guard.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [effectiveStep, scale.step]);
 
   return (
     <div className="space-y-3">
@@ -135,31 +220,78 @@ export function ScoringScaleEditor({
         </Select>
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
-        <div className="space-y-1.5">
-          <Label htmlFor={`${namePrefix}minScore`}>Min score</Label>
-          <Input
-            id={`${namePrefix}minScore`}
-            type="number"
-            value={scale.minScore}
-            min={0}
-            onChange={(e) =>
-              setScale((s) => ({ ...s, minScore: Number(e.target.value) }))
-            }
-          />
+      {/* Three short numbers that describe one scale, so they read as one
+          row rather than three stacked fields the width of the sheet. */}
+      <div className="space-y-1.5">
+        <div className="flex flex-wrap items-end gap-3">
+          <div className="w-24 space-y-1.5">
+            <Label htmlFor={`${namePrefix}minScore`}>Min score</Label>
+            <Input
+              id={`${namePrefix}minScore`}
+              type="number"
+              value={scale.minScore}
+              min={0}
+              onChange={(e) =>
+                setScale((s) => ({ ...s, minScore: Number(e.target.value) }))
+              }
+            />
+          </div>
+          <div className="w-24 space-y-1.5">
+            <Label htmlFor={`${namePrefix}maxScore`}>Max score</Label>
+            <Input
+              id={`${namePrefix}maxScore`}
+              type="number"
+              value={scale.maxScore}
+              min={1}
+              onChange={(e) =>
+                setScale((s) => ({ ...s, maxScore: Number(e.target.value) }))
+              }
+            />
+          </div>
+          <div className="w-24 space-y-1.5">
+            <Label htmlFor={`${namePrefix}scoreStep`}>Step</Label>
+            {/* A select rather than a number input: only steps that divide the
+                range evenly can reach the max, so the invalid ones should be
+                unpickable rather than typeable-then-rejected. */}
+            <Select
+              value={String(effectiveStep)}
+              onValueChange={(v) => {
+                // Radix reports an empty value when it clears a selection whose
+                // option list no longer holds it, and Number('') is 0. Ignoring
+                // that is what keeps an imported step from being wiped in the
+                // render before its range arrives.
+                const next = Number(v);
+                if (!Number.isFinite(next) || next < 1) return;
+                setScale((s) => ({ ...s, step: next }));
+              }}
+            >
+              <SelectTrigger
+                id={`${namePrefix}scoreStep`}
+                data-testid="rubric-score-step"
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {stepOptions.map((option) => (
+                  <SelectItem key={option} value={String(option)}>
+                    {option}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
-        <div className="space-y-1.5">
-          <Label htmlFor={`${namePrefix}maxScore`}>Max score</Label>
-          <Input
-            id={`${namePrefix}maxScore`}
-            type="number"
-            value={scale.maxScore}
-            min={1}
-            onChange={(e) =>
-              setScale((s) => ({ ...s, maxScore: Number(e.target.value) }))
-            }
-          />
-        </div>
+        <p className="text-sm text-muted-foreground">
+          Scores go up in steps of this size. {scoreScaleDescription}
+        </p>
+        {scoreScaleError ? (
+          <p
+            className="text-sm text-destructive"
+            data-testid="rubric-score-step-error"
+          >
+            {scoreScaleError}
+          </p>
+        ) : null}
       </div>
 
       {isAct && (
@@ -375,14 +507,19 @@ function RubricImportPanel({
       </div>
 
       <Sheet open={pasteOpen} onOpenChange={setPasteOpen}>
-        <SheetContent aria-describedby={undefined}>
-          <SheetHeader>
-            <SheetTitle className="flex items-center gap-2">
-              <ClipboardPaste className="size-4 shrink-0" />
-              Paste rubric
-            </SheetTitle>
-          </SheetHeader>
-          <div className="mt-4 space-y-4">
+        <SheetContent
+          aria-describedby={undefined}
+          className={PINNED_FOOTER_SHEET_CONTENT_CLASS_NAME}
+        >
+          <div className="p-6 pb-0">
+            <SheetHeader>
+              <SheetTitle className="flex items-center gap-2">
+                <ClipboardPaste className="size-4 shrink-0" />
+                Paste rubric
+              </SheetTitle>
+            </SheetHeader>
+          </div>
+          <div className={cn(SHEET_SCROLL_BODY_CLASS_NAME, 'space-y-4 p-6')}>
             <Textarea
               id="rubric-import-text"
               rows={12}
@@ -391,6 +528,8 @@ function RubricImportPanel({
               placeholder="Paste rubric categories, weights, and descriptions..."
               disabled={isExtracting}
             />
+          </div>
+          <SheetFooter className={SHEET_STICKY_FOOTER_CLASS_NAME}>
             <Button
               type="button"
               className="w-full"
@@ -406,19 +545,24 @@ function RubricImportPanel({
                 'Extract rubric'
               )}
             </Button>
-          </div>
+          </SheetFooter>
         </SheetContent>
       </Sheet>
 
       <Sheet open={pdfOpen} onOpenChange={setPdfOpen}>
-        <SheetContent aria-describedby={undefined}>
-          <SheetHeader>
-            <SheetTitle className="flex items-center gap-2">
-              <FileUp className="size-4 shrink-0" />
-              Upload PDF
-            </SheetTitle>
-          </SheetHeader>
-          <div className="mt-4 space-y-4">
+        <SheetContent
+          aria-describedby={undefined}
+          className={PINNED_FOOTER_SHEET_CONTENT_CLASS_NAME}
+        >
+          <div className="p-6 pb-0">
+            <SheetHeader>
+              <SheetTitle className="flex items-center gap-2">
+                <FileUp className="size-4 shrink-0" />
+                Upload PDF
+              </SheetTitle>
+            </SheetHeader>
+          </div>
+          <div className={cn(SHEET_SCROLL_BODY_CLASS_NAME, 'space-y-4 p-6')}>
             <div className="space-y-2">
               <Label htmlFor="rubric-import-pdf">Rubric PDF</Label>
               <Input
@@ -443,6 +587,8 @@ function RubricImportPanel({
                 disabled={isExtracting}
               />
             </div>
+          </div>
+          <SheetFooter className={SHEET_STICKY_FOOTER_CLASS_NAME}>
             <Button
               type="button"
               className="w-full"
@@ -458,19 +604,24 @@ function RubricImportPanel({
                 'Extract rubric'
               )}
             </Button>
-          </div>
+          </SheetFooter>
         </SheetContent>
       </Sheet>
 
       <Sheet open={copyOpen} onOpenChange={setCopyOpen}>
-        <SheetContent aria-describedby={undefined}>
-          <SheetHeader>
-            <SheetTitle className="flex items-center gap-2">
-              <Copy className="size-4 shrink-0" />
-              Copy rubric from
-            </SheetTitle>
-          </SheetHeader>
-          <div className="mt-4 space-y-4">
+        <SheetContent
+          aria-describedby={undefined}
+          className={PINNED_FOOTER_SHEET_CONTENT_CLASS_NAME}
+        >
+          <div className="p-6 pb-0">
+            <SheetHeader>
+              <SheetTitle className="flex items-center gap-2">
+                <Copy className="size-4 shrink-0" />
+                Copy rubric from
+              </SheetTitle>
+            </SheetHeader>
+          </div>
+          <div className={cn(SHEET_SCROLL_BODY_CLASS_NAME, 'space-y-4 p-6')}>
             {isLoadingSources ? (
               <p className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Loader2 className="size-4 shrink-0 animate-spin" />
@@ -509,132 +660,315 @@ function RubricImportPanel({
                     and the scoring scale from {selectedSource.title}.
                   </p>
                 ) : null}
-                <Button
-                  type="button"
-                  className="w-full"
-                  onClick={handleCopyRubric}
-                  disabled={!selectedSource}
-                >
-                  Copy rubric
-                </Button>
               </>
             )}
           </div>
+          {!isLoadingSources && !copyLoadError && copySources.length > 0 ? (
+            <SheetFooter className={SHEET_STICKY_FOOTER_CLASS_NAME}>
+              <Button
+                type="button"
+                className="w-full"
+                onClick={handleCopyRubric}
+                disabled={!selectedSource}
+              >
+                Copy rubric
+              </Button>
+            </SheetFooter>
+          ) : null}
         </SheetContent>
       </Sheet>
     </>
   );
 }
 
+/**
+ * True when the draft has diverged from the last-saved category. Drives the
+ * unsaved-changes guard — compares every field `onSave` would persist, so a
+ * change to score labels alone (no other field touched) still counts.
+ */
+function categoryDraftIsDirty(
+  saved: RubricCategoryRow,
+  draft: RubricCategoryRow
+) {
+  return (
+    saved.label !== draft.label ||
+    saved.weight !== draft.weight ||
+    saved.description !== draft.description ||
+    saved.feedbackEnabled !== draft.feedbackEnabled ||
+    saved.grammarHighlighting !== draft.grammarHighlighting ||
+    JSON.stringify(saved.scoreLabels ?? []) !==
+      JSON.stringify(draft.scoreLabels ?? [])
+  );
+}
+
+/**
+ * The category editor's body, split out from the `<Sheet>`/`<SheetContent>`
+ * Radix wrapper so it can render (and be tested) without the Dialog portal.
+ * Mirrors `AssignmentSummarySheetContent`.
+ */
+export function CategoryEditSheetContent({
+  category,
+  minScore,
+  maxScore,
+  step,
+  onSave,
+  onRemove,
+  onDirtyChange,
+  renderSheet = true,
+}: {
+  category: RubricCategoryRow;
+  minScore: number;
+  maxScore: number;
+  step?: number;
+  onSave: (patch: Partial<RubricCategory>) => void;
+  onRemove: () => void;
+  /** Reports live dirty state up so the wrapper's close guard stays in sync. */
+  onDirtyChange?: (isDirty: boolean) => void;
+  renderSheet?: boolean;
+}) {
+  const [draft, setDraft] = useState<RubricCategoryRow>(category);
+
+  useEffect(() => {
+    setDraft(category);
+  }, [category]);
+
+  const isDirty = categoryDraftIsDirty(category, draft);
+  useEffect(() => {
+    onDirtyChange?.(isDirty);
+  }, [isDirty, onDirtyChange]);
+
+  const scoreValues = buildScoreScaleValues({ minScore, maxScore, step });
+
+  function setScoreLabel(value: number, label: string) {
+    setDraft((current) => {
+      const rest = (current.scoreLabels ?? []).filter(
+        (entry) => entry.value !== value
+      );
+      const next = label.trim()
+        ? [...rest, { value, label }].sort((a, b) => a.value - b.value)
+        : rest;
+      return { ...current, scoreLabels: next };
+    });
+  }
+
+  function currentScoreLabel(value: number) {
+    return draft.scoreLabels?.find((entry) => entry.value === value)?.label ?? '';
+  }
+
+  function handleRemove() {
+    onRemove();
+  }
+
+  function handleDone() {
+    onSave({
+      label: draft.label,
+      weight: draft.weight,
+      description: draft.description,
+      scoreLabels: draft.scoreLabels,
+      feedbackEnabled: draft.feedbackEnabled,
+      grammarHighlighting: draft.grammarHighlighting,
+    });
+  }
+
+  const header = renderSheet ? (
+    <SheetHeader>
+      <SheetTitle>Edit category</SheetTitle>
+    </SheetHeader>
+  ) : (
+    <div>
+      <h2>Edit category</h2>
+    </div>
+  );
+
+  return (
+    <>
+      <div className="px-6 pt-6">{header}</div>
+      <div className={cn(SHEET_SCROLL_BODY_CLASS_NAME, 'space-y-4 px-6 py-4')}>
+        <div className="space-y-2">
+          <Label htmlFor="category-edit-label">Label</Label>
+          <Input
+            id="category-edit-label"
+            value={draft.label}
+            placeholder="e.g. Thesis & Content"
+            onChange={(event) =>
+              setDraft((current) => ({ ...current, label: event.target.value }))
+            }
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="category-edit-weight">Weight %</Label>
+          <Input
+            id="category-edit-weight"
+            type="number"
+            min={0}
+            max={100}
+            className="tabular-nums"
+            value={pct(draft.weight)}
+            onChange={(event) =>
+              setDraft((current) => ({
+                ...current,
+                weight: Number(event.target.value) / 100,
+              }))
+            }
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="category-edit-description">Description</Label>
+          <Textarea
+            id="category-edit-description"
+            rows={5}
+            value={draft.description}
+            placeholder="What does good performance look like?"
+            onChange={(event) =>
+              setDraft((current) => ({
+                ...current,
+                description: event.target.value,
+              }))
+            }
+          />
+        </div>
+        <div className="space-y-2">
+          <Label>Score labels</Label>
+          <p className="text-sm text-muted-foreground text-pretty">
+            The word shown for each score in this category. Leave a score blank
+            to keep the shared label.
+          </p>
+          <div className="space-y-2">
+            {scoreValues.map((value) => (
+              <div key={value} className="flex items-center gap-2">
+                <span className="w-6 shrink-0 tabular-nums text-sm text-muted-foreground">
+                  {value}
+                </span>
+                <Input
+                  id={`category-edit-score-label-${value}`}
+                  aria-label={`Score ${value} label`}
+                  value={currentScoreLabel(value)}
+                  placeholder="e.g. Proficient"
+                  onChange={(event) => setScoreLabel(value, event.target.value)}
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <Label htmlFor="category-edit-feedback-enabled">
+              Category feedback
+            </Label>
+            <p className="mt-1 text-sm text-muted-foreground text-pretty">
+              Give this category its own feedback box on the grading panel.
+            </p>
+          </div>
+          <Switch
+            id="category-edit-feedback-enabled"
+            checked={draft.feedbackEnabled !== false}
+            onCheckedChange={(checked) =>
+              setDraft((current) => ({ ...current, feedbackEnabled: checked }))
+            }
+          />
+        </div>
+      </div>
+      <SheetFooter
+        className={cn(
+          SHEET_STICKY_FOOTER_CLASS_NAME,
+          'flex-row items-center justify-between sm:justify-between'
+        )}
+      >
+        <Button type="button" variant="destructive-outline" onClick={handleRemove}>
+          <Trash2 className="mr-2 size-4 shrink-0" />
+          Remove category
+        </Button>
+        <Button type="button" onClick={handleDone}>
+          Done
+        </Button>
+      </SheetFooter>
+    </>
+  );
+}
+
 function CategoryEditSheet({
   category,
+  minScore,
+  maxScore,
+  step,
   open,
   onOpenChange,
   onSave,
   onRemove,
 }: {
   category: RubricCategoryRow | null;
+  minScore: number;
+  maxScore: number;
+  step?: number;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSave: (patch: Partial<RubricCategory>) => void;
   onRemove: () => void;
 }) {
-  const [draft, setDraft] = useState<RubricCategoryRow | null>(category);
+  const [isDirty, setIsDirty] = useState(false);
+  const { guardOpen, requestClose, confirmDiscard, cancelDiscard } =
+    useUnsavedChangesGuard({
+      isDirty,
+      onClose: () => onOpenChange(false),
+    });
 
+  // A freshly opened (or swapped) category starts clean; the guard only
+  // matters once the draft it renders has actually changed something.
   useEffect(() => {
-    setDraft(category);
-  }, [category]);
+    setIsDirty(false);
+  }, [category?.id]);
 
-  if (!draft) return null;
+  if (!category) return null;
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange} modal={false}>
-      <SheetContent
-        includeOverlay={false}
-        aria-describedby={undefined}
-        onPointerDownOutside={(event) => event.preventDefault()}
-        onInteractOutside={(event) => event.preventDefault()}
+    <>
+      {/* Non-modal on purpose: the assignment-type form behind this sheet has
+          to stay usable, and saving with the sheet still open must keep the
+          in-flight category (see the creator e2e spec). The overlay therefore
+          dims without swallowing clicks. */}
+      <Sheet
+        open={open}
+        onOpenChange={(next) => {
+          if (!next) requestClose();
+        }}
+        modal={false}
       >
-        <SheetHeader>
-          <SheetTitle>Edit category</SheetTitle>
-        </SheetHeader>
-        <div className="mt-4 space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="category-edit-label">Label</Label>
-            <Input
-              id="category-edit-label"
-              value={draft.label}
-              placeholder="e.g. Thesis & Content"
-              onChange={(event) =>
-                setDraft((current) =>
-                  current ? { ...current, label: event.target.value } : current
-                )
-              }
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="category-edit-weight">Weight %</Label>
-            <Input
-              id="category-edit-weight"
-              type="number"
-              min={0}
-              max={100}
-              className="tabular-nums"
-              value={pct(draft.weight)}
-              onChange={(event) =>
-                setDraft((current) =>
-                  current
-                    ? { ...current, weight: Number(event.target.value) / 100 }
-                    : current
-                )
-              }
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="category-edit-description">Description</Label>
-            <Textarea
-              id="category-edit-description"
-              rows={5}
-              value={draft.description}
-              placeholder="What does good performance look like?"
-              onChange={(event) =>
-                setDraft((current) =>
-                  current
-                    ? { ...current, description: event.target.value }
-                    : current
-                )
-              }
-            />
-          </div>
-          <div className="flex items-center justify-between gap-3">
-            <Button
-              type="button"
-              variant="destructive-outline"
-              onClick={() => {
-                onRemove();
-                onOpenChange(false);
-              }}
-            >
-              <Trash2 className="mr-2 size-4 shrink-0" />
-              Remove category
-            </Button>
-            <Button
-              type="button"
-              onClick={() => {
-                onSave({
-                  label: draft.label,
-                  weight: draft.weight,
-                  description: draft.description,
-                });
-                onOpenChange(false);
-              }}
-            >
-              Done
-            </Button>
-          </div>
-        </div>
-      </SheetContent>
-    </Sheet>
+        {/* Clicking the dimmed page is how most people dismiss a sheet, so it
+            routes through the same guard as Escape and the X rather than being
+            swallowed — which read as the sheet being stuck. */}
+        <SheetContent
+          includeOverlay={false}
+          dimBehind
+          aria-describedby={undefined}
+          className={PINNED_FOOTER_SHEET_CONTENT_CLASS_NAME}
+          onInteractOutside={(event) => {
+            event.preventDefault();
+            requestClose();
+          }}
+        >
+          <CategoryEditSheetContent
+            category={category}
+            minScore={minScore}
+            maxScore={maxScore}
+            step={step}
+            onDirtyChange={setIsDirty}
+            onSave={(patch) => {
+              onSave(patch);
+              onOpenChange(false);
+            }}
+            onRemove={() => {
+              onRemove();
+              onOpenChange(false);
+            }}
+          />
+        </SheetContent>
+      </Sheet>
+      <UnsavedChangesDialog
+        open={guardOpen}
+        onContinueEditing={cancelDiscard}
+        onDiscard={confirmDiscard}
+      />
+    </>
   );
 }
 
@@ -712,11 +1046,19 @@ export function RubricEditor({
   categories: controlledCategories,
   onCategoriesChange,
   namePrefix = '',
+  minScore = DEFAULT_SCORING_SCALE.minScore,
+  maxScore = DEFAULT_SCORING_SCALE.maxScore,
+  step = DEFAULT_SCORE_STEP,
 }: {
   initial?: RubricData;
   categories?: RubricCategoryRow[];
   onCategoriesChange?: (categories: RubricCategoryRow[]) => void;
   namePrefix?: string;
+  /** Score range the per-category score labels are collected for. */
+  minScore?: number;
+  maxScore?: number;
+  /** Gap between the score-label rows; 1 collects a label for every value. */
+  step?: number;
 }) {
   const [internalCats, setInternalCats] = useState<RubricCategoryRow[]>(() =>
     rowsFromCategories(initial?.categories ?? [])
@@ -843,8 +1185,39 @@ export function RubricEditor({
         Add category
       </Button>
 
+      {/* Grammar highlighting marks the essay as a whole rather than any one
+          category, so it is set once for the rubric. It is still written onto
+          every category, which is where every reader of it already looks. */}
+      <div className="flex items-start justify-between gap-3 border-t pt-4">
+        <div className="min-w-0">
+          <Label htmlFor={`${namePrefix}rubric-grammar-highlighting`}>
+            Grammar highlighting
+          </Label>
+          <p className="mt-1 text-sm text-muted-foreground text-pretty">
+            Produce grammar and syntax highlights on the student's essay. This
+            applies to the whole rubric, not one category.
+          </p>
+        </div>
+        <Switch
+          id={`${namePrefix}rubric-grammar-highlighting`}
+          data-testid="rubric-grammar-highlighting"
+          checked={resolveGrammarHighlightingEnabled(cats)}
+          onCheckedChange={(checked) =>
+            setCats((current) =>
+              current.map((category) => ({
+                ...category,
+                grammarHighlighting: checked,
+              }))
+            )
+          }
+        />
+      </div>
+
       <CategoryEditSheet
         category={editingCategory}
+        minScore={minScore}
+        maxScore={maxScore}
+        step={step}
         open={Boolean(editingCategory)}
         onOpenChange={(open) => {
           if (!open) setEditingCategoryId(null);
@@ -865,12 +1238,9 @@ export function RubricEditor({
         type="hidden"
         name="rubricJson"
         value={JSON.stringify({
-          categories: cats.map(({ id: _id, label, weight, description }) => ({
-            key: labelToKey(label),
-            label,
-            weight,
-            description,
-          })),
+          categories: cats.map(({ id: _id, ...category }) =>
+            serializeCategory(category)
+          ),
         })}
       />
     </div>
@@ -879,12 +1249,9 @@ export function RubricEditor({
 
 function categoriesToRubric(categories: RubricCategoryRow[]): RubricData {
   return {
-    categories: categories.map(({ label, weight, description }) => ({
-      key: labelToKey(label),
-      label,
-      weight,
-      description,
-    })),
+    categories: categories.map(({ id: _id, ...category }) =>
+      serializeCategory(category)
+    ),
   };
 }
 
@@ -961,6 +1328,9 @@ export function RubricConfigurationEditor({
         categories={categories}
         onCategoriesChange={updateCategories}
         namePrefix={namePrefix}
+        minScore={scoringScale.minScore}
+        maxScore={scoringScale.maxScore}
+        step={scoringScale.step}
       />
     </div>
   );
@@ -1029,12 +1399,13 @@ export function promptConfigSnapshot(cfg: PromptConfigData) {
 
 export function rubricSnapshot(rubric: RubricData) {
   return JSON.stringify({
-    categories: rubric.categories.map((category) => ({
-      key: labelToKey(category.label) || category.key,
-      label: category.label.trim(),
-      weight: category.weight,
-      description: category.description.trim(),
-    })),
+    categories: rubric.categories.map((category) =>
+      serializeCategory({
+        ...category,
+        label: category.label.trim(),
+        description: category.description.trim(),
+      })
+    ),
   });
 }
 

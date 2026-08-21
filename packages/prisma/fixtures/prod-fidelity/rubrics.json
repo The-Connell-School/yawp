@@ -1,0 +1,118 @@
+[
+  {
+    "id": "cmsvqo8lf002801l60o74x8wr",
+    "createdAt": "2026-08-16T11:46:07.875Z",
+    "updatedAt": "2026-08-16T11:46:07.875Z",
+    "name": "daily-pages-engagement",
+    "title": "Daily Pages engagement",
+    "schemaJson": {
+      "name": "daily-pages-engagement",
+      "title": "Daily Pages engagement",
+      "rubric": {
+        "categories": [
+          {
+            "key": "engagement_with_prompt",
+            "label": "Engagement with Prompt",
+            "weight": 1,
+            "description": "Measures the student's genuine engagement with the day's prompt — real thoughts, specific details, a mind visibly at work. Does not measure grammar, spelling, syntax, organization, or correctness of content. Judge whether the student took up the prompt, wrestled with it, and responded to what it asked. If no prompt is available, judge engagement with the act of writing itself.",
+            "scoreLabels": [
+              {
+                "label": "NOT HANDED IN",
+                "value": 0
+              },
+              {
+                "label": "HARDLY THERE",
+                "value": 10
+              },
+              {
+                "label": "SHOWED UP",
+                "value": 20
+              },
+              {
+                "label": "ALL IN",
+                "value": 30
+              }
+            ],
+            "feedbackEnabled": false,
+            "grammarHighlighting": false
+          }
+        ]
+      },
+      "outputSchema": {
+        "responseShape": "categories_overall_comment",
+        "schemaVersion": 1
+      },
+      "promptConfig": {
+        "gradingInstructions": "Daily Pages are an opportunity for students to workout their writing muscles. Correct grammar and syntax are a bonus, but not a requirement. The goal is for students to engage with an idea or prompt through writing. Daily Pages assingments might include start-of-class reflections, journal-type writing, or \"exit tickets\" designed to capture proof of a lesson learned. Students who demonstrate high engagement and the ability to reflect on/discuss ideas in a complex way earn the highest score. Students who write minimally or with little apparent interest or personal stake earn the lowest score."
+      },
+      "scoringScale": {
+        "step": 10,
+        "type": "rubric_points",
+        "maxScore": 30,
+        "minScore": 0,
+        "compositeMax": 30,
+        "compositeMin": 0
+      },
+      "calibrationNotes": null
+    }
+  },
+  {
+    "id": "cmsvqo8ld002701l6py86bkt6",
+    "createdAt": "2026-08-16T11:46:07.873Z",
+    "updatedAt": "2026-08-16T11:46:07.873Z",
+    "name": "thesis-driven-essay",
+    "title": "Thesis-driven essay grading assistant",
+    "schemaJson": {
+      "name": "thesis-driven-essay",
+      "title": "Thesis-driven essay grading assistant",
+      "rubric": {
+        "categories": [
+          {
+            "key": "thesis_and_content",
+            "label": "Thesis/Content",
+            "weight": 0.25,
+            "description": "Original, defensible thesis with sustained critical thinking and meaningful deductions."
+          },
+          {
+            "key": "organization_and_structure",
+            "label": "Organization/Structure",
+            "weight": 0.25,
+            "description": "Purposeful structure with strong progression, clear transitions, and a conclusion that extends thinking."
+          },
+          {
+            "key": "evidence_and_support",
+            "label": "Evidence/Support",
+            "weight": 0.2,
+            "description": "Precise, well-integrated evidence that deepens analysis and builds authority."
+          },
+          {
+            "key": "voice_and_style",
+            "label": "Voice/Style",
+            "weight": 0.2,
+            "description": "Authentic voice with engaging, precise language and consistent tone."
+          },
+          {
+            "key": "grammar_and_mechanics",
+            "label": "Grammar/Syntax/Formatting",
+            "weight": 0.1,
+            "description": "Technical correctness and polished presentation that support clarity."
+          }
+        ]
+      },
+      "outputSchema": {
+        "responseShape": "categories_overall_comment",
+        "schemaVersion": 1
+      },
+      "promptConfig": {
+        "instructionsPreset": "legacy_thesis_driven_essay"
+      },
+      "scoringScale": {
+        "step": 1,
+        "type": "weighted_1_5",
+        "maxScore": 5,
+        "minScore": 1
+      },
+      "calibrationNotes": "Represents the pre-existing Yawp thesis-driven essay grading assistant path."
+    }
+  }
+]

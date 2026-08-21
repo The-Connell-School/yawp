@@ -16,16 +16,37 @@ permissions:
   contents: read
 
 jobs:
-  validate-terraform-infra-pr:
-    name: Terraform validate (infra-pr)
-    runs-on: ubuntu-22.04
+  # CI names every test file it runs, so a test file that is merely present never executes.
+  # scripts/preview/*.test.js sat unrun for exactly that reason. It matters most here:
+  # enforce-cap.sh removes trees as root before every deploy, and the ownership case it
+  # guards can only be reproduced where bind mounts pass real UIDs through — which is
+  # Linux, not a macOS workstation. This job is where that coverage actually happens.
+  validate-preview-tooling:
+    name: Preview tooling
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: 1.8.5
-      - name: Terraform validate
-        run: terraform -chdir=infra-pr init -backend=false && terraform -chdir=infra-pr validate
+      - name: ⬇️ Checkout repo
+        uses: actions/checkout@v3
+
+      - name: 📥 Setup Bun
+        uses: oven-sh/setup-bun@v1
+
+      - name: 📦 Install dependencies
+        run: bun install
+
+      # The root-owned-build-output test needs the image the preview host itself runs.
+      - name: 🐳 Pull the preview runtime image
+        run: docker pull oven/bun:1.3.1
+
+      # Fail rather than skip if the runner cannot produce root-owned files: a silent skip
+      # here would leave the regression uncovered everywhere.
+      - name: 🧪 Preview tooling tests
+        env:
+          ENFORCE_CAP_REQUIRE_ROOT_OWNERSHIP: '1'
+          # Exercise the real Postgres role/ACL migration on Linux. Local macOS runs
+          # may leave this opt-in because the test launches its own Postgres container.
+          PREVIEW_DATABASE_ROLE_INTEGRATION: '1'
+        run: bun test ./scripts/preview/ --timeout 180000
 
   validate-prisma-migrations:
     name: Prisma migrations
@@ -53,8 +74,21 @@ jobs:
       - name: 📦 Install dependencies
         run: bun install
 
+      # bunfig.toml preloads services/web-app/test-preload.ts for every `bun test` run in
+      # this repo, and that preload imports ~/utils/auth.server, which imports @app/prisma.
+      # The generated client therefore has to exist before the first test step, not just
+      # before the migration steps below. `prisma generate` reads the schema only — it does
+      # not connect — so it can run before the validation database is created.
+      - name: ⚙️ Generate Prisma Client
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
+        run: bun prisma generate
+
       - name: 🧪 Validate deployment contract
         run: bun test ./scripts/deployment-contract.test.ts
+
+      - name: 🧪 Validate Blackboard LTI mock
+        run: bun test ./scripts/blackboard-lti-mock/ --timeout 60000
 
       - name: 🧪 Validate read-only impersonation contract
         run: bun test ./scripts/read-only-impersonation-contract.test.ts
@@ -71,11 +105,6 @@ jobs:
         env:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
         run: bun test ./packages/prisma/scripts/teacher-training-assignment-migration.test.ts
-
-      - name: ⚙️ Generate Prisma Client
-        env:
-          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
-        run: bun prisma generate
 
       - name: 🧱 Apply Prisma migrations
         env:
@@ -165,3 +194,10 @@ jobs:
           CI: true
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yop_e2e
         run: bun run test:e2e:smoke
+
+      - name: 🔐 Run preview access gate tests
+        working-directory: services/web-app
+        env:
+          CI: true
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yop_e2e
+        run: bun run test:e2e:preview-access

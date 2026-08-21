@@ -31,15 +31,17 @@ ensure_config() {
   mkdir -p "$CONFIG_DIR"
 
   if [[ -f "$CONFIG_FILE" ]]; then
-    # shellcheck disable=SC1090
-    source "$CONFIG_FILE"
-    return
+  # shellcheck disable=SC1090
+  source "$CONFIG_FILE"
+  LTI_MOCK_PORT="${LTI_MOCK_PORT:-$((DEV_PORT + 4297))}"
+  return
   fi
 
   local slot
   slot="$(hash_slot "$SLUG" 70)"
   PG_PORT=$((54320 + slot))
   DEV_PORT=$((5176 + slot))
+  LTI_MOCK_PORT=$((9473 + slot))
   CONTAINER_NAME="yawp-${SLUG}-postgres"
   VOLUME_NAME="yawp-${SLUG}-postgres-data"
   DB_NAME="yawp_${SLUG}"
@@ -48,6 +50,7 @@ ensure_config() {
 SLUG=$SLUG
 PG_PORT=$PG_PORT
 DEV_PORT=$DEV_PORT
+LTI_MOCK_PORT=$LTI_MOCK_PORT
 CONTAINER_NAME=$CONTAINER_NAME
 VOLUME_NAME=$VOLUME_NAME
 DB_NAME=$DB_NAME
@@ -120,6 +123,11 @@ write_env_files() {
 DATABASE_URL="${DATABASE_URL}"
 EOF
 
+  local mock_mode_line="CLASS_INSIGHT_MOCK_MODE=fixture"
+  if [[ -n "${anthropic_line}" ]]; then
+    mock_mode_line="CLASS_INSIGHT_MOCK_MODE=live"
+  fi
+
   cat >"$ROOT/services/web-app/.env" <<EOF
 NODE_ENV=development
 DATABASE_URL="${DATABASE_URL}"
@@ -130,8 +138,10 @@ HONEYPOT_SECRET="${SLUG}-worktree-honeypot"
 INTERNAL_COMMAND_TOKEN="${SLUG}-worktree-internal-token"
 AWS_S3_BUCKET_FOR_VIDEOS="${SLUG}-local-dev-bucket"
 AWS_S3_REGION_FOR_VIDEOS="us-east-1"
+${mock_mode_line}
 ${ai_model_line:-AI_MODEL="claude-sonnet-4-5"}
 ${anthropic_line:-ANTHROPIC_API_KEY=""}
+BLACKBOARD_LTI_MOCK_URL="http://127.0.0.1:${LTI_MOCK_PORT}"
 EOF
 
   if [[ ! -f "$ROOT/.env" ]]; then
@@ -166,6 +176,26 @@ migrate_and_seed() {
     bun run --cwd packages/prisma prisma migrate deploy
     bun run --cwd packages/prisma backfill-class-art-key
     bun db:seed-local-dev
+    bun run --cwd packages/prisma ensure-class-insights-local
+  )
+}
+
+ensure_class_insights_local() {
+  local runtime_env="$ROOT/../.ws/runtime.env"
+  (
+    cd "$ROOT/packages/prisma"
+    if [[ -f "$runtime_env" ]]; then
+      set -a
+      # shellcheck disable=SC1091
+      source "$runtime_env"
+      set +a
+    elif [[ -f .env ]]; then
+      set -a
+      # shellcheck disable=SC1091
+      source .env
+      set +a
+    fi
+    bun run ensure-class-insights-local
   )
 }
 
@@ -207,7 +237,17 @@ Dev logins (password: yawp-dev):
 Commands:
   bash scripts/worktree-local-setup.sh          # ensure db + env
   bash scripts/worktree-local-setup.sh --fresh  # reset + re-seed
+  bun blackboard-lti-mock                       # Blackboard Learn mock (student/teacher)
   bun dev                                       # start app
+
+Blackboard Learn mock:
+  BLACKBOARD_LTI_MOCK_ENABLED=true BLACKBOARD_LTI_MOCK_PORT=${LTI_MOCK_PORT} bun blackboard-lti-mock
+  Learn:       http://localhost:${LTI_MOCK_PORT}/
+  Same-origin: http://localhost:${DEV_PORT:-5176}/dev/blackboard-lti-mock/
+
+Class insights mock mode (services/web-app/.env):
+  CLASS_INSIGHT_MOCK_MODE=fixture   # fake summaries, no Anthropic calls
+  CLASS_INSIGHT_MOCK_MODE=live      # real Anthropic when API key is set
 EOF
 }
 
@@ -237,7 +277,9 @@ else
   (
     cd "$ROOT"
     bun prisma:generate >/dev/null
+    bun run --cwd packages/prisma prisma migrate deploy
   )
+  ensure_class_insights_local
 fi
 
 if [[ "$START_DEV" -eq 1 ]]; then

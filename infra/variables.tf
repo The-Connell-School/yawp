@@ -102,3 +102,9 @@ variable "posthog_host" {
   type        = string
   description = "PostHog host URL"
 }
+
+variable "production_domain_name" {
+  type        = string
+  description = "Public production domain served through the TLS 1.3 CloudFront edge."
+  default     = "yawp.school"
+}

@@ -10,7 +10,7 @@ import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { Button } from '~/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
 import { prisma } from '~/utils/db.server';
-import { requireMembership, requireUserId } from '~/utils/auth.server';
+import { requireMembership } from '~/utils/auth.server';
 import {
   Table,
   TableBody,
@@ -45,43 +45,38 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const currentUser = await requireAdmin(request);
   const profile = await requireMembership(request, currentUser.id);
 
-  const [
-    organization,
-    invitations,
-    totalOrganizations,
-    assignmentTypes,
-  ] =
+  const [organization, invitations, totalOrganizations, assignmentTypes] =
     await Promise.all([
-    prisma.organization.findUnique({
-      where: { id: params.id },
-      include: {
-        memberships: {
-          where: { isOrgOwner: true },
-          include: { user: { select: { name: true, email: true } } },
-        },
-        assignmentTypeAssignments: {
-          include: {
-            assignmentType: {
-              select: { id: true, title: true, description: true },
-            },
+      prisma.organization.findUnique({
+        where: { id: params.id },
+        include: {
+          memberships: {
+            where: { isOrgOwner: true },
+            include: { user: { select: { name: true, email: true } } },
           },
-          orderBy: { assignmentType: { position: 'asc' } },
+          assignmentTypeAssignments: {
+            include: {
+              assignmentType: {
+                select: { id: true, title: true, description: true },
+              },
+            },
+            orderBy: { assignmentType: { position: 'asc' } },
+          },
         },
-      },
-    }),
-    prisma.invitation.findMany({
-      where: {
-        metadata: JSON.stringify({ organizationId: params.id }),
-        type: 'onboard-owner',
-      },
-    }),
-    prisma.organization.count(),
-    prisma.assignmentType.findMany({
-      where: { archivedAt: null },
-      select: { id: true, title: true, description: true },
-      orderBy: { position: 'asc' },
-    }),
-  ]);
+      }),
+      prisma.invitation.findMany({
+        where: {
+          metadata: JSON.stringify({ organizationId: params.id }),
+          type: 'onboard-owner',
+        },
+      }),
+      prisma.organization.count(),
+      prisma.assignmentType.findMany({
+        where: { archivedAt: null },
+        select: { id: true, title: true, description: true },
+        orderBy: { position: 'asc' },
+      }),
+    ]);
 
   if (!organization) {
     throw new Response('Not Found', { status: 404 });
@@ -101,19 +96,11 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 }
 
 export async function action({ request, params }: ActionFunctionArgs) {
-  const userId = await requireUserId(request);
+  const currentAdmin = await requireAdmin(request);
+  const userId = currentAdmin.id;
   const formData = await request.formData();
   const intent = formData.get('intent');
   const profile = await requireMembership(request, userId);
-
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { isAdmin: true },
-  });
-
-  if (!user?.isAdmin) {
-    throw new Response('Unauthorized', { status: 401 });
-  }
 
   if (intent === 'deleteOrganization') {
     // Get current user and organization count to validate deletion
@@ -159,6 +146,13 @@ export async function action({ request, params }: ActionFunctionArgs) {
       formData.get('numOfTeacherSeats')?.toString() || '10'
     );
     const accessExpiresAt = formData.get('accessExpiresAt')?.toString();
+    const reporterEnabled = formData.get('reporterEnabled') === 'true';
+    const classInsightsEnabled =
+      formData.get('classInsightsEnabled') === 'true';
+    const writingPracticeEnabled =
+      formData.get('writingPracticeEnabled') === 'true';
+    const submissionActivityEnabled =
+      formData.get('submissionActivityEnabled') === 'true';
     const assignmentTypeIds = Array.from(
       new Set(
         formData
@@ -189,6 +183,10 @@ export async function action({ request, params }: ActionFunctionArgs) {
           numOfStudentSeats,
           numOfTeacherSeats,
           accessExpiresAt: accessExpiresAt ? new Date(accessExpiresAt) : null,
+          reporterEnabled,
+          classInsightsEnabled,
+          writingPracticeEnabled,
+          submissionActivityEnabled,
         },
       }),
       prisma.organizationAssignmentType.deleteMany({
@@ -342,12 +340,7 @@ function OrganizationInviteEmail({
 }
 
 export default function OrganizationRoute() {
-  const {
-    organization,
-    invitations,
-    assignmentTypes,
-    canDelete,
-  } =
+  const { organization, invitations, assignmentTypes, canDelete } =
     useLoaderData<typeof loader>();
   const fetcher = useFetcher();
   const inviteFetcher = useFetcher();
@@ -396,7 +389,7 @@ export default function OrganizationRoute() {
                 Edit Organization
               </Button>
             </SheetTrigger>
-            <SheetContent className="sm:max-w-md">
+            <SheetContent className="w-full overflow-x-hidden sm:max-w-md">
               <SheetHeader>
                 <SheetTitle>Edit Organization</SheetTitle>
               </SheetHeader>
@@ -449,12 +442,92 @@ export default function OrganizationRoute() {
 
                 <div
                   className="border-t pt-5"
-                  data-testid="organization-assignment-types-manager"
+                  data-testid="organization-ai-feature-manager"
                 >
                   <div className="space-y-1">
                     <h3 className="text-sm font-semibold">
-                      Assignment Types
+                      Production pilot features
                     </h3>
+                    <p className="text-sm text-muted-foreground">
+                      Roll out pilot features independently by organization.
+                    </p>
+                  </div>
+                  <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                    <label className="flex min-h-12 items-start gap-3 rounded-md border bg-background px-3 py-2 text-sm">
+                      <input
+                        type="checkbox"
+                        name="classInsightsEnabled"
+                        value="true"
+                        defaultChecked={organization.classInsightsEnabled}
+                        className="mt-1 h-4 w-4"
+                      />
+                      <span className="min-w-0">
+                        <span className="block font-medium">Class Summary</span>
+                        <span className="block text-xs text-muted-foreground">
+                          Enables assignment-level AI class summaries.
+                        </span>
+                      </span>
+                    </label>
+                    <label className="flex min-h-12 items-start gap-3 rounded-md border bg-background px-3 py-2 text-sm">
+                      <input
+                        type="checkbox"
+                        name="reporterEnabled"
+                        value="true"
+                        defaultChecked={organization.reporterEnabled}
+                        className="mt-1 h-4 w-4"
+                      />
+                      <span className="min-w-0">
+                        <span className="block font-medium">Yawp Reporter</span>
+                        <span className="block text-xs text-muted-foreground">
+                          Adds Reporter to the teacher sidebar.
+                        </span>
+                      </span>
+                    </label>
+                    <label className="flex min-h-12 items-start gap-3 rounded-md border bg-background px-3 py-2 text-sm">
+                      <input
+                        type="checkbox"
+                        name="writingPracticeEnabled"
+                        value="true"
+                        defaultChecked={organization.writingPracticeEnabled}
+                        className="mt-1 h-4 w-4"
+                      />
+                      <span className="min-w-0">
+                        <span className="block font-medium">
+                          Writing Practice
+                        </span>
+                        <span className="block text-xs text-muted-foreground">
+                          Adds Writing Practice to the teacher and student
+                          sidebars. Off by default while the feature is paused.
+                        </span>
+                      </span>
+                    </label>
+                    <label className="flex min-h-12 items-start gap-3 rounded-md border bg-background px-3 py-2 text-sm">
+                      <input
+                        type="checkbox"
+                        name="submissionActivityEnabled"
+                        value="true"
+                        defaultChecked={organization.submissionActivityEnabled}
+                        className="mt-1 h-4 w-4"
+                      />
+                      <span className="min-w-0">
+                        <span className="block font-medium">
+                          Released grade activity
+                        </span>
+                        <span className="block text-xs text-muted-foreground">
+                          Enables released-grade editing and staff-only
+                          submission activity history.
+                        </span>
+                      </span>
+                    </label>
+                  </div>
+                </div>
+
+                <div
+                  className="min-w-0 border-t pt-5"
+                  data-testid="organization-assignment-types-manager"
+                >
+                  <div className="space-y-1">
+                    <h3 className="text-sm font-semibold">Assignment Types</h3>
                     <p className="text-sm text-muted-foreground">
                       Select the assignment types teachers in this organization
                       can see and use.
@@ -465,11 +538,11 @@ export default function OrganizationRoute() {
                       No assignment types exist yet.
                     </div>
                   ) : (
-                    <div className="mt-3 grid gap-2">
+                    <div className="mt-3 grid min-w-0 gap-2">
                       {assignmentTypes.map((assignmentType) => (
                         <label
                           key={assignmentType.id}
-                          className="flex min-h-12 items-start gap-3 rounded-md border bg-background px-3 py-2 text-sm"
+                          className="flex min-h-12 min-w-0 items-start gap-3 rounded-md border bg-background px-3 py-2 text-sm"
                         >
                           <input
                             type="checkbox"
@@ -478,14 +551,14 @@ export default function OrganizationRoute() {
                             defaultChecked={assignedAssignmentTypeIds.has(
                               assignmentType.id
                             )}
-                            className="mt-1 h-4 w-4"
+                            className="mt-1 h-4 w-4 shrink-0"
                           />
-                          <span className="min-w-0">
-                            <span className="block truncate font-medium">
+                          <span className="min-w-0 flex-1">
+                            <span className="block break-words font-medium">
                               {assignmentType.title}
                             </span>
                             {assignmentType.description ? (
-                              <span className="block truncate text-xs text-muted-foreground">
+                              <span className="block break-words text-xs text-muted-foreground">
                                 {assignmentType.description}
                               </span>
                             ) : null}
@@ -689,7 +762,6 @@ export default function OrganizationRoute() {
           </Table>
         </CardContent>
       </Card>
-
     </div>
   );
 }

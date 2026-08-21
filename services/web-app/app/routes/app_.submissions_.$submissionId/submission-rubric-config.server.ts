@@ -1,19 +1,41 @@
 import { resolveAssignmentTypeGradingConfig } from '~/domain/assignment-types/assignment-type-grading-config.server';
 import {
   legacyRubricDisplayConfig,
+  type RubricDisplayCategory,
   type RubricDisplayConfig,
+  type RubricDisplaySource,
 } from '~/domain/grading/rubric-display';
+import {
+  parseOptionalBoolean,
+  parseRubricScoreBands,
+  parseRubricScoreLabels,
+  resolveGrammarHighlightingEnabled,
+} from '~/domain/assignment-types/rubric-category-options';
+import {
+  inferStepFromScoreValues,
+  normalizeScoreStep,
+} from '~/domain/assignment-types/score-scale-steps';
 
-type RubricSnapshotCategory = {
-  key: string;
-  label: string;
-  description: string;
-  weight: number;
-};
+type RubricSnapshotCategory = RubricDisplayCategory;
 
 export type LatestGradingRunRubricSnapshot = {
   assignmentTypeRubricSnapshot: unknown;
+  source?: string | null;
 };
+
+const rubricDisplaySources = new Set<string>([
+  'assignment-type',
+  'thesis-default',
+  'daily-pages-default',
+]);
+
+function parseRubricDisplaySource(
+  value: string | null | undefined
+): RubricDisplaySource | undefined {
+  return value && rubricDisplaySources.has(value)
+    ? (value as RubricDisplaySource)
+    : undefined;
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === 'object' && !Array.isArray(value));
@@ -40,7 +62,22 @@ function parseSnapshotCategory(value: unknown): RubricSnapshotCategory | null {
       : null;
 
   if (!key || !label || !description || weight === null) return null;
-  return { key, label, description, weight };
+
+  const scoreLabels = parseRubricScoreLabels(value.scoreLabels);
+  const bands = parseRubricScoreBands(value.bands);
+  const feedbackEnabled = parseOptionalBoolean(value.feedbackEnabled);
+  const grammarHighlighting = parseOptionalBoolean(value.grammarHighlighting);
+
+  return {
+    key,
+    label,
+    description,
+    weight,
+    ...(scoreLabels ? { scoreLabels } : {}),
+    ...(bands ? { bands } : {}),
+    ...(feedbackEnabled === undefined ? {} : { feedbackEnabled }),
+    ...(grammarHighlighting === undefined ? {} : { grammarHighlighting }),
+  };
 }
 
 export function buildRubricConfigFromSnapshot(
@@ -57,23 +94,54 @@ export function buildRubricConfigFromSnapshot(
     );
   if (categories.length === 0) return null;
 
+  const minScore =
+    typeof snapshot.minScore === 'number' && Number.isFinite(snapshot.minScore)
+      ? snapshot.minScore
+      : 1;
+  const maxScore =
+    typeof snapshot.maxScore === 'number' && Number.isFinite(snapshot.maxScore)
+      ? snapshot.maxScore
+      : 5;
+  // Snapshots taken before scales had a step record only their tiers, so the
+  // tier values stand in for it. Without this a 0-30 rubric scored in tens
+  // offers the teacher all thirty-one values, only four of which are named.
+  const step =
+    typeof snapshot.step === 'number'
+      ? normalizeScoreStep(snapshot.step)
+      : normalizeScoreStep(
+          inferStepFromScoreValues(
+            categories.flatMap((category) =>
+              (category.scoreLabels ?? []).map((entry) => entry.value)
+            ),
+            minScore
+          ) ?? undefined
+        );
+
   return {
     categories,
-    minScore:
-      typeof snapshot.minScore === 'number' &&
-      Number.isFinite(snapshot.minScore)
-        ? snapshot.minScore
-        : 1,
-    maxScore:
-      typeof snapshot.maxScore === 'number' &&
-      Number.isFinite(snapshot.maxScore)
-        ? snapshot.maxScore
-        : 5,
+    minScore,
+    maxScore,
+    step,
     scoringType:
       typeof snapshot.scoringType === 'string'
         ? snapshot.scoringType
         : 'weighted_1_5',
   };
+}
+
+/**
+ * Whether the assignment type's rubric currently asks for grammar highlighting.
+ *
+ * Read separately from the graded snapshot on purpose: the snapshot records
+ * what the rubric said at grading time, and a teacher who switches
+ * highlighting off afterwards expects the marks to disappear, not to persist
+ * because an older run had it on.
+ */
+export async function resolveGrammarHighlightingForAssignmentType(
+  assignmentTypeId: string
+): Promise<boolean> {
+  const config = await resolveAssignmentTypeGradingConfig({ assignmentTypeId });
+  return resolveGrammarHighlightingEnabled(config.rubricCategories);
 }
 
 export async function resolveRubricConfigForSubmission({
@@ -91,7 +159,9 @@ export async function resolveRubricConfigForSubmission({
       )
     : null;
 
-  let activeConfig = snapshotConfig;
+  let activeConfig = snapshotConfig
+    ? { ...snapshotConfig, source: parseRubricDisplaySource(latestGradingRun?.source) }
+    : null;
   if (!activeConfig) {
     const assignmentTypeConfig = await resolveAssignmentTypeGradingConfig({
       assignmentTypeId,
@@ -100,7 +170,10 @@ export async function resolveRubricConfigForSubmission({
       categories: assignmentTypeConfig.rubricCategories,
       minScore: assignmentTypeConfig.minScore,
       maxScore: assignmentTypeConfig.maxScore,
+      step: assignmentTypeConfig.step,
       scoringType: assignmentTypeConfig.scoringType,
+      source: assignmentTypeConfig.source,
+      rubricIncomplete: assignmentTypeConfig.rubricIncomplete,
     };
   }
 

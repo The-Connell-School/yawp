@@ -16,6 +16,32 @@ function safeText(value: string | undefined): string {
   return value?.trim() ?? '';
 }
 
+/**
+ * Best-effort recovery for a response that got cut off by the max_tokens
+ * limit mid-string. The JSON is incomplete (no closing quote/brace), so we
+ * pull whatever prompt text made it through instead of discarding the whole
+ * extraction.
+ */
+function salvageTruncatedExtraction(
+  responseText: string
+): { title?: string; prompt: string } | null {
+  const promptKeyMatch = responseText.match(/"prompt"\s*:\s*"/);
+  if (!promptKeyMatch || promptKeyMatch.index === undefined) return null;
+
+  let raw = responseText.slice(promptKeyMatch.index + promptKeyMatch[0].length);
+  if (raw.endsWith('\\')) raw = raw.slice(0, -1);
+  raw = raw
+    .replace(/\\n/g, '\n')
+    .replace(/\\t/g, '\t')
+    .replace(/\\"/g, '"')
+    .replace(/\\\\/g, '\\')
+    .trim();
+  if (!raw) return null;
+
+  const titleMatch = responseText.match(/"title"\s*:\s*"([^"]*)"/);
+  return { title: titleMatch?.[1], prompt: raw };
+}
+
 export async function action({ request }: ActionFunctionArgs) {
   const userId = await requireUserId(request);
   const profile = await requireMembership(request, userId);
@@ -27,6 +53,17 @@ export async function action({ request }: ActionFunctionArgs) {
         message: 'Only teachers can extract assignment prompts.',
       },
       { status: 403 }
+    );
+  }
+
+  const contentLength = Number(request.headers.get('content-length'));
+  if (
+    Number.isFinite(contentLength) &&
+    contentLength > MAX_PDF_BYTES + 1024 * 1024
+  ) {
+    return dataResponse(
+      { success: false, message: 'PDF is too large. Maximum size is 10 MB.' },
+      { status: 413 }
     );
   }
 
@@ -122,44 +159,61 @@ export async function action({ request }: ActionFunctionArgs) {
   };
 
   try {
-    const message = await anthropic.messages.create({
-      model,
-      max_tokens: 1200,
-      temperature: 0,
-      system,
-      messages: [
-        {
-          role: 'user',
-          content: [
-            {
-              type: 'document',
-              source: {
-                type: 'base64',
-                media_type: 'application/pdf',
-                data: pdfBase64,
+    const message = await anthropic.messages.create(
+      {
+        model,
+        max_tokens: 1200,
+        temperature: 0,
+        system,
+        messages: [
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'document',
+                source: {
+                  type: 'base64',
+                  media_type: 'application/pdf',
+                  data: pdfBase64,
+                },
               },
-            },
-            {
-              type: 'text',
-              text: [
-                'Extract the assignment for student writing.',
-                'If multiple prompts appear, choose the primary essay prompt.',
-                'Return strict JSON only.',
-              ].join(' '),
-            },
-          ],
-        },
-      ],
-    } as any);
+              {
+                type: 'text',
+                text: [
+                  'Extract the assignment for student writing.',
+                  'If multiple prompts appear, choose the primary essay prompt.',
+                  'Return strict JSON only.',
+                ].join(' '),
+              },
+            ],
+          },
+        ],
+      } as any,
+      { signal: AbortSignal.timeout(30_000) }
+    );
 
     const responseText = (message.content as any[])
       .map((part) => (part?.type === 'text' ? (part.text as string) : ''))
       .join('\n')
       .trim();
 
-    const parsed = ExtractedAssignmentSchema.parse(
-      parseFirstJsonValue(responseText)
-    );
+    const hitTokenLimit = message.stop_reason === 'max_tokens';
+    let parsed: { title?: string; prompt: string };
+    let truncated = false;
+
+    try {
+      parsed = ExtractedAssignmentSchema.parse(
+        parseFirstJsonValue(responseText)
+      );
+      truncated = hitTokenLimit;
+    } catch (parseError) {
+      const salvaged = hitTokenLimit
+        ? salvageTruncatedExtraction(responseText)
+        : null;
+      if (!salvaged) throw parseError;
+      parsed = salvaged;
+      truncated = true;
+    }
 
     await prisma.llmLog.create({
       data: {
@@ -174,7 +228,7 @@ export async function action({ request }: ActionFunctionArgs) {
           (message.usage?.input_tokens ?? 0) +
           (message.usage?.output_tokens ?? 0),
         durationMs: Date.now() - startedAt,
-        metadata,
+        metadata: { ...metadata, truncated },
       },
     });
 
@@ -182,6 +236,7 @@ export async function action({ request }: ActionFunctionArgs) {
       success: true,
       title: safeText(parsed.title),
       prompt: parsed.prompt.trim(),
+      truncated,
     });
   } catch (error) {
     const messageText =

@@ -1,5 +1,11 @@
 import { fileURLToPath } from 'node:url';
-import { buildPreviewEnv } from './preview-env.mjs';
+import {
+  buildPreviewEnv,
+  requirePreviewAccessSecret,
+  requirePreviewMasterAccessCode,
+  requirePreviewAccessSeats,
+  requirePreviewSessionSecret,
+} from './preview-env.mjs';
 
 function q(value) {
   return JSON.stringify(String(value));
@@ -11,6 +17,7 @@ function optionalEnv(name, fallback = '') {
 
 export function renderPreviewCompose({
   prNumber = process.env.PR_NUMBER,
+  slug = process.env.PREVIEW_SLUG,
   domain = process.env.PREVIEW_DOMAIN,
   root = process.env.PREVIEW_ROOT,
   sourceDir = process.env.SOURCE_DIR,
@@ -18,9 +25,30 @@ export function renderPreviewCompose({
   enableTls = process.env.PREVIEW_TLS !== 'false',
   runtime = process.env.PREVIEW_RUNTIME || 'fast',
   dataMode = process.env.PREVIEW_DATA_MODE || 'seed',
+  databaseUser = process.env.PREVIEW_DB_USER,
+  databasePassword = process.env.PREVIEW_DB_PASSWORD,
+  accessSeats = process.env.PREVIEW_ACCESS_SEATS,
+  masterAccessCode = process.env.PREVIEW_MASTER_ACCESS_CODE,
+  masterOrgGateEnabled = process.env.PREVIEW_MASTER_ORG_GATE_ENABLED === 'true',
+  accessSecret = process.env.PREVIEW_ACCESS_SECRET,
+  sessionSecret = process.env.PREVIEW_SESSION_SECRET,
+  aiMode = process.env.PREVIEW_AI_MODE || 'live',
+  customIngressActive = process.env.PREVIEW_CUSTOM_INGRESS_ACTIVE !== 'false',
 } = {}) {
+  const previewAccessSeats = requirePreviewAccessSeats(accessSeats);
+  const previewMasterAccessCode = masterOrgGateEnabled
+    ? requirePreviewMasterAccessCode(masterAccessCode)
+    : '';
+  const previewAccessSecret = requirePreviewAccessSecret(accessSecret);
+  const previewSessionSecret = requirePreviewSessionSecret(sessionSecret);
+  if (!['disabled', 'live'].includes(aiMode)) {
+    throw new Error('PREVIEW_AI_MODE must be disabled or live');
+  }
+  const anthropicApiKey =
+    aiMode === 'live' ? optionalEnv('PREVIEW_ANTHROPIC_API_KEY') : '';
   const env = buildPreviewEnv({
     prNumber,
+    slug,
     domain,
     root,
     sourceDir,
@@ -28,24 +56,47 @@ export function renderPreviewCompose({
     tls: enableTls,
     runtime,
     dataMode,
+    databaseUser,
+    databasePassword,
   });
-  const routerBase = env.composeProject;
   const directPortBlock = env.directPort
     ? `\n    ports:\n      - ${q(`127.0.0.1:${env.directPort}:8080`)}`
     : '';
+  const routerBase = env.composeProject;
   const tlsLabels = enableTls
     ? `\n      - ${q(`traefik.http.routers.${routerBase}-https.rule=Host(\`${env.hostname}\`)`)}\n      - ${q(`traefik.http.routers.${routerBase}-https.entrypoints=websecure`)}\n      - ${q(`traefik.http.routers.${routerBase}-https.tls.certresolver=letsencrypt`)}\n      - ${q(`traefik.http.routers.${routerBase}-https.service=${routerBase}`)}`
     : '';
+  const legacyTraefikLabels = (!env.prNumber || !customIngressActive)
+    ? `    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=preview"
+      - ${q(`traefik.http.routers.${routerBase}-http.rule=Host(\`${env.hostname}\`)`)}
+      - ${q(`traefik.http.routers.${routerBase}-http.entrypoints=web`)}
+      - ${q(`traefik.http.routers.${routerBase}-http.service=${routerBase}`)}
+${tlsLabels}
+      - ${q(`traefik.http.services.${routerBase}.loadbalancer.server.port=8080`)}
+`
+    : '';
   const cookieSecure = enableTls ? '"true"' : '"false"';
+  // PREVIEW_ACCESS_GATE is consumed by the root route middleware itself. This render
+  // cannot emit that enforcement switch without validated seats and its own signing secret,
+  // so enabling role-swap necessarily enables the request-boundary gate too.
+  const masterAccessEnvironment = masterOrgGateEnabled
+    ? `      PREVIEW_MASTER_ACCESS_CODE: ${q(previewMasterAccessCode)}\n`
+    : '';
   const commonEnvironment = `      DATABASE_URL: ${q(env.databaseUrl)}
       DATABASE_SSL_REJECT_UNAUTHORIZED: "false"
       NODE_ENV: ${env.runtime === 'fast' ? 'development' : 'production'}
       YAWP_ENVIRONMENT: "preview"
       PREVIEW_DATA_MODE: ${q(env.dataMode)}
+      PREVIEW_ACCESS_GATE: "on"
+      PREVIEW_ACCESS_SEATS: ${q(previewAccessSeats)}
+${masterAccessEnvironment}      PREVIEW_ACCESS_SECRET: ${q(previewAccessSecret)}
+      PREVIEW_SEAT_COUNT: ${q(optionalEnv('PREVIEW_SEAT_COUNT', '1'))}
       PORT: "8080"
       COOKIE_SECURE: ${cookieSecure}
       AWS_EC2_METADATA_DISABLED: "true"
-      SESSION_SECRET: ${q(optionalEnv('PREVIEW_SESSION_SECRET', 'preview-session-secret'))}
+      SESSION_SECRET: ${q(previewSessionSecret)}
       INTERNAL_COMMAND_TOKEN: ${q(optionalEnv('PREVIEW_INTERNAL_COMMAND_TOKEN', 'preview-internal-token'))}
       HONEYPOT_SECRET: ${q(optionalEnv('PREVIEW_HONEYPOT_SECRET', 'preview-honeypot-secret'))}
       AWS_S3_BUCKET_FOR_VIDEOS: ${q(optionalEnv('PREVIEW_AWS_S3_BUCKET_FOR_VIDEOS', 'preview-videos'))}
@@ -54,8 +105,11 @@ export function renderPreviewCompose({
       RESEND_API_KEY: ${q(optionalEnv('PREVIEW_RESEND_API_KEY', 'preview-resend-key'))}
       OPENAI_ORGANIZATION_ID: ${q(optionalEnv('PREVIEW_OPENAI_ORGANIZATION_ID'))}
       OPENAI_API_KEY: ${q(optionalEnv('PREVIEW_OPENAI_API_KEY'))}
-      ANTHROPIC_API_KEY: ${q(optionalEnv('PREVIEW_ANTHROPIC_API_KEY'))}
-      AI_MODEL: ${q(optionalEnv('PREVIEW_AI_MODEL', 'claude-sonnet-4-6'))}`;
+      YAWP_PREVIEW_AI_MODE: ${q(aiMode)}
+      CLASS_INSIGHT_MOCK_MODE: ${q(aiMode === 'disabled' ? 'fixture' : optionalEnv('PREVIEW_CLASS_INSIGHT_MOCK_MODE'))}
+      ANTHROPIC_API_KEY: ${q(anthropicApiKey)}
+      AI_MODEL: ${q(optionalEnv('PREVIEW_AI_MODEL', 'claude-sonnet-4-6'))}
+      BLACKBOARD_LTI_MOCK_URL: "http://blackboard-lti-mock:9473"`;
   const fastVolumes = `    volumes:
       - ${q(`${env.sourceDir}:/app`)}
       - ${env.composeProject}-node-modules:/app/node_modules
@@ -96,6 +150,7 @@ ${fastVolumes}
 ${commonEnvironment}
 `
       : `  web:
+    image: ${q(`${routerBase}-web:current`)}
     build:
       context: ${q(env.sourceDir)}
       dockerfile: services/web-app/Dockerfile
@@ -109,16 +164,48 @@ ${commonEnvironment}
   return `name: ${env.composeProject}
 services:
 ${toolboxService}
-${webService}    labels:
-      - "traefik.enable=true"
-      - "traefik.docker.network=preview"
-      - ${q(`traefik.http.routers.${routerBase}-http.rule=Host(\`${env.hostname}\`)`)}
-      - ${q(`traefik.http.routers.${routerBase}-http.entrypoints=web`)}
-      - ${q(`traefik.http.routers.${routerBase}-http.service=${routerBase}`)}${tlsLabels}
-      - ${q(`traefik.http.services.${routerBase}.loadbalancer.server.port=8080`)}
+${webService}${legacyTraefikLabels}    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "bun", "-e", "fetch('http://127.0.0.1:8080/api/healthcheck').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+      start_period: 90s
     networks:
       - default
       - preview${directPortBlock}
+
+  blackboard-lti-mock:
+    image: oven/bun:1.3.1
+    working_dir: /app
+    command: bun scripts/blackboard-lti-mock/server.mjs
+    volumes:
+      - ${q(`${env.sourceDir}:/app`)}
+    environment:
+      NODE_ENV: ${env.runtime === 'fast' ? 'development' : 'production'}
+      YAWP_ENVIRONMENT: "preview"
+      BLACKBOARD_LTI_MOCK_ENABLED: "true"
+      BLACKBOARD_LTI_MOCK_PORT: "9473"
+      BLACKBOARD_LTI_MOCK_ISSUER: "https://blackboard.com"
+      BLACKBOARD_LTI_MOCK_CLIENT_ID: "yawp-blackboard-mock"
+      BLACKBOARD_LTI_MOCK_DEPLOYMENT_ID: "yawp-mock-deployment"
+      BLACKBOARD_LTI_MOCK_PUBLIC_URL: "http://blackboard-lti-mock:9473"
+      BLACKBOARD_LTI_MOCK_PUBLIC_BASE_PATH: "/dev/blackboard-lti-mock"
+      BLACKBOARD_LTI_MOCK_TOOL_REDIRECT_URI: ${q(`${env.url}/lti/launch`)}
+      BLACKBOARD_LTI_MOCK_TOOL_OIDC_LOGIN_URL: ${q(`${env.url}/lti/login`)}
+      BLACKBOARD_LTI_MOCK_TOOL_JWKS_URL: ${q(`${env.url}/lti/jwks`)}
+      BLACKBOARD_LTI_MOCK_TOKEN_TTL_SECONDS: "60"
+      AWS_EC2_METADATA_DISABLED: "true"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "bun", "-e", "fetch('http://127.0.0.1:9473/healthz').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+      start_period: 20s
+    networks:
+      - default
+      - preview
 
 volumes:
   ${env.composeProject}-node-modules:

@@ -23,6 +23,12 @@ import { EmailSchema, PasswordSchema } from '~/utils/schemas/user';
 import { prisma } from '~/utils/db.server';
 import { authSessionStorage } from '~/cookie-session-storages/authentication.server';
 import { posthog } from '~/services/posthog.server';
+import {
+  getPreviewAccessSeat,
+  isIsolatedPreviewSeatMode,
+} from '~/utils/preview-access.server';
+import { setMembershipId } from '~/cookies/membership-id.server';
+import { combineHeaders } from '~/utils/misc';
 
 const Schema = z.object({
   email: EmailSchema,
@@ -51,6 +57,28 @@ const actionImpl = async ({ request }: ActionFunctionArgs) => {
       );
     }
 
+    let previewMembershipId: string | null = null;
+    if (isIsolatedPreviewSeatMode()) {
+      const seat = await getPreviewAccessSeat(request);
+      const seatMembership = seat
+        ? await prisma.orgMembership.findFirst({
+            where: {
+              userId: user.id,
+              organizationId: seat.organizationId,
+              isActive: true,
+            },
+            select: { id: true },
+          })
+        : null;
+      if (!seatMembership) {
+        return validationError(
+          { fieldErrors: { email: 'Invalid email or password' } },
+          data,
+        );
+      }
+      previewMembershipId = seatMembership.id;
+    }
+
     const session = await prisma.session.create({
       select: { id: true, expirationDate: true, userId: true },
       data: {
@@ -64,11 +92,16 @@ const actionImpl = async ({ request }: ActionFunctionArgs) => {
     authSession.set(sessionKey, session.id);
 
     return redirect(safeRedirect(data.redirectTo, '/app'), {
-      headers: {
-        'set-cookie': await authSessionStorage.commitSession(authSession, {
-          expires: session.expirationDate,
-        }),
-      },
+      headers: combineHeaders(
+        {
+          'set-cookie': await authSessionStorage.commitSession(authSession, {
+            expires: session.expirationDate,
+          }),
+        },
+        previewMembershipId
+          ? { 'set-cookie': await setMembershipId(previewMembershipId) }
+          : null,
+      ),
     });
   } catch (error) {
     posthog?.captureException(error, 'anonymous');

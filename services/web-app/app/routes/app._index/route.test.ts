@@ -3,7 +3,7 @@ import { afterAll, beforeEach, describe, expect, mock, test } from 'bun:test';
 const prisma = {
   classAssignment: { findMany: mock() },
   assignmentType: { findMany: mock() },
-  class: { findMany: mock() },
+  class: { findMany: mock(), findFirst: mock() },
   document: { findMany: mock(), count: mock() },
   orgMembership: { findUnique: mock() },
   teacherTraining: { findMany: mock() },
@@ -17,6 +17,13 @@ const getTeacherClassCardStats = mock();
 const getTeacherRecentActiveClassIds = mock();
 const getAvailableAssignmentTypesForScopes = mock();
 const getStudentPreviewState = mock();
+const getStudentEnrolledClasses = mock();
+// bun's module mocks are global to the test run and mock.restore() does not
+// undo mock.module — restore from the pristine copy test-preload.ts captured
+// before any file could mock.module() this path (see comment there).
+const actualAssignmentTypeAccess = globalThis.__realModules[
+  '~/utils/assignment-type-access.server'
+];
 
 mock.module('~/utils/db.server.js', () => ({ prisma }));
 mock.module('~/utils/auth.server.js', () => ({
@@ -33,20 +40,20 @@ mock.module('~/utils/teacher-dashboard-recent-classes.server', () => ({
   getTeacherRecentActiveClassIds,
 }));
 mock.module('~/utils/assignment-type-access.server', () => ({
+  ...actualAssignmentTypeAccess,
   getAvailableAssignmentTypesForScopes,
 }));
-mock.module('~/utils/student-preview.server', () => ({
-  getStudentPreviewState,
-  studentPreviewModeKey: 'studentPreviewMode',
-  studentPreviewOrgIdKey: 'studentPreviewOrgId',
-  shouldUseStudentExperience: (
-    args: { membershipRole: string; previewActive: boolean }
-  ) => args.membershipRole === 'STUDENT' || args.previewActive,
+mock.module('~/utils/student-classes.server', () => ({
+  getStudentEnrolledClasses,
 }));
 const { loader } = await import('./route');
 
 afterAll(() => {
   mock.restore();
+  mock.module(
+    '~/utils/assignment-type-access.server',
+    () => actualAssignmentTypeAccess
+  );
 });
 
 describe('app index loader assignments', () => {
@@ -64,6 +71,8 @@ describe('app index loader assignments', () => {
     getStudentPreviewState.mockReset();
     getStudentPreviewState.mockResolvedValue({ active: false, organizationId: null });
     getAvailableAssignmentTypesForScopes.mockResolvedValue([]);
+    getStudentEnrolledClasses.mockReset();
+    getStudentEnrolledClasses.mockResolvedValue([]);
     getTeacherClassCardStats.mockResolvedValue({
       ungradedCount: 0,
       gradedUnreleasedCount: 0,
@@ -100,67 +109,61 @@ describe('app index loader assignments', () => {
     prisma.submission.findMany.mockResolvedValue([]);
   });
 
-  test('fetches student dashboard assignments for all student classes', async () => {
+  test('offers a student only the assignment types their own teachers can assign', async () => {
+    await loader({
+      request: new Request('https://example.test/app'),
+      params: {},
+      context: {} as never,
+    } as any);
+
+    // One scope per teacher of each class the student is enrolled in: a type a teacher
+    // cannot assign must not be offered to that teacher's students either.
+    expect(getAvailableAssignmentTypesForScopes).toHaveBeenCalledWith(
+      expect.objectContaining({
+        scopes: [
+          {
+            organizationId: 'org-1',
+            schoolId: 'school-1',
+            teacherProfileId: 'teacher-1',
+          },
+          {
+            organizationId: 'org-1',
+            schoolId: 'school-1',
+            teacherProfileId: 'teacher-2',
+          },
+        ],
+      })
+    );
+  });
+
+  test('does not load documents or assignments for the student dashboard', async () => {
     const response = await loader({
-      request: new Request('https://example.test/app?tab=assignments'),
+      request: new Request('https://example.test/app'),
       params: {},
       context: {} as never,
     } as any);
     const data = (response as { data: any }).data;
 
-    expect(data.assignmentsEnabled).toBe(true);
-    expect(prisma.classAssignment.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { classId: { in: ['class-1', 'class-2'] } },
-      })
-    );
+    expect(prisma.document.findMany).not.toHaveBeenCalled();
+    expect(prisma.classAssignment.findMany).not.toHaveBeenCalled();
+    expect(data).not.toHaveProperty('documents');
+    expect(data).not.toHaveProperty('archivedDocuments');
+    expect(data).not.toHaveProperty('assignments');
   });
 
-  test('orders each student document tile by the current tutor module instead of the last module', async () => {
-    const createdAt = new Date('2026-06-01T12:00:00.000Z');
-    prisma.document.findMany.mockImplementation(async (args: any) => {
-      if (args.where?.archivedAt?.not === null) return [];
-
-      return [
-        {
-          id: 'doc-1',
-          title: 'Essay Draft',
-          html: '<p>Started</p>',
-          text: 'Started',
-          createdAt,
-          updatedAt: createdAt,
-          assignmentModuleSessions: [
-            {
-              id: 'cms-review',
-              createdAt,
-              updatedAt: createdAt,
-              instructionsCompleted: 0,
-              assignmentModuleId: 'module-review',
-              assignmentModule: {
-                id: 'module-review',
-                position: 4,
-                title: 'Review my Essay',
-                instructions: [{ id: 'review-instruction' }],
-              },
-            },
-            {
-              id: 'cms-prewriting',
-              createdAt,
-              updatedAt: createdAt,
-              instructionsCompleted: 0,
-              assignmentModuleId: 'module-prewriting',
-              assignmentModule: {
-                id: 'module-prewriting',
-                position: 1,
-                title: 'Pre-Writing',
-                instructions: [{ id: 'prewriting-instruction' }],
-              },
-            },
-          ],
-          submissions: [],
-        },
-      ];
-    });
+  test('loads the classes a student is enrolled in for the dashboard Classes section', async () => {
+    getStudentEnrolledClasses.mockResolvedValue([
+      {
+        id: 'class-1',
+        grade: '9',
+        period: '1',
+        title: 'History',
+        classArtKey: null,
+        legacyClassArtIndex: null,
+        school: { id: 'school-1', name: 'E2E High' },
+        teacherNames: ['Mrs Test Teacher'],
+      },
+    ]);
 
     const response = await loader({
       request: new Request('https://example.test/app'),
@@ -169,9 +172,12 @@ describe('app index loader assignments', () => {
     } as any);
     const data = (response as { data: any }).data;
 
-    expect(
-      data.documents[0].assignmentModuleSessions[0].assignmentModule.title
-    ).toBe('Pre-Writing');
+    expect(getStudentEnrolledClasses).toHaveBeenCalledWith(
+      'profile-1',
+      expect.any(String)
+    );
+    expect(data.enrolledClasses).toHaveLength(1);
+    expect(data.enrolledClasses[0].id).toBe('class-1');
   });
 
   test('does not load writing practice state for the dashboard', async () => {
@@ -488,7 +494,7 @@ describe('app index loader assignments', () => {
     } as any);
     const data = (response as { data: any }).data;
 
-    expect(data.courses).toEqual([]);
+    expect(data.assignmentTypes).toEqual([]);
     expect(data.teacherAssignmentTypes).toEqual([
       {
         id: 'type-1',
@@ -560,7 +566,7 @@ describe('app index loader assignments', () => {
     expect(data.assignmentCreationClasses).toEqual([
       {
         id: 'class-1',
-        name: 'Grade 9 • Period 1 — Pilot Class',
+        name: 'Pilot Class · Grade 9 • Period 1',
       },
     ]);
     expect(data.assignmentCreationTypes).toEqual([

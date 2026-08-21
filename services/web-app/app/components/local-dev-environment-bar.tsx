@@ -2,11 +2,13 @@ import {
   AlertTriangle,
   FlaskConical,
   GraduationCap,
+  KeyRound,
   Loader2,
   Shield,
   UserRound,
 } from 'lucide-react';
-import { useFetcher } from 'react-router';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Form, useFetcher } from 'react-router';
 import { Badge } from '~/components/ui/badge';
 import {
   Popover,
@@ -27,8 +29,10 @@ type LocalDevEnvironmentBarProps = {
   bannerWarning: 'staging' | 'localhost' | 'preview' | null;
   localDevQuickLogin?: {
     enabled: boolean;
-    options: LocalDevLoginOption[];
   };
+  previewAccessGateEnabled?: boolean;
+  previewAccessSeatLabel?: string | null;
+  blackboardLtiMockEnabled?: boolean;
 };
 
 const STAFF_ROLES = new Set(['admin', 'owner', 'teacher', 'teacher-multi']);
@@ -41,7 +45,11 @@ function roleMeta(role: string) {
     return { badge: 'Owner', icon: Shield, tone: 'secondary' as const };
   }
   if (role.startsWith('student')) {
-    return { badge: 'Student', icon: GraduationCap, tone: 'secondary' as const };
+    return {
+      badge: 'Student',
+      icon: GraduationCap,
+      tone: 'secondary' as const,
+    };
   }
   return { badge: 'Teacher', icon: UserRound, tone: 'secondary' as const };
 }
@@ -97,7 +105,10 @@ function LoginOptionRow({
         title={option.description}
         className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-accent focus-visible:bg-accent focus-visible:outline-none disabled:opacity-60"
       >
-        <Icon className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+        <Icon
+          className="size-4 shrink-0 text-muted-foreground"
+          aria-hidden="true"
+        />
         <span className="min-w-0 flex-1">
           <span className="block truncate font-medium">{option.label}</span>
           <span className="block truncate text-xs text-muted-foreground">
@@ -154,24 +165,99 @@ function LoginOptionGroup({
 }
 
 function LocalDevQuickLoginPanel({
-  options,
+  isOpen,
+  previewAccessGateEnabled,
+  previewAccessSeatLabel,
+  blackboardLtiMockEnabled,
 }: {
-  options: LocalDevLoginOption[];
+  isOpen: boolean;
+  previewAccessGateEnabled: boolean;
+  previewAccessSeatLabel: string | null;
+  blackboardLtiMockEnabled: boolean;
 }) {
-  const fetcher = useFetcher();
-  const isSubmitting = fetcher.state !== 'idle';
+  const loginFetcher = useFetcher();
+  const [options, setOptions] = useState<LocalDevLoginOption[]>([]);
+  const [nextCursor, setNextCursor] = useState<number | null>(null);
+  const [hasLoadedFirstPage, setHasLoadedFirstPage] = useState(false);
+  const [isLoadingOptions, setIsLoadingOptions] = useState(false);
+  const [optionsError, setOptionsError] = useState(false);
+  const firstPageRequested = useRef(false);
+  const loadInFlight = useRef(false);
+  const isMounted = useRef(true);
+  const isSubmitting = loginFetcher.state !== 'idle';
   const submittingEmail = isSubmitting
-    ? String(fetcher.formData?.get('email') ?? '')
+    ? String(loginFetcher.formData?.get('email') ?? '')
     : null;
   const { staff, students } = groupOptions(options);
+
+  const loadPage = useCallback(async (cursor: number) => {
+    if (loadInFlight.current) return;
+    loadInFlight.current = true;
+    setIsLoadingOptions(true);
+    setOptionsError(false);
+
+    try {
+      const response = await fetch(`/auth/dev-login/options?cursor=${cursor}`);
+      const contentType = response.headers.get('content-type') ?? '';
+      if (!response.ok || response.redirected || !contentType.includes('json')) {
+        throw new Error('Unable to load preview users.');
+      }
+      const page = (await response.json()) as {
+        options: LocalDevLoginOption[];
+        nextCursor: number | null;
+      };
+      if (!isMounted.current) return;
+      setOptions((current) => {
+        const knownEmails = new Set(current.map((option) => option.email));
+        return [
+          ...current,
+          ...page.options.filter((option) => !knownEmails.has(option.email)),
+        ];
+      });
+      setNextCursor(page.nextCursor);
+      setHasLoadedFirstPage(true);
+    } catch {
+      if (isMounted.current) setOptionsError(true);
+    } finally {
+      loadInFlight.current = false;
+      if (isMounted.current) setIsLoadingOptions(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    isMounted.current = true;
+    if (isOpen && !firstPageRequested.current) {
+      firstPageRequested.current = true;
+      void loadPage(0);
+    }
+    return () => {
+      isMounted.current = false;
+    };
+  }, [isOpen, loadPage]);
+
+  const loadMore = useCallback(() => {
+    if (nextCursor === null || loadInFlight.current) return;
+    void loadPage(nextCursor);
+  }, [loadPage, nextCursor]);
+
+  const handleScroll = useCallback(
+    (event: React.UIEvent<HTMLDivElement>) => {
+      const panel = event.currentTarget;
+      const remaining =
+        panel.scrollHeight - panel.scrollTop - panel.clientHeight;
+      if (remaining <= 48) loadMore();
+    },
+    [loadMore]
+  );
 
   return (
     <div
       id="local-dev-quick-login-panel"
       className="max-h-72 w-80 max-w-[calc(100vw-2rem)] overflow-y-auto p-1.5"
+      onScroll={handleScroll}
     >
       <LoginOptionGroup
-        Form={fetcher.Form}
+        Form={loginFetcher.Form}
         label="Staff"
         options={staff}
         isSubmitting={isSubmitting}
@@ -181,26 +267,95 @@ function LocalDevQuickLoginPanel({
         <div className="my-1.5 h-px bg-border/60" aria-hidden="true" />
       ) : null}
       <LoginOptionGroup
-        Form={fetcher.Form}
+        Form={loginFetcher.Form}
         label="Students"
         options={students}
         isSubmitting={isSubmitting}
         submittingEmail={submittingEmail}
       />
+      {isLoadingOptions ? (
+        <div
+          className="flex items-center justify-center gap-2 px-2 py-3 text-xs text-muted-foreground"
+          role="status"
+        >
+          <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
+          Loading preview users…
+        </div>
+      ) : null}
+      {hasLoadedFirstPage && !isLoadingOptions && options.length === 0 ? (
+        <p className="px-2 py-3 text-center text-xs text-muted-foreground">
+          No preview users found.
+        </p>
+      ) : null}
+      {optionsError ? (
+        <p className="px-2 py-3 text-center text-xs text-destructive" role="alert">
+          Unable to load preview users.
+        </p>
+      ) : null}
+      {blackboardLtiMockEnabled || previewAccessGateEnabled ? (
+        <>
+          {options.length > 0 || blackboardLtiMockEnabled ? (
+            <div className="my-1.5 h-px bg-border/60" aria-hidden="true" />
+          ) : null}
+          {previewAccessSeatLabel ? (
+            <PreviewSeatIdentity label={previewAccessSeatLabel} />
+          ) : null}
+          {blackboardLtiMockEnabled ? (
+            <BlackboardLtiMockLink />
+          ) : null}
+          {previewAccessGateEnabled ? (
+            <Form method="post" action="/auth/preview-access">
+              <input type="hidden" name="intent" value="sign-out" />
+              <button
+                type="submit"
+                className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:bg-accent focus-visible:outline-none"
+              >
+                <KeyRound className="size-4" aria-hidden="true" />
+                Re-enter access code
+              </button>
+            </Form>
+          ) : null}
+        </>
+      ) : null}
     </div>
+  );
+}
+
+export function BlackboardLtiMockLink() {
+  return (
+    <a
+      href="/dev/blackboard-lti-mock/"
+      className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:bg-accent focus-visible:outline-none"
+    >
+      <FlaskConical className="size-4" aria-hidden="true" />
+      Blackboard
+    </a>
+  );
+}
+
+export function PreviewSeatIdentity({ label }: { label: string }) {
+  return (
+    <p className="px-2 pb-1 pt-1.5 text-xs text-muted-foreground">
+      Current seat:{' '}
+      <span className="font-semibold text-foreground">{label}</span>
+    </p>
   );
 }
 
 export function LocalDevEnvironmentBar({
   bannerWarning,
   localDevQuickLogin,
+  previewAccessGateEnabled = false,
+  previewAccessSeatLabel = null,
+  blackboardLtiMockEnabled = false,
 }: LocalDevEnvironmentBarProps) {
+  const [isQuickLoginOpen, setIsQuickLoginOpen] = useState(false);
+
   if (!bannerWarning) {
     return null;
   }
 
   const showQuickLogin = localDevQuickLogin?.enabled ?? false;
-  const options = localDevQuickLogin?.options ?? [];
   const environmentLabel =
     bannerWarning === 'staging'
       ? 'Staging environment'
@@ -208,7 +363,7 @@ export function LocalDevEnvironmentBar({
         ? 'Preview environment'
         : 'Local development environment';
 
-  if (!showQuickLogin) {
+  if (!showQuickLogin && !previewAccessGateEnabled) {
     return (
       <div className="fixed bottom-4 right-4 z-30">
         <Tooltip
@@ -229,7 +384,7 @@ export function LocalDevEnvironmentBar({
 
   return (
     <div className="fixed bottom-4 right-4 z-30">
-      <Popover>
+      <Popover open={isQuickLoginOpen} onOpenChange={setIsQuickLoginOpen}>
         <PopoverTrigger asChild>
           <button
             type="button"
@@ -246,7 +401,12 @@ export function LocalDevEnvironmentBar({
           sideOffset={12}
           className="w-80 p-0"
         >
-          <LocalDevQuickLoginPanel options={options} />
+          <LocalDevQuickLoginPanel
+            isOpen={isQuickLoginOpen}
+            previewAccessGateEnabled={previewAccessGateEnabled}
+            previewAccessSeatLabel={previewAccessSeatLabel}
+            blackboardLtiMockEnabled={blackboardLtiMockEnabled}
+          />
         </PopoverContent>
       </Popover>
     </div>

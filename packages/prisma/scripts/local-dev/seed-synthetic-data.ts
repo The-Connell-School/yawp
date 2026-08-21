@@ -1,10 +1,9 @@
 /* eslint-disable no-console */
-import type { PrismaClient } from '../../generated/prisma';
+import type { Prisma, PrismaClient } from '../../generated/prisma';
 import { createPassword } from '../utils';
 import { getClassArtByIndex } from '../../../../services/web-app/app/utils/class-art.ts';
 import {
   LOCAL_DEV_ORG_ID,
-  LOCAL_DEV_ORG_NAME,
   LOCAL_DEV_PERSONAS,
   type LocalDevPersona,
 } from './dev-personas';
@@ -13,6 +12,16 @@ type PersonaRecord = {
   persona: LocalDevPersona;
   userId: string;
   membershipId: string;
+};
+
+type SyntheticSeedClient = PrismaClient | Prisma.TransactionClient;
+
+type SyntheticSeedOptions = {
+  organizationId?: string;
+  personas?: LocalDevPersona[];
+  schoolCodes?: [string, string, string];
+  assignmentTypeIds?: string[];
+  teacherTrainingIds?: string[];
 };
 
 export type LocalDevSeedContext = {
@@ -27,7 +36,7 @@ export type LocalDevSeedContext = {
 };
 
 async function upsertPersona(
-  prisma: PrismaClient,
+  prisma: SyntheticSeedClient,
   persona: LocalDevPersona,
   organizationId: string
 ): Promise<PersonaRecord> {
@@ -68,13 +77,21 @@ function pickAssignmentTypeId(
 }
 
 export async function seedSyntheticLocalDevData(
-  prisma: PrismaClient
+  prisma: SyntheticSeedClient,
+  options: SyntheticSeedOptions = {},
 ): Promise<LocalDevSeedContext> {
+  const organizationId = options.organizationId ?? LOCAL_DEV_ORG_ID;
+  const personas = options.personas ?? LOCAL_DEV_PERSONAS;
+  const schoolCodes = options.schoolCodes ?? [
+    'DEV-SCH-1',
+    'DEV-SCH-2',
+    'DEV-SCH-3',
+  ];
   const personaRecords = Object.fromEntries(
     (
       await Promise.all(
-        LOCAL_DEV_PERSONAS.map((persona) =>
-          upsertPersona(prisma, persona, LOCAL_DEV_ORG_ID)
+        personas.map((persona) =>
+          upsertPersona(prisma, persona, organizationId)
         )
       )
     ).map((record) => [record.persona.key, record])
@@ -97,8 +114,8 @@ export async function seedSyntheticLocalDevData(
       prisma.school.create({
         data: {
           name,
-          code: `DEV-SCH-${index + 1}`,
-          organizationId: LOCAL_DEV_ORG_ID,
+          code: schoolCodes[index]!,
+          organizationId,
         },
       })
     )
@@ -187,6 +204,9 @@ export async function seedSyntheticLocalDevData(
   }
 
   const assignmentTypes = await prisma.assignmentType.findMany({
+    where: options.assignmentTypeIds
+      ? { id: { in: options.assignmentTypeIds } }
+      : undefined,
     select: { id: true, title: true, kind: true, systemKey: true },
     orderBy: { position: 'asc' },
   });
@@ -213,8 +233,43 @@ export async function seedSyntheticLocalDevData(
   const thesisModules = await prisma.assignmentModule.findMany({
     where: { assignmentTypeId: thesisAssignmentTypeId, deletedAt: null },
     orderBy: { position: 'asc' },
-    select: { id: true, position: true },
+    select: {
+      id: true,
+      position: true,
+      instructions: {
+        orderBy: { position: 'asc' },
+        select: { id: true, prompt: true },
+      },
+    },
   });
+
+  // Mirrors createDocumentForAssignmentType (services/web-app/app/domain/documents.server.ts):
+  // every document needs one AssignmentModuleSession per module in its
+  // AssignmentType, or opening it hits "No assignment module session found."
+  // Kept in sync by hand because this script runs outside the web-app's `~/`
+  // alias resolution and can't import that helper directly.
+  function buildModuleSessionsCreateData(modules: typeof thesisModules) {
+    return modules.map((assignmentModule) => {
+      const firstInstruction = assignmentModule.instructions[0];
+      return {
+        instructionsCompleted: 0,
+        assignmentModuleId: assignmentModule.id,
+        ...(firstInstruction
+          ? {
+              messages: {
+                create: [
+                  {
+                    content: firstInstruction.prompt,
+                    agent: 'assistant',
+                    instructionId: firstInstruction.id,
+                  },
+                ],
+              },
+            }
+          : {}),
+      };
+    });
+  }
 
   const thesisAssignment = await prisma.assignment.create({
     data: {
@@ -250,6 +305,9 @@ export async function seedSyntheticLocalDevData(
   }
 
   const teacherTrainings = await prisma.teacherTraining.findMany({
+    where: options.teacherTrainingIds
+      ? { id: { in: options.teacherTrainingIds } }
+      : undefined,
     orderBy: { position: 'asc' },
     select: { id: true },
   });
@@ -277,6 +335,9 @@ export async function seedSyntheticLocalDevData(
       assignmentTypeId: thesisAssignmentTypeId,
       assignmentId: thesisAssignment.id,
       classAssignmentId: thesisClassAssignment.id,
+      assignmentModuleSessions: {
+        create: buildModuleSessionsCreateData(thesisModules),
+      },
     },
   });
 
@@ -301,9 +362,10 @@ export async function seedSyntheticLocalDevData(
                 title: 'Practice essay draft session',
                 instructionsCompleted: 1,
               },
+              ...buildModuleSessionsCreateData(thesisModules.slice(1)),
             ],
           }
-        : undefined,
+        : { create: buildModuleSessionsCreateData(thesisModules) },
     },
   });
   await prisma.documentRevision.createMany({
@@ -336,6 +398,9 @@ export async function seedSyntheticLocalDevData(
       assignmentTypeId: thesisAssignmentTypeId,
       assignmentId: thesisAssignment.id,
       classAssignmentId: thesisClassAssignment.id,
+      assignmentModuleSessions: {
+        create: buildModuleSessionsCreateData(thesisModules),
+      },
     },
   });
   await prisma.submission.create({
@@ -361,6 +426,9 @@ export async function seedSyntheticLocalDevData(
       assignmentTypeId: thesisAssignmentTypeId,
       assignmentId: thesisAssignment.id,
       classAssignmentId: thesisClassAssignment.id,
+      assignmentModuleSessions: {
+        create: buildModuleSessionsCreateData(thesisModules),
+      },
     },
   });
   const gradedSubmission = await prisma.submission.create({
@@ -408,6 +476,9 @@ export async function seedSyntheticLocalDevData(
       assignmentTypeId: thesisAssignmentTypeId,
       assignmentId: thesisAssignment.id,
       classAssignmentId: thesisClassAssignment.id,
+      assignmentModuleSessions: {
+        create: buildModuleSessionsCreateData(thesisModules),
+      },
     },
   });
   const unreleasedSubmission = await prisma.submission.create({
@@ -435,7 +506,7 @@ export async function seedSyntheticLocalDevData(
   });
 
   return {
-    organizationId: LOCAL_DEV_ORG_ID,
+    organizationId,
     schoolIds: schools.map((school) => school.id),
     primaryClassId: primaryClass.id,
     secondaryClassId: secondaryClass.id,

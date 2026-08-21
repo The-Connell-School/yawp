@@ -14,6 +14,14 @@ describe('partitionSubmissionsByArchive', () => {
     expect(active.map((x) => x.id)).toEqual(['1', '3']);
     expect(archived.map((x) => x.id)).toEqual(['2']);
   });
+
+  it('treats a teacher-unsubmitted submission as inactive, same as archived', () => {
+    const a = { id: '1', archivedAt: null, unsubmittedAt: null };
+    const b = { id: '2', archivedAt: null, unsubmittedAt: new Date() };
+    const { active, archived } = partitionSubmissionsByArchive([a, b]);
+    expect(active.map((x) => x.id)).toEqual(['1']);
+    expect(archived.map((x) => x.id)).toEqual(['2']);
+  });
 });
 
 describe('versionLabelForActiveSubmission', () => {

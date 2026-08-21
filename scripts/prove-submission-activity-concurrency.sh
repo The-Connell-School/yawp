@@ -1,0 +1,392 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+proof_url="${1:?Pass the isolated PostgreSQL URL}"
+case "$proof_url" in
+  postgresql://*@127.0.0.1:*/*) ;;
+  *)
+    echo "Refusing concurrency proof outside isolated local PostgreSQL." >&2
+    exit 1
+    ;;
+esac
+
+proof_dir="$(mktemp -d)"
+cleanup() {
+  rm -rf "$proof_dir"
+}
+trap cleanup EXIT
+
+psql "$proof_url" --no-psqlrc --set ON_ERROR_STOP=on <<'SQL'
+INSERT INTO "Organization" (id, name)
+VALUES
+  ('activity-concurrency-org', 'Activity Concurrency Proof'),
+  ('activity-concurrency-other-org', 'Activity Concurrency Other');
+INSERT INTO "User" (id, email, name)
+VALUES
+  ('activity-concurrency-owner', 'activity-concurrency-owner@example.test', 'Proof Owner'),
+  ('activity-concurrency-other', 'activity-concurrency-other@example.test', 'Other Owner'),
+  ('activity-concurrency-handoff', 'activity-concurrency-handoff@example.test', 'Handoff Owner'),
+  ('activity-concurrency-teacher', 'activity-concurrency-teacher@example.test', 'Proof Teacher');
+INSERT INTO "OrgMembership" (id, "userId", "organizationId", role)
+VALUES
+  ('activity-concurrency-owner-membership', 'activity-concurrency-owner', 'activity-concurrency-org', 'STUDENT'),
+  ('activity-concurrency-other-membership', 'activity-concurrency-other', 'activity-concurrency-other-org', 'STUDENT'),
+  ('activity-concurrency-handoff-membership', 'activity-concurrency-handoff', 'activity-concurrency-org', 'STUDENT'),
+  ('activity-concurrency-teacher-membership', 'activity-concurrency-teacher', 'activity-concurrency-org', 'TEACHER');
+INSERT INTO "School" (id, name, code, "organizationId")
+VALUES ('activity-concurrency-school', 'Activity Concurrency School', 'activity-concurrency-school', 'activity-concurrency-org');
+INSERT INTO "Class" (id, code, "schoolId")
+VALUES ('activity-concurrency-class', 'activity-concurrency-class', 'activity-concurrency-school');
+INSERT INTO "_ClassStudents" ("A", "B")
+VALUES ('activity-concurrency-class', 'activity-concurrency-owner-membership');
+INSERT INTO "_ClassTeachers" ("A", "B")
+VALUES ('activity-concurrency-class', 'activity-concurrency-teacher-membership');
+INSERT INTO "AssignmentType" (id, title, position)
+VALUES ('activity-concurrency-assignment-type', 'Concurrency Proof', 999998);
+INSERT INTO "Document" (id, title, text, html, "membershipId", "assignmentTypeId")
+VALUES (
+  'activity-concurrency-document', 'Concurrency Proof', 'Proof', '<p>Proof</p>',
+  'activity-concurrency-owner-membership', 'activity-concurrency-assignment-type'
+), (
+  'activity-concurrency-other-document', 'Other Tenant Concurrency Proof',
+  'Other proof', '<p>Other proof</p>',
+  'activity-concurrency-other-membership', 'activity-concurrency-assignment-type'
+), (
+  'activity-concurrency-handoff-document', 'Handoff Concurrency Proof',
+  'Handoff proof', '<p>Handoff proof</p>',
+  'activity-concurrency-owner-membership', 'activity-concurrency-assignment-type'
+);
+INSERT INTO "Submission" (id, title, text, html, "submittedAt", "documentId")
+VALUES (
+  'activity-concurrency-submission', 'Concurrency Proof', 'Proof', '<p>Proof</p>',
+  CURRENT_TIMESTAMP, 'activity-concurrency-document'
+);
+SQL
+
+# Revoke the exact teacher-class relationship first and hold that deletion
+# open. The route-equivalent access transaction locks its stable anchors, then
+# blocks on the relationship row. Once revocation commits, the access query
+# rechecks the row, inserts neither the comment nor its activity, and commits a
+# clean denial. This is the real PostgreSQL race that the route-level unit test
+# models with `lockSubmissionCommentAccess` returning false.
+comment_revoke_fifo="$proof_dir/comment-revoke.fifo"
+comment_revoke_log="$proof_dir/comment-revoke.log"
+comment_access_log="$proof_dir/comment-access.log"
+mkfifo "$comment_revoke_fifo"
+psql "$proof_url" --no-psqlrc --set ON_ERROR_STOP=on \
+  < "$comment_revoke_fifo" > "$comment_revoke_log" 2>&1 &
+comment_revoke_pid=$!
+exec 8>"$comment_revoke_fifo"
+printf '%s\n' \
+  'BEGIN;' \
+  'DELETE FROM "_ClassTeachers" WHERE "A" = '\''activity-concurrency-class'\'' AND "B" = '\''activity-concurrency-teacher-membership'\'';' \
+  '\echo COMMENT_ACCESS_REVOKED_UNCOMMITTED' >&8
+for _ in {1..100}; do
+  grep -q 'COMMENT_ACCESS_REVOKED_UNCOMMITTED' "$comment_revoke_log" && break
+  sleep 0.05
+done
+grep -q 'COMMENT_ACCESS_REVOKED_UNCOMMITTED' "$comment_revoke_log"
+
+psql "$proof_url" --no-psqlrc --set ON_ERROR_STOP=on \
+  > "$comment_access_log" 2>&1 <<'SQL' &
+BEGIN;
+SELECT submission.id
+FROM "Submission" submission
+JOIN "Document" document ON document.id = submission."documentId"
+JOIN "OrgMembership" owner ON owner.id = document."membershipId"
+JOIN "OrgMembership" actor ON actor.id = 'activity-concurrency-teacher-membership'
+JOIN "User" actor_user ON actor_user.id = 'activity-concurrency-teacher'
+WHERE submission.id = 'activity-concurrency-submission'
+  AND document."deletedAt" IS NULL
+  AND actor."userId" = 'activity-concurrency-teacher'
+FOR UPDATE OF submission, document, owner, actor, actor_user;
+\echo COMMENT_ACCESS_ANCHORS_LOCKED
+WITH authorized AS (
+  SELECT class.id
+  FROM "_ClassStudents" class_student
+  JOIN "Class" class ON class.id = class_student."A"
+  JOIN "School" school ON school.id = class."schoolId"
+  JOIN "_ClassTeachers" class_teacher
+    ON class_teacher."A" = class.id
+    AND class_teacher."B" = 'activity-concurrency-teacher-membership'
+  WHERE class_student."B" = 'activity-concurrency-owner-membership'
+    AND school."organizationId" = 'activity-concurrency-org'
+  FOR UPDATE OF class_student, class, school, class_teacher
+), inserted_comment AS (
+  INSERT INTO "SubmissionComment" (
+    id, content, excerpt, "submissionId", "membershipId"
+  )
+  SELECT
+    'activity-concurrency-revoked-comment', 'must not persist', 'proof',
+    'activity-concurrency-submission', 'activity-concurrency-teacher-membership'
+  FROM authorized
+  RETURNING id
+)
+INSERT INTO "SubmissionActivity" (
+  id, "submissionId", "organizationId", "actorType", "eventType", source, changes
+)
+SELECT
+  'activity-concurrency-revoked-comment-activity',
+  'activity-concurrency-submission', 'activity-concurrency-org', 'human',
+  'submission.comment_created', 'db-comment-race', '{}'::jsonb
+FROM inserted_comment;
+COMMIT;
+SQL
+comment_access_pid=$!
+
+for _ in {1..100}; do
+  grep -q 'COMMENT_ACCESS_ANCHORS_LOCKED' "$comment_access_log" && break
+  sleep 0.05
+done
+grep -q 'COMMENT_ACCESS_ANCHORS_LOCKED' "$comment_access_log"
+sleep 0.2
+printf '%s\n' 'COMMIT;' '\q' >&8
+exec 8>&-
+wait "$comment_revoke_pid"
+wait "$comment_access_pid"
+
+comment_race_rows="$(psql "$proof_url" --no-psqlrc --tuples-only --no-align --command "SELECT (SELECT count(*) FROM \"SubmissionComment\" WHERE id = 'activity-concurrency-revoked-comment') + (SELECT count(*) FROM \"SubmissionActivity\" WHERE id = 'activity-concurrency-revoked-comment-activity');")"
+[[ "$comment_race_rows" == "0" ]] || {
+  cat "$comment_access_log"
+  echo "Revoked comment race persisted a comment or activity." >&2
+  exit 1
+}
+echo "Concurrent comment-access revocation denied comment and activity atomically."
+
+run_race() {
+  local activity_id="$1"
+  local update_sql="$2"
+  local expected_error="$3"
+  local fifo="$proof_dir/$activity_id.fifo"
+  local session_log="$proof_dir/$activity_id.session.log"
+  local update_log="$proof_dir/$activity_id.update.log"
+
+  mkfifo "$fifo"
+  psql "$proof_url" --no-psqlrc --set ON_ERROR_STOP=on \
+    < "$fifo" > "$session_log" 2>&1 &
+  local session_pid=$!
+  exec 3>"$fifo"
+  printf '%s\n' \
+    'BEGIN;' \
+    "INSERT INTO \"SubmissionActivity\" (id, \"submissionId\", \"organizationId\", \"actorType\", \"eventType\", source, changes) VALUES ('$activity_id', 'activity-concurrency-submission', 'activity-concurrency-org', 'system', 'submission.grade_updated', 'db-proof', '{}'::jsonb);" \
+    '\echo ACTIVITY_LOCKED' >&3
+
+  for _ in {1..100}; do
+    grep -q 'ACTIVITY_LOCKED' "$session_log" && break
+    sleep 0.05
+  done
+  grep -q 'ACTIVITY_LOCKED' "$session_log"
+
+  set +e
+  psql "$proof_url" --no-psqlrc --set ON_ERROR_STOP=on \
+    --command "$update_sql" > "$update_log" 2>&1 &
+  local update_pid=$!
+  set -e
+  sleep 0.2
+  printf '%s\n' 'COMMIT;' '\q' >&3
+  exec 3>&-
+  wait "$session_pid"
+
+  set +e
+  wait "$update_pid"
+  local update_status=$?
+  set -e
+  if [[ "$update_status" -eq 0 ]]; then
+    cat "$update_log"
+    echo "Concurrent tenant reassignment unexpectedly committed." >&2
+    exit 1
+  fi
+  grep -q "$expected_error" "$update_log"
+
+  psql "$proof_url" --no-psqlrc --set ON_ERROR_STOP=on \
+    --command "BEGIN; SET LOCAL yawp.submission_activity_cleanup = 'on'; DELETE FROM \"SubmissionActivity\" WHERE id = '$activity_id'; COMMIT;" >/dev/null
+}
+
+run_race \
+  'submission-activity-owner-race-proof' \
+  'UPDATE "OrgMembership" SET "organizationId" = '\''activity-concurrency-other-org'\'' WHERE id = '\''activity-concurrency-owner-membership'\'';' \
+  'durable activity'
+
+run_race \
+  'submission-activity-document-race-proof' \
+  'UPDATE "Document" SET "membershipId" = '\''activity-concurrency-other-membership'\'' WHERE id = '\''activity-concurrency-document'\'';' \
+  'durable submission activity'
+
+run_race \
+  'submission-activity-submission-document-race-proof' \
+  'UPDATE "Submission" SET "documentId" = '\''activity-concurrency-other-document'\'' WHERE id = '\''activity-concurrency-submission'\'';' \
+  'audited submission'
+
+psql "$proof_url" --no-psqlrc --set ON_ERROR_STOP=on \
+  --command 'INSERT INTO "SubmissionActivity" (id, "submissionId", "organizationId", "actorType", "eventType", source, changes) VALUES ('\''submission-activity-parent-handoff-proof'\'', '\''activity-concurrency-submission'\'', '\''activity-concurrency-org'\'', '\''system'\'', '\''submission.grade_updated'\'', '\''db-proof'\'', '\''{}'\''::jsonb);' \
+  >/dev/null
+
+run_cross_parent_race() {
+  local label="$1"
+  local first_sql="$2"
+  local second_sql="$3"
+  local expected_error="$4"
+  local verify_sql="$5"
+  local reset_sql="$6"
+  local fifo="$proof_dir/$label.fifo"
+  local first_log="$proof_dir/$label.first.log"
+  local second_log="$proof_dir/$label.second.log"
+
+  mkfifo "$fifo"
+  psql "$proof_url" --no-psqlrc --set ON_ERROR_STOP=on \
+    < "$fifo" > "$first_log" 2>&1 &
+  local first_pid=$!
+  exec 6>"$fifo"
+  printf '%s\n' 'BEGIN;' "$first_sql" '\echo FIRST_PARENT_LOCKED' >&6
+  for _ in {1..100}; do
+    grep -q 'FIRST_PARENT_LOCKED' "$first_log" && break
+    sleep 0.05
+  done
+  grep -q 'FIRST_PARENT_LOCKED' "$first_log"
+
+  psql "$proof_url" --no-psqlrc --set ON_ERROR_STOP=on \
+    --command "$second_sql" > "$second_log" 2>&1 &
+  local second_pid=$!
+  sleep 0.2
+  printf '%s\n' 'COMMIT;' '\q' >&6
+  exec 6>&-
+  wait "$first_pid"
+
+  set +e
+  wait "$second_pid"
+  local second_status=$?
+  set -e
+  if [[ "$second_status" -eq 0 ]]; then
+    cat "$second_log"
+    echo "$label unexpectedly committed both parent moves." >&2
+    exit 1
+  fi
+  grep -q "$expected_error" "$second_log"
+
+  local verified
+  verified="$(psql "$proof_url" --no-psqlrc --tuples-only --no-align --command "$verify_sql")"
+  [[ "$verified" == "t" ]] || {
+    echo "$label left an invalid parent graph." >&2
+    exit 1
+  }
+  psql "$proof_url" --no-psqlrc --set ON_ERROR_STOP=on \
+    --command "$reset_sql" >/dev/null
+}
+
+run_cross_parent_race \
+  'document-then-membership' \
+  'UPDATE "Document" SET "membershipId" = '\''activity-concurrency-handoff-membership'\'' WHERE id = '\''activity-concurrency-document'\'';' \
+  'UPDATE "OrgMembership" SET "organizationId" = '\''activity-concurrency-other-org'\'' WHERE id = '\''activity-concurrency-handoff-membership'\'';' \
+  'durable activity' \
+  "SELECT (SELECT \"membershipId\" = 'activity-concurrency-handoff-membership' FROM \"Document\" WHERE id = 'activity-concurrency-document') AND (SELECT \"organizationId\" = 'activity-concurrency-org' FROM \"OrgMembership\" WHERE id = 'activity-concurrency-handoff-membership');" \
+  'UPDATE "Document" SET "membershipId" = '\''activity-concurrency-owner-membership'\'' WHERE id = '\''activity-concurrency-document'\'';'
+
+run_cross_parent_race \
+  'membership-then-document' \
+  'UPDATE "OrgMembership" SET "organizationId" = '\''activity-concurrency-other-org'\'' WHERE id = '\''activity-concurrency-handoff-membership'\'';' \
+  'UPDATE "Document" SET "membershipId" = '\''activity-concurrency-handoff-membership'\'' WHERE id = '\''activity-concurrency-document'\'';' \
+  'durable submission activity' \
+  "SELECT (SELECT \"membershipId\" = 'activity-concurrency-owner-membership' FROM \"Document\" WHERE id = 'activity-concurrency-document') AND (SELECT \"organizationId\" = 'activity-concurrency-other-org' FROM \"OrgMembership\" WHERE id = 'activity-concurrency-handoff-membership');" \
+  'UPDATE "OrgMembership" SET "organizationId" = '\''activity-concurrency-org'\'' WHERE id = '\''activity-concurrency-handoff-membership'\'';'
+
+run_cross_parent_race \
+  'submission-then-document' \
+  'UPDATE "Submission" SET "documentId" = '\''activity-concurrency-handoff-document'\'' WHERE id = '\''activity-concurrency-submission'\'';' \
+  'UPDATE "Document" SET "membershipId" = '\''activity-concurrency-other-membership'\'' WHERE id = '\''activity-concurrency-handoff-document'\'';' \
+  'durable submission activity' \
+  "SELECT (SELECT \"documentId\" = 'activity-concurrency-handoff-document' FROM \"Submission\" WHERE id = 'activity-concurrency-submission') AND (SELECT \"membershipId\" = 'activity-concurrency-owner-membership' FROM \"Document\" WHERE id = 'activity-concurrency-handoff-document');" \
+  'UPDATE "Submission" SET "documentId" = '\''activity-concurrency-document'\'' WHERE id = '\''activity-concurrency-submission'\'';'
+
+run_cross_parent_race \
+  'document-then-submission' \
+  'UPDATE "Document" SET "membershipId" = '\''activity-concurrency-other-membership'\'' WHERE id = '\''activity-concurrency-handoff-document'\'';' \
+  'UPDATE "Submission" SET "documentId" = '\''activity-concurrency-handoff-document'\'' WHERE id = '\''activity-concurrency-submission'\'';' \
+  'audited submission' \
+  "SELECT (SELECT \"documentId\" = 'activity-concurrency-document' FROM \"Submission\" WHERE id = 'activity-concurrency-submission') AND (SELECT \"membershipId\" = 'activity-concurrency-other-membership' FROM \"Document\" WHERE id = 'activity-concurrency-handoff-document');" \
+  'UPDATE "Document" SET "membershipId" = '\''activity-concurrency-owner-membership'\'' WHERE id = '\''activity-concurrency-handoff-document'\'';'
+
+psql "$proof_url" --no-psqlrc --set ON_ERROR_STOP=on \
+  --command 'BEGIN; SET LOCAL yawp.submission_activity_cleanup = '\''on'\''; DELETE FROM "SubmissionActivity" WHERE id = '\''submission-activity-parent-handoff-proof'\''; COMMIT;' \
+  >/dev/null
+
+echo "Cross-parent tenant handoff proofs passed in both lock orderings."
+
+stale_grade_revision="$(psql "$proof_url" --no-psqlrc --tuples-only --no-align \
+  --command 'SELECT "updatedAt" FROM "Submission" WHERE id = '\''activity-concurrency-submission'\'';')"
+
+# A separate committed database session changes the grade after the release
+# request captured its preimage. The route's one-statement batch predicate must
+# reject that stale revision instead of releasing a grade the teacher did not
+# validate.
+psql "$proof_url" --no-psqlrc --set ON_ERROR_STOP=on \
+  --command 'UPDATE "Submission" SET score = '\''91% (A)'\'', "updatedAt" = "updatedAt" + interval '\''1 second'\'' WHERE id = '\''activity-concurrency-submission'\'';' \
+  >/dev/null
+
+stale_release_count="$(psql "$proof_url" --no-psqlrc --tuples-only --no-align \
+  --command "WITH released AS (UPDATE \"Submission\" SET \"releasedAt\" = clock_timestamp(), \"updatedAt\" = clock_timestamp() WHERE id = 'activity-concurrency-submission' AND \"releasedAt\" IS NULL AND \"unsubmittedAt\" IS NULL AND \"updatedAt\" = '$stale_grade_revision'::timestamp RETURNING id) SELECT count(*) FROM released;")"
+
+[[ "$stale_release_count" == "0" ]] || {
+  echo "Stale grade revision unexpectedly released." >&2
+  exit 1
+}
+
+psql "$proof_url" --no-psqlrc --set ON_ERROR_STOP=on <<'SQL'
+DO $$
+BEGIN
+  IF (SELECT "releasedAt" FROM "Submission" WHERE id = 'activity-concurrency-submission') IS NOT NULL THEN
+    RAISE EXCEPTION 'stale grade revision changed releasedAt';
+  END IF;
+  IF (SELECT score FROM "Submission" WHERE id = 'activity-concurrency-submission') IS DISTINCT FROM '91% (A)' THEN
+    RAISE EXCEPTION 'concurrent grade change was not preserved';
+  END IF;
+  IF EXISTS (
+    SELECT 1 FROM "SubmissionActivity"
+    WHERE "submissionId" = 'activity-concurrency-submission'
+      AND "eventType" = 'submission.grade_released'
+  ) THEN
+    RAISE EXCEPTION 'stale release wrote an activity row';
+  END IF;
+END $$;
+SQL
+
+echo "Committed grade-change versus stale-release predicate proof passed."
+
+psql "$proof_url" --no-psqlrc --set ON_ERROR_STOP=on <<'SQL'
+INSERT INTO "SubmissionActivity" (
+  id, "submissionId", "organizationId", "actorType", "eventType", source, changes
+) VALUES (
+  'activity-immutable-route-row', 'activity-concurrency-submission',
+  'activity-concurrency-org', 'system', 'submission.grade_updated',
+  'update-submission', '{}'::jsonb
+);
+
+DO $$
+BEGIN
+  BEGIN
+    UPDATE "SubmissionActivity"
+    SET "eventType" = 'submission.comment_deleted'
+    WHERE id = 'activity-immutable-route-row';
+    RAISE EXCEPTION 'ordinary activity update unexpectedly succeeded';
+  EXCEPTION WHEN check_violation THEN NULL;
+  END;
+
+  BEGIN
+    DELETE FROM "SubmissionActivity"
+    WHERE id = 'activity-immutable-route-row';
+    RAISE EXCEPTION 'ordinary activity delete unexpectedly succeeded';
+  EXCEPTION WHEN check_violation THEN NULL;
+  END;
+END $$;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM "SubmissionActivity"
+    WHERE id = 'activity-immutable-route-row'
+  ) THEN
+    RAISE EXCEPTION 'failed ordinary delete did not preserve activity';
+  END IF;
+END $$;
+SQL
+
+echo "Two-session tenant-anchor serialization and immutable-ledger proof passed."

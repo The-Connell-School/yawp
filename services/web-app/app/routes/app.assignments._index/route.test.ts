@@ -1,349 +1,477 @@
-import { beforeEach, describe, expect, mock, test } from 'bun:test';
-import { readFileSync } from 'node:fs';
+import { afterAll, beforeEach, describe, expect, mock, test } from 'bun:test';
 
 const prisma = {
-  assignment: {
-    findFirst: mock(),
-    findMany: mock(),
-    update: mock(),
-    delete: mock(),
-    deleteMany: mock(),
-  },
-  assignmentType: {
-    findMany: mock(),
-    findFirst: mock(),
-  },
-  organizationAssignmentType: {
-    findMany: mock(),
-  },
-  school: {
-    findMany: mock(),
-  },
-  orgMembership: {
-    findMany: mock(),
-  },
-  class: {
-    findMany: mock(),
-  },
-  document: {
-    update: mock(),
-    updateMany: mock(),
-    delete: mock(),
-    deleteMany: mock(),
-  },
+  classAssignment: { findMany: mock() },
+  class: { findMany: mock(), findFirst: mock() },
 };
-
 const requireUserId = mock();
 const requireMembership = mock();
+const deleteClassAssignmentDeployment = mock();
+const listSavedAssignments = mock();
+const archiveSavedAssignment = mock();
+const getAvailableAssignmentTypesForScopes = mock();
+// bun's module mocks are global to the test run and mock.restore() does not
+// undo mock.module — restore from the pristine copy test-preload.ts captured
+// before any file could mock.module() this path (see comment there).
+const actualAssignmentTypeAccess = globalThis.__realModules[
+  '~/utils/assignment-type-access.server'
+];
 
 mock.module('~/utils/db.server', () => ({ prisma }));
+mock.module('~/utils/assignment-deployment.server', () => ({
+  deleteClassAssignmentDeployment,
+}));
 mock.module('~/utils/auth.server', () => ({ requireUserId, requireMembership }));
+mock.module('~/utils/assignment-type-access.server', () => ({
+  ...actualAssignmentTypeAccess,
+  getAvailableAssignmentTypesForScopes,
+}));
+mock.module('~/domain/assignments/saved-assignments.server', () => ({
+  SAVED_ASSIGNMENTS_ENABLED: true,
+  listSavedAssignments,
+  archiveSavedAssignment,
+}));
 
-const { action, loader, sanitizeAssignmentCreateReturnTo } = await import(
-  './route'
+const { action, loader } = await import('./route');
+// The loader reads the feature switch from the client-safe module, which is
+// deliberately not mocked here: these expectations follow the real flag rather
+// than a stand-in, so switching the feature changes the suite honestly.
+const { SAVED_ASSIGNMENTS_ENABLED } = await import(
+  '~/domain/assignments/saved-assignments'
 );
 
-function requestFor(body: Record<string, string>) {
+afterAll(() => {
+  mock.restore();
+  mock.module(
+    '~/utils/assignment-type-access.server',
+    () => actualAssignmentTypeAccess
+  );
+});
+
+function makeRequest() {
+  return new Request('https://example.test/app/assignments');
+}
+
+function removeRequest(body: Record<string, string>) {
   const form = new FormData();
-  for (const [key, value] of Object.entries(body)) {
-    form.append(key, value);
-  }
-  return new Request('https://example.com/app/assignments', {
+  for (const [key, value] of Object.entries(body)) form.append(key, value);
+  return new Request('https://example.test/app/assignments', {
     method: 'POST',
     body: form,
   });
 }
 
-async function readBody(response: any) {
-  return typeof response.json === 'function' ? response.json() : response.data;
-}
-
-function responseStatus(response: any) {
-  return response.status ?? response.init?.status;
-}
-
-const ownedAssignment = {
-  id: 'assignment-1',
-  assignmentTypeId: 'at-1',
-  assignmentType: { systemKey: 'generic_essay' },
-  classAssignments: [
-    {
-      class: {
-        id: 'class-1',
-        school: { id: 'school-1', organizationId: 'org-1' },
-      },
-    },
-  ],
-};
-
-describe('app.assignments action', () => {
+describe('My Assignments loader', () => {
   beforeEach(() => {
-    for (const model of Object.values(prisma)) {
-      for (const fn of Object.values(model)) fn.mockReset();
-    }
+    prisma.classAssignment.findMany.mockReset();
+    prisma.class.findMany.mockReset().mockResolvedValue([]);
+    listSavedAssignments.mockReset().mockResolvedValue([]);
+    archiveSavedAssignment.mockReset().mockResolvedValue(true);
+    getAvailableAssignmentTypesForScopes.mockReset().mockResolvedValue([]);
     requireUserId.mockReset();
     requireMembership.mockReset();
-
     requireUserId.mockResolvedValue('user-1');
-    requireMembership.mockResolvedValue({
-      id: 'teacher-1',
-      role: 'TEACHER',
-      organization: { id: 'org-1', name: 'Org' },
-    });
-    prisma.assignment.findFirst.mockResolvedValue(ownedAssignment);
-    prisma.assignment.findMany.mockResolvedValue([
-      {
-        id: 'assignment-1',
-        classAssignments: [
-          {
-            class: {
-              id: 'class-1',
-              school: { id: 'school-1', organizationId: 'org-1' },
-            },
-          },
-        ],
-      },
-      {
-        id: 'assignment-2',
-        classAssignments: [
-          {
-            class: {
-              id: 'class-1',
-              school: { id: 'school-1', organizationId: 'org-1' },
-            },
-          },
-        ],
-      },
-    ]);
-    prisma.assignment.deleteMany.mockResolvedValue({ count: 2 });
-    prisma.organizationAssignmentType.findMany.mockResolvedValue([
-      { organizationId: 'org-1', assignmentTypeId: 'at-1' },
-    ]);
-    prisma.school.findMany.mockResolvedValue([]);
-    prisma.orgMembership.findMany.mockResolvedValue([]);
-    prisma.assignmentType.findMany.mockResolvedValue([
-      {
-        id: 'at-1',
-        systemKey: 'generic_essay',
-        organizationAssignments: [{ organizationId: 'org-1' }],
-      },
-    ]);
   });
 
-  test('rejects non-teachers', async () => {
-    requireMembership.mockResolvedValue({
-      id: 'profile-1',
-      role: 'STUDENT',
-      organization: { id: 'org-1', name: 'Org' },
-    });
+  test('redirects non-teachers to the dashboard', async () => {
+    requireMembership.mockResolvedValue({ id: 'profile-1', role: 'STUDENT' });
 
-    const response = await action({
-      request: requestFor({
-        intent: 'delete-assignment',
-        assignmentId: 'assignment-1',
-      }),
+    const response = await loader({
+      request: makeRequest(),
       params: {},
+      context: {},
     } as any);
 
-    expect(responseStatus(response)).toBe(403);
+    expect(response).toBeInstanceOf(Response);
+    expect((response as Response).status).toBe(302);
+    expect((response as Response).headers.get('Location')).toBe('/app');
+    expect(prisma.classAssignment.findMany).not.toHaveBeenCalled();
   });
 
-  test('404s when the assignment is not owned by the teacher', async () => {
-    prisma.assignment.findFirst.mockResolvedValue(null);
+  test('scopes assignments to classes the teacher teaches', async () => {
+    requireMembership.mockResolvedValue({ id: 'profile-1', role: 'TEACHER' });
+    prisma.classAssignment.findMany.mockResolvedValue([
+      {
+        id: 'ca-1',
+        class: { id: 'class-1', grade: '9th', period: '1st', title: null },
+        assignment: {
+          id: 'assignment-1',
+          title: 'Essay One',
+          assignmentType: { title: 'Essay' },
+        },
+        _count: { documents: 3 },
+      },
+    ]);
 
-    const response = await action({
-      request: requestFor({
-        intent: 'delete-assignment',
-        assignmentId: 'assignment-x',
-      }),
+    const result = await loader({
+      request: makeRequest(),
       params: {},
+      context: {},
     } as any);
 
-    expect(responseStatus(response)).toBe(404);
-    expect(prisma.assignment.findFirst).toHaveBeenCalledWith(
+    expect(prisma.classAssignment.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: expect.objectContaining({
-          id: 'assignment-x',
-          classAssignments: {
-            some: {
-              class: { teachers: { some: { id: 'teacher-1' } } },
-            },
+        where: {
+          class: {
+            teachers: { some: { id: 'profile-1' } },
+            isArchived: false,
+            // Scoped to the teacher's school year, like every other surface.
+            schoolYear: expect.any(String),
           },
-        }),
+        },
       })
     );
-  });
-
-  test('deletes multiple assignments in one action', async () => {
-    const form = new FormData();
-    form.append('intent', 'delete-assignments');
-    form.append('assignmentIds', 'assignment-1');
-    form.append('assignmentIds', 'assignment-2');
-
-    const response = await action({
-      request: new Request('https://example.com/app/assignments', {
-        method: 'POST',
-        body: form,
-      }),
-      params: {},
-    } as any);
-
-    const body = await readBody(response);
-    expect(body.success).toBe(true);
-    expect(prisma.assignment.deleteMany).toHaveBeenCalledWith({
-      where: { id: { in: ['assignment-1', 'assignment-2'] } },
+    expect(result).toMatchObject({
+      assignments: [
+        {
+          assignmentId: 'assignment-1',
+          title: 'Essay One',
+          assignmentTypeTitle: 'Essay',
+          documentCount: 3,
+          classLabel: 'Grade 9th • Period 1st',
+          classes: [{ id: 'class-1', label: 'Grade 9th • Period 1st' }],
+          href: '/app/assignments/assignment-1?classId=class-1',
+        },
+      ],
     });
   });
 
-  test('deletes the assignment without touching documents', async () => {
-    const response = await action({
-      request: requestFor({
-        intent: 'delete-assignment',
-        assignmentId: 'assignment-1',
-      }),
-      params: {},
-    } as any);
-
-    const body = await readBody(response);
-    expect(body.success).toBe(true);
-    expect(prisma.assignment.delete).toHaveBeenCalledWith({
-      where: { id: 'assignment-1' },
-    });
-    expect(prisma.document.update).not.toHaveBeenCalled();
-    expect(prisma.document.updateMany).not.toHaveBeenCalled();
-    expect(prisma.document.delete).not.toHaveBeenCalled();
-    expect(prisma.document.deleteMany).not.toHaveBeenCalled();
-  });
-
-  test('allows safe app return targets for assignment creation', () => {
-    expect(sanitizeAssignmentCreateReturnTo('/app')).toBe('/app');
-    expect(
-      sanitizeAssignmentCreateReturnTo('/app/my-classes/class-1?tab=documents')
-    ).toBe('/app/my-classes/class-1?tab=documents');
-  });
-
-  test('rejects unsafe assignment creation return targets', () => {
-    expect(sanitizeAssignmentCreateReturnTo('')).toBeNull();
-    expect(sanitizeAssignmentCreateReturnTo(null)).toBeNull();
-    expect(sanitizeAssignmentCreateReturnTo('assignments')).toBeNull();
-    expect(
-      sanitizeAssignmentCreateReturnTo('https://example.com/app')
-    ).toBeNull();
-    expect(sanitizeAssignmentCreateReturnTo('//example.com/app')).toBeNull();
-    expect(sanitizeAssignmentCreateReturnTo('/application')).toBeNull();
-  });
-
-  test('updates assignment fields with grading intent', async () => {
-    const response = await action({
-      request: requestFor({
-        intent: 'update-assignment',
-        assignmentId: 'assignment-1',
-        assignmentTypeId: 'at-1',
-        title: 'Updated Title',
-        prompt: 'Updated prompt.',
-        submitForGrade: 'true',
-        pointValue: '50',
-      }),
-      params: {},
-    } as any);
-
-    const body = await readBody(response);
-    expect(body.success).toBe(true);
-    expect(prisma.assignment.update).toHaveBeenCalledWith({
-      where: { id: 'assignment-1' },
-      data: {
-        assignmentTypeId: 'at-1',
-        title: 'Updated Title',
-        prompt: 'Updated prompt.',
-        submitForGrade: true,
-        pointValue: 50,
-      },
-    });
-  });
-
-  test('rejects updates when the prompt is empty', async () => {
-    const response = await action({
-      request: requestFor({
-        intent: 'update-assignment',
-        assignmentId: 'assignment-1',
-        assignmentTypeId: 'at-1',
-        title: 'Updated Title',
-        prompt: '   ',
-      }),
-      params: {},
-    } as any);
-
-    expect(responseStatus(response)).toBe(400);
-    expect(prisma.assignment.update).not.toHaveBeenCalled();
-  });
-
-  test('blocks AP History assignments from generic editing', async () => {
-    prisma.assignment.findFirst.mockResolvedValue({
-      ...ownedAssignment,
-      assignmentType: { systemKey: 'ap_history_essay' },
-    });
-    prisma.assignmentType.findMany.mockResolvedValue([
+  // One Assignment deployed to several classes is one assignment, not several.
+  // The old list rendered a ClassAssignment per row, so it repeated the same
+  // assignment once per class and printed the cross-class document total on
+  // every one of those rows.
+  test('collapses one assignment deployed to several classes into a single row', async () => {
+    requireMembership.mockResolvedValue({ id: 'profile-1', role: 'TEACHER' });
+    const assignment = {
+      id: 'assignment-1',
+      title: 'Essay One',
+      assignmentType: { title: 'Essay' },
+    };
+    prisma.classAssignment.findMany.mockResolvedValue([
       {
-        id: 'at-1',
-        systemKey: 'ap_history_essay',
-        organizationAssignments: [{ organizationId: 'org-1' }],
+        id: 'ca-1',
+        class: { id: 'class-1', grade: '9th', period: '1st', title: null },
+        assignment,
+        _count: { documents: 3 },
+      },
+      {
+        id: 'ca-2',
+        class: { id: 'class-2', grade: '9th', period: '2nd', title: null },
+        assignment,
+        _count: { documents: 4 },
       },
     ]);
 
-    const response = await action({
-      request: requestFor({
-        intent: 'update-assignment',
-        assignmentId: 'assignment-1',
-        assignmentTypeId: 'at-1',
-        prompt: 'Updated prompt.',
-      }),
+    const result = (await loader({
+      request: makeRequest(),
       params: {},
+      context: {},
+    } as any)) as any;
+
+    expect(result.assignments).toHaveLength(1);
+    expect(result.assignments[0]).toMatchObject({
+      assignmentId: 'assignment-1',
+      documentCount: 7,
+      classLabel: 'Grade 9th • Period 1st, Grade 9th • Period 2nd',
+      classes: [
+        { id: 'class-1', label: 'Grade 9th • Period 1st' },
+        { id: 'class-2', label: 'Grade 9th • Period 2nd' },
+      ],
+    });
+    // With more than one class there is no single class to scope the detail
+    // page to; it picks the first deployment and offers its own class picker.
+    expect(result.assignments[0].href).toBe('/app/assignments/assignment-1');
+  });
+
+  test('counts documents per class deployment rather than across the assignment', async () => {
+    requireMembership.mockResolvedValue({ id: 'profile-1', role: 'TEACHER' });
+    prisma.classAssignment.findMany.mockResolvedValue([
+      {
+        id: 'ca-1',
+        class: { id: 'class-1', grade: '9th', period: '1st', title: null },
+        assignment: {
+          id: 'assignment-1',
+          title: 'Essay One',
+          assignmentType: { title: 'Essay' },
+        },
+        _count: { documents: 2 },
+      },
+    ]);
+
+    await loader({ request: makeRequest(), params: {}, context: {} } as any);
+
+    const [args] = prisma.classAssignment.findMany.mock.calls[0];
+    expect(args.select._count).toEqual({ select: { documents: true } });
+    expect(args.select.assignment.select._count).toBeUndefined();
+  });
+
+  test('falls back to "Untitled Assignment" when the title is blank', async () => {
+    requireMembership.mockResolvedValue({ id: 'profile-1', role: 'TEACHER' });
+    prisma.classAssignment.findMany.mockResolvedValue([
+      {
+        id: 'ca-2',
+        class: { id: 'class-2', grade: '10th', period: '2nd', title: 'Honors' },
+        assignment: {
+          id: 'assignment-2',
+          title: '   ',
+          assignmentType: { title: 'Prompt' },
+        },
+        _count: { documents: 0 },
+      },
+    ]);
+
+    const result = (await loader({
+      request: makeRequest(),
+      params: {},
+      context: {},
+    } as any)) as { assignments: { title: string; classLabel: string }[] };
+
+    expect(result.assignments[0].title).toBe('Untitled Assignment');
+    expect(result.assignments[0].classLabel).toBe(
+      'Honors · Grade 10th • Period 2nd'
+    );
+  });
+  test.skipIf(!SAVED_ASSIGNMENTS_ENABLED)('hands the page this teacher\'s saved assignments and what it takes to reuse one', async () => {
+    requireMembership.mockResolvedValue({ id: 'profile-1', role: 'TEACHER' });
+    prisma.classAssignment.findMany.mockResolvedValue([]);
+    prisma.class.findMany.mockResolvedValue([
+      { id: 'class-1', grade: '9th', period: '1st', title: null,
+        school: { id: 'school-1', organizationId: 'org-1' } },
+    ]);
+    getAvailableAssignmentTypesForScopes.mockResolvedValue([
+      { id: 'at-1', title: 'Essay', systemKey: null },
+      { id: 'ap-1', title: 'AP History Essay', systemKey: 'ap_history_essay' },
+    ]);
+    listSavedAssignments.mockResolvedValue([
+      {
+        id: 'saved-1',
+        title: 'Rhetorical Analysis Essay',
+        prompt: 'Analyze the passage.',
+        submitForGrade: true,
+        pointValue: 100,
+        gradingAssistantStrictnessLevel: 'intermediate',
+        tutorEnabled: true,
+        assignmentTypeId: 'at-1',
+        assignmentTypeTitle: 'Essay',
+        savedAt: '2026-08-08T12:00:00.000Z',
+      },
+    ]);
+
+    const result = (await loader({
+      request: makeRequest(),
+      params: {},
+      context: {},
+    } as any)) as any;
+
+    expect(listSavedAssignments).toHaveBeenCalledWith({
+      membershipId: 'profile-1',
+    });
+    expect(result.savedAssignments).toHaveLength(1);
+    expect(result.savedAssignments[0].title).toBe('Rhetorical Analysis Essay');
+    expect(result.assignmentCreationClasses).toEqual([
+      { id: 'class-1', name: 'Grade 9th • Period 1st' },
+    ]);
+    // AP History assignments come from their own library, not a saved prompt.
+    expect(result.assignmentCreationTypes).toEqual([
+      { id: 'at-1', title: 'Essay' },
+    ]);
+  });
+
+  test.skipIf(SAVED_ASSIGNMENTS_ENABLED)(
+    'reads no saved assignments while the feature is switched off, but still arms the creation sheet',
+    async () => {
+      requireMembership.mockResolvedValue({ id: 'profile-1', role: 'TEACHER' });
+      prisma.classAssignment.findMany.mockResolvedValue([]);
+      prisma.class.findMany.mockResolvedValue([
+        {
+          id: 'class-1',
+          grade: '9th',
+          period: '1st',
+          title: null,
+          school: { id: 'school-1', organizationId: 'org-1' },
+        },
+      ]);
+      getAvailableAssignmentTypesForScopes.mockResolvedValue([
+        { id: 'at-1', title: 'Essay', systemKey: null },
+      ]);
+
+      const result = (await loader({
+        request: makeRequest(),
+        params: {},
+        context: {},
+      } as any)) as any;
+
+      expect(listSavedAssignments).not.toHaveBeenCalled();
+      expect(result.savedAssignments).toEqual([]);
+      expect(result.assignmentCreationClasses).toEqual([
+        { id: 'class-1', name: 'Grade 9th • Period 1st' },
+      ]);
+      expect(result.assignmentCreationTypes).toEqual([
+        { id: 'at-1', title: 'Essay' },
+      ]);
+    }
+  );
+
+  test('does not read saved assignments for a non-teacher', async () => {
+    requireMembership.mockResolvedValue({ id: 'profile-1', role: 'STUDENT' });
+
+    await loader({
+      request: makeRequest(),
+      params: {},
+      context: {},
     } as any);
 
-    expect(responseStatus(response)).toBe(400);
-    expect(prisma.assignment.update).not.toHaveBeenCalled();
+    expect(listSavedAssignments).not.toHaveBeenCalled();
   });
 });
 
-describe('app.assignments loader', () => {
+describe('My Assignments action', () => {
   beforeEach(() => {
-    for (const model of Object.values(prisma)) {
-      for (const fn of Object.values(model)) fn.mockReset();
-    }
-    requireUserId.mockReset();
+    archiveSavedAssignment.mockReset().mockResolvedValue(true);
+    deleteClassAssignmentDeployment.mockReset().mockResolvedValue('ca-1');
+    prisma.classAssignment.findMany.mockReset().mockResolvedValue([]);
+    requireUserId.mockReset().mockResolvedValue('user-1');
     requireMembership.mockReset();
+  });
 
-    requireUserId.mockResolvedValue('user-1');
-    requireMembership.mockResolvedValue({
-      id: 'teacher-1',
-      role: 'TEACHER',
-      organization: { id: 'org-1', name: 'Org' },
+  describe('deleting assignments', () => {
+    function deleteRequest(assignmentIds: string[]) {
+      const form = new FormData();
+      form.append('intent', 'delete-assignments');
+      for (const id of assignmentIds) form.append('assignmentIds', id);
+      return new Request('https://example.test/app/assignments', {
+        method: 'POST',
+        body: form,
+      });
+    }
+
+    test('removes every deployment of the assignment in this teacher\'s classes', async () => {
+      requireMembership.mockResolvedValue({ id: 'profile-1', role: 'TEACHER' });
+      prisma.classAssignment.findMany.mockResolvedValue([
+        { assignmentId: 'assignment-1', classId: 'class-1' },
+        { assignmentId: 'assignment-1', classId: 'class-2' },
+      ]);
+
+      const response = (await action({
+        request: deleteRequest(['assignment-1']),
+        params: {},
+        context: {},
+      } as any)) as any;
+
+      // Scoped to classes the teacher teaches, so an assignment shared with
+      // someone else's class keeps its other deployments.
+      expect(prisma.classAssignment.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            assignmentId: { in: ['assignment-1'] },
+            class: {
+              teachers: { some: { id: 'profile-1' } },
+              isArchived: false,
+            },
+          },
+        })
+      );
+      expect(deleteClassAssignmentDeployment).toHaveBeenCalledTimes(2);
+      expect(deleteClassAssignmentDeployment).toHaveBeenCalledWith({
+        assignmentId: 'assignment-1',
+        classId: 'class-1',
+      });
+      expect(deleteClassAssignmentDeployment).toHaveBeenCalledWith({
+        assignmentId: 'assignment-1',
+        classId: 'class-2',
+      });
+      expect(response.success ?? response.data?.success).toBe(true);
+    });
+
+    test('deletes nothing when one of the ids is outside the teacher\'s classes', async () => {
+      requireMembership.mockResolvedValue({ id: 'profile-1', role: 'TEACHER' });
+      prisma.classAssignment.findMany.mockResolvedValue([
+        { assignmentId: 'assignment-1', classId: 'class-1' },
+      ]);
+
+      const response = (await action({
+        request: deleteRequest(['assignment-1', 'someone-elses-assignment']),
+        params: {},
+        context: {},
+      } as any)) as any;
+
+      expect(deleteClassAssignmentDeployment).not.toHaveBeenCalled();
+      expect(response.init?.status ?? response.status).toBe(404);
+    });
+
+    test('refuses a non-teacher', async () => {
+      requireMembership.mockResolvedValue({ id: 'profile-1', role: 'STUDENT' });
+
+      const response = (await action({
+        request: deleteRequest(['assignment-1']),
+        params: {},
+        context: {},
+      } as any)) as any;
+
+      expect(prisma.classAssignment.findMany).not.toHaveBeenCalled();
+      expect(deleteClassAssignmentDeployment).not.toHaveBeenCalled();
+      expect(response.init?.status ?? response.status).toBe(403);
+    });
+
+    test('rejects an empty selection', async () => {
+      requireMembership.mockResolvedValue({ id: 'profile-1', role: 'TEACHER' });
+
+      const response = (await action({
+        request: deleteRequest([]),
+        params: {},
+        context: {},
+      } as any)) as any;
+
+      expect(deleteClassAssignmentDeployment).not.toHaveBeenCalled();
+      expect(response.init?.status ?? response.status).toBe(400);
     });
   });
 
-  test('reports missing active classes separately from assignment type availability', async () => {
-    prisma.class.findMany.mockResolvedValue([]);
+  test('removes a saved assignment for the teacher who owns it', async () => {
+    requireMembership.mockResolvedValue({ id: 'profile-1', role: 'TEACHER' });
 
-    const response = await loader({
-      request: new Request('https://example.com/app/assignments'),
+    const response = (await action({
+      request: removeRequest({
+        intent: 'remove-saved-assignment',
+        savedAssignmentId: 'saved-1',
+      }),
       params: {},
-    } as any);
+      context: {},
+    } as any)) as any;
 
-    const body = await readBody(response);
-
-    expect(body.hasActiveClasses).toBe(false);
-    expect(body.assignmentsEnabled).toBe(false);
-    expect(prisma.assignment.findMany).not.toHaveBeenCalled();
-    expect(prisma.assignmentType.findMany).not.toHaveBeenCalled();
-    expect(prisma.organizationAssignmentType.findMany).not.toHaveBeenCalled();
+    expect(archiveSavedAssignment).toHaveBeenCalledWith({
+      membershipId: 'profile-1',
+      savedAssignmentId: 'saved-1',
+    });
+    expect(response.success ?? response.data?.success).toBe(true);
   });
 
-  test('does not describe teachers without classes as missing organization enablement', () => {
-    const source = readFileSync(new URL('./route.tsx', import.meta.url), 'utf8');
+  test('refuses a non-teacher', async () => {
+    requireMembership.mockResolvedValue({ id: 'profile-1', role: 'STUDENT' });
 
-    expect(source).not.toContain(
-      'Assignments are not enabled for your organization yet.'
-    );
-    expect(source).toContain('You are not assigned to any active classes yet.');
+    const response = (await action({
+      request: removeRequest({
+        intent: 'remove-saved-assignment',
+        savedAssignmentId: 'saved-1',
+      }),
+      params: {},
+      context: {},
+    } as any)) as any;
+
+    expect(archiveSavedAssignment).not.toHaveBeenCalled();
+    expect(response.init?.status ?? response.status).toBe(403);
+  });
+
+  test('rejects an unknown intent', async () => {
+    requireMembership.mockResolvedValue({ id: 'profile-1', role: 'TEACHER' });
+
+    const response = (await action({
+      request: removeRequest({ intent: 'nope' }),
+      params: {},
+      context: {},
+    } as any)) as any;
+
+    expect(archiveSavedAssignment).not.toHaveBeenCalled();
+    expect(response.init?.status ?? response.status).toBe(400);
   });
 });

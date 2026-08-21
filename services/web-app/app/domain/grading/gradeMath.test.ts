@@ -1,8 +1,11 @@
 import { describe, expect, test } from 'bun:test';
 import {
+  computeWeightedBandPercentage,
   computeWeightedPercentage,
+  computeWeightedPercentageForCategories,
   formatAssignmentGrade,
   formatPointGrade,
+  pointsScaleGradeFields,
 } from './gradeMath';
 
 describe('computeWeightedPercentage', () => {
@@ -73,5 +76,137 @@ describe('formatAssignmentGrade', () => {
         score: '4/5',
       })
     ).toBe('4/5');
+  });
+});
+
+describe('pointsScaleGradeFields', () => {
+  test('reports the earned points out of the top of the scale', () => {
+    expect(
+      pointsScaleGradeFields({ categories: [{ score: 2 }], maxScore: 3 })
+    ).toEqual({
+      overallScore: 2,
+      numericPercentage: null,
+      letterGrade: null,
+      score: '2/3',
+    });
+  });
+
+  test('reports a top score', () => {
+    expect(
+      pointsScaleGradeFields({ categories: [{ score: 3 }], maxScore: 3 })
+    ).toMatchObject({ overallScore: 3, score: '3/3' });
+  });
+
+  test('reports a zero score as earned points, not as a missing grade', () => {
+    expect(
+      pointsScaleGradeFields({ categories: [{ score: 0 }], maxScore: 3 })
+    ).toMatchObject({ overallScore: 0, score: '0/3' });
+  });
+
+  test('never invents a percentage or a letter for a points scale', () => {
+    const fields = pointsScaleGradeFields({
+      categories: [{ score: 3 }],
+      maxScore: 3,
+    });
+
+    expect(fields.numericPercentage).toBeNull();
+    expect(fields.letterGrade).toBeNull();
+  });
+
+  test('averages and rounds across several categories', () => {
+    expect(
+      pointsScaleGradeFields({
+        categories: [{ score: 3 }, { score: 2 }],
+        maxScore: 3,
+      })
+    ).toMatchObject({ overallScore: 3, score: '3/3' });
+  });
+
+  test('clamps a score that landed outside the scale', () => {
+    expect(
+      pointsScaleGradeFields({ categories: [{ score: 9 }], maxScore: 3 })
+    ).toMatchObject({ overallScore: 3, score: '3/3' });
+    expect(
+      pointsScaleGradeFields({ categories: [{ score: -4 }], maxScore: 3 })
+    ).toMatchObject({ overallScore: 0, score: '0/3' });
+  });
+});
+
+describe('computeWeightedBandPercentage', () => {
+  const categories = [
+    { key: 'a', weight: 0.5 },
+    { key: 'b', weight: 0.5 },
+  ];
+
+  test('weights the category percentages with nothing converted', () => {
+    expect(
+      computeWeightedBandPercentage(
+        { a: { score: 92 }, b: { score: 84 } },
+        categories
+      )
+    ).toBe(88);
+  });
+
+  /**
+   * The reason banded scoring exists: on the 1-5 path a score of 4 in every
+   * category could only ever produce 89, because each score was mapped to the
+   * ceiling of its band before being averaged.
+   */
+  test('a mid-band score no longer snaps to the band ceiling', () => {
+    expect(
+      computeWeightedBandPercentage(
+        { a: { score: 84 }, b: { score: 84 } },
+        categories
+      )
+    ).toBe(84);
+    expect(
+      computeWeightedPercentageForCategories({ a: { score: 4 }, b: { score: 4 } }, [
+        { key: 'a', label: 'A', weight: 0.5, description: '' },
+        { key: 'b', label: 'B', weight: 0.5, description: '' },
+      ])
+    ).toBe(89);
+  });
+
+  test('an unscored category produces no grade rather than a partial one', () => {
+    expect(
+      computeWeightedBandPercentage({ a: { score: 92 } }, categories)
+    ).toBeNull();
+  });
+
+  test('normalizes mixed raw-point category ranges before weighting', () => {
+    const rawPointCategories = [
+      {
+        key: 'introduction',
+        weight: 0.1,
+        bands: [{ min: 0, max: 5, label: 'Full range', description: '' }],
+      },
+      {
+        key: 'country_1',
+        weight: 0.4,
+        bands: [{ min: 0, max: 20, label: 'Full range', description: '' }],
+      },
+      {
+        key: 'country_2',
+        weight: 0.4,
+        bands: [{ min: 0, max: 20, label: 'Full range', description: '' }],
+      },
+      {
+        key: 'conclusion',
+        weight: 0.1,
+        bands: [{ min: 0, max: 5, label: 'Full range', description: '' }],
+      },
+    ];
+
+    expect(
+      computeWeightedBandPercentage(
+        {
+          introduction: { score: 5 },
+          country_1: { score: 18 },
+          country_2: { score: 16 },
+          conclusion: { score: 4 },
+        },
+        rawPointCategories
+      )
+    ).toBe(86);
   });
 });

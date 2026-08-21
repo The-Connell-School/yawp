@@ -1,4 +1,5 @@
 import type { E2EPrismaClient } from './prisma-client';
+import { currentSchoolYear } from '../app/utils/school-year';
 import { generateTOTP } from '../app/utils/totp.server';
 import bcrypt from 'bcryptjs';
 
@@ -25,7 +26,9 @@ export async function createDeployedAssignment(params: {
       ...(params.submitForGrade !== undefined
         ? { submitForGrade: params.submitForGrade }
         : {}),
-      ...(params.pointValue !== undefined ? { pointValue: params.pointValue } : {}),
+      ...(params.pointValue !== undefined
+        ? { pointValue: params.pointValue }
+        : {}),
     },
   });
   const classAssignment = await params.prisma.classAssignment.create({
@@ -104,9 +107,14 @@ export async function ensureDocumentUnsubmitted(params: {
   documentId: string;
 }) {
   const { prisma, documentId } = params;
-  // Delete all submissions to "unsubmit" the document
-  await prisma.submission.deleteMany({
-    where: { documentId },
+  // Fixture cleanup may remove its own audit rows. Production flows retain them.
+  await prisma.$transaction(async (tx) => {
+    await tx.submissionActivity.deleteMany({
+      where: { submission: { documentId } },
+    });
+    await tx.submission.deleteMany({
+      where: { documentId },
+    });
   });
 }
 
@@ -218,7 +226,7 @@ export async function createTeacherClassPilotFixture(params: {
   const klass = await prisma.class.create({
     data: {
       code: `E2E-${normalizedSuffix}`.slice(0, 32),
-      schoolYear: '2024-2025',
+      schoolYear: currentSchoolYear(),
       period: '2nd',
       grade: '10th',
       title: `Non-pilot ${normalizedSuffix}`,

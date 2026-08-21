@@ -8,6 +8,14 @@
       "types": "./generated/prisma/index.d.ts",
       "import": "index.ts",
       "require": "./generated/prisma/index.js"
+    },
+    "./preview-access-code": {
+      "types": "./preview-access-code.ts",
+      "import": "./preview-access-code.ts"
+    },
+    "./preview-seats": {
+      "types": "./scripts/preview-seats.ts",
+      "import": "./scripts/preview-seats.ts"
     }
   },
   "scripts": {
@@ -18,11 +26,16 @@
     "compare-grade-submission-parity": "bun ./scripts/compare-grade-submission-parity.ts",
     "seed-ap-history-library": "bun run scripts/seed-ap-history-library.ts",
     "seed-local-dev": "bun run scripts/seed-local-dev.ts",
+    "sync-prod-fidelity-fixtures": "bun run scripts/sync-prod-fidelity-fixtures.ts",
+    "seed-preview-seats": "bun run scripts/seed-preview-seats.ts",
+    "ensure-class-insights-local": "bun run scripts/local-dev/ensure-class-insights-enabled.ts",
     "fixtures:export-prod-fidelity": "bun run scripts/export-prod-fidelity-fixtures.ts",
     "assignment-type-release-gate": "bun run scripts/assignment-type-release-gate.ts",
     "backfill-class-art-key": "bun run scripts/backfill-class-art-key.ts",
     "production-qa-profile": "bun run scripts/production-qa-profile.ts",
     "production-qa-profile-remote": "bun run scripts/production-qa-profile-remote.ts",
+    "production-qa-postcheck": "bun run scripts/production-qa-postcheck.ts",
+    "sanitize-preview-production-data": "bun run scripts/sanitize-preview-production-data.ts",
     "org-membership:precheck": "bun run scripts/org-membership-precheck.ts",
     "org-membership:postcheck": "bun run scripts/org-membership-postcheck.ts",
     "org-membership:staging-verify": "bun run scripts/org-membership-staging-verify.ts",

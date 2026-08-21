@@ -1,4 +1,5 @@
 import type { Prisma } from '@app/prisma';
+import { deleteAssignmentPromptAttachment } from '~/domain/assignments/assignment-prompt-attachment.server';
 import { prisma } from '~/utils/db.server';
 
 export async function createAssignmentDeployedToClasses(params: {
@@ -7,6 +8,14 @@ export async function createAssignmentDeployedToClasses(params: {
     'id' | 'createdAt' | 'updatedAt'
   >;
   classIds: string[];
+  /**
+   * Optional deployment fields applied to every created ClassAssignment row.
+   * When provided, these values are set identically for each target class.
+   */
+  deployment?: {
+    postAt?: Date | null;
+    dueAt?: Date | null;
+  };
 }) {
   const uniqueClassIds = [...new Set(params.classIds)];
   const assignment = await prisma.assignment.create({
@@ -18,6 +27,8 @@ export async function createAssignmentDeployedToClasses(params: {
       data: uniqueClassIds.map((classId) => ({
         assignmentId: assignment.id,
         classId,
+        postAt: params.deployment?.postAt ?? null,
+        dueAt: params.deployment?.dueAt ?? null,
       })),
     });
   }
@@ -34,7 +45,10 @@ export async function deleteClassAssignmentDeployment(params: {
       assignmentId: params.assignmentId,
       classId: params.classId,
     },
-    select: { id: true },
+    select: {
+      id: true,
+      assignment: { select: { promptAttachmentKey: true } },
+    },
   });
 
   if (!deployment) {
@@ -49,6 +63,11 @@ export async function deleteClassAssignmentDeployment(params: {
 
   if (remaining === 0) {
     await prisma.assignment.delete({ where: { id: params.assignmentId } });
+    if (deployment.assignment.promptAttachmentKey) {
+      await deleteAssignmentPromptAttachment(
+        deployment.assignment.promptAttachmentKey
+      ).catch(() => {});
+    }
   }
 
   return deployment.id;

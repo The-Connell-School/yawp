@@ -9,6 +9,7 @@ import {
 } from './local-dev/import-prod-fidelity-fixtures';
 import { seedSyntheticLocalDevData } from './local-dev/seed-synthetic-data';
 import { truncateAllPublicTables } from './local-dev/truncate-all';
+import { enableClassInsightsForOrganizations } from './local-dev/class-insights';
 import {
   LOCAL_DEV_ORG_ID,
   LOCAL_DEV_ORG_NAME,
@@ -33,8 +34,11 @@ try {
       name: LOCAL_DEV_ORG_NAME,
       numOfStudentSeats: 200,
       numOfTeacherSeats: 40,
+      reporterEnabled: true,
+      classInsightsEnabled: false,
     },
   });
+  await enableClassInsightsForOrganizations(prisma, [LOCAL_DEV_ORG_ID]);
   console.timeEnd('organization');
 
   console.time('prod-fidelity');
