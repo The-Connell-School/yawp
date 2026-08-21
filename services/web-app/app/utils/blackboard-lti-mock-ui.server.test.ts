@@ -15,8 +15,8 @@ for (const key of keys) original[key] = process.env[key];
 
 afterEach(() => {
   for (const key of keys) {
-    if (original[key] === undefined) delete process.env[key];
-    else process.env[key] = original[key];
+    if (original[key] === undefined) Reflect.deleteProperty(process.env, key);
+    else Reflect.set(process.env, key, original[key]);
   }
 });
 

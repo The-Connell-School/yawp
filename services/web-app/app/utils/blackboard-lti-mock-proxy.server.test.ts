@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, test } from 'bun:test';
-import { createServer } from 'node:http';
+import { createServer, type RequestListener } from 'node:http';
 import { proxyBlackboardLtiMock } from './blackboard-lti-mock-proxy.server';
 
 const servers: Array<() => Promise<void>> = [];
 
-async function listenUpstream(handler: Parameters<typeof createServer>[0]) {
+async function listenUpstream(handler: RequestListener) {
   const server = createServer(handler);
   await new Promise<void>((resolve, reject) => {
     server.once('error', reject);
@@ -47,7 +47,7 @@ describe('proxyBlackboardLtiMock', () => {
     let received: { url?: string; method?: string; body?: string } = {};
     const upstream = await listenUpstream((incoming, response) => {
       const chunks: Buffer[] = [];
-      incoming.on('data', (chunk) => chunks.push(chunk));
+      incoming.on('data', (chunk: Buffer) => chunks.push(chunk));
       incoming.on('end', () => {
         received = {
           url: incoming.url,
