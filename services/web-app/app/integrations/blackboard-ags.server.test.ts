@@ -1,6 +1,5 @@
-import { generateKeyPairSync } from 'node:crypto';
 import { createBlackboardLtiPlatform } from '../../../../scripts/blackboard-lti-mock/server.mjs';
-import { postScoreToAgs } from './blackboard-ags.server';
+import { postScoreToAgs, getToolJwks } from './blackboard-ags.server';
 
 async function getJson(origin: string, path: string) {
   const res = await fetch(new URL(path, origin));
@@ -12,11 +11,8 @@ test('posts a score to Blackboard mock AGS using client assertion', async () => 
   process.env.BLACKBOARD_LTI_MOCK_ENABLED = 'true';
   process.env.YAWP_ENVIRONMENT = 'preview';
 
-  const { publicKey, privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
-  // Node KeyObject export to JWK is supported for RSA keys
-  const publicJwk = publicKey.export({ format: 'jwk' }) as any;
-  // Minimal kid is fine — the mock uses the provided publicJwk directly
-  publicJwk.kid = publicJwk.kid || 'tool-key';
+  const jwks = getToolJwks();
+  const publicJwk = jwks.keys[0] as any;
 
   const platform = createBlackboardLtiPlatform({ toolPublicJwk: publicJwk, tokenTtlSeconds: 45 });
   const { origin, close } = await platform.listen(0, '127.0.0.1');
@@ -30,7 +26,6 @@ test('posts a score to Blackboard mock AGS using client assertion', async () => 
       scoreMaximum: 100,
       tokenEndpoint,
       clientId: 'yawp-blackboard-mock',
-      privateKeyPem: privateKey.export({ format: 'pem', type: 'pkcs1' }).toString(),
     });
     const inspect = await getJson(origin, '/dev/scores');
     expect(Array.isArray(inspect.received)).toBe(true);
