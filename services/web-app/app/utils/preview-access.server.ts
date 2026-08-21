@@ -23,6 +23,7 @@ const MASTER_ACCESS_CODE_PATTERN =
   /^(?=.{8,64}$)[a-z][a-z0-9]*(?:-[a-z0-9]+)+$/;
 const OPEN_PATHS = new Set([
   '/api/healthcheck',
+  '/api/healthcheck/', // be tolerant of a trailing slash from probes
   PREVIEW_ACCESS_PATH,
   `${PREVIEW_ACCESS_PATH}.data`,
 ]);
