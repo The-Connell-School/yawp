@@ -244,9 +244,8 @@ function handleDevLaunch(
   })();
   const forceHttps = (host) =>
     host ? `https://${host.replace(/^https?:\/\//, '')}` : '';
-  const fromXf =
-    xfHost &&
-    `${(xfProto === 'https' ? 'https' : xfProto === 'http' ? 'http' : 'https')}://${xfHost}`;
+  // Always force HTTPS for the public preview host; ignore proto value.
+  const fromXf = xfHost && `https://${xfHost}`;
   const hostOrigin =
     fromXf ||
     (refOrigin && forceHttps(refOrigin)) ||
