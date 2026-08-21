@@ -1,4 +1,4 @@
-import { mkdir } from 'node:fs/promises';
+import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { chromium, expect, type Page } from '@playwright/test';
 import { submissionActivityUiContract } from '../app/domain/submissions/submission-activity-ui-contract';
@@ -32,6 +32,16 @@ try {
   });
   const teacherPage = await teacherContext.newPage();
   const teacherVideo = teacherPage.video();
+  const walkthroughStartedAt = performance.now();
+  const walkthroughSteps: Array<{ step: string; seconds: number }> = [];
+  const markWalkthroughStep = (step: string) => {
+    walkthroughSteps.push({
+      step,
+      seconds: Number(
+        ((performance.now() - walkthroughStartedAt) / 1000).toFixed(3)
+      ),
+    });
+  };
   await signIn(teacherPage, 'prod.qa.teacher.v3@brock.software');
   await teacherPage.goto(`${baseUrl}${submissionPath}`);
   await expect(
@@ -40,11 +50,13 @@ try {
   await expect(
     teacherPage.getByTestId(submissionActivityUiContract.triggerTestId)
   ).toBeVisible();
+  markWalkthroughStep('teacher_released_view');
 
   await teacherPage.getByTestId('submission-lifecycle-edit').click();
   await expect(
     teacherPage.getByTestId('released-grade-edit-warning')
   ).toBeVisible();
+  markWalkthroughStep('released_edit_warning');
   const warningScreenshotPath = resolve(
     'test-results/production-released-grade-edit-warning.png'
   );
@@ -62,6 +74,7 @@ try {
   await expect(
     teacherPage.getByTestId('submission-lifecycle-edit')
   ).toBeVisible();
+  markWalkthroughStep('released_grade_saved');
   await teacherPage.waitForTimeout(1_500);
 
   await teacherPage
@@ -80,6 +93,7 @@ try {
   ).toBeVisible();
   await expect(activityPanel).toContainText('77');
   await expect(activityPanel).toContainText('91');
+  markWalkthroughStep('activity_exact_before_after');
   // Radix marks the Sheet content visible before its entrance transition has
   // finished. Let the production proof capture the settled audit panel rather
   // than a translated off-screen frame.
@@ -90,6 +104,28 @@ try {
   );
   await mkdir(dirname(screenshotPath), { recursive: true });
   await teacherPage.screenshot({ path: screenshotPath, fullPage: true });
+
+  // Keep the student-negative verification in the same recorded walkthrough,
+  // so the video proves both the teacher capability and the student boundary.
+  await teacherContext.clearCookies();
+  await signIn(teacherPage, 'prod.qa.student.v3@brock.software');
+  await teacherPage.goto(`${baseUrl}${submissionPath}`);
+  await expect(teacherPage.getByText('91%')).toBeVisible();
+  await expect(
+    teacherPage.getByText('Production QA verified released-grade feedback.')
+  ).toBeVisible();
+  await expect(
+    teacherPage.getByTestId('submission-lifecycle-edit')
+  ).toHaveCount(0);
+  await expect(
+    teacherPage.getByTestId(submissionActivityUiContract.triggerTestId)
+  ).toHaveCount(0);
+  markWalkthroughStep('student_current_grade_without_staff_controls');
+  await teacherPage.waitForTimeout(2_000);
+  await writeFile(
+    resolve('test-results/production-released-grade-walkthrough-steps.json'),
+    `${JSON.stringify({ steps: walkthroughSteps }, null, 2)}\n`
+  );
   await teacherContext.close();
   await teacherVideo?.saveAs(
     resolve('test-results/production-released-grade-walkthrough.webm')

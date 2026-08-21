@@ -28,6 +28,42 @@ type FixtureGraphRow = {
   school_teacher_exact: boolean;
 };
 
+const QA_RESIDUE_DECISION = {
+  owner: 'Yawp engineering',
+  cleanupCheckpoint: '2026-09-30',
+  reason:
+    'Retain exact disposable audit proof until the production QA workflows are retired; the fixtures have no classroom memberships.',
+} as const;
+const KNOWN_QA_ORGANIZATION_IDS = ['prod-qa-org', 'prod-qa-v3-org'] as const;
+const KNOWN_QA_USER_IDS = [
+  'prod-qa-teacher-user',
+  'prod-qa-student-user',
+  'prod-qa-v2-teacher-user',
+  'prod-qa-v2-student-user',
+  'prod-qa-v3-teacher-user',
+  'prod-qa-v3-student-user',
+] as const;
+const KNOWN_QA_USER_EMAILS = [
+  'prod.qa.teacher@brock.software',
+  'prod.qa.student@brock.software',
+  'prod.qa.teacher.v2@brock.software',
+  'prod.qa.student.v2@brock.software',
+  'prod.qa.teacher.v3@brock.software',
+  'prod.qa.student.v3@brock.software',
+] as const;
+const KNOWN_QA_MEMBERSHIP_IDS = [
+  'prod-qa-teacher-membership',
+  'prod-qa-student-membership',
+  'prod-qa-v2-teacher-membership',
+  'prod-qa-v2-student-membership',
+  'prod-qa-v3-teacher-membership',
+  'prod-qa-v3-student-membership',
+] as const;
+const KNOWN_QA_SUBMISSION_IDS = [
+  'prod-qa-released-submission',
+  'prod-qa-v3-released-submission',
+] as const;
+
 const EXPECTED_INDEXES = [
   'SubmissionActivity_actorMembershipId_createdAt_idx',
   'SubmissionActivity_eventType_createdAt_idx',
@@ -169,6 +205,11 @@ try {
     fixtureActivityCount,
     fixtureUsers,
     fixtureMemberships,
+    qaOrganizations,
+    qaIdentityMatches,
+    qaMemberships,
+    qaSubmissions,
+    qaActivity,
   ] = await Promise.all([
     prisma.organization.findUnique({
       where: { id: PRODUCTION_QA_IDS.organizationId },
@@ -229,6 +270,62 @@ try {
         isOrgOwner: true,
       },
     }),
+    prisma.organization.findMany({
+      where: { id: { in: [...KNOWN_QA_ORGANIZATION_IDS] } },
+      select: { id: true, submissionActivityEnabled: true },
+      orderBy: { id: 'asc' },
+    }),
+    prisma.user.findMany({
+      where: {
+        OR: [
+          { id: { in: [...KNOWN_QA_USER_IDS] } },
+          { email: { in: [...KNOWN_QA_USER_EMAILS] } },
+        ],
+      },
+      select: { id: true, email: true },
+      orderBy: { id: 'asc' },
+    }),
+    prisma.orgMembership.findMany({
+      where: { organizationId: { in: [...KNOWN_QA_ORGANIZATION_IDS] } },
+      select: { id: true, userId: true, organizationId: true, role: true },
+      orderBy: { id: 'asc' },
+    }),
+    prisma.submission.findMany({
+      where: {
+        OR: [
+          { id: { in: [...KNOWN_QA_SUBMISSION_IDS] } },
+          {
+            document: {
+              is: {
+                membership: {
+                  is: {
+                    organizationId: { in: [...KNOWN_QA_ORGANIZATION_IDS] },
+                  },
+                },
+              },
+            },
+          },
+        ],
+      },
+      select: { id: true, documentId: true },
+      orderBy: { id: 'asc' },
+    }),
+    prisma.submissionActivity.findMany({
+      where: {
+        OR: [
+          { organizationId: { in: [...KNOWN_QA_ORGANIZATION_IDS] } },
+          { submissionId: { in: [...KNOWN_QA_SUBMISSION_IDS] } },
+        ],
+      },
+      select: {
+        id: true,
+        submissionId: true,
+        organizationId: true,
+        actorMembershipId: true,
+        eventType: true,
+      },
+      orderBy: { id: 'asc' },
+    }),
   ]);
 
   assertProductionQaIdentitySafety({
@@ -253,6 +350,38 @@ try {
   if (fixtureActivityCount !== 1) {
     throw new Error(
       `Expected one retained QA activity row, found ${fixtureActivityCount}.`
+    );
+  }
+
+  const unexpectedMemberships = qaMemberships.filter(
+    ({ id }) =>
+      !KNOWN_QA_MEMBERSHIP_IDS.includes(
+        id as (typeof KNOWN_QA_MEMBERSHIP_IDS)[number]
+      )
+  );
+  const unexpectedSubmissions = qaSubmissions.filter(
+    ({ id }) =>
+      !KNOWN_QA_SUBMISSION_IDS.includes(
+        id as (typeof KNOWN_QA_SUBMISSION_IDS)[number]
+      )
+  );
+  const unexpectedActivity = qaActivity.filter(
+    ({ submissionId, actorMembershipId }) =>
+      !KNOWN_QA_SUBMISSION_IDS.includes(
+        submissionId as (typeof KNOWN_QA_SUBMISSION_IDS)[number]
+      ) ||
+      (actorMembershipId !== null &&
+        !KNOWN_QA_MEMBERSHIP_IDS.includes(
+          actorMembershipId as (typeof KNOWN_QA_MEMBERSHIP_IDS)[number]
+        ))
+  );
+  if (
+    unexpectedMemberships.length > 0 ||
+    unexpectedSubmissions.length > 0 ||
+    unexpectedActivity.length > 0
+  ) {
+    throw new Error(
+      'A disposable production QA organization contains non-QA membership, submission, or activity rows.'
     );
   }
 
@@ -283,7 +412,15 @@ try {
           fixtureGraph: 'exclusive',
           fixtureGraphChecks: fixtureGraph,
           acceptedResidue:
-            'One exact-ID QA ledger row is retained until the next run resets the disposable fixture with its session-scoped cleanup capability.',
+            'Every retained QA ledger row is exact-ID enumerated below and remains isolated from classroom memberships until its QA workflow is retired.',
+          qaResidueEnumeration: {
+            decision: QA_RESIDUE_DECISION,
+            organizations: qaOrganizations,
+            identityMatches: qaIdentityMatches,
+            memberships: qaMemberships,
+            submissions: qaSubmissions,
+            activity: qaActivity,
+          },
         },
       },
       null,

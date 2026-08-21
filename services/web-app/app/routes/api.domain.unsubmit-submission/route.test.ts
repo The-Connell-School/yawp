@@ -100,6 +100,28 @@ describe('api.domain.unsubmit-submission', () => {
     });
   });
 
+  test('fails closed when the required unsubmit audit write is unavailable', async () => {
+    const previous = process.env.SUBMISSION_ACTIVITY_WRITES_ENABLED;
+    process.env.SUBMISSION_ACTIVITY_WRITES_ENABLED = 'false';
+    prisma.submission.findFirst.mockResolvedValue(ownedSubmission());
+
+    try {
+      await expect(
+        action({ request: makeRequest('sub-1') } as any)
+      ).rejects.toThrow(
+        'Submission activity recording is temporarily unavailable'
+      );
+      expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+      expect(prisma.submissionActivity.create).not.toHaveBeenCalled();
+    } finally {
+      if (previous === undefined) {
+        delete process.env.SUBMISSION_ACTIVITY_WRITES_ENABLED;
+      } else {
+        process.env.SUBMISSION_ACTIVITY_WRITES_ENABLED = previous;
+      }
+    }
+  });
+
   test('refuses a teacher even for a submission in their own class', async () => {
     getGradingActor.mockResolvedValue(
       studentActor({
