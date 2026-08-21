@@ -30,6 +30,9 @@ export async function proxyBlackboardLtiMock(request: Request, splat = '') {
   request.headers.forEach((value, name) => {
     if (!HOP_BY_HOP.has(name.toLowerCase())) headers.set(name, value);
   });
+  // Preserve the public origin for absolute URLs the mock generates
+  headers.set('x-forwarded-host', url.host);
+  headers.set('x-forwarded-proto', url.protocol.replace(/:$/, ''));
 
   const init: RequestInit = {
     method: request.method,

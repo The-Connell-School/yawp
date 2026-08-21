@@ -2,9 +2,8 @@ import { redirect, type LoaderFunctionArgs } from 'react-router';
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const url = new URL(request.url);
-  const origin = String(process.env.BLACKBOARD_LTI_MOCK_URL || '').replace(/\/$/, '');
-  if (!origin) return redirect('/dev/blackboard-lti-mock/');
-  const target = new URL('/api/v1/gateway/oidcauth', origin);
+  // Always route through same-origin proxy; browsers cannot resolve the Docker service name.
+  const target = new URL('/dev/blackboard-lti-mock/api/v1/gateway/oidcauth', url.origin);
   // Forward required params; mock accepts extras as well
   for (const [key, value] of url.searchParams.entries()) {
     target.searchParams.set(key, value);
