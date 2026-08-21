@@ -261,17 +261,29 @@ export async function maybePostGradeToBlackboard({
   studentMockUserId?: string; // Optional override; defaults to launch sub
 }) {
   if (numericPercentage == null) return;
-  const origin = String(process.env.BLACKBOARD_LTI_MOCK_URL || '').replace(/\/$/, '');
-  const clientId = String(process.env.LTI_CLIENT_ID || 'yawp-blackboard-mock');
-  if (!origin) return;
-
   const claims = await ensureMockLaunchClaims();
   if (!claims) return;
   const ags = claims['https://purl.imsglobal.org/spec/lti-ags/claim/endpoint'];
   const contextId = claims['https://purl.imsglobal.org/spec/lti/claim/context']?.id || '_4_1';
-  const lineItemId = (ags?.lineitem?.split('/').pop() || '_99_1_grade');
-  const lineItemUrl = `${origin}/learn/api/v1/lti/courses/${encodeURIComponent(contextId)}/lineItems/${encodeURIComponent(lineItemId)}/scores`;
-  const tokenEndpoint = `${origin}/api/v1/gateway/oauth2/jwttoken`;
+  const clientId = String(process.env.LTI_CLIENT_ID || 'yawp-blackboard-mock');
+
+  // Prefer the launch's AGS URLs; fall back to env origin if needed
+  const derivedOrigin =
+    (ags?.lineitems && safeOrigin(ags.lineitems)) ||
+    (ags?.lineitem && safeOrigin(ags.lineitem)) ||
+    String(process.env.BLACKBOARD_LTI_MOCK_URL || '').replace(/\/$/, '');
+  if (!derivedOrigin) return;
+
+  // Prefer the exact line item URL from claims
+  const lineItemUrl =
+    ags?.lineitem && isUrl(ags.lineitem)
+      ? `${ags.lineitem.replace(/\/$/, '')}/scores`
+      : `${derivedOrigin}/learn/api/v1/lti/courses/${encodeURIComponent(
+          contextId
+        )}/lineItems/${encodeURIComponent(
+          (ags?.lineitem?.split('/').pop() || '_99_1_grade')
+        )}/scores`;
+  const tokenEndpoint = `${derivedOrigin}/api/v1/gateway/oauth2/jwttoken`;
   const userId = studentMockUserId || claims.sub || 'bb-user-student';
 
   await postScoreToAgs({
@@ -282,5 +294,20 @@ export async function maybePostGradeToBlackboard({
     tokenEndpoint,
     clientId,
   });
+}
+
+function safeOrigin(url: string | undefined) {
+  try {
+    return url ? new URL(url).origin : '';
+  } catch {
+    return '';
+  }
+}
+function isUrl(url: string | undefined) {
+  try {
+    return Boolean(url && new URL(url));
+  } catch {
+    return false;
+  }
 }
 
