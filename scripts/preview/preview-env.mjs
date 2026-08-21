@@ -207,6 +207,9 @@ export function buildPreviewEnv({
     throw new Error('PREVIEW_DB_PASSWORD must be a 32-character URL-safe secret');
   }
   const hostname = `${slug}.${safeDomain}`;
+  const blackboardHostname = safePrNumber
+    ? `blackboard-pr-${safePrNumber}.${safeDomain}`
+    : `blackboard-${slug}.${safeDomain}`;
   const previewRoot = safeRoot.startsWith('/') ? safeRoot : `/${safeRoot}`;
   const previewDir = path.posix.join(previewRoot, 'previews', slug);
   const resolvedSourceDir =
@@ -230,7 +233,11 @@ export function buildPreviewEnv({
     databasePassword: resolvedDatabasePassword,
     templateDatabaseName,
     hostname,
+    blackboardHostname,
     url,
+    blackboardUrl: directPort
+      ? `http://127.0.0.1:${directPort}`
+      : `${scheme}://${blackboardHostname}`,
     root: previewRoot,
     previewDir,
     sourceDir: resolvedSourceDir,
