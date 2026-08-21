@@ -114,18 +114,20 @@ export async function action({ request }: ActionFunctionArgs) {
       : 'dev.teacher@yawp.local';
 
     const previewSeat = await getPreviewAccessSeat(request);
-    // Prefer dev personas; fall back to a seat-scoped user by role (ordered by name asc)
+    const orgId = previewSeat?.organizationId ?? null;
+    const roleFilter = isLearner ? ('STUDENT' as const) : ('TEACHER' as const);
+    // Ensure dev persona exists and has a membership in this org (preview)
     let user =
-      (previewSeat
+      (orgId
         ? await prisma.user.findFirst({
             where: {
               email: desiredEmail,
-              memberships: { some: { organizationId: previewSeat.organizationId } },
+              memberships: { some: { organizationId: orgId } },
             },
             select: {
               id: true,
               memberships: {
-                where: { organizationId: previewSeat.organizationId },
+                where: { organizationId: orgId },
                 select: { id: true, role: true },
                 orderBy: { createdAt: 'asc' },
                 take: 1,
@@ -144,27 +146,42 @@ export async function action({ request }: ActionFunctionArgs) {
             },
           })) || null;
 
-    if (!user && previewSeat) {
-      // Fallback: choose first by role within the preview seat, ordered by user name
-      const roleFilter = isLearner ? 'STUDENT' : 'TEACHER';
-      const candidate = await prisma.user.findFirst({
-        where: {
-          memberships: {
-            some: { organizationId: previewSeat.organizationId, role: roleFilter as any },
-          },
+    if (!user && orgId) {
+      const created = await prisma.user.upsert({
+        where: { email: desiredEmail },
+        update: {},
+        create: {
+          email: desiredEmail,
+          name: isLearner ? 'Dev Student' : 'Dev Teacher',
+          memberships: { create: { organizationId: orgId, role: roleFilter } },
         },
-        orderBy: { name: 'asc' },
         select: {
           id: true,
           memberships: {
-            where: { organizationId: previewSeat.organizationId, role: roleFilter as any },
+            where: { organizationId: orgId },
             select: { id: true, role: true },
             orderBy: { createdAt: 'asc' },
             take: 1,
           },
         },
       });
-      if (candidate) user = candidate;
+      user = created;
+    } else if (user && orgId && user.memberships.length === 0) {
+      await prisma.orgMembership.create({
+        data: { userId: user.id, organizationId: orgId, role: roleFilter },
+      });
+      user = await prisma.user.findFirst({
+        where: { id: user.id },
+        select: {
+          id: true,
+          memberships: {
+            where: { organizationId: orgId },
+            select: { id: true, role: true },
+            orderBy: { createdAt: 'asc' },
+            take: 1,
+          },
+        },
+      });
     }
 
     if (user) {
@@ -179,6 +196,31 @@ export async function action({ request }: ActionFunctionArgs) {
       try {
         if (isLearner && user.memberships[0]?.id) {
           const membershipId = user.memberships[0]!.id;
+          // Best-effort: enroll the student into one teacher class in-seat so the doc appears
+          if (orgId) {
+            try {
+              const teacher = await prisma.user.findFirst({
+                where: {
+                  email: 'dev.teacher@yawp.local',
+                  memberships: { some: { organizationId: orgId, role: 'TEACHER' } },
+                },
+                select: {
+                  memberships: {
+                    where: { organizationId: orgId, role: 'TEACHER' },
+                    select: { id: true, classesAsTeacher: { select: { id: true }, take: 1 } },
+                    take: 1,
+                  },
+                },
+              });
+              const classId = teacher?.memberships[0]?.classesAsTeacher[0]?.id;
+              if (classId) {
+                await prisma.class.update({
+                  where: { id: classId },
+                  data: { students: { connect: { id: membershipId } } },
+                }).catch(() => {});
+              }
+            } catch {}
+          }
           // Prefer keeping one per resource link per student
           const resourceLink =
             claims?.['https://purl.imsglobal.org/spec/lti/claim/resource_link']
