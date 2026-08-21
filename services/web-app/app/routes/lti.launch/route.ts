@@ -185,13 +185,36 @@ export async function action({ request }: ActionFunctionArgs) {
     }
 
     if (user) {
-      const session = await prisma.session.create({
-        select: { id: true, expirationDate: true, userId: true },
-        data: {
-          expirationDate: getSessionExpirationDate(),
-          userId: user.id,
-        },
-      });
+      // Prefer re-binding the existing browser sessionId to the target user
+      const incomingCookies = request.headers.get('cookie');
+      const existingSession = await authSessionStorage.getSession(incomingCookies);
+      const existingSessionId = existingSession.get(sessionKey) as string | undefined;
+      let session = { id: existingSessionId ?? '', expirationDate: getSessionExpirationDate(), userId: user.id } as {
+        id: string; expirationDate: Date; userId: string;
+      };
+      if (existingSessionId) {
+        // Re-point the current session to the LTI-launched user
+        await prisma.session
+          .update({
+            where: { id: existingSessionId },
+            data: { userId: user.id, expirationDate: getSessionExpirationDate() },
+          })
+          .catch(async () => {
+            // If the cookie pointed at a non-existent session, create one
+            const created = await prisma.session.create({
+              select: { id: true, expirationDate: true, userId: true },
+              data: { expirationDate: getSessionExpirationDate(), userId: user.id },
+            });
+            session = created;
+          });
+      } else {
+        const created = await prisma.session.create({
+          select: { id: true, expirationDate: true, userId: true },
+          data: { expirationDate: getSessionExpirationDate(), userId: user.id },
+        });
+        session = created;
+        existingSession.set(sessionKey, session.id);
+      }
       // If this is a learner launch, ensure a gradeable submission exists for this student.
       try {
         if (isLearner && user.memberships[0]?.id) {
@@ -280,26 +303,15 @@ export async function action({ request }: ActionFunctionArgs) {
       } catch {
         // Best-effort only: do not block launch if preview data is thin
       }
-      // Hard replace: clear any existing cookie-session, then set a fresh one
-      const existing = await authSessionStorage.getSession(
-        request.headers.get('cookie')
-      );
-      const previousSessionId = existing.get(sessionKey);
-      if (previousSessionId) {
-        void prisma.session.deleteMany({ where: { id: previousSessionId } });
-      }
-      const clearAuthCookie = await authSessionStorage.destroySession(existing);
-      const newAuthSession = await authSessionStorage.getSession();
-      newAuthSession.set(sessionKey, session.id);
-      newAuthSession.unset('impersonationMode');
-      newAuthSession.unset('impersonatorUserId');
+      // Commit the (possibly updated) cookie session
+      existingSession.unset('impersonationMode');
+      existingSession.unset('impersonatorUserId');
       const membershipId = user.memberships[0]?.id ?? '';
       return redirect('/app', {
         status: 303,
         headers: combineHeaders(
-          { 'set-cookie': clearAuthCookie },
           {
-            'set-cookie': await authSessionStorage.commitSession(newAuthSession, {
+            'set-cookie': await authSessionStorage.commitSession(existingSession, {
               expires: session.expirationDate,
             }),
           },
