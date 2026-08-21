@@ -89,9 +89,9 @@ async function handlePost(request: Request) {
           title:
             payload?.['https://purl.imsglobal.org/spec/lti/claim/resource_link']
               ?.title || 'Yawp Assignment',
-          url: `${getDomainUrl(request)}/lti/login?target_link_uri=${encodeURIComponent(
-            `${getDomainUrl(request)}${DEFAULT_ROUTE}`
-          )}&client_id=${encodeURIComponent(clientId)}&iss=${encodeURIComponent(
+          url: `${getDomainUrl(request)}/lti/login?target_link_uri=${encodeURIComponent(`${getDomainUrl(request)}/lti/launch`)}&client_id=${encodeURIComponent(
+            clientId
+          )}&iss=${encodeURIComponent(
             'https://blackboard.com'
           )}`,
           lineItem: {
@@ -107,8 +107,13 @@ async function handlePost(request: Request) {
       ],
     };
     const jwt = await signToolJwt(deepLink, { typ: 'JWT' });
-    const html = `<!doctype html><form id="dl" method="POST" enctype="application/x-www-form-urlencoded" accept-charset="UTF-8" action="${returnUrl}">
-<input type="hidden" name="jwt" value="${jwt}" />
+    const esc = (v: string) =>
+      v.replaceAll('&', '&amp;').replaceAll('"', '&quot;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+    const html = `<!doctype html><form id="dl" method="POST" enctype="application/x-www-form-urlencoded" accept-charset="UTF-8" action="${esc(
+      returnUrl
+    )}">
+<input type="hidden" name="JWT" value="${esc(jwt)}" />
+<input type="hidden" name="jwt" value="${esc(jwt)}" />
 </form><script>document.getElementById('dl').submit()</script>`;
     return new Response(html, {
       status: 200,

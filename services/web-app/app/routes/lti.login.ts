@@ -18,9 +18,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const clientId = url.searchParams.get('client_id') || '';
   const loginHint = url.searchParams.get('login_hint') || '';
   const messageHint = url.searchParams.get('lti_message_hint') || '';
-  const targetLinkUri =
-    url.searchParams.get('target_link_uri') ||
-    `${getDomainUrl(request)}/lti/launch`;
+  // Force HTTPS preview target — do not trust incoming target_link_uri
+  const targetLinkUri = `${getDomainUrl(request)}/lti/launch`;
   const deploymentId = url.searchParams.get('lti_deployment_id') || '';
 
   if (!iss || !clientId || !loginHint) {
@@ -43,8 +42,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   oidcAuth.searchParams.set('nonce', nonce);
   // Echo through for the mock's dev helpers; platforms ignore unknown params.
   if (deploymentId) oidcAuth.searchParams.set('lti_deployment_id', deploymentId);
-  if (targetLinkUri)
-    oidcAuth.searchParams.set('target_link_uri', targetLinkUri);
+  oidcAuth.searchParams.set('target_link_uri', targetLinkUri);
 
   const headers = new Headers({
     location: oidcAuth.toString(),
