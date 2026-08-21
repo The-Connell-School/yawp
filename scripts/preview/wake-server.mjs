@@ -19,17 +19,34 @@ function safeSecretEqual(actual, expected) {
     && timingSafeEqual(actualBuffer, expectedBuffer);
 }
 
-function escapeRegex(value) {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+export function parsePreviewHost(host, domain) {
+  if (typeof host !== 'string' || typeof domain !== 'string' || !domain) return null;
+  const hostname = host.toLowerCase().replace(/:\d+$/, '');
+  const suffix = `.${domain.toLowerCase()}`;
+  if (!hostname.endsWith(suffix)) return null;
+  const labels = hostname.slice(0, -suffix.length);
+  if (!labels || labels.includes('.')) return null;
+  const blackboard = labels.match(/^blackboard-pr-([1-9][0-9]*)$/);
+  if (blackboard) {
+    const pr = Number(blackboard[1]);
+    return Number.isSafeInteger(pr) ? { pr, service: 'blackboard' } : null;
+  }
+  const web = labels.match(/^pr-([1-9][0-9]*)$/);
+  if (web) {
+    const pr = Number(web[1]);
+    return Number.isSafeInteger(pr) ? { pr, service: 'web' } : null;
+  }
+  return null;
 }
 
 export function parsePreviewPr(host, domain) {
-  if (typeof host !== 'string' || typeof domain !== 'string' || !domain) return null;
-  const hostname = host.toLowerCase().replace(/:\d+$/, '');
-  const match = hostname.match(new RegExp(`^pr-([1-9][0-9]*)\\.${escapeRegex(domain.toLowerCase())}$`));
-  if (!match) return null;
-  const pr = Number(match[1]);
-  return Number.isSafeInteger(pr) ? pr : null;
+  return parsePreviewHost(host, domain)?.pr ?? null;
+}
+
+export function previewServiceHostname(pr, domain, service = 'web') {
+  const safeDomain = String(domain || '').toLowerCase();
+  if (service === 'blackboard') return `blackboard-pr-${pr}.${safeDomain}`;
+  return `pr-${pr}.${safeDomain}`;
 }
 
 function nonnegativeInteger(value, fallback, name) {

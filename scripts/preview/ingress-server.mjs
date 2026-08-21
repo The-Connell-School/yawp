@@ -8,7 +8,9 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import {
   createDefaultWakeOperations,
+  parsePreviewHost,
   parsePreviewPr,
+  previewServiceHostname,
 } from './wake-server.mjs';
 
 export function isDirectExecution(moduleUrl, argv1 = process.argv[1]) {
@@ -139,7 +141,7 @@ function createWakeCoordinator({ ensureRunning, maxConcurrentWakes }) {
   };
 }
 
-function proxyHttp({ request, response, target, hostname, pr, recordAccess }) {
+function proxyHttp({ request, response, target, hostname, pr, recordAccess, recordWithoutMarker = false }) {
   return new Promise((resolve) => {
     let settled = false;
     const upstream = httpRequest({
@@ -155,7 +157,7 @@ function proxyHttp({ request, response, target, hostname, pr, recordAccess }) {
       upstreamResponse.pipe(response);
       upstreamResponse.once('end', () => {
         if (
-          authorized
+          (authorized || recordWithoutMarker)
           && status < 400
           && request.method !== 'HEAD'
           && request.method !== 'OPTIONS'
@@ -203,22 +205,22 @@ export function createPreviewIngress({
     const rawHost = Array.isArray(request.headers.host)
       ? request.headers.host[0]
       : request.headers.host || '';
-    const pr = parsePreviewPr(rawHost, domain);
-    if (pr === null) {
+    const parsed = parsePreviewHost(rawHost, domain);
+    if (parsed === null) {
       send(response, 404, 'Not found.\n');
       return;
     }
-    const hostname = `pr-${pr}.${domain.toLowerCase()}`;
-    let target = await resolveTarget(pr);
+    const hostname = previewServiceHostname(parsed.pr, domain, parsed.service);
+    let target = await resolveTarget(parsed.pr, { service: parsed.service });
     if (!target) {
       try {
-        const authorization = await authorizeWake(pr, request.url, request);
+        const authorization = await authorizeWake(parsed.pr, request.url, request);
         if (!authorization) {
           send(response, 401, 'Open this sleeping preview with its one-click access URL.\n');
           return;
         }
-        await wake(pr, authorization);
-        target = await resolveTarget(pr, { fresh: true });
+        await wake(parsed.pr, authorization);
+        target = await resolveTarget(parsed.pr, { fresh: true, service: parsed.service });
         if (!target) {
           send(response, 503, 'Preview is starting; retry shortly.\n', { 'retry-after': '5' });
           return;
@@ -229,7 +231,15 @@ export function createPreviewIngress({
         return;
       }
     }
-    await proxyHttp({ request, response, target, hostname, pr, recordAccess });
+    await proxyHttp({
+      request,
+      response,
+      target,
+      hostname,
+      pr: parsed.pr,
+      recordAccess,
+      recordWithoutMarker: parsed.service === 'blackboard',
+    });
   };
 }
 
@@ -261,22 +271,22 @@ export function createWebSocketUpgradeHandler({
     const rawHost = Array.isArray(request.headers.host)
       ? request.headers.host[0]
       : request.headers.host || '';
-    const pr = parsePreviewPr(rawHost, domain);
-    if (pr === null) {
+    const parsed = parsePreviewHost(rawHost, domain);
+    if (parsed === null) {
       writeSocketResponse(socket, '404 Not Found', 'Not found.\n');
       return;
     }
-    const hostname = `pr-${pr}.${domain.toLowerCase()}`;
-    let target = await resolveTarget(pr);
+    const hostname = previewServiceHostname(parsed.pr, domain, parsed.service);
+    let target = await resolveTarget(parsed.pr, { service: parsed.service });
     if (!target) {
       try {
-        const authorization = await authorizeWake(pr, request.url, request);
+        const authorization = await authorizeWake(parsed.pr, request.url, request);
         if (!authorization) {
           writeSocketResponse(socket, '401 Unauthorized', 'Open this sleeping preview with its one-click access URL.\n');
           return;
         }
-        await wake(pr, authorization);
-        target = await resolveTarget(pr, { fresh: true });
+        await wake(parsed.pr, authorization);
+        target = await resolveTarget(parsed.pr, { fresh: true, service: parsed.service });
       } catch (error) {
         const [status, body] = wakeErrorResponse(error);
         writeSocketResponse(socket, `${status} Service Unavailable`, body);
@@ -315,7 +325,7 @@ export function createWebSocketUpgradeHandler({
         responsePreamble = Buffer.alloc(0);
         responseHeadersComplete = true;
         if (authorized && /^HTTP\/1\.[01] 101\b/.test(lines[0] || '')) {
-          Promise.resolve(recordAccess(pr)).catch((error) => {
+          Promise.resolve(recordAccess(parsed.pr)).catch((error) => {
             console.error('Preview activity recording failed', error);
           });
         }
@@ -347,12 +357,12 @@ export function createWebSocketUpgradeHandler({
   };
 }
 
-export function targetFromDockerInspect(inspect) {
+export function targetFromDockerInspect(inspect, port = 8080) {
   const address = inspect?.NetworkSettings?.Networks?.preview?.IPAddress;
   if (!inspect?.State?.Running || typeof address !== 'string' || !/^\d{1,3}(?:\.\d{1,3}){3}$/.test(address)) {
     return null;
   }
-  return { host: address, port: 8080 };
+  return { host: address, port };
 }
 
 function inspectContainer(socketPath, container) {
@@ -399,13 +409,18 @@ export function createDockerTargetResolver({
   inspect = (container) => inspectContainer(socketPath, container),
 } = {}) {
   const cache = new Map();
-  return async (pr, { fresh = false } = {}) => {
+  return async (pr, { fresh = false, service = 'web' } = {}) => {
     const now = Date.now();
-    const cached = cache.get(pr);
+    const cacheKey = `${service}:${pr}`;
+    const cached = cache.get(cacheKey);
     if (!fresh && cached && cached.expires > now) return cached.target;
+    const container = service === 'blackboard'
+      ? `yawp-pr-${pr}-blackboard-lti-mock-1`
+      : `yawp-pr-${pr}-web-1`;
+    const port = service === 'blackboard' ? 9473 : 8080;
     try {
-      const target = targetFromDockerInspect(await inspect(`yawp-pr-${pr}-web-1`));
-      cache.set(pr, { target, expires: now + (target ? cacheMs : Math.min(cacheMs, 250)) });
+      const target = targetFromDockerInspect(await inspect(container), port);
+      cache.set(cacheKey, { target, expires: now + (target ? cacheMs : Math.min(cacheMs, 250)) });
       return target;
     } catch (error) {
       console.error(`Preview pr-${pr} target resolution failed`, error.message);
@@ -420,8 +435,8 @@ export function createHttpRedirectHandler({ domain, readChallenge }) {
     const rawHost = Array.isArray(request.headers.host)
       ? request.headers.host[0]
       : request.headers.host || '';
-    const pr = parsePreviewPr(rawHost, domain);
-    if (pr === null) {
+    const parsed = parsePreviewHost(rawHost, domain);
+    if (parsed === null) {
       send(response, 404, 'Not found.\n');
       return;
     }
@@ -439,7 +454,7 @@ export function createHttpRedirectHandler({ domain, readChallenge }) {
       send(response, 200, keyAuthorization, { 'cache-control': 'no-store' });
       return;
     }
-    const hostname = `pr-${pr}.${domain.toLowerCase()}`;
+    const hostname = previewServiceHostname(parsed.pr, domain, parsed.service);
     response.writeHead(308, { location: `https://${hostname}${request.url || '/'}` });
     response.end();
   };
@@ -464,7 +479,7 @@ function loadCertificatePair(certRoot, hostname) {
 async function findDefaultHostname(certRoot, domain) {
   const entries = await readdir(certRoot, { withFileTypes: true });
   return entries
-    .filter((entry) => entry.isDirectory() && parsePreviewPr(entry.name, domain) !== null)
+    .filter((entry) => entry.isDirectory() && parsePreviewHost(entry.name, domain)?.service === 'web')
     .map((entry) => entry.name)
     .sort((a, b) => parsePreviewPr(b, domain) - parsePreviewPr(a, domain))[0] || null;
 }

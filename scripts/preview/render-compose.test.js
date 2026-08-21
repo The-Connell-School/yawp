@@ -68,7 +68,11 @@ describe('renderPreviewCompose', () => {
       `DATABASE_URL: "postgresql://yawp_pr_142_app:${previewDatabasePassword}@preview-postgres:5432/yawp_pr_142"`
     );
     expect(compose).toContain('AWS_EC2_METADATA_DISABLED: "true"');
-    expect(compose).toContain('YAWP_ENVIRONMENT: "preview"');
+    expect(compose).toContain('BLACKBOARD_LTI_MOCK_URL: "http://blackboard-lti-mock:9473"');
+    expect(compose).toContain('blackboard-lti-mock:');
+    expect(compose).toContain('bun scripts/blackboard-lti-mock/server.mjs');
+    expect(compose).toContain('BLACKBOARD_LTI_MOCK_ENABLED: "true"');
+    expect(compose).toContain('BLACKBOARD_LTI_MOCK_ISSUER: "https://blackboard.com"');
     expect(compose).toContain('AI_MODEL: "claude-sonnet-4-6"');
     expect(compose).not.toContain('target: production');
     expect(compose).not.toContain('traefik');
