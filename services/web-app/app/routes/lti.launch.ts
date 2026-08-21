@@ -3,6 +3,9 @@ import { jwtVerify, createRemoteJWKSet } from 'jose';
 import { getPlatformDeepLinkReturnUrl, getPlatformJwksUrl } from '~/utils/lti/platform.server.ts';
 import { getDomainUrl, DEFAULT_ROUTE } from '~/utils/misc.tsx';
 import { signToolJwt } from '~/utils/lti/keys.server.ts';
+import { authSessionStorage } from '~/cookie-session-storages/authentication.server.ts';
+import { sessionKey } from '~/utils/auth.server.ts';
+import { isLocalDevAuthEnabled } from '~/utils/local-dev-auth.server.ts';
 
 const STATE_COOKIE = 'yawp_lti_state';
 const NONCE_COOKIE = 'yawp_lti_nonce';
@@ -121,14 +124,39 @@ async function handlePost(request: Request) {
   const target =
     payload?.['https://purl.imsglobal.org/spec/lti/claim/target_link_uri'] ||
     `${getDomainUrl(request)}${DEFAULT_ROUTE}`;
-  return new Response(null, {
-    status: 302,
-    headers: {
-      location: target,
-      'cache-control': 'no-store',
-      'set-cookie': [clearCookie(STATE_COOKIE), clearCookie(NONCE_COOKIE)].join(', '),
-    },
-  });
+  // Ensure a session exists in preview/dev so the user does not see the login form.
+  const existing = await authSessionStorage.getSession(request.headers.get('cookie'));
+  const hasSession = Boolean(existing.get(sessionKey));
+  if (!hasSession && isLocalDevAuthEnabled()) {
+    const roles: string[] = Array.isArray(payload?.['https://purl.imsglobal.org/spec/lti/claim/roles'])
+      ? payload['https://purl.imsglobal.org/spec/lti/claim/roles']
+      : [];
+    const isInstructor = roles.some((r) => /Instructor/i.test(r));
+    const devEmail = isInstructor
+      ? 'dev.teacher@yawp.local'
+      : 'dev.student@yawp.local';
+    const html = `<!doctype html><form id="devlogin" method="POST" action="/auth/dev-login">
+<input type="hidden" name="email" value="${devEmail}" />
+<noscript><button type="submit">Continue</button></noscript>
+</form><script>document.getElementById('devlogin').submit()</script>`;
+    return new Response(html, {
+      status: 200,
+      headers: {
+        'content-type': 'text/html; charset=utf-8',
+        'cache-control': 'no-store',
+        'set-cookie': [clearCookie(STATE_COOKIE), clearCookie(NONCE_COOKIE)].join(', '),
+      },
+    });
+  } else {
+    return new Response(null, {
+      status: 302,
+      headers: {
+        location: target,
+        'cache-control': 'no-store',
+        'set-cookie': [clearCookie(STATE_COOKIE), clearCookie(NONCE_COOKIE)].join(', '),
+      },
+    });
+  }
 }
 
 export async function loader(args: LoaderFunctionArgs) {

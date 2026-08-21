@@ -227,10 +227,15 @@ function handleDevLaunch({ url, response, config, store, publicOrigin }, fault) 
   });
   const hintId = `hint_${randomUUID()}`;
   store.launchHints.set(hintId, profile);
-  const login = new URL(config.toolOidcLoginUrl);
+  // Prefer the same preview host that served this page to avoid cross-preview hops.
+  const hostOrigin = new URL(publicOrigin).origin;
+  const login = new URL('/lti/login', hostOrigin);
   login.searchParams.set('iss', config.issuer);
   login.searchParams.set('login_hint', profile.user.sub);
-  login.searchParams.set('target_link_uri', config.toolRedirectUri);
+  login.searchParams.set(
+    'target_link_uri',
+    new URL('/lti/launch', hostOrigin).toString()
+  );
   login.searchParams.set('lti_message_hint', hintId);
   login.searchParams.set('client_id', config.clientId);
   login.searchParams.set('lti_deployment_id', config.deploymentId);
