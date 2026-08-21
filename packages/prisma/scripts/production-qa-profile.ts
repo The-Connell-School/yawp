@@ -116,6 +116,134 @@ export function redactedProductionQaSummary(result: ProductionQaProfileResult) {
 
 type PrismaClientLike = ReturnType<typeof createPrismaClient>;
 
+type QaIdentityRecord = {
+  id: string;
+  email: string;
+  memberships: Array<{
+    id: string;
+    userId: string;
+    organizationId: string;
+    role: 'TEACHER' | 'STUDENT';
+    isOrgOwner: boolean;
+  }>;
+};
+
+type QaMembershipRecord = QaIdentityRecord['memberships'][number];
+
+export function assertProductionQaIdentitySafety({
+  users,
+  memberships,
+}: {
+  users: QaIdentityRecord[];
+  memberships: QaMembershipRecord[];
+}) {
+  const expected = [
+    {
+      userId: PRODUCTION_QA_IDS.teacherUserId,
+      email: PRODUCTION_QA_IDS.teacherEmail,
+      membershipId: PRODUCTION_QA_IDS.teacherMembershipId,
+      role: 'TEACHER' as const,
+      isOrgOwner: true,
+    },
+    {
+      userId: PRODUCTION_QA_IDS.studentUserId,
+      email: PRODUCTION_QA_IDS.studentEmail,
+      membershipId: PRODUCTION_QA_IDS.studentMembershipId,
+      role: 'STUDENT' as const,
+      isOrgOwner: false,
+    },
+  ];
+
+  for (const identity of expected) {
+    const matchingUsers = users.filter(
+      (user) => user.id === identity.userId || user.email === identity.email
+    );
+    if (matchingUsers.length > 1) {
+      throw new Error(
+        `Production QA identity collision for ${identity.email}; refusing to mutate production.`
+      );
+    }
+    const user = matchingUsers[0];
+    if (
+      user &&
+      (user.id !== identity.userId || user.email !== identity.email)
+    ) {
+      throw new Error(
+        `Production QA reserved email or user ID collision for ${identity.email}; refusing to mutate production.`
+      );
+    }
+    if (
+      user?.memberships.some(
+        (membership) =>
+          membership.id !== identity.membershipId ||
+          membership.organizationId !== PRODUCTION_QA_IDS.organizationId ||
+          membership.role !== identity.role ||
+          membership.isOrgOwner !== identity.isOrgOwner
+      )
+    ) {
+      throw new Error(
+        `Production QA user ${identity.email} has a non-QA membership graph; refusing to mutate production.`
+      );
+    }
+
+    const reservedMembership = memberships.find(
+      (membership) => membership.id === identity.membershipId
+    );
+    if (
+      reservedMembership &&
+      (reservedMembership.userId !== identity.userId ||
+        reservedMembership.organizationId !==
+          PRODUCTION_QA_IDS.organizationId ||
+        reservedMembership.role !== identity.role ||
+        reservedMembership.isOrgOwner !== identity.isOrgOwner)
+    ) {
+      throw new Error(
+        `Production QA reserved membership collision for ${identity.membershipId}; refusing to mutate production.`
+      );
+    }
+  }
+}
+
+async function assertProductionQaIdentityPreflight(prisma: PrismaClientLike) {
+  const ids = PRODUCTION_QA_IDS;
+  const [users, memberships] = await Promise.all([
+    prisma.user.findMany({
+      where: {
+        OR: [
+          { id: { in: [ids.teacherUserId, ids.studentUserId] } },
+          { email: { in: [ids.teacherEmail, ids.studentEmail] } },
+        ],
+      },
+      select: {
+        id: true,
+        email: true,
+        memberships: {
+          select: {
+            id: true,
+            userId: true,
+            organizationId: true,
+            role: true,
+            isOrgOwner: true,
+          },
+        },
+      },
+    }),
+    prisma.orgMembership.findMany({
+      where: {
+        id: { in: [ids.teacherMembershipId, ids.studentMembershipId] },
+      },
+      select: {
+        id: true,
+        userId: true,
+        organizationId: true,
+        role: true,
+        isOrgOwner: true,
+      },
+    }),
+  ]);
+  assertProductionQaIdentitySafety({ users, memberships });
+}
+
 async function ensureQaUser({
   prisma,
   id,
@@ -193,6 +321,10 @@ export async function ensureProductionQaProfile(
 ): Promise<ProductionQaProfileResult> {
   const ids = PRODUCTION_QA_IDS;
   const classArtKey = getClassArtByIndex(0).key;
+
+  // This read-only collision check must run before the first write. Reserved
+  // QA emails and IDs are never authority to reset an unrelated account.
+  await assertProductionQaIdentityPreflight(prisma);
 
   const org = await prisma.organization.upsert({
     where: { id: ids.organizationId },
