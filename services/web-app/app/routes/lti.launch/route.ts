@@ -10,7 +10,7 @@ import { prisma } from '~/utils/db.server';
 import { authSessionStorage } from '~/cookie-session-storages/authentication.server';
 import { sessionKey, getSessionExpirationDate } from '~/utils/auth.server';
 import { setMembershipId } from '~/cookies/membership-id.server';
-import { combineHeaders } from '~/utils/misc';
+import { combineHeaders, getDomainUrl } from '~/utils/misc';
 
 export async function loader() {
   // Launch is a POST; GET can confirm endpoint is up
@@ -59,7 +59,7 @@ export async function action({ request }: ActionFunctionArgs) {
           {
             type: 'ltiResourceLink',
             title: 'Yawp essay',
-            url: new URL('/lti/launch', new URL(request.url).origin).toString(),
+            url: new URL('/lti/launch', getDomainUrl(request)).toString(),
             lineItem: { scoreMaximum: 100, label: 'Yawp essay' },
           },
         ],
@@ -113,33 +113,58 @@ export async function action({ request }: ActionFunctionArgs) {
       : 'dev.teacher@yawp.local';
 
     const previewSeat = await getPreviewAccessSeat(request);
-    const user = previewSeat
-      ? await prisma.user.findFirst({
-          where: {
-            email: desiredEmail,
-            memberships: { some: { organizationId: previewSeat.organizationId } },
-          },
-          select: {
-            id: true,
-            memberships: {
-              where: { organizationId: previewSeat.organizationId },
-              select: { id: true, role: true },
-              orderBy: { createdAt: 'asc' },
-              take: 1,
+    // Prefer dev personas; fall back to a seat-scoped user by role (ordered by name asc)
+    let user =
+      (previewSeat
+        ? await prisma.user.findFirst({
+            where: {
+              email: desiredEmail,
+              memberships: { some: { organizationId: previewSeat.organizationId } },
             },
-          },
-        })
-      : await prisma.user.findUnique({
-          where: { email: desiredEmail },
-          select: {
-            id: true,
-            memberships: {
-              select: { id: true, role: true },
-              orderBy: { createdAt: 'asc' },
-              take: 1,
+            select: {
+              id: true,
+              memberships: {
+                where: { organizationId: previewSeat.organizationId },
+                select: { id: true, role: true },
+                orderBy: { createdAt: 'asc' },
+                take: 1,
+              },
             },
+          })
+        : await prisma.user.findUnique({
+            where: { email: desiredEmail },
+            select: {
+              id: true,
+              memberships: {
+                select: { id: true, role: true },
+                orderBy: { createdAt: 'asc' },
+                take: 1,
+              },
+            },
+          })) || null;
+
+    if (!user && previewSeat) {
+      // Fallback: choose first by role within the preview seat, ordered by user name
+      const roleFilter = isLearner ? 'STUDENT' : 'TEACHER';
+      const candidate = await prisma.user.findFirst({
+        where: {
+          memberships: {
+            some: { organizationId: previewSeat.organizationId, role: roleFilter as any },
           },
-        });
+        },
+        orderBy: { name: 'asc' },
+        select: {
+          id: true,
+          memberships: {
+            where: { organizationId: previewSeat.organizationId, role: roleFilter as any },
+            select: { id: true, role: true },
+            orderBy: { createdAt: 'asc' },
+            take: 1,
+          },
+        },
+      });
+      if (candidate) user = candidate;
+    }
 
     if (user) {
       const session = await prisma.session.create({
