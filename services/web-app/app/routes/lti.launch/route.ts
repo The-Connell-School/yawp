@@ -73,11 +73,30 @@ export async function action({ request }: ActionFunctionArgs) {
           postUrl = new URL('/api/v1/lti/deep-linking', internalMock).toString();
         } catch {}
       }
-      await fetch(postUrl, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ JWT: responseJwt }),
-      }).catch(() => {});
+      const tryPost = async (asForm: boolean) => {
+        if (asForm) {
+          const body = new URLSearchParams();
+          body.set('JWT', responseJwt);
+          await fetch(postUrl, {
+            method: 'POST',
+            headers: { 'content-type': 'application/x-www-form-urlencoded' },
+            body: body.toString(),
+          });
+        } else {
+          await fetch(postUrl, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ JWT: responseJwt }),
+          });
+        }
+      };
+      try {
+        await tryPost(false);
+      } catch {
+        try {
+          await tryPost(true);
+        } catch {}
+      }
     }
     return redirect('/dev/blackboard-lti-mock/learn/courses');
   }
