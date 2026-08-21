@@ -107,10 +107,21 @@ async function handlePost(request: Request) {
       ],
     };
     const jwt = await signToolJwt(deepLink, { typ: 'JWT' });
-    // Post as a form with id_token to match platform-style DL response consumption.
-    const html = `<!doctype html><form id="dl" method="POST" action="${returnUrl}">
-<input type="hidden" name="id_token" value="${jwt}" />
-</form><script>document.getElementById('dl').submit()</script>`;
+    // Post as a form with JWT, setting the value via JS to avoid any HTML attribute encoding.
+    const html = `<!doctype html><script>
+(function(){
+  var f=document.createElement('form');
+  f.method='POST';
+  f.action='${returnUrl}';
+  var i=document.createElement('input');
+  i.type='hidden';
+  i.name='JWT';
+  i.value=decodeURIComponent('${encodeURIComponent(jwt)}');
+  f.appendChild(i);
+  document.body.appendChild(f);
+  f.submit();
+})();
+</script>`;
     return new Response(html, {
       status: 200,
       headers: {
