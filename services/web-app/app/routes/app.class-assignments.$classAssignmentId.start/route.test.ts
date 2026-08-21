@@ -43,6 +43,10 @@ describe('student start is rejected when postAt is in the future', () => {
     } as any);
 
     // Redirect back to assignments with a toast
+    expect(response).toBeInstanceOf(Response);
+    if (!(response instanceof Response)) {
+      throw new Error('Expected assignment-not-found redirect response');
+    }
     expect(response.status).toBe(302);
     const location = response.headers.get('Location') || '';
     expect(location).toContain('/app?tab=assignments');
