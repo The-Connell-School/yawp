@@ -230,26 +230,9 @@ function handleDevLaunch(
   });
   const hintId = `hint_${randomUUID()}`;
   store.launchHints.set(hintId, profile);
-  // publicOrigin already incorporates X-Forwarded-* via originFrom(), so derive the
-  // browser-facing origin from it to avoid internal Docker hostnames and cross-preview hops.
-  const xfProto = String(request?.headers?.['x-forwarded-proto'] || '').toLowerCase();
-  const xfHost = String(request?.headers?.['x-forwarded-host'] || '').toLowerCase();
-  const ref = String(request?.headers?.referer || request?.headers?.referrer || '');
-  const refOrigin = (() => {
-    try {
-      return ref ? new URL(ref).origin : '';
-    } catch {
-      return '';
-    }
-  })();
-  const forceHttps = (host) =>
-    host ? `https://${host.replace(/^https?:\/\//, '')}` : '';
-  // Always force HTTPS for the public preview host; ignore proto value.
-  const fromXf = xfHost && `https://${xfHost}`;
-  const hostOrigin =
-    fromXf ||
-    (refOrigin && forceHttps(refOrigin)) ||
-    new URL(publicOrigin).origin.replace(/^http:\/\//, 'https://');
+  // Lock to the current request URL's origin (already computed from forwarded headers)
+  // and force HTTPS. This prevents cross-preview leaks and http scheme regressions.
+  const hostOrigin = url.origin.replace(/^http:\/\//, 'https://');
   const login = new URL('/lti/login', hostOrigin);
   login.searchParams.set('iss', config.issuer);
   login.searchParams.set('login_hint', profile.user.sub);
