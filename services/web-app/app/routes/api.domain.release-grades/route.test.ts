@@ -118,6 +118,43 @@ describe('api.domain.release-grades', () => {
     ).toEqual(expect.objectContaining({ OR: expect.any(Array) }));
   });
 
+  test('fails closed when required bulk-release activity recording is unavailable', async () => {
+    const previous = process.env.SUBMISSION_ACTIVITY_WRITES_ENABLED;
+    process.env.SUBMISSION_ACTIVITY_WRITES_ENABLED = 'false';
+    prisma.submission.findMany.mockResolvedValue([
+      {
+        id: 'sub-1',
+        releasedAt: null,
+        updatedAt: new Date('2026-08-21T10:00:00.000Z'),
+        document: { membership: { organizationId: 'org-1' } },
+      },
+    ]);
+    const form = new FormData();
+    form.append('submissionIds', 'sub-1');
+
+    try {
+      await expect(
+        action({
+          request: new Request(
+            'https://example.com/api/domain/release-grades',
+            { method: 'POST', body: form }
+          ),
+        } as any)
+      ).rejects.toThrow(
+        'Submission activity recording is temporarily unavailable'
+      );
+      expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+      expect(prisma.submission.updateMany).toHaveBeenCalledTimes(1);
+      expect(prisma.submissionActivity.createMany).not.toHaveBeenCalled();
+    } finally {
+      if (previous === undefined) {
+        delete process.env.SUBMISSION_ACTIVITY_WRITES_ENABLED;
+      } else {
+        process.env.SUBMISSION_ACTIVITY_WRITES_ENABLED = previous;
+      }
+    }
+  });
+
   test('returns 404 when no unreleased submissions found', async () => {
     prisma.submission.findMany.mockResolvedValue([]);
 

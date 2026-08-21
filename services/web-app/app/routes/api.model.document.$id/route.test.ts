@@ -150,6 +150,45 @@ describe('api.model.document.$id', () => {
     expect(activity.changes.body.after.html.length).toBe(22);
   });
 
+  test('rolls back the protected snapshot mutation when journal acceptance fails', async () => {
+    prisma.submission.findFirst.mockResolvedValue({
+      id: 'sub-1',
+      text: 'Old frozen body',
+      html: '<p>Old frozen body</p>',
+      updatedAt: new Date('2026-08-20T08:00:00.000Z'),
+      releasedAt: null,
+      document: { membership: { organizationId: 'org-1' } },
+    });
+    prisma.documentWriteJournal.update
+      .mockRejectedValueOnce(new Error('journal acceptance unavailable'))
+      .mockResolvedValueOnce({ id: 'journal-1', status: 'rejected' });
+    const form = new FormData();
+    form.append('text', 'New frozen body');
+
+    await expect(
+      action({
+        request: new Request(
+          'https://example.com/api/model/document/doc-1?snapshotId=sub-1',
+          { method: 'PUT', body: form }
+        ),
+        params: { id: 'doc-1' },
+      } as any)
+    ).rejects.toThrow('journal acceptance unavailable');
+
+    expect(prisma.documentWriteJournal.update).toHaveBeenCalledTimes(2);
+    expect(prisma.documentWriteJournal.update.mock.calls[0]?.[0]).toMatchObject(
+      { data: { status: 'accepted' } }
+    );
+    expect(prisma.documentWriteJournal.update.mock.calls[1]?.[0]).toMatchObject(
+      {
+        data: {
+          status: 'rejected',
+          failureReason: 'journal acceptance unavailable',
+        },
+      }
+    );
+  });
+
   test('rejects stale snapshot preimages and records no activity', async () => {
     prisma.submission.findFirst.mockResolvedValue({
       id: 'sub-1',

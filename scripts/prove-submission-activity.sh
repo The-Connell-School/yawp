@@ -22,6 +22,7 @@ cd "$repo_root/services/web-app"
 # atomicity, tenant/class authorization, rollout gating, and wrong-role denial.
 bun test \
   app/domain/submissions/submission-activity.server.test.ts \
+  app/domain/submissions/submission-comment-access.server.test.ts \
   app/routes/api.domain.update-submission/route.test.ts \
   app/routes/api.domain.release-grades/route.test.ts \
   app/routes/api.domain.unsubmit-submission/route.test.ts \

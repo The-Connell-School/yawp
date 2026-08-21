@@ -12,6 +12,7 @@ import {
   resolveSubmissionActivityActorMembershipId,
   submissionActivityEventTypes,
 } from '~/domain/submissions/submission-activity.server';
+import { lockSubmissionCommentAccess } from '~/domain/submissions/submission-comment-access.server';
 
 const POST = z
   .object({
@@ -113,6 +114,15 @@ export async function action({ request }: ActionFunctionArgs) {
 
   try {
     const created = await prisma.$transaction(async (tx) => {
+      const stillAuthorized = await lockSubmissionCommentAccess(tx, {
+        submissionId: submission.id,
+        actorMembershipId: profile.id,
+        actorUserId: userId,
+      });
+      if (!stillAuthorized) {
+        throw new SubmissionCommentAccessConflictError();
+      }
+
       const currentSubmission = await tx.submission.findFirst({
         where: {
           id: submission.id,
