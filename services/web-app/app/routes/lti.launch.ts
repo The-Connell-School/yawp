@@ -6,6 +6,7 @@ import { signToolJwt } from '~/utils/lti/keys.server.ts';
 import { authSessionStorage } from '~/cookie-session-storages/authentication.server.ts';
 import { sessionKey } from '~/utils/auth.server.ts';
 import { isLocalDevAuthEnabled } from '~/utils/local-dev-auth.server.ts';
+import { blackboardLtiMockUpstreamUrl } from '~/utils/blackboard-lti-mock-ui.server.ts';
 
 const STATE_COOKIE = 'yawp_lti_state';
 const NONCE_COOKIE = 'yawp_lti_nonce';
@@ -109,7 +110,12 @@ async function handlePost(request: Request) {
     };
     const jwt = await signToolJwt(deepLink, { typ: 'JWT' });
     // Server-side POST to the mock (avoids browser encoding quirks)
-    await fetch(returnUrl, {
+    const upstream = blackboardLtiMockUpstreamUrl() || '';
+    const postUrl =
+      upstream && upstream.startsWith('http')
+        ? `${upstream.replace(/\/+$/, '')}/api/v1/lti/deep-linking`
+        : returnUrl;
+    await fetch(postUrl, {
       method: 'POST',
       headers: { 'content-type': 'application/x-www-form-urlencoded;charset=UTF-8' },
       body: `JWT=${encodeURIComponent(jwt)}`,
