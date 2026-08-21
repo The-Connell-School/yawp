@@ -30,6 +30,7 @@ import {
   gradingAssistantStrictnessOptions,
   type GradingAssistantStrictnessLevel,
 } from '~/domain/grading/grading-assistant-strictness';
+import { toDateInputValue } from '~/utils/date-only';
 
 export type AssignmentCreationEntryPoint =
   'dashboard' | 'assignment-type' | 'class';
@@ -91,6 +92,10 @@ export type AssignmentCreationSheetProps = {
   emptyClassesMessage?: string;
   /** When true, a title must be entered before the assignment can be created. */
   titleRequired?: boolean;
+  /** Optional initial post/visible date (applies to selected classes). */
+  initialPostAt?: Date | string | null;
+  /** Optional initial due date (applies to selected classes). */
+  initialDueAt?: Date | string | null;
   /**
    * Grading and tutor settings to start from. Reusing a saved assignment
    * carries its whole configuration back into the sheet, not just its prompt.
@@ -179,6 +184,8 @@ export function AssignmentCreationSheetContent({
   initialPointValue = DEFAULT_SAVED_ASSIGNMENT_POINT_VALUE,
   initialTutorEnabled = true,
   initialGradingAssistantStrictnessLevel = DEFAULT_GRADING_ASSISTANT_STRICTNESS_LEVEL,
+  initialPostAt,
+  initialDueAt,
   createFetcher,
   extractFetcher,
   renderSheet = true,
@@ -202,6 +209,8 @@ export function AssignmentCreationSheetContent({
   const [pointValue, setPointValue] = useState(
     pointValueFieldValue(initialPointValue)
   );
+  const [postAt, setPostAt] = useState<string>('');
+  const [dueAt, setDueAt] = useState<string>('');
   const [tutorEnabled, setTutorEnabled] = useState(initialTutorEnabled);
   const [saveForReuse, setSaveForReuse] = useState(false);
   const [gradingAssistantStrictnessLevel, setGradingAssistantStrictnessLevel] =
@@ -272,6 +281,8 @@ export function AssignmentCreationSheetContent({
     setPrompt(initialPrompt);
     setSubmitForGrade(initialSubmitForGrade);
     setPointValue(pointValueFieldValue(initialPointValue));
+    setPostAt(toDateInputValue(initialPostAt));
+    setDueAt(toDateInputValue(initialDueAt));
     setTutorEnabled(initialTutorEnabled);
     setSaveForReuse(false);
     setGradingAssistantStrictnessLevel(initialGradingAssistantStrictnessLevel);
@@ -291,6 +302,8 @@ export function AssignmentCreationSheetContent({
     initialPointValue,
     initialTutorEnabled,
     initialGradingAssistantStrictnessLevel,
+    initialPostAt,
+    initialDueAt,
     open,
     teacherClasses,
   ]);
@@ -459,6 +472,35 @@ export function AssignmentCreationSheetContent({
             disabled={isSaving}
             required={titleRequired}
           />
+        </div>
+
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div className="space-y-2">
+            <Label htmlFor="assignment-create-post-at">
+              Post date <span className="text-muted-foreground">(optional)</span>
+            </Label>
+            <Input
+              id="assignment-create-post-at"
+              name="postAt"
+              type="date"
+              value={postAt}
+              onChange={(event) => setPostAt(event.target.value)}
+              disabled={isSaving}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="assignment-create-due-at">
+              Due date <span className="text-muted-foreground">(optional)</span>
+            </Label>
+            <Input
+              id="assignment-create-due-at"
+              name="dueAt"
+              type="date"
+              value={dueAt}
+              onChange={(event) => setDueAt(event.target.value)}
+              disabled={isSaving}
+            />
+          </div>
         </div>
 
         <div className="space-y-2">

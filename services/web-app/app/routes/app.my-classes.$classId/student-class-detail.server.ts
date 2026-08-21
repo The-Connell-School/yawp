@@ -78,9 +78,14 @@ export async function loadStudentClassDetail({
 
   const [assignments, assignmentTypes, documents] = await Promise.all([
     prisma.classAssignment.findMany({
-      where: { classId: klass.id },
+      where: {
+        classId: klass.id,
+        OR: [{ postAt: null }, { postAt: { lte: new Date() } }],
+      },
       select: {
         id: true,
+        postAt: true,
+        dueAt: true,
         assignment: {
           select: {
             id: true,

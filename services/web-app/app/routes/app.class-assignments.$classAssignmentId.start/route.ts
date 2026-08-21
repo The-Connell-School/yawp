@@ -28,6 +28,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
   const classAssignment = await prisma.classAssignment.findFirst({
     where: {
       id: params.classAssignmentId,
+      OR: [{ postAt: null }, { postAt: { lte: new Date() } }],
       class: {
         students: {
           some: {
