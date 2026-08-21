@@ -171,6 +171,57 @@ export async function createDocumentForAssignmentType(
         `Assignment.assignmentTypeId (${templateAssignment.assignmentTypeId}) does not match input.assignmentTypeId (${input.assignmentTypeId})`
       );
     }
+
+    // One document per assignment per student: if a document already exists
+    // for this membership and assignment (prefer classAssignmentId when given),
+    // reuse it instead of creating a new one. History is preserved — no deletes.
+    const resolvedAssignmentId = input.assignmentId ?? assignment?.assignmentId ?? null;
+    // Prefer exact class-assignment match if present.
+    if (input.classAssignmentId) {
+      const existingByClassAssignment = await prisma.document.findFirst({
+        where: {
+          membershipId: input.membershipId,
+          classAssignmentId: input.classAssignmentId,
+          deletedAt: null,
+          archivedAt: null,
+        },
+        orderBy: { createdAt: 'asc' },
+        select: { id: true },
+      });
+      if (existingByClassAssignment) {
+        return { documentId: existingByClassAssignment.id };
+      }
+      // Fallback: legacy documents may be linked only by assignmentId.
+      if (resolvedAssignmentId) {
+        const existingByAssignment = await prisma.document.findFirst({
+          where: {
+            membershipId: input.membershipId,
+            assignmentId: resolvedAssignmentId,
+            deletedAt: null,
+            archivedAt: null,
+          },
+          orderBy: { createdAt: 'asc' },
+          select: { id: true },
+        });
+        if (existingByAssignment) {
+          return { documentId: existingByAssignment.id };
+        }
+      }
+    } else if (resolvedAssignmentId) {
+      const existingByAssignment = await prisma.document.findFirst({
+        where: {
+          membershipId: input.membershipId,
+          assignmentId: resolvedAssignmentId,
+          deletedAt: null,
+          archivedAt: null,
+        },
+        orderBy: { createdAt: 'asc' },
+        select: { id: true },
+      });
+      if (existingByAssignment) {
+        return { documentId: existingByAssignment.id };
+      }
+    }
   }
 
   const document = await prisma.document.create({
