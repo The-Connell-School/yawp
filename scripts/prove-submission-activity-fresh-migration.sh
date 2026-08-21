@@ -23,6 +23,7 @@ maintenance_url="$server_url/postgres"
 proof_url="$server_url/$proof_database"
 upgrade_url="$server_url/$upgrade_database"
 activity_migration="20260820110000_add_submission_activity"
+hardening_migration="20260821010000_harden_submission_activity_tenant_guard"
 upgrade_migrations_dir="$(mktemp -d "$repo_root/packages/prisma/.activity-proof-upgrade.XXXXXX")"
 schema_diff="$(mktemp "$repo_root/packages/prisma/.activity-schema-diff.XXXXXX")"
 
@@ -134,6 +135,8 @@ before_count="$(psql "$upgrade_url" --no-psqlrc --tuples-only --no-align --comma
 echo "Applying activity migration to populated predecessor"
 psql "$upgrade_url" --no-psqlrc --set ON_ERROR_STOP=on \
   --file "$repo_root/packages/prisma/migrations/$activity_migration/migration.sql"
+psql "$upgrade_url" --no-psqlrc --set ON_ERROR_STOP=on \
+  --file "$repo_root/packages/prisma/migrations/$hardening_migration/migration.sql"
 
 after_submission="$(psql "$upgrade_url" --no-psqlrc --tuples-only --no-align --command \
   "SELECT row_to_json(snapshot)::text FROM (SELECT id, title, text, html, score, feedback, \"numericPercentage\", \"letterGrade\", \"documentId\" FROM \"Submission\" WHERE id = 'activity-upgrade-submission') snapshot;")"
