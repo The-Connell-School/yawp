@@ -32,7 +32,7 @@ try {
   });
   const teacherPage = await teacherContext.newPage();
   const teacherVideo = teacherPage.video();
-  await signIn(teacherPage, 'prod.qa.teacher@brock.software');
+  await signIn(teacherPage, 'prod.qa.teacher.v2@brock.software');
   await teacherPage.goto(`${baseUrl}${submissionPath}`);
   await expect(
     teacherPage.getByTestId('submission-lifecycle-edit')
@@ -99,7 +99,7 @@ try {
     viewport: { width: 390, height: 844 },
   });
   const mobileTeacherPage = await mobileTeacherContext.newPage();
-  await signIn(mobileTeacherPage, 'prod.qa.teacher@brock.software');
+  await signIn(mobileTeacherPage, 'prod.qa.teacher.v2@brock.software');
   await mobileTeacherPage.goto(`${baseUrl}${submissionPath}`);
   await mobileTeacherPage
     .getByTestId(submissionActivityUiContract.triggerTestId)
@@ -120,7 +120,7 @@ try {
     viewport: { width: 390, height: 844 },
   });
   const studentPage = await studentContext.newPage();
-  await signIn(studentPage, 'prod.qa.student@brock.software');
+  await signIn(studentPage, 'prod.qa.student.v2@brock.software');
   await studentPage.goto(`${baseUrl}${submissionPath}`);
   await expect(studentPage.getByText('91%')).toBeVisible();
   await expect(
