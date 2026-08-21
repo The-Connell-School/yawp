@@ -24,6 +24,7 @@ const MASTER_ACCESS_CODE_PATTERN =
 const OPEN_PATHS = new Set([
   '/api/healthcheck',
   '/api/healthcheck/', // be tolerant of a trailing slash from probes
+  '/lti/jwks',
   PREVIEW_ACCESS_PATH,
   `${PREVIEW_ACCESS_PATH}.data`,
 ]);

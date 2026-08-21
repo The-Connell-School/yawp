@@ -8,6 +8,7 @@ import { recordLtiLaunchClaims, signToolJwt } from '~/integrations/blackboard-ag
 import { getPreviewAccessSeat, isPreviewAccessGateEnabled } from '~/utils/preview-access.server';
 import { prisma } from '~/utils/db.server';
 import { authSessionStorage } from '~/cookie-session-storages/authentication.server';
+import { sessionKey, getSessionExpirationDate } from '~/utils/auth.server';
 import { setMembershipId } from '~/cookies/membership-id.server';
 import { combineHeaders } from '~/utils/misc';
 
@@ -125,18 +126,18 @@ export async function action({ request }: ActionFunctionArgs) {
       const session = await prisma.session.create({
         select: { id: true, expirationDate: true, userId: true },
         data: {
-          expirationDate: new Date(Date.now() + 1000 * 60 * 60 * 8),
+          expirationDate: getSessionExpirationDate(),
           userId: user.id,
         },
       });
       const authSession = await authSessionStorage.getSession(
         request.headers.get('cookie')
       );
-      const previousSessionId = authSession.get('en_session');
+      const previousSessionId = authSession.get(sessionKey);
       if (previousSessionId) {
         void prisma.session.deleteMany({ where: { id: previousSessionId } });
       }
-      authSession.set('en_session', session.id);
+      authSession.set(sessionKey, session.id);
       authSession.unset('impersonationMode');
       authSession.unset('impersonatorUserId');
       const membershipId = user.memberships[0]?.id ?? '';
