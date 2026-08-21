@@ -63,7 +63,16 @@ export async function action({ request }: ActionFunctionArgs) {
           },
         ],
       });
-      await fetch(returnUrl, {
+      // Post back to the mock. Prefer internal mock URL for server-to-server calls.
+      let postUrl = returnUrl;
+      const internalMock = String(process.env.BLACKBOARD_LTI_MOCK_URL || '').replace(/\/$/, '');
+      if (internalMock) {
+        try {
+          const parsed = new URL(returnUrl);
+          postUrl = new URL('/api/v1/lti/deep-linking', internalMock).toString();
+        } catch {}
+      }
+      await fetch(postUrl, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ JWT: responseJwt }),
