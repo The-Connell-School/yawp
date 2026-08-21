@@ -24,11 +24,13 @@ VALUES
 INSERT INTO "User" (id, email, name)
 VALUES
   ('activity-concurrency-owner', 'activity-concurrency-owner@example.test', 'Proof Owner'),
-  ('activity-concurrency-other', 'activity-concurrency-other@example.test', 'Other Owner');
+  ('activity-concurrency-other', 'activity-concurrency-other@example.test', 'Other Owner'),
+  ('activity-concurrency-handoff', 'activity-concurrency-handoff@example.test', 'Handoff Owner');
 INSERT INTO "OrgMembership" (id, "userId", "organizationId", role)
 VALUES
   ('activity-concurrency-owner-membership', 'activity-concurrency-owner', 'activity-concurrency-org', 'STUDENT'),
-  ('activity-concurrency-other-membership', 'activity-concurrency-other', 'activity-concurrency-other-org', 'STUDENT');
+  ('activity-concurrency-other-membership', 'activity-concurrency-other', 'activity-concurrency-other-org', 'STUDENT'),
+  ('activity-concurrency-handoff-membership', 'activity-concurrency-handoff', 'activity-concurrency-org', 'STUDENT');
 INSERT INTO "AssignmentType" (id, title, position)
 VALUES ('activity-concurrency-assignment-type', 'Concurrency Proof', 999998);
 INSERT INTO "Document" (id, title, text, html, "membershipId", "assignmentTypeId")
@@ -39,6 +41,10 @@ VALUES (
   'activity-concurrency-other-document', 'Other Tenant Concurrency Proof',
   'Other proof', '<p>Other proof</p>',
   'activity-concurrency-other-membership', 'activity-concurrency-assignment-type'
+), (
+  'activity-concurrency-handoff-document', 'Handoff Concurrency Proof',
+  'Handoff proof', '<p>Handoff proof</p>',
+  'activity-concurrency-owner-membership', 'activity-concurrency-assignment-type'
 );
 INSERT INTO "Submission" (id, title, text, html, "submittedAt", "documentId")
 VALUES (
@@ -110,6 +116,100 @@ run_race \
   'submission-activity-submission-document-race-proof' \
   'UPDATE "Submission" SET "documentId" = '\''activity-concurrency-other-document'\'' WHERE id = '\''activity-concurrency-submission'\'';' \
   'audited submission'
+
+psql "$proof_url" --no-psqlrc --set ON_ERROR_STOP=on \
+  --command 'INSERT INTO "SubmissionActivity" (id, "submissionId", "organizationId", "actorType", "eventType", source, changes) VALUES ('\''submission-activity-parent-handoff-proof'\'', '\''activity-concurrency-submission'\'', '\''activity-concurrency-org'\'', '\''system'\'', '\''submission.grade_updated'\'', '\''db-proof'\'', '\''{}'\''::jsonb);' \
+  >/dev/null
+
+run_cross_parent_race() {
+  local label="$1"
+  local first_sql="$2"
+  local second_sql="$3"
+  local expected_error="$4"
+  local verify_sql="$5"
+  local reset_sql="$6"
+  local fifo="$proof_dir/$label.fifo"
+  local first_log="$proof_dir/$label.first.log"
+  local second_log="$proof_dir/$label.second.log"
+
+  mkfifo "$fifo"
+  psql "$proof_url" --no-psqlrc --set ON_ERROR_STOP=on \
+    < "$fifo" > "$first_log" 2>&1 &
+  local first_pid=$!
+  exec 6>"$fifo"
+  printf '%s\n' 'BEGIN;' "$first_sql" '\echo FIRST_PARENT_LOCKED' >&6
+  for _ in {1..100}; do
+    grep -q 'FIRST_PARENT_LOCKED' "$first_log" && break
+    sleep 0.05
+  done
+  grep -q 'FIRST_PARENT_LOCKED' "$first_log"
+
+  psql "$proof_url" --no-psqlrc --set ON_ERROR_STOP=on \
+    --command "$second_sql" > "$second_log" 2>&1 &
+  local second_pid=$!
+  sleep 0.2
+  printf '%s\n' 'COMMIT;' '\q' >&6
+  exec 6>&-
+  wait "$first_pid"
+
+  set +e
+  wait "$second_pid"
+  local second_status=$?
+  set -e
+  if [[ "$second_status" -eq 0 ]]; then
+    cat "$second_log"
+    echo "$label unexpectedly committed both parent moves." >&2
+    exit 1
+  fi
+  grep -q "$expected_error" "$second_log"
+
+  local verified
+  verified="$(psql "$proof_url" --no-psqlrc --tuples-only --no-align --command "$verify_sql")"
+  [[ "$verified" == "t" ]] || {
+    echo "$label left an invalid parent graph." >&2
+    exit 1
+  }
+  psql "$proof_url" --no-psqlrc --set ON_ERROR_STOP=on \
+    --command "$reset_sql" >/dev/null
+}
+
+run_cross_parent_race \
+  'document-then-membership' \
+  'UPDATE "Document" SET "membershipId" = '\''activity-concurrency-handoff-membership'\'' WHERE id = '\''activity-concurrency-document'\'';' \
+  'UPDATE "OrgMembership" SET "organizationId" = '\''activity-concurrency-other-org'\'' WHERE id = '\''activity-concurrency-handoff-membership'\'';' \
+  'durable activity' \
+  "SELECT (SELECT \"membershipId\" = 'activity-concurrency-handoff-membership' FROM \"Document\" WHERE id = 'activity-concurrency-document') AND (SELECT \"organizationId\" = 'activity-concurrency-org' FROM \"OrgMembership\" WHERE id = 'activity-concurrency-handoff-membership');" \
+  'UPDATE "Document" SET "membershipId" = '\''activity-concurrency-owner-membership'\'' WHERE id = '\''activity-concurrency-document'\'';'
+
+run_cross_parent_race \
+  'membership-then-document' \
+  'UPDATE "OrgMembership" SET "organizationId" = '\''activity-concurrency-other-org'\'' WHERE id = '\''activity-concurrency-handoff-membership'\'';' \
+  'UPDATE "Document" SET "membershipId" = '\''activity-concurrency-handoff-membership'\'' WHERE id = '\''activity-concurrency-document'\'';' \
+  'durable submission activity' \
+  "SELECT (SELECT \"membershipId\" = 'activity-concurrency-owner-membership' FROM \"Document\" WHERE id = 'activity-concurrency-document') AND (SELECT \"organizationId\" = 'activity-concurrency-other-org' FROM \"OrgMembership\" WHERE id = 'activity-concurrency-handoff-membership');" \
+  'UPDATE "OrgMembership" SET "organizationId" = '\''activity-concurrency-org'\'' WHERE id = '\''activity-concurrency-handoff-membership'\'';'
+
+run_cross_parent_race \
+  'submission-then-document' \
+  'UPDATE "Submission" SET "documentId" = '\''activity-concurrency-handoff-document'\'' WHERE id = '\''activity-concurrency-submission'\'';' \
+  'UPDATE "Document" SET "membershipId" = '\''activity-concurrency-other-membership'\'' WHERE id = '\''activity-concurrency-handoff-document'\'';' \
+  'durable submission activity' \
+  "SELECT (SELECT \"documentId\" = 'activity-concurrency-handoff-document' FROM \"Submission\" WHERE id = 'activity-concurrency-submission') AND (SELECT \"membershipId\" = 'activity-concurrency-owner-membership' FROM \"Document\" WHERE id = 'activity-concurrency-handoff-document');" \
+  'UPDATE "Submission" SET "documentId" = '\''activity-concurrency-document'\'' WHERE id = '\''activity-concurrency-submission'\'';'
+
+run_cross_parent_race \
+  'document-then-submission' \
+  'UPDATE "Document" SET "membershipId" = '\''activity-concurrency-other-membership'\'' WHERE id = '\''activity-concurrency-handoff-document'\'';' \
+  'UPDATE "Submission" SET "documentId" = '\''activity-concurrency-handoff-document'\'' WHERE id = '\''activity-concurrency-submission'\'';' \
+  'audited submission' \
+  "SELECT (SELECT \"documentId\" = 'activity-concurrency-document' FROM \"Submission\" WHERE id = 'activity-concurrency-submission') AND (SELECT \"membershipId\" = 'activity-concurrency-other-membership' FROM \"Document\" WHERE id = 'activity-concurrency-handoff-document');" \
+  'UPDATE "Document" SET "membershipId" = '\''activity-concurrency-owner-membership'\'' WHERE id = '\''activity-concurrency-handoff-document'\'';'
+
+psql "$proof_url" --no-psqlrc --set ON_ERROR_STOP=on \
+  --command 'BEGIN; SET LOCAL yawp.submission_activity_cleanup = '\''on'\''; DELETE FROM "SubmissionActivity" WHERE id = '\''submission-activity-parent-handoff-proof'\''; COMMIT;' \
+  >/dev/null
+
+echo "Cross-parent tenant handoff proofs passed in both lock orderings."
 
 stale_grade_revision="$(psql "$proof_url" --no-psqlrc --tuples-only --no-align \
   --command 'SELECT "updatedAt" FROM "Submission" WHERE id = '\''activity-concurrency-submission'\'';')"

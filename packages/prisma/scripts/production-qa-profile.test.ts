@@ -2,19 +2,21 @@ import { describe, expect, test } from 'bun:test';
 import {
   PRODUCTION_QA_IDS,
   PRODUCTION_QA_ORGANIZATION_FLAGS,
+  assertNoProductionQaFixtureCollisions,
   assertProductionQaIdentitySafety,
   assertProductionQaPassword,
+  ensureProductionQaProfile,
   redactedProductionQaSummary,
 } from './production-qa-profile';
 
 describe('production QA profile guardrails', () => {
   test('uses obvious QA-only identifiers', () => {
-    expect(PRODUCTION_QA_IDS.organizationId).toBe('prod-qa-org');
+    expect(PRODUCTION_QA_IDS.organizationId).toBe('prod-qa-v3-org');
     expect(PRODUCTION_QA_IDS.teacherEmail).toBe(
-      'prod.qa.teacher.v2@brock.software'
+      'prod.qa.teacher.v3@brock.software'
     );
     expect(PRODUCTION_QA_IDS.studentEmail).toBe(
-      'prod.qa.student.v2@brock.software'
+      'prod.qa.student.v3@brock.software'
     );
 
     for (const id of Object.values(PRODUCTION_QA_IDS)) {
@@ -44,7 +46,7 @@ describe('production QA profile guardrails', () => {
   });
 
   test('enables released-grade activity only for the disposable QA organization', () => {
-    expect(PRODUCTION_QA_IDS.organizationId).toBe('prod-qa-org');
+    expect(PRODUCTION_QA_IDS.organizationId).toBe('prod-qa-v3-org');
     expect(PRODUCTION_QA_ORGANIZATION_FLAGS).toEqual({
       submissionActivityEnabled: true,
     });
@@ -133,5 +135,47 @@ describe('production QA profile guardrails', () => {
         memberships: [teacherMembership],
       })
     ).not.toThrow();
+  });
+
+  test('fails closed on any reserved fixture-graph collision', () => {
+    expect(() =>
+      assertNoProductionQaFixtureCollisions([
+        {
+          resource: 'ClassStudents',
+          reason: 'QA class student roster contains an unexpected link',
+        },
+      ])
+    ).toThrow(/fixture graph collision/);
+    expect(() => assertNoProductionQaFixtureCollisions([])).not.toThrow();
+  });
+
+  test('runs the complete collision preflight before the first fixture mutation', async () => {
+    let mutationCount = 0;
+    const tx = {
+      $executeRaw: async () => 0,
+      $queryRaw: async () => [
+        {
+          resource: 'Document',
+          reason: 'reserved ID is not the exact QA-owned document',
+        },
+      ],
+      user: { findMany: async () => [] },
+      orgMembership: { findMany: async () => [] },
+      organization: {
+        upsert: async () => {
+          mutationCount += 1;
+          throw new Error('unexpected mutation');
+        },
+      },
+    };
+    const prisma = {
+      $transaction: async (callback: (client: typeof tx) => unknown) =>
+        callback(tx),
+    };
+
+    await expect(
+      ensureProductionQaProfile(prisma as never, 'yawp-prod-qa-password-2026')
+    ).rejects.toThrow(/fixture graph collision/);
+    expect(mutationCount).toBe(0);
   });
 });

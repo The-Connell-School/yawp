@@ -2,6 +2,7 @@
 import { createPrismaClient } from './local-dev/connection';
 import {
   PRODUCTION_QA_IDS,
+  assertProductionQaFixturePreflight,
   assertProductionQaIdentitySafety,
 } from './production-qa-profile';
 
@@ -14,6 +15,18 @@ type MigrationRow = {
 
 type ColumnRow = { column_default: string | null };
 type IndexRow = { indexname: string };
+type FixtureGraphRow = {
+  school_exact: boolean;
+  class_exact: boolean;
+  assignment_type_exact: boolean;
+  assignment_exact: boolean;
+  class_assignment_exact: boolean;
+  document_exact: boolean;
+  submission_exact: boolean;
+  teacher_roster_exact: boolean;
+  student_roster_exact: boolean;
+  school_teacher_exact: boolean;
+};
 
 const EXPECTED_INDEXES = [
   'SubmissionActivity_actorMembershipId_createdAt_idx',
@@ -21,20 +34,99 @@ const EXPECTED_INDEXES = [
   'SubmissionActivity_organizationId_createdAt_idx',
   'SubmissionActivity_submissionId_createdAt_idx',
 ];
+const EXPECTED_MIGRATIONS = [
+  '20260820110000_add_submission_activity',
+  '20260821010000_harden_submission_activity_tenant_guard',
+];
 
 const prisma = createPrismaClient();
 try {
   const migrations = await prisma.$queryRaw<MigrationRow[]>`
     SELECT migration_name, checksum, finished_at, rolled_back_at
     FROM "_prisma_migrations"
-    WHERE migration_name = '20260820110000_add_submission_activity'
+    WHERE migration_name IN (
+      '20260820110000_add_submission_activity',
+      '20260821010000_harden_submission_activity_tenant_guard'
+    )
   `;
   if (
-    migrations.length !== 1 ||
-    !migrations[0].finished_at ||
-    migrations[0].rolled_back_at
+    migrations.length !== EXPECTED_MIGRATIONS.length ||
+    migrations.some(
+      ({ migration_name, finished_at, rolled_back_at }) =>
+        !EXPECTED_MIGRATIONS.includes(migration_name) ||
+        !finished_at ||
+        rolled_back_at
+    )
   ) {
     throw new Error('Submission activity migration is not cleanly applied.');
+  }
+  const initialMigration = migrations.find(
+    ({ migration_name }) =>
+      migration_name === '20260820110000_add_submission_activity'
+  )!;
+
+  await assertProductionQaFixturePreflight(prisma);
+  const [fixtureGraph] = await prisma.$queryRaw<FixtureGraphRow[]>`
+    SELECT
+      EXISTS (
+        SELECT 1 FROM "School"
+        WHERE id = ${PRODUCTION_QA_IDS.schoolId}
+          AND code = ${PRODUCTION_QA_IDS.schoolCode}
+          AND "organizationId" = ${PRODUCTION_QA_IDS.organizationId}
+      ) AS school_exact,
+      EXISTS (
+        SELECT 1 FROM "Class"
+        WHERE id = ${PRODUCTION_QA_IDS.classId}
+          AND code = ${PRODUCTION_QA_IDS.classCode}
+          AND "schoolId" = ${PRODUCTION_QA_IDS.schoolId}
+      ) AS class_exact,
+      EXISTS (
+        SELECT 1 FROM "AssignmentType"
+        WHERE id = ${PRODUCTION_QA_IDS.assignmentTypeId}
+          AND "ownerOrgId" = ${PRODUCTION_QA_IDS.organizationId}
+      ) AS assignment_type_exact,
+      EXISTS (
+        SELECT 1 FROM "Assignment"
+        WHERE id = ${PRODUCTION_QA_IDS.assignmentId}
+          AND "assignmentTypeId" = ${PRODUCTION_QA_IDS.assignmentTypeId}
+      ) AS assignment_exact,
+      EXISTS (
+        SELECT 1 FROM "ClassAssignment"
+        WHERE id = ${PRODUCTION_QA_IDS.classAssignmentId}
+          AND "assignmentId" = ${PRODUCTION_QA_IDS.assignmentId}
+          AND "classId" = ${PRODUCTION_QA_IDS.classId}
+      ) AS class_assignment_exact,
+      EXISTS (
+        SELECT 1 FROM "Document"
+        WHERE id = ${PRODUCTION_QA_IDS.documentId}
+          AND "membershipId" = ${PRODUCTION_QA_IDS.studentMembershipId}
+          AND "assignmentTypeId" = ${PRODUCTION_QA_IDS.assignmentTypeId}
+          AND "assignmentId" = ${PRODUCTION_QA_IDS.assignmentId}
+          AND "classAssignmentId" = ${PRODUCTION_QA_IDS.classAssignmentId}
+      ) AS document_exact,
+      EXISTS (
+        SELECT 1 FROM "Submission"
+        WHERE id = ${PRODUCTION_QA_IDS.submissionId}
+          AND "documentId" = ${PRODUCTION_QA_IDS.documentId}
+      ) AS submission_exact,
+      EXISTS (
+        SELECT 1 FROM "_ClassTeachers"
+        WHERE "A" = ${PRODUCTION_QA_IDS.classId}
+          AND "B" = ${PRODUCTION_QA_IDS.teacherMembershipId}
+      ) AS teacher_roster_exact,
+      EXISTS (
+        SELECT 1 FROM "_ClassStudents"
+        WHERE "A" = ${PRODUCTION_QA_IDS.classId}
+          AND "B" = ${PRODUCTION_QA_IDS.studentMembershipId}
+      ) AS student_roster_exact,
+      EXISTS (
+        SELECT 1 FROM "_SchoolTeachers"
+        WHERE "A" = ${PRODUCTION_QA_IDS.teacherMembershipId}
+          AND "B" = ${PRODUCTION_QA_IDS.schoolId}
+      ) AS school_teacher_exact
+  `;
+  if (!fixtureGraph || Object.values(fixtureGraph).some((value) => !value)) {
+    throw new Error('Production QA fixture graph is incomplete.');
   }
 
   const columns = await prisma.$queryRaw<ColumnRow[]>`
@@ -65,7 +157,7 @@ try {
   }
 
   const activityBeforeMigration = await prisma.submissionActivity.count({
-    where: { createdAt: { lt: migrations[0].finished_at } },
+    where: { createdAt: { lt: initialMigration.finished_at! } },
   });
   if (activityBeforeMigration !== 0) {
     throw new Error('Historical submission activity was backfilled.');
@@ -169,10 +261,13 @@ try {
       {
         classification: 'pass',
         migration: {
-          name: migrations[0].migration_name,
-          checksum: migrations[0].checksum,
-          finishedAt: migrations[0].finished_at,
-          rolledBackAt: null,
+          applied: migrations.map(
+            ({ migration_name, checksum, finished_at }) => ({
+              name: migration_name,
+              checksum,
+              finishedAt: finished_at,
+            })
+          ),
         },
         schema: {
           rolloutDefault: columns[0].column_default,
@@ -185,6 +280,8 @@ try {
           fixtureActivityCount,
           fixtureUserIds: fixtureUsers.map(({ id }) => id).sort(),
           fixtureMembershipIds: fixtureMemberships.map(({ id }) => id).sort(),
+          fixtureGraph: 'exclusive',
+          fixtureGraphChecks: fixtureGraph,
           acceptedResidue:
             'One exact-ID QA ledger row is retained until the next run resets the disposable fixture with its session-scoped cleanup capability.',
         },
