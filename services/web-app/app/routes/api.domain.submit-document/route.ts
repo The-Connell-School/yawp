@@ -64,6 +64,7 @@ const actionImpl = async ({ request }: ActionFunctionArgs) => {
       text: true,
       title: true,
       revision: true,
+      updatedAt: true,
       classAssignment: {
         select: {
           class: {
@@ -142,6 +143,7 @@ const actionImpl = async ({ request }: ActionFunctionArgs) => {
           where: {
             ...documentAccessWhere,
             revision: document.revision,
+            updatedAt: document.updatedAt,
             html: document.html,
             text: document.text,
           },
@@ -194,16 +196,16 @@ const actionImpl = async ({ request }: ActionFunctionArgs) => {
           },
         });
 
+        await tx.documentWriteJournal.update({
+          where: { id: journal.id },
+          data: {
+            status: 'accepted',
+            resultingRevision: document.revision,
+          },
+        });
+
         return { submission, document: doc };
       });
-
-    await prisma.documentWriteJournal.update({
-      where: { id: journal.id },
-      data: {
-        status: 'accepted',
-        resultingRevision: document.revision,
-      },
-    });
 
     return dataResponse({
       success: true,

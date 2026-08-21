@@ -313,6 +313,13 @@ const actionImpl = async ({ request, params }: ActionFunctionArgs) => {
               body: { before: previousBody, after: nextBody },
             },
           });
+          await tx.documentWriteJournal.update({
+            where: { id: journal.id },
+            data: {
+              status: 'accepted',
+              resultingRevision: document.revision,
+            },
+          });
         });
       } catch (error) {
         if (error instanceof SubmissionSnapshotConflictError) {
@@ -328,8 +335,26 @@ const actionImpl = async ({ request, params }: ActionFunctionArgs) => {
             { status: 409, headers: { 'Content-Type': 'application/json' } }
           );
         }
+        await prisma.documentWriteJournal.update({
+          where: { id: journal.id },
+          data: {
+            status: 'rejected',
+            failureReason:
+              error instanceof Error
+                ? error.message
+                : 'snapshot_transaction_failed',
+          },
+        });
         throw error;
       }
+
+      return new Response(
+        JSON.stringify({ ok: true, revision: document.revision }),
+        {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }
+      );
     }
 
     await prisma.documentWriteJournal.update({

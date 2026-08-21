@@ -25,12 +25,22 @@ INSERT INTO "User" (id, email, name)
 VALUES
   ('activity-concurrency-owner', 'activity-concurrency-owner@example.test', 'Proof Owner'),
   ('activity-concurrency-other', 'activity-concurrency-other@example.test', 'Other Owner'),
-  ('activity-concurrency-handoff', 'activity-concurrency-handoff@example.test', 'Handoff Owner');
+  ('activity-concurrency-handoff', 'activity-concurrency-handoff@example.test', 'Handoff Owner'),
+  ('activity-concurrency-teacher', 'activity-concurrency-teacher@example.test', 'Proof Teacher');
 INSERT INTO "OrgMembership" (id, "userId", "organizationId", role)
 VALUES
   ('activity-concurrency-owner-membership', 'activity-concurrency-owner', 'activity-concurrency-org', 'STUDENT'),
   ('activity-concurrency-other-membership', 'activity-concurrency-other', 'activity-concurrency-other-org', 'STUDENT'),
-  ('activity-concurrency-handoff-membership', 'activity-concurrency-handoff', 'activity-concurrency-org', 'STUDENT');
+  ('activity-concurrency-handoff-membership', 'activity-concurrency-handoff', 'activity-concurrency-org', 'STUDENT'),
+  ('activity-concurrency-teacher-membership', 'activity-concurrency-teacher', 'activity-concurrency-org', 'TEACHER');
+INSERT INTO "School" (id, name, code, "organizationId")
+VALUES ('activity-concurrency-school', 'Activity Concurrency School', 'activity-concurrency-school', 'activity-concurrency-org');
+INSERT INTO "Class" (id, code, "schoolId")
+VALUES ('activity-concurrency-class', 'activity-concurrency-class', 'activity-concurrency-school');
+INSERT INTO "_ClassStudents" ("A", "B")
+VALUES ('activity-concurrency-class', 'activity-concurrency-owner-membership');
+INSERT INTO "_ClassTeachers" ("A", "B")
+VALUES ('activity-concurrency-class', 'activity-concurrency-teacher-membership');
 INSERT INTO "AssignmentType" (id, title, position)
 VALUES ('activity-concurrency-assignment-type', 'Concurrency Proof', 999998);
 INSERT INTO "Document" (id, title, text, html, "membershipId", "assignmentTypeId")
@@ -52,6 +62,96 @@ VALUES (
   CURRENT_TIMESTAMP, 'activity-concurrency-document'
 );
 SQL
+
+# Revoke the exact teacher-class relationship first and hold that deletion
+# open. The route-equivalent access transaction locks its stable anchors, then
+# blocks on the relationship row. Once revocation commits, the access query
+# rechecks the row, inserts neither the comment nor its activity, and commits a
+# clean denial. This is the real PostgreSQL race that the route-level unit test
+# models with `lockSubmissionCommentAccess` returning false.
+comment_revoke_fifo="$proof_dir/comment-revoke.fifo"
+comment_revoke_log="$proof_dir/comment-revoke.log"
+comment_access_log="$proof_dir/comment-access.log"
+mkfifo "$comment_revoke_fifo"
+psql "$proof_url" --no-psqlrc --set ON_ERROR_STOP=on \
+  < "$comment_revoke_fifo" > "$comment_revoke_log" 2>&1 &
+comment_revoke_pid=$!
+exec 8>"$comment_revoke_fifo"
+printf '%s\n' \
+  'BEGIN;' \
+  'DELETE FROM "_ClassTeachers" WHERE "A" = '\''activity-concurrency-class'\'' AND "B" = '\''activity-concurrency-teacher-membership'\'';' \
+  '\echo COMMENT_ACCESS_REVOKED_UNCOMMITTED' >&8
+for _ in {1..100}; do
+  grep -q 'COMMENT_ACCESS_REVOKED_UNCOMMITTED' "$comment_revoke_log" && break
+  sleep 0.05
+done
+grep -q 'COMMENT_ACCESS_REVOKED_UNCOMMITTED' "$comment_revoke_log"
+
+psql "$proof_url" --no-psqlrc --set ON_ERROR_STOP=on \
+  > "$comment_access_log" 2>&1 <<'SQL' &
+BEGIN;
+SELECT submission.id
+FROM "Submission" submission
+JOIN "Document" document ON document.id = submission."documentId"
+JOIN "OrgMembership" owner ON owner.id = document."membershipId"
+JOIN "OrgMembership" actor ON actor.id = 'activity-concurrency-teacher-membership'
+JOIN "User" actor_user ON actor_user.id = 'activity-concurrency-teacher'
+WHERE submission.id = 'activity-concurrency-submission'
+  AND document."deletedAt" IS NULL
+  AND actor."userId" = 'activity-concurrency-teacher'
+FOR UPDATE OF submission, document, owner, actor, actor_user;
+\echo COMMENT_ACCESS_ANCHORS_LOCKED
+WITH authorized AS (
+  SELECT class.id
+  FROM "_ClassStudents" class_student
+  JOIN "Class" class ON class.id = class_student."A"
+  JOIN "School" school ON school.id = class."schoolId"
+  JOIN "_ClassTeachers" class_teacher
+    ON class_teacher."A" = class.id
+    AND class_teacher."B" = 'activity-concurrency-teacher-membership'
+  WHERE class_student."B" = 'activity-concurrency-owner-membership'
+    AND school."organizationId" = 'activity-concurrency-org'
+  FOR UPDATE OF class_student, class, school, class_teacher
+), inserted_comment AS (
+  INSERT INTO "SubmissionComment" (
+    id, content, excerpt, "submissionId", "membershipId"
+  )
+  SELECT
+    'activity-concurrency-revoked-comment', 'must not persist', 'proof',
+    'activity-concurrency-submission', 'activity-concurrency-teacher-membership'
+  FROM authorized
+  RETURNING id
+)
+INSERT INTO "SubmissionActivity" (
+  id, "submissionId", "organizationId", "actorType", "eventType", source, changes
+)
+SELECT
+  'activity-concurrency-revoked-comment-activity',
+  'activity-concurrency-submission', 'activity-concurrency-org', 'human',
+  'submission.comment_created', 'db-comment-race', '{}'::jsonb
+FROM inserted_comment;
+COMMIT;
+SQL
+comment_access_pid=$!
+
+for _ in {1..100}; do
+  grep -q 'COMMENT_ACCESS_ANCHORS_LOCKED' "$comment_access_log" && break
+  sleep 0.05
+done
+grep -q 'COMMENT_ACCESS_ANCHORS_LOCKED' "$comment_access_log"
+sleep 0.2
+printf '%s\n' 'COMMIT;' '\q' >&8
+exec 8>&-
+wait "$comment_revoke_pid"
+wait "$comment_access_pid"
+
+comment_race_rows="$(psql "$proof_url" --no-psqlrc --tuples-only --no-align --command "SELECT (SELECT count(*) FROM \"SubmissionComment\" WHERE id = 'activity-concurrency-revoked-comment') + (SELECT count(*) FROM \"SubmissionActivity\" WHERE id = 'activity-concurrency-revoked-comment-activity');")"
+[[ "$comment_race_rows" == "0" ]] || {
+  cat "$comment_access_log"
+  echo "Revoked comment race persisted a comment or activity." >&2
+  exit 1
+}
+echo "Concurrent comment-access revocation denied comment and activity atomically."
 
 run_race() {
   local activity_id="$1"

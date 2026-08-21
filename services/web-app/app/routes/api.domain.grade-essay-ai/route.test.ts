@@ -392,6 +392,39 @@ describe('api.domain.grade-essay-ai', () => {
     });
   });
 
+  test('fails closed when required grading-assistant activity recording is unavailable', async () => {
+    const previous = process.env.SUBMISSION_ACTIVITY_WRITES_ENABLED;
+    process.env.SUBMISSION_ACTIVITY_WRITES_ENABLED = 'false';
+    prisma.submission.findFirst.mockResolvedValue(mockSubmission());
+    const form = new FormData();
+    form.append('submissionId', 'sub-1');
+
+    try {
+      await expect(
+        action({
+          request: new Request(
+            'https://example.com/api/domain/grade-essay-ai',
+            { method: 'POST', body: form }
+          ),
+        } as any)
+      ).rejects.toThrow(
+        'Submission activity recording is temporarily unavailable'
+      );
+      expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+      expect(prisma.submission.update).toHaveBeenCalledTimes(1);
+      expect(prisma.submissionGradingAssistantRun.create).toHaveBeenCalledTimes(
+        1
+      );
+      expect(prisma.submissionActivity.create).not.toHaveBeenCalled();
+    } finally {
+      if (previous === undefined) {
+        delete process.env.SUBMISSION_ACTIVITY_WRITES_ENABLED;
+      } else {
+        process.env.SUBMISSION_ACTIVITY_WRITES_ENABLED = previous;
+      }
+    }
+  });
+
   test('never stores a cross-tenant admin membership as AI grader attribution', async () => {
     getGradingActor.mockResolvedValue({
       userId: 'admin-user',

@@ -10,11 +10,15 @@ const prisma = {
 
 const requireUserId = mock();
 const requireMembership = mock();
+const lockSubmissionCommentAccess = mock();
 
 mock.module('~/utils/db.server', () => ({ prisma }));
 mock.module('~/utils/auth.server', () => ({
   requireUserId,
   requireMembership,
+}));
+mock.module('~/domain/submissions/submission-comment-access.server', () => ({
+  lockSubmissionCommentAccess,
 }));
 
 const { action } = await import('./route');
@@ -28,6 +32,7 @@ describe('api.model.submission-comment', () => {
     prisma.$transaction.mockReset();
     requireUserId.mockReset();
     requireMembership.mockReset();
+    lockSubmissionCommentAccess.mockReset();
 
     requireUserId.mockResolvedValue('user-1');
     requireMembership.mockResolvedValue({
@@ -38,6 +43,7 @@ describe('api.model.submission-comment', () => {
     prisma.$transaction.mockImplementation(async (callback: any) =>
       callback(prisma)
     );
+    lockSubmissionCommentAccess.mockResolvedValue(true);
   });
 
   test('creates a submission comment', async () => {
@@ -177,6 +183,37 @@ describe('api.model.submission-comment', () => {
     } as any);
 
     expect((response as { init?: { status?: number } }).init?.status).toBe(409);
+    expect(prisma.submissionComment.create).not.toHaveBeenCalled();
+    expect(prisma.submissionActivity.create).not.toHaveBeenCalled();
+  });
+
+  test('returns 409 and writes nothing when locked authorization is revoked before create', async () => {
+    prisma.submission.findFirst.mockResolvedValue({
+      id: 'sub-1',
+      releasedAt: null,
+      document: { membership: { organizationId: 'org-1' } },
+    });
+    lockSubmissionCommentAccess.mockResolvedValue(false);
+
+    const form = new FormData();
+    form.append('submissionId', 'sub-1');
+    form.append('content', 'A comment');
+    form.append('excerpt', 'some text');
+
+    const response = await action({
+      request: new Request('https://example.com/api/model/submission-comment', {
+        method: 'POST',
+        body: form,
+      }),
+    } as any);
+
+    expect((response as { init?: { status?: number } }).init?.status).toBe(409);
+    expect(lockSubmissionCommentAccess).toHaveBeenCalledWith(prisma, {
+      submissionId: 'sub-1',
+      actorMembershipId: 'profile-1',
+      actorUserId: 'user-1',
+    });
+    expect(prisma.submission.findFirst).toHaveBeenCalledTimes(1);
     expect(prisma.submissionComment.create).not.toHaveBeenCalled();
     expect(prisma.submissionActivity.create).not.toHaveBeenCalled();
   });

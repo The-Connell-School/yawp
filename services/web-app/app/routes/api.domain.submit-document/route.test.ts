@@ -67,6 +67,7 @@ describe('api.domain.submit-document', () => {
       title: 'Essay',
       submissions: [],
       revision: 4,
+      updatedAt: new Date('2026-08-20T11:59:00.000Z'),
       classAssignment: null,
       membership: {
         classesAsStudent: [
@@ -99,6 +100,7 @@ describe('api.domain.submit-document', () => {
         user: prisma.user,
         submission: prisma.submission,
         document: prisma.document,
+        documentWriteJournal: prisma.documentWriteJournal,
         submissionActivity: prisma.submissionActivity,
       };
 
@@ -207,6 +209,36 @@ describe('api.domain.submit-document', () => {
     );
   });
 
+  test('rolls back the protected submit when journal acceptance fails', async () => {
+    prisma.documentWriteJournal.update
+      .mockRejectedValueOnce(new Error('journal acceptance unavailable'))
+      .mockResolvedValueOnce({ id: 'journal-1', status: 'rejected' });
+    const form = new FormData();
+    form.append('documentId', 'doc-1');
+
+    await expect(
+      action({
+        request: new Request('https://example.com/api/domain/submit-document', {
+          method: 'POST',
+          body: form,
+        }),
+      } as any)
+    ).rejects.toThrow('journal acceptance unavailable');
+
+    expect(prisma.documentWriteJournal.update).toHaveBeenCalledTimes(2);
+    expect(prisma.documentWriteJournal.update.mock.calls[0]?.[0]).toMatchObject(
+      { data: { status: 'accepted' } }
+    );
+    expect(prisma.documentWriteJournal.update.mock.calls[1]?.[0]).toMatchObject(
+      {
+        data: {
+          status: 'rejected',
+          failureReason: 'journal acceptance unavailable',
+        },
+      }
+    );
+  });
+
   test('returns 409 with no submission or activity when access changes before commit', async () => {
     prisma.document.updateMany.mockResolvedValue({ count: 0 });
     const form = new FormData();
@@ -226,6 +258,23 @@ describe('api.domain.submit-document', () => {
       prisma.documentWriteJournal.update.mock.calls.at(-1)?.[0]
     ).toMatchObject({
       data: { status: 'rejected' },
+    });
+  });
+
+  test('uses updatedAt as the active-submission concurrency token', async () => {
+    const form = new FormData();
+    form.append('documentId', 'doc-1');
+
+    await action({
+      request: new Request('https://example.com/api/domain/submit-document', {
+        method: 'POST',
+        body: form,
+      }),
+    } as any);
+
+    expect(prisma.document.updateMany.mock.calls[0]?.[0].where).toMatchObject({
+      revision: 4,
+      updatedAt: new Date('2026-08-20T11:59:00.000Z'),
     });
   });
 });
