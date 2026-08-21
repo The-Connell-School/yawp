@@ -212,7 +212,10 @@ async function route(ctx) {
   return { status: 404 };
 }
 
-function handleDevLaunch({ url, response, config, store, publicOrigin }, fault) {
+function handleDevLaunch(
+  { url, request, response, config, store, publicOrigin },
+  fault
+) {
   const profile = buildLaunchProfile({
     role: url.searchParams.get('role'),
     sub: url.searchParams.get('sub'),
@@ -229,7 +232,11 @@ function handleDevLaunch({ url, response, config, store, publicOrigin }, fault) 
   store.launchHints.set(hintId, profile);
   // publicOrigin already incorporates X-Forwarded-* via originFrom(), so derive the
   // browser-facing origin from it to avoid internal Docker hostnames and cross-preview hops.
-  const hostOrigin = new URL(publicOrigin).origin;
+  const xfProto = request?.headers?.['x-forwarded-proto'] || '';
+  const xfHost = request?.headers?.['x-forwarded-host'] || '';
+  const hostOrigin =
+    (xfHost ? `${xfProto || 'https'}://${xfHost}` : null) ||
+    new URL(publicOrigin).origin;
   const login = new URL('/lti/login', hostOrigin);
   login.searchParams.set('iss', config.issuer);
   login.searchParams.set('login_hint', profile.user.sub);
