@@ -107,20 +107,12 @@ async function handlePost(request: Request) {
       ],
     };
     const jwt = await signToolJwt(deepLink, { typ: 'JWT' });
-    // Post as a form with JWT, setting the value via JS to avoid any HTML attribute encoding.
+    // Post as application/x-www-form-urlencoded with JWT=... explicitly
     const html = `<!doctype html><script>
-(function(){
-  var f=document.createElement('form');
-  f.method='POST';
-  f.action='${returnUrl}';
-  var i=document.createElement('input');
-  i.type='hidden';
-  i.name='JWT';
-  i.value=decodeURIComponent('${encodeURIComponent(jwt)}');
-  f.appendChild(i);
-  document.body.appendChild(f);
-  f.submit();
-})();
+(function(){var jwt='${jwt}';
+fetch('${returnUrl}',{method:'POST',headers:{'content-type':'application/x-www-form-urlencoded;charset=UTF-8'},body:'JWT='+encodeURIComponent(jwt)})
+.then(function(){window.location.href='/dev/blackboard-lti-mock/dev/deep-links';})
+.catch(function(){document.body.textContent='Deep Linking post failed';});})();
 </script>`;
     return new Response(html, {
       status: 200,
