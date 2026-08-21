@@ -2,7 +2,7 @@ import { isLocalDevAuthEnabled } from './local-dev-auth.server';
 
 export function isBlackboardLtiMockUiEnabled(
   env: NodeJS.ProcessEnv = process.env
-) {
+): boolean {
   const mockUrl = String(env.BLACKBOARD_LTI_MOCK_URL || '').trim();
   if (!mockUrl) return false;
   if (String(env.YAWP_ENVIRONMENT || '').toLowerCase() === 'production') {
@@ -19,7 +19,8 @@ export function isBlackboardLtiMockUiEnabled(
 
 export function blackboardLtiMockUpstreamUrl(
   env: NodeJS.ProcessEnv = process.env
-) {
+): string | null {
   if (!isBlackboardLtiMockUiEnabled(env)) return null;
   return String(env.BLACKBOARD_LTI_MOCK_URL).replace(/\/$/, '');
 }
+

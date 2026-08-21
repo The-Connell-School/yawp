@@ -10,13 +10,14 @@ const keys = [
   'DATABASE_URL',
 ] as const;
 
-const original: Record<string, string | undefined> = {};
+const original: Partial<Record<(typeof keys)[number], string | undefined>> = {};
 for (const key of keys) original[key] = process.env[key];
 
 afterEach(() => {
   for (const key of keys) {
-    if (original[key] === undefined) Reflect.deleteProperty(process.env, key);
-    else Reflect.set(process.env, key, original[key]);
+    const value = original[key];
+    if (value === undefined) delete (process.env as Record<string, string>)[key];
+    else (process.env as Record<string, string>)[key] = value;
   }
 });
 

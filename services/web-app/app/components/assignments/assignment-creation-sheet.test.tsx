@@ -230,6 +230,8 @@ describe('AssignmentCreationSheetContent', () => {
       expectText('New Assignment');
       expectText('Assignment type');
       expectText('Assign to');
+      expectText('Post date');
+      expectText('Due date');
       expectText('Title (optional)');
       expectText('Attachment');
       expectText(
