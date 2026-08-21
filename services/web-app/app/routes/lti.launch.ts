@@ -107,17 +107,16 @@ async function handlePost(request: Request) {
       ],
     };
     const jwt = await signToolJwt(deepLink, { typ: 'JWT' });
-    // Post as application/x-www-form-urlencoded with JWT=... explicitly
-    const html = `<!doctype html><script>
-(function(){var jwt='${jwt}';
-fetch('${returnUrl}',{method:'POST',headers:{'content-type':'application/x-www-form-urlencoded;charset=UTF-8'},body:'JWT='+encodeURIComponent(jwt)})
-.then(function(){window.location.href='/dev/blackboard-lti-mock/dev/deep-links';})
-.catch(function(){document.body.textContent='Deep Linking post failed';});})();
-</script>`;
-    return new Response(html, {
-      status: 200,
+    // Server-side POST to the mock (avoids browser encoding quirks)
+    await fetch(returnUrl, {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded;charset=UTF-8' },
+      body: `JWT=${encodeURIComponent(jwt)}`,
+    });
+    return new Response(null, {
+      status: 302,
       headers: {
-        'content-type': 'text/html; charset=utf-8',
+        location: '/dev/blackboard-lti-mock/dev/deep-links',
         'cache-control': 'no-store',
         'set-cookie': [clearCookie(STATE_COOKIE), clearCookie(NONCE_COOKIE)].join(', '),
       },
