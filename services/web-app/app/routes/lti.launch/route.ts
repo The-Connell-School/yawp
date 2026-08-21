@@ -174,6 +174,7 @@ export async function action({ request }: ActionFunctionArgs) {
           userId: user.id,
         },
       });
+      // Load any existing cookie session to destroy it first
       const authSession = await authSessionStorage.getSession(
         request.headers.get('cookie')
       );
@@ -181,18 +182,27 @@ export async function action({ request }: ActionFunctionArgs) {
       if (previousSessionId) {
         void prisma.session.deleteMany({ where: { id: previousSessionId } });
       }
-      authSession.set(sessionKey, session.id);
-      authSession.unset('impersonationMode');
-      authSession.unset('impersonatorUserId');
+      const clearAuthCookie = await authSessionStorage.destroySession(authSession);
+      // Start a fresh cookie-session with the new DB session id
+      const newAuthSession = await authSessionStorage.getSession();
+      newAuthSession.set(sessionKey, session.id);
+      newAuthSession.unset('impersonationMode');
+      newAuthSession.unset('impersonatorUserId');
       const membershipId = user.memberships[0]?.id ?? '';
       return redirect(
         '/app',
         {
           headers: combineHeaders(
+            { 'set-cookie': clearAuthCookie },
             {
-              'set-cookie': await authSessionStorage.commitSession(authSession, {
-                expires: session.expirationDate,
-              }),
+              'set-cookie': await authSessionStorage.commitSession(
+                newAuthSession,
+                { expires: session.expirationDate }
+              ),
+            },
+            // Clear any prior membership cookie before setting the target one
+            {
+              'set-cookie': (await import('~/cookies/membership-id.server')).destroyMembershipId(),
             },
             { 'set-cookie': await setMembershipId(membershipId) }
           ),
