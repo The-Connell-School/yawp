@@ -58,4 +58,3 @@ describe('isBlackboardLtiMockUiEnabled', () => {
     expect(isBlackboardLtiMockUiEnabled()).toBe(true);
   });
 });
-

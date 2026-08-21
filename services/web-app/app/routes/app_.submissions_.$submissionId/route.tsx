@@ -383,6 +383,16 @@ export default function SubmissionRoute() {
     );
   }, [submission.id]);
 
+  // Optimistic grade display values are tied to the loader revision that was
+  // current when they were saved. Once any same-route revalidation advances
+  // the submission revision, discard that snapshot and use the authoritative
+  // loader values. Otherwise a later edit could combine stale displayed grade
+  // values with the newer concurrency token and silently overwrite another
+  // teacher's update.
+  useEffect(() => {
+    setTeacherGradeUi(null);
+  }, [submission.updatedAt]);
+
   useEffect(() => {
     if (titleFetcher.state !== 'idle') return;
     const body = titleFetcher.data as { success?: boolean } | undefined;

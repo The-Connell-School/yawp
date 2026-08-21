@@ -108,7 +108,8 @@ ${masterAccessEnvironment}      PREVIEW_ACCESS_SECRET: ${q(previewAccessSecret)}
       YAWP_PREVIEW_AI_MODE: ${q(aiMode)}
       CLASS_INSIGHT_MOCK_MODE: ${q(aiMode === 'disabled' ? 'fixture' : optionalEnv('PREVIEW_CLASS_INSIGHT_MOCK_MODE'))}
       ANTHROPIC_API_KEY: ${q(anthropicApiKey)}
-      AI_MODEL: ${q(optionalEnv('PREVIEW_AI_MODEL', 'claude-sonnet-4-6'))}`;
+      AI_MODEL: ${q(optionalEnv('PREVIEW_AI_MODEL', 'claude-sonnet-4-6'))}
+      BLACKBOARD_LTI_MOCK_URL: "http://blackboard-lti-mock:9473"`;
   const fastVolumes = `    volumes:
       - ${q(`${env.sourceDir}:/app`)}
       - ${env.composeProject}-node-modules:/app/node_modules
@@ -173,6 +174,38 @@ ${webService}${legacyTraefikLabels}    restart: unless-stopped
     networks:
       - default
       - preview${directPortBlock}
+
+  blackboard-lti-mock:
+    image: oven/bun:1.3.1
+    working_dir: /app
+    command: bun scripts/blackboard-lti-mock/server.mjs
+    volumes:
+      - ${q(`${env.sourceDir}:/app`)}
+    environment:
+      NODE_ENV: ${env.runtime === 'fast' ? 'development' : 'production'}
+      YAWP_ENVIRONMENT: "preview"
+      BLACKBOARD_LTI_MOCK_ENABLED: "true"
+      BLACKBOARD_LTI_MOCK_PORT: "9473"
+      BLACKBOARD_LTI_MOCK_ISSUER: "https://blackboard.com"
+      BLACKBOARD_LTI_MOCK_CLIENT_ID: "yawp-blackboard-mock"
+      BLACKBOARD_LTI_MOCK_DEPLOYMENT_ID: "yawp-mock-deployment"
+      BLACKBOARD_LTI_MOCK_PUBLIC_URL: "http://blackboard-lti-mock:9473"
+      BLACKBOARD_LTI_MOCK_PUBLIC_BASE_PATH: "/dev/blackboard-lti-mock"
+      BLACKBOARD_LTI_MOCK_TOOL_REDIRECT_URI: ${q(`${env.url}/lti/launch`)}
+      BLACKBOARD_LTI_MOCK_TOOL_OIDC_LOGIN_URL: ${q(`${env.url}/lti/login`)}
+      BLACKBOARD_LTI_MOCK_TOOL_JWKS_URL: ${q(`${env.url}/lti/jwks`)}
+      BLACKBOARD_LTI_MOCK_TOKEN_TTL_SECONDS: "60"
+      AWS_EC2_METADATA_DISABLED: "true"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "bun", "-e", "fetch('http://127.0.0.1:9473/healthz').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+      start_period: 20s
+    networks:
+      - default
+      - preview
 
 volumes:
   ${env.composeProject}-node-modules:

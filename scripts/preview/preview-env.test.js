@@ -27,7 +27,9 @@ describe('buildPreviewEnv', () => {
     expect(env.slug).toBe('pr-142');
     expect(env.composeProject).toBe('yawp-pr-142');
     expect(env.hostname).toBe('pr-142.preview.yawp.school');
+    expect(env.blackboardHostname).toBe('blackboard-pr-142.preview.yawp.school');
     expect(env.url).toBe('https://pr-142.preview.yawp.school');
+    expect(env.blackboardUrl).toBe('https://blackboard-pr-142.preview.yawp.school');
     expect(env.runtime).toBe('fast');
     expect(env.dataMode).toBe('seed');
     expect(env.previewDir).toBe('/srv/yawp-preview/previews/pr-142');

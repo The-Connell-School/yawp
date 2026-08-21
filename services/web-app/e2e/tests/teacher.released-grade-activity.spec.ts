@@ -3,6 +3,7 @@ import { createE2EPrismaClient } from '../prisma-client';
 import { mkdir } from 'node:fs/promises';
 import path from 'node:path';
 import type { Page } from '@playwright/test';
+import bcrypt from 'bcryptjs';
 
 const TEACHER_PASSWORD = 'teacher-e2e-password';
 const STUDENT_PASSWORD = 'johndoe';
@@ -27,6 +28,16 @@ async function lingerForQa(page: Page, milliseconds: number) {
   if (process.env.QA_CAPTURE_DIR) {
     await page.waitForTimeout(milliseconds);
   }
+}
+
+async function signInPage(page: Page, email: string, password: string) {
+  await page.goto('/auth/login');
+  await page.locator('input[type="email"]').fill(email);
+  await page.locator('input[type="password"]').fill(password);
+  await page.getByRole('button', { name: /log in/i }).click();
+  await page.waitForURL((url) => url.pathname.startsWith('/app'), {
+    timeout: 15000,
+  });
 }
 
 test.describe('Released grade editing and submission activity', () => {
@@ -348,6 +359,153 @@ test.describe('Released grade editing and submission activity', () => {
         await tx.submission.delete({ where: { id: submission.id } });
       });
       await prisma.document.delete({ where: { id: document.id } });
+      await prisma.$disconnect();
+    }
+  });
+
+  test('same-route revalidation cannot pair a stale grade with another teacher revision', async ({
+    page,
+    browser,
+    e2eContext,
+    signIn,
+  }) => {
+    const prisma = createE2EPrismaClient();
+    const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const secondTeacherEmail = `grade-race-${suffix}@yawp.test`;
+    const secondTeacherPassword = 'grade-race-teacher-password';
+    const secondTeacher = await prisma.user.create({
+      data: {
+        email: secondTeacherEmail,
+        name: 'Second Grade Teacher',
+        password: {
+          create: { hash: bcrypt.hashSync(secondTeacherPassword, 10) },
+        },
+        memberships: {
+          create: {
+            organizationId: e2eContext.organizationId,
+            role: 'TEACHER',
+            classesAsTeacher: { connect: { id: e2eContext.classId } },
+          },
+        },
+      },
+      include: { memberships: true },
+    });
+    const secondMembership = secondTeacher.memberships[0]!;
+    await prisma.$executeRaw`
+      INSERT INTO "_SchoolTeachers" ("A", "B")
+      VALUES (${secondMembership.id}, ${e2eContext.schoolId})
+      ON CONFLICT DO NOTHING
+    `;
+    const document = await prisma.document.create({
+      data: {
+        title: `Grade revision coupling ${suffix}`,
+        text: 'Two teachers must never overwrite a newer grade with a stale local snapshot.',
+        html: '<p>Two teachers must never overwrite a newer grade with a stale local snapshot.</p>',
+        membershipId: e2eContext.membershipId,
+        assignmentTypeId: e2eContext.assignmentTypeId,
+        assignmentId: e2eContext.assignmentId,
+        classAssignmentId: e2eContext.classAssignmentId,
+      },
+      select: { id: true, title: true, text: true, html: true },
+    });
+    const submission = await prisma.submission.create({
+      data: {
+        id: `e2e-released-grade-audit-revision-${suffix}`,
+        documentId: document.id,
+        title: document.title,
+        text: document.text ?? '',
+        html: document.html ?? '',
+        submittedAt: new Date('2026-08-19T12:00:00.000Z'),
+        gradedAt: new Date('2026-08-20T11:00:00.000Z'),
+        gradedByMembershipId: e2eContext.teacherMembershipId,
+        numericPercentage: 77,
+        letterGrade: 'C+',
+        score: '77% (C+)',
+        overallComment: 'Initial grade.',
+        releasedAt: new Date('2026-08-20T12:00:00.000Z'),
+      },
+      select: { id: true },
+    });
+    const secondContext = await browser.newContext();
+
+    try {
+      await signIn(e2eContext.teacherEmail, TEACHER_PASSWORD);
+      await page.goto(`/app/submissions/${submission.id}`);
+      const firstPanel = page.getByTestId('submission-lifecycle-panel');
+      await firstPanel.getByTestId('submission-lifecycle-edit').click();
+      await page.getByTestId('grading-overall-percentage').fill('82');
+      await firstPanel.getByTestId('submission-lifecycle-save').click();
+      await expect(firstPanel.getByText(/82%/).first()).toBeVisible({
+        timeout: 15000,
+      });
+
+      const secondPage = await secondContext.newPage();
+      await signInPage(secondPage, secondTeacherEmail, secondTeacherPassword);
+      await secondPage.goto(`/app/submissions/${submission.id}`);
+      const secondPanel = secondPage.getByTestId('submission-lifecycle-panel');
+      await secondPanel.getByTestId('submission-lifecycle-edit').click();
+      await secondPage.getByTestId('grading-overall-percentage').fill('93');
+      await secondPanel.getByTestId('submission-lifecycle-save').click();
+      await expect(secondPanel.getByText(/93%/).first()).toBeVisible({
+        timeout: 15000,
+      });
+
+      // Title save forces a same-route loader revalidation on teacher A's
+      // still-open page. Reopening must use teacher B's authoritative grade,
+      // not teacher A's earlier optimistic snapshot with the fresh token.
+      const titleInput = page.getByTestId('submission-title-input');
+      await titleInput.fill(`Revalidated grade revision ${suffix}`);
+      await titleInput.blur();
+      await expect
+        .poll(async () => {
+          const row = await prisma.submission.findUniqueOrThrow({
+            where: { id: submission.id },
+            select: { title: true },
+          });
+          return row.title;
+        })
+        .toBe(`Revalidated grade revision ${suffix}`);
+      await expect(firstPanel.getByText(/93%/).first()).toBeVisible({
+        timeout: 15000,
+      });
+
+      await firstPanel.getByTestId('submission-lifecycle-edit').click();
+      await expect(page.getByTestId('grading-overall-percentage')).toHaveValue(
+        '93'
+      );
+      await page
+        .getByTestId('grading-overall-comment')
+        .fill('Teacher A acknowledged the newer revision.');
+      await firstPanel.getByTestId('submission-lifecycle-save').click();
+
+      await expect
+        .poll(async () => {
+          const row = await prisma.submission.findUniqueOrThrow({
+            where: { id: submission.id },
+            select: { numericPercentage: true, overallComment: true },
+          });
+          return row;
+        })
+        .toEqual({
+          numericPercentage: 93,
+          overallComment: 'Teacher A acknowledged the newer revision.',
+        });
+    } finally {
+      await secondContext.close();
+      await prisma.$transaction(async (tx) => {
+        await tx.$executeRawUnsafe(
+          "SET LOCAL yawp.submission_activity_cleanup = 'on'"
+        );
+        await tx.submissionActivity.deleteMany({
+          where: { submissionId: submission.id },
+        });
+        await tx.submission.delete({ where: { id: submission.id } });
+      });
+      await prisma.document.delete({ where: { id: document.id } });
+      await prisma.orgMembership.delete({
+        where: { id: secondMembership.id },
+      });
+      await prisma.user.delete({ where: { id: secondTeacher.id } });
       await prisma.$disconnect();
     }
   });

@@ -136,6 +136,34 @@ describe('api.domain.submit-document', () => {
     expect(JSON.stringify(activity.metadata)).not.toContain('Draft');
   });
 
+  test('fails closed when the required submission audit write is unavailable', async () => {
+    const previous = process.env.SUBMISSION_ACTIVITY_WRITES_ENABLED;
+    process.env.SUBMISSION_ACTIVITY_WRITES_ENABLED = 'false';
+    const form = new FormData();
+    form.append('documentId', 'doc-1');
+
+    try {
+      await expect(
+        action({
+          request: new Request(
+            'https://example.com/api/domain/submit-document',
+            { method: 'POST', body: form }
+          ),
+        } as any)
+      ).rejects.toThrow(
+        'Submission activity recording is temporarily unavailable'
+      );
+      expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+      expect(prisma.submissionActivity.create).not.toHaveBeenCalled();
+    } finally {
+      if (previous === undefined) {
+        delete process.env.SUBMISSION_ACTIVITY_WRITES_ENABLED;
+      } else {
+        process.env.SUBMISSION_ACTIVITY_WRITES_ENABLED = previous;
+      }
+    }
+  });
+
   test('records a document submit journal entry with the full document payload', async () => {
     const form = new FormData();
     form.append('documentId', 'doc-1');

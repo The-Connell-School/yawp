@@ -257,6 +257,31 @@ describe('production deployment contract', () => {
       'ssh-keyscan -H "${PROD_SSH_HOST}" >> ~/.ssh/known_hosts'
     );
   });
+
+  test('production QA captures responsive evidence and verifies the database post-state', () => {
+    const productionQaWorkflow = readRepoFile(
+      '.github/workflows/production-qa-profile.yml'
+    );
+    const browserProof = readRepoFile(
+      'services/web-app/scripts/production-qa-released-grade.ts'
+    );
+
+    expect(productionQaWorkflow).toContain(
+      'production-qa-profile-remote production-postcheck'
+    );
+    expect(productionQaWorkflow).toContain(
+      'services/web-app/test-results/production-*'
+    );
+    expect(browserProof).toContain(
+      'production-released-grade-activity-mobile.png'
+    );
+    expect(browserProof).toContain(
+      'production-released-grade-student-mobile.png'
+    );
+    expect(browserProof).toContain(
+      'production-released-grade-walkthrough.webm'
+    );
+  });
 });
 
 describe('worktree local setup contract', () => {
@@ -277,6 +302,17 @@ describe('worktree local setup contract', () => {
 
     expect(viteConfig).toContain('Number(process.env.PORT ?? 5176)');
     expect(viteConfig).toContain('strictPort: true');
+  });
+
+  test('worktree setup writes a Blackboard LTI mock URL and bun script', () => {
+    const setupScript = readRepoFile('scripts/worktree-local-setup.sh');
+    const rootPackage = JSON.parse(readRepoFile('package.json'));
+
+    expect(setupScript).toContain('BLACKBOARD_LTI_MOCK_URL=');
+    expect(setupScript).toContain('LTI_MOCK_PORT');
+    expect(rootPackage.scripts['blackboard-lti-mock']).toContain(
+      'BLACKBOARD_LTI_MOCK_ENABLED=true'
+    );
   });
 
   test('worktree setup backfills class art keys before local seed verification', () => {
@@ -753,9 +789,11 @@ describe('PR preview deployment contract', () => {
     expect(bootstrap).not.toContain(
       '/var/run/docker.sock:/var/run/docker.sock:rw'
     );
-    expect(wakeServer).toContain('timingSafeEqual');
+    expect(wakeServer).toContain('parsePreviewHost');
+    expect(ingressServer).toContain("service === 'blackboard'");
+    expect(ingressServer).toContain('yawp-pr-${pr}-blackboard-lti-mock-1');
     expect(ingressServer).toContain('createWebSocketUpgradeHandler');
-    expect(ingressServer).toContain('authorizeWake(pr, request.url, request)');
+    expect(ingressServer).toContain('authorizeWake(parsed.pr, request.url, request)');
     expect(ingressServer).toContain("upstreamResponse.headers['x-yawp-preview-authorized']");
     expect(certificateManager).toContain("type === 'http-01'");
     expect(wakeScript).toContain('docker compose');
@@ -1131,6 +1169,23 @@ describe('PR preview deployment contract', () => {
     }
   });
 
+  test('preview compose starts the Blackboard LTI mock as a sibling service', () => {
+    const compose = readRepoFile('scripts/preview/render-compose.mjs');
+    const deploy = readRepoFile('scripts/preview/deploy.sh');
+    const dockerfile = readRepoFile('services/web-app/Dockerfile');
+
+    expect(compose).toContain('blackboard-lti-mock:');
+    expect(compose).toContain('BLACKBOARD_LTI_MOCK_ENABLED: "true"');
+    expect(compose).toContain('BLACKBOARD_LTI_MOCK_URL: "http://blackboard-lti-mock:9473"');
+    expect(deploy).toContain('start_blackboard_lti_mock_if_present');
+    expect(deploy).toContain('blackboard-lti-mock:');
+    expect(deploy).toContain('BLACKBOARD_HOSTNAME');
+    expect(deploy).toContain('BLACKBOARD_URL');
+    expect(dockerfile).not.toContain('blackboard-lti-mock');
+    expect(dockerfile).not.toContain('blackboard-lti-mock');
+    expect(dockerfile).toContain('CMD ["bash", "services/web-app/start.sh"]');
+  });
+
   test('preview comment describes selected data and dev-login smoke', () => {
     const previewWorkflow = readRepoFile(
       '.github/workflows/preview-environments.yml'
@@ -1140,7 +1195,7 @@ describe('PR preview deployment contract', () => {
       '- **Data:** `${{ env.PREVIEW_DATA_MODE }}` in an isolated PR database'
     );
     expect(previewWorkflow).toContain(
-      '- **Smoke:** in-app access gate + dev login'
+      '- **Blackboard:** ${{ steps.deploy.outputs.blackboard_url }}'
     );
     expect(previewWorkflow).not.toContain('seed overlay');
   });

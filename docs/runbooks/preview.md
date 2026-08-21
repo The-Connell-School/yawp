@@ -13,6 +13,7 @@ The target behavior is:
 - The shared template database restores the configured preview-safe database dump from S3 once; new PR databases clone that template, then apply newer Prisma migrations.
 - Deploys avoid ECR pushes and Terraform applies on the hot path.
 - The preview URL is `https://pr-<number>.$PREVIEW_DOMAIN` when TLS is enabled.
+- Blackboard Learn for that PR is `https://blackboard-pr-<number>.$PREVIEW_DOMAIN`. That hostname matches the existing `*.preview.yawp.school` wildcard; `blackboard.pr-<number>.preview.yawp.school` would not.
 - The React Router app protects every loader, action, and API route with a signed-cookie access gate. `/api/healthcheck` is the only exception. Deploys generate a memorable code and fail closed if no code reaches the app.
 - Live Anthropic AI is enabled in every access-gated PR preview. Deploys fail closed when neither `PREVIEW_ANTHROPIC_API_KEY` nor `ANTHROPIC_API_KEY` is configured for the preview-host environment.
 - The default runtime is `PREVIEW_RUNTIME=fast`: source is bind-mounted, Bun dependencies live in Docker volumes, React Router runs in dev mode, and warm deploys skip dependency install, Prisma generate, and migration work when the tooling fingerprint has not changed. The web container is still recreated after each source sync so the dev server starts from a clean process. Set `PREVIEW_RUNTIME=production` to use the production Dockerfile build path.

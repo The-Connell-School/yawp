@@ -48,4 +48,3 @@ export async function proxyBlackboardLtiMock(request: Request, splat = '') {
     headers: responseHeaders,
   });
 }
-

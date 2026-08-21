@@ -118,4 +118,3 @@ describe('proxyBlackboardLtiMock', () => {
     expect(response.headers.get('set-cookie')).toContain('bb_learn=Learner');
   });
 });
-

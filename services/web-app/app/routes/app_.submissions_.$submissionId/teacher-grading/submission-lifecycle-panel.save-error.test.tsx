@@ -34,7 +34,8 @@ mock.module('./teacher-grading-panel', () => ({
   },
 }));
 
-const { SubmissionLifecyclePanel } = await import('./submission-lifecycle-panel');
+const { SubmissionLifecyclePanel } =
+  await import('./submission-lifecycle-panel');
 
 const UNSUBMITTED_MESSAGE =
   'This submission was unsubmitted before you could grade it. Please refresh the page.';
@@ -196,6 +197,67 @@ describe('SubmissionLifecyclePanel save error handling', () => {
     expect(onMarkGraded).toHaveBeenCalledTimes(1);
     expect(toastError).toHaveBeenCalledWith(UNSUBMITTED_MESSAGE);
     expect(onEditingGradeChange).toHaveBeenCalledWith(false);
+    expect(onGradeSaved).not.toHaveBeenCalled();
+  });
+
+  it('revalidates the saved grade only after finalization advances the submission revision', async () => {
+    const calls: string[] = [];
+    currentHeaderState = headerState({
+      saveDraft: async () => {
+        calls.push('save-draft');
+      },
+      getSavedGradeSnapshot: () => {
+        calls.push('snapshot');
+        return {} as any;
+      },
+    });
+
+    const onMarkGraded = mock(async () => {
+      calls.push('mark-graded');
+    });
+    const onGradeSaved = mock(() => {
+      calls.push('revalidate');
+    });
+
+    ({ root } = render(
+      <SubmissionLifecyclePanel
+        lifecycleState="needs_grading"
+        isEditingGrade
+        onEditingGradeChange={() => {}}
+        onMarkGraded={onMarkGraded}
+        onGradeSaved={onGradeSaved}
+        isSavingGrade={false}
+        onRelease={() => {}}
+        isReleasing={false}
+        submissionForView={{} as any}
+        documentId="doc-1"
+        submissionId="sub-1"
+        existingGrade={{ id: 'sub-1' } as any}
+        grammarIssues={[]}
+        hiddenGrammarIssueIds={[]}
+        onToggleGrammarIssue={() => {}}
+        onRemoveGrammarIssue={() => {}}
+        onGrammarIssuesChange={() => {}}
+      />
+    ));
+
+    await act(async () => {
+      document
+        .querySelector<HTMLButtonElement>(
+          '[data-testid="submission-lifecycle-save"]'
+        )
+        ?.click();
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(calls).toEqual([
+      'save-draft',
+      'mark-graded',
+      'snapshot',
+      'revalidate',
+    ]);
   });
 
   it('shows the released edit warning, keeps save disabled until changed, and hides the assistant', () => {
@@ -225,7 +287,9 @@ describe('SubmissionLifecyclePanel save error handling', () => {
     ));
 
     expect(document.body.textContent).toContain('visible to the student');
-    expect(document.body.textContent).toContain('records the change in Activity');
+    expect(document.body.textContent).toContain(
+      'records the change in Activity'
+    );
     expect(
       document.querySelector('[data-testid="grading-assistant-generate"]')
     ).toBeNull();

@@ -2,24 +2,25 @@
 import { createPrismaClient } from './local-dev/connection';
 import { createPassword } from './utils';
 import { getClassArtByIndex } from '../../../services/web-app/app/utils/class-art.ts';
+import type { Prisma } from '../generated/prisma';
 
 export const PRODUCTION_QA_IDS = {
-  organizationId: 'prod-qa-org',
-  schoolId: 'prod-qa-school',
-  schoolCode: 'PROD-QA',
-  classId: 'prod-qa-class',
-  classCode: 'PROD-QA-CLASS',
-  teacherUserId: 'prod-qa-teacher-user',
-  teacherMembershipId: 'prod-qa-teacher-membership',
-  teacherEmail: 'prod.qa.teacher@brock.software',
-  studentUserId: 'prod-qa-student-user',
-  studentMembershipId: 'prod-qa-student-membership',
-  studentEmail: 'prod.qa.student@brock.software',
-  assignmentTypeId: 'prod-qa-writing-assignment-type',
-  assignmentId: 'prod-qa-writing-assignment',
-  classAssignmentId: 'prod-qa-class-assignment',
-  documentId: 'prod-qa-student-document',
-  submissionId: 'prod-qa-released-submission',
+  organizationId: 'prod-qa-v3-org',
+  schoolId: 'prod-qa-v3-school',
+  schoolCode: 'PROD-QA-V3',
+  classId: 'prod-qa-v3-class',
+  classCode: 'PROD-QA-V3-CLASS',
+  teacherUserId: 'prod-qa-v3-teacher-user',
+  teacherMembershipId: 'prod-qa-v3-teacher-membership',
+  teacherEmail: 'prod.qa.teacher.v3@brock.software',
+  studentUserId: 'prod-qa-v3-student-user',
+  studentMembershipId: 'prod-qa-v3-student-membership',
+  studentEmail: 'prod.qa.student.v3@brock.software',
+  assignmentTypeId: 'prod-qa-v3-writing-assignment-type',
+  assignmentId: 'prod-qa-v3-writing-assignment',
+  classAssignmentId: 'prod-qa-v3-class-assignment',
+  documentId: 'prod-qa-v3-student-document',
+  submissionId: 'prod-qa-v3-released-submission',
 } as const;
 
 export const PRODUCTION_QA_ORGANIZATION_FLAGS = {
@@ -114,7 +115,309 @@ export function redactedProductionQaSummary(result: ProductionQaProfileResult) {
   };
 }
 
-type PrismaClientLike = ReturnType<typeof createPrismaClient>;
+type RootPrismaClient = ReturnType<typeof createPrismaClient>;
+type PrismaClientLike = RootPrismaClient | Prisma.TransactionClient;
+
+export type ProductionQaFixtureCollision = {
+  resource: string;
+  reason: string;
+};
+
+export function assertNoProductionQaFixtureCollisions(
+  collisions: ProductionQaFixtureCollision[]
+) {
+  if (collisions.length === 0) return;
+  const details = collisions
+    .map(({ resource, reason }) => `${resource}: ${reason}`)
+    .join('; ');
+  throw new Error(
+    `Production QA fixture graph collision; refusing to mutate production. ${details}`
+  );
+}
+
+type QaIdentityRecord = {
+  id: string;
+  email: string;
+  memberships: Array<{
+    id: string;
+    userId: string;
+    organizationId: string;
+    role: 'TEACHER' | 'STUDENT';
+    isOrgOwner: boolean;
+  }>;
+};
+
+type QaMembershipRecord = QaIdentityRecord['memberships'][number];
+
+export function assertProductionQaIdentitySafety({
+  users,
+  memberships,
+}: {
+  users: QaIdentityRecord[];
+  memberships: QaMembershipRecord[];
+}) {
+  const expected = [
+    {
+      userId: PRODUCTION_QA_IDS.teacherUserId,
+      email: PRODUCTION_QA_IDS.teacherEmail,
+      membershipId: PRODUCTION_QA_IDS.teacherMembershipId,
+      role: 'TEACHER' as const,
+      isOrgOwner: true,
+    },
+    {
+      userId: PRODUCTION_QA_IDS.studentUserId,
+      email: PRODUCTION_QA_IDS.studentEmail,
+      membershipId: PRODUCTION_QA_IDS.studentMembershipId,
+      role: 'STUDENT' as const,
+      isOrgOwner: false,
+    },
+  ];
+
+  for (const identity of expected) {
+    const matchingUsers = users.filter(
+      (user) => user.id === identity.userId || user.email === identity.email
+    );
+    if (matchingUsers.length > 1) {
+      throw new Error(
+        `Production QA identity collision for ${identity.email}; refusing to mutate production.`
+      );
+    }
+    const user = matchingUsers[0];
+    if (
+      user &&
+      (user.id !== identity.userId || user.email !== identity.email)
+    ) {
+      throw new Error(
+        `Production QA reserved email or user ID collision for ${identity.email}; refusing to mutate production.`
+      );
+    }
+    if (
+      user?.memberships.some(
+        (membership) =>
+          membership.id !== identity.membershipId ||
+          membership.organizationId !== PRODUCTION_QA_IDS.organizationId ||
+          membership.role !== identity.role ||
+          membership.isOrgOwner !== identity.isOrgOwner
+      )
+    ) {
+      throw new Error(
+        `Production QA user ${identity.email} has a non-QA membership graph; refusing to mutate production.`
+      );
+    }
+
+    const reservedMembership = memberships.find(
+      (membership) => membership.id === identity.membershipId
+    );
+    if (
+      reservedMembership &&
+      (reservedMembership.userId !== identity.userId ||
+        reservedMembership.organizationId !==
+          PRODUCTION_QA_IDS.organizationId ||
+        reservedMembership.role !== identity.role ||
+        reservedMembership.isOrgOwner !== identity.isOrgOwner)
+    ) {
+      throw new Error(
+        `Production QA reserved membership collision for ${identity.membershipId}; refusing to mutate production.`
+      );
+    }
+  }
+}
+
+async function assertProductionQaIdentityPreflight(prisma: PrismaClientLike) {
+  const ids = PRODUCTION_QA_IDS;
+  const [users, memberships] = await Promise.all([
+    prisma.user.findMany({
+      where: {
+        OR: [
+          { id: { in: [ids.teacherUserId, ids.studentUserId] } },
+          { email: { in: [ids.teacherEmail, ids.studentEmail] } },
+        ],
+      },
+      select: {
+        id: true,
+        email: true,
+        memberships: {
+          select: {
+            id: true,
+            userId: true,
+            organizationId: true,
+            role: true,
+            isOrgOwner: true,
+          },
+        },
+      },
+    }),
+    prisma.orgMembership.findMany({
+      where: {
+        id: { in: [ids.teacherMembershipId, ids.studentMembershipId] },
+      },
+      select: {
+        id: true,
+        userId: true,
+        organizationId: true,
+        role: true,
+        isOrgOwner: true,
+      },
+    }),
+  ]);
+  assertProductionQaIdentitySafety({ users, memberships });
+}
+
+export async function assertProductionQaFixturePreflight(
+  prisma: PrismaClientLike
+) {
+  const ids = PRODUCTION_QA_IDS;
+  const collisions = await prisma.$queryRaw<ProductionQaFixtureCollision[]>`
+    SELECT 'Organization' AS resource, 'reserved ID has a non-QA name' AS reason
+    FROM "Organization"
+    WHERE id = ${ids.organizationId} AND name <> 'Yawp Production QA'
+    UNION ALL
+    SELECT 'School', 'reserved ID or code is not the exact QA school'
+    FROM "School"
+    WHERE (id = ${ids.schoolId} OR code = ${ids.schoolCode})
+      AND NOT (
+        id = ${ids.schoolId}
+        AND code = ${ids.schoolCode}
+        AND "organizationId" = ${ids.organizationId}
+      )
+    UNION ALL
+    SELECT 'Class', 'reserved ID or school/code key is not the exact QA class'
+    FROM "Class"
+    WHERE (
+      id = ${ids.classId}
+      OR ("schoolId" = ${ids.schoolId} AND code = ${ids.classCode})
+    )
+      AND NOT (
+        id = ${ids.classId}
+        AND "schoolId" = ${ids.schoolId}
+        AND code = ${ids.classCode}
+      )
+    UNION ALL
+    SELECT 'AssignmentType', 'reserved ID is not owned by the QA organization'
+    FROM "AssignmentType"
+    WHERE id = ${ids.assignmentTypeId}
+      AND "ownerOrgId" IS DISTINCT FROM ${ids.organizationId}
+    UNION ALL
+    SELECT 'Assignment', 'reserved ID is not owned by the QA assignment type'
+    FROM "Assignment"
+    WHERE id = ${ids.assignmentId}
+      AND "assignmentTypeId" IS DISTINCT FROM ${ids.assignmentTypeId}
+    UNION ALL
+    SELECT 'ClassAssignment', 'reserved ID or compound key is not the exact QA link'
+    FROM "ClassAssignment"
+    WHERE (
+      id = ${ids.classAssignmentId}
+      OR (
+        "assignmentId" = ${ids.assignmentId}
+        AND "classId" = ${ids.classId}
+      )
+    )
+      AND NOT (
+        id = ${ids.classAssignmentId}
+        AND "assignmentId" = ${ids.assignmentId}
+        AND "classId" = ${ids.classId}
+      )
+    UNION ALL
+    SELECT 'Document', 'reserved ID is not the exact QA-owned document'
+    FROM "Document"
+    WHERE id = ${ids.documentId}
+      AND NOT (
+        "membershipId" = ${ids.studentMembershipId}
+        AND "assignmentTypeId" = ${ids.assignmentTypeId}
+        AND "assignmentId" = ${ids.assignmentId}
+        AND "classAssignmentId" = ${ids.classAssignmentId}
+      )
+    UNION ALL
+    SELECT 'Submission', 'reserved ID is not attached to the QA document'
+    FROM "Submission"
+    WHERE id = ${ids.submissionId}
+      AND "documentId" IS DISTINCT FROM ${ids.documentId}
+    UNION ALL
+    SELECT 'OrgMembership', 'QA organization contains an unexpected membership'
+    FROM "OrgMembership"
+    WHERE "organizationId" = ${ids.organizationId}
+      AND id NOT IN (${ids.teacherMembershipId}, ${ids.studentMembershipId})
+    UNION ALL
+    SELECT 'School', 'QA organization contains an unexpected school'
+    FROM "School"
+    WHERE "organizationId" = ${ids.organizationId}
+      AND id <> ${ids.schoolId}
+    UNION ALL
+    SELECT 'AssignmentType', 'QA organization owns an unexpected assignment type'
+    FROM "AssignmentType"
+    WHERE "ownerOrgId" = ${ids.organizationId}
+      AND id <> ${ids.assignmentTypeId}
+    UNION ALL
+    SELECT 'OrganizationAssignmentType', 'QA organization has an unexpected assignment-type link'
+    FROM "OrganizationAssignmentType"
+    WHERE "organizationId" = ${ids.organizationId}
+      AND "assignmentTypeId" <> ${ids.assignmentTypeId}
+    UNION ALL
+    SELECT 'Class', 'QA school contains an unexpected class'
+    FROM "Class"
+    WHERE "schoolId" = ${ids.schoolId}
+      AND id <> ${ids.classId}
+    UNION ALL
+    SELECT 'Assignment', 'QA assignment type contains an unexpected assignment'
+    FROM "Assignment"
+    WHERE "assignmentTypeId" = ${ids.assignmentTypeId}
+      AND id <> ${ids.assignmentId}
+    UNION ALL
+    SELECT 'ClassAssignment', 'QA class contains an unexpected assignment link'
+    FROM "ClassAssignment"
+    WHERE "classId" = ${ids.classId}
+      AND id <> ${ids.classAssignmentId}
+    UNION ALL
+    SELECT 'Document', 'QA identities or assignment contain an unexpected document'
+    FROM "Document"
+    WHERE (
+      "membershipId" IN (${ids.teacherMembershipId}, ${ids.studentMembershipId})
+      OR "classAssignmentId" = ${ids.classAssignmentId}
+    )
+      AND id <> ${ids.documentId}
+    UNION ALL
+    SELECT 'Submission', 'QA document contains an unexpected submission'
+    FROM "Submission"
+    WHERE "documentId" = ${ids.documentId}
+      AND id <> ${ids.submissionId}
+    UNION ALL
+    SELECT 'SubmissionActivity', 'QA organization contains activity for another submission'
+    FROM "SubmissionActivity"
+    WHERE "organizationId" = ${ids.organizationId}
+      AND "submissionId" <> ${ids.submissionId}
+    UNION ALL
+    SELECT 'ClassTeachers', 'QA class teacher roster contains an unexpected link'
+    FROM "_ClassTeachers"
+    WHERE "A" = ${ids.classId}
+      AND "B" <> ${ids.teacherMembershipId}
+    UNION ALL
+    SELECT 'ClassTeachers', 'QA teacher is linked to another class'
+    FROM "_ClassTeachers"
+    WHERE "B" = ${ids.teacherMembershipId}
+      AND "A" <> ${ids.classId}
+    UNION ALL
+    SELECT 'ClassStudents', 'QA class student roster contains an unexpected link'
+    FROM "_ClassStudents"
+    WHERE "A" = ${ids.classId}
+      AND "B" <> ${ids.studentMembershipId}
+    UNION ALL
+    SELECT 'ClassStudents', 'QA student is linked to another class'
+    FROM "_ClassStudents"
+    WHERE "B" = ${ids.studentMembershipId}
+      AND "A" <> ${ids.classId}
+    UNION ALL
+    SELECT 'SchoolTeachers', 'QA school teacher roster contains an unexpected link'
+    FROM "_SchoolTeachers"
+    WHERE "B" = ${ids.schoolId}
+      AND "A" <> ${ids.teacherMembershipId}
+    UNION ALL
+    SELECT 'SchoolTeachers', 'QA teacher is linked to another school'
+    FROM "_SchoolTeachers"
+    WHERE "A" = ${ids.teacherMembershipId}
+      AND "B" <> ${ids.schoolId}
+  `;
+  assertNoProductionQaFixtureCollisions(collisions);
+}
 
 async function ensureQaUser({
   prisma,
@@ -187,12 +490,17 @@ async function ensureQaMembership({
   });
 }
 
-export async function ensureProductionQaProfile(
+async function provisionProductionQaProfile(
   prisma: PrismaClientLike,
-  password = assertProductionQaPassword(process.env.PROD_QA_PASSWORD)
+  password: string
 ): Promise<ProductionQaProfileResult> {
   const ids = PRODUCTION_QA_IDS;
   const classArtKey = getClassArtByIndex(0).key;
+
+  // This read-only collision check must run before the first write. Reserved
+  // QA emails and IDs are never authority to reset an unrelated account.
+  await assertProductionQaIdentityPreflight(prisma);
+  await assertProductionQaFixturePreflight(prisma);
 
   const org = await prisma.organization.upsert({
     where: { id: ids.organizationId },
@@ -396,7 +704,7 @@ export async function ensureProductionQaProfile(
   });
 
   const documentText =
-    'This production QA document is disposable and belongs only to prod-qa-org.';
+    'This production QA document is disposable and belongs only to prod-qa-v3-org.';
   const document = await prisma.document.upsert({
     where: { id: ids.documentId },
     update: {
@@ -424,16 +732,14 @@ export async function ensureProductionQaProfile(
 
   // Reset only the disposable QA submission. Durable activity elsewhere,
   // including real classroom data, remains untouched.
-  await prisma.$transaction(async (tx) => {
-    await tx.$executeRawUnsafe(
-      "SET LOCAL yawp.submission_activity_cleanup = 'on'"
-    );
-    await tx.submissionActivity.deleteMany({
-      where: {
-        submissionId: ids.submissionId,
-        organizationId: ids.organizationId,
-      },
-    });
+  await prisma.$executeRawUnsafe(
+    "SET LOCAL yawp.submission_activity_cleanup = 'on'"
+  );
+  await prisma.submissionActivity.deleteMany({
+    where: {
+      submissionId: ids.submissionId,
+      organizationId: ids.organizationId,
+    },
   });
   const releasedAt = new Date('2026-08-20T12:00:00.000Z');
   const submission = await prisma.submission.upsert({
@@ -497,6 +803,21 @@ export async function ensureProductionQaProfile(
     submissionId: submission.id,
     password,
   };
+}
+
+export async function ensureProductionQaProfile(
+  prisma: RootPrismaClient,
+  password = assertProductionQaPassword(process.env.PROD_QA_PASSWORD)
+): Promise<ProductionQaProfileResult> {
+  return prisma.$transaction(
+    async (tx) => {
+      await tx.$executeRaw`
+        SELECT pg_advisory_xact_lock(81205, hashtext(${PRODUCTION_QA_IDS.organizationId}))
+      `;
+      return provisionProductionQaProfile(tx, password);
+    },
+    { isolationLevel: 'Serializable' }
+  );
 }
 
 if (import.meta.main) {

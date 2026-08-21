@@ -477,7 +477,7 @@ describe('api.domain.update-submission', () => {
     });
   });
 
-  test('fails the endpoint transaction when required audit writes are disabled', async () => {
+  test('fails grade and grammar transaction when required audit writes are disabled', async () => {
     const previous = process.env.SUBMISSION_ACTIVITY_WRITES_ENABLED;
     process.env.SUBMISSION_ACTIVITY_WRITES_ENABLED = 'false';
     prisma.submission.findFirst.mockResolvedValue({
@@ -504,7 +504,19 @@ describe('api.domain.update-submission', () => {
     try {
       await expect(
         action({
-          request: makeRequest({ submissionId: 'sub-1', score: '92% (A)' }),
+          request: makeRequest({
+            submissionId: 'sub-1',
+            score: '92% (A)',
+            grammarIssues: [
+              {
+                id: 'grammar-fault',
+                kind: 'style',
+                message: 'Required audit',
+                start: 0,
+                end: 4,
+              },
+            ],
+          }),
         } as any)
       ).rejects.toThrow(
         'Submission activity recording is temporarily unavailable'

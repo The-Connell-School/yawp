@@ -23,13 +23,18 @@ maintenance_url="$server_url/postgres"
 proof_url="$server_url/$proof_database"
 upgrade_url="$server_url/$upgrade_database"
 activity_migration="20260820110000_add_submission_activity"
+hardening_migration="20260821010000_harden_submission_activity_tenant_guard"
+pre_feature_ref="${SUBMISSION_ACTIVITY_PRE_FEATURE_REF:-a6bec591b5b2adf2b7799d9f773f74a4001607b9}"
+pre_feature_migration_count=93
 upgrade_migrations_dir="$(mktemp -d "$repo_root/packages/prisma/.activity-proof-upgrade.XXXXXX")"
+rollback_probe_dir="$(mktemp -d "$repo_root/packages/prisma/.activity-proof-rollback.XXXXXX")"
 schema_diff="$(mktemp "$repo_root/packages/prisma/.activity-schema-diff.XXXXXX")"
 
 cleanup() {
   dropdb --if-exists --maintenance-db="$maintenance_url" "$proof_database"
   dropdb --if-exists --maintenance-db="$maintenance_url" "$upgrade_database"
   rm -rf "$upgrade_migrations_dir"
+  rm -rf "$rollback_probe_dir"
   rm -f "$schema_diff"
 }
 trap cleanup EXIT
@@ -84,6 +89,12 @@ while IFS= read -r migration_file; do
   fi
   cp -R "$(dirname "$migration_file")" "$upgrade_migrations_dir/migrations/$migration_name"
 done < <(find "$repo_root/packages/prisma/migrations" -mindepth 2 -maxdepth 2 -name migration.sql | sort)
+actual_predecessor_count="$(find "$upgrade_migrations_dir/migrations" -mindepth 2 -maxdepth 2 -name migration.sql | wc -l | tr -d ' ')"
+[[ "$actual_predecessor_count" == "$pre_feature_migration_count" ]] || {
+  echo "Expected $pre_feature_migration_count pre-feature migrations, found $actual_predecessor_count." >&2
+  exit 1
+}
+echo "Populated migration path: $pre_feature_migration_count -> 95 (both feature migrations)"
 (
   cd "$upgrade_migrations_dir"
   DATABASE_URL="$upgrade_url" "$repo_root/packages/prisma/node_modules/.bin/prisma" migrate deploy
@@ -134,6 +145,44 @@ before_count="$(psql "$upgrade_url" --no-psqlrc --tuples-only --no-align --comma
 echo "Applying activity migration to populated predecessor"
 psql "$upgrade_url" --no-psqlrc --set ON_ERROR_STOP=on \
   --file "$repo_root/packages/prisma/migrations/$activity_migration/migration.sql"
+psql "$upgrade_url" --no-psqlrc --set ON_ERROR_STOP=on \
+  --file "$repo_root/packages/prisma/migrations/$hardening_migration/migration.sql"
+
+echo "Proving pre-feature application client compatibility with the 95-migration schema"
+git archive "$pre_feature_ref" packages/prisma/schema.prisma \
+  | tar -x -C "$rollback_probe_dir" --strip-components=2
+DATABASE_URL="$upgrade_url" "$repo_root/packages/prisma/node_modules/.bin/prisma" generate \
+  --schema "$rollback_probe_dir/schema.prisma"
+(
+  cd "$rollback_probe_dir"
+  DATABASE_URL="$upgrade_url" bun -e '
+    import { PrismaPg } from "@prisma/adapter-pg";
+    import { PrismaClient } from "./generated/prisma";
+    const prisma = new PrismaClient({
+      adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL, ssl: false }),
+    });
+    try {
+      const before = await prisma.submission.findUniqueOrThrow({
+        where: { id: "activity-upgrade-submission" },
+        select: { id: true, feedback: true },
+      });
+      await prisma.submission.update({
+        where: { id: before.id },
+        data: { feedback: before.feedback },
+      });
+      const after = await prisma.submission.findUniqueOrThrow({
+        where: { id: before.id },
+        select: { id: true, feedback: true },
+      });
+      if (JSON.stringify(before) !== JSON.stringify(after)) {
+        throw new Error("Pre-feature client changed the compatibility probe row.");
+      }
+      console.log("pre-feature client read/write compatibility passed");
+    } finally {
+      await prisma.$disconnect();
+    }
+  '
+)
 
 after_submission="$(psql "$upgrade_url" --no-psqlrc --tuples-only --no-align --command \
   "SELECT row_to_json(snapshot)::text FROM (SELECT id, title, text, html, score, feedback, \"numericPercentage\", \"letterGrade\", \"documentId\" FROM \"Submission\" WHERE id = 'activity-upgrade-submission') snapshot;")"
