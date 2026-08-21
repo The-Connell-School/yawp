@@ -191,6 +191,9 @@ describe('production deployment contract', () => {
     const migrateIndex = deployWorkflow.indexOf(
       'bun prisma:migrate-remote production'
     );
+    const fingerprintCheckIndex = deployWorkflow.indexOf(
+      '"${observed_fingerprint}" != "${PROD_SSH_HOST_FINGERPRINT}"'
+    );
     const pushIndex = deployWorkflow.indexOf(
       'bun web-app:docker:production:push'
     );
@@ -213,6 +216,11 @@ describe('production deployment contract', () => {
     expect(deployWorkflow).toContain('backfill-class-art-key');
     expect(deployWorkflow).toContain('PROD_SSH_PRIVATE_KEY');
     expect(deployWorkflow).toContain('PROD_SSH_KEY_PATH');
+    expect(deployWorkflow).toContain('PROD_SSH_HOST_FINGERPRINT');
+    expect(deployWorkflow).toContain('PROD_SSH_KNOWN_HOSTS_PATH');
+    expect(deployWorkflow).not.toContain(
+      'ssh-keyscan -H "${PROD_SSH_HOST}" >> ~/.ssh/known_hosts'
+    );
     expect(deployWorkflow).toContain('PROD_DB_HOST');
     expect(deployWorkflow).toContain('PROD_DB_NAME');
     expect(deployWorkflow).toContain('PROD_DB_USER');
@@ -227,6 +235,8 @@ describe('production deployment contract', () => {
       deployValidateMigrateIndex
     );
     expect(migrateIndex).toBeGreaterThan(-1);
+    expect(fingerprintCheckIndex).toBeGreaterThan(-1);
+    expect(fingerprintCheckIndex).toBeLessThan(migrateIndex);
     expect(pushIndex).toBeGreaterThan(-1);
     expect(migrateIndex).toBeLessThan(pushIndex);
     expect(migrateRemoteScript).toContain('--require-data');
@@ -238,6 +248,9 @@ describe('production deployment contract', () => {
     );
     expect(migrateRemoteScript).toContain('rejectUnauthorized: false');
     expect(migrateRemoteScript).toContain("REMOTE_MIGRATE_TUNNEL: '1'");
+    expect(migrateRemoteScript).toContain("'StrictHostKeyChecking=yes'");
+    expect(migrateRemoteScript).toContain('UserKnownHostsFile=');
+    expect(migrateRemoteScript).toContain('PROD_SSH_KNOWN_HOSTS_PATH');
     expect(remoteMigrateIndex).toBeGreaterThan(-1);
     expect(remoteBackfillIndex).toBeGreaterThan(remoteMigrateIndex);
     expect(remoteReleaseGateIndex).toBeGreaterThan(remoteBackfillIndex);
