@@ -238,8 +238,9 @@ export async function action({ request }: ActionFunctionArgs) {
       } catch {
         // Best-effort only: do not block launch if preview data is thin
       }
-      // Start a fresh cookie-session with the new DB session id (no separate clear cookie)
-      const newAuthSession = await authSessionStorage.getSession();
+      // Mirror normal login: update the existing cookie session
+      const cookies = request.headers.get('cookie');
+      const newAuthSession = await authSessionStorage.getSession(cookies);
       newAuthSession.set(sessionKey, session.id);
       newAuthSession.unset('impersonationMode');
       newAuthSession.unset('impersonatorUserId');
