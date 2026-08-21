@@ -68,9 +68,10 @@ function faultFrom(url, headers, body = {}) {
 }
 
 function originFrom(config, request, listenOrigin) {
+  const xfHost = request.headers['x-forwarded-host'];
+  if (xfHost) return `https://${xfHost}${config.publicBasePath}`;
   if (config.publicUrl) return config.publicUrl;
-  const host = request.headers['x-forwarded-host'] || request.headers.host;
-  // Always serve the public mock over HTTPS on previews.
+  const host = request.headers.host;
   if (host) return `https://${host}${config.publicBasePath}`;
   return `${listenOrigin}${config.publicBasePath}`;
 }
