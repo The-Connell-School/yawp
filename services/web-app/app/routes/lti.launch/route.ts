@@ -280,9 +280,16 @@ export async function action({ request }: ActionFunctionArgs) {
       } catch {
         // Best-effort only: do not block launch if preview data is thin
       }
-      // Mirror normal login: update the existing cookie session
-      const cookies = request.headers.get('cookie');
-      const newAuthSession = await authSessionStorage.getSession(cookies);
+      // Hard replace: clear any existing cookie-session, then set a fresh one
+      const existing = await authSessionStorage.getSession(
+        request.headers.get('cookie')
+      );
+      const previousSessionId = existing.get(sessionKey);
+      if (previousSessionId) {
+        void prisma.session.deleteMany({ where: { id: previousSessionId } });
+      }
+      const clearAuthCookie = await authSessionStorage.destroySession(existing);
+      const newAuthSession = await authSessionStorage.getSession();
       newAuthSession.set(sessionKey, session.id);
       newAuthSession.unset('impersonationMode');
       newAuthSession.unset('impersonatorUserId');
@@ -290,6 +297,7 @@ export async function action({ request }: ActionFunctionArgs) {
       return redirect('/app', {
         status: 303,
         headers: combineHeaders(
+          { 'set-cookie': clearAuthCookie },
           {
             'set-cookie': await authSessionStorage.commitSession(newAuthSession, {
               expires: session.expirationDate,
