@@ -380,6 +380,26 @@ try {
     unexpectedSubmissions.length > 0 ||
     unexpectedActivity.length > 0
   ) {
+    console.error(
+      JSON.stringify(
+        {
+          classification: 'fail',
+          reason: 'unexpected-production-qa-residue',
+          unexpectedMemberships,
+          unexpectedSubmissions,
+          unexpectedActivity,
+          enumeratedResidue: {
+            organizations: qaOrganizations,
+            identityMatches: qaIdentityMatches,
+            memberships: qaMemberships,
+            submissions: qaSubmissions,
+            activity: qaActivity,
+          },
+        },
+        null,
+        2
+      )
+    );
     throw new Error(
       'A disposable production QA organization contains non-QA membership, submission, or activity rows.'
     );
