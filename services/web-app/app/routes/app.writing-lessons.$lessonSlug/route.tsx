@@ -20,6 +20,7 @@ import {
 } from 'react-router';
 
 import { GeneralErrorBoundary } from '~/components/error-boundary';
+import { LessonEvidencePanel } from '~/components/writing-lessons/lesson-evidence-panel';
 import { Button } from '~/components/ui/button';
 import { Badge } from '~/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
@@ -30,6 +31,8 @@ import { formatClassLabel } from '~/utils/class-display';
 import { prisma } from '~/utils/db.server';
 import { isCompositionPracticeEnabled } from '~/utils/writing-lessons/composition-flag.server';
 import { COMPOSITION_TOPIC_SUGGESTIONS } from '~/utils/writing-lessons/composition-topic-prompts';
+import type { LessonEvidence } from '~/utils/writing-lessons/lesson-evidence';
+import { getLessonEvidenceForTeacher } from '~/utils/writing-lessons/lesson-evidence.server';
 import {
   getLoungeModuleLinkForLesson,
   type LoungeModuleLink,
@@ -87,6 +90,12 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       ? await getLoungeModuleLinkForLesson(lesson.slug, profile.id)
       : null;
 
+  // The teacher's half of this page: what their own classes have done with
+  // this skill. A student never gets this, and never gets anyone else's work.
+  const evidence: LessonEvidence | null = isTeacher
+    ? await getLessonEvidenceForTeacher(lesson.slug, profile.id)
+    : null;
+
   return dataResponse({
     lesson,
     isComposition,
@@ -98,6 +107,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     isTeacher,
     teacherClasses,
     loungeModule,
+    evidence,
   });
 }
 
@@ -110,6 +120,7 @@ export default function WritingLessonDetailRoute() {
     isTeacher,
     teacherClasses,
     loungeModule,
+    evidence,
   } = useLoaderData<typeof loader>();
 
   // Grammar lessons drill ACT multiple choice; composition lessons are
@@ -195,6 +206,12 @@ export default function WritingLessonDetailRoute() {
             <div className="space-y-6">
               {loungeModule ? (
                 <LoungeModuleCard loungeModule={loungeModule} />
+              ) : null}
+              {evidence ? (
+                <LessonEvidencePanel
+                  evidence={evidence}
+                  isComposition={isComposition}
+                />
               ) : null}
               <TeacherAssignPanel
                 lessonSlug={lesson.slug}

@@ -348,6 +348,78 @@ test.describe.serial('Writing Fundamentals Practice', () => {
   // redesigned dashboard and sheet. Assigning now happens from the per-lesson
   // sheet (covered by the test below). Decide whether the shared-sheet path
   // should come back, then restore or retire this.
+  test('shows a teacher how the skill has landed in their classes', async ({
+    page,
+    e2eContext,
+    signIn,
+  }) => {
+    // A lesson page reads the same to both audiences until it carries
+    // something only a teacher can act on: their own students' work.
+    await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
+    await page.goto('/app/writing-lessons/pronoun-agreement');
+
+    const panel = page.getByRole('complementary');
+    const evidence = panel.getByTestId('lesson-evidence');
+    await expect(evidence).toBeVisible();
+    // Nothing assigned yet, so it says what will appear here rather than
+    // showing an empty table.
+    await expect(panel.getByTestId('lesson-evidence-empty')).toBeVisible();
+
+    await page.locator('input[name="classIds"]').first().check();
+    await page.locator('input[name="problemCount"]').fill('3');
+    await page.locator('input[name="dueAt"]').fill('2026-12-01');
+    await page.getByRole('button', { name: /assign practice/i }).click();
+    await expect(page.getByTestId('assign-result')).toContainText(
+      /assigned to/i
+    );
+
+    // The student works it and gets the first question wrong.
+    await page.request.post('/auth/logout');
+    await page.context().clearCookies();
+    await signIn(e2eContext.userEmail, 'johndoe');
+    await page.goto('/app/writing-lessons');
+    await page
+      .getByTestId(/^writing-practice-start-/)
+      .first()
+      .click();
+    await expect(page).toHaveURL(/\/app\/writing-lessons\/assigned\//);
+
+    await page.getByRole('radio').first().check();
+    await page.getByRole('button', { name: /check & save/i }).click();
+    await expect(page.getByTestId('act-result')).toBeVisible();
+
+    // The teacher comes back to the lesson and can see it — the class that
+    // worked it, and the question that tripped them up.
+    await page.request.post('/auth/logout');
+    await page.context().clearCookies();
+    await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
+    await page.goto('/app/writing-lessons/pronoun-agreement');
+
+    await expect(page.getByTestId('lesson-evidence-empty')).toHaveCount(0);
+    const classes = page.getByTestId('lesson-evidence-classes');
+    await expect(classes).toContainText(/1 of \d+ practiced/i);
+    await expect(
+      classes.getByRole('link', { name: /view results/i }).first()
+    ).toBeVisible();
+
+    const misses = page.getByTestId('lesson-evidence-misses');
+    await expect(misses).toBeVisible();
+    await expect(misses).toContainText(/1 of 1 missed this/i);
+    await expect(misses).toContainText(/correct:/i);
+    // The wording their students actually picked, ready for the board — not
+    // the label on the button. "They chose: NO CHANGE" would tell a teacher
+    // nothing about what their students wrote.
+    await expect(misses.getByText(/They chose: \S+/)).toBeVisible();
+    await expect(misses).not.toContainText(/they chose: no change/i);
+
+    // A student never sees any of it.
+    await page.request.post('/auth/logout');
+    await page.context().clearCookies();
+    await signIn(e2eContext.userEmail, 'johndoe');
+    await page.goto('/app/writing-lessons/pronoun-agreement');
+    await expect(page.getByTestId('lesson-evidence')).toHaveCount(0);
+  });
+
   test.fixme('a teacher assigns interleaved writing practice from the create-assignment sheet', async ({
     page,
     e2eContext,
