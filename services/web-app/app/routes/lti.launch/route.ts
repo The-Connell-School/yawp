@@ -64,38 +64,33 @@ export async function action({ request }: ActionFunctionArgs) {
           },
         ],
       });
-      // Post back to the mock. Prefer internal mock URL for server-to-server calls.
-      let postUrl = returnUrl;
+      // Post back to the mock. Try internal upstream, then same-origin proxy, then returnUrl.
+      const candidates: string[] = [];
       const internalMock = String(process.env.BLACKBOARD_LTI_MOCK_URL || '').replace(/\/$/, '');
-      if (internalMock) {
-        try {
-          const parsed = new URL(returnUrl);
-          postUrl = new URL('/api/v1/lti/deep-linking', internalMock).toString();
-        } catch {}
-      }
-      const tryPost = async (asForm: boolean) => {
-        if (asForm) {
+      if (internalMock) candidates.push(new URL('/api/v1/lti/deep-linking', internalMock).toString());
+      candidates.push(new URL('/dev/blackboard-lti-mock/api/v1/lti/deep-linking', getDomainUrl(request)).toString());
+      candidates.push(returnUrl);
+      const postOnce = async (urlStr: string) => {
+        // Try JSON then x-www-form-urlencoded, require 2xx
+        let res = await fetch(urlStr, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ JWT: responseJwt }),
+        }).catch(() => null);
+        if (!res || !res.ok) {
           const body = new URLSearchParams();
           body.set('JWT', responseJwt);
-          await fetch(postUrl, {
+          res = await fetch(urlStr, {
             method: 'POST',
             headers: { 'content-type': 'application/x-www-form-urlencoded' },
             body: body.toString(),
-          });
-        } else {
-          await fetch(postUrl, {
-            method: 'POST',
-            headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({ JWT: responseJwt }),
-          });
+          }).catch(() => null);
         }
+        return res?.ok === true;
       };
-      try {
-        await tryPost(false);
-      } catch {
-        try {
-          await tryPost(true);
-        } catch {}
+      for (const urlStr of candidates) {
+        const ok = await postOnce(urlStr);
+        if (ok) break;
       }
     }
     return redirect('/dev/blackboard-lti-mock/learn/courses');
