@@ -64,46 +64,38 @@ export async function action({ request }: ActionFunctionArgs) {
           },
         ],
       });
-      // Post back to the mock. Try internal upstream, then same-origin proxy, then returnUrl.
-      const candidates: string[] = [];
-      // Prefer same-origin proxy first (proven path through preview gate),
-      // then internal upstream, then the platform's return URL.
-      candidates.push(
-        new URL(
-          '/dev/blackboard-lti-mock/api/v1/lti/deep-linking',
-          getDomainUrl(request)
-        ).toString()
-      );
+      // Post back to the mock. Prefer internal mock URL for server-to-server calls.
+      let postUrl = returnUrl;
       const internalMock = String(process.env.BLACKBOARD_LTI_MOCK_URL || '').replace(/\/$/, '');
       if (internalMock) {
-        candidates.push(new URL('/api/v1/lti/deep-linking', internalMock).toString());
+        try {
+          // Ensure we post directly to the mock container
+          postUrl = new URL('/api/v1/lti/deep-linking', internalMock).toString();
+        } catch {}
       }
-      if (returnUrl) candidates.push(returnUrl);
-      const postOnce = async (urlStr: string) => {
-        const forwardHeaders = {
-          'x-forwarded-host': new URL(getDomainUrl(request)).host,
-          'x-forwarded-proto': 'https',
-        } as Record<string, string>;
-        // Try JSON then x-www-form-urlencoded, require 2xx
-        let res = await fetch(urlStr, {
-          method: 'POST',
-          headers: { 'content-type': 'application/json', ...forwardHeaders },
-          body: JSON.stringify({ JWT: responseJwt }),
-        }).catch(() => null);
-        if (!res || !res.ok) {
+      const tryPost = async (asForm: boolean) => {
+        if (asForm) {
           const body = new URLSearchParams();
           body.set('JWT', responseJwt);
-          res = await fetch(urlStr, {
+          await fetch(postUrl, {
             method: 'POST',
-            headers: { 'content-type': 'application/x-www-form-urlencoded', ...forwardHeaders },
+            headers: { 'content-type': 'application/x-www-form-urlencoded' },
             body: body.toString(),
-          }).catch(() => null);
+          });
+        } else {
+          await fetch(postUrl, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ JWT: responseJwt }),
+          });
         }
-        return res?.ok === true;
       };
-      for (const urlStr of candidates) {
-        const ok = await postOnce(urlStr);
-        if (ok) break;
+      try {
+        await tryPost(false);
+      } catch {
+        try {
+          await tryPost(true);
+        } catch {}
       }
     }
     return redirect('/dev/blackboard-lti-mock/learn/courses');
