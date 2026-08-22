@@ -8,11 +8,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
   for (const [key, value] of url.searchParams.entries()) {
     target.searchParams.set(key, value);
   }
-  // Ensure redirect_uri points back to our /lti/launch when missing
-  if (!target.searchParams.get('target_link_uri')) {
-    const launch = new URL('/lti/launch', url.origin);
-    target.searchParams.set('target_link_uri', launch.toString());
-  }
+  // Force target_link_uri to this preview's /lti/launch so the platform POSTS here
+  const launch = new URL('/lti/launch', url.origin);
+  target.searchParams.set('target_link_uri', launch.toString());
   return redirect(target.toString());
 }
 
