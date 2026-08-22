@@ -101,7 +101,7 @@ export async function action({ request }: ActionFunctionArgs) {
     return redirect('/dev/blackboard-lti-mock/learn/courses');
   }
 
-  // For a normal resource-link launch, establish a session as the mock user
+  // For a normal resource-link launch, establish a session as the LMS user
   // Always allow during LTI launch so the LMS user takes effect on redirect.
   if (messageType === 'LtiResourceLinkRequest') {
     const roles: string[] =
@@ -109,21 +109,24 @@ export async function action({ request }: ActionFunctionArgs) {
     const isLearner = roles.some((r) =>
       /membership#Learner$/i.test(String(r))
     );
-    const desiredEmail = isLearner
-      ? 'dev.student@yawp.local'
-      : 'dev.teacher@yawp.local';
-
     const previewSeat = await getPreviewAccessSeat(request);
     const orgId = previewSeat?.organizationId ?? null;
     const roleFilter = isLearner ? ('STUDENT' as const) : ('TEACHER' as const);
-    // Ensure dev persona exists and has a membership in this org (preview)
+    // Build a Yawp identity from LTI claims to reflect Ada/Grace instead of a dev persona
+    const sub = String(claims?.sub || '').trim() || 'bb-user';
+    const claimEmail = String(claims?.email || '').trim() || `${sub}@blackboard.local`;
+    const claimName =
+      String(claims?.name || '').trim() ||
+      [String(claims?.given_name || '').trim(), String(claims?.family_name || '').trim()]
+        .filter(Boolean)
+        .join(' ') ||
+      (isLearner ? 'Ada Student' : 'Grace Instructor');
+
+    // Ensure an in-seat user exists with this identity
     let user =
       (orgId
         ? await prisma.user.findFirst({
-            where: {
-              email: desiredEmail,
-              memberships: { some: { organizationId: orgId } },
-            },
+            where: { email: claimEmail, memberships: { some: { organizationId: orgId } } },
             select: {
               id: true,
               memberships: {
@@ -135,7 +138,7 @@ export async function action({ request }: ActionFunctionArgs) {
             },
           })
         : await prisma.user.findUnique({
-            where: { email: desiredEmail },
+            where: { email: claimEmail },
             select: {
               id: true,
               memberships: {
@@ -146,23 +149,25 @@ export async function action({ request }: ActionFunctionArgs) {
             },
           })) || null;
 
-    if (!user && orgId) {
-      const created = await prisma.user.upsert({
-        where: { email: desiredEmail },
-        update: {},
-        create: {
-          email: desiredEmail,
-          name: isLearner ? 'Dev Student' : 'Dev Teacher',
-          memberships: { create: { organizationId: orgId, role: roleFilter } },
+    if (!user) {
+      const created = await prisma.user.create({
+        data: {
+          email: claimEmail,
+          name: claimName,
+          ...(orgId
+            ? { memberships: { create: { organizationId: orgId, role: roleFilter } } }
+            : {}),
         },
         select: {
           id: true,
-          memberships: {
-            where: { organizationId: orgId },
-            select: { id: true, role: true },
-            orderBy: { createdAt: 'asc' },
-            take: 1,
-          },
+          memberships: orgId
+            ? {
+                where: { organizationId: orgId },
+                select: { id: true, role: true },
+                orderBy: { createdAt: 'asc' },
+                take: 1,
+              }
+            : { select: { id: true, role: true }, orderBy: { createdAt: 'asc' }, take: 1 },
         },
       });
       user = created;
