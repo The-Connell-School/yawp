@@ -4,7 +4,9 @@ import {
   describeGroupSubmitProgress,
   describeGroupSubmitWaiting,
   describeTeacherSubmitConfirmation,
+  summarizeBoardSubmitProgress,
   summarizeGroupSubmitReadiness,
+  type BoardGroupSubmitStatus,
   type GroupSubmitMemberInput,
 } from './submit-readiness';
 
@@ -241,5 +243,85 @@ describe('what the teacher is told and asked', () => {
     expect(sentence).toMatch(/what the group has written so far/i);
     expect(sentence).toMatch(/see that you submitted it for them/i);
     expect(sentence).toContain('Devon and Maya have not pressed');
+  });
+});
+
+/**
+ * The groups board's one line: how many groups are in, and how many students
+ * are holding the rest up. The teacher's entry point to the whole rule — before
+ * this, a group stuck on one student was invisible until someone opened that
+ * group's draft page and counted.
+ */
+describe('summarizeBoardSubmitProgress', () => {
+  const status = (
+    overrides: Partial<BoardGroupSubmitStatus> = {}
+  ): BoardGroupSubmitStatus => ({
+    total: 3,
+    submittedCount: 0,
+    everyoneSubmitted: false,
+    outstanding: ['Devon', 'Maya', 'Ada'],
+    submittedAt: null,
+    submittedByTeacherName: null,
+    ...overrides,
+  });
+
+  const submitted = () =>
+    status({
+      submittedCount: 3,
+      everyoneSubmitted: true,
+      outstanding: [],
+      submittedAt: '2026-08-22T11:00:00.000Z',
+    });
+
+  test('counts the groups that are actually in', () => {
+    const summary = summarizeBoardSubmitProgress([submitted(), status()]);
+
+    expect(summary.groupsSubmitted).toBe(1);
+    expect(summary.groupsTotal).toBe(2);
+  });
+
+  test('counts the students the class is waiting on', () => {
+    // Only in groups that have not submitted: a submitted group's roster is
+    // settled, whoever pressed.
+    const summary = summarizeBoardSubmitProgress([
+      submitted(),
+      status({ outstanding: ['Devon'] }),
+      status({ outstanding: ['Maya', 'Ada'] }),
+    ]);
+
+    expect(summary.studentsOutstanding).toBe(3);
+  });
+
+  test('says both numbers in one line', () => {
+    const summary = summarizeBoardSubmitProgress([
+      submitted(),
+      status({ outstanding: ['Devon'] }),
+    ]);
+
+    expect(summary.sentence).toContain('1 of 2 groups');
+    expect(summary.sentence).toContain('1 student');
+  });
+
+  test('pluralises the students it is waiting on', () => {
+    const summary = summarizeBoardSubmitProgress([
+      status({ outstanding: ['Devon', 'Maya'] }),
+    ]);
+
+    expect(summary.sentence).toContain('2 students');
+  });
+
+  test('says so when every group is in', () => {
+    const summary = summarizeBoardSubmitProgress([submitted(), submitted()]);
+
+    expect(summary.sentence).toMatch(/all 2 groups/i);
+    expect(summary.studentsOutstanding).toBe(0);
+  });
+
+  test('an unopened board has nothing to report', () => {
+    // Groups exist before they are opened; there is nothing to press yet.
+    const summary = summarizeBoardSubmitProgress([]);
+
+    expect(summary.sentence).toBe('');
+    expect(summary.groupsTotal).toBe(0);
   });
 });

@@ -20,6 +20,8 @@ import {
   removeEmptyGroup,
 } from '~/domain/collaboration/group-editing.server';
 import { unassignedMembershipIds } from '~/domain/collaboration/groups';
+import { readGroupSubmissions } from '~/domain/collaboration/submit.server';
+import { summarizeGroupSubmitReadiness } from '~/domain/collaboration/submit-readiness';
 import {
   arrangeGroups,
   GroupProvisioningError,
@@ -115,7 +117,9 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       openedAt: true,
       documentId: true,
       members: {
-        select: { membershipId: true, removedAt: true },
+        // `submittedAt` is one member's press. The board needs it to say who a
+        // group is still waiting on, which is the whole point of the column.
+        select: { membershipId: true, removedAt: true, submittedAt: true },
       },
     },
   });
@@ -127,6 +131,15 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const nameFor = new Map(
     roster.map((entry) => [entry.membershipId, entry.name])
   );
+
+  // Which groups are actually in. One query for the whole board rather than two
+  // per card: a class of ten groups would otherwise pay twenty round trips for a
+  // line of text.
+  const submissions = await readGroupSubmissions({
+    documentIds: groups
+      .map((group) => group.documentId)
+      .filter((id): id is string => Boolean(id)),
+  });
 
   const unassigned = unassignedMembershipIds({
     rosterMembershipIds: roster.map((entry) => entry.membershipId),
@@ -149,18 +162,49 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     isWholeClass:
       classAssignment.assignment.collaborationGroupMode === 'whole-class',
     opened: groups.some((group) => group.openedAt !== null),
-    groups: groups.map((group) => ({
-      id: group.id,
-      label: group.label,
-      openedAt: group.openedAt ? group.openedAt.toISOString() : null,
-      documentId: group.documentId,
-      members: group.members
-        .filter((member) => member.removedAt === null)
-        .map((member) => ({
+    groups: groups.map((group) => {
+      const active = group.members.filter(
+        (member) => member.removedAt === null
+      );
+      const members = active.map((member) => ({
+        membershipId: member.membershipId,
+        name: nameFor.get(member.membershipId) ?? 'Former student',
+      }));
+
+      const readiness = summarizeGroupSubmitReadiness({
+        members: active.map((member) => ({
           membershipId: member.membershipId,
           name: nameFor.get(member.membershipId) ?? 'Former student',
+          submittedAt: member.submittedAt,
         })),
-    })),
+        // The teacher is nobody's member here; the board reports on the group.
+        viewerMembershipId: null,
+      });
+      const submission = group.documentId
+        ? (submissions.get(group.documentId) ?? null)
+        : null;
+
+      return {
+        id: group.id,
+        label: group.label,
+        openedAt: group.openedAt ? group.openedAt.toISOString() : null,
+        documentId: group.documentId,
+        members,
+        // Null until the group is opened: before that there is no draft and
+        // nothing to press, so a "0 of 3 submitted" badge would be noise.
+        submit: group.openedAt
+          ? {
+              total: readiness.total,
+              submittedCount: readiness.submittedCount,
+              everyoneSubmitted: readiness.everyoneSubmitted,
+              outstanding: readiness.waitingOn.map((member) => member.name),
+              submittedAt: submission?.submittedAt ?? null,
+              submittedByTeacherName:
+                submission?.submittedByTeacherName ?? null,
+            }
+          : null,
+      };
+    }),
     unassigned,
     rosterCount: roster.length,
   });

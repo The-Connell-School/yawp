@@ -1007,10 +1007,26 @@ submission, so what is handed in is the snapshot taken at that moment, not a
 lock on further typing. Locking the room on submit is a separate question and is
 not built.
 
+### Outstanding on the groups board — 2026-08-22
+
+The teacher's entry point to all of this. Each opened group's card carries its
+submit state — "2 of 3 submitted · waiting on Devon", or "Submitted 22/08, 11:00"
+with the teacher's name when they submitted it for the group — and one line above
+the board reads "1 of 4 groups have submitted — 5 students still to press
+Submit".
+
+Read in one query for the whole board (`readGroupSubmissions`), not two per
+card: a class of ten groups would otherwise pay twenty round trips for a line of
+text. `DocumentGroupMember.submittedAt` rides along on the member select the
+board already ran, so the per-group half is free.
+
+Unopened groups show nothing. There is no draft before groups are opened, so
+"0 of 3 submitted" would be a count of something that cannot happen yet.
+
 **Still open:** nothing tells a group they are being waited on when they are not
-looking at the page, and nothing tells a teacher that a group is stuck without
-their opening the group-draft page. A nudge — a notification, or an outstanding
-column on the groups board — is the obvious follow-up, and neither exists yet.
+looking at their draft. The teacher can now see a stuck group from the board and
+act on it; the students still cannot see it from anywhere else. A notification
+is the remaining piece, and it does not exist.
 
 ## Open questions
 

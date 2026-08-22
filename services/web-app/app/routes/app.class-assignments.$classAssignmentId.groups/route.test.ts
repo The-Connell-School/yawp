@@ -13,14 +13,17 @@ const moveStudentToGroup = mock();
 const addGroup = mock();
 const removeEmptyGroup = mock();
 const redirectWithToast = mock();
+const readGroupSubmissions = mock();
 class GroupProvisioningError extends Error {}
 class GroupEditingError extends Error {}
 
 mock.module('~/utils/db.server', () => ({ prisma }));
-mock.module('~/utils/auth.server', () => ({ requireUserId, requireMembership }));
-const actualGroups = globalThis.__realModules[
-  '~/domain/collaboration/groups.server'
-];
+mock.module('~/utils/auth.server', () => ({
+  requireUserId,
+  requireMembership,
+}));
+const actualGroups =
+  globalThis.__realModules['~/domain/collaboration/groups.server'];
 mock.module('~/domain/collaboration/groups.server', () => ({
   ...actualGroups,
   arrangeGroups,
@@ -34,6 +37,9 @@ mock.module('~/domain/collaboration/group-editing.server', () => ({
   GroupEditingError,
 }));
 mock.module('~/utils/toast.server', () => ({ redirectWithToast }));
+mock.module('~/domain/collaboration/submit.server', () => ({
+  readGroupSubmissions,
+}));
 
 const { action, loader } = await import('./route');
 
@@ -104,11 +110,14 @@ describe('class assignment groups', () => {
     arrangeGroups.mockReset().mockResolvedValue({ groupCount: 2 });
     openGroups.mockReset().mockResolvedValue({ provisioned: 2 });
     moveStudentToGroup.mockReset().mockResolvedValue({ moved: true });
-    addGroup.mockReset().mockResolvedValue({ groupId: 'g-new', label: 'Group 3' });
+    addGroup
+      .mockReset()
+      .mockResolvedValue({ groupId: 'g-new', label: 'Group 3' });
     removeEmptyGroup.mockReset().mockResolvedValue({ removed: true });
     redirectWithToast
       .mockReset()
       .mockImplementation((to: string, options: any) => ({ to, options }));
+    readGroupSubmissions.mockReset().mockResolvedValue(new Map());
   });
 
   describe('authorization', () => {
@@ -207,6 +216,147 @@ describe('class assignment groups', () => {
         { membershipId: 'm2', name: 'bo@example.com' },
       ]);
       expect(body.unassigned).toEqual([{ membershipId: 'm1', name: 'Ada' }]);
+    });
+
+    /**
+     * The board is where a teacher finds out a group is stuck. A shared draft
+     * needs every member's press, so one absent student holds a group out
+     * indefinitely — and nothing else on this page would show it.
+     */
+    describe('who is still to press', () => {
+      const openedGroup = (members: any[]) => ({
+        id: 'g-1',
+        label: 'Group 1',
+        ordinal: 0,
+        openedAt: new Date('2026-08-17T10:00:00Z'),
+        documentId: 'doc-1',
+        members,
+      });
+
+      test('names the members of an opened group who have not pressed', async () => {
+        prisma.classAssignment.findFirst.mockResolvedValue(scoped());
+        prisma.documentGroup.findMany.mockResolvedValue([
+          openedGroup([
+            {
+              membershipId: 'm1',
+              removedAt: null,
+              submittedAt: new Date('2026-08-22T10:00:00Z'),
+            },
+            { membershipId: 'm2', removedAt: null, submittedAt: null },
+          ]),
+        ]);
+
+        const body = await readBody(await get());
+
+        expect(body.groups[0].submit).toMatchObject({
+          total: 2,
+          submittedCount: 1,
+          everyoneSubmitted: false,
+          outstanding: ['bo@example.com'],
+          submittedAt: null,
+        });
+      });
+
+      test('a removed member is not counted as outstanding', async () => {
+        // They were moved out; their old group must not look stuck on them.
+        prisma.classAssignment.findFirst.mockResolvedValue(scoped());
+        prisma.documentGroup.findMany.mockResolvedValue([
+          openedGroup([
+            {
+              membershipId: 'm1',
+              removedAt: null,
+              submittedAt: new Date('2026-08-22T10:00:00Z'),
+            },
+            {
+              membershipId: 'm2',
+              removedAt: new Date('2026-08-20T10:00:00Z'),
+              submittedAt: null,
+            },
+          ]),
+        ]);
+
+        const body = await readBody(await get());
+
+        expect(body.groups[0].submit).toMatchObject({
+          total: 1,
+          everyoneSubmitted: true,
+          outstanding: [],
+        });
+      });
+
+      test('reports a submitted group, and who submitted it', async () => {
+        prisma.classAssignment.findFirst.mockResolvedValue(scoped());
+        prisma.documentGroup.findMany.mockResolvedValue([
+          openedGroup([
+            { membershipId: 'm1', removedAt: null, submittedAt: null },
+          ]),
+        ]);
+        readGroupSubmissions.mockResolvedValue(
+          new Map([
+            [
+              'doc-1',
+              {
+                submittedAt: '2026-08-22T11:00:00.000Z',
+                submittedByTeacherName: 'Ms Okonkwo',
+              },
+            ],
+          ])
+        );
+
+        const body = await readBody(await get());
+
+        expect(body.groups[0].submit).toMatchObject({
+          submittedAt: '2026-08-22T11:00:00.000Z',
+          submittedByTeacherName: 'Ms Okonkwo',
+        });
+      });
+
+      test('a group that is not open yet has nothing to report', async () => {
+        // No draft exists before groups are opened, so there is nothing to
+        // press and a "0 of 2 submitted" badge would be noise.
+        prisma.classAssignment.findFirst.mockResolvedValue(scoped());
+        prisma.documentGroup.findMany.mockResolvedValue([
+          {
+            id: 'g-1',
+            label: 'Group 1',
+            ordinal: 0,
+            openedAt: null,
+            documentId: null,
+            members: [
+              { membershipId: 'm1', removedAt: null, submittedAt: null },
+            ],
+          },
+        ]);
+
+        const body = await readBody(await get());
+
+        expect(body.groups[0].submit).toBeNull();
+      });
+
+      test('reads the whole board in one query, not one per group', async () => {
+        prisma.classAssignment.findFirst.mockResolvedValue(scoped());
+        prisma.documentGroup.findMany.mockResolvedValue([
+          openedGroup([
+            { membershipId: 'm1', removedAt: null, submittedAt: null },
+          ]),
+          {
+            ...openedGroup([
+              { membershipId: 'm2', removedAt: null, submittedAt: null },
+            ]),
+            id: 'g-2',
+            label: 'Group 2',
+            ordinal: 1,
+            documentId: 'doc-2',
+          },
+        ]);
+
+        await get();
+
+        expect(readGroupSubmissions).toHaveBeenCalledTimes(1);
+        expect(readGroupSubmissions).toHaveBeenCalledWith({
+          documentIds: ['doc-1', 'doc-2'],
+        });
+      });
     });
 
     test('reports opened once any group has a draft', async () => {

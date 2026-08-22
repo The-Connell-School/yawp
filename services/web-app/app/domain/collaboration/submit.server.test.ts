@@ -1,7 +1,7 @@
 import { afterAll, beforeEach, describe, expect, mock, test } from 'bun:test';
 
 const prisma = {
-  submission: { findFirst: mock(), create: mock() },
+  submission: { findFirst: mock(), findMany: mock(), create: mock() },
   document: { update: mock() },
   documentGroup: { findFirst: mock() },
   documentGroupMember: { updateMany: mock() },
@@ -28,6 +28,7 @@ mock.module('~/domain/collaboration/snapshot', () => ({
 
 const {
   GroupSubmitError,
+  readGroupSubmissions,
   readGroupSubmitState,
   submitGroupDraft,
   withdrawGroupSubmit,
@@ -582,5 +583,73 @@ describe('readGroupSubmitState', () => {
 
     expect(state.submissionId).toBe('sub-1');
     expect(state.submittedAt).toBe('2026-08-22T11:00:00.000Z');
+  });
+});
+
+describe('readGroupSubmissions', () => {
+  beforeEach(() => {
+    prisma.submission.findMany.mockReset().mockResolvedValue([]);
+  });
+
+  test('asks nothing when there are no drafts to ask about', async () => {
+    // An unopened board has no documents at all; a query with an empty `in` is
+    // a round trip for a guaranteed empty answer.
+    const result = await readGroupSubmissions({ documentIds: [] });
+
+    expect(result.size).toBe(0);
+    expect(prisma.submission.findMany).not.toHaveBeenCalled();
+  });
+
+  test('reads a whole board in one query', async () => {
+    await readGroupSubmissions({ documentIds: ['doc-1', 'doc-2'] });
+
+    expect(prisma.submission.findMany).toHaveBeenCalledTimes(1);
+    const where = prisma.submission.findMany.mock.calls[0][0].where;
+    expect(where.documentId).toEqual({ in: ['doc-1', 'doc-2'] });
+    expect(where.unsubmittedAt).toBeNull();
+  });
+
+  test('keys each submission to its draft, naming a teacher who submitted it', async () => {
+    prisma.submission.findMany.mockResolvedValue([
+      {
+        documentId: 'doc-1',
+        submittedAt: new Date('2026-08-22T11:00:00Z'),
+        submittedByTeacher: { user: { name: 'Ms Okonkwo' } },
+      },
+      {
+        documentId: 'doc-2',
+        submittedAt: new Date('2026-08-22T10:00:00Z'),
+        submittedByTeacher: null,
+      },
+    ]);
+
+    const result = await readGroupSubmissions({
+      documentIds: ['doc-1', 'doc-2'],
+    });
+
+    expect(result.get('doc-1')).toEqual({
+      submittedAt: '2026-08-22T11:00:00.000Z',
+      submittedByTeacherName: 'Ms Okonkwo',
+    });
+    expect(result.get('doc-2')?.submittedByTeacherName).toBeNull();
+  });
+
+  test('keeps the newest submission when a draft has more than one', async () => {
+    prisma.submission.findMany.mockResolvedValue([
+      {
+        documentId: 'doc-1',
+        submittedAt: new Date('2026-08-22T11:00:00Z'),
+        submittedByTeacher: null,
+      },
+      {
+        documentId: 'doc-1',
+        submittedAt: new Date('2026-08-20T09:00:00Z'),
+        submittedByTeacher: null,
+      },
+    ]);
+
+    const result = await readGroupSubmissions({ documentIds: ['doc-1'] });
+
+    expect(result.get('doc-1')?.submittedAt).toBe('2026-08-22T11:00:00.000Z');
   });
 });

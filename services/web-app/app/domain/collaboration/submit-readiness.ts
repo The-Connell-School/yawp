@@ -171,3 +171,69 @@ export function describeTeacherSubmitConfirmation(
   // would be a promise the page does not keep.
   return `${who} What the group has written so far is what gets handed in, and they will see that you submitted it for them.`;
 }
+
+/**
+ * One group's submit state as the groups board needs it: flat, serializable,
+ * and already resolved to names, because the board renders many groups at once
+ * and must not go back to the database per card.
+ */
+export type BoardGroupSubmitStatus = {
+  total: number;
+  submittedCount: number;
+  everyoneSubmitted: boolean;
+  /** Active members who have not pressed, by name, in roster order. */
+  outstanding: string[];
+  submittedAt: string | null;
+  submittedByTeacherName: string | null;
+};
+
+/**
+ * The line above the board: how many groups are in, and how many students the
+ * class is waiting on.
+ *
+ * This is the teacher's entry point to the whole every-member rule. Without it a
+ * group stuck on one student who never pressed is invisible until somebody opens
+ * that group's draft page and counts — which is exactly the failure the rule
+ * trades for, so the board is where it has to be visible.
+ */
+export function summarizeBoardSubmitProgress(
+  statuses: BoardGroupSubmitStatus[]
+): {
+  groupsSubmitted: number;
+  groupsTotal: number;
+  studentsOutstanding: number;
+  sentence: string;
+} {
+  const groupsTotal = statuses.length;
+  const groupsSubmitted = statuses.filter(
+    (status) => status.submittedAt !== null
+  ).length;
+  // Only groups still out: a submitted group's roster is settled, whoever
+  // pressed and whoever did not.
+  const studentsOutstanding = statuses
+    .filter((status) => status.submittedAt === null)
+    .reduce((total, status) => total + status.outstanding.length, 0);
+
+  if (groupsTotal === 0) {
+    return { groupsSubmitted, groupsTotal, studentsOutstanding, sentence: '' };
+  }
+
+  if (groupsSubmitted === groupsTotal) {
+    return {
+      groupsSubmitted,
+      groupsTotal,
+      studentsOutstanding,
+      sentence: `All ${groupsTotal} groups have submitted.`,
+    };
+  }
+
+  const students =
+    studentsOutstanding === 1 ? '1 student' : `${studentsOutstanding} students`;
+
+  return {
+    groupsSubmitted,
+    groupsTotal,
+    studentsOutstanding,
+    sentence: `${groupsSubmitted} of ${groupsTotal} groups have submitted — ${students} still to press Submit.`,
+  };
+}

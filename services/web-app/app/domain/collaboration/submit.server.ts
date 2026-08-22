@@ -142,6 +142,50 @@ export async function readGroupSubmitState({
 }
 
 /**
+ * The active submission for each of several drafts, in one query.
+ *
+ * The groups board shows a whole class at once. Asking `readGroupSubmitState`
+ * per group would be two queries a card, and a class of ten groups would pay
+ * twenty round trips for a line of text.
+ */
+export async function readGroupSubmissions({
+  documentIds,
+}: {
+  documentIds: string[];
+}): Promise<
+  Map<string, { submittedAt: string; submittedByTeacherName: string | null }>
+> {
+  if (documentIds.length === 0) return new Map();
+
+  const submissions = await prisma.submission.findMany({
+    where: { documentId: { in: documentIds }, unsubmittedAt: null },
+    // Newest first, so the first row seen for a document is the one that counts
+    // if a withdrawn-and-resubmitted draft ever has more than one.
+    orderBy: { submittedAt: 'desc' },
+    select: {
+      documentId: true,
+      submittedAt: true,
+      submittedByTeacher: { select: { user: { select: { name: true } } } },
+    },
+  });
+
+  const byDocument = new Map<
+    string,
+    { submittedAt: string; submittedByTeacherName: string | null }
+  >();
+  for (const submission of submissions) {
+    if (!submission.documentId) continue;
+    if (byDocument.has(submission.documentId)) continue;
+    byDocument.set(submission.documentId, {
+      submittedAt: submission.submittedAt.toISOString(),
+      submittedByTeacherName:
+        submission.submittedByTeacher?.user.name?.trim() || null,
+    });
+  }
+  return byDocument;
+}
+
+/**
  * Takes back one member's press while the group is still waiting on someone.
  *
  * Only before the draft is in: once every member has pressed, the submission

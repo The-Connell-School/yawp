@@ -19,6 +19,11 @@ import { GripVertical, Plus, X } from 'lucide-react';
 import { Link } from 'react-router';
 import { Button } from '~/components/ui/button';
 import { MAX_COLLABORATION_GROUP_SIZE } from '~/domain/assignments/collaboration';
+import {
+  summarizeBoardSubmitProgress,
+  type BoardGroupSubmitStatus,
+} from '~/domain/collaboration/submit-readiness';
+import { GroupSubmitBadge } from './group-submit-badge';
 
 /**
  * The teacher's seating chart: drag a student from one group to another, or out
@@ -42,6 +47,11 @@ export type BoardGroup = {
   members: BoardStudent[];
   /** Set once the group is opened and owns a draft. */
   documentId?: string | null;
+  /**
+   * How far this group has got with submitting. Null until the group is opened:
+   * before that there is no draft and nothing to press.
+   */
+  submit?: BoardGroupSubmitStatus | null;
 };
 
 const UNASSIGNED = 'unassigned';
@@ -60,7 +70,9 @@ const UNASSIGNED = 'unassigned';
  */
 const boardCollisionDetection: CollisionDetection = (args) => {
   const pointerCollisions = pointerWithin(args);
-  return pointerCollisions.length > 0 ? pointerCollisions : closestCorners(args);
+  return pointerCollisions.length > 0
+    ? pointerCollisions
+    : closestCorners(args);
 };
 
 function initials(name: string) {
@@ -128,11 +140,7 @@ function DropZone({
       ref={setNodeRef}
       data-testid={testId}
       className={`${className} ${
-        isOver
-          ? full
-            ? 'ring-2 ring-amber-400'
-            : 'ring-2 ring-primary'
-          : ''
+        isOver ? (full ? 'ring-2 ring-amber-400' : 'ring-2 ring-primary') : ''
       }`}
     >
       {children}
@@ -166,16 +174,33 @@ export function GroupBoard({
   useEffect(() => setGroups(groupsFromServer), [groupsFromServer]);
   useEffect(() => setUnassigned(unassignedFromServer), [unassignedFromServer]);
 
-  const sensors = useSensors(useSensor(PointerSensor), useSensor(KeyboardSensor));
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor)
+  );
 
   const studentsById = useMemo(() => {
     const map = new Map<string, BoardStudent>();
     for (const student of unassigned) map.set(student.membershipId, student);
     for (const group of groups) {
-      for (const student of group.members) map.set(student.membershipId, student);
+      for (const student of group.members)
+        map.set(student.membershipId, student);
     }
     return map;
   }, [groups, unassigned]);
+
+  // Only opened groups have anything to submit, so the summary counts those.
+  // Derived from server data rather than the optimistic `groups` state: dragging
+  // a student around before opening cannot change who has pressed.
+  const submitSummary = useMemo(
+    () =>
+      summarizeBoardSubmitProgress(
+        groupsFromServer
+          .map((group) => group.submit)
+          .filter((status): status is BoardGroupSubmitStatus => Boolean(status))
+      ),
+    [groupsFromServer]
+  );
 
   // Kept in a ref so the announcement survives the revalidation that clears
   // fetcher.data, rather than flashing and vanishing.
@@ -209,7 +234,10 @@ export function GroupBoard({
     if (!student) return;
 
     const targetGroup = groups.find((group) => group.id === to);
-    if (targetGroup && targetGroup.members.length >= MAX_COLLABORATION_GROUP_SIZE) {
+    if (
+      targetGroup &&
+      targetGroup.members.length >= MAX_COLLABORATION_GROUP_SIZE
+    ) {
       // Refused locally as well as on the server, so the chip does not visibly
       // land in a group it is about to be bounced out of.
       lastAction.current = `${targetGroup.label} is full.`;
@@ -270,7 +298,9 @@ export function GroupBoard({
           ) : null}
         </div>
         {unassigned.length === 0 ? (
-          <p className="text-sm text-muted-foreground">Everyone is in a group.</p>
+          <p className="text-sm text-muted-foreground">
+            Everyone is in a group.
+          </p>
         ) : (
           <ul className="flex flex-wrap gap-2">
             {unassigned.map((student) => (
@@ -284,6 +314,19 @@ export function GroupBoard({
           </ul>
         )}
       </DropZone>
+
+      {/* The line that makes a stuck group visible from here. A shared draft
+          needs every member's press, so one absent student can hold a group out
+          indefinitely — and before this the only way to notice was to open each
+          group's draft and count. */}
+      {submitSummary.sentence ? (
+        <p
+          className="mb-3 rounded border bg-muted/40 px-3 py-2 text-sm"
+          data-testid="group-board-submit-summary"
+        >
+          {submitSummary.sentence}
+        </p>
+      ) : null}
 
       <ul className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {groups.map((group) => {
@@ -302,7 +345,11 @@ export function GroupBoard({
                     {group.members.length}
                     {group.members.length === 0 && !disabled ? (
                       <fetcher.Form method="post">
-                        <input type="hidden" name="intent" value="remove-group" />
+                        <input
+                          type="hidden"
+                          name="intent"
+                          value="remove-group"
+                        />
                         <input type="hidden" name="groupId" value={group.id} />
                         <button
                           type="submit"
@@ -331,6 +378,10 @@ export function GroupBoard({
                     ))}
                   </ul>
                 )}
+
+                {group.submit ? (
+                  <GroupSubmitBadge status={group.submit} />
+                ) : null}
 
                 {group.documentId ? (
                   <Link
