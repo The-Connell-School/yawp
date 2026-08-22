@@ -249,6 +249,54 @@ export function SubmissionActivitySheet({
                         </div>
                       </div>
                     ))}
+                    {activity.eventType === 'submission.unsubmitted' &&
+                    activity.metadata &&
+                    typeof activity.metadata === 'object' ? (
+                      <div className="rounded-md bg-muted/30 px-3 py-2 text-xs">
+                        <p className="font-medium">Prior status</p>
+                        <div className="mt-1 grid gap-2 sm:grid-cols-2">
+                          <div className="min-w-0">
+                            <span className="text-muted-foreground">
+                              Lifecycle
+                            </span>
+                            <pre className="mt-0.5 whitespace-pre-wrap break-words font-sans">
+                              {
+                                (activity.metadata as Record<string, unknown>)
+                                  .priorStatus as string
+                              }
+                            </pre>
+                          </div>
+                          <div className="min-w-0">
+                            <span className="text-muted-foreground">
+                              Score snapshot
+                            </span>
+                            <pre className="mt-0.5 whitespace-pre-wrap break-words font-sans">
+                              {(() => {
+                                const md =
+                                  activity.metadata as Record<string, unknown>;
+                                const pct = md.priorNumericPercentage as
+                                  | number
+                                  | undefined;
+                                const overall = md.priorOverallScore as
+                                  | number
+                                  | undefined;
+                                const score =
+                                  (md.priorScore as string | undefined) ??
+                                  undefined;
+                                const parts = [];
+                                if (pct != null) parts.push(`%: ${pct}`);
+                                if (overall != null)
+                                  parts.push(`Overall: ${overall}`);
+                                if (score) parts.push(`Score: ${score}`);
+                                return parts.length > 0
+                                  ? parts.join(' · ')
+                                  : 'None';
+                              })()}
+                            </pre>
+                          </div>
+                        </div>
+                      </div>
+                    ) : null}
                   </div>
                 </article>
               );
@@ -259,3 +307,4 @@ export function SubmissionActivitySheet({
     </Sheet>
   );
 }
+

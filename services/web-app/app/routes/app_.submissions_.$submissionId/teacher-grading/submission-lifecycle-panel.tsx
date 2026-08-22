@@ -1,4 +1,5 @@
 import { type ComponentProps, useEffect, useRef, useState } from 'react';
+import { useFetcher } from 'react-router';
 import { ChevronDown, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -222,6 +223,8 @@ export function SubmissionLifecyclePanel({
   isReleasing,
   submissionForView,
   submissionActivityEnabled = false,
+  submissionId,
+  documentId,
   ...teacherGradingPanelProps
 }: {
   lifecycleState: SubmissionLifecycleState;
@@ -234,6 +237,8 @@ export function SubmissionLifecyclePanel({
   isReleasing: boolean;
   submissionForView: ViewPanelSubmission;
   submissionActivityEnabled?: boolean;
+  submissionId: string;
+  documentId: string;
 } & ComponentProps<typeof TeacherGradingPanel>) {
   const label = lifecycleState === 'needs_grading' ? 'Grading' : 'Grade Summary';
   const isReadyToRelease =
@@ -322,6 +327,18 @@ export function SubmissionLifecyclePanel({
     exitEditMode();
   };
 
+  // Teacher Unsubmit
+  const teacherUnsubmitFetcher = useFetcher();
+  const handleTeacherUnsubmit = () => {
+    const fd = new FormData();
+    fd.set('submissionId', submissionId);
+    teacherUnsubmitFetcher.submit(fd, {
+      method: 'POST',
+      action: '/api/domain/teacher-unsubmit-submission',
+    });
+  };
+  const isUnsubmitting = teacherUnsubmitFetcher.state !== 'idle';
+
   return (
     <div
       className="flex h-full w-full flex-col"
@@ -381,12 +398,23 @@ export function SubmissionLifecyclePanel({
                 onAbortStart={() => setIsGradingAssistantPending(false)}
               />
             ) : null}
-            {/* Teachers can no longer unsubmit a document from here — only
-                the student who owns it can. The unsubmit machinery
-                (Submission.unsubmittedAt/unsubmittedByMembershipId, the
-                /api/domain/unsubmit-submission endpoint, and its
-                exclusion from active reads) is unchanged; only this
-                teacher-facing entry point was removed. */}
+            <ConfirmationDialog
+              title="Unsubmit Submission?"
+              description="Withdraw this submission so the student can continue editing and resubmit."
+              confirmText="Unsubmit"
+              cancelText="Cancel"
+              onConfirm={() => handleTeacherUnsubmit()}
+            >
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                data-testid="submission-lifecycle-unsubmit"
+                disabled={isUnsubmitting}
+              >
+                {isUnsubmitting ? 'Unsubmitting...' : 'Unsubmit'}
+              </Button>
+            </ConfirmationDialog>
           </div>
         </div>
       </div>

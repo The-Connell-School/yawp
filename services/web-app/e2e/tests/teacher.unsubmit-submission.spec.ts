@@ -20,7 +20,7 @@ test.describe.serial('Teacher unsubmit submission', () => {
       const unsubmitButton = page.getByTestId('submission-lifecycle-unsubmit');
       await expect(unsubmitButton).toBeVisible({ timeout: 10000 });
       await unsubmitButton.click();
-      await page.getByTestId('submission-lifecycle-unsubmit-confirm').click();
+      await page.getByRole('button', { name: /^unsubmit$/i }).click();
       await page.waitForLoadState('networkidle');
 
       // Verify DB flags updated
@@ -85,7 +85,7 @@ test.describe.serial('Teacher unsubmit submission', () => {
       const unsubmitButton = page.getByTestId('submission-lifecycle-unsubmit');
       await expect(unsubmitButton).toBeVisible({ timeout: 10000 });
       await unsubmitButton.click();
-      await page.getByTestId('submission-lifecycle-unsubmit-confirm').click();
+      await page.getByRole('button', { name: /^unsubmit$/i }).click();
       await page.waitForLoadState('networkidle');
 
       // Verify DB flags updated
