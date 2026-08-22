@@ -68,6 +68,7 @@ import {
   resolveSubmissionActivityActorMembershipId,
   submissionActivityEventTypes,
 } from '~/domain/submissions/submission-activity.server';
+import { maybePostGradeToBlackboard } from '~/integrations/blackboard-ags.server';
 
 const POST = z.object({
   documentId: z.string().optional(),
@@ -996,6 +997,13 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
       throw error;
     }
 
+    // Dev-only: attempt Blackboard mock AGS passback when configured
+    try {
+      await maybePostGradeToBlackboard({ numericPercentage });
+    } catch (error) {
+      console.warn('Blackboard AGS passback (mock) failed', { error });
+    }
+
     return dataResponse({
       success: true,
       message: 'Grading Assistant suggestions generated.',
@@ -1466,6 +1474,13 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
   } catch (error) {
     if (isPrismaRecordNotFoundError(error)) return staleGradeResponse();
     throw error;
+  }
+
+  // Dev-only: attempt Blackboard mock AGS passback when configured
+  try {
+    await maybePostGradeToBlackboard({ numericPercentage });
+  } catch (error) {
+    console.warn('Blackboard AGS passback (mock) failed', { error });
   }
 
   return dataResponse({
