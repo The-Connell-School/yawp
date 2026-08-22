@@ -289,14 +289,18 @@ export async function maybePostGradeToBlackboard({
     const proxyBase = `${derivedOrigin}/dev/blackboard-lti-mock`;
     return `${proxyBase}${path}`;
   };
+  // Prefer the Resource Link ID from the actual launch to pick the correct line item
+  const resourceLinkId =
+    (claims as any)['https://purl.imsglobal.org/spec/lti/claim/resource_link']?.id || '';
+  const derivedLineItemId = resourceLinkId
+    ? `_${String(resourceLinkId).replace(/^_/, '')}_grade`
+    : (ags?.lineitem?.split('/').pop() || '_99_1_grade');
   const lineItemPath =
-    ags?.lineitem && isUrl(ags.lineitem)
+    ags?.lineitem && isUrl(ags.lineitem) && !resourceLinkId
       ? new URL(ags.lineitem).pathname.replace(/\/$/, '') + '/scores'
       : `/learn/api/v1/lti/courses/${encodeURIComponent(
           contextId
-        )}/lineItems/${encodeURIComponent(
-          (ags?.lineitem?.split('/').pop() || '_99_1_grade')
-        )}/scores`;
+        )}/lineItems/${encodeURIComponent(derivedLineItemId)}/scores`;
   const lineItemUrl = toMockUrl(lineItemPath);
   const tokenEndpoint = toMockUrl('/api/v1/gateway/oauth2/jwttoken');
   const userId = studentMockUserId || claims.sub || 'bb-user-student';
